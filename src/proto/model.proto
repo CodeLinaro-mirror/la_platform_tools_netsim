@@ -1,0 +1,67 @@
+// Copyright 2022 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package netsim.model;
+
+// A 3D position. A valid Position must have both x and y coordinates.
+// The position coordinates are in meters.
+message Position {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message Orientation {
+  float yaw = 1;
+  float pitch = 2;
+  float roll = 3;
+}
+
+// A single Radio
+enum Radio {
+  NONE = 0;
+  BLUETOOTH_CLASSIC = 1;
+  BLUETOOTH_LOW_ENERGY = 2;
+  WIFI = 3;
+  UWB = 4;
+  WIFI_RTT = 5;
+}
+
+enum RadioState {
+  UNKNOWN = 0;
+  UP = 1;
+  DOWN = 2;
+}
+
+// A set of Radios
+message Radios {
+  RadioState bluetooth_classic = 1;
+  RadioState bluetooth_low_energy = 2;
+  RadioState wifi = 3;
+  RadioState uwb = 4;
+  RadioState wifi_rtt = 5;
+}
+
+message Device {
+  string device_serial = 1;  // unique device serial number
+  bool visible = 2;
+  Position position = 3;
+  Radios radios = 4;
+}
+
+message Scene {
+  repeated Device devices = 1;
+}
