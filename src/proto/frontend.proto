@@ -1,0 +1,177 @@
+// Copyright 2022 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package netsim.frontend;
+
+import "google/protobuf/empty.proto";
+
+import "model.proto";
+
+/**
+ * The frontend service for the network simulator.
+ *
+ * The network simulator interconnects virtual radio controllers on emulated
+ * android and accessory devices to allows control of the topology, device
+ * positions, and RF characteristics.
+ *
+ * Clients of the frontend service include a Command Line Interface (cli), Mobly
+ * scripts, and a web UI.
+ *
+ */
+service FrontendService {
+  // Get the version of the netsim service.
+  rpc GetVersion(google.protobuf.Empty) returns (VersionResponse);
+
+  // Set the position of the device.
+  rpc SetPosition(SetPositionRequest) returns (google.protobuf.Empty);
+
+  // Get the positions of all devices.
+  rpc GetPositions(google.protobuf.Empty) returns (GetPositionResponse);
+
+  // TODO: Other hwsim commands - addAccessPoint, addLink, ...
+
+  // Set the visibility of a device
+  rpc SetVisibility(VisibilityRequest) returns (google.protobuf.Empty);
+
+  // TODO: Get the visibilities of devices.
+
+  // Set a simplified Link Loss Model
+  rpc SetLinkLoss(SetLinkLossRequest) returns (google.protobuf.Empty);
+
+  // Radio properties (simplified view of txpower)
+  // Set the specified emulated radio chip's range.
+  rpc SetRange(SetRangeRequest) returns (google.protobuf.Empty);
+
+  // Gets all emulated radio chip's range.
+  rpc GetRanges(google.protobuf.Empty) returns (GetRangesResponse);
+
+  // Register for device movement and emulated radio state updates
+  rpc RegisterUpdates(google.protobuf.Empty) returns (stream Updates);
+
+  // Get a list of active devices
+  rpc GetDevices(google.protobuf.Empty) returns (GetDevicesResponse);
+
+  // Register for network logs
+  rpc NetCat(google.protobuf.Empty) returns (stream NetCatStream);
+
+  // Turn on/off packet capture for connected devices.
+  rpc SetPacketCapture(SetPacketCaptureRequest) returns (google.protobuf.Empty);
+
+  // Turn on/off device radios
+  // TODO: response information
+  rpc SetRadio(SetRadioRequest) returns (google.protobuf.Empty);
+}
+
+message VersionResponse {
+  string version = 1;
+}
+
+message SetPositionRequest {
+  string device_serial = 1;
+  netsim.model.Position position = 2;
+  netsim.model.Orientation orientation = 3;
+}
+
+message DevicePosition {
+  string device_serial = 1;
+  netsim.model.Position position = 2;
+  netsim.model.Orientation orientation = 3;
+}
+
+message GetPositionResponse {
+  repeated DevicePosition results = 1;
+}
+
+// Set a fixed error probabilities for a link, where a value of 0% is
+// a perfect medium.  This is a simple model that does not take into
+// account losses due to transmission rates and signal-to-noise ratio.
+message SetLinkLossRequest {
+  string device_serial = 1;
+  string other_device = 2;
+  netsim.model.Radio radio = 3;
+  // As a percent between 0 and 1
+  float link_loss = 4;
+}
+
+// Set the range of an device's radio in meters.
+message SetRangeRequest {
+  string device_serial = 1;
+  netsim.model.Radio radio = 2;
+  float range = 3;  // range in meters.
+}
+
+// The set of radios that are enabled for a device
+message SetRadioRequest {
+  string device_serial = 1;
+  netsim.model.Radio radio = 2;
+  netsim.model.RadioState state = 3;
+}
+
+message RadioRange {
+  netsim.model.Radio radio = 1;
+  float range = 2;
+}
+
+message DeviceRadioRange {
+  string device_serial = 1;
+  netsim.model.Radio radio = 2;
+  float range = 3;
+}
+
+// Response for GetRanges request
+message GetRangesResponse {
+  repeated DeviceRadioRange results = 1;
+}
+
+// Request for SetVisibility request
+message VisibilityRequest {
+  // The emulated device to change.
+  string device_serial = 1;
+  // The visibility of the device
+  bool visibility = 2;
+}
+
+// Updates when device changes.
+message Updates {
+  // The emulated device that changed.
+  string device_serial = 1;
+  // Position of the device.
+  netsim.model.Position position = 2;
+  bool visibility = 3;
+  // Which radios are enabled.
+  netsim.model.Radios radios = 4;
+  repeated RadioRange ranges = 5;
+}
+
+// Response for GetDevices request.
+//
+// Returns the emulators and accessory devices that are connected to
+// the network simulator.
+message GetDevicesResponse {
+  repeated netsim.model.Device devices = 1;
+}
+
+// Response to the NetCat request.
+//
+// NetCat provides a streaming log of network operations.
+message NetCatStream {
+  repeated string result = 1;
+}
+
+message SetPacketCaptureRequest {
+  bool capture = 1;
+  string device_serial = 2;
+}
