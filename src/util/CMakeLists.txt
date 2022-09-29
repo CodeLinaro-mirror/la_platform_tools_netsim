@@ -14,20 +14,19 @@
 
 cmake_minimum_required(VERSION 3.5)
 
-add_library(util-lib STATIC
-  os_utils.h
-  os_utils.cc
-  log.h
-  log.cc
-  ranging.h
-  ranging.cc
-  string_utils.h
-  string_utils.cc
+android_add_library(
+  TARGET util-lib 
+  LICENSE Apache-2.0
+  SRC
+  ini_file.cc
   ini_file.h
-  ini_file.cc)
+  log.cc
+  log.h
+  os_utils.cc
+  os_utils.h
+  ranging.cc
+  ranging.h
+  string_utils.cc
+  string_utils.h)
 
-target_include_directories(
-  util-lib
-  PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
-  )
+target_include_directories(util-lib PRIVATE ..)

@@ -18,6 +18,8 @@
 /// desktop emulator (emu) to simulator.
 
 #pragma once
+
+#include <memory>
 #include <string>
 
 namespace netsim {

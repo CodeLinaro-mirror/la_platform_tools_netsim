@@ -14,22 +14,8 @@
 
 cmake_minimum_required(VERSION 3.5)
 
-add_library(controller-lib STATIC
-  device.cc
-  device.h
-  scene_controller.cc
-  scene_controller.h)
-
-target_link_libraries(controller-lib
-  frontend-grpc-lib
-  util-lib
-  vhci-lib
-  hci-lib
-  libbt-rootcanal
-  grpc++)
-
-target_include_directories(
-  controller-lib
-  PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
-  )
+android_add_library(
+  TARGET controller-lib LICENSE Apache-2.0
+  SRC device.cc device.h scene_controller.cc scene_controller.h
+  DEPS frontend-grpc-lib grpc++ hci-lib libbt-rootcanal util-lib vhci-lib)
+target_include_directories(controller-lib PRIVATE ..)

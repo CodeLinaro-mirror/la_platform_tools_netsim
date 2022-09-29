@@ -14,6 +14,7 @@
 
 #include "core/server.h"
 
+#include <memory>
 #include <string>
 
 #include "fe/frontend_server.h"

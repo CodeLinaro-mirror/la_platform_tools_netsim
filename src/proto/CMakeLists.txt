@@ -16,26 +16,15 @@ cmake_minimum_required(VERSION 3.5)
 
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
-  SOURCES
-	${CMAKE_CURRENT_LIST_DIR}/frontend.proto
-	${CMAKE_CURRENT_LIST_DIR}/internal.proto
-	${CMAKE_CURRENT_LIST_DIR}/model.proto
-	${CMAKE_CURRENT_LIST_DIR}/startup.proto
+  SOURCES frontend.proto
+          ${CMAKE_CURRENT_LIST_DIR}/internal.proto
+          ${CMAKE_CURRENT_LIST_DIR}/model.proto
+          ${CMAKE_CURRENT_LIST_DIR}/startup.proto
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
   GENERATED GRPC_SRC)
 
-add_library(frontend-grpc-lib STATIC
-  ${GRPC_SRC})
+android_add_library(TARGET frontend-grpc-lib LICENSE Apache-2.0 SRC ${GRPC_SRC}
+                    DEPS grpc++ protobuf::libprotobuf)
 
-target_link_libraries(frontend-grpc-lib PRIVATE
-  grpc++
-  protobuf::libprotobuf)
-
-target_include_directories(
-  frontend-grpc-lib
-  PRIVATE
-  ${PROTOBUF_INCLUDE_DIR}
-  ${CMAKE_SOURCE_DIR}/src
-  PUBLIC
-  ${CMAKE_BINARY_DIR}/src/proto
-  )
+target_include_directories(frontend-grpc-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
+                           PUBLIC ${CMAKE_CURRENT_BINARY_DIR})

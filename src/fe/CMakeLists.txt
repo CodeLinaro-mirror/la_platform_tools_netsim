@@ -11,26 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 cmake_minimum_required(VERSION 3.5)
 
-add_library(frontend-lib STATIC
-  cli.h
-  cli.cc
-  frontend_server.h
-  frontend_server.cc)
+android_add_library(
+  TARGET frontend-lib
+  LICENSE Apache-2.0
+  SRC cli.cc cli.h frontend_server.cc frontend_server.h
+  DEPS controller-lib frontend-grpc-lib
+       # TODO: refactor so this isn't needed
+       grpc++ libbt-rootcanal protobuf::libprotobuf util-lib)
 
-target_link_libraries(frontend-lib
-  controller-lib
-  frontend-grpc-lib
-# TODO: refactor so this isn't needed
-  libbt-rootcanal
-  util-lib
-  grpc++
-  protobuf::libprotobuf)
-
-target_include_directories(
-  frontend-lib
-  PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
-  )
+target_include_directories(frontend-lib PRIVATE ..)

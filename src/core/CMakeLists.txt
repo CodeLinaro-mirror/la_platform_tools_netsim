@@ -12,17 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(core-lib STATIC
-  server.cc
-  server.h
-  server_rpc.cc
-  server_rpc.h)
+android_add_library(
+  TARGET core-lib LICENSE Apache-2.0 SRC server.cc server.h server_rpc.cc
+                                         server_rpc.h
+  DEPS frontend-grpc-lib frontend-lib grpc++ protobuf::libprotobuf)
 
-target_link_libraries(core-lib
-  frontend-lib)
-
-target_include_directories(
-  core-lib
-  PRIVATE
-  ${CMAKE_SOURCE_DIR}/src
-  )
+target_include_directories(core-lib PRIVATE ..)

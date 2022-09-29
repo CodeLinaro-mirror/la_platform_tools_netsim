@@ -22,20 +22,20 @@ package {
 }
 
 cc_library {
-    name: "netsim_proto",
+    name: "netsim-proto",
     host_supported: true,
     proto: {
         export_proto_headers: true,
         type: "full",
         canonical_path_from_root: false,
-        include_dirs: ["external/protobuf/src"]
+        include_dirs: ["external/protobuf/src"],
     },
     srcs: [
         "frontend.proto",
         "internal.proto",
         "model.proto",
-        "startup.proto"
-    ]
+        "startup.proto",
+    ],
 }
 
 genrule {

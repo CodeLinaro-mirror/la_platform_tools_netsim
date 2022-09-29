@@ -17,6 +17,8 @@
 /// Connect HCI file descriptors (from cuttlefish) to the simulator.
 
 #pragma once
+
+#include <memory>
 #include <string>
 
 namespace netsim {

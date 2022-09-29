@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <chrono>
+#include <cstdarg>
 #include <cstdio>
 #include <ctime>
 #include <fstream>

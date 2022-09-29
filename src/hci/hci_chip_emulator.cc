@@ -15,7 +15,9 @@
 #include "hci/hci_chip_emulator.h"
 
 #include <cassert>
+#include <filesystem>
 #include <iostream>
+#include <memory>
 #include <utility>
 
 #include "controller/scene_controller.h"
