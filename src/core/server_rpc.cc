@@ -15,6 +15,7 @@
 #include "core/server_rpc.h"
 
 #include <iostream>
+#include <memory>
 
 #include "fe/cli.h"
 #include "fe/frontend_server.h"

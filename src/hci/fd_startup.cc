@@ -20,6 +20,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include <memory>
 #include <thread>
 
 #include "controller/device.h"

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <memory>
+
 #include "frontend.grpc.pb.h"
 
 namespace netsim {

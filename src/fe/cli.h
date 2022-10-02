@@ -17,6 +17,7 @@
 // Frontend command line interface.
 #pragma once
 
+#include <memory>
 #include <string_view>
 
 #include "frontend.grpc.pb.h"

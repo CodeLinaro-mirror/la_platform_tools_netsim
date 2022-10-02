@@ -20,6 +20,7 @@
 #include <chrono>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <thread>
 
 #include "controller/device.h"

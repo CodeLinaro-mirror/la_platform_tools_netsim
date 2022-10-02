@@ -12,35 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(hci-lib STATIC
-  rpc_hal_transport.h
-  rpc_hal_transport.cc
-  rpc_hci_forwarder.h
-  rpc_hci_forwarder.cc
-  fd_startup.h
-  fd_startup.cc
-  hci_chip_emulator.h
-  hci_packet.h
-  hci_debug.h
-  hci_debug.cc
-  rpc_transport.h
-  hci_chip_emulator.h
-  hci_chip_emulator.cc
-)
-
-target_include_directories(
-  hci-lib
-  PRIVATE
-  ${PROTOBUF_INCLUDE_DIR}
-  ${CMAKE_SOURCE_DIR}/src
-  )
-
-target_link_libraries(hci-lib
-  PRIVATE
-  controller-lib
-  libbt-rootcanal
-  grpc++
-  vhci-lib
-  frontend-lib
-)
-
+android_add_library(
+  TARGET hci-lib
+  LICENSE Apache-2.0
+  SRC fd_startup.cc
+      fd_startup.h
+      hci_chip_emulator.cc
+      hci_chip_emulator.h
+      hci_chip_emulator.h
+      hci_debug.cc
+      hci_debug.h
+      hci_packet.h
+      rpc_hal_transport.cc
+      rpc_hal_transport.h
+      rpc_hci_forwarder.cc
+      rpc_hci_forwarder.h
+      rpc_transport.h
+  DEPS android-emu-base
+       controller-lib
+       frontend-grpc-lib
+       frontend-lib
+       grpc++
+       libbt-rootcanal
+       libbt-rootcanal-qemu
+       vhci-lib)
+target_include_directories(hci-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..)
