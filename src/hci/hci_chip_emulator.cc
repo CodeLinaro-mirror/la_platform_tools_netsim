@@ -47,7 +47,12 @@ class SimPhyLayerFactory : public rootcanal::PhyLayerFactory {
       return;
     }
     auto rssi_wrapper = ::model::packets::RssiWrapperView::Create(packet);
-    assert(rssi_wrapper.IsValid());
+    // Need to call IsValid() before GetRssi. Hit assert if debug build
+    if (!rssi_wrapper.IsValid()) {
+      assert(rssi_wrapper.IsValid());
+      rootcanal::PhyLayerFactory::Send(packet, id, device_id);
+      return;
+    }
     auto tx_power = rssi_wrapper.GetRssi();
 
     for (const auto &recv_phy : phy_layers_) {
