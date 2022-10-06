@@ -30,6 +30,8 @@ android_add_executable(
   TARGET netsim LICENSE Apache-2.0 INSTALL . SRC src/netsim.cc
   DEPS grpc++ libbt-rootcanal netsim-lib protobuf::libprotobuf)
 
+android_target_dependency(netsim linux TCMALLOC_OS_DEPENDENCIES)
+
 target_compile_definitions(netsim PUBLIC NETSIM_ANDROID_EMULATOR)
 
 android_add_test(
