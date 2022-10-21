@@ -16,7 +16,4 @@
 #
 # Setup cmake for netsim.
 
-$REPO/prebuilts/cmake/linux-x86/bin/cmake \
- -G Ninja \
- -DCMAKE_TOOLCHAIN_FILE=$REPO/external/qemu/android/build/cmake/toolchain-linux-x86_64.cmake \
-  ../CMakeLists.txt
+$REPO_EMU/external/qemu/android/rebuild.sh --build config --cmake_option FEATURE_NETSIM=TRUE --cmake_option CMAKE_EXPORT_COMPILE_COMMANDS=1

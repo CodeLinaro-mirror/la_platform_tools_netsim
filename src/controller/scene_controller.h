@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "model.pb.h"
 
 namespace netsim {
@@ -31,18 +33,23 @@ class SceneController {
   static SceneController &Singleton();
 
   void Add(netsim::model::Device &device);
-  const netsim::model::Scene &Get() const;
+  const netsim::model::Scene Copy();
   bool SetPosition(const std::string &device_serial,
                    const netsim::model::Position &position);
 
-  bool SetRadio(const std::string &device_serial, netsim::model::Radio radio,
-                netsim::model::RadioState state);
+  bool UpdateDevice(const netsim::model::Device &updated_device);
 
-  void UpdateRadio(const std::string &device_serial, netsim::model::Radio radio,
-                   netsim::model::RadioState state);
+  void UpdateRadio(const std::string &device_serial,
+                   netsim::model::PhyKind radio, netsim::model::PhyState state);
 
   std::optional<float> GetDistance(const std::string &device_serial_a,
                                    const std::string &device_serial_b);
+
+ protected:
+  friend class SceneControllerTest;
+
+  netsim::model::Device *MatchDevice(const std::string &serial,
+                                     const std::string &name);
 
  private:
   SceneController() = default;  // Disallow instantiation outside of the class.

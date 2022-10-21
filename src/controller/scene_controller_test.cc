@@ -14,28 +14,63 @@
 
 #include "controller/scene_controller.h"
 
+#include "controller/device.h"
 #include "gtest/gtest.h"
 #include "model.pb.h"
 
 namespace netsim {
-namespace testing {
-namespace {
+namespace controller {
 
-TEST(SceneTest, GetTest) {
-  const auto &scene = netsim::controller::SceneController::Singleton().Get();
+class SceneControllerTest : public ::testing::Test {
+ protected:
+  netsim::model::Device *match(const std::string &serial,
+                               const std::string &name) {
+    return SceneController::Singleton().MatchDevice(serial, name);
+  }
+};
+
+TEST_F(SceneControllerTest, GetTest) {
+  const auto &scene = SceneController::Singleton().Copy();
   EXPECT_EQ(scene.devices_size(), 0);
 }
 
-TEST(SceneTest, AddDevicesAndGetTest) {
+TEST_F(SceneControllerTest, AddDevicesAndGetTest) {
   netsim::model::Device device;
   device.set_visible(true);
   netsim::controller::SceneController::Singleton().Add(device);
 
-  const auto &scene = netsim::controller::SceneController::Singleton().Get();
+  const auto &scene = SceneController::Singleton().Copy();
   EXPECT_EQ(scene.devices_size(), 1);
   EXPECT_EQ(scene.devices(0).visible(), true);
 }
 
-}  // namespace
-}  // namespace testing
+TEST_F(SceneControllerTest, DeviceConstructorTest) {
+  auto device = controller::CreateDevice("unique-serial");
+  EXPECT_EQ("unique-serial", device.device_serial());
+  // Test for non-empty position and orientationa
+  EXPECT_TRUE(device.has_position());
+  EXPECT_TRUE(device.has_orientation());
+}
+
+TEST_F(SceneControllerTest, MatchDeviceTest) {
+  netsim::model::Device device;
+  device.set_device_serial("serial:aaa");
+  device.set_name("name:bbb");
+  SceneController::Singleton().Add(device);
+
+  device.set_device_serial("serial:ccc");
+  device.set_name("name:ddd");
+  SceneController::Singleton().Add(device);
+
+  // with both serial and name, uses serial since name won't match
+  ASSERT_TRUE(match("aa", "ee") != nullptr);
+
+  // with neither matching
+  ASSERT_TRUE(match("ff", "ee") == nullptr);
+
+  // with no serial, matches with name
+  ASSERT_TRUE(match("", "dd") != nullptr);
+}
+
+}  // namespace controller
 }  // namespace netsim

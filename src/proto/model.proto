@@ -30,8 +30,8 @@ message Orientation {
   float roll = 3;
 }
 
-// A single Radio
-enum Radio {
+// A radio physical layer
+enum PhyKind {
   NONE = 0;
   BLUETOOTH_CLASSIC = 1;
   BLUETOOTH_LOW_ENERGY = 2;
@@ -40,26 +40,41 @@ enum Radio {
   WIFI_RTT = 5;
 }
 
-enum RadioState {
+// The state of the physical layer
+enum PhyState {
+  option allow_alias = true;
   UNKNOWN = 0;
+  ON = 1;
   UP = 1;
+  OFF = 2;
   DOWN = 2;
 }
 
-// A set of Radios
-message Radios {
-  RadioState bluetooth_classic = 1;
-  RadioState bluetooth_low_energy = 2;
-  RadioState wifi = 3;
-  RadioState uwb = 4;
-  RadioState wifi_rtt = 5;
+// The phy layer and state in a chip
+//
+// A device can have multiple chips of the same kind
+// (like UWB) and each chip can provide multiple phys
+// (like Bluetooth)
+message ChipPhyState {
+  PhyKind radio = 1;
+  PhyState state = 2;
+  // TODO: add ChipKind and id
+}
+
+message ChipPhyRange {
+  PhyKind radio = 1;
+  float range = 2;
+  // TODO: add owning ChipKind and id
 }
 
 message Device {
   string device_serial = 1;  // unique device serial number
-  bool visible = 2;
-  Position position = 3;
-  Radios radios = 4;
+  string name = 2;           // user settable unique alias
+  bool visible = 3;
+  Position position = 4;
+  Orientation orientation = 5;
+  repeated ChipPhyState radio_states = 6;
+  repeated ChipPhyRange radio_ranges = 7;
 }
 
 message Scene {

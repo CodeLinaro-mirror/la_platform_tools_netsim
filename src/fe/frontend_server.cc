@@ -22,7 +22,6 @@
 #include "frontend.grpc.pb.h"
 #include "frontend.pb.h"
 #include "google/protobuf/empty.pb.h"
-#include "grpc/grpc_security_constants.h"
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
@@ -46,7 +45,7 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status GetDevices(grpc::ServerContext *context,
                           const google::protobuf::Empty *empty,
                           frontend::GetDevicesResponse *reply) {
-    const auto &scene = netsim::controller::SceneController::Singleton().Get();
+    const auto &scene = netsim::controller::SceneController::Singleton().Copy();
     for (const auto &device : scene.devices())
       reply->add_devices()->CopyFrom(device);
     return grpc::Status::OK;
@@ -63,14 +62,15 @@ class FrontendServer final : public frontend::FrontendService::Service {
     return grpc::Status::OK;
   }
 
-  grpc::Status SetRadio(grpc::ServerContext *context,
-                        const frontend::SetRadioRequest *request,
-                        google::protobuf::Empty *empty) {
-    auto status = netsim::controller::SceneController::Singleton().SetRadio(
-        request->device_serial(), request->radio(), request->state());
+  grpc::Status UpdateDevice(grpc::ServerContext *context,
+                            const frontend::UpdateDeviceRequest *request,
+                            google::protobuf::Empty *response) {
+    auto status = netsim::controller::SceneController::Singleton().UpdateDevice(
+        request->device());
     if (!status)
-      return grpc::Status(grpc::StatusCode::NOT_FOUND,
-                          "device " + request->device_serial() + " not found.");
+      return grpc::Status(
+          grpc::StatusCode::NOT_FOUND,
+          "device " + request->device().device_serial() + " not found.");
     return grpc::Status::OK;
   }
 

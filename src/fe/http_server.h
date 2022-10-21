@@ -12,30 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "core/server.h"
+#pragma once
 
-#include <memory>
-#include <string>
-#include <thread>
+namespace netsim::http {
 
-#include "fe/frontend_server.h"
-#include "hci/fd_startup.h"
-#ifndef NETSIM_ANDROID_EMULATOR
-#include "fe/http_server.h"
-#endif
+void RunHttpServer();
 
-namespace netsim {
-
-void StartWithFds(const std::string &startup_str, bool debug) {
-  std::unique_ptr<hci::FdStartup> fds = hci::FdStartup::Create();
-  fds->Connect(startup_str);
-
-#ifndef NETSIM_ANDROID_EMULATOR
-  std::thread http_server(netsim::http::RunHttpServer);
-#endif
-
-  // running the frontend server blocks
-  netsim::RunFrontendServer();
-}
-
-}  // namespace netsim
+}  // namespace netsim::http
