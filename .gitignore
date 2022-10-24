@@ -1,5 +1,6 @@
 # cmake build files
 **/build/
 *~
+objs
 # clangd
 .cache

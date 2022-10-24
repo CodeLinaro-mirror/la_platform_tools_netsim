@@ -15,9 +15,10 @@
 #include "controller/scene_controller.h"
 
 #include <cmath>
+#include <cstddef>
 
+#include "controller/device_notify_manager.h"
 #include "hci/hci_chip_emulator.h"
-#include "util/log.h"
 
 namespace netsim {
 namespace controller {
@@ -32,61 +33,112 @@ void SceneController::Add(netsim::model::Device &device) {
   std::unique_lock<std::mutex> lock(this->mutex_);
   scene_.add_devices()->CopyFrom(device);
 }
-const netsim::model::Scene &SceneController::Get() const { return scene_; }
+
+const netsim::model::Scene SceneController::Copy() {
+  std::unique_lock<std::mutex> lock(this->mutex_);
+  return scene_;
+}
 
 bool SceneController::SetPosition(const std::string &device_serial,
                                   const netsim::model::Position &position) {
+  std::unique_lock<std::mutex> lock(this->mutex_);
   for (auto &device : *scene_.mutable_devices()) {
     if (device.device_serial() == device_serial) {
       device.mutable_position()->CopyFrom(position);
+      DeviceNotifyManager::Get().Notify();
       return true;
     }
   }
   return false;
 }
-
-void UpdateRadioInternal(netsim::model::Radios &mutable_radios,
-                         netsim::model::Radio radio,
-                         netsim::model::RadioState state) {
-  switch (radio) {
-    case netsim::model::Radio::BLUETOOTH_LOW_ENERGY:
-      mutable_radios.set_bluetooth_low_energy(state);
-      break;
-    case netsim::model::Radio::BLUETOOTH_CLASSIC:
-      mutable_radios.set_bluetooth_classic(state);
-      break;
-    default:
-      // do not care about unimplemented radios
-      break;
+// Common update to Phy states used by frontend and Chip Facades
+void UpdateRadioInternal(netsim::model::Device &device,
+                         const netsim::model::ChipPhyState &radio_state,
+                         bool insert) {
+  // Phys are stored as in a table, devices have a small number
+  for (auto mutable_radio_state : *device.mutable_radio_states()) {
+    if (mutable_radio_state.radio() == radio_state.radio()) {
+      mutable_radio_state.set_state(radio_state.state());
+      return;
+    }
+  }
+  if (insert) {
+    // The radio was not found, add a new radio state if called
+    // from the Chip Facade.
+    auto rs = device.mutable_radio_states()->Add();
+    rs->CopyFrom(radio_state);
   }
 }
 
-// Radio Facade informing a change in radio state
+// Internal from Radio Facade
 void SceneController::UpdateRadio(const std::string &device_serial,
-                                  netsim::model::Radio radio,
-                                  netsim::model::RadioState state) {
+                                  netsim::model::PhyKind radio,
+                                  netsim::model::PhyState state) {
   std::unique_lock<std::mutex> lock(this->mutex_);
+  netsim::model::ChipPhyState radio_state;
+  radio_state.set_radio(radio);
+  radio_state.set_state(state);
   for (auto &device : *scene_.mutable_devices()) {
     if (device.device_serial() == device_serial) {
-      UpdateRadioInternal(*device.mutable_radios(), radio, state);
+      UpdateRadioInternal(device, radio_state, true);
       break;
     }
   }
 }
 
-// UI requesting a change in radios
-bool SceneController::SetRadio(const std::string &device_serial,
-                               netsim::model::Radio radio,
-                               netsim::model::RadioState state) {
-  std::unique_lock<std::mutex> lock(this->mutex_);
-  for (auto &device : *scene_.mutable_devices()) {
-    if (device.device_serial() == device_serial) {
-      hci::ChipEmulator::Get().SetDeviceRadio(device_serial, radio, state);
-      UpdateRadioInternal(*device.mutable_radios(), radio, state);
-      return true;
+// Returns a Mutable Device message or nullptr
+netsim::model::Device *SceneController::MatchDevice(const std::string &serial,
+                                                    const std::string &name) {
+  netsim::model::Device *found = nullptr;
+  if (serial.empty() && name.empty()) {
+    return nullptr;
+  }
+  for (netsim::model::Device &device : *scene_.mutable_devices()) {
+    // serial && name -> rename, only match by serial
+    // serial && !name -> match by serial
+    // !serial && name -> match by name
+    auto pos = (serial.empty()) ? device.name().find(name)
+                                : device.device_serial().find(serial);
+    if (pos != std::string::npos) {
+      // check for multiple matches
+      if (found != nullptr) return nullptr;
+      found = &device;
     }
   }
-  return false;
+  return found;
+}
+
+// UI requesting a change in device info
+bool SceneController::UpdateDevice(
+    const netsim::model::Device &updated_device) {
+  std::unique_lock<std::mutex> lock(this->mutex_);
+  if (updated_device.device_serial().empty()) {
+    return false;
+  }
+  netsim::model::Device *device =
+      MatchDevice(updated_device.device_serial(), updated_device.name());
+  if (device == nullptr) return false;
+  if (updated_device.has_position()) {
+    device->mutable_position()->CopyFrom(updated_device.position());
+  }
+  if (updated_device.has_orientation()) {
+    device->mutable_orientation()->CopyFrom(updated_device.orientation());
+  }
+  if (!updated_device.name().empty()) {
+    device->set_name(updated_device.name());
+  }
+  if (updated_device.radio_states().size()) {
+    for (auto &radio_state : updated_device.radio_states()) {
+      hci::ChipEmulator::Get().SetDeviceRadio(
+          device->device_serial(), radio_state.radio(), radio_state.state());
+      UpdateRadioInternal(*device, radio_state, false);
+    }
+  }
+  if (updated_device.radio_ranges().size()) {
+    // TODO push to model and chip emulators
+  }
+  DeviceNotifyManager::Get().Notify();
+  return true;
 }
 
 std::optional<float> SceneController::GetDistance(

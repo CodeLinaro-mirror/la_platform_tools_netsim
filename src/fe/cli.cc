@@ -74,13 +74,13 @@ class FrontendClient {
           y = std::atof(stringutils::AsString(args.at(3)).c_str()),
           z = std::atof(stringutils::AsString(args.at(4)).c_str());
     auto device_serial = std::string(args.at(1));
-    frontend::SetPositionRequest request;
-    request.set_device_serial(device_serial);
-    request.mutable_position()->set_x(x);
-    request.mutable_position()->set_y(y);
-    request.mutable_position()->set_z(z);
+    frontend::UpdateDeviceRequest request;
+    request.mutable_device()->set_device_serial(device_serial);
+    request.mutable_device()->mutable_position()->set_x(x);
+    request.mutable_device()->mutable_position()->set_y(y);
+    request.mutable_device()->mutable_position()->set_z(z);
     google::protobuf::Empty response;
-    auto status = stub_->SetPosition(&context_, request, &response);
+    auto status = stub_->UpdateDevice(&context_, request, &response);
     if (CheckStatus(status, "SetPosition"))
       std::cout << "move " << device_serial << " " << x << " " << y << " " << z
                 << std::endl;
@@ -91,12 +91,14 @@ class FrontendClient {
     if (args.size() != 3)
       return Usage("set-visibility <device_serial> <on|off>");
 
-    auto port = std::string(args.at(1));
+    auto device_serial = std::string(args.at(1));
     auto visible = args.at(2) == "on";
-    frontend::VisibilityRequest request;
-    auto status = stub_->SetVisibility(&context_, request, nullptr);
+    frontend::UpdateDeviceRequest request;
+    request.mutable_device()->set_device_serial(device_serial);
+    request.mutable_device()->set_visible(visible);
+    auto status = stub_->UpdateDevice(&context_, request, nullptr);
     if (CheckStatus(status, "SetVisibility"))
-      std::cout << "set-visibility " << port << " " << visible;
+      std::cout << "set-visibility " << device_serial << " " << visible;
   }
 
   // devices
@@ -113,13 +115,18 @@ class FrontendClient {
                << device.position().x() << "," << device.position().y() << ","
                << device.position().z() << ")";
         const std::string position = stream.str();
-        auto classic_status =
-            device.radios().bluetooth_classic() ? "up" : "down";
-        auto ble_status =
-            device.radios().bluetooth_low_energy() ? "up" : "down";
-        std::cout << device.device_serial() << "\t"
-                  << "ble:" << ble_status << "\tclassic:" << classic_status
-                  << "\twifi:up\tuwb:n/a\trtt:n/a\t" << position << std::endl;
+        std::cout << device.device_serial() << "\t";
+
+        for (const auto &radio_state : device.radio_states()) {
+          auto radio =
+              radio_state.radio() == model::PhyKind ::BLUETOOTH_LOW_ENERGY
+                  ? "ble:"
+                  : "classic:";
+          auto state =
+              radio_state.state() == model::PhyState::ON ? "up" : "down";
+          std::cout << radio << ":" << state << "\t";
+        }
+        std::cout << position << std::endl;
       }
     }
   }
@@ -132,23 +139,28 @@ class FrontendClient {
 
     if (args.size() != 4)
       return Usage("arg count - radio <ble|classic> <up|down> <device_serial>");
-    auto radio = std::string(args.at(1));
-    bool is_le = radio_le.count(radio);
-    bool is_bt = radio_bt.count(radio);
+    auto radio_str = std::string(args.at(1));
+    bool is_le = radio_le.count(radio_str);
+    bool is_bt = radio_bt.count(radio_str);
     if (!(is_le || is_bt)) {
       return Usage(
           "unknown radio - radio <ble|classic> <up|down> <device_serial>");
     }
-    bool is_up = up_status.count(std::string(args.at(2)));
-    auto device_serial = std::string(args.at(3));
-    frontend::SetRadioRequest request;
-    google::protobuf::Empty response;
-    request.set_device_serial(device_serial);
-    request.set_radio(is_le ? model::Radio::BLUETOOTH_LOW_ENERGY
-                            : model::Radio::BLUETOOTH_CLASSIC);
-    request.set_state(is_up ? model::RadioState::UP : model::RadioState::DOWN);
+    auto radio_state = up_status.count(std::string(args.at(2)))
+                           ? model::PhyState::UP
+                           : model::PhyState::DOWN;
 
-    auto status = stub_->SetRadio(&context_, request, &response);
+    auto radio = is_le ? model::PhyKind ::BLUETOOTH_LOW_ENERGY
+                       : model::PhyKind ::BLUETOOTH_CLASSIC;
+    auto device_serial = std::string(args.at(3));
+    frontend::UpdateDeviceRequest request;
+    google::protobuf::Empty response;
+    request.mutable_device()->set_device_serial(device_serial);
+
+    auto entry = request.mutable_device()->add_radio_states();
+    entry->set_radio(radio);
+    entry->set_state(radio_state);
+    auto status = stub_->UpdateDevice(&context_, request, &response);
     if (CheckStatus(status, "SetRadio")) {
       std::cout << "radio " << args.at(1) << " is " << args.at(2) << " for "
                 << args.at(3) << std::endl;

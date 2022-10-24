@@ -29,6 +29,7 @@ android_add_library(
       rpc_hci_forwarder.h
       rpc_transport.h
   DEPS android-emu-base
+       android-emu-base-headers
        controller-lib
        frontend-grpc-lib
        frontend-lib

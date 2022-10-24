@@ -38,41 +38,28 @@ service FrontendService {
   // Set the position of the device.
   rpc SetPosition(SetPositionRequest) returns (google.protobuf.Empty);
 
-  // Get the positions of all devices.
-  rpc GetPositions(google.protobuf.Empty) returns (GetPositionResponse);
-
   // TODO: Other hwsim commands - addAccessPoint, addLink, ...
-
-  // Set the visibility of a device
-  rpc SetVisibility(VisibilityRequest) returns (google.protobuf.Empty);
-
-  // TODO: Get the visibilities of devices.
 
   // Set a simplified Link Loss Model
   rpc SetLinkLoss(SetLinkLossRequest) returns (google.protobuf.Empty);
 
   // Radio properties (simplified view of txpower)
   // Set the specified emulated radio chip's range.
-  rpc SetRange(SetRangeRequest) returns (google.protobuf.Empty);
-
-  // Gets all emulated radio chip's range.
-  rpc GetRanges(google.protobuf.Empty) returns (GetRangesResponse);
 
   // Register for device movement and emulated radio state updates
-  rpc RegisterUpdates(google.protobuf.Empty) returns (stream Updates);
+  rpc GetUpdates(google.protobuf.Empty) returns (stream Updates);
 
-  // Get a list of active devices
+  // Get a list of devices
   rpc GetDevices(google.protobuf.Empty) returns (GetDevicesResponse);
+
+  // Update a device
+  rpc UpdateDevice(UpdateDeviceRequest) returns (google.protobuf.Empty);
 
   // Register for network logs
   rpc NetCat(google.protobuf.Empty) returns (stream NetCatStream);
 
   // Turn on/off packet capture for connected devices.
   rpc SetPacketCapture(SetPacketCaptureRequest) returns (google.protobuf.Empty);
-
-  // Turn on/off device radios
-  // TODO: response information
-  rpc SetRadio(SetRadioRequest) returns (google.protobuf.Empty);
 }
 
 message VersionResponse {
@@ -80,19 +67,11 @@ message VersionResponse {
 }
 
 message SetPositionRequest {
+  // use UpdateDevice instead
+  option deprecated = true;
   string device_serial = 1;
   netsim.model.Position position = 2;
   netsim.model.Orientation orientation = 3;
-}
-
-message DevicePosition {
-  string device_serial = 1;
-  netsim.model.Position position = 2;
-  netsim.model.Orientation orientation = 3;
-}
-
-message GetPositionResponse {
-  repeated DevicePosition results = 1;
 }
 
 // Set a fixed error probabilities for a link, where a value of 0% is
@@ -101,59 +80,18 @@ message GetPositionResponse {
 message SetLinkLossRequest {
   string device_serial = 1;
   string other_device = 2;
-  netsim.model.Radio radio = 3;
+  netsim.model.PhyKind radio = 3;
   // As a percent between 0 and 1
   float link_loss = 4;
 }
 
-// Set the range of an device's radio in meters.
-message SetRangeRequest {
-  string device_serial = 1;
-  netsim.model.Radio radio = 2;
-  float range = 3;  // range in meters.
+message UpdateDeviceRequest {
+  netsim.model.Device device = 2;  // update by id or name
 }
 
-// The set of radios that are enabled for a device
-message SetRadioRequest {
-  string device_serial = 1;
-  netsim.model.Radio radio = 2;
-  netsim.model.RadioState state = 3;
-}
-
-message RadioRange {
-  netsim.model.Radio radio = 1;
-  float range = 2;
-}
-
-message DeviceRadioRange {
-  string device_serial = 1;
-  netsim.model.Radio radio = 2;
-  float range = 3;
-}
-
-// Response for GetRanges request
-message GetRangesResponse {
-  repeated DeviceRadioRange results = 1;
-}
-
-// Request for SetVisibility request
-message VisibilityRequest {
-  // The emulated device to change.
-  string device_serial = 1;
-  // The visibility of the device
-  bool visibility = 2;
-}
-
-// Updates when device changes.
+// Updates when simulation state changes.
 message Updates {
-  // The emulated device that changed.
-  string device_serial = 1;
-  // Position of the device.
-  netsim.model.Position position = 2;
-  bool visibility = 3;
-  // Which radios are enabled.
-  netsim.model.Radios radios = 4;
-  repeated RadioRange ranges = 5;
+  repeated netsim.model.Device devices = 1;
 }
 
 // Response for GetDevices request.

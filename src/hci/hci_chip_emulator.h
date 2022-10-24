@@ -43,8 +43,8 @@ class ChipEmulator {
   static ChipEmulator &Get();
 
   // Enable/disable the enabled radios for a device
-  virtual void SetDeviceRadio(const std::string &, netsim::model::Radio,
-                              netsim::model::RadioState) = 0;
+  virtual void SetDeviceRadio(const std::string &, netsim::model::PhyKind,
+                              netsim::model::PhyState) = 0;
 
   // Starts the bluetooth chip emulator.
   virtual void Start() = 0;

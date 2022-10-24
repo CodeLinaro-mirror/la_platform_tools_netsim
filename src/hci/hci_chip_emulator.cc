@@ -92,39 +92,21 @@ class SimTestModel : public rootcanal::TestModel {
   };
 };
 
-class SimHciDevice : public rootcanal::HciDevice {
- public:
-  // for constructor inheritance
-  using rootcanal::HciDevice::HciDevice;
-
-  static std::shared_ptr<SimHciDevice> Create(
-      std::shared_ptr<rootcanal::HciTransport> transport,
-      const std::string &properties_filename) {
-    return std::make_shared<SimHciDevice>(transport, properties_filename);
-  }
-
-  bool HasPhy(rootcanal::Phy::Type phy_type) {
-    for (auto &phy : phy_layers_) {
-      if (phy != nullptr && phy->GetType() == phy_type) {
-        return true;
-      }
-    }
-    return false;
-  }
-};
-
-// Stores all the information associated with a connected device
+// Stores all the information associated with a connected hci or builtin device
 struct ConnectedDevice {
-  ConnectedDevice(std::string serial, std::shared_ptr<SimHciDevice> device,
+  ConnectedDevice(std::string serial, std::shared_ptr<rootcanal::Device> device,
                   size_t device_id,
+                  std::unordered_set<rootcanal::Phy::Type> has_phy,
                   std::shared_ptr<rootcanal::HciSniffer> sniffer)
       : serial(std::move(serial)),
         device(std::move(device)),
         device_id(device_id),
+        has_phy(std::move(has_phy)),
         sniffer(std::move(sniffer)) {}
   std::string serial;
-  std::shared_ptr<SimHciDevice> device;
+  std::shared_ptr<rootcanal::Device> device;
   size_t device_id;
+  std::unordered_set<rootcanal::Phy::Type> has_phy;
   std::shared_ptr<rootcanal::HciSniffer> sniffer;
 };
 
@@ -162,25 +144,27 @@ class ChipEmulatorImpl : public ChipEmulator {
   }
 
   // Enable or disable a single phy for a device
-  void UpdatePhy(const ConnectedDevice &cd, rootcanal::Phy::Type phy_type,
-                 size_t phy_index, netsim::model::RadioState new_state) {
-    auto current = cd.device->HasPhy(phy_type);
-    using RadioState = netsim::model::RadioState;
-    if (current && new_state == RadioState::DOWN) {
+  void UpdatePhy(ConnectedDevice &cd, rootcanal::Phy::Type phy_type,
+                 size_t phy_index, netsim::model::PhyState new_state) {
+    auto current = cd.has_phy.count(phy_type);
+    using RadioStateType = netsim::model::PhyState;
+    if (current && new_state == RadioStateType::DOWN) {
       mTestModel.DelDeviceFromPhy(cd.device_id, phy_index);
-    } else if (!current && new_state == RadioState::UP) {
+      cd.has_phy.erase(phy_type);
+    } else if (!current && new_state == RadioStateType::UP) {
       mTestModel.AddDeviceToPhy(cd.device_id, phy_index);
+      cd.has_phy.insert(phy_type);
     }
   }
 
   // Enable or disable the radios for a device
-  void SetDeviceRadio(const std::string &serial, netsim::model::Radio radio,
-                      netsim::model::RadioState state) override {
+  void SetDeviceRadio(const std::string &serial, netsim::model::PhyKind radio,
+                      netsim::model::PhyState state) override {
     if (auto cd = GetConnectedDevice(serial); cd != nullptr) {
-      if (radio == netsim::model::Radio::BLUETOOTH_LOW_ENERGY) {
+      if (radio == netsim::model::PhyKind::BLUETOOTH_LOW_ENERGY) {
         UpdatePhy(*cd, rootcanal::Phy::Type::LOW_ENERGY, phy_low_energy_index_,
                   state);
-      } else if (radio == netsim::model::Radio::BLUETOOTH_CLASSIC) {
+      } else if (radio == netsim::model::PhyKind::BLUETOOTH_CLASSIC) {
         UpdatePhy(*cd, rootcanal::Phy::Type::BR_EDR, phy_classic_index_, state);
       }
     }
@@ -200,7 +184,7 @@ class ChipEmulatorImpl : public ChipEmulator {
                                   : tx_power;
   }
 
-  ConnectedDevice const *GetConnectedDevice(const std::string &serial) {
+  ConnectedDevice *GetConnectedDevice(const std::string &serial) {
     if (auto iter = devices_.find(serial); iter != devices_.end()) {
       return &iter->second;
     }
@@ -221,25 +205,26 @@ class ChipEmulatorImpl : public ChipEmulator {
       std::shared_ptr<rootcanal::HciTransport> transport) override {
     // rewrap the transport to include a sniffer
     transport = rootcanal::HciSniffer::Create(transport);
-    auto device = SimHciDevice::Create(transport, mControllerProperties);
+    auto device = std::make_shared<rootcanal::HciDevice>(transport,
+                                                         mControllerProperties);
     std::cerr << "creating device: " << std::endl;
     auto device_id = mTestModel.AddHciConnection(device);
 
-    // update the scene controller with the radio state for this device
+    std::unordered_set<rootcanal::Phy::Type> has_phy;
+    // update the scene controller with the radio state for this device.
+    // AddHciConnection adds devices to both phys.
 
     controller::SceneController::Singleton().UpdateRadio(
-        serial, netsim::model::Radio::BLUETOOTH_LOW_ENERGY,
-        device->HasPhy(rootcanal::Phy::Type::LOW_ENERGY)
-            ? model::RadioState::UP
-            : model::RadioState::DOWN);
+        serial, netsim::model::PhyKind::BLUETOOTH_LOW_ENERGY,
+        model::PhyState::UP);
+    has_phy.insert(rootcanal::Phy::Type::LOW_ENERGY);
     controller::SceneController::Singleton().UpdateRadio(
-        serial, netsim::model::Radio::BLUETOOTH_CLASSIC,
-        device->HasPhy(rootcanal::Phy::Type::BR_EDR) ? model::RadioState::UP
-                                                     : model::RadioState::DOWN);
+        serial, netsim::model::PhyKind::BLUETOOTH_CLASSIC, model::PhyState::UP);
+    has_phy.insert(rootcanal::Phy::Type::BR_EDR);
 
     auto sniffer = std::static_pointer_cast<rootcanal::HciSniffer>(transport);
     devices_.emplace(std::make_pair(
-        serial, ConnectedDevice(serial, device, device_id, sniffer)));
+        serial, ConnectedDevice(serial, device, device_id, has_phy, sniffer)));
   }
 
   void SetPacketCapture(const std::string &serial, bool onOff) {

@@ -18,3 +18,5 @@ android_add_library(
   DEPS frontend-grpc-lib frontend-lib grpc++ protobuf::libprotobuf)
 
 target_include_directories(core-lib PRIVATE ..)
+
+target_compile_definitions(core-lib PUBLIC NETSIM_ANDROID_EMULATOR)
