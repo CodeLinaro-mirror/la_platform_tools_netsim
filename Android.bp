@@ -61,6 +61,7 @@ cc_library_host_static {
     name: "lib-netsim",
     defaults: ["netsim_defaults"],
     srcs: [
+        "src/controller/chip.cc",
         "src/controller/device.cc",
         "src/controller/scene_controller.cc",
         "src/controller/device_notify_manager.cc",
@@ -69,7 +70,7 @@ cc_library_host_static {
         "src/fe/frontend_server.cc",
         "src/fe/http_server.cc",
         "src/hci/fd_startup.cc",
-        "src/hci/hci_chip_emulator.cc",
+        "src/hci/bluetooth_chip_emulator.cc",
         "src/hci/hci_debug.cc",
         "src/util/ini_file.cc",
         "src/util/log.cc",

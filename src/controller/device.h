@@ -16,14 +16,38 @@
 
 #pragma once
 
+#include <memory>
 #include <string_view>
 
+#include "controller/chip.h"
 #include "model.pb.h"
 
 namespace netsim {
 namespace controller {
 
-model::Device CreateDevice(std::string_view device_serial);
+class Chip;
+
+class Device {
+ public:
+  model::Device model;
+
+  void Update(const model::Device &request);
+
+  void AddChip(std::shared_ptr<Device>, std::shared_ptr<Chip>,
+               const model::Chip &);
+
+  explicit Device(const model::Device &model) : model(model) {}
+  explicit Device(const std::string &serial) {
+    model.set_device_serial(serial);
+  }
+
+  void Reset();
+
+ protected:
+  std::vector<std::shared_ptr<Chip>> chips;
+};
+
+std::shared_ptr<Device> CreateDevice(std::string_view device_serial);
 
 }  // namespace controller
 }  // namespace netsim

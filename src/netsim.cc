@@ -19,7 +19,7 @@
 #include "core/server_rpc.h"
 #endif
 #include "fe/cli.h"
-#include "hci/hci_chip_emulator.h"
+#include "hci/bluetooth_chip_emulator.h"
 
 // Wireless network simulator for android (and other) emulated devices.
 
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
 
   // Daemon mode -- start radio managers
   if (!fd_startup_str.empty() || grpc_startup)
-    netsim::hci::ChipEmulator::Get().Start();
+    netsim::hci::BluetoothChipEmulator::Get().Start();
 
   if (!fd_startup_str.empty()) {
     netsim::StartWithFds(fd_startup_str, debug);

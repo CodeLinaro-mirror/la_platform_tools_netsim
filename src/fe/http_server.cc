@@ -84,11 +84,54 @@ Status SetPosition(const std::string &request, std::string &response) {
   return Status(true);
 }
 
+Status UpdateDevice(const std::string &request, std::string &response) {
+  frontend::UpdateDeviceRequest request_proto;
+  google::protobuf::util::JsonStringToMessage(request, &request_proto);
+  google::protobuf::Empty response_proto;
+
+  auto status = netsim::controller::SceneController::Singleton().UpdateDevice(
+      request_proto.device());
+  if (!status) {
+    return Status(
+        HTTP_STATUS_BAD_REQUEST,
+        "device_serial not found: " + request_proto.device().device_serial());
+  }
+
+  google::protobuf::util::MessageToJsonString(response_proto, &response);
+  return Status(true);
+}
+
 Status GetDevices(const std::string &request, std::string &response) {
   frontend::GetDevicesResponse response_proto;
-  const auto &scene = netsim::controller::SceneController::Singleton().Copy();
-  for (const auto &device : scene.devices())
-    response_proto.add_devices()->CopyFrom(device);
+  const auto &devices = netsim::controller::SceneController::Singleton().Copy();
+  for (const auto &device : devices)
+    response_proto.add_devices()->CopyFrom(device->model);
+
+  google::protobuf::util::MessageToJsonString(response_proto, &response);
+  return Status(true);
+}
+
+Status Reset(const std::string &request, std::string &response) {
+  netsim::controller::SceneController::Singleton().Reset();
+  google::protobuf::Empty response_proto;
+  google::protobuf::util::MessageToJsonString(response_proto, &response);
+  return Status(true);
+}
+
+Status SetPacketCapture(const std::string &request, std::string &response) {
+  frontend::SetPacketCaptureRequest request_proto;
+  google::protobuf::util::JsonStringToMessage(request, &request_proto);
+  google::protobuf::Empty response_proto;
+
+  model::Device device;
+  device.set_device_serial(request_proto.device_serial());
+  model::Chip chip;
+  // Turn on bt packet capture
+  chip.set_capture(request_proto.capture() ? model::State::ON
+                                           : model::State::OFF);
+  chip.mutable_bt();
+  device.mutable_chips()->Add()->CopyFrom(chip);
+  controller::SceneController::Singleton().UpdateDevice(device);
 
   google::protobuf::util::MessageToJsonString(response_proto, &response);
   return Status(true);
@@ -156,6 +199,14 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
         } else if (session->path.compare("/set-position") == 0) {
           session->status =
               SetPosition(session->request_body, session->response);
+        } else if (session->path.compare("/reset") == 0) {
+          session->status = Reset(session->request_body, session->response);
+        } else if (session->path.compare("/update-device") == 0) {
+          session->status =
+              UpdateDevice(session->request_body, session->response);
+        } else if (session->path.compare("/set-packet-capture") == 0) {
+          session->status =
+              SetPacketCapture(session->request_body, session->response);
         } else if (session->path.compare("/register-updates") == 0) {
           // Wake up by DeviceNotifyManager.
           session->status =

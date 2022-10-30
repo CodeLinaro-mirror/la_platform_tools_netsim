@@ -38,16 +38,8 @@ service FrontendService {
   // Set the position of the device.
   rpc SetPosition(SetPositionRequest) returns (google.protobuf.Empty);
 
-  // TODO: Other hwsim commands - addAccessPoint, addLink, ...
-
-  // Set a simplified Link Loss Model
-  rpc SetLinkLoss(SetLinkLossRequest) returns (google.protobuf.Empty);
-
-  // Radio properties (simplified view of txpower)
-  // Set the specified emulated radio chip's range.
-
   // Register for device movement and emulated radio state updates
-  rpc GetUpdates(google.protobuf.Empty) returns (stream Updates);
+  rpc RegisterUpdates(google.protobuf.Empty) returns (stream Updates);
 
   // Get a list of devices
   rpc GetDevices(google.protobuf.Empty) returns (GetDevicesResponse);
@@ -55,11 +47,24 @@ service FrontendService {
   // Update a device
   rpc UpdateDevice(UpdateDeviceRequest) returns (google.protobuf.Empty);
 
-  // Register for network logs
-  rpc NetCat(google.protobuf.Empty) returns (stream NetCatStream);
-
   // Turn on/off packet capture for connected devices.
   rpc SetPacketCapture(SetPacketCaptureRequest) returns (google.protobuf.Empty);
+
+  // Reset all devices.
+  rpc Reset(google.protobuf.Empty) returns (google.protobuf.Empty);
+
+  // TODO: Other hwsim commands - addAccessPoint, addLink, ...
+
+  // Methods not implement yet.
+
+  // Set a simplified Link Loss Model
+  rpc SetLinkLoss(SetLinkLossRequest) returns (google.protobuf.Empty);
+
+  // Radio properties (simplified view of txpower)
+  // Set the specified emulated radio chip's range.
+
+  // Register for network logs
+  rpc NetCat(google.protobuf.Empty) returns (stream NetCatStream);
 }
 
 message VersionResponse {

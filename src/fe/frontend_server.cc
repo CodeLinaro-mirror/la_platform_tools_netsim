@@ -27,7 +27,6 @@
 #include "grpcpp/server_builder.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
-#include "hci/hci_chip_emulator.h"
 #include "util/ini_file.h"
 #include "util/os_utils.h"
 
@@ -45,9 +44,10 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status GetDevices(grpc::ServerContext *context,
                           const google::protobuf::Empty *empty,
                           frontend::GetDevicesResponse *reply) {
-    const auto &scene = netsim::controller::SceneController::Singleton().Copy();
-    for (const auto &device : scene.devices())
-      reply->add_devices()->CopyFrom(device);
+    const auto devices =
+        netsim::controller::SceneController::Singleton().Copy();
+    for (const auto &device : devices)
+      reply->add_devices()->CopyFrom(device->model);
     return grpc::Status::OK;
   }
 
@@ -78,8 +78,21 @@ class FrontendServer final : public frontend::FrontendService::Service {
       grpc::ServerContext *context,
       const frontend::SetPacketCaptureRequest *request,
       google::protobuf::Empty *empty) {
-    hci::ChipEmulator::Get().SetPacketCapture(request->device_serial(),
-                                              request->capture());
+    model::Device device;
+    device.set_device_serial(request->device_serial());
+    model::Chip chip;
+    // Turn on bt packet capture
+    chip.set_capture(request->capture() ? model::State::ON : model::State::OFF);
+    chip.mutable_bt();
+    device.mutable_chips()->Add()->CopyFrom(chip);
+    controller::SceneController::Singleton().UpdateDevice(device);
+    return grpc::Status::OK;
+  }
+
+  grpc::Status Reset(grpc::ServerContext *context,
+                     const google::protobuf::Empty *request,
+                     google::protobuf::Empty *empty) {
+    netsim::controller::SceneController::Singleton().Reset();
     return grpc::Status::OK;
   }
 };

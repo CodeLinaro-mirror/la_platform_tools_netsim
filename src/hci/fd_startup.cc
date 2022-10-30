@@ -25,7 +25,7 @@
 
 #include "controller/device.h"
 #include "controller/scene_controller.h"
-#include "hci/hci_chip_emulator.h"
+#include "hci/bluetooth_chip_emulator.h"
 #include "model/hci/h4_parser.h"
 #include "model/hci/hci_transport.h"
 #include "startup.pb.h"
@@ -218,7 +218,7 @@ class FdStartupImpl : public FdStartup {
 
           // Add a new HCI device. Rootcanal will eventually RegisterCallbacks
           // which starts reading and writing to the fd.
-          hci::ChipEmulator::Get().AddHciConnection(serial, transport);
+          hci::BluetoothChipEmulator::Get().AddHciConnection(serial, transport);
         }
       }
     }

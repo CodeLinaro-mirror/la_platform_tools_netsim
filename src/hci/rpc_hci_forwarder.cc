@@ -28,7 +28,6 @@
 
 #include "emulated_bluetooth_vhci.grpc.pb.h"  // for VhciForwardingService
 #include "emulated_bluetooth_vhci.pb.h"       // for HCIPacket
-#include "hci/hci_chip_emulator.h"
 #include "hci/hci_debug.h"
 #include "hci/rpc_transport.h"
 #include "model/hci/hci_transport.h"

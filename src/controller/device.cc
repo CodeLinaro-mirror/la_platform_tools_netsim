@@ -45,16 +45,60 @@ const std::string GetName(std::string_view device_serial) {
 }
 }  // namespace
 
-model::Device CreateDevice(std::string_view device_serial) {
-  model::Device device;
-  device.set_device_serial(stringutils::AsString(device_serial));
-  device.set_visible(true);
+void Device::Update(const model::Device &request) {
+  if (request.has_position()) {
+    this->model.mutable_position()->CopyFrom(request.position());
+  }
+  if (request.has_orientation()) {
+    this->model.mutable_orientation()->CopyFrom(request.orientation());
+  }
+  if (!request.name().empty()) {
+    this->model.set_name(request.name());
+  }
+  for (auto &request_chip_model : request.chips()) {
+    auto found = false;
+    for (auto &chip : chips) {
+      if (chip->KeyComp(request_chip_model)) {
+        chip->Update(request_chip_model);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      std::cerr << "Unknown chip in update" << std::endl;
+    }
+  }
+}
+
+void Device::AddChip(std::shared_ptr<Device> device, std::shared_ptr<Chip> chip,
+                     const model::Chip &chip_model) {
+  for (auto &c : chips) {
+    if (c->KeyComp(chip_model)) {
+      std::cerr << "Trying to add a duplicate chip, skipping!" << std::endl;
+      return;
+    }
+  }
+  chip->Init(std::move(device), chips.size());
+  model.mutable_chips()->Add()->CopyFrom(chip_model);
+  chips.push_back(std::move(chip));
+}
+void Device::Reset() {
+  this->model.set_visible(true);
+  this->model.mutable_position()->Clear();
+  this->model.mutable_orientation()->Clear();
+  // TODO: Reset chips and radios.
+}
+
+std::shared_ptr<Device> CreateDevice(std::string_view serial) {
+  model::Device model;
+  model.set_device_serial(stringutils::AsString(serial));
+  model.set_visible(true);
   // default name
-  device.set_name(GetName(device_serial));
+  model.set_name(GetName(serial));
   // required sub-messages to simplify ui
-  device.mutable_position();
-  device.mutable_orientation();
-  return device;
+  model.mutable_position();
+  model.mutable_orientation();
+  return std::make_shared<Device>(model);
 }
 
 }  // namespace controller
