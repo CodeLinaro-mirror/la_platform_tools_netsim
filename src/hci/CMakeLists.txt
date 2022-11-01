@@ -17,9 +17,8 @@ android_add_library(
   LICENSE Apache-2.0
   SRC fd_startup.cc
       fd_startup.h
-      hci_chip_emulator.cc
-      hci_chip_emulator.h
-      hci_chip_emulator.h
+      bluetooth_chip_emulator.cc
+      bluetooth_chip_emulator.h
       hci_debug.cc
       hci_debug.h
       hci_packet.h

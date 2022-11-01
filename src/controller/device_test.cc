@@ -23,7 +23,7 @@ namespace {
 
 TEST(DeviceTest, CreateDevicesTest) {
   const auto device = netsim::controller::CreateDevice("test-device-serial");
-  EXPECT_EQ(device.device_serial(), "test-device-serial");
+  EXPECT_EQ(device->model.device_serial(), "test-device-serial");
 }
 
 }  // namespace

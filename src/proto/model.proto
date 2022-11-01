@@ -30,7 +30,6 @@ message Orientation {
   float roll = 3;
 }
 
-// A radio physical layer
 enum PhyKind {
   NONE = 0;
   BLUETOOTH_CLASSIC = 1;
@@ -40,31 +39,38 @@ enum PhyKind {
   WIFI_RTT = 5;
 }
 
-// The state of the physical layer
-enum PhyState {
-  option allow_alias = true;
+// An explicit valued boolean.
+enum State {
   UNKNOWN = 0;
   ON = 1;
-  UP = 1;
   OFF = 2;
-  DOWN = 2;
 }
 
-// The phy layer and state in a chip
-//
-// A device can have multiple chips of the same kind
-// (like UWB) and each chip can provide multiple phys
-// (like Bluetooth)
-message ChipPhyState {
-  PhyKind radio = 1;
-  PhyState state = 2;
-  // TODO: add ChipKind and id
-}
+message Chip {
+  // Radio state associated with the Chip
+  message Radio {
+    State state = 1;
+    float range = 2;
+    int32 tx_count = 3;
+    int32 rx_count = 4;
+  }
 
-message ChipPhyRange {
-  PhyKind radio = 1;
-  float range = 2;
-  // TODO: add owning ChipKind and id
+  // Bluetooth has 2 radios
+  message Bluetooth {
+    Radio low_energy = 1;
+    Radio classic = 2;
+  }
+
+  string chip_id = 1;       // optional like "rear-right"
+  string manufacturer = 2;  // optional like Quorvo
+  string model = 3;         // optional like DW300
+  State capture = 4;        // packet capture
+
+  oneof chip {
+    Bluetooth bt = 5;
+    Radio uwb = 6;
+    Radio wifi = 7;
+  }
 }
 
 message Device {
@@ -73,8 +79,8 @@ message Device {
   bool visible = 3;
   Position position = 4;
   Orientation orientation = 5;
-  repeated ChipPhyState radio_states = 6;
-  repeated ChipPhyRange radio_ranges = 7;
+  // Device can have multiple chips of the same kind.
+  repeated Chip chips = 6;
 }
 
 message Scene {

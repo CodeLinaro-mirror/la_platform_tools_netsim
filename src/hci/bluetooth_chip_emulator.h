@@ -29,22 +29,17 @@ namespace hci {
  * Owns the TestModel, setup, and manages the packet flow into and out of
  * rootcanal.
  */
-// TODO: rename to HciChipEmulator
-class ChipEmulator {
+class BluetoothChipEmulator {
  public:
-  virtual ~ChipEmulator(){};
+  virtual ~BluetoothChipEmulator(){};
 
   // Deleted copy constructor for singleton class
-  ChipEmulator(const ChipEmulator &) = delete;
+  BluetoothChipEmulator(const BluetoothChipEmulator &) = delete;
   // Deleted copy assignment for singleton class
-  ChipEmulator &operator=(const ChipEmulator &) = delete;
+  BluetoothChipEmulator &operator=(const BluetoothChipEmulator &) = delete;
 
   // Retrieve the singleton
-  static ChipEmulator &Get();
-
-  // Enable/disable the enabled radios for a device
-  virtual void SetDeviceRadio(const std::string &, netsim::model::PhyKind,
-                              netsim::model::PhyState) = 0;
+  static BluetoothChipEmulator &Get();
 
   // Starts the bluetooth chip emulator.
   virtual void Start() = 0;
@@ -52,17 +47,12 @@ class ChipEmulator {
   // Closes the bluetooth chip emulator.
   virtual void Close() = 0;
 
-  virtual int8_t GetRssi(int sender_id, int receiver_id, int8_t tx_power) = 0;
-
-  // Turn packet catpure on/off
-  virtual void SetPacketCapture(const std::string &, bool) = 0;
-
   virtual void AddHciConnection(
       const std::string &,
       std::shared_ptr<rootcanal::HciTransport> transport) = 0;
 
  protected:
-  ChipEmulator() {}
+  BluetoothChipEmulator() {}
 };
 
 }  // namespace hci

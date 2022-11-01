@@ -47,7 +47,7 @@ std::optional<std::string> GetServerAddress() {
 
 void Usage(const char *msg) { std::cerr << "Usage: " << msg << std::endl; }
 
-constexpr char kUsage[] = "Usage: [version|devices|radio|move|capture]";
+constexpr char kUsage[] = "Usage: [version|devices|radio|move|capture|reset]";
 using Args = std::vector<std::string_view>;
 
 // A synchronous client for the netsim frontend service.
@@ -101,6 +101,10 @@ class FrontendClient {
       std::cout << "set-visibility " << device_serial << " " << visible;
   }
 
+  std::string stateToString(const model::Chip::Radio &radio) {
+    return radio.state() == model::State::ON ? "up" : "down";
+  }
+
   // devices
   void GetDevices(const Args &args) {
     if (args.size() != 1) return Usage("devices");
@@ -117,14 +121,17 @@ class FrontendClient {
         const std::string position = stream.str();
         std::cout << device.device_serial() << "\t";
 
-        for (const auto &radio_state : device.radio_states()) {
-          auto radio =
-              radio_state.radio() == model::PhyKind ::BLUETOOTH_LOW_ENERGY
-                  ? "ble:"
-                  : "classic:";
-          auto state =
-              radio_state.state() == model::PhyState::ON ? "up" : "down";
-          std::cout << radio << ":" << state << "\t";
+        for (const auto &chip : device.chips()) {
+          switch (chip.chip_case()) {
+            case model::Chip::ChipCase::kBt:
+              std::cout << "ble:" << stateToString(chip.bt().low_energy())
+                        << "\t"
+                        << "classic:" << stateToString(chip.bt().classic());
+              break;
+            default:
+              std::cout << "unknown:down";
+              break;
+          }
         }
         std::cout << position << std::endl;
       }
@@ -147,19 +154,19 @@ class FrontendClient {
           "unknown radio - radio <ble|classic> <up|down> <device_serial>");
     }
     auto radio_state = up_status.count(std::string(args.at(2)))
-                           ? model::PhyState::UP
-                           : model::PhyState::DOWN;
+                           ? model::State::ON
+                           : model::State::OFF;
 
-    auto radio = is_le ? model::PhyKind ::BLUETOOTH_LOW_ENERGY
-                       : model::PhyKind ::BLUETOOTH_CLASSIC;
     auto device_serial = std::string(args.at(3));
     frontend::UpdateDeviceRequest request;
     google::protobuf::Empty response;
     request.mutable_device()->set_device_serial(device_serial);
-
-    auto entry = request.mutable_device()->add_radio_states();
-    entry->set_radio(radio);
-    entry->set_state(radio_state);
+    auto bt = request.mutable_device()->add_chips()->mutable_bt();
+    if (is_le) {
+      bt->mutable_low_energy()->set_state(radio_state);
+    } else {
+      bt->mutable_classic()->set_state(radio_state);
+    }
     auto status = stub_->UpdateDevice(&context_, request, &response);
     if (CheckStatus(status, "SetRadio")) {
       std::cout << "radio " << args.at(1) << " is " << args.at(2) << " for "
@@ -185,6 +192,16 @@ class FrontendClient {
                 << (device_serial.empty() ? "all devices" : device_serial)
                 << std::endl;
     }
+  }
+
+  // Reset all devices.
+  // reset
+  void Reset(const Args &args) {
+    if (args.size() != 1) return Usage("reset");
+    google::protobuf::Empty response;
+    auto status = stub_->Reset(&context_, {}, &response);
+    if (CheckStatus(status, "Reset"))
+      std::cout << "Reset all devices" << std::endl;
   }
 
  private:
@@ -245,6 +262,8 @@ int SendCommand(std::unique_ptr<frontend::FrontendService::Stub> stub,
     frontend.GetDevices(args);
   else if (cmd == "capture")
     frontend.SetPacketCapture(args);
+  else if (cmd == "reset")
+    frontend.Reset(args);
   else if (cmd == "positions" || cmd == "visibility" ||
            cmd == "set-link-loss" || cmd == "set-range" || cmd == "net-cat") {
     std::cout << "Not implement yet" << std::endl;

@@ -29,7 +29,7 @@
 #include "emulated_bluetooth_vhci.pb.h"       // for HCIPacket
 #include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
-#include "hci/hci_chip_emulator.h"
+#include "hci/bluetooth_chip_emulator.h"
 #include "hci/rpc_hci_forwarder.h"
 #include "util/ini_file.h"
 #include "util/os_utils.h"
@@ -89,7 +89,7 @@ class RpcHalTransportImpl : public RpcHalTransport {
     // Add a new HCI device for this RpcHciTransport
 
     std::shared_ptr<rootcanal::HciTransport> transport = forwarder;
-    hci::ChipEmulator::Get().AddHciConnection(serial, transport);
+    hci::BluetoothChipEmulator::Get().AddHciConnection(serial, transport);
 
     // Start the rpc transport
     forwarder->Start(serial, std::move(stream), std::move(context));
