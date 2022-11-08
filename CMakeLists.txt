@@ -39,7 +39,7 @@ android_add_test(
   SRC src/controller/device_test.cc
       src/controller/scene_controller_test.cc
       src/fe/frontend_server_test.cc
-      src/hci/startup_test.cc
+      src/backend/startup_test.cc
       src/util/ini_file_test.cc
       src/util/os_utils_test.cc
       src/util/string_utils_test.cc

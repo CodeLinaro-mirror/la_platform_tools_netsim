@@ -32,6 +32,7 @@ add_subdirectory(core)
 add_subdirectory(proto)
 add_subdirectory(controller)
 add_subdirectory(fe)
+add_subdirectory(backend)
 add_subdirectory(hci)
 
 add_library(netsim-lib INTERFACE)
@@ -40,6 +41,7 @@ target_link_libraries(
   INTERFACE core-lib
             frontend-grpc-lib
             frontend-lib
+	    backend-lib
             hci-lib
             util-lib
             vhci-lib

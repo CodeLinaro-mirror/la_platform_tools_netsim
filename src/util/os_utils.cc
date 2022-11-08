@@ -21,6 +21,8 @@
 #include <filesystem>
 #include <string>
 
+#include "util/log.h"
+
 namespace netsim {
 namespace osutils {
 namespace {
@@ -45,7 +47,12 @@ DiscoveryDir discovery {
 }  // namespace
 
 std::filesystem::path GetDiscoveryDirectory() {
-  std::filesystem::path path(std::getenv(discovery.root_env));
+  const char *env_p = std::getenv(discovery.root_env);
+  if (!env_p) {
+    BtsLog("No discovery env for %s, using tmp/", discovery.root_env);
+    env_p = "/tmp";
+  }
+  std::filesystem::path path(env_p);
   path.append(discovery.subdir);
   return path;
 }

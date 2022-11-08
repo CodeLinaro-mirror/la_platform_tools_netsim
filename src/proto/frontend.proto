@@ -35,9 +35,6 @@ service FrontendService {
   // Get the version of the netsim service.
   rpc GetVersion(google.protobuf.Empty) returns (VersionResponse);
 
-  // Set the position of the device.
-  rpc SetPosition(SetPositionRequest) returns (google.protobuf.Empty);
-
   // Register for device movement and emulated radio state updates
   rpc RegisterUpdates(google.protobuf.Empty) returns (stream Updates);
 
@@ -69,14 +66,6 @@ service FrontendService {
 
 message VersionResponse {
   string version = 1;
-}
-
-message SetPositionRequest {
-  // use UpdateDevice instead
-  option deprecated = true;
-  string device_serial = 1;
-  netsim.model.Position position = 2;
-  netsim.model.Orientation orientation = 3;
 }
 
 // Set a fixed error probabilities for a link, where a value of 0% is

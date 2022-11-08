@@ -25,7 +25,7 @@
 
 #include "controller/device.h"
 #include "controller/scene_controller.h"
-#include "hci/bluetooth_chip_emulator.h"
+#include "hci/bluetooth_facade.h"
 #include "model/hci/h4_parser.h"
 #include "model/hci/hci_transport.h"
 #include "startup.pb.h"

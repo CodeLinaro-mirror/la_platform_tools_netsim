@@ -31,7 +31,7 @@ model::Chip &Chip::Model() {
 model::Device &Chip::DeviceModel() { return this->parent->model; }
 
 void Chip::Update(const model::Chip &request) {
-  auto model = Model();
+  auto &model = Model();
   if (!request.manufacturer().empty()) {
     model.set_manufacturer(request.manufacturer());
   }
@@ -47,7 +47,7 @@ void Chip::Reset() {
 }
 
 bool Chip::KeyComp(const model::Chip &other_model) {
-  auto model = Model();
+  auto &model = Model();
   return model.chip_case() == other_model.chip_case() &&
          model.chip_id() == other_model.chip_id();
 }
