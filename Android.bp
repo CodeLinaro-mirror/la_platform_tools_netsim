@@ -37,7 +37,9 @@ cc_defaults {
     name: "netsim_defaults",
     cflags: [
         "-Wno-unused-parameter",
+        "-g", // Produce debugging information.
     ],
+    ldflags: ["-rdynamic"], // Allow obtaining backtraces for debugging.
     local_include_dirs: [
         "src",
     ],
@@ -69,8 +71,8 @@ cc_library_host_static {
         "src/fe/cli.cc",
         "src/fe/frontend_server.cc",
         "src/fe/http_server.cc",
-        "src/hci/fd_startup.cc",
-        "src/hci/bluetooth_chip_emulator.cc",
+        "src/backend/fd_startup.cc",
+        "src/hci/bluetooth_facade.cc",
         "src/hci/hci_debug.cc",
         "src/util/ini_file.cc",
         "src/util/log.cc",
@@ -130,7 +132,7 @@ cc_test_host {
         "src/controller/device_test.cc",
         "src/controller/scene_controller_test.cc",
         "src/fe/frontend_server_test.cc",
-        "src/hci/startup_test.cc",
+        "src/backend/startup_test.cc",
         "src/util/ini_file_test.cc",
         "src/util/os_utils_test.cc",
         "src/util/string_utils_test.cc",

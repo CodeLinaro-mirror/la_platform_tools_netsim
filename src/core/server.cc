@@ -18,8 +18,8 @@
 #include <string>
 #include <thread>
 
+#include "backend/fd_startup.h"
 #include "fe/frontend_server.h"
-#include "hci/fd_startup.h"
 #ifndef NETSIM_ANDROID_EMULATOR
 #include "fe/http_server.h"
 #endif

@@ -13,22 +13,19 @@
 # limitations under the License.
 
 android_add_library(
-  TARGET hci-lib
+  TARGET backend-lib
   LICENSE Apache-2.0
-  SRC bluetooth_facade.cc
-      bluetooth_facade.h
-      hci_debug.cc
-      hci_debug.h
-      hci_packet.h
-      rpc_hci_forwarder.cc
-      rpc_hci_forwarder.h
+  SRC fd_startup.cc
+      fd_startup.h
+      rpc_hal_transport.cc
+      rpc_hal_transport.h
+      rpc_transport.h
   DEPS android-emu-base
        android-emu-base-headers
        controller-lib
        frontend-grpc-lib
-       frontend-lib
-       grpc++
        libbt-rootcanal
        libbt-rootcanal-qemu
+       grpc++
        vhci-lib)
-target_include_directories(hci-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..)
+target_include_directories(backend-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..)

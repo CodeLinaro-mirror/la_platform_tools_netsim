@@ -27,12 +27,12 @@ package netsim.startup;
  * netsim -s '
  *   {"devices": [
  *      {serial: "emulator-5554",
- *       chips: [{type: "WIFI", fdIn: 1, fdOut: 2},
- *               {type: "BLUETOOTH", fdIn: 20, fdOut:21}]
+ *       chips: [{kind: "WIFI", fdIn: 1, fdOut: 2},
+ *               {kind: "BLUETOOTH", fdIn: 20, fdOut:21}]
  *      },
  *      {serial: "emulator-5555",
- *       chips: [{type: "BLUETOOTH", fdIn: 3, fdOut: 4},
- *               {type: "UWB", fdIn: 5, fdOut: 6, model: "DW300"}]
+ *       chips: [{kind: "BLUETOOTH", fdIn: 3, fdOut: 4},
+ *               {kind: "UWB", fdIn: 5, fdOut: 6, model: "DW300"}]
  *      }
  *    ]
  *   }'

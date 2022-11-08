@@ -13,15 +13,37 @@
 // limitations under the License.
 
 #include <getopt.h>
+#if defined(__linux__)
+#include <execinfo.h>
+#include <signal.h>
+#include <unistd.h>
+
+#include <cstdio>
+#endif
 
 #include "core/server.h"
 #ifdef NETSIM_ANDROID_EMULATOR
 #include "core/server_rpc.h"
 #endif
 #include "fe/cli.h"
-#include "hci/bluetooth_chip_emulator.h"
+#include "hci/bluetooth_facade.h"
 
 // Wireless network simulator for android (and other) emulated devices.
+
+#if defined(__linux__)
+// Signal handler to print backtraces and then terminate the program.
+void SignalHandler(int sig) {
+  size_t buffer_size = 20;  // Number of entries in that array.
+  void *buffer[buffer_size];
+
+  auto size = backtrace(buffer, buffer_size);
+  fprintf(stderr,
+          "netsim error: interrupt by signal %d. Obtained %d stack frames:\n",
+          sig, size);
+  backtrace_symbols_fd(buffer, size, STDERR_FILENO);
+  exit(sig);
+}
+#endif
 
 void ArgError(char *argv[], int c) {
   std::cerr << argv[0] << ": invalid option -- " << (char)c << "\n";
@@ -29,6 +51,9 @@ void ArgError(char *argv[], int c) {
 }
 
 int main(int argc, char *argv[]) {
+#if defined(__linux__)
+  signal(SIGSEGV, SignalHandler);
+#endif
   const char *kShortOpt = "s:dg";
   bool debug = false;
   bool grpc_startup = false;

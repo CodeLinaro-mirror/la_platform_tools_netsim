@@ -68,22 +68,6 @@ Status GetVersion(const std::string &request, std::string &response) {
   return Status(true);
 }
 
-Status SetPosition(const std::string &request, std::string &response) {
-  frontend::SetPositionRequest request_proto;
-  google::protobuf::util::JsonStringToMessage(request, &request_proto);
-  google::protobuf::Empty response_proto;
-
-  auto status = netsim::controller::SceneController::Singleton().SetPosition(
-      request_proto.device_serial(), request_proto.position());
-  if (!status) {
-    return Status(HTTP_STATUS_BAD_REQUEST,
-                  "device_serial not found: " + request_proto.device_serial());
-  }
-
-  google::protobuf::util::MessageToJsonString(response_proto, &response);
-  return Status(true);
-}
-
 Status UpdateDevice(const std::string &request, std::string &response) {
   frontend::UpdateDeviceRequest request_proto;
   google::protobuf::util::JsonStringToMessage(request, &request_proto);
@@ -196,9 +180,6 @@ int callback_http(struct lws *wsi, enum lws_callback_reasons reason, void *user,
         } else if (session->path.compare("/get-devices") == 0) {
           session->status =
               GetDevices(session->request_body, session->response);
-        } else if (session->path.compare("/set-position") == 0) {
-          session->status =
-              SetPosition(session->request_body, session->response);
         } else if (session->path.compare("/reset") == 0) {
           session->status = Reset(session->request_body, session->response);
         } else if (session->path.compare("/update-device") == 0) {

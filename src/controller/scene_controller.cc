@@ -38,19 +38,6 @@ const std::vector<std::shared_ptr<Device>> SceneController::Copy() {
   return devices_;
 }
 
-bool SceneController::SetPosition(const std::string &device_serial,
-                                  const netsim::model::Position &position) {
-  std::unique_lock<std::mutex> lock(this->mutex_);
-  for (auto &device : devices_) {
-    if (device->model.device_serial() == device_serial) {
-      device->model.mutable_position()->CopyFrom(position);
-      DeviceNotifyManager::Get().Notify();
-      return true;
-    }
-  }
-  return false;
-}
-
 std::shared_ptr<Device> SceneController::GetOrCreate(
     const std::string &serial) {
   std::unique_lock<std::mutex> lock(this->mutex_);

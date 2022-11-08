@@ -48,18 +48,18 @@ TEST_F(FrontendServerTest, VerifyVersion) {
   EXPECT_EQ(response.version(), "123b");
 }
 
-TEST_F(FrontendServerTest, SetPositionDevice) {
+TEST_F(FrontendServerTest, UpdateDevicePosition) {
   auto serial = "test-device-serial-for-set-position";
   auto device_to_add = controller::CreateDevice(serial);
   netsim::controller::SceneController::Singleton().Add(device_to_add);
 
   google::protobuf::Empty response;
-  frontend::SetPositionRequest request;
-  request.set_device_serial(serial);
-  request.mutable_position()->set_x(1.1);
-  request.mutable_position()->set_y(2.2);
-  request.mutable_position()->set_z(3.3);
-  grpc::Status status = service_.SetPosition(&context_, &request, &response);
+  frontend::UpdateDeviceRequest request;
+  request.mutable_device()->set_device_serial(serial);
+  request.mutable_device()->mutable_position()->set_x(1.1);
+  request.mutable_device()->mutable_position()->set_y(2.2);
+  request.mutable_device()->mutable_position()->set_z(3.3);
+  grpc::Status status = service_.UpdateDevice(&context_, &request, &response);
   ASSERT_TRUE(status.ok());
   const auto &scene = netsim::controller::SceneController::Singleton().Copy();
   // NOTE: Singleton won't be reset between tests. Need to either deprecate
@@ -67,10 +67,10 @@ TEST_F(FrontendServerTest, SetPositionDevice) {
   bool found = false;
   for (const auto &device :
        netsim::controller::SceneController::Singleton().Copy()) {
-    if (device->model.device_serial() == request.device_serial()) {
-      EXPECT_EQ(device->model.position().x(), request.position().x());
-      EXPECT_EQ(device->model.position().y(), request.position().y());
-      EXPECT_EQ(device->model.position().z(), request.position().z());
+    if (device->model.device_serial() == request.device().device_serial()) {
+      EXPECT_EQ(device->model.position().x(), request.device().position().x());
+      EXPECT_EQ(device->model.position().y(), request.device().position().y());
+      EXPECT_EQ(device->model.position().z(), request.device().position().z());
       found = true;
       break;
     }
@@ -110,11 +110,11 @@ TEST_F(FrontendServerTest, UpdateDevice) {
               model::State::ON);
 }
 
-TEST_F(FrontendServerTest, SetPositionDeviceNotFound) {
+TEST_F(FrontendServerTest, UpdateDeviceNotFound) {
   google::protobuf::Empty response;
-  frontend::SetPositionRequest request;
-  request.set_device_serial("non-existing-device-serial");
-  grpc::Status status = service_.SetPosition(&context_, &request, &response);
+  frontend::UpdateDeviceRequest request;
+  request.mutable_device()->set_device_serial("non-existing-device-serial");
+  grpc::Status status = service_.UpdateDevice(&context_, &request, &response);
   ASSERT_FALSE(status.ok());
   EXPECT_EQ(status.error_code(), grpc::StatusCode::NOT_FOUND);
 }

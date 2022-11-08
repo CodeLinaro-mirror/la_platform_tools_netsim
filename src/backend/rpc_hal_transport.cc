@@ -15,7 +15,7 @@
 /// Transport of virtual controller messages (hci, uci, netlink) from
 /// desktop emulator (emu) to simulator.
 
-#include "hci/rpc_hal_transport.h"
+#include "backend/rpc_hal_transport.h"
 
 #include <chrono>
 #include <filesystem>
@@ -29,7 +29,7 @@
 #include "emulated_bluetooth_vhci.pb.h"       // for HCIPacket
 #include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
-#include "hci/bluetooth_chip_emulator.h"
+#include "hci/bluetooth_facade.h"
 #include "hci/rpc_hci_forwarder.h"
 #include "util/ini_file.h"
 #include "util/os_utils.h"

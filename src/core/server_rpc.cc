@@ -20,7 +20,7 @@
 #include "fe/cli.h"
 #include "fe/frontend_server.h"
 #include "frontend.grpc.pb.h"
-#include "hci/rpc_hal_transport.h"
+#include "backend/rpc_hal_transport.h"
 #include "util/os_utils.h"
 
 namespace netsim {

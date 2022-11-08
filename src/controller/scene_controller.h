@@ -40,8 +40,6 @@ class SceneController {
   void Add(std::shared_ptr<Device> &device);
 
   const std::vector<std::shared_ptr<Device>> Copy();
-  bool SetPosition(const std::string &device_serial,
-                   const netsim::model::Position &position);
 
   bool UpdateDevice(const model::Device &);
 
