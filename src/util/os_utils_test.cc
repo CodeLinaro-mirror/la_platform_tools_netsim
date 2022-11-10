@@ -27,8 +27,6 @@ namespace {
 
 // Test that the result of GetDiscoveryDir exists
 TEST(OsUtilsTest, GetDiscoveryDir) {
-  GTEST_SKIP() << "$XDG_RUNTIME_DIR is not set in the machines of Android Host "
-                  "Unit Tests";
   auto dir = osutils::GetDiscoveryDirectory();
   EXPECT_TRUE(std::filesystem::exists(dir));
 }

@@ -68,9 +68,9 @@ cc_library_host_static {
         "src/controller/scene_controller.cc",
         "src/controller/device_notify_manager.cc",
         "src/core/server.cc",
-        "src/fe/cli.cc",
-        "src/fe/frontend_server.cc",
-        "src/fe/http_server.cc",
+        "src/frontend/cli.cc",
+        "src/frontend/frontend_server.cc",
+        "src/frontend/http_server.cc",
         "src/backend/fd_startup.cc",
         "src/hci/bluetooth_facade.cc",
         "src/hci/hci_debug.cc",
@@ -125,13 +125,39 @@ cc_binary_host {
     ],
 }
 
+cc_binary_host {
+    name: "netsimd",
+    defaults: ["netsim_defaults"],
+    srcs: [
+        "src/netsimd.cc",
+    ],
+    shared_libs: [
+        "libgrpc++",
+        "libcap",
+        "libcrypto",
+        "libssl",
+    ],
+    static_libs: [
+        "libc++fs",
+        "libjsoncpp",
+        "libprotobuf-cpp-full",
+        "libscriptedbeaconpayload-protos-lite",
+        "libwebsockets",
+        "netsim-proto",
+        "lib-netsim",
+    ],
+    whole_static_libs: [
+        "libbt-rootcanal",
+    ],
+}
+
 cc_test_host {
     name: "netsim-test",
     defaults: ["netsim_defaults"],
     srcs: [
         "src/controller/device_test.cc",
         "src/controller/scene_controller_test.cc",
-        "src/fe/frontend_server_test.cc",
+        "src/frontend/frontend_server_test.cc",
         "src/backend/startup_test.cc",
         "src/util/ini_file_test.cc",
         "src/util/os_utils_test.cc",

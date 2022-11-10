@@ -113,18 +113,21 @@ class BluetoothChipEmulatorImpl : public BluetoothChipEmulator {
   BluetoothChipEmulatorImpl(const BluetoothChipEmulatorImpl &) = delete;
 
   // Initialize the rootcanal library.
-  void Start() override {
+  void Start(std::string rootcanal_default_commands_file,
+             std::string rootcanal_controller_properties_file) override {
     if (mStarted) return;
+    controller_properties_ = rootcanal_controller_properties_file;
 
-    phy_low_energy_index_ = mTestModel.AddPhy(rootcanal::Phy::Type::LOW_ENERGY);
+    // NOTE: 0:BR_EDR, 1:LOW_ENERGY. The order is used by bluetooth CTS.
     phy_classic_index_ = mTestModel.AddPhy(rootcanal::Phy::Type::BR_EDR);
+    phy_low_energy_index_ = mTestModel.AddPhy(rootcanal::Phy::Type::LOW_ENERGY);
 
     // TODO: remove testCommands
     auto testCommands = rootcanal::TestCommandHandler(mTestModel);
     testCommands.RegisterSendResponse([](const std::string &) {});
     testCommands.SetTimerPeriod({"5"});
     testCommands.StartTimer({});
-    testCommands.FromFile(mCmdFile);
+    testCommands.FromFile(rootcanal_default_commands_file);
 
     mStarted = true;
   };
@@ -178,8 +181,7 @@ class BluetoothChipEmulatorImpl : public BluetoothChipEmulator {
       [this](const std::string & /* server */, int /* port */,
              rootcanal::Phy::Type /* phy_type */) { return nullptr; }};
 
-  std::string mControllerProperties;
-  std::string mCmdFile;
+  std::string controller_properties_;
 };
 
 class BluetoothChip : public controller::Chip {
@@ -306,7 +308,7 @@ void BluetoothChipEmulatorImpl::AddHciConnection(
   // rewrap the transport to include a sniffer
   transport = rootcanal::HciSniffer::Create(transport);
   auto hci_device =
-      std::make_shared<rootcanal::HciDevice>(transport, mControllerProperties);
+      std::make_shared<rootcanal::HciDevice>(transport, controller_properties_);
   std::cerr << "creating device: " << std::endl;
   auto device_id = mTestModel.AddHciConnection(hci_device);
 

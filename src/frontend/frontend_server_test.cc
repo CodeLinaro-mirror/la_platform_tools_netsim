@@ -14,7 +14,7 @@
 
 // Unit tests for the FrontendServer class.
 
-#include "fe/frontend_server.cc"
+#include "frontend/frontend_server.cc"
 
 #include <string>
 

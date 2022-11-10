@@ -42,7 +42,8 @@ class BluetoothChipEmulator {
   static BluetoothChipEmulator &Get();
 
   // Starts the bluetooth chip emulator.
-  virtual void Start() = 0;
+  virtual void Start(std::string rootcanal_default_commands_file,
+                     std::string rootcanal_controller_properties_file) = 0;
 
   // Closes the bluetooth chip emulator.
   virtual void Close() = 0;
