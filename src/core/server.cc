@@ -19,9 +19,9 @@
 #include <thread>
 
 #include "backend/fd_startup.h"
-#include "fe/frontend_server.h"
+#include "frontend/frontend_server.h"
 #ifndef NETSIM_ANDROID_EMULATOR
-#include "fe/http_server.h"
+#include "frontend/http_server.h"
 #endif
 
 namespace netsim {

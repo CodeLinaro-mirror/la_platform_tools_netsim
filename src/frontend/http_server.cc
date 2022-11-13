@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fe/http_server.h"
+#include "frontend/http_server.h"
 
 #include <google/protobuf/empty.pb.h>
 #include <google/protobuf/util/json_util.h>

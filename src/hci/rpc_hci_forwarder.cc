@@ -26,10 +26,10 @@
 #include <utility>
 #include <vector>
 
+#include "backend/rpc_transport.h"
 #include "emulated_bluetooth_vhci.grpc.pb.h"  // for VhciForwardingService
 #include "emulated_bluetooth_vhci.pb.h"       // for HCIPacket
 #include "hci/hci_debug.h"
-#include "backend/rpc_transport.h"
 #include "model/hci/hci_transport.h"
 #include "util/log.h"
 

@@ -17,8 +17,8 @@
 #pragma once
 #include <grpcpp/grpcpp.h>
 
-#include "emulated_bluetooth_vhci.pb.h"  // for HCIPacket
 #include "backend/rpc_transport.h"
+#include "emulated_bluetooth_vhci.pb.h"  // for HCIPacket
 #include "model/hci/hci_socket_transport.h"
 
 namespace netsim {
