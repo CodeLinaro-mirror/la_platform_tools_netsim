@@ -83,7 +83,11 @@ class SimPhyLayerFactory : public rootcanal::PhyLayerFactory {
               bytes);
       auto link_layer_packet_view =
           ::model::packets::LinkLayerPacketView::Create(packet_view);
-      assert(link_layer_packet_view.IsValid());
+      // Validating packets going through Send. Hit assert if debug build
+      if (!link_layer_packet_view.IsValid()) {
+        assert(link_layer_packet_view.IsValid());
+        return;
+      }
       // Send the re-written packet to all phys (devices)
       recv_phy->Receive(link_layer_packet_view);
     }
@@ -331,7 +335,8 @@ int8_t BluetoothChipEmulatorImpl::ComputeRssi(int send_id, int recv_id,
   auto sender = id_to_chip_[send_id];
   auto receiver = id_to_chip_[recv_id];
   if (!sender || !receiver) {
-    BtsLog("GetRssi unknown send or recv id");
+    // TODO: Add beacon to netsim.
+    // BtsLog("GetRssi unknown send or recv id");
     return tx_power;
   }
   auto distance = controller::SceneController::Singleton().GetDistance(

@@ -15,17 +15,13 @@
 android_add_library(
   TARGET backend-lib
   LICENSE Apache-2.0
-  SRC fd_startup.cc
-      fd_startup.h
-      rpc_hal_transport.cc
-      rpc_hal_transport.h
-      rpc_transport.h
+  SRC rpc_hal_transport.cc rpc_hal_transport.h rpc_transport.h
   DEPS android-emu-base
        android-emu-base-headers
        controller-lib
        frontend-grpc-lib
+       grpc++
        libbt-rootcanal
        libbt-rootcanal-qemu
-       grpc++
        vhci-lib)
 target_include_directories(backend-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..)

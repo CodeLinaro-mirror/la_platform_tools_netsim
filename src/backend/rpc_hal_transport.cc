@@ -39,7 +39,12 @@ namespace {
 
 using android::emulation::bluetooth::VhciForwardingService;
 
+#ifdef WIN32
+const wchar_t *kFilenameFormat = L"pid_%d.ini";
+#else
 const char *kFilenameFormat = "pid_%d.ini";
+#endif 
+
 
 const std::chrono::duration kConnectionDeadline = std::chrono::seconds(1);
 
@@ -97,6 +102,21 @@ class RpcHalTransportImpl : public RpcHalTransport {
     return true;
   }
 
+  static auto isPidFile(const std::filesystem::directory_entry &entry) -> bool {
+    if (!entry.is_regular_file()) {
+      return false;
+    }
+
+    int pid = 0;
+#ifndef _WIN32
+    return std::sscanf(entry.path().filename().c_str(), kFilenameFormat,
+                       &pid) != 1;
+#else
+    return std::swscanf(entry.path().filename().c_str(), kFilenameFormat,
+                        &pid) != 1;
+#endif
+  }
+
   // Connect all Grpc endpoints.
   bool discover() override {
     std::cerr << "Connecting to all grpc endpoints\n";
@@ -109,10 +129,7 @@ class RpcHalTransportImpl : public RpcHalTransport {
     }
 
     for (const auto &entry : std::filesystem::directory_iterator(path)) {
-      int pid = 0;
-      if (!entry.is_regular_file() ||
-          std::sscanf(entry.path().filename().c_str(), kFilenameFormat, &pid) !=
-              1) {
+      if (!isPidFile(entry)) {
         continue;
       }
       IniFile iniFile(entry.path());

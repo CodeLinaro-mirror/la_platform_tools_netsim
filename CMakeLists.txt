@@ -60,7 +60,10 @@ android_add_test(
        libbt-rootcanal
        netsim-lib
        protobuf::libprotobuf
-       util-lib)
+       util-lib
+  TEST_PARAMS
+      --gtest_filter=-OsUtilsTest.GetDiscoveryDir
+)
 
 target_include_directories(netsim-test PRIVATE src)
 

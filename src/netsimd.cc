@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#if defined(_WIN32)
+#include <msvc-getopt.h>
+#else
 #include <getopt.h>
+#endif
+
 #if defined(__linux__)
 #include <execinfo.h>
 #include <signal.h>
@@ -21,9 +26,10 @@
 #include <cstdio>
 #endif
 
-#include "core/server.h"
 #ifdef NETSIM_ANDROID_EMULATOR
 #include "core/server_rpc.h"
+#else
+#include "core/server.h"
 #endif
 #include "frontend/cli.h"
 #include "hci/bluetooth_facade.h"
@@ -71,12 +77,13 @@ int main(int argc, char *argv[]) {
   while ((c = getopt_long(argc, argv, kShortOpt, kLongOptions, nullptr)) !=
          -1) {
     switch (c) {
-      case 's':
-        fd_startup_str = std::string(optarg);
-        break;
 #ifdef NETSIM_ANDROID_EMULATOR
       case 'g':
         grpc_startup = true;
+        break;
+#else
+      case 's':
+        fd_startup_str = std::string(optarg);
         break;
 #endif
       case 'd':
@@ -103,26 +110,19 @@ int main(int argc, char *argv[]) {
         rootcanal_default_commands_file, rootcanal_controller_properties_file);
   }
 
+#ifdef NETSIM_ANDROID_EMULATOR
+  // get netsim daemon, starting if it doesn't exist
+  auto frontend_stub = netsim::NewFrontendStub();
+  if (frontend_stub == nullptr) {
+    // starts netsim in vhci connection mode
+    netsim::StartWithGrpc(debug);
+  }
+#else
   if (!fd_startup_str.empty()) {
     netsim::StartWithFds(fd_startup_str, debug);
     return -1;
   }
-
-  // get netsim daemon, starting if it doesn't exist
-  auto frontend_stub = netsim::NewFrontendStub();
-#ifdef NETSIM_ANDROID_EMULATOR
-  if (frontend_stub == nullptr) {
-    // starts netsim in vhci connection mode
-    frontend_stub = netsim::StartWithGrpc(debug);
-  }
 #endif
-  // could not start the server
-  if (frontend_stub == nullptr) return (1);
-
-  if (!grpc_startup) {
-    std::vector<std::string_view> args(argv + 1, argv + argc);
-    netsim::SendCommand(std::move(frontend_stub), args);
-  }
 
   return (0);
 }
