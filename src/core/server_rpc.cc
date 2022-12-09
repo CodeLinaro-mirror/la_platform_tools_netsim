@@ -18,39 +18,17 @@
 #include <memory>
 
 #include "backend/rpc_hal_transport.h"
-#include "frontend.grpc.pb.h"
-#include "frontend/cli.h"
 #include "frontend/frontend_server.h"
-#include "util/os_utils.h"
 
 namespace netsim {
 
-std::unique_ptr<frontend::FrontendService::Stub> StartWithGrpc(bool debug) {
-  // if debug then always run as server, without fork
-  auto pid = debug ? 0 : netsim::osutils::Daemon();
-  if (pid == 0) {
-    // Connect to all emulator grpc servers
-    auto grpc_transport = RpcHalTransport::Create();
-    grpc_transport->discover();
-    netsim::RunFrontendServer();
-    // never happens
-    return nullptr;
-  } else {
-    std::cout << "netsim not running; starting now at pid:" << pid << "\n";
-    auto frontend_stub = std::unique_ptr<frontend::FrontendService::Stub>{};
-    for (int second : {1, 2, 5}) {
-      sleep(second);
-      frontend_stub = NewFrontendStub();
-      if (frontend_stub) break;
-    }
-
-    if (frontend_stub != nullptr) {
-      std::cout << "netsim started successfully" << std::endl;
-    } else {
-      std::cerr << "cannot connect to daemon at pid:" << pid << std::endl;
-    }
-    return frontend_stub;
-  }
+void StartWithGrpc(bool debug) {
+  std::cout << "netsim starting packet streamer\n";
+  // Connect to all emulator grpc servers
+  auto grpc_transport = RpcHalTransport::Create();
+  grpc_transport->discover();
+  netsim::RunFrontendServer();
+  // never happens
 }
 
 }  // namespace netsim

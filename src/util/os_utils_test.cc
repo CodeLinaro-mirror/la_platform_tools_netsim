@@ -31,34 +31,6 @@ TEST(OsUtilsTest, GetDiscoveryDir) {
   EXPECT_TRUE(std::filesystem::exists(dir));
 }
 
-// Test Daemon() by writing and reading from a shared tempfile.
-TEST(OsUtilsTest, DaemonTest) {
-  const char *tempFileName = std::tmpnam(NULL);
-  int pid = osutils::Daemon();
-  EXPECT_TRUE(pid >= 0);
-  if (pid == 0) {
-    // daemon process: just write pid to the temp file and exit
-    std::ofstream outTempFile(tempFileName);
-    outTempFile << getpid();
-    outTempFile.close();
-    exit(EXIT_SUCCESS);
-  } else {
-    // parent process: wait for the child to exit and then check that the pid
-    // written to tempfile is the same we received from Daemon().
-    //
-    // Note: daemon is a child because we did not do the double fork.
-    int wait_pid = waitpid(pid, NULL, 0);
-    EXPECT_EQ(pid, wait_pid);
-
-    std::ifstream inTempFile(tempFileName);
-    int read_pid;
-    inTempFile >> read_pid;
-    EXPECT_EQ(read_pid, pid);
-    inTempFile.close();
-    EXPECT_EQ(std::remove(tempFileName), 0);
-  }
-}
-
 }  // namespace
 }  // namespace testing
 }  // namespace netsim

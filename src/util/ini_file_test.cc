@@ -58,27 +58,28 @@ INSTANTIATE_TEST_SUITE_P(IniFileParameters, IniFileReadTest,
 
 TEST(IniFileTest, WriteTest) {
   const char *tempFileName = tmpnam(NULL);
+  {
+    IniFile iniFile(tempFileName);
 
-  IniFile iniFile(tempFileName);
+    EXPECT_FALSE(iniFile.HasKey("port"));
+    EXPECT_FALSE(iniFile.HasKey("unknown-key"));
+    EXPECT_FALSE(iniFile.Get("port").has_value());
+    EXPECT_FALSE(iniFile.Get("unknown-key").has_value());
 
-  EXPECT_FALSE(iniFile.HasKey("port"));
-  EXPECT_FALSE(iniFile.HasKey("unknown-key"));
-  EXPECT_FALSE(iniFile.Get("port").has_value());
-  EXPECT_FALSE(iniFile.Get("unknown-key").has_value());
+    iniFile.Set("port", "123");
+    EXPECT_TRUE(iniFile.HasKey("port"));
+    EXPECT_FALSE(iniFile.HasKey("unknown-key"));
+    EXPECT_EQ(iniFile.Get("port").value(), "123");
+    EXPECT_FALSE(iniFile.Get("unknown-key").has_value());
 
-  iniFile.Set("port", "123");
-  EXPECT_TRUE(iniFile.HasKey("port"));
-  EXPECT_FALSE(iniFile.HasKey("unknown-key"));
-  EXPECT_EQ(iniFile.Get("port").value(), "123");
-  EXPECT_FALSE(iniFile.Get("unknown-key").has_value());
+    iniFile.Write();
 
-  iniFile.Write();
-
-  std::ifstream inTempFile(tempFileName);
-  std::string line;
-  ASSERT_TRUE(getline(inTempFile, line));
-  EXPECT_EQ(line, "port=123");
-  EXPECT_FALSE(getline(inTempFile, line));
+    std::ifstream inTempFile(tempFileName);
+    std::string line;
+    ASSERT_TRUE(getline(inTempFile, line));
+    EXPECT_EQ(line, "port=123");
+    EXPECT_FALSE(getline(inTempFile, line));
+  }
 
   // Delete temp file.
   ASSERT_EQ(std::remove(tempFileName), 0);

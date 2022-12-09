@@ -24,6 +24,6 @@ namespace netsim {
 
 // Startup netsim and connect over grpc then daemonize. If netsim already
 // running then process cli.
-std::unique_ptr<frontend::FrontendService::Stub> StartWithGrpc(bool);
+void StartWithGrpc(bool);
 
 }  // namespace netsim
