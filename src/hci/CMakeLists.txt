@@ -31,4 +31,5 @@ android_add_library(
        libbt-rootcanal
        libbt-rootcanal-qemu
        vhci-lib)
-target_include_directories(hci-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..)
+target_include_directories(hci-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
+                                           ../../rust/ranging/cxx)

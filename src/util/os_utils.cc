@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <string>
 
+#include "util/ini_file.h"
 #include "util/log.h"
 
 namespace netsim {
@@ -62,5 +63,19 @@ std::filesystem::path GetDiscoveryDirectory() {
   return path;
 }
 
+std::optional<std::string> GetServerAddress() {
+  auto filepath = osutils::GetDiscoveryDirectory().append("netsim.ini");
+  if (!std::filesystem::exists(filepath)) {
+    BtsLog("Unable to find discovery directory: %d", filepath.c_str());
+    return std::nullopt;
+  }
+  if (!std::filesystem::is_regular_file(filepath)) {
+    BtsLog("Not a regular file: %d", filepath.c_str());
+    return std::nullopt;
+  }
+  IniFile iniFile(filepath);
+  iniFile.Read();
+  return iniFile.Get("grpc.port");
+}
 }  // namespace osutils
 }  // namespace netsim
