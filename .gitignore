@@ -6,3 +6,4 @@ objs
 .cache
 # rust
 **/target
+**/Cargo.lock

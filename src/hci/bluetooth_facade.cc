@@ -23,6 +23,7 @@
 
 #include "controller/chip.h"
 #include "controller/scene_controller.h"
+#include "libranging_cxx_generated.h"
 #include "model/devices/link_layer_socket_device.h"
 #include "model/hci/hci_sniffer.h"
 #include "model/hci/hci_socket_transport.h"
@@ -31,7 +32,6 @@
 #include "model/setup/test_model.h"
 #include "packet/raw_builder.h"  // for RawBuilder
 #include "util/log.h"
-#include "util/ranging.h"
 
 namespace netsim {
 namespace hci {

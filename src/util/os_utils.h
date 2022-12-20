@@ -18,6 +18,7 @@
 // OS specific utility functions.
 
 #include <filesystem>
+#include <optional>
 #include <string>
 
 namespace netsim {
@@ -28,5 +29,9 @@ namespace osutils {
  */
 std::filesystem::path GetDiscoveryDirectory();
 
+/**
+ * Return the frontend grpc port.
+ */
+std::optional<std::string> GetServerAddress();
 }  // namespace osutils
 }  // namespace netsim

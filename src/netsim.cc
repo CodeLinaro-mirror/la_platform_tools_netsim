@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #if defined(_WIN32)
 #include <msvc-getopt.h>
 #else

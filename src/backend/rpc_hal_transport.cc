@@ -43,8 +43,7 @@ using android::emulation::bluetooth::VhciForwardingService;
 const wchar_t *kFilenameFormat = L"pid_%d.ini";
 #else
 const char *kFilenameFormat = "pid_%d.ini";
-#endif 
-
+#endif
 
 const std::chrono::duration kConnectionDeadline = std::chrono::seconds(1);
 
