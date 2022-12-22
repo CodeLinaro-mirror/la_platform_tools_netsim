@@ -1,0 +1,8 @@
+# cmake build files
+**/build/
+*~
+objs
+# clangd
+.cache
+# rust
+**/target

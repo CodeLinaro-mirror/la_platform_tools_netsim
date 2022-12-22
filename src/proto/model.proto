@@ -1,0 +1,88 @@
+// Copyright 2022 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package netsim.model;
+
+// A 3D position. A valid Position must have both x and y coordinates.
+// The position coordinates are in meters.
+message Position {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message Orientation {
+  float yaw = 1;
+  float pitch = 2;
+  float roll = 3;
+}
+
+enum PhyKind {
+  NONE = 0;
+  BLUETOOTH_CLASSIC = 1;
+  BLUETOOTH_LOW_ENERGY = 2;
+  WIFI = 3;
+  UWB = 4;
+  WIFI_RTT = 5;
+}
+
+// An explicit valued boolean.
+enum State {
+  UNKNOWN = 0;
+  ON = 1;
+  OFF = 2;
+}
+
+message Chip {
+  // Radio state associated with the Chip
+  message Radio {
+    State state = 1;
+    float range = 2;
+    int32 tx_count = 3;
+    int32 rx_count = 4;
+  }
+
+  // Bluetooth has 2 radios
+  message Bluetooth {
+    Radio low_energy = 1;
+    Radio classic = 2;
+  }
+
+  string chip_id = 1;       // optional like "rear-right"
+  string manufacturer = 2;  // optional like Quorvo
+  string model = 3;         // optional like DW300
+  State capture = 4;        // packet capture
+
+  oneof chip {
+    Bluetooth bt = 5;
+    Radio uwb = 6;
+    Radio wifi = 7;
+  }
+}
+
+message Device {
+  string device_serial = 1;  // unique device serial number
+  string name = 2;           // user settable unique alias
+  bool visible = 3;
+  Position position = 4;
+  Orientation orientation = 5;
+  // Device can have multiple chips of the same kind.
+  repeated Chip chips = 6;
+}
+
+message Scene {
+  repeated Device devices = 1;
+}
