@@ -184,31 +184,17 @@ impl Device {
 
     pub fn add_chip(
         &mut self,
-        chip_kind: ProtoChipKind,
-        chip_address: &str,
-        chip_name: Option<&str>,
-        chip_manufacturer: &str,
-        chip_product_name: &str,
+        chip_create_params: &chip::CreateParams,
     ) -> Result<(DeviceIdentifier, ChipIdentifier), String> {
-        if let Some(chip_name) = chip_name {
-            for chip in self.chips.values() {
-                if chip.kind == chip_kind && chip.name == chip_name {
-                    return Err(format!(
-                        "Device::AddChip - duplicate at id {}, skipping.",
-                        chip.id
-                    ));
-                }
+        for chip in self.chips.values() {
+            if chip.kind == chip_create_params.kind
+                && chip_create_params.name.clone().is_some_and(|name| name == chip.name)
+            {
+                return Err(format!("Device::AddChip - duplicate at id {}, skipping.", chip.id));
             }
         }
 
-        let chip = chip::chip_new(
-            chip_kind,
-            chip_address,
-            chip_name,
-            &self.name,
-            chip_manufacturer,
-            chip_product_name,
-        )?;
+        let chip = chip::chip_new(&self.name, chip_create_params)?;
         let chip_id = chip.id;
         self.chips.insert(chip_id, chip);
 
@@ -237,20 +223,22 @@ mod tests {
 
     fn create_test_device() -> Result<Device, String> {
         let mut device = Device::new(0, "0".to_string(), TEST_DEVICE_NAME.to_string(), false);
-        device.add_chip(
-            ProtoChipKind::BLUETOOTH,
-            "",
-            Some(TEST_CHIP_NAME_1),
-            "test_manufacturer",
-            "test_product_name",
-        )?;
-        device.add_chip(
-            ProtoChipKind::BLUETOOTH,
-            "",
-            Some(TEST_CHIP_NAME_2),
-            "test_manufacturer",
-            "test_product_name",
-        )?;
+        device.add_chip(&chip::CreateParams {
+            kind: ProtoChipKind::BLUETOOTH,
+            address: "".to_string(),
+            name: Some(TEST_CHIP_NAME_1.to_string()),
+            manufacturer: "test_manufacturer".to_string(),
+            product_name: "test_product_name".to_string(),
+            bt_properties: None,
+        })?;
+        device.add_chip(&chip::CreateParams {
+            kind: ProtoChipKind::BLUETOOTH,
+            address: "".to_string(),
+            name: Some(TEST_CHIP_NAME_2.to_string()),
+            manufacturer: "test_manufacturer".to_string(),
+            product_name: "test_product_name".to_string(),
+            bt_properties: None,
+        })?;
         Ok(device)
     }
 

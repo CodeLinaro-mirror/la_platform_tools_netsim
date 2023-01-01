@@ -58,9 +58,11 @@ export class NetsimApp extends LitElement {
     super.connectedCallback();
     window.addEventListener('changeModeEvent', this.handleChangeModeEvent);
     window.addEventListener('reset-button-clicked', this.handleReset);
+    window.addEventListener('bumble-button-clicked', this.handleBumbleHive);
   }
 
   disconnectedCallback() {
+    window.removeEventListener('bumble-button-clicked', this.handleBumbleHive);
     window.removeEventListener('reset-button-clicked', this.handleReset);
     window.removeEventListener('changeModeEvent', this.handleChangeModeEvent);
     super.disconnectedCallback();
@@ -79,6 +81,10 @@ export class NetsimApp extends LitElement {
     })
   };
 
+  handleBumbleHive() {
+    window.open('https://google.github.io/bumble/hive/index.html', '_blank');
+  }
+
   render() {
     let page = html``;
     if (this.viewMode === 'main') {
@@ -86,6 +92,7 @@ export class NetsimApp extends LitElement {
         <ns-customize-button eventName="map-button-clicked" class="primary" aria-label="Change background of the device map">Change Background</ns-customize-button>
         <ns-customize-button eventName="isometric-button-clicked" class="primary" aria-label="Toggle view of the device map">Toggle View</ns-customize-button>
         <ns-customize-button eventName="reset-button-clicked" class="primary" aria-label="Reset device information">Reset</ns-customize-button>
+        <ns-customize-button eventName="bumble-button-clicked" class="primary" aria-label="Bumble Hive Webpage">Bumble Hive</ns-customize-button>
         <div class="container">
           <div class="contentA">
             <ns-device-map></ns-device-map>

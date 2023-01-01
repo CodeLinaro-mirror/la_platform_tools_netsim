@@ -181,6 +181,10 @@ pub extern "C" fn rust_main() {
         println!("netsim artifact directory: {}", artifact_dir.display());
         browser::open(artifact_dir);
         return;
+    } else if matches!(args.command, args::Command::Bumble) {
+        println!("Opening Bumble Hive on default web browser");
+        browser::open("https://google.github.io/bumble/hive/index.html");
+        return;
     }
     let grpc_method = args.command.grpc_method();
     let server = match (args.vsock, args.port) {

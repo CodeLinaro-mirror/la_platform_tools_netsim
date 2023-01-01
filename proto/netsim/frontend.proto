@@ -50,6 +50,11 @@ service FrontendService {
   // Get a list of devices
   rpc ListDevice(google.protobuf.Empty) returns (ListDeviceResponse);
 
+  // Get a list of devices when a device event is published.
+  // Waits for device event up to 15 seconds and returns Error response if no
+  // event is received
+  rpc SubscribeDevice(SubscribeDeviceRequest) returns (SubscribeDeviceResponse);
+
   // Patch a Capture source to turn capture on/off.
   // When turned on the old capture contents are replaced.
   rpc PatchCapture(PatchCaptureRequest) returns (google.protobuf.Empty);
@@ -115,6 +120,25 @@ message ListDeviceResponse {
   // The timestamp will be updated if devices state has changed (except for
   // packet counts)
   google.protobuf.Timestamp last_modified = 2;
+}
+
+// Request for SubscribeDevice.
+message SubscribeDeviceRequest {
+  // The SubscribeDevice will immediately return if the
+  // provided last_modified timestamp is prior to the current last_modified
+  // timestamp in device resource.
+  optional google.protobuf.Timestamp last_modified = 1;
+}
+
+// Response for SubscribeDevice request.
+message SubscribeDeviceResponse {
+  // Will return ListDeviceResponse or an EmptyResponse
+  oneof response {
+    // Response for ListDevice
+    ListDeviceResponse list_device_response = 1;
+    // Empty Response
+    google.protobuf.Empty empty_response = 2;
+  }
 }
 
 // Request of PatchCapture.

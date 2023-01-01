@@ -72,4 +72,8 @@ pub struct NetsimdArgs {
     /// WARNING: This flag is for development purpose. netsimd will not shutdown without SIGKILL.
     #[arg(long, alias = "no_shutdown")]
     pub no_shutdown: Option<bool>,
+
+    /// Print Netsimd version information
+    #[arg(long)]
+    pub version: bool,
 }

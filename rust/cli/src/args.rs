@@ -84,6 +84,8 @@ pub enum Command {
     /// A chip that sends advertisements at a set interval
     #[command(subcommand)]
     Beacon(Beacon),
+    /// Open Bumble Hive Web Page
+    Bumble,
 }
 
 impl Command {
@@ -157,7 +159,7 @@ impl Command {
                 }
             },
             Command::Artifact => {
-                unimplemented!("get_request_bytes is not implemented for Artifact Command.")
+                unimplemented!("get_request_bytes is not implemented for Artifact Command.");
             }
             Command::Beacon(action) => match action {
                 Beacon::Create(kind) => match kind {
@@ -215,6 +217,9 @@ impl Command {
                 },
                 Beacon::Remove(_) => Vec::new(),
             },
+            Command::Bumble => {
+                unimplemented!("get_request_bytes is not implemented for Bumble Command.");
+            }
         }
     }
 

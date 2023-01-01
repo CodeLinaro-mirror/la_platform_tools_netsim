@@ -77,10 +77,9 @@ class SimPhyLayer : public PhyLayer {
   static bool Contains(
       PhyDevice::Identifier device_id,
       const std::list<std::shared_ptr<rootcanal::PhyDevice>> &phy_devices) {
-    return std::any_of(phy_devices.begin(), phy_devices.end(),
-                        [device_id](const auto &device) {
-                          return device->id == device_id;
-                        });
+    return std::any_of(
+        phy_devices.begin(), phy_devices.end(),
+        [device_id](const auto &device) { return device->id == device_id; });
   }
 
   // Overrides Send in PhyLayerFactory to add Rx/Tx statistics.

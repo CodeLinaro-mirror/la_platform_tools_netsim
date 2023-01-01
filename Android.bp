@@ -71,6 +71,7 @@ rust_defaults {
         "libnetsim_proto",
         "libhttp",
         "libnetsim_common",
+        "libpdl_runtime",
         "libprotobuf",
         "libprotobuf_json_mapping",
         "libregex",
@@ -336,32 +337,6 @@ cc_library_host_static {
 }
 
 rust_defaults {
-    name: "libnetsim_cli_defaults",
-    srcs: ["rust/cli/src/lib.rs"],
-    rustlibs: [
-        "libclap",
-        "libhex",
-        "libnetsim_proto",
-        "libnetsim_common",
-        "libprotobuf",
-        "libcxx",
-        "liblog_rust",
-    ],
-}
-
-rust_ffi_host_static {
-    name: "libnetsim_cli",
-    crate_name: "netsim_cli",
-    defaults: ["libnetsim_cli_defaults"],
-}
-
-rust_test_host {
-    name: "libnetsim_cli_tests",
-    defaults: ["libnetsim_cli_defaults"],
-    test_suites: ["general_tests"],
-}
-
-rust_defaults {
     name: "netsim_cli_defaults",
     rustlibs: [
         "libclap",
@@ -372,6 +347,10 @@ rust_defaults {
         "libnetsim_proto",
         "libprotobuf",
     ],
+}
+
+rust_defaults {
+    name: "netsim_cli_cc_defaults",
     shared_libs: ["libgrpc++"],
     static_libs: [
         "lib-netsim-frontend-client",
@@ -381,37 +360,27 @@ rust_defaults {
     ],
 }
 
-rust_library_host {
-    name: "libnetsim_cli_rs",
-    crate_name: "netsim_cli",
-    defaults: ["netsim_cli_defaults"],
+rust_test_host {
+    name: "libnetsim_cli_tests",
     srcs: ["rust/cli/src/lib.rs"],
+    defaults: ["netsim_cli_defaults"],
+    test_suites: ["general_tests"],
+}
+
+rust_library_host {
+    name: "libnetsim_cli",
+    crate_name: "netsim_cli",
+    srcs: ["rust/cli/src/lib.rs"],
+    defaults: [
+        "netsim_cli_defaults",
+        "netsim_cli_cc_defaults",
+    ],
 }
 
 rust_binary_host {
     name: "netsim",
     srcs: ["rust/cli/bin/netsim.rs"],
-    defaults: ["netsim_cli_defaults"],
     rustlibs: [
-        "libnetsim_cli_rs",
-    ],
-}
-
-// TODO: Remove the target in the following change.
-cc_binary_host {
-    name: "netsim-cc",
-    defaults: ["netsim_defaults"],
-    srcs: ["rust/netsim.cc"],
-    generated_headers: ["cxx-bridge-header"],
-    shared_libs: ["libgrpc++"],
-    static_libs: [
-        "libc++fs",
-        "libprotobuf-cpp-full",
-        "lib-netsim-frontend-proto",
-        "lib-netsim-frontend-client",
-    ],
-    whole_static_libs: [
         "libnetsim_cli",
     ],
-    ldflags: ["-Wl,--allow-multiple-definition"],
 }

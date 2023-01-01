@@ -85,6 +85,12 @@ fn get_netsimd_args(argc: c_int, argv: *const *const c_char) -> NetsimdArgs {
 }
 
 fn run_netsimd_with_args(args: NetsimdArgs) {
+    // Log version and terminate netsimd
+    if args.version {
+        println!("Netsimd Version: {}", get_version());
+        return;
+    }
+
     // Log where netsim artifacts are located
     info!("netsim artifacts path: {}", netsimd_temp_dir().display());
 
@@ -235,9 +241,6 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     // Gracefully shutdown netsimd services
     service.shut_down();
 
-    // Once shutdown is complete, delete the netsim ini file
-    remove_netsim_ini(instance_num);
-
     // write out session stats
     let _ = session.stop();
 
@@ -245,4 +248,7 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     if let Err(err) = zip_artifacts() {
         error!("Failed to zip artifacts: {err:?}");
     }
+
+    // Once shutdown is complete, delete the netsim ini file
+    remove_netsim_ini(instance_num);
 }
