@@ -121,13 +121,13 @@ unsafe fn fd_reader(
                             error!("End reader connection with fd={}. Failed to reading uci control packet: {:?}", fd_rx, e);
                             break;
                         }
-                        Ok(uci::Packet { payload }) => {
-                            handle_request(kind as u32, facade_id, &payload, 0);
+                        Ok(uci::Packet { mut payload }) => {
+                            handle_request(kind as u32, facade_id, chip_id, &mut payload, 0);
                         }
                     },
                     ChipKindEnum::BLUETOOTH => match h4::read_h4_packet(&mut rx) {
-                        Ok(h4::Packet { h4_type, payload }) => {
-                            handle_request(kind as u32, facade_id, &payload, h4_type);
+                        Ok(h4::Packet { h4_type, mut payload }) => {
+                            handle_request(kind as u32, facade_id, chip_id, &mut payload, h4_type);
                         }
                         Err(PacketError::IoError(e))
                             if e.kind() == ErrorKind::UnexpectedEof =>

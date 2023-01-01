@@ -14,7 +14,7 @@
 
 use super::dispatcher::{handle_request, register_transport, unregister_transport, Response};
 use super::h4::PacketError;
-use crate::devices::chip;
+use crate::devices::chip::{self, ChipIdentifier};
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::echip;
 use crate::transport::h4;
@@ -115,7 +115,7 @@ fn handle_hci_client(stream: TcpStream) {
         Box::new(SocketTransport { stream }),
     );
 
-    let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.facade_id);
+    let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.facade_id, result.chip_id);
 
     // unregister before remove_chip because facade may re-use facade_id
     // on an intertwining create_chip and the unregister here might remove
@@ -130,13 +130,18 @@ fn handle_hci_client(stream: TcpStream) {
 
 /// read from the socket and pass to the packet hub.
 ///
-fn reader(mut tcp_rx: TcpStream, kind: ChipKind, facade_id: u32) -> std::io::Result<()> {
+fn reader(
+    mut tcp_rx: TcpStream,
+    kind: ChipKind,
+    facade_id: u32,
+    chip_id: ChipIdentifier,
+) -> std::io::Result<()> {
     loop {
         if let ChipKind::BLUETOOTH = kind {
             match h4::read_h4_packet(&mut tcp_rx) {
-                Ok(packet) => {
+                Ok(mut packet) => {
                     let kind: u32 = kind as u32;
-                    handle_request(kind, facade_id, &packet.payload, packet.h4_type);
+                    handle_request(kind, facade_id, chip_id, &mut packet.payload, packet.h4_type);
                 }
                 Err(PacketError::IoError(e)) if e.kind() == ErrorKind::UnexpectedEof => {
                     info!("End socket reader connection with {}.", &tcp_rx.peer_addr().unwrap());

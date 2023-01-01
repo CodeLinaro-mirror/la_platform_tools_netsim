@@ -29,3 +29,4 @@ pub(crate) use self::mocked::*;
 pub(crate) mod frame;
 pub(crate) mod medium;
 pub(crate) mod packets;
+pub(crate) mod radiotap;

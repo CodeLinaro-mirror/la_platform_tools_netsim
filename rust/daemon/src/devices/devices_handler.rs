@@ -26,7 +26,6 @@ use super::chip;
 use super::chip::ChipIdentifier;
 use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
-use crate::bluetooth as bluetooth_facade;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
 use crate::echip;
@@ -35,7 +34,6 @@ use crate::events::Event;
 use crate::ffi::ffi_response_writable::CxxServerResponseWriter;
 use crate::ffi::CxxServerResponseWriterWrapper;
 use crate::http_server::server_response::ResponseWritable;
-use crate::wifi as wifi_facade;
 use cxx::{CxxString, CxxVector};
 use http::Request;
 use http::Version;
@@ -356,14 +354,11 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
     let result = {
         let devices_arc = get_devices();
         let mut devices = devices_arc.write().unwrap();
-        let (is_empty, (facade_id_option, _device_name, chip_kind, radio_stats)) = match devices
-            .entries
-            .entry(device_id)
-        {
+        let (is_empty, radio_stats) = match devices.entries.entry(device_id) {
             Entry::Occupied(mut entry) => {
                 let device = entry.get_mut();
-                let remove_result = device.remove_chip(chip_id)?;
-                (device.chips.is_empty(), remove_result)
+                let radio_stats = device.remove_chip(chip_id)?;
+                (device.chips.is_empty(), radio_stats)
             }
             Entry::Vacant(_) => return Err(format!("RemoveChip device id {device_id} not found")),
         };
@@ -371,31 +366,15 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
             remove_device(&mut devices, device_id)?;
         }
         Ok((
-            facade_id_option,
             device_id,
-            chip_kind,
             devices.entries.values().filter(|device| !device.builtin).count(),
             radio_stats,
         ))
     };
     match result {
-        Ok((facade_id_option, device_id, chip_kind, remaining_nonbuiltin_devices, radio_stats)) => {
-            match facade_id_option {
-                Some(facade_id) => match chip_kind {
-                    ProtoChipKind::BLUETOOTH => {
-                        bluetooth_facade::bluetooth_remove(facade_id);
-                    }
-                    ProtoChipKind::WIFI => {
-                        wifi_facade::wifi_remove(facade_id);
-                    }
-                    ProtoChipKind::BLUETOOTH_BEACON => {
-                        bluetooth_facade::ble_beacon_remove(chip_id, facade_id)?;
-                    }
-                    _ => Err(format!("Unknown chip kind: {:?}", chip_kind))?,
-                },
-                None => Err(format!(
-                    "Facade Id hasn't been added yet to frontend resource for chip_id: {chip_id}"
-                ))?,
+        Ok((device_id, remaining_nonbuiltin_devices, radio_stats)) => {
+            if echip::remove(chip_id).is_none() {
+                warn!("Removing a non-existent EmulatedChip: chip_id: {chip_id}");
             }
             info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
             {

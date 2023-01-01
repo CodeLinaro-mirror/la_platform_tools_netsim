@@ -14,15 +14,16 @@
 
 use crate::devices::chip::FacadeIdentifier;
 use crate::ffi::ffi_wifi;
+use crate::wifi::medium;
 use crate::{
     devices::device::DeviceIdentifier,
     echip::{EmulatedChip, SharedEmulatedChip},
 };
-
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::chip::Radio;
 use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
 
 use std::sync::Arc;
@@ -37,6 +38,9 @@ pub struct Wifi {
 
 impl EmulatedChip for Wifi {
     fn handle_request(&self, packet: &[u8]) {
+        if crate::config::get_dev() {
+            let _ = medium::parse_hwsim_cmd(packet);
+        }
         ffi_wifi::handle_wifi_request(self.facade_id, &packet.to_vec());
     }
 
@@ -57,6 +61,22 @@ impl EmulatedChip for Wifi {
         ffi_wifi::wifi_patch_cxx(self.facade_id, &radio_bytes);
     }
 
+    fn remove(&self) {
+        ffi_wifi::wifi_remove(self.facade_id);
+    }
+
+    fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
+        let mut stats_proto = ProtoRadioStats::new();
+        stats_proto.set_duration_secs(duration_secs);
+        stats_proto.set_kind(netsim_radio_stats::Kind::WIFI);
+        let chip_proto = self.get();
+        if chip_proto.has_wifi() {
+            stats_proto.set_tx_count(chip_proto.wifi().tx_count);
+            stats_proto.set_rx_count(chip_proto.wifi().rx_count);
+        }
+        vec![stats_proto]
+    }
+
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::WIFI
     }
@@ -75,6 +95,9 @@ pub fn new(_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulate
 
 /// Starts the WiFi service.
 pub fn wifi_start(config: &MessageField<WiFiConfig>) {
+    if crate::config::get_dev() {
+        medium::test_parse_hwsim_cmd();
+    }
     let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
     ffi_wifi::wifi_start(&proto_bytes);
 }

@@ -65,13 +65,17 @@ pub struct NetsimdArgs {
     pub config: Option<String>,
 
     /// Start with test beacons
-    #[arg(long, alias = "test_beacons")]
-    pub test_beacons: Option<bool>,
+    #[arg(long, alias = "test_beacons", overrides_with("no_test_beacons"))]
+    pub test_beacons: bool,
+
+    /// Do not start with test beacons
+    #[arg(long, alias = "no_test_beacons", overrides_with("test_beacons"))]
+    pub no_test_beacons: bool,
 
     /// Disable netsimd from shutting down automatically.
     /// WARNING: This flag is for development purpose. netsimd will not shutdown without SIGKILL.
     #[arg(long, alias = "no_shutdown")]
-    pub no_shutdown: Option<bool>,
+    pub no_shutdown: bool,
 
     /// Print Netsimd version information
     #[arg(long)]
