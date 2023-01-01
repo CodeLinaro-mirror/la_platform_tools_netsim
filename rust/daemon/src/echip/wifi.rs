@@ -66,15 +66,6 @@ impl EmulatedChip for Wifi {
     }
 }
 
-impl Drop for Wifi {
-    /// At drop, Remove the emulated chip from the virtual device. No further calls will
-    /// be made on this emulated chip. This is called when the packet stream from
-    /// the virtual device closes.
-    fn drop(&mut self) {
-        ffi_wifi::wifi_remove(self.facade_id);
-    }
-}
-
 /// Create a new Emulated Wifi Chip
 pub fn new(_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
     let facade_id = ffi_wifi::wifi_add(device_id);

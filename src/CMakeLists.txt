@@ -122,10 +122,8 @@ if(TARGET Rust::Rustc)
          packet-streamer-proto-lib
          protobuf::libprotobuf
          util-lib)
-  target_include_directories(
-    netsimd-lib PRIVATE . ${PROTOBUF_INCLUDE_DIR}
-    PUBLIC
-     ${cxx_bridge_binary_folder})
+  target_include_directories(netsimd-lib PRIVATE . ${PROTOBUF_INCLUDE_DIR}
+                             PUBLIC ${cxx_bridge_binary_folder})
   target_compile_definitions(netsimd-lib PUBLIC NETSIM_ANDROID_EMULATOR)
   # Make sure we have the cxx files generated before we build them.
   add_dependencies(netsimd-lib cargo-build_netsim-daemon)
