@@ -14,7 +14,8 @@
 
 android_add_library(
   TARGET core-lib LICENSE Apache-2.0 SRC server_rpc.cc server_rpc.h
-  DEPS frontend-grpc-lib frontend-lib grpc++ protobuf::libprotobuf)
+  DEPS frontend-grpc-lib frontend-lib grpc++ packet-streamer-server-lib
+       protobuf::libprotobuf util-lib)
 
 target_include_directories(core-lib PRIVATE ..)
 

@@ -80,7 +80,7 @@ std::optional<std::string> IniFile::Get(const std::string &key) const {
 }
 
 void IniFile::Set(const std::string &key, std::string_view value) {
-  data.emplace(key, std::string(value));
+  data[key] = std::string(value);
 }
 
 }  // namespace netsim

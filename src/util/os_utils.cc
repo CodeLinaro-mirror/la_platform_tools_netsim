@@ -63,19 +63,19 @@ std::filesystem::path GetDiscoveryDirectory() {
   return path;
 }
 
-std::optional<std::string> GetServerAddress() {
+std::optional<std::string> GetServerAddress(bool frontend_server) {
   auto filepath = osutils::GetDiscoveryDirectory().append("netsim.ini");
   if (!std::filesystem::exists(filepath)) {
-    BtsLog("Unable to find discovery directory: %d", filepath.c_str());
+    BtsLog("Unable to find discovery directory: %s", filepath.c_str());
     return std::nullopt;
   }
   if (!std::filesystem::is_regular_file(filepath)) {
-    BtsLog("Not a regular file: %d", filepath.c_str());
+    BtsLog("Not a regular file: %s", filepath.c_str());
     return std::nullopt;
   }
   IniFile iniFile(filepath);
   iniFile.Read();
-  return iniFile.Get("grpc.port");
+  return iniFile.Get(frontend_server ? "grpc.port" : "grpc.backend.port");
 }
 }  // namespace osutils
 }  // namespace netsim

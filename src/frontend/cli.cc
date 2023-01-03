@@ -123,7 +123,7 @@ class FrontendClient {
                         << "\t";
               break;
             default:
-              std::cout << "unknown:down" << "\t";
+              std::cout << "unknown:down\t";
               break;
           }
         }

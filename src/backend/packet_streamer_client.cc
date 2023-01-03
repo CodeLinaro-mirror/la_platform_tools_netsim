@@ -61,7 +61,7 @@ std::shared_ptr<grpc::Channel> CreateChannel(
     std::string rootcanal_controller_properties_file) {
   bool start_netsimd = false;
   for (int second : {1, 2, 4, 8}) {
-    auto port = netsim::osutils::GetServerAddress();
+    auto port = netsim::osutils::GetServerAddress(/*frontend_server=*/false);
     if (port.has_value()) {
       auto server = "localhost:" + port.value();
       auto channel =

@@ -17,8 +17,11 @@
 #include <iostream>
 #include <memory>
 
+#include "backend/backend_server.h"
 #include "backend/rpc_hal_transport.h"
 #include "frontend/frontend_server.h"
+#include "util/ini_file.h"
+#include "util/os_utils.h"
 
 namespace netsim {
 
@@ -27,7 +30,21 @@ void StartWithGrpc(bool debug) {
   // Connect to all emulator grpc servers
   auto grpc_transport = RpcHalTransport::Create();
   grpc_transport->discover();
-  netsim::RunFrontendServer();
+
+  // Run frontend and backend grpc servers.
+  auto [frontend_server, frontend_grpc_port] = netsim::RunFrontendServer();
+  auto [backend_server, backend_grpc_port] = netsim::RunBackendServer();
+
+  // Writes grpc ports to ini file.
+  auto filepath = osutils::GetDiscoveryDirectory().append("netsim.ini");
+  IniFile iniFile(filepath);
+  iniFile.Read();
+  iniFile.Set("grpc.port", frontend_grpc_port);
+  iniFile.Set("grpc.backend.port", backend_grpc_port);
+  iniFile.Write();
+
+  frontend_server->Wait();
+  backend_server->Wait();
   // never happens
 }
 

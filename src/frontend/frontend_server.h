@@ -16,8 +16,15 @@
 
 #pragma once
 // A synchronous Frontend server for the Network Simulator.
+
+#include <memory>
+#include <string>
+#include <utility>
+
+#include "grpcpp/server.h"
+
 namespace netsim {
 
-void RunFrontendServer();
+std::pair<std::unique_ptr<grpc::Server>, std::string> RunFrontendServer();
 
 }  // namespace netsim

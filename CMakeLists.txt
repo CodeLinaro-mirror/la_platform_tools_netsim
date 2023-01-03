@@ -16,15 +16,16 @@
 
 project(netsim)
 cmake_minimum_required(VERSION 3.5)
+cmake_policy(SET CMP0079 NEW)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-if(NOT ANDROID_EMULATOR_BUILD)
-  message(ERROR "Netsim should be built with emulator")
-  set(CMAKE_BUILD_TYPE Debug)
-  set(CMAKE_CXX_STANDARD 17)
-  set(CMAKE_CXX_STANDARD_REQUIRED True)
-  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+if (NOT ANDROID_EMULATOR_BUILD)
+  message(STATUS "Building netsim standalone.")
   include(netsim_dependencies)
 endif()
+
 
 if(NOT Rust_COMPILER AND NOT OPTION_ENABLE_SYSTEM_RUST)
   message(ERROR " No Rust for netsim ${Rust_COMPILER}")
@@ -74,6 +75,12 @@ android_add_test(
        util-lib
   TEST_PARAMS --gtest_filter=-OsUtilsTest.GetDiscoveryDir)
 
-add_dependencies(netsim-test netsimd emulator) # For PacketStreamerClientTest.
+add_dependencies(netsim-test netsimd)
+
+if (ANDROID_EMULATOR_BUILD)
+  add_dependencies(netsim-test emulator) # For PacketStreamerClientTest.
+endif()
 
 target_include_directories(netsim-test PRIVATE src)
+
+add_subdirectory(ui)
