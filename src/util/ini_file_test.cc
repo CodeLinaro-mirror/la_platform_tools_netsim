@@ -56,6 +56,29 @@ INSTANTIATE_TEST_SUITE_P(IniFileParameters, IniFileReadTest,
                          ::testing::Values("port=123", "port= 123", "port =123",
                                            " port = 123 "));
 
+TEST(IniFileTest, SetTest) {
+  const char *tempFileName = tmpnam(NULL);
+  IniFile iniFile(tempFileName);
+
+  EXPECT_FALSE(iniFile.HasKey("port"));
+  EXPECT_FALSE(iniFile.HasKey("unknown-key"));
+  EXPECT_FALSE(iniFile.Get("port").has_value());
+  EXPECT_FALSE(iniFile.Get("unknown-key").has_value());
+
+  iniFile.Set("port", "123");
+  EXPECT_TRUE(iniFile.HasKey("port"));
+  EXPECT_FALSE(iniFile.HasKey("unknown-key"));
+  EXPECT_EQ(iniFile.Get("port").value(), "123");
+  EXPECT_FALSE(iniFile.Get("unknown-key").has_value());
+
+  // Update the value of an existing key.
+  iniFile.Set("port", "234");
+  EXPECT_TRUE(iniFile.HasKey("port"));
+  EXPECT_FALSE(iniFile.HasKey("unknown-key"));
+  EXPECT_EQ(iniFile.Get("port").value(), "234");
+  EXPECT_FALSE(iniFile.Get("unknown-key").has_value());
+}
+
 TEST(IniFileTest, WriteTest) {
   const char *tempFileName = tmpnam(NULL);
   {

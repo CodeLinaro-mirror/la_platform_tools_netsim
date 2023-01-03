@@ -16,4 +16,4 @@
 #
 # Setup cmake for netsim.
 
-$REPO_EMU/external/qemu/android/rebuild.sh --build config --cmake_option FEATURE_NETSIM=TRUE --cmake_option CMAKE_EXPORT_COMPILE_COMMANDS=1
+$REPO_EMU/external/qemu/android/rebuild.sh --task configure --cmake_option CMAKE_EXPORT_COMPILE_COMMANDS=1

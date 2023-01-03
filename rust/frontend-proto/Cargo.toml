@@ -1,0 +1,17 @@
+[package]
+version = "0.1.0"
+edition = "2021"
+name = "frontend-proto"
+# build = "build_cargo.rs"
+
+[dependencies]
+protobuf = "2.27.1"
+
+[build-dependencies]
+protoc-rust = "2.27"
+protobuf-codegen = "*"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib","lib"]
+doctest = false

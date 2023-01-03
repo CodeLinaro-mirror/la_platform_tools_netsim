@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>netsim Web UI</title>
+  <link rel="icon" href="./assets/netsim-logo.svg">
+  <script type="importmap">
+      {
+        "imports": {
+          "lit": "https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js"
+        }
+      }
+    </script>
+  <script type="module" src="./js/cube-sprite.js"></script>
+  <script type="module" src="./js/pyramid-sprite.js"></script>
+  <script type="module" src="./js/device-dragzone.js"></script>
+  <script type="module" src="./js/device-dropzone.js"></script>
+  <script type="module" src="./js/device-list.js"></script>
+  <script type="module" src="./js/device-map.js"></script>
+  <script type="module" src="./js/device-info.js"></script>
+  <script type="module" src="./js/customize-map-button.js"></script>
+  <script type="module" src="./js/navigation-bar.js"></script>
+</head>
+
+<body>
+
+  <style>
+    .container {
+      display: flex;
+      width: 100%;
+    }
+
+    .contentA {
+      flex: 2;
+    }
+
+    .contentB {
+      flex: 2;
+    }
+  </style>
+
+  <ns-navigation-bar></ns-navigation-bar>
+  <ns-customize-button eventName="map-button-clicked" class="primary">Change Background</ns-customize-button>
+  <ns-customize-button eventName="isometric-button-clicked" class="primary">Toggle View</ns-customize-button>
+  <div class="container">
+    <div class="contentA">
+      <ns-device-map></ns-device-map>
+      <ns-device-list></ns-device-list>
+    </div>
+    <div class="contentB">
+      <ns-device-info></ns-device-info>
+    </div>
+  </div>
+
+</body>
+
+</html>
