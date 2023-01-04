@@ -36,11 +36,11 @@ import "startup.proto";
  */
 service PacketStreamer {
   // Attach a virtual radio controller to the network simulation.
-  rpc StreamPackets(stream StreamPacketsRequest)
-      returns (stream StreamPacketsResponse);
+  rpc StreamPackets(stream PacketRequest)
+      returns (stream PacketResponse);
 }
 
-message StreamPacketsRequest {
+message PacketRequest {
   // The pattern of oneof in a stream from grpc/load_balancer.proto
   oneof request_type {
     // This message should be sent on the first request to the network
@@ -53,7 +53,7 @@ message StreamPacketsRequest {
   }
 }
 
-message StreamPacketsResponse {
+message PacketResponse {
   oneof response_type {
     // Error during streaming
     string error = 1;

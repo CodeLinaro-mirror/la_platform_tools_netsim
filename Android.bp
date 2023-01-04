@@ -60,26 +60,26 @@ cc_defaults {
 }
 
 rust_ffi_host_static {
-    name: "libranging_rust",
-    crate_name: "ranging_rust",
+    name: "libnetsim_cxx_rust",
+    crate_name: "netsim_cxx",
     rlibs: ["libcxx"],
-    srcs: ["rust/ranging/src/lib.rs"],
+    srcs: ["rust/netsim-cxx/src/lib.rs"],
 }
 
 genrule {
-    name: "libranging_cxx",
+    name: "libnetsim_cxx",
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) >> $(out)",
-    srcs: ["rust/ranging/src/lib.rs"],
-    out: ["libranging_cxx_generated.cc"],
+    srcs: ["rust/netsim-cxx/src/lib.rs"],
+    out: ["netsim_cxx_generated.cc"],
 }
 
 genrule {
-    name: "libranging_cxx_h",
+    name: "netsim_cxx_h",
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) --header >> $(out)",
-    srcs: ["rust/ranging/src/lib.rs"],
-    out: ["libranging_cxx_generated.h"],
+    srcs: ["rust/netsim-cxx/src/lib.rs"],
+    out: ["netsim_cxx_generated.h"],
 }
 
 cc_library_host_static {
@@ -104,10 +104,10 @@ cc_library_host_static {
     ],
     generated_headers: [
         "cxx-bridge-header",
-        "libranging_cxx_h"
+        "netsim_cxx_h"
     ],
     generated_sources: [
-        "libranging_cxx",
+        "libnetsim_cxx",
     ],
     shared_libs: [
         "libgrpc++",
@@ -136,7 +136,7 @@ cc_binary_host {
     ],
     generated_headers: [
         "cxx-bridge-header",
-        "libranging_cxx_h"
+        "netsim_cxx_h"
     ],
     shared_libs: [
         "libbase",
@@ -155,7 +155,7 @@ cc_binary_host {
         "lib-netsim",
     ],
     whole_static_libs: [
-        "libranging_rust",
+        "libnetsim_cxx_rust",
         "libbt-rootcanal",
     ],
     ldflags: ["-Wl,--allow-multiple-definition"]
@@ -169,7 +169,7 @@ cc_binary_host {
     ],
     generated_headers: [
         "cxx-bridge-header",
-        "libranging_cxx_h"
+        "netsim_cxx_h"
     ],
     shared_libs: [
         "libbase",
@@ -188,7 +188,7 @@ cc_binary_host {
         "lib-netsim",
     ],
     whole_static_libs: [
-        "libranging_rust",
+        "libnetsim_cxx_rust",
         "libbt-rootcanal",
     ],
     ldflags: ["-Wl,--allow-multiple-definition"]
@@ -220,16 +220,30 @@ cc_test_host {
         "lib-netsim",
     ],
     whole_static_libs: [
-        "libranging_rust",
+        "libnetsim_cxx_rust",
         "libbt-rootcanal",
     ],
     ldflags: ["-Wl,--allow-multiple-definition"]
 }
 
+rust_library_host {
+    name: "libfrontend_proto",
+    crate_name: "frontend_proto",
+    srcs: ["rust/frontend-proto/src/lib.rs"],
+    features: ["serde", "serde_derive", "with-serde"],
+    rustlibs: [
+        "libprotobuf_with_serde",
+        "libserde",
+    ],
+}
+
 rust_binary_host {
     name: "netsim-cli",
     srcs: ["rust/netsim-cli/src/main.rs"],
+    features: ["with-serde"],
     rustlibs: [
         "libclap",
+        "libserde_json",
+        "libfrontend_proto",
     ],
 }

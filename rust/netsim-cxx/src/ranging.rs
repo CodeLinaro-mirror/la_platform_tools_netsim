@@ -3,14 +3,6 @@
 /// The Free Space Path Loss (FSPL) model is considered as the standard
 /// under the ideal scenario.
 
-#[cxx::bridge(namespace = "netsim")]
-mod ffi {
-    extern "Rust" {
-        #[cxx_name = "DistanceToRssi"]
-        fn distance_to_rssi(tx_power: i8, distance: f32) -> i8;
-    }
-}
-
 /// (dBm) PATH_LOSS at 1m for isotropic antenna transmitting BLE.
 const PATH_LOSS_AT_1M: f32 = 40.20;
 

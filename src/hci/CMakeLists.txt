@@ -31,4 +31,4 @@ android_add_library(
        libbt-rootcanal
        vhci-lib)
 target_include_directories(hci-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
-                                           ../../rust/ranging/cxx)
+                                           ../../rust/netsim-cxx/cxx)

@@ -1,7 +1,6 @@
 message(STATUS "Adding rust libraries")
 
 add_subdirectory(netsim-cxx)
-add_subdirectory(ranging)
 add_subdirectory(netsim-cli)
 add_subdirectory(frontend-client-cxx)
 add_subdirectory(frontend-proto)
@@ -15,8 +14,7 @@ add_subdirectory(frontend-proto)
 
 add_library(netsim-rust-lib INTERFACE)
 target_link_libraries(
-  netsim-rust-lib INTERFACE netsim-cxx netsim-cxx-generated frontend-proto
-                            ranging ranging_cxx)
+  netsim-rust-lib INTERFACE netsim-cxx netsim-cxx-generated frontend-proto)
 
 android_license(TARGET "netsim-cxx" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
@@ -24,7 +22,6 @@ android_license(TARGET "backend-proto" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
 android_license(TARGET "netsim-rust-lib" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
-android_license(TARGET "ranging" LIBNAME None SPDX None LICENSE None LOCAL None)
 android_license(TARGET "frontend-proto" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
 android_license(TARGET "frontend-client-cxx" LIBNAME None SPDX None LICENSE None

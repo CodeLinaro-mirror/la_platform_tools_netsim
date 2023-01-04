@@ -16,6 +16,7 @@
 
 mod args;
 mod browser;
+mod requests;
 use args::NetsimArgs;
 use clap::Parser;
 
@@ -30,7 +31,7 @@ fn call_command(command: &args::CommandType, mut writer: impl std::io::Write) {
     let err_msg = "Error writing output";
     match command {
         args::CommandType::Version => {
-            writeln!(writer, "(Not yet implemented.) Display netsim version: ").expect(err_msg);
+            requests::get_version(writer);
         }
         args::CommandType::Radio(cmd) => {
             writeln!(
