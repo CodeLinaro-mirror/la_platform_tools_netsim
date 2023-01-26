@@ -24,8 +24,6 @@ android_add_library(
   log.h
   os_utils.cc
   os_utils.h
-  ranging.cc
-  ranging.h
   string_utils.cc
   string_utils.h)
 

@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright 2022 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#!/bin/bash
-#
 # Formats source files according to Google's style guide.
 
 # Run clang-format.
 find src \( -name '*.cc' -o -name '*.h' -o -name '*.proto' \) \
   -exec clang-format -i {} \;
+
+# Format rust.
+$REPO_EMU/prebuilts/rust/linux-x86/stable/rustfmt -v -- $REPO_EMU/tools/netsim/rust/*/src/*.rs

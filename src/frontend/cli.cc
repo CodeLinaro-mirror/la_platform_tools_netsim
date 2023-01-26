@@ -38,13 +38,6 @@ namespace netsim {
 namespace {
 const std::chrono::duration kConnectionDeadline = std::chrono::seconds(1);
 
-std::optional<std::string> GetServerAddress() {
-  auto filepath = osutils::GetDiscoveryDirectory().append("netsim.ini");
-  IniFile iniFile(filepath);
-  iniFile.Read();
-  return iniFile.Get("grpc.port");
-}
-
 void Usage(const char *msg) { std::cerr << "Usage: " << msg << std::endl; }
 
 constexpr char kUsage[] = "Usage: [version|devices|radio|move|capture|reset]";
@@ -126,10 +119,11 @@ class FrontendClient {
             case model::Chip::ChipCase::kBt:
               std::cout << "ble:" << stateToString(chip.bt().low_energy())
                         << "\t"
-                        << "classic:" << stateToString(chip.bt().classic());
+                        << "classic:" << stateToString(chip.bt().classic())
+                        << "\t";
               break;
             default:
-              std::cout << "unknown:down";
+              std::cout << "unknown:down" << "\t";
               break;
           }
         }
@@ -224,7 +218,7 @@ class FrontendClient {
 }  // namespace
 
 std::unique_ptr<frontend::FrontendService::Stub> NewFrontendStub() {
-  auto port = GetServerAddress();
+  auto port = netsim::osutils::GetServerAddress();
   if (!port.has_value()) {
     return {};
   }
