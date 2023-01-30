@@ -24,13 +24,16 @@
 // const _PROTOBUF_VERSION_CHECK: () = ::protobuf::VERSION_2_28_0;
 
 #[derive(PartialEq,Clone,Default)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Position {
     // message fields
     pub x: f32,
     pub y: f32,
     pub z: f32,
     // special fields
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -246,13 +249,16 @@ impl ::protobuf::reflect::ProtobufValue for Position {
 }
 
 #[derive(PartialEq,Clone,Default)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Orientation {
     // message fields
     pub yaw: f32,
     pub pitch: f32,
     pub roll: f32,
     // special fields
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -468,6 +474,7 @@ impl ::protobuf::reflect::ProtobufValue for Orientation {
 }
 
 #[derive(PartialEq,Clone,Default)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Chip {
     // message fields
     pub chip_id: ::std::string::String,
@@ -477,7 +484,9 @@ pub struct Chip {
     // message oneof groups
     pub chip: ::std::option::Option<Chip_oneof_chip>,
     // special fields
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -488,6 +497,7 @@ impl<'a> ::std::default::Default for &'a Chip {
 }
 
 #[derive(Clone,PartialEq,Debug)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub enum Chip_oneof_chip {
     bt(Chip_Bluetooth),
     uwb(Chip_Radio),
@@ -984,6 +994,7 @@ impl ::protobuf::reflect::ProtobufValue for Chip {
 }
 
 #[derive(PartialEq,Clone,Default)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Chip_Radio {
     // message fields
     pub state: State,
@@ -991,7 +1002,9 @@ pub struct Chip_Radio {
     pub tx_count: i32,
     pub rx_count: i32,
     // special fields
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -1237,12 +1250,15 @@ impl ::protobuf::reflect::ProtobufValue for Chip_Radio {
 }
 
 #[derive(PartialEq,Clone,Default)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Chip_Bluetooth {
     // message fields
     pub low_energy: ::protobuf::SingularPtrField<Chip_Radio>,
     pub classic: ::protobuf::SingularPtrField<Chip_Radio>,
     // special fields
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -1468,6 +1484,7 @@ impl ::protobuf::reflect::ProtobufValue for Chip_Bluetooth {
 }
 
 #[derive(PartialEq,Clone,Default)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Device {
     // message fields
     pub device_serial: ::std::string::String,
@@ -1477,7 +1494,9 @@ pub struct Device {
     pub orientation: ::protobuf::SingularPtrField<Orientation>,
     pub chips: ::protobuf::RepeatedField<Chip>,
     // special fields
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -1867,11 +1886,14 @@ impl ::protobuf::reflect::ProtobufValue for Device {
 }
 
 #[derive(PartialEq,Clone,Default)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Scene {
     // message fields
     pub devices: ::protobuf::RepeatedField<Device>,
     // special fields
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
+    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -2033,6 +2055,7 @@ impl ::protobuf::reflect::ProtobufValue for Scene {
 }
 
 #[derive(Clone,PartialEq,Eq,Debug,Hash)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub enum PhyKind {
     NONE = 0,
     BLUETOOTH_CLASSIC = 1,
@@ -2095,6 +2118,7 @@ impl ::protobuf::reflect::ProtobufValue for PhyKind {
 }
 
 #[derive(Clone,PartialEq,Eq,Debug,Hash)]
+#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub enum State {
     UNKNOWN = 0,
     ON = 1,

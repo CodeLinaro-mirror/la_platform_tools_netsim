@@ -21,11 +21,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-if (NOT ANDROID_EMULATOR_BUILD)
+if(NOT ANDROID_EMULATOR_BUILD)
   message(STATUS "Building netsim standalone.")
   include(netsim_dependencies)
 endif()
-
 
 if(NOT Rust_COMPILER AND NOT OPTION_ENABLE_SYSTEM_RUST)
   message(ERROR " No Rust for netsim ${Rust_COMPILER}")
@@ -45,6 +44,10 @@ target_compile_definitions(netsim PUBLIC NETSIM_ANDROID_EMULATOR)
 android_add_executable(
   TARGET netsimd LICENSE Apache-2.0 INSTALL . SRC src/netsimd.cc
   DEPS grpc++ libbt-rootcanal netsim-lib netsim-rust-lib protobuf::libprotobuf)
+if(NOT DARWIN_AARCH64 AND NOT DARWIN_X86_64)
+  # Prevent duplicate symbol for cxx Rust crate.
+  target_link_libraries(netsimd PRIVATE -Wl,--allow-multiple-definition)
+endif()
 
 android_target_dependency(netsimd linux TCMALLOC_OS_DEPENDENCIES)
 
@@ -77,7 +80,7 @@ android_add_test(
 
 add_dependencies(netsim-test netsimd)
 
-if (ANDROID_EMULATOR_BUILD)
+if(ANDROID_EMULATOR_BUILD)
   add_dependencies(netsim-test emulator) # For PacketStreamerClientTest.
 endif()
 

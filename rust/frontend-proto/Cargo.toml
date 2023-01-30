@@ -5,11 +5,14 @@ name = "frontend-proto"
 # build = "build_cargo.rs"
 
 [dependencies]
-protobuf = "2.27.1"
+protobuf = {version = "2.27.1", features = [ "with-serde" ] }
+
+
 
 [build-dependencies]
+protobuf = {version = "2.27.1", features = [ "with-serde" ] }
 protoc-rust = "2.27"
-protobuf-codegen = "*"
+protobuf-codegen = "2.27"
 
 [lib]
 path = "src/lib.rs"

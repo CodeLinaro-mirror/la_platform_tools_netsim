@@ -15,16 +15,15 @@
 cmake_minimum_required(VERSION 3.5)
 
 android_add_library(
-  TARGET util-lib 
+  TARGET util-lib
   LICENSE Apache-2.0
-  SRC
-  ini_file.cc
-  ini_file.h
-  log.cc
-  log.h
-  os_utils.cc
-  os_utils.h
-  string_utils.cc
-  string_utils.h)
+  SRC ini_file.cc
+      ini_file.h
+      log.cc
+      log.h
+      os_utils.cc
+      os_utils.h
+      string_utils.cc
+      string_utils.h)
 
 target_include_directories(util-lib PRIVATE ..)
