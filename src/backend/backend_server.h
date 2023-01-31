@@ -22,8 +22,25 @@
 #include <utility>
 
 #include "grpcpp/server.h"
+#include "grpcpp/support/sync_stream.h"
+#include "packet_streamer.pb.h"
 
 namespace netsim {
+
+class PacketStreamClient {
+ public:
+  PacketStreamClient(
+      ::grpc::ServerReaderWriter< ::netsim::packet::StreamPacketsResponse,
+                                  ::netsim::packet::StreamPacketsRequest>
+          *stream);
+
+  std::unique_ptr<std::string> Read() const;
+  void Write(const std::string &) const;
+
+ private:
+  ::grpc::ServerReaderWriter< ::netsim::packet::StreamPacketsResponse,
+                              ::netsim::packet::StreamPacketsRequest> *stream;
+};
 
 std::pair<std::unique_ptr<grpc::Server>, std::string> RunBackendServer();
 

@@ -1,0 +1,16 @@
+[package]
+name = "backend-cxx"
+version = "0.1.0"
+edition = "2021"
+# build = "build_cargo.rs"
+
+[lib]
+crate-type = ["staticlib", "lib"]
+doctest = false
+test = false
+
+[dependencies]
+cxx = { version = "=1.0.42", features = ["c++17"] }
+
+[build-dependencies]
+cxx-build = "1.0"

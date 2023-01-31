@@ -17,6 +17,6 @@ android_add_library(
   DEPS frontend-grpc-lib frontend-lib grpc++ packet-streamer-server-lib
        protobuf::libprotobuf util-lib)
 
-target_include_directories(core-lib PRIVATE ..)
+target_include_directories(core-lib PRIVATE .. ../../rust/backend-cxx)
 
 target_compile_definitions(core-lib PUBLIC NETSIM_ANDROID_EMULATOR)

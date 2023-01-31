@@ -71,6 +71,7 @@ class SimulationState {
     }
     registerObserver(elem) {
         this.observers.push(elem);
+        elem.onNotify(this.simulationInfo);
     }
     removeObserver(elem) {
         const index = this.observers.indexOf(elem);
@@ -91,6 +92,8 @@ async function subscribe() {
     // net::ERR_EMPTY_RESPONSE --> subscribe rightaway
     // net::ERR_CONNECTION_REFUSED --> subscribe after 15 seconds
     // eslint-disable-next-line
+    let request = 0;
+    let start = new Date().getTime();
     while (true) {
         await fetch(REGISTER_UPDATE_URL) // eslint-disable-line
             .then(response => response.json())
@@ -99,7 +102,19 @@ async function subscribe() {
         })
             .catch(error => {
             console.log(error); // eslint-disable-line
+            request += 1;
         });
+        // Send out Fail to connect when 3 requests fail in 1 second
+        if (request >= 3) {
+            if ((new Date().getTime() - start) < 1000) {
+                alert("Failed to Connect to netsim");
+                return;
+            }
+            else {
+                request = 0;
+                start = new Date().getTime();
+            }
+        }
     }
 }
 subscribe();

@@ -9,5 +9,5 @@ const baseConfig = createSpaConfig({
 
 export default merge(baseConfig, {
   // any <script type="module"> inside will be bundled by rollup
-  input: ['./web/index.html', './web/packet.html'],
+  input: ['./web/index.html'],
 });

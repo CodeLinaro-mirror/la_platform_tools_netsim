@@ -13,6 +13,7 @@
         }
       }
     </script>
+  <script type="module" src="./js/netsim-app.js"></script>
   <script type="module" src="./js/cube-sprite.js"></script>
   <script type="module" src="./js/pyramid-sprite.js"></script>
   <script type="module" src="./js/device-dragzone.js"></script>
@@ -22,38 +23,11 @@
   <script type="module" src="./js/device-info.js"></script>
   <script type="module" src="./js/customize-map-button.js"></script>
   <script type="module" src="./js/navigation-bar.js"></script>
+  <script type="module" src="./js/packet-info.js"></script>
 </head>
 
 <body>
-
-  <style>
-    .container {
-      display: flex;
-      width: 100%;
-    }
-
-    .contentA {
-      flex: 2;
-    }
-
-    .contentB {
-      flex: 2;
-    }
-  </style>
-
-  <ns-navigation-bar></ns-navigation-bar>
-  <ns-customize-button eventName="map-button-clicked" class="primary">Change Background</ns-customize-button>
-  <ns-customize-button eventName="isometric-button-clicked" class="primary">Toggle View</ns-customize-button>
-  <div class="container">
-    <div class="contentA">
-      <ns-device-map></ns-device-map>
-      <ns-device-list></ns-device-list>
-    </div>
-    <div class="contentB">
-      <ns-device-info></ns-device-info>
-    </div>
-  </div>
-
+  <netsim-app></netsim-app>
 </body>
 
 </html>

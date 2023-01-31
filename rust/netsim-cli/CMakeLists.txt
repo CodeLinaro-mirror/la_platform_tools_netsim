@@ -20,4 +20,5 @@ if(LINUX)
     "netsim-cli" "-Clink-args=-Wl,-rpath,${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 endif()
 
+target_link_libraries(netsim-cli INTERFACE frontend-client-lib frontend-grpc-lib)
 corrosion_install(TARGETS netsim-cli RUNTIME DESTINATION .)

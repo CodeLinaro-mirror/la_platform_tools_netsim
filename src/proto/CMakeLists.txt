@@ -21,6 +21,7 @@ protobuf_generate_grpc_cpp(
           ${CMAKE_CURRENT_LIST_DIR}/model.proto
           ${CMAKE_CURRENT_LIST_DIR}/startup.proto
           ${CMAKE_CURRENT_LIST_DIR}/packet_streamer.proto
+          ${CMAKE_CURRENT_LIST_DIR}/hci_packet.proto
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
   GENERATED GRPC_SRC)
 

@@ -35,6 +35,7 @@ cc_library {
         "internal.proto",
         "model.proto",
         "startup.proto",
+	"hci_packet.proto"
     ],
 }
 

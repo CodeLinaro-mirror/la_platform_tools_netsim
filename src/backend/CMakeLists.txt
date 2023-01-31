@@ -27,11 +27,15 @@ android_add_library(
 target_include_directories(backend-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..)
 
 android_add_library(
-  TARGET packet-streamer-server-lib LICENSE Apache-2.0 SRC backend_server.cc
-                                                           backend_server.h
-  DEPS frontend-grpc-lib grpc++ protobuf::libprotobuf util-lib)
+  TARGET packet-streamer-server-lib
+  LICENSE Apache-2.0
+  SRC backend_server.cc backend_server.h
+  DEPS backend-cxx backend-cxx-generated frontend-grpc-lib grpc++
+       protobuf::libprotobuf util-lib)
 
-target_include_directories(packet-streamer-server-lib PRIVATE ..)
+target_include_directories(
+  packet-streamer-server-lib PRIVATE .. ../../rust/backend-cxx
+                                     ../../rust/backend-cxx/cxx)
 
 android_add_library(
   TARGET packet-streamer-client-lib

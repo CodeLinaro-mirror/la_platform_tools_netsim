@@ -229,4 +229,7 @@ cc_test_host {
 rust_binary_host {
     name: "netsim-cli",
     srcs: ["rust/netsim-cli/src/main.rs"],
+    rustlibs: [
+        "libclap",
+    ],
 }

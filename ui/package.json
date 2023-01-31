@@ -10,8 +10,8 @@
     "test": "tsc && wtr --coverage",
     "test:watch": "tsc && concurrently -k -r \"tsc --watch --preserveWatchOutput\" \"wtr --watch\"",
     "analyze": "cem analyze --litelement",
-    "build": "rimraf dist/* && cp -r ./web/assets ./dist && tsc && rollup -c rollup.config.js",
-    "start": "tsc && cp -r ./ts/assets ./web/assets && concurrently -k -r \"tsc --watch --preserveWatchOutput\" \"wds\" \"serve /tmp/\""
+    "build": "tsc && cp ./ts/assets/* ./web/assets && rimraf dist/* && cp -r ./web/assets ./dist && rollup -c rollup.config.js",
+    "start": "tsc && cp ./ts/assets/* ./web/assets && concurrently -k -r \"tsc --watch --preserveWatchOutput\" \"wds\" \"serve /tmp/\""
   },
   "dependencies": {
     "lit": "^2.0.2",
