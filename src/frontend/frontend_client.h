@@ -27,7 +27,8 @@ namespace frontend {
 
 class ClientResult {
  public:
-  ClientResult(bool is_ok, const std::string err, const std::string json) : is_ok_(is_ok), err_(err), json_(std::move(json)) {};
+  ClientResult(bool is_ok, const std::string err, const std::string json)
+      : is_ok_(is_ok), err_(err), json_(std::move(json)){};
 
   bool is_ok_;
   std::string err_;

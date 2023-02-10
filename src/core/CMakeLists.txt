@@ -13,10 +13,18 @@
 # limitations under the License.
 
 android_add_library(
-  TARGET core-lib LICENSE Apache-2.0 SRC server_rpc.cc server_rpc.h
-  DEPS frontend-grpc-lib frontend-lib grpc++ packet-streamer-server-lib
-       protobuf::libprotobuf util-lib)
+  TARGET core-lib
+  LICENSE Apache-2.0
+  SRC server_rpc.cc server_rpc.h
+  DEPS frontend-grpc-lib
+       frontend-lib
+       grpc++
+       netsim-cxx-generated
+       packet-streamer-server-lib
+       protobuf::libprotobuf
+       util-lib)
 
-target_include_directories(core-lib PRIVATE .. ../../rust/backend-cxx)
+target_include_directories(core-lib PRIVATE .. ../../rust/netsim-cxx
+                                            ../../rust/netsim-cxx/cxx)
 
 target_compile_definitions(core-lib PUBLIC NETSIM_ANDROID_EMULATOR)

@@ -34,6 +34,7 @@ target_include_directories(frontend-grpc-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
   SOURCES ${CMAKE_CURRENT_LIST_DIR}/startup.proto
+          ${CMAKE_CURRENT_LIST_DIR}/hci_packet.proto
           ${CMAKE_CURRENT_LIST_DIR}/packet_streamer.proto
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
   GENERATED PACKET_STREAMER_CLIENT_GRPC_SRC)

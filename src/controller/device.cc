@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "model.pb.h"
+#include "util/log.h"
 #include "util/os_utils.h"
 #include "util/string_utils.h"
 
@@ -65,16 +66,35 @@ void Device::Update(const model::Device &request) {
       }
     }
     if (!found) {
-      std::cerr << "Unknown chip in update" << std::endl;
+      BtsLog("Unknown chip in update");
     }
   }
+}
+
+bool Device::RemoveChip(model::Chip::ChipCase chip_case,
+                        const std::string &chip_id) {
+  for (int c = 0; c < model.chips().size(); c++) {
+    auto c_case = model.chips().at(c).chip_case();
+    auto c_id = model.chips().at(c).chip_id();
+    if (chip_case == c_case && chip_id == c_id) {
+      // Entry in chips and model are at same index
+      BtsLog("Removing chip kind:%d id:'%s' from %s", c_case, c_id.c_str(),
+             model.device_serial().c_str());
+      chips[c]->Remove();
+      chips.erase(chips.begin() + c);
+      model.mutable_chips()->DeleteSubrange(c, 1);
+      return chips.size() == 0;
+    }
+  }
+  BtsLog("Trying to remove unknown chip");
+  return chips.size() == 0;
 }
 
 void Device::AddChip(std::shared_ptr<Device> device, std::shared_ptr<Chip> chip,
                      const model::Chip &chip_model) {
   for (auto &c : chips) {
     if (c->KeyComp(chip_model)) {
-      std::cerr << "Trying to add a duplicate chip, skipping!" << std::endl;
+      BtsLog("Trying to add a duplicate chip, skipping!");
       return;
     }
   }

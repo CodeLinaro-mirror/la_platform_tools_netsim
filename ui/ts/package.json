@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "lit": "^2.0.0",
-    "@lit-labs/motion": "^1.0.1"
-  }
-}

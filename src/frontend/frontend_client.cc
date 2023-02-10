@@ -16,7 +16,6 @@
 #include "frontend/frontend_client.h"
 
 #include <google/protobuf/util/json_util.h>
-
 #include <stdlib.h>
 
 #include <chrono>
@@ -65,8 +64,7 @@ class FrontendClientImpl : public FrontendClient {
       : stub_(std::move(stub)) {}
 
   std::unique_ptr<ClientResult> make_result(
-      const grpc::Status& status,
-      const google::protobuf::Message& message) {
+      const grpc::Status &status, const google::protobuf::Message &message) {
     if (!status.ok()) {
       return std::make_unique<ClientResult>(false, status.error_message(), "");
     }
@@ -107,9 +105,7 @@ class FrontendClientImpl : public FrontendClient {
   }
 };
 
-
 }  // namespace
-
 
 std::unique_ptr<FrontendClient> NewFrontendClient() {
   return std::make_unique<FrontendClientImpl>(NewFrontendStub());

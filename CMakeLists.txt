@@ -53,10 +53,22 @@ android_target_dependency(netsimd linux TCMALLOC_OS_DEPENDENCIES)
 
 target_compile_definitions(netsimd PUBLIC NETSIM_ANDROID_EMULATOR)
 
+android_add_executable(
+  TARGET netsim-packet-streamer-client
+  LICENSE Apache-2.0
+  INSTALL .
+  SRC src/netsim-packet-streamer-client.cc
+  DEPS
+    packet-streamer-client-grpc-lib
+    packet-streamer-client-lib
+    grpc++
+    protobuf::libprotobuf
+)
+
+
 android_add_test(
   TARGET netsim-test LICENSE Apache-2.0
-  SRC src/backend/packet_streamer_client_test.cc
-      src/backend/startup_test.cc
+  SRC src/backend/startup_test.cc
       src/controller/device_test.cc
       src/controller/scene_controller_test.cc
       src/frontend/frontend_server_test.cc

@@ -32,6 +32,7 @@
 #include "hci/bluetooth_facade.h"
 #include "hci/rpc_hci_forwarder.h"
 #include "util/ini_file.h"
+#include "util/log.h"
 #include "util/os_utils.h"
 
 namespace netsim {
@@ -68,16 +69,16 @@ class RpcHalTransportImpl : public RpcHalTransport {
     std::shared_ptr<grpc::Channel> channel =
         grpc::CreateChannel(server, grpc::InsecureChannelCredentials());
     if (channel == nullptr) {
-      std::cerr << "RpcHalTransportImpl::connect - not found" << std::endl;
+      BtsLog("RpcHalTransportImpl::connect - not found");
       return false;
     }
     auto deadline = std::chrono::system_clock::now() + kConnectionDeadline;
     if (!channel->WaitForConnected(deadline)) {
-      std::cerr << "Unable to connect to " << serial << std::endl;
+      BtsLog("Unable to connect to %s", serial.c_str());
       return false;
     }
 
-    std::cerr << "VhciForwardingClient::attach " << serial << std::endl;
+    BtsLog("VhciForwardingClient::attach %s", serial.c_str());
 
     std::unique_ptr<VhciForwardingService::Stub> stub(
         VhciForwardingService::NewStub(channel));
@@ -118,12 +119,12 @@ class RpcHalTransportImpl : public RpcHalTransport {
 
   // Connect all Grpc endpoints.
   bool discover() override {
-    std::cerr << "Connecting to all grpc endpoints\n";
+    BtsLog("Connecting to all grpc endpoints");
     bool discovered = false;
     auto path =
         osutils::GetDiscoveryDirectory().append("avd").append("running");
     if (!std::filesystem::exists(path)) {
-      std::cerr << "Unable to find discovery directory: " << path << std::endl;
+      BtsLog("Unable to find discovery directory: %s", path.c_str());
       return false;
     }
 
@@ -133,16 +134,16 @@ class RpcHalTransportImpl : public RpcHalTransport {
       }
       IniFile iniFile(entry.path());
       if (!iniFile.Read()) {
-        std::cerr << "Unable to read ini file: " << entry.path() << std::endl;
+        BtsLog("Unable to read ini file: %s", entry.path().c_str());
         continue;
       }
       auto grpc = iniFile.Get("grpc.port");
       if (!grpc.has_value()) {
-        std::cerr << "Unable to read grpc.port: " << entry.path() << std::endl;
+        BtsLog("Unable to read grpc.port: %s", entry.path().c_str());
         continue;
       }
       auto port = grpc.value();
-      std::cerr << "creating new RpcHal device grpc.port=" << port << std::endl;
+      BtsLog("Creating new RpcHal device grpc.port:%s", port.c_str());
       if (this->connect(std::stoi(port), "emulator-" + grpc.value())) {
         auto device =
             netsim::controller::CreateDevice("emulator-" + grpc.value());
@@ -164,7 +165,7 @@ RpcHalTransport::~RpcHalTransport(){};
 // TODO: singleton pattern
 
 std::unique_ptr<RpcHalTransport> RpcHalTransport::Create() {
-  std::cerr << "Creating RpcHalTransport\n";
+  BtsLog("Creating RpcHalTransport");
   return std::make_unique<RpcHalTransportImpl>();
 }
 

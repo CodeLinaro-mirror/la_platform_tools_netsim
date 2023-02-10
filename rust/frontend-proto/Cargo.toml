@@ -6,8 +6,7 @@ name = "frontend-proto"
 
 [dependencies]
 protobuf = {version = "2.27.1", features = [ "with-serde" ] }
-
-
+serde = "1.0"
 
 [build-dependencies]
 protobuf = {version = "2.27.1", features = [ "with-serde" ] }
@@ -18,3 +17,7 @@ protobuf-codegen = "2.27"
 path = "src/lib.rs"
 crate-type = ["staticlib","lib"]
 doctest = false
+
+[features]
+default = ["with-serde"]
+with-serde = ["protobuf/with-serde"]

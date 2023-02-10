@@ -28,31 +28,31 @@ message HCIPacket {
     // This is mainly here to protect against compatibility issues that can
     // arise if new enum fields are ever introduced.
     // See: https://developers.google.com/protocol-buffers/docs/style#enums
-    PACKET_TYPE_UNSPECIFIED = 0;
+    HCI_PACKET_UNSPECIFIED = 0;
 
     // HCI Command Packets: commands are issued by the HCI Driver to the
     // Host Controller:
-    PACKET_TYPE_HCI_COMMAND = 1;
+    COMMAND = 1;
 
     // ACL (asynchronous connectionless) packet.
-    PACKET_TYPE_ACL = 2;
+    ACL = 2;
 
     // SCO (synchronous connection orientated) packet.
-    PACKET_TYPE_SCO = 3;
+    SCO = 3;
 
     // HCI Event Packets.
-    PACKET_TYPE_EVENT = 4;
+    EVENT = 4;
 
     // Isochronous Channel, a data transmissions that are time-sensitive
     // and synchronized rendering of these data streams across multiple
     // receivers. See
     // https://www.novelbits.io/bluetooth-version-5-2-le-audio/ for an
     // overview of ISO channels.
-    PACKET_TYPE_ISO = 5;
+    ISO = 5;
   }
 
   // Indicates the type of packet contained in the packet bytes.
-  PacketType type = 1;
+  PacketType packet_type = 1;
 
   // The actual data that was transferred.
   bytes packet = 2;
