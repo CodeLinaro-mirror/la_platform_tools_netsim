@@ -46,13 +46,13 @@ TEST_F(PacketStreamerClientTest, CreateChannelLoopBackTest) {
 
   ::grpc::ClientContext context;
 
-  packet::StreamPacketsRequest initial_request;
+  packet::PacketRequest initial_request;
   packet::Stream bt_stream = stub->StreamPackets(&context);
   initial_request.mutable_initial_info()->set_serial("emulator-5554");
   initial_request.mutable_initial_info()->mutable_chip()->set_kind(
       netsim::startup::Chip::ChipKind::Chip_ChipKind_BLUETOOTH);
   bt_stream->Write(initial_request);
-  packet::StreamPacketsResponse response;
+  packet::PacketResponse response;
   bt_stream->Read(&response);
   // TODO: Valid response after server is implemented.
   ASSERT_FALSE(response.has_packet());

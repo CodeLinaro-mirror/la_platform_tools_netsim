@@ -2,4 +2,6 @@
 package-lock.json
 /test
 web-test-runner.config.mjs
-dist/workbox-*.js.map
+web/js
+web/assets
+CDNURL.txt

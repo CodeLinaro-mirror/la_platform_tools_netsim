@@ -23,13 +23,13 @@
 
 #include "controller/chip.h"
 #include "controller/scene_controller.h"
-#include "libranging_cxx_generated.h"
 #include "model/devices/link_layer_socket_device.h"
 #include "model/hci/hci_sniffer.h"
 #include "model/hci/hci_socket_transport.h"
 #include "model/setup/async_manager.h"
 #include "model/setup/test_command_handler.h"
 #include "model/setup/test_model.h"
+#include "netsim_cxx_generated.h"
 #include "packet/raw_builder.h"  // for RawBuilder
 #include "util/log.h"
 
@@ -239,12 +239,11 @@ class BluetoothChip : public controller::Chip {
   }
 
   void Remove() override {
+    auto &model = DeviceModel();
+    BtsLog("Removing HCI chip for %s", model.device_serial().c_str());
+    // NOTE: OnConnectionClosed removes the device from the rootcanal testmodel,
+    // so the only cleanup is in the Chip class.
     controller::Chip::Remove();
-    std::cerr << "Deleting bluetooth chip." << std::endl;
-    SetPacketCapture(false);
-    sniffer.reset();
-    chip_emulator->Remove(device_index);
-    chip_emulator = nullptr;
   }
 
   void IncrTx(rootcanal::Phy::Type phy_type) {
@@ -313,7 +312,7 @@ void BluetoothChipEmulatorImpl::AddHciConnection(
   transport = rootcanal::HciSniffer::Create(transport);
   auto hci_device =
       std::make_shared<rootcanal::HciDevice>(transport, controller_properties_);
-  std::cerr << "creating device: " << std::endl;
+  BtsLog("Creating HCI for %s", serial.c_str());
   auto device_id = mTestModel.AddHciConnection(hci_device);
 
   auto sniffer = std::static_pointer_cast<rootcanal::HciSniffer>(transport);

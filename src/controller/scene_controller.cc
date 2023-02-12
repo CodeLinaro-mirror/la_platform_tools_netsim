@@ -18,6 +18,7 @@
 #include <cstddef>
 
 #include "controller/device_notify_manager.h"
+#include "util/log.h"
 
 namespace netsim {
 namespace controller {
@@ -48,6 +49,22 @@ std::shared_ptr<Device> SceneController::GetOrCreate(
   device = std::make_shared<Device>(serial);
   devices_.push_back(device);
   return device;
+}
+
+void SceneController::RemoveChip(const std::string &serial,
+                                 model::Chip::ChipCase chip_case,
+                                 const std::string &chip_id) {
+  for (int d = 0; d < devices_.size(); d++) {
+    if (devices_[d]->model.device_serial() == serial) {
+      if (devices_[d]->RemoveChip(chip_case, chip_id)) {
+        BtsLog("Removing device %s, no more chips", serial.c_str());
+        // No more chips, deleting device
+        devices_.erase(devices_.begin() + d);
+      }
+      return;
+    }
+  }
+  std::cerr << "Trying to remove chip from unknown device" << std::endl;
 }
 
 std::shared_ptr<Device> SceneController::GetDevice(const std::string &serial) {

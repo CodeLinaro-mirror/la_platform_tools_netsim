@@ -37,6 +37,11 @@ class SceneController {
 
   std::shared_ptr<Device> GetOrCreate(const std::string &);
 
+  // When a packet stream goes away the chip is removed. When there are no more
+  // chips the device is remove.
+  void RemoveChip(const std::string &serial, model::Chip::ChipCase chip_case,
+                  const std::string &chip_id);
+
   void Add(std::shared_ptr<Device> &device);
 
   const std::vector<std::shared_ptr<Device>> Copy();
