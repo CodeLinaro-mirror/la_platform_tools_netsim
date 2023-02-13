@@ -51,4 +51,4 @@ android_add_library(
        protobuf::libprotobuf
        util-lib)
 
-target_include_directories(packet-streamer-client-lib PRIVATE ..)
+target_include_directories(packet-streamer-client-lib PUBLIC ${CMAKE_CURRENT_LIST_DIR}/..)
