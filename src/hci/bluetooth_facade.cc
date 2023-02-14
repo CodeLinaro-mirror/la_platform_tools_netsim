@@ -45,51 +45,22 @@ class SimPhyLayerFactory : public rootcanal::PhyLayerFactory {
   // for constructor inheritance
   using PhyLayerFactory::PhyLayerFactory;
 
-  // Overrides Send in PhyLayerFactory to rewrite rssi in packets
+  // Overrides ComputeRssi in PhyLayerFactory to provide
+  // simulated RSSI information using actual spatial
+  // device positions.
+  int8_t ComputeRssi(uint32_t sender_id, uint32_t receiver_id, int8_t tx_power) override {
+    return netsim::hci::ComputeRssi(sender_id, receiver_id, tx_power);
+  }
+
+  // Overrides Send in PhyLayerFactory to add Rx/Tx statistics.
   void Send(::model::packets::LinkLayerPacketView packet, uint32_t id,
-            uint32_t device_id) override {
+            uint32_t device_id, int8_t tx_power) override {
     IncrTx(device_id, GetType());
-
-    if (packet.GetType() != ::model::packets::PacketType::RSSI_WRAPPER) {
-      rootcanal::PhyLayerFactory::Send(packet, id, device_id);
-      return;
-    }
-    auto rssi_wrapper = ::model::packets::RssiWrapperView::Create(packet);
-    // Need to call IsValid() before GetRssi. Hit assert if debug build
-    if (!rssi_wrapper.IsValid()) {
-      assert(rssi_wrapper.IsValid());
-      rootcanal::PhyLayerFactory::Send(packet, id, device_id);
-      return;
-    }
-    auto tx_power = rssi_wrapper.GetRssi();
-
-    for (const auto &recv_phy : phy_layers_) {
-      if (id == recv_phy->GetId()) continue;
-      int8_t rssi = ComputeRssi(device_id, recv_phy->GetDeviceId(), tx_power);
-      IncrRx(recv_phy->GetDeviceId(), GetType());
-      // Simply changes the rssi value in the LinkLayerPacketView (!)
-      auto rssi_builder = ::model::packets::RssiWrapperBuilder::Create(
-          rssi_wrapper.GetSourceAddress(), rssi_wrapper.GetDestinationAddress(),
-          rssi,
-          std::make_unique<::bluetooth::packet::RawBuilder>(
-              std::vector<uint8_t>(rssi_wrapper.GetPayload().begin(),
-                                   rssi_wrapper.GetPayload().end())));
-      auto bytes = std::make_shared<std::vector<uint8_t>>();
-      bluetooth::packet::BitInserter i(*bytes);
-      bytes->reserve(rssi_builder->size());
-      rssi_builder->Serialize(i);
-      auto packet_view =
-          ::bluetooth::packet::PacketView<bluetooth::packet::kLittleEndian>(
-              bytes);
-      auto link_layer_packet_view =
-          ::model::packets::LinkLayerPacketView::Create(packet_view);
-      // Validating packets going through Send. Hit assert if debug build
-      if (!link_layer_packet_view.IsValid()) {
-        assert(link_layer_packet_view.IsValid());
-        return;
+    for (const auto& phy : phy_layers_) {
+      if (id != phy->GetId()) {
+        IncrRx(phy->GetId(), GetType());
+        phy->Receive(packet, ComputeRssi(device_id, phy->GetId(), tx_power));
       }
-      // Send the re-written packet to all phys (devices)
-      recv_phy->Receive(link_layer_packet_view);
     }
   }
 };
