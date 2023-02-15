@@ -32,6 +32,6 @@ std::filesystem::path GetDiscoveryDirectory();
 /**
  * Return the frontend grpc port.
  */
-std::optional<std::string> GetServerAddress();
+std::optional<std::string> GetServerAddress(bool frontend_server = true);
 }  // namespace osutils
 }  // namespace netsim

@@ -17,6 +17,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "controller/scene_controller.h"
 #include "frontend.grpc.pb.h"
@@ -27,9 +28,7 @@
 #include "grpcpp/server_builder.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
-#include "util/ini_file.h"
 #include "util/log.h"
-#include "util/os_utils.h"
 
 namespace netsim {
 
@@ -87,7 +86,7 @@ class FrontendServer final : public frontend::FrontendService::Service {
   }
 };
 
-void RunFrontendServer() {
+std::pair<std::unique_ptr<grpc::Server>, std::string> RunFrontendServer() {
   FrontendServer service;
 
   grpc::ServerBuilder builder;
@@ -97,16 +96,9 @@ void RunFrontendServer() {
   builder.RegisterService(&service);
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
 
-  BtsLog("Server listening on localhost: %s",
+  BtsLog("Frontend server listening on localhost: %s",
          std::to_string(selected_port).c_str());
-
-  // Writes port to ini file.
-  auto filepath = osutils::GetDiscoveryDirectory().append("netsim.ini");
-  IniFile iniFile(filepath);
-  iniFile.Set("grpc.port", std::to_string(selected_port));
-  iniFile.Write();
-
-  server->Wait();
+  return std::make_pair(std::move(server), std::to_string(selected_port));
 }
 
 }  // namespace netsim

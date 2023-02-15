@@ -1,0 +1,5 @@
+/node_modules
+package-lock.json
+/test
+web-test-runner.config.mjs
+dist/workbox-*.js.map
