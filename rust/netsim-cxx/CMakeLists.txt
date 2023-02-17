@@ -1,8 +1,3 @@
-message(STATUS "Adding rust ${CMAKE_CURRENT_LIST_DIR}/Cargo.toml")
-
-# This will automatically register all the tests as well.
-corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
-
 if(WIN32)
   # 1. Set RUST_CXX_NO_EXCEPTIONS preprocesor definition for cxx crate to disable
   #    compilation error message of "cannot use 'throw' with exceptions".
@@ -25,9 +20,9 @@ android_add_library(
   LICENSE Apache-2.0
   SRC ${CMAKE_CURRENT_LIST_DIR}/cxx/netsim_cxx_generated.cc
       ${CMAKE_CURRENT_LIST_DIR}/cxx/netsim_cxx_generated.h
-  DEPS frontend-grpc-lib grpc++ packet-streamer-server-lib)
+  DEPS controller-lib frontend-grpc-lib grpc++ packet-streamer-server-lib)
 
 target_include_directories(
-  netsim-cxx-generated PRIVATE ../../src # For backend/backend_server.h
+  netsim-cxx-generated PRIVATE ../../src # For controller/controller.h
                                . # For cxx/cxx.h
 )

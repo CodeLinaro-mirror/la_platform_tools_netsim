@@ -14,7 +14,9 @@
 
 // Opening Browser on Linux and MacOS
 
-use std::{ffi::OsStr, process::Command};
+use std::ffi::OsStr;
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use std::process::Command;
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 pub fn open<T: AsRef<OsStr>>(path: T) {
@@ -47,5 +49,10 @@ pub fn open<T: AsRef<OsStr>>(path: T) {
 #[cfg(target_os = "windows")]
 pub fn open<T: AsRef<OsStr>>(path: T) {
     let path = path.as_ref();
-    println!("Unsupported OS (windows). Open this url:{:?}", path);
+    if let Ok(_output) = Command::new("cmd.exe").args(["/C", "start"]).arg(path).output() {
+        return;
+    } else if let Ok(_output) = Command::new("explorer").arg(path).output() {
+        return;
+    }
+    println!("'start' and 'explorer' command not supported (windows). Open this url:{:?}", path);
 }

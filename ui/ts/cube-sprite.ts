@@ -76,10 +76,10 @@ export class CubeSprite extends LitElement implements Notifiable {
   }
 
   onNotify(data: SimulationInfo) {
-    this.highlighted = data.selectedSerial === this.id;
+    this.highlighted = data.selectedId === this.id;
     for (const device of data.devices) {
-      if (device.deviceSerial === this.id) {
-        this.posZ = (device.position.z ?? 0) * 100;
+      if (device.name === this.id) {
+        this.posZ = device.position.z * 100;
         return;
       }
     }

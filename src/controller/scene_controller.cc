@@ -18,6 +18,7 @@
 #include <cstddef>
 
 #include "controller/device_notify_manager.h"
+#include "util/log.h"
 
 namespace netsim {
 namespace controller {
@@ -38,38 +39,51 @@ const std::vector<std::shared_ptr<Device>> SceneController::Copy() {
   return devices_;
 }
 
-std::shared_ptr<Device> SceneController::GetOrCreate(
-    const std::string &serial) {
+std::shared_ptr<Device> SceneController::GetOrCreate(const std::string &name) {
   std::unique_lock<std::mutex> lock(this->mutex_);
-  auto device = GetDevice(serial);
+  auto device = GetDevice(name);
   if (device != nullptr) {
     return device;
   }
-  device = std::make_shared<Device>(serial);
+  device = CreateDevice(name);
   devices_.push_back(device);
   return device;
 }
 
-std::shared_ptr<Device> SceneController::GetDevice(const std::string &serial) {
+void SceneController::RemoveChip(const std::string &name,
+                                 common::ChipKind chip_kind,
+                                 const std::string &chip_id) {
+  for (int d = 0; d < devices_.size(); d++) {
+    if (devices_[d]->model.name() == name) {
+      if (devices_[d]->RemoveChip(chip_kind, chip_id)) {
+        BtsLog("Removing device %s, no more chips", name.c_str());
+        // No more chips, deleting device
+        devices_.erase(devices_.begin() + d);
+      }
+      return;
+    }
+  }
+  std::cerr << "Trying to remove chip from unknown device" << std::endl;
+}
+
+std::shared_ptr<Device> SceneController::GetDevice(const std::string &name) {
   for (auto device : devices_) {
-    if (device->model.device_serial() == serial) return device;
+    if (device->model.name() == name) return device;
   }
   return {nullptr};
 }
 
 // Returns a Device shared_ptr or nullptr
-std::shared_ptr<Device> SceneController::MatchDevice(const std::string &serial,
-                                                     const std::string &name) {
+std::shared_ptr<Device> SceneController::MatchDevice(const std::string &name) {
   std::shared_ptr<Device> found = nullptr;
-  if (serial.empty() && name.empty()) {
+  if (name.empty()) {
     return nullptr;
   }
   for (auto &device : devices_) {
-    // serial && name -> rename, only match by serial
-    // serial && !name -> match by serial
-    // !serial && name -> match by name
-    auto pos = (serial.empty()) ? device->model.name().find(name)
-                                : device->model.device_serial().find(serial);
+    // query && name -> rename, only match by id
+    // query && !name -> match by query
+    // !query && name -> match by name
+    auto pos = device->model.name().find(name);
     if (pos != std::string::npos) {
       // check for multiple matches
       if (found != nullptr) return nullptr;
@@ -80,14 +94,14 @@ std::shared_ptr<Device> SceneController::MatchDevice(const std::string &serial,
 }
 
 // UI requesting a change in device info
-bool SceneController::UpdateDevice(const netsim::model::Device &request) {
+bool SceneController::PatchDevice(const model::Device &request) {
   std::unique_lock<std::mutex> lock(this->mutex_);
-  if (request.device_serial().empty()) {
+  if (request.name().empty()) {
     return false;
   }
-  auto device = MatchDevice(request.device_serial(), request.name());
+  auto device = MatchDevice(request.name());
   if (device == nullptr) return false;
-  device->Update(request);
+  device->Patch(request);
   DeviceNotifyManager::Get().Notify();
   return true;
 }

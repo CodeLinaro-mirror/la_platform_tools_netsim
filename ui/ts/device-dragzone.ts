@@ -44,7 +44,7 @@ export class DeviceDragZone extends LitElement {
   handleSelect(ev: Event) {
     this.style.opacity = '1';
     if (ev.target) {
-      simulationState.updateSelected((ev.target as Element).id);
+      simulationState.patchSelected((ev.target as Element).id);
       // We can add a feature for visually showing a selected object (i.e. bolded borders)
     }
   }

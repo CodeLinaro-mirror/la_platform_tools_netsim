@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "model.pb.h"
+#include "util/log.h"
 #include "util/os_utils.h"
 #include "util/string_utils.h"
 
@@ -38,14 +39,14 @@ const std::vector<std::string> kDeviceNames{
     "Rusa", "Saki", "Seal", "Skug", "Sore", "Tait", "Tegg", "Titi", "Unau",
     "Urus", "Urva", "Vari", "Vole", "Wolf", "Zati", "Zebu", "Zobo", "Zobu"};
 
-const std::string GetName(std::string_view device_serial) {
+const std::string GetName(std::string_view device_name) {
   unsigned int idx =
-      std::hash<std::string_view>()(device_serial) % kDeviceNames.size();
+      std::hash<std::string_view>()(device_name) % kDeviceNames.size();
   return kDeviceNames.at(idx);
 }
 }  // namespace
 
-void Device::Update(const model::Device &request) {
+void Device::Patch(const model::Device &request) {
   if (request.has_position()) {
     this->model.mutable_position()->CopyFrom(request.position());
   }
@@ -59,22 +60,41 @@ void Device::Update(const model::Device &request) {
     auto found = false;
     for (auto &chip : chips) {
       if (chip->KeyComp(request_chip_model)) {
-        chip->Update(request_chip_model);
+        chip->Patch(request_chip_model);
         found = true;
         break;
       }
     }
     if (!found) {
-      std::cerr << "Unknown chip in update" << std::endl;
+      BtsLog("Unknown chip in update");
     }
   }
+}
+
+bool Device::RemoveChip(common::ChipKind chip_kind,
+                        const std::string &chip_id) {
+  for (int c = 0; c < model.chips().size(); c++) {
+    auto c_kind = model.chips().at(c).chip_kind();
+    auto c_id = model.chips().at(c).chip_id();
+    if (chip_kind == c_kind && chip_id == c_id) {
+      // Entry in chips and model are at same index
+      BtsLog("Removing chip kind:%d id:'%s' from %s", c_kind, c_id.c_str(),
+             model.name().c_str());
+      chips[c]->Remove();
+      chips.erase(chips.begin() + c);
+      model.mutable_chips()->DeleteSubrange(c, 1);
+      return chips.size() == 0;
+    }
+  }
+  BtsLog("Trying to remove unknown chip");
+  return chips.size() == 0;
 }
 
 void Device::AddChip(std::shared_ptr<Device> device, std::shared_ptr<Chip> chip,
                      const model::Chip &chip_model) {
   for (auto &c : chips) {
     if (c->KeyComp(chip_model)) {
-      std::cerr << "Trying to add a duplicate chip, skipping!" << std::endl;
+      BtsLog("Trying to add a duplicate chip, skipping!");
       return;
     }
   }
@@ -89,12 +109,10 @@ void Device::Reset() {
   // TODO: Reset chips and radios.
 }
 
-std::shared_ptr<Device> CreateDevice(std::string_view serial) {
+std::shared_ptr<Device> CreateDevice(std::string_view name) {
   model::Device model;
-  model.set_device_serial(stringutils::AsString(serial));
+  model.set_name(stringutils::AsString(name));
   model.set_visible(true);
-  // default name
-  model.set_name(GetName(serial));
   // required sub-messages to simplify ui
   model.mutable_position();
   model.mutable_orientation();

@@ -24,8 +24,8 @@
 namespace netsim {
 namespace hci {
 
-using Stream = ::grpc::ServerReaderWriter<packet::PacketResponse,
-                                          packet::PacketRequest>;
+using Stream =
+    ::grpc::ServerReaderWriter<packet::PacketResponse, packet::PacketRequest>;
 
 /**
  * @class BackendServerHciTransport

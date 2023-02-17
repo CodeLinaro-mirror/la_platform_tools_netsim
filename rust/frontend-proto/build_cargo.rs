@@ -38,7 +38,11 @@ fn main() {
 
     // Generate protobuf output
     let proto_dir = proto_root.join("src/proto");
-    let proto_input_files = [proto_dir.join("model.proto"), proto_dir.join("frontend.proto")];
+    let proto_input_files = [
+        proto_dir.join("model.proto"),
+        proto_dir.join("frontend.proto"),
+        proto_dir.join("common.proto"),
+    ];
     let proto_include_dirs = [proto_dir.clone()];
     let proto_out_dir = proto_root.join("rust/frontend-proto/src");
 
@@ -46,7 +50,6 @@ fn main() {
         .out_dir(proto_out_dir.as_os_str().to_str().unwrap())
         .inputs(&paths_to_strs(&proto_input_files))
         .includes(&paths_to_strs(&proto_include_dirs))
-        .customize(Customize { serde_derive: Some(true), ..Default::default() })
         .run()
         .expect("protoc");
 }

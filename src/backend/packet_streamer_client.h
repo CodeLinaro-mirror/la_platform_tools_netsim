@@ -31,18 +31,17 @@ std::unique_ptr<PacketStreamer::Stub> stub = PacketStreamer::NewStub(channel);
 
 PacketsRequest initial_request;
 Stream bt_stream = stub.StreamPackets(&context);
-initial_request.mutable_initial_info().set_serial("emulator-5554");
-initial_request.mutable_initial_info().mutable_chip().set_kind(ChipKind.BLUETOOTH);
+initial_request.mutable_initial_info().set_name("Pixel_XL_3");
+initial_request.mutable_initial_info().mutable_chip().set_kind(ChipKind::BLUETOOTH);
 bt_stream.write(initial_request);
 
 Stream wifi_stream = stub.StreamPackets(&context);
-initial_request.mutable_initial_info().set_serial("emulator-5554");
-initial_request.mutable_initial_info().mutable_chip().set_kind(ChipKind.WIFI);
+initial_request.mutable_initial_info().set_name("Pixel_XL_3");
+initial_request.mutable_initial_info().mutable_chip().set_kind(ChipKind::WIFI);
 wifi_stream.write(initial_request);
 */
-using Stream =
-    std::unique_ptr<::grpc::ClientReaderWriter<packet::PacketRequest,
-                                               packet::PacketResponse>>;
+using Stream = std::unique_ptr<
+    ::grpc::ClientReaderWriter<packet::PacketRequest, packet::PacketResponse>>;
 
 std::shared_ptr<grpc::Channel> CreateChannel(
     std::string rootcanal_default_commands_file = "",

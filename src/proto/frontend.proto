@@ -35,17 +35,14 @@ service FrontendService {
   // Get the version of the netsim service.
   rpc GetVersion(google.protobuf.Empty) returns (VersionResponse);
 
-  // Register for device movement and emulated radio state updates
-  rpc RegisterUpdates(google.protobuf.Empty) returns (stream Updates);
+  // Register for device movement and emulated radio state events
+  rpc RegisterEvents(google.protobuf.Empty) returns (stream Event);
 
   // Get a list of devices
   rpc GetDevices(google.protobuf.Empty) returns (GetDevicesResponse);
 
-  // Update a device
-  rpc UpdateDevice(UpdateDeviceRequest) returns (google.protobuf.Empty);
-
-  // Turn on/off packet capture for connected devices.
-  rpc SetPacketCapture(SetPacketCaptureRequest) returns (google.protobuf.Empty);
+  // Patch a device
+  rpc PatchDevice(PatchDeviceRequest) returns (google.protobuf.Empty);
 
   // Reset all devices.
   rpc Reset(google.protobuf.Empty) returns (google.protobuf.Empty);
@@ -72,19 +69,19 @@ message VersionResponse {
 // a perfect medium.  This is a simple model that does not take into
 // account losses due to transmission rates and signal-to-noise ratio.
 message SetLinkLossRequest {
-  string device_serial = 1;
+  string device_name = 1;
   string other_device = 2;
   netsim.model.PhyKind radio = 3;
   // As a percent between 0 and 1
   float link_loss = 4;
 }
 
-message UpdateDeviceRequest {
-  netsim.model.Device device = 2;  // update by id or name
+message PatchDeviceRequest {
+  netsim.model.Device device = 2;  // by id or name
 }
 
-// Updates when simulation state changes.
-message Updates {
+// Event when simulation state changes.
+message Event {
   repeated netsim.model.Device devices = 1;
 }
 

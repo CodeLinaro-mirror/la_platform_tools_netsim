@@ -17,7 +17,6 @@
 #pragma once
 // OS specific utility functions.
 
-#include <filesystem>
 #include <optional>
 #include <string>
 
@@ -25,9 +24,15 @@ namespace netsim {
 namespace osutils {
 
 /**
+ * Return the value of environment variable if exists. Otherwise, the default
+ * value.
+ */
+std::string GetEnv(const std::string &name, const std::string &default_value);
+
+/**
  * Return the path containing runtime user files.
  */
-std::filesystem::path GetDiscoveryDirectory();
+std::string GetDiscoveryDirectory();
 
 /**
  * Return the frontend grpc port.

@@ -15,7 +15,7 @@
 android_add_library(
   TARGET core-lib
   LICENSE Apache-2.0
-  SRC server_rpc.cc server_rpc.h
+  SRC server.cc server.h
   DEPS frontend-grpc-lib
        frontend-lib
        grpc++

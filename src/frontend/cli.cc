@@ -60,38 +60,37 @@ class FrontendClient {
       std::cout << "received: " << response.version() << std::endl;
   }
 
-  // move <device_serial> <x> <y> <z>
+  // move <name> <x> <y> <z>
   void SetPosition(const Args &args) {
-    if (args.size() != 5) return Usage("move <device_serial> <x> <y> <z>");
+    if (args.size() != 5) return Usage("move <name> <x> <y> <z>");
     float x = std::atof(stringutils::AsString(args.at(2)).c_str()),
           y = std::atof(stringutils::AsString(args.at(3)).c_str()),
           z = std::atof(stringutils::AsString(args.at(4)).c_str());
-    auto device_serial = std::string(args.at(1));
-    frontend::UpdateDeviceRequest request;
-    request.mutable_device()->set_device_serial(device_serial);
+    auto name = std::string(args.at(1));
+    frontend::PatchDeviceRequest request;
+    request.mutable_device()->set_name(name);
     request.mutable_device()->mutable_position()->set_x(x);
     request.mutable_device()->mutable_position()->set_y(y);
     request.mutable_device()->mutable_position()->set_z(z);
     google::protobuf::Empty response;
-    auto status = stub_->UpdateDevice(&context_, request, &response);
+    auto status = stub_->PatchDevice(&context_, request, &response);
     if (CheckStatus(status, "SetPosition"))
-      std::cout << "move " << device_serial << " " << x << " " << y << " " << z
+      std::cout << "move " << name << " " << x << " " << y << " " << z
                 << std::endl;
   }
 
-  // set-visibility <device_serial> <on|off>
+  // set-visibility <name> <on|off>
   void SetVisibility(const Args &args) {
-    if (args.size() != 3)
-      return Usage("set-visibility <device_serial> <on|off>");
+    if (args.size() != 3) return Usage("set-visibility <name> <on|off>");
 
-    auto device_serial = std::string(args.at(1));
+    auto name = std::string(args.at(1));
     auto visible = args.at(2) == "on";
-    frontend::UpdateDeviceRequest request;
-    request.mutable_device()->set_device_serial(device_serial);
+    frontend::PatchDeviceRequest request;
+    request.mutable_device()->set_name(name);
     request.mutable_device()->set_visible(visible);
-    auto status = stub_->UpdateDevice(&context_, request, nullptr);
+    auto status = stub_->PatchDevice(&context_, request, nullptr);
     if (CheckStatus(status, "SetVisibility"))
-      std::cout << "set-visibility " << device_serial << " " << visible;
+      std::cout << "set-visibility " << name << " " << visible;
   }
 
   std::string stateToString(const model::Chip::Radio &radio) {
@@ -112,7 +111,7 @@ class FrontendClient {
                << device.position().x() << "," << device.position().y() << ","
                << device.position().z() << ")";
         const std::string position = stream.str();
-        std::cout << device.device_serial() << "\t";
+        std::cout << device.name() << "\t";
 
         for (const auto &chip : device.chips()) {
           switch (chip.chip_case()) {
@@ -139,52 +138,31 @@ class FrontendClient {
     std::unordered_set<std::string> up_status = {"up", "on", "enabled", "true"};
 
     if (args.size() != 4)
-      return Usage("arg count - radio <ble|classic> <up|down> <device_serial>");
+      return Usage("arg count - radio <ble|classic> <up|down> <name>");
     auto radio_str = std::string(args.at(1));
     bool is_le = radio_le.count(radio_str);
     bool is_bt = radio_bt.count(radio_str);
     if (!(is_le || is_bt)) {
-      return Usage(
-          "unknown radio - radio <ble|classic> <up|down> <device_serial>");
+      return Usage("unknown radio - radio <ble|classic> <up|down> <name>");
     }
     auto radio_state = up_status.count(std::string(args.at(2)))
                            ? model::State::ON
                            : model::State::OFF;
 
-    auto device_serial = std::string(args.at(3));
-    frontend::UpdateDeviceRequest request;
+    auto name = std::string(args.at(3));
+    frontend::PatchDeviceRequest request;
     google::protobuf::Empty response;
-    request.mutable_device()->set_device_serial(device_serial);
+    request.mutable_device()->set_name(name);
     auto bt = request.mutable_device()->add_chips()->mutable_bt();
     if (is_le) {
       bt->mutable_low_energy()->set_state(radio_state);
     } else {
       bt->mutable_classic()->set_state(radio_state);
     }
-    auto status = stub_->UpdateDevice(&context_, request, &response);
+    auto status = stub_->PatchDevice(&context_, request, &response);
     if (CheckStatus(status, "SetRadio")) {
       std::cout << "radio " << args.at(1) << " is " << args.at(2) << " for "
                 << args.at(3) << std::endl;
-    }
-  }
-
-  // capture <true/false> [<device_serial>]
-  void SetPacketCapture(const Args &args) {
-    if (args.size() != 2 && args.size() != 3)
-      return Usage("capture <true/false> [<device_serial>]");
-
-    auto capture = args.at(1) == "on";
-    auto device_serial = (args.size() == 3) ? std::string(args.at(2)) : "";
-
-    frontend::SetPacketCaptureRequest request;
-    request.set_capture(capture);
-    if (!device_serial.empty()) request.set_device_serial(device_serial);
-    google::protobuf::Empty response;
-    auto status = stub_->SetPacketCapture(&context_, request, &response);
-    if (CheckStatus(status, "SetPacketCapture")) {
-      std::cout << "turn " << (capture ? "on" : "off") << " packet capture for "
-                << (device_serial.empty() ? "all devices" : device_serial)
-                << std::endl;
     }
   }
 
@@ -254,8 +232,6 @@ int SendCommand(std::unique_ptr<frontend::FrontendService::Stub> stub,
     frontend.SetVisibility(args);
   else if (cmd == "devices")
     frontend.GetDevices(args);
-  else if (cmd == "capture")
-    frontend.SetPacketCapture(args);
   else if (cmd == "reset")
     frontend.Reset(args);
   else if (cmd == "positions" || cmd == "visibility" ||

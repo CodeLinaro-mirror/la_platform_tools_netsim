@@ -40,6 +40,7 @@ fn main() {
         proto_dir.join("packet_streamer.proto"),
         proto_dir.join("hci_packet.proto"),
         proto_dir.join("startup.proto"),
+        proto_dir.join("common.proto"),
     ];
     let proto_include_dirs = [proto_dir.clone()];
 

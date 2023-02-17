@@ -35,10 +35,10 @@ class Chip {
   virtual ~Chip(){};
 
   /**
-   * Update processing for the chip. Validate and move state from the request
+   * Patch processing for the chip. Validate and move state from the request
    * into the parent's model::Chip changing the ChipFacade as needed.
    */
-  virtual void Update(const model::Chip &request);
+  virtual void Patch(const model::Chip &request);
 
   /**
    * Reset the state of the chip to defaults.

@@ -17,7 +17,8 @@ cmake_minimum_required(VERSION 3.5)
 android_add_library(
   TARGET util-lib
   LICENSE Apache-2.0
-  SRC ini_file.cc
+  SRC filesystem.h
+      ini_file.cc
       ini_file.h
       log.cc
       log.h

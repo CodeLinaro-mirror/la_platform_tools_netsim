@@ -15,8 +15,17 @@
 cmake_minimum_required(VERSION 3.5)
 
 android_add_library(
-  TARGET controller-lib LICENSE Apache-2.0
-  SRC chip.cc chip.h device.cc device.h device_notify_manager.cc device_notify_manager.h
-  scene_controller.cc scene_controller.h
-  DEPS frontend-grpc-lib grpc++ hci-lib libbt-rootcanal util-lib vhci-lib)
+  TARGET controller-lib
+  LICENSE Apache-2.0
+  SRC chip.cc
+      chip.h
+      controller.cc
+      controller.h
+      device.cc
+      device.h
+      device_notify_manager.cc
+      device_notify_manager.h
+      scene_controller.cc
+      scene_controller.h
+  DEPS frontend-grpc-lib grpc++ hci-lib libbt-rootcanal util-lib)
 target_include_directories(controller-lib PRIVATE ..)

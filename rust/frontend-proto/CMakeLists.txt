@@ -1,8 +1,3 @@
-message(STATUS "Adding rust ${CMAKE_CURRENT_LIST_DIR}/Cargo.toml")
-
-# This will automatically register all the tests as well.
-corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
-
 corrosion_set_env_vars(frontend-proto RUST_BACKTRACE=full)
 
 cmake_path(APPEND PROTOBUF_INCLUDE_DIR "${AOSP_ROOT}" "external" "protobuf"
