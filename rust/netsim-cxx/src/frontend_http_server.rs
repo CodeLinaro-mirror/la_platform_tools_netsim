@@ -140,7 +140,7 @@ fn handle_static(request: &HttpRequest, path: &str) -> HttpResponse {
 fn handle_version(_request: &HttpRequest, _param: &str) -> HttpResponse {
     HttpResponse::new_200(
         "text/plain",
-        format!("{{version: \"{}\"}}", VERSION).into_bytes().to_vec(),
+        format!("{{\"version\": \"{}\"}}", VERSION).into_bytes().to_vec(),
     )
 }
 
@@ -179,7 +179,7 @@ fn handle_devices(request: &HttpRequest, _param: &str) -> HttpResponse {
 fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
     let mut router = Router::new();
     router.add_route("/", Box::new(handle_index));
-    router.add_route("/get-version", Box::new(handle_version));
+    router.add_route("/version", Box::new(handle_version));
     router.add_route("/v1/devices", Box::new(handle_devices));
     router.add_route(r"/pcap/{id}", Box::new(handle_pcap_file));
 

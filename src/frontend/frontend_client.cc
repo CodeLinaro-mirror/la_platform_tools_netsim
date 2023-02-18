@@ -27,6 +27,7 @@
 #include <string>
 #include <string_view>
 
+#include "../rust/frontend-client-cxx/cxx/frontend_client_cxx_generated.h"
 #include "frontend.grpc.pb.h"
 #include "frontend.pb.h"
 #include "google/protobuf/empty.pb.h"
@@ -111,6 +112,26 @@ class FrontendClientImpl : public FrontendClient {
                                   request_byte_vec.size());
     auto status = stub_->PatchDevice(&context_, request, &response);
     return make_result(status, response);
+  }
+
+  // Helper function to redirect Grpc
+  std::unique_ptr<ClientResult> SendGrpc(
+      frontend::GrpcMethod const &grpc_method,
+      rust::Vec<::rust::u8> const &request_byte_vec) const override {
+    switch (grpc_method) {
+      case frontend::GrpcMethod::GetVersion:
+        return GetVersion();
+      case frontend::GrpcMethod::PatchDevice:
+        return PatchDevice(request_byte_vec);
+      case frontend::GrpcMethod::GetDevices:
+        return GetDevices();
+      case frontend::GrpcMethod::Reset:
+        return Reset();
+      default:
+        return make_result(::grpc::Status(::grpc::StatusCode::UNKNOWN,
+                                          "Unknown GrpcMethod found."),
+                           ::google::protobuf::Empty());
+    }
   }
 
  private:

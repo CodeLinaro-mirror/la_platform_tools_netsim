@@ -713,7 +713,22 @@ std::size_t align_of() {
 
 namespace netsim {
   namespace frontend {
+    enum class GrpcMethod : ::std::uint8_t;
     using FrontendClient = ::netsim::frontend::FrontendClient;
     using ClientResult = ::netsim::frontend::ClientResult;
   }
 }
+
+namespace netsim {
+namespace frontend {
+#ifndef CXXBRIDGE1_ENUM_netsim$frontend$GrpcMethod
+#define CXXBRIDGE1_ENUM_netsim$frontend$GrpcMethod
+enum class GrpcMethod : ::std::uint8_t {
+  GetVersion = 0,
+  PatchDevice = 1,
+  GetDevices = 2,
+  Reset = 3,
+};
+#endif // CXXBRIDGE1_ENUM_netsim$frontend$GrpcMethod
+} // namespace frontend
+} // namespace netsim

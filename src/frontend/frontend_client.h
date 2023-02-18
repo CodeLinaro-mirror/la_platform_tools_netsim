@@ -26,6 +26,8 @@
 namespace netsim {
 namespace frontend {
 
+enum class GrpcMethod : ::std::uint8_t;
+
 class ClientResult {
  public:
   ClientResult(bool is_ok, const std::string &err,
@@ -45,6 +47,9 @@ class ClientResult {
 class FrontendClient {
  public:
   virtual ~FrontendClient(){};
+  virtual std::unique_ptr<ClientResult> SendGrpc(
+      frontend::GrpcMethod const &grpc_method,
+      rust::Vec<rust::u8> const &request_byte_vec) const = 0;
   virtual std::unique_ptr<ClientResult> GetVersion() const = 0;
   virtual std::unique_ptr<ClientResult> GetDevices() const = 0;
   virtual std::unique_ptr<ClientResult> PatchDevice(

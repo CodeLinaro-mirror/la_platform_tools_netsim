@@ -722,6 +722,7 @@ template <> struct deleter_if<true> {
 
 namespace netsim {
   namespace frontend {
+    enum class GrpcMethod : ::std::uint8_t;
     using FrontendClient = ::netsim::frontend::FrontendClient;
     using ClientResult = ::netsim::frontend::ClientResult;
   }
@@ -729,30 +730,25 @@ namespace netsim {
 
 namespace netsim {
 namespace frontend {
+#ifndef CXXBRIDGE1_ENUM_netsim$frontend$GrpcMethod
+#define CXXBRIDGE1_ENUM_netsim$frontend$GrpcMethod
+enum class GrpcMethod : ::std::uint8_t {
+  GetVersion = 0,
+  PatchDevice = 1,
+  GetDevices = 2,
+  Reset = 3,
+};
+#endif // CXXBRIDGE1_ENUM_netsim$frontend$GrpcMethod
+
 extern "C" {
 ::netsim::frontend::FrontendClient *netsim$frontend$cxxbridge1$new_frontend_client() noexcept {
   ::std::unique_ptr<::netsim::frontend::FrontendClient> (*new_frontend_client$)() = ::netsim::frontend::NewFrontendClient;
   return new_frontend_client$().release();
 }
 
-::netsim::frontend::ClientResult *netsim$frontend$cxxbridge1$FrontendClient$get_version(::netsim::frontend::FrontendClient const &self) noexcept {
-  ::std::unique_ptr<::netsim::frontend::ClientResult> (::netsim::frontend::FrontendClient::*get_version$)() const = &::netsim::frontend::FrontendClient::GetVersion;
-  return (self.*get_version$)().release();
-}
-
-::netsim::frontend::ClientResult *netsim$frontend$cxxbridge1$FrontendClient$get_devices(::netsim::frontend::FrontendClient const &self) noexcept {
-  ::std::unique_ptr<::netsim::frontend::ClientResult> (::netsim::frontend::FrontendClient::*get_devices$)() const = &::netsim::frontend::FrontendClient::GetDevices;
-  return (self.*get_devices$)().release();
-}
-
-::netsim::frontend::ClientResult *netsim$frontend$cxxbridge1$FrontendClient$reset(::netsim::frontend::FrontendClient const &self) noexcept {
-  ::std::unique_ptr<::netsim::frontend::ClientResult> (::netsim::frontend::FrontendClient::*reset$)() const = &::netsim::frontend::FrontendClient::Reset;
-  return (self.*reset$)().release();
-}
-
-::netsim::frontend::ClientResult *netsim$frontend$cxxbridge1$FrontendClient$patch_device(::netsim::frontend::FrontendClient const &self, ::rust::Vec<::std::uint8_t> const &request) noexcept {
-  ::std::unique_ptr<::netsim::frontend::ClientResult> (::netsim::frontend::FrontendClient::*patch_device$)(::rust::Vec<::std::uint8_t> const &) const = &::netsim::frontend::FrontendClient::PatchDevice;
-  return (self.*patch_device$)(request).release();
+::netsim::frontend::ClientResult *netsim$frontend$cxxbridge1$FrontendClient$send_grpc(::netsim::frontend::FrontendClient const &self, ::netsim::frontend::GrpcMethod const &grpc_method, ::rust::Vec<::std::uint8_t> const &request) noexcept {
+  ::std::unique_ptr<::netsim::frontend::ClientResult> (::netsim::frontend::FrontendClient::*send_grpc$)(::netsim::frontend::GrpcMethod const &, ::rust::Vec<::std::uint8_t> const &) const = &::netsim::frontend::FrontendClient::SendGrpc;
+  return (self.*send_grpc$)(grpc_method, request).release();
 }
 
 bool netsim$frontend$cxxbridge1$ClientResult$is_ok(::netsim::frontend::ClientResult const &self) noexcept {

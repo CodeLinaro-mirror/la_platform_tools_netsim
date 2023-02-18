@@ -23,6 +23,9 @@ use protobuf::Message;
 pub struct NetsimArgs {
     #[clap(subcommand)]
     pub command: Command,
+    /// Set verbose mode
+    #[clap(short, long)]
+    pub verbose: bool,
 }
 
 #[derive(Debug, Subcommand)]
