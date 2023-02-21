@@ -14,6 +14,7 @@
 
 # Netsim - a network simulator for discovery, ranging and communication
 
-SET(INSTALL_NETSIM_UI_DIR "${CMAKE_INSTALL_PREFIX}/netsim-ui" CACHE PATH "The directory the netsim web UI is installed in")
+set(INSTALL_NETSIM_UI_DIR "${CMAKE_INSTALL_PREFIX}/netsim-ui"
+    CACHE PATH "The directory the netsim web UI is installed in")
 
 install(DIRECTORY dist/ DESTINATION ${INSTALL_NETSIM_UI_DIR})

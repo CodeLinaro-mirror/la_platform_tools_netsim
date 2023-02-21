@@ -130,14 +130,14 @@ export class DeviceMap extends LitElement implements Notifiable {
         <div id="dropzone" class="box pattern${this.imageIdx}">
           ${this.deviceData.map(
             (device, idx) => html`
-              ${device.visible === true
+              ${!("visible" in device) || device.visible === true
                 ? html`
                     <ns-device-dragzone
                       .action=${'move'}
                       style=${styleMap({
                         position: 'absolute',
-                        left: `${(device.position.x ?? 0) * 100}px`,
-                        top: `${(device.position.y ?? 0) * 100}px`,
+                        left: `${('position' in device && device.position) ? (device.position.x ?? 0) * 100 : 0}px`,
+                        top: `${('position' in device && device.position) ? (device.position.y ?? 0) * 100 : 0}px`,
                       })}
                     >
                       <ns-cube-sprite
@@ -145,10 +145,10 @@ export class DeviceMap extends LitElement implements Notifiable {
                         .color=${rainbow[idx % rainbow.length]}
                         .size=${'30px'}
                         .controls=${true}
-                        yaw=${device.orientation.yaw ?? 0}
-                        pitch=${device.orientation.pitch ?? 0}
-                        roll=${device.orientation.roll ?? 0}
-                        posZ=${(device.position.z ?? 0) * 100}
+                        yaw=${('orientation' in device && device.orientation) ? device.orientation.yaw ?? 0: 0}
+                        pitch=${('orientation' in device && device.orientation) ? device.orientation.pitch ?? 0: 0}
+                        roll=${('orientation' in device && device.orientation) ? device.orientation.roll ?? 0: 0}
+                        posZ=${('position' in device && device.position) ? (device.position.z ?? 0) * 100 : 0}
                       ></ns-cube-sprite>
                     </ns-device-dragzone>
                   `

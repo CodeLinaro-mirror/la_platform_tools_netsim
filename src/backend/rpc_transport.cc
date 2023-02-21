@@ -12,25 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "util/os_utils.h"
+#include "backend/rpc_transport.h"
 
-#include <cstdio>
-#include <fstream>
-#include <string>
-
-#include "gtest/gtest.h"
-#include "util/filesystem.h"
-
-namespace netsim {
-namespace testing {
-namespace {
-
-// Test that the result of GetDiscoveryDir exists
-TEST(OsUtilsTest, GetDiscoveryDir) {
-  auto dir = osutils::GetDiscoveryDirectory();
-  EXPECT_TRUE(netsim::filesystem::exists(dir));
-}
-
-}  // namespace
-}  // namespace testing
-}  // namespace netsim
+// NOTE: Add this file for backend-lib because it can't create library from one
+// header file.
+// TODO: Move implementation from backend/rpc_transport.h.

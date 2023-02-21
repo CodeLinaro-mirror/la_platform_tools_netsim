@@ -22,7 +22,7 @@ package {
 }
 
 cc_library {
-    name: "netsim-proto",
+    name: "lib-netsim-frontend-proto",
     host_supported: true,
     proto: {
         export_proto_headers: true,
@@ -35,7 +35,7 @@ cc_library {
         "internal.proto",
         "model.proto",
         "startup.proto",
-	"hci_packet.proto"
+        "hci_packet.proto"
     ],
 }
 

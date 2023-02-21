@@ -2,7 +2,7 @@
 name = "frontend-client-cxx"
 version = "0.1.0"
 edition = "2021"
-# build = "build.rs"
+# build = "build_cargo.rs"
 
 [lib]
 crate-type = ["staticlib", "lib"]
@@ -12,4 +12,4 @@ doctest = false
 cxx = { version = "=1.0.42", features = ["c++17"] }
 
 [build-dependencies]
-cxx-build = "1.0"
+# cxx-build = "1.0"

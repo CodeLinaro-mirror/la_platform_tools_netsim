@@ -140,6 +140,78 @@ export class PacketInformation extends LitElement implements Notifiable {
     this.requestUpdate();
   }
 
+  private handleGetChips(device: Device) {
+    let btTable = html``;
+    let uwbTable = html``;
+    let wifiTable = html``;
+    if ("chips" in device && device.chips) {
+      for (const chip of device.chips) {
+        if ("bt" in chip && chip.bt) {
+          let bleTable = html``;
+          let bclassicTable = html``;
+          if ("lowEnergy" in chip.bt && chip.bt.lowEnergy) {
+            bleTable = html`
+              <tr>
+                <td>BLE</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>${chip.bt.lowEnergy.rxCount ?? 0}</td>
+                <td>${chip.bt.lowEnergy.txCount ?? 0}</td>
+                <td>N/A</td>
+                <td>N/A</td>
+              </tr>
+            `;
+          }
+          if ("classic" in chip.bt && chip.bt.classic) {
+            bclassicTable = html`
+              <tr>
+                <td>Bluetooth Classic</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>${chip.bt.classic.rxCount ?? 0}</td>
+                <td>${chip.bt.classic.txCount ?? 0}</td>
+                <td>N/A</td>
+                <td>N/A</td>
+              </tr>
+            `;
+          }
+          btTable = html`${bleTable} ${bclassicTable}`;
+        }
+        if ("uwb" in chip && chip.uwb) {
+          uwbTable = html`
+            <tr>
+              <td>UWB</td>
+              <td>N/A</td>
+              <td>N/A</td>
+              <td>${chip.uwb.rxCount ?? 0}</td>
+              <td>${chip.uwb.txCount ?? 0}</td>
+              <td>N/A</td>
+              <td>N/A</td>
+            </tr>
+          `
+        }
+        if ("wifi" in chip && chip.wifi) {
+          wifiTable = html`
+            <tr>
+              <td>WIFI</td>
+              <td>N/A</td>
+              <td>N/A</td>
+              <td>${chip.wifi.rxCount ?? 0}</td>
+              <td>${chip.wifi.txCount ?? 0}</td>
+              <td>N/A</td>
+              <td>N/A</td>
+            </tr>
+          `;
+        }
+      }
+    }
+    return html`
+      ${btTable}
+      ${uwbTable}
+      ${wifiTable}
+    `;
+  }
+
   render() {
     return html`
       <div class="panel">
@@ -158,57 +230,7 @@ export class PacketInformation extends LitElement implements Notifiable {
                   <th>RX Bytes</th>
                   <th>TX Bytes</th>
                 </tr>
-                ${device.chips.map(chip => {
-                  if (chip.bt) {
-                    return html`
-                      <tr>
-                        <td>BLE</td>
-                        <td>N/A</td>
-                        <td>N/A</td>
-                        <td>${chip.bt.lowEnergy.rxCount ?? 0}</td>
-                        <td>${chip.bt.lowEnergy.txCount ?? 0}</td>
-                        <td>N/A</td>
-                        <td>N/A</td>
-                      </tr>
-                      <tr>
-                        <td>Bluetooth Classic</td>
-                        <td>N/A</td>
-                        <td>N/A</td>
-                        <td>${chip.bt.classic.rxCount ?? 0}</td>
-                        <td>${chip.bt.classic.txCount ?? 0}</td>
-                        <td>N/A</td>
-                        <td>N/A</td>
-                      </tr>
-                    `;
-                  }
-                  if (chip.uwb) {
-                    return html`
-                      <tr>
-                        <td>UWB</td>
-                        <td>N/A</td>
-                        <td>N/A</td>
-                        <td>${chip.uwb.rxCount ?? 0}</td>
-                        <td>${chip.uwb.txCount ?? 0}</td>
-                        <td>N/A</td>
-                        <td>N/A</td>
-                      </tr>
-                    `;
-                  }
-                  if (chip.wifi) {
-                    return html`
-                      <tr>
-                        <td>WIFI</td>
-                        <td>N/A</td>
-                        <td>N/A</td>
-                        <td>${chip.wifi.rxCount ?? 0}</td>
-                        <td>${chip.wifi.txCount ?? 0}</td>
-                        <td>N/A</td>
-                        <td>N/A</td>
-                      </tr>
-                    `;
-                  }
-                  return html``;
-                })}
+                ${this.handleGetChips(device)}
               </table>
             `
         )}
@@ -227,7 +249,7 @@ export class PacketInformation extends LitElement implements Notifiable {
                   <td>${device.name}</td>
                   <td>${device.deviceSerial}</td>
                   <td>
-                    ${device.chips.map(chip => {
+                    ${('chips' in device && device.chips) ? device.chips.map(chip => {
                       if (chip.bt) {
                         return html`<input
                           id=${device.deviceSerial}
@@ -238,7 +260,7 @@ export class PacketInformation extends LitElement implements Notifiable {
                         />`;
                       }
                       return html``;
-                    })}
+                    }) : html``}
                   </td>
                   <td>
                     <a

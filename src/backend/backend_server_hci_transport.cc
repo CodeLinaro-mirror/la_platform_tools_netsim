@@ -16,12 +16,17 @@
 
 #include <grpcpp/grpcpp.h>
 
+#include <condition_variable>
 #include <memory>
+#include <queue>
+#include <thread>
 #include <vector>
 
+#include "hci/hci_debug.h"
 #include "model/hci/hci_transport.h"
 #include "packet_streamer.grpc.pb.h"
 #include "packet_streamer.pb.h"
+#include "util/blocking_queue.h"
 #include "util/log.h"
 
 using netsim::packet::HCIPacket;
@@ -32,12 +37,16 @@ namespace {
 
 // Transports HCIPacket between grpc and chip emulator.
 //
+// All outgoing messages to a gRPC stream must be single threaded.
+// All incoming messages to Rootcanal must be single threaded.
+//
 // Private implementation.
 //
 class BackendServerHciTransportImpl : public BackendServerHciTransport {
  public:
   BackendServerHciTransportImpl(std::string peer, Stream *stream)
-      : mPeer(peer), mStream(stream) {}
+      : mPeer(peer), mStream(stream), mReading(true) {}
+
   ~BackendServerHciTransportImpl() {}
 
   // Called by HCITransport (rootcanal)
@@ -66,7 +75,7 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
                          rootcanal::PacketCallback scoCallback,
                          rootcanal::PacketCallback isoCallback,
                          rootcanal::CloseCallback closeCallback) override {
-    BtsLog("hci_transport RegisterCallbacks");
+    BtsLog("hci_transport: registered");
     mCommandCallback = commandCallback;
     mAclCallback = aclCallback;
     mScoCallback = scoCallback;
@@ -80,15 +89,19 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
   // Close from Rootcanal
   void Close() override {
     BtsLog("hci_transport close from rootcanal");
-    mDone = true;
+    mReading = false;
   }
 
   // Transport packets from grpc to rootcanal. Return when connection is closed.
   void Transport() override {
     packet::PacketRequest request;
-    while (true) {
-      bool reader_success = mStream->Read(&request);
-      if (!reader_success || mDone) {
+
+    // non-blocking and serialized writes to gRPC on a thread
+    mWriter = std::move(std::thread([&] { startWriter(); }));
+
+    while (mReading) {
+      if (!mStream->Read(&request)) {
+        BtsLog("hci_transport: reading stopped peer %s", mPeer.c_str());
         break;
       }
       if (!request.has_hci_packet()) {
@@ -98,25 +111,23 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
       auto str = request.mutable_hci_packet()->mutable_packet();
       auto packet =
           std::make_shared<std::vector<uint8_t>>(str->begin(), str->end());
-      switch (request.hci_packet().packet_type()) {
-        case HCIPacket::COMMAND: {
-          mCommandCallback(std::move(packet));
-        } break;
-        case HCIPacket::ACL:
-          mAclCallback(std::move(packet));
-          break;
-        case HCIPacket::SCO:
-          mScoCallback(std::move(packet));
-          break;
-        case HCIPacket::ISO:
-          mIsoCallback(std::move(packet));
-          break;
-        default:
-          BtsLog("hci_transport Ignoring unknown packet.");
-          break;
+      auto packet_type = request.hci_packet().packet_type();
+
+      if (packet_type == HCIPacket::COMMAND) {
+        auto cmd = HciCommandToString(packet->at(0), packet->at(1));
+        BtsLog("hci_transport: from %s %s", mPeer.c_str(), cmd.c_str());
+      }
+      auto packet_callback = PacketTypeCallback(packet_type);
+      if (packet_callback != nullptr) {
+        BtsLog("hci_transport: from start %s", mPeer.c_str());
+        packet_callback(packet);
+        BtsLog("hci_transport: from done %s", mPeer.c_str());
+      } else {
+        BtsLog("hci_transport: bad packet_callback...");
       }
     }
     // stream is closed on return
+    BtsLog("hci_transport: Transport finished peer %s", mPeer.c_str());
     Done();
   }
 
@@ -127,20 +138,49 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
     response.mutable_hci_packet()->set_packet_type(packet_type);
     auto packet = std::string(data.begin(), data.end());
     response.mutable_hci_packet()->set_packet(packet);
-    // send from chip to host
-    if (!mStream->Write(response)) {
-      Done();
-    }
+    auto event = HciEventToString(data);
+    BtsLog("hci_transport: to %s %s", mPeer.c_str(), event.c_str());
+    // send from chip to gRPC
+    mQueue.Push(response);
   }
 
   // Called when grpc read or write fails
   void Done() {
     BtsLog("hci_transport done for peer %s", mPeer.c_str());
-    mDone = true;
+    mReading = false;
+    mQueue.Stop();
     if (mCloseCallback) {
       mCloseCallback();
       mCloseCallback = nullptr;
     }
+  }
+
+  rootcanal::PacketCallback PacketTypeCallback(
+      packet::HCIPacket_PacketType packet_type) {
+    switch (packet_type) {
+      case HCIPacket::COMMAND:
+        assert(mCommandCallback);
+        return mCommandCallback;
+      case HCIPacket::ACL:
+        return mAclCallback;
+      case HCIPacket::SCO:
+        return mScoCallback;
+      case HCIPacket::ISO:
+        return mIsoCallback;
+      default:
+        BtsLog("hci_transport Ignoring unknown packet.");
+        return nullptr;
+    }
+  }
+
+  // Writing through grpc stream is not thread safe, so all writes all queue
+  // into this writer thread.
+  void startWriter() {
+    packet::PacketResponse outgoing;
+    while (mQueue.WaitAndPop(outgoing)) {
+      if (!mStream->Write(outgoing)) break;
+    }
+    Done();
   }
 
   Stream *mStream;
@@ -149,10 +189,11 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
   rootcanal::PacketCallback mScoCallback;
   rootcanal::PacketCallback mIsoCallback;
   rootcanal::CloseCallback mCloseCallback;
-  bool mDone;
+  bool mReading;
   std::string mPeer;
+  util::BlockingQueue<packet::PacketResponse> mQueue;
+  std::thread mWriter;
 };
-
 }  // namespace
 
 // Factory constructor that returns the private implementation

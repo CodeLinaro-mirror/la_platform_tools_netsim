@@ -2,19 +2,19 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
       ${this.deviceData.map(((i,t)=>r`
           <li>
             <center>
-              ${!0===i.visible?r`<ns-cube-sprite
-                      id=${i.deviceSerial}
-                      color=${e[t%e.length]}
-                      size="30px"
-                      style="opacity:0.5;"
-                    ></ns-cube-sprite
-                    >${i.name} `:r`<ns-device-dragzone action="move">
+              ${"visible"in i&&!0!==i.visible?r`<ns-device-dragzone action="move">
                       <ns-cube-sprite
                         id=${i.deviceSerial}
                         color=${e[t%e.length]}
                         size="30px"
                       ></ns-cube-sprite> </ns-device-dragzone
-                    >${i.name}`}
+                    >${i.name}`:r`<ns-cube-sprite
+                      id=${i.deviceSerial}
+                      color=${e[t%e.length]}
+                      size="30px"
+                      style="opacity:0.5;"
+                    ></ns-cube-sprite
+                    >${i.name} `}
             </center>
           </li>
         `))}

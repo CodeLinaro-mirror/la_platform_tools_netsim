@@ -14,11 +14,9 @@
 cmake_minimum_required(VERSION 3.5)
 
 android_add_library(
-  TARGET frontend-client
-  LICENSE Apache-2.0
-  SRC frontend_client.cc frontend_client.h
-  DEPS frontend-grpc-lib
-  grpc++ protobuf::libprotobuf util-lib)
+  TARGET frontend-client LICENSE Apache-2.0 SRC frontend_client.cc
+                                                frontend_client.h
+  DEPS frontend-grpc-lib grpc++ protobuf::libprotobuf util-lib)
 
 target_include_directories(frontend-client PRIVATE ..)
 

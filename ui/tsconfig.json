@@ -10,9 +10,9 @@
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "importHelpers": true,
-    "outDir": "./web/js",
-    "sourceMap": true,
-    "inlineSources": true,
+    "outDir": "web/js",
+    "rootDir": "ts",
+    "sourceMap":true,
     "incremental": true,
     "resolveJsonModule": true
   },

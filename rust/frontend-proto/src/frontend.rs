@@ -24,14 +24,11 @@
 // const _PROTOBUF_VERSION_CHECK: () = ::protobuf::VERSION_2_28_0;
 
 #[derive(PartialEq,Clone,Default)]
-#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct VersionResponse {
     // message fields
     pub version: ::std::string::String,
     // special fields
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -186,7 +183,6 @@ impl ::protobuf::reflect::ProtobufValue for VersionResponse {
 }
 
 #[derive(PartialEq,Clone,Default)]
-#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct SetLinkLossRequest {
     // message fields
     pub device_serial: ::std::string::String,
@@ -194,9 +190,7 @@ pub struct SetLinkLossRequest {
     pub radio: super::model::PhyKind,
     pub link_loss: f32,
     // special fields
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -456,14 +450,11 @@ impl ::protobuf::reflect::ProtobufValue for SetLinkLossRequest {
 }
 
 #[derive(PartialEq,Clone,Default)]
-#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct UpdateDeviceRequest {
     // message fields
     pub device: ::protobuf::SingularPtrField<super::model::Device>,
     // special fields
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -633,14 +624,11 @@ impl ::protobuf::reflect::ProtobufValue for UpdateDeviceRequest {
 }
 
 #[derive(PartialEq,Clone,Default)]
-#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct Updates {
     // message fields
     pub devices: ::protobuf::RepeatedField<super::model::Device>,
     // special fields
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -802,14 +790,11 @@ impl ::protobuf::reflect::ProtobufValue for Updates {
 }
 
 #[derive(PartialEq,Clone,Default)]
-#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct GetDevicesResponse {
     // message fields
     pub devices: ::protobuf::RepeatedField<super::model::Device>,
     // special fields
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -971,14 +956,11 @@ impl ::protobuf::reflect::ProtobufValue for GetDevicesResponse {
 }
 
 #[derive(PartialEq,Clone,Default)]
-#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct NetCatStream {
     // message fields
     pub result: ::protobuf::RepeatedField<::std::string::String>,
     // special fields
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 
@@ -1132,15 +1114,12 @@ impl ::protobuf::reflect::ProtobufValue for NetCatStream {
 }
 
 #[derive(PartialEq,Clone,Default)]
-#[cfg_attr(feature = "with-serde", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct SetPacketCaptureRequest {
     // message fields
     pub capture: bool,
     pub device_serial: ::std::string::String,
     // special fields
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub unknown_fields: ::protobuf::UnknownFields,
-    #[cfg_attr(feature = "with-serde", serde(skip))]
     pub cached_size: ::protobuf::CachedSize,
 }
 

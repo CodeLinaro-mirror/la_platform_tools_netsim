@@ -59,6 +59,10 @@ export class NetsimApp extends LitElement {
       page = html`
         <ns-packet-info></ns-packet-info>
       `;
+    } else if (this.viewMode === 'oslib') {
+      page = html`
+        <ns-license-info></ns-license-info>
+      `;
     }
     return html`
       <ns-navigation-bar></ns-navigation-bar>

@@ -18,9 +18,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include <filesystem>
 #include <string>
 
+#include "util/filesystem.h"
 #include "util/ini_file.h"
 #include "util/log.h"
 
@@ -47,29 +47,27 @@ DiscoveryDir discovery {
 
 }  // namespace
 
-std::filesystem::path GetDiscoveryDirectory() {
+std::string GetDiscoveryDirectory() {
   // $TMPDIR is the temp directory on buildbots.
   const char *test_env_p = std::getenv("TMPDIR");
   if (test_env_p && *test_env_p) {
-    return std::filesystem::path(test_env_p);
+    return std::string(test_env_p);
   }
   const char *env_p = std::getenv(discovery.root_env);
   if (!env_p) {
     BtsLog("No discovery env for %s, using tmp/", discovery.root_env);
     env_p = "/tmp";
   }
-  std::filesystem::path path(env_p);
-  path.append(discovery.subdir);
-  return path;
+  return std::string(env_p) + netsim::filesystem::slash + discovery.subdir;
 }
 
 std::optional<std::string> GetServerAddress(bool frontend_server) {
   auto filepath = osutils::GetDiscoveryDirectory().append("netsim.ini");
-  if (!std::filesystem::exists(filepath)) {
+  if (!netsim::filesystem::exists(filepath)) {
     BtsLog("Unable to find discovery directory: %s", filepath.c_str());
     return std::nullopt;
   }
-  if (!std::filesystem::is_regular_file(filepath)) {
+  if (!netsim::filesystem::is_regular_file(filepath)) {
     BtsLog("Not a regular file: %s", filepath.c_str());
     return std::nullopt;
   }

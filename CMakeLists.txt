@@ -93,7 +93,7 @@ endif()
 
 android_add_executable(
   TARGET netsim-packet-streamer-client
-  LICENSE Apache-2.0 INSTALL .
+  LICENSE Apache-2.0
   SRC src/netsim-packet-streamer-client.cc
   DEPS grpc++ packet-streamer-client-grpc-lib packet-streamer-client-lib
        protobuf::libprotobuf)

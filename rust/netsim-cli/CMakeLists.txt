@@ -2,6 +2,7 @@ message(STATUS "Adding rust ${CMAKE_CURRENT_LIST_DIR}/Cargo.toml")
 
 # This will automatically register all the tests as well.
 corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
+corrosion_set_env_vars(netsim-cli CARGO_HOME=${Rust_CARGO_HOME})
 
 if(WIN32)
   # 1. Set RUST_CXX_NO_EXCEPTIONS preprocesor definition for cxx crate to disable
@@ -19,6 +20,3 @@ if(LINUX)
   corrosion_add_target_rustflags(
     "netsim-cli" "-Clink-args=-Wl,-rpath,${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 endif()
-
-target_link_libraries(netsim-cli INTERFACE frontend-client-lib frontend-grpc-lib)
-corrosion_install(TARGETS netsim-cli RUNTIME DESTINATION .)

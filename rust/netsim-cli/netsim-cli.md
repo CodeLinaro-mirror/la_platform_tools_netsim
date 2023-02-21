@@ -1,7 +1,7 @@
 # Command Line Interface for Netsim (netsim-cli)
 
 USAGE:
-* `netsim-cli <SUBCOMMAND>`
+* `netsim-cl <SUBCOMMAND>`
 
 OPTIONS:
 * -`h, --help`:    Print help information
@@ -9,42 +9,35 @@ OPTIONS:
 ## SUBCOMMANDS:
 * ### `capture`:           Control the packet capture for one or all devices
     * USAGE:
-        * `netsim-cli capture <STATE> <SERIAL>`
+        * `netsim-cl capture <STATE> <DEVICE_SERIAL>`
 
     * ARGS:
-        * \<STATE\>:     Capture state (true/false)
-        * \<SERIAL\>:    Device serial
+        * \<STATE\>:     Capture state [possible values: true, false]
+        * \<DEVICE_SERIAL\>:    Device serial
 * ### `devices`:           Display device(s) information
     * USAGE:
-        * `netsim-cli devices`
+        * `netsim-cl devices`
 * ### `help`:              Print this message or the help of the given subcommand(s)
 * ### `move`:              Set the device location
     * USAGE:
-        * `netsim-cli move <SERIAL> <X> <Y> [Z]`
+        * `netsim-cl move <DEVICE_SERIAL> <X> <Y> [Z]`
 
     * ARGS:
-        * \<SERIAL\>:    Device serial
+        * \<DEVICE_SERIAL\>:    Device serial
         * \<X\>:         x position of device
         * \<Y\>:         y position of device
         * \<Z\>:         Optional z position of device
 * ### `radio`:             Control the radio state of a device
     * USAGE:
-        * `netsim-cli radio <BT_TYPE> <STATUS> <SERIAL>`
+        * `netsim-cl radio <BT_TYPE> <STATUS> <DEVICE_SERIAL>`
 
     * ARGS:
-        * \<BT_TYPE\>    Radio type
-        * \<STATUS\>     Radio status (up/down)
-        * \<SERIAL\>     Device serial*`
+        * \<BT_TYPE\>    Radio type [possible values: ble, classic]
+        * \<STATUS\>     Radio status [possible values: up, down]
+        * \<DEVICE_SERIAL\>     Device serial
 * ### `reset`:             Reset Netsim device scene
     * USAGE:
-        * `netsim-cli reset`
-* ### `set-visibility`:    Toggle visibility of a device
-    * USAGE:
-        * `netsim-cli set-visibility <SERIAL> <STATE>`
-
-    * ARGS:
-        * \<SERIAL\>    Device serial
-        * \<STATE\>     Visibility state (on/off)
+        * `netsim-cl reset`
 * ### `version`:          Print Netsim version information
     * USAGE:
-        * `netsim-cli version`
+        * `netsim-cl version`
