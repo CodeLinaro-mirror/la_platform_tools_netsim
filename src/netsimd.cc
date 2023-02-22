@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "frontend/frontend_client.h"
 #if defined(_WIN32)
 #include <msvc-getopt.h>
 #else
@@ -30,7 +31,6 @@
 #include "backend/fd_startup.h"
 #endif
 #include "core/server.h"
-#include "frontend/cli.h"
 #include "hci/bluetooth_facade.h"
 
 // Wireless network simulator for android (and other) emulated devices.
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
 #ifdef NETSIM_ANDROID_EMULATOR
   // get netsim daemon, starting if it doesn't exist
   // Create a frontend grpc client to check if a netsimd is already running.
-  auto frontend_stub = netsim::NewFrontendStub();
+  auto frontend_stub = netsim::frontend::NewFrontendClient();
   if (frontend_stub == nullptr) {
     // starts netsim in vhci connection mode
     netsim::server::Run();

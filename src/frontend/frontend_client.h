@@ -20,7 +20,7 @@
 #include <memory>
 #include <string_view>
 
-#include "../rust/frontend-client-cxx/cxx/cxx.h"
+#include "../../rust/frontend-client-cxx/cxx/cxx.h"
 #include "frontend.grpc.pb.h"
 
 namespace netsim {

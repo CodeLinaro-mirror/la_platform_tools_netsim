@@ -48,16 +48,8 @@ if(TARGET Rust::Rustc)
          util-lib)
 
   android_add_executable(
-    TARGET netsim-cc LICENSE Apache-2.0 SRC src/netsim.cc
-    DEPS grpc++ libbt-rootcanal netsim-lib protobuf::libprotobuf)
-
-  android_target_dependency(netsim-cc linux TCMALLOC_OS_DEPENDENCIES)
-
-  target_compile_definitions(netsim-cc PUBLIC NETSIM_ANDROID_EMULATOR)
-
-  android_add_executable(
     TARGET netsimd LICENSE Apache-2.0 INSTALL . SRC src/netsimd.cc
-    DEPS grpc++ libbt-rootcanal netsim-lib netsim-rust-lib
+    DEPS grpc++ libbt-rootcanal netsim-lib netsim-rust-lib frontend-client
          protobuf::libprotobuf)
   if(NOT DARWIN_AARCH64 AND NOT DARWIN_X86_64)
     # Prevent duplicate symbol for cxx Rust crate.

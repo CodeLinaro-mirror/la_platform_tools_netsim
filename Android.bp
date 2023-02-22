@@ -111,7 +111,6 @@ cc_library_host_static {
         "src/controller/scene_controller.cc",
         "src/controller/device_notify_manager.cc",
         "src/core/server.cc",
-        "src/frontend/cli.cc",
         "src/frontend/frontend_server.cc",
         "src/backend/fd_startup.cc",
         "src/hci/bluetooth_facade.cc",
@@ -142,36 +141,6 @@ cc_library_host_static {
     whole_static_libs: [
         "libbt-rootcanal",
     ],
-}
-
-cc_binary_host {
-    name: "netsim-cc",
-    defaults: ["netsim_defaults"],
-    srcs: [
-        "src/netsim.cc",
-    ],
-    generated_headers: [
-        "cxx-bridge-header",
-        "netsim_cxx_h"
-    ],
-    shared_libs: [
-        "libbase",
-        "libcrypto",
-        "libgrpc++",
-    ],
-    static_libs: [
-        "libc++fs",
-        "libjsoncpp",
-        "libprotobuf-cpp-full",
-        "libscriptedbeaconpayload-protos-lite",
-        "lib-netsim-frontend-proto",
-        "lib-netsim",
-    ],
-    whole_static_libs: [
-        "libnetsim_cxx",
-        "libbt-rootcanal",
-    ],
-    ldflags: ["-Wl,--allow-multiple-definition"]
 }
 
 netsim_ui_modules = [

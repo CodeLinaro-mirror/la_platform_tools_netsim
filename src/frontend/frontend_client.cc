@@ -27,7 +27,7 @@
 #include <string>
 #include <string_view>
 
-#include "../rust/frontend-client-cxx/cxx/frontend_client_cxx_generated.h"
+#include "../../rust/frontend-client-cxx/cxx/frontend_client_cxx_generated.h"
 #include "frontend.grpc.pb.h"
 #include "frontend.pb.h"
 #include "google/protobuf/empty.pb.h"
