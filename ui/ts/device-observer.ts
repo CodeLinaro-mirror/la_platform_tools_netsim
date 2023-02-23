@@ -1,5 +1,5 @@
 // URL for netsim
-const GET_DEVICES_URL = 'http://localhost:7681/netsim/get-devices';
+const GET_DEVICES_URL = 'http://localhost:7681/get-devices';
 const REGISTER_UPDATE_URL = 'http://localhost:7681/netsim/register-updates';
 const UPDATE_DEVICE_URL = 'http://localhost:7681/netsim/update-device';
 const SET_PACKET_CAPTURE_URL =
@@ -15,25 +15,25 @@ export interface Notifiable {
 
 // TODO(b/255353541): import message interfaces in model.proto
 interface Radio {
-  state: string;
-  range: number;
-  txCount: number;
-  rxCount: number;
+  state?: string;
+  range?: number;
+  txCount?: number;
+  rxCount?: number;
 }
 
 interface Bluetooth {
-  lowEnergy: Radio;
-  classic: Radio;
+  lowEnergy?: Radio;
+  classic?: Radio;
 }
 
 interface Chip {
-  chipId: string;
-  manufacturer: string;
-  model: string;
-  capture: string;
-  bt: Bluetooth;
-  uwb: Radio;
-  wifi: Radio;
+  chipId?: string;
+  manufacturer?: string;
+  model?: string;
+  capture?: string;
+  bt?: Bluetooth;
+  uwb?: Radio;
+  wifi?: Radio;
 }
 
 /**
@@ -42,19 +42,19 @@ interface Chip {
  */
 export interface Device {
   deviceSerial: string;
-  name: string;
-  position: {
-    x: number;
-    y: number;
-    z: number;
+  name?: string;
+  position?: {
+    x?: number;
+    y?: number;
+    z?: number;
   };
-  orientation: {
-    yaw: number;
-    pitch: number;
-    roll: number;
+  orientation?: {
+    yaw?: number;
+    pitch?: number;
+    roll?: number;
   };
-  chips: Chip[];
-  visible: boolean;
+  chips?: Chip[];
+  visible?: boolean;
 }
 
 /**
@@ -111,8 +111,12 @@ class SimulationState implements Observable {
   handleDrop(serial: string, x: number, y: number) {
     for (const device of this.simulationInfo.devices) {
       if (serial === device.deviceSerial) {
-        device.position.x = x;
-        device.position.y = y;
+        if ("position" in device && device.position) {
+          device.position.x = x;
+          device.position.y = y;
+        } else {
+          device.position = {x: x, y: y, z: 0};
+        }
         this.updateDevice({
           device: {
             deviceSerial: serial,

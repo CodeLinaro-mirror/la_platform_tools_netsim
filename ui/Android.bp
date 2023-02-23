@@ -87,6 +87,13 @@ prebuilt_root_host {
 }
 
 prebuilt_root_host {
+    name: "netsim_ui_js_license-info.js",
+    src: "dist/js/license-info.js",
+    sub_dir: "bin/netsim-ui/js",
+    filename_from_src: true,
+}
+
+prebuilt_root_host {
     name: "netsim_ui_js_navigation-bar.js",
     src: "dist/js/navigation-bar.js",
     sub_dir: "bin/netsim-ui/js",

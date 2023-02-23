@@ -46,7 +46,6 @@ fn main() {
         .out_dir(proto_out_dir.as_os_str().to_str().unwrap())
         .inputs(&paths_to_strs(&proto_input_files))
         .includes(&paths_to_strs(&proto_include_dirs))
-        .customize(Customize { serde_derive: Some(true), ..Default::default() })
         .run()
         .expect("protoc");
 }

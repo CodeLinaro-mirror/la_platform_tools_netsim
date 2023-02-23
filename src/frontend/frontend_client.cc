@@ -64,32 +64,35 @@ class FrontendClientImpl : public FrontendClient {
       : stub_(std::move(stub)) {}
 
   std::unique_ptr<ClientResult> make_result(
-      const grpc::Status &status, const google::protobuf::Message &message) {
+      const grpc::Status &status,
+      const google::protobuf::Message &message) const {
     if (!status.ok()) {
       return std::make_unique<ClientResult>(false, status.error_message(), "");
     }
     std::string json_string;
     google::protobuf::util::JsonPrintOptions options;
     MessageToJsonString(message, &json_string, options);
-    return std::make_unique<ClientResult>(true, "", json_string);
+    return std::make_unique<ClientResult>(true, "",
+                                          message.SerializeAsString());
   }
 
   // Gets the version of the network simulator service.
-  std::unique_ptr<ClientResult> GetVersion() {
+  std::unique_ptr<ClientResult> GetVersion() const override {
     frontend::VersionResponse response;
+    grpc::ClientContext context_;
     auto status = stub_->GetVersion(&context_, {}, &response);
     return make_result(status, response);
   }
 
-  std::unique_ptr<ClientResult> GetDevices() {
+  std::unique_ptr<ClientResult> GetDevices() const override {
     frontend::GetDevicesResponse response;
+    grpc::ClientContext context_;
     auto status = stub_->GetDevices(&context_, {}, &response);
     return make_result(status, response);
   }
 
  private:
   std::unique_ptr<frontend::FrontendService::Stub> stub_;
-  grpc::ClientContext context_;
 
   static bool CheckStatus(const grpc::Status &status,
                           const std::string &message) {

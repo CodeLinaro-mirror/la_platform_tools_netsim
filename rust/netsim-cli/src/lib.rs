@@ -17,16 +17,26 @@
 mod args;
 mod browser;
 mod requests;
+mod response;
+
 use args::NetsimArgs;
 use clap::Parser;
 
-fn main() {
+#[no_mangle]
+/// main function for netsim CLI to be called by C wrapper netsim-cl
+pub extern "C" fn rust_main() {
     let args = NetsimArgs::parse();
-    if matches!(args.command, args::Command::Ui) {
-        browser::open("https://google.com"); //TODO: update to open netsim ui directly
+    if matches!(args.command, args::Command::Gui) {
+        browser::open("http://localhost:7681/");
         return;
     }
-    let _grpc_method = args.command.grpc_method();
-    let _json_string = args.command.request_json();
-    //TODO: update to use grpc_method and _json_string with SendGrpc function from frontend-netsim-cxx
+    let grpc_method = args.command.grpc_method();
+    let request = args.command.get_request_bytes();
+    let client = frontend_client_cxx::ffi::new_frontend_client();
+    let client_result = frontend_client_cxx::send_grpc(client, grpc_method, request.as_slice());
+    if client_result.is_ok() {
+        args.command.print_response(client_result.byte_str().as_bytes());
+    } else {
+        println!("Grpc call error: {}", client_result.err());
+    }
 }

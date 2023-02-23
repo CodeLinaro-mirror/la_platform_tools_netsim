@@ -19,9 +19,9 @@
 #include <thread>
 
 #include "backend/backend_server.h"
-#include "backend/rpc_hal_transport.h"
 #include "frontend/frontend_server.h"
 #include "netsim_cxx_generated.h"
+#include "util/filesystem.h"
 #include "util/ini_file.h"
 #include "util/log.h"
 #include "util/os_utils.h"
@@ -30,9 +30,6 @@ namespace netsim {
 
 void StartWithGrpc(bool debug) {
   BtsLog("starting packet streamer");
-  // Connect to all emulator grpc servers
-  auto grpc_transport = RpcHalTransport::Create();
-  grpc_transport->discover();
 
   // Run frontend http server.
   std::thread frontend_http_server(RunFrontendHttpServer);
@@ -42,7 +39,8 @@ void StartWithGrpc(bool debug) {
   auto [backend_server, backend_grpc_port] = netsim::RunBackendServer();
 
   // Writes grpc ports to ini file.
-  auto filepath = osutils::GetDiscoveryDirectory().append("netsim.ini");
+  auto filepath = osutils::GetDiscoveryDirectory() + netsim::filesystem::slash +
+                  "netsim.ini";
   IniFile iniFile(filepath);
   iniFile.Read();
   iniFile.Set("grpc.port", frontend_grpc_port);

@@ -37,11 +37,11 @@ export class NavigationBar extends LitElement {
 
     #nav-logo-section {
       justify-content: flex-start;
-      flex-basis: calc(100% / 3);
+      flex-basis: calc(100% / 4);
     }
 
     #nav-link-section {
-      flex-basis: calc(100% / 3);
+      flex-basis: calc(100% / 2);
       gap: 6rem;
     }
 
@@ -82,6 +82,8 @@ export class NavigationBar extends LitElement {
     let mode = "main";
     if ((ev.target as HTMLElement).id === "nav-trace-section") {
       mode = "trace";
+    } else if ((ev.target as HTMLElement).id === "nav-os-library-section") {
+      mode = "oslib";
     }
     window.dispatchEvent(new CustomEvent('changeModeEvent', {
       detail: { mode }
@@ -103,6 +105,9 @@ export class NavigationBar extends LitElement {
           >
           <a id="nav-trace-section" @click=${this.handleClick}
             >PACKET TRACE</a
+          >
+          <a id="nav-os-library-section" @click=${this.handleClick}
+            >OPEN SOURCE LIBRARIES</a
           >
         </div>
         <div id="nav-contact-section" class="nav-section">

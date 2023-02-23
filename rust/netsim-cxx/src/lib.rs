@@ -20,5 +20,25 @@ mod ffi {
         fn distance_to_rssi(tx_power: i8, distance: f32) -> i8;
     }
 
-    extern "C++" {}
+    unsafe extern "C++" {
+        include!("controller/controller.h");
+
+        #[allow(dead_code)]
+        #[rust_name = "get_devices"]
+        #[namespace = "netsim::scene_controller"]
+        fn GetDevices(
+            request: &CxxString,
+            response: Pin<&mut CxxString>,
+            error_message: Pin<&mut CxxString>,
+        ) -> u32;
+
+        #[allow(dead_code)]
+        #[rust_name = "update_device"]
+        #[namespace = "netsim::scene_controller"]
+        fn UpdateDevice(
+            request: &CxxString,
+            response: Pin<&mut CxxString>,
+            error_message: Pin<&mut CxxString>,
+        ) -> u32;
+    }
 }

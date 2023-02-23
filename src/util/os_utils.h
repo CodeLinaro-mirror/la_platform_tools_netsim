@@ -17,7 +17,6 @@
 #pragma once
 // OS specific utility functions.
 
-#include <filesystem>
 #include <optional>
 #include <string>
 
@@ -27,7 +26,7 @@ namespace osutils {
 /**
  * Return the path containing runtime user files.
  */
-std::filesystem::path GetDiscoveryDirectory();
+std::string GetDiscoveryDirectory();
 
 /**
  * Return the frontend grpc port.

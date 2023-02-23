@@ -12,25 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "util/os_utils.h"
+#pragma once
 
-#include <cstdio>
-#include <fstream>
 #include <string>
 
-#include "gtest/gtest.h"
-#include "util/filesystem.h"
+namespace netsim::scene_controller {
 
-namespace netsim {
-namespace testing {
-namespace {
+const unsigned int HTTP_STATUS_OK = 200;
+const unsigned int HTTP_STATUS_BAD_REQUEST = 400;
 
-// Test that the result of GetDiscoveryDir exists
-TEST(OsUtilsTest, GetDiscoveryDir) {
-  auto dir = osutils::GetDiscoveryDirectory();
-  EXPECT_TRUE(netsim::filesystem::exists(dir));
-}
+unsigned int UpdateDevice(const std::string &request, std::string &response,
+                          std::string &error_message);
 
-}  // namespace
-}  // namespace testing
-}  // namespace netsim
+unsigned int GetDevices(const std::string &request, std::string &response,
+                        std::string &error_message);
+
+}  // namespace netsim::scene_controller
