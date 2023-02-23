@@ -49,6 +49,14 @@ enum State {
 }
 
 message Chip {
+  netsim.common.ChipKind kind = 1;
+  int32 id = 2;
+  string name = 3;  // optional like "rear-right"
+
+  string manufacturer = 4;  // optional like Quorvo
+  string product_name = 5;  // optional like DW300
+  State capture = 6;        // packet capture
+
   // Radio state associated with the Chip
   message Radio {
     State state = 1;
@@ -63,21 +71,15 @@ message Chip {
     Radio classic = 2;
   }
 
-  netsim.common.ChipKind chip_kind = 8;
-
-  string chip_id = 1;       // optional like "rear-right"
-  string manufacturer = 2;  // optional like Quorvo
-  string model = 3;         // optional like DW300
-  State capture = 4;        // packet capture
-
   oneof chip {
-    Bluetooth bt = 5;
-    Radio uwb = 6;
-    Radio wifi = 7;
+    Bluetooth bt = 7;
+    Radio uwb = 8;
+    Radio wifi = 9;
   }
 }
 
 message Device {
+  int32 id = 1;
   string name = 2;  // settable at creation
   bool visible = 3;
   Position position = 4;

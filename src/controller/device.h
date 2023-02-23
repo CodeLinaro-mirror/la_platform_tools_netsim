@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string_view>
 
@@ -29,25 +30,29 @@ class Chip;
 
 class Device {
  public:
-  model::Device model;
+  const uint32_t id;
+  const std::string guid;
+  const std::string name;
+  bool visible;
+  model::Position position;
+  model::Orientation orientation;
 
+  Device(uint32_t id, const std::string &guid, const std::string &name)
+      : id(id), guid(guid), name(name) {}
+
+  model::Device Get();
   void Patch(const model::Device &request);
-
-  bool RemoveChip(common::ChipKind chip_kind, const std::string &chip_id);
-
-  void AddChip(std::shared_ptr<Device>, std::shared_ptr<Chip>,
-               const model::Chip &);
-
-  explicit Device(const model::Device &model) : model(model) {}
-  explicit Device(const std::string &name) { model.set_name(name); }
-
+  bool RemoveChip(uint32_t chip_id);
+  std::pair<uint32_t, uint32_t> AddChip(common::ChipKind chip_kind,
+                                        const std::string &chip_name,
+                                        const std::string &manufacturer,
+                                        const std::string &product_name);
   void Reset();
+  void Remove();
 
- protected:
-  std::vector<std::shared_ptr<Chip>> chips;
+ private:
+  std::unordered_map<uint32_t, std::shared_ptr<Chip>> chips_;
 };
-
-std::shared_ptr<Device> CreateDevice(std::string_view name);
 
 }  // namespace controller
 }  // namespace netsim

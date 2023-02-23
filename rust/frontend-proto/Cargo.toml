@@ -5,10 +5,10 @@ name = "frontend-proto"
 # build = "build_cargo.rs"
 
 [dependencies]
-protobuf = "2.27.1"
+protobuf = "=2.27.1"
 
 [build-dependencies]
-# protobuf = "2.27.1"
+# protobuf = "=2.27.1"
 # protoc-rust = "2.27"
 # protobuf-codegen = "2.27"
 

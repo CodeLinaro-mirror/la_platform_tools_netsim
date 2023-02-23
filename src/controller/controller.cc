@@ -17,8 +17,10 @@
 #include <google/protobuf/empty.pb.h>
 #include <google/protobuf/util/json_util.h>
 
+#include <cstdint>
 #include <string>
 
+#include "common.pb.h"
 #include "controller/scene_controller.h"
 #include "frontend.pb.h"
 
@@ -44,12 +46,29 @@ unsigned int PatchDevice(const std::string &request, std::string &response,
 unsigned int GetDevices(const std::string &request, std::string &response,
                         std::string &error_message) {
   frontend::GetDevicesResponse response_proto;
-  const auto &devices = netsim::controller::SceneController::Singleton().Copy();
-  for (const auto &device : devices)
-    response_proto.add_devices()->CopyFrom(device->model);
-
+  auto scene = netsim::controller::SceneController::Singleton().Get();
+  for (const auto &device : scene.devices())
+    response_proto.add_devices()->CopyFrom(device);
   google::protobuf::util::MessageToJsonString(response_proto, &response);
   return HTTP_STATUS_OK;
+}
+
+void RemoveChip(uint32_t device_id, uint32_t chip_id) {
+  netsim::controller::SceneController::Singleton().RemoveChip(device_id,
+                                                              chip_id);
+}
+
+std::tuple<uint32_t, uint32_t, uint32_t> AddChip(
+    const std::string &guid, const std::string &device_name,
+    common::ChipKind chip_kind, const std::string &chip_name,
+    const std::string &manufacturer, const std::string &product_name) {
+  return netsim::controller::SceneController::Singleton().AddChip(
+      guid, device_name, chip_kind, chip_name, manufacturer, product_name);
+}
+
+float GetDistance(uint32_t device_id, uint32_t other_device_id) {
+  return netsim::controller::SceneController::Singleton().GetDistance(
+      device_id, other_device_id);
 }
 
 }  // namespace netsim::scene_controller

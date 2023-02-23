@@ -470,10 +470,11 @@ impl ::protobuf::reflect::ProtobufValue for Orientation {
 #[derive(PartialEq,Clone,Default)]
 pub struct Chip {
     // message fields
-    pub chip_kind: super::common::ChipKind,
-    pub chip_id: ::std::string::String,
+    pub kind: super::common::ChipKind,
+    pub id: i32,
+    pub name: ::std::string::String,
     pub manufacturer: ::std::string::String,
-    pub model: ::std::string::String,
+    pub product_name: ::std::string::String,
     pub capture: State,
     // message oneof groups
     pub chip: ::std::option::Option<Chip_oneof_chip>,
@@ -500,48 +501,63 @@ impl Chip {
         ::std::default::Default::default()
     }
 
-    // .netsim.common.ChipKind chip_kind = 8;
+    // .netsim.common.ChipKind kind = 1;
 
 
-    pub fn get_chip_kind(&self) -> super::common::ChipKind {
-        self.chip_kind
+    pub fn get_kind(&self) -> super::common::ChipKind {
+        self.kind
     }
-    pub fn clear_chip_kind(&mut self) {
-        self.chip_kind = super::common::ChipKind::UNSPECIFIED;
-    }
-
-    // Param is passed by value, moved
-    pub fn set_chip_kind(&mut self, v: super::common::ChipKind) {
-        self.chip_kind = v;
-    }
-
-    // string chip_id = 1;
-
-
-    pub fn get_chip_id(&self) -> &str {
-        &self.chip_id
-    }
-    pub fn clear_chip_id(&mut self) {
-        self.chip_id.clear();
+    pub fn clear_kind(&mut self) {
+        self.kind = super::common::ChipKind::UNSPECIFIED;
     }
 
     // Param is passed by value, moved
-    pub fn set_chip_id(&mut self, v: ::std::string::String) {
-        self.chip_id = v;
+    pub fn set_kind(&mut self, v: super::common::ChipKind) {
+        self.kind = v;
+    }
+
+    // int32 id = 2;
+
+
+    pub fn get_id(&self) -> i32 {
+        self.id
+    }
+    pub fn clear_id(&mut self) {
+        self.id = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_id(&mut self, v: i32) {
+        self.id = v;
+    }
+
+    // string name = 3;
+
+
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+    pub fn clear_name(&mut self) {
+        self.name.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_name(&mut self, v: ::std::string::String) {
+        self.name = v;
     }
 
     // Mutable pointer to the field.
     // If field is not initialized, it is initialized with default value first.
-    pub fn mut_chip_id(&mut self) -> &mut ::std::string::String {
-        &mut self.chip_id
+    pub fn mut_name(&mut self) -> &mut ::std::string::String {
+        &mut self.name
     }
 
     // Take field
-    pub fn take_chip_id(&mut self) -> ::std::string::String {
-        ::std::mem::replace(&mut self.chip_id, ::std::string::String::new())
+    pub fn take_name(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.name, ::std::string::String::new())
     }
 
-    // string manufacturer = 2;
+    // string manufacturer = 4;
 
 
     pub fn get_manufacturer(&self) -> &str {
@@ -567,33 +583,33 @@ impl Chip {
         ::std::mem::replace(&mut self.manufacturer, ::std::string::String::new())
     }
 
-    // string model = 3;
+    // string product_name = 5;
 
 
-    pub fn get_model(&self) -> &str {
-        &self.model
+    pub fn get_product_name(&self) -> &str {
+        &self.product_name
     }
-    pub fn clear_model(&mut self) {
-        self.model.clear();
+    pub fn clear_product_name(&mut self) {
+        self.product_name.clear();
     }
 
     // Param is passed by value, moved
-    pub fn set_model(&mut self, v: ::std::string::String) {
-        self.model = v;
+    pub fn set_product_name(&mut self, v: ::std::string::String) {
+        self.product_name = v;
     }
 
     // Mutable pointer to the field.
     // If field is not initialized, it is initialized with default value first.
-    pub fn mut_model(&mut self) -> &mut ::std::string::String {
-        &mut self.model
+    pub fn mut_product_name(&mut self) -> &mut ::std::string::String {
+        &mut self.product_name
     }
 
     // Take field
-    pub fn take_model(&mut self) -> ::std::string::String {
-        ::std::mem::replace(&mut self.model, ::std::string::String::new())
+    pub fn take_product_name(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.product_name, ::std::string::String::new())
     }
 
-    // .netsim.model.State capture = 4;
+    // .netsim.model.State capture = 6;
 
 
     pub fn get_capture(&self) -> State {
@@ -608,7 +624,7 @@ impl Chip {
         self.capture = v;
     }
 
-    // .netsim.model.Chip.Bluetooth bt = 5;
+    // .netsim.model.Chip.Bluetooth bt = 7;
 
 
     pub fn get_bt(&self) -> &Chip_Bluetooth {
@@ -657,7 +673,7 @@ impl Chip {
         }
     }
 
-    // .netsim.model.Chip.Radio uwb = 6;
+    // .netsim.model.Chip.Radio uwb = 8;
 
 
     pub fn get_uwb(&self) -> &Chip_Radio {
@@ -706,7 +722,7 @@ impl Chip {
         }
     }
 
-    // .netsim.model.Chip.Radio wifi = 7;
+    // .netsim.model.Chip.Radio wifi = 9;
 
 
     pub fn get_wifi(&self) -> &Chip_Radio {
@@ -780,34 +796,41 @@ impl ::protobuf::Message for Chip {
         while !is.eof()? {
             let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
-                8 => {
-                    ::protobuf::rt::read_proto3_enum_with_unknown_fields_into(wire_type, is, &mut self.chip_kind, 8, &mut self.unknown_fields)?
-                },
                 1 => {
-                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.chip_id)?;
+                    ::protobuf::rt::read_proto3_enum_with_unknown_fields_into(wire_type, is, &mut self.kind, 1, &mut self.unknown_fields)?
                 },
                 2 => {
-                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.manufacturer)?;
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.id = tmp;
                 },
                 3 => {
-                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.model)?;
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.name)?;
                 },
                 4 => {
-                    ::protobuf::rt::read_proto3_enum_with_unknown_fields_into(wire_type, is, &mut self.capture, 4, &mut self.unknown_fields)?
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.manufacturer)?;
                 },
                 5 => {
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.product_name)?;
+                },
+                6 => {
+                    ::protobuf::rt::read_proto3_enum_with_unknown_fields_into(wire_type, is, &mut self.capture, 6, &mut self.unknown_fields)?
+                },
+                7 => {
                     if wire_type != ::protobuf::wire_format::WireTypeLengthDelimited {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     }
                     self.chip = ::std::option::Option::Some(Chip_oneof_chip::bt(is.read_message()?));
                 },
-                6 => {
+                8 => {
                     if wire_type != ::protobuf::wire_format::WireTypeLengthDelimited {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     }
                     self.chip = ::std::option::Option::Some(Chip_oneof_chip::uwb(is.read_message()?));
                 },
-                7 => {
+                9 => {
                     if wire_type != ::protobuf::wire_format::WireTypeLengthDelimited {
                         return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
                     }
@@ -825,20 +848,23 @@ impl ::protobuf::Message for Chip {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
-        if self.chip_kind != super::common::ChipKind::UNSPECIFIED {
-            my_size += ::protobuf::rt::enum_size(8, self.chip_kind);
+        if self.kind != super::common::ChipKind::UNSPECIFIED {
+            my_size += ::protobuf::rt::enum_size(1, self.kind);
         }
-        if !self.chip_id.is_empty() {
-            my_size += ::protobuf::rt::string_size(1, &self.chip_id);
+        if self.id != 0 {
+            my_size += ::protobuf::rt::value_size(2, self.id, ::protobuf::wire_format::WireTypeVarint);
+        }
+        if !self.name.is_empty() {
+            my_size += ::protobuf::rt::string_size(3, &self.name);
         }
         if !self.manufacturer.is_empty() {
-            my_size += ::protobuf::rt::string_size(2, &self.manufacturer);
+            my_size += ::protobuf::rt::string_size(4, &self.manufacturer);
         }
-        if !self.model.is_empty() {
-            my_size += ::protobuf::rt::string_size(3, &self.model);
+        if !self.product_name.is_empty() {
+            my_size += ::protobuf::rt::string_size(5, &self.product_name);
         }
         if self.capture != State::UNKNOWN {
-            my_size += ::protobuf::rt::enum_size(4, self.capture);
+            my_size += ::protobuf::rt::enum_size(6, self.capture);
         }
         if let ::std::option::Option::Some(ref v) = self.chip {
             match v {
@@ -862,35 +888,38 @@ impl ::protobuf::Message for Chip {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
-        if self.chip_kind != super::common::ChipKind::UNSPECIFIED {
-            os.write_enum(8, ::protobuf::ProtobufEnum::value(&self.chip_kind))?;
+        if self.kind != super::common::ChipKind::UNSPECIFIED {
+            os.write_enum(1, ::protobuf::ProtobufEnum::value(&self.kind))?;
         }
-        if !self.chip_id.is_empty() {
-            os.write_string(1, &self.chip_id)?;
+        if self.id != 0 {
+            os.write_int32(2, self.id)?;
+        }
+        if !self.name.is_empty() {
+            os.write_string(3, &self.name)?;
         }
         if !self.manufacturer.is_empty() {
-            os.write_string(2, &self.manufacturer)?;
+            os.write_string(4, &self.manufacturer)?;
         }
-        if !self.model.is_empty() {
-            os.write_string(3, &self.model)?;
+        if !self.product_name.is_empty() {
+            os.write_string(5, &self.product_name)?;
         }
         if self.capture != State::UNKNOWN {
-            os.write_enum(4, ::protobuf::ProtobufEnum::value(&self.capture))?;
+            os.write_enum(6, ::protobuf::ProtobufEnum::value(&self.capture))?;
         }
         if let ::std::option::Option::Some(ref v) = self.chip {
             match v {
                 &Chip_oneof_chip::bt(ref v) => {
-                    os.write_tag(5, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+                    os.write_tag(7, ::protobuf::wire_format::WireTypeLengthDelimited)?;
                     os.write_raw_varint32(v.get_cached_size())?;
                     v.write_to_with_cached_sizes(os)?;
                 },
                 &Chip_oneof_chip::uwb(ref v) => {
-                    os.write_tag(6, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+                    os.write_tag(8, ::protobuf::wire_format::WireTypeLengthDelimited)?;
                     os.write_raw_varint32(v.get_cached_size())?;
                     v.write_to_with_cached_sizes(os)?;
                 },
                 &Chip_oneof_chip::wifi(ref v) => {
-                    os.write_tag(7, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+                    os.write_tag(9, ::protobuf::wire_format::WireTypeLengthDelimited)?;
                     os.write_raw_varint32(v.get_cached_size())?;
                     v.write_to_with_cached_sizes(os)?;
                 },
@@ -935,14 +964,19 @@ impl ::protobuf::Message for Chip {
         descriptor.get(|| {
             let mut fields = ::std::vec::Vec::new();
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeEnum<super::common::ChipKind>>(
-                "chip_kind",
-                |m: &Chip| { &m.chip_kind },
-                |m: &mut Chip| { &mut m.chip_kind },
+                "kind",
+                |m: &Chip| { &m.kind },
+                |m: &mut Chip| { &mut m.kind },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "id",
+                |m: &Chip| { &m.id },
+                |m: &mut Chip| { &mut m.id },
             ));
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
-                "chip_id",
-                |m: &Chip| { &m.chip_id },
-                |m: &mut Chip| { &mut m.chip_id },
+                "name",
+                |m: &Chip| { &m.name },
+                |m: &mut Chip| { &mut m.name },
             ));
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
                 "manufacturer",
@@ -950,9 +984,9 @@ impl ::protobuf::Message for Chip {
                 |m: &mut Chip| { &mut m.manufacturer },
             ));
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
-                "model",
-                |m: &Chip| { &m.model },
-                |m: &mut Chip| { &mut m.model },
+                "product_name",
+                |m: &Chip| { &m.product_name },
+                |m: &mut Chip| { &mut m.product_name },
             ));
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeEnum<State>>(
                 "capture",
@@ -990,10 +1024,11 @@ impl ::protobuf::Message for Chip {
 
 impl ::protobuf::Clear for Chip {
     fn clear(&mut self) {
-        self.chip_kind = super::common::ChipKind::UNSPECIFIED;
-        self.chip_id.clear();
+        self.kind = super::common::ChipKind::UNSPECIFIED;
+        self.id = 0;
+        self.name.clear();
         self.manufacturer.clear();
-        self.model.clear();
+        self.product_name.clear();
         self.capture = State::UNKNOWN;
         self.chip = ::std::option::Option::None;
         self.chip = ::std::option::Option::None;
@@ -1501,6 +1536,7 @@ impl ::protobuf::reflect::ProtobufValue for Chip_Bluetooth {
 #[derive(PartialEq,Clone,Default)]
 pub struct Device {
     // message fields
+    pub id: i32,
     pub name: ::std::string::String,
     pub visible: bool,
     pub position: ::protobuf::SingularPtrField<Position>,
@@ -1520,6 +1556,21 @@ impl<'a> ::std::default::Default for &'a Device {
 impl Device {
     pub fn new() -> Device {
         ::std::default::Default::default()
+    }
+
+    // int32 id = 1;
+
+
+    pub fn get_id(&self) -> i32 {
+        self.id
+    }
+    pub fn clear_id(&mut self) {
+        self.id = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_id(&mut self, v: i32) {
+        self.id = v;
     }
 
     // string name = 2;
@@ -1679,6 +1730,13 @@ impl ::protobuf::Message for Device {
         while !is.eof()? {
             let (field_number, wire_type) = is.read_tag_unpack()?;
             match field_number {
+                1 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.id = tmp;
+                },
                 2 => {
                     ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.name)?;
                 },
@@ -1710,6 +1768,9 @@ impl ::protobuf::Message for Device {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u32 {
         let mut my_size = 0;
+        if self.id != 0 {
+            my_size += ::protobuf::rt::value_size(1, self.id, ::protobuf::wire_format::WireTypeVarint);
+        }
         if !self.name.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.name);
         }
@@ -1734,6 +1795,9 @@ impl ::protobuf::Message for Device {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        if self.id != 0 {
+            os.write_int32(1, self.id)?;
+        }
         if !self.name.is_empty() {
             os.write_string(2, &self.name)?;
         }
@@ -1793,6 +1857,11 @@ impl ::protobuf::Message for Device {
         static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
         descriptor.get(|| {
             let mut fields = ::std::vec::Vec::new();
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "id",
+                |m: &Device| { &m.id },
+                |m: &mut Device| { &mut m.id },
+            ));
             fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
                 "name",
                 |m: &Device| { &m.name },
@@ -1834,6 +1903,7 @@ impl ::protobuf::Message for Device {
 
 impl ::protobuf::Clear for Device {
     fn clear(&mut self) {
+        self.id = 0;
         self.name.clear();
         self.visible = false;
         self.position.clear();
@@ -2142,31 +2212,32 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x01(\x02R\x01y\x12\x0c\n\x01z\x18\x03\x20\x01(\x02R\x01z\"I\n\x0bOrient\
     ation\x12\x10\n\x03yaw\x18\x01\x20\x01(\x02R\x03yaw\x12\x14\n\x05pitch\
     \x18\x02\x20\x01(\x02R\x05pitch\x12\x12\n\x04roll\x18\x03\x20\x01(\x02R\
-    \x04roll\"\xce\x04\n\x04Chip\x124\n\tchip_kind\x18\x08\x20\x01(\x0e2\x17\
-    .netsim.common.ChipKindR\x08chipKind\x12\x17\n\x07chip_id\x18\x01\x20\
-    \x01(\tR\x06chipId\x12\"\n\x0cmanufacturer\x18\x02\x20\x01(\tR\x0cmanufa\
-    cturer\x12\x14\n\x05model\x18\x03\x20\x01(\tR\x05model\x12-\n\x07capture\
-    \x18\x04\x20\x01(\x0e2\x13.netsim.model.StateR\x07capture\x12.\n\x02bt\
-    \x18\x05\x20\x01(\x0b2\x1c.netsim.model.Chip.BluetoothH\0R\x02bt\x12,\n\
-    \x03uwb\x18\x06\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x03uwb\x12\
-    .\n\x04wifi\x18\x07\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x04wif\
-    i\x1a~\n\x05Radio\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model\
-    .StateR\x05state\x12\x14\n\x05range\x18\x02\x20\x01(\x02R\x05range\x12\
-    \x19\n\x08tx_count\x18\x03\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_coun\
-    t\x18\x04\x20\x01(\x05R\x07rxCount\x1ax\n\tBluetooth\x127\n\nlow_energy\
-    \x18\x01\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\tlowEnergy\x122\n\
-    \x07classic\x18\x02\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\x07classi\
-    cB\x06\n\x04chip\"\xd1\x01\n\x06Device\x12\x12\n\x04name\x18\x02\x20\x01\
-    (\tR\x04name\x12\x18\n\x07visible\x18\x03\x20\x01(\x08R\x07visible\x122\
-    \n\x08position\x18\x04\x20\x01(\x0b2\x16.netsim.model.PositionR\x08posit\
-    ion\x12;\n\x0borientation\x18\x05\x20\x01(\x0b2\x19.netsim.model.Orienta\
-    tionR\x0borientation\x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.mo\
-    del.ChipR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\x03(\x0b2\
-    \x14.netsim.model.DeviceR\x07devices*e\n\x07PhyKind\x12\x08\n\x04NONE\
-    \x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW\
-    _ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\
-    \x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\
-    \x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
+    \x04roll\"\xdd\x04\n\x04Chip\x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17.ne\
+    tsim.common.ChipKindR\x04kind\x12\x0e\n\x02id\x18\x02\x20\x01(\x05R\x02i\
+    d\x12\x12\n\x04name\x18\x03\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\
+    \x18\x04\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cproduct_name\x18\x05\x20\
+    \x01(\tR\x0bproductName\x12-\n\x07capture\x18\x06\x20\x01(\x0e2\x13.nets\
+    im.model.StateR\x07capture\x12.\n\x02bt\x18\x07\x20\x01(\x0b2\x1c.netsim\
+    .model.Chip.BluetoothH\0R\x02bt\x12,\n\x03uwb\x18\x08\x20\x01(\x0b2\x18.\
+    netsim.model.Chip.RadioH\0R\x03uwb\x12.\n\x04wifi\x18\t\x20\x01(\x0b2\
+    \x18.netsim.model.Chip.RadioH\0R\x04wifi\x1a~\n\x05Radio\x12)\n\x05state\
+    \x18\x01\x20\x01(\x0e2\x13.netsim.model.StateR\x05state\x12\x14\n\x05ran\
+    ge\x18\x02\x20\x01(\x02R\x05range\x12\x19\n\x08tx_count\x18\x03\x20\x01(\
+    \x05R\x07txCount\x12\x19\n\x08rx_count\x18\x04\x20\x01(\x05R\x07rxCount\
+    \x1ax\n\tBluetooth\x127\n\nlow_energy\x18\x01\x20\x01(\x0b2\x18.netsim.m\
+    odel.Chip.RadioR\tlowEnergy\x122\n\x07classic\x18\x02\x20\x01(\x0b2\x18.\
+    netsim.model.Chip.RadioR\x07classicB\x06\n\x04chip\"\xe1\x01\n\x06Device\
+    \x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x12\x12\n\x04name\x18\x02\
+    \x20\x01(\tR\x04name\x12\x18\n\x07visible\x18\x03\x20\x01(\x08R\x07visib\
+    le\x122\n\x08position\x18\x04\x20\x01(\x0b2\x16.netsim.model.PositionR\
+    \x08position\x12;\n\x0borientation\x18\x05\x20\x01(\x0b2\x19.netsim.mode\
+    l.OrientationR\x0borientation\x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.\
+    netsim.model.ChipR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\
+    \x03(\x0b2\x14.netsim.model.DeviceR\x07devices*e\n\x07PhyKind\x12\x08\n\
+    \x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUET\
+    OOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\
+    \x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07UNKNOWN\x10\
+    \0\x12\x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;

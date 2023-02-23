@@ -16,6 +16,7 @@ android_add_library(
   TARGET hci-lib
   LICENSE Apache-2.0
   SRC bluetooth_facade.cc bluetooth_facade.h hci_debug.cc hci_debug.h
+      hci_packet_transport.cc hci_packet_transport.h
   DEPS android-emu-base
        android-emu-base-headers
        controller-lib
@@ -25,3 +26,4 @@ android_add_library(
        libbt-rootcanal)
 target_include_directories(hci-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
                                            ../../rust/netsim-cxx/cxx)
+target_compile_definitions(hci-lib PUBLIC NETSIM_ANDROID_EMULATOR)

@@ -16,6 +16,8 @@
 
 #include <string>
 
+#include "common.pb.h"
+
 namespace netsim::scene_controller {
 
 const unsigned int HTTP_STATUS_OK = 200;
@@ -26,5 +28,14 @@ unsigned int PatchDevice(const std::string &request, std::string &response,
 
 unsigned int GetDevices(const std::string &request, std::string &response,
                         std::string &error_message);
+
+void RemoveChip(uint32_t device_id, uint32_t chip_id);
+
+std::tuple<uint32_t, uint32_t, uint32_t> AddChip(
+    const std::string &guid, const std::string &device_name,
+    common::ChipKind chip_kind, const std::string &chip_name = "",
+    const std::string &manufacturer = "", const std::string &product_name = "");
+
+float GetDistance(uint32_t, uint32_t);
 
 }  // namespace netsim::scene_controller

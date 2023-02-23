@@ -20,6 +20,7 @@
 #include <optional>
 #include <vector>
 
+#include "common.pb.h"
 #include "controller/device.h"
 #include "model.pb.h"
 
@@ -35,20 +36,21 @@ class SceneController {
 
   static SceneController &Singleton();
 
-  std::shared_ptr<Device> GetOrCreate(const std::string &);
-
   // When a packet stream goes away the chip is removed. When there are no more
   // chips the device is remove.
-  void RemoveChip(const std::string &serial, common::ChipKind chip_kind,
-                  const std::string &chip_id);
+  void RemoveChip(uint32_t device_id, uint32_t chip_id);
 
-  void Add(std::shared_ptr<Device> &device);
-
-  const std::vector<std::shared_ptr<Device>> Copy();
+  std::tuple<uint32_t, uint32_t, uint32_t> AddChip(
+      const std::string &guid, const std::string &device_name,
+      common::ChipKind chip_kind, const std::string &chip_name = "",
+      const std::string &manufacturer = "",
+      const std::string &product_name = "");
 
   bool PatchDevice(const model::Device &);
 
-  float GetDistance(const Device &, const Device &);
+  float GetDistance(uint32_t, uint32_t);
+
+  model::Scene Get();
 
   void Reset();
 
@@ -56,13 +58,16 @@ class SceneController {
   friend class SceneControllerTest;
   friend class FrontendServerTest;
 
-  std::shared_ptr<Device> GetDevice(const std::string &serial);
-
+  std::shared_ptr<Device> GetDevice(const std::string &guid,
+                                    const std::string &name);
   std::shared_ptr<Device> MatchDevice(const std::string &query);
 
  private:
   SceneController() = default;  // Disallow instantiation outside of the class.
-  std::vector<std::shared_ptr<Device>> devices_;
+
+  void RemoveDevice(uint32_t device_id);
+
+  std::unordered_map<uint32_t, std::shared_ptr<Device>> devices_;
   std::mutex mutex_;
 };
 

@@ -14,42 +14,77 @@
 
 #include "controller/chip.h"
 
+#include "common.pb.h"
+#include "hci/bluetooth_facade.h"
 #include "model.pb.h"
+#include "util/log.h"
 
 namespace netsim {
 namespace controller {
 
-void Chip::Init(std::shared_ptr<Device> parent, int chip_index) {
-  this->parent = std::move(parent);
-  this->chip_index = chip_index;
-}
+// Create the model protobuf
 
-model::Chip &Chip::Model() {
-  return this->parent->model.mutable_chips()->at(this->chip_index);
+model::Chip Chip::Get() {
+  BtsLog("Chip::Model %d", id);
+  model::Chip model;
+  model.set_kind(kind);
+  model.set_id(id);
+  model.set_name(name);
+  model.set_manufacturer(manufacturer);
+  model.set_product_name(product_name);
+  model.set_capture(capture);
+  if (kind == common::ChipKind::BLUETOOTH) {
+    auto bt = hci::facade::Get(facade_id);
+    model.mutable_bt()->CopyFrom(bt);
+  } else {
+    BtsLog("Chip::Model - unknown chip kind");
+  }
+  return model;
 }
-
-model::Device &Chip::DeviceModel() { return this->parent->model; }
 
 void Chip::Patch(const model::Chip &request) {
-  auto &model = Model();
-  if (!request.manufacturer().empty()) {
-    model.set_manufacturer(request.manufacturer());
+  BtsLog("Chip::Patch %d", id);
+
+  if (request.capture() != model::State::UNKNOWN &&
+      this->capture != request.capture()) {
+    this->capture = request.capture();
+    hci::facade::SetPacketCapture(this->facade_id,
+                                  request.capture() == model::State::ON,
+                                  this->device_name);
   }
-  if (!request.model().empty()) {
-    model.set_model(request.model());
+  if (!request.manufacturer().empty()) {
+    this->manufacturer = request.manufacturer();
+  }
+  if (!request.product_name().empty()) {
+    this->product_name = request.product_name();
+  }
+  if (kind == common::ChipKind::BLUETOOTH) {
+    if (request.has_bt()) {
+      hci::facade::Patch(facade_id, request.bt());
+    }
+  } else {
+    BtsLog("Chip::Patch - unknown chip kind");
   }
 }
 
-void Chip::Remove() {}
+void Chip::Remove() {
+  BtsLog("Chip::Remove %d", id);
+  if (kind == common::ChipKind::BLUETOOTH) {
+    hci::facade::Remove(facade_id);
+  } else {
+    BtsLog("Chip::Remove - unknown chip kind");
+  }
+}
 
 void Chip::Reset() {
-  // Nothing to reset
+  BtsLog("Chip::Reset %d", id);
+  // TODO RESET THE CHIP
+  if (kind == common::ChipKind::BLUETOOTH) {
+    hci::facade::Reset(facade_id);
+  } else {
+    BtsLog("Chip::Reset - unknown chip kind");
+  }
 }
 
-bool Chip::KeyComp(const model::Chip &other_model) {
-  auto &model = Model();
-  return model.chip_case() == other_model.chip_case() &&
-         model.chip_id() == other_model.chip_id();
-}
 }  // namespace controller
 }  // namespace netsim

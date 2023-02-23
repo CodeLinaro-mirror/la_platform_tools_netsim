@@ -85,6 +85,7 @@ if(TARGET Rust::Rustc)
     TEST_PARAMS --gtest_filter=-OsUtilsTest.GetDiscoveryDir)
 
   add_dependencies(netsim-test netsimd)
+  target_compile_definitions(netsim-test PUBLIC NETSIM_ANDROID_EMULATOR)
 
   if(ANDROID_EMULATOR_BUILD)
     add_dependencies(netsim-test emulator) # For PacketStreamerClientTest.

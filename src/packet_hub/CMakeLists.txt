@@ -12,26 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(util)
-add_subdirectory(core)
-add_subdirectory(proto)
-add_subdirectory(controller)
-add_subdirectory(frontend)
-add_subdirectory(backend)
-add_subdirectory(hci)
-add_subdirectory(packet_hub)
+android_add_library(
+  TARGET packet-hub-lib LICENSE Apache-2.0 SRC packet_hub.cc packet_hub.h
+  DEPS frontend-grpc-lib grpc++ packet-streamer-server-lib)
 
-add_library(netsim-lib INTERFACE)
-target_link_libraries(
-  netsim-lib
-  INTERFACE core-lib
-            frontend-grpc-lib
-            frontend-lib
-            backend-lib
-            packet-hub-lib
-            hci-lib
-            util-lib
-            protobuf::libprotobuf)
-
-android_license(TARGET "netsim-lib" LIBNAME None SPDX None LICENSE None
-                LOCAL None)
+target_include_directories(packet-hub-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
+                                                  ../../rust/netsim-cxx/cxx)

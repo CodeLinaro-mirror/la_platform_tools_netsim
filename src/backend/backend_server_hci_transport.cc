@@ -75,7 +75,6 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
                          rootcanal::PacketCallback scoCallback,
                          rootcanal::PacketCallback isoCallback,
                          rootcanal::CloseCallback closeCallback) override {
-    BtsLog("hci_transport: registered");
     mCommandCallback = commandCallback;
     mAclCallback = aclCallback;
     mScoCallback = scoCallback;
@@ -87,10 +86,7 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
   void Tick() override {}
 
   // Close from Rootcanal
-  void Close() override {
-    BtsLog("hci_transport close from rootcanal");
-    mReading = false;
-  }
+  void Close() override { mReading = false; }
 
   // Transport packets from grpc to rootcanal. Return when connection is closed.
   void Transport() override {
@@ -115,13 +111,10 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
 
       if (packet_type == HCIPacket::COMMAND) {
         auto cmd = HciCommandToString(packet->at(0), packet->at(1));
-        BtsLog("hci_transport: from %s %s", mPeer.c_str(), cmd.c_str());
       }
       auto packet_callback = PacketTypeCallback(packet_type);
       if (packet_callback != nullptr) {
-        BtsLog("hci_transport: from start %s", mPeer.c_str());
         packet_callback(packet);
-        BtsLog("hci_transport: from done %s", mPeer.c_str());
       } else {
         BtsLog("hci_transport: bad packet_callback...");
       }
@@ -139,7 +132,6 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
     auto packet = std::string(data.begin(), data.end());
     response.mutable_hci_packet()->set_packet(packet);
     auto event = HciEventToString(data);
-    BtsLog("hci_transport: to %s %s", mPeer.c_str(), event.c_str());
     // send from chip to gRPC
     mQueue.Push(response);
   }

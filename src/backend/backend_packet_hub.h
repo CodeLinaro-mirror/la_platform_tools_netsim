@@ -15,27 +15,21 @@
  */
 
 #pragma once
-#include <memory>
-#include <string>
 
-#include "model.pb.h"
+// Use gRPC HCI PacketType definitions so we don't expose Rootcanal's version
+// outside of the Bluetooth Facade.
+#include "packet_streamer.pb.h"
 
-/** Manages the bluetooth chip emulation provided by the root canal library.
- *
- * Owns the TestModel, setup, and manages the packet flow into and out of
- * rootcanal.
- */
+namespace netsim {
+namespace backend {
+namespace grpc {
 
-namespace netsim::hci::facade {
+/* Handle packet requests for the backend. */
 
-void Reset(uint32_t);
-void Remove(uint32_t);
-void Patch(uint32_t, const model::Chip::Bluetooth &);
-void SetPacketCapture(uint32_t id, bool isOn, std::string device_name);
-model::Chip::Bluetooth Get(uint32_t);
-uint32_t Add(uint32_t simulation_device);
+void handle_bt_response(uint32_t facade_id,
+                        packet::HCIPacket_PacketType packet_type,
+                        const std::shared_ptr<std::vector<uint8_t>> packet);
 
-void Start();
-void Stop();
-
-}  // namespace netsim::hci::facade
+}  // namespace grpc
+}  // namespace backend
+}  // namespace netsim

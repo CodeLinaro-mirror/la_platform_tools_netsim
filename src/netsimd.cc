@@ -105,8 +105,7 @@ int main(int argc, char *argv[]) {
 
   // Daemon mode -- start radio managers
   if (!fd_startup_str.empty() || grpc_startup) {
-    netsim::hci::BluetoothChipEmulator::Get().Start(
-        rootcanal_default_commands_file, rootcanal_controller_properties_file);
+    netsim::hci::facade::Start();
   }
 
 #ifdef NETSIM_ANDROID_EMULATOR

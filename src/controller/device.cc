@@ -14,109 +14,112 @@
 
 #include "controller/device.h"
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "common.pb.h"
+#include "hci/bluetooth_facade.h"
 #include "model.pb.h"
 #include "util/log.h"
-#include "util/os_utils.h"
-#include "util/string_utils.h"
 
 namespace netsim {
 namespace controller {
+
 namespace {
-
-// common_typos_disable
-const std::vector<std::string> kDeviceNames{
-    "Bear", "Boar", "Buck", "Bull", "Calf", "Cavy", "Colt", "Cony", "Coon",
-    "Dauw", "Deer", "Dieb", "Douc", "Dzho", "Euro", "Eyra", "Fawn", "Foal",
-    "Gaur", "Gilt", "Goat", "Guib", "Gyal", "Hare", "Hart", "Hind", "Hogg",
-    "Ibex", "Joey", "Jomo", "Kine", "Kudu", "Lamb", "Lion", "Maki", "Mara",
-    "Mare", "Mico", "Mink", "Moco", "Mohr", "Moke", "Mole", "Mona", "Mule",
-    "Musk", "Napu", "Neat", "Nowt", "Oont", "Orca", "Oryx", "Oxen", "Paca",
-    "Paco", "Pard", "Peba", "Pika", "Pudu", "Puma", "Quey", "Roan", "Runt",
-    "Rusa", "Saki", "Seal", "Skug", "Sore", "Tait", "Tegg", "Titi", "Unau",
-    "Urus", "Urva", "Vari", "Vole", "Wolf", "Zati", "Zebu", "Zobo", "Zobu"};
-
-const std::string GetName(std::string_view device_name) {
-  unsigned int idx =
-      std::hash<std::string_view>()(device_name) % kDeviceNames.size();
-  return kDeviceNames.at(idx);
-}
+// To detect bugs of misuse of chip_id more efficiently.
+const int kGlobalChipStartIndex = 1000;
 }  // namespace
+
+model::Device Device::Get() {
+  model::Device model;
+  model.set_id(id);
+  model.set_name(name);
+  model.set_visible(visible);
+  model.mutable_position()->CopyFrom(position);
+  model.mutable_orientation()->CopyFrom(orientation);
+
+  // populate chips models
+  for (auto &[_, chip] : chips_) {
+    model.add_chips()->CopyFrom(chip->Get());
+  }
+  return model;
+}
 
 void Device::Patch(const model::Device &request) {
   if (request.has_position()) {
-    this->model.mutable_position()->CopyFrom(request.position());
+    this->position.CopyFrom(request.position());
   }
   if (request.has_orientation()) {
-    this->model.mutable_orientation()->CopyFrom(request.orientation());
+    this->orientation.CopyFrom(request.orientation());
   }
-  if (!request.name().empty()) {
-    this->model.set_name(request.name());
-  }
-  for (auto &request_chip_model : request.chips()) {
-    auto found = false;
-    for (auto &chip : chips) {
-      if (chip->KeyComp(request_chip_model)) {
+  for (const auto &request_chip_model : request.chips()) {
+    // TODO: use request_chip_model.kind()
+    const auto &request_chip_kind = common::ChipKind::BLUETOOTH;
+    const auto &request_chip_name = request_chip_model.name();
+    BtsLog("request kind:%d, name:%s", request_chip_kind,
+           request_chip_name.c_str());
+    for (auto &[_, chip] : chips_) {
+      BtsLog("chip kind:%d, name:%s", chip->kind, chip->name.c_str());
+      if (chip->name == request_chip_name && chip->kind == request_chip_kind) {
         chip->Patch(request_chip_model);
-        found = true;
-        break;
       }
     }
-    if (!found) {
-      BtsLog("Unknown chip in update");
-    }
   }
 }
 
-bool Device::RemoveChip(common::ChipKind chip_kind,
-                        const std::string &chip_id) {
-  for (int c = 0; c < model.chips().size(); c++) {
-    auto c_kind = model.chips().at(c).chip_kind();
-    auto c_id = model.chips().at(c).chip_id();
-    if (chip_kind == c_kind && chip_id == c_id) {
-      // Entry in chips and model are at same index
-      BtsLog("Removing chip kind:%d id:'%s' from %s", c_kind, c_id.c_str(),
-             model.name().c_str());
-      chips[c]->Remove();
-      chips.erase(chips.begin() + c);
-      model.mutable_chips()->DeleteSubrange(c, 1);
-      return chips.size() == 0;
-    }
+bool Device::RemoveChip(uint32_t chip_id) {
+  if (chips_.find(chip_id) != chips_.end()) {
+    BtsLog("Device::RemoveChip: removed %d", chip_id);
+    chips_[chip_id]->Remove();
+    chips_.erase(chip_id);
+  } else {
+    BtsLog("Device::RemoveChip: %d not found", chip_id);
   }
-  BtsLog("Trying to remove unknown chip");
-  return chips.size() == 0;
+  return chips_.size() == 0;
 }
 
-void Device::AddChip(std::shared_ptr<Device> device, std::shared_ptr<Chip> chip,
-                     const model::Chip &chip_model) {
-  for (auto &c : chips) {
-    if (c->KeyComp(chip_model)) {
-      BtsLog("Trying to add a duplicate chip, skipping!");
-      return;
+std::pair<uint32_t, uint32_t> Device::AddChip(common::ChipKind chip_kind,
+                                              const std::string &chip_name,
+                                              const std::string &manufacturer,
+                                              const std::string &product_name) {
+  for (auto &[_, chip] : chips_) {
+    auto chip_model = chip->Get();
+    if (chip_model.kind() == chip_kind && chip_model.name() == chip_name) {
+      BtsLog("Device::AddChip - duplicate, skipping.");
+      return {-1, -1};
     }
   }
-  chip->Init(std::move(device), chips.size());
-  model.mutable_chips()->Add()->CopyFrom(chip_model);
-  chips.push_back(std::move(chip));
+  static uint32_t global_chip_id = kGlobalChipStartIndex;
+  auto chip_id = global_chip_id++;
+  uint32_t facade_id;
+  if (chip_kind == common::ChipKind::BLUETOOTH) {
+    facade_id = hci::facade::Add(this->id);
+    BtsLog("hci::facade::Add chip_id:%d, facade_id:%d", id, facade_id);
+  } else {
+    BtsLog("Device::AdChip: unable to add chip");
+    return {-1, -1};
+  }
+  auto chip = std::make_shared<Chip>(chip_id, facade_id, chip_kind, chip_name,
+                                     this->name, manufacturer, product_name);
+  chips_[chip_id] = std::move(chip);
+  return {chip_id, facade_id};
 }
+
 void Device::Reset() {
-  this->model.set_visible(true);
-  this->model.mutable_position()->Clear();
-  this->model.mutable_orientation()->Clear();
-  // TODO: Reset chips and radios.
+  this->visible = true;
+  this->position.Clear();
+  this->orientation.Clear();
+  for (auto &[_, chip] : chips_) {
+    chip->Reset();
+  }
 }
 
-std::shared_ptr<Device> CreateDevice(std::string_view name) {
-  model::Device model;
-  model.set_name(stringutils::AsString(name));
-  model.set_visible(true);
-  // required sub-messages to simplify ui
-  model.mutable_position();
-  model.mutable_orientation();
-  return std::make_shared<Device>(model);
+void Device::Remove() {
+  for (auto &[_, chip] : chips_) {
+    chip->Remove();
+  }
 }
 
 }  // namespace controller

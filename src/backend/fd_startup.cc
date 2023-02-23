@@ -23,14 +23,13 @@
 #include <memory>
 #include <thread>
 
-#include "controller/device.h"
+#include "common.pb.h"
 #include "controller/scene_controller.h"
 #include "hci/bluetooth_facade.h"
 #include "model/hci/h4_parser.h"
 #include "model/hci/hci_transport.h"
 #include "startup.pb.h"
 #include "util/log.h"
-#include "util/string_utils.h"
 
 namespace netsim {
 namespace hci {
@@ -212,13 +211,12 @@ class FdStartupImpl : public FdStartup {
 
           std::shared_ptr<rootcanal::HciTransport> transport =
               std::make_shared<FdHciForwarder>(name, fd_in, fd_out);
+          auto guid =
+              name + ":" + std::to_string(fd_in) + ":" + std::to_string(fd_out);
+          netsim::controller::SceneController::Singleton().AddChip(
+              guid, name, common::ChipKind::BLUETOOTH);
 
-          auto device = netsim::controller::CreateDevice(name);
-          netsim::controller::SceneController::Singleton().Add(device);
-
-          // Add a new HCI device. Rootcanal will eventually RegisterCallbacks
-          // which starts reading and writing to the fd.
-          hci::BluetoothChipEmulator::Get().AddHciConnection(name, transport);
+          BtsLog("FdHciForwarder is not supported");
         }
       }
     }
