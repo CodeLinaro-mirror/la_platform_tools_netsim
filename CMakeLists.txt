@@ -49,7 +49,7 @@ if(TARGET Rust::Rustc)
 
   android_add_executable(
     TARGET netsimd LICENSE Apache-2.0 INSTALL . SRC src/netsimd.cc
-    DEPS grpc++ libbt-rootcanal netsim-lib netsim-rust-lib frontend-client
+    DEPS frontend-client grpc++ libbt-rootcanal netsim-lib netsim-rust-lib
          protobuf::libprotobuf)
   if(NOT DARWIN_AARCH64 AND NOT DARWIN_X86_64)
     # Prevent duplicate symbol for cxx Rust crate.

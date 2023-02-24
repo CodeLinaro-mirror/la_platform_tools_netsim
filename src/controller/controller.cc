@@ -17,7 +17,9 @@
 #include <google/protobuf/empty.pb.h>
 #include <google/protobuf/util/json_util.h>
 
+#include <chrono>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "common.pb.h"
@@ -69,6 +71,10 @@ std::tuple<uint32_t, uint32_t, uint32_t> AddChip(
 float GetDistance(uint32_t device_id, uint32_t other_device_id) {
   return netsim::controller::SceneController::Singleton().GetDistance(
       device_id, other_device_id);
+}
+
+std::optional<std::chrono::seconds> GetShutdownTime() {
+  return netsim::controller::SceneController::Singleton().GetShutdownTime();
 }
 
 }  // namespace netsim::scene_controller
