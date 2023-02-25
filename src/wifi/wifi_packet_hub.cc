@@ -1,4 +1,4 @@
-// Copyright 2022 The Android Open Source Project
+// Copyright 2023 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto3";
+#include <cstdint>
+#include <memory>
+#include <vector>
 
-package netsim.internal;
+#include "util/log.h"
 
-import "google/protobuf/empty.proto";
+namespace netsim::wifi {
 
-/**
- * The internal service for the network simulator.
- *
- * Handles startup and shutdown.
- */
-service InternalService {
-  /**
-   * Scan for new discovery files.
-   */
-  rpc Scan(google.protobuf.Empty) returns (google.protobuf.Empty);
-
-  /**
-   * Stop the network simulator service.
-   */
-  rpc StopService(google.protobuf.Empty) returns (google.protobuf.Empty);
+void handle_wifi_request(uint32_t facade_id,
+                         const std::shared_ptr<std::vector<uint8_t>> &packet) {
+  BtsLog("netsim::wifi::handle_wifi_request()");
 }
+
+}  // namespace netsim::wifi

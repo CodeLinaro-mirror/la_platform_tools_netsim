@@ -21,8 +21,6 @@
 //! This library is only used for serving the netsim client and is not
 //! meant to implement all aspects of RFC 5322.
 
-use std::io::Write;
-
 pub use crate::frontend_http_server::http_request::HttpHeaders;
 
 pub struct HttpResponse {
@@ -32,17 +30,19 @@ pub struct HttpResponse {
 }
 
 impl HttpResponse {
-    pub fn write_to<W: Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        let mut buffer = format!("HTTP/1.1 {}\r\n", self.status_code).into_bytes();
-        for (name, value) in self.headers.iter() {
-            buffer.extend_from_slice(format!("{name}: {value}\r\n").as_bytes());
+    pub fn new_ok_with_length(content_type: &str, length: u32) -> HttpResponse {
+        let body = Vec::new();
+        HttpResponse {
+            status_code: 200,
+            headers: HttpHeaders::new_with_headers(&[
+                ("Content-Type", content_type),
+                ("Content-Length", length.to_string().as_str()),
+            ]),
+            body,
         }
-        buffer.extend_from_slice(b"\r\n");
-        buffer.extend_from_slice(&self.body);
-        writer.write_all(&buffer)
     }
 
-    pub fn new_200(content_type: &str, body: Vec<u8>) -> HttpResponse {
+    pub fn new_ok(content_type: &str, body: Vec<u8>) -> HttpResponse {
         HttpResponse {
             status_code: 200,
             headers: HttpHeaders::new_with_headers(&[
@@ -53,9 +53,9 @@ impl HttpResponse {
         }
     }
 
-    pub fn new_404(body: Vec<u8>) -> HttpResponse {
+    pub fn new_error(status_code: u16, body: Vec<u8>) -> HttpResponse {
         HttpResponse {
-            status_code: 404,
+            status_code,
             headers: HttpHeaders::new_with_headers(&[
                 ("Content-Type", "text/plain"),
                 ("Content-Length", &body.len().to_string()),
@@ -67,14 +67,16 @@ impl HttpResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::frontend_http_server::server_response::{
+        ServerResponseWritable, ServerResponseWriter,
+    };
     use std::io::Cursor;
 
     #[test]
     fn test_write_to() {
-        let response = HttpResponse::new_200("text/plain", b"Hello World".to_vec());
         let mut stream = Cursor::new(Vec::new());
-        response.write_to(&mut stream).unwrap();
+        let mut writer = ServerResponseWriter::new(&mut stream);
+        writer.put_ok_with_vec("text/plain", b"Hello World".to_vec());
         let written_bytes = stream.get_ref();
         let expected_bytes =
             b"HTTP/1.1 200\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";

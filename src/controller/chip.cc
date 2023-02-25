@@ -18,6 +18,7 @@
 #include "hci/bluetooth_facade.h"
 #include "model.pb.h"
 #include "util/log.h"
+#include "wifi/wifi_facade.h"
 
 namespace netsim {
 namespace controller {
@@ -25,7 +26,6 @@ namespace controller {
 // Create the model protobuf
 
 model::Chip Chip::Get() {
-  BtsLog("Chip::Model %d", id);
   model::Chip model;
   model.set_kind(kind);
   model.set_id(id);
@@ -36,6 +36,9 @@ model::Chip Chip::Get() {
   if (kind == common::ChipKind::BLUETOOTH) {
     auto bt = hci::facade::Get(facade_id);
     model.mutable_bt()->CopyFrom(bt);
+  } else if (kind == common::ChipKind::WIFI) {
+    auto radio = wifi::facade::Get(facade_id);
+    model.mutable_wifi()->CopyFrom(radio);
   } else {
     BtsLog("Chip::Model - unknown chip kind");
   }
@@ -62,6 +65,10 @@ void Chip::Patch(const model::Chip &request) {
     if (request.has_bt()) {
       hci::facade::Patch(facade_id, request.bt());
     }
+  } else if (kind == common::ChipKind::WIFI) {
+    if (request.has_wifi()) {
+      wifi::facade::Patch(facade_id, request.wifi());
+    }
   } else {
     BtsLog("Chip::Patch - unknown chip kind");
   }
@@ -71,6 +78,8 @@ void Chip::Remove() {
   BtsLog("Chip::Remove %d", id);
   if (kind == common::ChipKind::BLUETOOTH) {
     hci::facade::Remove(facade_id);
+  } else if (kind == common::ChipKind::WIFI) {
+    wifi::facade::Remove(facade_id);
   } else {
     BtsLog("Chip::Remove - unknown chip kind");
   }
@@ -81,6 +90,8 @@ void Chip::Reset() {
   // TODO RESET THE CHIP
   if (kind == common::ChipKind::BLUETOOTH) {
     hci::facade::Reset(facade_id);
+  } else if (kind == common::ChipKind::WIFI) {
+    wifi::facade::Reset(facade_id);
   } else {
     BtsLog("Chip::Reset - unknown chip kind");
   }

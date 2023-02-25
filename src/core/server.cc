@@ -61,8 +61,7 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port) {
          std::to_string(selected_port).c_str());
 
   // Writes grpc port to ini file.
-  auto filepath = osutils::GetDiscoveryDirectory() + netsim::filesystem::slash +
-                  "netsim.ini";
+  auto filepath = osutils::GetNetsimIniFilepath();
   IniFile iniFile(filepath);
   iniFile.Read();
   iniFile.Set("grpc.port", std::to_string(selected_port));

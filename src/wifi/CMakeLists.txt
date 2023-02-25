@@ -1,4 +1,4 @@
-# Copyright 2022 The Android Open Source Project
+# Copyright 2023 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,17 +13,10 @@
 # limitations under the License.
 
 android_add_library(
-  TARGET hci-lib
+  TARGET wifi-lib
   LICENSE Apache-2.0
-  SRC bluetooth_facade.cc bluetooth_facade.h hci_debug.cc hci_debug.h
-      hci_packet_transport.cc hci_packet_transport.h
-  DEPS android-emu-base
-       android-emu-base-headers
-       controller-lib
-       netsim-proto-lib
-       libbt-rootcanal
-       libbt-rootcanal-qemu
-       grpc++)
-target_include_directories(hci-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
-                                           ../../rust/netsim-cxx/cxx)
-target_compile_definitions(hci-lib PUBLIC NETSIM_ANDROID_EMULATOR)
+  SRC wifi_facade.cc wifi_facade.h wifi_packet_hub.cc wifi_packet_hub.h
+  DEPS controller-lib frontend-grpc-lib packet-streamer-server-lib
+       protobuf::libprotobuf)
+target_include_directories(wifi-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..)
+target_compile_definitions(wifi-lib PUBLIC NETSIM_ANDROID_EMULATOR)

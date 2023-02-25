@@ -38,7 +38,7 @@ class Device {
   model::Orientation orientation;
 
   Device(uint32_t id, const std::string &guid, const std::string &name)
-      : id(id), guid(guid), name(name) {}
+      : id(id), guid(guid), name(name), visible(true) {}
 
   model::Device Get();
   void Patch(const model::Device &request);

@@ -25,9 +25,10 @@
 //! meant to implement all aspects of an http router.
 
 use crate::frontend_http_server::http_request::HttpRequest;
-use crate::frontend_http_server::http_response::HttpResponse;
 
-type RequestHandler = Box<dyn Fn(&HttpRequest, &str) -> HttpResponse>;
+use crate::frontend_http_server::server_response::ResponseWritable;
+
+type RequestHandler = Box<dyn Fn(&HttpRequest, &str, ResponseWritable)>;
 
 pub struct Router {
     routes: Vec<(String, RequestHandler)>,
@@ -42,14 +43,15 @@ impl Router {
         self.routes.push((route.to_owned(), handler));
     }
 
-    pub fn handle_request(&self, request: &HttpRequest) -> HttpResponse {
+    pub fn handle_request(&self, request: &HttpRequest, writer: ResponseWritable) {
         for (route, handler) in &self.routes {
             if let Some(param) = match_route(route, &request.uri) {
-                return handler(request, param);
+                handler(request, param, writer);
+                return;
             }
         }
         let body = format!("404 Not found (netsim): HttpRouter unknown uri {}", request.uri);
-        HttpResponse::new_404(body.into_bytes())
+        writer.put_error(404, body.as_str());
     }
 }
 
@@ -92,13 +94,16 @@ fn match_route<'a>(route: &str, uri: &'a str) -> Option<&'a str> {
 mod tests {
     use super::*;
     use crate::frontend_http_server::http_response::HttpHeaders;
+    use crate::frontend_http_server::server_response::ServerResponseWriter;
+    use std::io::Cursor;
 
-    fn handle_index(_request: &HttpRequest, _param: &str) -> HttpResponse {
-        HttpResponse::new_200("text/html", b"Hello, world!".to_vec())
+    fn handle_index(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
+        writer.put_ok_with_vec("text/html", b"Hello, world!".to_vec());
     }
 
-    fn handle_user(_request: &HttpRequest, user_id: &str) -> HttpResponse {
-        HttpResponse::new_200("application/json", format!("Hello, {user_id}!").as_bytes().to_vec())
+    fn handle_user(_request: &HttpRequest, user_id: &str, writer: ResponseWritable) {
+        let body = format!("Hello, {user_id}!");
+        writer.put_ok("application/json", body.as_str());
     }
 
     #[test]
@@ -128,13 +133,13 @@ mod tests {
             headers: HttpHeaders::new(),
             body: vec![],
         };
-        let response = router.handle_request(&request);
-        assert_eq!(response.status_code, 200);
-        let content_type = response.headers.get("Content-Type");
-        println!("headers are {:?}", response.headers);
-        assert!(content_type.is_some());
-        assert_eq!(content_type.unwrap(), "text/html");
-        assert_eq!(response.body, b"Hello, world!".to_vec());
+        let mut stream = Cursor::new(Vec::new());
+        let mut writer = ServerResponseWriter::new(&mut stream);
+        router.handle_request(&request, &mut writer);
+        let written_bytes = stream.get_ref();
+        let expected_bytes =
+            b"HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: 13\r\n\r\nHello, world!";
+        assert_eq!(written_bytes, expected_bytes);
 
         let request = HttpRequest {
             method: "GET".to_string(),
@@ -143,12 +148,13 @@ mod tests {
             headers: HttpHeaders::new(),
             body: vec![],
         };
-        let response = router.handle_request(&request);
-        assert_eq!(response.status_code, 200);
-        assert_eq!(response.body, b"Hello, 1920!".to_vec());
-        let content_type = response.headers.get("Content-Type");
-        assert!(content_type.is_some());
-        assert_eq!(content_type.unwrap(), "application/json");
+        let mut stream = Cursor::new(Vec::new());
+        let mut writer = ServerResponseWriter::new(&mut stream);
+        router.handle_request(&request, &mut writer);
+        let written_bytes = stream.get_ref();
+        let expected_bytes =
+            b"HTTP/1.1 200\r\nContent-Type: application/json\r\nContent-Length: 12\r\n\r\nHello, 1920!";
+        assert_eq!(written_bytes, expected_bytes);
     }
 
     #[test]
@@ -162,13 +168,12 @@ mod tests {
             headers: HttpHeaders::new(),
             body: vec![],
         };
-        let response = router.handle_request(&request);
-        assert_eq!(response.status_code, 404);
-        let expected_body =
-            format!("404 Not found (netsim): HttpRouter unknown uri {}", &request.uri);
-        assert_eq!(response.body, expected_body.as_bytes());
-        let content_type = response.headers.get("Content-Type");
-        assert!(content_type.is_some());
-        assert_eq!(content_type.unwrap(), "text/plain");
+        let mut stream = Cursor::new(Vec::new());
+        let mut writer = ServerResponseWriter::new(&mut stream);
+        router.handle_request(&request, &mut writer);
+        let written_bytes = stream.get_ref();
+        let expected_bytes =
+            b"HTTP/1.1 404\r\nContent-Type: text/plain\r\nContent-Length: 59\r\n\r\n404 Not found (netsim): HttpRouter unknown uri /player/1920";
+        assert_eq!(written_bytes, expected_bytes);
     }
 }

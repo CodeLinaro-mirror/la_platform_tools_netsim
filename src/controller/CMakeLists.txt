@@ -27,5 +27,5 @@ android_add_library(
       device_notify_manager.h
       scene_controller.cc
       scene_controller.h
-  DEPS frontend-grpc-lib grpc++ hci-lib libbt-rootcanal util-lib)
+  DEPS frontend-grpc-lib grpc++ hci-lib libbt-rootcanal util-lib wifi-lib)
 target_include_directories(controller-lib PRIVATE ..)

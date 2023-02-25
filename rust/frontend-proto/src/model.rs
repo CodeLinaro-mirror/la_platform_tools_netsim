@@ -2091,6 +2091,406 @@ impl ::protobuf::reflect::ProtobufValue for Scene {
     }
 }
 
+#[derive(PartialEq,Clone,Default)]
+pub struct Pcap {
+    // message fields
+    pub id: i32,
+    pub chip_kind: super::common::ChipKind,
+    pub chip_id: i32,
+    pub device_name: ::std::string::String,
+    pub state: bool,
+    pub size: i32,
+    pub records: i32,
+    pub timestamp: i32,
+    // special fields
+    pub unknown_fields: ::protobuf::UnknownFields,
+    pub cached_size: ::protobuf::CachedSize,
+}
+
+impl<'a> ::std::default::Default for &'a Pcap {
+    fn default() -> &'a Pcap {
+        <Pcap as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl Pcap {
+    pub fn new() -> Pcap {
+        ::std::default::Default::default()
+    }
+
+    // int32 id = 1;
+
+
+    pub fn get_id(&self) -> i32 {
+        self.id
+    }
+    pub fn clear_id(&mut self) {
+        self.id = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_id(&mut self, v: i32) {
+        self.id = v;
+    }
+
+    // .netsim.common.ChipKind chip_kind = 2;
+
+
+    pub fn get_chip_kind(&self) -> super::common::ChipKind {
+        self.chip_kind
+    }
+    pub fn clear_chip_kind(&mut self) {
+        self.chip_kind = super::common::ChipKind::UNSPECIFIED;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_chip_kind(&mut self, v: super::common::ChipKind) {
+        self.chip_kind = v;
+    }
+
+    // int32 chip_id = 3;
+
+
+    pub fn get_chip_id(&self) -> i32 {
+        self.chip_id
+    }
+    pub fn clear_chip_id(&mut self) {
+        self.chip_id = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_chip_id(&mut self, v: i32) {
+        self.chip_id = v;
+    }
+
+    // string device_name = 4;
+
+
+    pub fn get_device_name(&self) -> &str {
+        &self.device_name
+    }
+    pub fn clear_device_name(&mut self) {
+        self.device_name.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_device_name(&mut self, v: ::std::string::String) {
+        self.device_name = v;
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_device_name(&mut self) -> &mut ::std::string::String {
+        &mut self.device_name
+    }
+
+    // Take field
+    pub fn take_device_name(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.device_name, ::std::string::String::new())
+    }
+
+    // bool state = 5;
+
+
+    pub fn get_state(&self) -> bool {
+        self.state
+    }
+    pub fn clear_state(&mut self) {
+        self.state = false;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_state(&mut self, v: bool) {
+        self.state = v;
+    }
+
+    // int32 size = 6;
+
+
+    pub fn get_size(&self) -> i32 {
+        self.size
+    }
+    pub fn clear_size(&mut self) {
+        self.size = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_size(&mut self, v: i32) {
+        self.size = v;
+    }
+
+    // int32 records = 7;
+
+
+    pub fn get_records(&self) -> i32 {
+        self.records
+    }
+    pub fn clear_records(&mut self) {
+        self.records = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_records(&mut self, v: i32) {
+        self.records = v;
+    }
+
+    // int32 timestamp = 8;
+
+
+    pub fn get_timestamp(&self) -> i32 {
+        self.timestamp
+    }
+    pub fn clear_timestamp(&mut self) {
+        self.timestamp = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_timestamp(&mut self, v: i32) {
+        self.timestamp = v;
+    }
+}
+
+impl ::protobuf::Message for Pcap {
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
+            match field_number {
+                1 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.id = tmp;
+                },
+                2 => {
+                    ::protobuf::rt::read_proto3_enum_with_unknown_fields_into(wire_type, is, &mut self.chip_kind, 2, &mut self.unknown_fields)?
+                },
+                3 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.chip_id = tmp;
+                },
+                4 => {
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.device_name)?;
+                },
+                5 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_bool()?;
+                    self.state = tmp;
+                },
+                6 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.size = tmp;
+                },
+                7 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.records = tmp;
+                },
+                8 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.timestamp = tmp;
+                },
+                _ => {
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u32 {
+        let mut my_size = 0;
+        if self.id != 0 {
+            my_size += ::protobuf::rt::value_size(1, self.id, ::protobuf::wire_format::WireTypeVarint);
+        }
+        if self.chip_kind != super::common::ChipKind::UNSPECIFIED {
+            my_size += ::protobuf::rt::enum_size(2, self.chip_kind);
+        }
+        if self.chip_id != 0 {
+            my_size += ::protobuf::rt::value_size(3, self.chip_id, ::protobuf::wire_format::WireTypeVarint);
+        }
+        if !self.device_name.is_empty() {
+            my_size += ::protobuf::rt::string_size(4, &self.device_name);
+        }
+        if self.state != false {
+            my_size += 2;
+        }
+        if self.size != 0 {
+            my_size += ::protobuf::rt::value_size(6, self.size, ::protobuf::wire_format::WireTypeVarint);
+        }
+        if self.records != 0 {
+            my_size += ::protobuf::rt::value_size(7, self.records, ::protobuf::wire_format::WireTypeVarint);
+        }
+        if self.timestamp != 0 {
+            my_size += ::protobuf::rt::value_size(8, self.timestamp, ::protobuf::wire_format::WireTypeVarint);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
+        self.cached_size.set(my_size);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        if self.id != 0 {
+            os.write_int32(1, self.id)?;
+        }
+        if self.chip_kind != super::common::ChipKind::UNSPECIFIED {
+            os.write_enum(2, ::protobuf::ProtobufEnum::value(&self.chip_kind))?;
+        }
+        if self.chip_id != 0 {
+            os.write_int32(3, self.chip_id)?;
+        }
+        if !self.device_name.is_empty() {
+            os.write_string(4, &self.device_name)?;
+        }
+        if self.state != false {
+            os.write_bool(5, self.state)?;
+        }
+        if self.size != 0 {
+            os.write_int32(6, self.size)?;
+        }
+        if self.records != 0 {
+            os.write_int32(7, self.records)?;
+        }
+        if self.timestamp != 0 {
+            os.write_int32(8, self.timestamp)?;
+        }
+        os.write_unknown_fields(self.get_unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn get_cached_size(&self) -> u32 {
+        self.cached_size.get()
+    }
+
+    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
+        &self.unknown_fields
+    }
+
+    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
+        &mut self.unknown_fields
+    }
+
+    fn as_any(&self) -> &dyn (::std::any::Any) {
+        self as &dyn (::std::any::Any)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
+        self as &mut dyn (::std::any::Any)
+    }
+    fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
+        self
+    }
+
+    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
+        Self::descriptor_static()
+    }
+
+    fn new() -> Pcap {
+        Pcap::new()
+    }
+
+    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
+        descriptor.get(|| {
+            let mut fields = ::std::vec::Vec::new();
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "id",
+                |m: &Pcap| { &m.id },
+                |m: &mut Pcap| { &mut m.id },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeEnum<super::common::ChipKind>>(
+                "chip_kind",
+                |m: &Pcap| { &m.chip_kind },
+                |m: &mut Pcap| { &mut m.chip_kind },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "chip_id",
+                |m: &Pcap| { &m.chip_id },
+                |m: &mut Pcap| { &mut m.chip_id },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
+                "device_name",
+                |m: &Pcap| { &m.device_name },
+                |m: &mut Pcap| { &mut m.device_name },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeBool>(
+                "state",
+                |m: &Pcap| { &m.state },
+                |m: &mut Pcap| { &mut m.state },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "size",
+                |m: &Pcap| { &m.size },
+                |m: &mut Pcap| { &mut m.size },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "records",
+                |m: &Pcap| { &m.records },
+                |m: &mut Pcap| { &mut m.records },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "timestamp",
+                |m: &Pcap| { &m.timestamp },
+                |m: &mut Pcap| { &mut m.timestamp },
+            ));
+            ::protobuf::reflect::MessageDescriptor::new_pb_name::<Pcap>(
+                "Pcap",
+                fields,
+                file_descriptor_proto()
+            )
+        })
+    }
+
+    fn default_instance() -> &'static Pcap {
+        static instance: ::protobuf::rt::LazyV2<Pcap> = ::protobuf::rt::LazyV2::INIT;
+        instance.get(Pcap::new)
+    }
+}
+
+impl ::protobuf::Clear for Pcap {
+    fn clear(&mut self) {
+        self.id = 0;
+        self.chip_kind = super::common::ChipKind::UNSPECIFIED;
+        self.chip_id = 0;
+        self.device_name.clear();
+        self.state = false;
+        self.size = 0;
+        self.records = 0;
+        self.timestamp = 0;
+        self.unknown_fields.clear();
+    }
+}
+
+impl ::std::fmt::Debug for Pcap {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for Pcap {
+    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
+        ::protobuf::reflect::ReflectValueRef::Message(self)
+    }
+}
+
 #[derive(Clone,PartialEq,Eq,Debug,Hash)]
 pub enum PhyKind {
     NONE = 0,
@@ -2233,11 +2633,18 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x08position\x12;\n\x0borientation\x18\x05\x20\x01(\x0b2\x19.netsim.mode\
     l.OrientationR\x0borientation\x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.\
     netsim.model.ChipR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\
-    \x03(\x0b2\x14.netsim.model.DeviceR\x07devices*e\n\x07PhyKind\x12\x08\n\
-    \x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUET\
-    OOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\
-    \x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07UNKNOWN\x10\
-    \0\x12\x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
+    \x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"\xe8\x01\n\x04Pcap\x12\
+    \x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x124\n\tchip_kind\x18\x02\x20\
+    \x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x17\n\x07chip_id\
+    \x18\x03\x20\x01(\x05R\x06chipId\x12\x1f\n\x0bdevice_name\x18\x04\x20\
+    \x01(\tR\ndeviceName\x12\x14\n\x05state\x18\x05\x20\x01(\x08R\x05state\
+    \x12\x12\n\x04size\x18\x06\x20\x01(\x05R\x04size\x12\x18\n\x07records\
+    \x18\x07\x20\x01(\x05R\x07records\x12\x1c\n\ttimestamp\x18\x08\x20\x01(\
+    \x05R\ttimestamp*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLU\
+    ETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\
+    \n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\
+    \x05*%\n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\
+    \x07\n\x03OFF\x10\x02b\x06proto3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;

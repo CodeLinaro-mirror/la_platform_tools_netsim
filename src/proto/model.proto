@@ -91,3 +91,18 @@ message Device {
 message Scene {
   repeated Device devices = 1;
 }
+
+message Pcap {
+  int32 id = 1;
+  netsim.common.ChipKind chip_kind = 2;
+  int32 chip_id = 3;
+  // device AVD name
+  string device_name = 4;
+  // capture state
+  bool state = 5;
+  // size of current capture
+  int32 size = 6;
+  // number of records in current capture
+  int32 records = 7;
+  int32 timestamp = 8;
+}

@@ -120,6 +120,8 @@ cc_library_host_static {
         "src/util/log.cc",
         "src/util/os_utils.cc",
         "src/util/string_utils.cc",
+        "src/wifi/wifi_facade.cc",
+        "src/wifi/wifi_packet_hub.cc",
     ],
     generated_headers: [
         "cxx-bridge-header",

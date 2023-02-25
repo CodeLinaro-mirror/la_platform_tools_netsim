@@ -17,33 +17,39 @@ cmake_minimum_required(VERSION 3.5)
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
   SOURCES ${CMAKE_CURRENT_LIST_DIR}/common.proto
-          ${CMAKE_CURRENT_LIST_DIR}/frontend.proto
           ${CMAKE_CURRENT_LIST_DIR}/hci_packet.proto
-          ${CMAKE_CURRENT_LIST_DIR}/internal.proto
           ${CMAKE_CURRENT_LIST_DIR}/model.proto
-          ${CMAKE_CURRENT_LIST_DIR}/packet_streamer.proto
           ${CMAKE_CURRENT_LIST_DIR}/startup.proto
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
-  GENERATED GRPC_SRC)
+  GENERATED NETSIM_PROTO_SRC)
 
-android_add_library(TARGET frontend-grpc-lib LICENSE Apache-2.0 SRC ${GRPC_SRC}
+android_add_library(TARGET netsim-proto-lib LICENSE Apache-2.0 SRC ${NETSIM_PROTO_SRC}
                     DEPS grpc++ protobuf::libprotobuf)
+
+target_include_directories(netsim-proto-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
+                           PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+
+protobuf_generate_grpc_cpp(
+  SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
+  SOURCES ${CMAKE_CURRENT_LIST_DIR}/frontend.proto
+  OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
+  GENERATED NETSIM_FRONTEND_GRPC_SRC)
+
+android_add_library(TARGET frontend-grpc-lib LICENSE Apache-2.0 SRC ${NETSIM_FRONTEND_GRPC_SRC}
+                    DEPS grpc++ netsim-proto-lib protobuf::libprotobuf)
 
 target_include_directories(frontend-grpc-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
                            PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
-  SOURCES ${CMAKE_CURRENT_LIST_DIR}/common.proto
-          ${CMAKE_CURRENT_LIST_DIR}/hci_packet.proto
-          ${CMAKE_CURRENT_LIST_DIR}/packet_streamer.proto
-          ${CMAKE_CURRENT_LIST_DIR}/startup.proto
+  SOURCES ${CMAKE_CURRENT_LIST_DIR}/packet_streamer.proto
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
-  GENERATED PACKET_STREAMER_CLIENT_GRPC_SRC)
+  GENERATED NETSIM_PACKET_STREAMER_GRPC_SRC)
 
 android_add_library(
   TARGET packet-streamer-client-grpc-lib LICENSE Apache-2.0
-  SRC ${PACKET_STREAMER_CLIENT_GRPC_SRC} DEPS grpc++ protobuf::libprotobuf)
+  SRC ${NETSIM_PACKET_STREAMER_GRPC_SRC} DEPS netsim-proto-lib grpc++ protobuf::libprotobuf)
 
 target_include_directories(
   packet-streamer-client-grpc-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..

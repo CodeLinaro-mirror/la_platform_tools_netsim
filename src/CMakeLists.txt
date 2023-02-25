@@ -19,6 +19,7 @@ add_subdirectory(controller)
 add_subdirectory(frontend)
 add_subdirectory(backend)
 add_subdirectory(hci)
+add_subdirectory(wifi)
 add_subdirectory(packet_hub)
 
 add_library(netsim-lib INTERFACE)
@@ -27,11 +28,12 @@ target_link_libraries(
   INTERFACE core-lib
             frontend-grpc-lib
             frontend-lib
-            backend-lib
-            packet-hub-lib
             hci-lib
-            util-lib
-            protobuf::libprotobuf)
+    	    netsim-proto-lib
+            packet-hub-lib
+	    packet-streamer-client-grpc-lib
+            protobuf::libprotobuf
+            util-lib)
 
 android_license(TARGET "netsim-lib" LIBNAME None SPDX None LICENSE None
                 LOCAL None)

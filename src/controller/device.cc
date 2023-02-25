@@ -23,6 +23,7 @@
 #include "hci/bluetooth_facade.h"
 #include "model.pb.h"
 #include "util/log.h"
+#include "wifi/wifi_facade.h"
 
 namespace netsim {
 namespace controller {
@@ -48,6 +49,9 @@ model::Device Device::Get() {
 }
 
 void Device::Patch(const model::Device &request) {
+  if (this->visible != request.visible()) {
+    this->visible = request.visible();
+  }
   if (request.has_position()) {
     this->position.CopyFrom(request.position());
   }
@@ -56,7 +60,10 @@ void Device::Patch(const model::Device &request) {
   }
   for (const auto &request_chip_model : request.chips()) {
     // TODO: use request_chip_model.kind()
-    const auto &request_chip_kind = common::ChipKind::BLUETOOTH;
+    auto request_chip_kind =
+        request_chip_model.kind() != common::ChipKind::UNSPECIFIED
+            ? request_chip_model.kind()
+            : common::ChipKind::BLUETOOTH;
     const auto &request_chip_name = request_chip_model.name();
     BtsLog("request kind:%d, name:%s", request_chip_kind,
            request_chip_name.c_str());
@@ -97,6 +104,8 @@ std::pair<uint32_t, uint32_t> Device::AddChip(common::ChipKind chip_kind,
   if (chip_kind == common::ChipKind::BLUETOOTH) {
     facade_id = hci::facade::Add(this->id);
     BtsLog("hci::facade::Add chip_id:%d, facade_id:%d", id, facade_id);
+  } else if (chip_kind == common::ChipKind::WIFI) {
+    facade_id = wifi::facade::Add(this->id);
   } else {
     BtsLog("Device::AdChip: unable to add chip");
     return {-1, -1};

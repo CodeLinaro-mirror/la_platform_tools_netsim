@@ -168,7 +168,6 @@ class SimulationState implements Observable {
     })
       .then(response => response.json())
       .then(data => {
-        console.log(data);
         this.fetchDevice(data.devices);
       })
       .catch(error => {

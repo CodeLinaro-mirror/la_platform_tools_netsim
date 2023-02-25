@@ -41,43 +41,73 @@ TEST_F(SceneControllerTest, GetTest) {
 }
 
 #ifdef NETSIM_ANDROID_EMULATOR
-TEST_F(SceneControllerTest, AddDevicesAndGetTest) {
-  scene_controller::AddChip("a", "name-AddDevicesAndGetTest",
-                            common::ChipKind::BLUETOOTH);
+TEST_F(SceneControllerTest, AddChipTest) {
+  auto guid = "guid-SceneControllerTest-AddChipTest";
+  auto device_name = "device_name-SceneControllerTest-AddChipTest";
+  auto [device_id, chip_id1, _1] =
+      scene_controller::AddChip(guid, device_name, common::ChipKind::BLUETOOTH);
+  auto [device_id2, chip_id2, _2] =
+      scene_controller::AddChip(guid, device_name, common::ChipKind::WIFI);
 
-  const auto size = SceneController::Singleton().Get().devices_size();
-  EXPECT_EQ(size, 1);
-}
+  EXPECT_EQ(device_id, device_id2);
+  EXPECT_EQ(SceneController::Singleton().Get().devices_size(), 1);
+  auto device = match(device_name);
+  EXPECT_TRUE(device != nullptr);
+  auto device_proto = device->Get();
+  EXPECT_EQ(device_proto.id(), device_id);
+  EXPECT_EQ(device_proto.name(), device_name);
+  EXPECT_TRUE(device_proto.visible());
+  EXPECT_TRUE(device_proto.has_position());
+  EXPECT_TRUE(device_proto.has_orientation());
 
-TEST_F(SceneControllerTest, DeviceConstructorTest) {
-  scene_controller::AddChip("unique-id", "name-DeviceConstructorTest",
-                            common::ChipKind::BLUETOOTH);
-  auto device = match("name-DeviceConstructorTest");
+  EXPECT_EQ(device_proto.chips_size(), 2);
+  for (const auto &chip : device_proto.chips()) {
+    EXPECT_TRUE(chip.id() == chip_id1 || chip.id() == chip_id2);
+    if (chip.id() == chip_id1) {
+      EXPECT_TRUE(chip.has_bt());
+      EXPECT_EQ(chip.id(), chip_id1);
 
-  EXPECT_EQ("name-DeviceConstructorTest", device->Get().name());
-  // Test for non-empty position and orientationa
-  EXPECT_TRUE(device->Get().has_position());
-  EXPECT_TRUE(device->Get().has_orientation());
+    } else if (chip.id() == chip_id2) {
+      EXPECT_TRUE(chip.has_wifi());
+      EXPECT_EQ(chip.id(), chip_id2);
+    } else {
+      FAIL() << "Unknown chip id: " << chip.id() << ". Should be in ["
+             << chip_id1 << "," << chip_id2 << "].";
+    }
+  }
 }
 
 TEST_F(SceneControllerTest, MatchDeviceTest) {
-  scene_controller::AddChip("guid:1", "name1", common::ChipKind::BLUETOOTH);
-  scene_controller::AddChip("guid:2", "name2", common::ChipKind::BLUETOOTH);
-  scene_controller::AddChip("guid:3", "name3", common::ChipKind::BLUETOOTH);
+  auto guid1 = "guid-1-SceneControllerTest-MatchDeviceTest";
+  auto device_name1 = "device_name-1-SceneControllerTest-MatchDeviceTest";
+  auto guid2 = "guid-2-SceneControllerTest-MatchDeviceTest";
+  auto device_name2 = "device_name-2-SceneControllerTest-MatchDeviceTest";
+  auto guid3 = "guid-3-SceneControllerTest-MatchDeviceTest";
+  auto device_name3 = "device_name-3-SceneControllerTest-MatchDeviceTest";
+  scene_controller::AddChip(guid1, device_name1, common::ChipKind::BLUETOOTH);
+  scene_controller::AddChip(guid2, device_name2, common::ChipKind::BLUETOOTH);
+  scene_controller::AddChip(guid3, device_name3, common::ChipKind::BLUETOOTH);
+
+  //  exact matches with name
+  ASSERT_TRUE(match(device_name1));
+  ASSERT_TRUE(match(device_name2));
+  ASSERT_TRUE(match(device_name3));
 
   //  matches with name
-  ASSERT_TRUE(match("name1"));
-  ASSERT_TRUE(match("name2"));
-  ASSERT_TRUE(match("name3"));
+  ASSERT_TRUE(match("1-SceneControllerTest-MatchDeviceTest"));
+  ASSERT_TRUE(match("2-SceneControllerTest-MatchDeviceTest"));
+  ASSERT_TRUE(match("3-SceneControllerTest-MatchDeviceTest"));
+
   ASSERT_TRUE(match("non-existing-name") == nullptr);
 }
 
-TEST_F(SceneControllerTest, ResetTest) {
-  auto name = "name-ResetTest";
-  auto [device_id, chip_id, _] = scene_controller::AddChip(
-      "name-for-reset-test", name, common::ChipKind::BLUETOOTH);
+TEST_F(SceneControllerTest, PatchDeviceTest) {
+  auto guid = "guid-SceneControllerTest-PatchDeviceTest";
+  auto device_name = "device_name-SceneControllerTest-PatchDeviceTest";
+  auto [device_id, chip_id, _] =
+      scene_controller::AddChip(guid, device_name, common::ChipKind::BLUETOOTH);
   model::Device model;
-  model.set_name(name);
+  model.set_name(device_name);
   model.set_visible(false);
   model.mutable_position()->set_x(10.0);
   model.mutable_position()->set_y(20.0);
@@ -88,7 +118,35 @@ TEST_F(SceneControllerTest, ResetTest) {
 
   auto status = SceneController::Singleton().PatchDevice(model);
   EXPECT_TRUE(status);
-  auto device = match(name);
+  auto device = match(device_name);
+  model = device->Get();
+  EXPECT_EQ(model.visible(), false);
+  EXPECT_EQ(model.position().x(), 10.0);
+  EXPECT_EQ(model.position().y(), 20.0);
+  EXPECT_EQ(model.position().z(), 30.0);
+  EXPECT_EQ(model.orientation().pitch(), 1.0);
+  EXPECT_EQ(model.orientation().roll(), 2.0);
+  EXPECT_EQ(model.orientation().yaw(), 3.0);
+}
+
+TEST_F(SceneControllerTest, ResetTest) {
+  auto guid = "guid-SceneControllerTest-ResetTest";
+  auto device_name = "device_name-SceneControllerTest-ResetTest";
+  auto [device_id, chip_id, _] =
+      scene_controller::AddChip(guid, device_name, common::ChipKind::BLUETOOTH);
+  model::Device model;
+  model.set_name(device_name);
+  model.set_visible(false);
+  model.mutable_position()->set_x(10.0);
+  model.mutable_position()->set_y(20.0);
+  model.mutable_position()->set_z(30.0);
+  model.mutable_orientation()->set_pitch(1.0);
+  model.mutable_orientation()->set_roll(2.0);
+  model.mutable_orientation()->set_yaw(3.0);
+
+  auto status = SceneController::Singleton().PatchDevice(model);
+  EXPECT_TRUE(status);
+  auto device = match(device_name);
   model = device->Get();
   EXPECT_EQ(model.visible(), false);
   EXPECT_EQ(model.position().x(), 10.0);
@@ -96,7 +154,7 @@ TEST_F(SceneControllerTest, ResetTest) {
 
   SceneController::Singleton().Reset();
 
-  device = match(name);
+  device = match(device_name);
   model = device->Get();
 
   EXPECT_EQ(model.visible(), true);
