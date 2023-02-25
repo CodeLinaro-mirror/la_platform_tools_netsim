@@ -26,11 +26,10 @@
 #include <cstdio>
 #endif
 
-#ifdef NETSIM_ANDROID_EMULATOR
-#include "core/server_rpc.h"
-#else
-#include "core/server.h"
+#ifndef NETSIM_ANDROID_EMULATOR
+#include "backend/fd_startup.h"
 #endif
+#include "core/server.h"
 #include "frontend/cli.h"
 #include "hci/bluetooth_facade.h"
 
@@ -112,14 +111,18 @@ int main(int argc, char *argv[]) {
 
 #ifdef NETSIM_ANDROID_EMULATOR
   // get netsim daemon, starting if it doesn't exist
+  // Create a frontend grpc client to check if a netsimd is already running.
   auto frontend_stub = netsim::NewFrontendStub();
   if (frontend_stub == nullptr) {
     // starts netsim in vhci connection mode
-    netsim::StartWithGrpc(debug);
+    netsim::server::Run();
   }
 #else
   if (!fd_startup_str.empty()) {
-    netsim::StartWithFds(fd_startup_str, debug);
+    std::unique_ptr<netsim::hci::FdStartup> fds =
+        netsim::hci::FdStartup::Create();
+    fds->Connect(fd_startup_str);
+    netsim::server::Run();
     return -1;
   }
 #endif

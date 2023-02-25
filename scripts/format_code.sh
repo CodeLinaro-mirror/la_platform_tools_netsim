@@ -22,7 +22,10 @@ find $REPO/tools/netsim/src \( -name '*.cc' -o -name '*.h' -o -name '*.proto' \)
   -exec clang-format -i {} \;
 
 # Format rust.
-$REPO/prebuilts/rust/linux-x86/stable/rustfmt -v -- $REPO/tools/netsim/rust/*/src/*.rs
+find $REPO/tools/netsim/rust \( \
+  -path $REPO/tools/netsim/rust/target -prune -false \
+  -o -name '*.rs' \) \
+  -exec $REPO/prebuilts/rust/linux-x86/stable/rustfmt -v {} \;
 
 # Run cmake-format.
 find $REPO/tools/netsim \( -name 'CMakeLists.txt' \) \

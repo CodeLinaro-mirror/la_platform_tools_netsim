@@ -131,15 +131,6 @@ export class PacketInformation extends LitElement implements Notifiable {
     this.requestUpdate();
   }
 
-  private handleCapture(ev: InputEvent) {
-    const target = ev.target as HTMLInputElement;
-    simulationState.updateCapture({
-      deviceSerial: target.id,
-      capture: target.checked,
-    });
-    this.requestUpdate();
-  }
-
   private handleGetChips(device: Device) {
     let btTable = html``;
     let uwbTable = html``;
@@ -153,12 +144,8 @@ export class PacketInformation extends LitElement implements Notifiable {
             bleTable = html`
               <tr>
                 <td>BLE</td>
-                <td>N/A</td>
-                <td>N/A</td>
                 <td>${chip.bt.lowEnergy.rxCount ?? 0}</td>
                 <td>${chip.bt.lowEnergy.txCount ?? 0}</td>
-                <td>N/A</td>
-                <td>N/A</td>
               </tr>
             `;
           }
@@ -166,12 +153,8 @@ export class PacketInformation extends LitElement implements Notifiable {
             bclassicTable = html`
               <tr>
                 <td>Bluetooth Classic</td>
-                <td>N/A</td>
-                <td>N/A</td>
                 <td>${chip.bt.classic.rxCount ?? 0}</td>
                 <td>${chip.bt.classic.txCount ?? 0}</td>
-                <td>N/A</td>
-                <td>N/A</td>
               </tr>
             `;
           }
@@ -181,25 +164,17 @@ export class PacketInformation extends LitElement implements Notifiable {
           uwbTable = html`
             <tr>
               <td>UWB</td>
-              <td>N/A</td>
-              <td>N/A</td>
               <td>${chip.uwb.rxCount ?? 0}</td>
               <td>${chip.uwb.txCount ?? 0}</td>
-              <td>N/A</td>
-              <td>N/A</td>
             </tr>
-          `
+          `;
         }
         if ("wifi" in chip && chip.wifi) {
           wifiTable = html`
             <tr>
               <td>WIFI</td>
-              <td>N/A</td>
-              <td>N/A</td>
               <td>${chip.wifi.rxCount ?? 0}</td>
               <td>${chip.wifi.txCount ?? 0}</td>
-              <td>N/A</td>
-              <td>N/A</td>
             </tr>
           `;
         }
@@ -212,6 +187,40 @@ export class PacketInformation extends LitElement implements Notifiable {
     `;
   }
 
+  private handleGetCapture(device: Device) {
+    let resultCapture = html``;
+    if ('chips' in device && device.chips) {
+      for (const chip of device.chips) {
+        resultCapture = html`
+          ${resultCapture}
+          <tr>
+            <td>${device.name}</td>
+            <td>
+              ${chip.bt ? "Bluetooth" : chip.uwb ? "UWB" : chip.wifi ? "WIFI" : "Unknown"}
+            </td>
+            <td>
+              <input
+                type="checkbox"
+                class="switch_1"
+                .checked=${chip.capture === 'ON'}
+                @click=${() => {device.toggleCapture(device, chip);}}
+              />
+            </td>
+            <td>
+              <a
+                href="http://localhost:7681/pcap/${device.name}"
+                target="_blank"
+                type="application/vnd.tcpdump.pcap"
+                >Download PCAP</a
+              >
+            </td>
+          </tr>
+        `;
+      }
+    }
+    return resultCapture;
+  }
+
   render() {
     return html`
       <div class="panel">
@@ -219,16 +228,12 @@ export class PacketInformation extends LitElement implements Notifiable {
         ${this.deviceData.map(
           device =>
             html`
-              <div class="label">${device.name} | ${device.deviceSerial}</div>
+              <div class="label">${device.name}</div>
               <table class="styled-table">
                 <tr>
                   <th>Radio</th>
-                  <th>Start-Time</th>
-                  <th>End-Time</th>
                   <th>RX Count</th>
                   <th>TX Count</th>
-                  <th>RX Bytes</th>
-                  <th>TX Bytes</th>
                 </tr>
                 ${this.handleGetChips(device)}
               </table>
@@ -238,40 +243,12 @@ export class PacketInformation extends LitElement implements Notifiable {
         <table class="styled-table">
           <tr>
             <th>Name</th>
-            <th>Serial</th>
+            <th>Chip Type</th>
             <th>Capture ON/OFF</th>
             <th>Packet Trace</th>
           </tr>
           ${this.deviceData.map(
-            device =>
-              html`
-                <tr>
-                  <td>${device.name}</td>
-                  <td>${device.deviceSerial}</td>
-                  <td>
-                    ${('chips' in device && device.chips) ? device.chips.map(chip => {
-                      if (chip.bt) {
-                        return html`<input
-                          id=${device.deviceSerial}
-                          type="checkbox"
-                          class="switch_1"
-                          .checked=${chip.capture === 'ON'}
-                          @click=${this.handleCapture}
-                        />`;
-                      }
-                      return html``;
-                    }) : html``}
-                  </td>
-                  <td>
-                    <a
-                      href="http://localhost:3000/${device.deviceSerial}-hci.pcap"
-                      target="_blank"
-                      type="application/vnd.tcpdump.pcap"
-                      >Download PCAP</a
-                    >
-                  </td>
-                </tr>
-              `
+            device => this.handleGetCapture(device)
           )}
         </table>
       </div>

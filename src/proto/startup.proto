@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package netsim.startup;
 
+import "common.proto";
+
 /**
  * The startup info proto.
  *
@@ -41,29 +43,23 @@ package netsim.startup;
 
 message StartupInfo {
   message Device {
-    string serial = 1;        // unique serial name of device
+    string name = 1;          //  name of device
     repeated Chip chips = 2;  // list of SoCs associated with device
   }
   repeated Device devices = 1;
 }
 
 message ChipInfo {
-  string serial = 1;  // unique serial name of device
-  Chip chip = 2;      // single chip
+  string name = 1;  // name of device
+  Chip chip = 2;    // single chip
 }
 
 message Chip {
-  enum ChipKind {
-    UNSPECIFIED = 0;
-    BLUETOOTH = 1;
-    WIFI = 2;
-    UWB = 3;
-  }
-  ChipKind kind = 1;        // the kind of chip
-  string id = 2;            // optional like "rear-right"
-  string manufacturer = 3;  // optional like Quorvo
-  string model = 4;         // optional like DW300
-  int32 fd_in = 5;          // optional guest os input
-  int32 fd_out = 6;         // optional guest os output
-  bool loopback = 7;        // optional for testing
+  common.ChipKind kind = 1;  // the kind of chip
+  string id = 2;             // optional like "rear-right"
+  string manufacturer = 3;   // optional like Quorvo
+  string model = 4;          // optional like DW300
+  int32 fd_in = 5;           // optional guest os input
+  int32 fd_out = 6;          // optional guest os output
+  bool loopback = 7;         // optional for testing
 }

@@ -24,8 +24,9 @@ android_add_library(
   TARGET frontend-lib
   LICENSE Apache-2.0
   SRC cli.cc cli.h frontend_server.cc frontend_server.h
-  DEPS controller-lib frontend-grpc-lib
+  DEPS controller-lib frontend-grpc-lib grpc++ netsim-cxx-generated
        # TODO: refactor so this isn't needed
-       grpc++ protobuf::libprotobuf util-lib)
+       protobuf::libprotobuf util-lib)
 
-target_include_directories(frontend-lib PRIVATE ..)
+target_include_directories(frontend-lib PRIVATE .. ../../rust/netsim-cxx
+                                                ../../rust/netsim-cxx/cxx)

@@ -84,7 +84,7 @@ class BackendServerHciTransportImpl : public BackendServerHciTransport {
   }
 
   // Called by HCITransport (rootcanal)
-  void TimerTick() override {}
+  void Tick() override {}
 
   // Close from Rootcanal
   void Close() override {

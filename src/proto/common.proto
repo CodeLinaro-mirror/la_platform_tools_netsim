@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+syntax = "proto3";
 
-namespace netsim::http {
+package netsim.common;
 
-void RunHttpServer();
-
-}  // namespace netsim::http
+enum ChipKind {
+  UNSPECIFIED = 0;
+  BLUETOOTH = 1;
+  WIFI = 2;
+  UWB = 3;
+}

@@ -8,9 +8,8 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum GrpcMethod {
     GetVersion,
-    UpdateDevice,
+    PatchDevice,
     GetDevices,
-    SetPacketCapture,
     Reset,
 }
 
@@ -37,6 +36,14 @@ pub mod ffi {
         pub fn GetDevices(self: &FrontendClient) -> UniquePtr<ClientResult>;
 
         #[allow(dead_code)]
+        #[rust_name = "reset"]
+        pub fn Reset(self: &FrontendClient) -> UniquePtr<ClientResult>;
+
+        #[allow(dead_code)]
+        #[rust_name = "patch_device"]
+        pub fn PatchDevice(self: &FrontendClient, request: &Vec<u8>) -> UniquePtr<ClientResult>;
+
+        #[allow(dead_code)]
         #[rust_name = "is_ok"]
         pub fn IsOk(self: &ClientResult) -> bool;
 
@@ -45,8 +52,8 @@ pub mod ffi {
         pub fn Err(self: &ClientResult) -> String;
 
         #[allow(dead_code)]
-        #[rust_name = "byte_str"]
-        pub fn ByteStr(self: &ClientResult) -> String;
+        #[rust_name = "byte_vec"]
+        pub fn ByteVec(self: &ClientResult) -> &CxxVector<u8>;
 
     }
 }
@@ -54,16 +61,14 @@ use crate::ffi::{ClientResult, FrontendClient};
 
 /// Placeholder / temporary method before actual SendGrpc is implemented in C++
 pub fn send_grpc(
-    client: cxx::UniquePtr<FrontendClient>,
-    grpc_method: GrpcMethod,
-    request: &[u8],
+    client: &cxx::UniquePtr<FrontendClient>,
+    grpc_method: &GrpcMethod,
+    request: &Vec<u8>,
 ) -> cxx::UniquePtr<ClientResult> {
     match grpc_method {
         GrpcMethod::GetVersion => client.get_version(),
         GrpcMethod::GetDevices => client.get_devices(),
-        _ => panic!(
-            "Grpc method is not implemented. grpc_method: {:#?}, request (bytes): {:?}",
-            grpc_method, request
-        ),
+        GrpcMethod::Reset => client.reset(),
+        GrpcMethod::PatchDevice => client.patch_device(request),
     }
 }

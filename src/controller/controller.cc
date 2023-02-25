@@ -24,17 +24,16 @@
 
 namespace netsim::scene_controller {
 
-unsigned int UpdateDevice(const std::string &request, std::string &response,
-                          std::string &error_message) {
-  frontend::UpdateDeviceRequest request_proto;
+unsigned int PatchDevice(const std::string &request, std::string &response,
+                         std::string &error_message) {
+  frontend::PatchDeviceRequest request_proto;
   google::protobuf::util::JsonStringToMessage(request, &request_proto);
   google::protobuf::Empty response_proto;
 
-  auto status = netsim::controller::SceneController::Singleton().UpdateDevice(
+  auto status = netsim::controller::SceneController::Singleton().PatchDevice(
       request_proto.device());
   if (!status) {
-    error_message =
-        "device_serial not found: " + request_proto.device().device_serial();
+    error_message = "device_serial not found: " + request_proto.device().name();
     return HTTP_STATUS_BAD_REQUEST;
   }
 

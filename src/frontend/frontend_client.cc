@@ -28,9 +28,12 @@
 #include <string_view>
 
 #include "frontend.grpc.pb.h"
+#include "frontend.pb.h"
+#include "google/protobuf/empty.pb.h"
 #include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/status_code_enum.h"
+#include "model.pb.h"
 #include "util/ini_file.h"
 #include "util/os_utils.h"
 #include "util/string_utils.h"
@@ -66,14 +69,13 @@ class FrontendClientImpl : public FrontendClient {
   std::unique_ptr<ClientResult> make_result(
       const grpc::Status &status,
       const google::protobuf::Message &message) const {
+    std::vector<unsigned char> message_vec(message.ByteSizeLong());
+    message.SerializeToArray(message_vec.data(), message_vec.size());
     if (!status.ok()) {
-      return std::make_unique<ClientResult>(false, status.error_message(), "");
+      return std::make_unique<ClientResult>(false, status.error_message(),
+                                            message_vec);
     }
-    std::string json_string;
-    google::protobuf::util::JsonPrintOptions options;
-    MessageToJsonString(message, &json_string, options);
-    return std::make_unique<ClientResult>(true, "",
-                                          message.SerializeAsString());
+    return std::make_unique<ClientResult>(true, "", message_vec);
   }
 
   // Gets the version of the network simulator service.
@@ -84,10 +86,30 @@ class FrontendClientImpl : public FrontendClient {
     return make_result(status, response);
   }
 
+  // Gets the list of device information
   std::unique_ptr<ClientResult> GetDevices() const override {
     frontend::GetDevicesResponse response;
     grpc::ClientContext context_;
     auto status = stub_->GetDevices(&context_, {}, &response);
+    return make_result(status, response);
+  }
+
+  std::unique_ptr<ClientResult> Reset() const override {
+    grpc::ClientContext context_;
+    google::protobuf::Empty response;
+    auto status = stub_->Reset(&context_, {}, &response);
+    return make_result(status, response);
+  }
+
+  // Patchs the information of the device
+  std::unique_ptr<ClientResult> PatchDevice(
+      rust::Vec<::rust::u8> const &request_byte_vec) const override {
+    ::google::protobuf::Empty response;
+    grpc::ClientContext context_;
+    frontend::PatchDeviceRequest request;
+    request.ParsePartialFromArray(request_byte_vec.data(),
+                                  request_byte_vec.size());
+    auto status = stub_->PatchDevice(&context_, request, &response);
     return make_result(status, response);
   }
 
@@ -111,7 +133,10 @@ class FrontendClientImpl : public FrontendClient {
 }  // namespace
 
 std::unique_ptr<FrontendClient> NewFrontendClient() {
-  return std::make_unique<FrontendClientImpl>(NewFrontendStub());
+  auto stub = NewFrontendStub();
+  return (stub == nullptr
+              ? nullptr
+              : std::make_unique<FrontendClientImpl>(std::move(stub)));
 }
 
 }  // namespace frontend

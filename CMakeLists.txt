@@ -36,12 +36,24 @@ add_subdirectory(src)
 
 if(TARGET Rust::Rustc)
   android_add_executable(
-    TARGET netsim LICENSE Apache-2.0 INSTALL . SRC src/netsim.cc
+    TARGET netsim
+    LICENSE Apache-2.0 INSTALL .
+    SRC rust/netsim.cc
+    DEPS frontend-client
+         frontend-grpc-lib
+         frontend_client_cxx_generated
+         grpc++
+         netsim-cli-rust-lib
+         protobuf::libprotobuf
+         util-lib)
+
+  android_add_executable(
+    TARGET netsim-cc LICENSE Apache-2.0 SRC src/netsim.cc
     DEPS grpc++ libbt-rootcanal netsim-lib protobuf::libprotobuf)
 
-  android_target_dependency(netsim linux TCMALLOC_OS_DEPENDENCIES)
+  android_target_dependency(netsim-cc linux TCMALLOC_OS_DEPENDENCIES)
 
-  target_compile_definitions(netsim PUBLIC NETSIM_ANDROID_EMULATOR)
+  target_compile_definitions(netsim-cc PUBLIC NETSIM_ANDROID_EMULATOR)
 
   android_add_executable(
     TARGET netsimd LICENSE Apache-2.0 INSTALL . SRC src/netsimd.cc
@@ -86,7 +98,7 @@ if(TARGET Rust::Rustc)
     add_dependencies(netsim-test emulator) # For PacketStreamerClientTest.
   endif()
 
-  target_include_directories(netsim-test PRIVATE src)
+  target_include_directories(netsim-test PRIVATE src rust/netsim-cxx/cxx)
 
   add_subdirectory(ui)
 endif()

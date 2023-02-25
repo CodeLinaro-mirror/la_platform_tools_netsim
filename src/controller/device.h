@@ -31,17 +31,15 @@ class Device {
  public:
   model::Device model;
 
-  void Update(const model::Device &request);
+  void Patch(const model::Device &request);
 
-  bool RemoveChip(model::Chip::ChipCase chip_case, const std::string &chip_id);
+  bool RemoveChip(common::ChipKind chip_kind, const std::string &chip_id);
 
   void AddChip(std::shared_ptr<Device>, std::shared_ptr<Chip>,
                const model::Chip &);
 
   explicit Device(const model::Device &model) : model(model) {}
-  explicit Device(const std::string &serial) {
-    model.set_device_serial(serial);
-  }
+  explicit Device(const std::string &name) { model.set_name(name); }
 
   void Reset();
 
@@ -49,7 +47,7 @@ class Device {
   std::vector<std::shared_ptr<Chip>> chips;
 };
 
-std::shared_ptr<Device> CreateDevice(std::string_view device_serial);
+std::shared_ptr<Device> CreateDevice(std::string_view name);
 
 }  // namespace controller
 }  // namespace netsim

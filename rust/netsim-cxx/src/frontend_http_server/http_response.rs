@@ -53,11 +53,14 @@ impl HttpResponse {
         }
     }
 
-    pub fn new_404() -> HttpResponse {
+    pub fn new_404(body: Vec<u8>) -> HttpResponse {
         HttpResponse {
             status_code: 404,
-            headers: HttpHeaders::new_with_headers(&[("Content-Type", "text/plain")]),
-            body: b"404 Not Found".to_vec(),
+            headers: HttpHeaders::new_with_headers(&[
+                ("Content-Type", "text/plain"),
+                ("Content-Length", &body.len().to_string()),
+            ]),
+            body,
         }
     }
 }

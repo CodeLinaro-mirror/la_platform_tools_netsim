@@ -21,8 +21,8 @@ namespace netsim::scene_controller {
 const unsigned int HTTP_STATUS_OK = 200;
 const unsigned int HTTP_STATUS_BAD_REQUEST = 400;
 
-unsigned int UpdateDevice(const std::string &request, std::string &response,
-                          std::string &error_message);
+unsigned int PatchDevice(const std::string &request, std::string &response,
+                         std::string &error_message);
 
 unsigned int GetDevices(const std::string &request, std::string &response,
                         std::string &error_message);

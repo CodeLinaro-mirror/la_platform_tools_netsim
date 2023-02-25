@@ -16,7 +16,8 @@ cmake_minimum_required(VERSION 3.5)
 
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
-  SOURCES ${CMAKE_CURRENT_LIST_DIR}/frontend.proto
+  SOURCES ${CMAKE_CURRENT_LIST_DIR}/common.proto
+          ${CMAKE_CURRENT_LIST_DIR}/frontend.proto
           ${CMAKE_CURRENT_LIST_DIR}/hci_packet.proto
           ${CMAKE_CURRENT_LIST_DIR}/internal.proto
           ${CMAKE_CURRENT_LIST_DIR}/model.proto
@@ -33,7 +34,8 @@ target_include_directories(frontend-grpc-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
 
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
-  SOURCES ${CMAKE_CURRENT_LIST_DIR}/hci_packet.proto
+  SOURCES ${CMAKE_CURRENT_LIST_DIR}/common.proto
+          ${CMAKE_CURRENT_LIST_DIR}/hci_packet.proto
           ${CMAKE_CURRENT_LIST_DIR}/packet_streamer.proto
           ${CMAKE_CURRENT_LIST_DIR}/startup.proto
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
