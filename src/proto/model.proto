@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package netsim.model;
 
+import "common.proto";
+
 // A 3D position. A valid Position must have both x and y coordinates.
 // The position coordinates are in meters.
 message Position {
@@ -61,6 +63,8 @@ message Chip {
     Radio classic = 2;
   }
 
+  netsim.common.ChipKind chip_kind = 8;
+
   string chip_id = 1;       // optional like "rear-right"
   string manufacturer = 2;  // optional like Quorvo
   string model = 3;         // optional like DW300
@@ -74,8 +78,7 @@ message Chip {
 }
 
 message Device {
-  string device_serial = 1;  // unique device serial number
-  string name = 2;           // user settable unique alias
+  string name = 2;  // settable at creation
   bool visible = 3;
   Position position = 4;
   Orientation orientation = 5;

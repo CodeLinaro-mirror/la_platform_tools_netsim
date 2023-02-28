@@ -1,61 +1,65 @@
-import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,LitElement as d,html as i}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as a,customElement as o}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as r}from"./device-observer.js";let l=class extends d{constructor(){super(...arguments),this.deviceData=[]}connectedCallback(){super.connectedCallback(),r.registerObserver(this)}disconnectedCallback(){r.removeObserver(this),super.disconnectedCallback()}onNotify(t){this.deviceData=t.devices,this.requestUpdate()}handleCapture(t){const e=t.target;r.updateCapture({deviceSerial:e.id,capture:e.checked}),this.requestUpdate()}handleGetChips(t){var e,d,a,o,r,l,n,s;let c=i``,p=i``,h=i``;if("chips"in t&&t.chips)for(const b of t.chips){if("bt"in b&&b.bt){let t=i``,r=i``;"lowEnergy"in b.bt&&b.bt.lowEnergy&&(t=i`
+import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,LitElement as i,html as o}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as a,customElement as n}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as d}from"./device-observer.js";let l=class extends i{constructor(){super(...arguments),this.deviceData=[]}connectedCallback(){super.connectedCallback(),d.registerObserver(this)}disconnectedCallback(){d.removeObserver(this),super.disconnectedCallback()}onNotify(t){this.deviceData=t.devices,this.requestUpdate()}handleGetChips(t){var e,i,a,n,d,l,r,s;let c=o``,p=o``,b=o``;if("chips"in t&&t.chips)for(const h of t.chips){if("bt"in h&&h.bt){let t=o``,d=o``;"lowEnergy"in h.bt&&h.bt.lowEnergy&&(t=o`
               <tr>
                 <td>BLE</td>
-                <td>N/A</td>
-                <td>N/A</td>
-                <td>${null!==(e=b.bt.lowEnergy.rxCount)&&void 0!==e?e:0}</td>
-                <td>${null!==(d=b.bt.lowEnergy.txCount)&&void 0!==d?d:0}</td>
-                <td>N/A</td>
-                <td>N/A</td>
+                <td>${null!==(e=h.bt.lowEnergy.rxCount)&&void 0!==e?e:0}</td>
+                <td>${null!==(i=h.bt.lowEnergy.txCount)&&void 0!==i?i:0}</td>
               </tr>
-            `),"classic"in b.bt&&b.bt.classic&&(r=i`
+            `),"classic"in h.bt&&h.bt.classic&&(d=o`
               <tr>
                 <td>Bluetooth Classic</td>
-                <td>N/A</td>
-                <td>N/A</td>
-                <td>${null!==(a=b.bt.classic.rxCount)&&void 0!==a?a:0}</td>
-                <td>${null!==(o=b.bt.classic.txCount)&&void 0!==o?o:0}</td>
-                <td>N/A</td>
-                <td>N/A</td>
+                <td>${null!==(a=h.bt.classic.rxCount)&&void 0!==a?a:0}</td>
+                <td>${null!==(n=h.bt.classic.txCount)&&void 0!==n?n:0}</td>
               </tr>
-            `),c=i`${t} ${r}`}"uwb"in b&&b.uwb&&(p=i`
+            `),c=o`${t} ${d}`}"uwb"in h&&h.uwb&&(p=o`
             <tr>
               <td>UWB</td>
-              <td>N/A</td>
-              <td>N/A</td>
-              <td>${null!==(r=b.uwb.rxCount)&&void 0!==r?r:0}</td>
-              <td>${null!==(l=b.uwb.txCount)&&void 0!==l?l:0}</td>
-              <td>N/A</td>
-              <td>N/A</td>
+              <td>${null!==(d=h.uwb.rxCount)&&void 0!==d?d:0}</td>
+              <td>${null!==(l=h.uwb.txCount)&&void 0!==l?l:0}</td>
             </tr>
-          `),"wifi"in b&&b.wifi&&(h=i`
+          `),"wifi"in h&&h.wifi&&(b=o`
             <tr>
               <td>WIFI</td>
-              <td>N/A</td>
-              <td>N/A</td>
-              <td>${null!==(n=b.wifi.rxCount)&&void 0!==n?n:0}</td>
-              <td>${null!==(s=b.wifi.txCount)&&void 0!==s?s:0}</td>
-              <td>N/A</td>
-              <td>N/A</td>
+              <td>${null!==(r=h.wifi.rxCount)&&void 0!==r?r:0}</td>
+              <td>${null!==(s=h.wifi.txCount)&&void 0!==s?s:0}</td>
             </tr>
-          `)}return i`
+          `)}return o`
       ${c}
       ${p}
-      ${h}
-    `}render(){return i`
+      ${b}
+    `}handleGetCapture(t){let e=o``;if("chips"in t&&t.chips)for(const i of t.chips)e=o`
+          ${e}
+          <tr>
+            <td>${t.name}</td>
+            <td>
+              ${i.bt?"Bluetooth":i.uwb?"UWB":i.wifi?"WIFI":"Unknown"}
+            </td>
+            <td>
+              <input
+                type="checkbox"
+                class="switch_1"
+                .checked=${"ON"===i.capture}
+                @click=${()=>{t.toggleCapture(t,i)}}
+              />
+            </td>
+            <td>
+              <a
+                href="http://localhost:7681/pcap/${t.name}"
+                target="_blank"
+                type="application/vnd.tcpdump.pcap"
+                >Download PCAP</a
+              >
+            </td>
+          </tr>
+        `;return e}render(){return o`
       <div class="panel">
         <div class="title">Packet Info</div>
-        ${this.deviceData.map((t=>i`
-              <div class="label">${t.name} | ${t.deviceSerial}</div>
+        ${this.deviceData.map((t=>o`
+              <div class="label">${t.name}</div>
               <table class="styled-table">
                 <tr>
                   <th>Radio</th>
-                  <th>Start-Time</th>
-                  <th>End-Time</th>
                   <th>RX Count</th>
                   <th>TX Count</th>
-                  <th>RX Bytes</th>
-                  <th>TX Bytes</th>
                 </tr>
                 ${this.handleGetChips(t)}
               </table>
@@ -64,33 +68,11 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
         <table class="styled-table">
           <tr>
             <th>Name</th>
-            <th>Serial</th>
+            <th>Chip Type</th>
             <th>Capture ON/OFF</th>
             <th>Packet Trace</th>
           </tr>
-          ${this.deviceData.map((t=>i`
-                <tr>
-                  <td>${t.name}</td>
-                  <td>${t.deviceSerial}</td>
-                  <td>
-                    ${"chips"in t&&t.chips?t.chips.map((e=>e.bt?i`<input
-                          id=${t.deviceSerial}
-                          type="checkbox"
-                          class="switch_1"
-                          .checked=${"ON"===e.capture}
-                          @click=${this.handleCapture}
-                        />`:i``)):i``}
-                  </td>
-                  <td>
-                    <a
-                      href="http://localhost:3000/${t.deviceSerial}-hci.pcap"
-                      target="_blank"
-                      type="application/vnd.tcpdump.pcap"
-                      >Download PCAP</a
-                    >
-                  </td>
-                </tr>
-              `))}
+          ${this.deviceData.map((t=>this.handleGetCapture(t)))}
         </table>
       </div>
     `}};l.styles=e`
@@ -193,4 +175,4 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
     input[type='checkbox'].switch_1:checked:after {
       left: calc(100% - 1.5em);
     }
-  `,t([a()],l.prototype,"deviceData",void 0),l=t([o("ns-packet-info")],l);export{l as PacketInformation};
+  `,t([a()],l.prototype,"deviceData",void 0),l=t([n("ns-packet-info")],l);export{l as PacketInformation};

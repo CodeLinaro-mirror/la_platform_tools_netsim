@@ -14,7 +14,9 @@
 
 // Opening Browser on Linux and MacOS
 
-use std::{ffi::OsStr, process::Command};
+use std::ffi::OsStr;
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use std::process::Command;
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 pub fn open<T: AsRef<OsStr>>(path: T) {

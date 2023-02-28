@@ -31,6 +31,7 @@ cc_library {
         include_dirs: ["external/protobuf/src"],
     },
     srcs: [
+        "common.proto",
         "frontend.proto",
         "internal.proto",
         "model.proto",

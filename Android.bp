@@ -113,7 +113,6 @@ cc_library_host_static {
         "src/core/server.cc",
         "src/frontend/cli.cc",
         "src/frontend/frontend_server.cc",
-        "src/frontend/http_server.cc",
         "src/backend/fd_startup.cc",
         "src/hci/bluetooth_facade.cc",
         "src/hci/hci_debug.cc",
@@ -131,16 +130,13 @@ cc_library_host_static {
     ],
     shared_libs: [
         "libgrpc++",
-        "libcap",
         "libcrypto",
-        "libssl",
     ],
     static_libs: [
         "libc++fs",
         "libjsoncpp",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite",
-        "libwebsockets",
         "lib-netsim-frontend-proto",
     ],
     whole_static_libs: [
@@ -149,7 +145,7 @@ cc_library_host_static {
 }
 
 cc_binary_host {
-    name: "netsim",
+    name: "netsim-cc",
     defaults: ["netsim_defaults"],
     srcs: [
         "src/netsim.cc",
@@ -160,17 +156,14 @@ cc_binary_host {
     ],
     shared_libs: [
         "libbase",
-        "libgrpc++",
-        "libcap",
         "libcrypto",
-        "libssl",
+        "libgrpc++",
     ],
     static_libs: [
         "libc++fs",
         "libjsoncpp",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite",
-        "libwebsockets",
         "lib-netsim-frontend-proto",
         "lib-netsim",
     ],
@@ -226,7 +219,6 @@ cc_binary_host {
         "libjsoncpp",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite",
-        "libwebsockets",
         "lib-netsim-frontend-proto",
         "lib-netsim",
     ],
@@ -249,6 +241,10 @@ cc_test_host {
         "src/util/ini_file_test.cc",
         "src/util/os_utils_test.cc",
         "src/util/string_utils_test.cc",
+    ],
+    generated_headers: [
+        "cxx-bridge-header",
+        "netsim_cxx_h"
     ],
     shared_libs: [
         "libgrpc++",
@@ -310,13 +306,14 @@ rust_ffi_host_static {
         "libfrontend_proto",
         "libfrontend_client_cxx",
         "libprotobuf",
+        "libcxx",
     ],
 }
 
 cc_binary_host {
-    name: "netsim-cl",
+    name: "netsim",
     defaults: ["netsim_defaults"],
-    srcs: ["rust/netsim-cl.cc"],
+    srcs: ["rust/netsim.cc"],
     generated_headers: ["cxx-bridge-header"],
     shared_libs: ["libgrpc++"],
     static_libs: [

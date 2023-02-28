@@ -21,10 +21,10 @@
 #include <string>
 #include <utility>
 
-#include "grpcpp/server.h"
+#include "frontend.grpc.pb.h"
 
 namespace netsim {
 
-std::pair<std::unique_ptr<grpc::Server>, std::string> RunFrontendServer();
+std::unique_ptr<frontend::FrontendService::Service> GetFrontendService();
 
 }  // namespace netsim

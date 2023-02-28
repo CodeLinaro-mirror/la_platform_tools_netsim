@@ -17,6 +17,8 @@
 #include "backend/packet_streamer_client.h"
 #include "packet_streamer.grpc.pb.h"
 
+using netsim::common::ChipKind;
+
 int main(int argc, char *argv[]) {
   // Finding the netsimd binary requires this env variable when run
   // interactively export ANDROID_EMULATOR_LAUNCHER_DIR=./objs
@@ -30,9 +32,9 @@ int main(int argc, char *argv[]) {
 
   netsim::packet::PacketRequest initial_request;
   netsim::packet::Stream bt_stream = stub->StreamPackets(&context);
-  initial_request.mutable_initial_info()->set_serial("emulator-5554");
+  initial_request.mutable_initial_info()->set_name("emulator-5554");
   initial_request.mutable_initial_info()->mutable_chip()->set_kind(
-      netsim::startup::Chip_ChipKind_BLUETOOTH);
+      ChipKind::BLUETOOTH);
   bt_stream->Write(initial_request);
 
   std::cout << "Press enter to close the connection...";

@@ -38,7 +38,11 @@ fn main() {
 
     // Generate protobuf output
     let proto_dir = proto_root.join("src/proto");
-    let proto_input_files = [proto_dir.join("model.proto"), proto_dir.join("frontend.proto")];
+    let proto_input_files = [
+        proto_dir.join("model.proto"),
+        proto_dir.join("frontend.proto"),
+        proto_dir.join("common.proto"),
+    ];
     let proto_include_dirs = [proto_dir.clone()];
     let proto_out_dir = proto_root.join("rust/frontend-proto/src");
 

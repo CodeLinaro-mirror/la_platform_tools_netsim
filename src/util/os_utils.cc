@@ -47,6 +47,14 @@ DiscoveryDir discovery {
 
 }  // namespace
 
+std::string GetEnv(const std::string &name, const std::string &default_value) {
+  auto val = std::getenv(name.c_str());
+  if (!val) {
+    return default_value;
+  }
+  return val;
+}
+
 std::string GetDiscoveryDirectory() {
   // $TMPDIR is the temp directory on buildbots.
   const char *test_env_p = std::getenv("TMPDIR");
@@ -73,7 +81,7 @@ std::optional<std::string> GetServerAddress(bool frontend_server) {
   }
   IniFile iniFile(filepath);
   iniFile.Read();
-  return iniFile.Get(frontend_server ? "grpc.port" : "grpc.backend.port");
+  return iniFile.Get("grpc.port");
 }
 }  // namespace osutils
 }  // namespace netsim

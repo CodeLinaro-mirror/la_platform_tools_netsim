@@ -1,14 +1,20 @@
-message(STATUS "Adding rust libraries")
+message(STATUS "Adding rust ${CMAKE_CURRENT_LIST_DIR}/Cargo.toml")
 
-# Use generated rust files because protobuf compiler is unavailable yet.
-add_subdirectory(netsim-cxx)
-# Steps to generate rust files are as follows:
+# This will automatically register all the tests as well.
+corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
+corrosion_set_env_vars(netsim-cxx CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(netsim-cli CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(frontend-proto CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(frontend-client-cxx CARGO_HOME=${Rust_CARGO_HOME})
+
+# Use generated rust files because cxx-build is unavailable yet. Steps to
+# generate rust and C++ source files for netsim-cxx / frontend-client-cxx:
 #
-# 1. sudo apt-get install protobuf-compiler
-# 2. Uncomment `build = "build_cargo.rs"` in rust/netsim-cxx/Cargo.toml.
-# 3. cd rust/netsim-cxx && cxxbridge.sh
-# 4. Comment `build = "build_cargo.rs"` in rust/netsim-cxx/Cargo.toml.
-
+# 1. Uncomment `build = "build_cargo.rs"` and `cxx-build = "1.0"` in
+#    rust/{netsim-cxx or frontend-client-cxx}/Cargo.toml.
+# 2. cd rust && cargo build
+# 3. git restore *-cxx/Cargo.toml
+add_subdirectory(netsim-cxx)
 add_subdirectory(netsim-cli)
 add_subdirectory(frontend-client-cxx)
 add_subdirectory(frontend-proto)
@@ -45,16 +51,3 @@ target_link_libraries(netsim-cli-rust-lib
 
 android_license(TARGET netsim-cli-rust-lib LIBNAME None SPDX None LICENSE None
                 LOCAL None)
-
-android_add_executable(
-  TARGET netsim-cl
-  LICENSE Apache-2.0 INSTALL .
-  SRC netsim-cl.cc
-  DEPS frontend-client
-       frontend-grpc-lib
-       frontend_client_cxx_generated
-       grpc++
-       netsim-cli-rust-lib
-       protobuf::libprotobuf
-       protobuf::libprotobuf
-       util-lib)
