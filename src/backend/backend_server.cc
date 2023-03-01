@@ -17,6 +17,7 @@
 #include <google/protobuf/util/json_util.h>
 #include <stdlib.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -42,7 +43,12 @@ using Stream =
 
 using netsim::startup::Chip;
 
-std::unordered_map<uint32_t, Stream *> bt_facade_to_stream;
+// Mapping from <chip kind, facade id> to streams.
+std::unordered_map<std::string, Stream *> facade_to_stream;
+
+std::string ChipFacade(ChipKind chip_kind, uint32_t facade_id) {
+  return std::to_string(chip_kind) + "/" + std::to_string(facade_id);
+}
 
 // Service handles the gRPC StreamPackets requests.
 
@@ -77,11 +83,11 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     BtsLog("backend_server: adding chip %d with facade %d to %s", chip_id,
            facade_id, device_name.c_str());
     // connect packet responses from chip facade to the peer
-    bt_facade_to_stream[facade_id] = stream;
+    facade_to_stream[ChipFacade(chip_kind, facade_id)] = stream;
     this->ProcessRequests(stream, device_id, chip_kind, facade_id);
 
     // no longer able to send responses to peer
-    bt_facade_to_stream.erase(facade_id);
+    facade_to_stream.erase(ChipFacade(chip_kind, facade_id));
 
     // Remove the chip from the device
     scene_controller::RemoveChip(device_id, chip_id);
@@ -122,8 +128,15 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         auto packet =
             ToSharedVec(request.mutable_hci_packet()->mutable_packet());
         packet_hub::handle_bt_request(facade_id, packet_type, packet);
+      } else if (chip_kind == common::ChipKind::WIFI) {
+        if (!request.has_packet()) {
+          BtsLog("backend_server: unknown packet type from %d", facade_id);
+          continue;
+        }
+        auto packet = ToSharedVec(request.mutable_packet());
+        packet_hub::handle_wifi_request(facade_id, packet);
       } else {
-        // TODO: add WiFi & UWB here
+        // TODO: add UWB here
         BtsLog("backend_server: unknown chip kind");
       }
     }
@@ -139,7 +152,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
 void handle_bt_response(uint32_t facade_id,
                         packet::HCIPacket_PacketType packet_type,
                         const std::shared_ptr<std::vector<uint8_t>> packet) {
-  auto stream = bt_facade_to_stream[facade_id];
+  auto stream = facade_to_stream[ChipFacade(ChipKind::BLUETOOTH, facade_id)];
   if (stream) {
     // TODO: lock or caller here because gRPC does not allow overlapping writes.
     packet::PacketResponse response;
@@ -147,6 +160,27 @@ void handle_bt_response(uint32_t facade_id,
     auto str_packet = std::string(packet->begin(), packet->end());
     // TODO: check if Swap is available since copied in line above
     response.mutable_hci_packet()->set_packet(str_packet);
+    if (!stream->Write(response)) {
+      BtsLog("backend_server: write failed %d", facade_id);
+    }
+  } else {
+    BtsLog("backend_server: no stream for %d", facade_id);
+  }
+}
+
+// handle_wifi_response is called by packet_hub to forward a response to
+// the gRPC stream associated with facade_id.
+//
+// When writing, the packet is copied because it is a shared_ptr and grpc++
+// doesn't know about smart pointers.
+void handle_wifi_response(uint32_t facade_id,
+                          const std::shared_ptr<std::vector<uint8_t>> packet) {
+  auto stream = facade_to_stream[ChipFacade(ChipKind::WIFI, facade_id)];
+  if (stream) {
+    // TODO: lock or caller here because gRPC does not allow overlapping writes.
+    packet::PacketResponse response;
+    auto str_packet = std::string(packet->begin(), packet->end());
+    response.set_packet(str_packet);
     if (!stream->Write(response)) {
       BtsLog("backend_server: write failed %d", facade_id);
     }
