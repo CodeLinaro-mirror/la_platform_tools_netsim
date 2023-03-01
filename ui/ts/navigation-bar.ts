@@ -3,6 +3,7 @@ import { customElement } from 'lit/decorators.js';
 
 @customElement('ns-navigation-bar')
 export class NavigationBar extends LitElement {
+
   static styles = css`
     :host {
       --border-color: rgb(255, 255, 255, 0.1);
@@ -10,28 +11,13 @@ export class NavigationBar extends LitElement {
     }
 
     .logo {
-      animation: app-logo-two infinite 10s;
+      background-image: url(./assets/netsim-logo.svg);
       background-repeat: no-repeat;
       margin-left: 25%;
       width: 50px;
       height: 50px;
     }
-
-    @keyframes app-logo-two {
-      0%,
-      50% {
-        background-image: url(./assets/netsim-logo.svg);
-      }
-      55%,
-      60% {
-        background-image: url(./assets/netsim-logo-b.svg);
-      }
-      65%,
-      100% {
-        background-image: url(./assets/netsim-logo.svg);
-      }
-    }
-
+    
     nav {
       display: flex;
       width: 100%;
@@ -67,6 +53,10 @@ export class NavigationBar extends LitElement {
       text-decoration: none;
     }
 
+    a:hover {
+      cursor: pointer;
+    }
+
     h1,
     h2,
     h3,
@@ -76,7 +66,7 @@ export class NavigationBar extends LitElement {
       font-family: 'Lato';
       font-weight: bold;
       color: white;
-      font-size: 20px;
+      font-size: 25px;
     }
   `;
 
@@ -88,12 +78,22 @@ export class NavigationBar extends LitElement {
     super.disconnectedCallback(); // eslint-disable-line
   }
 
+  private handleClick(ev: Event) {
+    let mode = "main";
+    if ((ev.target as HTMLElement).id === "nav-trace-section") {
+      mode = "trace";
+    }
+    window.dispatchEvent(new CustomEvent('changeModeEvent', {
+      detail: { mode }
+    }));
+  }
+
   render() {
     return html`
       <nav>
         <div id="nav-logo-section" class="nav-section">
-          <a href=".">
-            <div class="logo"></div>
+          <a>
+            <div id="nav-logo-pic" class="logo" @click=${this.handleClick}></div>
           </a>
           <p>#betosim</p>
         </div>
@@ -101,7 +101,7 @@ export class NavigationBar extends LitElement {
           <a href="http://go/betosim" target="_blank" rel="noopener noreferrer"
             >ABOUT</a
           >
-          <a href="./packet.html" target="_blank" rel="noopener noreferrer"
+          <a id="nav-trace-section" @click=${this.handleClick}
             >PACKET TRACE</a
           >
         </div>

@@ -2,3 +2,8 @@
 name = "netsim-cli"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+clap = { version = "4.0.29", features = ["derive"] }
+frontend-proto = { path = "../frontend-proto" }
+serde_json = "1.0"

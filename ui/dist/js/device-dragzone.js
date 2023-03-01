@@ -1,0 +1,5 @@
+import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,LitElement as r,html as s}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as a,customElement as d}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as i}from"./device-observer.js";var o;let n=o=class extends r{constructor(){super(),this.action="move",this.addEventListener("dragstart",this.handleDragStart),this.addEventListener("dragend",this.handleDragEnd),this.addEventListener("click",this.handleSelect)}connectedCallback(){this.draggable=!0}handleDragStart(t){this.style.opacity="0.4",t.dataTransfer&&t.target&&(o.dragged=t.target,t.dataTransfer.effectAllowed="move"===this.action?"move":"copy")}handleDragEnd(){this.style.opacity="1",o.dragged=null}handleSelect(t){this.style.opacity="1",t.target&&i.updateSelected(t.target.id)}render(){return s` <slot></slot> `}};n.styles=e`
+    :host {
+      cursor: move;
+    }
+  `,t([a({type:String,attribute:"action"})],n.prototype,"action",void 0),n=o=t([d("ns-device-dragzone")],n);export{n as DeviceDragZone};

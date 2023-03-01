@@ -65,4 +65,5 @@ message Chip {
   string model = 4;         // optional like DW300
   int32 fd_in = 5;          // optional guest os input
   int32 fd_out = 6;         // optional guest os output
+  bool loopback = 7;        // optional for testing
 }

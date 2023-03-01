@@ -31,7 +31,7 @@
 #include "util/log.h"
 
 namespace netsim {
-
+namespace {
 class FrontendServer final : public frontend::FrontendService::Service {
  public:
   grpc::Status GetVersion(grpc::ServerContext *context,
@@ -86,9 +86,10 @@ class FrontendServer final : public frontend::FrontendService::Service {
   }
 };
 
-std::pair<std::unique_ptr<grpc::Server>, std::string> RunFrontendServer() {
-  FrontendServer service;
+FrontendServer service;
+}  // namespace
 
+std::pair<std::unique_ptr<grpc::Server>, std::string> RunFrontendServer() {
   grpc::ServerBuilder builder;
   int selected_port;
   builder.AddListeningPort("0.0.0.0:0", grpc::InsecureServerCredentials(),

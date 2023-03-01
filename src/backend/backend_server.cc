@@ -14,42 +14,80 @@
 
 #include "backend/backend_server.h"
 
-#include <grpcpp/support/status.h>
+#include <google/protobuf/util/json_util.h>
 
 #include <memory>
 #include <string>
 
+#include "backend/backend_server_hci_transport.h"
+#include "controller/scene_controller.h"
 #include "google/protobuf/empty.pb.h"
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
+#include "hci/bluetooth_facade.h"
 #include "packet_streamer.grpc.pb.h"
 #include "packet_streamer.pb.h"
 #include "util/log.h"
 
 namespace netsim {
+namespace {
 
-class BackendServer final : public packet::PacketStreamer::Service {
+using Stream =
+    ::grpc::ServerReaderWriter<packet::PacketResponse, packet::PacketRequest>;
+
+// Service handles grpc requests
+//
+class ServiceImpl final : public packet::PacketStreamer::Service {
  public:
-  ::grpc::Status StreamPackets(
-      ::grpc::ServerContext *context,
-      ::grpc::ServerReaderWriter< ::netsim::packet::StreamPacketsResponse,
-                                  ::netsim::packet::StreamPacketsRequest>
-          *stream) {
-    BtsLog("Streaming packets");
+  ServiceImpl(){};
 
-    packet::StreamPacketsRequest request;
-    stream->Read(&request);
-    packet::StreamPacketsResponse response;
-    stream->Write(response);
+  ::grpc::Status StreamPackets(::grpc::ServerContext *context,
+                               Stream *stream) override {
+    // Now connected to a peer issuing a bi-directional streaming grpc
+    auto peer = context->peer();
+    BtsLog("backend_server new packet_stream for peer %s", peer.c_str());
+
+    packet::PacketRequest request;
+
+    // First packet must have initial_info describing the peer
+    bool success = stream->Read(&request);
+    if (!success || !request.has_initial_info()) {
+      BtsLog("ServiceImpl no initial information or stream closed");
+      return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                          "Missing initial_info in first packet.");
+    }
+
+    auto serial = request.initial_info().serial();
+    auto kind = request.initial_info().chip().kind();
+
+    auto bs_hci_transport =
+        hci::BackendServerHciTransport::Create(peer, stream);
+    std::shared_ptr<rootcanal::HciTransport> transport = bs_hci_transport;
+
+    // Add a new HCI device for this RpcHciTransport
+    hci::BluetoothChipEmulator::Get().AddHciConnection(serial, transport);
+    bs_hci_transport->Transport();
+
+    // TODO: chip information in initial_info should match model
+    controller::SceneController::Singleton().RemoveChip(
+        serial, model::Chip::ChipCase::kBt, request.initial_info().chip().id());
+
+    BtsLog("backend_server drop packet_stream for peer %s", peer.c_str());
+
     return ::grpc::Status::OK;
   }
 };
 
+}  // namespace
+
+// Runs the BackendServer.
+//
 std::pair<std::unique_ptr<grpc::Server>, std::string> RunBackendServer() {
-  BackendServer service;
+  // process lifetime for service
+  static auto service = ServiceImpl();
 
   grpc::ServerBuilder builder;
   int selected_port;
@@ -62,5 +100,4 @@ std::pair<std::unique_ptr<grpc::Server>, std::string> RunBackendServer() {
          std::to_string(selected_port).c_str());
   return std::make_pair(std::move(server), std::to_string(selected_port));
 }
-
 }  // namespace netsim

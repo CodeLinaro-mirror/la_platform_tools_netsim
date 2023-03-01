@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+// Grpc C++ Server implementation of PacketStreamer.
+//
+// Moves packets between Chip and Host with the help of a manager.
+
 #pragma once
-// A synchronous Backend server for the Network Simulator.
 
 #include <memory>
 #include <string>

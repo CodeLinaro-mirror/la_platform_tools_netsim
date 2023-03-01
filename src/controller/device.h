@@ -33,6 +33,8 @@ class Device {
 
   void Update(const model::Device &request);
 
+  bool RemoveChip(model::Chip::ChipCase chip_case, const std::string &chip_id);
+
   void AddChip(std::shared_ptr<Device>, std::shared_ptr<Chip>,
                const model::Chip &);
 

@@ -16,8 +16,7 @@ syntax = "proto3";
 
 package netsim.packet;
 
-import "google/protobuf/empty.proto";
-
+import "hci_packet.proto";
 import "startup.proto";
 
 /**
@@ -37,25 +36,29 @@ import "startup.proto";
  */
 service PacketStreamer {
   // Attach a virtual radio controller to the network simulation.
-  rpc StreamPackets(stream StreamPacketsRequest)
-      returns (stream StreamPacketsResponse);
+  rpc StreamPackets(stream PacketRequest) returns (stream PacketResponse);
 }
 
-message StreamPacketsRequest {
+message PacketRequest {
   // The pattern of oneof in a stream from grpc/load_balancer.proto
   oneof request_type {
     // This message should be sent on the first request to the network
     // simulator. Specifies the device name and chip type for the packet stream.
     netsim.startup.ChipInfo initial_info = 1;
-
-    // The streamed data for an attached radio chip
-    bytes packet = 2;
+    // The streamed data for an attached hci radio chip
+    HCIPacket hci_packet = 2;
+    // The streamed data for other radio chips
+    bytes packet = 3;
   }
 }
 
-message StreamPacketsResponse {
+message PacketResponse {
   oneof response_type {
-    bytes packet = 1;
-    string error = 2;
+    // Error during streaming
+    string error = 1;
+    // The streamed data for an attached hci radio chip
+    HCIPacket hci_packet = 2;
+    // The streamed data for other radio chips
+    bytes packet = 3;
   }
 }

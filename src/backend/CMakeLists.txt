@@ -27,11 +27,17 @@ android_add_library(
 target_include_directories(backend-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..)
 
 android_add_library(
-  TARGET packet-streamer-server-lib LICENSE Apache-2.0 SRC backend_server.cc
-                                                           backend_server.h
-  DEPS frontend-grpc-lib grpc++ protobuf::libprotobuf util-lib)
+  TARGET packet-streamer-server-lib
+  LICENSE Apache-2.0
+  SRC backend_server.cc backend_server.h backend_server_hci_transport.cc
+      backend_server_hci_transport.h
+  DEPS  libbt-rootcanal
+    frontend-grpc-lib grpc++ netsim-cxx netsim-cxx-generated
+       protobuf::libprotobuf util-lib)
 
-target_include_directories(packet-streamer-server-lib PRIVATE ..)
+target_include_directories(
+  packet-streamer-server-lib PRIVATE .. ../../rust/netsim-cxx
+                                     ../../rust/netsim-cxx/cxx)
 
 android_add_library(
   TARGET packet-streamer-client-lib
@@ -45,4 +51,4 @@ android_add_library(
        protobuf::libprotobuf
        util-lib)
 
-target_include_directories(packet-streamer-client-lib PRIVATE ..)
+target_include_directories(packet-streamer-client-lib PUBLIC ${CMAKE_CURRENT_LIST_DIR}/..)

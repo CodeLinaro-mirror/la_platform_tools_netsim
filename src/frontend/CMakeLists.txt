@@ -14,11 +14,20 @@
 cmake_minimum_required(VERSION 3.5)
 
 android_add_library(
+  TARGET frontend-client
+  LICENSE Apache-2.0
+  SRC frontend_client.cc frontend_client.h
+  DEPS frontend-grpc-lib
+  grpc++ protobuf::libprotobuf util-lib)
+
+target_include_directories(frontend-client PRIVATE ..)
+
+android_add_library(
   TARGET frontend-lib
   LICENSE Apache-2.0
   SRC cli.cc cli.h frontend_server.cc frontend_server.h
   DEPS controller-lib frontend-grpc-lib
        # TODO: refactor so this isn't needed
-       grpc++ libbt-rootcanal protobuf::libprotobuf util-lib)
+       grpc++ protobuf::libprotobuf util-lib)
 
 target_include_directories(frontend-lib PRIVATE ..)

@@ -26,7 +26,7 @@ export class DeviceMap extends LitElement implements Notifiable {
   @property() numImages = 3;
 
   @property({ type: Boolean, reflect: true })
-  isometric: Boolean = false;
+  isometric: boolean = false;
 
   connectedCallback() {
     super.connectedCallback(); // eslint-disable-line
