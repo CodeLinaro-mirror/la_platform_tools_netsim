@@ -41,16 +41,17 @@ if(TARGET Rust::Rustc)
     LICENSE Apache-2.0 INSTALL .
     SRC rust/netsim.cc
     DEPS frontend-client
-         frontend-grpc-lib
          frontend_client_cxx_generated
          grpc++
+         netsim-cli-proto-lib
          netsim-cli-rust-lib
          protobuf::libprotobuf
          util-lib)
 
   android_add_executable(
     TARGET netsimd LICENSE Apache-2.0 INSTALL . SRC src/netsimd.cc
-    DEPS frontend-client grpc++ netsim-lib netsim-rust-lib)
+    DEPS frontend-client frontend_client_cxx_generated grpc++
+         netsim-cli-rust-lib netsim-lib netsim-rust-lib)
   if(NOT DARWIN_AARCH64 AND NOT DARWIN_X86_64)
     # Prevent duplicate symbol for cxx Rust crate.
     target_link_libraries(netsimd PRIVATE -Wl,--allow-multiple-definition)
@@ -69,6 +70,7 @@ if(TARGET Rust::Rustc)
         src/util/ini_file_test.cc
         src/util/os_utils_test.cc
         src/util/string_utils_test.cc
+        src/wifi/wifi_facade_test.cc
     DEPS android-emu-base-headers
          controller-lib
          core-lib
@@ -97,5 +99,5 @@ android_add_executable(
   TARGET netsim-packet-streamer-client
   LICENSE Apache-2.0
   SRC src/netsim-packet-streamer-client.cc
-  DEPS grpc++ packet-streamer-client-grpc-lib packet-streamer-client-lib
+  DEPS grpc++ packet-streamer-client-lib packet-streamer-proto-lib
        protobuf::libprotobuf)

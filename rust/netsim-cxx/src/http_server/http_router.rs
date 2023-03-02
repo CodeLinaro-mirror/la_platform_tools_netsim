@@ -24,9 +24,9 @@
 //! This library is only used for serving the netsim client and is not
 //! meant to implement all aspects of an http router.
 
-use crate::frontend_http_server::http_request::HttpRequest;
+use crate::http_server::http_request::HttpRequest;
 
-use crate::frontend_http_server::server_response::ResponseWritable;
+use crate::http_server::server_response::ResponseWritable;
 
 type RequestHandler = Box<dyn Fn(&HttpRequest, &str, ResponseWritable)>;
 
@@ -93,8 +93,8 @@ fn match_route<'a>(route: &str, uri: &'a str) -> Option<&'a str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::frontend_http_server::http_response::HttpHeaders;
-    use crate::frontend_http_server::server_response::ServerResponseWriter;
+    use crate::http_server::http_response::HttpHeaders;
+    use crate::http_server::server_response::ServerResponseWriter;
     use std::io::Cursor;
 
     fn handle_index(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {

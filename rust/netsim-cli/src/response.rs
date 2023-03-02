@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::args::{self, BtType, Command, OnOffState, UpDownStatus};
+use crate::args::{self, BtType, Command, OnOffState, Pcap, UpDownStatus};
+use frontend_proto::frontend::ListPcapResponse;
 use frontend_proto::model::State;
 use frontend_proto::{
     frontend::{GetDevicesResponse, VersionResponse},
@@ -58,7 +59,7 @@ impl args::Command {
                 if verbose {
                     println!(
                         "Turned {} packet capture for {}",
-                        if cmd.state == OnOffState::On { "on" } else { "off" },
+                        Self::on_off_state_to_string(cmd.state),
                         cmd.name.to_owned()
                     );
                 }
@@ -67,6 +68,23 @@ impl args::Command {
                 if verbose {
                     println!("All devices have been reset.");
                 }
+            }
+            Command::Pcap(Pcap::List) => Self::print_list_pcap_response(
+                ListPcapResponse::parse_from_bytes(response).unwrap(),
+                verbose,
+            ),
+            Command::Pcap(Pcap::Patch(cmd)) => {
+                if verbose {
+                    println!(
+                        "Patched Pcap id: {} to {}",
+                        cmd.id,
+                        Self::on_off_state_to_string(cmd.state)
+                    )
+                }
+            }
+            Command::Pcap(Pcap::Get(_)) => {
+                // TODO: Add output with downloaded file information
+                todo!("GetPcap response output not yet implemented.")
             }
             Command::Gui => {
                 unimplemented!("No Grpc Response for Gui Command.");
@@ -181,8 +199,38 @@ impl args::Command {
         }
     }
 
+    fn on_off_state_to_string(state: OnOffState) -> String {
+        match state {
+            OnOffState::On => "on".to_string(),
+            OnOffState::Off => "off".to_string(),
+        }
+    }
+
     /// Helper function to format and print VersionResponse
     fn print_version_response(response: VersionResponse) {
-        println!("Netsim version: {}", response.version)
+        println!("Netsim version: {}", response.version);
+    }
+
+    /// Helper function to format and print ListPcapResponse
+    fn print_list_pcap_response(response: ListPcapResponse, verbose: bool) {
+        let id_width = 4;
+        let name_width = 16;
+        let state_width = 5;
+        if response.pcaps.is_empty() {
+            println!("No available Pcaps found.");
+        } else {
+            println!("List of Pcaps:");
+        }
+        for pcap in &response.pcaps {
+            // TODO: Enhance output with additional information once implemented
+            if verbose || !pcap.state {
+                println!(
+                    "Pcap ID: {:id_width$}, Device: {:name_width$}, State: {:state_width$}",
+                    pcap.id.to_string(),
+                    pcap.device_name,
+                    if pcap.state { "on" } else { "off" }
+                );
+            }
+        }
     }
 }

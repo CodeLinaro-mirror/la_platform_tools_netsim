@@ -18,15 +18,15 @@ mod http_router;
 pub(crate) mod server_response;
 mod thread_pool;
 
-use crate::frontend_http_server::http_request::HttpRequest;
-use crate::frontend_http_server::http_router::Router;
-use crate::frontend_http_server::server_response::{
+use crate::http_server::http_request::HttpRequest;
+use crate::http_server::http_router::Router;
+use crate::http_server::server_response::{
     ResponseWritable, ServerResponseWritable, ServerResponseWriter,
 };
 use crate::pcap::*;
 use crate::version::VERSION;
 
-use crate::frontend_http_server::thread_pool::ThreadPool;
+use crate::http_server::thread_pool::ThreadPool;
 
 use crate::ffi::get_devices;
 use crate::ffi::patch_device;
@@ -43,7 +43,7 @@ use std::sync::Arc;
 
 const PATH_PREFIXES: [&str; 3] = ["js", "assets", "node_modules/tslib"];
 
-pub fn run_frontend_http_server() {
+pub fn run_http_server() {
     let listener = TcpListener::bind("127.0.0.1:7681").unwrap();
     let pool = ThreadPool::new(4);
     println!("Frontend http server is listening on http://localhost:7681");

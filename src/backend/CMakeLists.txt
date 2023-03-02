@@ -16,11 +16,11 @@ android_add_library(
   TARGET packet-streamer-server-lib
   LICENSE Apache-2.0
   SRC backend_packet_hub.h backend_server.cc backend_server.h
-  DEPS frontend-grpc-lib
-       grpc++
+  DEPS grpc++
        libbt-rootcanal
        netsim-cxx
        netsim-cxx-generated
+       netsimd-proto-lib
        protobuf::libprotobuf
        util-lib)
 
@@ -36,7 +36,7 @@ android_add_library(
        android-emu-base-headers
        android-emu-base-process
        grpc++
-       packet-streamer-client-grpc-lib
+       packet-streamer-proto-lib
        protobuf::libprotobuf
        util-lib)
 

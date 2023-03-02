@@ -468,7 +468,7 @@ namespace netsim {
 }
 
 namespace netsim {
-void RunFrontendHttpServer() noexcept;
+void RunHttpServer() noexcept;
 
 ::std::int8_t DistanceToRssi(::std::int8_t tx_power, float distance) noexcept;
 

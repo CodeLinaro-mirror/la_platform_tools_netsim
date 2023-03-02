@@ -14,7 +14,7 @@
 
 //! Netsim cxx libraries.
 
-mod frontend_http_server;
+mod http_server;
 mod pcap;
 mod ranging;
 mod version;
@@ -23,9 +23,9 @@ use std::pin::Pin;
 
 use cxx::let_cxx_string;
 use ffi::CxxServerResponseWriter;
-use frontend_http_server::server_response::ServerResponseWritable;
+use http_server::server_response::ServerResponseWritable;
 
-use crate::frontend_http_server::run_frontend_http_server;
+use crate::http_server::run_http_server;
 use crate::pcap::handle_pcap_cxx;
 use crate::ranging::*;
 use crate::version::*;
@@ -35,8 +35,8 @@ mod ffi {
 
     extern "Rust" {
 
-        #[cxx_name = "RunFrontendHttpServer"]
-        fn run_frontend_http_server();
+        #[cxx_name = "RunHttpServer"]
+        fn run_http_server();
 
         // Ranging
 

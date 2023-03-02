@@ -26,12 +26,14 @@ add_library(netsim-lib INTERFACE)
 target_link_libraries(
   netsim-lib
   INTERFACE core-lib
-            frontend-grpc-lib
+            netsim-cli-proto-lib
             frontend-lib
             hci-lib
-    	    netsim-proto-lib
+            netsimd-proto-lib
             packet-hub-lib
-	    packet-streamer-client-grpc-lib
+            packet-streamer-proto-lib
+            packet-streamer-client-lib
+            packet-streamer-server-lib
             protobuf::libprotobuf
             util-lib)
 

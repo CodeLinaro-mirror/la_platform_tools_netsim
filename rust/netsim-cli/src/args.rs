@@ -44,6 +44,10 @@ pub enum Command {
     Reset,
     /// Open netsim Web UI
     Gui,
+    /// (Not fully implemented)
+    /// Control the packet capture functionalities with subcommands: list, patch, get
+    #[clap(subcommand)]
+    Pcap(Pcap),
 }
 
 impl Command {
@@ -103,6 +107,24 @@ impl Command {
             Command::Gui => {
                 unimplemented!("get_request_bytes is not implemented for Gui Command.");
             }
+            Command::Pcap(pcap_cmd) => match pcap_cmd {
+                Pcap::List => Vec::new(),
+                Pcap::Get(cmd) => {
+                    let mut result = frontend::GetPcapRequest::new();
+                    result.set_id(cmd.id);
+                    result.write_to_bytes().unwrap()
+                }
+                Pcap::Patch(cmd) => {
+                    let mut result = frontend::PatchPcapRequest::new();
+                    result.set_id(cmd.id);
+                    let capture_state = match cmd.state {
+                        OnOffState::On => true,
+                        OnOffState::Off => false,
+                    };
+                    result.set_state(capture_state);
+                    result.write_to_bytes().unwrap()
+                }
+            },
         }
     }
 }
@@ -166,4 +188,29 @@ pub enum OnOffState {
     On,
     // #[value(alias("Off"), alias("OFF"))]
     Off,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Pcap {
+    /// List all currently available Pcaps (packet captures)
+    List,
+    /// Patch a Pcap source to turn packet capture on/off
+    Patch(PatchPcap),
+    /// Download the packet capture content
+    Get(GetPcap),
+}
+
+#[derive(Debug, Args)]
+pub struct PatchPcap {
+    /// Pcap id
+    pub id: i32,
+    /// Packet capture state
+    #[clap(value_enum)]
+    pub state: OnOffState,
+}
+
+#[derive(Debug, Args)]
+pub struct GetPcap {
+    /// Pcap id
+    pub id: i32,
 }

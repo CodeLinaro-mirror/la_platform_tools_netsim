@@ -20,10 +20,10 @@ android_add_library(
   DEPS android-emu-base
        android-emu-base-headers
        controller-lib
-       netsim-proto-lib
+       grpc++
        libbt-rootcanal
        libbt-rootcanal-qemu
-       grpc++)
+       netsimd-proto-lib)
 target_include_directories(hci-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
                                            ../../rust/netsim-cxx/cxx)
 target_compile_definitions(hci-lib PUBLIC NETSIM_ANDROID_EMULATOR)

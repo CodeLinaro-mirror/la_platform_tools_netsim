@@ -21,7 +21,7 @@
 //! This library is only used for serving the netsim client and is not
 //! meant to implement all aspects of RFC 5322.
 
-pub use crate::frontend_http_server::http_request::HttpHeaders;
+pub use crate::http_server::http_request::HttpHeaders;
 
 pub struct HttpResponse {
     pub status_code: u16,
@@ -67,9 +67,7 @@ impl HttpResponse {
 
 #[cfg(test)]
 mod tests {
-    use crate::frontend_http_server::server_response::{
-        ServerResponseWritable, ServerResponseWriter,
-    };
+    use crate::http_server::server_response::{ServerResponseWritable, ServerResponseWriter};
     use std::io::Cursor;
 
     #[test]

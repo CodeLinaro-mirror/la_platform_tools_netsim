@@ -16,9 +16,9 @@ android_add_library(
   TARGET core-lib
   LICENSE Apache-2.0
   SRC server.cc server.h
-  DEPS frontend-grpc-lib
-       frontend-lib
+  DEPS frontend-lib
        grpc++
+       netsim-cli-proto-lib
        netsim-cxx-generated
        packet-streamer-server-lib
        protobuf::libprotobuf

@@ -24,7 +24,7 @@
 
 use std::io::Write;
 
-use crate::frontend_http_server::http_response::HttpResponse;
+use crate::http_server::http_response::HttpResponse;
 
 pub type ResponseWritable<'a> = &'a mut dyn ServerResponseWritable;
 

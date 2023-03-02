@@ -490,7 +490,7 @@ namespace netsim {
 
 namespace netsim {
 extern "C" {
-void netsim$cxxbridge1$run_frontend_http_server() noexcept;
+void netsim$cxxbridge1$run_http_server() noexcept;
 
 ::std::int8_t netsim$cxxbridge1$distance_to_rssi(::std::int8_t tx_power, float distance) noexcept;
 
@@ -537,8 +537,8 @@ void netsim$frontend$cxxbridge1$CxxServerResponseWriter$put_error(::netsim::fron
 } // extern "C"
 } // namespace frontend
 
-void RunFrontendHttpServer() noexcept {
-  netsim$cxxbridge1$run_frontend_http_server();
+void RunHttpServer() noexcept {
+  netsim$cxxbridge1$run_http_server();
 }
 
 ::std::int8_t DistanceToRssi(::std::int8_t tx_power, float distance) noexcept {

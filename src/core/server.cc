@@ -80,7 +80,7 @@ void Run() {
   auto grpc_server = RunGrpcServer(netsim_grpc_port);
   if (netsim_grpc_port == 0) {
     // Run frontend http server.
-    std::thread(RunFrontendHttpServer).detach();
+    std::thread(RunHttpServer).detach();
   }
 
   while (true) {

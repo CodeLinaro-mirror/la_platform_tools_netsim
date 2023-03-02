@@ -14,7 +14,7 @@
 
 android_add_library(
   TARGET packet-hub-lib LICENSE Apache-2.0 SRC packet_hub.cc packet_hub.h
-  DEPS frontend-grpc-lib grpc++ packet-streamer-server-lib)
+  DEPS grpc++ netsim-cli-proto-lib packet-streamer-server-lib)
 
 target_include_directories(packet-hub-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
                                                   ../../rust/netsim-cxx/cxx)
