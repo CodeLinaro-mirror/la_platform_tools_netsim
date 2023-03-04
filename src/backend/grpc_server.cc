@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "backend/backend_server.h"
+#include "backend/grpc_server.h"
 
 #include <google/protobuf/util/json_util.h>
 #include <stdlib.h>
@@ -58,7 +58,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
                                Stream *stream) override {
     // Now connected to a peer issuing a bi-directional streaming grpc
     auto peer = context->peer();
-    BtsLog("backend_server new packet_stream for peer %s", peer.c_str());
+    BtsLog("grpc_server new packet_stream for peer %s", peer.c_str());
 
     packet::PacketRequest request;
 
@@ -80,7 +80,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     auto [device_id, chip_id, facade_id] = scene_controller::AddChip(
         peer, device_name, chip_kind, chip_name, manufacturer, product_name);
 
-    BtsLog("backend_server: adding chip %d with facade %d to %s", chip_id,
+    BtsLog("grpc_server: adding chip %d with facade %d to %s", chip_id,
            facade_id, device_name.c_str());
     // connect packet responses from chip facade to the peer
     facade_to_stream[ChipFacade(chip_kind, facade_id)] = stream;
@@ -92,7 +92,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     // Remove the chip from the device
     scene_controller::RemoveChip(device_id, chip_id);
 
-    BtsLog("backend_server: removing chip %d from %s", chip_id,
+    BtsLog("grpc_server: removing chip %d from %s", chip_id,
            device_name.c_str());
 
     return ::grpc::Status::OK;
@@ -115,13 +115,13 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     packet::PacketRequest request;
     while (true) {
       if (!stream->Read(&request)) {
-        BtsLog("backend_server: reading stopped for %d", facade_id);
+        BtsLog("grpc_server: reading stopped for %d", facade_id);
         break;
       }
       // All kinds possible (bt, uwb, wifi), but each rpc only streames one.
       if (chip_kind == common::ChipKind::BLUETOOTH) {
         if (!request.has_hci_packet()) {
-          BtsLog("backend_server: unknown packet type from %d", facade_id);
+          BtsLog("grpc_server: unknown packet type from %d", facade_id);
           continue;
         }
         auto packet_type = request.hci_packet().packet_type();
@@ -130,14 +130,14 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         packet_hub::handle_bt_request(facade_id, packet_type, packet);
       } else if (chip_kind == common::ChipKind::WIFI) {
         if (!request.has_packet()) {
-          BtsLog("backend_server: unknown packet type from %d", facade_id);
+          BtsLog("grpc_server: unknown packet type from %d", facade_id);
           continue;
         }
         auto packet = ToSharedVec(request.mutable_packet());
         packet_hub::handle_wifi_request(facade_id, packet);
       } else {
         // TODO: add UWB here
-        BtsLog("backend_server: unknown chip kind");
+        BtsLog("grpc_server: unknown chip kind");
       }
     }
   }
@@ -161,10 +161,10 @@ void handle_bt_response(uint32_t facade_id,
     // TODO: check if Swap is available since copied in line above
     response.mutable_hci_packet()->set_packet(str_packet);
     if (!stream->Write(response)) {
-      BtsLog("backend_server: write failed %d", facade_id);
+      BtsLog("grpc_server: write failed %d", facade_id);
     }
   } else {
-    BtsLog("backend_server: no stream for %d", facade_id);
+    BtsLog("grpc_server: no stream for %d", facade_id);
   }
 }
 
@@ -182,10 +182,10 @@ void handle_wifi_response(uint32_t facade_id,
     auto str_packet = std::string(packet->begin(), packet->end());
     response.set_packet(str_packet);
     if (!stream->Write(response)) {
-      BtsLog("backend_server: write failed %d", facade_id);
+      BtsLog("grpc_server: write failed %d", facade_id);
     }
   } else {
-    BtsLog("backend_server: no stream for %d", facade_id);
+    BtsLog("grpc_server: no stream for %d", facade_id);
   }
 }
 

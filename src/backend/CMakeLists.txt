@@ -15,7 +15,7 @@
 android_add_library(
   TARGET packet-streamer-server-lib
   LICENSE Apache-2.0
-  SRC backend_packet_hub.h backend_server.cc backend_server.h
+  SRC backend_packet_hub.h grpc_server.cc grpc_server.h
   DEPS grpc++
        libbt-rootcanal
        netsim-cxx
