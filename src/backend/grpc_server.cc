@@ -33,7 +33,7 @@
 #include "util/log.h"
 
 namespace netsim {
-namespace backend::grpc {
+namespace backend {
 namespace {
 
 using netsim::common::ChipKind;
@@ -151,7 +151,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
 // doesn't know about smart pointers.
 void handle_bt_response(uint32_t facade_id,
                         packet::HCIPacket_PacketType packet_type,
-                        const std::shared_ptr<std::vector<uint8_t>> packet) {
+                        const std::shared_ptr<std::vector<uint8_t>> &packet) {
   auto stream = facade_to_stream[ChipFacade(ChipKind::BLUETOOTH, facade_id)];
   if (stream) {
     // TODO: lock or caller here because gRPC does not allow overlapping writes.
@@ -174,7 +174,7 @@ void handle_bt_response(uint32_t facade_id,
 // When writing, the packet is copied because it is a shared_ptr and grpc++
 // doesn't know about smart pointers.
 void handle_wifi_response(uint32_t facade_id,
-                          const std::shared_ptr<std::vector<uint8_t>> packet) {
+                          const std::shared_ptr<std::vector<uint8_t>> &packet) {
   auto stream = facade_to_stream[ChipFacade(ChipKind::WIFI, facade_id)];
   if (stream) {
     // TODO: lock or caller here because gRPC does not allow overlapping writes.
@@ -189,9 +189,9 @@ void handle_wifi_response(uint32_t facade_id,
   }
 }
 
-}  // namespace backend::grpc
+}  // namespace backend
 
 std::unique_ptr<packet::PacketStreamer::Service> GetBackendService() {
-  return std::make_unique<backend::grpc::ServiceImpl>();
+  return std::make_unique<backend::ServiceImpl>();
 }
 }  // namespace netsim

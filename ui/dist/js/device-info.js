@@ -1,64 +1,64 @@
-import{__decorate as i}from"../node_modules/tslib/tslib.es6.js";import{css as e,LitElement as t,html as s}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as o,customElement as a}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{styleMap as l,live as d}from"https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js";import{simulationState as n}from"./device-observer.js";import{State as c}from"./model.js";var r;let h=r=class extends t{constructor(){super(...arguments),this.yaw=0,this.pitch=0,this.roll=0,this.editMode=!1,this.posX=0,this.posY=0,this.posZ=0,this.holdRange=!1}connectedCallback(){super.connectedCallback(),n.registerObserver(this)}disconnectedCallback(){n.removeObserver(this),super.disconnectedCallback()}onNotify(i){if(i.selectedId&&!1===this.editMode)for(const e of i.devices)if(e.name===i.selectedId){this.selectedDevice=e,this.holdRange||(this.yaw=e.orientation.yaw,this.pitch=e.orientation.pitch,this.roll=e.orientation.roll),this.posX=Math.floor(100*e.position.x),this.posY=Math.floor(100*e.position.y),this.posZ=Math.floor(100*e.position.z);break}}changeRange(i){var e;this.holdRange=!0,console.assert(null!==this.selectedDevice);const t=i.target,s=new CustomEvent("orientationEvent",{detail:{name:null===(e=this.selectedDevice)||void 0===e?void 0:e.name,type:t.id,value:t.value}});window.dispatchEvent(s),"yaw"===t.id?this.yaw=Number(t.value):"pitch"===t.id?this.pitch=Number(t.value):this.roll=Number(t.value)}patchOrientation(){this.holdRange=!1,console.assert(void 0!==this.selectedDevice),void 0!==this.selectedDevice&&(this.selectedDevice.orientation={yaw:this.yaw,pitch:this.pitch,roll:this.roll},n.patchDevice({device:{name:this.selectedDevice.name,orientation:this.selectedDevice.orientation}}))}patchRadio(){console.assert(void 0!==this.selectedDevice),void 0!==this.selectedDevice&&n.patchDevice({device:{name:this.selectedDevice.name,chips:this.selectedDevice.chips}})}handleEditForm(){this.editMode?(n.invokeGetDevice(),this.editMode=!1):this.editMode=!0}static checkPositionBound(i){return i>10?10:i<0?0:i}static checkOrientationBound(i){return i>90?90:i<-90?-90:i}handleSave(){if(console.assert(void 0!==this.selectedDevice),void 0===this.selectedDevice)return;const i=this.renderRoot.querySelectorAll('[id^="edit"]'),e={name:this.selectedDevice.name,position:this.selectedDevice.position,orientation:this.selectedDevice.orientation};i.forEach((i=>{const t=i;"editName"===t.id?e.name=t.value:t.id.startsWith("editPos")?Number.isNaN(Number(t.value))||(e.position[t.id.slice(7).toLowerCase()]=r.checkPositionBound(Number(t.value)/100)):t.id.startsWith("editOri")&&(Number.isNaN(Number(t.value))||(e.orientation[t.id.slice(7).toLowerCase()]=r.checkOrientationBound(Number(t.value))))})),this.selectedDevice.name=e.name,this.selectedDevice.position=e.position,this.selectedDevice.orientation=e.orientation,this.handleEditForm(),n.patchDevice({device:e})}handleGetChips(){let i=s``,e=s``,t=s``,o=s``;const a=s`
+import{__decorate as i}from"../node_modules/tslib/tslib.es6.js";import{css as e,LitElement as t,html as s}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as o,customElement as a}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{styleMap as l,live as d}from"https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js";import{simulationState as n}from"./device-observer.js";import{State as c}from"./model.js";var r;let h=r=class extends t{constructor(){super(...arguments),this.yaw=0,this.pitch=0,this.roll=0,this.editMode=!1,this.posX=0,this.posY=0,this.posZ=0,this.holdRange=!1}connectedCallback(){super.connectedCallback(),n.registerObserver(this)}disconnectedCallback(){n.removeObserver(this),super.disconnectedCallback()}onNotify(i){if(i.selectedId&&!1===this.editMode)for(const e of i.devices)if(e.name===i.selectedId){this.selectedDevice=e,this.holdRange||(this.yaw=e.orientation.yaw,this.pitch=e.orientation.pitch,this.roll=e.orientation.roll),this.posX=Math.floor(100*e.position.x),this.posY=Math.floor(100*e.position.y),this.posZ=Math.floor(100*e.position.z);break}}changeRange(i){var e;this.holdRange=!0,console.assert(null!==this.selectedDevice);const t=i.target,s=new CustomEvent("orientationEvent",{detail:{name:null===(e=this.selectedDevice)||void 0===e?void 0:e.name,type:t.id,value:t.value}});window.dispatchEvent(s),"yaw"===t.id?this.yaw=Number(t.value):"pitch"===t.id?this.pitch=Number(t.value):this.roll=Number(t.value)}patchOrientation(){this.holdRange=!1,console.assert(void 0!==this.selectedDevice),void 0!==this.selectedDevice&&(this.selectedDevice.orientation={yaw:this.yaw,pitch:this.pitch,roll:this.roll},n.patchDevice({device:{name:this.selectedDevice.name,orientation:this.selectedDevice.orientation}}))}patchRadio(){console.assert(void 0!==this.selectedDevice),void 0!==this.selectedDevice&&n.patchDevice({device:{name:this.selectedDevice.name,chips:this.selectedDevice.chips}})}handleEditForm(){this.editMode?(n.invokeGetDevice(),this.editMode=!1):this.editMode=!0}static checkPositionBound(i){return i>10?10:i<0?0:i}static checkOrientationBound(i){return i>90?90:i<-90?-90:i}handleSave(){if(console.assert(void 0!==this.selectedDevice),void 0===this.selectedDevice)return;const i=this.renderRoot.querySelectorAll('[id^="edit"]'),e={name:this.selectedDevice.name,position:this.selectedDevice.position,orientation:this.selectedDevice.orientation};i.forEach((i=>{const t=i;"editName"===t.id?e.name=t.value:t.id.startsWith("editPos")?Number.isNaN(Number(t.value))||(e.position[t.id.slice(7).toLowerCase()]=r.checkPositionBound(Number(t.value)/100)):t.id.startsWith("editOri")&&(Number.isNaN(Number(t.value))||(e.orientation[t.id.slice(7).toLowerCase()]=r.checkOrientationBound(Number(t.value))))})),this.selectedDevice.name=e.name,this.selectedDevice.position=e.position,this.selectedDevice.orientation=e.orientation,this.handleEditForm(),n.patchDevice({device:e})}handleGetChips(){const i=s`
       <input type="checkbox" disabled />
         <span
           class="slider round"
           style=${l({opacity:"0.7"})}
         ></span>
-    `;if(this.selectedDevice&&"chips"in this.selectedDevice&&this.selectedDevice.chips)for(const l of this.selectedDevice.chips)"bt"in l&&l.bt&&(i="lowEnergy"in l.bt&&l.bt.lowEnergy&&"state"in l.bt.lowEnergy?s`
+    `;let e=i,t=i,o=i,a=i;if(this.selectedDevice&&"chips"in this.selectedDevice&&this.selectedDevice.chips)for(const i of this.selectedDevice.chips)"bt"in i&&i.bt&&("lowEnergy"in i.bt&&i.bt.lowEnergy&&"state"in i.bt.lowEnergy&&(e=s`
                 <input
                   id="lowEnergy"
                   type="checkbox"
-                  .checked=${d(l.bt.lowEnergy.state===c.ON)}
-                  @click=${()=>{var i;null===(i=this.selectedDevice)||void 0===i||i.toggleChipState(l,"lowEnergy"),this.patchRadio()}}
+                  .checked=${d(i.bt.lowEnergy.state===c.ON)}
+                  @click=${()=>{var e;null===(e=this.selectedDevice)||void 0===e||e.toggleChipState(i,"lowEnergy"),this.patchRadio()}}
                 />
                 <span class="slider round"></span>
-              `:a,e="classic"in l.bt&&l.bt.classic&&"state"in l.bt.classic?s`
+              `),"classic"in i.bt&&i.bt.classic&&"state"in i.bt.classic&&(t=s`
                 <input
                   id="classic"
                   type="checkbox"
-                  .checked=${d(l.bt.classic.state===c.ON)}
-                  @click=${()=>{var i;null===(i=this.selectedDevice)||void 0===i||i.toggleChipState(l,"classic"),this.patchRadio()}}
+                  .checked=${d(i.bt.classic.state===c.ON)}
+                  @click=${()=>{var e;null===(e=this.selectedDevice)||void 0===e||e.toggleChipState(i,"classic"),this.patchRadio()}}
                 />
                 <span class="slider round"></span>
-              `:a),t="wifi"in l&&l.wifi?s`
+              `)),"wifi"in i&&i.wifi&&(o=s`
               <input
                 id="wifi"
                 type="checkbox"
-                .checked=${d(l.wifi.state===c.ON)}
-                @click=${()=>{var i;null===(i=this.selectedDevice)||void 0===i||i.toggleChipState(l),this.patchRadio()}}
+                .checked=${d(i.wifi.state===c.ON)}
+                @click=${()=>{var e;null===(e=this.selectedDevice)||void 0===e||e.toggleChipState(i),this.patchRadio()}}
               />
               <span class="slider round"></span>
-            `:a,o="uwb"in l&&l.uwb?s`
+            `),"uwb"in i&&i.uwb&&(a=s`
               <input
                 id="uwb"
                 type="checkbox"
-                .checked=${d(l.uwb.state===c.ON)}
-                @click=${()=>{var i;null===(i=this.selectedDevice)||void 0===i||i.toggleChipState(l),this.patchRadio()}}
+                .checked=${d(i.uwb.state===c.ON)}
+                @click=${()=>{var e;null===(e=this.selectedDevice)||void 0===e||e.toggleChipState(i),this.patchRadio()}}
               />
               <span class="slider round"></span>
-            `:a;return s`
+            `);return s`
       <div class="label">BLE</div>
-      <div class="info">
-        <label class="switch">
-          ${i}
-        </label>
-      </div>
-      <div class="label">Classic</div>
       <div class="info">
         <label class="switch">
           ${e}
         </label>
       </div>
-      <div class="label">WIFI</div>
+      <div class="label">Classic</div>
       <div class="info">
         <label class="switch">
           ${t}
         </label>
       </div>
-      <div class="label">UWB</div>
+      <div class="label">WIFI</div>
       <div class="info">
         <label class="switch">
           ${o}
+        </label>
+      </div>
+      <div class="label">UWB</div>
+      <div class="info">
+        <label class="switch">
+          ${a}
         </label>
       </div>
     `}render(){return s`${this.selectedDevice?s`
