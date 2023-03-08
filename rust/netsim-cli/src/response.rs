@@ -258,12 +258,12 @@ impl args::Command {
         }
         for pcap in &response.pcaps {
             // TODO: Enhance output with additional information once implemented
-            if verbose || !pcap.state {
+            if verbose || pcap.state == State::ON {
                 println!(
                     "Pcap ID: {:id_width$}, Device: {:name_width$}, State: {:state_width$}",
                     pcap.id.to_string(),
                     pcap.device_name,
-                    if pcap.state { "on" } else { "off" }
+                    Self::capture_state_to_string(pcap.state),
                 );
             }
         }
