@@ -14,20 +14,25 @@
  * limitations under the License.
  */
 
-// Frontend command line interface.
 #pragma once
 
-#include <memory>
-#include <string_view>
-
-#include "frontend.grpc.pb.h"
+// Use gRPC HCI PacketType definitions so we don't expose Rootcanal's version
+// outside of the Bluetooth Facade.
+#include "packet_streamer.pb.h"
 
 namespace netsim {
+namespace backend {
+namespace grpc {
 
-std::unique_ptr<frontend::FrontendService::Stub> NewFrontendStub();
+/* Handle packet requests for the backend. */
 
-// Sends a command from the netsim client to netsim server.
-int SendCommand(std::unique_ptr<frontend::FrontendService::Stub> stub,
-                const std::vector<std::string_view> &args);
+void handle_bt_response(uint32_t facade_id,
+                        packet::HCIPacket_PacketType packet_type,
+                        const std::shared_ptr<std::vector<uint8_t>> packet);
 
+void handle_wifi_response(uint32_t facade_id,
+                          const std::shared_ptr<std::vector<uint8_t>> packet);
+
+}  // namespace grpc
+}  // namespace backend
 }  // namespace netsim

@@ -8,6 +8,7 @@ import {
   SimulationInfo,
   simulationState,
 } from './device-observer.js';
+import {State} from './model.js'
 
 @customElement('ns-device-info')
 export class DeviceInformation extends LitElement implements Notifiable {
@@ -353,7 +354,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 <input
                   id="lowEnergy"
                   type="checkbox"
-                  .checked=${live(chip.bt.lowEnergy.state === 'ON')}
+                  .checked=${live(chip.bt.lowEnergy.state === State.ON)}
                   @click=${() => {
                     // eslint-disable-next-line
                     this.selectedDevice?.toggleChipState(chip, "lowEnergy");
@@ -370,7 +371,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 <input
                   id="classic"
                   type="checkbox"
-                  .checked=${live(chip.bt.classic.state === 'ON')}
+                  .checked=${live(chip.bt.classic.state === State.ON)}
                   @click=${() => {
                     // eslint-disable-next-line
                     this.selectedDevice?.toggleChipState(chip, "classic");
@@ -389,7 +390,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
               <input
                 id="wifi"
                 type="checkbox"
-                .checked=${live(chip.wifi.state === 'ON')}
+                .checked=${live(chip.wifi.state === State.ON)}
                 @click=${() => {
                   // eslint-disable-next-line
                   this.selectedDevice?.toggleChipState(chip);
@@ -407,7 +408,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
               <input
                 id="uwb"
                 type="checkbox"
-                .checked=${live(chip.uwb.state === 'ON')}
+                .checked=${live(chip.uwb.state === State.ON)}
                 @click=${() => {
                   // eslint-disable-next-line
                   this.selectedDevice?.toggleChipState(chip);

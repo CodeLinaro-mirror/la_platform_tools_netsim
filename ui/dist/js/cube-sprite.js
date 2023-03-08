@@ -1,4 +1,4 @@
-import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,LitElement as i,html as o}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as r,customElement as s}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as d}from"./device-observer.js";let a=class extends i{constructor(){super(...arguments),this.yaw=-15,this.pitch=-15,this.roll=0,this.posZ=0,this.color=e`red`,this.size=e`30px`,this.controls=!1,this.highlighted=!1,this.handleOrientationEvent=t=>{const{detail:e}=t;e.deviceSerial===this.id&&this.controls&&("yaw"===e.type?this.yaw=e.value:"pitch"===e.type?this.pitch=e.value:this.roll=e.value)}}connectedCallback(){super.connectedCallback(),d.registerObserver(this),window.addEventListener("orientationEvent",this.handleOrientationEvent)}disconnectedCallback(){window.removeEventListener("orientationEvent",this.handleOrientationEvent),d.removeObserver(this),super.disconnectedCallback()}onNotify(t){this.highlighted=t.selectedId===this.id;for(const e of t.devices)if(e.name===this.id)return void(this.posZ=100*e.position.z)}render(){return o`
+import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,LitElement as o,html as i}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as r,customElement as s}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as d}from"./device-observer.js";let a=class extends o{constructor(){super(...arguments),this.yaw=-15,this.pitch=-15,this.roll=0,this.posZ=0,this.color=e`red`,this.size=e`30px`,this.controls=!1,this.highlighted=!1,this.handleOrientationEvent=t=>{const{detail:e}=t;e.name===this.id&&this.controls&&("yaw"===e.type?this.yaw=e.value:"pitch"===e.type?this.pitch=e.value:this.roll=e.value)}}connectedCallback(){super.connectedCallback(),d.registerObserver(this),window.addEventListener("orientationEvent",this.handleOrientationEvent)}disconnectedCallback(){window.removeEventListener("orientationEvent",this.handleOrientationEvent),d.removeObserver(this),super.disconnectedCallback()}onNotify(t){this.highlighted=t.selectedId===this.id;for(const e of t.devices)if(e.name===this.id)return void(this.posZ=100*e.position.z)}render(){return i`
       <style>
         :host {
           font-size: ${this.size};
@@ -20,10 +20,10 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
         <div></div>
         <div></div>
       </div>
-      ${this.controls?o`
+      ${this.controls?i`
             <div class="line"></div>
             <div class="base"></div>
-          `:o``}
+          `:i``}
     `}};a.styles=e`
     :host {
       /** all sizes are relative to font-size **/

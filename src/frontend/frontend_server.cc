@@ -41,10 +41,9 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status GetDevices(grpc::ServerContext *context,
                           const google::protobuf::Empty *empty,
                           frontend::GetDevicesResponse *reply) {
-    const auto devices =
-        netsim::controller::SceneController::Singleton().Copy();
-    for (const auto &device : devices)
-      reply->add_devices()->CopyFrom(device->model);
+    const auto scene = netsim::controller::SceneController::Singleton().Get();
+    for (const auto &device : scene.devices())
+      reply->add_devices()->CopyFrom(device);
     return grpc::Status::OK;
   }
 

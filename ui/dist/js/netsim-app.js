@@ -1,4 +1,4 @@
-import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as n,LitElement as t,html as i}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as s,customElement as o}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let d=class extends t{constructor(){super(...arguments),this.viewMode="main",this.handleChangeModeEvent=e=>{const{detail:n}=e;this.viewMode=n.mode}}connectedCallback(){super.connectedCallback(),window.addEventListener("changeModeEvent",this.handleChangeModeEvent)}disconnectedCallback(){window.removeEventListener("changeModeEvent",this.handleChangeModeEvent),super.disconnectedCallback()}render(){let e=i``;return"main"===this.viewMode?e=i`
+import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as t,LitElement as n,html as i}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as o,customElement as s}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let c=class extends n{constructor(){super(),this.viewMode="main",this.version="",this.handleChangeModeEvent=e=>{const{detail:t}=e;this.viewMode=t.mode},this.invokeGetVersion()}invokeGetVersion(){fetch("http://localhost:7681/version",{method:"GET"}).then((e=>e.json())).then((e=>{this.version=e.version})).catch((e=>{console.log("Cannot connect to netsim web server",e)}))}connectedCallback(){super.connectedCallback(),window.addEventListener("changeModeEvent",this.handleChangeModeEvent)}disconnectedCallback(){window.removeEventListener("changeModeEvent",this.handleChangeModeEvent),super.disconnectedCallback()}render(){let e=i``;return"main"===this.viewMode?e=i`
         <ns-customize-button eventName="map-button-clicked" class="primary">Change Background</ns-customize-button>
         <ns-customize-button eventName="isometric-button-clicked" class="primary">Toggle View</ns-customize-button>
         <div class="container">
@@ -17,7 +17,8 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as n,
       `),i`
       <ns-navigation-bar></ns-navigation-bar>
       ${e}
-    `}};d.styles=n`
+      <div id="bottom">version: ${this.version}</div>
+    `}};c.styles=t`
     .container {
       display: flex;
       width: 100%;
@@ -30,4 +31,11 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as n,
     .contentB {
       flex: 2;
     }
-  `,e([s()],d.prototype,"viewMode",void 0),d=e([o("netsim-app")],d);export{d as NetsimApp};
+
+    #bottom {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      font-size: 20px;
+    }
+  `,e([o()],c.prototype,"viewMode",void 0),e([o()],c.prototype,"version",void 0),c=e([s("netsim-app")],c);export{c as NetsimApp};

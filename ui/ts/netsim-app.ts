@@ -9,6 +9,12 @@ export class NetsimApp extends LitElement {
   @property()
   viewMode: string = 'main';
 
+  /**
+   * The version of netsim.
+   */
+  @property()
+  version: string = '';
+
   static styles = css`
     .container {
       display: flex;
@@ -22,7 +28,33 @@ export class NetsimApp extends LitElement {
     .contentB {
       flex: 2;
     }
+
+    #bottom {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      font-size: 20px;
+    }
   `;
+
+  constructor() {
+    super();
+    this.invokeGetVersion();
+  }
+
+  invokeGetVersion() {
+    fetch('http://localhost:7681/version', {
+      method: 'GET',
+    })
+      .then(response => response.json())
+      .then(data => {
+        this.version = data.version;
+      })
+      .catch(error => {
+        // eslint-disable-next-line
+        console.log('Cannot connect to netsim web server', error);
+      });
+  }
 
   connectedCallback() {
     super.connectedCallback();
@@ -67,6 +99,7 @@ export class NetsimApp extends LitElement {
     return html`
       <ns-navigation-bar></ns-navigation-bar>
       ${page}
+      <div id="bottom">version: ${this.version}</div>
     `;
   }
 }

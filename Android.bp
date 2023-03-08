@@ -111,15 +111,16 @@ cc_library_host_static {
         "src/controller/scene_controller.cc",
         "src/controller/device_notify_manager.cc",
         "src/core/server.cc",
-        "src/frontend/cli.cc",
         "src/frontend/frontend_server.cc",
         "src/backend/fd_startup.cc",
         "src/hci/bluetooth_facade.cc",
         "src/hci/hci_debug.cc",
+        "src/hci/hci_packet_transport.cc",
         "src/util/ini_file.cc",
         "src/util/log.cc",
         "src/util/os_utils.cc",
         "src/util/string_utils.cc",
+        "src/wifi/wifi_facade.cc",
     ],
     generated_headers: [
         "cxx-bridge-header",
@@ -144,36 +145,6 @@ cc_library_host_static {
     ],
 }
 
-cc_binary_host {
-    name: "netsim-cc",
-    defaults: ["netsim_defaults"],
-    srcs: [
-        "src/netsim.cc",
-    ],
-    generated_headers: [
-        "cxx-bridge-header",
-        "netsim_cxx_h"
-    ],
-    shared_libs: [
-        "libbase",
-        "libcrypto",
-        "libgrpc++",
-    ],
-    static_libs: [
-        "libc++fs",
-        "libjsoncpp",
-        "libprotobuf-cpp-full",
-        "libscriptedbeaconpayload-protos-lite",
-        "lib-netsim-frontend-proto",
-        "lib-netsim",
-    ],
-    whole_static_libs: [
-        "libnetsim_cxx",
-        "libbt-rootcanal",
-    ],
-    ldflags: ["-Wl,--allow-multiple-definition"]
-}
-
 netsim_ui_modules = [
     "netsim_ui_index.html",
     "netsim_ui_js_cube-sprite.js",
@@ -189,6 +160,7 @@ netsim_ui_modules = [
     "netsim_ui_js_netsim-app.js",
     "netsim_ui_js_packet-info.js",
     "netsim_ui_js_pyramid-sprite.js",
+    "netsim_ui_js_model.js",
     "netsim_ui_tslib",
     "netsim_ui_assets_grid-background.svg",
     "netsim_ui_assets_hexagonal-background.png",
@@ -241,6 +213,7 @@ cc_test_host {
         "src/util/ini_file_test.cc",
         "src/util/os_utils_test.cc",
         "src/util/string_utils_test.cc",
+        "src/wifi/wifi_facade_test.cc",
     ],
     generated_headers: [
         "cxx-bridge-header",

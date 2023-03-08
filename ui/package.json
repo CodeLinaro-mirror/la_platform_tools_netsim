@@ -10,6 +10,7 @@
     "test": "tsc && wtr --coverage",
     "test:watch": "tsc && concurrently -k -r \"tsc --watch --preserveWatchOutput\" \"wtr --watch\"",
     "analyze": "cem analyze --litelement",
+    "tsproto": "protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=./ts --proto_path=../src/proto --ts_proto_opt=onlyTypes=true --ts_proto_opt=stringEnums=true model.proto",
     "build": "tsc && cp -r ./assets ./web && rimraf dist/* && rollup -c rollup.config.mjs",
     "start": "tsc && cp -r ./assets ./web && concurrently -k -r \"tsc --watch --preserveWatchOutput\" \"wds\" \"serve /tmp/\""
   },
@@ -43,6 +44,7 @@
     "rollup-plugin-minify-html-literals": "^1.2.6",
     "rollup-plugin-summary": "^2.0.0",
     "rollup-plugin-terser": "^7.0.2",
+    "ts-proto": "^1.139.0",
     "tslib": "^2.3.1",
     "typescript": "^4.5.2"
   },
