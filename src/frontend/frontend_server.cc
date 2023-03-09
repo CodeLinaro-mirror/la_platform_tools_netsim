@@ -14,6 +14,8 @@
 
 #include "frontend/frontend_server.h"
 
+#include <google/protobuf/util/json_util.h>
+
 #include <iostream>
 #include <memory>
 #include <string>
@@ -29,6 +31,49 @@
 
 namespace netsim {
 namespace {
+
+/// The C++ implementation of the CxxServerResponseWriter interface. This is
+/// used by the gRPC server to invoke the Rust pcap handler and process a
+/// responses.
+class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
+ public:
+  CxxServerResponseWritable()
+      : grpc_writer_(nullptr), err(""), is_ok(false), body(""), length(0){};
+  CxxServerResponseWritable(
+      grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer)
+      : grpc_writer_(grpc_writer), err(""), is_ok(false), body(""), length(0){};
+
+  void put_error(unsigned int error_code,
+                 const std::string &response) const override {
+    err = std::to_string(error_code) + ": " + response;
+    is_ok = false;
+  }
+
+  void put_ok_with_length(const std::string &mime_type,
+                          unsigned int length) const override {
+    this->length = length;
+    is_ok = true;
+  }
+
+  void put_chunk(rust::Slice<const uint8_t> chunk) const override {
+    netsim::frontend::GetPcapResponse response;
+    response.ParseFromArray(chunk.data(), chunk.length());
+    is_ok = grpc_writer_->Write(response);
+  }
+
+  void put_ok(const std::string &mime_type,
+              const std::string &body) const override {
+    this->body = body;
+    is_ok = true;
+  }
+
+  mutable grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer_;
+  mutable std::string err;
+  mutable bool is_ok;
+  mutable std::string body;
+  mutable unsigned int length;
+};
+
 class FrontendServer final : public frontend::FrontendService::Service {
  public:
   grpc::Status GetVersion(grpc::ServerContext *context,
@@ -77,6 +122,41 @@ class FrontendServer final : public frontend::FrontendService::Service {
                      google::protobuf::Empty *empty) {
     netsim::controller::SceneController::Singleton().Reset();
     return grpc::Status::OK;
+  }
+
+  grpc::Status ListPcap(grpc::ServerContext *context,
+                        const google::protobuf::Empty *empty,
+                        frontend::ListPcapResponse *reply) {
+    CxxServerResponseWritable writer;
+    HandlePcapCxx(writer, "GET", "", "");
+    if (writer.is_ok) {
+      google::protobuf::util::JsonStringToMessage(writer.body, reply);
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
+  }
+
+  grpc::Status PatchPcap(grpc::ServerContext *context,
+                         const frontend::PatchPcapRequest *request,
+                         google::protobuf::Empty *response) {
+    CxxServerResponseWritable writer;
+    HandlePcapCxx(writer, "PATCH", std::to_string(request->id()),
+                  std::to_string(request->state()));
+    if (writer.is_ok) {
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
+  }
+  grpc::Status GetPcap(
+      grpc::ServerContext *context,
+      const netsim::frontend::GetPcapRequest *request,
+      grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer) {
+    CxxServerResponseWritable writer(grpc_writer);
+    HandlePcapCxx(writer, "GET", std::to_string(request->id()), "");
+    if (writer.is_ok) {
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
 };
 }  // namespace

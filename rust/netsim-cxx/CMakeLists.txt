@@ -20,7 +20,7 @@ android_add_library(
   LICENSE Apache-2.0
   SRC ${CMAKE_CURRENT_LIST_DIR}/cxx/netsim_cxx_generated.cc
       ${CMAKE_CURRENT_LIST_DIR}/cxx/netsim_cxx_generated.h
-  DEPS controller-lib grpc++ netsim-cli-proto-lib packet-streamer-server-lib)
+  DEPS grpc++ netsim-cli-proto-lib netsimd-lib)
 
 target_include_directories(
   netsim-cxx-generated PRIVATE ../../src # For controller/controller.h
