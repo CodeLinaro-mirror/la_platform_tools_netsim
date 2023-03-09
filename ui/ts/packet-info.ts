@@ -6,6 +6,7 @@ import {
   SimulationInfo,
   simulationState,
 } from './device-observer.js';
+import {State} from './model.js';
 
 @customElement('ns-packet-info')
 export class PacketInformation extends LitElement implements Notifiable {
@@ -202,7 +203,7 @@ export class PacketInformation extends LitElement implements Notifiable {
               <input
                 type="checkbox"
                 class="switch_1"
-                .checked=${chip.capture === 'ON'}
+                .checked=${chip.capture === State.ON}
                 @click=${() => {device.toggleCapture(device, chip);}}
               />
             </td>

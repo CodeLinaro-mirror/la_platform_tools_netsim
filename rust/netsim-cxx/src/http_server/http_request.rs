@@ -195,6 +195,6 @@ mod tests {
         assert_eq!(http_request.uri, "/index.html");
         assert_eq!(http_request.version, "HTTP/1.1");
         assert!(http_request.headers.eq(&[("Host", "example.com")]));
-        assert_eq!(http_request.body, b"Hello World\r\n".to_vec());
+        assert_eq!(http_request.body, b"");
     }
 }

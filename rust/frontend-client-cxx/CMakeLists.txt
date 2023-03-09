@@ -23,6 +23,6 @@ corrosion_link_libraries(frontend-client-cxx frontend_client_cxx_generated
 android_add_library(
   TARGET frontend_client_cxx_generated LICENSE Apache-2.0
   SRC ${CMAKE_CURRENT_LIST_DIR}/cxx/frontend_client_cxx_generated.cc
-  DEPS frontend-grpc-lib grpc++ protobuf::libprotobuf)
+  DEPS grpc++ netsim-cli-proto-lib protobuf::libprotobuf)
 
 target_include_directories(frontend_client_cxx_generated PRIVATE ../../src)

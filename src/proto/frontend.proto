@@ -59,6 +59,16 @@ service FrontendService {
 
   // Register for network logs
   rpc NetCat(google.protobuf.Empty) returns (stream NetCatStream);
+
+  // Patch a Pcap source to turn capture on/off.
+  // When turned on the old capture contents are replaced.
+  rpc PatchPcap(PatchPcapRequest) returns (google.protobuf.Empty);
+
+  // List all Pcaps currently connected on netsim.
+  rpc ListPcap(google.protobuf.Empty) returns (ListPcapResponse);
+
+  // Retrieve the contents of the packet capture as streaming bytes
+  rpc GetPcap(GetPcapRequest) returns (stream GetPcapResponse);
 }
 
 message VersionResponse {
@@ -103,4 +113,21 @@ message NetCatStream {
 message SetPacketCaptureRequest {
   bool capture = 1;
   string device_serial = 2;
+}
+
+message PatchPcapRequest {
+  int32 id = 1;
+  bool state = 2;
+}
+
+message ListPcapResponse {
+  repeated netsim.model.Pcap pcaps = 1;
+}
+
+message GetPcapRequest {
+  int32 id = 1;
+}
+
+message GetPcapResponse {
+  bytes capture_stream = 1;
 }

@@ -32,8 +32,6 @@ template <typename T>
 class impl;
 } // namespace
 
-class Opaque;
-
 template <typename T>
 ::std::size_t size_of();
 template <typename T>
@@ -105,6 +103,53 @@ private:
   std::array<std::uintptr_t, 3> repr;
 };
 #endif // CXXBRIDGE1_RUST_STRING
+
+#ifndef CXXBRIDGE1_RUST_STR
+#define CXXBRIDGE1_RUST_STR
+class Str final {
+public:
+  Str() noexcept;
+  Str(const String &) noexcept;
+  Str(const std::string &);
+  Str(const char *);
+  Str(const char *, std::size_t);
+
+  Str &operator=(const Str &) &noexcept = default;
+
+  explicit operator std::string() const;
+
+  const char *data() const noexcept;
+  std::size_t size() const noexcept;
+  std::size_t length() const noexcept;
+  bool empty() const noexcept;
+
+  Str(const Str &) noexcept = default;
+  ~Str() noexcept = default;
+
+  using iterator = const char *;
+  using const_iterator = const char *;
+  const_iterator begin() const noexcept;
+  const_iterator end() const noexcept;
+  const_iterator cbegin() const noexcept;
+  const_iterator cend() const noexcept;
+
+  bool operator==(const Str &) const noexcept;
+  bool operator!=(const Str &) const noexcept;
+  bool operator<(const Str &) const noexcept;
+  bool operator<=(const Str &) const noexcept;
+  bool operator>(const Str &) const noexcept;
+  bool operator>=(const Str &) const noexcept;
+
+  void swap(Str &) noexcept;
+
+private:
+  class uninit;
+  Str(uninit) noexcept;
+  friend impl<Str>;
+
+  std::array<std::uintptr_t, 2> repr;
+};
+#endif // CXXBRIDGE1_RUST_STR
 
 #ifndef CXXBRIDGE1_RUST_SLICE
 #define CXXBRIDGE1_RUST_SLICE
@@ -641,6 +686,16 @@ template <typename T>
 Vec<T>::Vec(unsafe_bitcopy_t, const Vec &bits) noexcept : repr(bits.repr) {}
 #endif // CXXBRIDGE1_RUST_VEC
 
+#ifndef CXXBRIDGE1_RUST_OPAQUE
+#define CXXBRIDGE1_RUST_OPAQUE
+class Opaque {
+public:
+  Opaque() = delete;
+  Opaque(const Opaque &) = delete;
+  ~Opaque() = delete;
+};
+#endif // CXXBRIDGE1_RUST_OPAQUE
+
 #ifndef CXXBRIDGE1_IS_COMPLETE
 #define CXXBRIDGE1_IS_COMPLETE
 namespace detail {
@@ -713,7 +768,42 @@ std::size_t align_of() {
 
 namespace netsim {
   namespace frontend {
+    enum class GrpcMethod : ::std::uint8_t;
+    struct ClientResponseReader;
     using FrontendClient = ::netsim::frontend::FrontendClient;
     using ClientResult = ::netsim::frontend::ClientResult;
   }
 }
+
+namespace netsim {
+namespace frontend {
+#ifndef CXXBRIDGE1_ENUM_netsim$frontend$GrpcMethod
+#define CXXBRIDGE1_ENUM_netsim$frontend$GrpcMethod
+enum class GrpcMethod : ::std::uint8_t {
+  GetVersion = 0,
+  PatchDevice = 1,
+  GetDevices = 2,
+  Reset = 3,
+  ListPcap = 4,
+  PatchPcap = 5,
+  GetPcap = 6,
+};
+#endif // CXXBRIDGE1_ENUM_netsim$frontend$GrpcMethod
+
+#ifndef CXXBRIDGE1_STRUCT_netsim$frontend$ClientResponseReader
+#define CXXBRIDGE1_STRUCT_netsim$frontend$ClientResponseReader
+struct ClientResponseReader final : public ::rust::Opaque {
+  void handle_chunk(::rust::Slice<::std::uint8_t const> chunk) const noexcept;
+  void handle_error(::std::uint32_t error_code, ::rust::Str error_message) const noexcept;
+  ~ClientResponseReader() = delete;
+
+private:
+  friend ::rust::layout;
+  struct layout {
+    static ::std::size_t size() noexcept;
+    static ::std::size_t align() noexcept;
+  };
+};
+#endif // CXXBRIDGE1_STRUCT_netsim$frontend$ClientResponseReader
+} // namespace frontend
+} // namespace netsim

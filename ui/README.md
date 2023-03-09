@@ -4,40 +4,55 @@
 
 ## netsim web UI
 
-[![Built with open-wc recommendations](https://img.shields.io/badge/built%20with-open--wc-blue.svg)](https://github.com/open-wc)
-
-This is a working directory for providing a web UI for netsim.
+This directory contains the Web UI for netsim.
 
 ## Prerequisite
 
-The netsim web server must be up and running. Check go/betosim on how to start multiple virtual devices with netsim.
+The netsimd web server must be up and running.
 
-## Quickstart
+## Build Commands
 
-To get started:
+Firstly, you must enter the ui directory and run npm install.
 
 ```sh
+cd $REPO/tools/netsim/ui
 npm install
 ```
+
+Command for compiling and building web UI:
+
+```sh
+npm run build
+```
+
+Command for translating netsim's model.proto into model.ts:
+
+```sh
+npm run tsproto
+```
+
+Command for running local web development server:
 
 ```sh
 npm start
 ```
 
-Then open `http://localhost:8000/web/` to run the netsim web UI
+Local web server will be served in `http://localhost:8000/web/`
 
 ## Scripts
 
+- `build` compiles TypeScript into JavaScript and bundle to distribution with rollup
+- `tsproto` translates netsim's model.proto into model.ts
 - `start` runs your app for development, reloading on file changes
 
 ## Tooling configs
 
-For most of the tools, the configuration is in the `package.json` to reduce the amount of files in your project.
-
-If you customize the configuration a lot, you can consider moving them to individual files.
+- `package.json` contains all npm packages and scripts for web development
+- `rollup.config.mjs` applies import mappings to CDNs and bundles to distribution
+- `tsconfig.json` has configurations for typescript compiling.
 
 ## Authors
 
-[Bill Schilit] schilit@google.com
-
 [Hyun Jae Moon] hyunjaemoon@google.com
+
+[Bill Schilit] schilit@google.com

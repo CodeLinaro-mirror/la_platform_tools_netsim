@@ -167,7 +167,7 @@ export class CubeSprite extends LitElement implements Notifiable {
 
   private handleOrientationEvent = (e: Event) => {
     const { detail } = e as CustomEvent;
-    if (detail.deviceSerial === this.id && this.controls) {
+    if (detail.name === this.id && this.controls) {
       if (detail.type === 'yaw') {
         this.yaw = detail.value;
       } else if (detail.type === 'pitch') {
