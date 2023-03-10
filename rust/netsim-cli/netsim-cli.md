@@ -9,7 +9,7 @@ OPTIONS:
 
 
 ## SUBCOMMANDS:
-* ### `capture`:    Control the packet capture for one or all devices
+* ### `capture`:    Control the bluetooth packet capture for one or all devices
     * USAGE:
         * `netsim capture <STATE> <NAME>`
 
@@ -35,9 +35,9 @@ OPTIONS:
         * `netsim radio <BT_TYPE> <STATUS> <NAME>`
 
     * ARGS:
-        * \<BT_TYPE\>    Radio type [possible values: ble, classic]
-        * \<STATUS\>     Radio status [possible values: up, down]
-        * \<NAME\>       Device name
+        * \<RADIO_TYPE\>    Radio type [possible values: ble, classic, wifi]
+        * \<STATUS\>        Radio status [possible values: up, down]
+        * \<NAME\>          Device name
 * ### `reset`:      Reset Netsim device scene
     * USAGE:
         * `netsim reset`

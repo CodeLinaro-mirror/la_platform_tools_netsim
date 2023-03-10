@@ -34,7 +34,7 @@ void handle_bt_request(uint32_t facade_id,
 void handle_bt_response(uint32_t facade_id,
                         packet::HCIPacket_PacketType packet_type,
                         const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::backend::grpc::handle_bt_response(facade_id, packet_type, packet);
+  netsim::backend::handle_bt_response(facade_id, packet_type, packet);
 }
 
 // forward from transport to facade via packet_hub
@@ -46,7 +46,7 @@ void handle_wifi_request(uint32_t facade_id,
 // forward from facade to transport via packet_hub
 void handle_wifi_response(uint32_t facade_id,
                           const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::backend::grpc::handle_wifi_response(facade_id, packet);
+  netsim::backend::handle_wifi_response(facade_id, packet);
 }
 
 }  // namespace packet_hub

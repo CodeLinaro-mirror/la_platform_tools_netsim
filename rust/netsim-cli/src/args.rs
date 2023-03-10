@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use frontend_proto::common::ChipKind;
 use frontend_proto::frontend;
 use frontend_proto::model;
 use frontend_proto::model::State;
 use frontend_proto::model::{Chip_Bluetooth, Chip_Radio};
 use protobuf::Message;
+use std::fmt;
 
 #[derive(Debug, Parser)]
 pub struct NetsimArgs {
@@ -38,7 +40,7 @@ pub enum Command {
     Move(Move),
     /// Display device(s) information
     Devices(Devices),
-    /// Control the packet capture for one or all devices
+    /// Control the bluetooth packet capture for one or all devices
     Capture(Capture),
     /// Reset Netsim device scene
     Reset,
@@ -58,22 +60,32 @@ impl Command {
         match self {
             Command::Version => Vec::new(),
             Command::Radio(cmd) => {
-                let mut result = frontend::PatchDeviceRequest::new();
-                let mutable_device = result.mut_device();
-                mutable_device.set_name(cmd.name.to_owned());
-                let mutable_chips = mutable_device.mut_chips();
-                mutable_chips.push_default();
-                let mut bt_chip = Chip_Bluetooth::new();
+                let mut chip = model::Chip { ..Default::default() };
                 let chip_state = match cmd.status {
                     UpDownStatus::Up => State::ON,
                     UpDownStatus::Down => State::OFF,
                 };
-                if cmd.bt_type == BtType::Ble {
-                    bt_chip.set_low_energy(Chip_Radio { state: chip_state, ..Default::default() });
+                if cmd.radio_type == RadioType::Wifi {
+                    let mut wifi_chip = Chip_Radio::new();
+                    wifi_chip.set_state(chip_state);
+                    chip.set_wifi(wifi_chip);
+                    chip.set_kind(ChipKind::WIFI);
                 } else {
-                    bt_chip.set_classic(Chip_Radio { state: chip_state, ..Default::default() });
+                    let mut bt_chip = Chip_Bluetooth::new();
+                    if cmd.radio_type == RadioType::Ble {
+                        bt_chip
+                            .set_low_energy(Chip_Radio { state: chip_state, ..Default::default() });
+                    } else {
+                        bt_chip.set_classic(Chip_Radio { state: chip_state, ..Default::default() });
+                    }
+                    chip.set_kind(ChipKind::BLUETOOTH);
+                    chip.set_bt(bt_chip);
                 }
-                mutable_chips[0].set_bt(bt_chip);
+                let mut result = frontend::PatchDeviceRequest::new();
+                let mutable_device = result.mut_device();
+                mutable_device.set_name(cmd.name.to_owned());
+                let mutable_chips = mutable_device.mut_chips();
+                mutable_chips.push(chip);
                 result.write_to_bytes().unwrap()
             }
             Command::Move(cmd) => {
@@ -90,17 +102,21 @@ impl Command {
             }
             Command::Devices(_) => Vec::new(),
             Command::Capture(cmd) => {
-                let mut result = frontend::PatchDeviceRequest::new();
-                let mutable_device = result.mut_device();
-                mutable_device.set_name(cmd.name.to_owned());
-                let mutable_chips = mutable_device.mut_chips();
-                mutable_chips.push_default();
+                let mut bt_chip = model::Chip {
+                    kind: ChipKind::BLUETOOTH,
+                    chip: Some(model::Chip_oneof_chip::bt(Chip_Bluetooth { ..Default::default() })),
+                    ..Default::default()
+                };
                 let capture_state = match cmd.state {
                     OnOffState::On => State::ON,
                     OnOffState::Off => State::OFF,
                 };
-                mutable_chips[0].set_capture(capture_state);
-                mutable_chips[0].mut_bt();
+                bt_chip.set_capture(capture_state);
+                let mut result = frontend::PatchDeviceRequest::new();
+                let mutable_device = result.mut_device();
+                mutable_device.set_name(cmd.name.to_owned());
+                let mutable_chips = mutable_device.mut_chips();
+                mutable_chips.push(bt_chip);
                 result.write_to_bytes().unwrap()
             }
             Command::Reset => Vec::new(),
@@ -133,7 +149,7 @@ impl Command {
 pub struct Radio {
     /// Radio type
     #[clap(value_enum)]
-    pub bt_type: BtType,
+    pub radio_type: RadioType,
     /// Radio status
     #[clap(value_enum)]
     pub status: UpDownStatus,
@@ -142,15 +158,28 @@ pub struct Radio {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub enum BtType {
+pub enum RadioType {
     Ble,
     Classic,
+    Wifi,
+}
+
+impl fmt::Display for RadioType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum UpDownStatus {
     Up,
     Down,
+}
+
+impl fmt::Display for UpDownStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug, Args)]

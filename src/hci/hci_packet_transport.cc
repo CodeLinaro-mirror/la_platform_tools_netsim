@@ -21,11 +21,8 @@
 #include "hci/hci_debug.h"
 #include "hci_packet.pb.h"
 #include "model/hci/hci_transport.h"
-#include "util/log.h"
-
-#ifdef NETSIM_ANDROID_EMULATOR
 #include "packet_hub/packet_hub.h"
-#endif
+#include "util/log.h"
 
 using netsim::packet::HCIPacket;
 
@@ -134,10 +131,8 @@ void HciPacketTransport::Response(packet::HCIPacket_PacketType packet_type,
     return;
   }
   auto shared_packet = std::make_shared<std::vector<uint8_t>>(packet);
-#ifdef NETSIM_ANDROID_EMULATOR
   netsim::packet_hub::handle_bt_response(mDeviceId.value(), packet_type,
                                          shared_packet);
-#endif
 }
 
 rootcanal::PacketCallback HciPacketTransport::PacketTypeCallback(

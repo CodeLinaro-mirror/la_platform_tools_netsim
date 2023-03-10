@@ -21,7 +21,7 @@
 #include <thread>
 
 #ifdef NETSIM_ANDROID_EMULATOR
-#include "backend/backend_server.h"
+#include "backend/grpc_server.h"
 #endif
 #include "controller/controller.h"
 #include "frontend/frontend_server.h"

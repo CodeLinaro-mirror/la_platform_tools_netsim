@@ -15,9 +15,6 @@
 
 #include "aemu/base/process/Process.h"
 #include "gtest/gtest.h"
-#include "packet_streamer.grpc.pb.h"
-#include "packet_streamer.pb.h"
-#include "startup.pb.h"
 
 namespace netsim::testing {
 namespace {
@@ -35,41 +32,10 @@ class PacketStreamerClientTest : public ::testing::Test {
 TEST_F(PacketStreamerClientTest, CreateChannelTest) {
   auto channel = packet::CreateChannel();
   ASSERT_TRUE(channel != nullptr);
-}
 
-TEST_F(PacketStreamerClientTest, CreateChannelLoopBackTest) {
-  auto channel = packet::CreateChannel();
-  ASSERT_TRUE(channel != nullptr);
-
-  std::unique_ptr<packet::PacketStreamer::Stub> stub =
-      packet::PacketStreamer::NewStub(channel);
-
-  ::grpc::ClientContext context;
-
-  packet::PacketRequest initial_request;
-  packet::Stream bt_stream = stub->StreamPackets(&context);
-  initial_request.mutable_initial_info()->set_name("Pixel_XL_3");
-  initial_request.mutable_initial_info()->mutable_chip()->set_kind(
-      netsim::common::ChipKind::BLUETOOTH);
-  bt_stream->Write(initial_request);
-  packet::PacketResponse response;
-  bt_stream->Read(&response);
-  // TODO: Valid response after server is implemented.
-  ASSERT_FALSE(response.has_packet());
-  ASSERT_FALSE(response.has_error());
-
-  ::grpc::ClientContext context2;
-  packet::Stream wifi_stream = stub->StreamPackets(&context2);
-  initial_request.mutable_initial_info()->set_name("Pixel_XL_3");
-  initial_request.mutable_initial_info()->mutable_chip()->set_kind(
-      netsim::common::ChipKind::WIFI);
-  wifi_stream->Write(initial_request);
-  response.Clear();
-  bt_stream->Read(&response);
-
-  // TODO: Valid response after server is implemented.
-  ASSERT_FALSE(response.has_packet());
-  ASSERT_FALSE(response.has_error());
+  auto channel2 = packet::CreateChannel();
+  ASSERT_TRUE(channel2 != nullptr);
+  ASSERT_EQ(channel, channel2);  // Should reuse the channel.
 }
 
 }  // namespace

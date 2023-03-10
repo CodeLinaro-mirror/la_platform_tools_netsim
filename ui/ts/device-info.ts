@@ -334,10 +334,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
   }
 
   private handleGetChips() {
-    let lowEnergyCheckbox = html``;
-    let classicCheckbox = html``;
-    let wifiCheckbox = html``;
-    let uwbCheckbox = html``;
     const disabledCheckbox = html`
       <input type="checkbox" disabled />
         <span
@@ -345,6 +341,10 @@ export class DeviceInformation extends LitElement implements Notifiable {
           style=${styleMap({ opacity: '0.7' })}
         ></span>
     `;
+    let lowEnergyCheckbox = disabledCheckbox;
+    let classicCheckbox = disabledCheckbox;
+    let wifiCheckbox = disabledCheckbox;
+    let uwbCheckbox = disabledCheckbox;
     if (this.selectedDevice) {
       if ("chips" in this.selectedDevice && this.selectedDevice.chips) {
         for (const chip of this.selectedDevice.chips) {
@@ -363,8 +363,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 />
                 <span class="slider round"></span>
               `;
-            } else {
-              lowEnergyCheckbox = disabledCheckbox;
             }
             if ("classic" in chip.bt && chip.bt.classic && 'state' in chip.bt.classic) {
               classicCheckbox = html`
@@ -380,8 +378,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 />
                 <span class="slider round"></span>
               `;
-            } else {
-              classicCheckbox = disabledCheckbox;
             }
           }
 
@@ -399,8 +395,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
               />
               <span class="slider round"></span>
             `;
-          } else {
-            wifiCheckbox = disabledCheckbox;
           }
 
           if ('uwb' in chip && chip.uwb) {
@@ -417,8 +411,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
               />
               <span class="slider round"></span>
             `;
-          } else {
-            uwbCheckbox = disabledCheckbox;
           }
         }
       }
