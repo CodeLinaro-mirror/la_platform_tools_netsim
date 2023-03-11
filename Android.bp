@@ -74,7 +74,7 @@ genrule {
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) >> $(out)",
     srcs: ["rust/netsim-cxx/src/lib.rs"],
-    out: ["netsim_cxx_generated.cc"],
+    out: ["netsim-cxx/src/lib.rs.cc"],
 }
 
 genrule {
@@ -82,7 +82,7 @@ genrule {
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) --header >> $(out)",
     srcs: ["rust/netsim-cxx/src/lib.rs"],
-    out: ["netsim_cxx_generated.h"],
+    out: ["netsim-cxx/src/lib.rs.h"],
 }
 
 genrule {

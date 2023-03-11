@@ -15,9 +15,9 @@
 #pragma once
 #include <string>
 
-#include "../../rust/netsim-cxx/cxx/cxx.h"
 #include "frontend.pb.h"
 #include "grpcpp/support/sync_stream.h"
+#include "rust/cxx.h"
 
 namespace netsim {
 namespace frontend {

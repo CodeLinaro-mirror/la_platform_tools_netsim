@@ -2,7 +2,7 @@
 name = "netsim-cxx"
 version = "0.1.0"
 edition = "2021"
-# build = "build_cargo.rs"
+build = "build.rs"
 
 [lib]
 crate-type = ["staticlib", "lib"]
@@ -16,4 +16,4 @@ protobuf = "2.27.1"
 regex = "1.6.0"
 
 [build-dependencies]
-# cxx-build = "1.0"
+cxx-build = "1.0.92"

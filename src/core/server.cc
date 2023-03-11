@@ -28,7 +28,7 @@
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
-#include "netsim_cxx_generated.h"
+#include "netsim-cxx/src/lib.rs.h"
 #include "util/filesystem.h"
 #include "util/ini_file.h"
 #include "util/log.h"
