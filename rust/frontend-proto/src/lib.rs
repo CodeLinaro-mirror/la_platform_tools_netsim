@@ -15,5 +15,6 @@
 
 //! frontend protobuf library for netsim
 
+pub mod common;
 pub mod frontend;
 pub mod model;

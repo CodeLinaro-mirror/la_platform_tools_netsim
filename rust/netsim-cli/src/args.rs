@@ -15,6 +15,9 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use frontend_proto::frontend;
 use frontend_proto::model;
+use frontend_proto::model::State;
+use frontend_proto::model::{Chip_Bluetooth, Chip_Radio};
+use protobuf::Message;
 
 #[derive(Debug, Parser)]
 pub struct NetsimArgs {
@@ -31,46 +34,71 @@ pub enum Command {
     /// Set the device location
     Move(Move),
     /// Display device(s) information
-    Devices,
+    Devices(Devices),
     /// Control the packet capture for one or all devices
     Capture(Capture),
     /// Reset Netsim device scene
     Reset,
     /// Open netsim Web UI
-    Ui,
+    Gui,
 }
 
 impl Command {
-    pub fn request_json(self) -> String {
+    /// Return the generated request protobuf as a byte vector
+    /// The parsed command parameters are used to construct the request protobuf which is
+    /// returned as a byte vector that can be sent to the server.
+    pub fn get_request_bytes(&self) -> Vec<u8> {
         match self {
-            Command::Version => String::from("{}"),
-            Command::Radio(_cmd) => {
-                let result = frontend::UpdateDeviceRequest::new();
-                //TODO: Update request content once bt/hci functions are added and working
-                serde_json::to_string(&result).unwrap()
+            Command::Version => Vec::new(),
+            Command::Radio(cmd) => {
+                let mut result = frontend::PatchDeviceRequest::new();
+                let mutable_device = result.mut_device();
+                mutable_device.set_name(cmd.name.to_owned());
+                let mutable_chips = mutable_device.mut_chips();
+                mutable_chips.push_default();
+                let mut bt_chip = Chip_Bluetooth::new();
+                let chip_state = match cmd.status {
+                    UpDownStatus::Up => State::ON,
+                    UpDownStatus::Down => State::OFF,
+                };
+                if cmd.bt_type == BtType::Ble {
+                    bt_chip.set_low_energy(Chip_Radio { state: chip_state, ..Default::default() });
+                } else {
+                    bt_chip.set_classic(Chip_Radio { state: chip_state, ..Default::default() });
+                }
+                mutable_chips[0].set_bt(bt_chip);
+                result.write_to_bytes().unwrap()
             }
             Command::Move(cmd) => {
-                let mut result = frontend::UpdateDeviceRequest::new();
+                let mut result = frontend::PatchDeviceRequest::new();
                 let mutable_device = result.mut_device();
-                mutable_device.set_device_serial(cmd.device_serial);
+                mutable_device.set_name(cmd.name.to_owned());
                 mutable_device.set_position(model::Position {
                     x: cmd.x,
                     y: cmd.y,
                     z: cmd.z.unwrap_or_default(),
                     ..Default::default()
                 });
-                serde_json::to_string(&result).unwrap()
+                result.write_to_bytes().unwrap()
             }
-            Command::Devices => String::from("{}"),
+            Command::Devices(_) => Vec::new(),
             Command::Capture(cmd) => {
-                let mut result = frontend::SetPacketCaptureRequest::new();
-                result.set_device_serial(cmd.device_serial);
-                result.set_capture(cmd.state == BoolState::True);
-                serde_json::to_string(&result).unwrap()
+                let mut result = frontend::PatchDeviceRequest::new();
+                let mutable_device = result.mut_device();
+                mutable_device.set_name(cmd.name.to_owned());
+                let mutable_chips = mutable_device.mut_chips();
+                mutable_chips.push_default();
+                let capture_state = match cmd.state {
+                    OnOffState::On => State::ON,
+                    OnOffState::Off => State::OFF,
+                };
+                mutable_chips[0].set_capture(capture_state);
+                mutable_chips[0].mut_bt();
+                result.write_to_bytes().unwrap()
             }
-            Command::Reset => String::from("{}"),
-            Command::Ui => {
-                panic!("get_json is not implemented for Ui Command.");
+            Command::Reset => Vec::new(),
+            Command::Gui => {
+                unimplemented!("get_request_bytes is not implemented for Gui Command.");
             }
         }
     }
@@ -79,11 +107,13 @@ impl Command {
 #[derive(Debug, Args)]
 pub struct Radio {
     /// Radio type
+    #[clap(value_enum)]
     pub bt_type: BtType,
-    /// Radio status (up/down)
+    /// Radio status
+    #[clap(value_enum)]
     pub status: UpDownStatus,
-    /// Device serial
-    pub device_serial: String,
+    /// Device name
+    pub name: String,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
@@ -100,8 +130,8 @@ pub enum UpDownStatus {
 
 #[derive(Debug, Args)]
 pub struct Move {
-    /// Device serial
-    pub device_serial: String,
+    /// Device name
+    pub name: String,
     /// x position of device
     pub x: f32,
     /// y position of device
@@ -111,17 +141,26 @@ pub struct Move {
 }
 
 #[derive(Debug, Args)]
+pub struct Devices {
+    /// Continuously print device(s) information every second
+    #[clap(short, long)]
+    pub continuous: bool,
+}
+
+#[derive(Debug, Args)]
 pub struct Capture {
-    /// Capture state (true/false)
-    pub state: BoolState,
-    /// Device serial
-    pub device_serial: String,
+    /// Capture state
+    #[clap(value_enum)]
+    pub state: OnOffState,
+    /// Device name
+    pub name: String,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-pub enum BoolState {
-    #[value(alias("True"), alias("TRUE"))]
-    True,
-    #[value(alias("False"), alias("FALSE"))]
-    False,
+pub enum OnOffState {
+    // NOTE: Temporarily disable this attribute because clap-3.2.22 is used.
+    // #[value(alias("On"), alias("ON"))]
+    On,
+    // #[value(alias("Off"), alias("OFF"))]
+    Off,
 }

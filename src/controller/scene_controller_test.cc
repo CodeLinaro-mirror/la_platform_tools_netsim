@@ -25,9 +25,8 @@ namespace controller {
 
 class SceneControllerTest : public ::testing::Test {
  protected:
-  std::shared_ptr<Device> match(const std::string &serial,
-                                const std::string &name) {
-    return SceneController::Singleton().MatchDevice(serial, name);
+  std::shared_ptr<Device> match(const std::string &name) {
+    return SceneController::Singleton().MatchDevice(name);
   }
 };
 
@@ -44,34 +43,28 @@ TEST_F(SceneControllerTest, AddDevicesAndGetTest) {
 }
 
 TEST_F(SceneControllerTest, DeviceConstructorTest) {
-  auto device = controller::CreateDevice("unique-serial");
-  EXPECT_EQ("unique-serial", device->model.device_serial());
+  auto device = controller::CreateDevice("unique-name");
+  EXPECT_EQ("unique-name", device->model.name());
   // Test for non-empty position and orientationa
   EXPECT_TRUE(device->model.has_position());
   EXPECT_TRUE(device->model.has_orientation());
 }
 
 TEST_F(SceneControllerTest, MatchDeviceTest) {
-  auto device = controller::CreateDevice("serial:aaa");
+  auto device = controller::CreateDevice("name:aaa");
   device->model.set_name("name:bbb");
   SceneController::Singleton().Add(device);
 
-  device = controller::CreateDevice("serial:ccc");
+  device = controller::CreateDevice("name:ccc");
   device->model.set_name("name:ddd");
   SceneController::Singleton().Add(device);
 
-  // with both serial and name, uses serial since name won't match
-  ASSERT_TRUE(match("aa", "ee") != nullptr);
-
-  // with neither matching
-  ASSERT_TRUE(match("ff", "ee") == nullptr);
-
-  // with no serial, matches with name
-  ASSERT_TRUE(match("", "dd") != nullptr);
+  //  matches with name
+  ASSERT_TRUE(match("dd") != nullptr);
 }
 
 TEST_F(SceneControllerTest, ResetTest) {
-  auto device_to_add = controller::CreateDevice("serial-for-reset-test");
+  auto device_to_add = controller::CreateDevice("name-for-reset-test");
   device_to_add->model.set_visible(false);
   device_to_add->model.mutable_position()->set_x(10.0);
   device_to_add->model.mutable_position()->set_y(20.0);
@@ -82,14 +75,14 @@ TEST_F(SceneControllerTest, ResetTest) {
 
   SceneController::Singleton().Add(device_to_add);
 
-  auto device = match("serial-for-reset-test", "");
+  auto device = match("name-for-reset-test");
   EXPECT_EQ(device->model.visible(), false);
   EXPECT_EQ(device->model.position().x(), 10.0);
   EXPECT_EQ(device->model.orientation().pitch(), 1.0);
 
   SceneController::Singleton().Reset();
 
-  device = match("serial-for-reset-test", "");
+  device = match("name-for-reset-test");
   EXPECT_EQ(device->model.visible(), true);
   EXPECT_EQ(device->model.position().x(), 0.0);
   EXPECT_EQ(device->model.position().y(), 0.0);

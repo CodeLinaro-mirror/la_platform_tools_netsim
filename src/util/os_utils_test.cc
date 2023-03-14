@@ -15,11 +15,11 @@
 #include "util/os_utils.h"
 
 #include <cstdio>
-#include <filesystem>
 #include <fstream>
 #include <string>
 
 #include "gtest/gtest.h"
+#include "util/filesystem.h"
 
 namespace netsim {
 namespace testing {
@@ -28,7 +28,7 @@ namespace {
 // Test that the result of GetDiscoveryDir exists
 TEST(OsUtilsTest, GetDiscoveryDir) {
   auto dir = osutils::GetDiscoveryDirectory();
-  EXPECT_TRUE(std::filesystem::exists(dir));
+  EXPECT_TRUE(netsim::filesystem::exists(dir));
 }
 
 }  // namespace

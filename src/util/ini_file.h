@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -30,8 +29,7 @@ class IniFile {
  public:
   // Note that the constructor _does not_ read data from the backing file.
   // Call |Read| to read the data.
-  explicit IniFile(std::filesystem::path filepath = {})
-      : filepath(std::move(filepath)) {}
+  explicit IniFile(std::string filepath = "") : filepath(std::move(filepath)) {}
 
   // Reads data into IniFile from the backing file, overwriting any
   // existing data.
@@ -51,7 +49,7 @@ class IniFile {
 
  private:
   std::unordered_map<std::string, std::string> data;
-  std::filesystem::path filepath;
+  std::string filepath;
 };
 
 }  // namespace netsim

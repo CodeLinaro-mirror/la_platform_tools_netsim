@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Command Line Interface for Netsim
+/// Version library.
 
-mod args;
-mod browser;
-mod requests;
-use args::NetsimArgs;
-use clap::Parser;
+pub const VERSION: &str = "0.1.0";
 
-fn main() {
-    let args = NetsimArgs::parse();
-    if matches!(args.command, args::Command::Ui) {
-        browser::open("https://google.com"); //TODO: update to open netsim ui directly
-        return;
-    }
-    let _grpc_method = args.command.grpc_method();
-    let _json_string = args.command.request_json();
-    //TODO: update to use grpc_method and _json_string with SendGrpc function from frontend-netsim-cxx
+pub fn get_version() -> String {
+    VERSION.to_owned()
 }

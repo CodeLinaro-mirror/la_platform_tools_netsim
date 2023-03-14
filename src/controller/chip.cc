@@ -30,7 +30,7 @@ model::Chip &Chip::Model() {
 
 model::Device &Chip::DeviceModel() { return this->parent->model; }
 
-void Chip::Update(const model::Chip &request) {
+void Chip::Patch(const model::Chip &request) {
   auto &model = Model();
   if (!request.manufacturer().empty()) {
     model.set_manufacturer(request.manufacturer());

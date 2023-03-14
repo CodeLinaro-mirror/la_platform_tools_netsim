@@ -15,10 +15,20 @@
 
 # Formats source files according to Google's style guide.
 
+REPO=$(dirname "$0")/../../..
+
 # Run clang-format.
-find src \( -name '*.cc' -o -name '*.h' -o -name '*.proto' \) \
+find $REPO/tools/netsim/src \( -name '*.cc' -o -name '*.h' -o -name '*.proto' \) \
   -exec clang-format -i {} \;
 
 # Format rust.
-REPO=$(dirname "$0")/../../..
-$REPO/prebuilts/rust/linux-x86/stable/rustfmt -v -- $REPO/tools/netsim/rust/*/src/*.rs
+find $REPO/tools/netsim/rust \( \
+  -path $REPO/tools/netsim/rust/target -prune -false \
+  -o -name '*.rs' \) \
+  -exec $REPO/prebuilts/rust/linux-x86/stable/rustfmt -v {} \;
+
+# Run cmake-format.
+find $REPO/tools/netsim \( -name 'CMakeLists.txt' \) \
+  -exec cmake-format -i {} \;
+find $REPO/tools/netsim/cmake \( -name "*.cmake" \) \
+  -exec cmake-format -i {} \;

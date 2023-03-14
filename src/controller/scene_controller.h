@@ -39,14 +39,14 @@ class SceneController {
 
   // When a packet stream goes away the chip is removed. When there are no more
   // chips the device is remove.
-  void RemoveChip(const std::string &serial, model::Chip::ChipCase chip_case,
+  void RemoveChip(const std::string &serial, common::ChipKind chip_kind,
                   const std::string &chip_id);
 
   void Add(std::shared_ptr<Device> &device);
 
   const std::vector<std::shared_ptr<Device>> Copy();
 
-  bool UpdateDevice(const model::Device &);
+  bool PatchDevice(const model::Device &);
 
   float GetDistance(const Device &, const Device &);
 
@@ -58,8 +58,7 @@ class SceneController {
 
   std::shared_ptr<Device> GetDevice(const std::string &serial);
 
-  std::shared_ptr<Device> MatchDevice(const std::string &serial,
-                                      const std::string &name);
+  std::shared_ptr<Device> MatchDevice(const std::string &query);
 
  private:
   SceneController() = default;  // Disallow instantiation outside of the class.

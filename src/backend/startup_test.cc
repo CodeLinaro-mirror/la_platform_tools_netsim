@@ -29,10 +29,10 @@ TEST(StartupTest, MessageToJsonStringTest) {
   netsim::startup::StartupInfo info;
 
   auto device = info.add_devices();
-  device->set_serial("emulator-5554");
+  device->set_name("emulator-5554");
 
   auto chip = device->add_chips();
-  chip->set_kind(startup::Chip::BLUETOOTH);
+  chip->set_kind(common::ChipKind::BLUETOOTH);
   chip->set_fd_in(1);
   chip->set_fd_out(2);
 
@@ -43,15 +43,15 @@ TEST(StartupTest, MessageToJsonStringTest) {
   EXPECT_EQ(
       json_string,
       std::string(
-          R"({"devices":[{"serial":"emulator-5554","chips":[{"kind":"BLUETOOTH","fdIn":1,"fdOut":2}]}]})"));
+          R"({"devices":[{"name":"emulator-5554","chips":[{"kind":"BLUETOOTH","fdIn":1,"fdOut":2}]}]})"));
 }
 
 // Test reading json format of the proto
 TEST(StartupTest, JsonStringToMessageTest) {
   auto r =
       R"({devices:[
-           {serial:"0.0.0.0:6520",chips:[{kind:"BLUETOOTH", fd_in:1,fd_out:2}]},
-           {serial: "0.0.0.0:6521", chips:[{kind: "BLUETOOTH", fd_in:2, fd_out:3}]}]})";
+           {name:"0.0.0.0:6520",chips:[{kind:"BLUETOOTH", fd_in:1,fd_out:2}]},
+           {name: "0.0.0.0:6521", chips:[{kind: "BLUETOOTH", fd_in:2, fd_out:3}]}]})";
 
   google::protobuf::util::JsonParseOptions options;
   netsim::startup::StartupInfo info;
@@ -59,10 +59,10 @@ TEST(StartupTest, JsonStringToMessageTest) {
 
   ASSERT_EQ(info.devices().size(), 2);
   auto &device = info.devices().Get(0);
-  ASSERT_EQ(device.serial(), "0.0.0.0:6520");
+  ASSERT_EQ(device.name(), "0.0.0.0:6520");
   ASSERT_EQ(device.chips().size(), 1);
   auto &chip = device.chips().Get(0);
-  ASSERT_EQ(chip.kind(), startup::Chip::BLUETOOTH);
+  ASSERT_EQ(chip.kind(), common::ChipKind::BLUETOOTH);
   ASSERT_EQ(chip.fd_in(), 1);
 }
 

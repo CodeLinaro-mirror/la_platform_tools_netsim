@@ -16,4 +16,5 @@
 #
 # Setup cmake for netsim.
 REPO=$(dirname "$0")/../../..
-$REPO/external/qemu/android/rebuild.sh --task configure --cmake_option CMAKE_EXPORT_COMPILE_COMMANDS=1
+# Runs the CMake Ninja generator.
+$REPO/external/qemu/android/rebuild.sh --task Configure --cmake_option CMAKE_EXPORT_COMPILE_COMMANDS=1

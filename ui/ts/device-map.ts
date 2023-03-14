@@ -136,19 +136,19 @@ export class DeviceMap extends LitElement implements Notifiable {
                       .action=${'move'}
                       style=${styleMap({
                         position: 'absolute',
-                        left: `${(device.position.x ?? 0) * 100}px`,
-                        top: `${(device.position.y ?? 0) * 100}px`,
+                        left: `${device.position.x * 100}px`,
+                        top: `${device.position.y * 100}px`,
                       })}
                     >
                       <ns-cube-sprite
-                        id=${device.deviceSerial}
+                        id=${device.name}
                         .color=${rainbow[idx % rainbow.length]}
                         .size=${'30px'}
                         .controls=${true}
-                        yaw=${device.orientation.yaw ?? 0}
-                        pitch=${device.orientation.pitch ?? 0}
-                        roll=${device.orientation.roll ?? 0}
-                        posZ=${(device.position.z ?? 0) * 100}
+                        yaw=${device.orientation.yaw}
+                        pitch=${device.orientation.pitch}
+                        roll=${device.orientation.roll}
+                        posZ=${device.position.z * 100}
                       ></ns-cube-sprite>
                     </ns-device-dragzone>
                   `

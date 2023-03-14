@@ -1,4 +1,4 @@
-import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,LitElement as t,html as n}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{customElement as a}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let i=class extends t{connectedCallback(){super.connectedCallback()}disconnectedCallback(){super.disconnectedCallback()}handleClick(e){let o="main";"nav-trace-section"===e.target.id&&(o="trace"),window.dispatchEvent(new CustomEvent("changeModeEvent",{detail:{mode:o}}))}render(){return n`
+import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,LitElement as t,html as a}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{customElement as n}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let i=class extends t{connectedCallback(){super.connectedCallback()}disconnectedCallback(){super.disconnectedCallback()}handleClick(e){let o="main";"nav-trace-section"===e.target.id?o="trace":"nav-os-library-section"===e.target.id&&(o="oslib"),window.dispatchEvent(new CustomEvent("changeModeEvent",{detail:{mode:o}}))}render(){return a`
       <nav>
         <div id="nav-logo-section" class="nav-section">
           <a>
@@ -12,6 +12,9 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,
           >
           <a id="nav-trace-section" @click=${this.handleClick}
             >PACKET TRACE</a
+          >
+          <a id="nav-os-library-section" @click=${this.handleClick}
+            >OPEN SOURCE LIBRARIES</a
           >
         </div>
         <div id="nav-contact-section" class="nav-section">
@@ -56,11 +59,11 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,
 
     #nav-logo-section {
       justify-content: flex-start;
-      flex-basis: calc(100% / 3);
+      flex-basis: calc(100% / 4);
     }
 
     #nav-link-section {
-      flex-basis: calc(100% / 3);
+      flex-basis: calc(100% / 2);
       gap: 6rem;
     }
 
@@ -87,4 +90,4 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,
       color: white;
       font-size: 25px;
     }
-  `,i=e([a("ns-navigation-bar")],i);export{i as NavigationBar};
+  `,i=e([n("ns-navigation-bar")],i);export{i as NavigationBar};

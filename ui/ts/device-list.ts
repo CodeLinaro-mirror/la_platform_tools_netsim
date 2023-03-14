@@ -81,7 +81,7 @@ export class DeviceList extends LitElement implements Notifiable {
             <center>
               ${device.visible === true
                 ? html`<ns-cube-sprite
-                      id=${device.deviceSerial}
+                      id=${device.name}
                       color=${rainbow[idx % rainbow.length]}
                       size="30px"
                       style="opacity:0.5;"
@@ -89,7 +89,7 @@ export class DeviceList extends LitElement implements Notifiable {
                     >${device.name} `
                 : html`<ns-device-dragzone action="move">
                       <ns-cube-sprite
-                        id=${device.deviceSerial}
+                        id=${device.name}
                         color=${rainbow[idx % rainbow.length]}
                         size="30px"
                       ></ns-cube-sprite> </ns-device-dragzone

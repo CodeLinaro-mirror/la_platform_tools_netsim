@@ -15,7 +15,7 @@
 #include "hci/bluetooth_facade.h"
 
 #include <cassert>
-#include <filesystem>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
@@ -31,35 +31,107 @@
 #include "model/setup/test_model.h"
 #include "netsim_cxx_generated.h"
 #include "packet/raw_builder.h"  // for RawBuilder
+#include "util/filesystem.h"
 #include "util/log.h"
+
+using netsim::model::State;
 
 namespace netsim {
 namespace hci {
 namespace {
 
+using namespace std::literals;
+using namespace rootcanal;
+
+/// Transport wrapper for transports that run on an auxiliary thread.
+/// Helps reschedule packet handling to the AsyncManager event thread
+/// to ensure synchronization with other RootCanal events.
+class SyncTransport : public HciTransport {
+ public:
+  SyncTransport(std::shared_ptr<HciTransport> transport,
+                AsyncManager &async_manager)
+      : mTransport(std::move(transport)), mAsyncManager(async_manager) {}
+  ~SyncTransport() = default;
+
+  void RegisterCallbacks(PacketCallback cmd_callback,
+                         PacketCallback acl_callback,
+                         PacketCallback sco_callback,
+                         PacketCallback iso_callback,
+                         CloseCallback close_callback) override {
+    mTransport->RegisterCallbacks(
+        [this, cmd_callback = std::move(cmd_callback)](
+            const std::shared_ptr<std::vector<uint8_t>> cmd) {
+          mAsyncManager.Synchronize(
+              [cmd_callback, cmd = std::move(cmd)]() { cmd_callback(cmd); });
+        },
+        [this, acl_callback = std::move(acl_callback)](
+            const std::shared_ptr<std::vector<uint8_t>> acl) {
+          mAsyncManager.Synchronize(
+              [acl_callback, acl = std::move(acl)]() { acl_callback(acl); });
+        },
+        [this, sco_callback = std::move(sco_callback)](
+            const std::shared_ptr<std::vector<uint8_t>> sco) {
+          mAsyncManager.Synchronize(
+              [sco_callback, sco = std::move(sco)]() { sco_callback(sco); });
+        },
+        [this, iso_callback = std::move(iso_callback)](
+            const std::shared_ptr<std::vector<uint8_t>> iso) {
+          mAsyncManager.Synchronize(
+              [iso_callback, iso = std::move(iso)]() { iso_callback(iso); });
+        },
+        close_callback);
+  }
+
+  void SendEvent(const std::vector<uint8_t> &packet) override {
+    mTransport->SendEvent(packet);
+  }
+  void SendAcl(const std::vector<uint8_t> &packet) override {
+    mTransport->SendAcl(packet);
+  }
+  void SendSco(const std::vector<uint8_t> &packet) override {
+    mTransport->SendSco(packet);
+  }
+  void SendIso(const std::vector<uint8_t> &packet) override {
+    mTransport->SendIso(packet);
+  }
+
+  void Tick() override { mTransport->Tick(); }
+  void Close() override { mTransport->Close(); }
+
+ private:
+  std::shared_ptr<HciTransport> mTransport;
+  AsyncManager &mAsyncManager;
+};
+
 int8_t ComputeRssi(int send_id, int recv_id, int8_t tx_power);
 void IncrTx(uint32_t send_id, rootcanal::Phy::Type phy_type);
 void IncrRx(uint32_t receive_id, rootcanal::Phy::Type phy_type);
 
-class SimPhyLayerFactory : public rootcanal::PhyLayerFactory {
+using rootcanal::PhyDevice;
+using rootcanal::PhyLayer;
+
+class SimPhyLayer : public PhyLayer {
   // for constructor inheritance
-  using PhyLayerFactory::PhyLayerFactory;
+  using PhyLayer::PhyLayer;
 
   // Overrides ComputeRssi in PhyLayerFactory to provide
   // simulated RSSI information using actual spatial
   // device positions.
-  int8_t ComputeRssi(uint32_t sender_id, uint32_t receiver_id, int8_t tx_power) override {
+  int8_t ComputeRssi(PhyDevice::Identifier sender_id,
+                     PhyDevice::Identifier receiver_id,
+                     int8_t tx_power) override {
     return netsim::hci::ComputeRssi(sender_id, receiver_id, tx_power);
   }
 
   // Overrides Send in PhyLayerFactory to add Rx/Tx statistics.
-  void Send(::model::packets::LinkLayerPacketView packet, uint32_t id,
-            uint32_t device_id, int8_t tx_power) override {
-    IncrTx(device_id, GetType());
-    for (const auto& phy : phy_layers_) {
-      if (id != phy->GetId()) {
-        IncrRx(phy->GetId(), GetType());
-        phy->Receive(packet, ComputeRssi(device_id, phy->GetId(), tx_power));
+  void Send(std::vector<uint8_t> const &packet, int8_t tx_power,
+            PhyDevice::Identifier sender_id) override {
+    IncrTx(sender_id, type);
+    for (const auto &device : phy_devices_) {
+      if (sender_id != device->id) {
+        IncrRx(device->id, type);
+        device->Receive(packet, type,
+                        ComputeRssi(sender_id, device->id, tx_power));
       }
     }
   }
@@ -69,10 +141,10 @@ class SimTestModel : public rootcanal::TestModel {
   // for constructor inheritance
   using rootcanal::TestModel::TestModel;
 
-  std::unique_ptr<rootcanal::PhyLayerFactory> CreatePhy(
-      rootcanal::Phy::Type phy_type, size_t phy_index) override {
-    return std::make_unique<SimPhyLayerFactory>(phy_type, phy_index);
-  };
+  std::unique_ptr<rootcanal::PhyLayer> CreatePhyLayer(
+      PhyLayer::Identifier id, rootcanal::Phy::Type type) override {
+    return std::make_unique<SimPhyLayer>(id, type);
+  }
 };
 
 class BluetoothChip;
@@ -108,7 +180,7 @@ class BluetoothChipEmulatorImpl : public BluetoothChipEmulator {
   };
 
   void AddHciConnection(
-      const std::string &serial,
+      const std::string &name,
       std::shared_ptr<rootcanal::HciTransport> transport) override;
 
   std::shared_ptr<BluetoothChip> Get(int device_index);
@@ -123,12 +195,12 @@ class BluetoothChipEmulatorImpl : public BluetoothChipEmulator {
 
   int8_t ComputeRssi(int send_id, int recv_id, int8_t tx_power);
 
-  void UpdatePhy(int device_id, bool isAddToPhy, bool isLowEnergy) {
+  void PatchPhy(int device_id, bool isAddToPhy, bool isLowEnergy) {
     auto phy_index = (isLowEnergy) ? phy_low_energy_index_ : phy_classic_index_;
     if (isAddToPhy) {
       mTestModel.AddDeviceToPhy(device_id, phy_index);
     } else {
-      mTestModel.DelDeviceFromPhy(device_id, phy_index);
+      mTestModel.RemoveDeviceFromPhy(device_id, phy_index);
     }
   }
 
@@ -173,21 +245,21 @@ class BluetoothChip : public controller::Chip {
   void Reset() override {
     controller::Chip::Reset();
     model::Chip model;
-    model.mutable_bt()->mutable_classic()->set_state(model::State::ON);
-    model.mutable_bt()->mutable_low_energy()->set_state(model::State::ON);
-    model.set_capture(model::State::OFF);
-    Update(model);
+    model.mutable_bt()->mutable_classic()->set_state(State::ON);
+    model.mutable_bt()->mutable_low_energy()->set_state(State::ON);
+    model.set_capture(State::OFF);
+    Patch(model);
   }
 
-  void Update(const model::Chip &request) override {
-    controller::Chip::Update(request);
+  void Patch(const model::Chip &request) override {
+    controller::Chip::Patch(request);
 
     auto &model = Model();
 
-    // Update packet capture
+    // Patch packet capture
     if (changedState(model.capture(), request.capture())) {
       model.set_capture(request.capture());
-      bool isOn = request.capture() == model::State::ON;
+      bool isOn = request.capture() == State::ON;
       SetPacketCapture(isOn);
     }
 
@@ -196,22 +268,20 @@ class BluetoothChip : public controller::Chip {
     auto *le = model.mutable_bt()->mutable_low_energy();
     if (changedState(le->state(), request_state)) {
       le->set_state(request_state);
-      chip_emulator->UpdatePhy(device_index, request_state == model::State::ON,
-                               true);
+      chip_emulator->PatchPhy(device_index, request_state == State::ON, true);
     }
     // Classic radio state
     request_state = request.bt().classic().state();
     auto *classic = model.mutable_bt()->mutable_classic();
     if (changedState(classic->state(), request_state)) {
       classic->set_state(request_state);
-      chip_emulator->UpdatePhy(device_index, request_state == model::State::ON,
-                               false);
+      chip_emulator->PatchPhy(device_index, request_state == State::ON, false);
     }
   }
 
   void Remove() override {
     auto &model = DeviceModel();
-    BtsLog("Removing HCI chip for %s", model.device_serial().c_str());
+    BtsLog("Removing HCI chip for %s", model.name().c_str());
     // NOTE: OnConnectionClosed removes the device from the rootcanal testmodel,
     // so the only cleanup is in the Chip class.
     controller::Chip::Remove();
@@ -238,8 +308,8 @@ class BluetoothChip : public controller::Chip {
   }
 
  private:
-  bool changedState(model::State a, model::State b) {
-    return (b != model::State::UNKNOWN && a != b);
+  bool changedState(State a, State b) {
+    return (b != State::UNKNOWN && a != b);
   }
 
   void SetPacketCapture(bool isOn) {
@@ -250,10 +320,9 @@ class BluetoothChip : public controller::Chip {
     // TODO: make multi-os
     // Filename: emulator-5554-hci.pcap
     auto &model = DeviceModel();
-    auto filename = "/tmp/" + model.device_serial() + "-hci.pcap";
-    for (auto i = 0; std::filesystem::exists(filename); ++i) {
-      filename = "/tmp/" + model.device_serial() + "-hci-" + std::to_string(i) +
-                 ".pcap";
+    auto filename = "/tmp/" + model.name() + "-hci.pcap";
+    for (auto i = 0; netsim::filesystem::exists(filename); ++i) {
+      filename = "/tmp/" + model.name() + "-hci-" + std::to_string(i) + ".pcap";
     }
     auto file = std::make_shared<std::ofstream>(filename, std::ios::binary);
     sniffer->SetOutputStream(file);
@@ -271,30 +340,33 @@ std::shared_ptr<BluetoothChip> BluetoothChipEmulatorImpl::Get(int device_id) {
 void BluetoothChipEmulatorImpl::Remove(int device_id) {
   // clear the shared pointer
   id_to_chip_[device_id] = nullptr;
-  mTestModel.Del(device_id);
+  mTestModel.RemoveDevice(device_id);
 }
 
 // Rename AddChip(model::Chip, device, transport)
 
 void BluetoothChipEmulatorImpl::AddHciConnection(
-    const std::string &serial,
+    const std::string &name,
     std::shared_ptr<rootcanal::HciTransport> transport) {
+  // rewrap the transport to reschedule callbacks to the async manager
+  // event thread.
+  transport = std::make_shared<SyncTransport>(transport, mAsyncManager);
   // rewrap the transport to include a sniffer
   transport = rootcanal::HciSniffer::Create(transport);
   auto hci_device =
       std::make_shared<rootcanal::HciDevice>(transport, controller_properties_);
-  BtsLog("Creating HCI for %s", serial.c_str());
+  BtsLog("Creating HCI for %s", name.c_str());
   auto device_id = mTestModel.AddHciConnection(hci_device);
 
   auto sniffer = std::static_pointer_cast<rootcanal::HciSniffer>(transport);
 
   model::Chip model;
-  model.mutable_bt()->mutable_classic()->set_state(model::State::ON);
-  model.mutable_bt()->mutable_low_energy()->set_state(model::State::ON);
-  model.set_capture(model::State::OFF);
+  model.mutable_bt()->mutable_classic()->set_state(State::ON);
+  model.mutable_bt()->mutable_low_energy()->set_state(State::ON);
+  model.set_capture(State::OFF);
 
   auto chip = std::make_shared<BluetoothChip>(this, sniffer, device_id);
-  auto device = controller::SceneController::Singleton().GetOrCreate(serial);
+  auto device = controller::SceneController::Singleton().GetOrCreate(name);
   device->AddChip(device, std::static_pointer_cast<controller::Chip>(chip),
                   model);
   id_to_chip_[device_id] = chip;

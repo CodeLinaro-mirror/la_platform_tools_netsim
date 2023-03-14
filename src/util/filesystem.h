@@ -14,15 +14,39 @@
  * limitations under the License.
  */
 
-// Common include for HCIPacket
 #pragma once
 
-#include "emulated_bluetooth_packets.pb.h"  // for HCIPacket
+#include <sys/stat.h>
+
+#include <fstream>
+#include <string>
 
 namespace netsim {
-namespace hci {
+namespace filesystem {
 
-using HCIPacket = android::emulation::bluetooth::HCIPacket;
+#ifdef _WIN32
+static const std::string slash = "\\";
+#else
+static const std::string slash = "/";
+#endif
 
-}  // namespace hci
+/**
+ * Return if a path exists.
+ */
+inline bool exists(const std::string &name) {
+  struct stat stat_buffer;
+  return stat(name.c_str(), &stat_buffer) == 0;
+}
+
+/**
+ * Return if a file exists.
+ */
+inline bool is_regular_file(const std::string &name) {
+  // NOTE: Use fstream instead because 'S_ISREG'is undeclared identifier in
+  // windows.
+  std::ifstream f(name.c_str());
+  return f.good();
+}
+
+}  // namespace filesystem
 }  // namespace netsim

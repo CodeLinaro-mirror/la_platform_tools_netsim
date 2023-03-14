@@ -21,13 +21,11 @@
 #pragma once
 
 #include <memory>
-#include <string>
 #include <utility>
 
-#include "grpcpp/server.h"
+#include "packet_streamer.grpc.pb.h"
 
 namespace netsim {
-
-std::pair<std::unique_ptr<grpc::Server>, std::string> RunBackendServer();
+std::unique_ptr<packet::PacketStreamer::Service> GetBackendService();
 
 }  // namespace netsim

@@ -18,9 +18,9 @@
 
 #include <string>
 
-namespace netsim {
+namespace netsim::server {
 
-// Startup netsim over inherited fds.
-void StartWithFds(const std::string &, bool);
+// Run grpc and http servers.
+void Run();
 
-}  // namespace netsim
+}  // namespace netsim::server

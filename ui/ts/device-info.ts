@@ -44,11 +44,28 @@ export class DeviceInformation extends LitElement implements Notifiable {
   @property({ type: Boolean })
   editMode = false;
 
-  posX: number = 0;
+  /**
+   * the x value in position for ns-cube-sprite
+   * unit: cm
+   */
+  @property({ type: Number })
+  posX = 0;
 
-  posY: number = 0;
+  /**
+   * the y value in position for ns-cube-sprite
+   * unit: cm
+   */
+  @property({ type: Number })
+  posY = 0;
 
-  posZ: number = 0;
+  /**
+   * the z value in position for ns-cube-sprite
+   * unit: cm
+   */
+  @property({ type: Number })
+  posZ = 0;
+
+  holdRange = false;
 
   static styles = css`
     :host {
@@ -199,17 +216,18 @@ export class DeviceInformation extends LitElement implements Notifiable {
   }
 
   onNotify(data: SimulationInfo) {
-    this.editMode = false;
-    if (data.selectedSerial) {
+    if (data.selectedId && this.editMode === false) {
       for (const device of data.devices) {
-        if (device.deviceSerial === data.selectedSerial) {
+        if (device.name === data.selectedId) {
           this.selectedDevice = device;
-          this.yaw = device.orientation.yaw ?? 0;
-          this.pitch = device.orientation.pitch ?? 0;
-          this.roll = device.orientation.roll ?? 0;
-          this.posX = Math.round((device.position.x ?? 0) * 100);
-          this.posY = Math.round((device.position.y ?? 0) * 100);
-          this.posZ = Math.round((device.position.z ?? 0) * 100);
+          if (!this.holdRange){
+            this.yaw = device.orientation.yaw;
+            this.pitch = device.orientation.pitch;
+            this.roll = device.orientation.roll;
+          }
+          this.posX = Math.floor(device.position.x * 100);
+          this.posY = Math.floor(device.position.y * 100);
+          this.posZ = Math.floor(device.position.z * 100);
           break;
         }
       }
@@ -217,11 +235,12 @@ export class DeviceInformation extends LitElement implements Notifiable {
   }
 
   private changeRange(ev: InputEvent) {
+    this.holdRange = true;
     console.assert(this.selectedDevice !== null); // eslint-disable-line
     const range = ev.target as HTMLInputElement;
     const event = new CustomEvent('orientationEvent', {
       detail: {
-        deviceSerial: this.selectedDevice?.deviceSerial,
+        name: this.selectedDevice?.name,
         type: range.id,
         value: range.value,
       },
@@ -236,30 +255,37 @@ export class DeviceInformation extends LitElement implements Notifiable {
     }
   }
 
-  private updateOrientation() {
+  private patchOrientation() {
+    this.holdRange = false;
     console.assert(this.selectedDevice !== undefined); // eslint-disable-line
     if (this.selectedDevice === undefined) return;
-    simulationState.updateDevice({
+    this.selectedDevice.orientation = {yaw: this.yaw, pitch: this.pitch, roll: this.roll};
+    simulationState.patchDevice({
       device: {
-        deviceSerial: this.selectedDevice.deviceSerial,
-        orientation: { yaw: this.yaw, pitch: this.pitch, roll: this.roll },
+        name: this.selectedDevice.name,
+        orientation: this.selectedDevice.orientation,
       },
     });
   }
 
-  private updateRadio() {
+  private patchRadio() {
     console.assert(this.selectedDevice !== undefined); // eslint-disable-line
     if (this.selectedDevice === undefined) return;
-    simulationState.updateDevice({
+    simulationState.patchDevice({
       device: {
-        deviceSerial: this.selectedDevice.deviceSerial,
+        name: this.selectedDevice.name,
         chips: this.selectedDevice.chips,
       },
     });
   }
 
   private handleEditForm() {
-    this.editMode = !this.editMode;
+    if (this.editMode) {
+      simulationState.invokeGetDevice();
+      this.editMode = false;
+    } else {
+      this.editMode = true;
+    }
   }
 
   static checkPositionBound(value: number) {
@@ -275,7 +301,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
     if (this.selectedDevice === undefined) return;
     const elements = this.renderRoot.querySelectorAll(`[id^="edit"]`);
     const obj: Record<string, any> = {
-      deviceSerial: this.selectedDevice.deviceSerial,
       name: this.selectedDevice.name,
       position: this.selectedDevice.position,
       orientation: this.selectedDevice.orientation,
@@ -298,10 +323,131 @@ export class DeviceInformation extends LitElement implements Notifiable {
         }
       }
     });
-    simulationState.updateDevice({
+    this.selectedDevice.name = obj.name;
+    this.selectedDevice.position = obj.position;
+    this.selectedDevice.orientation = obj.orientation;
+    this.handleEditForm();
+    simulationState.patchDevice({
       device: obj,
     });
-    this.handleEditForm();
+  }
+
+  private handleGetChips() {
+    let lowEnergyCheckbox = html``;
+    let classicCheckbox = html``;
+    let wifiCheckbox = html``;
+    let uwbCheckbox = html``;
+    const disabledCheckbox = html`
+      <input type="checkbox" disabled />
+        <span
+          class="slider round"
+          style=${styleMap({ opacity: '0.7' })}
+        ></span>
+    `;
+    if (this.selectedDevice) {
+      if ("chips" in this.selectedDevice && this.selectedDevice.chips) {
+        for (const chip of this.selectedDevice.chips) {
+          if ('bt' in chip && chip.bt) {
+            if ("lowEnergy" in chip.bt && chip.bt.lowEnergy && 'state' in chip.bt.lowEnergy) {
+              lowEnergyCheckbox = html `
+                <input
+                  id="lowEnergy"
+                  type="checkbox"
+                  .checked=${live(chip.bt.lowEnergy.state === 'ON')}
+                  @click=${() => {
+                    // eslint-disable-next-line
+                    this.selectedDevice?.toggleChipState(chip, "lowEnergy");
+                    this.patchRadio();
+                  }}
+                />
+                <span class="slider round"></span>
+              `;
+            } else {
+              lowEnergyCheckbox = disabledCheckbox;
+            }
+            if ("classic" in chip.bt && chip.bt.classic && 'state' in chip.bt.classic) {
+              classicCheckbox = html`
+                <input
+                  id="classic"
+                  type="checkbox"
+                  .checked=${live(chip.bt.classic.state === 'ON')}
+                  @click=${() => {
+                    // eslint-disable-next-line
+                    this.selectedDevice?.toggleChipState(chip, "classic");
+                    this.patchRadio();
+                  }}
+                />
+                <span class="slider round"></span>
+              `;
+            } else {
+              classicCheckbox = disabledCheckbox;
+            }
+          }
+
+          if ('wifi' in chip && chip.wifi) {
+            wifiCheckbox = html`
+              <input
+                id="wifi"
+                type="checkbox"
+                .checked=${live(chip.wifi.state === 'ON')}
+                @click=${() => {
+                  // eslint-disable-next-line
+                  this.selectedDevice?.toggleChipState(chip);
+                  this.patchRadio();
+                }}
+              />
+              <span class="slider round"></span>
+            `;
+          } else {
+            wifiCheckbox = disabledCheckbox;
+          }
+
+          if ('uwb' in chip && chip.uwb) {
+            uwbCheckbox = html`
+              <input
+                id="uwb"
+                type="checkbox"
+                .checked=${live(chip.uwb.state === 'ON')}
+                @click=${() => {
+                  // eslint-disable-next-line
+                  this.selectedDevice?.toggleChipState(chip);
+                  this.patchRadio();
+                }}
+              />
+              <span class="slider round"></span>
+            `;
+          } else {
+            uwbCheckbox = disabledCheckbox;
+          }
+        }
+      }
+    }
+    return html`
+      <div class="label">BLE</div>
+      <div class="info">
+        <label class="switch">
+          ${lowEnergyCheckbox}
+        </label>
+      </div>
+      <div class="label">Classic</div>
+      <div class="info">
+        <label class="switch">
+          ${classicCheckbox}
+        </label>
+      </div>
+      <div class="label">WIFI</div>
+      <div class="info">
+        <label class="switch">
+          ${wifiCheckbox}
+        </label>
+      </div>
+      <div class="label">UWB</div>
+      <div class="info">
+        <label class="switch">
+          ${uwbCheckbox}
+        </label>
+      </div>
+    `;
   }
 
   render() {
@@ -310,19 +456,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
           <div class="title">Device Info</div>
           <div class="setting">
             <div class="name">Name</div>
-            <div class="info">
-              ${this.editMode
-                ? html`<input
-                    type="text"
-                    id="editName"
-                    .value=${this.selectedDevice.name}
-                  />`
-                : html`${this.selectedDevice.name}`}
-            </div>
-          </div>
-          <div class="setting">
-            <div class="name">Serial</div>
-            <div class="info">${this.selectedDevice.deviceSerial}</div>
+            <div class="info">${this.selectedDevice.name}</div>
           </div>
           <div class="setting">
             <div class="name">Position</div>
@@ -369,7 +503,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 .value=${this.yaw.toString()}
                 .disabled=${this.editMode}
                 @input=${this.changeRange}
-                @change=${this.updateOrientation}
+                @change=${this.patchOrientation}
               />
               ${this.editMode
                 ? html`<input
@@ -390,7 +524,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 .value=${this.pitch.toString()}
                 .disabled=${this.editMode}
                 @input=${this.changeRange}
-                @change=${this.updateOrientation}
+                @change=${this.patchOrientation}
               />
               ${this.editMode
                 ? html`<input
@@ -411,7 +545,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 .value=${this.roll.toString()}
                 .disabled=${this.editMode}
                 @input=${this.changeRange}
-                @change=${this.updateOrientation}
+                @change=${this.patchOrientation}
               />
               ${this.editMode
                 ? html`<input
@@ -441,79 +575,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
           </div>
           <div class="setting">
             <div class="name">Radio States</div>
-            ${this.selectedDevice.chips.map(chip =>
-              chip.bt
-                ? html`
-                    <div class="label">BLE</div>
-                    <div class="info">
-                      <label class="switch">
-                        <input
-                          id="lowEnergy"
-                          type="checkbox"
-                          .checked=${live(chip.bt.lowEnergy.state === 'ON')}
-                          @click=${() => {
-                            // eslint-disable-next-line
-                            chip.bt.lowEnergy.state =
-                              chip.bt.lowEnergy.state === 'ON' ? 'OFF' : 'ON';
-                            this.updateRadio();
-                          }}
-                        />
-                        <span class="slider round"></span>
-                      </label>
-                    </div>
-                    <div class="label">Bluetooth Classic</div>
-                    <div class="info">
-                      <label class="switch">
-                        <input
-                          id="classic"
-                          type="checkbox"
-                          .checked=${live(chip.bt.classic.state === 'ON')}
-                          @click=${() => {
-                            // eslint-disable-next-line
-                            chip.bt.classic.state =
-                              chip.bt.classic.state === 'ON' ? 'OFF' : 'ON';
-                            this.updateRadio();
-                          }}
-                        />
-                        <span class="slider round"></span>
-                      </label>
-                    </div>
-                  `
-                : html``
-            )}
-            <!--Hard coded and disabled Radio States-->
-            <div class="label" style=${styleMap({ opacity: '0.7' })}>WIFI</div>
-            <div class="info">
-              <label class="switch">
-                <input type="checkbox" disabled />
-                <span
-                  class="slider round"
-                  style=${styleMap({ opacity: '0.7' })}
-                ></span>
-              </label>
-            </div>
-            <div class="label" style=${styleMap({ opacity: '0.7' })}>UWB</div>
-            <div class="info">
-              <label class="switch">
-                <input type="checkbox" disabled />
-                <span
-                  class="slider round"
-                  style=${styleMap({ opacity: '0.7' })}
-                ></span>
-              </label>
-            </div>
-            <div class="label" style=${styleMap({ opacity: '0.7' })}>
-              WIFI_RTT
-            </div>
-            <div class="info">
-              <label class="switch">
-                <input type="checkbox" disabled />
-                <span
-                  class="slider round"
-                  style=${styleMap({ opacity: '0.7' })}
-                ></span>
-              </label>
-            </div>
+            ${this.handleGetChips()}
           </div>
         `
       : html`<div class="title">Device Info</div>`}`;

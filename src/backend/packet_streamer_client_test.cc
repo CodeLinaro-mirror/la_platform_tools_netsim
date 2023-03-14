@@ -48,9 +48,9 @@ TEST_F(PacketStreamerClientTest, CreateChannelLoopBackTest) {
 
   packet::PacketRequest initial_request;
   packet::Stream bt_stream = stub->StreamPackets(&context);
-  initial_request.mutable_initial_info()->set_serial("emulator-5554");
+  initial_request.mutable_initial_info()->set_name("Pixel_XL_3");
   initial_request.mutable_initial_info()->mutable_chip()->set_kind(
-      netsim::startup::Chip::ChipKind::Chip_ChipKind_BLUETOOTH);
+      netsim::common::ChipKind::BLUETOOTH);
   bt_stream->Write(initial_request);
   packet::PacketResponse response;
   bt_stream->Read(&response);
@@ -60,9 +60,9 @@ TEST_F(PacketStreamerClientTest, CreateChannelLoopBackTest) {
 
   ::grpc::ClientContext context2;
   packet::Stream wifi_stream = stub->StreamPackets(&context2);
-  initial_request.mutable_initial_info()->set_serial("emulator-5554");
+  initial_request.mutable_initial_info()->set_name("Pixel_XL_3");
   initial_request.mutable_initial_info()->mutable_chip()->set_kind(
-      netsim::startup::Chip::ChipKind::Chip_ChipKind_WIFI);
+      netsim::common::ChipKind::WIFI);
   wifi_stream->Write(initial_request);
   response.Clear();
   bt_stream->Read(&response);
