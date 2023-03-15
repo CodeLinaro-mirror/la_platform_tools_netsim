@@ -75,7 +75,7 @@ void RunNetsimd() {
 
 }  // namespace
 
-void SetPacketStreamEnpoint(const std::string &endpoint) {
+void SetPacketStreamEndpoint(const std::string &endpoint) {
   if (endpoint != "default") custom_packet_stream_endpoint = endpoint;
 }
 

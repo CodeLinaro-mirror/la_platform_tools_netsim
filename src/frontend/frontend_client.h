@@ -21,8 +21,8 @@
 #include <string_view>
 #include <vector>
 
-#include "../../rust/frontend-client-cxx/cxx/cxx.h"
 #include "frontend.grpc.pb.h"
+#include "rust/cxx.h"
 
 namespace netsim {
 namespace frontend {

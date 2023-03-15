@@ -65,7 +65,8 @@ rust_ffi_host_static {
     rlibs: ["libcxx",
         "libfrontend_proto",
         "libprotobuf",
-        "libregex"],
+        "libregex",
+        "liblazy_static"],
     srcs: ["rust/netsim-cxx/src/lib.rs"],
 }
 
@@ -90,7 +91,7 @@ genrule {
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) >> $(out)",
     srcs: ["rust/frontend-client-cxx/src/lib.rs"],
-    out: ["frontend_client_cxx_generated.cc"],
+    out: ["frontend-client-cxx/src/lib.rs.cc"],
 }
 
 genrule {
@@ -98,7 +99,7 @@ genrule {
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) --header >> $(out)",
     srcs: ["rust/frontend-client-cxx/src/lib.rs"],
-    out: ["frontend_client_cxx_generated.h"],
+    out: ["frontend-client-cxx/src/lib.rs.h"],
 }
 
 cc_library_host_static {

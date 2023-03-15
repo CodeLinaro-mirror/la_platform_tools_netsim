@@ -2102,6 +2102,7 @@ pub struct Pcap {
     pub size: i32,
     pub records: i32,
     pub timestamp: i32,
+    pub valid: bool,
     // special fields
     pub unknown_fields: ::protobuf::UnknownFields,
     pub cached_size: ::protobuf::CachedSize,
@@ -2248,6 +2249,21 @@ impl Pcap {
     pub fn set_timestamp(&mut self, v: i32) {
         self.timestamp = v;
     }
+
+    // bool valid = 9;
+
+
+    pub fn get_valid(&self) -> bool {
+        self.valid
+    }
+    pub fn clear_valid(&mut self) {
+        self.valid = false;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_valid(&mut self, v: bool) {
+        self.valid = v;
+    }
 }
 
 impl ::protobuf::Message for Pcap {
@@ -2303,6 +2319,13 @@ impl ::protobuf::Message for Pcap {
                     let tmp = is.read_int32()?;
                     self.timestamp = tmp;
                 },
+                9 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_bool()?;
+                    self.valid = tmp;
+                },
                 _ => {
                     ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
@@ -2339,6 +2362,9 @@ impl ::protobuf::Message for Pcap {
         if self.timestamp != 0 {
             my_size += ::protobuf::rt::value_size(8, self.timestamp, ::protobuf::wire_format::WireTypeVarint);
         }
+        if self.valid != false {
+            my_size += 2;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
         my_size
@@ -2368,6 +2394,9 @@ impl ::protobuf::Message for Pcap {
         }
         if self.timestamp != 0 {
             os.write_int32(8, self.timestamp)?;
+        }
+        if self.valid != false {
+            os.write_bool(9, self.valid)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -2447,6 +2476,11 @@ impl ::protobuf::Message for Pcap {
                 |m: &Pcap| { &m.timestamp },
                 |m: &mut Pcap| { &mut m.timestamp },
             ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeBool>(
+                "valid",
+                |m: &Pcap| { &m.valid },
+                |m: &mut Pcap| { &mut m.valid },
+            ));
             ::protobuf::reflect::MessageDescriptor::new_pb_name::<Pcap>(
                 "Pcap",
                 fields,
@@ -2471,6 +2505,7 @@ impl ::protobuf::Clear for Pcap {
         self.size = 0;
         self.records = 0;
         self.timestamp = 0;
+        self.valid = false;
         self.unknown_fields.clear();
     }
 }
@@ -2629,18 +2664,19 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x08position\x12;\n\x0borientation\x18\x05\x20\x01(\x0b2\x19.netsim.mode\
     l.OrientationR\x0borientation\x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.\
     netsim.model.ChipR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\
-    \x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"\xfd\x01\n\x04Pcap\x12\
+    \x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"\x93\x02\n\x04Pcap\x12\
     \x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x124\n\tchip_kind\x18\x02\x20\
     \x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x17\n\x07chip_id\
     \x18\x03\x20\x01(\x05R\x06chipId\x12\x1f\n\x0bdevice_name\x18\x04\x20\
     \x01(\tR\ndeviceName\x12)\n\x05state\x18\x05\x20\x01(\x0e2\x13.netsim.mo\
     del.StateR\x05state\x12\x12\n\x04size\x18\x06\x20\x01(\x05R\x04size\x12\
     \x18\n\x07records\x18\x07\x20\x01(\x05R\x07records\x12\x1c\n\ttimestamp\
-    \x18\x08\x20\x01(\x05R\ttimestamp*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\
-    \x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERG\
-    Y\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\
-    \x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\
-    \x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
+    \x18\x08\x20\x01(\x05R\ttimestamp\x12\x14\n\x05valid\x18\t\x20\x01(\x08R\
+    \x05valid*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_\
+    CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04W\
+    IFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\
+    \x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\n\
+    \x03OFF\x10\x02b\x06proto3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;
