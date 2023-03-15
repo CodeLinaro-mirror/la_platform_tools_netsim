@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::args::{self, BtType, Command, OnOffState, Pcap, UpDownStatus};
-use frontend_proto::frontend::ListPcapResponse;
-use frontend_proto::model::State;
+use crate::args::{self, Command, OnOffState, Pcap};
 use frontend_proto::{
+    frontend::ListPcapResponse,
     frontend::{GetDevicesResponse, VersionResponse},
     model::Chip_oneof_chip,
+    model::State,
 };
 use protobuf::Message;
 
@@ -32,8 +32,8 @@ impl args::Command {
                 if verbose {
                     println!(
                         "Radio {} is {} for {}",
-                        if cmd.bt_type == BtType::Ble { "ble" } else { "classic" },
-                        if cmd.status == UpDownStatus::Up { "up" } else { "down" },
+                        cmd.radio_type,
+                        cmd.status,
                         cmd.name.to_owned()
                     );
                 }
@@ -99,6 +99,7 @@ impl args::Command {
         let state_width = 5;
         let cnt_width = 9;
         let chip_indent = 2;
+        let radio_width = 9;
         if verbose {
             if response.devices.is_empty() {
                 println!("No attached devices found.");
@@ -120,29 +121,41 @@ impl args::Command {
                             if bt.has_low_energy() {
                                 let ble_chip = bt.get_low_energy();
                                 println!(
-                                    "{:chip_indent$}ble:     {:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?}", "",
-                                    Self::bt_state_to_string(ble_chip.get_state()),
+                                    "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
+                                    "",
+                                    "ble:",
+                                    Self::chip_state_to_string(ble_chip.get_state()),
                                     ble_chip.get_rx_count(),
-                                    ble_chip.get_tx_count()
+                                    ble_chip.get_tx_count(),
+                                    Self::capture_state_to_string(chip.capture)
                                 );
                             }
                             if bt.has_classic() {
                                 let classic_chip = bt.get_classic();
                                 println!(
-                                    "{:chip_indent$}classic: {:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?}", "",
-                                    Self::bt_state_to_string(classic_chip.get_state()),
+                                    "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
+                                    "",
+                                    "classic:",
+                                    Self::chip_state_to_string(classic_chip.get_state()),
                                     classic_chip.get_rx_count(),
-                                    classic_chip.get_tx_count()
+                                    classic_chip.get_tx_count(),
+                                    Self::capture_state_to_string(chip.capture)
                                 );
                             }
                         }
+                        Some(Chip_oneof_chip::wifi(wifi_chip)) => {
+                            println!(
+                                "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
+                                "",
+                                "wifi:",
+                                Self::chip_state_to_string(wifi_chip.get_state()),
+                                wifi_chip.get_rx_count(),
+                                wifi_chip.get_tx_count(),
+                                Self::capture_state_to_string(chip.capture)
+                            );
+                        }
                         _ => println!("{:chip_indent$}Unknown chip: down  ", ""),
                     }
-                    println!(
-                        "{:chip_indent$}capture: {}",
-                        "",
-                        if chip.capture == State::ON { "on" } else { "off" }
-                    );
                 }
             }
         } else {
@@ -158,43 +171,65 @@ impl args::Command {
                     );
                 }
                 for chip in &device.chips {
-                    if let Some(Chip_oneof_chip::bt(bt)) = &chip.chip {
-                        if bt.has_low_energy() {
-                            let ble_chip = bt.get_low_energy();
-                            if ble_chip.get_state() == State::OFF {
+                    match &chip.chip {
+                        Some(Chip_oneof_chip::bt(bt)) => {
+                            if bt.has_low_energy() {
+                                let ble_chip = bt.get_low_energy();
+                                if ble_chip.get_state() == State::OFF {
+                                    print!(
+                                        "{:chip_indent$}{:radio_width$}{:state_width$}",
+                                        "",
+                                        "ble:",
+                                        Self::chip_state_to_string(ble_chip.get_state()),
+                                    );
+                                }
+                            }
+                            if bt.has_classic() {
+                                let classic_chip = bt.get_classic();
+                                if classic_chip.get_state() == State::OFF {
+                                    print!(
+                                        "{:chip_indent$}{:radio_width$}{:state_width$}",
+                                        "",
+                                        "classic:",
+                                        Self::chip_state_to_string(classic_chip.get_state())
+                                    );
+                                }
+                            }
+                        }
+                        Some(Chip_oneof_chip::wifi(wifi_chip)) => {
+                            if wifi_chip.get_state() == State::OFF {
                                 print!(
-                                    "{:chip_indent$}ble: {:state_width$}",
+                                    "{:chip_indent$}{:radio_width$}{:state_width$}",
                                     "",
-                                    Self::bt_state_to_string(ble_chip.get_state()),
+                                    "wifi:",
+                                    Self::chip_state_to_string(wifi_chip.get_state())
                                 );
                             }
                         }
-                        if bt.has_classic() {
-                            let classic_chip = bt.get_classic();
-                            if classic_chip.get_state() == State::OFF {
-                                print!(
-                                    "{:chip_indent$}classic: {:state_width$}",
-                                    "",
-                                    Self::bt_state_to_string(classic_chip.get_state())
-                                );
-                            }
-                        }
+                        _ => {}
                     }
-
                     if chip.capture == State::ON {
                         print!("{:chip_indent$}capture: on", "");
                     }
-                    println!();
                 }
+                println!();
             }
         }
     }
 
     /// Helper function to convert frontend_proto::model::State to string for output
-    fn bt_state_to_string(state: State) -> String {
+    fn chip_state_to_string(state: State) -> String {
         match state {
             State::ON => "up".to_string(),
             State::OFF => "down".to_string(),
+            _ => "unknown".to_string(),
+        }
+    }
+
+    fn capture_state_to_string(state: State) -> String {
+        match state {
+            State::ON => "on".to_string(),
+            State::OFF => "off".to_string(),
             _ => "unknown".to_string(),
         }
     }

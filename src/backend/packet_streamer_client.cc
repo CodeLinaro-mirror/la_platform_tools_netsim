@@ -15,7 +15,9 @@
 #include "backend/packet_streamer_client.h"
 
 #include <chrono>
+#include <cstddef>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <thread>
 #ifdef _WIN32
@@ -36,55 +38,74 @@ namespace netsim::packet {
 namespace {
 
 const std::chrono::duration kConnectionDeadline = std::chrono::seconds(1);
+std::string custom_packet_stream_endpoint = "";
+std::shared_ptr<grpc::Channel> packet_stream_channel;
+std::mutex channel_mutex;
 
-void RunNetsimd(std::string rootcanal_default_commands_file,
-                std::string rootcanal_controller_properties_file) {
+std::shared_ptr<grpc::Channel> CreateGrpcChannel() {
+  auto endpoint = custom_packet_stream_endpoint;
+  if (endpoint.empty()) {
+    auto port = netsim::osutils::GetServerAddress();
+    if (!port.has_value()) return nullptr;
+    endpoint = "localhost:" + port.value();
+  }
+
+  if (endpoint.empty()) return nullptr;
+  BtsLog("Creating a Grpc channel to %s", endpoint.c_str());
+  return grpc::CreateChannel(endpoint, grpc::InsecureChannelCredentials());
+}
+
+bool GrpcChannelReady(const std::shared_ptr<grpc::Channel> &channel) {
+  if (channel) {
+    auto deadline = std::chrono::system_clock::now() + kConnectionDeadline;
+    return channel->WaitForConnected(deadline);
+  }
+  return false;
+}
+
+void RunNetsimd() {
   auto exe = android::base::System::get()->findBundledExecutable("netsimd");
   auto cmd = android::base::Command::create({exe, "-g"});
-  std::cerr << "*** netsim " << exe << std::endl;
-  if (!rootcanal_default_commands_file.empty())
-    cmd.arg("--rootcanal_default_commands_file=" +
-            rootcanal_default_commands_file);
-  if (!rootcanal_controller_properties_file.empty())
-    cmd.arg("--rootcanal_controller_properties_file=" +
-            rootcanal_controller_properties_file);
 
   auto netsimd = cmd.asDeamon().execute();
   if (netsimd) {
-    BtsLog("Running netsimd as pid: %d", netsimd->pid());
+    BtsLog("Running netsimd as pid: %d.", netsimd->pid());
   }
 }
 
 }  // namespace
 
-std::shared_ptr<grpc::Channel> CreateChannel(
-    std::string rootcanal_default_commands_file,
-    std::string rootcanal_controller_properties_file) {
-  bool start_netsimd = false;
-  for (int second : {1, 2, 4, 8}) {
-    auto port = netsim::osutils::GetServerAddress(/*frontend_server=*/false);
-    if (port.has_value()) {
-      auto server = "localhost:" + port.value();
-      auto channel =
-          grpc::CreateChannel(server, grpc::InsecureChannelCredentials());
+void SetPacketStreamEnpoint(const std::string &endpoint) {
+  if (endpoint != "default") custom_packet_stream_endpoint = endpoint;
+}
 
-      auto deadline = std::chrono::system_clock::now() + kConnectionDeadline;
-      if (channel->WaitForConnected(deadline)) {
-        return channel;
-      }
+std::shared_ptr<grpc::Channel> GetChannel() {
+  std::lock_guard<std::mutex> lock(channel_mutex);
+
+  bool is_netsimd_started = false;
+  for (int second : {1, 2, 4, 8}) {
+    if (!packet_stream_channel) packet_stream_channel = CreateGrpcChannel();
+    if (GrpcChannelReady(packet_stream_channel)) return packet_stream_channel;
+
+    packet_stream_channel.reset();
+
+    if (!is_netsimd_started && custom_packet_stream_endpoint.empty()) {
+      BtsLog("Starting netsim.");
+      RunNetsimd();
+      is_netsimd_started = true;
     }
-    if (!start_netsimd) {
-      BtsLog("Starting netsim");
-      RunNetsimd(rootcanal_default_commands_file,
-                 rootcanal_controller_properties_file);
-      start_netsimd = true;
-    }
-    BtsLog("Retry connecting to netsim in %d second", second);
+    BtsLog("Retry connecting to netsim in %d second.", second);
     std::this_thread::sleep_for(std::chrono::seconds(second));
   }
 
-  BtsLog("Unable to start netsim");
+  BtsLog("Unable to get a packet stream channel.");
   return nullptr;
+}
+
+std::shared_ptr<grpc::Channel> CreateChannel(
+    std::string _rootcanal_default_commands_file,
+    std::string _rootcanal_controller_properties_file) {
+  return GetChannel();
 }
 
 }  // namespace netsim::packet
