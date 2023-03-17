@@ -2,7 +2,7 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,
       <nav>
         <div id="nav-logo-section" class="nav-section">
           <a>
-            <div id="nav-logo-pic" class="logo" @click=${this.handleClick}></div>
+            <div id="nav-logo-pic" class="logo" @click=${this.handleClick} role="link" tabindex="0" aria-label="Netsim Logo, Scene View"></div>
           </a>
           <p>#betosim</p>
         </div>

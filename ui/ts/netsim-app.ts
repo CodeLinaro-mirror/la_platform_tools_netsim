@@ -1,19 +1,17 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import {css, html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
 
 @customElement('netsim-app')
 export class NetsimApp extends LitElement {
   /**
    * The view of the netsim app: main (map view), trace (packet trace view)
    */
-  @property()
-  viewMode: string = 'main';
+  @property() viewMode: string = 'main';
 
   /**
    * The version of netsim.
    */
-  @property()
-  version: string = '';
+  @property() version: string = '';
 
   static styles = css`
     .container {
@@ -46,14 +44,14 @@ export class NetsimApp extends LitElement {
     fetch('http://localhost:7681/version', {
       method: 'GET',
     })
-      .then(response => response.json())
-      .then(data => {
-        this.version = data.version;
-      })
-      .catch(error => {
-        // eslint-disable-next-line
-        console.log('Cannot connect to netsim web server', error);
-      });
+        .then(response => response.json())
+        .then(data => {
+          this.version = data.version;
+        })
+        .catch(error => {
+          // eslint-disable-next-line
+          console.log('Cannot connect to netsim web server', error);
+        });
   }
 
   connectedCallback() {
@@ -67,7 +65,7 @@ export class NetsimApp extends LitElement {
   }
 
   handleChangeModeEvent = (e: Event) => {
-    const { detail } = (e as CustomEvent);
+    const {detail} = (e as CustomEvent);
     this.viewMode = detail.mode;
   };
 

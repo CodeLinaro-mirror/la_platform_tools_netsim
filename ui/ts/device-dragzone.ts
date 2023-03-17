@@ -1,19 +1,13 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import { simulationState } from './device-observer.js';
+import {html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
+
+import {simulationState} from './device-observer.js';
 
 @customElement('ns-device-dragzone')
 export class DeviceDragZone extends LitElement {
-  static dragged: EventTarget | null;
+  static dragged: EventTarget|null;
 
-  @property({ type: String, attribute: 'action' })
-  action = 'move';
-
-  static styles = css`
-    :host {
-      cursor: move;
-    }
-  `;
+  @property({type: String, attribute: 'action'}) action = 'move';
 
   constructor() {
     super();
@@ -45,7 +39,8 @@ export class DeviceDragZone extends LitElement {
     this.style.opacity = '1';
     if (ev.target) {
       simulationState.patchSelected((ev.target as Element).id);
-      // We can add a feature for visually showing a selected object (i.e. bolded borders)
+      // We can add a feature for visually showing a selected object (i.e.
+      // bolded borders)
     }
   }
 

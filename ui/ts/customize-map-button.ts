@@ -1,5 +1,5 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import {css, html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
 
 @customElement('ns-customize-button')
 export class CustomizeButton extends LitElement {
@@ -84,8 +84,8 @@ export class CustomizeButton extends LitElement {
     return html`
       <button
         @click="${() => {
-          window.dispatchEvent(new CustomEvent(this.eventName));
-        }}"
+      window.dispatchEvent(new CustomEvent(this.eventName));
+    }}"
         class="lit-button"
         ?disabled=${this.disabled}
       >

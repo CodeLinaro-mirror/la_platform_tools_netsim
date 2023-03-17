@@ -12,7 +12,7 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
           outline: ${this.highlighted&&this.controls?e`dashed`:e``};
         }
       </style>
-      <div class="cube">
+      <div class="cube" role="button" tabindex="0" aria-label="Device">
         <div></div>
         <div></div>
         <div></div>
@@ -35,6 +35,7 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
       transform-origin: center;
       transform-style: preserve-3d;
       transform: translateZ(calc(var(--posZ) * 1px));
+      cursor: move;
     }
 
     .cube {
