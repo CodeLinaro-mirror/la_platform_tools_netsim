@@ -29,6 +29,60 @@
 
 namespace netsim {
 namespace {
+
+/// The C++ implementation of the CxxServerResponseWriter interface. This is
+/// used by the gRPC server to invoke the Rust pcap handler and process a
+/// responses.
+class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
+ public:
+  CxxServerResponseWritable()
+      : grpc_writer_(nullptr), err(""), is_ok(false), body(""){};
+  CxxServerResponseWritable(
+      grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer)
+      : grpc_writer_(grpc_writer), err(""), is_ok(false), body(""){};
+
+  void put_error(unsigned int error_code,
+                 const std::string &response) const override {
+    // TODO: remove temporary print statement
+    std::cout << "cxx result: " << error_code << " " << response.c_str()
+              << std::endl;
+    err = "CxxServerResponseWriter Error code: " + std::to_string(error_code);
+    is_ok = false;
+  }
+  void put_ok_with_length(const std::string &mime_type,
+                          unsigned int length) const override {
+    // TODO: complete implementation
+    std::cout << "HTTP/1.1 200 OK" << std::endl
+              << "Content-Type: " << mime_type << std::endl
+              << "Content-Length: " << length << std::endl
+              << std::endl;
+    len = length;
+    is_ok = true;
+  }
+  void put_chunk(rust::Slice<const uint8_t> chunk) const override {
+    // TODO: complete implementation
+    netsim::frontend::GetPcapResponse response;
+    std::cout << "put_chunk parsing response" << std::endl;
+    response.ParseFromArray(chunk.data(), chunk.length());
+    std::cout << "put_chunk writing response" << std::endl;
+    is_ok = grpc_writer_->Write(response);
+  }
+
+  void put_ok(const std::string &mime_type,
+              const std::string &body) const override {
+    // TODO: complete implementation
+    std::cout << "cxx result: " << mime_type.c_str() << " " << body.c_str()
+              << std::endl;
+    is_ok = true;
+  }
+
+  mutable grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer_;
+  mutable std::string err;
+  mutable bool is_ok;
+  mutable std::string body;
+  mutable unsigned int len;
+};
+
 class FrontendServer final : public frontend::FrontendService::Service {
  public:
   grpc::Status GetVersion(grpc::ServerContext *context,
@@ -77,6 +131,45 @@ class FrontendServer final : public frontend::FrontendService::Service {
                      google::protobuf::Empty *empty) {
     netsim::controller::SceneController::Singleton().Reset();
     return grpc::Status::OK;
+  }
+
+  grpc::Status ListPcap(grpc::ServerContext *context,
+                        const google::protobuf::Empty *empty,
+                        frontend::ListPcapResponse *reply) {
+    CxxServerResponseWritable writer;
+    HandlePcapCxx(writer, "GET", "", "Listpcap");
+    if (writer.is_ok) {
+      reply->ParseFromString(writer.body);
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
+  }
+
+  grpc::Status PatchPcap(grpc::ServerContext *context,
+                         const frontend::PatchPcapRequest *request,
+                         google::protobuf::Empty *response) {
+    CxxServerResponseWritable writer;
+    HandlePcapCxx(writer, "PATCH", std::to_string(request->id()),
+                  std::to_string(request->state()));
+    if (writer.is_ok) {
+      return grpc::Status::OK;
+    }
+    return grpc::Status(
+        grpc::StatusCode::UNKNOWN,
+        "PatchPcap: ServerResponseWriter failed to write response.");
+  }
+  grpc::Status GetPcap(
+      grpc::ServerContext *context,
+      const netsim::frontend::GetPcapRequest *request,
+      grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer) {
+    CxxServerResponseWritable writer(grpc_writer);
+    HandlePcapCxx(writer, "GET", std::to_string(request->id()), "");
+    if (writer.is_ok) {
+      return grpc::Status::OK;
+    }
+    return grpc::Status(
+        grpc::StatusCode::UNKNOWN,
+        "GetPcap: ServerResponseWriter failed to write response.");
   }
 };
 }  // namespace

@@ -99,7 +99,7 @@ message Pcap {
   // device AVD name
   string device_name = 4;
   // capture state
-  bool state = 5;
+  State state = 5;
   // size of current capture
   int32 size = 6;
   // number of records in current capture

@@ -57,6 +57,7 @@ mod ffi {
             param: String,
             body: String,
         );
+
     }
 
     unsafe extern "C++" {
@@ -99,7 +100,7 @@ mod ffi {
     }
 }
 
-/// CxxServerResponseWriter is implemented in server_response_writable.cc
+/// CxxServerResponseWriter is defined in server_response_writable.h
 /// Wrapper struct allows the impl to discover the respective C++ methods
 struct CxxServerResponseWriterWrapper<'a> {
     writer: Pin<&'a mut CxxServerResponseWriter>,

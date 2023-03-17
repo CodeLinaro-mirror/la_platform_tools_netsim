@@ -23,8 +23,7 @@ target_include_directories(frontend-client PRIVATE ..)
 android_add_library(
   TARGET frontend-lib
   LICENSE Apache-2.0
-  SRC frontend_server.cc frontend_server.h server_response_writable.cc
-      server_response_writable.h
+  SRC frontend_server.cc frontend_server.h server_response_writable.h
   DEPS controller-lib grpc++ netsim-cli-proto-lib netsim-cxx-generated
        # TODO: refactor so this isn't needed
        protobuf::libprotobuf util-lib)

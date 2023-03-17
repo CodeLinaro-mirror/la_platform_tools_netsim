@@ -26,12 +26,31 @@ use crate::ffi::CxxServerResponseWriter;
 use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
 use crate::CxxServerResponseWriterWrapper;
+use frontend_proto::frontend::GetPcapResponse;
+use protobuf::Message;
 
 /// The Rust pcap handler used directly by Http frontend for GET, PATCH
-pub fn handle_pcap(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
+pub fn handle_pcap(request: &HttpRequest, param: &str, writer: ResponseWritable) {
     match request.method.as_str() {
-        "GET" => writer.put_ok("text/plain", "GetPcap"),
-        "PATCH" => writer.put_ok("text/plain", "PatchPcap"),
+        "GET" => {
+            if param.is_empty() {
+                println!("handle_pcap calling put_ok for ListPcap");
+                writer.put_ok("text/plain", "ListPcap");
+            } else {
+                // read in file to be sent
+                println!("handle_pcap calling put_ok_with_length for GetPcap");
+                writer.put_ok_with_length("text/plain", 0);
+                println!("handle_pcap calling put_chunk for GetPcap");
+                let response_bytes = GetPcapResponse::new().write_to_bytes().unwrap();
+                writer.put_chunk(&response_bytes);
+                println!("handle_pcap calling put_chunk for GetPcap 2nd time");
+                writer.put_chunk(&response_bytes);
+            }
+        }
+        "PATCH" => {
+            println!("handle_pcap calling put_ok for PatchPcap");
+            writer.put_ok("text/plain", "PatchPcap")
+        }
         _ => {
             writer.put_error(404, "Not found.");
         }
