@@ -141,7 +141,7 @@ class FrontendServer final : public frontend::FrontendService::Service {
                          google::protobuf::Empty *response) {
     CxxServerResponseWritable writer;
     HandlePcapCxx(writer, "PATCH", std::to_string(request->id()),
-                  std::to_string(request->state()));
+                  std::to_string(request->patch().state()));
     if (writer.is_ok) {
       return grpc::Status::OK;
     }

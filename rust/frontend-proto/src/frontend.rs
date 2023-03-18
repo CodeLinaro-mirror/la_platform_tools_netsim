@@ -1311,7 +1311,7 @@ impl ::protobuf::reflect::ProtobufValue for SetPacketCaptureRequest {
 pub struct PatchPcapRequest {
     // message fields
     pub id: i32,
-    pub state: bool,
+    pub patch: ::protobuf::SingularPtrField<PatchPcapRequest_PcapPatch>,
     // special fields
     pub unknown_fields: ::protobuf::UnknownFields,
     pub cached_size: ::protobuf::CachedSize,
@@ -1343,24 +1343,47 @@ impl PatchPcapRequest {
         self.id = v;
     }
 
-    // bool state = 2;
+    // .netsim.frontend.PatchPcapRequest.PcapPatch patch = 2;
 
 
-    pub fn get_state(&self) -> bool {
-        self.state
+    pub fn get_patch(&self) -> &PatchPcapRequest_PcapPatch {
+        self.patch.as_ref().unwrap_or_else(|| <PatchPcapRequest_PcapPatch as ::protobuf::Message>::default_instance())
     }
-    pub fn clear_state(&mut self) {
-        self.state = false;
+    pub fn clear_patch(&mut self) {
+        self.patch.clear();
+    }
+
+    pub fn has_patch(&self) -> bool {
+        self.patch.is_some()
     }
 
     // Param is passed by value, moved
-    pub fn set_state(&mut self, v: bool) {
-        self.state = v;
+    pub fn set_patch(&mut self, v: PatchPcapRequest_PcapPatch) {
+        self.patch = ::protobuf::SingularPtrField::some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_patch(&mut self) -> &mut PatchPcapRequest_PcapPatch {
+        if self.patch.is_none() {
+            self.patch.set_default();
+        }
+        self.patch.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_patch(&mut self) -> PatchPcapRequest_PcapPatch {
+        self.patch.take().unwrap_or_else(|| PatchPcapRequest_PcapPatch::new())
     }
 }
 
 impl ::protobuf::Message for PatchPcapRequest {
     fn is_initialized(&self) -> bool {
+        for v in &self.patch {
+            if !v.is_initialized() {
+                return false;
+            }
+        };
         true
     }
 
@@ -1376,11 +1399,7 @@ impl ::protobuf::Message for PatchPcapRequest {
                     self.id = tmp;
                 },
                 2 => {
-                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
-                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
-                    }
-                    let tmp = is.read_bool()?;
-                    self.state = tmp;
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.patch)?;
                 },
                 _ => {
                     ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
@@ -1397,8 +1416,9 @@ impl ::protobuf::Message for PatchPcapRequest {
         if self.id != 0 {
             my_size += ::protobuf::rt::value_size(1, self.id, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.state != false {
-            my_size += 2;
+        if let Some(ref v) = self.patch.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
@@ -1409,8 +1429,10 @@ impl ::protobuf::Message for PatchPcapRequest {
         if self.id != 0 {
             os.write_int32(1, self.id)?;
         }
-        if self.state != false {
-            os.write_bool(2, self.state)?;
+        if let Some(ref v) = self.patch.as_ref() {
+            os.write_tag(2, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -1455,10 +1477,10 @@ impl ::protobuf::Message for PatchPcapRequest {
                 |m: &PatchPcapRequest| { &m.id },
                 |m: &mut PatchPcapRequest| { &mut m.id },
             ));
-            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeBool>(
-                "state",
-                |m: &PatchPcapRequest| { &m.state },
-                |m: &mut PatchPcapRequest| { &mut m.state },
+            fields.push(::protobuf::reflect::accessor::make_singular_ptr_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<PatchPcapRequest_PcapPatch>>(
+                "patch",
+                |m: &PatchPcapRequest| { &m.patch },
+                |m: &mut PatchPcapRequest| { &mut m.patch },
             ));
             ::protobuf::reflect::MessageDescriptor::new_pb_name::<PatchPcapRequest>(
                 "PatchPcapRequest",
@@ -1477,7 +1499,7 @@ impl ::protobuf::Message for PatchPcapRequest {
 impl ::protobuf::Clear for PatchPcapRequest {
     fn clear(&mut self) {
         self.id = 0;
-        self.state = false;
+        self.patch.clear();
         self.unknown_fields.clear();
     }
 }
@@ -1489,6 +1511,154 @@ impl ::std::fmt::Debug for PatchPcapRequest {
 }
 
 impl ::protobuf::reflect::ProtobufValue for PatchPcapRequest {
+    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
+        ::protobuf::reflect::ReflectValueRef::Message(self)
+    }
+}
+
+#[derive(PartialEq,Clone,Default)]
+pub struct PatchPcapRequest_PcapPatch {
+    // message fields
+    pub state: super::model::State,
+    // special fields
+    pub unknown_fields: ::protobuf::UnknownFields,
+    pub cached_size: ::protobuf::CachedSize,
+}
+
+impl<'a> ::std::default::Default for &'a PatchPcapRequest_PcapPatch {
+    fn default() -> &'a PatchPcapRequest_PcapPatch {
+        <PatchPcapRequest_PcapPatch as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl PatchPcapRequest_PcapPatch {
+    pub fn new() -> PatchPcapRequest_PcapPatch {
+        ::std::default::Default::default()
+    }
+
+    // .netsim.model.State state = 1;
+
+
+    pub fn get_state(&self) -> super::model::State {
+        self.state
+    }
+    pub fn clear_state(&mut self) {
+        self.state = super::model::State::UNKNOWN;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_state(&mut self, v: super::model::State) {
+        self.state = v;
+    }
+}
+
+impl ::protobuf::Message for PatchPcapRequest_PcapPatch {
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
+            match field_number {
+                1 => {
+                    ::protobuf::rt::read_proto3_enum_with_unknown_fields_into(wire_type, is, &mut self.state, 1, &mut self.unknown_fields)?
+                },
+                _ => {
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u32 {
+        let mut my_size = 0;
+        if self.state != super::model::State::UNKNOWN {
+            my_size += ::protobuf::rt::enum_size(1, self.state);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
+        self.cached_size.set(my_size);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        if self.state != super::model::State::UNKNOWN {
+            os.write_enum(1, ::protobuf::ProtobufEnum::value(&self.state))?;
+        }
+        os.write_unknown_fields(self.get_unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn get_cached_size(&self) -> u32 {
+        self.cached_size.get()
+    }
+
+    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
+        &self.unknown_fields
+    }
+
+    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
+        &mut self.unknown_fields
+    }
+
+    fn as_any(&self) -> &dyn (::std::any::Any) {
+        self as &dyn (::std::any::Any)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
+        self as &mut dyn (::std::any::Any)
+    }
+    fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
+        self
+    }
+
+    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
+        Self::descriptor_static()
+    }
+
+    fn new() -> PatchPcapRequest_PcapPatch {
+        PatchPcapRequest_PcapPatch::new()
+    }
+
+    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
+        descriptor.get(|| {
+            let mut fields = ::std::vec::Vec::new();
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeEnum<super::model::State>>(
+                "state",
+                |m: &PatchPcapRequest_PcapPatch| { &m.state },
+                |m: &mut PatchPcapRequest_PcapPatch| { &mut m.state },
+            ));
+            ::protobuf::reflect::MessageDescriptor::new_pb_name::<PatchPcapRequest_PcapPatch>(
+                "PatchPcapRequest.PcapPatch",
+                fields,
+                file_descriptor_proto()
+            )
+        })
+    }
+
+    fn default_instance() -> &'static PatchPcapRequest_PcapPatch {
+        static instance: ::protobuf::rt::LazyV2<PatchPcapRequest_PcapPatch> = ::protobuf::rt::LazyV2::INIT;
+        instance.get(PatchPcapRequest_PcapPatch::new)
+    }
+}
+
+impl ::protobuf::Clear for PatchPcapRequest_PcapPatch {
+    fn clear(&mut self) {
+        self.state = super::model::State::UNKNOWN;
+        self.unknown_fields.clear();
+    }
+}
+
+impl ::std::fmt::Debug for PatchPcapRequest_PcapPatch {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for PatchPcapRequest_PcapPatch {
     fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
         ::protobuf::reflect::ReflectValueRef::Message(self)
     }
@@ -1985,25 +2155,27 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x14.netsim.model.DeviceR\x07devices\"&\n\x0cNetCatStream\x12\x16\n\x06r\
     esult\x18\x01\x20\x03(\tR\x06result\"X\n\x17SetPacketCaptureRequest\x12\
     \x18\n\x07capture\x18\x01\x20\x01(\x08R\x07capture\x12#\n\rdevice_serial\
-    \x18\x02\x20\x01(\tR\x0cdeviceSerial\"8\n\x10PatchPcapRequest\x12\x0e\n\
-    \x02id\x18\x01\x20\x01(\x05R\x02id\x12\x14\n\x05state\x18\x02\x20\x01(\
-    \x08R\x05state\"<\n\x10ListPcapResponse\x12(\n\x05pcaps\x18\x01\x20\x03(\
-    \x0b2\x12.netsim.model.PcapR\x05pcaps\"\x20\n\x0eGetPcapRequest\x12\x0e\
-    \n\x02id\x18\x01\x20\x01(\x05R\x02id\"8\n\x0fGetPcapResponse\x12%\n\x0ec\
-    apture_stream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xdb\x05\n\x0fFronten\
-    dService\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim\
-    .frontend.VersionResponse\x12B\n\x0eRegisterEvents\x12\x16.google.protob\
-    uf.Empty\x1a\x16.netsim.frontend.Event0\x01\x12I\n\nGetDevices\x12\x16.g\
-    oogle.protobuf.Empty\x1a#.netsim.frontend.GetDevicesResponse\x12J\n\x0bP\
-    atchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.google.protob\
-    uf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\x16.google.pr\
-    otobuf.Empty\x12J\n\x0bSetLinkLoss\x12#.netsim.frontend.SetLinkLossReque\
-    st\x1a\x16.google.protobuf.Empty\x12A\n\x06NetCat\x12\x16.google.protobu\
-    f.Empty\x1a\x1d.netsim.frontend.NetCatStream0\x01\x12F\n\tPatchPcap\x12!\
-    .netsim.frontend.PatchPcapRequest\x1a\x16.google.protobuf.Empty\x12E\n\
-    \x08ListPcap\x12\x16.google.protobuf.Empty\x1a!.netsim.frontend.ListPcap\
-    Response\x12N\n\x07GetPcap\x12\x1f.netsim.frontend.GetPcapRequest\x1a\
-    \x20.netsim.frontend.GetPcapResponse0\x01b\x06proto3\
+    \x18\x02\x20\x01(\tR\x0cdeviceSerial\"\x9d\x01\n\x10PatchPcapRequest\x12\
+    \x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x12A\n\x05patch\x18\x02\x20\x01\
+    (\x0b2+.netsim.frontend.PatchPcapRequest.PcapPatchR\x05patch\x1a6\n\tPca\
+    pPatch\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model.StateR\x05\
+    state\"<\n\x10ListPcapResponse\x12(\n\x05pcaps\x18\x01\x20\x03(\x0b2\x12\
+    .netsim.model.PcapR\x05pcaps\"\x20\n\x0eGetPcapRequest\x12\x0e\n\x02id\
+    \x18\x01\x20\x01(\x05R\x02id\"8\n\x0fGetPcapResponse\x12%\n\x0ecapture_s\
+    tream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xdb\x05\n\x0fFrontendService\
+    \x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.fronten\
+    d.VersionResponse\x12B\n\x0eRegisterEvents\x12\x16.google.protobuf.Empty\
+    \x1a\x16.netsim.frontend.Event0\x01\x12I\n\nGetDevices\x12\x16.google.pr\
+    otobuf.Empty\x1a#.netsim.frontend.GetDevicesResponse\x12J\n\x0bPatchDevi\
+    ce\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.google.protobuf.Empty\
+    \x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.E\
+    mpty\x12J\n\x0bSetLinkLoss\x12#.netsim.frontend.SetLinkLossRequest\x1a\
+    \x16.google.protobuf.Empty\x12A\n\x06NetCat\x12\x16.google.protobuf.Empt\
+    y\x1a\x1d.netsim.frontend.NetCatStream0\x01\x12F\n\tPatchPcap\x12!.netsi\
+    m.frontend.PatchPcapRequest\x1a\x16.google.protobuf.Empty\x12E\n\x08List\
+    Pcap\x12\x16.google.protobuf.Empty\x1a!.netsim.frontend.ListPcapResponse\
+    \x12N\n\x07GetPcap\x12\x1f.netsim.frontend.GetPcapRequest\x1a\x20.netsim\
+    .frontend.GetPcapResponse0\x01b\x06proto3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;

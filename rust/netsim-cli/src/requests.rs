@@ -42,6 +42,7 @@ mod tests {
     use super::*;
     use args::{NetsimArgs, OnOffState};
     use clap::Parser;
+    use frontend::PatchPcapRequest_PcapPatch as PcapPatch;
     use frontend_proto::{
         common::ChipKind,
         frontend,
@@ -265,7 +266,13 @@ mod tests {
     fn get_expected_patch_pcap(id: i32, state: bool) -> Vec<u8> {
         let mut result = frontend::PatchPcapRequest::new();
         result.set_id(id);
-        result.set_state(state);
+        let mut pcap_patch = PcapPatch::new();
+        let capture_state = match state {
+            true => State::ON,
+            false => State::OFF,
+        };
+        pcap_patch.set_state(capture_state);
+        result.set_patch(pcap_patch);
         result.write_to_bytes().unwrap()
     }
 

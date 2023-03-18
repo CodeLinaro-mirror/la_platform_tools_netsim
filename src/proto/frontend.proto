@@ -117,7 +117,14 @@ message SetPacketCaptureRequest {
 
 message PatchPcapRequest {
   int32 id = 1;
-  bool state = 2;
+
+  // Body of PcapPatch that will be channeled into
+  // body for HandlePcapCxx
+  message PcapPatch {
+    netsim.model.State state = 1;
+  }
+
+  PcapPatch patch = 2;
 }
 
 message ListPcapResponse {

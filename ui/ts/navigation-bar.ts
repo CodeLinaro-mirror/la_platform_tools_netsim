@@ -101,10 +101,12 @@ export class NavigationBar extends LitElement {
           <a href="http://go/betosim" target="_blank" rel="noopener noreferrer"
             >ABOUT</a
           >
-          <a id="nav-trace-section" @click=${this.handleClick}
+          <a href="javascript:void(0)" id="nav-trace-section" @click=${
+        this.handleClick}
             >PACKET TRACE</a
           >
-          <a id="nav-os-library-section" @click=${this.handleClick}
+          <a href="javascript:void(0)" id="nav-os-library-section" @click=${
+        this.handleClick}
             >OPEN SOURCE LIBRARIES</a
           >
         </div>

@@ -15,6 +15,7 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend;
+use frontend_proto::frontend::PatchPcapRequest_PcapPatch as PcapPatch;
 use frontend_proto::model;
 use frontend_proto::model::State;
 use frontend_proto::model::{Chip_Bluetooth, Chip_Radio};
@@ -134,10 +135,12 @@ impl Command {
                     let mut result = frontend::PatchPcapRequest::new();
                     result.set_id(cmd.id);
                     let capture_state = match cmd.state {
-                        OnOffState::On => true,
-                        OnOffState::Off => false,
+                        OnOffState::On => State::ON,
+                        OnOffState::Off => State::OFF,
                     };
-                    result.set_state(capture_state);
+                    let mut pcap_patch = PcapPatch::new();
+                    pcap_patch.set_state(capture_state);
+                    result.set_patch(pcap_patch);
                     result.write_to_bytes().unwrap()
                 }
             },
