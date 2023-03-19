@@ -21,7 +21,7 @@
 //! handle_pcap_cxx calls handle_pcaps or handle_pcap based on the method
 
 use frontend_proto::frontend::GetPcapResponse;
-use frontend_proto::model::Pcap as ProtoPcap;
+use frontend_proto::model::{Pcap as ProtoPcap, State};
 use lazy_static::lazy_static;
 use protobuf::Message;
 use std::collections::hash_map::{Iter, Values};
@@ -34,7 +34,7 @@ use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
 use crate::CxxServerResponseWriterWrapper;
 
-use super::controller::handle_pcap_list;
+use super::controller::{handle_pcap_list, handle_pcap_patch};
 
 // The Pcap resource is a singleton that manages all pcaps
 lazy_static! {
@@ -68,6 +68,23 @@ impl Pcaps {
         self.pcaps.get_mut(key)
     }
 
+    pub fn get_by_id(&mut self, id: i32) -> Option<&mut ProtoPcap> {
+        self.pcaps.iter_mut().map(|(_, pcap)| pcap).find(|pcap| pcap.id == id)
+    }
+
+    // TODO: replace with "optional bool" in proto
+    pub fn set_state(&mut self, id: i32, state: bool) -> bool {
+        let capture_state = match state {
+            true => State::ON,
+            false => State::OFF,
+        };
+        if let Some(pcap) = self.get_by_id(id) {
+            pcap.set_state(capture_state);
+            return true;
+        }
+        false
+    }
+
     pub fn insert(&mut self, mut pcap: ProtoPcap) {
         pcap.set_id(self.current_idx);
         self.pcaps.insert(Self::get_key(&pcap), pcap);
@@ -94,7 +111,7 @@ impl Pcaps {
 }
 
 /// The Rust pcap handler used directly by Http frontend for LIST, GET, and PATCH
-pub fn handle_pcap(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
+pub fn handle_pcap(request: &HttpRequest, param: &str, writer: ResponseWritable) {
     if request.uri.as_str() == "/v1/pcaps" {
         match request.method.as_str() {
             "GET" => {
@@ -113,8 +130,21 @@ pub fn handle_pcap(request: &HttpRequest, _param: &str, writer: ResponseWritable
                 writer.put_chunk(&response_bytes);
             }
             "PATCH" => {
-                // TODO: Implement handle_pcap_patch in controller.rs
-                writer.put_ok("text/plain", "PatchPcap");
+                let mut pcaps = RESOURCE.write().unwrap();
+                let id = match param.parse::<i32>() {
+                    Ok(num) => num,
+                    Err(_) => {
+                        writer.put_error(404, "Incorrect ID type for pcap, ID should be i32.");
+                        return;
+                    }
+                };
+                let body = &request.body;
+                let state = String::from_utf8(body.to_vec()).unwrap();
+                match state.as_str() {
+                    "1" => handle_pcap_patch(writer, &mut pcaps, id, true),
+                    "2" => handle_pcap_patch(writer, &mut pcaps, id, false),
+                    _ => writer.put_error(404, "Incorrect state for PatchPcap"),
+                }
             }
             _ => writer.put_error(404, "Not found."),
         }

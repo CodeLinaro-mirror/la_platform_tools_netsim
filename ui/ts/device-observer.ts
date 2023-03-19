@@ -1,7 +1,7 @@
 import {Chip, Device as ProtoDevice, State} from './model.js';
 
 // URL for netsim
-const DEVICES_URL = 'http://localhost:7681/v1/devices';
+const DEVICES_URL = './v1/devices';
 
 /**
  * Interface for a method in notifying the subscribed observers.

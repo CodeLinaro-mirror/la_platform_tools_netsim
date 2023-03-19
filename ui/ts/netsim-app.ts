@@ -41,7 +41,7 @@ export class NetsimApp extends LitElement {
   }
 
   invokeGetVersion() {
-    fetch('http://localhost:7681/version', {
+    fetch('./version', {
       method: 'GET',
     })
         .then(response => response.json())

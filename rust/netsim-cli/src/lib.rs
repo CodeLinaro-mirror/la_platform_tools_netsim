@@ -102,8 +102,8 @@ pub extern "C" fn rust_main() {
         return;
     }
     // TODO: remove warning once pcap commands are implemented
-    if matches!(args.command, args::Command::Pcap(_)) {
-        eprintln!("Warning: Pcap subcommands are not fully implemented yet!");
+    if matches!(args.command, args::Command::Pcap(args::Pcap::Get(_))) {
+        eprintln!("Warning: GetPcap is not fully implemented yet!");
     }
     let grpc_method = args.command.grpc_method();
     let request = args.command.get_request_bytes();
