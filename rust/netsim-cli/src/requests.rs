@@ -26,7 +26,7 @@ impl args::Command {
             Command::Capture(_) => GrpcMethod::PatchDevice,
             Command::Reset => GrpcMethod::Reset,
             Command::Pcap(cmd) => match cmd {
-                args::Pcap::List => GrpcMethod::ListPcap,
+                args::Pcap::List(_) => GrpcMethod::ListPcap,
                 args::Pcap::Get(_) => GrpcMethod::GetPcap,
                 args::Pcap::Patch(_) => GrpcMethod::PatchPcap,
             },
@@ -40,9 +40,8 @@ impl args::Command {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use args::{NetsimArgs, OnOffState};
+    use args::{BinaryProtobuf, NetsimArgs, OnOffState};
     use clap::Parser;
-    use frontend::PatchPcapRequest_PcapPatch as PcapPatch;
     use frontend_proto::{
         common::ChipKind,
         frontend,
@@ -53,7 +52,7 @@ mod tests {
     fn test_command(
         command: &str,
         expected_grpc_method: GrpcMethod,
-        expected_request_byte_str: Vec<u8>,
+        expected_request_byte_str: BinaryProtobuf,
     ) {
         let command = NetsimArgs::parse_from(command.split_whitespace()).command;
         assert_eq!(expected_grpc_method, command.grpc_method());
@@ -66,7 +65,7 @@ mod tests {
         test_command("netsim-cli version", GrpcMethod::GetVersion, Vec::new())
     }
 
-    fn get_expected_radio(name: &str, radio_type: &str, state: &str) -> Vec<u8> {
+    fn get_expected_radio(name: &str, radio_type: &str, state: &str) -> BinaryProtobuf {
         let mut chip = model::Chip { ..Default::default() };
         let chip_state = match state {
             "up" => State::ON,
@@ -137,7 +136,7 @@ mod tests {
         );
     }
 
-    fn get_expected_move(name: &str, x: f32, y: f32, z: Option<f32>) -> Vec<u8> {
+    fn get_expected_move(name: &str, x: f32, y: f32, z: Option<f32>) -> BinaryProtobuf {
         let mut result = frontend::PatchDeviceRequest::new();
         let mutable_device = result.mut_device();
         mutable_device.set_name(name.to_owned());
@@ -191,7 +190,7 @@ mod tests {
         test_command("netsim-cli devices", GrpcMethod::GetDevices, Vec::new())
     }
 
-    fn get_expected_capture(name: &str, state: OnOffState) -> Vec<u8> {
+    fn get_expected_capture(name: &str, state: OnOffState) -> BinaryProtobuf {
         let mut bt_chip = model::Chip {
             kind: ChipKind::BLUETOOTH,
             chip: Some(model::Chip_oneof_chip::bt(Chip_Bluetooth { ..Default::default() })),
@@ -263,32 +262,7 @@ mod tests {
         test_command("netsim-cli pcap list", GrpcMethod::ListPcap, Vec::new())
     }
 
-    fn get_expected_patch_pcap(id: i32, state: bool) -> Vec<u8> {
-        let mut result = frontend::PatchPcapRequest::new();
-        result.set_id(id);
-        let mut pcap_patch = PcapPatch::new();
-        let capture_state = match state {
-            true => State::ON,
-            false => State::OFF,
-        };
-        pcap_patch.set_state(capture_state);
-        result.set_patch(pcap_patch);
-        result.write_to_bytes().unwrap()
-    }
-
-    #[test]
-    fn test_pcap_patch() {
-        test_command(
-            "netsim-cli pcap patch 1 on",
-            GrpcMethod::PatchPcap,
-            get_expected_patch_pcap(1, true),
-        );
-        test_command(
-            "netsim-cli pcap patch 8 off",
-            GrpcMethod::PatchPcap,
-            get_expected_patch_pcap(8, false),
-        );
-    }
+    //TODO: Add pcap patch tests once able to run tests with cxx definitions
 
     #[test]
     fn test_pcap_get() {
