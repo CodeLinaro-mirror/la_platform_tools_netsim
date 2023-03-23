@@ -138,3 +138,9 @@ message GetPcapRequest {
 message GetPcapResponse {
   bytes capture_stream = 1;
 }
+
+message ErrorResponse {
+  int32 code = 1;
+  string error_message = 2;
+  string status = 3;
+}

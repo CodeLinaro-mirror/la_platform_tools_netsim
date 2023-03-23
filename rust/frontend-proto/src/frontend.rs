@@ -2141,6 +2141,242 @@ impl ::protobuf::reflect::ProtobufValue for GetPcapResponse {
     }
 }
 
+#[derive(PartialEq,Clone,Default)]
+pub struct ErrorResponse {
+    // message fields
+    pub code: i32,
+    pub error_message: ::std::string::String,
+    pub status: ::std::string::String,
+    // special fields
+    pub unknown_fields: ::protobuf::UnknownFields,
+    pub cached_size: ::protobuf::CachedSize,
+}
+
+impl<'a> ::std::default::Default for &'a ErrorResponse {
+    fn default() -> &'a ErrorResponse {
+        <ErrorResponse as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl ErrorResponse {
+    pub fn new() -> ErrorResponse {
+        ::std::default::Default::default()
+    }
+
+    // int32 code = 1;
+
+
+    pub fn get_code(&self) -> i32 {
+        self.code
+    }
+    pub fn clear_code(&mut self) {
+        self.code = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_code(&mut self, v: i32) {
+        self.code = v;
+    }
+
+    // string error_message = 2;
+
+
+    pub fn get_error_message(&self) -> &str {
+        &self.error_message
+    }
+    pub fn clear_error_message(&mut self) {
+        self.error_message.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_error_message(&mut self, v: ::std::string::String) {
+        self.error_message = v;
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_error_message(&mut self) -> &mut ::std::string::String {
+        &mut self.error_message
+    }
+
+    // Take field
+    pub fn take_error_message(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.error_message, ::std::string::String::new())
+    }
+
+    // string status = 3;
+
+
+    pub fn get_status(&self) -> &str {
+        &self.status
+    }
+    pub fn clear_status(&mut self) {
+        self.status.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_status(&mut self, v: ::std::string::String) {
+        self.status = v;
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_status(&mut self) -> &mut ::std::string::String {
+        &mut self.status
+    }
+
+    // Take field
+    pub fn take_status(&mut self) -> ::std::string::String {
+        ::std::mem::replace(&mut self.status, ::std::string::String::new())
+    }
+}
+
+impl ::protobuf::Message for ErrorResponse {
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
+            match field_number {
+                1 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.code = tmp;
+                },
+                2 => {
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.error_message)?;
+                },
+                3 => {
+                    ::protobuf::rt::read_singular_proto3_string_into(wire_type, is, &mut self.status)?;
+                },
+                _ => {
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u32 {
+        let mut my_size = 0;
+        if self.code != 0 {
+            my_size += ::protobuf::rt::value_size(1, self.code, ::protobuf::wire_format::WireTypeVarint);
+        }
+        if !self.error_message.is_empty() {
+            my_size += ::protobuf::rt::string_size(2, &self.error_message);
+        }
+        if !self.status.is_empty() {
+            my_size += ::protobuf::rt::string_size(3, &self.status);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
+        self.cached_size.set(my_size);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        if self.code != 0 {
+            os.write_int32(1, self.code)?;
+        }
+        if !self.error_message.is_empty() {
+            os.write_string(2, &self.error_message)?;
+        }
+        if !self.status.is_empty() {
+            os.write_string(3, &self.status)?;
+        }
+        os.write_unknown_fields(self.get_unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn get_cached_size(&self) -> u32 {
+        self.cached_size.get()
+    }
+
+    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
+        &self.unknown_fields
+    }
+
+    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
+        &mut self.unknown_fields
+    }
+
+    fn as_any(&self) -> &dyn (::std::any::Any) {
+        self as &dyn (::std::any::Any)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
+        self as &mut dyn (::std::any::Any)
+    }
+    fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
+        self
+    }
+
+    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
+        Self::descriptor_static()
+    }
+
+    fn new() -> ErrorResponse {
+        ErrorResponse::new()
+    }
+
+    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
+        descriptor.get(|| {
+            let mut fields = ::std::vec::Vec::new();
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "code",
+                |m: &ErrorResponse| { &m.code },
+                |m: &mut ErrorResponse| { &mut m.code },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
+                "error_message",
+                |m: &ErrorResponse| { &m.error_message },
+                |m: &mut ErrorResponse| { &mut m.error_message },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeString>(
+                "status",
+                |m: &ErrorResponse| { &m.status },
+                |m: &mut ErrorResponse| { &mut m.status },
+            ));
+            ::protobuf::reflect::MessageDescriptor::new_pb_name::<ErrorResponse>(
+                "ErrorResponse",
+                fields,
+                file_descriptor_proto()
+            )
+        })
+    }
+
+    fn default_instance() -> &'static ErrorResponse {
+        static instance: ::protobuf::rt::LazyV2<ErrorResponse> = ::protobuf::rt::LazyV2::INIT;
+        instance.get(ErrorResponse::new)
+    }
+}
+
+impl ::protobuf::Clear for ErrorResponse {
+    fn clear(&mut self) {
+        self.code = 0;
+        self.error_message.clear();
+        self.status.clear();
+        self.unknown_fields.clear();
+    }
+}
+
+impl ::std::fmt::Debug for ErrorResponse {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for ErrorResponse {
+    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
+        ::protobuf::reflect::ReflectValueRef::Message(self)
+    }
+}
+
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x0efrontend.proto\x12\x0fnetsim.frontend\x1a\x1bgoogle/protobuf/empty\
     .proto\x1a\x0bmodel.proto\"+\n\x0fVersionResponse\x12\x18\n\x07version\
@@ -2162,20 +2398,23 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     state\"<\n\x10ListPcapResponse\x12(\n\x05pcaps\x18\x01\x20\x03(\x0b2\x12\
     .netsim.model.PcapR\x05pcaps\"\x20\n\x0eGetPcapRequest\x12\x0e\n\x02id\
     \x18\x01\x20\x01(\x05R\x02id\"8\n\x0fGetPcapResponse\x12%\n\x0ecapture_s\
-    tream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xdb\x05\n\x0fFrontendService\
-    \x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.fronten\
-    d.VersionResponse\x12B\n\x0eRegisterEvents\x12\x16.google.protobuf.Empty\
-    \x1a\x16.netsim.frontend.Event0\x01\x12I\n\nGetDevices\x12\x16.google.pr\
-    otobuf.Empty\x1a#.netsim.frontend.GetDevicesResponse\x12J\n\x0bPatchDevi\
-    ce\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.google.protobuf.Empty\
-    \x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.E\
-    mpty\x12J\n\x0bSetLinkLoss\x12#.netsim.frontend.SetLinkLossRequest\x1a\
-    \x16.google.protobuf.Empty\x12A\n\x06NetCat\x12\x16.google.protobuf.Empt\
-    y\x1a\x1d.netsim.frontend.NetCatStream0\x01\x12F\n\tPatchPcap\x12!.netsi\
-    m.frontend.PatchPcapRequest\x1a\x16.google.protobuf.Empty\x12E\n\x08List\
-    Pcap\x12\x16.google.protobuf.Empty\x1a!.netsim.frontend.ListPcapResponse\
-    \x12N\n\x07GetPcap\x12\x1f.netsim.frontend.GetPcapRequest\x1a\x20.netsim\
-    .frontend.GetPcapResponse0\x01b\x06proto3\
+    tream\x18\x01\x20\x01(\x0cR\rcaptureStream\"`\n\rErrorResponse\x12\x12\n\
+    \x04code\x18\x01\x20\x01(\x05R\x04code\x12#\n\rerror_message\x18\x02\x20\
+    \x01(\tR\x0cerrorMessage\x12\x16\n\x06status\x18\x03\x20\x01(\tR\x06stat\
+    us2\xdb\x05\n\x0fFrontendService\x12F\n\nGetVersion\x12\x16.google.proto\
+    buf.Empty\x1a\x20.netsim.frontend.VersionResponse\x12B\n\x0eRegisterEven\
+    ts\x12\x16.google.protobuf.Empty\x1a\x16.netsim.frontend.Event0\x01\x12I\
+    \n\nGetDevices\x12\x16.google.protobuf.Empty\x1a#.netsim.frontend.GetDev\
+    icesResponse\x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDeviceReque\
+    st\x1a\x16.google.protobuf.Empty\x127\n\x05Reset\x12\x16.google.protobuf\
+    .Empty\x1a\x16.google.protobuf.Empty\x12J\n\x0bSetLinkLoss\x12#.netsim.f\
+    rontend.SetLinkLossRequest\x1a\x16.google.protobuf.Empty\x12A\n\x06NetCa\
+    t\x12\x16.google.protobuf.Empty\x1a\x1d.netsim.frontend.NetCatStream0\
+    \x01\x12F\n\tPatchPcap\x12!.netsim.frontend.PatchPcapRequest\x1a\x16.goo\
+    gle.protobuf.Empty\x12E\n\x08ListPcap\x12\x16.google.protobuf.Empty\x1a!\
+    .netsim.frontend.ListPcapResponse\x12N\n\x07GetPcap\x12\x1f.netsim.front\
+    end.GetPcapRequest\x1a\x20.netsim.frontend.GetPcapResponse0\x01b\x06prot\
+    o3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;
