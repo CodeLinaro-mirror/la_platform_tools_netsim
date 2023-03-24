@@ -259,9 +259,15 @@ impl args::Command {
         if patterns.is_empty() {
             println!("List of Pcaps:");
         } else {
-            println!("List of Pcaps matching pattern(s) `{:?}`:", patterns);
             // Filter out list of pcaps with matching patterns
-            Self::filter_pcaps(&mut response.pcaps, &patterns)
+            Self::filter_pcaps(&mut response.pcaps, &patterns);
+            if response.pcaps.is_empty() {
+                if verbose {
+                    println!("No available Pcap found matching pattern(s) `{:?}`:", patterns);
+                }
+                return;
+            }
+            println!("List of Pcaps matching pattern(s) `{:?}`:", patterns);
         }
         // Create the header row and determine column widths
         let id_hdr = "ID";
@@ -289,22 +295,43 @@ impl args::Command {
         );
         // Print header for pcap list
         println!(
-            "{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
-            id_hdr,
-            name_hdr,
-            chipkind_hdr,
-            state_hdr,
-            size_hdr,
+            "{}",
+            if verbose {
+                format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                    id_hdr,
+                    name_hdr,
+                    chipkind_hdr,
+                    state_hdr,
+                    size_hdr,
+                )
+            } else {
+                format!(
+                    "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                    name_hdr, chipkind_hdr, state_hdr, size_hdr,
+                )
+            }
         );
         // Print information of each Pcap
         for pcap in &response.pcaps {
             println!(
-                "{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
-                pcap.id.to_string(),
-                pcap.device_name,
-                Self::chip_kind_to_string(pcap.chip_kind),
-                Self::capture_state_to_string(pcap.state),
-                pcap.size,
+                "{}",
+                if verbose {
+                    format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                        pcap.id.to_string(),
+                        pcap.device_name,
+                        Self::chip_kind_to_string(pcap.chip_kind),
+                        Self::capture_state_to_string(pcap.state),
+                        pcap.size,
+                    )
+                } else {
+                    format!(
+                        "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                        pcap.device_name,
+                        Self::chip_kind_to_string(pcap.chip_kind),
+                        Self::capture_state_to_string(pcap.state),
+                        pcap.size,
+                    )
+                }
             );
         }
     }

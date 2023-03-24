@@ -34,7 +34,7 @@ use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
 use crate::CxxServerResponseWriterWrapper;
 
-use super::controller::{handle_pcap_list, handle_pcap_patch};
+use super::managers::{handle_pcap_list, handle_pcap_patch};
 
 // The Pcap resource is a singleton that manages all pcaps
 lazy_static! {
