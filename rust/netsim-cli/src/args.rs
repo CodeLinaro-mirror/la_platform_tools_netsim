@@ -17,10 +17,8 @@ use frontend_client_cxx::ffi::{FrontendClient, GrpcMethod};
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend;
 use frontend_proto::frontend::PatchPcapRequest_PcapPatch as PcapPatch;
-use frontend_proto::model;
-use frontend_proto::model::State;
-use frontend_proto::model::{Chip_Bluetooth, Chip_Radio};
-use protobuf::Message;
+use frontend_proto::model::{self, Chip_Bluetooth, Chip_Radio, State};
+use protobuf::{Message, RepeatedField};
 use std::fmt;
 
 pub type BinaryProtobuf = Vec<u8>;
@@ -129,10 +127,8 @@ impl Command {
             }
             Command::Pcap(pcap_cmd) => match pcap_cmd {
                 Pcap::List(_) => Vec::new(),
-                Pcap::Get(cmd) => {
-                    let mut result = frontend::GetPcapRequest::new();
-                    result.set_id(cmd.id);
-                    result.write_to_bytes().unwrap()
+                Pcap::Get(_) => {
+                    unimplemented!("get_request_bytes not implemented for Pcap Get command. Use get_requests instead.")
                 }
                 Pcap::Patch(_) => {
                     unimplemented!("get_request_bytes not implemented for Pcap Patch command. Use get_requests instead.")
@@ -145,26 +141,13 @@ impl Command {
     /// In the case of a command with pattern argument(s) there may be multiple gRPC requests.
     /// The parsed command parameters are used to construct the request protobuf.
     /// The client is used to send gRPC call(s) to retrieve information needed for request protobufs.
-    pub fn get_requests(&self, client: &cxx::UniquePtr<FrontendClient>) -> Vec<BinaryProtobuf> {
+    pub fn get_requests(&mut self, client: &cxx::UniquePtr<FrontendClient>) -> Vec<BinaryProtobuf> {
         match self {
             Command::Pcap(Pcap::Patch(cmd)) => {
                 let mut reqs = Vec::new();
-                // Get list of pcaps
-                let req = Vec::new();
-                let result = client.send_grpc(&GrpcMethod::ListPcap, &req);
-                if !result.is_ok() {
-                    eprintln!("Grpc call error: {}", result.err());
-                    return Vec::new();
-                }
-                let mut response =
-                    frontend::ListPcapResponse::parse_from_bytes(result.byte_vec().as_slice())
-                        .unwrap();
-                if !cmd.patterns.is_empty() {
-                    // Filter out list of pcaps with matching patterns
-                    Self::filter_pcaps(&mut response.pcaps, &cmd.patterns)
-                }
+                let filtered_pcaps = Self::get_filtered_pcaps(client, &cmd.patterns);
                 // Create a request for each pcap
-                for pcap in &response.pcaps {
+                for pcap in &filtered_pcaps {
                     let mut result = frontend::PatchPcapRequest::new();
                     result.set_id(pcap.id);
                     let capture_state = match cmd.state {
@@ -178,12 +161,48 @@ impl Command {
                 }
                 reqs
             }
+            Command::Pcap(Pcap::Get(cmd)) => {
+                let mut reqs = Vec::new();
+                let filtered_pcaps = Self::get_filtered_pcaps(client, &cmd.patterns);
+                // Create a request for each pcap
+                for pcap in &filtered_pcaps {
+                    let mut result = frontend::GetPcapRequest::new();
+                    result.set_id(pcap.id);
+                    reqs.push(result.write_to_bytes().unwrap());
+                    cmd.filenames.push(format!(
+                        "{}-{}-{}",
+                        pcap.device_name.to_owned().replace(' ', "_"),
+                        Self::chip_kind_to_string(pcap.chip_kind),
+                        pcap.timestamp
+                    ));
+                }
+                reqs
+            }
             _ => {
                 unimplemented!(
                     "get_requests not implemented for this command. Use get_request_bytes instead."
                 )
             }
         }
+    }
+
+    fn get_filtered_pcaps(
+        client: &cxx::UniquePtr<FrontendClient>,
+        patterns: &Vec<String>,
+    ) -> RepeatedField<frontend_proto::model::Pcap> {
+        // Get list of pcaps
+        let result = client.send_grpc(&GrpcMethod::ListPcap, &Vec::new());
+        if !result.is_ok() {
+            eprintln!("Grpc call error: {}", result.err());
+            return RepeatedField::new();
+        }
+        let mut response =
+            frontend::ListPcapResponse::parse_from_bytes(result.byte_vec().as_slice()).unwrap();
+        if !patterns.is_empty() {
+            // Filter out list of pcaps with matching patterns
+            Self::filter_pcaps(&mut response.pcaps, patterns)
+        }
+        response.pcaps
     }
 }
 
@@ -288,6 +307,11 @@ pub struct PatchPcap {
 
 #[derive(Debug, Args)]
 pub struct GetPcap {
-    /// Pcap id
-    pub id: i32,
+    /// Optional strings of pattern for pcaps to get. Possible filter fields include Pcap ID, Device Name, and Chip Kind
+    pub patterns: Vec<String>,
+    /// Directory to store downloaded pcap(s)
+    #[clap(short = 'o', long)]
+    pub location: Option<String>,
+    #[clap(skip)]
+    pub filenames: Vec<String>,
 }
