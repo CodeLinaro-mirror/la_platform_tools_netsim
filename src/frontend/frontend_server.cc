@@ -14,6 +14,8 @@
 
 #include "frontend/frontend_server.h"
 
+#include <google/protobuf/util/json_util.h>
+
 #include <iostream>
 #include <memory>
 #include <string>
@@ -25,7 +27,7 @@
 #include "google/protobuf/empty.pb.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
-#include "netsim_cxx_generated.h"
+#include "netsim-cxx/src/lib.rs.h"
 
 namespace netsim {
 namespace {
@@ -36,43 +38,32 @@ namespace {
 class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
  public:
   CxxServerResponseWritable()
-      : grpc_writer_(nullptr), err(""), is_ok(false), body(""){};
+      : grpc_writer_(nullptr), err(""), is_ok(false), body(""), length(0){};
   CxxServerResponseWritable(
       grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer)
-      : grpc_writer_(grpc_writer), err(""), is_ok(false), body(""){};
+      : grpc_writer_(grpc_writer), err(""), is_ok(false), body(""), length(0){};
 
   void put_error(unsigned int error_code,
                  const std::string &response) const override {
-    // TODO: remove temporary print statement
-    std::cout << "cxx result: " << error_code << " " << response.c_str()
-              << std::endl;
-    err = "CxxServerResponseWriter Error code: " + std::to_string(error_code);
+    err = std::to_string(error_code) + ": " + response;
     is_ok = false;
   }
+
   void put_ok_with_length(const std::string &mime_type,
                           unsigned int length) const override {
-    // TODO: complete implementation
-    std::cout << "HTTP/1.1 200 OK" << std::endl
-              << "Content-Type: " << mime_type << std::endl
-              << "Content-Length: " << length << std::endl
-              << std::endl;
-    len = length;
+    this->length = length;
     is_ok = true;
   }
+
   void put_chunk(rust::Slice<const uint8_t> chunk) const override {
-    // TODO: complete implementation
     netsim::frontend::GetPcapResponse response;
-    std::cout << "put_chunk parsing response" << std::endl;
     response.ParseFromArray(chunk.data(), chunk.length());
-    std::cout << "put_chunk writing response" << std::endl;
     is_ok = grpc_writer_->Write(response);
   }
 
   void put_ok(const std::string &mime_type,
               const std::string &body) const override {
-    // TODO: complete implementation
-    std::cout << "cxx result: " << mime_type.c_str() << " " << body.c_str()
-              << std::endl;
+    this->body = body;
     is_ok = true;
   }
 
@@ -80,7 +71,7 @@ class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
   mutable std::string err;
   mutable bool is_ok;
   mutable std::string body;
-  mutable unsigned int len;
+  mutable unsigned int length;
 };
 
 class FrontendServer final : public frontend::FrontendService::Service {
@@ -137,9 +128,9 @@ class FrontendServer final : public frontend::FrontendService::Service {
                         const google::protobuf::Empty *empty,
                         frontend::ListPcapResponse *reply) {
     CxxServerResponseWritable writer;
-    HandlePcapCxx(writer, "GET", "", "Listpcap");
+    HandlePcapCxx(writer, "GET", "", "");
     if (writer.is_ok) {
-      reply->ParseFromString(writer.body);
+      google::protobuf::util::JsonStringToMessage(writer.body, reply);
       return grpc::Status::OK;
     }
     return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
@@ -154,9 +145,7 @@ class FrontendServer final : public frontend::FrontendService::Service {
     if (writer.is_ok) {
       return grpc::Status::OK;
     }
-    return grpc::Status(
-        grpc::StatusCode::UNKNOWN,
-        "PatchPcap: ServerResponseWriter failed to write response.");
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
   grpc::Status GetPcap(
       grpc::ServerContext *context,
@@ -167,9 +156,7 @@ class FrontendServer final : public frontend::FrontendService::Service {
     if (writer.is_ok) {
       return grpc::Status::OK;
     }
-    return grpc::Status(
-        grpc::StatusCode::UNKNOWN,
-        "GetPcap: ServerResponseWriter failed to write response.");
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
 };
 }  // namespace

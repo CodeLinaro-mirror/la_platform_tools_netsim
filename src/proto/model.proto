@@ -105,4 +105,5 @@ message Pcap {
   // number of records in current capture
   int32 records = 7;
   int32 timestamp = 8;
+  bool valid = 9;
 }

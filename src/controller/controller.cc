@@ -55,6 +55,18 @@ unsigned int GetDevices(const std::string &request, std::string &response,
   return HTTP_STATUS_OK;
 }
 
+bool GetDevicesBytes(rust::Vec<::rust::u8> &vec) {
+  auto scene = netsim::controller::SceneController::Singleton().Get();
+  std::vector<unsigned char> message_vec(scene.ByteSizeLong());
+  auto status = scene.SerializeToArray(message_vec.data(), message_vec.size());
+  if (!status) {
+    return false;
+  }
+  vec.reserve(message_vec.size());
+  std::copy(message_vec.begin(), message_vec.end(), std::back_inserter(vec));
+  return true;
+}
+
 void RemoveChip(uint32_t device_id, uint32_t chip_id) {
   netsim::controller::SceneController::Singleton().RemoveChip(device_id,
                                                               chip_id);
