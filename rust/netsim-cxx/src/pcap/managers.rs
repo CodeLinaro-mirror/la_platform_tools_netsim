@@ -16,13 +16,14 @@
 //!
 //! Provides the API for the frontend to interact with pcaps.
 
+use cxx::let_cxx_string;
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend::GetDevicesResponse;
 use frontend_proto::model::{Pcap as ProtoPcap, State};
 use protobuf::Message;
 use std::collections::HashMap;
 
-use crate::ffi::get_devices_bytes;
+use crate::ffi::{get_devices_bytes, patch_device};
 use crate::http_server::server_response::ResponseWritable;
 
 use super::handlers::Pcaps;
@@ -155,6 +156,47 @@ fn update_pcaps(pcaps: &mut Pcaps) {
     }
 }
 
+fn patch_chip_capture(chip_id: i32, state: bool) -> bool {
+    // Get Devices
+    let mut vec = Vec::<u8>::new();
+    if !get_devices_bytes(&mut vec) {
+        println!("netsim error: GetDevicesBytes in patch_chip_capture failed");
+        return false;
+    }
+
+    // Parse get_devices_response
+    let device_response = GetDevicesResponse::parse_from_bytes(&vec).unwrap();
+
+    // Update capture field in chip with given chip_id
+    for device in device_response.get_devices() {
+        for chip in device.get_chips() {
+            if chip.get_id() == chip_id {
+                let capture_state = match state {
+                    true => State::ON,
+                    false => State::OFF,
+                };
+                let body = format!(
+                    r#"{{"device":{{"name":{:?},"chips":[{{"id":{:?},"kind":"{:?}","capture":"{:?}"}}]}}}}"#,
+                    device.get_name(),
+                    chip.get_id(),
+                    chip.get_kind(),
+                    capture_state
+                );
+                let_cxx_string!(request = body);
+                let_cxx_string!(response = "");
+                let_cxx_string!(error_message = "");
+                let status = patch_device(&request, response, error_message.as_mut());
+                if status != 200 {
+                    println!("netsim: error from patch_chip_capture: {:?}", error_message.to_str());
+                    return false;
+                }
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub fn handle_pcap_list(writer: ResponseWritable, pcaps: &mut Pcaps) {
     // Get the most updated active pcaps
     update_pcaps(pcaps);
@@ -181,6 +223,12 @@ pub fn handle_pcap_patch(writer: ResponseWritable, pcaps: &mut Pcaps, id: i32, s
     // Patch the state of the pcap and write appropriate responses
     if pcaps.set_state(id, state) {
         let pcap = pcaps.get_by_id(id).unwrap();
+        let status = patch_chip_capture(pcap.get_chip_id(), state);
+        if !status {
+            pcaps.set_state(id, !state);
+            writer.put_error(404, "Patch Chip failure");
+            return;
+        }
         let mut out = String::new();
         pcap_to_string(pcap, &mut out);
         out.pop();
