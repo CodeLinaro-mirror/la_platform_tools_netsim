@@ -23,7 +23,7 @@ use crate::http_server::http_router::Router;
 use crate::http_server::server_response::{
     ResponseWritable, ServerResponseWritable, ServerResponseWriter,
 };
-use crate::pcap::*;
+use crate::pcap::handlers::*;
 use crate::version::VERSION;
 
 use crate::http_server::thread_pool::ThreadPool;
@@ -185,8 +185,8 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
     router.add_route("/version", Box::new(handle_version));
     router.add_route("/v1/devices", Box::new(handle_devices));
     router.add_route(r"/pcap/{id}", Box::new(handle_pcap_file));
-    router.add_route(r"/v1/pcap", Box::new(handle_pcaps));
-    router.add_route(r"/v1/pcap/{id}", Box::new(handle_pcap));
+    router.add_route(r"/v1/pcaps", Box::new(handle_pcap));
+    router.add_route(r"/v1/pcaps/{id}", Box::new(handle_pcap));
 
     // A closure for checking if path is a static file we wish to serve, and call handle_static
     let handle_static_wrapper =

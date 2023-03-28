@@ -19,6 +19,7 @@
 #include <string>
 
 #include "common.pb.h"
+#include "rust/cxx.h"
 
 namespace netsim::scene_controller {
 
@@ -30,6 +31,8 @@ unsigned int PatchDevice(const std::string &request, std::string &response,
 
 unsigned int GetDevices(const std::string &request, std::string &response,
                         std::string &error_message);
+
+bool GetDevicesBytes(rust::Vec<::rust::u8> &vec);
 
 void RemoveChip(uint32_t device_id, uint32_t chip_id);
 
