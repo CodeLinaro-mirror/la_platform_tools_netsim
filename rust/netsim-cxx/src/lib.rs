@@ -14,6 +14,8 @@
 
 //! Netsim cxx libraries.
 
+#![allow(dead_code)]
+
 mod http_server;
 mod pcap;
 mod ranging;
@@ -63,6 +65,27 @@ mod ffi {
     unsafe extern "C++" {
         include!("controller/controller.h");
 
+        #[namespace = "netsim::scene_controller"]
+        type AddChipResult;
+        fn get_chip_id(self: &AddChipResult) -> u32;
+        fn get_device_id(self: &AddChipResult) -> u32;
+        fn get_facade_id(self: &AddChipResult) -> u32;
+
+        #[rust_name = "add_chip_cxx"]
+        #[namespace = "netsim::scene_controller"]
+        fn AddChipCxx(
+            guid: &CxxString,
+            device_name: &CxxString,
+            chip_kind: u32,
+            chip_name: &CxxString,
+            manufacturer: &CxxString,
+            product_name: &CxxString,
+        ) -> UniquePtr<AddChipResult>;
+
+        #[rust_name = "remove_chip"]
+        #[namespace = "netsim::scene_controller"]
+        fn RemoveChip(device_id: u32, chip_id: u32);
+
         #[rust_name = "get_devices"]
         #[namespace = "netsim::scene_controller"]
         fn GetDevices(
@@ -90,16 +113,16 @@ mod ffi {
         type CxxServerResponseWriter;
 
         #[namespace = "netsim::frontend"]
-        fn put_ok_with_length(&self, mime_type: &CxxString, length: u32);
+        fn put_ok_with_length(self: &CxxServerResponseWriter, mime_type: &CxxString, length: u32);
 
         #[namespace = "netsim::frontend"]
-        fn put_chunk(&self, chunk: &[u8]);
+        fn put_chunk(self: &CxxServerResponseWriter, chunk: &[u8]);
 
         #[namespace = "netsim::frontend"]
-        fn put_ok(&self, mime_type: &CxxString, body: &CxxString);
+        fn put_ok(self: &CxxServerResponseWriter, mime_type: &CxxString, body: &CxxString);
 
         #[namespace = "netsim::frontend"]
-        fn put_error(&self, error_code: u32, error_message: &CxxString);
+        fn put_error(self: &CxxServerResponseWriter, error_code: u32, error_message: &CxxString);
     }
 }
 

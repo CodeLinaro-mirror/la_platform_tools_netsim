@@ -17,36 +17,42 @@
 #include "packet_hub/packet_hub.h"
 
 #include "backend/backend_packet_hub.h"
+#include "common.pb.h"
 #include "hci/hci_packet_hub.h"
+#include "hci_packet.pb.h"
 #include "wifi/wifi_packet_hub.h"
 
 namespace netsim {
 namespace packet_hub {
 
+using netsim::common::ChipKind;
+
 // forward from transport to facade via packet_hub
-void handle_bt_request(uint32_t facade_id,
-                       packet::HCIPacket_PacketType packet_type,
-                       const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::hci::handle_bt_request(facade_id, packet_type, packet);
+void handle_request(ChipKind kind, uint32_t facade_id,
+                    const std::vector<uint8_t> &packet,
+                    packet::HCIPacket_PacketType packet_type) {
+  // Copied
+  auto shared_packet = std::make_shared<std::vector<uint8_t>>(packet);
+  if (kind == ChipKind::BLUETOOTH) {
+    netsim::hci::handle_bt_request(facade_id, packet_type, shared_packet);
+  } else if (kind == ChipKind::WIFI) {
+    netsim::wifi::handle_wifi_request(facade_id, shared_packet);
+  }
 }
 
 // forward from facade to transport via packet_hub
 void handle_bt_response(uint32_t facade_id,
                         packet::HCIPacket_PacketType packet_type,
                         const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::backend::handle_bt_response(facade_id, packet_type, packet);
-}
-
-// forward from transport to facade via packet_hub
-void handle_wifi_request(uint32_t facade_id,
-                         const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::wifi::handle_wifi_request(facade_id, packet);
+  netsim::backend::handle_response(ChipKind::BLUETOOTH, facade_id, *packet,
+                                   packet_type);
 }
 
 // forward from facade to transport via packet_hub
 void handle_wifi_response(uint32_t facade_id,
                           const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::backend::handle_wifi_response(facade_id, packet);
+  netsim::backend::handle_response(ChipKind::WIFI, facade_id, *packet,
+                                   packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
 }
 
 }  // namespace packet_hub

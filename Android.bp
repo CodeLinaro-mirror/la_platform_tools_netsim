@@ -64,7 +64,7 @@ rust_ffi_host_static {
     crate_name: "netsim_cxx",
     rlibs: ["libcxx",
         "libfrontend_proto",
-        "libprotobuf",
+        "libprotobuf_deprecated",
         "libregex",
         "liblazy_static"],
     srcs: ["rust/netsim-cxx/src/lib.rs"],
@@ -247,7 +247,7 @@ rust_library_host {
     crate_name: "frontend_proto",
     srcs: ["rust/frontend-proto/src/lib.rs"],
     rustlibs: [
-        "libprotobuf"
+        "libprotobuf_deprecated"
     ],
 }
 
@@ -281,7 +281,7 @@ rust_ffi_host_static {
         "libclap",
         "libfrontend_proto",
         "libfrontend_client_cxx",
-        "libprotobuf",
+        "libprotobuf_deprecated",
         "libcxx",
     ],
 }

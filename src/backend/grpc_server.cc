@@ -127,14 +127,17 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         auto packet_type = request.hci_packet().packet_type();
         auto packet =
             ToSharedVec(request.mutable_hci_packet()->mutable_packet());
-        packet_hub::handle_bt_request(facade_id, packet_type, packet);
+        packet_hub::handle_request(chip_kind, facade_id, *packet, packet_type);
       } else if (chip_kind == common::ChipKind::WIFI) {
         if (!request.has_packet()) {
           BtsLog("grpc_server: unknown packet type from %d", facade_id);
           continue;
         }
         auto packet = ToSharedVec(request.mutable_packet());
-        packet_hub::handle_wifi_request(facade_id, packet);
+        packet_hub::handle_request(chip_kind, facade_id,
+
+                                   *packet,
+                                   packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
       } else {
         // TODO: add UWB here
         BtsLog("grpc_server: unknown chip kind");
@@ -144,43 +147,26 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
 };
 }  // namespace
 
-// handle_bt_response is called by packet_hub to forward a response to
-// the gRPC stream associated with facade_id.
+// handle_response is called by packet_hub to forward a response to the gRPC
+// stream associated with chip_kind and facade_id.
 //
-// When writing, the packet is copied because it is a shared_ptr and grpc++
-// doesn't know about smart pointers.
-void handle_bt_response(uint32_t facade_id,
-                        packet::HCIPacket_PacketType packet_type,
-                        const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  auto stream = facade_to_stream[ChipFacade(ChipKind::BLUETOOTH, facade_id)];
+// When writing, the packet is copied because is borrowed from a shared_ptr and
+// grpc++ doesn't know about smart pointers.
+void handle_response(ChipKind kind, uint32_t facade_id,
+                     const std::vector<uint8_t> &packet,
+                     packet::HCIPacket_PacketType packet_type) {
+  auto stream = facade_to_stream[ChipFacade(kind, facade_id)];
   if (stream) {
     // TODO: lock or caller here because gRPC does not allow overlapping writes.
     packet::PacketResponse response;
-    response.mutable_hci_packet()->set_packet_type(packet_type);
-    auto str_packet = std::string(packet->begin(), packet->end());
-    // TODO: check if Swap is available since copied in line above
-    response.mutable_hci_packet()->set_packet(str_packet);
-    if (!stream->Write(response)) {
-      BtsLog("grpc_server: write failed %d", facade_id);
+    // Copies the borrowed packet for output
+    auto str_packet = std::string(packet.begin(), packet.end());
+    if (kind == ChipKind::BLUETOOTH) {
+      response.mutable_hci_packet()->set_packet_type(packet_type);
+      response.mutable_hci_packet()->set_packet(str_packet);
+    } else {
+      response.set_packet(str_packet);
     }
-  } else {
-    BtsLog("grpc_server: no stream for %d", facade_id);
-  }
-}
-
-// handle_wifi_response is called by packet_hub to forward a response to
-// the gRPC stream associated with facade_id.
-//
-// When writing, the packet is copied because it is a shared_ptr and grpc++
-// doesn't know about smart pointers.
-void handle_wifi_response(uint32_t facade_id,
-                          const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  auto stream = facade_to_stream[ChipFacade(ChipKind::WIFI, facade_id)];
-  if (stream) {
-    // TODO: lock or caller here because gRPC does not allow overlapping writes.
-    packet::PacketResponse response;
-    auto str_packet = std::string(packet->begin(), packet->end());
-    response.set_packet(str_packet);
     if (!stream->Write(response)) {
       BtsLog("grpc_server: write failed %d", facade_id);
     }
