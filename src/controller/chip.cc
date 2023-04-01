@@ -47,21 +47,13 @@ model::Chip Chip::Get() {
 
 void Chip::Patch(const model::Chip &request) {
   BtsLog("Chip::Patch %d", id);
-  std::string chip_kind;
-  if (kind == common::ChipKind::BLUETOOTH) {
-    chip_kind = "bluetooth";
-  } else if (kind == common::ChipKind::WIFI) {
-    chip_kind = "wifi";
-  } else {
-    chip_kind = "uwb";
-  }
 
   if (request.capture() != model::State::UNKNOWN &&
       this->capture != request.capture()) {
     this->capture = request.capture();
     hci::facade::SetPacketCapture(this->facade_id,
                                   request.capture() == model::State::ON,
-                                  this->device_name, chip_kind, this->id);
+                                  this->device_name);
   }
   if (!request.manufacturer().empty()) {
     this->manufacturer = request.manufacturer();

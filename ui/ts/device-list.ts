@@ -82,6 +82,9 @@ export class DeviceList extends LitElement implements Notifiable {
                       color=${rainbow[idx % rainbow.length]}
                       size="30px"
                       style="opacity:0.5;"
+                      role="listitem"
+                      tabindex="0"
+                      aria-label="${device.name} in Device Legends"
                     ></ns-cube-sprite
                     >${device.name} ` :
                     html`<ns-device-dragzone action="move">
@@ -89,6 +92,9 @@ export class DeviceList extends LitElement implements Notifiable {
                         id=${device.name}
                         color=${rainbow[idx % rainbow.length]}
                         size="30px"
+                        role="listitem"
+                        tabindex="0"
+                        aria-label="${device.name} in Device Legends"
                       ></ns-cube-sprite> </ns-device-dragzone
                     >${device.name}`}
             </center>
@@ -101,6 +107,9 @@ export class DeviceList extends LitElement implements Notifiable {
             color=${rainbow[this.deviceData.length % rainbow.length]}
             size="30px"
             style="opacity:0.5;"
+            role="listitem"
+            tabindex="0"
+            aria-label="beacon in Device Legends"
           ></ns-pyramid-sprite
           >beacon
         </center>
@@ -112,6 +121,9 @@ export class DeviceList extends LitElement implements Notifiable {
             color=${rainbow[(this.deviceData.length + 1) % rainbow.length]}
             size="30px"
             style="opacity:0.5;"
+            role="listitem"
+            tabindex="0"
+            aria-label="anchor in Device Legends"
           ></ns-pyramid-sprite
           >anchor
         </center>

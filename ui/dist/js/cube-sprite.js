@@ -12,7 +12,7 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
           outline: ${this.highlighted&&this.controls?e`dashed`:e``};
         }
       </style>
-      <div class="cube" role="button" tabindex="0" aria-label="Device">
+      <div class="cube">
         <div></div>
         <div></div>
         <div></div>

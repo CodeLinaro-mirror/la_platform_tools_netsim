@@ -63,7 +63,9 @@ fn ui_path(suffix: &str) -> PathBuf {
     let mut path = std::env::current_exe().unwrap();
     path.pop();
     path.push("netsim-ui");
-    path.push(suffix);
+    for subpath in suffix.split('/') {
+        path.push(subpath);
+    }
     path
 }
 

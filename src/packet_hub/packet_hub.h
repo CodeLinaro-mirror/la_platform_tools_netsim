@@ -41,6 +41,10 @@ void handle_request(common::ChipKind kind, uint32_t facade_id,
                     const std::vector<uint8_t> &packet,
                     packet::HCIPacket_PacketType packet_type);
 
+void handle_request_cxx(uint32_t kind, uint32_t facade_id,
+                        const std::vector<uint8_t> &packet,
+                        uint32_t packet_type);
+
 void handle_bt_response(uint32_t facade_id,
                         packet::HCIPacket_PacketType packet_type,
                         const std::shared_ptr<std::vector<uint8_t>> &packet);

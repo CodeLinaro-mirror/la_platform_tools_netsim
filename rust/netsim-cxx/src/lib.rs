@@ -60,6 +60,12 @@ mod ffi {
             body: String,
         );
 
+        // Packet hub
+
+        #[cxx_name = HandleResponse]
+        #[namespace = "netsim::fd"]
+        fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u32);
+
     }
 
     unsafe extern "C++" {
@@ -98,6 +104,10 @@ mod ffi {
         #[namespace = "netsim::scene_controller"]
         fn GetDevicesBytes(vec: &mut Vec<u8>) -> bool;
 
+        #[rust_name = "get_facade_id"]
+        #[namespace = "netsim::scene_controller"]
+        fn GetFacadeId(chip_id: i32) -> i32;
+
         #[rust_name = "patch_device"]
         #[namespace = "netsim::scene_controller"]
         fn PatchDevice(
@@ -123,8 +133,16 @@ mod ffi {
 
         #[namespace = "netsim::frontend"]
         fn put_error(self: &CxxServerResponseWriter, error_code: u32, error_message: &CxxString);
+
+        include!("packet_hub/packet_hub.h");
+
+        #[namespace = "netsim::packet_hub"]
+        fn handle_request_cxx(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u32);
+
     }
 }
+
+fn handle_response(_kind: u32, _facade_id: u32, _packet: &cxx::CxxVector<u8>, _packet_type: u32) {}
 
 /// CxxServerResponseWriter is defined in server_response_writable.h
 /// Wrapper struct allows the impl to discover the respective C++ methods

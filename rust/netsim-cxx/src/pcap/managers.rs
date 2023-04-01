@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use crate::ffi::{get_devices_bytes, patch_device};
 use crate::http_server::server_response::ResponseWritable;
 
-use super::handlers::Pcaps;
+use super::handlers::{ChipId, PcapId, Pcaps};
 
 // Creating a new ProtoPcap with known entries
 fn new_with_entry(chip_kind: ChipKind, chip_id: i32, device_name: String) -> ProtoPcap {
@@ -85,9 +85,9 @@ fn pcap_to_string(proto: &ProtoPcap, out: &mut String) {
 }
 
 // Perform get_devices and add chips into a pcap hashmap
-fn get_pcaps_from_devices() -> HashMap<String, ProtoPcap> {
+fn get_pcaps_from_devices() -> HashMap<ChipId, ProtoPcap> {
     // Instantiate pcap hashmap
-    let mut new_pcaps = HashMap::<String, ProtoPcap>::new();
+    let mut new_pcaps = HashMap::<ChipId, ProtoPcap>::new();
 
     // Perform get_devices_bytes ffi to receive bytes of GetDevicesResponse
     // Print error and return empty hashmap if GetDevicesBytes fails.
@@ -104,7 +104,7 @@ fn get_pcaps_from_devices() -> HashMap<String, ProtoPcap> {
     for device in device_response.get_devices() {
         for chip in device.get_chips() {
             let new_pcap = new_with_entry(chip.get_kind(), chip.get_id(), device.get_name().into());
-            new_pcaps.insert(Pcaps::get_key(&new_pcap), new_pcap);
+            new_pcaps.insert(new_pcap.chip_id, new_pcap);
         }
     }
     new_pcaps
@@ -131,18 +131,18 @@ fn update_pcaps(pcaps: &mut Pcaps) {
     // 1. The device had no pcap, remove completely.
     // 2. The device had pcap, indicate by pcap.set_valid(false)
     enum RemovalIndicator {
-        Gone(String),
-        Unused(String),
+        Gone(ChipId),   // type ChipId = i32
+        Unused(ChipId), // type ChipId = i32
     }
 
     // Check if the active_pcap entry still exists in the chips.
     let mut removal = Vec::<RemovalIndicator>::new();
-    for (key, pcap) in pcaps.iter() {
+    for (key, pcap) in pcaps.iter_chip_id_map() {
         if !new_pcaps.contains_key(key) {
             if pcap.get_size() == 0 {
-                removal.push(RemovalIndicator::Unused(key.to_string()));
+                removal.push(RemovalIndicator::Unused(key.to_owned()));
             } else {
-                removal.push(RemovalIndicator::Gone(key.to_string()))
+                removal.push(RemovalIndicator::Gone(key.to_owned()))
             }
         }
     }
@@ -151,12 +151,12 @@ fn update_pcaps(pcaps: &mut Pcaps) {
     for indicator in removal {
         match indicator {
             RemovalIndicator::Unused(key) => pcaps.remove(&key),
-            RemovalIndicator::Gone(key) => pcaps.get(&key).unwrap().set_valid(false),
+            RemovalIndicator::Gone(key) => pcaps.get_by_chip_id(key).unwrap().set_valid(false),
         }
     }
 }
 
-fn patch_chip_capture(chip_id: i32, state: bool) -> bool {
+fn patch_chip_capture(chip_id: ChipId, state: bool) -> bool {
     // Get Devices
     let mut vec = Vec::<u8>::new();
     if !get_devices_bytes(&mut vec) {
@@ -216,13 +216,13 @@ pub fn handle_pcap_list(writer: ResponseWritable, pcaps: &mut Pcaps) {
     writer.put_ok("text/json", out.as_str());
 }
 
-pub fn handle_pcap_patch(writer: ResponseWritable, pcaps: &mut Pcaps, id: i32, state: bool) {
+pub fn handle_pcap_patch(writer: ResponseWritable, pcaps: &mut Pcaps, id: PcapId, state: bool) {
     // Get the most updated active pcaps
     update_pcaps(pcaps);
 
     // Patch the state of the pcap and write appropriate responses
     if pcaps.set_state(id, state) {
-        let pcap = pcaps.get_by_id(id).unwrap();
+        let pcap = pcaps.get_by_pcap_id(id).unwrap();
         let status = patch_chip_capture(pcap.get_chip_id(), state);
         if !status {
             pcaps.set_state(id, !state);

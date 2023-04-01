@@ -50,7 +50,6 @@ class Device {
   void Reset();
   void Remove();
 
- private:
   std::unordered_map<uint32_t, std::shared_ptr<Chip>> chips_;
 };
 

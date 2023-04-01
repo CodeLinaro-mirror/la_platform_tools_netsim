@@ -19,7 +19,6 @@
 #include <cassert>
 #include <chrono>
 #include <cstdint>
-#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
@@ -274,8 +273,7 @@ void IncrRx(uint32_t id, rootcanal::Phy::Type phy_type) {
   }
 }
 
-void SetPacketCapture(uint32_t id, bool isOn, std::string device_name,
-                      std::string chip_kind, uint32_t chip_id) {
+void SetPacketCapture(uint32_t id, bool isOn, std::string device_name) {
   if (id_to_chip_info_.find(id) == id_to_chip_info_.end()) {
     BtsLog("Missing chip_info");
     return;
@@ -289,13 +287,10 @@ void SetPacketCapture(uint32_t id, bool isOn, std::string device_name,
     return;
   }
   // TODO: make multi-os
-  // Filename: /tmp/netsim-pcaps/chip-id/1000/Pixel\ 6\ API\ 33-bluetooth.pcap
-  auto filedir = "/tmp/netsim-pcaps/" + std::to_string(chip_id) + "/";
-  std::filesystem::create_directories(filedir);
-  auto filename = filedir + device_name + "-" + chip_kind + ".pcap";
-  BtsLog("Pcap stored in %s", filename.c_str());
-  if (netsim::filesystem::exists(filename)) {
-    std::remove(filename.c_str());
+  // Filename: emulator-5554-hci.pcap
+  auto filename = "/tmp/" + device_name + "-hci.pcap";
+  for (auto i = 0; netsim::filesystem::exists(filename); ++i) {
+    filename = "/tmp/" + device_name + "-hci-" + std::to_string(i) + ".pcap";
   }
   auto file = std::make_shared<std::ofstream>(filename, std::ios::binary);
   sniffer->SetOutputStream(file);
