@@ -12,25 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto3";
+#include <cstdint>
 
-package netsim.internal;
+#include "hci_packet.pb.h"
 
-import "google/protobuf/empty.proto";
+namespace netsim::backend {
 
-/**
- * The internal service for the network simulator.
- *
- * Handles startup and shutdown.
- */
-service InternalService {
-  /**
-   * Scan for new discovery files.
-   */
-  rpc Scan(google.protobuf.Empty) returns (google.protobuf.Empty);
+void handle_bt_response(uint32_t facade_id,
+                        packet::HCIPacket_PacketType packet_type,
+                        const std::shared_ptr<std::vector<uint8_t>> &packet) {}
 
-  /**
-   * Stop the network simulator service.
-   */
-  rpc StopService(google.protobuf.Empty) returns (google.protobuf.Empty);
+void handle_wifi_response(uint32_t facade_id,
+                          const std::shared_ptr<std::vector<uint8_t>> &packet) {
 }
+
+}  // namespace netsim::backend

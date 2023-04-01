@@ -1307,6 +1307,670 @@ impl ::protobuf::reflect::ProtobufValue for SetPacketCaptureRequest {
     }
 }
 
+#[derive(PartialEq,Clone,Default)]
+pub struct PatchPcapRequest {
+    // message fields
+    pub id: i32,
+    pub state: bool,
+    // special fields
+    pub unknown_fields: ::protobuf::UnknownFields,
+    pub cached_size: ::protobuf::CachedSize,
+}
+
+impl<'a> ::std::default::Default for &'a PatchPcapRequest {
+    fn default() -> &'a PatchPcapRequest {
+        <PatchPcapRequest as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl PatchPcapRequest {
+    pub fn new() -> PatchPcapRequest {
+        ::std::default::Default::default()
+    }
+
+    // int32 id = 1;
+
+
+    pub fn get_id(&self) -> i32 {
+        self.id
+    }
+    pub fn clear_id(&mut self) {
+        self.id = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_id(&mut self, v: i32) {
+        self.id = v;
+    }
+
+    // bool state = 2;
+
+
+    pub fn get_state(&self) -> bool {
+        self.state
+    }
+    pub fn clear_state(&mut self) {
+        self.state = false;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_state(&mut self, v: bool) {
+        self.state = v;
+    }
+}
+
+impl ::protobuf::Message for PatchPcapRequest {
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
+            match field_number {
+                1 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.id = tmp;
+                },
+                2 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_bool()?;
+                    self.state = tmp;
+                },
+                _ => {
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u32 {
+        let mut my_size = 0;
+        if self.id != 0 {
+            my_size += ::protobuf::rt::value_size(1, self.id, ::protobuf::wire_format::WireTypeVarint);
+        }
+        if self.state != false {
+            my_size += 2;
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
+        self.cached_size.set(my_size);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        if self.id != 0 {
+            os.write_int32(1, self.id)?;
+        }
+        if self.state != false {
+            os.write_bool(2, self.state)?;
+        }
+        os.write_unknown_fields(self.get_unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn get_cached_size(&self) -> u32 {
+        self.cached_size.get()
+    }
+
+    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
+        &self.unknown_fields
+    }
+
+    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
+        &mut self.unknown_fields
+    }
+
+    fn as_any(&self) -> &dyn (::std::any::Any) {
+        self as &dyn (::std::any::Any)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
+        self as &mut dyn (::std::any::Any)
+    }
+    fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
+        self
+    }
+
+    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
+        Self::descriptor_static()
+    }
+
+    fn new() -> PatchPcapRequest {
+        PatchPcapRequest::new()
+    }
+
+    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
+        descriptor.get(|| {
+            let mut fields = ::std::vec::Vec::new();
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "id",
+                |m: &PatchPcapRequest| { &m.id },
+                |m: &mut PatchPcapRequest| { &mut m.id },
+            ));
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeBool>(
+                "state",
+                |m: &PatchPcapRequest| { &m.state },
+                |m: &mut PatchPcapRequest| { &mut m.state },
+            ));
+            ::protobuf::reflect::MessageDescriptor::new_pb_name::<PatchPcapRequest>(
+                "PatchPcapRequest",
+                fields,
+                file_descriptor_proto()
+            )
+        })
+    }
+
+    fn default_instance() -> &'static PatchPcapRequest {
+        static instance: ::protobuf::rt::LazyV2<PatchPcapRequest> = ::protobuf::rt::LazyV2::INIT;
+        instance.get(PatchPcapRequest::new)
+    }
+}
+
+impl ::protobuf::Clear for PatchPcapRequest {
+    fn clear(&mut self) {
+        self.id = 0;
+        self.state = false;
+        self.unknown_fields.clear();
+    }
+}
+
+impl ::std::fmt::Debug for PatchPcapRequest {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for PatchPcapRequest {
+    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
+        ::protobuf::reflect::ReflectValueRef::Message(self)
+    }
+}
+
+#[derive(PartialEq,Clone,Default)]
+pub struct ListPcapResponse {
+    // message fields
+    pub pcaps: ::protobuf::RepeatedField<super::model::Pcap>,
+    // special fields
+    pub unknown_fields: ::protobuf::UnknownFields,
+    pub cached_size: ::protobuf::CachedSize,
+}
+
+impl<'a> ::std::default::Default for &'a ListPcapResponse {
+    fn default() -> &'a ListPcapResponse {
+        <ListPcapResponse as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl ListPcapResponse {
+    pub fn new() -> ListPcapResponse {
+        ::std::default::Default::default()
+    }
+
+    // repeated .netsim.model.Pcap pcaps = 1;
+
+
+    pub fn get_pcaps(&self) -> &[super::model::Pcap] {
+        &self.pcaps
+    }
+    pub fn clear_pcaps(&mut self) {
+        self.pcaps.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_pcaps(&mut self, v: ::protobuf::RepeatedField<super::model::Pcap>) {
+        self.pcaps = v;
+    }
+
+    // Mutable pointer to the field.
+    pub fn mut_pcaps(&mut self) -> &mut ::protobuf::RepeatedField<super::model::Pcap> {
+        &mut self.pcaps
+    }
+
+    // Take field
+    pub fn take_pcaps(&mut self) -> ::protobuf::RepeatedField<super::model::Pcap> {
+        ::std::mem::replace(&mut self.pcaps, ::protobuf::RepeatedField::new())
+    }
+}
+
+impl ::protobuf::Message for ListPcapResponse {
+    fn is_initialized(&self) -> bool {
+        for v in &self.pcaps {
+            if !v.is_initialized() {
+                return false;
+            }
+        };
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
+            match field_number {
+                1 => {
+                    ::protobuf::rt::read_repeated_message_into(wire_type, is, &mut self.pcaps)?;
+                },
+                _ => {
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u32 {
+        let mut my_size = 0;
+        for value in &self.pcaps {
+            let len = value.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
+        };
+        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
+        self.cached_size.set(my_size);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        for v in &self.pcaps {
+            os.write_tag(1, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
+        };
+        os.write_unknown_fields(self.get_unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn get_cached_size(&self) -> u32 {
+        self.cached_size.get()
+    }
+
+    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
+        &self.unknown_fields
+    }
+
+    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
+        &mut self.unknown_fields
+    }
+
+    fn as_any(&self) -> &dyn (::std::any::Any) {
+        self as &dyn (::std::any::Any)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
+        self as &mut dyn (::std::any::Any)
+    }
+    fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
+        self
+    }
+
+    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
+        Self::descriptor_static()
+    }
+
+    fn new() -> ListPcapResponse {
+        ListPcapResponse::new()
+    }
+
+    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
+        descriptor.get(|| {
+            let mut fields = ::std::vec::Vec::new();
+            fields.push(::protobuf::reflect::accessor::make_repeated_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<super::model::Pcap>>(
+                "pcaps",
+                |m: &ListPcapResponse| { &m.pcaps },
+                |m: &mut ListPcapResponse| { &mut m.pcaps },
+            ));
+            ::protobuf::reflect::MessageDescriptor::new_pb_name::<ListPcapResponse>(
+                "ListPcapResponse",
+                fields,
+                file_descriptor_proto()
+            )
+        })
+    }
+
+    fn default_instance() -> &'static ListPcapResponse {
+        static instance: ::protobuf::rt::LazyV2<ListPcapResponse> = ::protobuf::rt::LazyV2::INIT;
+        instance.get(ListPcapResponse::new)
+    }
+}
+
+impl ::protobuf::Clear for ListPcapResponse {
+    fn clear(&mut self) {
+        self.pcaps.clear();
+        self.unknown_fields.clear();
+    }
+}
+
+impl ::std::fmt::Debug for ListPcapResponse {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for ListPcapResponse {
+    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
+        ::protobuf::reflect::ReflectValueRef::Message(self)
+    }
+}
+
+#[derive(PartialEq,Clone,Default)]
+pub struct GetPcapRequest {
+    // message fields
+    pub id: i32,
+    // special fields
+    pub unknown_fields: ::protobuf::UnknownFields,
+    pub cached_size: ::protobuf::CachedSize,
+}
+
+impl<'a> ::std::default::Default for &'a GetPcapRequest {
+    fn default() -> &'a GetPcapRequest {
+        <GetPcapRequest as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl GetPcapRequest {
+    pub fn new() -> GetPcapRequest {
+        ::std::default::Default::default()
+    }
+
+    // int32 id = 1;
+
+
+    pub fn get_id(&self) -> i32 {
+        self.id
+    }
+    pub fn clear_id(&mut self) {
+        self.id = 0;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_id(&mut self, v: i32) {
+        self.id = v;
+    }
+}
+
+impl ::protobuf::Message for GetPcapRequest {
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
+            match field_number {
+                1 => {
+                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
+                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
+                    }
+                    let tmp = is.read_int32()?;
+                    self.id = tmp;
+                },
+                _ => {
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u32 {
+        let mut my_size = 0;
+        if self.id != 0 {
+            my_size += ::protobuf::rt::value_size(1, self.id, ::protobuf::wire_format::WireTypeVarint);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
+        self.cached_size.set(my_size);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        if self.id != 0 {
+            os.write_int32(1, self.id)?;
+        }
+        os.write_unknown_fields(self.get_unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn get_cached_size(&self) -> u32 {
+        self.cached_size.get()
+    }
+
+    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
+        &self.unknown_fields
+    }
+
+    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
+        &mut self.unknown_fields
+    }
+
+    fn as_any(&self) -> &dyn (::std::any::Any) {
+        self as &dyn (::std::any::Any)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
+        self as &mut dyn (::std::any::Any)
+    }
+    fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
+        self
+    }
+
+    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
+        Self::descriptor_static()
+    }
+
+    fn new() -> GetPcapRequest {
+        GetPcapRequest::new()
+    }
+
+    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
+        descriptor.get(|| {
+            let mut fields = ::std::vec::Vec::new();
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+                "id",
+                |m: &GetPcapRequest| { &m.id },
+                |m: &mut GetPcapRequest| { &mut m.id },
+            ));
+            ::protobuf::reflect::MessageDescriptor::new_pb_name::<GetPcapRequest>(
+                "GetPcapRequest",
+                fields,
+                file_descriptor_proto()
+            )
+        })
+    }
+
+    fn default_instance() -> &'static GetPcapRequest {
+        static instance: ::protobuf::rt::LazyV2<GetPcapRequest> = ::protobuf::rt::LazyV2::INIT;
+        instance.get(GetPcapRequest::new)
+    }
+}
+
+impl ::protobuf::Clear for GetPcapRequest {
+    fn clear(&mut self) {
+        self.id = 0;
+        self.unknown_fields.clear();
+    }
+}
+
+impl ::std::fmt::Debug for GetPcapRequest {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for GetPcapRequest {
+    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
+        ::protobuf::reflect::ReflectValueRef::Message(self)
+    }
+}
+
+#[derive(PartialEq,Clone,Default)]
+pub struct GetPcapResponse {
+    // message fields
+    pub capture_stream: ::std::vec::Vec<u8>,
+    // special fields
+    pub unknown_fields: ::protobuf::UnknownFields,
+    pub cached_size: ::protobuf::CachedSize,
+}
+
+impl<'a> ::std::default::Default for &'a GetPcapResponse {
+    fn default() -> &'a GetPcapResponse {
+        <GetPcapResponse as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl GetPcapResponse {
+    pub fn new() -> GetPcapResponse {
+        ::std::default::Default::default()
+    }
+
+    // bytes capture_stream = 1;
+
+
+    pub fn get_capture_stream(&self) -> &[u8] {
+        &self.capture_stream
+    }
+    pub fn clear_capture_stream(&mut self) {
+        self.capture_stream.clear();
+    }
+
+    // Param is passed by value, moved
+    pub fn set_capture_stream(&mut self, v: ::std::vec::Vec<u8>) {
+        self.capture_stream = v;
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_capture_stream(&mut self) -> &mut ::std::vec::Vec<u8> {
+        &mut self.capture_stream
+    }
+
+    // Take field
+    pub fn take_capture_stream(&mut self) -> ::std::vec::Vec<u8> {
+        ::std::mem::replace(&mut self.capture_stream, ::std::vec::Vec::new())
+    }
+}
+
+impl ::protobuf::Message for GetPcapResponse {
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        while !is.eof()? {
+            let (field_number, wire_type) = is.read_tag_unpack()?;
+            match field_number {
+                1 => {
+                    ::protobuf::rt::read_singular_proto3_bytes_into(wire_type, is, &mut self.capture_stream)?;
+                },
+                _ => {
+                    ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u32 {
+        let mut my_size = 0;
+        if !self.capture_stream.is_empty() {
+            my_size += ::protobuf::rt::bytes_size(1, &self.capture_stream);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
+        self.cached_size.set(my_size);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::ProtobufResult<()> {
+        if !self.capture_stream.is_empty() {
+            os.write_bytes(1, &self.capture_stream)?;
+        }
+        os.write_unknown_fields(self.get_unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn get_cached_size(&self) -> u32 {
+        self.cached_size.get()
+    }
+
+    fn get_unknown_fields(&self) -> &::protobuf::UnknownFields {
+        &self.unknown_fields
+    }
+
+    fn mut_unknown_fields(&mut self) -> &mut ::protobuf::UnknownFields {
+        &mut self.unknown_fields
+    }
+
+    fn as_any(&self) -> &dyn (::std::any::Any) {
+        self as &dyn (::std::any::Any)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn (::std::any::Any) {
+        self as &mut dyn (::std::any::Any)
+    }
+    fn into_any(self: ::std::boxed::Box<Self>) -> ::std::boxed::Box<dyn (::std::any::Any)> {
+        self
+    }
+
+    fn descriptor(&self) -> &'static ::protobuf::reflect::MessageDescriptor {
+        Self::descriptor_static()
+    }
+
+    fn new() -> GetPcapResponse {
+        GetPcapResponse::new()
+    }
+
+    fn descriptor_static() -> &'static ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::LazyV2<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::LazyV2::INIT;
+        descriptor.get(|| {
+            let mut fields = ::std::vec::Vec::new();
+            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeBytes>(
+                "capture_stream",
+                |m: &GetPcapResponse| { &m.capture_stream },
+                |m: &mut GetPcapResponse| { &mut m.capture_stream },
+            ));
+            ::protobuf::reflect::MessageDescriptor::new_pb_name::<GetPcapResponse>(
+                "GetPcapResponse",
+                fields,
+                file_descriptor_proto()
+            )
+        })
+    }
+
+    fn default_instance() -> &'static GetPcapResponse {
+        static instance: ::protobuf::rt::LazyV2<GetPcapResponse> = ::protobuf::rt::LazyV2::INIT;
+        instance.get(GetPcapResponse::new)
+    }
+}
+
+impl ::protobuf::Clear for GetPcapResponse {
+    fn clear(&mut self) {
+        self.capture_stream.clear();
+        self.unknown_fields.clear();
+    }
+}
+
+impl ::std::fmt::Debug for GetPcapResponse {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for GetPcapResponse {
+    fn as_ref(&self) -> ::protobuf::reflect::ReflectValueRef {
+        ::protobuf::reflect::ReflectValueRef::Message(self)
+    }
+}
+
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x0efrontend.proto\x12\x0fnetsim.frontend\x1a\x1bgoogle/protobuf/empty\
     .proto\x1a\x0bmodel.proto\"+\n\x0fVersionResponse\x12\x18\n\x07version\
@@ -1321,16 +1985,25 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x14.netsim.model.DeviceR\x07devices\"&\n\x0cNetCatStream\x12\x16\n\x06r\
     esult\x18\x01\x20\x03(\tR\x06result\"X\n\x17SetPacketCaptureRequest\x12\
     \x18\n\x07capture\x18\x01\x20\x01(\x08R\x07capture\x12#\n\rdevice_serial\
-    \x18\x02\x20\x01(\tR\x0cdeviceSerial2\xfc\x03\n\x0fFrontendService\x12F\
-    \n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.frontend.Ver\
-    sionResponse\x12B\n\x0eRegisterEvents\x12\x16.google.protobuf.Empty\x1a\
-    \x16.netsim.frontend.Event0\x01\x12I\n\nGetDevices\x12\x16.google.protob\
-    uf.Empty\x1a#.netsim.frontend.GetDevicesResponse\x12J\n\x0bPatchDevice\
-    \x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.google.protobuf.Empty\
-    \x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.E\
-    mpty\x12J\n\x0bSetLinkLoss\x12#.netsim.frontend.SetLinkLossRequest\x1a\
-    \x16.google.protobuf.Empty\x12A\n\x06NetCat\x12\x16.google.protobuf.Empt\
-    y\x1a\x1d.netsim.frontend.NetCatStream0\x01b\x06proto3\
+    \x18\x02\x20\x01(\tR\x0cdeviceSerial\"8\n\x10PatchPcapRequest\x12\x0e\n\
+    \x02id\x18\x01\x20\x01(\x05R\x02id\x12\x14\n\x05state\x18\x02\x20\x01(\
+    \x08R\x05state\"<\n\x10ListPcapResponse\x12(\n\x05pcaps\x18\x01\x20\x03(\
+    \x0b2\x12.netsim.model.PcapR\x05pcaps\"\x20\n\x0eGetPcapRequest\x12\x0e\
+    \n\x02id\x18\x01\x20\x01(\x05R\x02id\"8\n\x0fGetPcapResponse\x12%\n\x0ec\
+    apture_stream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xdb\x05\n\x0fFronten\
+    dService\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim\
+    .frontend.VersionResponse\x12B\n\x0eRegisterEvents\x12\x16.google.protob\
+    uf.Empty\x1a\x16.netsim.frontend.Event0\x01\x12I\n\nGetDevices\x12\x16.g\
+    oogle.protobuf.Empty\x1a#.netsim.frontend.GetDevicesResponse\x12J\n\x0bP\
+    atchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.google.protob\
+    uf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\x16.google.pr\
+    otobuf.Empty\x12J\n\x0bSetLinkLoss\x12#.netsim.frontend.SetLinkLossReque\
+    st\x1a\x16.google.protobuf.Empty\x12A\n\x06NetCat\x12\x16.google.protobu\
+    f.Empty\x1a\x1d.netsim.frontend.NetCatStream0\x01\x12F\n\tPatchPcap\x12!\
+    .netsim.frontend.PatchPcapRequest\x1a\x16.google.protobuf.Empty\x12E\n\
+    \x08ListPcap\x12\x16.google.protobuf.Empty\x1a!.netsim.frontend.ListPcap\
+    Response\x12N\n\x07GetPcap\x12\x1f.netsim.frontend.GetPcapRequest\x1a\
+    \x20.netsim.frontend.GetPcapResponse0\x01b\x06proto3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;

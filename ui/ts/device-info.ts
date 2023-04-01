@@ -8,6 +8,7 @@ import {
   SimulationInfo,
   simulationState,
 } from './device-observer.js';
+import {State} from './model.js'
 
 @customElement('ns-device-info')
 export class DeviceInformation extends LitElement implements Notifiable {
@@ -333,10 +334,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
   }
 
   private handleGetChips() {
-    let lowEnergyCheckbox = html``;
-    let classicCheckbox = html``;
-    let wifiCheckbox = html``;
-    let uwbCheckbox = html``;
     const disabledCheckbox = html`
       <input type="checkbox" disabled />
         <span
@@ -344,6 +341,10 @@ export class DeviceInformation extends LitElement implements Notifiable {
           style=${styleMap({ opacity: '0.7' })}
         ></span>
     `;
+    let lowEnergyCheckbox = disabledCheckbox;
+    let classicCheckbox = disabledCheckbox;
+    let wifiCheckbox = disabledCheckbox;
+    let uwbCheckbox = disabledCheckbox;
     if (this.selectedDevice) {
       if ("chips" in this.selectedDevice && this.selectedDevice.chips) {
         for (const chip of this.selectedDevice.chips) {
@@ -353,7 +354,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 <input
                   id="lowEnergy"
                   type="checkbox"
-                  .checked=${live(chip.bt.lowEnergy.state === 'ON')}
+                  .checked=${live(chip.bt.lowEnergy.state === State.ON)}
                   @click=${() => {
                     // eslint-disable-next-line
                     this.selectedDevice?.toggleChipState(chip, "lowEnergy");
@@ -362,15 +363,13 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 />
                 <span class="slider round"></span>
               `;
-            } else {
-              lowEnergyCheckbox = disabledCheckbox;
             }
             if ("classic" in chip.bt && chip.bt.classic && 'state' in chip.bt.classic) {
               classicCheckbox = html`
                 <input
                   id="classic"
                   type="checkbox"
-                  .checked=${live(chip.bt.classic.state === 'ON')}
+                  .checked=${live(chip.bt.classic.state === State.ON)}
                   @click=${() => {
                     // eslint-disable-next-line
                     this.selectedDevice?.toggleChipState(chip, "classic");
@@ -379,8 +378,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
                 />
                 <span class="slider round"></span>
               `;
-            } else {
-              classicCheckbox = disabledCheckbox;
             }
           }
 
@@ -389,7 +386,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
               <input
                 id="wifi"
                 type="checkbox"
-                .checked=${live(chip.wifi.state === 'ON')}
+                .checked=${live(chip.wifi.state === State.ON)}
                 @click=${() => {
                   // eslint-disable-next-line
                   this.selectedDevice?.toggleChipState(chip);
@@ -398,8 +395,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
               />
               <span class="slider round"></span>
             `;
-          } else {
-            wifiCheckbox = disabledCheckbox;
           }
 
           if ('uwb' in chip && chip.uwb) {
@@ -407,7 +402,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
               <input
                 id="uwb"
                 type="checkbox"
-                .checked=${live(chip.uwb.state === 'ON')}
+                .checked=${live(chip.uwb.state === State.ON)}
                 @click=${() => {
                   // eslint-disable-next-line
                   this.selectedDevice?.toggleChipState(chip);
@@ -416,8 +411,6 @@ export class DeviceInformation extends LitElement implements Notifiable {
               />
               <span class="slider round"></span>
             `;
-          } else {
-            uwbCheckbox = disabledCheckbox;
           }
         }
       }

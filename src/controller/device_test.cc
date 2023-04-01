@@ -19,13 +19,6 @@
 
 namespace netsim {
 namespace testing {
-namespace {
-
-TEST(DeviceTest, CreateDevicesTest) {
-  const auto device = netsim::controller::CreateDevice("test-device-name");
-  EXPECT_EQ(device->model.name(), "test-device-name");
-}
-
-}  // namespace
+namespace {}  // namespace
 }  // namespace testing
 }  // namespace netsim

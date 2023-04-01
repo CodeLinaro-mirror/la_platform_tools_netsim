@@ -35,6 +35,11 @@ std::string GetEnv(const std::string &name, const std::string &default_value);
 std::string GetDiscoveryDirectory();
 
 /**
+ * Return the path of netsim ini file.
+ */
+std::string GetNetsimIniFilepath();
+
+/**
  * Return the frontend grpc port.
  */
 std::optional<std::string> GetServerAddress(bool frontend_server = true);

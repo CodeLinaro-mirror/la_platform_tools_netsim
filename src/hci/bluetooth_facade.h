@@ -19,42 +19,23 @@
 #include <string>
 
 #include "model.pb.h"
-#include "model/hci/hci_transport.h"  // for HciTransport
-
-namespace netsim {
-namespace hci {
 
 /** Manages the bluetooth chip emulation provided by the root canal library.
  *
  * Owns the TestModel, setup, and manages the packet flow into and out of
  * rootcanal.
  */
-class BluetoothChipEmulator {
- public:
-  virtual ~BluetoothChipEmulator(){};
 
-  // Deleted copy constructor for singleton class
-  BluetoothChipEmulator(const BluetoothChipEmulator &) = delete;
-  // Deleted copy assignment for singleton class
-  BluetoothChipEmulator &operator=(const BluetoothChipEmulator &) = delete;
+namespace netsim::hci::facade {
 
-  // Retrieve the singleton
-  static BluetoothChipEmulator &Get();
+void Reset(uint32_t);
+void Remove(uint32_t);
+void Patch(uint32_t, const model::Chip::Bluetooth &);
+void SetPacketCapture(uint32_t id, bool isOn, std::string device_name);
+model::Chip::Bluetooth Get(uint32_t);
+uint32_t Add(uint32_t simulation_device);
 
-  // Starts the bluetooth chip emulator.
-  virtual void Start(std::string rootcanal_default_commands_file,
-                     std::string rootcanal_controller_properties_file) = 0;
+void Start();
+void Stop();
 
-  // Closes the bluetooth chip emulator.
-  virtual void Close() = 0;
-
-  virtual void AddHciConnection(
-      const std::string &,
-      std::shared_ptr<rootcanal::HciTransport> transport) = 0;
-
- protected:
-  BluetoothChipEmulator() {}
-};
-
-}  // namespace hci
-}  // namespace netsim
+}  // namespace netsim::hci::facade

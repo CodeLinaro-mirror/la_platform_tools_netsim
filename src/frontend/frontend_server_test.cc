@@ -18,6 +18,7 @@
 
 #include <string>
 
+#include "common.pb.h"
 #include "controller/device.h"
 #include "controller/scene_controller.h"
 #include "frontend.pb.h"
@@ -36,8 +37,8 @@ class FrontendServerTest : public ::testing::Test {
   // An instance of the service under test.
   FrontendServer service_;
 
-  std::shared_ptr<controller::Device> GetDevice(const std::string &name) {
-    return controller::SceneController::Singleton().GetDevice(name);
+  std::shared_ptr<Device> match(const std::string &name) {
+    return SceneController::Singleton().MatchDevice(name);
   }
 };
 
@@ -48,10 +49,11 @@ TEST_F(FrontendServerTest, VerifyVersion) {
   EXPECT_FALSE(response.version().empty());
 }
 
+#ifdef NETSIM_ANDROID_EMULATOR
 TEST_F(FrontendServerTest, PatchDevicePosition) {
   auto name = "test-device-name-for-set-position";
-  auto device_to_add = controller::CreateDevice(name);
-  netsim::controller::SceneController::Singleton().Add(device_to_add);
+  auto [device_id, _1, _2] =
+      scene_controller::AddChip("guid-fs-1", name, common::ChipKind::BLUETOOTH);
 
   google::protobuf::Empty response;
   frontend::PatchDeviceRequest request;
@@ -61,16 +63,15 @@ TEST_F(FrontendServerTest, PatchDevicePosition) {
   request.mutable_device()->mutable_position()->set_z(3.3);
   grpc::Status status = service_.PatchDevice(&context_, &request, &response);
   ASSERT_TRUE(status.ok());
-  const auto &scene = netsim::controller::SceneController::Singleton().Copy();
+  const auto &scene = netsim::controller::SceneController::Singleton().Get();
   // NOTE: Singleton won't be reset between tests. Need to either deprecate
   // Singleton pattern or provide reset().
   bool found = false;
-  for (const auto &device :
-       netsim::controller::SceneController::Singleton().Copy()) {
-    if (device->model.name() == request.device().name()) {
-      EXPECT_EQ(device->model.position().x(), request.device().position().x());
-      EXPECT_EQ(device->model.position().y(), request.device().position().y());
-      EXPECT_EQ(device->model.position().z(), request.device().position().z());
+  for (const auto &device : scene.devices()) {
+    if (device.name() == request.device().name()) {
+      EXPECT_EQ(device.position().x(), request.device().position().x());
+      EXPECT_EQ(device.position().y(), request.device().position().y());
+      EXPECT_EQ(device.position().z(), request.device().position().z());
       found = true;
       break;
     }
@@ -79,34 +80,33 @@ TEST_F(FrontendServerTest, PatchDevicePosition) {
 }
 
 TEST_F(FrontendServerTest, PatchDevice) {
-  auto name = std::string("name-for-update");
-  auto device_to_add = controller::CreateDevice(name);
-  device_to_add->model.set_name(name);
-  {
-    auto chip = device_to_add->model.mutable_chips()->Add();
-    chip->mutable_bt()->mutable_classic()->set_state(model::State::ON);
-  }
-  netsim::controller::SceneController::Singleton().Add(device_to_add);
+  auto name = "name-for-update";
+  auto [device_id, chip_id, _] =
+      scene_controller::AddChip("guid-fs-2", name, common::ChipKind::BLUETOOTH);
+
+  model::Device model;
+  model.set_name(name);
+  model.set_visible(false);
+  auto chip = model.mutable_chips()->Add();
+  chip->mutable_bt()->mutable_classic()->set_state(model::State::OFF);
+  chip->set_id(chip_id);
+  chip->set_kind(common::ChipKind::BLUETOOTH);
 
   frontend::PatchDeviceRequest request;
   google::protobuf::Empty response;
-  request.mutable_device()->set_name(name);
-  {
-    auto chip = request.mutable_device()->mutable_chips()->Add();
-    chip->mutable_bt()->mutable_classic()->set_state(model::State::ON);
-  }
+  request.mutable_device()->CopyFrom(model);
 
   grpc::Status status = service_.PatchDevice(&context_, &request, &response);
   ASSERT_TRUE(status.ok());
-  auto optional_device = GetDevice(name);
+  auto optional_device = match(name);
   ASSERT_TRUE(optional_device != nullptr);
-  ASSERT_TRUE(optional_device->model.name() == name);
-  ASSERT_TRUE(optional_device->model.chips().size() == 1);
-  ASSERT_TRUE(optional_device->model.chips().Get(0).chip_case() ==
-              model::Chip::ChipCase::kBt);
-  ASSERT_TRUE(optional_device->model.chips().Get(0).bt().classic().state() ==
-              model::State::ON);
+  model = optional_device->Get();
+  ASSERT_TRUE(model.name() == name);
+  ASSERT_TRUE(model.chips().size() == 1);
+  ASSERT_TRUE(model.chips().Get(0).chip_case() == model::Chip::ChipCase::kBt);
+  ASSERT_TRUE(model.chips().Get(0).bt().classic().state() == model::State::OFF);
 }
+#endif
 
 TEST_F(FrontendServerTest, PatchDeviceNotFound) {
   google::protobuf::Empty response;

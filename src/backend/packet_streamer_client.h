@@ -43,6 +43,9 @@ wifi_stream.write(initial_request);
 using Stream = std::unique_ptr<
     ::grpc::ClientReaderWriter<packet::PacketRequest, packet::PacketResponse>>;
 
+// Configure the endpoint for a server other than the local netsimd server.
+void SetPacketStreamEnpoint(const std::string &endpoint);
+
 std::shared_ptr<grpc::Channel> CreateChannel(
     std::string rootcanal_default_commands_file = "",
     std::string rootcanal_controller_properties_file = "");

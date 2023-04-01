@@ -14,13 +14,16 @@
 
 #include "core/server.h"
 
+#include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 
 #ifdef NETSIM_ANDROID_EMULATOR
-#include "backend/backend_server.h"
+#include "backend/grpc_server.h"
 #endif
+#include "controller/controller.h"
 #include "frontend/frontend_server.h"
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"
@@ -30,10 +33,17 @@
 #include "util/ini_file.h"
 #include "util/log.h"
 #include "util/os_utils.h"
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace netsim::server {
 
 namespace {
+constexpr std::chrono::seconds InactivityCheckInterval(5);
+
 std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port) {
   grpc::ServerBuilder builder;
   int selected_port;
@@ -51,8 +61,7 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port) {
          std::to_string(selected_port).c_str());
 
   // Writes grpc port to ini file.
-  auto filepath = osutils::GetDiscoveryDirectory() + netsim::filesystem::slash +
-                  "netsim.ini";
+  auto filepath = osutils::GetNetsimIniFilepath();
   IniFile iniFile(filepath);
   iniFile.Read();
   iniFile.Set("grpc.port", std::to_string(selected_port));
@@ -71,11 +80,19 @@ void Run() {
   auto grpc_server = RunGrpcServer(netsim_grpc_port);
   if (netsim_grpc_port == 0) {
     // Run frontend http server.
-    std::thread frontend_http_server(RunFrontendHttpServer);
-    frontend_http_server.join();
+    std::thread(RunHttpServer).detach();
   }
-  grpc_server->Wait();
-  // never happens
+
+  while (true) {
+    std::this_thread::sleep_for(InactivityCheckInterval);
+    if (auto seconds_to_shutdown = netsim::scene_controller::GetShutdownTime();
+        seconds_to_shutdown.has_value() &&
+        seconds_to_shutdown.value() < std::chrono::seconds(0)) {
+      grpc_server->Shutdown();
+      BtsLog("Netsim has been shutdown due to inactivity.");
+      break;
+    }
+  }
 }
 
 }  // namespace netsim::server

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::args::{self, Command};
-use frontend_client_cxx::GrpcMethod;
+use frontend_client_cxx::ffi::GrpcMethod;
 
 impl args::Command {
     /// Return the respective GrpcMethod for the command
@@ -25,6 +25,11 @@ impl args::Command {
             Command::Devices(_) => GrpcMethod::GetDevices,
             Command::Capture(_) => GrpcMethod::PatchDevice,
             Command::Reset => GrpcMethod::Reset,
+            Command::Pcap(cmd) => match cmd {
+                args::Pcap::List => GrpcMethod::ListPcap,
+                args::Pcap::Get(_) => GrpcMethod::GetPcap,
+                args::Pcap::Patch(_) => GrpcMethod::PatchPcap,
+            },
             Command::Gui => {
                 panic!("No GrpcMethod for Ui Command.");
             }
@@ -38,8 +43,9 @@ mod tests {
     use args::{NetsimArgs, OnOffState};
     use clap::Parser;
     use frontend_proto::{
+        common::ChipKind,
         frontend,
-        model::{Chip_Bluetooth, Chip_Radio, Position, State},
+        model::{self, Chip_Bluetooth, Chip_Radio, Position, State},
     };
     use protobuf::Message;
 
@@ -59,24 +65,32 @@ mod tests {
         test_command("netsim-cli version", GrpcMethod::GetVersion, Vec::new())
     }
 
-    fn get_expected_radio(device_serial: &str, bt_type: &str, state: &str) -> Vec<u8> {
-        let mut result = frontend::PatchDeviceRequest::new();
-        let mutable_device = result.mut_device();
-        mutable_device.set_device_serial(device_serial.to_owned());
-        let mutable_chips = mutable_device.mut_chips();
-        mutable_chips.push_default();
-        let mut bt_chip = Chip_Bluetooth::new();
+    fn get_expected_radio(name: &str, radio_type: &str, state: &str) -> Vec<u8> {
+        let mut chip = model::Chip { ..Default::default() };
         let chip_state = match state {
             "up" => State::ON,
             _ => State::OFF,
         };
-        if bt_type == "ble" {
-            bt_chip.set_low_energy(Chip_Radio { state: chip_state, ..Default::default() });
+        if radio_type == "wifi" {
+            let mut wifi_chip = Chip_Radio::new();
+            wifi_chip.set_state(chip_state);
+            chip.set_wifi(wifi_chip);
+            chip.set_kind(ChipKind::WIFI);
         } else {
-            bt_chip.set_classic(Chip_Radio { state: chip_state, ..Default::default() });
+            let mut bt_chip = Chip_Bluetooth::new();
+            if radio_type == "ble" {
+                bt_chip.set_low_energy(Chip_Radio { state: chip_state, ..Default::default() });
+            } else {
+                bt_chip.set_classic(Chip_Radio { state: chip_state, ..Default::default() });
+            }
+            chip.set_kind(ChipKind::BLUETOOTH);
+            chip.set_bt(bt_chip);
         }
-        mutable_chips[0].set_bt(bt_chip);
-        mutable_chips[0].mut_bt();
+        let mut result = frontend::PatchDeviceRequest::new();
+        let mutable_device = result.mut_device();
+        mutable_device.set_name(name.to_owned());
+        let mutable_chips = mutable_device.mut_chips();
+        mutable_chips.push(chip);
         result.write_to_bytes().unwrap()
     }
 
@@ -108,10 +122,24 @@ mod tests {
         );
     }
 
-    fn get_expected_move(device_serial: &str, x: f32, y: f32, z: Option<f32>) -> Vec<u8> {
+    #[test]
+    fn test_radio_wifi() {
+        test_command(
+            "netsim-cli radio wifi down a",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("a", "wifi", "down"),
+        );
+        test_command(
+            "netsim-cli radio wifi up b",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("b", "wifi", "up"),
+        );
+    }
+
+    fn get_expected_move(name: &str, x: f32, y: f32, z: Option<f32>) -> Vec<u8> {
         let mut result = frontend::PatchDeviceRequest::new();
         let mutable_device = result.mut_device();
-        mutable_device.set_device_serial(device_serial.to_owned());
+        mutable_device.set_name(name.to_owned());
         mutable_device.set_position(Position {
             x: x,
             y: y,
@@ -162,17 +190,22 @@ mod tests {
         test_command("netsim-cli devices", GrpcMethod::GetDevices, Vec::new())
     }
 
-    fn get_expected_capture(device_serial: &str, state: OnOffState) -> Vec<u8> {
-        let mut result = frontend::PatchDeviceRequest::new();
-        let mutable_device = result.mut_device();
-        mutable_device.set_device_serial(device_serial.to_owned());
-        let mutable_chips = mutable_device.mut_chips();
-        mutable_chips.push_default();
+    fn get_expected_capture(name: &str, state: OnOffState) -> Vec<u8> {
+        let mut bt_chip = model::Chip {
+            kind: ChipKind::BLUETOOTH,
+            chip: Some(model::Chip_oneof_chip::bt(Chip_Bluetooth { ..Default::default() })),
+            ..Default::default()
+        };
         let capture_state = match state {
             OnOffState::On => State::ON,
             OnOffState::Off => State::OFF,
         };
-        mutable_chips[0].set_capture(capture_state);
+        bt_chip.set_capture(capture_state);
+        let mut result = frontend::PatchDeviceRequest::new();
+        let mutable_device = result.mut_device();
+        mutable_device.set_name(name.to_owned());
+        let mutable_chips = mutable_device.mut_chips();
+        mutable_chips.push(bt_chip);
         result.write_to_bytes().unwrap()
     }
 
@@ -222,5 +255,38 @@ mod tests {
     #[test]
     fn test_reset() {
         test_command("netsim-cli reset", GrpcMethod::Reset, Vec::new())
+    }
+
+    #[test]
+    fn test_pcap_list() {
+        test_command("netsim-cli pcap list", GrpcMethod::ListPcap, Vec::new())
+    }
+
+    fn get_expected_patch_pcap(id: i32, state: bool) -> Vec<u8> {
+        let mut result = frontend::PatchPcapRequest::new();
+        result.set_id(id);
+        result.set_state(state);
+        result.write_to_bytes().unwrap()
+    }
+
+    #[test]
+    fn test_pcap_patch() {
+        test_command(
+            "netsim-cli pcap patch 1 on",
+            GrpcMethod::PatchPcap,
+            get_expected_patch_pcap(1, true),
+        );
+        test_command(
+            "netsim-cli pcap patch 8 off",
+            GrpcMethod::PatchPcap,
+            get_expected_patch_pcap(8, false),
+        );
+    }
+
+    #[test]
+    fn test_pcap_get() {
+        let mut result = frontend::GetPcapRequest::new();
+        result.set_id(2);
+        test_command("netsim-cli pcap get 2", GrpcMethod::GetPcap, result.write_to_bytes().unwrap())
     }
 }

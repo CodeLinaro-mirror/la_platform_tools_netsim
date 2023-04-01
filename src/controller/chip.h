@@ -20,7 +20,6 @@
 #include <string_view>
 
 #include "controller/chip.h"
-#include "controller/device.h"
 #include "model.pb.h"
 
 namespace netsim {
@@ -29,51 +28,50 @@ namespace controller {
 class Device;
 
 class Chip {
- public:
-  explicit Chip() {}
+  friend Device;
 
-  virtual ~Chip(){};
+ public:
+  explicit Chip(uint32_t id, uint32_t facade_id, common::ChipKind kind,
+                std::string name, std::string device_name,
+                std::string manufacturer = "", std::string product_name = "")
+      : id(id),
+        facade_id(facade_id),
+        kind(kind),
+        name(std::move(name)),
+        device_name(std::move(device_name)),
+        manufacturer(std::move(manufacturer)),
+        product_name(std::move(product_name)),
+        capture(model::State::OFF){};
+
+  ~Chip(){};
 
   /**
    * Patch processing for the chip. Validate and move state from the request
    * into the parent's model::Chip changing the ChipFacade as needed.
    */
-  virtual void Patch(const model::Chip &request);
+  void Patch(const model::Chip &request);
 
+  model::Chip Get();
   /**
    * Reset the state of the chip to defaults.
    */
-  virtual void Reset();
+  void Reset();
 
   /**
    * Remove resources own by the chip and remove it from the chip emulator.
    */
-  virtual void Remove();
-
-  /**
-   * Initialize the chip with a parent and index into the parents model.
-   */
-  void Init(std::shared_ptr<Device> parent, int index);
-
-  /**
-   * Compare keys with another chip model, return true if they are the same.
-   */
-  bool KeyComp(const model::Chip &);
-
-  std::shared_ptr<Device> parent;
+  void Remove();
 
  protected:
-  /**
-   * Fetch a reference to the parent's model::Chip.
-   */
-  model::Chip &Model();
-
-  /**
-   * Fetch a reference to the parent's model::Device.
-   */
-  model::Device &DeviceModel();
-
-  int chip_index;
+  const uint32_t id;  // Global id.
+  const uint32_t facade_id;
+  const common::ChipKind kind;
+  const std::string name;
+  const std::string device_name;
+  // These are patchable
+  std::string manufacturer;
+  std::string product_name;
+  model::State capture;
 };
 
 }  // namespace controller

@@ -58,7 +58,7 @@ message Chip {
   common.ChipKind kind = 1;  // the kind of chip
   string id = 2;             // optional like "rear-right"
   string manufacturer = 3;   // optional like Quorvo
-  string model = 4;          // optional like DW300
+  string product_name = 4;   // optional like DW300
   int32 fd_in = 5;           // optional guest os input
   int32 fd_out = 6;          // optional guest os output
   bool loopback = 7;         // optional for testing
