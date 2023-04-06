@@ -17,12 +17,10 @@ use std::cmp::max;
 use crate::args::{self, Command, OnOffState, Pcap};
 use frontend_proto::{
     common::ChipKind,
-    frontend::ListPcapResponse,
-    frontend::{GetDevicesResponse, VersionResponse},
-    model::Chip_oneof_chip,
-    model::State,
+    frontend::{GetDevicesResponse, ListPcapResponse, VersionResponse},
+    model::{self, Chip_oneof_chip, State},
 };
-use protobuf::Message;
+use protobuf::{Message, RepeatedField};
 
 impl args::Command {
     /// Format and print the response received from the frontend server for the command
@@ -72,17 +70,14 @@ impl args::Command {
                     println!("All devices have been reset.");
                 }
             }
-            Command::Pcap(Pcap::List) => Self::print_list_pcap_response(
+            Command::Pcap(Pcap::List(cmd)) => Self::print_list_pcap_response(
                 ListPcapResponse::parse_from_bytes(response).unwrap(),
                 verbose,
+                cmd.patterns.to_owned(),
             ),
             Command::Pcap(Pcap::Patch(cmd)) => {
                 if verbose {
-                    println!(
-                        "Patched Pcap id: {} to {}",
-                        cmd.id,
-                        Self::on_off_state_to_string(cmd.state)
-                    )
+                    println!("Patched Pcap state to {}", Self::on_off_state_to_string(cmd.state),);
                 }
             }
             Command::Pcap(Pcap::Get(_)) => {
@@ -250,14 +245,30 @@ impl args::Command {
     }
 
     /// Helper function to format and print ListPcapResponse
-    fn print_list_pcap_response(response: ListPcapResponse, verbose: bool) {
+    fn print_list_pcap_response(
+        mut response: ListPcapResponse,
+        verbose: bool,
+        patterns: Vec<String>,
+    ) {
         if response.pcaps.is_empty() {
             if verbose {
                 println!("No available Pcap found.");
             }
             return;
         }
-        println!("List of Pcaps:");
+        if patterns.is_empty() {
+            println!("List of Pcaps:");
+        } else {
+            // Filter out list of pcaps with matching patterns
+            Self::filter_pcaps(&mut response.pcaps, &patterns);
+            if response.pcaps.is_empty() {
+                if verbose {
+                    println!("No available Pcap found matching pattern(s) `{:?}`:", patterns);
+                }
+                return;
+            }
+            println!("List of Pcaps matching pattern(s) `{:?}`:", patterns);
+        }
         // Create the header row and determine column widths
         let id_hdr = "ID";
         let name_hdr = "Device Name";
@@ -267,34 +278,60 @@ impl args::Command {
         let id_width = 4; // ID width of 4 since Pcap id starts at 4000
         let state_width = 7; // State width of 7 for 'unknown'
         let chipkind_width = 11; // ChipKind width 11 for 'UNSPECIFIED'
-
-        // Determine suitable device name and pcap size widths
         let name_width = max(
-            (response.pcaps.iter().max_by_key(|x| x.device_name.len())).unwrap().device_name.len(),
+            (response.pcaps.iter().max_by_key(|x| x.device_name.len()))
+                .unwrap_or_default()
+                .device_name
+                .len(),
             name_hdr.len(),
         );
         let size_width = max(
-            (response.pcaps.iter().max_by_key(|x| x.size)).unwrap().size.to_string().len(),
+            (response.pcaps.iter().max_by_key(|x| x.size))
+                .unwrap_or_default()
+                .size
+                .to_string()
+                .len(),
             size_hdr.len(),
         );
         // Print header for pcap list
         println!(
-            "{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
-            id_hdr,
-            name_hdr,
-            chipkind_hdr,
-            state_hdr,
-            size_hdr,
+            "{}",
+            if verbose {
+                format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                    id_hdr,
+                    name_hdr,
+                    chipkind_hdr,
+                    state_hdr,
+                    size_hdr,
+                )
+            } else {
+                format!(
+                    "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                    name_hdr, chipkind_hdr, state_hdr, size_hdr,
+                )
+            }
         );
         // Print information of each Pcap
         for pcap in &response.pcaps {
             println!(
-                "{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
-                pcap.id.to_string(),
-                pcap.device_name,
-                Self::chip_kind_to_string(pcap.chip_kind),
-                Self::capture_state_to_string(pcap.state),
-                pcap.size,
+                "{}",
+                if verbose {
+                    format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                        pcap.id.to_string(),
+                        pcap.device_name,
+                        Self::chip_kind_to_string(pcap.chip_kind),
+                        Self::capture_state_to_string(pcap.state),
+                        pcap.size,
+                    )
+                } else {
+                    format!(
+                        "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                        pcap.device_name,
+                        Self::chip_kind_to_string(pcap.chip_kind),
+                        Self::capture_state_to_string(pcap.state),
+                        pcap.size,
+                    )
+                }
             );
         }
     }
@@ -306,5 +343,131 @@ impl args::Command {
             ChipKind::WIFI => "WIFI".to_string(),
             ChipKind::UWB => "UWB".to_string(),
         }
+    }
+
+    pub fn filter_pcaps(pcaps: &mut RepeatedField<model::Pcap>, keys: &[String]) {
+        // Filter out list of pcaps with matching pattern
+        pcaps.retain(|pcap| {
+            keys.iter().map(|key| key.to_uppercase()).all(|key| {
+                pcap.id.to_string().contains(&key)
+                    || pcap.device_name.to_uppercase().contains(&key)
+                    || Self::chip_kind_to_string(pcap.chip_kind).contains(&key)
+            })
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn test_filter_pcaps_helper(patterns: Vec<String>, expected_pcaps: RepeatedField<model::Pcap>) {
+        let mut pcaps = all_test_pcaps();
+        Command::filter_pcaps(&mut pcaps, &patterns);
+        assert_eq!(pcaps, expected_pcaps);
+    }
+
+    fn pcap_1() -> model::Pcap {
+        model::Pcap {
+            id: 4001,
+            chip_kind: ChipKind::BLUETOOTH,
+            device_name: "device 1".to_string(),
+            ..Default::default()
+        }
+    }
+    fn pcap_1_wifi() -> model::Pcap {
+        model::Pcap {
+            id: 4002,
+            chip_kind: ChipKind::WIFI,
+            device_name: "device 1".to_string(),
+            ..Default::default()
+        }
+    }
+    fn pcap_2() -> model::Pcap {
+        model::Pcap {
+            id: 4003,
+            chip_kind: ChipKind::BLUETOOTH,
+            device_name: "device 2".to_string(),
+            ..Default::default()
+        }
+    }
+    fn pcap_3() -> model::Pcap {
+        model::Pcap {
+            id: 4004,
+            chip_kind: ChipKind::WIFI,
+            device_name: "device 3".to_string(),
+            ..Default::default()
+        }
+    }
+    fn all_test_pcaps() -> RepeatedField<model::Pcap> {
+        RepeatedField::from_vec(vec![pcap_1(), pcap_1_wifi(), pcap_2(), pcap_3()])
+    }
+
+    #[test]
+    fn test_no_match() {
+        test_filter_pcaps_helper(
+            vec!["test".to_string()],
+            RepeatedField::<model::Pcap>::from_vec(vec![]),
+        );
+    }
+
+    #[test]
+    fn test_all_match() {
+        test_filter_pcaps_helper(vec!["device".to_string()], all_test_pcaps());
+    }
+
+    #[test]
+    fn test_match_pcap_id() {
+        test_filter_pcaps_helper(vec!["4001".to_string()], RepeatedField::from_vec(vec![pcap_1()]));
+        test_filter_pcaps_helper(vec!["03".to_string()], RepeatedField::from_vec(vec![pcap_2()]));
+        test_filter_pcaps_helper(vec!["40".to_string()], all_test_pcaps());
+    }
+
+    #[test]
+    fn test_match_device_name() {
+        test_filter_pcaps_helper(
+            vec!["device 1".to_string()],
+            RepeatedField::from_vec(vec![pcap_1(), pcap_1_wifi()]),
+        );
+        test_filter_pcaps_helper(vec![" 2".to_string()], RepeatedField::from_vec(vec![pcap_2()]));
+    }
+
+    #[test]
+    fn test_match_device_name_case_insensitive() {
+        test_filter_pcaps_helper(
+            vec!["DEVICE 1".to_string()],
+            RepeatedField::from_vec(vec![pcap_1(), pcap_1_wifi()]),
+        );
+    }
+
+    #[test]
+    fn test_match_wifi() {
+        test_filter_pcaps_helper(
+            vec!["wifi".to_string()],
+            RepeatedField::from_vec(vec![pcap_1_wifi(), pcap_3()]),
+        );
+        test_filter_pcaps_helper(
+            vec!["WIFI".to_string()],
+            RepeatedField::from_vec(vec![pcap_1_wifi(), pcap_3()]),
+        );
+    }
+
+    #[test]
+    fn test_match_bt() {
+        test_filter_pcaps_helper(
+            vec!["BLUETOOTH".to_string()],
+            RepeatedField::from_vec(vec![pcap_1(), pcap_2()]),
+        );
+        test_filter_pcaps_helper(
+            vec!["blue".to_string()],
+            RepeatedField::from_vec(vec![pcap_1(), pcap_2()]),
+        );
+    }
+
+    #[test]
+    fn test_match_name_and_chip() {
+        test_filter_pcaps_helper(
+            vec!["device 1".to_string(), "wifi".to_string()],
+            RepeatedField::from_vec(vec![pcap_1_wifi()]),
+        );
     }
 }

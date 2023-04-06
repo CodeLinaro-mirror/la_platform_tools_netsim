@@ -13,13 +13,17 @@
 // limitations under the License.
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use frontend_client_cxx::ffi::{FrontendClient, GrpcMethod};
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend;
+use frontend_proto::frontend::PatchPcapRequest_PcapPatch as PcapPatch;
 use frontend_proto::model;
 use frontend_proto::model::State;
 use frontend_proto::model::{Chip_Bluetooth, Chip_Radio};
 use protobuf::Message;
 use std::fmt;
+
+pub type BinaryProtobuf = Vec<u8>;
 
 #[derive(Debug, Parser)]
 pub struct NetsimArgs {
@@ -56,7 +60,7 @@ impl Command {
     /// Return the generated request protobuf as a byte vector
     /// The parsed command parameters are used to construct the request protobuf which is
     /// returned as a byte vector that can be sent to the server.
-    pub fn get_request_bytes(&self) -> Vec<u8> {
+    pub fn get_request_bytes(&self) -> BinaryProtobuf {
         match self {
             Command::Version => Vec::new(),
             Command::Radio(cmd) => {
@@ -124,23 +128,61 @@ impl Command {
                 unimplemented!("get_request_bytes is not implemented for Gui Command.");
             }
             Command::Pcap(pcap_cmd) => match pcap_cmd {
-                Pcap::List => Vec::new(),
+                Pcap::List(_) => Vec::new(),
                 Pcap::Get(cmd) => {
                     let mut result = frontend::GetPcapRequest::new();
                     result.set_id(cmd.id);
                     result.write_to_bytes().unwrap()
                 }
-                Pcap::Patch(cmd) => {
-                    let mut result = frontend::PatchPcapRequest::new();
-                    result.set_id(cmd.id);
-                    let capture_state = match cmd.state {
-                        OnOffState::On => true,
-                        OnOffState::Off => false,
-                    };
-                    result.set_state(capture_state);
-                    result.write_to_bytes().unwrap()
+                Pcap::Patch(_) => {
+                    unimplemented!("get_request_bytes not implemented for Pcap Patch command. Use get_requests instead.")
                 }
             },
+        }
+    }
+
+    /// Create and return the request protobuf(s) for the command.
+    /// In the case of a command with pattern argument(s) there may be multiple gRPC requests.
+    /// The parsed command parameters are used to construct the request protobuf.
+    /// The client is used to send gRPC call(s) to retrieve information needed for request protobufs.
+    pub fn get_requests(&self, client: &cxx::UniquePtr<FrontendClient>) -> Vec<BinaryProtobuf> {
+        match self {
+            Command::Pcap(Pcap::Patch(cmd)) => {
+                let mut reqs = Vec::new();
+                // Get list of pcaps
+                let req = Vec::new();
+                let result = client.send_grpc(&GrpcMethod::ListPcap, &req);
+                if !result.is_ok() {
+                    eprintln!("Grpc call error: {}", result.err());
+                    return Vec::new();
+                }
+                let mut response =
+                    frontend::ListPcapResponse::parse_from_bytes(result.byte_vec().as_slice())
+                        .unwrap();
+                if !cmd.patterns.is_empty() {
+                    // Filter out list of pcaps with matching patterns
+                    Self::filter_pcaps(&mut response.pcaps, &cmd.patterns)
+                }
+                // Create a request for each pcap
+                for pcap in &response.pcaps {
+                    let mut result = frontend::PatchPcapRequest::new();
+                    result.set_id(pcap.id);
+                    let capture_state = match cmd.state {
+                        OnOffState::On => State::ON,
+                        OnOffState::Off => State::OFF,
+                    };
+                    let mut pcap_patch = PcapPatch::new();
+                    pcap_patch.set_state(capture_state);
+                    result.set_patch(pcap_patch);
+                    reqs.push(result.write_to_bytes().unwrap())
+                }
+                reqs
+            }
+            _ => {
+                unimplemented!(
+                    "get_requests not implemented for this command. Use get_request_bytes instead."
+                )
+            }
         }
     }
 }
@@ -221,8 +263,8 @@ pub enum OnOffState {
 
 #[derive(Debug, Subcommand)]
 pub enum Pcap {
-    /// List all currently available Pcaps (packet captures)
-    List,
+    /// List currently available Pcaps (packet captures)
+    List(ListPcap),
     /// Patch a Pcap source to turn packet capture on/off
     Patch(PatchPcap),
     /// Download the packet capture content
@@ -230,12 +272,18 @@ pub enum Pcap {
 }
 
 #[derive(Debug, Args)]
+pub struct ListPcap {
+    /// Optional strings of pattern for pcaps to list. Possible filter fields include Pcap ID, Device Name, and Chip Kind
+    pub patterns: Vec<String>,
+}
+
+#[derive(Debug, Args)]
 pub struct PatchPcap {
-    /// Pcap id
-    pub id: i32,
     /// Packet capture state
     #[clap(value_enum)]
     pub state: OnOffState,
+    /// Optional strings of pattern for pcaps to patch. Possible filter fields include Pcap ID, Device Name, and Chip Kind
+    pub patterns: Vec<String>,
 }
 
 #[derive(Debug, Args)]

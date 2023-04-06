@@ -1,12 +1,8 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import { styleMap } from 'lit/directives/style-map.js';
-import {
-  simulationState,
-  Notifiable,
-  SimulationInfo,
-  Device,
-} from './device-observer.js';
+import {css, html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
+import {styleMap} from 'lit/directives/style-map.js';
+
+import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
 
 @customElement('ns-device-map')
 export class DeviceMap extends LitElement implements Notifiable {
@@ -25,27 +21,22 @@ export class DeviceMap extends LitElement implements Notifiable {
    */
   @property() numImages = 3;
 
-  @property({ type: Boolean, reflect: true })
-  isometric: boolean = false;
+  @property({type: Boolean, reflect: true}) isometric: boolean = false;
 
   connectedCallback() {
-    super.connectedCallback(); // eslint-disable-line
+    super.connectedCallback();  // eslint-disable-line
     simulationState.registerObserver(this);
     window.addEventListener('map-button-clicked', this.onChangeMap);
     window.addEventListener(
-      'isometric-button-clicked',
-      this.handleIsometricView
-    );
+        'isometric-button-clicked', this.handleIsometricView);
   }
 
   disconnectedCallback() {
     window.removeEventListener(
-      'isometric-button-clicked',
-      this.handleIsometricView
-    );
+        'isometric-button-clicked', this.handleIsometricView);
     window.removeEventListener('map-button-clicked', this.onChangeMap);
     simulationState.removeObserver(this);
-    super.disconnectedCallback(); // eslint-disable-line
+    super.disconnectedCallback();  // eslint-disable-line
   }
 
   static styles = css`
@@ -121,24 +112,33 @@ export class DeviceMap extends LitElement implements Notifiable {
       'indigo',
       'purple',
     ];
-    const viewStyle = this.isometric
-      ? `perspective(200rem) rotateX(60deg) rotateY(0deg) rotateZ(0deg) scale3d(0.8,0.8,0.8); top: 250px`
-      : 'none; top: 0px;';
+    const viewStyle = this.isometric ?
+        `perspective(200rem) rotateX(60deg) rotateY(0deg) rotateZ(0deg) scale3d(0.8,0.8,0.8); top: 250px` :
+        'none; top: 0px;';
 
     return html`
-      <ns-device-dropzone>
+      <ns-device-dropzone role="region" tabindex="0" aria-label="Device map">
         <div id="dropzone" class="box pattern${this.imageIdx}">
-          ${this.deviceData.map(
+          ${
+        this.deviceData.map(
             (device, idx) => html`
-              ${device.visible === true
-                ? html`
+              ${
+                device.visible === true ?
+                    html`
                     <ns-device-dragzone
                       .action=${'move'}
                       style=${styleMap({
-                        position: 'absolute',
-                        left: `${device.position.x * 100}px`,
-                        top: `${device.position.y * 100}px`,
-                      })}
+                      position: 'absolute',
+                      left: `${device.position.x * 100}px`,
+                      top: `${device.position.y * 100}px`,
+                    })}
+                      role="region"
+                      tabindex="1"
+                      aria-label="Position: ${
+                        Math.round(device.position.x * 100)}, ${
+                        Math.round(device.position.y * 100)}, ${
+                        Math.round(device.position.z * 100)}"
+                      aria-live="assertive"
                     >
                       <ns-cube-sprite
                         id=${device.name}
@@ -151,10 +151,9 @@ export class DeviceMap extends LitElement implements Notifiable {
                         posZ=${device.position.z * 100}
                       ></ns-cube-sprite>
                     </ns-device-dragzone>
-                  `
-                : html``}
-            `
-          )}
+                  ` :
+                    html``}
+            `)}
         </div>
         <style>
           #dropzone {

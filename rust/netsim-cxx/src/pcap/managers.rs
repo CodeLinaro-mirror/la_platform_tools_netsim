@@ -109,7 +109,13 @@ fn get_pcaps_from_devices() -> HashMap<String, ProtoPcap> {
     new_pcaps
 }
 
-pub fn handle_pcap_list(writer: ResponseWritable, pcaps: &mut Pcaps) {
+// Update the Pcaps collection to reflect the currently connected devices.
+// This function removes entries from Pcaps when devices/chips
+// go away and adds entries when new devices/chips connect.
+//
+// Note: if a device disconnects and there is captured data, the entry
+// remains with a flag valid = false so it can be retrieved.
+fn update_pcaps(pcaps: &mut Pcaps) {
     // Parse the get_devices_response and add info to ProtoPcap
     let new_pcaps = get_pcaps_from_devices();
 
@@ -147,6 +153,11 @@ pub fn handle_pcap_list(writer: ResponseWritable, pcaps: &mut Pcaps) {
             RemovalIndicator::Gone(key) => pcaps.get(&key).unwrap().set_valid(false),
         }
     }
+}
+
+pub fn handle_pcap_list(writer: ResponseWritable, pcaps: &mut Pcaps) {
+    // Get the most updated active pcaps
+    update_pcaps(pcaps);
 
     // Write active pcaps to json string
     let mut out = String::new();
@@ -161,6 +172,23 @@ pub fn handle_pcap_list(writer: ResponseWritable, pcaps: &mut Pcaps) {
         out.push_str(r"]}");
     }
     writer.put_ok("text/json", out.as_str());
+}
+
+pub fn handle_pcap_patch(writer: ResponseWritable, pcaps: &mut Pcaps, id: i32, state: bool) {
+    // Get the most updated active pcaps
+    update_pcaps(pcaps);
+
+    // Patch the state of the pcap and write appropriate responses
+    if pcaps.set_state(id, state) {
+        let pcap = pcaps.get_by_id(id).unwrap();
+        let mut out = String::new();
+        pcap_to_string(pcap, &mut out);
+        out.pop();
+        writer.put_ok("text/json", out.as_str())
+    } else {
+        let body = format!("ID: {} doesn't exist in pcaps", id);
+        writer.put_error(404, body.as_str())
+    }
 }
 
 #[cfg(test)]

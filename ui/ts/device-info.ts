@@ -1,74 +1,60 @@
-import { css, html, LitElement } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import { live } from 'lit/directives/live.js';
-import { styleMap } from 'lit/directives/style-map.js';
-import {
-  Device,
-  Notifiable,
-  SimulationInfo,
-  simulationState,
-} from './device-observer.js';
+import {css, html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
+import {live} from 'lit/directives/live.js';
+import {styleMap} from 'lit/directives/style-map.js';
+
+import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
 import {State} from './model.js'
 
-@customElement('ns-device-info')
-export class DeviceInformation extends LitElement implements Notifiable {
-  /**
-   * The currently user-clicked device will have its
-   * information displayed on the info panel.
-   */
-  @property() selectedDevice?: Device;
+    @customElement('ns-device-info') export class DeviceInformation extends LitElement implements Notifiable {
 
-  /**
+      // Selected Device on scene
+      @property() selectedDevice: Device|undefined;
+
+      /**
    * the yaw value in orientation for ns-cube-sprite
    * unit: deg
    */
-  @property({ type: Number })
-  yaw = 0;
+      @property({type : Number}) yaw = 0;
 
-  /**
-   * the pitch value in orientation for ns-cube-sprite
+      /**
+   * the pitch value in orientation for ns-cube-spriteß
    * unit: deg
    */
-  @property({ type: Number })
-  pitch = 0;
+      @property({type : Number}) pitch = 0;
 
-  /**
+      /**
    * the roll value in orientation for ns-cube-sprite
    * unit: deg
    */
-  @property({ type: Number })
-  roll = 0;
+      @property({type : Number}) roll = 0;
 
-  /**
+      /**
    * The state of device info. True if edit mode.
    */
-  @property({ type: Boolean })
-  editMode = false;
+      @property({type : Boolean}) editMode = false;
 
-  /**
+      /**
    * the x value in position for ns-cube-sprite
    * unit: cm
    */
-  @property({ type: Number })
-  posX = 0;
+      @property({type : Number}) posX = 0;
 
-  /**
+      /**
    * the y value in position for ns-cube-sprite
    * unit: cm
    */
-  @property({ type: Number })
-  posY = 0;
+      @property({type : Number}) posY = 0;
 
-  /**
+      /**
    * the z value in position for ns-cube-sprite
    * unit: cm
    */
-  @property({ type: Number })
-  posZ = 0;
+      @property({type : Number}) posZ = 0;
 
-  holdRange = false;
+      holdRange = false;
 
-  static styles = css`
+      static styles = css`
     :host {
       cursor: pointer;
       display: grid;
@@ -206,17 +192,17 @@ export class DeviceInformation extends LitElement implements Notifiable {
     }
   `;
 
-  connectedCallback() {
+      connectedCallback() {
     super.connectedCallback(); // eslint-disable-line
     simulationState.registerObserver(this);
-  }
+      }
 
-  disconnectedCallback() {
+      disconnectedCallback() {
     simulationState.removeObserver(this);
     super.disconnectedCallback(); // eslint-disable-line
-  }
+      }
 
-  onNotify(data: SimulationInfo) {
+      onNotify(data: SimulationInfo) {
     if (data.selectedId && this.editMode === false) {
       for (const device of data.devices) {
         if (device.name === data.selectedId) {
@@ -233,9 +219,9 @@ export class DeviceInformation extends LitElement implements Notifiable {
         }
       }
     }
-  }
+      }
 
-  private changeRange(ev: InputEvent) {
+      private changeRange(ev: InputEvent) {
     this.holdRange = true;
     console.assert(this.selectedDevice !== null); // eslint-disable-line
     const range = ev.target as HTMLInputElement;
@@ -254,9 +240,9 @@ export class DeviceInformation extends LitElement implements Notifiable {
     } else {
       this.roll = Number(range.value);
     }
-  }
+      }
 
-  private patchOrientation() {
+      private patchOrientation() {
     this.holdRange = false;
     console.assert(this.selectedDevice !== undefined); // eslint-disable-line
     if (this.selectedDevice === undefined) return;
@@ -267,9 +253,9 @@ export class DeviceInformation extends LitElement implements Notifiable {
         orientation: this.selectedDevice.orientation,
       },
     });
-  }
+      }
 
-  private patchRadio() {
+      private patchRadio() {
     console.assert(this.selectedDevice !== undefined); // eslint-disable-line
     if (this.selectedDevice === undefined) return;
     simulationState.patchDevice({
@@ -278,26 +264,26 @@ export class DeviceInformation extends LitElement implements Notifiable {
         chips: this.selectedDevice.chips,
       },
     });
-  }
+      }
 
-  private handleEditForm() {
+      private handleEditForm() {
     if (this.editMode) {
       simulationState.invokeGetDevice();
       this.editMode = false;
     } else {
       this.editMode = true;
     }
-  }
+      }
 
-  static checkPositionBound(value: number) {
+      static checkPositionBound(value: number) {
     return value > 10 ? 10 : value < 0 ? 0 : value; // eslint-disable-line
-  }
+      }
 
-  static checkOrientationBound(value: number) {
+      static checkOrientationBound(value: number) {
     return value > 90 ? 90 : value < -90 ? -90 : value; // eslint-disable-line
-  }
+      }
 
-  private handleSave() {
+      private handleSave() {
     console.assert(this.selectedDevice !== undefined); // eslint-disable-line
     if (this.selectedDevice === undefined) return;
     const elements = this.renderRoot.querySelectorAll(`[id^="edit"]`);
@@ -331,9 +317,9 @@ export class DeviceInformation extends LitElement implements Notifiable {
     simulationState.patchDevice({
       device: obj,
     });
-  }
+      }
 
-  private handleGetChips() {
+      private handleGetChips() {
     const disabledCheckbox = html`
       <input type="checkbox" disabled />
         <span
@@ -346,10 +332,10 @@ export class DeviceInformation extends LitElement implements Notifiable {
     let wifiCheckbox = disabledCheckbox;
     let uwbCheckbox = disabledCheckbox;
     if (this.selectedDevice) {
-      if ("chips" in this.selectedDevice && this.selectedDevice.chips) {
+      if ('chips' in this.selectedDevice && this.selectedDevice.chips) {
         for (const chip of this.selectedDevice.chips) {
           if ('bt' in chip && chip.bt) {
-            if ("lowEnergy" in chip.bt && chip.bt.lowEnergy && 'state' in chip.bt.lowEnergy) {
+            if ('lowEnergy' in chip.bt && chip.bt.lowEnergy && 'state' in chip.bt.lowEnergy) {
               lowEnergyCheckbox = html `
                 <input
                   id="lowEnergy"
@@ -357,14 +343,14 @@ export class DeviceInformation extends LitElement implements Notifiable {
                   .checked=${live(chip.bt.lowEnergy.state === State.ON)}
                   @click=${() => {
                     // eslint-disable-next-line
-                    this.selectedDevice?.toggleChipState(chip, "lowEnergy");
+                    this.selectedDevice?.toggleChipState(chip, 'lowEnergy');
                     this.patchRadio();
                   }}
                 />
                 <span class="slider round"></span>
               `;
             }
-            if ("classic" in chip.bt && chip.bt.classic && 'state' in chip.bt.classic) {
+            if ('classic' in chip.bt && chip.bt.classic && 'state' in chip.bt.classic) {
               classicCheckbox = html`
                 <input
                   id="classic"
@@ -372,7 +358,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
                   .checked=${live(chip.bt.classic.state === State.ON)}
                   @click=${() => {
                     // eslint-disable-next-line
-                    this.selectedDevice?.toggleChipState(chip, "classic");
+                    this.selectedDevice?.toggleChipState(chip, 'classic');
                     this.patchRadio();
                   }}
                 />
@@ -441,9 +427,9 @@ export class DeviceInformation extends LitElement implements Notifiable {
         </label>
       </div>
     `;
-  }
+      }
 
-  render() {
+      render() {
     return html`${this.selectedDevice
       ? html`
           <div class="title">Device Info</div>
@@ -572,5 +558,4 @@ export class DeviceInformation extends LitElement implements Notifiable {
           </div>
         `
       : html`<div class="title">Device Info</div>`}`;
-  }
-}
+      }}

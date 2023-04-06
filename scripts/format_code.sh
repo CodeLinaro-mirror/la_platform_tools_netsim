@@ -27,6 +27,10 @@ find $REPO/tools/netsim/rust \( \
   -o -name '*.rs' \) \
   -exec $REPO/prebuilts/rust/linux-x86/stable/rustfmt -v {} \;
 
+# Format TypeScript.
+find $REPO/tools/netsim/ui/ts \( -name '*.ts' \) \
+  -exec clang-format -i {} \;
+
 # Run cmake-format.
 find $REPO/tools/netsim \( -name 'CMakeLists.txt' \) \
   -exec cmake-format -i {} \;

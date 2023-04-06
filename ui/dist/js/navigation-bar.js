@@ -1,8 +1,8 @@
-import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,LitElement as t,html as a}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{customElement as n}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let i=class extends t{connectedCallback(){super.connectedCallback()}disconnectedCallback(){super.disconnectedCallback()}handleClick(e){let o="main";"nav-trace-section"===e.target.id?o="trace":"nav-os-library-section"===e.target.id&&(o="oslib"),window.dispatchEvent(new CustomEvent("changeModeEvent",{detail:{mode:o}}))}render(){return a`
+import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,LitElement as t,html as a}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{customElement as i}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let n=class extends t{connectedCallback(){super.connectedCallback()}disconnectedCallback(){super.disconnectedCallback()}handleClick(e){let o="main";"nav-trace-section"===e.target.id?o="trace":"nav-os-library-section"===e.target.id&&(o="oslib"),window.dispatchEvent(new CustomEvent("changeModeEvent",{detail:{mode:o}}))}render(){return a`
       <nav>
         <div id="nav-logo-section" class="nav-section">
           <a>
-            <div id="nav-logo-pic" class="logo" @click=${this.handleClick}></div>
+            <div id="nav-logo-pic" class="logo" @click=${this.handleClick} role="link" tabindex="0" aria-label="Netsim Logo, Scene View"></div>
           </a>
           <p>#betosim</p>
         </div>
@@ -10,10 +10,10 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,
           <a href="http://go/betosim" target="_blank" rel="noopener noreferrer"
             >ABOUT</a
           >
-          <a id="nav-trace-section" @click=${this.handleClick}
+          <a href="javascript:void(0)" id="nav-trace-section" @click=${this.handleClick}
             >PACKET TRACE</a
           >
-          <a id="nav-os-library-section" @click=${this.handleClick}
+          <a href="javascript:void(0)" id="nav-os-library-section" @click=${this.handleClick}
             >OPEN SOURCE LIBRARIES</a
           >
         </div>
@@ -26,7 +26,7 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,
           >
         </div>
       </nav>
-    `}};i.styles=o`
+    `}};n.styles=o`
     :host {
       --border-color: rgb(255, 255, 255, 0.1);
       --background-color: #747474;
@@ -90,4 +90,4 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as o,
       color: white;
       font-size: 25px;
     }
-  `,i=e([n("ns-navigation-bar")],i);export{i as NavigationBar};
+  `,n=e([i("ns-navigation-bar")],n);export{n as NavigationBar};

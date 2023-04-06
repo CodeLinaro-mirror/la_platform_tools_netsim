@@ -35,9 +35,9 @@ OPTIONS:
         * `netsim radio <BT_TYPE> <STATUS> <NAME>`
 
     * ARGS:
-        * \<RADIO_TYPE\>    Radio type [possible values: ble, classic, wifi]
-        * \<STATUS\>        Radio status [possible values: up, down]
-        * \<NAME\>          Device name
+        * \<RADIO_TYPE\>:    Radio type [possible values: ble, classic, wifi]
+        * \<STATUS\>:        Radio status [possible values: up, down]
+        * \<NAME\>:          Device name
 * ### `reset`:      Reset Netsim device scene
     * USAGE:
         * `netsim reset`
@@ -46,17 +46,21 @@ OPTIONS:
         * `netsim version`
 * ### `pcap`:       (Not fully implemented)  Control the packet capture functionalities
     * #### SUBCOMMANDS
-        * `list`:   List all currently available Pcaps (packet captures)
+        * `list`:   List currently available Pcaps (packet captures)
             * USAGE:
-                * `netsim pcap list`
+                * `netsim pcap list [PATTERNS]...`
+            * ARGS:
+                * \<PATTERNS\>...:  Optional strings of pattern for pcaps to list. Possible filter fields
+                                    include Pcap ID, Device Name, and Chip Kind
         * `patch`:  Patch a Pcap source to turn packet capture on/off
             * USAGE:
-                * `netsim pcap patch <ID> <STATE>`
+                * `netsim pcap patch <STATE> [PATTERNS]...`
             * ARGS:
-                * \<ID\>        Pcap id
-                * \<STATE\>     Packet capture state [possible values: on, off]
+                * \<STATE\>:        Packet capture state [possible values: on, off]
+                * \<PATTERNS\>...:  Optional strings of pattern for pcaps to patch. Possible filter fields
+                                    include Pcap ID, Device Name, and Chip Kind
         * `get`:    Download the packet capture content
             * USAGE:
                 * `netsim pcap get <ID>`
             * ARGS:
-                * \<ID\>        Pcap id
+                * \<ID\>:        Pcap id
