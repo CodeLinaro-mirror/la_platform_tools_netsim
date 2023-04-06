@@ -30,6 +30,7 @@
 // outside of the Bluetooth Facade.
 #include "common.pb.h"
 #include "hci_packet.pb.h"
+#include "rust/cxx.h"
 
 namespace netsim {
 namespace packet_hub {
@@ -42,8 +43,7 @@ void handle_request(common::ChipKind kind, uint32_t facade_id,
                     packet::HCIPacket_PacketType packet_type);
 
 void handle_request_cxx(uint32_t kind, uint32_t facade_id,
-                        const std::vector<uint8_t> &packet,
-                        uint32_t packet_type);
+                        const rust::Vec<uint8_t> &packet, uint8_t packet_type);
 
 void handle_bt_response(uint32_t facade_id,
                         packet::HCIPacket_PacketType packet_type,

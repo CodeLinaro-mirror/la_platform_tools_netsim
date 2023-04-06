@@ -19,6 +19,7 @@
 mod http_server;
 mod pcap;
 mod ranging;
+mod transport;
 mod version;
 
 use std::pin::Pin;
@@ -26,6 +27,9 @@ use std::pin::Pin;
 use cxx::let_cxx_string;
 use ffi::CxxServerResponseWriter;
 use http_server::server_response::ServerResponseWritable;
+
+use crate::transport::fd::handle_response;
+use crate::transport::fd::run_fd_transport;
 
 use crate::http_server::run_http_server;
 use crate::pcap::handlers::handle_pcap_cxx;
@@ -36,6 +40,9 @@ use crate::version::*;
 mod ffi {
 
     extern "Rust" {
+
+        #[cxx_name = "RunFdTransport"]
+        fn run_fd_transport(startup_json: &String);
 
         #[cxx_name = "RunHttpServer"]
         fn run_http_server();
@@ -64,7 +71,7 @@ mod ffi {
 
         #[cxx_name = HandleResponse]
         #[namespace = "netsim::fd"]
-        fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u32);
+        fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
     }
 
@@ -137,12 +144,10 @@ mod ffi {
         include!("packet_hub/packet_hub.h");
 
         #[namespace = "netsim::packet_hub"]
-        fn handle_request_cxx(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u32);
+        fn handle_request_cxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
 
     }
 }
-
-fn handle_response(_kind: u32, _facade_id: u32, _packet: &cxx::CxxVector<u8>, _packet_type: u32) {}
 
 /// CxxServerResponseWriter is defined in server_response_writable.h
 /// Wrapper struct allows the impl to discover the respective C++ methods

@@ -42,9 +42,9 @@ void handle_request(ChipKind kind, uint32_t facade_id,
 }
 
 void handle_request_cxx(uint32_t kind, uint32_t facade_id,
-                        const std::vector<uint8_t> &packet,
-                        uint32_t packet_type) {
-  handle_request(static_cast<ChipKind>(kind), facade_id, packet,
+                        const rust::Vec<uint8_t> &packet, uint8_t packet_type) {
+  std::vector<uint8_t> buffer(packet.begin(), packet.end());
+  handle_request(static_cast<ChipKind>(kind), facade_id, buffer,
                  static_cast<packet::HCIPacket_PacketType>(packet_type));
 }
 

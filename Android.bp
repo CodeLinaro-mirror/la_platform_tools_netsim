@@ -62,10 +62,13 @@ cc_defaults {
 rust_ffi_host_static {
     name: "libnetsim_cxx",
     crate_name: "netsim_cxx",
+    features: ["cuttlefish"],
     rlibs: ["libcxx",
         "libfrontend_proto",
         "libprotobuf_deprecated",
         "libregex",
+	"libserde",
+	"libserde_json",
         "liblazy_static"],
     srcs: ["rust/netsim-cxx/src/lib.rs"],
 }
