@@ -19,7 +19,7 @@ mod browser;
 mod requests;
 mod response;
 
-use args::NetsimArgs;
+use args::{BinaryProtobuf, NetsimArgs};
 use clap::Parser;
 use cxx::UniquePtr;
 use frontend_client_cxx::ffi::{new_frontend_client, ClientResult, FrontendClient, GrpcMethod};
@@ -53,7 +53,7 @@ impl ClientResponseReadable for PcapHandler {
 }
 
 // helper function to process streaming Grpc request
-fn perform_reader_request(client: &cxx::UniquePtr<FrontendClient>) -> UniquePtr<ClientResult> {
+fn perform_streaming_request(client: &cxx::UniquePtr<FrontendClient>) -> UniquePtr<ClientResult> {
     client.get_pcap(
         &Vec::new(),
         &ClientResponseReader {
@@ -67,32 +67,39 @@ fn perform_request(
     command: args::Command,
     client: cxx::UniquePtr<FrontendClient>,
     grpc_method: GrpcMethod,
-    request: Vec<u8>,
+    requests: Vec<BinaryProtobuf>,
     verbose: bool,
 ) -> Result<(), String> {
-    let continuous = match command {
-        args::Command::Devices(ref cmd) => cmd.continuous,
-        _ => false,
-    };
-    let streaming = matches!(command, args::Command::Pcap(args::Pcap::Get(_)));
-    loop {
-        let result = if streaming {
-            perform_reader_request(&client)
-        } else {
-            client.send_grpc(&grpc_method, &request)
+    for req in requests {
+        let result = match command {
+            // Continuous option sends the gRPC call every second
+            args::Command::Devices(ref cmd) if cmd.continuous => loop {
+                process_result(&command, client.send_grpc(&grpc_method, &req), verbose)?;
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            },
+            // Get Pcap use streaming gRPC reader request
+            args::Command::Pcap(args::Pcap::Get(_)) => perform_streaming_request(&client),
+            // All other commands use a single gRPC call
+            _ => client.send_grpc(&grpc_method, &req),
         };
-        if result.is_ok() {
-            command.print_response(result.byte_vec().as_slice(), verbose);
-            if !continuous {
-                return Ok(());
-            }
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        } else {
-            return Err(format!("Grpc call error: {}", result.err()));
-        }
+        process_result(&command, result, verbose)?;
     }
+    Ok(())
 }
 
+/// Check and handle the gRPC call result
+fn process_result(
+    command: &args::Command,
+    result: UniquePtr<ClientResult>,
+    verbose: bool,
+) -> Result<(), String> {
+    if result.is_ok() {
+        command.print_response(result.byte_vec().as_slice(), verbose);
+    } else {
+        return Err(format!("Grpc call error: {}", result.err()));
+    }
+    Ok(())
+}
 #[no_mangle]
 /// main Rust netsim CLI function to be called by C wrapper netsim.cc
 pub extern "C" fn rust_main() {
@@ -102,17 +109,22 @@ pub extern "C" fn rust_main() {
         return;
     }
     // TODO: remove warning once pcap commands are implemented
-    if matches!(args.command, args::Command::Pcap(_)) {
-        eprintln!("Warning: Pcap subcommands are not fully implemented yet!");
+    if matches!(args.command, args::Command::Pcap(args::Pcap::Get(_))) {
+        eprintln!("Warning: GetPcap is not fully implemented yet!");
     }
     let grpc_method = args.command.grpc_method();
-    let request = args.command.get_request_bytes();
     let client = new_frontend_client();
     if client.is_null() {
         eprintln!("Unable to create frontend client. Please ensure netsimd is running.");
         return;
     }
-    if let Err(e) = perform_request(args.command, client, grpc_method, request, args.verbose) {
+    // Handle where there are potentially multiple requests
+    let reqs = if matches!(args.command, args::Command::Pcap(args::Pcap::Patch(_))) {
+        args.command.get_requests(&client)
+    } else {
+        vec![args.command.get_request_bytes()]
+    };
+    if let Err(e) = perform_request(args.command, client, grpc_method, reqs, args.verbose) {
         eprintln!("{e}");
     }
 }

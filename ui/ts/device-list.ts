@@ -1,16 +1,11 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import {
-  simulationState,
-  Notifiable,
-  SimulationInfo,
-  Device,
-} from './device-observer.js';
+import {css, html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
+
+import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
 
 @customElement('ns-device-list')
 export class DeviceList extends LitElement implements Notifiable {
-  @property()
-  deviceData: Device[] = [];
+  @property() deviceData: Device[] = [];
 
   connectedCallback(): void {
     // eslint-disable-next-line
@@ -75,19 +70,21 @@ export class DeviceList extends LitElement implements Notifiable {
 
     // Repeating templates with map
     return html`
-      ${this.deviceData.map(
-        (device, idx) => html`
+      ${
+        this.deviceData.map(
+            (device, idx) => html`
           <li>
             <center>
-              ${device.visible === true
-                ? html`<ns-cube-sprite
+              ${
+                device.visible === true ?
+                    html`<ns-cube-sprite
                       id=${device.name}
                       color=${rainbow[idx % rainbow.length]}
                       size="30px"
                       style="opacity:0.5;"
                     ></ns-cube-sprite
-                    >${device.name} `
-                : html`<ns-device-dragzone action="move">
+                    >${device.name} ` :
+                    html`<ns-device-dragzone action="move">
                       <ns-cube-sprite
                         id=${device.name}
                         color=${rainbow[idx % rainbow.length]}
@@ -96,8 +93,7 @@ export class DeviceList extends LitElement implements Notifiable {
                     >${device.name}`}
             </center>
           </li>
-        `
-      )}
+        `)}
       <li>
         <center>
           <ns-pyramid-sprite

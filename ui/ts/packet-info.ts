@@ -1,11 +1,7 @@
-import { css, html, LitElement } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import {
-  Device,
-  Notifiable,
-  SimulationInfo,
-  simulationState,
-} from './device-observer.js';
+import {css, html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
+
+import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
 import {State} from './model.js';
 
 @customElement('ns-packet-info')
@@ -118,13 +114,13 @@ export class PacketInformation extends LitElement implements Notifiable {
   `;
 
   connectedCallback() {
-    super.connectedCallback(); // eslint-disable-line
+    super.connectedCallback();  // eslint-disable-line
     simulationState.registerObserver(this);
   }
 
   disconnectedCallback() {
     simulationState.removeObserver(this);
-    super.disconnectedCallback(); // eslint-disable-line
+    super.disconnectedCallback();  // eslint-disable-line
   }
 
   onNotify(data: SimulationInfo) {
@@ -136,12 +132,12 @@ export class PacketInformation extends LitElement implements Notifiable {
     let btTable = html``;
     let uwbTable = html``;
     let wifiTable = html``;
-    if ("chips" in device && device.chips) {
+    if ('chips' in device && device.chips) {
       for (const chip of device.chips) {
-        if ("bt" in chip && chip.bt) {
+        if ('bt' in chip && chip.bt) {
           let bleTable = html``;
           let bclassicTable = html``;
-          if ("lowEnergy" in chip.bt && chip.bt.lowEnergy) {
+          if ('lowEnergy' in chip.bt && chip.bt.lowEnergy) {
             bleTable = html`
               <tr>
                 <td>BLE</td>
@@ -150,7 +146,7 @@ export class PacketInformation extends LitElement implements Notifiable {
               </tr>
             `;
           }
-          if ("classic" in chip.bt && chip.bt.classic) {
+          if ('classic' in chip.bt && chip.bt.classic) {
             bclassicTable = html`
               <tr>
                 <td>Bluetooth Classic</td>
@@ -161,7 +157,7 @@ export class PacketInformation extends LitElement implements Notifiable {
           }
           btTable = html`${bleTable} ${bclassicTable}`;
         }
-        if ("uwb" in chip && chip.uwb) {
+        if ('uwb' in chip && chip.uwb) {
           uwbTable = html`
             <tr>
               <td>UWB</td>
@@ -170,7 +166,7 @@ export class PacketInformation extends LitElement implements Notifiable {
             </tr>
           `;
         }
-        if ("wifi" in chip && chip.wifi) {
+        if ('wifi' in chip && chip.wifi) {
           wifiTable = html`
             <tr>
               <td>WIFI</td>
@@ -197,19 +193,25 @@ export class PacketInformation extends LitElement implements Notifiable {
           <tr>
             <td>${device.name}</td>
             <td>
-              ${chip.bt ? "Bluetooth" : chip.uwb ? "UWB" : chip.wifi ? "WIFI" : "Unknown"}
+              ${
+            chip.bt       ? 'Bluetooth' :
+                chip.uwb  ? 'UWB' :
+                chip.wifi ? 'WIFI' :
+                            'Unknown'}
             </td>
             <td>
               <input
                 type="checkbox"
                 class="switch_1"
                 .checked=${chip.capture === State.ON}
-                @click=${() => {device.toggleCapture(device, chip);}}
+                @click=${() => {
+          device.toggleCapture(device, chip);
+        }}
               />
             </td>
             <td>
               <a
-                href="http://localhost:7681/pcap/${device.name}"
+                href="./pcap/${device.name}"
                 target="_blank"
                 type="application/vnd.tcpdump.pcap"
                 >Download PCAP</a
@@ -226,9 +228,7 @@ export class PacketInformation extends LitElement implements Notifiable {
     return html`
       <div class="panel">
         <div class="title">Packet Info</div>
-        ${this.deviceData.map(
-          device =>
-            html`
+        ${this.deviceData.map(device => html`
               <div class="label">${device.name}</div>
               <table class="styled-table">
                 <tr>
@@ -238,8 +238,7 @@ export class PacketInformation extends LitElement implements Notifiable {
                 </tr>
                 ${this.handleGetChips(device)}
               </table>
-            `
-        )}
+            `)}
         <div class="title">Packet Capture</div>
         <table class="styled-table">
           <tr>
@@ -248,9 +247,7 @@ export class PacketInformation extends LitElement implements Notifiable {
             <th>Capture ON/OFF</th>
             <th>Packet Trace</th>
           </tr>
-          ${this.deviceData.map(
-            device => this.handleGetCapture(device)
-          )}
+          ${this.deviceData.map(device => this.handleGetCapture(device))}
         </table>
       </div>
     `;

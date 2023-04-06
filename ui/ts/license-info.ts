@@ -1,9 +1,8 @@
-import { css, html, LitElement } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import {css, html, LitElement} from 'lit';
+import {customElement} from 'lit/decorators.js';
 
 @customElement('ns-license-info')
 export class PacketInformation extends LitElement {
-
   static styles = css`
     .panel {
       cursor: pointer;

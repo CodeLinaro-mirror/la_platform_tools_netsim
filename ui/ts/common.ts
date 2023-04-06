@@ -1,11 +1,11 @@
 /* eslint-disable */
 
-export const protobufPackage = "netsim.common";
+export const protobufPackage = 'netsim.common';
 
 export enum ChipKind {
-  UNSPECIFIED = "UNSPECIFIED",
-  BLUETOOTH = "BLUETOOTH",
-  WIFI = "WIFI",
-  UWB = "UWB",
-  UNRECOGNIZED = "UNRECOGNIZED",
+  UNSPECIFIED = 'UNSPECIFIED',
+  BLUETOOTH = 'BLUETOOTH',
+  WIFI = 'WIFI',
+  UWB = 'UWB',
+  UNRECOGNIZED = 'UNRECOGNIZED',
 }

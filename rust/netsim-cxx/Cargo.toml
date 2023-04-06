@@ -10,7 +10,7 @@ doctest = false
 test = false
 
 [dependencies]
-cxx = { version = "=1.0.42", features = ["c++17"] }
+cxx = { version = ">=1.0.85", features = ["c++17"] }
 frontend-proto = { path = "../frontend-proto" }
 protobuf = "2.27.1"
 regex = "1.6.0"
