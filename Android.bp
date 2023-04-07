@@ -65,6 +65,7 @@ rust_ffi_host_static {
     features: ["cuttlefish"],
     rlibs: ["libcxx",
         "libfrontend_proto",
+        "libnetsim_common",
         "libprotobuf_deprecated",
         "libregex",
 	"libserde",
@@ -254,6 +255,26 @@ rust_library_host {
     ],
 }
 
+rust_defaults {
+    name: "libnetsim_common_defaults",
+    srcs: ["rust/netsim-common/src/lib.rs"],
+    rustlibs: [
+        "librand"
+    ],
+}
+
+rust_library_host {
+    name: "libnetsim_common",
+    crate_name: "netsim_common",
+    defaults: ["libnetsim_common_defaults"],
+}
+
+rust_test_host {
+    name: "libnetsim_common_inline_tests",
+    defaults: ["libnetsim_common_defaults"],
+    test_suites: ["general_tests"],
+}
+
 cc_library_host_static {
     name: "lib-netsim-frontend-client",
     defaults: ["netsim_defaults"],
@@ -284,6 +305,7 @@ rust_ffi_host_static {
         "libclap",
         "libfrontend_proto",
         "libfrontend_client_cxx",
+        "libnetsim_common",
         "libprotobuf_deprecated",
         "libcxx",
     ],
