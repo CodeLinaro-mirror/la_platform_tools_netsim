@@ -262,12 +262,5 @@ mod tests {
         test_command("netsim-cli pcap list", GrpcMethod::ListPcap, Vec::new())
     }
 
-    //TODO: Add pcap patch tests once able to run tests with cxx definitions
-
-    #[test]
-    fn test_pcap_get() {
-        let mut result = frontend::GetPcapRequest::new();
-        result.set_id(2);
-        test_command("netsim-cli pcap get 2", GrpcMethod::GetPcap, result.write_to_bytes().unwrap())
-    }
+    //TODO: Add pcap patch and get tests once able to run tests with cxx definitions
 }

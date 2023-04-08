@@ -34,7 +34,31 @@ unsigned int GetDevices(const std::string &request, std::string &response,
 
 bool GetDevicesBytes(rust::Vec<::rust::u8> &vec);
 
+int GetFacadeId(int chip_id);
+
 void RemoveChip(uint32_t device_id, uint32_t chip_id);
+
+/// The C++ definition of AddChip response interface for CXX.
+class AddChipResult {
+ public:
+  uint32_t device_id;
+  uint32_t chip_id;
+  uint32_t facade_id;
+
+  uint32_t get_device_id() const { return device_id; }
+  uint32_t get_chip_id() const { return chip_id; }
+  uint32_t get_facade_id() const { return facade_id; }
+
+  AddChipResult(uint32_t device_id, uint32_t chip_id, uint32_t facade_id)
+      : device_id(device_id), chip_id(chip_id), facade_id(facade_id){};
+};
+
+std::unique_ptr<AddChipResult> AddChipCxx(const std::string &guid,
+                                          const std::string &device_name,
+                                          uint32_t chip_kind,
+                                          const std::string &chip_name,
+                                          const std::string &manufacturer,
+                                          const std::string &product_name);
 
 std::tuple<uint32_t, uint32_t, uint32_t> AddChip(
     const std::string &guid, const std::string &device_name,

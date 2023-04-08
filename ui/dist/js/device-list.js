@@ -1,4 +1,4 @@
-import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,LitElement as t,html as r}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as s,customElement as n}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as o}from"./device-observer.js";let a=class extends t{constructor(){super(...arguments),this.deviceData=[]}connectedCallback(){super.connectedCallback(),o.registerObserver(this)}disconnectedCallback(){super.disconnectedCallback(),o.removeObserver(this)}onNotify(e){this.deviceData=e.devices,this.requestUpdate()}render(){const e=["red","orange","yellow","green","blue","indigo","purple"];return r`
+import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,LitElement as t,html as r}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as s,customElement as n}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as a}from"./device-observer.js";let l=class extends t{constructor(){super(...arguments),this.deviceData=[]}connectedCallback(){super.connectedCallback(),a.registerObserver(this)}disconnectedCallback(){super.disconnectedCallback(),a.removeObserver(this)}onNotify(e){this.deviceData=e.devices,this.requestUpdate()}render(){const e=["red","orange","yellow","green","blue","indigo","purple"];return r`
       ${this.deviceData.map(((i,t)=>r`
           <li>
             <center>
@@ -7,12 +7,18 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
                       color=${e[t%e.length]}
                       size="30px"
                       style="opacity:0.5;"
+                      role="listitem"
+                      tabindex="0"
+                      aria-label="${i.name} in Device Legends"
                     ></ns-cube-sprite
                     >${i.name} `:r`<ns-device-dragzone action="move">
                       <ns-cube-sprite
                         id=${i.name}
                         color=${e[t%e.length]}
                         size="30px"
+                        role="listitem"
+                        tabindex="0"
+                        aria-label="${i.name} in Device Legends"
                       ></ns-cube-sprite> </ns-device-dragzone
                     >${i.name}`}
             </center>
@@ -25,6 +31,9 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
             color=${e[this.deviceData.length%e.length]}
             size="30px"
             style="opacity:0.5;"
+            role="listitem"
+            tabindex="0"
+            aria-label="beacon in Device Legends"
           ></ns-pyramid-sprite
           >beacon
         </center>
@@ -36,11 +45,14 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
             color=${e[(this.deviceData.length+1)%e.length]}
             size="30px"
             style="opacity:0.5;"
+            role="listitem"
+            tabindex="0"
+            aria-label="anchor in Device Legends"
           ></ns-pyramid-sprite
           >anchor
         </center>
       </li>
-    `}};a.styles=i`
+    `}};l.styles=i`
     :host {
       justify-content: center;
       display: flex;
@@ -71,4 +83,4 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
       border: solid 1px rgb(198, 210, 255);
       margin: 2.5em auto;
     }
-  `,e([s()],a.prototype,"deviceData",void 0),a=e([n("ns-device-list")],a);export{a as DeviceList};
+  `,e([s()],l.prototype,"deviceData",void 0),l=e([n("ns-device-list")],l);export{l as DeviceList};

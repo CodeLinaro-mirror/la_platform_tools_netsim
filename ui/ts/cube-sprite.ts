@@ -184,7 +184,7 @@ export class CubeSprite extends LitElement implements Notifiable {
           outline: ${this.highlighted && this.controls ? css`dashed` : css``};
         }
       </style>
-      <div class="cube" role="button" tabindex="0" aria-label="Device">
+      <div class="cube">
         <div></div>
         <div></div>
         <div></div>

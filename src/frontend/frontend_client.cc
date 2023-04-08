@@ -178,15 +178,8 @@ class FrontendClientImpl : public FrontendClient {
       client_reader.handle_chunk(
           rust::Slice<const uint8_t>{bytes.data(), bytes.size()});
     }
-    // Temporary tests calling handle_chunk and handle_error
-    std::cout << "GetPcap in frontend_client.cc calling handle_chunk..."
-              << std::endl;
-    client_reader.handle_chunk(rust::Slice<const uint8_t>());
-    std::cout << "GetPcap in frontend_client.cc calling handle_error..."
-              << std::endl;
-    client_reader.handle_error(1, "placeholder error response");
-    // TOOD: update to reflect actual status
-    return make_result(grpc::Status::OK, google::protobuf::Empty());
+    auto status = reader->Finish();
+    return make_result(status, google::protobuf::Empty());
   }
 
   // Helper function to redirect to the correct Grpc call
