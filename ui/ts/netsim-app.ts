@@ -28,7 +28,7 @@ export class NetsimApp extends LitElement {
     }
 
     #bottom {
-      position: absolute;
+      position: relative;
       bottom: 0;
       left: 0;
       font-size: 20px;

@@ -20,6 +20,7 @@ mod http_server;
 mod pcap;
 mod ranging;
 mod transport;
+mod uwb;
 mod version;
 
 use std::pin::Pin;
@@ -32,7 +33,7 @@ use crate::transport::fd::handle_response;
 use crate::transport::fd::run_fd_transport;
 
 use crate::http_server::run_http_server;
-use crate::pcap::handlers::handle_pcap_cxx;
+use crate::pcap::handlers::{handle_packet_request, handle_packet_response, handle_pcap_cxx};
 use crate::ranging::*;
 use crate::version::*;
 
@@ -73,6 +74,25 @@ mod ffi {
         #[namespace = "netsim::fd"]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
+        // Pcap Resource
+
+        #[cxx_name = HandleRequest]
+        #[namespace = "netsim::pcap"]
+        fn handle_packet_request(
+            kind: u32,
+            facade_id: u32,
+            packet: &CxxVector<u8>,
+            packet_type: u32,
+        );
+
+        #[cxx_name = HandleResponse]
+        #[namespace = "netsim::pcap"]
+        fn handle_packet_response(
+            kind: u32,
+            facade_id: u32,
+            packet: &CxxVector<u8>,
+            packet_type: u32,
+        );
     }
 
     unsafe extern "C++" {

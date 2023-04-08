@@ -33,7 +33,7 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as t,
     }
 
     #bottom {
-      position: absolute;
+      position: relative;
       bottom: 0;
       left: 0;
       font-size: 20px;

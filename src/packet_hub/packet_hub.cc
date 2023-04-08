@@ -39,6 +39,7 @@ void handle_request(ChipKind kind, uint32_t facade_id,
   } else if (kind == ChipKind::WIFI) {
     netsim::wifi::handle_wifi_request(facade_id, shared_packet);
   }
+  netsim::pcap::HandleRequest(kind, facade_id, packet, packet_type);
 }
 
 void handle_request_cxx(uint32_t kind, uint32_t facade_id,
@@ -56,6 +57,8 @@ void handle_bt_response(uint32_t facade_id,
                                    packet_type);
   netsim::fd::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
                              packet_type);
+  netsim::pcap::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
+                               packet_type);
 }
 
 // forward from facade to transport via packet_hub
@@ -65,6 +68,8 @@ void handle_wifi_response(uint32_t facade_id,
                                    packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
   netsim::fd::HandleResponse(ChipKind::WIFI, facade_id, *packet,
                              packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+  netsim::pcap::HandleResponse(ChipKind::WIFI, facade_id, *packet,
+                               packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
 }
 
 }  // namespace packet_hub
