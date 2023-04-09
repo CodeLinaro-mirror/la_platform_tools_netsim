@@ -117,7 +117,7 @@ export class DeviceMap extends LitElement implements Notifiable {
         'none; top: 0px;';
 
     return html`
-      <ns-device-dropzone role="region" tabindex="0" aria-label="Device map">
+      <ns-device-dropzone role="widget" tabindex="0" aria-label="Device map">
         <div id="dropzone" class="box pattern${this.imageIdx}">
           ${
         this.deviceData.map(
@@ -132,13 +132,6 @@ export class DeviceMap extends LitElement implements Notifiable {
                       left: `${device.position.x * 100}px`,
                       top: `${device.position.y * 100}px`,
                     })}
-                      role="region"
-                      tabindex="1"
-                      aria-label="Position: ${
-                        Math.round(device.position.x * 100)}, ${
-                        Math.round(device.position.y * 100)}, ${
-                        Math.round(device.position.z * 100)}"
-                      aria-live="assertive"
                     >
                       <ns-cube-sprite
                         id=${device.name}
@@ -149,6 +142,17 @@ export class DeviceMap extends LitElement implements Notifiable {
                         pitch=${device.orientation.pitch}
                         roll=${device.orientation.roll}
                         posZ=${device.position.z * 100}
+                        role="widget"
+                        tabindex="1"
+                        aria-label="${device.name} on Device Map, Position: ${
+                        Math.round(device.position.x * 100)}, ${
+                        Math.round(device.position.y * 100)}, ${
+                        Math.round(
+                            device.position.z * 100)}, Orientation: yaw: ${
+                        device.orientation.yaw}, pitch: ${
+                        device.orientation.pitch}, roll: ${
+                        device.orientation.roll}"
+                        aria-live="polite"
                       ></ns-cube-sprite>
                     </ns-device-dragzone>
                   ` :

@@ -44,8 +44,12 @@ lazy_static! {
 // Pcaps contains a recent copy of all chips and their ChipKind, chip_id,
 // and owning device name. Information for any recent or ongoing captures is
 // also stored in the ProtoPcap.
+pub type ChipId = i32;
+pub type FacadeId = i32;
+pub type PcapId = i32;
 pub struct Pcaps {
-    pcaps: HashMap<String, ProtoPcap>,
+    chip_id_map: HashMap<ChipId, ProtoPcap>,
+    facade_id_map: HashMap<FacadeId, ProtoPcap>,
     current_idx: i32,
 }
 
@@ -53,60 +57,66 @@ impl Pcaps {
     // The idx starts with 4000 to avoid conflict with other indices that may
     // exist in different resources
     fn new() -> Self {
-        Pcaps { pcaps: HashMap::<String, ProtoPcap>::new(), current_idx: 4000 }
+        Pcaps {
+            chip_id_map: HashMap::<ChipId, ProtoPcap>::new(),
+            facade_id_map: HashMap::<FacadeId, ProtoPcap>::new(),
+            current_idx: 4000,
+        }
     }
 
     pub fn contains_pcap(&self, pcap: &ProtoPcap) -> bool {
-        self.pcaps.contains_key(&Self::get_key(pcap))
+        self.chip_id_map.contains_key(&pcap.get_chip_id())
     }
 
-    pub fn get_key(pcap: &ProtoPcap) -> String {
-        format!("{:?}_{}", pcap.get_chip_kind(), pcap.get_chip_id())
+    pub fn get_by_chip_id(&mut self, key: ChipId) -> Option<&mut ProtoPcap> {
+        self.chip_id_map.get_mut(&key)
     }
 
-    pub fn get(&mut self, key: &String) -> Option<&mut ProtoPcap> {
-        self.pcaps.get_mut(key)
+    pub fn get_by_facade_id(&mut self, key: FacadeId) -> Option<&mut ProtoPcap> {
+        self.facade_id_map.get_mut(&key)
     }
 
-    pub fn get_by_id(&mut self, id: i32) -> Option<&mut ProtoPcap> {
-        self.pcaps.iter_mut().map(|(_, pcap)| pcap).find(|pcap| pcap.id == id)
+    pub fn get_by_pcap_id(&mut self, id: PcapId) -> Option<&mut ProtoPcap> {
+        self.chip_id_map.iter_mut().map(|(_, pcap)| pcap).find(|pcap| pcap.id == id)
     }
 
     // TODO: replace with "optional bool" in proto
-    pub fn set_state(&mut self, id: i32, state: bool) -> bool {
+    pub fn set_state(&mut self, id: PcapId, state: bool) -> bool {
         let capture_state = match state {
             true => State::ON,
             false => State::OFF,
         };
-        if let Some(pcap) = self.get_by_id(id) {
+        if let Some(pcap) = self.get_by_pcap_id(id) {
             pcap.set_state(capture_state);
             return true;
         }
         false
     }
 
+    // TODO: invoke GetFacadeId cxx method to obtain facade_id from chip_id
     pub fn insert(&mut self, mut pcap: ProtoPcap) {
         pcap.set_id(self.current_idx);
-        self.pcaps.insert(Self::get_key(&pcap), pcap);
+        self.chip_id_map.insert(pcap.get_chip_id(), pcap);
         self.current_idx += 1;
     }
 
     pub fn is_empty(&self) -> bool {
-        self.pcaps.is_empty()
+        self.chip_id_map.is_empty()
     }
 
-    pub fn iter(&self) -> Iter<String, ProtoPcap> {
-        self.pcaps.iter()
+    pub fn iter_chip_id_map(&self) -> Iter<ChipId, ProtoPcap> {
+        self.chip_id_map.iter()
     }
 
-    pub fn remove(&mut self, key: &String) {
-        if self.pcaps.remove(key).is_none() {
+    // TODO: remove pcap from facade_id_map
+    pub fn remove(&mut self, key: &ChipId) {
+        if self.chip_id_map.remove(key).is_none() {
             println!("key does not exist in Pcaps");
         }
     }
 
-    pub fn values(&self) -> Values<String, ProtoPcap> {
-        self.pcaps.values()
+    pub fn values(&self) -> Values<ChipId, ProtoPcap> {
+        self.chip_id_map.values()
     }
 }
 

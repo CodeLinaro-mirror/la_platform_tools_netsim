@@ -73,8 +73,8 @@ export class NetsimApp extends LitElement {
     let page = html``;
     if (this.viewMode === 'main') {
       page = html`
-        <ns-customize-button eventName="map-button-clicked" class="primary">Change Background</ns-customize-button>
-        <ns-customize-button eventName="isometric-button-clicked" class="primary">Toggle View</ns-customize-button>
+        <ns-customize-button eventName="map-button-clicked" class="primary" aria-label="Change background of the device map">Change Background</ns-customize-button>
+        <ns-customize-button eventName="isometric-button-clicked" class="primary" aria-label="Toggle view of the device map">Toggle View</ns-customize-button>
         <div class="container">
           <div class="contentA">
             <ns-device-map></ns-device-map>
