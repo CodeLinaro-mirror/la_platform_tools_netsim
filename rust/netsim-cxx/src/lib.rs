@@ -163,8 +163,9 @@ mod ffi {
 
         include!("packet_hub/packet_hub.h");
 
+        #[rust_name = "handle_request_cxx"]
         #[namespace = "netsim::packet_hub"]
-        fn handle_request_cxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
+        fn HandleRequestCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
 
     }
 }

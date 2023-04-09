@@ -16,6 +16,7 @@
 # Formats source files according to Google's style guide.
 
 REPO=$(dirname "$0")/../../..
+OS=$(uname | tr '[:upper:]' '[:lower:]') # The possible values are "linux" and "darwin".
 
 # Run clang-format.
 find $REPO/tools/netsim/src \( -name '*.cc' -o -name '*.h' -o -name '*.proto' \) \
@@ -25,7 +26,7 @@ find $REPO/tools/netsim/src \( -name '*.cc' -o -name '*.h' -o -name '*.proto' \)
 find $REPO/tools/netsim/rust \( \
   -path $REPO/tools/netsim/rust/target -prune -false \
   -o -name '*.rs' \) \
-  -exec $REPO/prebuilts/rust/linux-x86/stable/rustfmt -v {} \;
+  -exec $REPO/prebuilts/rust/$OS-x86/stable/rustfmt -v {} \;
 
 # Format TypeScript.
 find $REPO/tools/netsim/ui/ts \( -name '*.ts' \) \

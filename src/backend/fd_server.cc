@@ -19,8 +19,8 @@
 
 namespace netsim::backend {
 
-void handle_response(common::ChipKind kind, uint32_t facade_id,
-                     const std::vector<uint8_t> &packet,
-                     /* optional */ packet::HCIPacket_PacketType packet_type) {}
+void HandleResponse(common::ChipKind kind, uint32_t facade_id,
+                    const std::vector<uint8_t> &packet,
+                    /* optional */ packet::HCIPacket_PacketType packet_type) {}
 
 }  // namespace netsim::backend
