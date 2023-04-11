@@ -35,6 +35,7 @@ use crate::transport::fd::run_fd_transport;
 use crate::http_server::run_http_server;
 use crate::pcap::handlers::{handle_packet_request, handle_packet_response, handle_pcap_cxx};
 use crate::ranging::*;
+use crate::uwb::facade::*;
 use crate::version::*;
 
 #[cxx::bridge(namespace = "netsim")]
@@ -93,6 +94,41 @@ mod ffi {
             packet: &CxxVector<u8>,
             packet_type: u32,
         );
+
+        // Uwb Facade.
+
+        #[cxx_name = HandleUwbRequestCxx]
+        #[namespace = "netsim::uwb"]
+        fn handle_uwb_request(facade_id: u32, packet: &[u8]);
+
+        #[cxx_name = PatchCxx]
+        #[namespace = "netsim::uwb::facade"]
+        pub fn uwb_patch(_facade_id: u32, _proto_bytes: &[u8]);
+
+        #[cxx_name = GetCxx]
+        #[namespace = "netsim::uwb::facade"]
+        pub fn uwb_get(_facade_id: u32) -> Vec<u8>;
+
+        #[cxx_name = Reset]
+        #[namespace = "netsim::uwb::facade"]
+        pub fn uwb_reset(_facade_id: u32);
+
+        #[cxx_name = Remove]
+        #[namespace = "netsim::uwb::facade"]
+        pub fn uwb_remove(_facade_id: u32);
+
+        #[cxx_name = Add]
+        #[namespace = "netsim::uwb::facade"]
+        pub fn uwb_add(_chip_id: u32) -> u32;
+
+        #[cxx_name = Start]
+        #[namespace = "netsim::uwb::facade"]
+        pub fn uwb_start();
+
+        #[cxx_name = Stop]
+        #[namespace = "netsim::uwb::facade"]
+        pub fn uwb_stop();
+
     }
 
     unsafe extern "C++" {

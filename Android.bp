@@ -127,6 +127,7 @@ cc_library_host_static {
         "src/util/log.cc",
         "src/util/os_utils.cc",
         "src/util/string_utils.cc",
+        "src/uwb/uwb_facade.cc",
         "src/wifi/wifi_facade.cc",
     ],
     generated_headers: [
