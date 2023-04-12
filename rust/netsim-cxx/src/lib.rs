@@ -27,6 +27,7 @@ use std::pin::Pin;
 
 use cxx::let_cxx_string;
 use ffi::CxxServerResponseWriter;
+use http_server::http_request::StrHeaders;
 use http_server::server_response::ServerResponseWritable;
 
 use crate::transport::fd::handle_response;
@@ -186,7 +187,7 @@ mod ffi {
         type CxxServerResponseWriter;
 
         #[namespace = "netsim::frontend"]
-        fn put_ok_with_length(self: &CxxServerResponseWriter, mime_type: &CxxString, length: u32);
+        fn put_ok_with_length(self: &CxxServerResponseWriter, mime_type: &CxxString, length: usize);
 
         #[namespace = "netsim::frontend"]
         fn put_chunk(self: &CxxServerResponseWriter, chunk: &[u8]);
@@ -213,14 +214,14 @@ struct CxxServerResponseWriterWrapper<'a> {
 }
 
 impl ServerResponseWritable for CxxServerResponseWriterWrapper<'_> {
-    fn put_ok_with_length(&mut self, mime_type: &str, length: u32) {
+    fn put_ok_with_length(&mut self, mime_type: &str, length: usize, _headers: StrHeaders) {
         let_cxx_string!(mime_type = mime_type);
         self.writer.put_ok_with_length(&mime_type, length);
     }
     fn put_chunk(&mut self, chunk: &[u8]) {
         self.writer.put_chunk(chunk);
     }
-    fn put_ok(&mut self, mime_type: &str, body: &str) {
+    fn put_ok(&mut self, mime_type: &str, body: &str, _headers: StrHeaders) {
         let_cxx_string!(mime_type = mime_type);
         let_cxx_string!(body = body);
         self.writer.put_ok(&mime_type, &body);
@@ -230,7 +231,7 @@ impl ServerResponseWritable for CxxServerResponseWriterWrapper<'_> {
         self.writer.put_error(error_code.into(), &error_message);
     }
 
-    fn put_ok_with_vec(&mut self, _mime_type: &str, _body: Vec<u8>) {
+    fn put_ok_with_vec(&mut self, _mime_type: &str, _body: Vec<u8>, _headers: StrHeaders) {
         todo!()
     }
 }

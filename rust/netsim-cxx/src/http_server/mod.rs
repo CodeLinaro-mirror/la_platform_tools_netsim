@@ -111,7 +111,7 @@ fn handle_file(method: &str, path: &str, writer: ResponseWritable) {
             None => ui_path(path),
         };
         if let Ok(body) = fs::read(&filepath) {
-            writer.put_ok_with_vec(to_content_type(&filepath), body);
+            writer.put_ok_with_vec(to_content_type(&filepath), body, &[]);
             return;
         }
     }
@@ -126,7 +126,7 @@ fn handle_pcap_file(request: &HttpRequest, id: &str, writer: ResponseWritable) {
         filepath.push("/tmp");
         filepath.push(format!("{}-hci.pcap", id.replace("%20", " ")));
         if let Ok(body) = fs::read(&filepath) {
-            writer.put_ok_with_vec(to_content_type(&filepath), body);
+            writer.put_ok_with_vec(to_content_type(&filepath), body, &[]);
             return;
         }
     }
@@ -146,7 +146,7 @@ fn handle_static(request: &HttpRequest, path: &str, writer: ResponseWritable) {
 
 fn handle_version(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
     let body = format!("{{\"version\": \"{}\"}}", VERSION);
-    writer.put_ok("text/plain", body.as_str());
+    writer.put_ok("text/plain", body.as_str(), &[]);
 }
 
 fn handle_devices(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
@@ -156,7 +156,7 @@ fn handle_devices(request: &HttpRequest, _param: &str, writer: ResponseWritable)
         let_cxx_string!(error_message = "");
         let status = get_devices(&request, response.as_mut(), error_message.as_mut());
         if status == 200 {
-            writer.put_ok("text/plain", response.to_string().as_str());
+            writer.put_ok("text/plain", response.to_string().as_str(), &[]);
         } else {
             let body = format!("404 Not found (netsim): {:?}", error_message.to_string());
             writer.put_error(404, body.as_str());
@@ -167,7 +167,7 @@ fn handle_devices(request: &HttpRequest, _param: &str, writer: ResponseWritable)
         let_cxx_string!(error_message = "");
         let status = patch_device(&new_request, response.as_mut(), error_message.as_mut());
         if status == 200 {
-            writer.put_ok("text/plain", response.to_string().as_str());
+            writer.put_ok("text/plain", response.to_string().as_str(), &[]);
         } else {
             let body = format!("404 Not found (netsim): {:?}", error_message.to_string());
             writer.put_error(404, body.as_str());

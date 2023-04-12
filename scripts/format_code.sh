@@ -37,3 +37,11 @@ find $REPO/tools/netsim \( -name 'CMakeLists.txt' \) \
   -exec cmake-format -i {} \;
 find $REPO/tools/netsim/cmake \( -name "*.cmake" \) \
   -exec cmake-format -i {} \;
+
+# Run bpfmt to format Android.bp if in aosp_master repo.
+BPFMT=$REPO/prebuilts/build-tools/$OS-x86/bin/bpfmt
+if [ -f "$BPFMT" ]; then
+    $BPFMT -w $REPO/tools/netsim/Android.bp
+    $BPFMT -w $REPO/tools/netsim/ui/Android.bp
+    $BPFMT -w $REPO/tools/netsim/src/proto/Android.bp
+fi

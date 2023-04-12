@@ -95,9 +95,9 @@ export class NetsimApp extends LitElement {
       `;
     }
     return html`
+      <div id="bottom">version: ${this.version}</div>
       <ns-navigation-bar></ns-navigation-bar>
       ${page}
-      <div id="bottom">version: ${this.version}</div>
     `;
   }
 }

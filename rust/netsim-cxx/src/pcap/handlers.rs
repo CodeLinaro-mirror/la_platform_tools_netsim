@@ -22,12 +22,17 @@
 //! handle_packet_request and handle_packet_response is invoked by packet_hub
 //! to write packets to files if capture state is on.
 
+// TODO(b/274506882): Implement gRPC status proto on error responses. Also write better
+// and more descriptive error messages with proper error codes.
+
 use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
-use frontend_proto::frontend::{GetDevicesResponse, GetPcapResponse};
+use frontend_proto::frontend::GetDevicesResponse;
 use lazy_static::lazy_static;
 use protobuf::Message;
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::{Read, Result};
 use std::pin::Pin;
 use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -41,6 +46,9 @@ use crate::CxxServerResponseWriterWrapper;
 use super::capture::CaptureInfo;
 use super::pcap_util::{append_record, PacketDirection};
 use super::proto_json::capture_to_string;
+use super::PCAP_MIME_TYPE;
+
+const CHUNK_LEN: usize = 1_048_576;
 
 // The Capture resource is a singleton that manages all captures
 lazy_static! {
@@ -113,6 +121,53 @@ fn update_captures(captures: &mut Captures) {
     }
 }
 
+// Helper function for getting file name from the given fields.
+fn get_file(id: ChipId, device_name: String, chip_kind: ChipKind) -> Result<File> {
+    let mut filename = std::env::temp_dir();
+    filename.push("netsim-pcaps");
+    filename.push(format!("{:?}-{:}-{:?}.pcap", id, device_name, chip_kind));
+    File::open(filename)
+}
+
+// TODO: GetPcap should return the information of the pcap. Need to reconsider
+// uri hierarchy.
+// GET /pcap/id/{id} --> Get Pcap informatiojn
+// GET /pcap/contents/{id} --> Download Pcap file
+pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id: ChipId) {
+    // Get the most updated active captures
+    update_captures(captures);
+
+    if let Some(capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
+        if capture.size == 0 {
+            writer.put_error(404, "Capture file not found");
+        } else if let Ok(mut file) = get_file(id, capture.device_name.clone(), capture.chip_kind) {
+            let mut buffer = [0u8; CHUNK_LEN];
+            let header_value = format!(
+                "attachment; filename=\"{:?}-{:}-{:?}.pcap\"",
+                id,
+                capture.device_name.clone(),
+                capture.chip_kind
+            );
+            writer.put_ok_with_length(
+                PCAP_MIME_TYPE,
+                capture.size,
+                &[("Content-Disposition", header_value.as_str())],
+            );
+            loop {
+                match file.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(length) => writer.put_chunk(&buffer[..length]),
+                    Err(_) => writer.put_error(404, "Error reading pcap file"),
+                }
+            }
+        } else {
+            writer.put_error(404, "Cannot open Capture file");
+        }
+    } else {
+        writer.put_error(404, "Cannot access Pcap Resource")
+    }
+}
+
 pub fn handle_capture_list(writer: ResponseWritable, captures: &mut Captures) {
     // Get the most updated active captures
     update_captures(captures);
@@ -129,7 +184,7 @@ pub fn handle_capture_list(writer: ResponseWritable, captures: &mut Captures) {
         out.pop();
         out.push_str(r"]}");
     }
-    writer.put_ok("text/json", out.as_str());
+    writer.put_ok("text/json", out.as_str(), &[]);
 }
 
 pub fn handle_capture_patch(
@@ -157,7 +212,7 @@ pub fn handle_capture_patch(
         let mut out = String::new();
         capture_to_string(&proto_capture, &mut out);
         out.pop();
-        writer.put_ok("text/json", out.as_str());
+        writer.put_ok("text/json", out.as_str(), &[]);
     }
 }
 
@@ -174,11 +229,15 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
     } else {
         match request.method.as_str() {
             "GET" => {
-                // TODO: Implement handle_capture_get in controller.rs
-                writer.put_ok_with_length("text/plain", 0);
-                let response_bytes = GetPcapResponse::new().write_to_bytes().unwrap();
-                writer.put_chunk(&response_bytes);
-                writer.put_chunk(&response_bytes);
+                let mut captures = RESOURCE.write().unwrap();
+                let id = match param.parse::<i32>() {
+                    Ok(num) => num,
+                    Err(_) => {
+                        writer.put_error(404, "Incorrect ID type for pcap, ID should be i32.");
+                        return;
+                    }
+                };
+                handle_capture_get(writer, &mut captures, id);
             }
             "PATCH" => {
                 let mut captures = RESOURCE.write().unwrap();

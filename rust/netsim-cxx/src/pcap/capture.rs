@@ -41,8 +41,8 @@ pub struct CaptureInfo {
     pub file: Option<File>,
     // Following items will be returned as ProtoPcap. (state: file.is_some())
     id: ChipId,
-    chip_kind: ChipKind,
-    device_name: String,
+    pub chip_kind: ChipKind,
+    pub device_name: String,
     pub size: usize,
     pub records: i32,
     timestamp: i32, // TODO: Creation time of File. (TimeStamp type in Protobuf)

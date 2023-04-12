@@ -38,13 +38,14 @@ export interface Orientation {
 }
 
 export interface Chip {
-  chipKind: ChipKind;
+  kind: ChipKind;
+  id: number;
   /** optional like "rear-right" */
-  chipId: string;
+  name: string;
   /** optional like Quorvo */
   manufacturer: string;
   /** optional like DW300 */
-  model: string;
+  productName: string;
   /** packet capture */
   capture: State;
   bt?: Chip_Bluetooth|undefined;
@@ -67,6 +68,7 @@ export interface Chip_Bluetooth {
 }
 
 export interface Device {
+  id: number;
   /** settable at creation */
   name: string;
   visible: boolean;
@@ -78,4 +80,20 @@ export interface Device {
 
 export interface Scene {
   devices: Device[];
+}
+
+export interface Pcap {
+  id: number;
+  chipKind: ChipKind;
+  chipId: number;
+  /** device AVD name */
+  deviceName: string;
+  /** capture state */
+  state: State;
+  /** size of current capture */
+  size: number;
+  /** number of records in current capture */
+  records: number;
+  timestamp: number;
+  valid: boolean;
 }

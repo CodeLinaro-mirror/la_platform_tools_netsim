@@ -40,7 +40,7 @@ fn chip_kind_to_string(chip_kind: ChipKind) -> &'static str {
 
 // Will be deprecated once protobuf v3 is imported
 fn write_to_json_str(key: &str, value: String, out: &mut String) {
-    if key == "chip_kind" || key == "device_name" || key == "state" {
+    if key == "chipKind" || key == "deviceName" || key == "state" {
         out.push_str(format!(r#""{:}": "{:}","#, key, value).as_str());
     } else {
         out.push_str(format!(r#""{:}": {:},"#, key, value).as_str());
@@ -51,9 +51,9 @@ fn write_to_json_str(key: &str, value: String, out: &mut String) {
 pub fn capture_to_string(proto: &ProtoPcap, out: &mut String) {
     out.push('{');
     write_to_json_str("id", proto.get_id().to_string(), out);
-    write_to_json_str("chip_kind", chip_kind_to_string(proto.get_chip_kind()).to_string(), out);
-    write_to_json_str("chip_id", proto.get_chip_id().to_string(), out);
-    write_to_json_str("device_name", proto.get_device_name().to_string(), out);
+    write_to_json_str("chipKind", chip_kind_to_string(proto.get_chip_kind()).to_string(), out);
+    write_to_json_str("chipId", proto.get_chip_id().to_string(), out);
+    write_to_json_str("deviceName", proto.get_device_name().to_string(), out);
     write_to_json_str("state", state_to_string(proto.get_state()).to_string(), out);
     write_to_json_str("size", proto.get_size().to_string(), out);
     write_to_json_str("records", proto.get_records().to_string(), out);
@@ -72,7 +72,7 @@ mod tests {
         let pcap = ProtoPcap::new();
         let mut out = String::new();
         capture_to_string(&pcap, &mut out);
-        let expected = r#"{"id": 0,"chip_kind": "UNSPECIFIED","chip_id": 0,"device_name": "","state": "UNKNOWN","size": 0,"records": 0,"timestamp": 0,"valid": false},"#;
+        let expected = r#"{"id": 0,"chipKind": "UNSPECIFIED","chipId": 0,"deviceName": "","state": "UNKNOWN","size": 0,"records": 0,"timestamp": 0,"valid": false},"#;
         assert_eq!(out, expected);
     }
 
@@ -84,7 +84,7 @@ mod tests {
         pcap.chip_kind = ChipKind::WIFI;
         pcap.device_name = "sample".to_string();
         capture_to_string(&pcap, &mut out);
-        let expected = r#"{"id": 1,"chip_kind": "WIFI","chip_id": 0,"device_name": "sample","state": "UNKNOWN","size": 0,"records": 0,"timestamp": 0,"valid": false},"#;
+        let expected = r#"{"id": 1,"chipKind": "WIFI","chipId": 0,"deviceName": "sample","state": "UNKNOWN","size": 0,"records": 0,"timestamp": 0,"valid": false},"#;
         assert_eq!(out, expected);
     }
 }
