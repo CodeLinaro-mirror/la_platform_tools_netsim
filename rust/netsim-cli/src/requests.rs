@@ -76,11 +76,6 @@ mod tests {
             wifi_chip.set_state(chip_state);
             chip.set_wifi(wifi_chip);
             chip.set_kind(ChipKind::WIFI);
-        } else if radio_type == "uwb" {
-            let mut uwb_chip = Chip_Radio::new();
-            uwb_chip.set_state(chip_state);
-            chip.set_uwb(uwb_chip);
-            chip.set_kind(ChipKind::UWB);
         } else {
             let mut bt_chip = Chip_Bluetooth::new();
             if radio_type == "ble" {
@@ -162,20 +157,6 @@ mod tests {
             "netsim-cli radio wifi up b",
             GrpcMethod::PatchDevice,
             get_expected_radio("b", "wifi", "up"),
-        );
-    }
-
-    #[test]
-    fn test_radio_uwb() {
-        test_command(
-            "netsim-cli radio uwb down a",
-            GrpcMethod::PatchDevice,
-            get_expected_radio("a", "uwb", "down"),
-        );
-        test_command(
-            "netsim-cli radio uwb up b",
-            GrpcMethod::PatchDevice,
-            get_expected_radio("b", "uwb", "up"),
         );
     }
 
