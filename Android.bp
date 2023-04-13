@@ -50,8 +50,6 @@ cc_defaults {
         "packages/modules/Bluetooth/system/gd",
     ],
     generated_headers: [
-        "RootCanalGeneratedPackets_h",
-        "RootCanalBrEdrBBGeneratedPackets_h",
         "FrontendStub_h",
     ],
     generated_sources: [

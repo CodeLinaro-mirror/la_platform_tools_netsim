@@ -78,6 +78,9 @@ impl CaptureInfo {
     // The lifecycle of the file is NOT tied to the lifecycle of the struct
     // Format: /tmp/netsim-pcaps/{chip_id}-{device_name}-{chip_kind}.pcap
     pub fn start_capture(&mut self) -> Result<()> {
+        if self.file.is_some() {
+            return Ok(());
+        }
         let mut filename = std::env::temp_dir();
         filename.push("netsim-pcaps");
         std::fs::create_dir_all(&filename)?;

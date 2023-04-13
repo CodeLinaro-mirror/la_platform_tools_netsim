@@ -76,6 +76,11 @@ mod tests {
             wifi_chip.set_state(chip_state);
             chip.set_wifi(wifi_chip);
             chip.set_kind(ChipKind::WIFI);
+        } else if radio_type == "uwb" {
+            let mut uwb_chip = Chip_Radio::new();
+            uwb_chip.set_state(chip_state);
+            chip.set_uwb(uwb_chip);
+            chip.set_kind(ChipKind::UWB);
         } else {
             let mut bt_chip = Chip_Bluetooth::new();
             if radio_type == "ble" {
@@ -109,6 +114,30 @@ mod tests {
     }
 
     #[test]
+    fn test_radio_ble_aliases() {
+        test_command(
+            "netsim-cli radio ble Down 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("1000", "ble", "down"),
+        );
+        test_command(
+            "netsim-cli radio ble Up 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("1000", "ble", "up"),
+        );
+        test_command(
+            "netsim-cli radio ble DOWN 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("1000", "ble", "down"),
+        );
+        test_command(
+            "netsim-cli radio ble UP 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("1000", "ble", "up"),
+        );
+    }
+
+    #[test]
     fn test_radio_classic() {
         test_command(
             "netsim-cli radio classic down 100",
@@ -133,6 +162,20 @@ mod tests {
             "netsim-cli radio wifi up b",
             GrpcMethod::PatchDevice,
             get_expected_radio("b", "wifi", "up"),
+        );
+    }
+
+    #[test]
+    fn test_radio_uwb() {
+        test_command(
+            "netsim-cli radio uwb down a",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("a", "uwb", "down"),
+        );
+        test_command(
+            "netsim-cli radio uwb up b",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("b", "uwb", "up"),
         );
     }
 
@@ -223,34 +266,33 @@ mod tests {
         )
     }
 
-    // NOTE: Temporarily disable alias tests because clap-3.2.22 is used which does not support aliasing.
-    // #[test]
-    // fn test_capture_mixed_case() {
-    //     test_command(
-    //         "netsim-cli capture On 10",
-    //         GrpcMethod::PatchDevice,
-    //         get_expected_capture("10", OnOffState::On),
-    //     );
-    //     test_command(
-    //         "netsim-cli capture Off 1000",
-    //         GrpcMethod::PatchDevice,
-    //         get_expected_capture("1000", OnOffState::Off),
-    //     )
-    // }
+    #[test]
+    fn test_capture_mixed_case() {
+        test_command(
+            "netsim-cli capture On 10",
+            GrpcMethod::PatchDevice,
+            get_expected_capture("10", OnOffState::On),
+        );
+        test_command(
+            "netsim-cli capture Off 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_capture("1000", OnOffState::Off),
+        )
+    }
 
-    // #[test]
-    // fn test_capture_uppercase() {
-    //     test_command(
-    //         "netsim-cli capture ON 1000",
-    //         GrpcMethod::PatchDevice,
-    //         get_expected_capture("1000", OnOffState::On),
-    //     );
-    //     test_command(
-    //         "netsim-cli capture OFF 1000",
-    //         GrpcMethod::PatchDevice,
-    //         get_expected_capture("1000", OnOffState::Off),
-    //     )
-    // }
+    #[test]
+    fn test_capture_uppercase() {
+        test_command(
+            "netsim-cli capture ON 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_capture("1000", OnOffState::On),
+        );
+        test_command(
+            "netsim-cli capture OFF 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_capture("1000", OnOffState::Off),
+        )
+    }
 
     #[test]
     fn test_reset() {

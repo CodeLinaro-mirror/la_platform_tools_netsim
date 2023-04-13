@@ -153,6 +153,17 @@ impl args::Command {
                                 Self::capture_state_to_string(chip.capture)
                             );
                         }
+                        Some(Chip_oneof_chip::uwb(uwb_chip)) => {
+                            println!(
+                                "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
+                                "",
+                                "uwb:",
+                                Self::chip_state_to_string(uwb_chip.get_state()),
+                                uwb_chip.get_rx_count(),
+                                uwb_chip.get_tx_count(),
+                                Self::capture_state_to_string(chip.capture)
+                            );
+                        }
                         _ => println!("{:chip_indent$}Unknown chip: down  ", ""),
                     }
                 }
@@ -202,6 +213,16 @@ impl args::Command {
                                     "",
                                     "wifi:",
                                     Self::chip_state_to_string(wifi_chip.get_state())
+                                );
+                            }
+                        }
+                        Some(Chip_oneof_chip::uwb(uwb_chip)) => {
+                            if uwb_chip.get_state() == State::OFF {
+                                print!(
+                                    "{:chip_indent$}{:radio_width$}{:state_width$}",
+                                    "",
+                                    "uwb:",
+                                    Self::chip_state_to_string(uwb_chip.get_state())
                                 );
                             }
                         }
@@ -399,8 +420,16 @@ mod tests {
             ..Default::default()
         }
     }
+    fn pcap_4_uwb() -> model::Pcap {
+        model::Pcap {
+            id: 4005,
+            chip_kind: ChipKind::UWB,
+            device_name: "device 4".to_string(),
+            ..Default::default()
+        }
+    }
     fn all_test_pcaps() -> RepeatedField<model::Pcap> {
-        RepeatedField::from_vec(vec![pcap_1(), pcap_1_wifi(), pcap_2(), pcap_3()])
+        RepeatedField::from_vec(vec![pcap_1(), pcap_1_wifi(), pcap_2(), pcap_3(), pcap_4_uwb()])
     }
 
     #[test]
@@ -449,6 +478,18 @@ mod tests {
         test_filter_pcaps_helper(
             vec!["WIFI".to_string()],
             RepeatedField::from_vec(vec![pcap_1_wifi(), pcap_3()]),
+        );
+    }
+
+    #[test]
+    fn test_match_uwb() {
+        test_filter_pcaps_helper(
+            vec!["uwb".to_string()],
+            RepeatedField::from_vec(vec![pcap_4_uwb()]),
+        );
+        test_filter_pcaps_helper(
+            vec!["UWB".to_string()],
+            RepeatedField::from_vec(vec![pcap_4_uwb()]),
         );
     }
 
