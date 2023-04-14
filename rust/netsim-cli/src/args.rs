@@ -18,6 +18,7 @@ use frontend_proto::common::ChipKind;
 use frontend_proto::frontend;
 use frontend_proto::frontend::PatchPcapRequest_PcapPatch as PcapPatch;
 use frontend_proto::model::{self, Chip_Bluetooth, Chip_Radio, State};
+use netsim_common::util::time_display::TimeDisplay;
 use protobuf::{Message, RepeatedField};
 use std::fmt;
 
@@ -49,8 +50,7 @@ pub enum Command {
     Reset,
     /// Open netsim Web UI
     Gui,
-    /// (Not fully implemented)
-    /// Control the packet capture functionalities with subcommands: list, patch, get
+    /// Control the packet capture functionalities with commands: list, patch, get
     #[command(subcommand)]
     Pcap(Pcap),
 }
@@ -73,6 +73,11 @@ impl Command {
                     wifi_chip.set_state(chip_state);
                     chip.set_wifi(wifi_chip);
                     chip.set_kind(ChipKind::WIFI);
+                } else if cmd.radio_type == RadioType::Uwb {
+                    let mut uwb_chip = Chip_Radio::new();
+                    uwb_chip.set_state(chip_state);
+                    chip.set_uwb(uwb_chip);
+                    chip.set_kind(ChipKind::UWB);
                 } else {
                     let mut bt_chip = Chip_Bluetooth::new();
                     if cmd.radio_type == RadioType::Ble {
@@ -170,11 +175,16 @@ impl Command {
                     let mut result = frontend::GetPcapRequest::new();
                     result.set_id(pcap.id);
                     reqs.push(result.write_to_bytes().unwrap());
+                    let time_display = TimeDisplay::new(
+                        pcap.timestamp.get_ref().seconds,
+                        pcap.timestamp.get_ref().nanos as u32,
+                    );
                     cmd.filenames.push(format!(
-                        "{}-{}-{}",
+                        "{:?}-{}-{}-{}",
+                        pcap.id,
                         pcap.device_name.to_owned().replace(' ', "_"),
                         Self::chip_kind_to_string(pcap.chip_kind),
-                        pcap.timestamp
+                        time_display.utc_display()
                     ));
                 }
                 reqs
@@ -224,6 +234,7 @@ pub enum RadioType {
     Ble,
     Classic,
     Wifi,
+    Uwb,
 }
 
 impl fmt::Display for RadioType {

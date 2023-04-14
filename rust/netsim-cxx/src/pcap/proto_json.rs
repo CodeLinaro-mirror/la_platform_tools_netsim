@@ -18,6 +18,7 @@
 
 use frontend_proto::common::ChipKind;
 use frontend_proto::model::{Pcap as ProtoPcap, State};
+use protobuf::well_known_types::Timestamp;
 
 // Will be deprecated once protobuf v3 is imported
 fn state_to_string(state: State) -> &'static str {
@@ -47,6 +48,13 @@ fn write_to_json_str(key: &str, value: String, out: &mut String) {
     }
 }
 
+fn write_timestamp_to_json_str(key: &str, value: &Timestamp, out: &mut String) {
+    out.push_str(
+        format!(r#""{:}": {{"seconds": {:},"nanos": {:}}},"#, key, value.seconds, value.nanos)
+            .as_str(),
+    );
+}
+
 // Will be deprecated once protobuf v3 is imported
 pub fn capture_to_string(proto: &ProtoPcap, out: &mut String) {
     out.push('{');
@@ -57,7 +65,7 @@ pub fn capture_to_string(proto: &ProtoPcap, out: &mut String) {
     write_to_json_str("state", state_to_string(proto.get_state()).to_string(), out);
     write_to_json_str("size", proto.get_size().to_string(), out);
     write_to_json_str("records", proto.get_records().to_string(), out);
-    write_to_json_str("timestamp", proto.get_timestamp().to_string(), out);
+    write_timestamp_to_json_str("timestamp", proto.get_timestamp(), out);
     write_to_json_str("valid", proto.get_valid().to_string(), out);
     out.pop();
     out.push_str(r"},");
@@ -72,7 +80,7 @@ mod tests {
         let pcap = ProtoPcap::new();
         let mut out = String::new();
         capture_to_string(&pcap, &mut out);
-        let expected = r#"{"id": 0,"chipKind": "UNSPECIFIED","chipId": 0,"deviceName": "","state": "UNKNOWN","size": 0,"records": 0,"timestamp": 0,"valid": false},"#;
+        let expected = r#"{"id": 0,"chipKind": "UNSPECIFIED","chipId": 0,"deviceName": "","state": "UNKNOWN","size": 0,"records": 0,"timestamp": {"seconds": 0,"nanos": 0},"valid": false},"#;
         assert_eq!(out, expected);
     }
 
@@ -84,7 +92,7 @@ mod tests {
         pcap.chip_kind = ChipKind::WIFI;
         pcap.device_name = "sample".to_string();
         capture_to_string(&pcap, &mut out);
-        let expected = r#"{"id": 1,"chipKind": "WIFI","chipId": 0,"deviceName": "sample","state": "UNKNOWN","size": 0,"records": 0,"timestamp": 0,"valid": false},"#;
+        let expected = r#"{"id": 1,"chipKind": "WIFI","chipId": 0,"deviceName": "sample","state": "UNKNOWN","size": 0,"records": 0,"timestamp": {"seconds": 0,"nanos": 0},"valid": false},"#;
         assert_eq!(out, expected);
     }
 }

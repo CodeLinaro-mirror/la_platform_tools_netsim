@@ -76,6 +76,11 @@ mod tests {
             wifi_chip.set_state(chip_state);
             chip.set_wifi(wifi_chip);
             chip.set_kind(ChipKind::WIFI);
+        } else if radio_type == "uwb" {
+            let mut uwb_chip = Chip_Radio::new();
+            uwb_chip.set_state(chip_state);
+            chip.set_uwb(uwb_chip);
+            chip.set_kind(ChipKind::UWB);
         } else {
             let mut bt_chip = Chip_Bluetooth::new();
             if radio_type == "ble" {
@@ -160,13 +165,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_radio_uwb() {
+        test_command(
+            "netsim-cli radio uwb down a",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("a", "uwb", "down"),
+        );
+        test_command(
+            "netsim-cli radio uwb up b",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("b", "uwb", "up"),
+        );
+    }
+
     fn get_expected_move(name: &str, x: f32, y: f32, z: Option<f32>) -> BinaryProtobuf {
         let mut result = frontend::PatchDeviceRequest::new();
         let mutable_device = result.mut_device();
         mutable_device.set_name(name.to_owned());
         mutable_device.set_position(Position {
-            x: x,
-            y: y,
+            x,
+            y,
             z: z.unwrap_or_default(),
             ..Default::default()
         });

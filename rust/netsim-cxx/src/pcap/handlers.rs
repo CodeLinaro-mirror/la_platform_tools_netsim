@@ -29,6 +29,7 @@ use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend::GetDevicesResponse;
 use lazy_static::lazy_static;
+use netsim_common::util::time_display::TimeDisplay;
 use protobuf::Message;
 use std::collections::HashSet;
 use std::fs::File;
@@ -142,11 +143,13 @@ pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id:
             writer.put_error(404, "Capture file not found");
         } else if let Ok(mut file) = get_file(id, capture.device_name.clone(), capture.chip_kind) {
             let mut buffer = [0u8; CHUNK_LEN];
+            let time_display = TimeDisplay::new(capture.seconds, capture.nanos as u32);
             let header_value = format!(
-                "attachment; filename=\"{:?}-{:}-{:?}.pcap\"",
+                "attachment; filename=\"{:?}-{:}-{:?}-{}.pcap\"",
                 id,
                 capture.device_name.clone(),
-                capture.chip_kind
+                capture.chip_kind,
+                time_display.utc_display()
             );
             writer.put_ok_with_length(
                 PCAP_MIME_TYPE,

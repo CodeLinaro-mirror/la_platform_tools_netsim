@@ -94,6 +94,6 @@ export interface Pcap {
   size: number;
   /** number of records in current capture */
   records: number;
-  timestamp: number;
+  timestamp: Date|undefined;
   valid: boolean;
 }

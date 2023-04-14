@@ -16,3 +16,4 @@
 //! # netsim utilities.
 
 pub mod ini_file;
+pub mod time_display;

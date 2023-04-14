@@ -23,11 +23,14 @@ use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::Result;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use frontend_proto::{
     common::ChipKind,
     model::{Pcap as ProtoPcap, State},
 };
+use protobuf::well_known_types::Timestamp;
+use protobuf::SingularPtrField;
 
 use crate::ffi::get_facade_id;
 
@@ -45,7 +48,8 @@ pub struct CaptureInfo {
     pub device_name: String,
     pub size: usize,
     pub records: i32,
-    timestamp: i32, // TODO: Creation time of File. (TimeStamp type in Protobuf)
+    pub seconds: i64,
+    pub nanos: i32,
     pub valid: bool,
 }
 
@@ -68,7 +72,8 @@ impl CaptureInfo {
             device_name,
             size: 0,
             records: 0,
-            timestamp: 0,
+            seconds: 0,
+            nanos: 0,
             valid: true,
             file: None,
         }
@@ -87,8 +92,11 @@ impl CaptureInfo {
         filename.push(format!("{:?}-{:}-{:?}.pcap", self.id, self.device_name, self.chip_kind));
         let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(filename)?;
         let size = write_pcap_header(&mut file)?;
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
         self.size = size;
         self.records = 0;
+        self.seconds = timestamp.as_secs() as i64;
+        self.nanos = timestamp.subsec_nanos() as i32;
         self.file = Some(file);
         Ok(())
     }
@@ -120,7 +128,11 @@ impl CaptureInfo {
             },
             size: self.size as i32,
             records: self.records,
-            timestamp: self.timestamp,
+            timestamp: SingularPtrField::some(Timestamp {
+                seconds: self.seconds,
+                nanos: self.nanos,
+                ..Default::default()
+            }),
             valid: self.valid,
             ..Default::default()
         }

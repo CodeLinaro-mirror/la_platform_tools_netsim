@@ -260,6 +260,7 @@ rust_defaults {
     name: "libnetsim_common_defaults",
     srcs: ["rust/netsim-common/src/lib.rs"],
     rustlibs: [
+        "libchrono",
         "librand",
     ],
 }
@@ -301,9 +302,8 @@ rust_library_host {
     rustlibs: ["libcxx"],
 }
 
-rust_ffi_host_static {
-    name: "libnetsim_cli",
-    crate_name: "netsim_cli",
+rust_defaults {
+    name: "libnetsim_cli_defaults",
     srcs: ["rust/netsim-cli/src/lib.rs"],
     rustlibs: [
         "libclap",
@@ -313,6 +313,18 @@ rust_ffi_host_static {
         "libprotobuf_deprecated",
         "libcxx",
     ],
+}
+
+rust_ffi_host_static {
+    name: "libnetsim_cli",
+    crate_name: "netsim_cli",
+    defaults: ["libnetsim_cli_defaults"],
+}
+
+rust_test_host {
+    name: "libnetsim_cli_tests",
+    defaults: ["libnetsim_cli_defaults"],
+    test_suites: ["general_tests"],
 }
 
 cc_binary_host {
