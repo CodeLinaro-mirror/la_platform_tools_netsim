@@ -18,8 +18,8 @@
 //! the protobuf structure. CaptureMaps contains mappings of ChipId
 //! and FacadeId to CaptureInfo.
 
-use std::collections::hash_map::{Iter, Values};
-use std::collections::HashMap;
+use std::collections::btree_map::{Iter, Values};
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{File, OpenOptions};
 use std::io::Result;
 use std::sync::{Arc, Mutex};
@@ -60,7 +60,9 @@ pub struct CaptureInfo {
 // is invoked from packet_hub.
 pub struct Captures {
     pub facade_key_to_capture: HashMap<(ChipKind, FacadeId), Arc<Mutex<CaptureInfo>>>,
-    pub chip_id_to_capture: HashMap<ChipId, Arc<Mutex<CaptureInfo>>>,
+    // BTreeMap is used for chip_id_to_capture, so that the CaptureInfo can always be
+    // ordered by ChipId. ListPcapResponse will produce a ordered list of CaptureInfos.
+    pub chip_id_to_capture: BTreeMap<ChipId, Arc<Mutex<CaptureInfo>>>,
 }
 
 impl CaptureInfo {
@@ -143,7 +145,7 @@ impl Captures {
     pub fn new() -> Self {
         Captures {
             facade_key_to_capture: HashMap::<(ChipKind, FacadeId), Arc<Mutex<CaptureInfo>>>::new(),
-            chip_id_to_capture: HashMap::<ChipId, Arc<Mutex<CaptureInfo>>>::new(),
+            chip_id_to_capture: BTreeMap::<ChipId, Arc<Mutex<CaptureInfo>>>::new(),
         }
     }
 

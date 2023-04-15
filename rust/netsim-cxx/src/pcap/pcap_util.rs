@@ -26,8 +26,8 @@ macro_rules! be_vec {
     }
 
 pub enum PacketDirection {
-    HostToController = 1,
-    ControllerToHost = 0,
+    HostToController = 0,
+    ControllerToHost = 1,
 }
 
 pub fn write_pcap_header(output: &mut File) -> Result<usize> {

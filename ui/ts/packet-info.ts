@@ -17,6 +17,13 @@ export class PacketInformation extends LitElement implements Notifiable {
   @property() deviceData: Device[] = [];
 
   static styles = css`
+    :host {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      height: 100vh;
+    }
+
     .panel {
       cursor: pointer;
       display: grid;
@@ -26,6 +33,7 @@ export class PacketInformation extends LitElement implements Notifiable {
       font-family: 'Lato', sans-serif;
       border: 5px solid black;
       border-radius: 12px;
+      margin: 10px;
       padding: 10px;
       background-color: #ffffff;
       max-width: max-content;
@@ -115,6 +123,25 @@ export class PacketInformation extends LitElement implements Notifiable {
 
     input[type='checkbox'].switch_1:checked:after {
       left: calc(100% - 1.5em);
+    }
+
+    button {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #4CAF50;
+      color: #FFFFFF;
+      font-size: 18px;
+      font-weight: bold;
+      text-align: center;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #45a049;
+      transition: 0.5s;
     }
   `;
 
@@ -218,7 +245,7 @@ export class PacketInformation extends LitElement implements Notifiable {
             href="./v1/captures/${capture.id}"
             target="_blank"
             type="application/vnd.tcpdump.pcap"
-            >Download</a
+            ><button>Download</button></a
           >
         </td>
       </tr>
@@ -240,12 +267,14 @@ export class PacketInformation extends LitElement implements Notifiable {
                 ${this.handleGetChips(device)}
               </table>
             `)}
+      </div>
+      <div class="panel">
         <div class="title">Packet Capture</div>
         <table class="styled-table">
           <tr>
             <th>Device Name</th>
             <th>Chip Kind</th>
-            <th>Size(bytes)</th>
+            <th>Bytes</th>
             <th>Records</th>
             <th>Capture State</th>
             <th>Download Pcap</th>
