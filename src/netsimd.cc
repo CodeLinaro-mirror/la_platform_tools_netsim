@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "frontend/frontend_client.h"
 #if defined(_WIN32)
 #include <msvc-getopt.h>
 #else
@@ -31,6 +30,7 @@
 #include "backend/fd_startup.h"
 #endif
 #include "core/server.h"
+#include "frontend/frontend_client_stub.h"
 #include "hci/bluetooth_facade.h"
 
 // Wireless network simulator for android (and other) emulated devices.

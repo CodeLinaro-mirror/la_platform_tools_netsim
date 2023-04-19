@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
+
 use crate::args::{self, Command, OnOffState, Pcap};
 use frontend_proto::{
+    common::ChipKind,
     frontend::ListPcapResponse,
     frontend::{GetDevicesResponse, VersionResponse},
     model::Chip_oneof_chip,
@@ -248,24 +251,60 @@ impl args::Command {
 
     /// Helper function to format and print ListPcapResponse
     fn print_list_pcap_response(response: ListPcapResponse, verbose: bool) {
-        let id_width = 4;
-        let name_width = 16;
-        let state_width = 5;
         if response.pcaps.is_empty() {
-            println!("No available Pcaps found.");
-        } else {
-            println!("List of Pcaps:");
-        }
-        for pcap in &response.pcaps {
-            // TODO: Enhance output with additional information once implemented
-            if verbose || pcap.state == State::ON {
-                println!(
-                    "Pcap ID: {:id_width$}, Device: {:name_width$}, State: {:state_width$}",
-                    pcap.id.to_string(),
-                    pcap.device_name,
-                    Self::capture_state_to_string(pcap.state),
-                );
+            if verbose {
+                println!("No available Pcap found.");
             }
+            return;
+        }
+        println!("List of Pcaps:");
+        // Create the header row and determine column widths
+        let id_hdr = "ID";
+        let name_hdr = "Device Name";
+        let chipkind_hdr = "Chip Kind";
+        let state_hdr = "State";
+        let size_hdr = "Size";
+        let id_width = 4; // ID width of 4 since Pcap id starts at 4000
+        let state_width = 7; // State width of 7 for 'unknown'
+        let chipkind_width = 11; // ChipKind width 11 for 'UNSPECIFIED'
+
+        // Determine suitable device name and pcap size widths
+        let name_width = max(
+            (response.pcaps.iter().max_by_key(|x| x.device_name.len())).unwrap().device_name.len(),
+            name_hdr.len(),
+        );
+        let size_width = max(
+            (response.pcaps.iter().max_by_key(|x| x.size)).unwrap().size.to_string().len(),
+            size_hdr.len(),
+        );
+        // Print header for pcap list
+        println!(
+            "{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+            id_hdr,
+            name_hdr,
+            chipkind_hdr,
+            state_hdr,
+            size_hdr,
+        );
+        // Print information of each Pcap
+        for pcap in &response.pcaps {
+            println!(
+                "{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                pcap.id.to_string(),
+                pcap.device_name,
+                Self::chip_kind_to_string(pcap.chip_kind),
+                Self::capture_state_to_string(pcap.state),
+                pcap.size,
+            );
+        }
+    }
+
+    fn chip_kind_to_string(chip_kind: ChipKind) -> String {
+        match chip_kind {
+            ChipKind::UNSPECIFIED => "UNSPECIFIED".to_string(),
+            ChipKind::BLUETOOTH => "BLUETOOTH".to_string(),
+            ChipKind::WIFI => "WIFI".to_string(),
+            ChipKind::UWB => "UWB".to_string(),
         }
     }
 }
