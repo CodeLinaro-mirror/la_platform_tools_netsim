@@ -14,9 +14,7 @@
 //  limitations under the License.
 
 extern crate protobuf_codegen;
-extern crate protoc_rust;
 
-use protoc_rust::Customize;
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -46,7 +44,7 @@ fn main() {
     let proto_include_dirs = [proto_dir.clone()];
     let proto_out_dir = proto_root.join("rust/frontend-proto/src");
 
-    protoc_rust::Codegen::new()
+    protobuf_codegen::Codegen::new()
         .out_dir(proto_out_dir.as_os_str().to_str().unwrap())
         .inputs(&paths_to_strs(&proto_input_files))
         .includes(&paths_to_strs(&proto_include_dirs))

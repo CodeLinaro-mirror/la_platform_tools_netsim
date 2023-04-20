@@ -27,10 +27,11 @@
 
 use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
-use frontend_proto::frontend::GetDevicesResponse;
+use frontend_proto::frontend::{GetDevicesResponse, ListPcapResponse};
 use lazy_static::lazy_static;
 use netsim_common::util::time_display::TimeDisplay;
 use protobuf::Message;
+use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Read, Result};
@@ -46,10 +47,15 @@ use crate::CxxServerResponseWriterWrapper;
 
 use super::capture::CaptureInfo;
 use super::pcap_util::{append_record, PacketDirection};
-use super::proto_json::capture_to_string;
 use super::PCAP_MIME_TYPE;
 
 const CHUNK_LEN: usize = 1_048_576;
+const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
+    enum_values_int: false,
+    proto_field_name: false,
+    always_output_default_values: true,
+    _future_options: (),
+};
 
 // The Capture resource is a singleton that manages all captures
 lazy_static! {
@@ -76,12 +82,15 @@ fn update_captures(captures: &mut Captures) {
 
     // Adding to Captures hashmap
     let mut chip_ids = HashSet::<ChipId>::new();
-    for device in device_response.get_devices() {
-        for chip in device.get_chips() {
-            chip_ids.insert(chip.get_id());
-            if !captures.contains(chip.get_id()) {
-                let capture =
-                    CaptureInfo::new(chip.get_kind(), chip.get_id(), device.get_name().into());
+    for device in device_response.devices {
+        for chip in device.chips {
+            chip_ids.insert(chip.id);
+            if !captures.contains(chip.id) {
+                let capture = CaptureInfo::new(
+                    chip.kind.enum_value_or_default(),
+                    chip.id,
+                    device.name.clone(),
+                );
                 captures.insert(capture);
             }
         }
@@ -101,7 +110,7 @@ fn update_captures(captures: &mut Captures) {
         let lock = capture.lock().unwrap();
         let proto_capture = lock.get_capture_proto();
         if !chip_ids.contains(chip_id) {
-            if proto_capture.get_size() == 0 {
+            if proto_capture.size == 0 {
                 removal.push(RemovalIndicator::Unused(chip_id.to_owned()));
             } else {
                 removal.push(RemovalIndicator::Gone(chip_id.to_owned()))
@@ -175,19 +184,18 @@ pub fn handle_capture_list(writer: ResponseWritable, captures: &mut Captures) {
     // Get the most updated active captures
     update_captures(captures);
 
-    // Write active captures to json string (will be deprecated with protobuf v3)
-    let mut out = String::new();
-    if captures.is_empty() {
-        out.push_str(r#"{}"#);
-    } else {
-        out.push_str(r#"{"pcaps": ["#);
-        for capture in captures.values() {
-            capture_to_string(&capture.lock().unwrap().get_capture_proto(), &mut out)
-        }
-        out.pop();
-        out.push_str(r"]}");
+    // Instantiate ListPcapResponse and add Captures
+    let mut response = ListPcapResponse::new();
+    for capture in captures.values() {
+        response.pcaps.push(capture.lock().unwrap().get_capture_proto());
     }
-    writer.put_ok("text/json", out.as_str(), &[]);
+
+    // Perform protobuf-json-mapping with the given protobuf
+    if let Ok(json_response) = print_to_string_with_options(&response, &JSON_PRINT_OPTION) {
+        writer.put_ok("text/json", &json_response, &[])
+    } else {
+        writer.put_error(404, "proto to JSON mapping failure")
+    }
 }
 
 pub fn handle_capture_patch(
@@ -210,12 +218,14 @@ pub fn handle_capture_patch(
             false => capture.stop_capture(),
         }
 
-        // Write result to writer
-        let proto_capture = capture.get_capture_proto();
-        let mut out = String::new();
-        capture_to_string(&proto_capture, &mut out);
-        out.pop();
-        writer.put_ok("text/json", out.as_str(), &[]);
+        // Perform protobuf-json-mapping with the given protobuf
+        if let Ok(json_response) =
+            print_to_string_with_options(&capture.get_capture_proto(), &JSON_PRINT_OPTION)
+        {
+            writer.put_ok("text/json", &json_response, &[]);
+        } else {
+            writer.put_error(404, "proto to JSON mapping failure");
+        }
     }
 }
 

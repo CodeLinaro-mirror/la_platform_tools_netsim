@@ -29,8 +29,7 @@ use frontend_proto::{
     common::ChipKind,
     model::{Pcap as ProtoPcap, State},
 };
-use protobuf::well_known_types::Timestamp;
-use protobuf::SingularPtrField;
+use protobuf::well_known_types::timestamp::Timestamp;
 
 use crate::ffi::get_facade_id;
 
@@ -119,22 +118,20 @@ impl CaptureInfo {
     }
 
     pub fn get_capture_proto(&self) -> ProtoPcap {
+        let timestamp =
+            Timestamp { seconds: self.seconds, nanos: self.nanos, ..Default::default() };
         ProtoPcap {
             id: self.id,
-            chip_kind: self.chip_kind,
+            chip_kind: self.chip_kind.into(),
             chip_id: self.id,
             device_name: self.device_name.clone(),
             state: match self.file.is_some() {
-                true => State::ON,
-                false => State::OFF,
+                true => State::ON.into(),
+                false => State::OFF.into(),
             },
             size: self.size as i32,
             records: self.records,
-            timestamp: SingularPtrField::some(Timestamp {
-                seconds: self.seconds,
-                nanos: self.nanos,
-                ..Default::default()
-            }),
+            timestamp: Some(timestamp).into(),
             valid: self.valid,
             ..Default::default()
         }

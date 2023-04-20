@@ -16,10 +16,13 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use frontend_client_cxx::ffi::{FrontendClient, GrpcMethod};
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend;
-use frontend_proto::frontend::PatchPcapRequest_PcapPatch as PcapPatch;
-use frontend_proto::model::{self, Chip_Bluetooth, Chip_Radio, State};
+use frontend_proto::frontend::patch_pcap_request::PcapPatch;
+use frontend_proto::model;
+use frontend_proto::model::chip::{Bluetooth as Chip_Bluetooth, Radio as Chip_Radio};
+use frontend_proto::model::{Chip, State};
+use frontend_proto::model::{Device, Position};
 use netsim_common::util::time_display::TimeDisplay;
-use protobuf::{Message, RepeatedField};
+use protobuf::Message;
 use std::fmt;
 
 pub type BinaryProtobuf = Vec<u8>;
@@ -44,8 +47,6 @@ pub enum Command {
     Move(Move),
     /// Display device(s) information
     Devices(Devices),
-    /// Control the bluetooth packet capture for one or all devices
-    Capture(Capture),
     /// Reset Netsim device scene
     Reset,
     /// Open netsim Web UI
@@ -63,70 +64,55 @@ impl Command {
         match self {
             Command::Version => Vec::new(),
             Command::Radio(cmd) => {
-                let mut chip = model::Chip { ..Default::default() };
+                let mut chip = Chip { ..Default::default() };
                 let chip_state = match cmd.status {
                     UpDownStatus::Up => State::ON,
                     UpDownStatus::Down => State::OFF,
                 };
                 if cmd.radio_type == RadioType::Wifi {
                     let mut wifi_chip = Chip_Radio::new();
-                    wifi_chip.set_state(chip_state);
+                    wifi_chip.state = chip_state.into();
                     chip.set_wifi(wifi_chip);
-                    chip.set_kind(ChipKind::WIFI);
+                    chip.kind = ChipKind::WIFI.into();
                 } else if cmd.radio_type == RadioType::Uwb {
                     let mut uwb_chip = Chip_Radio::new();
-                    uwb_chip.set_state(chip_state);
+                    uwb_chip.state = chip_state.into();
                     chip.set_uwb(uwb_chip);
-                    chip.set_kind(ChipKind::UWB);
+                    chip.kind = ChipKind::UWB.into();
                 } else {
                     let mut bt_chip = Chip_Bluetooth::new();
+                    let mut bt_chip_radio = Chip_Radio::new();
+                    bt_chip_radio.state = chip_state.into();
                     if cmd.radio_type == RadioType::Ble {
-                        bt_chip
-                            .set_low_energy(Chip_Radio { state: chip_state, ..Default::default() });
+                        bt_chip.low_energy = Some(bt_chip_radio).into();
                     } else {
-                        bt_chip.set_classic(Chip_Radio { state: chip_state, ..Default::default() });
+                        bt_chip.classic = Some(bt_chip_radio).into();
                     }
-                    chip.set_kind(ChipKind::BLUETOOTH);
+                    chip.kind = ChipKind::BLUETOOTH.into();
                     chip.set_bt(bt_chip);
                 }
                 let mut result = frontend::PatchDeviceRequest::new();
-                let mutable_device = result.mut_device();
-                mutable_device.set_name(cmd.name.to_owned());
-                let mutable_chips = mutable_device.mut_chips();
-                mutable_chips.push(chip);
+                let mut device = Device::new();
+                device.name = cmd.name.to_owned();
+                device.chips.push(chip);
+                result.device = Some(device).into();
                 result.write_to_bytes().unwrap()
             }
             Command::Move(cmd) => {
                 let mut result = frontend::PatchDeviceRequest::new();
-                let mutable_device = result.mut_device();
-                mutable_device.set_name(cmd.name.to_owned());
-                mutable_device.set_position(model::Position {
+                let mut device = Device::new();
+                let position = Position {
                     x: cmd.x,
                     y: cmd.y,
                     z: cmd.z.unwrap_or_default(),
                     ..Default::default()
-                });
+                };
+                device.name = cmd.name.to_owned();
+                device.position = Some(position).into();
+                result.device = Some(device).into();
                 result.write_to_bytes().unwrap()
             }
             Command::Devices(_) => Vec::new(),
-            Command::Capture(cmd) => {
-                let mut bt_chip = model::Chip {
-                    kind: ChipKind::BLUETOOTH,
-                    chip: Some(model::Chip_oneof_chip::bt(Chip_Bluetooth { ..Default::default() })),
-                    ..Default::default()
-                };
-                let capture_state = match cmd.state {
-                    OnOffState::On => State::ON,
-                    OnOffState::Off => State::OFF,
-                };
-                bt_chip.set_capture(capture_state);
-                let mut result = frontend::PatchDeviceRequest::new();
-                let mutable_device = result.mut_device();
-                mutable_device.set_name(cmd.name.to_owned());
-                let mutable_chips = mutable_device.mut_chips();
-                mutable_chips.push(bt_chip);
-                result.write_to_bytes().unwrap()
-            }
             Command::Reset => Vec::new(),
             Command::Gui => {
                 unimplemented!("get_request_bytes is not implemented for Gui Command.");
@@ -155,14 +141,14 @@ impl Command {
                 // Create a request for each pcap
                 for pcap in &filtered_pcaps {
                     let mut result = frontend::PatchPcapRequest::new();
-                    result.set_id(pcap.id);
+                    result.id = pcap.id;
                     let capture_state = match cmd.state {
                         OnOffState::On => State::ON,
                         OnOffState::Off => State::OFF,
                     };
                     let mut pcap_patch = PcapPatch::new();
-                    pcap_patch.set_state(capture_state);
-                    result.set_patch(pcap_patch);
+                    pcap_patch.state = capture_state.into();
+                    result.patch = Some(pcap_patch).into();
                     reqs.push(result.write_to_bytes().unwrap())
                 }
                 reqs
@@ -173,17 +159,17 @@ impl Command {
                 // Create a request for each pcap
                 for pcap in &filtered_pcaps {
                     let mut result = frontend::GetPcapRequest::new();
-                    result.set_id(pcap.id);
+                    result.id = pcap.id;
                     reqs.push(result.write_to_bytes().unwrap());
                     let time_display = TimeDisplay::new(
-                        pcap.timestamp.get_ref().seconds,
-                        pcap.timestamp.get_ref().nanos as u32,
+                        pcap.timestamp.get_or_default().seconds,
+                        pcap.timestamp.get_or_default().nanos as u32,
                     );
                     cmd.filenames.push(format!(
                         "{:?}-{}-{}-{}",
                         pcap.id,
                         pcap.device_name.to_owned().replace(' ', "_"),
-                        Self::chip_kind_to_string(pcap.chip_kind),
+                        Self::chip_kind_to_string(pcap.chip_kind.enum_value_or_default()),
                         time_display.utc_display()
                     ));
                 }
@@ -200,12 +186,12 @@ impl Command {
     fn get_filtered_pcaps(
         client: &cxx::UniquePtr<FrontendClient>,
         patterns: &Vec<String>,
-    ) -> RepeatedField<frontend_proto::model::Pcap> {
+    ) -> Vec<model::Pcap> {
         // Get list of pcaps
         let result = client.send_grpc(&GrpcMethod::ListPcap, &Vec::new());
         if !result.is_ok() {
             eprintln!("Grpc call error: {}", result.err());
-            return RepeatedField::new();
+            return Vec::new();
         }
         let mut response =
             frontend::ListPcapResponse::parse_from_bytes(result.byte_vec().as_slice()).unwrap();
@@ -272,15 +258,6 @@ pub struct Devices {
     /// Continuously print device(s) information every second
     #[arg(short, long)]
     pub continuous: bool,
-}
-
-#[derive(Debug, Args)]
-pub struct Capture {
-    /// Capture state
-    #[arg(value_enum, ignore_case = true)]
-    pub state: OnOffState,
-    /// Device name
-    pub name: String,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]

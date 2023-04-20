@@ -18,9 +18,9 @@ use crate::args::{self, Command, OnOffState, Pcap};
 use frontend_proto::{
     common::ChipKind,
     frontend::{GetDevicesResponse, ListPcapResponse, VersionResponse},
-    model::{self, Chip_oneof_chip, State},
+    model::{self, chip::Chip as Chip_oneof_chip, State},
 };
-use protobuf::{Message, RepeatedField};
+use protobuf::Message;
 
 impl args::Command {
     /// Format and print the response received from the frontend server for the command
@@ -55,15 +55,6 @@ impl args::Command {
                     GetDevicesResponse::parse_from_bytes(response).unwrap(),
                     verbose,
                 );
-            }
-            Command::Capture(cmd) => {
-                if verbose {
-                    println!(
-                        "Turned {} packet capture for {}",
-                        Self::on_off_state_to_string(cmd.state),
-                        cmd.name.to_owned()
-                    );
-                }
             }
             Command::Reset => {
                 if verbose {
@@ -106,62 +97,59 @@ impl args::Command {
                 println!("List of attached devices:");
             }
             for device in response.devices {
-                let pos = device.get_position();
+                let pos = device.position;
                 println!(
                     "{:name_width$}  position: {:.pos_prec$}, {:.pos_prec$}, {:.pos_prec$}",
-                    device.name,
-                    pos.get_x(),
-                    pos.get_y(),
-                    pos.get_z()
+                    device.name, pos.x, pos.y, pos.z
                 );
                 for chip in &device.chips {
                     match &chip.chip {
-                        Some(Chip_oneof_chip::bt(bt)) => {
-                            if bt.has_low_energy() {
-                                let ble_chip = bt.get_low_energy();
+                        Some(Chip_oneof_chip::Bt(bt)) => {
+                            if bt.low_energy.is_some() {
+                                let ble_chip = &bt.low_energy;
                                 println!(
                                     "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
                                     "",
                                     "ble:",
-                                    Self::chip_state_to_string(ble_chip.get_state()),
-                                    ble_chip.get_rx_count(),
-                                    ble_chip.get_tx_count(),
-                                    Self::capture_state_to_string(chip.capture)
+                                    Self::chip_state_to_string(ble_chip.state.enum_value_or_default()),
+                                    ble_chip.rx_count,
+                                    ble_chip.tx_count,
+                                    Self::capture_state_to_string(chip.capture.enum_value_or_default())
                                 );
                             }
-                            if bt.has_classic() {
-                                let classic_chip = bt.get_classic();
+                            if bt.classic.is_some() {
+                                let classic_chip = &bt.classic;
                                 println!(
                                     "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
                                     "",
                                     "classic:",
-                                    Self::chip_state_to_string(classic_chip.get_state()),
-                                    classic_chip.get_rx_count(),
-                                    classic_chip.get_tx_count(),
-                                    Self::capture_state_to_string(chip.capture)
+                                    Self::chip_state_to_string(classic_chip.state.enum_value_or_default()),
+                                    classic_chip.rx_count,
+                                    classic_chip.tx_count,
+                                    Self::capture_state_to_string(chip.capture.enum_value_or_default())
                                 );
                             }
                         }
-                        Some(Chip_oneof_chip::wifi(wifi_chip)) => {
+                        Some(Chip_oneof_chip::Wifi(wifi_chip)) => {
                             println!(
                                 "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
                                 "",
                                 "wifi:",
-                                Self::chip_state_to_string(wifi_chip.get_state()),
-                                wifi_chip.get_rx_count(),
-                                wifi_chip.get_tx_count(),
-                                Self::capture_state_to_string(chip.capture)
+                                Self::chip_state_to_string(wifi_chip.state.enum_value_or_default()),
+                                wifi_chip.rx_count,
+                                wifi_chip.tx_count,
+                                Self::capture_state_to_string(chip.capture.enum_value_or_default())
                             );
                         }
-                        Some(Chip_oneof_chip::uwb(uwb_chip)) => {
+                        Some(Chip_oneof_chip::Uwb(uwb_chip)) => {
                             println!(
                                 "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
                                 "",
                                 "uwb:",
-                                Self::chip_state_to_string(uwb_chip.get_state()),
-                                uwb_chip.get_rx_count(),
-                                uwb_chip.get_tx_count(),
-                                Self::capture_state_to_string(chip.capture)
+                                Self::chip_state_to_string(uwb_chip.state.enum_value_or_default()),
+                                uwb_chip.rx_count,
+                                uwb_chip.tx_count,
+                                Self::capture_state_to_string(chip.capture.enum_value_or_default())
                             );
                         }
                         _ => println!("{:chip_indent$}Unknown chip: down  ", ""),
@@ -170,65 +158,71 @@ impl args::Command {
             }
         } else {
             for device in response.devices {
-                let pos = device.get_position();
+                let pos = device.position;
                 print!("{:name_width$}  ", device.name,);
-                if pos.get_x() != 0.0 || pos.get_y() != 0.0 || pos.get_z() != 0.0 {
+                if pos.x != 0.0 || pos.y != 0.0 || pos.z != 0.0 {
                     print!(
                         "position: {:.pos_prec$}, {:.pos_prec$}, {:.pos_prec$}",
-                        pos.get_x(),
-                        pos.get_y(),
-                        pos.get_z()
+                        pos.x, pos.y, pos.z
                     );
                 }
                 for chip in &device.chips {
                     match &chip.chip {
-                        Some(Chip_oneof_chip::bt(bt)) => {
-                            if bt.has_low_energy() {
-                                let ble_chip = bt.get_low_energy();
-                                if ble_chip.get_state() == State::OFF {
+                        Some(Chip_oneof_chip::Bt(bt)) => {
+                            if bt.low_energy.is_some() {
+                                let ble_chip = &bt.low_energy;
+                                if ble_chip.state.enum_value_or_default() == State::OFF {
                                     print!(
                                         "{:chip_indent$}{:radio_width$}{:state_width$}",
                                         "",
                                         "ble:",
-                                        Self::chip_state_to_string(ble_chip.get_state()),
+                                        Self::chip_state_to_string(
+                                            ble_chip.state.enum_value_or_default()
+                                        ),
                                     );
                                 }
                             }
-                            if bt.has_classic() {
-                                let classic_chip = bt.get_classic();
-                                if classic_chip.get_state() == State::OFF {
+                            if bt.classic.is_some() {
+                                let classic_chip = &bt.classic;
+                                if classic_chip.state.enum_value_or_default() == State::OFF {
                                     print!(
                                         "{:chip_indent$}{:radio_width$}{:state_width$}",
                                         "",
                                         "classic:",
-                                        Self::chip_state_to_string(classic_chip.get_state())
+                                        Self::chip_state_to_string(
+                                            classic_chip.state.enum_value_or_default()
+                                        )
                                     );
                                 }
                             }
                         }
-                        Some(Chip_oneof_chip::wifi(wifi_chip)) => {
-                            if wifi_chip.get_state() == State::OFF {
+                        Some(Chip_oneof_chip::Wifi(wifi_chip)) => {
+                            if wifi_chip.state.enum_value_or_default() == State::OFF {
                                 print!(
                                     "{:chip_indent$}{:radio_width$}{:state_width$}",
                                     "",
                                     "wifi:",
-                                    Self::chip_state_to_string(wifi_chip.get_state())
+                                    Self::chip_state_to_string(
+                                        wifi_chip.state.enum_value_or_default()
+                                    )
                                 );
                             }
                         }
-                        Some(Chip_oneof_chip::uwb(uwb_chip)) => {
-                            if uwb_chip.get_state() == State::OFF {
+                        Some(Chip_oneof_chip::Uwb(uwb_chip)) => {
+                            if uwb_chip.state.enum_value_or_default() == State::OFF {
                                 print!(
                                     "{:chip_indent$}{:radio_width$}{:state_width$}",
                                     "",
                                     "uwb:",
-                                    Self::chip_state_to_string(uwb_chip.get_state())
+                                    Self::chip_state_to_string(
+                                        uwb_chip.state.enum_value_or_default()
+                                    )
                                 );
                             }
                         }
                         _ => {}
                     }
-                    if chip.capture == State::ON {
+                    if chip.capture.enum_value_or_default() == State::ON {
                         print!("{:chip_indent$}capture: on", "");
                     }
                 }
@@ -341,16 +335,16 @@ impl args::Command {
                     format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
                         pcap.id.to_string(),
                         pcap.device_name,
-                        Self::chip_kind_to_string(pcap.chip_kind),
-                        Self::capture_state_to_string(pcap.state),
+                        Self::chip_kind_to_string(pcap.chip_kind.enum_value_or_default()),
+                        Self::capture_state_to_string(pcap.state.enum_value_or_default()),
                         pcap.size,
                     )
                 } else {
                     format!(
                         "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
                         pcap.device_name,
-                        Self::chip_kind_to_string(pcap.chip_kind),
-                        Self::capture_state_to_string(pcap.state),
+                        Self::chip_kind_to_string(pcap.chip_kind.enum_value_or_default()),
+                        Self::capture_state_to_string(pcap.state.enum_value_or_default()),
                         pcap.size,
                     )
                 }
@@ -367,13 +361,14 @@ impl args::Command {
         }
     }
 
-    pub fn filter_pcaps(pcaps: &mut RepeatedField<model::Pcap>, keys: &[String]) {
+    pub fn filter_pcaps(pcaps: &mut Vec<model::Pcap>, keys: &[String]) {
         // Filter out list of pcaps with matching pattern
         pcaps.retain(|pcap| {
             keys.iter().map(|key| key.to_uppercase()).all(|key| {
                 pcap.id.to_string().contains(&key)
                     || pcap.device_name.to_uppercase().contains(&key)
-                    || Self::chip_kind_to_string(pcap.chip_kind).contains(&key)
+                    || Self::chip_kind_to_string(pcap.chip_kind.enum_value_or_default())
+                        .contains(&key)
             })
         });
     }
@@ -382,7 +377,7 @@ impl args::Command {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn test_filter_pcaps_helper(patterns: Vec<String>, expected_pcaps: RepeatedField<model::Pcap>) {
+    fn test_filter_pcaps_helper(patterns: Vec<String>, expected_pcaps: Vec<model::Pcap>) {
         let mut pcaps = all_test_pcaps();
         Command::filter_pcaps(&mut pcaps, &patterns);
         assert_eq!(pcaps, expected_pcaps);
@@ -391,7 +386,7 @@ mod tests {
     fn pcap_1() -> model::Pcap {
         model::Pcap {
             id: 4001,
-            chip_kind: ChipKind::BLUETOOTH,
+            chip_kind: ChipKind::BLUETOOTH.into(),
             device_name: "device 1".to_string(),
             ..Default::default()
         }
@@ -399,7 +394,7 @@ mod tests {
     fn pcap_1_wifi() -> model::Pcap {
         model::Pcap {
             id: 4002,
-            chip_kind: ChipKind::WIFI,
+            chip_kind: ChipKind::WIFI.into(),
             device_name: "device 1".to_string(),
             ..Default::default()
         }
@@ -407,7 +402,7 @@ mod tests {
     fn pcap_2() -> model::Pcap {
         model::Pcap {
             id: 4003,
-            chip_kind: ChipKind::BLUETOOTH,
+            chip_kind: ChipKind::BLUETOOTH.into(),
             device_name: "device 2".to_string(),
             ..Default::default()
         }
@@ -415,7 +410,7 @@ mod tests {
     fn pcap_3() -> model::Pcap {
         model::Pcap {
             id: 4004,
-            chip_kind: ChipKind::WIFI,
+            chip_kind: ChipKind::WIFI.into(),
             device_name: "device 3".to_string(),
             ..Default::default()
         }
@@ -423,21 +418,18 @@ mod tests {
     fn pcap_4_uwb() -> model::Pcap {
         model::Pcap {
             id: 4005,
-            chip_kind: ChipKind::UWB,
+            chip_kind: ChipKind::UWB.into(),
             device_name: "device 4".to_string(),
             ..Default::default()
         }
     }
-    fn all_test_pcaps() -> RepeatedField<model::Pcap> {
-        RepeatedField::from_vec(vec![pcap_1(), pcap_1_wifi(), pcap_2(), pcap_3(), pcap_4_uwb()])
+    fn all_test_pcaps() -> Vec<model::Pcap> {
+        vec![pcap_1(), pcap_1_wifi(), pcap_2(), pcap_3(), pcap_4_uwb()]
     }
 
     #[test]
     fn test_no_match() {
-        test_filter_pcaps_helper(
-            vec!["test".to_string()],
-            RepeatedField::<model::Pcap>::from_vec(vec![]),
-        );
+        test_filter_pcaps_helper(vec!["test".to_string()], vec![]);
     }
 
     #[test]
@@ -447,69 +439,45 @@ mod tests {
 
     #[test]
     fn test_match_pcap_id() {
-        test_filter_pcaps_helper(vec!["4001".to_string()], RepeatedField::from_vec(vec![pcap_1()]));
-        test_filter_pcaps_helper(vec!["03".to_string()], RepeatedField::from_vec(vec![pcap_2()]));
+        test_filter_pcaps_helper(vec!["4001".to_string()], vec![pcap_1()]);
+        test_filter_pcaps_helper(vec!["03".to_string()], vec![pcap_2()]);
         test_filter_pcaps_helper(vec!["40".to_string()], all_test_pcaps());
     }
 
     #[test]
     fn test_match_device_name() {
-        test_filter_pcaps_helper(
-            vec!["device 1".to_string()],
-            RepeatedField::from_vec(vec![pcap_1(), pcap_1_wifi()]),
-        );
-        test_filter_pcaps_helper(vec![" 2".to_string()], RepeatedField::from_vec(vec![pcap_2()]));
+        test_filter_pcaps_helper(vec!["device 1".to_string()], vec![pcap_1(), pcap_1_wifi()]);
+        test_filter_pcaps_helper(vec![" 2".to_string()], vec![pcap_2()]);
     }
 
     #[test]
     fn test_match_device_name_case_insensitive() {
-        test_filter_pcaps_helper(
-            vec!["DEVICE 1".to_string()],
-            RepeatedField::from_vec(vec![pcap_1(), pcap_1_wifi()]),
-        );
+        test_filter_pcaps_helper(vec!["DEVICE 1".to_string()], vec![pcap_1(), pcap_1_wifi()]);
     }
 
     #[test]
     fn test_match_wifi() {
-        test_filter_pcaps_helper(
-            vec!["wifi".to_string()],
-            RepeatedField::from_vec(vec![pcap_1_wifi(), pcap_3()]),
-        );
-        test_filter_pcaps_helper(
-            vec!["WIFI".to_string()],
-            RepeatedField::from_vec(vec![pcap_1_wifi(), pcap_3()]),
-        );
+        test_filter_pcaps_helper(vec!["wifi".to_string()], vec![pcap_1_wifi(), pcap_3()]);
+        test_filter_pcaps_helper(vec!["WIFI".to_string()], vec![pcap_1_wifi(), pcap_3()]);
     }
 
     #[test]
     fn test_match_uwb() {
-        test_filter_pcaps_helper(
-            vec!["uwb".to_string()],
-            RepeatedField::from_vec(vec![pcap_4_uwb()]),
-        );
-        test_filter_pcaps_helper(
-            vec!["UWB".to_string()],
-            RepeatedField::from_vec(vec![pcap_4_uwb()]),
-        );
+        test_filter_pcaps_helper(vec!["uwb".to_string()], vec![pcap_4_uwb()]);
+        test_filter_pcaps_helper(vec!["UWB".to_string()], vec![pcap_4_uwb()]);
     }
 
     #[test]
     fn test_match_bt() {
-        test_filter_pcaps_helper(
-            vec!["BLUETOOTH".to_string()],
-            RepeatedField::from_vec(vec![pcap_1(), pcap_2()]),
-        );
-        test_filter_pcaps_helper(
-            vec!["blue".to_string()],
-            RepeatedField::from_vec(vec![pcap_1(), pcap_2()]),
-        );
+        test_filter_pcaps_helper(vec!["BLUETOOTH".to_string()], vec![pcap_1(), pcap_2()]);
+        test_filter_pcaps_helper(vec!["blue".to_string()], vec![pcap_1(), pcap_2()]);
     }
 
     #[test]
     fn test_match_name_and_chip() {
         test_filter_pcaps_helper(
             vec!["device 1".to_string(), "wifi".to_string()],
-            RepeatedField::from_vec(vec![pcap_1_wifi()]),
+            vec![pcap_1_wifi()],
         );
     }
 }

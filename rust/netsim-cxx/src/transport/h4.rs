@@ -66,7 +66,7 @@ pub fn read_h4_packet<R: Read>(reader: &mut R) -> Result<Packet, PacketError> {
         }
         H4_ACL_TYPE => {
             // ACL: 2 bytes for handle, 2 bytes for data length (Volume 2, Part E, 5.4.2)
-            usize::from(packet[3]) << 8 | usize::from(packet[1 + 2])
+            u16::from_le_bytes([packet[2], packet[3]]) as usize
         }
         H4_SCO_TYPE => {
             // SCO: 2 bytes for handle, 1 byte for data length (Volume 2, Part E, 5.4.3)
