@@ -18,12 +18,12 @@ mod http_router;
 pub(crate) mod server_response;
 mod thread_pool;
 
+use crate::captures::handlers::*;
 use crate::http_server::http_request::HttpRequest;
 use crate::http_server::http_router::Router;
 use crate::http_server::server_response::{
     ResponseWritable, ServerResponseWritable, ServerResponseWriter,
 };
-use crate::pcap::handlers::*;
 use crate::version::VERSION;
 
 use crate::http_server::thread_pool::ThreadPool;

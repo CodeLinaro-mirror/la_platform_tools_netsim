@@ -955,26 +955,26 @@ impl ::protobuf::reflect::ProtobufValue for SetPacketCaptureRequest {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:netsim.frontend.PatchPcapRequest)
-pub struct PatchPcapRequest {
+// @@protoc_insertion_point(message:netsim.frontend.PatchCaptureRequest)
+pub struct PatchCaptureRequest {
     // message fields
-    // @@protoc_insertion_point(field:netsim.frontend.PatchPcapRequest.id)
+    // @@protoc_insertion_point(field:netsim.frontend.PatchCaptureRequest.id)
     pub id: i32,
-    // @@protoc_insertion_point(field:netsim.frontend.PatchPcapRequest.patch)
-    pub patch: ::protobuf::MessageField<patch_pcap_request::PcapPatch>,
+    // @@protoc_insertion_point(field:netsim.frontend.PatchCaptureRequest.patch)
+    pub patch: ::protobuf::MessageField<patch_capture_request::PatchCapture>,
     // special fields
-    // @@protoc_insertion_point(special_field:netsim.frontend.PatchPcapRequest.special_fields)
+    // @@protoc_insertion_point(special_field:netsim.frontend.PatchCaptureRequest.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
-impl<'a> ::std::default::Default for &'a PatchPcapRequest {
-    fn default() -> &'a PatchPcapRequest {
-        <PatchPcapRequest as ::protobuf::Message>::default_instance()
+impl<'a> ::std::default::Default for &'a PatchCaptureRequest {
+    fn default() -> &'a PatchCaptureRequest {
+        <PatchCaptureRequest as ::protobuf::Message>::default_instance()
     }
 }
 
-impl PatchPcapRequest {
-    pub fn new() -> PatchPcapRequest {
+impl PatchCaptureRequest {
+    pub fn new() -> PatchCaptureRequest {
         ::std::default::Default::default()
     }
 
@@ -983,24 +983,24 @@ impl PatchPcapRequest {
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "id",
-            |m: &PatchPcapRequest| { &m.id },
-            |m: &mut PatchPcapRequest| { &mut m.id },
+            |m: &PatchCaptureRequest| { &m.id },
+            |m: &mut PatchCaptureRequest| { &mut m.id },
         ));
-        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, patch_pcap_request::PcapPatch>(
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, patch_capture_request::PatchCapture>(
             "patch",
-            |m: &PatchPcapRequest| { &m.patch },
-            |m: &mut PatchPcapRequest| { &mut m.patch },
+            |m: &PatchCaptureRequest| { &m.patch },
+            |m: &mut PatchCaptureRequest| { &mut m.patch },
         ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<PatchPcapRequest>(
-            "PatchPcapRequest",
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<PatchCaptureRequest>(
+            "PatchCaptureRequest",
             fields,
             oneofs,
         )
     }
 }
 
-impl ::protobuf::Message for PatchPcapRequest {
-    const NAME: &'static str = "PatchPcapRequest";
+impl ::protobuf::Message for PatchCaptureRequest {
+    const NAME: &'static str = "PatchCaptureRequest";
 
     fn is_initialized(&self) -> bool {
         true
@@ -1058,8 +1058,8 @@ impl ::protobuf::Message for PatchPcapRequest {
         &mut self.special_fields
     }
 
-    fn new() -> PatchPcapRequest {
-        PatchPcapRequest::new()
+    fn new() -> PatchCaptureRequest {
+        PatchCaptureRequest::new()
     }
 
     fn clear(&mut self) {
@@ -1068,8 +1068,8 @@ impl ::protobuf::Message for PatchPcapRequest {
         self.special_fields.clear();
     }
 
-    fn default_instance() -> &'static PatchPcapRequest {
-        static instance: PatchPcapRequest = PatchPcapRequest {
+    fn default_instance() -> &'static PatchCaptureRequest {
+        static instance: PatchCaptureRequest = PatchCaptureRequest {
             id: 0,
             patch: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
@@ -1078,44 +1078,44 @@ impl ::protobuf::Message for PatchPcapRequest {
     }
 }
 
-impl ::protobuf::MessageFull for PatchPcapRequest {
+impl ::protobuf::MessageFull for PatchCaptureRequest {
     fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
         static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("PatchPcapRequest").unwrap()).clone()
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("PatchCaptureRequest").unwrap()).clone()
     }
 }
 
-impl ::std::fmt::Display for PatchPcapRequest {
+impl ::std::fmt::Display for PatchCaptureRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for PatchPcapRequest {
+impl ::protobuf::reflect::ProtobufValue for PatchCaptureRequest {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
-/// Nested message and enums of message `PatchPcapRequest`
-pub mod patch_pcap_request {
+/// Nested message and enums of message `PatchCaptureRequest`
+pub mod patch_capture_request {
     #[derive(PartialEq,Clone,Default,Debug)]
-    // @@protoc_insertion_point(message:netsim.frontend.PatchPcapRequest.PcapPatch)
-    pub struct PcapPatch {
+    // @@protoc_insertion_point(message:netsim.frontend.PatchCaptureRequest.PatchCapture)
+    pub struct PatchCapture {
         // message fields
-        // @@protoc_insertion_point(field:netsim.frontend.PatchPcapRequest.PcapPatch.state)
+        // @@protoc_insertion_point(field:netsim.frontend.PatchCaptureRequest.PatchCapture.state)
         pub state: ::protobuf::EnumOrUnknown<super::super::model::State>,
         // special fields
-        // @@protoc_insertion_point(special_field:netsim.frontend.PatchPcapRequest.PcapPatch.special_fields)
+        // @@protoc_insertion_point(special_field:netsim.frontend.PatchCaptureRequest.PatchCapture.special_fields)
         pub special_fields: ::protobuf::SpecialFields,
     }
 
-    impl<'a> ::std::default::Default for &'a PcapPatch {
-        fn default() -> &'a PcapPatch {
-            <PcapPatch as ::protobuf::Message>::default_instance()
+    impl<'a> ::std::default::Default for &'a PatchCapture {
+        fn default() -> &'a PatchCapture {
+            <PatchCapture as ::protobuf::Message>::default_instance()
         }
     }
 
-    impl PcapPatch {
-        pub fn new() -> PcapPatch {
+    impl PatchCapture {
+        pub fn new() -> PatchCapture {
             ::std::default::Default::default()
         }
 
@@ -1124,19 +1124,19 @@ pub mod patch_pcap_request {
             let mut oneofs = ::std::vec::Vec::with_capacity(0);
             fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
                 "state",
-                |m: &PcapPatch| { &m.state },
-                |m: &mut PcapPatch| { &mut m.state },
+                |m: &PatchCapture| { &m.state },
+                |m: &mut PatchCapture| { &mut m.state },
             ));
-            ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<PcapPatch>(
-                "PatchPcapRequest.PcapPatch",
+            ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<PatchCapture>(
+                "PatchCaptureRequest.PatchCapture",
                 fields,
                 oneofs,
             )
         }
     }
 
-    impl ::protobuf::Message for PcapPatch {
-        const NAME: &'static str = "PcapPatch";
+    impl ::protobuf::Message for PatchCapture {
+        const NAME: &'static str = "PatchCapture";
 
         fn is_initialized(&self) -> bool {
             true
@@ -1184,8 +1184,8 @@ pub mod patch_pcap_request {
             &mut self.special_fields
         }
 
-        fn new() -> PcapPatch {
-            PcapPatch::new()
+        fn new() -> PatchCapture {
+            PatchCapture::new()
         }
 
         fn clear(&mut self) {
@@ -1193,8 +1193,8 @@ pub mod patch_pcap_request {
             self.special_fields.clear();
         }
 
-        fn default_instance() -> &'static PcapPatch {
-            static instance: PcapPatch = PcapPatch {
+        fn default_instance() -> &'static PatchCapture {
+            static instance: PatchCapture = PatchCapture {
                 state: ::protobuf::EnumOrUnknown::from_i32(0),
                 special_fields: ::protobuf::SpecialFields::new(),
             };
@@ -1202,43 +1202,43 @@ pub mod patch_pcap_request {
         }
     }
 
-    impl ::protobuf::MessageFull for PcapPatch {
+    impl ::protobuf::MessageFull for PatchCapture {
         fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
             static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-            descriptor.get(|| super::file_descriptor().message_by_package_relative_name("PatchPcapRequest.PcapPatch").unwrap()).clone()
+            descriptor.get(|| super::file_descriptor().message_by_package_relative_name("PatchCaptureRequest.PatchCapture").unwrap()).clone()
         }
     }
 
-    impl ::std::fmt::Display for PcapPatch {
+    impl ::std::fmt::Display for PatchCapture {
         fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
             ::protobuf::text_format::fmt(self, f)
         }
     }
 
-    impl ::protobuf::reflect::ProtobufValue for PcapPatch {
+    impl ::protobuf::reflect::ProtobufValue for PatchCapture {
         type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
     }
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:netsim.frontend.ListPcapResponse)
-pub struct ListPcapResponse {
+// @@protoc_insertion_point(message:netsim.frontend.ListCaptureResponse)
+pub struct ListCaptureResponse {
     // message fields
-    // @@protoc_insertion_point(field:netsim.frontend.ListPcapResponse.pcaps)
-    pub pcaps: ::std::vec::Vec<super::model::Pcap>,
+    // @@protoc_insertion_point(field:netsim.frontend.ListCaptureResponse.captures)
+    pub captures: ::std::vec::Vec<super::model::Capture>,
     // special fields
-    // @@protoc_insertion_point(special_field:netsim.frontend.ListPcapResponse.special_fields)
+    // @@protoc_insertion_point(special_field:netsim.frontend.ListCaptureResponse.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
-impl<'a> ::std::default::Default for &'a ListPcapResponse {
-    fn default() -> &'a ListPcapResponse {
-        <ListPcapResponse as ::protobuf::Message>::default_instance()
+impl<'a> ::std::default::Default for &'a ListCaptureResponse {
+    fn default() -> &'a ListCaptureResponse {
+        <ListCaptureResponse as ::protobuf::Message>::default_instance()
     }
 }
 
-impl ListPcapResponse {
-    pub fn new() -> ListPcapResponse {
+impl ListCaptureResponse {
+    pub fn new() -> ListCaptureResponse {
         ::std::default::Default::default()
     }
 
@@ -1246,20 +1246,20 @@ impl ListPcapResponse {
         let mut fields = ::std::vec::Vec::with_capacity(1);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
-            "pcaps",
-            |m: &ListPcapResponse| { &m.pcaps },
-            |m: &mut ListPcapResponse| { &mut m.pcaps },
+            "captures",
+            |m: &ListCaptureResponse| { &m.captures },
+            |m: &mut ListCaptureResponse| { &mut m.captures },
         ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<ListPcapResponse>(
-            "ListPcapResponse",
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<ListCaptureResponse>(
+            "ListCaptureResponse",
             fields,
             oneofs,
         )
     }
 }
 
-impl ::protobuf::Message for ListPcapResponse {
-    const NAME: &'static str = "ListPcapResponse";
+impl ::protobuf::Message for ListCaptureResponse {
+    const NAME: &'static str = "ListCaptureResponse";
 
     fn is_initialized(&self) -> bool {
         true
@@ -1269,7 +1269,7 @@ impl ::protobuf::Message for ListPcapResponse {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 10 => {
-                    self.pcaps.push(is.read_message()?);
+                    self.captures.push(is.read_message()?);
                 },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
@@ -1283,7 +1283,7 @@ impl ::protobuf::Message for ListPcapResponse {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
-        for value in &self.pcaps {
+        for value in &self.captures {
             let len = value.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         };
@@ -1293,7 +1293,7 @@ impl ::protobuf::Message for ListPcapResponse {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
-        for v in &self.pcaps {
+        for v in &self.captures {
             ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
         };
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
@@ -1308,60 +1308,60 @@ impl ::protobuf::Message for ListPcapResponse {
         &mut self.special_fields
     }
 
-    fn new() -> ListPcapResponse {
-        ListPcapResponse::new()
+    fn new() -> ListCaptureResponse {
+        ListCaptureResponse::new()
     }
 
     fn clear(&mut self) {
-        self.pcaps.clear();
+        self.captures.clear();
         self.special_fields.clear();
     }
 
-    fn default_instance() -> &'static ListPcapResponse {
-        static instance: ListPcapResponse = ListPcapResponse {
-            pcaps: ::std::vec::Vec::new(),
+    fn default_instance() -> &'static ListCaptureResponse {
+        static instance: ListCaptureResponse = ListCaptureResponse {
+            captures: ::std::vec::Vec::new(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
     }
 }
 
-impl ::protobuf::MessageFull for ListPcapResponse {
+impl ::protobuf::MessageFull for ListCaptureResponse {
     fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
         static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("ListPcapResponse").unwrap()).clone()
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("ListCaptureResponse").unwrap()).clone()
     }
 }
 
-impl ::std::fmt::Display for ListPcapResponse {
+impl ::std::fmt::Display for ListCaptureResponse {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for ListPcapResponse {
+impl ::protobuf::reflect::ProtobufValue for ListCaptureResponse {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:netsim.frontend.GetPcapRequest)
-pub struct GetPcapRequest {
+// @@protoc_insertion_point(message:netsim.frontend.GetCaptureRequest)
+pub struct GetCaptureRequest {
     // message fields
-    // @@protoc_insertion_point(field:netsim.frontend.GetPcapRequest.id)
+    // @@protoc_insertion_point(field:netsim.frontend.GetCaptureRequest.id)
     pub id: i32,
     // special fields
-    // @@protoc_insertion_point(special_field:netsim.frontend.GetPcapRequest.special_fields)
+    // @@protoc_insertion_point(special_field:netsim.frontend.GetCaptureRequest.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
-impl<'a> ::std::default::Default for &'a GetPcapRequest {
-    fn default() -> &'a GetPcapRequest {
-        <GetPcapRequest as ::protobuf::Message>::default_instance()
+impl<'a> ::std::default::Default for &'a GetCaptureRequest {
+    fn default() -> &'a GetCaptureRequest {
+        <GetCaptureRequest as ::protobuf::Message>::default_instance()
     }
 }
 
-impl GetPcapRequest {
-    pub fn new() -> GetPcapRequest {
+impl GetCaptureRequest {
+    pub fn new() -> GetCaptureRequest {
         ::std::default::Default::default()
     }
 
@@ -1370,19 +1370,19 @@ impl GetPcapRequest {
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "id",
-            |m: &GetPcapRequest| { &m.id },
-            |m: &mut GetPcapRequest| { &mut m.id },
+            |m: &GetCaptureRequest| { &m.id },
+            |m: &mut GetCaptureRequest| { &mut m.id },
         ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<GetPcapRequest>(
-            "GetPcapRequest",
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<GetCaptureRequest>(
+            "GetCaptureRequest",
             fields,
             oneofs,
         )
     }
 }
 
-impl ::protobuf::Message for GetPcapRequest {
-    const NAME: &'static str = "GetPcapRequest";
+impl ::protobuf::Message for GetCaptureRequest {
+    const NAME: &'static str = "GetCaptureRequest";
 
     fn is_initialized(&self) -> bool {
         true
@@ -1430,8 +1430,8 @@ impl ::protobuf::Message for GetPcapRequest {
         &mut self.special_fields
     }
 
-    fn new() -> GetPcapRequest {
-        GetPcapRequest::new()
+    fn new() -> GetCaptureRequest {
+        GetCaptureRequest::new()
     }
 
     fn clear(&mut self) {
@@ -1439,8 +1439,8 @@ impl ::protobuf::Message for GetPcapRequest {
         self.special_fields.clear();
     }
 
-    fn default_instance() -> &'static GetPcapRequest {
-        static instance: GetPcapRequest = GetPcapRequest {
+    fn default_instance() -> &'static GetCaptureRequest {
+        static instance: GetCaptureRequest = GetCaptureRequest {
             id: 0,
             special_fields: ::protobuf::SpecialFields::new(),
         };
@@ -1448,42 +1448,42 @@ impl ::protobuf::Message for GetPcapRequest {
     }
 }
 
-impl ::protobuf::MessageFull for GetPcapRequest {
+impl ::protobuf::MessageFull for GetCaptureRequest {
     fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
         static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("GetPcapRequest").unwrap()).clone()
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("GetCaptureRequest").unwrap()).clone()
     }
 }
 
-impl ::std::fmt::Display for GetPcapRequest {
+impl ::std::fmt::Display for GetCaptureRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for GetPcapRequest {
+impl ::protobuf::reflect::ProtobufValue for GetCaptureRequest {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:netsim.frontend.GetPcapResponse)
-pub struct GetPcapResponse {
+// @@protoc_insertion_point(message:netsim.frontend.GetCaptureResponse)
+pub struct GetCaptureResponse {
     // message fields
-    // @@protoc_insertion_point(field:netsim.frontend.GetPcapResponse.capture_stream)
+    // @@protoc_insertion_point(field:netsim.frontend.GetCaptureResponse.capture_stream)
     pub capture_stream: ::std::vec::Vec<u8>,
     // special fields
-    // @@protoc_insertion_point(special_field:netsim.frontend.GetPcapResponse.special_fields)
+    // @@protoc_insertion_point(special_field:netsim.frontend.GetCaptureResponse.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
-impl<'a> ::std::default::Default for &'a GetPcapResponse {
-    fn default() -> &'a GetPcapResponse {
-        <GetPcapResponse as ::protobuf::Message>::default_instance()
+impl<'a> ::std::default::Default for &'a GetCaptureResponse {
+    fn default() -> &'a GetCaptureResponse {
+        <GetCaptureResponse as ::protobuf::Message>::default_instance()
     }
 }
 
-impl GetPcapResponse {
-    pub fn new() -> GetPcapResponse {
+impl GetCaptureResponse {
+    pub fn new() -> GetCaptureResponse {
         ::std::default::Default::default()
     }
 
@@ -1492,19 +1492,19 @@ impl GetPcapResponse {
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "capture_stream",
-            |m: &GetPcapResponse| { &m.capture_stream },
-            |m: &mut GetPcapResponse| { &mut m.capture_stream },
+            |m: &GetCaptureResponse| { &m.capture_stream },
+            |m: &mut GetCaptureResponse| { &mut m.capture_stream },
         ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<GetPcapResponse>(
-            "GetPcapResponse",
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<GetCaptureResponse>(
+            "GetCaptureResponse",
             fields,
             oneofs,
         )
     }
 }
 
-impl ::protobuf::Message for GetPcapResponse {
-    const NAME: &'static str = "GetPcapResponse";
+impl ::protobuf::Message for GetCaptureResponse {
+    const NAME: &'static str = "GetCaptureResponse";
 
     fn is_initialized(&self) -> bool {
         true
@@ -1552,8 +1552,8 @@ impl ::protobuf::Message for GetPcapResponse {
         &mut self.special_fields
     }
 
-    fn new() -> GetPcapResponse {
-        GetPcapResponse::new()
+    fn new() -> GetCaptureResponse {
+        GetCaptureResponse::new()
     }
 
     fn clear(&mut self) {
@@ -1561,8 +1561,8 @@ impl ::protobuf::Message for GetPcapResponse {
         self.special_fields.clear();
     }
 
-    fn default_instance() -> &'static GetPcapResponse {
-        static instance: GetPcapResponse = GetPcapResponse {
+    fn default_instance() -> &'static GetCaptureResponse {
+        static instance: GetCaptureResponse = GetCaptureResponse {
             capture_stream: ::std::vec::Vec::new(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
@@ -1570,20 +1570,20 @@ impl ::protobuf::Message for GetPcapResponse {
     }
 }
 
-impl ::protobuf::MessageFull for GetPcapResponse {
+impl ::protobuf::MessageFull for GetCaptureResponse {
     fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
         static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("GetPcapResponse").unwrap()).clone()
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("GetCaptureResponse").unwrap()).clone()
     }
 }
 
-impl ::std::fmt::Display for GetPcapResponse {
+impl ::std::fmt::Display for GetCaptureResponse {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for GetPcapResponse {
+impl ::protobuf::reflect::ProtobufValue for GetCaptureResponse {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
@@ -1759,30 +1759,30 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x14.netsim.model.DeviceR\x07devices\"&\n\x0cNetCatStream\x12\x16\n\x06r\
     esult\x18\x01\x20\x03(\tR\x06result\"X\n\x17SetPacketCaptureRequest\x12\
     \x18\n\x07capture\x18\x01\x20\x01(\x08R\x07capture\x12#\n\rdevice_serial\
-    \x18\x02\x20\x01(\tR\x0cdeviceSerial\"\x9d\x01\n\x10PatchPcapRequest\x12\
-    \x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x12A\n\x05patch\x18\x02\x20\x01\
-    (\x0b2+.netsim.frontend.PatchPcapRequest.PcapPatchR\x05patch\x1a6\n\tPca\
-    pPatch\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model.StateR\x05\
-    state\"<\n\x10ListPcapResponse\x12(\n\x05pcaps\x18\x01\x20\x03(\x0b2\x12\
-    .netsim.model.PcapR\x05pcaps\"\x20\n\x0eGetPcapRequest\x12\x0e\n\x02id\
-    \x18\x01\x20\x01(\x05R\x02id\"8\n\x0fGetPcapResponse\x12%\n\x0ecapture_s\
-    tream\x18\x01\x20\x01(\x0cR\rcaptureStream\"`\n\rErrorResponse\x12\x12\n\
-    \x04code\x18\x01\x20\x01(\x05R\x04code\x12#\n\rerror_message\x18\x02\x20\
-    \x01(\tR\x0cerrorMessage\x12\x16\n\x06status\x18\x03\x20\x01(\tR\x06stat\
-    us2\xdb\x05\n\x0fFrontendService\x12F\n\nGetVersion\x12\x16.google.proto\
-    buf.Empty\x1a\x20.netsim.frontend.VersionResponse\x12B\n\x0eRegisterEven\
-    ts\x12\x16.google.protobuf.Empty\x1a\x16.netsim.frontend.Event0\x01\x12I\
-    \n\nGetDevices\x12\x16.google.protobuf.Empty\x1a#.netsim.frontend.GetDev\
-    icesResponse\x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDeviceReque\
-    st\x1a\x16.google.protobuf.Empty\x127\n\x05Reset\x12\x16.google.protobuf\
-    .Empty\x1a\x16.google.protobuf.Empty\x12J\n\x0bSetLinkLoss\x12#.netsim.f\
-    rontend.SetLinkLossRequest\x1a\x16.google.protobuf.Empty\x12A\n\x06NetCa\
-    t\x12\x16.google.protobuf.Empty\x1a\x1d.netsim.frontend.NetCatStream0\
-    \x01\x12F\n\tPatchPcap\x12!.netsim.frontend.PatchPcapRequest\x1a\x16.goo\
-    gle.protobuf.Empty\x12E\n\x08ListPcap\x12\x16.google.protobuf.Empty\x1a!\
-    .netsim.frontend.ListPcapResponse\x12N\n\x07GetPcap\x12\x1f.netsim.front\
-    end.GetPcapRequest\x1a\x20.netsim.frontend.GetPcapResponse0\x01b\x06prot\
-    o3\
+    \x18\x02\x20\x01(\tR\x0cdeviceSerial\"\xa9\x01\n\x13PatchCaptureRequest\
+    \x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x12G\n\x05patch\x18\x02\x20\
+    \x01(\x0b21.netsim.frontend.PatchCaptureRequest.PatchCaptureR\x05patch\
+    \x1a9\n\x0cPatchCapture\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim\
+    .model.StateR\x05state\"H\n\x13ListCaptureResponse\x121\n\x08captures\
+    \x18\x01\x20\x03(\x0b2\x15.netsim.model.CaptureR\x08captures\"#\n\x11Get\
+    CaptureRequest\x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\";\n\x12GetCa\
+    ptureResponse\x12%\n\x0ecapture_stream\x18\x01\x20\x01(\x0cR\rcaptureStr\
+    eam\"`\n\rErrorResponse\x12\x12\n\x04code\x18\x01\x20\x01(\x05R\x04code\
+    \x12#\n\rerror_message\x18\x02\x20\x01(\tR\x0cerrorMessage\x12\x16\n\x06\
+    status\x18\x03\x20\x01(\tR\x06status2\xf0\x05\n\x0fFrontendService\x12F\
+    \n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.frontend.Ver\
+    sionResponse\x12B\n\x0eRegisterEvents\x12\x16.google.protobuf.Empty\x1a\
+    \x16.netsim.frontend.Event0\x01\x12I\n\nGetDevices\x12\x16.google.protob\
+    uf.Empty\x1a#.netsim.frontend.GetDevicesResponse\x12J\n\x0bPatchDevice\
+    \x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.google.protobuf.Empty\
+    \x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.E\
+    mpty\x12J\n\x0bSetLinkLoss\x12#.netsim.frontend.SetLinkLossRequest\x1a\
+    \x16.google.protobuf.Empty\x12A\n\x06NetCat\x12\x16.google.protobuf.Empt\
+    y\x1a\x1d.netsim.frontend.NetCatStream0\x01\x12L\n\x0cPatchCapture\x12$.\
+    netsim.frontend.PatchCaptureRequest\x1a\x16.google.protobuf.Empty\x12K\n\
+    \x0bListCapture\x12\x16.google.protobuf.Empty\x1a$.netsim.frontend.ListC\
+    aptureResponse\x12W\n\nGetCapture\x12\".netsim.frontend.GetCaptureReques\
+    t\x1a#.netsim.frontend.GetCaptureResponse0\x01b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -1810,12 +1810,12 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(GetDevicesResponse::generated_message_descriptor_data());
             messages.push(NetCatStream::generated_message_descriptor_data());
             messages.push(SetPacketCaptureRequest::generated_message_descriptor_data());
-            messages.push(PatchPcapRequest::generated_message_descriptor_data());
-            messages.push(ListPcapResponse::generated_message_descriptor_data());
-            messages.push(GetPcapRequest::generated_message_descriptor_data());
-            messages.push(GetPcapResponse::generated_message_descriptor_data());
+            messages.push(PatchCaptureRequest::generated_message_descriptor_data());
+            messages.push(ListCaptureResponse::generated_message_descriptor_data());
+            messages.push(GetCaptureRequest::generated_message_descriptor_data());
+            messages.push(GetCaptureResponse::generated_message_descriptor_data());
             messages.push(ErrorResponse::generated_message_descriptor_data());
-            messages.push(patch_pcap_request::PcapPatch::generated_message_descriptor_data());
+            messages.push(patch_capture_request::PatchCapture::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(0);
             ::protobuf::reflect::GeneratedFileDescriptor::new_generated(
                 file_descriptor_proto(),

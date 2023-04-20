@@ -16,7 +16,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use frontend_client_cxx::ffi::{FrontendClient, GrpcMethod};
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend;
-use frontend_proto::frontend::patch_pcap_request::PcapPatch;
+use frontend_proto::frontend::patch_capture_request::PatchCapture as PatchCaptureProto;
 use frontend_proto::model;
 use frontend_proto::model::chip::{Bluetooth as Chip_Bluetooth, Radio as Chip_Radio};
 use frontend_proto::model::{Chip, State};
@@ -137,39 +137,39 @@ impl Command {
         match self {
             Command::Pcap(Pcap::Patch(cmd)) => {
                 let mut reqs = Vec::new();
-                let filtered_pcaps = Self::get_filtered_pcaps(client, &cmd.patterns);
-                // Create a request for each pcap
-                for pcap in &filtered_pcaps {
-                    let mut result = frontend::PatchPcapRequest::new();
-                    result.id = pcap.id;
+                let filtered_captures = Self::get_filtered_captures(client, &cmd.patterns);
+                // Create a request for each capture
+                for capture in &filtered_captures {
+                    let mut result = frontend::PatchCaptureRequest::new();
+                    result.id = capture.id;
                     let capture_state = match cmd.state {
                         OnOffState::On => State::ON,
                         OnOffState::Off => State::OFF,
                     };
-                    let mut pcap_patch = PcapPatch::new();
-                    pcap_patch.state = capture_state.into();
-                    result.patch = Some(pcap_patch).into();
+                    let mut patch_capture = PatchCaptureProto::new();
+                    patch_capture.state = capture_state.into();
+                    result.patch = Some(patch_capture).into();
                     reqs.push(result.write_to_bytes().unwrap())
                 }
                 reqs
             }
             Command::Pcap(Pcap::Get(cmd)) => {
                 let mut reqs = Vec::new();
-                let filtered_pcaps = Self::get_filtered_pcaps(client, &cmd.patterns);
-                // Create a request for each pcap
-                for pcap in &filtered_pcaps {
-                    let mut result = frontend::GetPcapRequest::new();
-                    result.id = pcap.id;
+                let filtered_captures = Self::get_filtered_captures(client, &cmd.patterns);
+                // Create a request for each capture
+                for capture in &filtered_captures {
+                    let mut result = frontend::GetCaptureRequest::new();
+                    result.id = capture.id;
                     reqs.push(result.write_to_bytes().unwrap());
                     let time_display = TimeDisplay::new(
-                        pcap.timestamp.get_or_default().seconds,
-                        pcap.timestamp.get_or_default().nanos as u32,
+                        capture.timestamp.get_or_default().seconds,
+                        capture.timestamp.get_or_default().nanos as u32,
                     );
                     cmd.filenames.push(format!(
                         "{:?}-{}-{}-{}",
-                        pcap.id,
-                        pcap.device_name.to_owned().replace(' ', "_"),
-                        Self::chip_kind_to_string(pcap.chip_kind.enum_value_or_default()),
+                        capture.id,
+                        capture.device_name.to_owned().replace(' ', "_"),
+                        Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
                         time_display.utc_display()
                     ));
                 }
@@ -183,23 +183,23 @@ impl Command {
         }
     }
 
-    fn get_filtered_pcaps(
+    fn get_filtered_captures(
         client: &cxx::UniquePtr<FrontendClient>,
         patterns: &Vec<String>,
-    ) -> Vec<model::Pcap> {
-        // Get list of pcaps
-        let result = client.send_grpc(&GrpcMethod::ListPcap, &Vec::new());
+    ) -> Vec<model::Capture> {
+        // Get list of captures
+        let result = client.send_grpc(&GrpcMethod::ListCapture, &Vec::new());
         if !result.is_ok() {
             eprintln!("Grpc call error: {}", result.err());
             return Vec::new();
         }
         let mut response =
-            frontend::ListPcapResponse::parse_from_bytes(result.byte_vec().as_slice()).unwrap();
+            frontend::ListCaptureResponse::parse_from_bytes(result.byte_vec().as_slice()).unwrap();
         if !patterns.is_empty() {
-            // Filter out list of pcaps with matching patterns
-            Self::filter_pcaps(&mut response.pcaps, patterns)
+            // Filter out list of captures with matching patterns
+            Self::filter_captures(&mut response.captures, patterns)
         }
-        response.pcaps
+        response.captures
     }
 }
 
@@ -268,34 +268,34 @@ pub enum OnOffState {
 
 #[derive(Debug, Subcommand)]
 pub enum Pcap {
-    /// List currently available Pcaps (packet captures)
-    List(ListPcap),
-    /// Patch a Pcap source to turn packet capture on/off
-    Patch(PatchPcap),
+    /// List currently available Captures (packet captures)
+    List(ListCapture),
+    /// Patch a Capture source to turn packet capture on/off
+    Patch(PatchCapture),
     /// Download the packet capture content
-    Get(GetPcap),
+    Get(GetCapture),
 }
 
 #[derive(Debug, Args)]
-pub struct ListPcap {
-    /// Optional strings of pattern for pcaps to list. Possible filter fields include Pcap ID, Device Name, and Chip Kind
+pub struct ListCapture {
+    /// Optional strings of pattern for captures to list. Possible filter fields include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
 }
 
 #[derive(Debug, Args)]
-pub struct PatchPcap {
+pub struct PatchCapture {
     /// Packet capture state
     #[arg(value_enum, ignore_case = true)]
     pub state: OnOffState,
-    /// Optional strings of pattern for pcaps to patch. Possible filter fields include Pcap ID, Device Name, and Chip Kind
+    /// Optional strings of pattern for captures to patch. Possible filter fields include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
 }
 
 #[derive(Debug, Args)]
-pub struct GetPcap {
-    /// Optional strings of pattern for pcaps to get. Possible filter fields include Pcap ID, Device Name, and Chip Kind
+pub struct GetCapture {
+    /// Optional strings of pattern for captures to get. Possible filter fields include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
-    /// Directory to store downloaded pcap(s)
+    /// Directory to store downloaded capture(s)
     #[arg(short = 'o', long)]
     pub location: Option<String>,
     #[arg(skip)]

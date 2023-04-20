@@ -95,22 +95,25 @@ void SceneController::RemoveChip(uint32_t device_id, uint32_t chip_id) {
 
 // Returns a Device shared_ptr or nullptr
 std::shared_ptr<Device> SceneController::MatchDevice(const std::string &name) {
-  std::shared_ptr<Device> found = nullptr;
+  std::shared_ptr<Device> target = nullptr;
+  bool multiple_matches = false;
   if (name.empty()) {
     return nullptr;
   }
   for (auto &[_, device] : devices_) {
-    // query && name -> rename, only match by id
-    // query && !name -> match by query
-    // !query && name -> match by name
+    // match by device name
     auto pos = device->name.find(name);
     if (pos != std::string::npos) {
-      // check for multiple matches
-      if (found != nullptr) return nullptr;
-      found = device;
+      // check for exact match
+      if (device->name == name) return device;
+      // record if multiple ambiguous matches were found
+      if (target != nullptr) multiple_matches = true;
+      target = device;
     }
   }
-  return found;
+  // return nullptr if multiple ambiguous matches were found
+  if (multiple_matches) return nullptr;
+  return target;
 }
 
 // UI requesting a change in device info

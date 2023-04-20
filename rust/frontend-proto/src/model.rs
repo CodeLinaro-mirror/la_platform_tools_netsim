@@ -1454,101 +1454,94 @@ impl ::protobuf::reflect::ProtobufValue for Scene {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:netsim.model.Pcap)
-pub struct Pcap {
+// @@protoc_insertion_point(message:netsim.model.Capture)
+pub struct Capture {
     // message fields
-    // @@protoc_insertion_point(field:netsim.model.Pcap.id)
+    // @@protoc_insertion_point(field:netsim.model.Capture.id)
     pub id: i32,
-    // @@protoc_insertion_point(field:netsim.model.Pcap.chip_kind)
+    // @@protoc_insertion_point(field:netsim.model.Capture.chip_kind)
     pub chip_kind: ::protobuf::EnumOrUnknown<super::common::ChipKind>,
-    // @@protoc_insertion_point(field:netsim.model.Pcap.chip_id)
-    pub chip_id: i32,
-    // @@protoc_insertion_point(field:netsim.model.Pcap.device_name)
+    // @@protoc_insertion_point(field:netsim.model.Capture.device_name)
     pub device_name: ::std::string::String,
-    // @@protoc_insertion_point(field:netsim.model.Pcap.state)
+    // @@protoc_insertion_point(field:netsim.model.Capture.state)
     pub state: ::protobuf::EnumOrUnknown<State>,
-    // @@protoc_insertion_point(field:netsim.model.Pcap.size)
+    // @@protoc_insertion_point(field:netsim.model.Capture.size)
     pub size: i32,
-    // @@protoc_insertion_point(field:netsim.model.Pcap.records)
+    // @@protoc_insertion_point(field:netsim.model.Capture.records)
     pub records: i32,
-    // @@protoc_insertion_point(field:netsim.model.Pcap.timestamp)
+    // @@protoc_insertion_point(field:netsim.model.Capture.timestamp)
     pub timestamp: ::protobuf::MessageField<::protobuf::well_known_types::timestamp::Timestamp>,
-    // @@protoc_insertion_point(field:netsim.model.Pcap.valid)
+    // @@protoc_insertion_point(field:netsim.model.Capture.valid)
     pub valid: bool,
     // special fields
-    // @@protoc_insertion_point(special_field:netsim.model.Pcap.special_fields)
+    // @@protoc_insertion_point(special_field:netsim.model.Capture.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
-impl<'a> ::std::default::Default for &'a Pcap {
-    fn default() -> &'a Pcap {
-        <Pcap as ::protobuf::Message>::default_instance()
+impl<'a> ::std::default::Default for &'a Capture {
+    fn default() -> &'a Capture {
+        <Capture as ::protobuf::Message>::default_instance()
     }
 }
 
-impl Pcap {
-    pub fn new() -> Pcap {
+impl Capture {
+    pub fn new() -> Capture {
         ::std::default::Default::default()
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(9);
+        let mut fields = ::std::vec::Vec::with_capacity(8);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "id",
-            |m: &Pcap| { &m.id },
-            |m: &mut Pcap| { &mut m.id },
+            |m: &Capture| { &m.id },
+            |m: &mut Capture| { &mut m.id },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "chip_kind",
-            |m: &Pcap| { &m.chip_kind },
-            |m: &mut Pcap| { &mut m.chip_kind },
-        ));
-        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
-            "chip_id",
-            |m: &Pcap| { &m.chip_id },
-            |m: &mut Pcap| { &mut m.chip_id },
+            |m: &Capture| { &m.chip_kind },
+            |m: &mut Capture| { &mut m.chip_kind },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "device_name",
-            |m: &Pcap| { &m.device_name },
-            |m: &mut Pcap| { &mut m.device_name },
+            |m: &Capture| { &m.device_name },
+            |m: &mut Capture| { &mut m.device_name },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "state",
-            |m: &Pcap| { &m.state },
-            |m: &mut Pcap| { &mut m.state },
+            |m: &Capture| { &m.state },
+            |m: &mut Capture| { &mut m.state },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "size",
-            |m: &Pcap| { &m.size },
-            |m: &mut Pcap| { &mut m.size },
+            |m: &Capture| { &m.size },
+            |m: &mut Capture| { &mut m.size },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "records",
-            |m: &Pcap| { &m.records },
-            |m: &mut Pcap| { &mut m.records },
+            |m: &Capture| { &m.records },
+            |m: &mut Capture| { &mut m.records },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, ::protobuf::well_known_types::timestamp::Timestamp>(
             "timestamp",
-            |m: &Pcap| { &m.timestamp },
-            |m: &mut Pcap| { &mut m.timestamp },
+            |m: &Capture| { &m.timestamp },
+            |m: &mut Capture| { &mut m.timestamp },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "valid",
-            |m: &Pcap| { &m.valid },
-            |m: &mut Pcap| { &mut m.valid },
+            |m: &Capture| { &m.valid },
+            |m: &mut Capture| { &mut m.valid },
         ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Pcap>(
-            "Pcap",
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Capture>(
+            "Capture",
             fields,
             oneofs,
         )
     }
 }
 
-impl ::protobuf::Message for Pcap {
-    const NAME: &'static str = "Pcap";
+impl ::protobuf::Message for Capture {
+    const NAME: &'static str = "Capture";
 
     fn is_initialized(&self) -> bool {
         true
@@ -1563,25 +1556,22 @@ impl ::protobuf::Message for Pcap {
                 16 => {
                     self.chip_kind = is.read_enum_or_unknown()?;
                 },
-                24 => {
-                    self.chip_id = is.read_int32()?;
-                },
-                34 => {
+                26 => {
                     self.device_name = is.read_string()?;
                 },
-                40 => {
+                32 => {
                     self.state = is.read_enum_or_unknown()?;
                 },
-                48 => {
+                40 => {
                     self.size = is.read_int32()?;
                 },
-                56 => {
+                48 => {
                     self.records = is.read_int32()?;
                 },
-                66 => {
+                58 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.timestamp)?;
                 },
-                72 => {
+                64 => {
                     self.valid = is.read_bool()?;
                 },
                 tag => {
@@ -1602,20 +1592,17 @@ impl ::protobuf::Message for Pcap {
         if self.chip_kind != ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED) {
             my_size += ::protobuf::rt::int32_size(2, self.chip_kind.value());
         }
-        if self.chip_id != 0 {
-            my_size += ::protobuf::rt::int32_size(3, self.chip_id);
-        }
         if !self.device_name.is_empty() {
-            my_size += ::protobuf::rt::string_size(4, &self.device_name);
+            my_size += ::protobuf::rt::string_size(3, &self.device_name);
         }
         if self.state != ::protobuf::EnumOrUnknown::new(State::UNKNOWN) {
-            my_size += ::protobuf::rt::int32_size(5, self.state.value());
+            my_size += ::protobuf::rt::int32_size(4, self.state.value());
         }
         if self.size != 0 {
-            my_size += ::protobuf::rt::int32_size(6, self.size);
+            my_size += ::protobuf::rt::int32_size(5, self.size);
         }
         if self.records != 0 {
-            my_size += ::protobuf::rt::int32_size(7, self.records);
+            my_size += ::protobuf::rt::int32_size(6, self.records);
         }
         if let Some(v) = self.timestamp.as_ref() {
             let len = v.compute_size();
@@ -1636,26 +1623,23 @@ impl ::protobuf::Message for Pcap {
         if self.chip_kind != ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED) {
             os.write_enum(2, ::protobuf::EnumOrUnknown::value(&self.chip_kind))?;
         }
-        if self.chip_id != 0 {
-            os.write_int32(3, self.chip_id)?;
-        }
         if !self.device_name.is_empty() {
-            os.write_string(4, &self.device_name)?;
+            os.write_string(3, &self.device_name)?;
         }
         if self.state != ::protobuf::EnumOrUnknown::new(State::UNKNOWN) {
-            os.write_enum(5, ::protobuf::EnumOrUnknown::value(&self.state))?;
+            os.write_enum(4, ::protobuf::EnumOrUnknown::value(&self.state))?;
         }
         if self.size != 0 {
-            os.write_int32(6, self.size)?;
+            os.write_int32(5, self.size)?;
         }
         if self.records != 0 {
-            os.write_int32(7, self.records)?;
+            os.write_int32(6, self.records)?;
         }
         if let Some(v) = self.timestamp.as_ref() {
-            ::protobuf::rt::write_message_field_with_cached_size(8, v, os)?;
+            ::protobuf::rt::write_message_field_with_cached_size(7, v, os)?;
         }
         if self.valid != false {
-            os.write_bool(9, self.valid)?;
+            os.write_bool(8, self.valid)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -1669,14 +1653,13 @@ impl ::protobuf::Message for Pcap {
         &mut self.special_fields
     }
 
-    fn new() -> Pcap {
-        Pcap::new()
+    fn new() -> Capture {
+        Capture::new()
     }
 
     fn clear(&mut self) {
         self.id = 0;
         self.chip_kind = ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED);
-        self.chip_id = 0;
         self.device_name.clear();
         self.state = ::protobuf::EnumOrUnknown::new(State::UNKNOWN);
         self.size = 0;
@@ -1686,11 +1669,10 @@ impl ::protobuf::Message for Pcap {
         self.special_fields.clear();
     }
 
-    fn default_instance() -> &'static Pcap {
-        static instance: Pcap = Pcap {
+    fn default_instance() -> &'static Capture {
+        static instance: Capture = Capture {
             id: 0,
             chip_kind: ::protobuf::EnumOrUnknown::from_i32(0),
-            chip_id: 0,
             device_name: ::std::string::String::new(),
             state: ::protobuf::EnumOrUnknown::from_i32(0),
             size: 0,
@@ -1703,20 +1685,20 @@ impl ::protobuf::Message for Pcap {
     }
 }
 
-impl ::protobuf::MessageFull for Pcap {
+impl ::protobuf::MessageFull for Capture {
     fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
         static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("Pcap").unwrap()).clone()
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("Capture").unwrap()).clone()
     }
 }
 
-impl ::std::fmt::Display for Pcap {
+impl ::std::fmt::Display for Capture {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for Pcap {
+impl ::protobuf::reflect::ProtobufValue for Capture {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
@@ -1876,19 +1858,18 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     orientation\x18\x05\x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borien\
     tation\x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05c\
     hips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.mo\
-    del.DeviceR\x07devices\"\xaf\x02\n\x04Pcap\x12\x0e\n\x02id\x18\x01\x20\
-    \x01(\x05R\x02id\x124\n\tchip_kind\x18\x02\x20\x01(\x0e2\x17.netsim.comm\
-    on.ChipKindR\x08chipKind\x12\x17\n\x07chip_id\x18\x03\x20\x01(\x05R\x06c\
-    hipId\x12\x1f\n\x0bdevice_name\x18\x04\x20\x01(\tR\ndeviceName\x12)\n\
-    \x05state\x18\x05\x20\x01(\x0e2\x13.netsim.model.StateR\x05state\x12\x12\
-    \n\x04size\x18\x06\x20\x01(\x05R\x04size\x12\x18\n\x07records\x18\x07\
-    \x20\x01(\x05R\x07records\x128\n\ttimestamp\x18\x08\x20\x01(\x0b2\x1a.go\
-    ogle.protobuf.TimestampR\ttimestamp\x12\x14\n\x05valid\x18\t\x20\x01(\
-    \x08R\x05valid*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLUET\
-    OOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\
-    \x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*\
-    %\n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\
-    \n\x03OFF\x10\x02b\x06proto3\
+    del.DeviceR\x07devices\"\x99\x02\n\x07Capture\x12\x0e\n\x02id\x18\x01\
+    \x20\x01(\x05R\x02id\x124\n\tchip_kind\x18\x02\x20\x01(\x0e2\x17.netsim.\
+    common.ChipKindR\x08chipKind\x12\x1f\n\x0bdevice_name\x18\x03\x20\x01(\t\
+    R\ndeviceName\x12)\n\x05state\x18\x04\x20\x01(\x0e2\x13.netsim.model.Sta\
+    teR\x05state\x12\x12\n\x04size\x18\x05\x20\x01(\x05R\x04size\x12\x18\n\
+    \x07records\x18\x06\x20\x01(\x05R\x07records\x128\n\ttimestamp\x18\x07\
+    \x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x14\n\x05va\
+    lid\x18\x08\x20\x01(\x08R\x05valid*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\
+    \0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENE\
+    RGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\
+    \x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\
+    \x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -1914,7 +1895,7 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(Chip::generated_message_descriptor_data());
             messages.push(Device::generated_message_descriptor_data());
             messages.push(Scene::generated_message_descriptor_data());
-            messages.push(Pcap::generated_message_descriptor_data());
+            messages.push(Capture::generated_message_descriptor_data());
             messages.push(chip::Radio::generated_message_descriptor_data());
             messages.push(chip::Bluetooth::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(2);

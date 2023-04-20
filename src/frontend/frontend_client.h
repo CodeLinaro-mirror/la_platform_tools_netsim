@@ -57,10 +57,10 @@ class FrontendClient {
   virtual std::unique_ptr<ClientResult> PatchDevice(
       rust::Vec<rust::u8> const &request_byte_vec) const = 0;
   virtual std::unique_ptr<ClientResult> Reset() const = 0;
-  virtual std::unique_ptr<ClientResult> ListPcap() const = 0;
-  virtual std::unique_ptr<ClientResult> PatchPcap(
+  virtual std::unique_ptr<ClientResult> ListCapture() const = 0;
+  virtual std::unique_ptr<ClientResult> PatchCapture(
       rust::Vec<rust::u8> const &request_byte_vec) const = 0;
-  virtual std::unique_ptr<ClientResult> GetPcap(
+  virtual std::unique_ptr<ClientResult> GetCapture(
       rust::Vec<::rust::u8> const &request_byte_vec,
       ClientResponseReader const &client_reader) const = 0;
 };

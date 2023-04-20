@@ -14,11 +14,11 @@
 
 //! Packet Capture handlers and singleton for HTTP and gRPC server.
 //!
-//! This module implements a handler for GET, PATCH, LIST pcap
+//! This module implements a handler for GET, PATCH, LIST capture
 //!
 //! /v1/captures --> handle_capture_list
 //! /v1/captures/{id} --> handle_capture_patch, handle_capture_get
-//! handle_pcap_cxx calls handle_capture, which calls handle_capture_* based on uri
+//! handle_capture_cxx calls handle_capture, which calls handle_capture_* based on uri
 //! handle_packet_request and handle_packet_response is invoked by packet_hub
 //! to write packets to files if capture state is on.
 
@@ -27,7 +27,7 @@
 
 use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
-use frontend_proto::frontend::{GetDevicesResponse, ListPcapResponse};
+use frontend_proto::frontend::{GetDevicesResponse, ListCaptureResponse};
 use lazy_static::lazy_static;
 use netsim_common::util::time_display::TimeDisplay;
 use protobuf::Message;
@@ -39,10 +39,10 @@ use std::pin::Pin;
 use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::captures::capture::{Captures, ChipId};
 use crate::ffi::{get_devices_bytes, CxxServerResponseWriter};
 use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
-use crate::pcap::capture::{Captures, ChipId};
 use crate::CxxServerResponseWriterWrapper;
 
 use super::capture::CaptureInfo;
@@ -63,7 +63,7 @@ lazy_static! {
 }
 
 // Update the Captures collection to reflect the currently connected devices.
-// This function removes entries from Pcaps when devices/chips
+// This function removes entries from Captures when devices/chips
 // go away and adds entries when new devices/chips connect.
 //
 // Note: if a device disconnects and there is captured data, the entry
@@ -73,7 +73,7 @@ fn update_captures(captures: &mut Captures) {
     // Print error and return empty hashmap if GetDevicesBytes fails.
     let mut vec = Vec::<u8>::new();
     if !get_devices_bytes(&mut vec) {
-        println!("netsim error: GetDevicesBytes failed - returning an empty set of pcaps");
+        println!("netsim error: GetDevicesBytes failed - returning an empty set of captures");
         return;
     }
 
@@ -104,7 +104,7 @@ fn update_captures(captures: &mut Captures) {
         Unused(ChipId), // type ChipId = i32
     }
 
-    // Check if the active_pcap entry still exists in the chips.
+    // Check if the active_capture entry still exists in the chips.
     let mut removal = Vec::<RemovalIndicator>::new();
     for (chip_id, capture) in captures.iter() {
         let lock = capture.lock().unwrap();
@@ -118,7 +118,7 @@ fn update_captures(captures: &mut Captures) {
         }
     }
 
-    // Now remove/update the pcaps based on the loop above
+    // Now remove/update the captures based on the loop above
     for indicator in removal {
         match indicator {
             RemovalIndicator::Unused(key) => captures.remove(&key),
@@ -139,10 +139,10 @@ fn get_file(id: ChipId, device_name: String, chip_kind: ChipKind) -> Result<File
     File::open(filename)
 }
 
-// TODO: GetPcap should return the information of the pcap. Need to reconsider
+// TODO: GetCapture should return the information of the capture. Need to reconsider
 // uri hierarchy.
-// GET /pcap/id/{id} --> Get Pcap informatiojn
-// GET /pcap/contents/{id} --> Download Pcap file
+// GET /captures/id/{id} --> Get Capture information
+// GET /captures/contents/{id} --> Download Pcap file
 pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id: ChipId) {
     // Get the most updated active captures
     update_captures(captures);
@@ -176,7 +176,7 @@ pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id:
             writer.put_error(404, "Cannot open Capture file");
         }
     } else {
-        writer.put_error(404, "Cannot access Pcap Resource")
+        writer.put_error(404, "Cannot access Capture Resource")
     }
 }
 
@@ -184,10 +184,10 @@ pub fn handle_capture_list(writer: ResponseWritable, captures: &mut Captures) {
     // Get the most updated active captures
     update_captures(captures);
 
-    // Instantiate ListPcapResponse and add Captures
-    let mut response = ListPcapResponse::new();
+    // Instantiate ListCaptureResponse and add Captures
+    let mut response = ListCaptureResponse::new();
     for capture in captures.values() {
-        response.pcaps.push(capture.lock().unwrap().get_capture_proto());
+        response.captures.push(capture.lock().unwrap().get_capture_proto());
     }
 
     // Perform protobuf-json-mapping with the given protobuf
@@ -246,7 +246,7 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
                 let id = match param.parse::<i32>() {
                     Ok(num) => num,
                     Err(_) => {
-                        writer.put_error(404, "Incorrect ID type for pcap, ID should be i32.");
+                        writer.put_error(404, "Incorrect ID type for capture, ID should be i32.");
                         return;
                     }
                 };
@@ -257,7 +257,7 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
                 let id = match param.parse::<i32>() {
                     Ok(num) => num,
                     Err(_) => {
-                        writer.put_error(404, "Incorrect ID type for pcap, ID should be i32.");
+                        writer.put_error(404, "Incorrect ID type for capture, ID should be i32.");
                         return;
                     }
                 };
@@ -266,7 +266,7 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
                 match state.as_str() {
                     "1" => handle_capture_patch(writer, &mut captures, id, true),
                     "2" => handle_capture_patch(writer, &mut captures, id, false),
-                    _ => writer.put_error(404, "Incorrect state for PatchPcap"),
+                    _ => writer.put_error(404, "Incorrect state for PatchCapture"),
                 }
             }
             _ => writer.put_error(404, "Not found."),
@@ -274,8 +274,8 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
     }
 }
 
-/// pcap handle cxx for grpc server to call
-pub fn handle_pcap_cxx(
+/// capture handle cxx for grpc server to call
+pub fn handle_capture_cxx(
     responder: Pin<&mut CxxServerResponseWriter>,
     method: String,
     param: String,
@@ -318,19 +318,21 @@ fn handle_packet(
     packet_type: u32,
     direction: PacketDirection,
 ) {
-    let pcaps = RESOURCE.read().unwrap();
+    let captures = RESOURCE.read().unwrap();
     let facade_key = CaptureInfo::new_facade_key(int_to_chip_kind(kind), facade_id as i32);
-    if let Some(mut pcap) =
-        pcaps.facade_key_to_capture.get(&facade_key).map(|arc_pcap| arc_pcap.lock().unwrap())
+    if let Some(mut capture) = captures
+        .facade_key_to_capture
+        .get(&facade_key)
+        .map(|arc_capture| arc_capture.lock().unwrap())
     {
-        if let Some(ref mut file) = pcap.file {
+        if let Some(ref mut file) = capture.file {
             if int_to_chip_kind(kind) == ChipKind::BLUETOOTH {
                 let timestamp =
                     SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
                 match append_record(timestamp, file, direction, packet_type, packet.as_slice()) {
                     Ok(size) => {
-                        pcap.size += size;
-                        pcap.records += 1;
+                        capture.size += size;
+                        capture.records += 1;
                     }
                     Err(err) => {
                         println!("netsimd: {err:?}");

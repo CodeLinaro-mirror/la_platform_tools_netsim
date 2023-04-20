@@ -79,7 +79,7 @@ pub fn append_record(
 mod tests {
     use std::{fs::File, io::Read, time::Duration};
 
-    use crate::pcap::pcap_util::{append_record, PacketDirection};
+    use crate::captures::pcap_util::{append_record, PacketDirection};
 
     use super::write_pcap_header;
 

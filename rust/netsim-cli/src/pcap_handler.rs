@@ -18,12 +18,12 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-pub struct PcapHandler {
+pub struct CaptureHandler {
     pub file: File,
     pub path: PathBuf,
 }
 
-impl ClientResponseReadable for PcapHandler {
+impl ClientResponseReadable for CaptureHandler {
     // function to handle writing each chunk to file
     fn handle_chunk(&self, chunk: &[u8]) {
         (&self.file)

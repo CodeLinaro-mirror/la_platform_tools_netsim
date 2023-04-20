@@ -87,3 +87,23 @@ pub fn read_h4_packet<R: Read>(reader: &mut R) -> Result<Packet, PacketError> {
     reader.read_exact(&mut packet[preamble_size..]).map_err(PacketError::IoError)?;
     Ok(Packet { h4_type, payload: packet })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::read_h4_packet;
+    use super::H4_ACL_TYPE;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_acl() {
+        let hci_acl: Vec<u8> = vec![
+            0x02, 0x2a, 0x20, 0x11, 0x00, 0x15, 0x00, 0x40, 0x00, 0x06, 0x00, 0x01, 0x00, 0x10,
+            0x36, 0x00, 0x03, 0x19, 0x11, 0x08, 0x02, 0xa0,
+        ];
+        let mut file = Cursor::new(hci_acl);
+        let response = read_h4_packet(&mut file);
+        assert!(&response.is_ok());
+        assert_eq!(response.as_ref().unwrap().h4_type, H4_ACL_TYPE);
+        assert_eq!(response.as_ref().unwrap().payload.len(), 21);
+    }
+}

@@ -25,9 +25,9 @@ impl args::Command {
             Command::Devices(_) => GrpcMethod::GetDevices,
             Command::Reset => GrpcMethod::Reset,
             Command::Pcap(cmd) => match cmd {
-                args::Pcap::List(_) => GrpcMethod::ListPcap,
-                args::Pcap::Get(_) => GrpcMethod::GetPcap,
-                args::Pcap::Patch(_) => GrpcMethod::PatchPcap,
+                args::Pcap::List(_) => GrpcMethod::ListCapture,
+                args::Pcap::Get(_) => GrpcMethod::GetCapture,
+                args::Pcap::Patch(_) => GrpcMethod::PatchCapture,
             },
             Command::Gui => {
                 panic!("No GrpcMethod for Ui Command.");
@@ -242,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_pcap_list() {
-        test_command("netsim-cli pcap list", GrpcMethod::ListPcap, Vec::new())
+        test_command("netsim-cli pcap list", GrpcMethod::ListCapture, Vec::new())
     }
 
     //TODO: Add pcap patch and get tests once able to run tests with cxx definitions
