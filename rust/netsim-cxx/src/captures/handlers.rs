@@ -352,3 +352,17 @@ pub fn handle_packet_request(kind: u32, facade_id: u32, packet: &CxxVector<u8>, 
 pub fn handle_packet_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u32) {
     handle_packet(kind, facade_id, packet, packet_type, PacketDirection::ControllerToHost)
 }
+
+// Cxx Method for clearing pcap files in temp directory
+pub fn clear_pcap_files() -> bool {
+    let mut path = std::env::temp_dir();
+    path.push("netsim-pcaps");
+
+    // Check if the directory exists.
+    if std::fs::metadata(&path).is_err() {
+        return false;
+    }
+
+    // Delete the directory.
+    std::fs::remove_dir_all(&path).is_ok()
+}

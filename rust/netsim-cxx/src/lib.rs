@@ -35,7 +35,7 @@ use crate::transport::fd::handle_response;
 use crate::transport::fd::run_fd_transport;
 
 use crate::captures::handlers::{
-    handle_capture_cxx, handle_packet_request, handle_packet_response,
+    clear_pcap_files, handle_capture_cxx, handle_packet_request, handle_packet_response,
 };
 use crate::http_server::run_http_server;
 use crate::ranging::*;
@@ -98,6 +98,12 @@ mod ffi {
             packet: &CxxVector<u8>,
             packet_type: u32,
         );
+
+        // Clearing out all pcap Files in temp directory
+
+        #[cxx_name = ClearPcapFiles]
+        #[namespace = "netsim::pcap"]
+        fn clear_pcap_files() -> bool;
 
         // Uwb Facade.
 
