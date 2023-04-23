@@ -16,7 +16,7 @@
 
 mod args;
 mod browser;
-mod pcap_handler;
+mod capture_handler;
 mod requests;
 mod response;
 
@@ -25,16 +25,16 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use args::{BinaryProtobuf, GetCapture, NetsimArgs};
+use capture_handler::CaptureHandler;
 use clap::Parser;
 use cxx::UniquePtr;
 use frontend_client_cxx::ffi::{new_frontend_client, ClientResult, FrontendClient, GrpcMethod};
 use frontend_client_cxx::ClientResponseReader;
-use pcap_handler::CaptureHandler;
 
 // helper function to process streaming Grpc request
 fn perform_streaming_request(
     client: &cxx::UniquePtr<FrontendClient>,
-    cmd: &GetCapture,
+    cmd: &mut GetCapture,
     req: &BinaryProtobuf,
     filename: &str,
 ) -> UniquePtr<ClientResult> {
@@ -43,13 +43,8 @@ fn perform_streaming_request(
     } else {
         env::current_dir().unwrap()
     };
-    // Find next available file name
-    let mut output_file = dir.join(filename.to_string() + ".pcap");
-    let mut idx = 0;
-    while output_file.exists() {
-        idx += 1;
-        output_file = dir.join(format!("{}_{}.pcap", filename, idx));
-    }
+    let output_file = dir.join(filename);
+    cmd.current_file = output_file.display().to_string();
     client.get_capture(
         req,
         &ClientResponseReader {
@@ -72,12 +67,12 @@ fn perform_command(
 ) -> Result<(), String> {
     // Get command's gRPC request(s)
     let requests = match command {
-        args::Command::Pcap(args::Pcap::Patch(_) | args::Pcap::Get(_)) => {
+        args::Command::Capture(args::Capture::Patch(_) | args::Capture::Get(_)) => {
             command.get_requests(&client)
         }
         _ => vec![command.get_request_bytes()],
     };
-
+    let mut process_error = false;
     // Process each request
     for (i, req) in requests.iter().enumerate() {
         let result = match command {
@@ -86,14 +81,20 @@ fn perform_command(
                 process_result(command, client.send_grpc(&grpc_method, req), verbose)?;
                 std::thread::sleep(std::time::Duration::from_secs(1));
             },
-            // Get Pcap use streaming gRPC reader request
-            args::Command::Pcap(args::Pcap::Get(ref cmd)) => {
-                perform_streaming_request(&client, cmd, req, &cmd.filenames[i])
+            // Get Capture use streaming gRPC reader request
+            args::Command::Capture(args::Capture::Get(ref mut cmd)) => {
+                perform_streaming_request(&client, cmd, req, &cmd.filenames[i].to_owned())
             }
             // All other commands use a single gRPC call
             _ => client.send_grpc(&grpc_method, req),
         };
-        process_result(command, result, verbose)?;
+        if let Err(e) = process_result(command, result, verbose) {
+            eprintln!("{}", e);
+            process_error = true;
+        };
+    }
+    if process_error {
+        return Err("Not all requests were processed successfully.".to_string());
     }
     Ok(())
 }

@@ -33,7 +33,6 @@ use frontend_proto::model::Position as ProtoPosition;
 use frontend_proto::model::Scene as ProtoScene;
 use lazy_static::lazy_static;
 use protobuf_json_mapping::merge_from_str;
-use protobuf_json_mapping::print_to_string;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::sync::RwLockWriteGuard;
@@ -184,16 +183,13 @@ pub fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> f32 {
 }
 
 #[allow(dead_code)]
-pub fn get_devices() -> String {
+pub fn get_devices() -> ProtoScene {
     let mut scene = ProtoScene::new();
     // iterate over the devices and add each to the scene
     DEVICES.read().unwrap().devices.values().for_each(|device| {
         scene.devices.push(device.get());
     });
-    print_to_string(&scene).unwrap_or_else(|e| -> String {
-        eprintln!("Error converting scene {:?}", e);
-        String::new()
-    })
+    scene
 }
 
 #[allow(dead_code)]
@@ -221,10 +217,57 @@ fn get_secs_until_idle_shutdown() -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
+    use protobuf_json_mapping::print_to_string;
+
     use super::*;
 
+    /// TestChipParameters struct to invoke add_chip
+    /// This struct contains parameters required to invoke add_chip.
+    /// This will eventually be invoked by the facades.
+    struct TestChipParameters<'a> {
+        device_guid: &'a str,
+        device_name: &'a str,
+        chip_kind: ProtoChipKind,
+        chip_name: &'a str,
+        chip_manufacturer: &'a str,
+        chip_product_name: &'a str,
+    }
+
+    impl TestChipParameters<'_> {
+        fn add_chip(&self) -> AddChipResult {
+            super::add_chip(
+                self.device_guid,
+                self.device_name,
+                self.chip_kind,
+                self.chip_name,
+                self.chip_manufacturer,
+                self.chip_product_name,
+            )
+        }
+    }
+
+    /// helper function for test cases to instantiate ProtoPosition
     fn new_with_xyz(x: f32, y: f32, z: f32) -> ProtoPosition {
         ProtoPosition { x, y, z, ..Default::default() }
+    }
+
+    /// helper function for test cases to refresh DEVICES
+    fn refresh_resource() {
+        let mut resource = DEVICES.write().unwrap();
+        resource.devices = HashMap::new();
+        resource.id_factory = IdFactory::new(1000, 1);
+        resource.idle_since = None
+    }
+
+    fn test_chip_1_bt() -> TestChipParameters<'static> {
+        TestChipParameters {
+            device_guid: "guid-fs-1",
+            device_name: "test-device-name-1",
+            chip_kind: ProtoChipKind::BLUETOOTH,
+            chip_name: "bt_chip_name",
+            chip_manufacturer: "netsim",
+            chip_product_name: "netsim_bt",
+        }
     }
 
     #[test]
@@ -235,5 +278,29 @@ mod tests {
         assert_eq!(distance(&a, &b), 3.0);
         b = new_with_xyz(2.0, 3.0, 6.0);
         assert_eq!(distance(&a, &b), 7.0);
+    }
+
+    #[test]
+    fn test_patch_device_position() {
+        // Patching device position
+        refresh_resource();
+        let test_chip_params = test_chip_1_bt();
+        let mock_chip_result = test_chip_params.add_chip();
+        let mut patch_device_request = ProtoDevice::new();
+        let request_position = new_with_xyz(1.1, 2.2, 3.3);
+        patch_device_request.name = test_chip_params.device_name.into();
+        patch_device_request.position = Some(request_position.clone()).into();
+        patch_device(
+            mock_chip_result.device_id,
+            print_to_string(&patch_device_request).unwrap().as_str(),
+        );
+        match get_devices().devices.get(0) {
+            Some(device) => {
+                assert_eq!(device.position.x, request_position.x);
+                assert_eq!(device.position.y, request_position.y);
+                assert_eq!(device.position.z, request_position.z);
+            }
+            None => unreachable!(),
+        }
     }
 }

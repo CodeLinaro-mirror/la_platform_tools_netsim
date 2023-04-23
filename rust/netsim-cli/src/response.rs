@@ -14,7 +14,7 @@
 
 use std::cmp::max;
 
-use crate::args::{self, Command, OnOffState, Pcap};
+use crate::args::{self, Capture, Command, OnOffState};
 use frontend_proto::{
     common::ChipKind,
     frontend::{GetDevicesResponse, ListCaptureResponse, VersionResponse},
@@ -61,12 +61,12 @@ impl args::Command {
                     println!("All devices have been reset.");
                 }
             }
-            Command::Pcap(Pcap::List(cmd)) => Self::print_list_capture_response(
+            Command::Capture(Capture::List(cmd)) => Self::print_list_capture_response(
                 ListCaptureResponse::parse_from_bytes(response).unwrap(),
                 verbose,
                 cmd.patterns.to_owned(),
             ),
-            Command::Pcap(Pcap::Patch(cmd)) => {
+            Command::Capture(Capture::Patch(cmd)) => {
                 if verbose {
                     println!(
                         "Patched Capture state to {}",
@@ -74,9 +74,9 @@ impl args::Command {
                     );
                 }
             }
-            Command::Pcap(Pcap::Get(_)) => {
+            Command::Capture(Capture::Get(cmd)) => {
                 if verbose {
-                    println!("Successfully downloaded Pcap.");
+                    println!("Successfully downloaded file: {}", cmd.current_file);
                 }
             }
             Command::Gui => {

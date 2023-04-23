@@ -86,11 +86,14 @@ fn update_captures(captures: &mut Captures) {
         for chip in device.chips {
             chip_ids.insert(chip.id);
             if !captures.contains(chip.id) {
-                let capture = CaptureInfo::new(
+                let mut capture = CaptureInfo::new(
                     chip.kind.enum_value_or_default(),
                     chip.id,
                     device.name.clone(),
                 );
+                // TODO(b/268271460): Add ability to set default capture state.
+                // Currently, the default capture state is ON
+                let _ = capture.start_capture();
                 captures.insert(capture);
             }
         }
@@ -149,7 +152,13 @@ pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id:
 
     if let Some(capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
         if capture.size == 0 {
-            writer.put_error(404, "Capture file not found");
+            writer.put_error(
+                404,
+                &format!(
+                    "Capture file not found for {:?}-{}-{:?}",
+                    id, capture.device_name, capture.chip_kind
+                ),
+            );
         } else if let Ok(mut file) = get_file(id, capture.device_name.clone(), capture.chip_kind) {
             let mut buffer = [0u8; CHUNK_LEN];
             let time_display = TimeDisplay::new(capture.seconds, capture.nanos as u32);
@@ -318,8 +327,12 @@ fn handle_packet(
     packet_type: u32,
     direction: PacketDirection,
 ) {
-    let captures = RESOURCE.read().unwrap();
+    let mut captures = RESOURCE.write().unwrap();
     let facade_key = CaptureInfo::new_facade_key(int_to_chip_kind(kind), facade_id as i32);
+    // TODO: Create event channel to invoke update_captures when new device is added.
+    if !captures.facade_key_to_capture.contains_key(&facade_key) {
+        update_captures(&mut captures);
+    }
     if let Some(mut capture) = captures
         .facade_key_to_capture
         .get(&facade_key)

@@ -38,7 +38,7 @@ add_subdirectory(${EXTERNAL}/qemu/android/third_party/protobuf protobuf)
 
 add_subdirectory(${AOSP}/hardware/google/aemu/base aemu-base)
 add_subdirectory(${AOSP}/hardware/google/aemu/host-common host-common)
-add_subdirectory(${EXTERNAL_QEMU}/android/bluetooth/rootcanal rootcanal)
+add_subdirectory(${AOSP}/packages/modules/Bluetooth/tools/rootcanal rootcanal)
 add_subdirectory(${EXTERNAL_QEMU}/android/third_party/abseil-cpp abseil-cpp)
 add_subdirectory(${EXTERNAL_QEMU}/android/third_party/boringssl boringssl)
 add_subdirectory(${EXTERNAL_QEMU}/android/third_party/google-benchmark
