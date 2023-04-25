@@ -32,6 +32,8 @@ using netsim::common::ChipKind;
 void HandleRequest(ChipKind kind, uint32_t facade_id,
                    const std::vector<uint8_t> &packet,
                    packet::HCIPacket_PacketType packet_type) {
+  // capture the packet
+  netsim::pcap::HandleRequest(kind, facade_id, packet, packet_type);
   // Copied
   auto shared_packet = std::make_shared<std::vector<uint8_t>>(packet);
   if (kind == ChipKind::BLUETOOTH) {
@@ -39,7 +41,6 @@ void HandleRequest(ChipKind kind, uint32_t facade_id,
   } else if (kind == ChipKind::WIFI) {
     netsim::wifi::HandleWifiRequest(facade_id, shared_packet);
   }
-  netsim::pcap::HandleRequest(kind, facade_id, packet, packet_type);
 }
 
 void HandleRequestCxx(uint32_t kind, uint32_t facade_id,
@@ -53,23 +54,23 @@ void HandleRequestCxx(uint32_t kind, uint32_t facade_id,
 void HandleBtResponse(uint32_t facade_id,
                       packet::HCIPacket_PacketType packet_type,
                       const std::shared_ptr<std::vector<uint8_t>> &packet) {
+  netsim::pcap::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
+                               packet_type);
   netsim::backend::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
                                   packet_type);
   netsim::fd::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
                              packet_type);
-  netsim::pcap::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
-                               packet_type);
 }
 
 // forward from facade to transport via packet_hub
 void HandleWifiResponse(uint32_t facade_id,
                         const std::shared_ptr<std::vector<uint8_t>> &packet) {
+  netsim::pcap::HandleResponse(ChipKind::WIFI, facade_id, *packet,
+                               packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
   netsim::backend::HandleResponse(ChipKind::WIFI, facade_id, *packet,
                                   packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
   netsim::fd::HandleResponse(ChipKind::WIFI, facade_id, *packet,
                              packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
-  netsim::pcap::HandleResponse(ChipKind::WIFI, facade_id, *packet,
-                               packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
 }
 
 }  // namespace packet_hub
