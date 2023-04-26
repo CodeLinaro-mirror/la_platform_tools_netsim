@@ -38,6 +38,8 @@ int GetFacadeId(int chip_id);
 
 void RemoveChip(uint32_t device_id, uint32_t chip_id);
 
+void Reset();
+
 /// The C++ definition of AddChip response interface for CXX.
 class AddChipResult {
  public:

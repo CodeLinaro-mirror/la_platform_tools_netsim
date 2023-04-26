@@ -213,6 +213,9 @@ mod ffi {
         #[namespace = "netsim::packet_hub"]
         fn HandleRequestCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
 
+        #[rust_name = "reset"]
+        #[namespace = "netsim::scene_controller"]
+        fn Reset();
     }
 }
 

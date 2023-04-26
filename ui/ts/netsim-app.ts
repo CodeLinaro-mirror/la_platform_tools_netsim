@@ -57,9 +57,11 @@ export class NetsimApp extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     window.addEventListener('changeModeEvent', this.handleChangeModeEvent);
+    window.addEventListener('reset-button-clicked', this.handleReset);
   }
 
   disconnectedCallback() {
+    window.removeEventListener('reset-button-clicked', this.handleReset);
     window.removeEventListener('changeModeEvent', this.handleChangeModeEvent);
     super.disconnectedCallback();
   }
@@ -69,12 +71,21 @@ export class NetsimApp extends LitElement {
     this.viewMode = detail.mode;
   };
 
+  handleReset() {
+    fetch('./v1/devices', {
+      method: 'PUT',
+    }).catch(error => {
+      console.log('Cannot connect to netsim web server:', error);
+    })
+  };
+
   render() {
     let page = html``;
     if (this.viewMode === 'main') {
       page = html`
         <ns-customize-button eventName="map-button-clicked" class="primary" aria-label="Change background of the device map">Change Background</ns-customize-button>
         <ns-customize-button eventName="isometric-button-clicked" class="primary" aria-label="Toggle view of the device map">Toggle View</ns-customize-button>
+        <ns-customize-button eventName="reset-button-clicked" class="primary" aria-label="Reset device information">Reset</ns-customize-button>
         <div class="container">
           <div class="contentA">
             <ns-device-map></ns-device-map>

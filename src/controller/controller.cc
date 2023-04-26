@@ -84,6 +84,8 @@ void RemoveChip(uint32_t device_id, uint32_t chip_id) {
                                                               chip_id);
 }
 
+void Reset() { netsim::controller::SceneController::Singleton().Reset(); }
+
 std::unique_ptr<AddChipResult> AddChipCxx(const std::string &guid,
                                           const std::string &device_name,
                                           uint32_t chip_kind,

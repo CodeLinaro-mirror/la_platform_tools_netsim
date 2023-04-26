@@ -30,6 +30,7 @@ use crate::http_server::thread_pool::ThreadPool;
 
 use crate::ffi::get_devices;
 use crate::ffi::patch_device;
+use crate::ffi::reset;
 use cxx::let_cxx_string;
 use std::collections::HashSet;
 use std::ffi::OsStr;
@@ -178,6 +179,9 @@ fn handle_devices(request: &HttpRequest, _param: &str, writer: ResponseWritable)
             let body = format!("404 Not found (netsim): {:?}", error_message.to_string());
             writer.put_error(404, body.as_str());
         }
+    } else if &request.method == "PUT" {
+        reset();
+        writer.put_ok("text/plain", r"Device position reset success", &[]);
     } else {
         let body = format!(
             "404 Not found (netsim): {:?} is not a valid method for this route",
