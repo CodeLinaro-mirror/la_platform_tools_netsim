@@ -203,10 +203,10 @@ class SimulationState implements Observable {
         })
   }
 
-  fetchDevice(devices: ProtoDevice[]) {
+  fetchDevice(devices?: ProtoDevice[]) {
     this.simulationInfo.devices = [];
-    for (const device of devices) {
-      this.simulationInfo.devices.push(new Device(device));
+    if (devices) {
+      this.simulationInfo.devices = devices.map(device => new Device(device));
     }
     this.notifyObservers();
   }

@@ -56,10 +56,14 @@ void HandleBtResponse(uint32_t facade_id,
                       const std::shared_ptr<std::vector<uint8_t>> &packet) {
   netsim::pcap::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
                                packet_type);
+  // TODO: Return true in backend::HandleResponse, fd::HandleResponse and
+  // socket::HandleResponse if the response was handled correctly.
   netsim::backend::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
                                   packet_type);
   netsim::fd::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
                              packet_type);
+  netsim::socket::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
+                                 packet_type);
 }
 
 // forward from facade to transport via packet_hub

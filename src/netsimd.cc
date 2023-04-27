@@ -114,8 +114,11 @@ int main(int argc, char *argv[]) {
   // Create a frontend grpc client to check if a netsimd is already running.
   auto frontend_stub = netsim::frontend::NewFrontendClient();
   if (frontend_stub == nullptr) {
-    // starts netsim in vhci connection mode
+    // starts netsim servers.
     netsim::server::Run();
+  } else {
+    std::cerr << "Failed to start netsim daemon because a netsim daemon is "
+                 "already running\n";
   }
 #else
   if (!fd_startup_str.empty()) {

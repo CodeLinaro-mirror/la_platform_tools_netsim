@@ -20,6 +20,7 @@ mod captures;
 mod devices;
 mod http_server;
 mod ranging;
+mod system;
 mod transport;
 mod uwb;
 mod version;
@@ -33,6 +34,8 @@ use http_server::server_response::ServerResponseWritable;
 
 use crate::transport::fd::handle_response;
 use crate::transport::fd::run_fd_transport;
+use crate::transport::socket::handle_response as socket_handle_response;
+use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
     clear_pcap_files, handle_capture_cxx, handle_packet_request, handle_packet_response,
@@ -46,6 +49,8 @@ use crate::version::*;
 mod ffi {
 
     extern "Rust" {
+        #[cxx_name = "RunSocketTransport"]
+        fn run_socket_transport(hci_port: u16);
 
         #[cxx_name = "RunFdTransport"]
         fn run_fd_transport(startup_json: &String);
@@ -78,6 +83,15 @@ mod ffi {
         #[cxx_name = HandleResponse]
         #[namespace = "netsim::fd"]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
+
+        #[cxx_name = HandleResponse]
+        #[namespace = "netsim::socket"]
+        fn socket_handle_response(
+            kind: u32,
+            facade_id: u32,
+            packet: &CxxVector<u8>,
+            packet_type: u8,
+        );
 
         // Capture Resource
 

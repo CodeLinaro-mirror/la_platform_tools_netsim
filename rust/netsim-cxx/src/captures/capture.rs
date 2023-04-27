@@ -32,6 +32,7 @@ use frontend_proto::{
 use protobuf::well_known_types::timestamp::Timestamp;
 
 use crate::ffi::get_facade_id;
+use crate::system;
 
 use super::pcap_util::write_pcap_header;
 
@@ -82,13 +83,13 @@ impl CaptureInfo {
 
     // Creates a pcap file with headers and store it under temp directory
     // The lifecycle of the file is NOT tied to the lifecycle of the struct
-    // Format: /tmp/netsim-pcaps/{chip_id}-{device_name}-{chip_kind}.pcap
+    // Format: /tmp/netsimd/$USER/pcaps/{chip_id}-{device_name}-{chip_kind}.pcap
     pub fn start_capture(&mut self) -> Result<()> {
         if self.file.is_some() {
             return Ok(());
         }
-        let mut filename = std::env::temp_dir();
-        filename.push("netsim-pcaps");
+        let mut filename = system::netsimd_temp_dir();
+        filename.push("pcaps");
         std::fs::create_dir_all(&filename)?;
         filename.push(format!("{:?}-{:}-{:?}.pcap", self.id, self.device_name, self.chip_kind));
         let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(filename)?;

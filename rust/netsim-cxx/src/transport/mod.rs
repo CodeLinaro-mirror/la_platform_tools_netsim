@@ -14,8 +14,8 @@
 
 #[cfg(feature = "cuttlefish")]
 pub mod fd;
-#[cfg(feature = "cuttlefish")]
 mod h4;
+pub mod socket;
 #[cfg(feature = "cuttlefish")]
 mod uci;
 

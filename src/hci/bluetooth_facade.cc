@@ -221,7 +221,7 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
 }
 
 void Remove(uint32_t id) {
-  BtsLog("Removing HCI chip for %s");
+  BtsLog("Removing HCI chip for %d", id);
   id_to_chip_info_.erase(id);
   gTestModel->RemoveDevice(id);
   // rootcanal will call HciPacketTransport::Close().
