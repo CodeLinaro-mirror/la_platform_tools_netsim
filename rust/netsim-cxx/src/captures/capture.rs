@@ -50,6 +50,7 @@ pub struct CaptureInfo {
     pub records: i32,
     pub seconds: i64,
     pub nanos: i32,
+    /// valid represents the status of whether the device is connected to netsim
     pub valid: bool,
 }
 

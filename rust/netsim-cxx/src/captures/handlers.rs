@@ -127,7 +127,10 @@ fn update_captures(captures: &mut Captures) {
             RemovalIndicator::Unused(key) => captures.remove(&key),
             RemovalIndicator::Gone(key) => {
                 for capture in captures.get(key).iter() {
-                    capture.lock().unwrap().valid = false;
+                    let mut lock = capture.lock().unwrap();
+                    lock.stop_capture();
+                    // Valid is marked false if the capture of the device is disconnected from netsim
+                    lock.valid = false;
                 }
             }
         }
