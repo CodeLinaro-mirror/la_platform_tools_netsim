@@ -93,17 +93,17 @@ fn match_route<'a>(route: &str, uri: &'a str) -> Option<&'a str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http_server::http_response::HttpHeaders;
+    use crate::http_server::http_request::HttpHeaders;
     use crate::http_server::server_response::ServerResponseWriter;
     use std::io::Cursor;
 
     fn handle_index(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
-        writer.put_ok_with_vec("text/html", b"Hello, world!".to_vec());
+        writer.put_ok_with_vec("text/html", b"Hello, world!".to_vec(), &[]);
     }
 
     fn handle_user(_request: &HttpRequest, user_id: &str, writer: ResponseWritable) {
         let body = format!("Hello, {user_id}!");
-        writer.put_ok("application/json", body.as_str());
+        writer.put_ok("application/json", body.as_str(), &[]);
     }
 
     #[test]

@@ -131,8 +131,8 @@ void HciPacketTransport::Response(packet::HCIPacket_PacketType packet_type,
     return;
   }
   auto shared_packet = std::make_shared<std::vector<uint8_t>>(packet);
-  netsim::packet_hub::handle_bt_response(mDeviceId.value(), packet_type,
-                                         shared_packet);
+  netsim::packet_hub::HandleBtResponse(mDeviceId.value(), packet_type,
+                                       shared_packet);
 }
 
 rootcanal::PacketCallback HciPacketTransport::PacketTypeCallback(

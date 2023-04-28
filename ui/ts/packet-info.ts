@@ -2,16 +2,28 @@ import {css, html, LitElement} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
 
 import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
-import {State} from './model.js';
+import {Pcap, State} from './model.js';
 
 @customElement('ns-packet-info')
 export class PacketInformation extends LitElement implements Notifiable {
+  /**
+   * List of captures currently on the netsim.
+   */
+  @property() captureData: Pcap[] = [];
+
   /**
    * List of devices currently on the netsim.
    */
   @property() deviceData: Device[] = [];
 
   static styles = css`
+    :host {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      height: 100vh;
+    }
+
     .panel {
       cursor: pointer;
       display: grid;
@@ -21,6 +33,7 @@ export class PacketInformation extends LitElement implements Notifiable {
       font-family: 'Lato', sans-serif;
       border: 5px solid black;
       border-radius: 12px;
+      margin: 10px;
       padding: 10px;
       background-color: #ffffff;
       max-width: max-content;
@@ -111,6 +124,25 @@ export class PacketInformation extends LitElement implements Notifiable {
     input[type='checkbox'].switch_1:checked:after {
       left: calc(100% - 1.5em);
     }
+
+    button {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #4CAF50;
+      color: #FFFFFF;
+      font-size: 18px;
+      font-weight: bold;
+      text-align: center;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #45a049;
+      transition: 0.5s;
+    }
   `;
 
   connectedCallback() {
@@ -124,8 +156,15 @@ export class PacketInformation extends LitElement implements Notifiable {
   }
 
   onNotify(data: SimulationInfo) {
+    this.captureData = data.captures;
     this.deviceData = data.devices;
     this.requestUpdate();
+  }
+
+  toggleCapture(capture: Pcap) {
+    let id = capture.id.toString();
+    let state = capture.state === State.OFF ? '1' : '2';
+    simulationState.patchCapture(id, state);
   }
 
   private handleGetChips(device: Device) {
@@ -184,44 +223,33 @@ export class PacketInformation extends LitElement implements Notifiable {
     `;
   }
 
-  private handleGetCapture(device: Device) {
-    let resultCapture = html``;
-    if ('chips' in device && device.chips) {
-      for (const chip of device.chips) {
-        resultCapture = html`
-          ${resultCapture}
-          <tr>
-            <td>${device.name}</td>
-            <td>
-              ${
-            chip.bt       ? 'Bluetooth' :
-                chip.uwb  ? 'UWB' :
-                chip.wifi ? 'WIFI' :
-                            'Unknown'}
-            </td>
-            <td>
-              <input
+  private handleListCaptures(capture: Pcap) {
+    return html`
+      <tr>
+        <td>${capture.deviceName}</td>
+        <td>${capture.chipKind}</td>
+        <td>${capture.size}</td>
+        <td>${capture.records}</td>
+        <td>
+        <input
                 type="checkbox"
                 class="switch_1"
-                .checked=${chip.capture === State.ON}
+                .checked=${capture.state === State.ON}
                 @click=${() => {
-          device.toggleCapture(device, chip);
-        }}
+      this.toggleCapture(capture);
+    }}
               />
-            </td>
-            <td>
-              <a
-                href="./pcap/${device.name}"
-                target="_blank"
-                type="application/vnd.tcpdump.pcap"
-                >Download PCAP</a
-              >
-            </td>
-          </tr>
-        `;
-      }
-    }
-    return resultCapture;
+        </td>
+        <td>
+          <a
+            href="./v1/captures/${capture.id}"
+            target="_blank"
+            type="application/vnd.tcpdump.pcap"
+            ><button>Download</button></a
+          >
+        </td>
+      </tr>
+    `
   }
 
   render() {
@@ -239,15 +267,19 @@ export class PacketInformation extends LitElement implements Notifiable {
                 ${this.handleGetChips(device)}
               </table>
             `)}
+      </div>
+      <div class="panel">
         <div class="title">Packet Capture</div>
         <table class="styled-table">
           <tr>
-            <th>Name</th>
-            <th>Chip Type</th>
-            <th>Capture ON/OFF</th>
-            <th>Packet Trace</th>
+            <th>Device Name</th>
+            <th>Chip Kind</th>
+            <th>Bytes</th>
+            <th>Records</th>
+            <th>Capture State</th>
+            <th>Download Pcap</th>
           </tr>
-          ${this.deviceData.map(device => this.handleGetCapture(device))}
+          ${this.captureData.map(capture => this.handleListCaptures(capture))}
         </table>
       </div>
     `;

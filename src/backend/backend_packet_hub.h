@@ -28,9 +28,9 @@ using netsim::common::ChipKind;
 
 /* Handle packet responses for the backend. */
 
-void handle_response(ChipKind kind, uint32_t facade_id,
-                     const std::vector<uint8_t> &packet,
-                     /* optional */ packet::HCIPacket_PacketType packet_type);
+void HandleResponse(ChipKind kind, uint32_t facade_id,
+                    const std::vector<uint8_t> &packet,
+                    /* optional */ packet::HCIPacket_PacketType packet_type);
 
 }  // namespace backend
 }  // namespace netsim

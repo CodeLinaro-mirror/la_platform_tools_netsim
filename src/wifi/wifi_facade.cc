@@ -108,9 +108,9 @@ void Stop() { BtsLog("wifi::facade::Stop()"); }
 
 }  // namespace facade
 
-void handle_wifi_request(uint32_t facade_id,
-                         const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  BtsLog("netsim::wifi::handle_wifi_request()");
+void HandleWifiRequest(uint32_t facade_id,
+                       const std::shared_ptr<std::vector<uint8_t>> &packet) {
+  BtsLog("netsim::wifi::HandleWifiRequest()");
   netsim::wifi::IncrTx(facade_id);
 
   // TODO: Broadcast the packet to other emulators.
