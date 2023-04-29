@@ -104,20 +104,6 @@ class FrontendServer final : public frontend::FrontendService::Service {
     return grpc::Status::OK;
   }
 
-  grpc::Status SetPacketCapture(
-      grpc::ServerContext *context,
-      const frontend::SetPacketCaptureRequest *request,
-      google::protobuf::Empty *empty) {
-    model::Device device;
-    model::Chip chip;
-    // Turn on bt packet capture
-    chip.set_capture(request->capture() ? model::State::ON : model::State::OFF);
-    chip.mutable_bt();
-    device.mutable_chips()->Add()->CopyFrom(chip);
-    controller::SceneController::Singleton().PatchDevice(device);
-    return grpc::Status::OK;
-  }
-
   grpc::Status Reset(grpc::ServerContext *context,
                      const google::protobuf::Empty *request,
                      google::protobuf::Empty *empty) {

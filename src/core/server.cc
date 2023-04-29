@@ -75,7 +75,7 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port) {
 }
 }  // namespace
 
-void Run() {
+void Run(bool dev) {
   // Clear all pcap files in temp directory
   if (netsim::pcap::ClearPcapFiles()) {
     BtsLog("netsim generated pcap files in temp directory has been removed.");
@@ -93,7 +93,7 @@ void Run() {
   }
   if (netsim_grpc_port == 0) {
     // Run frontend http server.
-    std::thread(RunHttpServer).detach();
+    std::thread(RunHttpServer, dev).detach();
   }
 
   // Environment variable "NETSIM_HCI_PORT" can be set.

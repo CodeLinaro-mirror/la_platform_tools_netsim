@@ -22,7 +22,6 @@ use crate::devices::facades::*;
 use crate::devices::id_factory::IdFactory;
 use frontend_proto::common::ChipKind as ProtoChipKind;
 use frontend_proto::model::Chip as ProtoChip;
-use frontend_proto::model::State as ProtoState;
 use lazy_static::lazy_static;
 use protobuf::EnumOrUnknown;
 
@@ -48,7 +47,6 @@ pub struct Chip {
     // These are patchable
     manufacturer: String,
     product_name: String,
-    capture: ProtoState,
 }
 
 impl Chip {
@@ -69,7 +67,6 @@ impl Chip {
             device_name: device_name.to_string(),
             manufacturer: manufacturer.to_string(),
             product_name: product_name.to_string(),
-            capture: ProtoState::OFF,
         }
     }
 
@@ -81,7 +78,6 @@ impl Chip {
         chip.name = self.name.clone();
         chip.manufacturer = self.manufacturer.clone();
         chip.product_name = self.product_name.clone();
-        chip.capture = EnumOrUnknown::new(self.capture);
         match chip.kind.enum_value() {
             Ok(ProtoChipKind::BLUETOOTH) => {
                 chip.set_bt(hci_get(self.facade_id));
@@ -99,11 +95,6 @@ impl Chip {
     /// Patch processing for the chip. Validate and move state from the patch
     /// into the chip changing the ChipFacade as needed.
     pub fn patch(&mut self, patch: &ProtoChip) {
-        if let Ok(patch_capture) = patch.capture.enum_value() {
-            if patch_capture != ProtoState::UNKNOWN && patch_capture != self.capture {
-                self.capture = patch_capture;
-            }
-        }
         if !patch.manufacturer.is_empty() {
             self.manufacturer = patch.manufacturer.clone();
         }

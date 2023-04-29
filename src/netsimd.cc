@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
       {"rootcanal_controller_properties_file", required_argument, 0, 'p'},
   };
 
-  bool debug = false;
+  bool dev = false;
   bool grpc_startup = false;
   std::string fd_startup_str;
   std::string rootcanal_default_commands_file;
@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
         break;
 #endif
       case 'd':
-        debug = true;
+        dev = true;
         break;
 
       case 'c':
@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
   auto frontend_stub = netsim::frontend::NewFrontendClient();
   if (frontend_stub == nullptr) {
     // starts netsim servers.
-    netsim::server::Run();
+    netsim::server::Run(dev);
   } else {
     std::cerr << "Failed to start netsim daemon because a netsim daemon is "
                  "already running\n";
@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
 #else
   if (!fd_startup_str.empty()) {
     netsim::RunFdTransport(fd_startup_str);
-    netsim::server::Run();
+    netsim::server::Run(dev);
     return -1;
   }
 #endif

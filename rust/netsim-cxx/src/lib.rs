@@ -16,7 +16,7 @@
 
 #![allow(dead_code)]
 
-mod captures;
+pub mod captures;
 mod devices;
 mod http_server;
 mod ranging;
@@ -56,7 +56,7 @@ mod ffi {
         fn run_fd_transport(startup_json: &String);
 
         #[cxx_name = "RunHttpServer"]
-        fn run_http_server();
+        fn run_http_server(dev: bool);
 
         // Ranging
 

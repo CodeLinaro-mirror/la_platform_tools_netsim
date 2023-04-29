@@ -31,7 +31,6 @@ namespace netsim::hci::facade {
 void Reset(uint32_t);
 void Remove(uint32_t);
 void Patch(uint32_t, const model::Chip::Bluetooth &);
-void SetPacketCapture(uint32_t id, bool isOn, std::string device_name);
 model::Chip::Bluetooth Get(uint32_t);
 uint32_t Add(uint32_t simulation_device);
 

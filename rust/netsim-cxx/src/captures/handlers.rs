@@ -17,8 +17,10 @@
 //! This module implements a handler for GET, PATCH, LIST capture
 //!
 //! /v1/captures --> handle_capture_list
+//!
 //! /v1/captures/{id} --> handle_capture_patch, handle_capture_get
-//! handle_capture_cxx calls handle_capture, which calls handle_capture_* based on uri
+//!
+//! handle_capture_cxx calls handle_capture, which calls handle_capture_* based on uri.
 //! handle_packet_request and handle_packet_response is invoked by packet_hub
 //! to write packets to files if capture state is on.
 
@@ -43,6 +45,7 @@ use crate::captures::capture::{Captures, ChipId};
 use crate::ffi::{get_devices_bytes, CxxServerResponseWriter};
 use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
+use crate::system;
 use crate::CxxServerResponseWriterWrapper;
 
 use super::capture::CaptureInfo;
@@ -62,12 +65,12 @@ lazy_static! {
     static ref RESOURCE: RwLock<Captures> = RwLock::new(Captures::new());
 }
 
-// Update the Captures collection to reflect the currently connected devices.
-// This function removes entries from Captures when devices/chips
-// go away and adds entries when new devices/chips connect.
-//
-// Note: if a device disconnects and there is captured data, the entry
-// remains with a flag valid = false so it can be retrieved.
+/// Updates the Captures collection to reflect the currently connected devices.
+///
+/// This function removes entries from Captures when devices/chips
+/// go away and adds entries when new devices/chips connect.
+/// Note: if a device disconnects and there is captured data, the entry
+/// remains with a flag valid = false so it can be retrieved.
 fn update_captures(captures: &mut Captures) {
     // Perform get_devices_bytes ffi to receive bytes of GetDevicesResponse
     // Print error and return empty hashmap if GetDevicesBytes fails.
@@ -137,10 +140,10 @@ fn update_captures(captures: &mut Captures) {
     }
 }
 
-// Helper function for getting file name from the given fields.
+/// Helper function for getting file name from the given fields.
 fn get_file(id: ChipId, device_name: String, chip_kind: ChipKind) -> Result<File> {
-    let mut filename = std::env::temp_dir();
-    filename.push("netsim-pcaps");
+    let mut filename = system::netsimd_temp_dir();
+    filename.push("pcaps");
     filename.push(format!("{:?}-{:}-{:?}.pcap", id, device_name, chip_kind));
     File::open(filename)
 }
@@ -149,6 +152,7 @@ fn get_file(id: ChipId, device_name: String, chip_kind: ChipKind) -> Result<File
 // uri hierarchy.
 // GET /captures/id/{id} --> Get Capture information
 // GET /captures/contents/{id} --> Download Pcap file
+/// Performs GetCapture to download pcap file and write to writer.
 pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id: ChipId) {
     // Get the most updated active captures
     update_captures(captures);
@@ -192,6 +196,7 @@ pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id:
     }
 }
 
+/// Performs ListCapture to get the list of CaptureInfos and write to writer.
 pub fn handle_capture_list(writer: ResponseWritable, captures: &mut Captures) {
     // Get the most updated active captures
     update_captures(captures);
@@ -210,6 +215,8 @@ pub fn handle_capture_list(writer: ResponseWritable, captures: &mut Captures) {
     }
 }
 
+/// Performs PatchCapture to patch a CaptureInfo with id.
+/// Writes the result of PatchCapture to writer.
 pub fn handle_capture_patch(
     writer: ResponseWritable,
     captures: &mut Captures,
@@ -241,7 +248,7 @@ pub fn handle_capture_patch(
     }
 }
 
-/// The Rust capture handler used directly by Http frontend for LIST, GET, and PATCH
+/// The Rust capture handler used directly by Http frontend or handle_capture_cxx for LIST, GET, and PATCH
 pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritable) {
     if request.uri.as_str() == "/v1/captures" {
         match request.method.as_str() {
@@ -286,7 +293,7 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
     }
 }
 
-/// capture handle cxx for grpc server to call
+/// Capture handler cxx for grpc server to call
 pub fn handle_capture_cxx(
     responder: Pin<&mut CxxServerResponseWriter>,
     method: String,
@@ -312,7 +319,7 @@ pub fn handle_capture_cxx(
     );
 }
 
-// Helper function for translating u32 representation of ChipKind
+/// Helper function for translating u32 representation of ChipKind
 fn int_to_chip_kind(kind: u32) -> ChipKind {
     match kind {
         1 => ChipKind::BLUETOOTH,
@@ -322,7 +329,7 @@ fn int_to_chip_kind(kind: u32) -> ChipKind {
     }
 }
 
-// A common code for handle_request and handle_response cxx mehtods
+/// A common code for handle_request and handle_response cxx mehtods
 fn handle_packet(
     kind: u32,
     facade_id: u32,
@@ -359,20 +366,20 @@ fn handle_packet(
     };
 }
 
-// Cxx Method for packet_hub to invoke (Host to Controller Packet Flow)
+/// Cxx Method for packet_hub to invoke (Host to Controller Packet Flow)
 pub fn handle_packet_request(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u32) {
     handle_packet(kind, facade_id, packet, packet_type, PacketDirection::HostToController)
 }
 
-// Cxx Method for packet_hub to invoke (Controller to Host Packet Flow)
+/// Cxx Method for packet_hub to invoke (Controller to Host Packet Flow)
 pub fn handle_packet_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u32) {
     handle_packet(kind, facade_id, packet, packet_type, PacketDirection::ControllerToHost)
 }
 
-// Cxx Method for clearing pcap files in temp directory
+/// Cxx Method for clearing pcap files in temp directory
 pub fn clear_pcap_files() -> bool {
-    let mut path = std::env::temp_dir();
-    path.push("netsim-pcaps");
+    let mut path = system::netsimd_temp_dir();
+    path.push("pcaps");
 
     // Check if the directory exists.
     if std::fs::metadata(&path).is_err() {

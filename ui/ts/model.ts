@@ -46,8 +46,6 @@ export interface Chip {
   manufacturer: string;
   /** optional like DW300 */
   productName: string;
-  /** packet capture */
-  capture: State;
   bt?: Chip_Bluetooth|undefined;
   uwb?: Chip_Radio|undefined;
   wifi?: Chip_Radio|undefined;

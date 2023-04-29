@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Capture Resource codebase
+
 pub mod capture;
 pub mod handlers;
 pub mod pcap_util;
-
+/// A mime type for pcap file in HTTP headers. [application/vnd.tcpdump.pcap]
 pub const PCAP_MIME_TYPE: &str = "application/vnd.tcpdump.pcap";

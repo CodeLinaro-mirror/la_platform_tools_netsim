@@ -21,6 +21,6 @@
 namespace netsim::server {
 
 // Run grpc and http servers.
-void Run();
+void Run(bool dev);
 
 }  // namespace netsim::server

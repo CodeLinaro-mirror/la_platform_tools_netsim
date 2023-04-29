@@ -56,7 +56,6 @@ message Chip {
 
   string manufacturer = 4;  // optional like Quorvo
   string product_name = 5;  // optional like DW300
-  State capture = 6;        // packet capture
 
   // Radio state associated with the Chip
   message Radio {
@@ -73,9 +72,9 @@ message Chip {
   }
 
   oneof chip {
-    Bluetooth bt = 7;
-    Radio uwb = 8;
-    Radio wifi = 9;
+    Bluetooth bt = 6;
+    Radio uwb = 7;
+    Radio wifi = 8;
   }
 }
 

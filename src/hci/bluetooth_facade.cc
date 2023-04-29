@@ -273,29 +273,6 @@ void IncrRx(uint32_t id, rootcanal::Phy::Type phy_type) {
   }
 }
 
-void SetPacketCapture(uint32_t id, bool isOn, std::string device_name) {
-  if (id_to_chip_info_.find(id) == id_to_chip_info_.end()) {
-    BtsLog("Missing chip_info");
-    return;
-  }
-  auto sniffer = id_to_chip_info_[id]->sniffer;
-  if (!sniffer) {
-    return;
-  }
-  if (!isOn) {
-    sniffer->SetOutputStream(nullptr);
-    return;
-  }
-  // TODO: make multi-os
-  // Filename: emulator-5554-hci.pcap
-  auto filename = "/tmp/" + device_name + "-hci.pcap";
-  for (auto i = 0; netsim::filesystem::exists(filename); ++i) {
-    filename = "/tmp/" + device_name + "-hci-" + std::to_string(i) + ".pcap";
-  }
-  auto file = std::make_shared<std::ofstream>(filename, std::ios::binary);
-  sniffer->SetOutputStream(file);
-}
-
 int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power) {
   if (id_to_chip_info_.find(send_id) == id_to_chip_info_.end() ||
       id_to_chip_info_.find(recv_id) == id_to_chip_info_.end()) {
