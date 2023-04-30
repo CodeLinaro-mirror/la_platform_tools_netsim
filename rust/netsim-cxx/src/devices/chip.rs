@@ -71,7 +71,7 @@ impl Chip {
     }
 
     /// Create the model protobuf
-    pub fn get(&self) -> ProtoChip {
+    pub fn get(&self) -> Result<ProtoChip, String> {
         let mut chip = ProtoChip::new();
         chip.kind = EnumOrUnknown::new(self.kind);
         chip.id = self.id;
@@ -86,15 +86,15 @@ impl Chip {
                 chip.set_wifi(wifi_get(self.facade_id));
             }
             _ => {
-                eprint!("Unknown chip kind: {:?}", chip.kind);
+                return Err(format!("Unknown chip kind: {:?}", chip.kind));
             }
         }
-        chip
+        Ok(chip)
     }
 
     /// Patch processing for the chip. Validate and move state from the patch
     /// into the chip changing the ChipFacade as needed.
-    pub fn patch(&mut self, patch: &ProtoChip) {
+    pub fn patch(&mut self, patch: &ProtoChip) -> Result<(), String> {
         if !patch.manufacturer.is_empty() {
             self.manufacturer = patch.manufacturer.clone();
         }
@@ -107,11 +107,12 @@ impl Chip {
         } else if self.kind == ProtoChipKind::WIFI && patch.has_wifi() {
             wifi_patch(self.facade_id, patch.wifi());
         } else {
-            eprint!("Unknown chip kind or missing radio: {:?}", self.kind);
+            return Err(format!("Unknown chip kind or missing radio: {:?}", self.kind));
         }
+        Ok(())
     }
 
-    pub fn remove(&mut self) {
+    pub fn remove(&mut self) -> Result<(), String> {
         match self.kind {
             ProtoChipKind::BLUETOOTH => {
                 hci_remove(self.facade_id);
@@ -119,13 +120,12 @@ impl Chip {
             ProtoChipKind::WIFI => {
                 wifi_remove(self.facade_id);
             }
-            _ => {
-                eprint!("Unknown chip kind: {:?}", self.kind);
-            }
+            _ => return Err(format!("Unknown chip kind: {:?}", self.kind)),
         }
+        Ok(())
     }
 
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self) -> Result<(), String> {
         match self.kind {
             ProtoChipKind::BLUETOOTH => {
                 hci_reset(self.facade_id);
@@ -133,10 +133,9 @@ impl Chip {
             ProtoChipKind::WIFI => {
                 wifi_reset(self.facade_id);
             }
-            _ => {
-                eprint!("Unknown chip kind: {:?}", self.kind);
-            }
+            _ => return Err(format!("Unknown chip kind: {:?}", self.kind)),
         }
+        Ok(())
     }
 }
 
@@ -148,16 +147,14 @@ pub fn chip_new(
     device_name: &str,
     chip_manufacturer: &str,
     chip_product_name: &str,
-) -> Chip {
+) -> Result<Chip, String> {
     let id = IDS.write().unwrap().next_id();
     let facade_id = match chip_kind {
         ProtoChipKind::BLUETOOTH => facades::hci_add(device_id),
         ProtoChipKind::WIFI => facades::wifi_add(device_id),
-        _ => {
-            panic!("Unknown chip kind: {:?}", chip_kind);
-        }
+        _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
     };
-    Chip::new(
+    Ok(Chip::new(
         id,
         facade_id,
         chip_kind,
@@ -165,5 +162,5 @@ pub fn chip_new(
         device_name,
         chip_manufacturer,
         chip_product_name,
-    )
+    ))
 }

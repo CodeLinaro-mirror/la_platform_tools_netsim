@@ -30,6 +30,7 @@
 #include "model/setup/test_command_handler.h"
 #include "model/setup/test_model.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "rust/cxx.h"
 #include "util/filesystem.h"
 #include "util/log.h"
 
@@ -89,10 +90,8 @@ size_t phy_classic_index_;
 
 bool mStarted = false;
 std::shared_ptr<rootcanal::AsyncManager> mAsyncManager;
-
 std::unique_ptr<SimTestModel> gTestModel;
-
-std::string controller_properties_ = "";
+rootcanal::ControllerProperties controller_properties_;
 
 bool ChangedState(model::State a, model::State b) {
   return (b != model::State::UNKNOWN && a != b);
@@ -283,6 +282,23 @@ int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power) {
   auto b = id_to_chip_info_[recv_id]->simulation_device;
   auto distance = scene_controller::GetDistance(a, b);
   return netsim::DistanceToRssi(tx_power, distance);
+}
+
+void PatchCxx(uint32_t id,
+              const rust::Slice<::std::uint8_t const> proto_bytes) {
+  model::Chip::Bluetooth bluetooth;
+  bluetooth.ParseFromArray(proto_bytes.data(), proto_bytes.size());
+  Patch(id, bluetooth);
+}
+
+rust::Vec<::std::uint8_t> GetCxx(uint32_t id) {
+  auto bluetooth = Get(id);
+  std::vector<uint8_t> proto_bytes(bluetooth.ByteSizeLong());
+  bluetooth.SerializeToArray(proto_bytes.data(), proto_bytes.size());
+  rust::Vec<uint8_t> proto_rust_bytes;
+  std::copy(proto_bytes.begin(), proto_bytes.end(),
+            std::back_inserter(proto_rust_bytes));
+  return proto_rust_bytes;
 }
 
 }  // namespace netsim::hci::facade

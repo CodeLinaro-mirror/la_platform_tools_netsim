@@ -14,6 +14,7 @@
 
 #include "wifi/wifi_facade.h"
 
+#include "rust/cxx.h"
 #include "util/log.h"
 
 namespace netsim::wifi {
@@ -91,6 +92,23 @@ model::Chip::Radio Get(uint32_t id) {
   return radio;
 }
 
+void PatchCxx(uint32_t id,
+              const rust::Slice<::std::uint8_t const> proto_bytes) {
+  model::Chip::Radio radio;
+  radio.ParseFromArray(proto_bytes.data(), proto_bytes.size());
+  Patch(id, radio);
+}
+
+rust::Vec<uint8_t> GetCxx(uint32_t id) {
+  auto radio = Get(id);
+  std::vector<uint8_t> proto_bytes(radio.ByteSizeLong());
+  radio.SerializeToArray(proto_bytes.data(), proto_bytes.size());
+  rust::Vec<uint8_t> proto_rust_bytes;
+  std::copy(proto_bytes.begin(), proto_bytes.end(),
+            std::back_inserter(proto_rust_bytes));
+  return proto_rust_bytes;
+}
+
 uint32_t Add(uint32_t simulation_device) {
   BtsLog("wifi::facade::Add(%d)", simulation_device);
   static uint32_t global_chip_id = kGlobalChipStartIndex;
@@ -116,4 +134,12 @@ void HandleWifiRequest(uint32_t facade_id,
   // TODO: Broadcast the packet to other emulators.
   // TODO: Send the packet to the WiFi service.
 }
+
+void HandleWifiRequestCxx(uint32_t facade_id,
+                          const rust::Vec<uint8_t> &packet) {
+  std::vector<uint8_t> buffer(packet.begin(), packet.end());
+  auto packet_ptr = std::make_shared<std::vector<uint8_t>>(buffer);
+  HandleWifiRequest(facade_id, packet_ptr);
+}
+
 }  // namespace netsim::wifi

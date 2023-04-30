@@ -24,6 +24,7 @@ mod system;
 mod transport;
 mod uwb;
 mod version;
+mod wifi;
 
 use std::pin::Pin;
 
@@ -230,6 +231,81 @@ mod ffi {
         #[rust_name = "reset"]
         #[namespace = "netsim::scene_controller"]
         fn Reset();
+
+        // Bluetooth facade.
+        include!("hci/hci_packet_hub.h");
+
+        #[rust_name = handle_bt_request]
+        #[namespace = "netsim::hci"]
+        fn HandleBtRequestCxx(facade_id: u32, packet_type: u8, packet: &Vec<u8>);
+
+        include!("hci/bluetooth_facade.h");
+
+        #[rust_name = bluetooth_patch_cxx]
+        #[namespace = "netsim::hci::facade"]
+        pub fn PatchCxx(facade_id: u32, proto_bytes: &[u8]);
+
+        #[rust_name = bluetooth_get_cxx]
+        #[namespace = "netsim::hci::facade"]
+        pub fn GetCxx(facade_id: u32) -> Vec<u8>;
+
+        #[rust_name = bluetooth_reset]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Reset(facade_id: u32);
+
+        #[rust_name = bluetooth_remove]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Remove(facade_id: u32);
+
+        #[rust_name = bluetooth_add]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Add(_chip_id: u32) -> u32;
+
+        #[rust_name = bluetooth_start]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Start();
+
+        #[rust_name = bluetooth_stop]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Stop();
+
+        // WiFi facade.
+        include!("wifi/wifi_packet_hub.h");
+
+        #[rust_name = handle_wifi_request]
+        #[namespace = "netsim::wifi"]
+        fn HandleWifiRequestCxx(facade_id: u32, packet: &Vec<u8>);
+
+        include!("wifi/wifi_facade.h");
+
+        #[rust_name = wifi_patch_cxx]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn PatchCxx(facade_id: u32, proto_bytes: &[u8]);
+
+        #[rust_name = wifi_get_cxx]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn GetCxx(facade_id: u32) -> Vec<u8>;
+
+        #[rust_name = wifi_reset]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Reset(facade_id: u32);
+
+        #[rust_name = wifi_remove]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Remove(facade_id: u32);
+
+        #[rust_name = wifi_add]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Add(_chip_id: u32) -> u32;
+
+        #[rust_name = wifi_start]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Start();
+
+        #[rust_name = wifi_stop]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Stop();
+
     }
 }
 

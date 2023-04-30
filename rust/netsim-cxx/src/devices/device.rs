@@ -58,7 +58,7 @@ pub struct AddChipResult {
 }
 
 impl Device {
-    pub fn get(&self) -> ProtoDevice {
+    pub fn get(&self) -> Result<ProtoDevice, String> {
         let mut device = ProtoDevice::new();
         device.id = self.id;
         device.name = self.name.clone();
@@ -66,13 +66,13 @@ impl Device {
         device.position = protobuf::MessageField::from(Some(self.position.clone()));
         device.orientation = protobuf::MessageField::from(Some(self.orientation.clone()));
         for chip in self.chips.values() {
-            device.chips.push(chip.get());
+            device.chips.push(chip.get()?);
         }
-        device
+        Ok(device)
     }
 
     /// Patch a device and its chips.
-    pub fn patch(&mut self, patch: &ProtoDevice) {
+    pub fn patch(&mut self, patch: &ProtoDevice) -> Result<(), String> {
         // TODO visible should be State
         self.visible = patch.visible;
         if patch.position.is_some() {
@@ -89,21 +89,25 @@ impl Device {
             // Find the matching chip and patch the proto chip
             for chip in self.chips.values_mut() {
                 if chip.name.eq(patch_chip_name) && chip.kind == patch_chip_kind {
-                    chip.patch(patch_chip);
+                    chip.patch(patch_chip)?;
                     break; // next proto chip
                 }
             }
         }
+        Ok(())
     }
 
     /// Remove a chip from a device.
-    pub fn remove_chip(&mut self, chip_id: ChipIdentifier) {
+    pub fn remove_chip(&mut self, chip_id: ChipIdentifier) -> Result<(), String> {
         if let Some(chip) = self.chips.get_mut(&chip_id) {
-            chip.remove();
+            chip.remove()?;
         } else {
-            eprintln!("RemoveChip id {chip_id} not found");
+            return Err(format!("RemoveChip id {chip_id} not found"));
         }
-        self.chips.remove(&chip_id);
+        self.chips
+            .remove(&chip_id)
+            .ok_or(format!("HashMap remove error with chip_id: {chip_id}"))?;
+        Ok(())
     }
 
     pub fn add_chip(
@@ -113,11 +117,10 @@ impl Device {
         chip_name: &str,
         chip_manufacturer: &str,
         chip_product_name: &str,
-    ) -> Option<AddChipResult> {
+    ) -> Result<AddChipResult, String> {
         for chip in self.chips.values() {
             if chip.kind == chip_kind && chip.name == chip_name {
-                eprintln!("Device::AddChip - duplicate at id {}, skipping.", chip.id);
-                return None;
+                return Err(format!("Device::AddChip - duplicate at id {}, skipping.", chip.id));
             }
         }
         let chip = chip::chip_new(
@@ -127,29 +130,31 @@ impl Device {
             device_name,
             chip_manufacturer,
             chip_product_name,
-        );
+        )?;
         let chip_id = chip.id;
         let facade_id = chip.facade_id;
-        self.chips.insert(chip.id, chip);
-        Some(AddChipResult { device_id: self.id, chip_id, facade_id })
+        self.chips.insert(chip_id, chip);
+        Ok(AddChipResult { device_id: self.id, chip_id, facade_id })
     }
 
     /// Reset a device to its default state.
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self) -> Result<(), String> {
         self.visible = true;
         self.position.clear();
         self.orientation.clear();
-        for chp in self.chips.values_mut() {
-            chp.reset();
+        for chip in self.chips.values_mut() {
+            chip.reset()?;
         }
+        Ok(())
     }
 
     /// Remove all chips from a device.
     /// Called at shutdown.
     #[allow(dead_code)]
-    pub fn remove(&mut self) {
+    pub fn remove(&mut self) -> Result<(), String> {
         for (_, chip) in self.chips.iter_mut() {
-            chip.remove();
+            chip.remove()?;
         }
+        Ok(())
     }
 }

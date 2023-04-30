@@ -62,6 +62,7 @@ fn notify_all() {
     // TODO
 }
 
+/// Returns a Result<AddChipResult, String> after adding chip to resource.
 /// add_chip is called by the transport layer when a new chip is attached.
 ///
 /// The guid is a transport layer identifier for the device (host:port)
@@ -74,20 +75,18 @@ pub fn add_chip(
     chip_name: &str,
     chip_manufacturer: &str,
     chip_product_name: &str,
-) -> AddChipResult {
+) -> Result<AddChipResult, String> {
     let mut resource = DEVICES.write().unwrap();
     resource.idle_since = None;
     let device_id = get_or_create_device(&mut resource, device_guid, device_name);
     // This is infrequent, so we can afford to do another lookup for the device.
-    resource
-        .devices
-        .get_mut(&device_id)
-        .unwrap()
-        .add_chip(device_name, chip_kind, chip_name, chip_manufacturer, chip_product_name)
-        .unwrap_or_else(|| {
-            eprintln!("Error adding chip to device {}", device_id);
-            AddChipResult { device_id: 0, chip_id: 0, facade_id: 0 }
-        })
+    resource.devices.get_mut(&device_id).unwrap().add_chip(
+        device_name,
+        chip_kind,
+        chip_name,
+        chip_manufacturer,
+        chip_product_name,
+    )
 }
 
 /// Get or create a device.
@@ -111,52 +110,48 @@ fn get_or_create_device(
 /// Remove a device from the simulation.
 ///
 /// Called when the last chip for the device is removed.
-fn remove_device(resource: &mut RwLockWriteGuard<Devices>, id: DeviceIdentifier) {
-    resource.devices.remove(&id).or_else(|| {
-        eprintln!("Error removing device id {id}");
-        None
-    });
+fn remove_device(
+    resource: &mut RwLockWriteGuard<Devices>,
+    id: DeviceIdentifier,
+) -> Result<(), String> {
+    resource.devices.remove(&id).ok_or(format!("Error removing device id {id}"))?;
     if resource.devices.is_empty() {
         resource.idle_since = Some(Instant::now());
     }
+    Ok(())
 }
 
 /// Remove a chip from a device.
 ///
 /// Called when the packet transport for the chip shuts down.
 #[allow(dead_code)]
-pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) {
+pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(), String> {
     let mut resource = DEVICES.write().unwrap();
+    let mut is_ok = Ok(());
     let mut is_empty = false;
     resource.devices.entry(device_id).and_modify(|device| {
-        device.remove_chip(chip_id);
+        is_ok = device.remove_chip(chip_id);
         is_empty = device.chips.is_empty();
     });
+    is_ok?;
     if is_empty {
-        remove_device(&mut resource, device_id);
+        remove_device(&mut resource, device_id)?;
     }
+    Ok(())
 }
-/// MATCH
-///
-///
 
 // lock the devices, find the id and call the patch function
 #[allow(dead_code)]
-fn patch_device(id: DeviceIdentifier, patch_json: &str) {
+fn patch_device(id: DeviceIdentifier, patch_json: &str) -> Result<(), String> {
     let mut proto_device = ProtoDevice::new();
     if merge_from_str(&mut proto_device, patch_json).is_ok() {
-        DEVICES
-            .write()
-            .unwrap()
-            .devices
-            .get_mut(&id)
-            .map(|device_ref| device_ref.patch(&proto_device))
-            .or_else(|| {
-                eprintln!("No such device with id {id}");
-                None
-            });
+        let mut resource = DEVICES.write().unwrap();
+        match resource.devices.get_mut(&id) {
+            Some(device) => device.patch(&proto_device),
+            None => Err(format!("No such device with id {id}")),
+        }
     } else {
-        eprintln!("Error parsing device {id} patch json {}", patch_json);
+        Err(format!("Error parsing device {id} patch json {}", patch_json))
     }
 }
 
@@ -165,41 +160,38 @@ fn distance(a: &ProtoPosition, b: &ProtoPosition) -> f32 {
 }
 
 #[allow(dead_code)]
-pub fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> f32 {
+pub fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32, String> {
     print!("get_distance({:?}, {:?}) = ", id, other_id);
     let devices = &DEVICES.read().unwrap().devices;
-    let a = devices.get(&id).map(|device_ref| device_ref.position.clone()).or_else(|| {
-        eprintln!("No such device with id {id}");
-        None
-    });
-    let b = devices.get(&other_id).map(|device_ref| device_ref.position.clone()).or_else(|| {
-        eprintln!("No such device with id {id}");
-        None
-    });
-    match (a, b) {
-        (Some(a), Some(b)) => distance(&a, &b),
-        _ => 0.0,
-    }
+    let a = devices
+        .get(&id)
+        .map(|device_ref| device_ref.position.clone())
+        .ok_or(format!("No such device with id {id}"))?;
+    let b = devices
+        .get(&other_id)
+        .map(|device_ref| device_ref.position.clone())
+        .ok_or(format!("No such device with id {other_id}"))?;
+    Ok(distance(&a, &b))
 }
 
 #[allow(dead_code)]
-pub fn get_devices() -> ProtoScene {
+pub fn get_devices() -> Result<ProtoScene, String> {
     let mut scene = ProtoScene::new();
     // iterate over the devices and add each to the scene
-    DEVICES.read().unwrap().devices.values().for_each(|device| {
-        scene.devices.push(device.get());
-    });
-    scene
+    let resource = DEVICES.read().unwrap();
+    for device in resource.devices.values() {
+        scene.devices.push(device.get()?);
+    }
+    Ok(scene)
 }
 
 #[allow(dead_code)]
-pub fn reset(id: DeviceIdentifier) {
-    DEVICES.write().unwrap().devices.get_mut(&id).map(|device_ref| device_ref.reset()).or_else(
-        || {
-            eprintln!("No such device with id {id}");
-            None
-        },
-    );
+pub fn reset(id: DeviceIdentifier) -> Result<(), String> {
+    let mut resource = DEVICES.write().unwrap();
+    match resource.devices.get_mut(&id) {
+        Some(device) => device.reset(),
+        None => Err(format!("No such device with id {id}")),
+    }
 }
 
 #[allow(dead_code)]
@@ -243,7 +235,7 @@ mod tests {
     }
 
     impl TestChipParameters<'_> {
-        fn add_chip(&self) -> AddChipResult {
+        fn add_chip(&self) -> Result<AddChipResult, String> {
             super::add_chip(
                 self.device_guid,
                 self.device_name,
@@ -312,7 +304,7 @@ mod tests {
         // Patching device position
         refresh_resource();
         let chip_params = test_chip_1_bt();
-        let chip_result = chip_params.add_chip();
+        let chip_result = chip_params.add_chip().unwrap();
         let mut patch_device_request = ProtoDevice::new();
         let request_position = new_position(1.1, 2.2, 3.3);
         let request_orientation = new_orientation(4.4, 5.5, 6.6);
@@ -323,8 +315,9 @@ mod tests {
         patch_device(
             chip_result.device_id,
             print_to_string(&patch_device_request).unwrap().as_str(),
-        );
-        match get_devices().devices.get(0) {
+        )
+        .unwrap();
+        match get_devices().unwrap().devices.get(0) {
             Some(device) => {
                 assert_eq!(device.position.x, request_position.x);
                 assert_eq!(device.position.y, request_position.y);
@@ -347,11 +340,11 @@ mod tests {
         refresh_resource();
         let bt_chip_params = test_chip_1_bt();
         let wifi_chip_params = test_chip_1_wifi();
-        let bt_chip_result = bt_chip_params.add_chip();
-        let wifi_chip_result = wifi_chip_params.add_chip();
+        let bt_chip_result = bt_chip_params.add_chip().unwrap();
+        let wifi_chip_result = wifi_chip_params.add_chip().unwrap();
         assert_eq!(bt_chip_result.device_id, wifi_chip_result.device_id);
-        assert_eq!(get_devices().devices.len(), 1);
-        let scene = get_devices();
+        assert_eq!(get_devices().unwrap().devices.len(), 1);
+        let scene = get_devices().unwrap();
         let device = scene.devices.get(0).unwrap();
         assert_eq!(device.id, bt_chip_result.device_id);
         assert_eq!(device.name, bt_chip_params.device_name);
@@ -379,7 +372,7 @@ mod tests {
         // Patching Device and Resetting scene
         refresh_resource();
         let chip_params = test_chip_1_bt();
-        let chip_result = chip_params.add_chip();
+        let chip_result = chip_params.add_chip().unwrap();
         let mut patch_device_request = ProtoDevice::new();
         let request_position = new_position(10.0, 20.0, 30.0);
         let request_orientation = new_orientation(1.0, 2.0, 3.0);
@@ -390,8 +383,9 @@ mod tests {
         patch_device(
             chip_result.device_id,
             print_to_string(&patch_device_request).unwrap().as_str(),
-        );
-        match get_devices().devices.get(0) {
+        )
+        .unwrap();
+        match get_devices().unwrap().devices.get(0) {
             Some(device) => {
                 assert_eq!(device.position.x, 10.0);
                 assert_eq!(device.orientation.yaw, 1.0);
@@ -399,8 +393,8 @@ mod tests {
             }
             None => unreachable!(),
         }
-        reset(chip_result.device_id);
-        match get_devices().devices.get(0) {
+        reset(chip_result.device_id).unwrap();
+        match get_devices().unwrap().devices.get(0) {
             Some(device) => {
                 assert_eq!(device.position.x, 0.0);
                 assert_eq!(device.position.y, 0.0);

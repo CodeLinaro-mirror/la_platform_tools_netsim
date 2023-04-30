@@ -22,6 +22,7 @@
 #include "hci_packet.pb.h"
 #include "model/hci/hci_transport.h"
 #include "packet_hub/packet_hub.h"
+#include "rust/cxx.h"
 #include "util/log.h"
 
 using netsim::packet::HCIPacket;
@@ -173,6 +174,15 @@ void handle_bt_request(uint32_t facade_id,
         "hci_packet_transport: handle_request with no transport for device %d",
         facade_id);
   }
+}
+
+void HandleBtRequestCxx(uint32_t facade_id, uint8_t packet_type,
+                        const rust::Vec<uint8_t> &packet) {
+  std::vector<uint8_t> buffer(packet.begin(), packet.end());
+  auto packet_ptr = std::make_shared<std::vector<uint8_t>>(buffer);
+  handle_bt_request(facade_id,
+                    static_cast<packet::HCIPacket_PacketType>(packet_type),
+                    packet_ptr);
 }
 
 }  // namespace hci
