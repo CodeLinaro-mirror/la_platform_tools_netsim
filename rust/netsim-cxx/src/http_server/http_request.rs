@@ -31,6 +31,8 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 
+pub type StrHeaders<'a> = &'a [(&'a str, &'a str)];
+
 #[derive(Debug)]
 pub struct HttpHeaders {
     pub headers: Vec<(String, String)>,
@@ -53,7 +55,7 @@ impl HttpHeaders {
     }
 
     #[allow(dead_code)]
-    pub fn new_with_headers(str_headers: &[(&str, &str)]) -> HttpHeaders {
+    pub fn new_with_headers(str_headers: StrHeaders) -> HttpHeaders {
         HttpHeaders {
             headers: str_headers
                 .iter()

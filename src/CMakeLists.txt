@@ -116,6 +116,8 @@ if(TARGET Rust::Rustc)
         hci/hci_packet_transport.h
         packet_hub/packet_hub.cc
         packet_hub/packet_hub.h
+        uwb/uwb_facade.cc
+        uwb/uwb_facade.h
         wifi/wifi_facade.cc
         wifi/wifi_facade.h
         wifi/wifi_packet_hub.h

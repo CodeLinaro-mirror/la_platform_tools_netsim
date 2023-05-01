@@ -29,42 +29,47 @@ namespace packet_hub {
 using netsim::common::ChipKind;
 
 // forward from transport to facade via packet_hub
-void handle_request(ChipKind kind, uint32_t facade_id,
-                    const std::vector<uint8_t> &packet,
-                    packet::HCIPacket_PacketType packet_type) {
+void HandleRequest(ChipKind kind, uint32_t facade_id,
+                   const std::vector<uint8_t> &packet,
+                   packet::HCIPacket_PacketType packet_type) {
   // Copied
   auto shared_packet = std::make_shared<std::vector<uint8_t>>(packet);
   if (kind == ChipKind::BLUETOOTH) {
     netsim::hci::handle_bt_request(facade_id, packet_type, shared_packet);
   } else if (kind == ChipKind::WIFI) {
-    netsim::wifi::handle_wifi_request(facade_id, shared_packet);
+    netsim::wifi::HandleWifiRequest(facade_id, shared_packet);
   }
+  netsim::pcap::HandleRequest(kind, facade_id, packet, packet_type);
 }
 
-void handle_request_cxx(uint32_t kind, uint32_t facade_id,
-                        const rust::Vec<uint8_t> &packet, uint8_t packet_type) {
+void HandleRequestCxx(uint32_t kind, uint32_t facade_id,
+                      const rust::Vec<uint8_t> &packet, uint8_t packet_type) {
   std::vector<uint8_t> buffer(packet.begin(), packet.end());
-  handle_request(static_cast<ChipKind>(kind), facade_id, buffer,
-                 static_cast<packet::HCIPacket_PacketType>(packet_type));
+  HandleRequest(static_cast<ChipKind>(kind), facade_id, buffer,
+                static_cast<packet::HCIPacket_PacketType>(packet_type));
 }
 
 // forward from facade to transport via packet_hub
-void handle_bt_response(uint32_t facade_id,
-                        packet::HCIPacket_PacketType packet_type,
-                        const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::backend::handle_response(ChipKind::BLUETOOTH, facade_id, *packet,
-                                   packet_type);
+void HandleBtResponse(uint32_t facade_id,
+                      packet::HCIPacket_PacketType packet_type,
+                      const std::shared_ptr<std::vector<uint8_t>> &packet) {
+  netsim::backend::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
+                                  packet_type);
   netsim::fd::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
                              packet_type);
+  netsim::pcap::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
+                               packet_type);
 }
 
 // forward from facade to transport via packet_hub
-void handle_wifi_response(uint32_t facade_id,
-                          const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::backend::handle_response(ChipKind::WIFI, facade_id, *packet,
-                                   packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+void HandleWifiResponse(uint32_t facade_id,
+                        const std::shared_ptr<std::vector<uint8_t>> &packet) {
+  netsim::backend::HandleResponse(ChipKind::WIFI, facade_id, *packet,
+                                  packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
   netsim::fd::HandleResponse(ChipKind::WIFI, facade_id, *packet,
                              packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+  netsim::pcap::HandleResponse(ChipKind::WIFI, facade_id, *packet,
+                               packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
 }
 
 }  // namespace packet_hub

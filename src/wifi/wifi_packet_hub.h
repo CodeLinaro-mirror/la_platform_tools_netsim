@@ -24,7 +24,7 @@ namespace netsim::wifi {
 /* Handle packet requests for the WiFi Facade which may come over
    different transports including gRPC. */
 
-void handle_wifi_request(uint32_t facade_id,
-                         const std::shared_ptr<std::vector<uint8_t>> &packet);
+void HandleWifiRequest(uint32_t facade_id,
+                       const std::shared_ptr<std::vector<uint8_t>> &packet);
 
 }  // namespace netsim::wifi

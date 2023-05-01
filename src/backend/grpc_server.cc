@@ -127,17 +127,17 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         auto packet_type = request.hci_packet().packet_type();
         auto packet =
             ToSharedVec(request.mutable_hci_packet()->mutable_packet());
-        packet_hub::handle_request(chip_kind, facade_id, *packet, packet_type);
+        packet_hub::HandleRequest(chip_kind, facade_id, *packet, packet_type);
       } else if (chip_kind == common::ChipKind::WIFI) {
         if (!request.has_packet()) {
           BtsLog("grpc_server: unknown packet type from %d", facade_id);
           continue;
         }
         auto packet = ToSharedVec(request.mutable_packet());
-        packet_hub::handle_request(chip_kind, facade_id,
+        packet_hub::HandleRequest(chip_kind, facade_id,
 
-                                   *packet,
-                                   packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+                                  *packet,
+                                  packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
       } else {
         // TODO: add UWB here
         BtsLog("grpc_server: unknown chip kind");
@@ -152,9 +152,9 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
 //
 // When writing, the packet is copied because is borrowed from a shared_ptr and
 // grpc++ doesn't know about smart pointers.
-void handle_response(ChipKind kind, uint32_t facade_id,
-                     const std::vector<uint8_t> &packet,
-                     packet::HCIPacket_PacketType packet_type) {
+void HandleResponse(ChipKind kind, uint32_t facade_id,
+                    const std::vector<uint8_t> &packet,
+                    packet::HCIPacket_PacketType packet_type) {
   auto stream = facade_to_stream[ChipFacade(kind, facade_id)];
   if (stream) {
     // TODO: lock or caller here because gRPC does not allow overlapping writes.

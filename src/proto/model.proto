@@ -17,6 +17,7 @@ syntax = "proto3";
 package netsim.model;
 
 import "common.proto";
+import "google/protobuf/timestamp.proto";
 
 // A 3D position. A valid Position must have both x and y coordinates.
 // The position coordinates are in meters.
@@ -104,6 +105,6 @@ message Pcap {
   int32 size = 6;
   // number of records in current capture
   int32 records = 7;
-  int32 timestamp = 8;
+  google.protobuf.Timestamp timestamp = 8;
   bool valid = 9;
 }

@@ -2101,7 +2101,7 @@ pub struct Pcap {
     pub state: State,
     pub size: i32,
     pub records: i32,
-    pub timestamp: i32,
+    pub timestamp: ::protobuf::SingularPtrField<::protobuf::well_known_types::Timestamp>,
     pub valid: bool,
     // special fields
     pub unknown_fields: ::protobuf::UnknownFields,
@@ -2235,19 +2235,37 @@ impl Pcap {
         self.records = v;
     }
 
-    // int32 timestamp = 8;
+    // .google.protobuf.Timestamp timestamp = 8;
 
 
-    pub fn get_timestamp(&self) -> i32 {
-        self.timestamp
+    pub fn get_timestamp(&self) -> &::protobuf::well_known_types::Timestamp {
+        self.timestamp.as_ref().unwrap_or_else(|| <::protobuf::well_known_types::Timestamp as ::protobuf::Message>::default_instance())
     }
     pub fn clear_timestamp(&mut self) {
-        self.timestamp = 0;
+        self.timestamp.clear();
+    }
+
+    pub fn has_timestamp(&self) -> bool {
+        self.timestamp.is_some()
     }
 
     // Param is passed by value, moved
-    pub fn set_timestamp(&mut self, v: i32) {
-        self.timestamp = v;
+    pub fn set_timestamp(&mut self, v: ::protobuf::well_known_types::Timestamp) {
+        self.timestamp = ::protobuf::SingularPtrField::some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_timestamp(&mut self) -> &mut ::protobuf::well_known_types::Timestamp {
+        if self.timestamp.is_none() {
+            self.timestamp.set_default();
+        }
+        self.timestamp.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_timestamp(&mut self) -> ::protobuf::well_known_types::Timestamp {
+        self.timestamp.take().unwrap_or_else(|| ::protobuf::well_known_types::Timestamp::new())
     }
 
     // bool valid = 9;
@@ -2268,6 +2286,11 @@ impl Pcap {
 
 impl ::protobuf::Message for Pcap {
     fn is_initialized(&self) -> bool {
+        for v in &self.timestamp {
+            if !v.is_initialized() {
+                return false;
+            }
+        };
         true
     }
 
@@ -2313,11 +2336,7 @@ impl ::protobuf::Message for Pcap {
                     self.records = tmp;
                 },
                 8 => {
-                    if wire_type != ::protobuf::wire_format::WireTypeVarint {
-                        return ::std::result::Result::Err(::protobuf::rt::unexpected_wire_type(wire_type));
-                    }
-                    let tmp = is.read_int32()?;
-                    self.timestamp = tmp;
+                    ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.timestamp)?;
                 },
                 9 => {
                     if wire_type != ::protobuf::wire_format::WireTypeVarint {
@@ -2359,8 +2378,9 @@ impl ::protobuf::Message for Pcap {
         if self.records != 0 {
             my_size += ::protobuf::rt::value_size(7, self.records, ::protobuf::wire_format::WireTypeVarint);
         }
-        if self.timestamp != 0 {
-            my_size += ::protobuf::rt::value_size(8, self.timestamp, ::protobuf::wire_format::WireTypeVarint);
+        if let Some(ref v) = self.timestamp.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         }
         if self.valid != false {
             my_size += 2;
@@ -2392,8 +2412,10 @@ impl ::protobuf::Message for Pcap {
         if self.records != 0 {
             os.write_int32(7, self.records)?;
         }
-        if self.timestamp != 0 {
-            os.write_int32(8, self.timestamp)?;
+        if let Some(ref v) = self.timestamp.as_ref() {
+            os.write_tag(8, ::protobuf::wire_format::WireTypeLengthDelimited)?;
+            os.write_raw_varint32(v.get_cached_size())?;
+            v.write_to_with_cached_sizes(os)?;
         }
         if self.valid != false {
             os.write_bool(9, self.valid)?;
@@ -2471,7 +2493,7 @@ impl ::protobuf::Message for Pcap {
                 |m: &Pcap| { &m.records },
                 |m: &mut Pcap| { &mut m.records },
             ));
-            fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeInt32>(
+            fields.push(::protobuf::reflect::accessor::make_singular_ptr_field_accessor::<_, ::protobuf::types::ProtobufTypeMessage<::protobuf::well_known_types::Timestamp>>(
                 "timestamp",
                 |m: &Pcap| { &m.timestamp },
                 |m: &mut Pcap| { &mut m.timestamp },
@@ -2504,7 +2526,7 @@ impl ::protobuf::Clear for Pcap {
         self.state = State::UNKNOWN;
         self.size = 0;
         self.records = 0;
-        self.timestamp = 0;
+        self.timestamp.clear();
         self.valid = false;
         self.unknown_fields.clear();
     }
@@ -2638,45 +2660,46 @@ impl ::protobuf::reflect::ProtobufValue for State {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x0bmodel.proto\x12\x0cnetsim.model\x1a\x0ccommon.proto\"4\n\x08Positi\
-    on\x12\x0c\n\x01x\x18\x01\x20\x01(\x02R\x01x\x12\x0c\n\x01y\x18\x02\x20\
-    \x01(\x02R\x01y\x12\x0c\n\x01z\x18\x03\x20\x01(\x02R\x01z\"I\n\x0bOrient\
-    ation\x12\x10\n\x03yaw\x18\x01\x20\x01(\x02R\x03yaw\x12\x14\n\x05pitch\
-    \x18\x02\x20\x01(\x02R\x05pitch\x12\x12\n\x04roll\x18\x03\x20\x01(\x02R\
-    \x04roll\"\xdd\x04\n\x04Chip\x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17.ne\
-    tsim.common.ChipKindR\x04kind\x12\x0e\n\x02id\x18\x02\x20\x01(\x05R\x02i\
-    d\x12\x12\n\x04name\x18\x03\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\
-    \x18\x04\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cproduct_name\x18\x05\x20\
-    \x01(\tR\x0bproductName\x12-\n\x07capture\x18\x06\x20\x01(\x0e2\x13.nets\
-    im.model.StateR\x07capture\x12.\n\x02bt\x18\x07\x20\x01(\x0b2\x1c.netsim\
-    .model.Chip.BluetoothH\0R\x02bt\x12,\n\x03uwb\x18\x08\x20\x01(\x0b2\x18.\
-    netsim.model.Chip.RadioH\0R\x03uwb\x12.\n\x04wifi\x18\t\x20\x01(\x0b2\
-    \x18.netsim.model.Chip.RadioH\0R\x04wifi\x1a~\n\x05Radio\x12)\n\x05state\
-    \x18\x01\x20\x01(\x0e2\x13.netsim.model.StateR\x05state\x12\x14\n\x05ran\
-    ge\x18\x02\x20\x01(\x02R\x05range\x12\x19\n\x08tx_count\x18\x03\x20\x01(\
-    \x05R\x07txCount\x12\x19\n\x08rx_count\x18\x04\x20\x01(\x05R\x07rxCount\
-    \x1ax\n\tBluetooth\x127\n\nlow_energy\x18\x01\x20\x01(\x0b2\x18.netsim.m\
-    odel.Chip.RadioR\tlowEnergy\x122\n\x07classic\x18\x02\x20\x01(\x0b2\x18.\
-    netsim.model.Chip.RadioR\x07classicB\x06\n\x04chip\"\xe1\x01\n\x06Device\
-    \x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x12\x12\n\x04name\x18\x02\
-    \x20\x01(\tR\x04name\x12\x18\n\x07visible\x18\x03\x20\x01(\x08R\x07visib\
-    le\x122\n\x08position\x18\x04\x20\x01(\x0b2\x16.netsim.model.PositionR\
-    \x08position\x12;\n\x0borientation\x18\x05\x20\x01(\x0b2\x19.netsim.mode\
-    l.OrientationR\x0borientation\x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.\
-    netsim.model.ChipR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\
-    \x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"\x93\x02\n\x04Pcap\x12\
-    \x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x124\n\tchip_kind\x18\x02\x20\
-    \x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x17\n\x07chip_id\
-    \x18\x03\x20\x01(\x05R\x06chipId\x12\x1f\n\x0bdevice_name\x18\x04\x20\
-    \x01(\tR\ndeviceName\x12)\n\x05state\x18\x05\x20\x01(\x0e2\x13.netsim.mo\
-    del.StateR\x05state\x12\x12\n\x04size\x18\x06\x20\x01(\x05R\x04size\x12\
-    \x18\n\x07records\x18\x07\x20\x01(\x05R\x07records\x12\x1c\n\ttimestamp\
-    \x18\x08\x20\x01(\x05R\ttimestamp\x12\x14\n\x05valid\x18\t\x20\x01(\x08R\
-    \x05valid*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_\
-    CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04W\
-    IFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\
-    \x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\n\
-    \x03OFF\x10\x02b\x06proto3\
+    \n\x0bmodel.proto\x12\x0cnetsim.model\x1a\x0ccommon.proto\x1a\x1fgoogle/\
+    protobuf/timestamp.proto\"4\n\x08Position\x12\x0c\n\x01x\x18\x01\x20\x01\
+    (\x02R\x01x\x12\x0c\n\x01y\x18\x02\x20\x01(\x02R\x01y\x12\x0c\n\x01z\x18\
+    \x03\x20\x01(\x02R\x01z\"I\n\x0bOrientation\x12\x10\n\x03yaw\x18\x01\x20\
+    \x01(\x02R\x03yaw\x12\x14\n\x05pitch\x18\x02\x20\x01(\x02R\x05pitch\x12\
+    \x12\n\x04roll\x18\x03\x20\x01(\x02R\x04roll\"\xdd\x04\n\x04Chip\x12+\n\
+    \x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\
+    \x0e\n\x02id\x18\x02\x20\x01(\x05R\x02id\x12\x12\n\x04name\x18\x03\x20\
+    \x01(\tR\x04name\x12\"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\x0cmanufact\
+    urer\x12!\n\x0cproduct_name\x18\x05\x20\x01(\tR\x0bproductName\x12-\n\
+    \x07capture\x18\x06\x20\x01(\x0e2\x13.netsim.model.StateR\x07capture\x12\
+    .\n\x02bt\x18\x07\x20\x01(\x0b2\x1c.netsim.model.Chip.BluetoothH\0R\x02b\
+    t\x12,\n\x03uwb\x18\x08\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\
+    \x03uwb\x12.\n\x04wifi\x18\t\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\
+    \0R\x04wifi\x1a~\n\x05Radio\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.ne\
+    tsim.model.StateR\x05state\x12\x14\n\x05range\x18\x02\x20\x01(\x02R\x05r\
+    ange\x12\x19\n\x08tx_count\x18\x03\x20\x01(\x05R\x07txCount\x12\x19\n\
+    \x08rx_count\x18\x04\x20\x01(\x05R\x07rxCount\x1ax\n\tBluetooth\x127\n\n\
+    low_energy\x18\x01\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\tlowEnergy\
+    \x122\n\x07classic\x18\x02\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\
+    \x07classicB\x06\n\x04chip\"\xe1\x01\n\x06Device\x12\x0e\n\x02id\x18\x01\
+    \x20\x01(\x05R\x02id\x12\x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x12\
+    \x18\n\x07visible\x18\x03\x20\x01(\x08R\x07visible\x122\n\x08position\
+    \x18\x04\x20\x01(\x0b2\x16.netsim.model.PositionR\x08position\x12;\n\x0b\
+    orientation\x18\x05\x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borien\
+    tation\x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05c\
+    hips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.mo\
+    del.DeviceR\x07devices\"\xaf\x02\n\x04Pcap\x12\x0e\n\x02id\x18\x01\x20\
+    \x01(\x05R\x02id\x124\n\tchip_kind\x18\x02\x20\x01(\x0e2\x17.netsim.comm\
+    on.ChipKindR\x08chipKind\x12\x17\n\x07chip_id\x18\x03\x20\x01(\x05R\x06c\
+    hipId\x12\x1f\n\x0bdevice_name\x18\x04\x20\x01(\tR\ndeviceName\x12)\n\
+    \x05state\x18\x05\x20\x01(\x0e2\x13.netsim.model.StateR\x05state\x12\x12\
+    \n\x04size\x18\x06\x20\x01(\x05R\x04size\x12\x18\n\x07records\x18\x07\
+    \x20\x01(\x05R\x07records\x128\n\ttimestamp\x18\x08\x20\x01(\x0b2\x1a.go\
+    ogle.protobuf.TimestampR\ttimestamp\x12\x14\n\x05valid\x18\t\x20\x01(\
+    \x08R\x05valid*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLUET\
+    OOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\
+    \x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*\
+    %\n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\
+    \n\x03OFF\x10\x02b\x06proto3\
 ";
 
 static file_descriptor_proto_lazy: ::protobuf::rt::LazyV2<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::rt::LazyV2::INIT;

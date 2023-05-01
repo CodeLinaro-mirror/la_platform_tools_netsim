@@ -28,7 +28,7 @@ export class NetsimApp extends LitElement {
     }
 
     #bottom {
-      position: absolute;
+      position: relative;
       bottom: 0;
       left: 0;
       font-size: 20px;
@@ -95,9 +95,9 @@ export class NetsimApp extends LitElement {
       `;
     }
     return html`
+      <div id="bottom">version: ${this.version}</div>
       <ns-navigation-bar></ns-navigation-bar>
       ${page}
-      <div id="bottom">version: ${this.version}</div>
     `;
   }
 }
