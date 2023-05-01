@@ -1,5 +1,5 @@
-import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as i,LitElement as r,html as e}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{customElement as o}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let s=class extends r{render(){return e`
-      <div class="panel">
+import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as i,LitElement as e,html as r}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{customElement as o}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let s=class extends e{render(){return r`
+      <div class="panel" role="text" tabindex="0">
         <div class="title">Lit-HTML</div>
         <div class="copyright">
             Copyright (c) 2017 Google LLC. All rights reserved.

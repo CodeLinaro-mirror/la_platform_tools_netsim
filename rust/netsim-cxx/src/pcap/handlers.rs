@@ -21,7 +21,7 @@
 //! handle_pcap_cxx calls handle_pcaps or handle_pcap based on the method
 
 use frontend_proto::frontend::GetPcapResponse;
-use frontend_proto::model::Pcap as ProtoPcap;
+use frontend_proto::model::{Pcap as ProtoPcap, State};
 use lazy_static::lazy_static;
 use protobuf::Message;
 use std::collections::hash_map::{Iter, Values};
@@ -34,7 +34,7 @@ use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
 use crate::CxxServerResponseWriterWrapper;
 
-use super::controller::handle_pcap_list;
+use super::managers::{handle_pcap_list, handle_pcap_patch};
 
 // The Pcap resource is a singleton that manages all pcaps
 lazy_static! {
@@ -44,8 +44,12 @@ lazy_static! {
 // Pcaps contains a recent copy of all chips and their ChipKind, chip_id,
 // and owning device name. Information for any recent or ongoing captures is
 // also stored in the ProtoPcap.
+pub type ChipId = i32;
+pub type FacadeId = i32;
+pub type PcapId = i32;
 pub struct Pcaps {
-    pcaps: HashMap<String, ProtoPcap>,
+    chip_id_map: HashMap<ChipId, ProtoPcap>,
+    facade_id_map: HashMap<FacadeId, ProtoPcap>,
     current_idx: i32,
 }
 
@@ -53,48 +57,71 @@ impl Pcaps {
     // The idx starts with 4000 to avoid conflict with other indices that may
     // exist in different resources
     fn new() -> Self {
-        Pcaps { pcaps: HashMap::<String, ProtoPcap>::new(), current_idx: 4000 }
+        Pcaps {
+            chip_id_map: HashMap::<ChipId, ProtoPcap>::new(),
+            facade_id_map: HashMap::<FacadeId, ProtoPcap>::new(),
+            current_idx: 4000,
+        }
     }
 
     pub fn contains_pcap(&self, pcap: &ProtoPcap) -> bool {
-        self.pcaps.contains_key(&Self::get_key(pcap))
+        self.chip_id_map.contains_key(&pcap.get_chip_id())
     }
 
-    pub fn get_key(pcap: &ProtoPcap) -> String {
-        format!("{:?}_{}", pcap.get_chip_kind(), pcap.get_chip_id())
+    pub fn get_by_chip_id(&mut self, key: ChipId) -> Option<&mut ProtoPcap> {
+        self.chip_id_map.get_mut(&key)
     }
 
-    pub fn get(&mut self, key: &String) -> Option<&mut ProtoPcap> {
-        self.pcaps.get_mut(key)
+    pub fn get_by_facade_id(&mut self, key: FacadeId) -> Option<&mut ProtoPcap> {
+        self.facade_id_map.get_mut(&key)
     }
 
+    pub fn get_by_pcap_id(&mut self, id: PcapId) -> Option<&mut ProtoPcap> {
+        self.chip_id_map.iter_mut().map(|(_, pcap)| pcap).find(|pcap| pcap.id == id)
+    }
+
+    // TODO: replace with "optional bool" in proto
+    pub fn set_state(&mut self, id: PcapId, state: bool) -> bool {
+        let capture_state = match state {
+            true => State::ON,
+            false => State::OFF,
+        };
+        if let Some(pcap) = self.get_by_pcap_id(id) {
+            pcap.set_state(capture_state);
+            return true;
+        }
+        false
+    }
+
+    // TODO: invoke GetFacadeId cxx method to obtain facade_id from chip_id
     pub fn insert(&mut self, mut pcap: ProtoPcap) {
         pcap.set_id(self.current_idx);
-        self.pcaps.insert(Self::get_key(&pcap), pcap);
+        self.chip_id_map.insert(pcap.get_chip_id(), pcap);
         self.current_idx += 1;
     }
 
     pub fn is_empty(&self) -> bool {
-        self.pcaps.is_empty()
+        self.chip_id_map.is_empty()
     }
 
-    pub fn iter(&self) -> Iter<String, ProtoPcap> {
-        self.pcaps.iter()
+    pub fn iter_chip_id_map(&self) -> Iter<ChipId, ProtoPcap> {
+        self.chip_id_map.iter()
     }
 
-    pub fn remove(&mut self, key: &String) {
-        if self.pcaps.remove(key).is_none() {
+    // TODO: remove pcap from facade_id_map
+    pub fn remove(&mut self, key: &ChipId) {
+        if self.chip_id_map.remove(key).is_none() {
             println!("key does not exist in Pcaps");
         }
     }
 
-    pub fn values(&self) -> Values<String, ProtoPcap> {
-        self.pcaps.values()
+    pub fn values(&self) -> Values<ChipId, ProtoPcap> {
+        self.chip_id_map.values()
     }
 }
 
 /// The Rust pcap handler used directly by Http frontend for LIST, GET, and PATCH
-pub fn handle_pcap(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
+pub fn handle_pcap(request: &HttpRequest, param: &str, writer: ResponseWritable) {
     if request.uri.as_str() == "/v1/pcaps" {
         match request.method.as_str() {
             "GET" => {
@@ -113,8 +140,21 @@ pub fn handle_pcap(request: &HttpRequest, _param: &str, writer: ResponseWritable
                 writer.put_chunk(&response_bytes);
             }
             "PATCH" => {
-                // TODO: Implement handle_pcap_patch in controller.rs
-                writer.put_ok("text/plain", "PatchPcap");
+                let mut pcaps = RESOURCE.write().unwrap();
+                let id = match param.parse::<i32>() {
+                    Ok(num) => num,
+                    Err(_) => {
+                        writer.put_error(404, "Incorrect ID type for pcap, ID should be i32.");
+                        return;
+                    }
+                };
+                let body = &request.body;
+                let state = String::from_utf8(body.to_vec()).unwrap();
+                match state.as_str() {
+                    "1" => handle_pcap_patch(writer, &mut pcaps, id, true),
+                    "2" => handle_pcap_patch(writer, &mut pcaps, id, false),
+                    _ => writer.put_error(404, "Incorrect state for PatchPcap"),
+                }
             }
             _ => writer.put_error(404, "Not found."),
         }

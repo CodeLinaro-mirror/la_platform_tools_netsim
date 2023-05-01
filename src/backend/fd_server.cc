@@ -14,16 +14,13 @@
 
 #include <cstdint>
 
+#include "common.pb.h"
 #include "hci_packet.pb.h"
 
 namespace netsim::backend {
 
-void handle_bt_response(uint32_t facade_id,
-                        packet::HCIPacket_PacketType packet_type,
-                        const std::shared_ptr<std::vector<uint8_t>> &packet) {}
-
-void handle_wifi_response(uint32_t facade_id,
-                          const std::shared_ptr<std::vector<uint8_t>> &packet) {
-}
+void handle_response(common::ChipKind kind, uint32_t facade_id,
+                     const std::vector<uint8_t> &packet,
+                     /* optional */ packet::HCIPacket_PacketType packet_type) {}
 
 }  // namespace netsim::backend

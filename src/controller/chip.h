@@ -61,10 +61,10 @@ class Chip {
    * Remove resources own by the chip and remove it from the chip emulator.
    */
   void Remove();
-
- protected:
   const uint32_t id;  // Global id.
   const uint32_t facade_id;
+
+ protected:
   const common::ChipKind kind;
   const std::string name;
   const std::string device_name;

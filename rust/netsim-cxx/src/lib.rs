@@ -14,9 +14,12 @@
 
 //! Netsim cxx libraries.
 
+#![allow(dead_code)]
+
 mod http_server;
 mod pcap;
 mod ranging;
+mod transport;
 mod version;
 
 use std::pin::Pin;
@@ -24,6 +27,9 @@ use std::pin::Pin;
 use cxx::let_cxx_string;
 use ffi::CxxServerResponseWriter;
 use http_server::server_response::ServerResponseWritable;
+
+use crate::transport::fd::handle_response;
+use crate::transport::fd::run_fd_transport;
 
 use crate::http_server::run_http_server;
 use crate::pcap::handlers::handle_pcap_cxx;
@@ -34,6 +40,9 @@ use crate::version::*;
 mod ffi {
 
     extern "Rust" {
+
+        #[cxx_name = "RunFdTransport"]
+        fn run_fd_transport(startup_json: &String);
 
         #[cxx_name = "RunHttpServer"]
         fn run_http_server();
@@ -58,10 +67,37 @@ mod ffi {
             body: String,
         );
 
+        // Packet hub
+
+        #[cxx_name = HandleResponse]
+        #[namespace = "netsim::fd"]
+        fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
+
     }
 
     unsafe extern "C++" {
         include!("controller/controller.h");
+
+        #[namespace = "netsim::scene_controller"]
+        type AddChipResult;
+        fn get_chip_id(self: &AddChipResult) -> u32;
+        fn get_device_id(self: &AddChipResult) -> u32;
+        fn get_facade_id(self: &AddChipResult) -> u32;
+
+        #[rust_name = "add_chip_cxx"]
+        #[namespace = "netsim::scene_controller"]
+        fn AddChipCxx(
+            guid: &CxxString,
+            device_name: &CxxString,
+            chip_kind: u32,
+            chip_name: &CxxString,
+            manufacturer: &CxxString,
+            product_name: &CxxString,
+        ) -> UniquePtr<AddChipResult>;
+
+        #[rust_name = "remove_chip"]
+        #[namespace = "netsim::scene_controller"]
+        fn RemoveChip(device_id: u32, chip_id: u32);
 
         #[rust_name = "get_devices"]
         #[namespace = "netsim::scene_controller"]
@@ -74,6 +110,10 @@ mod ffi {
         #[rust_name = "get_devices_bytes"]
         #[namespace = "netsim::scene_controller"]
         fn GetDevicesBytes(vec: &mut Vec<u8>) -> bool;
+
+        #[rust_name = "get_facade_id"]
+        #[namespace = "netsim::scene_controller"]
+        fn GetFacadeId(chip_id: i32) -> i32;
 
         #[rust_name = "patch_device"]
         #[namespace = "netsim::scene_controller"]
@@ -90,16 +130,22 @@ mod ffi {
         type CxxServerResponseWriter;
 
         #[namespace = "netsim::frontend"]
-        fn put_ok_with_length(&self, mime_type: &CxxString, length: u32);
+        fn put_ok_with_length(self: &CxxServerResponseWriter, mime_type: &CxxString, length: u32);
 
         #[namespace = "netsim::frontend"]
-        fn put_chunk(&self, chunk: &[u8]);
+        fn put_chunk(self: &CxxServerResponseWriter, chunk: &[u8]);
 
         #[namespace = "netsim::frontend"]
-        fn put_ok(&self, mime_type: &CxxString, body: &CxxString);
+        fn put_ok(self: &CxxServerResponseWriter, mime_type: &CxxString, body: &CxxString);
 
         #[namespace = "netsim::frontend"]
-        fn put_error(&self, error_code: u32, error_message: &CxxString);
+        fn put_error(self: &CxxServerResponseWriter, error_code: u32, error_message: &CxxString);
+
+        include!("packet_hub/packet_hub.h");
+
+        #[namespace = "netsim::packet_hub"]
+        fn handle_request_cxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
+
     }
 }
 

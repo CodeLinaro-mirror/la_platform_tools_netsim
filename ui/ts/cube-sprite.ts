@@ -1,10 +1,7 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import {
-  simulationState,
-  Notifiable,
-  SimulationInfo,
-} from './device-observer.js';
+import {css, html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
+
+import {Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
 
 @customElement('ns-cube-sprite')
 export class CubeSprite extends LitElement implements Notifiable {
@@ -12,59 +9,51 @@ export class CubeSprite extends LitElement implements Notifiable {
    * the yaw value in orientation for ns-cube-sprite
    * unit: deg
    */
-  @property({ type: Number })
-  yaw = -15;
+  @property({type: Number}) yaw = -15;
 
   /**
    * the pitch value in orientation for ns-cube-sprite
    * unit: deg
    */
-  @property({ type: Number })
-  pitch = -15;
+  @property({type: Number}) pitch = -15;
 
   /**
    * the roll value in orientation for ns-cube-sprite
    * unit: deg
    */
-  @property({ type: Number })
-  roll = 0;
+  @property({type: Number}) roll = 0;
 
   /**
    * the z value in position for ns-cube-sprite
    * unit: cm
    */
-  @property({ type: Number })
-  posZ = 0;
+  @property({type: Number}) posZ = 0;
 
   /**
    * the css value for color
    */
-  @property({ type: css, attribute: 'color' })
-  color = css`red`;
+  @property({type: css, attribute: 'color'}) color = css`red`;
 
   /**
    * the css value for size
    */
-  @property({ type: css, attribute: 'size' })
-  size = css`30px`;
+  @property({type: css, attribute: 'size'}) size = css`30px`;
 
   /**
    * A Boolean property; if set true, the user would
    * be able to control the cube's pitch, yaw, and roll
    * with the info panel.
    */
-  @property({ type: Boolean })
-  controls = false;
+  @property({type: Boolean}) controls = false;
 
   /**
    * A Boolean property; if set true, the box is selected
    * therefore the outline gets dotted.
    */
-  @property({ type: Boolean })
-  highlighted = false;
+  @property({type: Boolean}) highlighted = false;
 
   connectedCallback() {
-    super.connectedCallback(); // eslint-disable-line
+    super.connectedCallback();  // eslint-disable-line
     simulationState.registerObserver(this);
     window.addEventListener('orientationEvent', this.handleOrientationEvent);
   }
@@ -72,7 +61,7 @@ export class CubeSprite extends LitElement implements Notifiable {
   disconnectedCallback() {
     window.removeEventListener('orientationEvent', this.handleOrientationEvent);
     simulationState.removeObserver(this);
-    super.disconnectedCallback(); // eslint-disable-line
+    super.disconnectedCallback();  // eslint-disable-line
   }
 
   onNotify(data: SimulationInfo) {
@@ -96,6 +85,7 @@ export class CubeSprite extends LitElement implements Notifiable {
       transform-origin: center;
       transform-style: preserve-3d;
       transform: translateZ(calc(var(--posZ) * 1px));
+      cursor: move;
     }
 
     .cube {
@@ -166,7 +156,7 @@ export class CubeSprite extends LitElement implements Notifiable {
   `;
 
   private handleOrientationEvent = (e: Event) => {
-    const { detail } = e as CustomEvent;
+    const {detail} = e as CustomEvent;
     if (detail.name === this.id && this.controls) {
       if (detail.type === 'yaw') {
         this.yaw = detail.value;
@@ -202,12 +192,12 @@ export class CubeSprite extends LitElement implements Notifiable {
         <div></div>
         <div></div>
       </div>
-      ${this.controls
-        ? html`
+      ${
+        this.controls ? html`
             <div class="line"></div>
             <div class="base"></div>
-          `
-        : html``}
+          ` :
+                        html``}
     `;
   }
 }

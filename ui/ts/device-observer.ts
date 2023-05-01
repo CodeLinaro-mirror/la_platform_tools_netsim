@@ -1,6 +1,7 @@
-import {State, Chip, Device as ProtoDevice} from './model.js';
+import {Chip, Device as ProtoDevice, State} from './model.js';
+
 // URL for netsim
-const DEVICES_URL = 'http://localhost:7681/v1/devices';
+const DEVICES_URL = './v1/devices';
 
 /**
  * Interface for a method in notifying the subscribed observers.
@@ -21,7 +22,7 @@ export class Device {
     this.device = device;
   }
 
-  get name() : string {
+  get name(): string {
     return this.device.name;
   }
 
@@ -29,16 +30,20 @@ export class Device {
     this.device.name = value;
   }
 
-  get position() : {x: number; y: number; z: number} {
+  get position(): {x: number; y: number; z: number} {
     const result = {x: 0, y: 0, z: 0};
-    if ("position" in this.device && this.device.position && typeof this.device.position === 'object') {
-      if ("x" in this.device.position && typeof this.device.position.x === 'number') {
+    if ('position' in this.device && this.device.position &&
+        typeof this.device.position === 'object') {
+      if ('x' in this.device.position &&
+          typeof this.device.position.x === 'number') {
         result.x = this.device.position.x;
       }
-      if ("y" in this.device.position && typeof this.device.position.y === 'number') {
+      if ('y' in this.device.position &&
+          typeof this.device.position.y === 'number') {
         result.y = this.device.position.y;
       }
-      if ("z" in this.device.position && typeof this.device.position.z === 'number') {
+      if ('z' in this.device.position &&
+          typeof this.device.position.z === 'number') {
         result.z = this.device.position.z;
       }
     }
@@ -49,16 +54,20 @@ export class Device {
     this.device.position = pos;
   }
 
-  get orientation() : {yaw: number; pitch: number; roll: number} {
+  get orientation(): {yaw: number; pitch: number; roll: number} {
     const result = {yaw: 0, pitch: 0, roll: 0};
-    if ("orientation" in this.device && this.device.orientation && typeof this.device.orientation === 'object') {
-      if ("yaw" in this.device.orientation && typeof this.device.orientation.yaw === 'number') {
+    if ('orientation' in this.device && this.device.orientation &&
+        typeof this.device.orientation === 'object') {
+      if ('yaw' in this.device.orientation &&
+          typeof this.device.orientation.yaw === 'number') {
         result.yaw = this.device.orientation.yaw;
       }
-      if ("pitch" in this.device.orientation && typeof this.device.orientation.pitch === 'number') {
+      if ('pitch' in this.device.orientation &&
+          typeof this.device.orientation.pitch === 'number') {
         result.pitch = this.device.orientation.pitch;
       }
-      if ("roll" in this.device.orientation && typeof this.device.orientation.roll === 'number') {
+      if ('roll' in this.device.orientation &&
+          typeof this.device.orientation.roll === 'number') {
         result.roll = this.device.orientation.roll;
       }
     }
@@ -70,7 +79,7 @@ export class Device {
   }
 
   // TODO modularize getters and setters for Chip Interface
-  get chips() : Chip[] {
+  get chips(): Chip[] {
     return this.device.chips ?? [];
   }
 
@@ -79,7 +88,7 @@ export class Device {
     this.device.chips = value;
   }
 
-  get visible() : boolean {
+  get visible(): boolean {
     return this.device.visible ?? true;
   }
 
@@ -88,43 +97,48 @@ export class Device {
   }
 
   toggleChipState(chip: Chip, btType?: string) {
-    if ("bt" in chip && chip.bt) {
-      if (typeof(btType) === 'undefined') {
+    if ('bt' in chip && chip.bt) {
+      if (typeof (btType) === 'undefined') {
         // eslint-disable-next-line
-        console.log("netsim-ui: must specify lowEnergy or classic for Bluetooth");
+        console.log(
+            'netsim-ui: must specify lowEnergy or classic for Bluetooth');
         return;
       }
-      if (btType === "lowEnergy" && "lowEnergy" in chip.bt && chip.bt.lowEnergy) {
-        if ("state" in chip.bt.lowEnergy) {
-          chip.bt.lowEnergy.state = chip.bt.lowEnergy.state === State.ON ? State.OFF : State.ON;
+      if (btType === 'lowEnergy' && 'lowEnergy' in chip.bt &&
+          chip.bt.lowEnergy) {
+        if ('state' in chip.bt.lowEnergy) {
+          chip.bt.lowEnergy.state =
+              chip.bt.lowEnergy.state === State.ON ? State.OFF : State.ON;
         }
       }
-      if (btType === "classic" && "classic" in chip.bt && chip.bt.classic) {
-        if ("state" in chip.bt.classic) {
-          chip.bt.classic.state = chip.bt.classic.state === State.ON ? State.OFF : State.ON;
+      if (btType === 'classic' && 'classic' in chip.bt && chip.bt.classic) {
+        if ('state' in chip.bt.classic) {
+          chip.bt.classic.state =
+              chip.bt.classic.state === State.ON ? State.OFF : State.ON;
         }
       }
     }
-    if ("wifi" in chip && chip.wifi) {
-      if ("state" in chip.wifi) {
+    if ('wifi' in chip && chip.wifi) {
+      if ('state' in chip.wifi) {
         chip.wifi.state = chip.wifi.state === State.ON ? State.OFF : State.ON;
       }
     }
-    if ("uwb" in chip && chip.uwb) {
-      if ("state" in chip.uwb) {
-        chip.uwb.state = chip.uwb.state ===  State.ON ? State.OFF : State.ON;
+    if ('uwb' in chip && chip.uwb) {
+      if ('state' in chip.uwb) {
+        chip.uwb.state = chip.uwb.state === State.ON ? State.OFF : State.ON;
       }
     }
-
   }
 
   toggleCapture(device: Device, chip: Chip) {
-    if ("capture" in chip && chip.capture) {
-      chip.capture = chip.capture ===  State.ON ? State.OFF : State.ON;
-      simulationState.patchDevice({device: {
-        name: device.name,
-        chips: device.chips,
-      }});
+    if ('capture' in chip && chip.capture) {
+      chip.capture = chip.capture === State.ON ? State.OFF : State.ON;
+      simulationState.patchDevice({
+        device: {
+          name: device.name,
+          chips: device.chips,
+        }
+      });
     }
   }
 }
@@ -136,11 +150,7 @@ export class Device {
 export interface SimulationInfo {
   devices: Device[];
   selectedId: string;
-  dimension: {
-    x: number;
-    y: number;
-    z: number;
-  };
+  dimension: {x: number; y: number; z: number;};
 }
 
 interface Observable {
@@ -154,7 +164,7 @@ class SimulationState implements Observable {
   private simulationInfo: SimulationInfo = {
     devices: [],
     selectedId: '',
-    dimension: { x: 10, y: 10, z: 0 },
+    dimension: {x: 10, y: 10, z: 0},
   };
 
   constructor() {
@@ -166,14 +176,14 @@ class SimulationState implements Observable {
     fetch(DEVICES_URL, {
       method: 'GET',
     })
-      .then(response => response.json())
-      .then(data => {
-        this.fetchDevice(data.devices);
-      })
-      .catch(error => {
-        // eslint-disable-next-line
-        console.log('Cannot connect to netsim web server', error);
-      });
+        .then(response => response.json())
+        .then(data => {
+          this.fetchDevice(data.devices);
+        })
+        .catch(error => {
+          // eslint-disable-next-line
+          console.log('Cannot connect to netsim web server', error);
+        });
   }
 
   fetchDevice(devices: ProtoDevice[]) {
@@ -214,11 +224,11 @@ class SimulationState implements Observable {
       },
       body: jsonBody,
     })
-      .then(response => response.json())
-      .catch(error => {
-        // eslint-disable-next-line
-        console.error('Error:', error);
-      });
+        .then(response => response.json())
+        .catch(error => {
+          // eslint-disable-next-line
+          console.error('Error:', error);
+        });
     this.notifyObservers();
   }
 

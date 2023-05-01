@@ -1,13 +1,11 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import {css, html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
 
 @customElement('ns-pyramid-sprite')
 export class PyramidSprite extends LitElement {
-  @property({ type: css, attribute: 'color' })
-  color;
+  @property({type: css, attribute: 'color'}) color;
 
-  @property({ type: css, attribute: 'size' })
-  size;
+  @property({type: css, attribute: 'size'}) size;
 
   constructor() {
     super();
