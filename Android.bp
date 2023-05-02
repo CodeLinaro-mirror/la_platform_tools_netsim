@@ -70,7 +70,6 @@ rust_defaults {
         "libserde",
         "libserde_json",
         "liblazy_static",
-        "liblog_rust",
     ],
     srcs: ["rust/netsim-cxx/src/lib.rs"],
 }
@@ -275,8 +274,6 @@ rust_defaults {
     rustlibs: [
         "libchrono",
         "librand",
-        "liblog_rust",
-        "libenv_logger",
     ],
 }
 

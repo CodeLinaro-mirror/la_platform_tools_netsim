@@ -32,8 +32,6 @@ use crate::ffi::get_devices;
 use crate::ffi::patch_device;
 use crate::ffi::reset;
 use cxx::let_cxx_string;
-use log::{error, info, warn};
-use netsim_common::util::netsim_logger;
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::fs;
@@ -46,18 +44,16 @@ use std::sync::Arc;
 
 const PATH_PREFIXES: [&str; 3] = ["js", "assets", "node_modules/tslib"];
 
-// TODO: move to main.rs
 pub fn run_http_server(dev: bool) {
-    netsim_logger::init("netsimd");
     let listener = match TcpListener::bind("127.0.0.1:7681") {
         Ok(listener) => listener,
         Err(e) => {
-            error!("bind error in netsimd frontend http server. {}", e);
+            eprintln!("netsimd: bind error in netsimd frontend http server. {}", e);
             return;
         }
     };
     let pool = ThreadPool::new(4);
-    info!("Frontend http server is listening on http://localhost:7681");
+    println!("netsimd: Frontend http server is listening on http://localhost:7681");
     let valid_files = Arc::new(create_filename_hash_set());
     for stream in listener.incoming() {
         let stream = stream.unwrap();
@@ -67,7 +63,7 @@ pub fn run_http_server(dev: bool) {
         });
     }
 
-    info!("Shutting down frontend http server.");
+    println!("netsimd: Shutting down frontend http server.");
 }
 
 fn ui_path(suffix: &str) -> PathBuf {
@@ -89,7 +85,7 @@ fn create_filename_hash_set() -> HashSet<String> {
                 valid_files.insert(entry.path().to_str().unwrap().to_string());
             }
         } else {
-            warn!("netsim-ui doesn't exist");
+            println!("netsim-ui doesn't exist");
         }
     }
     valid_files
