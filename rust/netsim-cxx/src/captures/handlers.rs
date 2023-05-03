@@ -52,7 +52,7 @@ use super::capture::CaptureInfo;
 use super::pcap_util::{append_record, PacketDirection};
 use super::PCAP_MIME_TYPE;
 
-const CHUNK_LEN: usize = 1_048_576;
+const CHUNK_LEN: usize = 1024;
 const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     enum_values_int: false,
     proto_field_name: false,
@@ -185,7 +185,10 @@ pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id:
                 match file.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(length) => writer.put_chunk(&buffer[..length]),
-                    Err(_) => writer.put_error(404, "Error reading pcap file"),
+                    Err(_) => {
+                        writer.put_error(404, "Error reading pcap file");
+                        break;
+                    }
                 }
             }
         } else {
