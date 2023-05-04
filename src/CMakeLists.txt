@@ -60,6 +60,8 @@ android_add_library(
   DEPS android-emu-base
        android-emu-base-headers
        android-emu-base-process
+       android-grpc-interceptors
+       android-emu-metrics
        grpc++
        packet-streamer-proto-lib
        protobuf::libprotobuf

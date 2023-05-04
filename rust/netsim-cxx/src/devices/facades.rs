@@ -19,46 +19,52 @@ use super::device::DeviceIdentifier;
 
 pub type FacadeIdentifier = i32;
 
-pub fn hci_get(facade_id: FacadeIdentifier) -> ProtoBluetoothChip {
+pub fn hci_get(facade_id: FacadeIdentifier) -> Result<ProtoBluetoothChip, String> {
     println!("hci_get({})", facade_id);
-    ProtoBluetoothChip::new()
+    Ok(ProtoBluetoothChip::new())
 }
 
-pub fn wifi_get(facade_id: FacadeIdentifier) -> ProtoRadioChip {
+pub fn wifi_get(facade_id: FacadeIdentifier) -> Result<ProtoRadioChip, String> {
     println!("wifi_get({})", facade_id);
-    ProtoRadioChip::new()
+    Ok(ProtoRadioChip::new())
 }
 
-pub fn hci_remove(facade_id: FacadeIdentifier) {
+pub fn hci_remove(facade_id: FacadeIdentifier) -> Result<(), String> {
     println!("hci_remove({})", facade_id);
+    Ok(())
 }
 
-pub fn wifi_remove(facade_id: FacadeIdentifier) {
+pub fn wifi_remove(facade_id: FacadeIdentifier) -> Result<(), String> {
     println!("wifi_remove({})", facade_id);
+    Ok(())
 }
 
-pub fn hci_add(_device_id: DeviceIdentifier) -> FacadeIdentifier {
+pub fn hci_add(_device_id: DeviceIdentifier) -> Result<FacadeIdentifier, String> {
     println!("hci_add()");
-    0
+    Ok(0)
 }
 
-pub fn wifi_add(_device_id: DeviceIdentifier) -> FacadeIdentifier {
+pub fn wifi_add(_device_id: DeviceIdentifier) -> Result<FacadeIdentifier, String> {
     println!("wifi_add()");
-    0
+    Ok(0)
 }
 
-pub fn hci_patch(_facade_id: FacadeIdentifier, _patch: &ProtoBluetoothChip) {
+pub fn hci_patch(_facade_id: FacadeIdentifier, _patch: &ProtoBluetoothChip) -> Result<(), String> {
     println!("hci_patch()");
+    Ok(())
 }
 
-pub fn wifi_patch(_facade_id: FacadeIdentifier, _patch: &ProtoRadioChip) {
+pub fn wifi_patch(_facade_id: FacadeIdentifier, _patch: &ProtoRadioChip) -> Result<(), String> {
     println!("wifi_patch()");
+    Ok(())
 }
 
-pub fn hci_reset(_facade_id: FacadeIdentifier) {
+pub fn hci_reset(_facade_id: FacadeIdentifier) -> Result<(), String> {
     println!("bt_reset()");
+    Ok(())
 }
 
-pub fn wifi_reset(_facade_id: FacadeIdentifier) {
+pub fn wifi_reset(_facade_id: FacadeIdentifier) -> Result<(), String> {
     println!("wifi_reset()");
+    Ok(())
 }

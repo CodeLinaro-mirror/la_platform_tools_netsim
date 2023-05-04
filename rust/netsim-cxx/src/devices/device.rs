@@ -51,6 +51,7 @@ impl Device {
     }
 }
 
+#[derive(Debug)]
 pub struct AddChipResult {
     pub device_id: DeviceIdentifier,
     pub chip_id: ChipIdentifier,
@@ -102,12 +103,12 @@ impl Device {
         if let Some(chip) = self.chips.get_mut(&chip_id) {
             chip.remove()?;
         } else {
-            return Err(format!("RemoveChip id {chip_id} not found"));
+            return Err(format!("RemoveChip chip id {chip_id} not found"));
         }
-        self.chips
-            .remove(&chip_id)
-            .ok_or(format!("HashMap remove error with chip_id: {chip_id}"))?;
-        Ok(())
+        match self.chips.remove(&chip_id) {
+            Some(_) => Ok(()),
+            None => Err(format!("Key {chip_id} not found in Hashmap")),
+        }
     }
 
     pub fn add_chip(

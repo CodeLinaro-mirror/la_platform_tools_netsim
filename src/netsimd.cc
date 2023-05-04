@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include <cstdio>
+#include <cstdlib>
 #endif
 
 #ifndef NETSIM_ANDROID_EMULATOR
@@ -33,6 +34,7 @@
 #include "frontend/frontend_client_stub.h"
 #include "hci/bluetooth_facade.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "util/os_utils.h"
 
 // Wireless network simulator for android (and other) emulated devices.
 
@@ -51,6 +53,29 @@ void SignalHandler(int sig) {
 }
 #endif
 
+// TODO: Change to 6402 after --hci_port is set in netsim_server.cc.
+constexpr int DEFAULT_HCI_PORT = 7300;
+
+int get_hci_port(int hci_port_flag) {
+  // The following priorities are used to determine the HCI port number:
+  //
+  // 1. The CLI flag `-hci_port`.
+  // 2. The environment variable `NETSIM_HCI_PORT`.
+  // 3. The default value `DEFAULT_HCI_PORT`.
+  int hci_port = 0;
+  if (hci_port_flag != 0) {
+    hci_port = hci_port_flag;
+  } else if (auto netsim_hci_port =
+                 netsim::osutils::GetEnv("NETSIM_HCI_PORT", "0");
+             netsim_hci_port != "0") {
+    char *ptr;
+    hci_port = strtol(netsim_hci_port.c_str(), &ptr, 10);
+  } else {
+    hci_port = DEFAULT_HCI_PORT;
+  }
+  return hci_port;
+}
+
 void ArgError(char *argv[], int c) {
   std::cerr << argv[0] << ": invalid option -- " << (char)c << "\n";
   std::cerr << "Try `" << argv[0] << " --help' for more information.\n";
@@ -60,10 +85,16 @@ int main(int argc, char *argv[]) {
 #if defined(__linux__)
   signal(SIGSEGV, SignalHandler);
 #endif
+  bool no_web_ui = false;
+  bool no_cli_ui = false;
+
   const char *kShortOpt = "s:dg";
   const option kLongOptions[] = {
+      {"no_cli_ui", no_argument, 0, 'f'},
+      {"no_web_ui", no_argument, 0, 'w'},
       {"rootcanal_default_commands_file", required_argument, 0, 'c'},
       {"rootcanal_controller_properties_file", required_argument, 0, 'p'},
+      {"hci_port", required_argument, 0, 'b'},
   };
 
   bool dev = false;
@@ -71,6 +102,7 @@ int main(int argc, char *argv[]) {
   std::string fd_startup_str;
   std::string rootcanal_default_commands_file;
   std::string rootcanal_controller_properties_file;
+  int hci_port_flag = 0;
 
   int c;
 
@@ -98,12 +130,25 @@ int main(int argc, char *argv[]) {
         rootcanal_controller_properties_file = std::string(optarg);
         break;
 
+      case 'f':
+        no_cli_ui = true;
+        break;
+
+      case 'w':
+        no_web_ui = true;
+        break;
+
+      case 'b':
+        hci_port_flag = std::atoi(optarg);
+        break;
+
       default:
         ArgError(argv, c);
         return (-2);
     }
   }
 
+  int hci_port = get_hci_port(hci_port_flag);
   // Daemon mode -- start radio managers
   if (!fd_startup_str.empty() || grpc_startup) {
     netsim::hci::facade::Start();
@@ -115,7 +160,10 @@ int main(int argc, char *argv[]) {
   auto frontend_stub = netsim::frontend::NewFrontendClient();
   if (frontend_stub == nullptr) {
     // starts netsim servers.
-    netsim::server::Run(dev);
+    netsim::server::Run({.dev = dev,
+                         .no_cli_ui = no_cli_ui,
+                         .no_web_ui = no_web_ui,
+                         .hci_port = hci_port});
   } else {
     std::cerr << "Failed to start netsim daemon because a netsim daemon is "
                  "already running\n";
@@ -123,7 +171,10 @@ int main(int argc, char *argv[]) {
 #else
   if (!fd_startup_str.empty()) {
     netsim::RunFdTransport(fd_startup_str);
-    netsim::server::Run(dev);
+    netsim::server::Run({.dev = dev,
+                         .no_cli_ui = no_cli_ui,
+                         .no_web_ui = no_web_ui,
+                         .hci_port = hci_port});
     return -1;
   }
 #endif

@@ -44,13 +44,16 @@ namespace netsim::server {
 namespace {
 constexpr std::chrono::seconds InactivityCheckInterval(5);
 
-std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port) {
+std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
+                                            bool no_cli_ui) {
   grpc::ServerBuilder builder;
   int selected_port;
   builder.AddListeningPort("0.0.0.0:" + std::to_string(netsim_grpc_port),
                            grpc::InsecureServerCredentials(), &selected_port);
-  static auto frontend_service = GetFrontendService();
-  builder.RegisterService(frontend_service.get());
+  if (!no_cli_ui) {
+    static auto frontend_service = GetFrontendService();
+    builder.RegisterService(frontend_service.get());
+  }
   builder.AddChannelArgument(GRPC_ARG_ALLOW_REUSEPORT, 0);
 #ifdef NETSIM_ANDROID_EMULATOR
   static auto backend_service = GetBackendService();
@@ -75,7 +78,7 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port) {
 }
 }  // namespace
 
-void Run(bool dev) {
+void Run(ServerParams params) {
   // Clear all pcap files in temp directory
   if (netsim::pcap::ClearPcapFiles()) {
     BtsLog("netsim generated pcap files in temp directory has been removed.");
@@ -85,23 +88,23 @@ void Run(bool dev) {
   // 1. Use the fixed port for grpc server.
   // 2. Don't start http server.
   auto netsim_grpc_port = std::stoi(osutils::GetEnv("NETSIM_GRPC_PORT", "0"));
-  // Run frontend and backend grpc servers.
-  auto grpc_server = RunGrpcServer(netsim_grpc_port);
+
+  // Run backend and optionally frontend grpc servers (based on no_cli_ui).
+  auto grpc_server = RunGrpcServer(netsim_grpc_port, params.no_cli_ui);
   if (grpc_server == nullptr) {
     BtsLog("Failed to start Grpc server");
     return;
   }
-  if (netsim_grpc_port == 0) {
+
+  // no_web_ui disables the web server
+  if (netsim_grpc_port == 0 && !params.no_web_ui) {
     // Run frontend http server.
-    std::thread(RunHttpServer, dev).detach();
+    std::thread(RunHttpServer, params.dev).detach();
   }
 
-  // Environment variable "NETSIM_HCI_PORT" can be set.
-  unsigned short netsim_hci_port =
-      std::atoi(osutils::GetEnv("NETSIM_HCI_PORT", "7300").c_str());
   // Run the socket server.
-  BtsLog("RunSocketTransport:%d", netsim_hci_port);
-  RunSocketTransport(netsim_hci_port);
+  BtsLog("RunSocketTransport:%d", params.hci_port);
+  RunSocketTransport(params.hci_port);
 
   while (true) {
     std::this_thread::sleep_for(InactivityCheckInterval);

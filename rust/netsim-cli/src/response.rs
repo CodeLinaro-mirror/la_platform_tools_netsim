@@ -291,7 +291,7 @@ impl args::Command {
         let records_hdr = "Records";
         let size_hdr = "Size (bytes)";
         let id_width = 4; // ID width of 4 since capture id (=chip_id) starts at 1000
-        let state_width = 7; // State width of 7 for 'unknown'
+        let state_width = 8; // State width of 8 for 'detached' if device is disconnected
         let chipkind_width = 11; // ChipKind width 11 for 'UNSPECIFIED'
         let time_width = 9; // Timestamp width 9 for header (value format set to HH:MM:SS)
         let name_width = max(
@@ -346,7 +346,7 @@ impl args::Command {
                         capture.id.to_string(),
                         capture.device_name,
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
-                        Self::capture_state_to_string(capture.state.enum_value_or_default()),
+                        if capture.valid {Self::capture_state_to_string(capture.state.enum_value_or_default())} else {"detached".to_string()},
                         TimeDisplay::new(
                             capture.timestamp.get_or_default().seconds,
                             capture.timestamp.get_or_default().nanos as u32,
@@ -359,7 +359,7 @@ impl args::Command {
                         "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:records_width$} |",
                         capture.device_name,
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
-                        Self::capture_state_to_string(capture.state.enum_value_or_default()),
+                        if capture.valid {Self::capture_state_to_string(capture.state.enum_value_or_default())} else {"detached".to_string()},
                         capture.records,
                     )
                 }
