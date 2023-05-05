@@ -15,6 +15,5 @@
 pub mod capture;
 pub mod handlers;
 pub mod pcap_util;
-pub mod proto_json;
 
 pub const PCAP_MIME_TYPE: &str = "application/vnd.tcpdump.pcap";

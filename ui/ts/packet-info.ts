@@ -2,14 +2,14 @@ import {css, html, LitElement} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
 
 import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
-import {Pcap, State} from './model.js';
+import {Capture, State} from './model.js';
 
 @customElement('ns-packet-info')
 export class PacketInformation extends LitElement implements Notifiable {
   /**
    * List of captures currently on the netsim.
    */
-  @property() captureData: Pcap[] = [];
+  @property() captureData: Capture[] = [];
 
   /**
    * List of devices currently on the netsim.
@@ -161,7 +161,7 @@ export class PacketInformation extends LitElement implements Notifiable {
     this.requestUpdate();
   }
 
-  toggleCapture(capture: Pcap) {
+  toggleCapture(capture: Capture) {
     let id = capture.id.toString();
     let state = capture.state === State.OFF ? '1' : '2';
     simulationState.patchCapture(id, state);
@@ -223,7 +223,7 @@ export class PacketInformation extends LitElement implements Notifiable {
     `;
   }
 
-  private handleListCaptures(capture: Pcap) {
+  private handleListCaptures(capture: Capture) {
     return html`
       <tr>
         <td>${capture.deviceName}</td>

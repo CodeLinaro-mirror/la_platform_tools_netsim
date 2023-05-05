@@ -31,7 +31,8 @@ test = false
 cxx = { version = ">=1.0.85", features = ["c++17"] }
 frontend-proto = { path = "../frontend-proto" }
 netsim-common = { path = "../netsim-common" }
-protobuf = "2.27.1"
+protobuf = "3.2.0"
+protobuf-json-mapping = "3.2.0"
 regex = "1.6.0"
 lazy_static = "1.4.0"
 serde = { version = "1.0", features = ["derive"] }

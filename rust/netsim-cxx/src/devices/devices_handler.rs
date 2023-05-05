@@ -1,3 +1,17 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 // devices_handler.rs
 //
 // Provides the API for the frontend and backend to interact with devices.
@@ -13,10 +27,10 @@ use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
-use crate::proto::common::ChipKind as ProtoChipKind;
-use crate::proto::model::Device as ProtoDevice;
-use crate::proto::model::Position as ProtoPosition;
-use crate::proto::model::Scene as ProtoScene;
+use frontend_proto::common::ChipKind as ProtoChipKind;
+use frontend_proto::model::Device as ProtoDevice;
+use frontend_proto::model::Position as ProtoPosition;
+use frontend_proto::model::Scene as ProtoScene;
 use lazy_static::lazy_static;
 use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string;
@@ -147,11 +161,8 @@ fn patch_device(id: DeviceIdentifier, patch_json: &str) {
     }
 }
 
-impl ProtoPosition {
-    fn distance(&self, other: &Self) -> f32 {
-        ((other.x - self.x).powf(2.0) + (other.y - self.y).powf(2.0) + (other.z - self.z).powf(2.0))
-            .sqrt()
-    }
+fn distance(a: &ProtoPosition, b: &ProtoPosition) -> f32 {
+    ((b.x - a.x).powf(2.0) + (b.y - a.y).powf(2.0) + (b.z - a.z).powf(2.0)).sqrt()
 }
 
 #[allow(dead_code)]
@@ -167,7 +178,7 @@ pub fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> f32 {
         None
     });
     match (a, b) {
-        (Some(a), Some(b)) => a.distance(&b),
+        (Some(a), Some(b)) => distance(&a, &b),
         _ => 0.0,
     }
 }
@@ -212,23 +223,17 @@ fn get_secs_until_idle_shutdown() -> Option<u32> {
 mod tests {
     use super::*;
 
-    impl ProtoPosition {
-        fn new_with_xyz(x: f32, y: f32, z: f32) -> Self {
-            let mut p = ProtoPosition::new();
-            p.x = x;
-            p.y = y;
-            p.z = z;
-            p
-        }
+    fn new_with_xyz(x: f32, y: f32, z: f32) -> ProtoPosition {
+        ProtoPosition { x, y, z, ..Default::default() }
     }
 
     #[test]
     fn test_distance() {
         // Pythagorean quadruples
-        let a = ProtoPosition::new_with_xyz(0.0, 0.0, 0.0);
-        let mut b = ProtoPosition::new_with_xyz(1.0, 2.0, 2.0);
-        assert_eq!(a.distance(&b), 3.0);
-        b = ProtoPosition::new_with_xyz(2.0, 3.0, 6.0);
-        assert_eq!(a.distance(&b), 7.0);
+        let a = new_with_xyz(0.0, 0.0, 0.0);
+        let mut b = new_with_xyz(1.0, 2.0, 2.0);
+        assert_eq!(distance(&a, &b), 3.0);
+        b = new_with_xyz(2.0, 3.0, 6.0);
+        assert_eq!(distance(&a, &b), 7.0);
     }
 }

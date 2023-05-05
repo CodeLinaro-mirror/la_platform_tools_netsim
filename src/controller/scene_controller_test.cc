@@ -93,11 +93,13 @@ TEST_F(SceneControllerTest, MatchDeviceTest) {
   ASSERT_TRUE(match(device_name2));
   ASSERT_TRUE(match(device_name3));
 
-  //  matches with name
+  //  matches with unique substring of name
   ASSERT_TRUE(match("1-SceneControllerTest-MatchDeviceTest"));
   ASSERT_TRUE(match("2-SceneControllerTest-MatchDeviceTest"));
   ASSERT_TRUE(match("3-SceneControllerTest-MatchDeviceTest"));
 
+  //  ambiguous matches and no match
+  ASSERT_TRUE(match("MatchDeviceTest") == nullptr);
   ASSERT_TRUE(match("non-existing-name") == nullptr);
 }
 

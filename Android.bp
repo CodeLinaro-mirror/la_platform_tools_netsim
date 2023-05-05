@@ -57,21 +57,33 @@ cc_defaults {
     ],
 }
 
-rust_ffi_host_static {
-    name: "libnetsim_cxx",
-    crate_name: "netsim_cxx",
+rust_defaults {
+    name: "libnetsim_cxx_defaults",
     features: ["cuttlefish"],
     rlibs: [
         "libcxx",
         "libfrontend_proto",
         "libnetsim_common",
-        "libprotobuf_deprecated",
+        "libprotobuf",
+        "libprotobuf_json_mapping",
         "libregex",
         "libserde",
         "libserde_json",
         "liblazy_static",
     ],
     srcs: ["rust/netsim-cxx/src/lib.rs"],
+}
+
+rust_ffi_host_static {
+    name: "libnetsim_cxx",
+    crate_name: "netsim_cxx",
+    defaults: ["libnetsim_cxx_defaults"],
+}
+
+rust_test_host {
+    name: "libnetsim_cxx_tests",
+    defaults: ["libnetsim_cxx_defaults"],
+    test_suites: ["general_tests"],
 }
 
 genrule {
@@ -252,7 +264,7 @@ rust_library_host {
     crate_name: "frontend_proto",
     srcs: ["rust/frontend-proto/src/lib.rs"],
     rustlibs: [
-        "libprotobuf_deprecated",
+        "libprotobuf",
     ],
 }
 
@@ -310,7 +322,7 @@ rust_defaults {
         "libfrontend_proto",
         "libfrontend_client_cxx",
         "libnetsim_common",
-        "libprotobuf_deprecated",
+        "libprotobuf",
         "libcxx",
     ],
 }
