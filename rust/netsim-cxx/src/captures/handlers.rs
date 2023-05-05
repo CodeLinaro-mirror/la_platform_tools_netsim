@@ -71,12 +71,12 @@ lazy_static! {
 /// go away and adds entries when new devices/chips connect.
 /// Note: if a device disconnects and there is captured data, the entry
 /// remains with a flag valid = false so it can be retrieved.
-fn update_captures(captures: &mut Captures) {
+pub fn update_captures() {
     // Perform get_devices_bytes ffi to receive bytes of GetDevicesResponse
     // Print error and return empty hashmap if GetDevicesBytes fails.
     let mut vec = Vec::<u8>::new();
     if !get_devices_bytes(&mut vec) {
-        println!("netsim error: GetDevicesBytes failed - returning an empty set of captures");
+        println!("netsimd error: GetDevicesBytes failed - returning an empty set of captures");
         return;
     }
 
@@ -84,6 +84,7 @@ fn update_captures(captures: &mut Captures) {
     let device_response = GetDevicesResponse::parse_from_bytes(&vec).unwrap();
 
     // Adding to Captures hashmap
+    let mut captures = RESOURCE.write().unwrap();
     let mut chip_ids = HashSet::<ChipId>::new();
     for device in device_response.devices {
         for chip in device.chips {
@@ -153,10 +154,10 @@ fn get_file(id: ChipId, device_name: String, chip_kind: ChipKind) -> Result<File
 // GET /captures/id/{id} --> Get Capture information
 // GET /captures/contents/{id} --> Download Pcap file
 /// Performs GetCapture to download pcap file and write to writer.
-pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id: ChipId) {
+pub fn handle_capture_get(writer: ResponseWritable, id: ChipId) {
     // Get the most updated active captures
-    update_captures(captures);
-
+    update_captures();
+    let mut captures = RESOURCE.write().unwrap();
     if let Some(capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
         if capture.size == 0 {
             writer.put_error(
@@ -196,14 +197,14 @@ pub fn handle_capture_get(writer: ResponseWritable, captures: &mut Captures, id:
         }
     } else {
         writer.put_error(404, "Cannot access Capture Resource")
-    }
+    };
 }
 
 /// Performs ListCapture to get the list of CaptureInfos and write to writer.
-pub fn handle_capture_list(writer: ResponseWritable, captures: &mut Captures) {
+pub fn handle_capture_list(writer: ResponseWritable) {
     // Get the most updated active captures
-    update_captures(captures);
-
+    update_captures();
+    let captures = RESOURCE.write().unwrap();
     // Instantiate ListCaptureResponse and add Captures
     let mut response = ListCaptureResponse::new();
     for capture in captures.values() {
@@ -220,15 +221,10 @@ pub fn handle_capture_list(writer: ResponseWritable, captures: &mut Captures) {
 
 /// Performs PatchCapture to patch a CaptureInfo with id.
 /// Writes the result of PatchCapture to writer.
-pub fn handle_capture_patch(
-    writer: ResponseWritable,
-    captures: &mut Captures,
-    id: ChipId,
-    state: bool,
-) {
+pub fn handle_capture_patch(writer: ResponseWritable, id: ChipId, state: bool) {
     // Get the most updated active captures
-    update_captures(captures);
-
+    update_captures();
+    let mut captures = RESOURCE.write().unwrap();
     if let Some(mut capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
         match state {
             true => {
@@ -248,7 +244,7 @@ pub fn handle_capture_patch(
         } else {
             writer.put_error(404, "proto to JSON mapping failure");
         }
-    }
+    };
 }
 
 /// The Rust capture handler used directly by Http frontend or handle_capture_cxx for LIST, GET, and PATCH
@@ -256,15 +252,13 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
     if request.uri.as_str() == "/v1/captures" {
         match request.method.as_str() {
             "GET" => {
-                let mut captures = RESOURCE.write().unwrap();
-                handle_capture_list(writer, &mut captures);
+                handle_capture_list(writer);
             }
             _ => writer.put_error(404, "Not found."),
         }
     } else {
         match request.method.as_str() {
             "GET" => {
-                let mut captures = RESOURCE.write().unwrap();
                 let id = match param.parse::<i32>() {
                     Ok(num) => num,
                     Err(_) => {
@@ -272,10 +266,9 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
                         return;
                     }
                 };
-                handle_capture_get(writer, &mut captures, id);
+                handle_capture_get(writer, id);
             }
             "PATCH" => {
-                let mut captures = RESOURCE.write().unwrap();
                 let id = match param.parse::<i32>() {
                     Ok(num) => num,
                     Err(_) => {
@@ -286,8 +279,8 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
                 let body = &request.body;
                 let state = String::from_utf8(body.to_vec()).unwrap();
                 match state.as_str() {
-                    "1" => handle_capture_patch(writer, &mut captures, id, true),
-                    "2" => handle_capture_patch(writer, &mut captures, id, false),
+                    "1" => handle_capture_patch(writer, id, true),
+                    "2" => handle_capture_patch(writer, id, false),
                     _ => writer.put_error(404, "Incorrect state for PatchCapture"),
                 }
             }
@@ -340,11 +333,11 @@ fn handle_packet(
     packet_type: u32,
     direction: PacketDirection,
 ) {
-    let mut captures = RESOURCE.write().unwrap();
+    let captures = RESOURCE.write().unwrap();
     let facade_key = CaptureInfo::new_facade_key(int_to_chip_kind(kind), facade_id as i32);
     // TODO: Create event channel to invoke update_captures when new device is added.
     if !captures.facade_key_to_capture.contains_key(&facade_key) {
-        update_captures(&mut captures);
+        update_captures();
     }
     if let Some(mut capture) = captures
         .facade_key_to_capture

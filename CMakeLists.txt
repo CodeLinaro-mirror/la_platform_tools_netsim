@@ -74,7 +74,6 @@ if(TARGET Rust::Rustc)
          netsim-cxx
          netsimd-lib
          netsimd-proto-lib
-         packet-streamer-client-lib
          protobuf::libprotobuf
          util-lib)
 
@@ -87,9 +86,11 @@ if(TARGET Rust::Rustc)
   target_include_directories(netsim-test PRIVATE src)
 endif()
 
-android_add_executable(
-  TARGET netsim-packet-streamer-client
-  LICENSE Apache-2.0
-  SRC src/netsim-packet-streamer-client.cc
-  DEPS grpc++ packet-streamer-client-lib packet-streamer-proto-lib
-       protobuf::libprotobuf)
+if(NOT NETSIM_EXT)
+  android_add_executable(
+    TARGET netsim-packet-streamer-client
+    LICENSE Apache-2.0
+    SRC src/netsim-packet-streamer-client.cc
+    DEPS grpc++ packet-streamer-client-lib packet-streamer-proto-lib
+         protobuf::libprotobuf)
+endif()

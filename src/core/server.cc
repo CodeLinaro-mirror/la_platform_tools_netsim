@@ -80,7 +80,7 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
 
 void Run(ServerParams params) {
   // Clear all pcap files in temp directory
-  if (netsim::pcap::ClearPcapFiles()) {
+  if (netsim::capture::ClearPcapFiles()) {
     BtsLog("netsim generated pcap files in temp directory has been removed.");
   }
 

@@ -20,6 +20,7 @@
 #include <optional>
 
 #include "controller/device_notify_manager.h"
+#include "netsim-cxx/src/lib.rs.h"
 #include "util/log.h"
 
 namespace netsim {
@@ -50,6 +51,8 @@ std::tuple<uint32_t, uint32_t, uint32_t> SceneController::AddChip(
   // TODO: catch case of similar name chips
   auto [chip_id, facade_id] =
       device->AddChip(chip_kind, chip_name, manufacturer, product_name);
+  // notify capture handler a Chip was added
+  netsim::capture::UpdateCaptures();
   inactive_timestamp_.reset();
   return {device->id, chip_id, facade_id};
 }
@@ -88,6 +91,8 @@ void SceneController::RemoveChip(uint32_t device_id, uint32_t chip_id) {
       if (devices_.empty())
         inactive_timestamp_.emplace(std::chrono::system_clock::now());
     }
+    // notify capture handler a Chip was removed
+    netsim::capture::UpdateCaptures();
   } else {
     std::cerr << "Trying to remove chip from unknown device" << std::endl;
   }

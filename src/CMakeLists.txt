@@ -53,21 +53,23 @@ if(TARGET Rust::Rustc)
                              PUBLIC ${cxx_bridge_binary_folder})
 endif()
 
-android_add_library(
-  TARGET packet-streamer-client-lib
-  LICENSE Apache-2.0
-  SRC backend/packet_streamer_client.cc backend/packet_streamer_client.h
-  DEPS android-emu-base
-       android-emu-base-headers
-       android-emu-base-process
-       android-grpc-interceptors
-       android-emu-metrics
-       grpc++
-       packet-streamer-proto-lib
-       protobuf::libprotobuf
-       util-lib)
-target_include_directories(packet-streamer-client-lib
-                           PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+if(NOT NETSIM_EXT)
+  android_add_library(
+    TARGET packet-streamer-client-lib
+    LICENSE Apache-2.0
+    SRC backend/packet_streamer_client.cc backend/packet_streamer_client.h
+    DEPS android-emu-base
+         android-emu-base-headers
+         android-emu-base-process
+         android-emu-metrics
+         android-grpc-interceptors
+         grpc++
+         packet-streamer-proto-lib
+         protobuf::libprotobuf
+         util-lib)
+  target_include_directories(packet-streamer-client-lib
+                             PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+endif()
 
 if(TARGET Rust::Rustc)
   set(cxx_bridge_binary_folder

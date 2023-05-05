@@ -40,6 +40,7 @@ use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
     clear_pcap_files, handle_capture_cxx, handle_packet_request, handle_packet_response,
+    update_captures,
 };
 use crate::http_server::run_http_server;
 use crate::ranging::*;
@@ -96,8 +97,12 @@ mod ffi {
 
         // Capture Resource
 
+        #[cxx_name = UpdateCaptures]
+        #[namespace = "netsim::capture"]
+        fn update_captures();
+
         #[cxx_name = HandleRequest]
-        #[namespace = "netsim::pcap"]
+        #[namespace = "netsim::capture"]
         fn handle_packet_request(
             kind: u32,
             facade_id: u32,
@@ -106,7 +111,7 @@ mod ffi {
         );
 
         #[cxx_name = HandleResponse]
-        #[namespace = "netsim::pcap"]
+        #[namespace = "netsim::capture"]
         fn handle_packet_response(
             kind: u32,
             facade_id: u32,
@@ -117,7 +122,7 @@ mod ffi {
         // Clearing out all pcap Files in temp directory
 
         #[cxx_name = ClearPcapFiles]
-        #[namespace = "netsim::pcap"]
+        #[namespace = "netsim::capture"]
         fn clear_pcap_files() -> bool;
 
         // Uwb Facade.
