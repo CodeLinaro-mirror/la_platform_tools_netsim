@@ -101,6 +101,15 @@ bool ChangedState(model::State a, model::State b) {
 void Start() {
   if (mStarted) return;
 
+  // When emulators restore from a snapshot the PacketStreamer connection to
+  // netsim is recreated with a new (uninitialized) Rootcanal device. However the
+  // Android Bluetooth Stack does not re-initialize the controller. Our solution
+  // is for Rootcanal to recognize that it is receiving HCI commands before a
+  // HCI Reset. The flag below causes a hardware error event that triggers the
+  // Reset from the Bluetooth Stack.
+
+  controller_properties_.quirks.hardware_error_before_reset = true;
+
   mAsyncManager = std::make_shared<rootcanal::AsyncManager>();
 
   gTestModel = std::make_unique<SimTestModel>(

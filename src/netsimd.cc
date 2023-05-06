@@ -27,9 +27,6 @@
 #include <cstdlib>
 #endif
 
-#ifndef NETSIM_ANDROID_EMULATOR
-#include "backend/fd_startup.h"
-#endif
 #include "core/server.h"
 #include "frontend/frontend_client_stub.h"
 #include "hci/bluetooth_facade.h"
