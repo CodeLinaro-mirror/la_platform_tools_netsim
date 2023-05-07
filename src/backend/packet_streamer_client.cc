@@ -121,7 +121,6 @@ std::shared_ptr<grpc::Channel> CreateChannel(NetsimdOptions options) {
 }
 
 std::shared_ptr<grpc::Channel> CreateChannel(
-    std::string _rootcanal_default_commands_file,
     std::string _rootcanal_controller_properties_file) {
   return GetChannel({});
 }

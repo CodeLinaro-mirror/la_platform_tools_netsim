@@ -89,7 +89,6 @@ int main(int argc, char *argv[]) {
   const option kLongOptions[] = {
       {"no_cli_ui", no_argument, 0, 'f'},
       {"no_web_ui", no_argument, 0, 'w'},
-      {"rootcanal_default_commands_file", required_argument, 0, 'c'},
       {"rootcanal_controller_properties_file", required_argument, 0, 'p'},
       {"hci_port", required_argument, 0, 'b'},
   };
@@ -97,7 +96,6 @@ int main(int argc, char *argv[]) {
   bool dev = false;
   bool grpc_startup = false;
   std::string fd_startup_str;
-  std::string rootcanal_default_commands_file;
   std::string rootcanal_controller_properties_file;
   int hci_port_flag = 0;
 
@@ -117,10 +115,6 @@ int main(int argc, char *argv[]) {
 #endif
       case 'd':
         dev = true;
-        break;
-
-      case 'c':
-        rootcanal_default_commands_file = std::string(optarg);
         break;
 
       case 'p':

@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
   // Finding the netsimd binary requires this env variable when run
   // interactively export ANDROID_EMULATOR_LAUNCHER_DIR=./objs
 
-  auto channel = netsim::packet::CreateChannel("", "");
+  auto channel = netsim::packet::CreateChannel("");
 
   std::unique_ptr<netsim::packet::PacketStreamer::Stub> stub =
       netsim::packet::PacketStreamer::NewStub(channel);

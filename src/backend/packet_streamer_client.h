@@ -56,7 +56,6 @@ std::shared_ptr<grpc::Channel> CreateChannel(NetsimdOptions);
 
 // Deprecated.
 std::shared_ptr<grpc::Channel> CreateChannel(
-    std::string rootcanal_default_commands_file = "",
     std::string rootcanal_controller_properties_file = "");
 
 }  // namespace netsim::packet
