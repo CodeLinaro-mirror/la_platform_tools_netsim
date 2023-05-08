@@ -79,7 +79,7 @@ pub fn append_record(
 mod tests {
     use std::{fs::File, io::Read, time::Duration};
 
-    use crate::pcap::pcap_util::{append_record, PacketDirection};
+    use crate::captures::pcap_util::{append_record, PacketDirection};
 
     use super::write_pcap_header;
 
@@ -97,7 +97,7 @@ mod tests {
             append_record(
                 Duration::from_secs(0),
                 &mut file,
-                PacketDirection::ControllerToHost,
+                PacketDirection::HostToController,
                 4u32,
                 &[14, 4, 1, 10, 32, 0],
             )
@@ -105,22 +105,23 @@ mod tests {
             append_record(
                 Duration::from_millis(250),
                 &mut file,
-                PacketDirection::HostToController,
+                PacketDirection::ControllerToHost,
                 1u32,
                 &[10, 32, 1, 0],
             )
             .unwrap();
         } else {
-            println!("Cannot create temp file");
-            assert!(false);
+            panic!("Cannot create temp file")
         }
         if let Ok(mut file) = File::open(temp_dir) {
             let mut buffer = [0u8; 76];
-            file.read(&mut buffer).unwrap();
+            #[allow(clippy::unused_io_amount)]
+            {
+                file.read(&mut buffer).unwrap();
+            }
             assert_eq!(&buffer, EXPECTED);
         } else {
-            println!("Cannot reopen temp file");
-            assert!(false);
+            panic!("Cannot create temp file")
         }
     }
 }

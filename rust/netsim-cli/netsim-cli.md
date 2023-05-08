@@ -27,11 +27,6 @@ Options:
     * Usage: `netsim devices [OPTIONS]`
     * Options:
         * `-c, --continuous`:    Continuously print device(s) information every second
-* ### `capture`:    Control the bluetooth packet capture for one or all devices
-    * Usage: `netsim capture <STATE> <NAME>`
-    * Arguments:
-        * \<STATE\>:        Capture state [possible values: on, off]
-        * \<NAME\>:         Device name
 * ### `reset`:      Reset Netsim device scene
     * Usage: `netsim reset`
 * ### `pcap`:       Control the packet capture functionalities with commands: list, patch, get

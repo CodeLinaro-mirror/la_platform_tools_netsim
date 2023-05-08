@@ -13,5 +13,5 @@ clap = { version = "4.1.8", default-features = false, features = ["derive", "err
 frontend-proto = { path = "../frontend-proto" }
 netsim-common = { path = "../netsim-common" }
 frontend-client-cxx = { path = "../frontend-client-cxx" }
-protobuf = "2.27.1"
+protobuf = "3.2.0"
 cxx = { version = ">=1.0.85", features = ["c++17"] }

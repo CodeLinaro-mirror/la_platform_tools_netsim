@@ -72,6 +72,11 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port) {
 }  // namespace
 
 void Run() {
+  // Clear all pcap files in temp directory
+  if (netsim::pcap::ClearPcapFiles()) {
+    BtsLog("netsim generated pcap files in temp directory has been removed.");
+  }
+
   // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge. If set:
   // 1. Use the fixed port for grpc server.
   // 2. Don't start http server.

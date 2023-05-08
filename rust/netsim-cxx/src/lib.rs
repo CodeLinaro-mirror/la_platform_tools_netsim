@@ -16,8 +16,9 @@
 
 #![allow(dead_code)]
 
+mod captures;
+mod devices;
 mod http_server;
-mod pcap;
 mod ranging;
 mod transport;
 mod uwb;
@@ -33,8 +34,10 @@ use http_server::server_response::ServerResponseWritable;
 use crate::transport::fd::handle_response;
 use crate::transport::fd::run_fd_transport;
 
+use crate::captures::handlers::{
+    clear_pcap_files, handle_capture_cxx, handle_packet_request, handle_packet_response,
+};
 use crate::http_server::run_http_server;
-use crate::pcap::handlers::{handle_packet_request, handle_packet_response, handle_pcap_cxx};
 use crate::ranging::*;
 use crate::uwb::facade::*;
 use crate::version::*;
@@ -60,10 +63,10 @@ mod ffi {
         #[cxx_name = "GetVersion"]
         fn get_version() -> String;
 
-        // handle_pcap_cxx translates each argument into an appropriate Rust type
+        // handle_capture_cxx translates each argument into an appropriate Rust type
 
-        #[cxx_name = "HandlePcapCxx"]
-        fn handle_pcap_cxx(
+        #[cxx_name = "HandleCaptureCxx"]
+        fn handle_capture_cxx(
             responder: Pin<&mut CxxServerResponseWriter>,
             method: String,
             param: String,
@@ -76,7 +79,7 @@ mod ffi {
         #[namespace = "netsim::fd"]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
-        // Pcap Resource
+        // Capture Resource
 
         #[cxx_name = HandleRequest]
         #[namespace = "netsim::pcap"]
@@ -95,6 +98,12 @@ mod ffi {
             packet: &CxxVector<u8>,
             packet_type: u32,
         );
+
+        // Clearing out all pcap Files in temp directory
+
+        #[cxx_name = ClearPcapFiles]
+        #[namespace = "netsim::pcap"]
+        fn clear_pcap_files() -> bool;
 
         // Uwb Facade.
 

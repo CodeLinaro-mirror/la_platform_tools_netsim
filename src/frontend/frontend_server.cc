@@ -40,7 +40,7 @@ class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
   CxxServerResponseWritable()
       : grpc_writer_(nullptr), err(""), is_ok(false), body(""), length(0){};
   CxxServerResponseWritable(
-      grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer)
+      grpc::ServerWriter<netsim::frontend::GetCaptureResponse> *grpc_writer)
       : grpc_writer_(grpc_writer), err(""), is_ok(false), body(""), length(0){};
 
   void put_error(unsigned int error_code,
@@ -56,7 +56,7 @@ class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
   }
 
   void put_chunk(rust::Slice<const uint8_t> chunk) const override {
-    netsim::frontend::GetPcapResponse response;
+    netsim::frontend::GetCaptureResponse response;
     response.set_capture_stream(std::string(chunk.begin(), chunk.end()));
     is_ok = grpc_writer_->Write(response);
   }
@@ -67,7 +67,8 @@ class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
     is_ok = true;
   }
 
-  mutable grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer_;
+  mutable grpc::ServerWriter<netsim::frontend::GetCaptureResponse>
+      *grpc_writer_;
   mutable std::string err;
   mutable bool is_ok;
   mutable std::string body;
@@ -124,11 +125,11 @@ class FrontendServer final : public frontend::FrontendService::Service {
     return grpc::Status::OK;
   }
 
-  grpc::Status ListPcap(grpc::ServerContext *context,
-                        const google::protobuf::Empty *empty,
-                        frontend::ListPcapResponse *reply) {
+  grpc::Status ListCapture(grpc::ServerContext *context,
+                           const google::protobuf::Empty *empty,
+                           frontend::ListCaptureResponse *reply) {
     CxxServerResponseWritable writer;
-    HandlePcapCxx(writer, "GET", "", "");
+    HandleCaptureCxx(writer, "GET", "", "");
     if (writer.is_ok) {
       google::protobuf::util::JsonStringToMessage(writer.body, reply);
       return grpc::Status::OK;
@@ -136,23 +137,23 @@ class FrontendServer final : public frontend::FrontendService::Service {
     return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
 
-  grpc::Status PatchPcap(grpc::ServerContext *context,
-                         const frontend::PatchPcapRequest *request,
-                         google::protobuf::Empty *response) {
+  grpc::Status PatchCapture(grpc::ServerContext *context,
+                            const frontend::PatchCaptureRequest *request,
+                            google::protobuf::Empty *response) {
     CxxServerResponseWritable writer;
-    HandlePcapCxx(writer, "PATCH", std::to_string(request->id()),
-                  std::to_string(request->patch().state()));
+    HandleCaptureCxx(writer, "PATCH", std::to_string(request->id()),
+                     std::to_string(request->patch().state()));
     if (writer.is_ok) {
       return grpc::Status::OK;
     }
     return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
-  grpc::Status GetPcap(
+  grpc::Status GetCapture(
       grpc::ServerContext *context,
-      const netsim::frontend::GetPcapRequest *request,
-      grpc::ServerWriter<netsim::frontend::GetPcapResponse> *grpc_writer) {
+      const netsim::frontend::GetCaptureRequest *request,
+      grpc::ServerWriter<netsim::frontend::GetCaptureResponse> *grpc_writer) {
     CxxServerResponseWritable writer(grpc_writer);
-    HandlePcapCxx(writer, "GET", std::to_string(request->id()), "");
+    HandleCaptureCxx(writer, "GET", std::to_string(request->id()), "");
     if (writer.is_ok) {
       return grpc::Status::OK;
     }

@@ -124,49 +124,51 @@ class FrontendClientImpl : public FrontendClient {
     return make_result(status, response);
   }
 
-  // Get the list of Pcap information
-  std::unique_ptr<ClientResult> ListPcap() const override {
-    frontend::ListPcapResponse response;
+  // Get the list of Capture information
+  std::unique_ptr<ClientResult> ListCapture() const override {
+    frontend::ListCaptureResponse response;
     grpc::ClientContext context_;
-    auto status = stub_->ListPcap(&context_, {}, &response);
+    auto status = stub_->ListCapture(&context_, {}, &response);
     return make_result(status, response);
   }
 
-  // Patch the Pcap
-  std::unique_ptr<ClientResult> PatchPcap(
+  // Patch the Capture
+  std::unique_ptr<ClientResult> PatchCapture(
       rust::Vec<::rust::u8> const &request_byte_vec) const override {
     google::protobuf::Empty response;
     grpc::ClientContext context_;
-    frontend::PatchPcapRequest request;
+    frontend::PatchCaptureRequest request;
     if (!request.ParseFromArray(request_byte_vec.data(),
                                 request_byte_vec.size())) {
       return make_result(
           grpc::Status(
               grpc::StatusCode::INVALID_ARGUMENT,
-              "Error parsing PatchPcap request protobuf. request size:" +
+              "Error parsing PatchCapture request protobuf. request size:" +
                   std::to_string(request_byte_vec.size())),
           response);
     };
-    auto status = stub_->PatchPcap(&context_, request, &response);
+    auto status = stub_->PatchCapture(&context_, request, &response);
     return make_result(status, response);
   }
 
-  // Download pcap file by using ClientResponseReader to handle streaming grpc
-  std::unique_ptr<ClientResult> GetPcap(
+  // Download capture file by using ClientResponseReader to handle streaming
+  // grpc
+  std::unique_ptr<ClientResult> GetCapture(
       rust::Vec<::rust::u8> const &request_byte_vec,
       ClientResponseReader const &client_reader) const override {
     grpc::ClientContext context_;
-    frontend::GetPcapRequest request;
+    frontend::GetCaptureRequest request;
     if (!request.ParseFromArray(request_byte_vec.data(),
                                 request_byte_vec.size())) {
       return make_result(
-          grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
-                       "Error parsing GetPcap request protobuf. request size:" +
-                           std::to_string(request_byte_vec.size())),
+          grpc::Status(
+              grpc::StatusCode::INVALID_ARGUMENT,
+              "Error parsing GetCapture request protobuf. request size:" +
+                  std::to_string(request_byte_vec.size())),
           google::protobuf::Empty());
     };
-    auto reader = stub_->GetPcap(&context_, request);
-    frontend::GetPcapResponse chunk;
+    auto reader = stub_->GetCapture(&context_, request);
+    frontend::GetCaptureResponse chunk;
     // Read every available chunks from grpc reader
     while (reader->Read(&chunk)) {
       // Using a mutable protobuf here so the move iterator can move
@@ -195,10 +197,10 @@ class FrontendClientImpl : public FrontendClient {
         return GetDevices();
       case frontend::GrpcMethod::Reset:
         return Reset();
-      case frontend::GrpcMethod::ListPcap:
-        return ListPcap();
-      case frontend::GrpcMethod::PatchPcap:
-        return PatchPcap(request_byte_vec);
+      case frontend::GrpcMethod::ListCapture:
+        return ListCapture();
+      case frontend::GrpcMethod::PatchCapture:
+        return PatchCapture(request_byte_vec);
       default:
         return make_result(grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
                                         "Unknown GrpcMethod found."),

@@ -18,12 +18,12 @@ mod http_router;
 pub(crate) mod server_response;
 mod thread_pool;
 
+use crate::captures::handlers::*;
 use crate::http_server::http_request::HttpRequest;
 use crate::http_server::http_router::Router;
 use crate::http_server::server_response::{
     ResponseWritable, ServerResponseWritable, ServerResponseWriter,
 };
-use crate::pcap::handlers::*;
 use crate::version::VERSION;
 
 use crate::http_server::thread_pool::ThreadPool;
@@ -44,9 +44,15 @@ use std::sync::Arc;
 const PATH_PREFIXES: [&str; 3] = ["js", "assets", "node_modules/tslib"];
 
 pub fn run_http_server() {
-    let listener = TcpListener::bind("127.0.0.1:7681").unwrap();
+    let listener = match TcpListener::bind("127.0.0.1:7681") {
+        Ok(listener) => listener,
+        Err(e) => {
+            eprintln!("netsimd: bind error in netsimd frontend http server. {}", e);
+            return;
+        }
+    };
     let pool = ThreadPool::new(4);
-    println!("Frontend http server is listening on http://localhost:7681");
+    println!("netsimd: Frontend http server is listening on http://localhost:7681");
     let valid_files = Arc::new(create_filename_hash_set());
     for stream in listener.incoming() {
         let stream = stream.unwrap();
@@ -56,7 +62,7 @@ pub fn run_http_server() {
         });
     }
 
-    println!("Shutting down frontend http server.");
+    println!("netsimd: Shutting down frontend http server.");
 }
 
 fn ui_path(suffix: &str) -> PathBuf {

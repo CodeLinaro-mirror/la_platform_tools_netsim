@@ -29,5 +29,6 @@ pub mod fd {
         _packet_type: u8,
     ) {
     }
+    #[allow(clippy::ptr_arg)]
     pub fn run_fd_transport(_startup_json: &String) {}
 }

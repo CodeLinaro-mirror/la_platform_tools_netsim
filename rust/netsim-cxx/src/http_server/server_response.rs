@@ -17,7 +17,7 @@
 //! This module implements a basic response writer that can pass
 //! chunked http responses between a uri handler and the network.
 //!
-//! The main use is for streaming large files from the pcap_handler()
+//! The main use is for streaming large files from the capture_handler()
 //! to the Http client.
 //!
 //! This library is intended solely for serving netsim clients.
