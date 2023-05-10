@@ -131,6 +131,7 @@ cc_library_host_static {
         "src/controller/scene_controller.cc",
         "src/controller/device_notify_manager.cc",
         "src/core/server.cc",
+        "src/frontend/frontend_client_stub.cc",
         "src/frontend/frontend_server.cc",
         "src/backend/fd_server.cc",
         "src/hci/bluetooth_facade.cc",

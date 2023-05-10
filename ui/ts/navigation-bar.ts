@@ -87,6 +87,10 @@ export class NavigationBar extends LitElement {
     window.dispatchEvent(new CustomEvent('changeModeEvent', {detail: {mode}}));
   }
 
+  private alertMissingLink() {
+    window.alert('This link is currently under construction');
+  }
+
   render() {
     return html`
       <nav>
@@ -98,7 +102,8 @@ export class NavigationBar extends LitElement {
           <p>netsim</p>
         </div>
         <div id="nav-link-section" class="nav-section">
-          <a href="http://go/betosim" target="_blank" rel="noopener noreferrer"
+          <a href="javascript:void(0)" @click=${
+        this.alertMissingLink} rel="noopener noreferrer"
             >ABOUT</a
           >
           <a href="javascript:void(0)" id="nav-trace-section" @click=${
@@ -112,8 +117,8 @@ export class NavigationBar extends LitElement {
         </div>
         <div id="nav-contact-section" class="nav-section">
           <a
-            href="https://team.git.corp.google.com/betosim/web"
-            target="_blank"
+            href="javascript:void(0)"
+            @click=${this.alertMissingLink}
             rel="noopener noreferrer"
             >DOCUMENTATION</a
           >

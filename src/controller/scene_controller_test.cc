@@ -53,7 +53,7 @@ TEST_F(SceneControllerTest, AddChipTest) {
   auto device_proto = device->Get();
   EXPECT_EQ(device_proto.id(), device_id);
   EXPECT_EQ(device_proto.name(), device_name);
-  EXPECT_TRUE(device_proto.visible());
+  EXPECT_EQ(device_proto.visible(), model::State::ON);
   EXPECT_TRUE(device_proto.has_position());
   EXPECT_TRUE(device_proto.has_orientation());
 
@@ -107,7 +107,7 @@ TEST_F(SceneControllerTest, PatchDeviceTest) {
       scene_controller::AddChip(guid, device_name, common::ChipKind::UWB);
   model::Device model;
   model.set_name(device_name);
-  model.set_visible(false);
+  model.set_visible(model::State::OFF);
   model.mutable_position()->set_x(10.0);
   model.mutable_position()->set_y(20.0);
   model.mutable_position()->set_z(30.0);
@@ -119,7 +119,7 @@ TEST_F(SceneControllerTest, PatchDeviceTest) {
   EXPECT_TRUE(status);
   auto device = match(device_name);
   model = device->Get();
-  EXPECT_EQ(model.visible(), false);
+  EXPECT_EQ(model.visible(), model::State::OFF);
   EXPECT_EQ(model.position().x(), 10.0);
   EXPECT_EQ(model.position().y(), 20.0);
   EXPECT_EQ(model.position().z(), 30.0);
@@ -135,7 +135,7 @@ TEST_F(SceneControllerTest, ResetTest) {
       scene_controller::AddChip(guid, device_name, common::ChipKind::UWB);
   model::Device model;
   model.set_name(device_name);
-  model.set_visible(false);
+  model.set_visible(model::State::OFF);
   model.mutable_position()->set_x(10.0);
   model.mutable_position()->set_y(20.0);
   model.mutable_position()->set_z(30.0);
@@ -147,7 +147,7 @@ TEST_F(SceneControllerTest, ResetTest) {
   EXPECT_TRUE(status);
   auto device = match(device_name);
   model = device->Get();
-  EXPECT_EQ(model.visible(), false);
+  EXPECT_EQ(model.visible(), model::State::OFF);
   EXPECT_EQ(model.position().x(), 10.0);
   EXPECT_EQ(model.orientation().pitch(), 1.0);
 
@@ -156,7 +156,7 @@ TEST_F(SceneControllerTest, ResetTest) {
   device = match(device_name);
   model = device->Get();
 
-  EXPECT_EQ(model.visible(), true);
+  EXPECT_EQ(model.visible(), model::State::ON);
   EXPECT_EQ(model.position().x(), 0.0);
   EXPECT_EQ(model.position().y(), 0.0);
   EXPECT_EQ(model.position().z(), 0.0);

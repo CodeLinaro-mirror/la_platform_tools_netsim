@@ -28,6 +28,7 @@
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
+#include "hci/bluetooth_facade.h"
 #include "netsim-cxx/src/lib.rs.h"
 #include "util/filesystem.h"
 #include "util/ini_file.h"
@@ -83,6 +84,8 @@ void Run(ServerParams params) {
   if (netsim::capture::ClearPcapFiles()) {
     BtsLog("netsim generated pcap files in temp directory has been removed.");
   }
+
+  netsim::hci::facade::Start();
 
   // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge. If set:
   // 1. Use the fixed port for grpc server.

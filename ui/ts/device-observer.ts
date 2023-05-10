@@ -90,11 +90,11 @@ export class Device {
   }
 
   get visible(): boolean {
-    return this.device.visible ?? true;
+    return this.device.visible === State.ON ? true : false;
   }
 
   set visible(value: boolean) {
-    this.device.visible = value;
+    this.device.visible = value ? State.ON : State.OFF;
   }
 
   toggleChipState(chip: Chip, btType?: string) {

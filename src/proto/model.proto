@@ -81,7 +81,7 @@ message Chip {
 message Device {
   int32 id = 1;
   string name = 2;  // settable at creation
-  bool visible = 3;
+  State visible = 3;
   Position position = 4;
   Orientation orientation = 5;
   // Device can have multiple chips of the same kind.

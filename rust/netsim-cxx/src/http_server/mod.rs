@@ -19,6 +19,7 @@ pub(crate) mod server_response;
 mod thread_pool;
 
 use crate::captures::handlers::*;
+use crate::devices::devices_handler::handle_device;
 use crate::http_server::http_request::HttpRequest;
 use crate::http_server::http_router::Router;
 use crate::http_server::server_response::{
@@ -180,8 +181,8 @@ fn handle_devices(request: &HttpRequest, _param: &str, writer: ResponseWritable)
     }
 }
 
-fn handle_debug(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
-    writer.put_ok("text/plain", r"Welcome to netsim debug mode", &[]);
+fn handle_dev(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
+    writer.put_ok("text/plain", r"Welcome to netsim developer mode", &[]);
 }
 
 fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>, dev: bool) {
@@ -192,9 +193,10 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>, d
     router.add_route(r"/v1/captures", Box::new(handle_capture));
     router.add_route(r"/v1/captures/{id}", Box::new(handle_capture));
 
-    // Adding additional routes in debug mode.
+    // Adding additional routes in dev mode.
     if dev {
-        router.add_route("/debug", Box::new(handle_debug));
+        router.add_route("/dev", Box::new(handle_dev));
+        router.add_route("/dev/v1/devices", Box::new(handle_device));
     }
 
     // A closure for checking if path is a static file we wish to serve, and call handle_static

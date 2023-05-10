@@ -14,6 +14,7 @@
 
 // Device.rs
 
+use frontend_proto::model::State;
 use protobuf::Message;
 
 use crate::devices::chip;
@@ -32,7 +33,7 @@ pub struct Device {
     pub id: DeviceIdentifier,
     pub guid: String,
     name: String,
-    visible: bool,
+    visible: State,
     pub position: ProtoPosition,
     orientation: ProtoOrientation,
     pub chips: HashMap<ChipIdentifier, Chip>,
@@ -43,7 +44,7 @@ impl Device {
             id,
             guid,
             name,
-            visible: true,
+            visible: State::ON,
             position: ProtoPosition::new(),
             orientation: ProtoOrientation::new(),
             chips: HashMap::new(),
@@ -63,7 +64,7 @@ impl Device {
         let mut device = ProtoDevice::new();
         device.id = self.id;
         device.name = self.name.clone();
-        device.visible = self.visible;
+        device.visible = self.visible.into();
         device.position = protobuf::MessageField::from(Some(self.position.clone()));
         device.orientation = protobuf::MessageField::from(Some(self.orientation.clone()));
         for chip in self.chips.values() {
@@ -75,7 +76,7 @@ impl Device {
     /// Patch a device and its chips.
     pub fn patch(&mut self, patch: &ProtoDevice) -> Result<(), String> {
         // TODO visible should be State
-        self.visible = patch.visible;
+        self.visible = patch.visible.enum_value_or_default();
         if patch.position.is_some() {
             self.position.clone_from(&patch.position);
         }
@@ -140,7 +141,7 @@ impl Device {
 
     /// Reset a device to its default state.
     pub fn reset(&mut self) -> Result<(), String> {
-        self.visible = true;
+        self.visible = State::ON;
         self.position.clear();
         self.orientation.clear();
         for chip in self.chips.values_mut() {

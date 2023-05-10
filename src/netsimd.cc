@@ -29,7 +29,6 @@
 
 #include "core/server.h"
 #include "frontend/frontend_client_stub.h"
-#include "hci/bluetooth_facade.h"
 #include "netsim-cxx/src/lib.rs.h"
 #include "util/os_utils.h"
 
@@ -50,8 +49,7 @@ void SignalHandler(int sig) {
 }
 #endif
 
-// TODO: Change to 6402 after --hci_port is set in netsim_server.cc.
-constexpr int DEFAULT_HCI_PORT = 7300;
+constexpr int DEFAULT_HCI_PORT = 6402;
 
 int get_hci_port(int hci_port_flag) {
   // The following priorities are used to determine the HCI port number:
@@ -94,7 +92,6 @@ int main(int argc, char *argv[]) {
   };
 
   bool dev = false;
-  bool grpc_startup = false;
   std::string fd_startup_str;
   std::string rootcanal_controller_properties_file;
   int hci_port_flag = 0;
@@ -106,7 +103,7 @@ int main(int argc, char *argv[]) {
     switch (c) {
 #ifdef NETSIM_ANDROID_EMULATOR
       case 'g':
-        grpc_startup = true;
+      //TODO: Remove the no-op flag after a release cycle.
         break;
 #else
       case 's':
@@ -141,34 +138,27 @@ int main(int argc, char *argv[]) {
 
   int hci_port = get_hci_port(hci_port_flag);
   // Daemon mode -- start radio managers
-  if (!fd_startup_str.empty() || grpc_startup) {
-    netsim::hci::facade::Start();
-  }
-
-#ifdef NETSIM_ANDROID_EMULATOR
   // get netsim daemon, starting if it doesn't exist
   // Create a frontend grpc client to check if a netsimd is already running.
   auto frontend_stub = netsim::frontend::NewFrontendClient();
-  if (frontend_stub == nullptr) {
-    // starts netsim servers.
-    netsim::server::Run({.dev = dev,
-                         .no_cli_ui = no_cli_ui,
-                         .no_web_ui = no_web_ui,
-                         .hci_port = hci_port});
-  } else {
+  if (frontend_stub != nullptr) {
     std::cerr << "Failed to start netsim daemon because a netsim daemon is "
                  "already running\n";
-  }
-#else
-  if (!fd_startup_str.empty()) {
-    netsim::RunFdTransport(fd_startup_str);
-    netsim::server::Run({.dev = dev,
-                         .no_cli_ui = no_cli_ui,
-                         .no_web_ui = no_web_ui,
-                         .hci_port = hci_port});
     return -1;
   }
+
+#ifndef NETSIM_ANDROID_EMULATOR
+  if (fd_startup_str.empty()) {
+    std::cerr << "Failed to start netsim daemon because fd startup flag `-s` "
+                 "is empty\n";
+    return -1;
+  }
+  netsim::RunFdTransport(fd_startup_str);
 #endif
 
-  return (0);
+  netsim::server::Run({.dev = dev,
+                       .no_cli_ui = no_cli_ui,
+                       .no_web_ui = no_web_ui,
+                       .hci_port = hci_port});
+  return -1;
 }

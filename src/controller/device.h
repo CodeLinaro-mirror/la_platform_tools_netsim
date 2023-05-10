@@ -33,12 +33,12 @@ class Device {
   const uint32_t id;
   const std::string guid;
   const std::string name;
-  bool visible;
+  model::State visible;
   model::Position position;
   model::Orientation orientation;
 
   Device(uint32_t id, const std::string &guid, const std::string &name)
-      : id(id), guid(guid), name(name), visible(true) {}
+      : id(id), guid(guid), name(name), visible(model::State::ON) {}
 
   model::Device Get();
   void Patch(const model::Device &request);

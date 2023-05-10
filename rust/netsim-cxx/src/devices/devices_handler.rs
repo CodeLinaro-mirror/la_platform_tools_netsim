@@ -27,18 +27,30 @@ use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
+use crate::http_server::http_request::HttpRequest;
+use crate::http_server::server_response::ResponseWritable;
 use frontend_proto::common::ChipKind as ProtoChipKind;
+use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::model::Device as ProtoDevice;
 use frontend_proto::model::Position as ProtoPosition;
 use frontend_proto::model::Scene as ProtoScene;
 use lazy_static::lazy_static;
 use protobuf_json_mapping::merge_from_str;
+use protobuf_json_mapping::print_to_string_with_options;
+use protobuf_json_mapping::PrintOptions;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::sync::RwLockWriteGuard;
 use std::time::Duration;
 use std::time::Instant;
+
+const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
+    enum_values_int: false,
+    proto_field_name: false,
+    always_output_default_values: true,
+    _future_options: (),
+};
 
 lazy_static! {
     static ref DEVICES: RwLock<Devices> = RwLock::new(Devices::new());
@@ -61,6 +73,28 @@ impl Devices {
 #[allow(dead_code)]
 fn notify_all() {
     // TODO
+}
+
+// Adding a placeholder device into netsim scene.
+// TODO: This code is intended for internal debugging. Will be removed once device API
+// implementation is completed.
+fn add_placeholder() -> AddChipResult {
+    let mut resource = DEVICES.write().unwrap();
+    resource.idle_since = None;
+    let device_id = get_or_create_device(&mut resource, "placeholder0", "placeholder-device");
+    // This is infrequent, so we can afford to do another lookup for the device.
+    resource
+        .devices
+        .get_mut(&device_id)
+        .unwrap()
+        .add_chip(
+            "placeholder-device",
+            ProtoChipKind::BLUETOOTH,
+            "placeholder-chip",
+            "placeholder-manufacturer",
+            "placeholder-productname",
+        )
+        .unwrap()
 }
 
 /// Returns a Result<AddChipResult, String> after adding chip to resource.
@@ -209,11 +243,48 @@ fn get_secs_until_idle_shutdown() -> Option<u32> {
     }
 }
 
+/// Performs ListDevices to get the list of Devices and write to writer.
+pub fn handle_device_list(writer: ResponseWritable) {
+    // TODO: This line adds a placeholder device to the scene. Remove this line once implementation is complete.
+    let result = add_placeholder();
+
+    let devices = get_devices().unwrap();
+    // Instantiate ListDeviceResponse and add Devices
+    let mut response = ListDeviceResponse::new();
+    for device in devices.devices {
+        response.devices.push(device);
+    }
+
+    // TODO: This line removes a placeholder device from the scene. Remove this line once implementation is complete.
+    remove_chip(result.device_id, result.chip_id).unwrap();
+
+    // Perform protobuf-json-mapping with the given protobuf
+    if let Ok(json_response) = print_to_string_with_options(&response, &JSON_PRINT_OPTION) {
+        writer.put_ok("text/json", &json_response, &[])
+    } else {
+        writer.put_error(404, "proto to JSON mapping failure")
+    }
+}
+
+/// The Rust device handler used directly by Http frontend or handle_device_cxx for LIST, GET, and PATCH
+pub fn handle_device(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
+    if request.uri.as_str() == "/dev/v1/devices" {
+        match request.method.as_str() {
+            "GET" => {
+                handle_device_list(writer);
+            }
+            _ => writer.put_error(404, "Not found."),
+        }
+    } else {
+        writer.put_error(404, "Not found.")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
 
-    use frontend_proto::model::Orientation as ProtoOrientation;
+    use frontend_proto::model::{Orientation as ProtoOrientation, State};
     use protobuf_json_mapping::print_to_string;
 
     use super::*;
@@ -373,7 +444,7 @@ mod tests {
         let request_position = new_position(1.1, 2.2, 3.3);
         let request_orientation = new_orientation(4.4, 5.5, 6.6);
         patch_device_request.name = chip_params.device_name.into();
-        patch_device_request.visible = false;
+        patch_device_request.visible = State::OFF.into();
         patch_device_request.position = Some(request_position.clone()).into();
         patch_device_request.orientation = Some(request_orientation.clone()).into();
         patch_device(
@@ -389,7 +460,7 @@ mod tests {
                 assert_eq!(device.orientation.yaw, request_orientation.yaw);
                 assert_eq!(device.orientation.pitch, request_orientation.pitch);
                 assert_eq!(device.orientation.roll, request_orientation.roll);
-                assert!(!device.visible);
+                assert_eq!(device.visible.enum_value_or_default(), State::OFF);
             }
             None => unreachable!(),
         }
@@ -447,7 +518,7 @@ mod tests {
         let device = scene.devices.get(0).unwrap();
         assert_eq!(device.id, bt_chip_result.device_id);
         assert_eq!(device.name, bt_chip_params.device_name);
-        assert!(device.visible);
+        assert_eq!(device.visible.enum_value_or_default(), State::ON);
         assert!(device.position.is_some());
         assert!(device.orientation.is_some());
         assert_eq!(device.chips.len(), 2);
@@ -476,7 +547,7 @@ mod tests {
         let request_position = new_position(10.0, 20.0, 30.0);
         let request_orientation = new_orientation(1.0, 2.0, 3.0);
         patch_device_request.name = chip_params.device_name.into();
-        patch_device_request.visible = false;
+        patch_device_request.visible = State::OFF.into();
         patch_device_request.position = Some(request_position).into();
         patch_device_request.orientation = Some(request_orientation).into();
         patch_device(
@@ -488,7 +559,7 @@ mod tests {
             Some(device) => {
                 assert_eq!(device.position.x, 10.0);
                 assert_eq!(device.orientation.yaw, 1.0);
-                assert!(!device.visible);
+                assert_eq!(device.visible.enum_value_or_default(), State::OFF);
             }
             None => unreachable!(),
         }
@@ -501,7 +572,7 @@ mod tests {
                 assert_eq!(device.orientation.yaw, 0.0);
                 assert_eq!(device.orientation.pitch, 0.0);
                 assert_eq!(device.orientation.roll, 0.0);
-                assert!(device.visible);
+                assert_eq!(device.visible.enum_value_or_default(), State::ON);
             }
             None => unreachable!(),
         }

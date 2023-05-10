@@ -1106,7 +1106,7 @@ pub struct Device {
     // @@protoc_insertion_point(field:netsim.model.Device.name)
     pub name: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.model.Device.visible)
-    pub visible: bool,
+    pub visible: ::protobuf::EnumOrUnknown<State>,
     // @@protoc_insertion_point(field:netsim.model.Device.position)
     pub position: ::protobuf::MessageField<Position>,
     // @@protoc_insertion_point(field:netsim.model.Device.orientation)
@@ -1187,7 +1187,7 @@ impl ::protobuf::Message for Device {
                     self.name = is.read_string()?;
                 },
                 24 => {
-                    self.visible = is.read_bool()?;
+                    self.visible = is.read_enum_or_unknown()?;
                 },
                 34 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.position)?;
@@ -1216,8 +1216,8 @@ impl ::protobuf::Message for Device {
         if !self.name.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.name);
         }
-        if self.visible != false {
-            my_size += 1 + 1;
+        if self.visible != ::protobuf::EnumOrUnknown::new(State::UNKNOWN) {
+            my_size += ::protobuf::rt::int32_size(3, self.visible.value());
         }
         if let Some(v) = self.position.as_ref() {
             let len = v.compute_size();
@@ -1243,8 +1243,8 @@ impl ::protobuf::Message for Device {
         if !self.name.is_empty() {
             os.write_string(2, &self.name)?;
         }
-        if self.visible != false {
-            os.write_bool(3, self.visible)?;
+        if self.visible != ::protobuf::EnumOrUnknown::new(State::UNKNOWN) {
+            os.write_enum(3, ::protobuf::EnumOrUnknown::value(&self.visible))?;
         }
         if let Some(v) = self.position.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
@@ -1274,7 +1274,7 @@ impl ::protobuf::Message for Device {
     fn clear(&mut self) {
         self.id = 0;
         self.name.clear();
-        self.visible = false;
+        self.visible = ::protobuf::EnumOrUnknown::new(State::UNKNOWN);
         self.position.clear();
         self.orientation.clear();
         self.chips.clear();
@@ -1285,7 +1285,7 @@ impl ::protobuf::Message for Device {
         static instance: Device = Device {
             id: 0,
             name: ::std::string::String::new(),
-            visible: false,
+            visible: ::protobuf::EnumOrUnknown::from_i32(0),
             position: ::protobuf::MessageField::none(),
             orientation: ::protobuf::MessageField::none(),
             chips: ::std::vec::Vec::new(),
@@ -1832,25 +1832,25 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     _count\x18\x04\x20\x01(\x05R\x07rxCount\x1ax\n\tBluetooth\x127\n\nlow_en\
     ergy\x18\x01\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\tlowEnergy\x122\
     \n\x07classic\x18\x02\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\x07clas\
-    sicB\x06\n\x04chip\"\xe1\x01\n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01\
-    (\x05R\x02id\x12\x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x12\x18\n\x07\
-    visible\x18\x03\x20\x01(\x08R\x07visible\x122\n\x08position\x18\x04\x20\
-    \x01(\x0b2\x16.netsim.model.PositionR\x08position\x12;\n\x0borientation\
-    \x18\x05\x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borientation\x12(\
-    \n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chips\"7\n\
-    \x05Scene\x12.\n\x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.model.Devic\
-    eR\x07devices\"\x99\x02\n\x07Capture\x12\x0e\n\x02id\x18\x01\x20\x01(\
-    \x05R\x02id\x124\n\tchip_kind\x18\x02\x20\x01(\x0e2\x17.netsim.common.Ch\
-    ipKindR\x08chipKind\x12\x1f\n\x0bdevice_name\x18\x03\x20\x01(\tR\ndevice\
-    Name\x12)\n\x05state\x18\x04\x20\x01(\x0e2\x13.netsim.model.StateR\x05st\
-    ate\x12\x12\n\x04size\x18\x05\x20\x01(\x05R\x04size\x12\x18\n\x07records\
-    \x18\x06\x20\x01(\x05R\x07records\x128\n\ttimestamp\x18\x07\x20\x01(\x0b\
-    2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x14\n\x05valid\x18\x08\
-    \x20\x01(\x08R\x05valid*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\
-    \x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\
-    \x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RT\
-    T\x10\x05*%\n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\x02ON\x10\
-    \x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
+    sicB\x06\n\x04chip\"\xf6\x01\n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01\
+    (\x05R\x02id\x12\x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x12-\n\x07vis\
+    ible\x18\x03\x20\x01(\x0e2\x13.netsim.model.StateR\x07visible\x122\n\x08\
+    position\x18\x04\x20\x01(\x0b2\x16.netsim.model.PositionR\x08position\
+    \x12;\n\x0borientation\x18\x05\x20\x01(\x0b2\x19.netsim.model.Orientatio\
+    nR\x0borientation\x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model\
+    .ChipR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\x03(\x0b2\
+    \x14.netsim.model.DeviceR\x07devices\"\x99\x02\n\x07Capture\x12\x0e\n\
+    \x02id\x18\x01\x20\x01(\x05R\x02id\x124\n\tchip_kind\x18\x02\x20\x01(\
+    \x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x1f\n\x0bdevice_name\
+    \x18\x03\x20\x01(\tR\ndeviceName\x12)\n\x05state\x18\x04\x20\x01(\x0e2\
+    \x13.netsim.model.StateR\x05state\x12\x12\n\x04size\x18\x05\x20\x01(\x05\
+    R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\x07records\x128\n\t\
+    timestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestam\
+    p\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05valid*e\n\x07PhyKind\x12\
+    \x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\
+    \x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03\
+    UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07UNKN\
+    OWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

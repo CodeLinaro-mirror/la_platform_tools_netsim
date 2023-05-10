@@ -88,7 +88,7 @@ TEST_F(FrontendServerTest, PatchDevice) {
 
   model::Device model;
   model.set_name(name);
-  model.set_visible(false);
+  model.set_visible(model::State::OFF);
   auto chip = model.mutable_chips()->Add();
   chip->mutable_bt()->mutable_classic()->set_state(model::State::OFF);
   chip->set_id(chip_id);
