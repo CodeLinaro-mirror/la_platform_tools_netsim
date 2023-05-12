@@ -87,6 +87,10 @@ void Run(ServerParams params) {
 
   netsim::hci::facade::Start();
 
+#ifndef NETSIM_ANDROID_EMULATOR
+  netsim::RunFdTransport(params.fd_startup_str);
+#endif
+
   // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge. If set:
   // 1. Use the fixed port for grpc server.
   // 2. Don't start http server.

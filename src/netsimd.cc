@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
     switch (c) {
 #ifdef NETSIM_ANDROID_EMULATOR
       case 'g':
-      //TODO: Remove the no-op flag after a release cycle.
+        // TODO: Remove the no-op flag after a release cycle.
         break;
 #else
       case 's':
@@ -153,10 +153,10 @@ int main(int argc, char *argv[]) {
                  "is empty\n";
     return -1;
   }
-  netsim::RunFdTransport(fd_startup_str);
 #endif
 
   netsim::server::Run({.dev = dev,
+                       .fd_startup_str = fd_startup_str,
                        .no_cli_ui = no_cli_ui,
                        .no_web_ui = no_web_ui,
                        .hci_port = hci_port});
