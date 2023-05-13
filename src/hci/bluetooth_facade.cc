@@ -34,6 +34,10 @@
 #include "util/filesystem.h"
 #include "util/log.h"
 
+#ifndef NETSIM_ANDROID_EMULATOR
+#include "net/posix/posix_async_socket_server.h"
+#endif
+
 using netsim::model::State;
 
 namespace netsim::hci::facade {
@@ -93,9 +97,91 @@ std::shared_ptr<rootcanal::AsyncManager> mAsyncManager;
 std::unique_ptr<SimTestModel> gTestModel;
 rootcanal::ControllerProperties controller_properties_;
 
+#ifndef NETSIM_ANDROID_EMULATOR
+// test port
+std::unique_ptr<rootcanal::TestCommandHandler> gTestChannel;
+std::unique_ptr<rootcanal::TestChannelTransport> gTestChannelTransport;
+std::shared_ptr<AsyncDataChannelServer> gTestSocketServer;
+bool gTestChannelOpen{false};
+rootcanal::AsyncUserId gSocketUserId{};
+constexpr int kDefaultTestPort = 7500;
+#endif
+
+namespace {
 bool ChangedState(model::State a, model::State b) {
   return (b != model::State::UNKNOWN && a != b);
 }
+
+#ifndef NETSIM_ANDROID_EMULATOR
+
+using ::android::net::PosixAsyncSocketServer;
+
+void SetUpTestChannel() {
+  gTestSocketServer = std::make_shared<PosixAsyncSocketServer>(
+      kDefaultTestPort, mAsyncManager.get());
+
+  gTestChannel = std::make_unique<rootcanal::TestCommandHandler>(*gTestModel);
+  // Get a user ID for tasks scheduled within the test environment.
+  gSocketUserId = mAsyncManager->GetNextUserId();
+
+  gTestChannelTransport = std::make_unique<rootcanal::TestChannelTransport>();
+  gTestChannelTransport->RegisterCommandHandler(
+      [](const std::string &name, const std::vector<std::string> &args) {
+        mAsyncManager->ExecAsync(
+            gSocketUserId, std::chrono::milliseconds(0), [name, args]() {
+              BtsLog("CommandHandle name:%s", name.c_str());
+              std::string args_str = "";
+              for (auto arg : args) args_str += " " + arg;
+              BtsLog("arg:%s", args_str.c_str());
+              if (name == "END_SIMULATION") {
+                BtsLog("END_SIMULATION");
+              } else {
+                gTestChannel->HandleCommand(name, args);
+              }
+            });
+      });
+
+  bool transport_configured = gTestChannelTransport->SetUp(
+      gTestSocketServer, [](std::shared_ptr<AsyncDataChannel> conn_fd,
+                            AsyncDataChannelServer *server) {
+        BtsLog("Test channel connection accepted.");
+        server->StartListening();
+        if (gTestChannelOpen) {
+          BtsLog("Warning: Only one connection at a time is supported");
+          rootcanal::TestChannelTransport::SendResponse(
+              conn_fd, "The connection is broken");
+          return false;
+        }
+        gTestChannelOpen = true;
+        gTestChannel->RegisterSendResponse(
+            [conn_fd](const std::string &response) {
+              rootcanal::TestChannelTransport::SendResponse(conn_fd, response);
+            });
+
+        conn_fd->WatchForNonBlockingRead([](AsyncDataChannel *conn_fd) {
+          gTestChannelTransport->OnCommandReady(
+              conn_fd, []() { gTestChannelOpen = false; });
+        });
+        return false;
+      });
+
+  gTestChannel->AddDevice({"beacon", "be:ac:01:55:00:01", "1000"});
+  gTestChannel->AddDeviceToPhy({"0", "1"});
+  gTestChannel->AddDevice({"beacon", "be:ac:01:55:00:02", "1000"});
+  gTestChannel->AddDeviceToPhy({"1", "1"});
+  gTestChannel->SetTimerPeriod({"5"});
+  gTestChannel->StartTimer({});
+
+  if (!transport_configured) {
+    BtsLog("Error: Test channel SetUp failed.");
+    return;
+  }
+
+  BtsLog("Test channel SetUp() successful");
+}
+#endif
+
+}  // namespace
 
 // Initialize the rootcanal library.
 void Start() {
@@ -131,11 +217,10 @@ void Start() {
   phy_classic_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::BR_EDR);
   phy_low_energy_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::LOW_ENERGY);
 
-  // TODO: remove testCommands
-  auto testCommands = rootcanal::TestCommandHandler(*gTestModel);
-  testCommands.RegisterSendResponse([](const std::string &) {});
-  testCommands.SetTimerPeriod({"5"});
-  testCommands.StartTimer({});
+  // TODO: Remove test channel.
+#ifndef NETSIM_ANDROID_EMULATOR
+  SetUpTestChannel();
+#endif
   mStarted = true;
 };
 
@@ -284,7 +369,11 @@ void IncrRx(uint32_t id, rootcanal::Phy::Type phy_type) {
 int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power) {
   if (id_to_chip_info_.find(send_id) == id_to_chip_info_.end() ||
       id_to_chip_info_.find(recv_id) == id_to_chip_info_.end()) {
+#ifdef NETSIM_ANDROID_EMULATOR
+    // NOTE: Ignore log messages in Cuttlefish for beacon devices created by
+    // test channel.
     BtsLog("Missing chip_info");
+#endif
     return tx_power;
   }
   auto a = id_to_chip_info_[send_id]->simulation_device;

@@ -197,6 +197,7 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>, d
     if dev {
         router.add_route("/dev", Box::new(handle_dev));
         router.add_route("/dev/v1/devices", Box::new(handle_device));
+        router.add_route(r"/dev/v1/devices/{id}", Box::new(handle_device));
     }
 
     // A closure for checking if path is a static file we wish to serve, and call handle_static

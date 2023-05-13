@@ -32,7 +32,7 @@ pub type DeviceIdentifier = i32;
 pub struct Device {
     pub id: DeviceIdentifier,
     pub guid: String,
-    name: String,
+    pub name: String,
     visible: State,
     pub position: ProtoPosition,
     orientation: ProtoOrientation,
@@ -75,8 +75,10 @@ impl Device {
 
     /// Patch a device and its chips.
     pub fn patch(&mut self, patch: &ProtoDevice) -> Result<(), String> {
-        // TODO visible should be State
-        self.visible = patch.visible.enum_value_or_default();
+        let patch_visible = patch.visible.enum_value_or_default();
+        if patch_visible != State::UNKNOWN {
+            self.visible = patch_visible;
+        }
         if patch.position.is_some() {
             self.position.clone_from(&patch.position);
         }
