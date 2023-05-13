@@ -16,43 +16,20 @@
 
 mod args;
 mod browser;
+mod pcap_handler;
 mod requests;
 mod response;
 
 use std::env;
 use std::fs::File;
-use std::io::Write;
 use std::path::PathBuf;
 
 use args::{BinaryProtobuf, GetPcap, NetsimArgs};
 use clap::Parser;
 use cxx::UniquePtr;
 use frontend_client_cxx::ffi::{new_frontend_client, ClientResult, FrontendClient, GrpcMethod};
-use frontend_client_cxx::{ClientResponseReadable, ClientResponseReader};
-
-struct PcapHandler {
-    file: File,
-    path: PathBuf,
-}
-
-impl ClientResponseReadable for PcapHandler {
-    // function to handle writing each chunk to file
-    fn handle_chunk(&self, chunk: &[u8]) {
-        println!("handling chunk of length {} on file {}", chunk.len(), self.path.display());
-        (&self.file)
-            .write_all(chunk)
-            .unwrap_or_else(|_| panic!("Unable to write to file: {}", self.path.display()));
-    }
-    // function to handle error response
-    fn handle_error(&self, error_code: u32, error_message: &str) {
-        println!(
-            "Handling error code: {}, msg: {}, on file: {}",
-            error_code,
-            error_message,
-            self.path.display()
-        );
-    }
-}
+use frontend_client_cxx::ClientResponseReader;
+use pcap_handler::PcapHandler;
 
 // helper function to process streaming Grpc request
 fn perform_streaming_request(

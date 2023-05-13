@@ -50,14 +50,14 @@ class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
   }
 
   void put_ok_with_length(const std::string &mime_type,
-                          unsigned int length) const override {
+                          std::size_t length) const override {
     this->length = length;
     is_ok = true;
   }
 
   void put_chunk(rust::Slice<const uint8_t> chunk) const override {
     netsim::frontend::GetPcapResponse response;
-    response.ParseFromArray(chunk.data(), chunk.length());
+    response.set_capture_stream(std::string(chunk.begin(), chunk.end()));
     is_ok = grpc_writer_->Write(response);
   }
 
@@ -71,7 +71,7 @@ class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
   mutable std::string err;
   mutable bool is_ok;
   mutable std::string body;
-  mutable unsigned int length;
+  mutable std::size_t length;
 };
 
 class FrontendServer final : public frontend::FrontendService::Service {

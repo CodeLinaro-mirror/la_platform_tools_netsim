@@ -1,7 +1,8 @@
-import {Chip, Device as ProtoDevice, State} from './model.js';
+import {Chip, Device as ProtoDevice, Pcap, State} from './model.js';
 
 // URL for netsim
 const DEVICES_URL = './v1/devices';
+const CAPTURES_URL = './v1/captures';
 
 /**
  * Interface for a method in notifying the subscribed observers.
@@ -149,6 +150,7 @@ export class Device {
  */
 export interface SimulationInfo {
   devices: Device[];
+  captures: Pcap[];
   selectedId: string;
   dimension: {x: number; y: number; z: number;};
 }
@@ -163,6 +165,7 @@ class SimulationState implements Observable {
 
   private simulationInfo: SimulationInfo = {
     devices: [],
+    captures: [],
     selectedId: '',
     dimension: {x: 10, y: 10, z: 0},
   };
@@ -170,6 +173,7 @@ class SimulationState implements Observable {
   constructor() {
     // initial GET
     this.invokeGetDevice();
+    this.invokeListCaptures();
   }
 
   invokeGetDevice() {
@@ -184,6 +188,19 @@ class SimulationState implements Observable {
           // eslint-disable-next-line
           console.log('Cannot connect to netsim web server', error);
         });
+  }
+
+  invokeListCaptures() {
+    fetch(CAPTURES_URL, {
+      method: 'GET',
+    })
+        .then(response => response.json())
+        .then(data => {
+          this.simulationInfo.captures = data.pcaps;
+        })
+        .catch(error => {
+          console.log('Cannot connect to netsim web server', error);
+        })
   }
 
   fetchDevice(devices: ProtoDevice[]) {
@@ -212,6 +229,18 @@ class SimulationState implements Observable {
         break;
       }
     }
+  }
+
+  patchCapture(id: string, state: string) {
+    fetch(CAPTURES_URL + '/' + id, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'text/plain',
+        'Content-Length': state.length.toString(),
+      },
+      body: state,
+    });
+    this.notifyObservers();
   }
 
   patchDevice(obj: object) {
@@ -260,6 +289,7 @@ async function subscribe() {
   const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
   while (true) {
     simulationState.invokeGetDevice();
+    simulationState.invokeListCaptures();
     await delay(1000);
   }
 }

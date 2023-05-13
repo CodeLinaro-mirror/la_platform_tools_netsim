@@ -95,7 +95,7 @@ export class NavigationBar extends LitElement {
             <div id="nav-logo-pic" class="logo" @click=${
         this.handleClick} role="tab" tabindex="0" aria-label="Netsim Logo, change view mode to scene view"></div>
           </a>
-          <p>#betosim</p>
+          <p>netsim</p>
         </div>
         <div id="nav-link-section" class="nav-section">
           <a href="http://go/betosim" target="_blank" rel="noopener noreferrer"

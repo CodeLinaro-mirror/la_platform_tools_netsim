@@ -32,7 +32,7 @@ class CxxServerResponseWriter {
   virtual void put_error(unsigned int error_code,
                          const std::string &response) const = 0;
   virtual void put_ok_with_length(const std::string &mime_type,
-                                  unsigned int length) const = 0;
+                                  std::size_t length) const = 0;
   virtual void put_chunk(rust::Slice<const uint8_t> chunk) const = 0;
   virtual void put_ok(const std::string &mime_type,
                       const std::string &body) const = 0;

@@ -22,6 +22,7 @@
 #include "common.pb.h"
 #include "hci/bluetooth_facade.h"
 #include "model.pb.h"
+#include "netsim-cxx/src/lib.rs.h"
 #include "util/log.h"
 #include "wifi/wifi_facade.h"
 
@@ -106,6 +107,8 @@ std::pair<uint32_t, uint32_t> Device::AddChip(common::ChipKind chip_kind,
     BtsLog("hci::facade::Add chip_id:%d, facade_id:%d", id, facade_id);
   } else if (chip_kind == common::ChipKind::WIFI) {
     facade_id = wifi::facade::Add(this->id);
+  } else if (chip_kind == common::ChipKind::UWB) {
+    facade_id = uwb::facade::Add(this->id);
   } else {
     BtsLog("Device::AdChip: unable to add chip");
     return {-1, -1};
