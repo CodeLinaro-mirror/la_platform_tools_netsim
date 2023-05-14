@@ -20,7 +20,7 @@ use protobuf::Message;
 use crate::devices::chip;
 use crate::devices::chip::Chip;
 use crate::devices::chip::ChipIdentifier;
-use crate::devices::facades::FacadeIdentifier;
+use crate::devices::chip::FacadeIdentifier;
 use frontend_proto::common::ChipKind as ProtoChipKind;
 use frontend_proto::model::Device as ProtoDevice;
 use frontend_proto::model::Orientation as ProtoOrientation;
@@ -88,7 +88,11 @@ impl Device {
         // iterate over patched ProtoChip entries and patch matching chip
         for patch_chip in patch.chips.iter() {
             // Allow default chip kind of BLUETOOTH
-            let patch_chip_kind = patch_chip.kind.enum_value_or(ProtoChipKind::BLUETOOTH);
+            let mut patch_chip_kind = patch_chip.kind.enum_value_or(ProtoChipKind::BLUETOOTH);
+            // TODO: remove after confirming that default to Bluetooth is unnecessary
+            if patch_chip_kind == ProtoChipKind::UNSPECIFIED {
+                patch_chip_kind = ProtoChipKind::BLUETOOTH;
+            }
             let patch_chip_name = &patch_chip.name;
             // Find the matching chip and patch the proto chip
             for chip in self.chips.values_mut() {

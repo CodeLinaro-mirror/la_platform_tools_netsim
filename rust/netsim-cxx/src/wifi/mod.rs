@@ -12,4 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod facade;
+// [cfg(all(test))] gets compiled during local Rust unit tests
+// [cfg(not(all(test)))] avoids getting compiled during local Rust unit tests
+
+#![allow(unused)]
+
+#[cfg(not(all(test)))]
+mod facade;
+#[cfg(not(all(test)))]
+pub(crate) use self::facade::*;
+
+#[cfg(all(test))]
+mod mocked;
+#[cfg(all(test))]
+pub(crate) use self::mocked::*;

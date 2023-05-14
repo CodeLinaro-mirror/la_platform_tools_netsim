@@ -16,6 +16,7 @@
 
 #![allow(dead_code)]
 
+mod bluetooth;
 pub mod captures;
 mod devices;
 mod http_server;

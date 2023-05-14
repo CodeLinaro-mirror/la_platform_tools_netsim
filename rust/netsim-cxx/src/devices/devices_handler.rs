@@ -381,9 +381,10 @@ pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritabl
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
+    use std::sync::{Mutex, Once};
 
     use frontend_proto::model::{Orientation as ProtoOrientation, State};
+    use netsim_common::util::netsim_logger::init_for_test;
     use protobuf_json_mapping::print_to_string;
 
     use super::*;
@@ -392,6 +393,16 @@ mod tests {
     // to avoid unwanted interleaving operations on DEVICES
     lazy_static! {
         static ref MUTEX: Mutex<()> = Mutex::new(());
+    }
+
+    // This allows Log init method to be invoked once when running all tests.
+    static INIT: Once = Once::new();
+
+    /// Logger setup function that is only run once, even if called multiple times.
+    fn logger_setup() {
+        INIT.call_once(|| {
+            init_for_test();
+        });
     }
 
     /// TestChipParameters struct to invoke add_chip
@@ -489,6 +500,9 @@ mod tests {
         // Avoiding Interleaving Operations
         let _lock = MUTEX.lock().unwrap();
 
+        // Initializing Logger
+        logger_setup();
+
         // Adding a chip
         refresh_resource();
         let chip_params = test_chip_1_bt();
@@ -520,6 +534,9 @@ mod tests {
         // Avoiding Interleaving Operations
         let _lock = MUTEX.lock().unwrap();
 
+        // Initializing Logger
+        logger_setup();
+
         // Creating a device and getting device
         refresh_resource();
         let bt_chip_params = test_chip_1_bt();
@@ -534,6 +551,9 @@ mod tests {
     fn test_patch_device() {
         // Avoiding Interleaving Operations
         let _lock = MUTEX.lock().unwrap();
+
+        // Initializing Logger
+        logger_setup();
 
         // Patching device position and orientation by id
         refresh_resource();
@@ -571,6 +591,9 @@ mod tests {
     fn test_patch_error() {
         // Avoiding Interleaving Operations
         let _lock = MUTEX.lock().unwrap();
+
+        // Initializing Logger
+        logger_setup();
 
         // Patch Error Testing
         refresh_resource();
@@ -627,6 +650,9 @@ mod tests {
         // Avoiding Interleaving Operations
         let _lock = MUTEX.lock().unwrap();
 
+        // Initializing Logger
+        logger_setup();
+
         // Adding two chips of the same device
         refresh_resource();
         let bt_chip_params = test_chip_1_bt();
@@ -659,6 +685,9 @@ mod tests {
     fn test_reset() {
         // Avoiding Interleaving Operations
         let _lock = MUTEX.lock().unwrap();
+
+        // Initializing Logger
+        logger_setup();
 
         // Patching Device and Resetting scene
         refresh_resource();
@@ -704,6 +733,9 @@ mod tests {
         // Avoiding Interleaving Operations
         let _lock = MUTEX.lock().unwrap();
 
+        // Initializing Logger
+        logger_setup();
+
         // Add 2 chips of same device and 1 chip of different device
         refresh_resource();
         let bt_chip_params = test_chip_1_bt();
@@ -743,6 +775,9 @@ mod tests {
     fn test_remove_chip_error() {
         // Avoiding Interleaving Operations
         let _lock = MUTEX.lock().unwrap();
+
+        // Initializing Logger
+        logger_setup();
 
         // Add 2 chips of same device and 1 chip of different device
         refresh_resource();
