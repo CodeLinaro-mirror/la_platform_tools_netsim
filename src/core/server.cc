@@ -46,13 +46,13 @@ namespace {
 constexpr std::chrono::seconds InactivityCheckInterval(5);
 
 std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
-                                            bool no_cli_ui) {
+                                            bool no_cli_ui, bool dev) {
   grpc::ServerBuilder builder;
   int selected_port;
   builder.AddListeningPort("0.0.0.0:" + std::to_string(netsim_grpc_port),
                            grpc::InsecureServerCredentials(), &selected_port);
   if (!no_cli_ui) {
-    static auto frontend_service = GetFrontendService();
+    static auto frontend_service = GetFrontendService(dev);
     builder.RegisterService(frontend_service.get());
   }
   builder.AddChannelArgument(GRPC_ARG_ALLOW_REUSEPORT, 0);
@@ -97,7 +97,8 @@ void Run(ServerParams params) {
   auto netsim_grpc_port = std::stoi(osutils::GetEnv("NETSIM_GRPC_PORT", "0"));
 
   // Run backend and optionally frontend grpc servers (based on no_cli_ui).
-  auto grpc_server = RunGrpcServer(netsim_grpc_port, params.no_cli_ui);
+  auto grpc_server =
+      RunGrpcServer(netsim_grpc_port, params.no_cli_ui, params.dev);
   if (grpc_server == nullptr) {
     BtsLog("Failed to start Grpc server");
     return;

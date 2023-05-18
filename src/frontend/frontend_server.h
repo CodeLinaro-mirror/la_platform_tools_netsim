@@ -25,6 +25,7 @@
 
 namespace netsim {
 
-std::unique_ptr<frontend::FrontendService::Service> GetFrontendService();
+std::unique_ptr<frontend::FrontendService::Service> GetFrontendService(
+    bool dev);
 
 }  // namespace netsim

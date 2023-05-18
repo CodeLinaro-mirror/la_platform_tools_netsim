@@ -43,6 +43,7 @@ use crate::captures::handlers::{
     clear_pcap_files, handle_capture_cxx, handle_packet_request, handle_packet_response,
     update_captures,
 };
+use crate::devices::devices_handler::handle_device_cxx;
 use crate::http_server::run_http_server;
 use crate::ranging::*;
 use crate::uwb::facade::*;
@@ -71,10 +72,18 @@ mod ffi {
         #[cxx_name = "GetVersion"]
         fn get_version() -> String;
 
-        // handle_capture_cxx translates each argument into an appropriate Rust type
+        // handlers for gRPC server's invocation of API calls
 
         #[cxx_name = "HandleCaptureCxx"]
         fn handle_capture_cxx(
+            responder: Pin<&mut CxxServerResponseWriter>,
+            method: String,
+            param: String,
+            body: String,
+        );
+
+        #[cxx_name = "HandleDeviceCxx"]
+        fn handle_device_cxx(
             responder: Pin<&mut CxxServerResponseWriter>,
             method: String,
             param: String,

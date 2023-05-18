@@ -218,7 +218,12 @@ void Start() {
   phy_low_energy_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::LOW_ENERGY);
 
   // TODO: Remove test channel.
-#ifndef NETSIM_ANDROID_EMULATOR
+#ifdef NETSIM_ANDROID_EMULATOR
+  auto testCommands = rootcanal::TestCommandHandler(*gTestModel);
+  testCommands.RegisterSendResponse([](const std::string &) {});
+  testCommands.SetTimerPeriod({"5"});
+  testCommands.StartTimer({});
+#else
   SetUpTestChannel();
 #endif
   mStarted = true;

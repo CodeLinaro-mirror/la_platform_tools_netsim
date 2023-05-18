@@ -27,8 +27,11 @@ use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
+use crate::ffi::CxxServerResponseWriter;
+use crate::http_server::http_request::HttpHeaders;
 use crate::http_server::http_request::HttpRequest;
 use crate::http_server::server_response::ResponseWritable;
+use crate::CxxServerResponseWriterWrapper;
 use frontend_proto::common::ChipKind as ProtoChipKind;
 use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::model::Device as ProtoDevice;
@@ -40,6 +43,7 @@ use protobuf_json_mapping::print_to_string_with_options;
 use protobuf_json_mapping::PrintOptions;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::pin::Pin;
 use std::sync::RwLock;
 use std::sync::RwLockWriteGuard;
 use std::time::Duration;
@@ -377,6 +381,32 @@ pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritabl
             _ => writer.put_error(404, "Not found."),
         }
     }
+}
+
+/// Device handler cxx for grpc server to call
+pub fn handle_device_cxx(
+    responder: Pin<&mut CxxServerResponseWriter>,
+    method: String,
+    param: String,
+    body: String,
+) {
+    let mut request = HttpRequest {
+        method,
+        uri: String::new(),
+        headers: HttpHeaders::new(),
+        version: "1.1".to_string(),
+        body: body.as_bytes().to_vec(),
+    };
+    if param.is_empty() {
+        request.uri = "/dev/v1/devices".to_string();
+    } else {
+        request.uri = format!("dev/v1/devices/{}", param)
+    }
+    handle_device(
+        &request,
+        param.as_str(),
+        &mut CxxServerResponseWriterWrapper { writer: responder },
+    )
 }
 
 #[cfg(test)]

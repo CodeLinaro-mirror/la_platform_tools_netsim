@@ -87,16 +87,26 @@ impl Device {
         }
         // iterate over patched ProtoChip entries and patch matching chip
         for patch_chip in patch.chips.iter() {
-            // Allow default chip kind of BLUETOOTH
-            let mut patch_chip_kind = patch_chip.kind.enum_value_or(ProtoChipKind::BLUETOOTH);
-            // TODO: remove after confirming that default to Bluetooth is unnecessary
+            let mut patch_chip_kind = patch_chip.kind.enum_value_or_default();
+            // Check if chip is given when kind is not given.
+            // TODO: Fix patch device request body in CLI to include ChipKind, and remove if block below.
             if patch_chip_kind == ProtoChipKind::UNSPECIFIED {
-                patch_chip_kind = ProtoChipKind::BLUETOOTH;
+                if patch_chip.has_bt() {
+                    patch_chip_kind = ProtoChipKind::BLUETOOTH;
+                } else if patch_chip.has_wifi() {
+                    patch_chip_kind = ProtoChipKind::WIFI;
+                } else if patch_chip.has_uwb() {
+                    patch_chip_kind = ProtoChipKind::UWB;
+                } else {
+                    break;
+                }
             }
             let patch_chip_name = &patch_chip.name;
             // Find the matching chip and patch the proto chip
             for chip in self.chips.values_mut() {
-                if chip.name.eq(patch_chip_name) && chip.kind == patch_chip_kind {
+                if (patch_chip_name.is_empty() || chip.name.eq(patch_chip_name))
+                    && chip.kind == patch_chip_kind
+                {
                     chip.patch(patch_chip)?;
                     break; // next proto chip
                 }
