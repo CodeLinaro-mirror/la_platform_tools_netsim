@@ -21,7 +21,6 @@
 namespace netsim::server {
 
 struct ServerParams {
-  bool dev;
   std::string fd_startup_str;
   bool no_cli_ui;
   bool no_web_ui;

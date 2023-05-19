@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
         return (-2);
     }
   }
-
+  netsim::config::SetDev(dev);
   int hci_port = get_hci_port(hci_port_flag);
   // Daemon mode -- start radio managers
   // get netsim daemon, starting if it doesn't exist
@@ -155,8 +155,7 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-  netsim::server::Run({.dev = dev,
-                       .fd_startup_str = fd_startup_str,
+  netsim::server::Run({.fd_startup_str = fd_startup_str,
                        .no_cli_ui = no_cli_ui,
                        .no_web_ui = no_web_ui,
                        .hci_port = hci_port});

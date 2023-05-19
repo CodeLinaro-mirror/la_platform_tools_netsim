@@ -47,12 +47,17 @@ namespace frontend {
 namespace {
 const std::chrono::duration kConnectionDeadline = std::chrono::seconds(1);
 
-std::unique_ptr<frontend::FrontendService::Stub> NewFrontendStub() {
-  auto port = netsim::osutils::GetServerAddress();
-  if (!port.has_value()) {
-    return {};
+std::unique_ptr<frontend::FrontendService::Stub> NewFrontendStub(
+    std::string port) {
+  // Find local grpc port if not specified
+  if (port == "0") {
+    auto local_port = netsim::osutils::GetServerAddress();
+    if (!local_port.has_value()) {
+      return {};
+    }
+    port = local_port.value();
   }
-  auto server = "localhost:" + port.value();
+  auto server = "localhost:" + port;
   std::shared_ptr<grpc::Channel> channel =
       grpc::CreateChannel(server, grpc::InsecureChannelCredentials());
 
@@ -227,8 +232,8 @@ class FrontendClientImpl : public FrontendClient {
 
 }  // namespace
 
-std::unique_ptr<FrontendClient> NewFrontendClient() {
-  auto stub = NewFrontendStub();
+std::unique_ptr<FrontendClient> NewFrontendClient(int32_t port) {
+  auto stub = NewFrontendStub(std::to_string(port));
   return (stub == nullptr
               ? nullptr
               : std::make_unique<FrontendClientImpl>(std::move(stub)));

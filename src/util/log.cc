@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include "log.h"
 
 #include <chrono>
 #include <cstdarg>
@@ -20,14 +21,8 @@
 
 namespace netsim {
 
-void BtsLog(const char *fmt, ...) {
-  char buffer[255];
-  va_list arglist;
-
-  va_start(arglist, fmt);
-  vsnprintf(buffer, sizeof(buffer), fmt, arglist);
-  va_end(arglist);
-
+void BtsLogDefault(int priority,const char* file, int lineNumber,
+                   const char* buffer) {
   auto now = std::chrono::system_clock::now();
   auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
   auto now_t = std::chrono::system_clock::to_time_t(now);
@@ -40,4 +35,18 @@ void BtsLog(const char *fmt, ...) {
   fprintf(stderr, "netsim D %s %s\n", prefix, buffer);
 }
 
+static BtsLogFn logFunction = BtsLogDefault;
+
+void __BtsLog(int priority, const char *file, int line, const char *fmt, ...) {
+  char buffer[255];
+  va_list arglist;
+
+  va_start(arglist, fmt);
+  vsnprintf(buffer, sizeof(buffer), fmt, arglist);
+  va_end(arglist);
+
+  logFunction(priority, file, line, buffer);
+}
+
+void setBtsLogSink(BtsLogFn logFn) { logFunction = logFn; }
 }  // namespace netsim

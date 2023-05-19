@@ -34,6 +34,9 @@ pub struct NetsimArgs {
     /// Set verbose mode
     #[arg(short, long)]
     pub verbose: bool,
+    /// Set custom grpc port
+    #[arg(short, long)]
+    pub port: Option<i32>,
 }
 
 #[derive(Debug, Subcommand)]

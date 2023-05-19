@@ -59,7 +59,7 @@ pub mod ffi {
 
         #[allow(dead_code)]
         #[rust_name = "new_frontend_client"]
-        pub fn NewFrontendClient() -> UniquePtr<FrontendClient>;
+        pub fn NewFrontendClient(port: i32) -> UniquePtr<FrontendClient>;
 
         #[allow(dead_code)]
         #[rust_name = "get_capture"]

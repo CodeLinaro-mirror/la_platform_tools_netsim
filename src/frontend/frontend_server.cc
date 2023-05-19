@@ -77,8 +77,6 @@ class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
 
 class FrontendServer final : public frontend::FrontendService::Service {
  public:
-  FrontendServer(bool dev = false) : dev_(dev) {}
-
   grpc::Status GetVersion(grpc::ServerContext *context,
                           const google::protobuf::Empty *empty,
                           frontend::VersionResponse *reply) {
@@ -89,7 +87,7 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status GetDevices(grpc::ServerContext *context,
                           const google::protobuf::Empty *empty,
                           frontend::GetDevicesResponse *reply) {
-    if (this->dev_) {
+    if (netsim::config::GetDev()) {
       return GetDevicesDev(reply);
     }
     const auto scene = netsim::controller::SceneController::Singleton().Get();
@@ -111,7 +109,7 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status PatchDevice(grpc::ServerContext *context,
                            const frontend::PatchDeviceRequest *request,
                            google::protobuf::Empty *response) {
-    if (this->dev_) {
+    if (netsim::config::GetDev()) {
       return PatchDeviceDev(request);
     }
     auto status = netsim::controller::SceneController::Singleton().PatchDevice(
@@ -137,7 +135,7 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status Reset(grpc::ServerContext *context,
                      const google::protobuf::Empty *request,
                      google::protobuf::Empty *empty) {
-    if (this->dev_) {
+    if (netsim::config::GetDev()) {
       return ResetDev();
     }
     netsim::controller::SceneController::Singleton().Reset();
@@ -187,15 +185,11 @@ class FrontendServer final : public frontend::FrontendService::Service {
     }
     return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
-
- private:
-  bool dev_;
 };
 }  // namespace
 
-std::unique_ptr<frontend::FrontendService::Service> GetFrontendService(
-    bool dev) {
-  return std::make_unique<FrontendServer>(dev);
+std::unique_ptr<frontend::FrontendService::Service> GetFrontendService() {
+  return std::make_unique<FrontendServer>();
 }
 
 }  // namespace netsim

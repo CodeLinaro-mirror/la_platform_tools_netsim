@@ -48,7 +48,7 @@ use std::sync::Arc;
 const PATH_PREFIXES: [&str; 3] = ["js", "assets", "node_modules/tslib"];
 
 // TODO: move to main.rs
-pub fn run_http_server(dev: bool) {
+pub fn run_http_server() {
     netsim_logger::init("netsimd");
     let listener = match TcpListener::bind("127.0.0.1:7681") {
         Ok(listener) => listener,
@@ -64,7 +64,7 @@ pub fn run_http_server(dev: bool) {
         let stream = stream.unwrap();
         let valid_files = valid_files.clone();
         pool.execute(move || {
-            handle_connection(stream, valid_files, dev);
+            handle_connection(stream, valid_files);
         });
     }
 
@@ -185,7 +185,7 @@ fn handle_dev(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
     writer.put_ok("text/plain", r"Welcome to netsim developer mode", &[]);
 }
 
-fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>, dev: bool) {
+fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
     let mut router = Router::new();
     router.add_route("/", Box::new(handle_index));
     router.add_route("/version", Box::new(handle_version));
@@ -194,7 +194,7 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>, d
     router.add_route(r"/v1/captures/{id}", Box::new(handle_capture));
 
     // Adding additional routes in dev mode.
-    if dev {
+    if crate::config::get_dev() {
         router.add_route("/dev", Box::new(handle_dev));
         router.add_route("/dev/v1/devices", Box::new(handle_device));
         router.add_route(r"/dev/v1/devices/{id}", Box::new(handle_device));

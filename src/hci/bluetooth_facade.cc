@@ -371,6 +371,8 @@ void IncrRx(uint32_t id, rootcanal::Phy::Type phy_type) {
   }
 }
 
+// TODO: Make SimComputeRssi invoke netsim::device::GetDistanceRust with dev
+// flag
 int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power) {
   if (id_to_chip_info_.find(send_id) == id_to_chip_info_.end() ||
       id_to_chip_info_.find(recv_id) == id_to_chip_info_.end()) {

@@ -32,12 +32,15 @@ use crate::http_server::http_request::HttpHeaders;
 use crate::http_server::http_request::HttpRequest;
 use crate::http_server::server_response::ResponseWritable;
 use crate::CxxServerResponseWriterWrapper;
+use cxx::CxxString;
+use cxx::UniquePtr;
 use frontend_proto::common::ChipKind as ProtoChipKind;
 use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::model::Device as ProtoDevice;
 use frontend_proto::model::Position as ProtoPosition;
 use frontend_proto::model::Scene as ProtoScene;
 use lazy_static::lazy_static;
+use log::{error, info};
 use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string_with_options;
 use protobuf_json_mapping::PrintOptions;
@@ -49,7 +52,7 @@ use std::sync::RwLockWriteGuard;
 use std::time::Duration;
 use std::time::Instant;
 
-const INITIAL_DEVICE_ID: DeviceIdentifier = 1000;
+const INITIAL_DEVICE_ID: DeviceIdentifier = 0;
 const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     enum_values_int: false,
     proto_field_name: false,
@@ -144,6 +147,45 @@ fn add_chip(
     )
 }
 
+/// An AddChip function for Rust Device API.
+/// The backend gRPC code will be invoking this method.
+pub fn add_chip_rust(
+    device_guid: &str,
+    device_name: &str,
+    chip_kind: &CxxString,
+    chip_name: &str,
+    chip_manufacturer: &str,
+    chip_product_name: &str,
+) -> UniquePtr<crate::ffi::AddChipResult> {
+    let chip_kind_proto = match chip_kind.to_string().as_str() {
+        "BLUETOOTH" => ProtoChipKind::BLUETOOTH,
+        "WIFI" => ProtoChipKind::WIFI,
+        "UWB" => ProtoChipKind::UWB,
+        _ => ProtoChipKind::UNSPECIFIED,
+    };
+    match add_chip(
+        device_guid,
+        device_name,
+        chip_kind_proto,
+        chip_name,
+        chip_manufacturer,
+        chip_product_name,
+    ) {
+        Ok(result) => {
+            info!("Rust Device API Add Chip Success");
+            crate::ffi::new_add_chip_result(
+                result.device_id as u32,
+                result.chip_id as u32,
+                result.facade_id,
+            )
+        }
+        Err(err) => {
+            error!("Rust Device API Add Chip Error: {err}");
+            crate::ffi::new_add_chip_result(u32::MAX, u32::MAX, u32::MAX)
+        }
+    }
+}
+
 /// Get or create a device.
 fn get_or_create_device(
     resource: &mut RwLockWriteGuard<Devices>,
@@ -194,6 +236,15 @@ fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(
         remove_device(&mut resource, device_id)?;
     }
     Ok(())
+}
+
+/// A RemoveChip function for Rust Device API.
+/// The backend gRPC code will be invoking this method.
+pub fn remove_chip_rust(device_id: u32, chip_id: u32) {
+    match remove_chip(device_id as i32, chip_id as i32) {
+        Ok(_) => info!("Rust Device API Remove Chip Success"),
+        Err(err) => error!("Rust Device API Remove Chip Failure: {err}"),
+    }
 }
 
 // lock the devices, find the id and call the patch function
@@ -254,6 +305,18 @@ fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32,
         .map(|device_ref| device_ref.position.clone())
         .ok_or(format!("No such device with id {other_id}"))?;
     Ok(distance(&a, &b))
+}
+
+/// A GetDistance function for Rust Device API.
+/// The backend gRPC code will be invoking this method.
+pub fn get_distance_rust(a: u32, b: u32) -> f32 {
+    match get_distance(a as i32, b as i32) {
+        Ok(distance) => distance,
+        Err(err) => {
+            error!("Rust Device API Get Distance Error: {err}");
+            0.0
+        }
+    }
 }
 
 #[allow(dead_code)]

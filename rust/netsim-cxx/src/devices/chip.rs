@@ -32,9 +32,12 @@ use crate::devices::device::DeviceIdentifier;
 pub type ChipIdentifier = i32;
 pub type FacadeIdentifier = u32;
 
+const INITIAL_CHIP_ID: ChipIdentifier = 1000;
+
 // Allocator for chip identifiers.
 lazy_static! {
-    static ref IDS: RwLock<IdFactory<ChipIdentifier>> = RwLock::new(IdFactory::new(2000, 1));
+    static ref IDS: RwLock<IdFactory<ChipIdentifier>> =
+        RwLock::new(IdFactory::new(INITIAL_CHIP_ID, 1));
 }
 
 pub struct Chip {

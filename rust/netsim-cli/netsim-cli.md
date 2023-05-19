@@ -4,8 +4,9 @@ Usage:
 * `netsim [Options] <COMMAND>`
 
 Options:
-* `-h, --help`:    Print help information
 * `-v, --verbose`: Set verbose mode
+* `-p, --port <PORT>`: Set custom grpc port
+* `-h, --help`:    Print help information
 
 ## Commands:
 * ### `version`:    Print Netsim version information
