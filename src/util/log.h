@@ -24,7 +24,7 @@ namespace netsim {
 
 void __BtsLog(int priority, const char *file, int line, const char *fmt, ...);
 
-using BtsLogFn = std::function<void(int, const char*, int, const char*)>;
+using BtsLogFn = std::function<void(int, const char *, int, const char *)>;
 
 void setBtsLogSink(BtsLogFn logFn);
 

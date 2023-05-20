@@ -189,15 +189,18 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
     let mut router = Router::new();
     router.add_route("/", Box::new(handle_index));
     router.add_route("/version", Box::new(handle_version));
-    router.add_route("/v1/devices", Box::new(handle_devices));
+    if crate::config::get_dev() {
+        router.add_route(r"/v1/devices", Box::new(handle_device));
+        router.add_route(r"/v1/devices/{id}", Box::new(handle_device));
+    } else {
+        router.add_route("/v1/devices", Box::new(handle_devices));
+    }
     router.add_route(r"/v1/captures", Box::new(handle_capture));
     router.add_route(r"/v1/captures/{id}", Box::new(handle_capture));
 
     // Adding additional routes in dev mode.
     if crate::config::get_dev() {
         router.add_route("/dev", Box::new(handle_dev));
-        router.add_route("/dev/v1/devices", Box::new(handle_device));
-        router.add_route(r"/dev/v1/devices/{id}", Box::new(handle_device));
     }
 
     // A closure for checking if path is a static file we wish to serve, and call handle_static

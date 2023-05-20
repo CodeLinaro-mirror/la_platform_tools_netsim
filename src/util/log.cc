@@ -21,8 +21,8 @@
 
 namespace netsim {
 
-void BtsLogDefault(int priority,const char* file, int lineNumber,
-                   const char* buffer) {
+void BtsLogDefault(int priority, const char *file, int lineNumber,
+                   const char *buffer) {
   auto now = std::chrono::system_clock::now();
   auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
   auto now_t = std::chrono::system_clock::to_time_t(now);

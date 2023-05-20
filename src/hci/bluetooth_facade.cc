@@ -19,6 +19,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
@@ -94,6 +95,7 @@ size_t phy_classic_index_;
 
 bool mStarted = false;
 std::shared_ptr<rootcanal::AsyncManager> mAsyncManager;
+rootcanal::AsyncUserId gSocketUserId{};
 std::unique_ptr<SimTestModel> gTestModel;
 rootcanal::ControllerProperties controller_properties_;
 
@@ -103,7 +105,6 @@ std::unique_ptr<rootcanal::TestCommandHandler> gTestChannel;
 std::unique_ptr<rootcanal::TestChannelTransport> gTestChannelTransport;
 std::shared_ptr<AsyncDataChannelServer> gTestSocketServer;
 bool gTestChannelOpen{false};
-rootcanal::AsyncUserId gSocketUserId{};
 constexpr int kDefaultTestPort = 7500;
 #endif
 
@@ -121,8 +122,6 @@ void SetUpTestChannel() {
       kDefaultTestPort, mAsyncManager.get());
 
   gTestChannel = std::make_unique<rootcanal::TestCommandHandler>(*gTestModel);
-  // Get a user ID for tasks scheduled within the test environment.
-  gSocketUserId = mAsyncManager->GetNextUserId();
 
   gTestChannelTransport = std::make_unique<rootcanal::TestChannelTransport>();
   gTestChannelTransport->RegisterCommandHandler(
@@ -197,6 +196,8 @@ void Start() {
   controller_properties_.quirks.hardware_error_before_reset = true;
 
   mAsyncManager = std::make_shared<rootcanal::AsyncManager>();
+  // Get a user ID for tasks scheduled within the test environment.
+  gSocketUserId = mAsyncManager->GetNextUserId();
 
   gTestModel = std::make_unique<SimTestModel>(
       std::bind(&rootcanal::AsyncManager::GetNextUserId, mAsyncManager),
@@ -334,7 +335,17 @@ uint32_t Add(uint32_t simulation_device) {
       rootcanal::HciSniffer::Create(transport));
   auto hci_device =
       std::make_shared<rootcanal::HciDevice>(sniffer, controller_properties_);
-  auto facade_id = gTestModel->AddHciConnection(hci_device);
+
+  // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
+  // invoked atomically, preventing data races.
+  std::promise<uint32_t> facade_id_promise;
+  auto facade_id_future = facade_id_promise.get_future();
+  mAsyncManager->ExecAsync(
+      gSocketUserId, std::chrono::milliseconds(0),
+      [hci_device, &facade_id_promise]() {
+        facade_id_promise.set_value(gTestModel->AddHciConnection(hci_device));
+      });
+  auto facade_id = facade_id_future.get();
 
   HciPacketTransport::Add(facade_id, transport);
   BtsLog("Creating HCI facade %d for device %d", facade_id, simulation_device);

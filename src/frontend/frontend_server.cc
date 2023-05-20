@@ -123,8 +123,7 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status PatchDeviceDev(const frontend::PatchDeviceRequest *request) {
     CxxServerResponseWritable writer;
     std::string request_json;
-    google::protobuf::util::MessageToJsonString(request->device(),
-                                                &request_json);
+    google::protobuf::util::MessageToJsonString(*request, &request_json);
     HandleDeviceCxx(writer, "PATCH", "", request_json);
     if (writer.is_ok) {
       return grpc::Status::OK;

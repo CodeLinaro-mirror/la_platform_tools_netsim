@@ -74,7 +74,8 @@ bool GrpcChannelReady(const std::shared_ptr<grpc::Channel> &channel) {
   return false;
 }
 
-void RunNetsimd(NetsimdOptions options) {
+std::unique_ptr<android::base::ObservableProcess> RunNetsimd(
+    NetsimdOptions options) {
   auto exe = android::base::System::get()->findBundledExecutable("netsimd");
   std::vector<std::string> program_with_args{exe};
   if (options.no_cli_ui) program_with_args.push_back("--no_cli_ui");
@@ -85,6 +86,8 @@ void RunNetsimd(NetsimdOptions options) {
   if (netsimd) {
     BtsLog("Running netsimd as pid: %d.", netsimd->pid());
   }
+
+  return netsimd;
 }
 
 }  // namespace
@@ -96,17 +99,19 @@ void SetPacketStreamEndpoint(const std::string &endpoint) {
 std::shared_ptr<grpc::Channel> GetChannel(NetsimdOptions options) {
   std::lock_guard<std::mutex> lock(channel_mutex);
 
-  bool is_netsimd_started = false;
+  // bool is_netsimd_started = false;
+  std::unique_ptr<android::base::ObservableProcess> netsimProc;
   for (int second : {1, 2, 4, 8}) {
     if (!packet_stream_channel) packet_stream_channel = CreateGrpcChannel();
     if (GrpcChannelReady(packet_stream_channel)) return packet_stream_channel;
 
     packet_stream_channel.reset();
 
-    if (!is_netsimd_started && custom_packet_stream_endpoint.empty()) {
-      BtsLog("Starting netsim.");
-      RunNetsimd(options);
-      is_netsimd_started = true;
+    if ((!netsimProc || !netsimProc->isAlive()) &&
+        custom_packet_stream_endpoint.empty()) {
+      BtsLog("Starting netsim since %s",
+             netsimProc ? "the process died" : "it is not yet launched");
+      netsimProc = RunNetsimd(options);
     }
     BtsLog("Retry connecting to netsim in %d second.", second);
     std::this_thread::sleep_for(std::chrono::seconds(second));
