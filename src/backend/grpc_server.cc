@@ -77,47 +77,9 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     auto chip_name = request.initial_info().chip().id();
     auto manufacturer = request.initial_info().chip().manufacturer();
     auto product_name = request.initial_info().chip().product_name();
-
-    uint32_t device_id = -1;
-    uint32_t chip_id = -1;
-    uint32_t facade_id = -1;
-
-    if (netsim::config::GetDev()) {
-      // Add a new chip to the Rust Device Resource
-      // TODO: replace scene_controller::AddChip with this
-      std::string chip_kind_string;
-      switch (chip_kind) {
-        case common::ChipKind::BLUETOOTH:
-          chip_kind_string = "BLUETOOTH";
-          break;
-        case common::ChipKind::WIFI:
-          chip_kind_string = "WIFI";
-          break;
-        case common::ChipKind::UWB:
-          chip_kind_string = "UWB";
-          break;
-        default:
-          chip_kind_string = "UNSPECIFIED";
-          break;
-      }
-      std::unique_ptr<scene_controller::AddChipResult> add_chip_result_ptr =
-          netsim::device::AddChipRust(peer, device_name, chip_kind_string,
-                                      chip_name, manufacturer, product_name);
-      device_id = add_chip_result_ptr->device_id;
-      chip_id = add_chip_result_ptr->chip_id;
-      facade_id = add_chip_result_ptr->facade_id;
-      // TODO: Remove this BtsLog once completed Device API implementation
-      BtsLog("Rust Device API: device_id %d, chip_id %d, facade_id %d",
-             device_id, chip_id, facade_id);
-    } else {
-      // Add a new chip to the device
-      std::tuple<uint32_t, uint32_t, uint32_t> add_chip_result =
-          scene_controller::AddChip(peer, device_name, chip_kind, chip_name,
-                                    manufacturer, product_name);
-      device_id = std::get<0>(add_chip_result);
-      chip_id = std::get<1>(add_chip_result);
-      facade_id = std::get<2>(add_chip_result);
-    }
+    // Add a new chip to the device
+    auto [device_id, chip_id, facade_id] = scene_controller::AddChip(
+        peer, device_name, chip_kind, chip_name, manufacturer, product_name);
 
     BtsLog("grpc_server: adding chip %d with facade %d to %s", chip_id,
            facade_id, device_name.c_str());
@@ -128,14 +90,8 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     // no longer able to send responses to peer
     facade_to_stream.erase(ChipFacade(chip_kind, facade_id));
 
-    if (netsim::config::GetDev()) {
-      // Remove the chip from Rust Device Resource
-      // TODO: replace scene_controller::RemoveChip with this
-      netsim::device::RemoveChipRust(device_id, chip_id);
-    } else {
-      // Remove the chip from the device
-      scene_controller::RemoveChip(device_id, chip_id);
-    }
+    // Remove the chip from the device
+    scene_controller::RemoveChip(device_id, chip_id);
 
     BtsLog("grpc_server: removing chip %d from %s", chip_id,
            device_name.c_str());
