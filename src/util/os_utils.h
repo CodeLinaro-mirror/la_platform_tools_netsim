@@ -43,5 +43,11 @@ std::string GetNetsimIniFilepath();
  * Return the frontend grpc port.
  */
 std::optional<std::string> GetServerAddress(bool frontend_server = true);
+
+/**
+ * Redirect stdout and stderr to file.
+ */
+void RedirectStdStream(std::string netsim_temp_dir);
+
 }  // namespace osutils
 }  // namespace netsim

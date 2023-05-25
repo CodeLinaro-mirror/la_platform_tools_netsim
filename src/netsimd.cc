@@ -131,6 +131,17 @@ int main(int argc, char *argv[]) {
         return (-2);
     }
   }
+  if (fd_startup_str.empty()) {
+#ifndef NETSIM_ANDROID_EMULATOR
+    std::cerr << "Failed to start netsim daemon because fd startup flag `-s` "
+                 "is empty\n";
+    return -1;
+#endif
+    // NOTE: Redirect stdout and stderr to files only if netsimd is not invoked
+    // by Cuttlefish. Some Cuttlefish builds fail when writing logs to files.
+    netsim::osutils::RedirectStdStream(netsim::NetsimdTempDirString().c_str());
+  }
+
   netsim::config::SetDev(dev);
   int hci_port = get_hci_port(hci_port_flag);
   // Daemon mode -- start radio managers
@@ -142,14 +153,6 @@ int main(int argc, char *argv[]) {
                  "already running\n";
     return -1;
   }
-
-#ifndef NETSIM_ANDROID_EMULATOR
-  if (fd_startup_str.empty()) {
-    std::cerr << "Failed to start netsim daemon because fd startup flag `-s` "
-                 "is empty\n";
-    return -1;
-  }
-#endif
 
   netsim::server::Run({.fd_startup_str = fd_startup_str,
                        .no_cli_ui = no_cli_ui,

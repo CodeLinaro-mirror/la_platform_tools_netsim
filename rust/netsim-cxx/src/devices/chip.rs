@@ -147,7 +147,7 @@ impl Chip {
 
 /// Allocates a new chip with a facade_id.
 pub fn chip_new(
-    _device_id: DeviceIdentifier,
+    device_id: DeviceIdentifier,
     chip_kind: ProtoChipKind,
     chip_name: &str,
     device_name: &str,
@@ -155,7 +155,7 @@ pub fn chip_new(
     chip_product_name: &str,
 ) -> Result<Chip, String> {
     let id = IDS.write().unwrap().next_id();
-    let id_u32 = u32::try_from(id).map_err(|err| err.to_string())?;
+    let id_u32 = u32::try_from(device_id).map_err(|err| err.to_string())?;
     let facade_id = match chip_kind {
         ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(id_u32),
         ProtoChipKind::WIFI => wifi_facade::wifi_add(id_u32),

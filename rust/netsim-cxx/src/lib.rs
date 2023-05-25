@@ -50,6 +50,7 @@ use crate::devices::devices_handler::{
 };
 use crate::http_server::run_http_server;
 use crate::ranging::*;
+use crate::system::netsimd_temp_dir_string;
 use crate::uwb::facade::*;
 use crate::version::*;
 
@@ -84,6 +85,11 @@ mod ffi {
 
         #[cxx_name = "GetVersion"]
         fn get_version() -> String;
+
+        // System
+
+        #[cxx_name = "NetsimdTempDirString"]
+        fn netsimd_temp_dir_string() -> String;
 
         // handlers for gRPC server's invocation of API calls
 

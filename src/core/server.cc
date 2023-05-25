@@ -20,9 +20,7 @@
 #include <string>
 #include <thread>
 
-#ifdef NETSIM_ANDROID_EMULATOR
 #include "backend/grpc_server.h"
-#endif
 #include "controller/controller.h"
 #include "frontend/frontend_server.h"
 #include "grpcpp/security/server_credentials.h"
@@ -55,11 +53,9 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
     static auto frontend_service = GetFrontendService();
     builder.RegisterService(frontend_service.release());
   }
-  builder.AddChannelArgument(GRPC_ARG_ALLOW_REUSEPORT, 0);
-#ifdef NETSIM_ANDROID_EMULATOR
   static auto backend_service = GetBackendService();
   builder.RegisterService(backend_service.release());
-#endif
+  builder.AddChannelArgument(GRPC_ARG_ALLOW_REUSEPORT, 0);
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
   if (server == nullptr) {
     return nullptr;
