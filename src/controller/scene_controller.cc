@@ -69,7 +69,7 @@ std::tuple<uint32_t, uint32_t, uint32_t> SceneController::AddChip(
     uint32_t device_id = add_chip_result_ptr->device_id;
     uint32_t chip_id = add_chip_result_ptr->chip_id;
     uint32_t facade_id = add_chip_result_ptr->facade_id;
-    // netsim::capture::UpdateCaptures();
+    netsim::capture::UpdateCaptures();
     return {device_id, chip_id, facade_id};
   }
   auto device = GetDevice(guid, device_name);
@@ -109,7 +109,7 @@ void SceneController::RemoveChip(uint32_t device_id, uint32_t chip_id) {
   std::unique_lock<std::mutex> lock(this->mutex_);
   if (netsim::config::GetDev()) {
     netsim::device::RemoveChipRust(device_id, chip_id);
-    // netsim::capture::UpdateCaptures();
+    netsim::capture::UpdateCaptures();
     return;
   }
   BtsLog("Scene RemoveChip %d", chip_id);

@@ -33,9 +33,7 @@ void HandleRequest(ChipKind kind, uint32_t facade_id,
                    const std::vector<uint8_t> &packet,
                    packet::HCIPacket_PacketType packet_type) {
   // capture the packet
-  if (!netsim::config::GetDev()) {
-    netsim::capture::HandleRequest(kind, facade_id, packet, packet_type);
-  }
+  netsim::capture::HandleRequest(kind, facade_id, packet, packet_type);
   // Copied
   auto shared_packet = std::make_shared<std::vector<uint8_t>>(packet);
   if (kind == ChipKind::BLUETOOTH) {
@@ -56,10 +54,8 @@ void HandleRequestCxx(uint32_t kind, uint32_t facade_id,
 void HandleBtResponse(uint32_t facade_id,
                       packet::HCIPacket_PacketType packet_type,
                       const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  if (!netsim::config::GetDev()) {
-    netsim::capture::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
-                                    packet_type);
-  }
+  netsim::capture::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
+                                  packet_type);
   // TODO: Return true in backend::HandleResponse, fd::HandleResponse and
   // socket::HandleResponse if the response was handled correctly.
   netsim::backend::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,

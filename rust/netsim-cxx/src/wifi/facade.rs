@@ -38,8 +38,8 @@ pub fn wifi_get(facade_id: u32) -> Radio {
 }
 
 // Returns facade_id
-pub fn wifi_add(chip_id: u32) -> u32 {
-    crate::ffi::wifi_add(chip_id)
+pub fn wifi_add(device_id: u32) -> u32 {
+    crate::ffi::wifi_add(device_id)
 }
 
 /// Starts the WiFi service.

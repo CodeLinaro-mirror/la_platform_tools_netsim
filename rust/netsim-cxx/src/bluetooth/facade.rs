@@ -38,8 +38,8 @@ pub fn bluetooth_get(facade_id: u32) -> Bluetooth {
 }
 
 // Returns facade_id
-pub fn bluetooth_add(chip_id: u32) -> u32 {
-    crate::ffi::bluetooth_add(chip_id)
+pub fn bluetooth_add(device_id: u32) -> u32 {
+    crate::ffi::bluetooth_add(device_id)
 }
 
 /// Starts the Bluetooth service.

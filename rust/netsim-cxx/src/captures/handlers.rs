@@ -72,16 +72,28 @@ lazy_static! {
 /// Note: if a device disconnects and there is captured data, the entry
 /// remains with a flag valid = false so it can be retrieved.
 pub fn update_captures() {
-    // Perform get_devices_bytes ffi to receive bytes of GetDevicesResponse
-    // Print error and return empty hashmap if GetDevicesBytes fails.
-    let mut vec = Vec::<u8>::new();
-    if !get_devices_bytes(&mut vec) {
-        println!("netsimd error: GetDevicesBytes failed - returning an empty set of captures");
-        return;
-    }
-
-    // Parse get_devices_response
-    let device_response = GetDevicesResponse::parse_from_bytes(&vec).unwrap();
+    let device_response = match crate::config::get_dev() {
+        true => match crate::devices::devices_handler::get_devices() {
+            Ok(scene) => GetDevicesResponse { devices: scene.devices, ..Default::default() },
+            Err(err) => {
+                println!("{err}");
+                return;
+            }
+        },
+        false => {
+            // Perform get_devices_bytes ffi to receive bytes of GetDevicesResponse
+            // Print error and return empty hashmap if GetDevicesBytes fails.
+            let mut vec = Vec::<u8>::new();
+            if !get_devices_bytes(&mut vec) {
+                println!(
+                    "netsimd error: GetDevicesBytes failed - returning an empty set of captures"
+                );
+                return;
+            }
+            // Parse get_devices_response
+            GetDevicesResponse::parse_from_bytes(&vec).unwrap()
+        }
+    };
 
     // Adding to Captures hashmap
     let mut captures = RESOURCE.write().unwrap();

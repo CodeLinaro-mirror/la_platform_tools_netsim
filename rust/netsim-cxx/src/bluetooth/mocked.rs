@@ -13,7 +13,23 @@
 // limitations under the License.
 
 use frontend_proto::model::chip::Bluetooth;
+use lazy_static::lazy_static;
 use log::info;
+use std::sync::RwLock;
+
+lazy_static! {
+    static ref IDS: RwLock<FacadeIds> = RwLock::new(FacadeIds::new());
+}
+
+struct FacadeIds {
+    current_id: u32,
+}
+
+impl FacadeIds {
+    fn new() -> Self {
+        FacadeIds { current_id: 0 }
+    }
+}
 
 pub fn handle_bluetooth_request(facade_id: u32, packet_type: u8, packet: &Vec<u8>) {
     info!("hci_reset({facade_id}, {packet_type}, {packet:?})");
@@ -37,9 +53,12 @@ pub fn bluetooth_get(facade_id: u32) -> Bluetooth {
 }
 
 // Returns facade_id
-pub fn bluetooth_add(chip_id: u32) -> u32 {
-    info!("hci_add({chip_id})");
-    0
+pub fn bluetooth_add(device_id: u32) -> u32 {
+    info!("hci_add({device_id})");
+    let mut resource = IDS.write().unwrap();
+    let facade_id = resource.current_id;
+    resource.current_id += 1;
+    facade_id
 }
 
 /// Starts the Bluetooth service.
@@ -50,4 +69,10 @@ pub fn bluetooth_start() {
 /// Stops the Bluetooth service.
 pub fn bluetooth_stop() {
     info!("bluetooth service ended");
+}
+
+/// Refresh Resource for Rust tests
+pub fn refresh_resource() {
+    let mut resource = IDS.write().unwrap();
+    resource.current_id = 0;
 }

@@ -12,10 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// [cfg(test)] gets compiled during local Rust unit tests
-// [cfg(not(test))] avoids getting compiled during local Rust unit tests
 use frontend_proto::model::chip::Radio;
+use lazy_static::lazy_static;
 use log::info;
+use std::sync::RwLock;
+
+lazy_static! {
+    static ref IDS: RwLock<FacadeIds> = RwLock::new(FacadeIds::new());
+}
+
+struct FacadeIds {
+    current_id: u32,
+}
+
+impl FacadeIds {
+    fn new() -> Self {
+        FacadeIds { current_id: 0 }
+    }
+}
 
 pub fn handle_wifi_request(facade_id: u32, packet: &Vec<u8>) {
     info!("handle_wifi_request({facade_id}, {packet:?})");
@@ -39,9 +53,12 @@ pub fn wifi_get(facade_id: u32) -> Radio {
 }
 
 // Returns facade_id
-pub fn wifi_add(chip_id: u32) -> u32 {
-    info!("wifi_add({chip_id})");
-    0
+pub fn wifi_add(device_id: u32) -> u32 {
+    info!("wifi_add({device_id})");
+    let mut resource = IDS.write().unwrap();
+    let facade_id = resource.current_id;
+    resource.current_id += 1;
+    facade_id
 }
 
 /// Starts the WiFi service.
@@ -52,4 +69,10 @@ pub fn wifi_start() {
 /// Stops the WiFi service.
 pub fn wifi_stop() {
     info!("wifi service stopped");
+}
+
+/// Refresh Resource for Rust tests
+pub fn refresh_resource() {
+    let mut resource = IDS.write().unwrap();
+    resource.current_id = 0;
 }
