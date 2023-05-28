@@ -89,10 +89,8 @@ size_t phy_classic_index_;
 
 bool mStarted = false;
 std::shared_ptr<rootcanal::AsyncManager> mAsyncManager;
-
 std::unique_ptr<SimTestModel> gTestModel;
-
-std::string controller_properties_ = "";
+rootcanal::ControllerProperties controller_properties_;
 
 bool ChangedState(model::State a, model::State b) {
   return (b != model::State::UNKNOWN && a != b);
