@@ -25,7 +25,7 @@ use frontend_proto::common::ChipKind as ProtoChipKind;
 use frontend_proto::model::Device as ProtoDevice;
 use frontend_proto::model::Orientation as ProtoOrientation;
 use frontend_proto::model::Position as ProtoPosition;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub type DeviceIdentifier = i32;
 
@@ -36,7 +36,7 @@ pub struct Device {
     visible: State,
     pub position: ProtoPosition,
     orientation: ProtoOrientation,
-    pub chips: HashMap<ChipIdentifier, Chip>,
+    pub chips: BTreeMap<ChipIdentifier, Chip>,
 }
 impl Device {
     pub fn new(id: DeviceIdentifier, guid: String, name: String) -> Self {
@@ -47,7 +47,7 @@ impl Device {
             visible: State::ON,
             position: ProtoPosition::new(),
             orientation: ProtoOrientation::new(),
-            chips: HashMap::new(),
+            chips: BTreeMap::new(),
         }
     }
 }

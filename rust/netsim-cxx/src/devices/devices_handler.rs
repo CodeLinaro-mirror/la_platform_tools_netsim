@@ -509,6 +509,7 @@ mod tests {
         resource.devices = BTreeMap::new();
         resource.id_factory = IdFactory::new(1000, 1);
         resource.idle_since = Some(Instant::now());
+        crate::devices::chip::refresh_resource();
         crate::bluetooth::refresh_resource();
         crate::wifi::refresh_resource();
     }

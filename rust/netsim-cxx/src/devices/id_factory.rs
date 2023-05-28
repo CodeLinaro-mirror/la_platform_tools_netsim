@@ -19,6 +19,7 @@ pub struct IdFactory<T>
 where
     T: Add<Output = T> + Copy,
 {
+    start_id: T,
     next_id: T,
     increment: T,
 }
@@ -28,12 +29,16 @@ where
     T: Add<Output = T> + Copy,
 {
     pub fn new(start_id: T, increment: T) -> Self {
-        Self { next_id: start_id, increment }
+        Self { start_id, next_id: start_id, increment }
     }
     pub fn next_id(&mut self) -> T {
         let id = self.next_id;
         self.next_id = self.next_id + self.increment;
         id
+    }
+    #[cfg(all(test))]
+    pub fn reset_id(&mut self) {
+        self.next_id = self.start_id;
     }
 }
 

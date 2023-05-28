@@ -171,3 +171,10 @@ pub fn chip_new(
         chip_product_name,
     ))
 }
+
+/// For testing
+#[cfg(all(test))]
+pub fn refresh_resource() {
+    let mut ids = IDS.write().unwrap();
+    ids.reset_id();
+}

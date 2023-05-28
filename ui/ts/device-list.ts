@@ -76,7 +76,7 @@ export class DeviceList extends LitElement implements Notifiable {
           <li>
             <center>
               ${
-                device.visible === true ?
+                true ?  // TODO manage device.visible in Web UI
                     html`<ns-cube-sprite
                       id=${device.name}
                       color=${rainbow[idx % rainbow.length]}
