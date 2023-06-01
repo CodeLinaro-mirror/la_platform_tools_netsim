@@ -1,0 +1,5 @@
+HTTP/1.1 200
+Content-Type: text/json
+Content-Length: 783
+
+{"devices": [{"id": 1000, "name": "test-device-name-1", "visible": "ON", "position": {"x": 0.0, "y": 0.0, "z": 0.0}, "orientation": {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}, "chips": [{"kind": "BLUETOOTH", "id": 1000, "name": "bt_chip_name", "manufacturer": "netsim", "productName": "netsim_bt", "bt": {}}, {"kind": "WIFI", "id": 1001, "name": "bt_chip_name", "manufacturer": "netsim", "productName": "netsim_bt", "wifi": {"state": "UNKNOWN", "range": 0.0, "txCount": 0, "rxCount": 0}}]}, {"id": 1001, "name": "test-device-name-2", "visible": "ON", "position": {"x": 0.0, "y": 0.0, "z": 0.0}, "orientation": {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}, "chips": [{"kind": "BLUETOOTH", "id": 1002, "name": "bt_chip_name", "manufacturer": "netsim", "productName": "netsim_bt", "bt": {}}]}]}

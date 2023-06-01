@@ -438,6 +438,7 @@ pub fn get_facade_id(chip_id: i32) -> Result<u32, String> {
 #[cfg(test)]
 mod tests {
     use std::{
+        io::Cursor,
         sync::{Mutex, Once},
         time::Duration,
     };
@@ -445,6 +446,8 @@ mod tests {
     use frontend_proto::model::{Device as ProtoDevice, Orientation as ProtoOrientation, State};
     use netsim_common::util::netsim_logger::init_for_test;
     use protobuf_json_mapping::print_to_string;
+
+    use crate::http_server::server_response::ServerResponseWriter;
 
     use super::*;
 
@@ -942,5 +945,145 @@ mod tests {
         let _ = test_chip_1_bt().add_chip();
         assert!(DEVICES.read().unwrap().idle_since.is_none());
         assert!(!is_shutdown_time_cxx());
+    }
+
+    fn list_request() -> HttpRequest {
+        HttpRequest {
+            method: "GET".to_string(),
+            uri: "/v1/devices".to_string(),
+            version: "1.1".to_string(),
+            headers: HttpHeaders::new(),
+            body: b"".to_vec(),
+        }
+    }
+
+    #[test]
+    fn test_handle_device() {
+        // Avoiding Interleaving Operations
+        let _lock = MUTEX.lock().unwrap();
+
+        // Initializing Logger
+        logger_setup();
+
+        // Refresh Resource
+        refresh_resource();
+
+        // Add bt, wifi chips of the same device and bt chip of second device
+        let bt_chip_params = test_chip_1_bt();
+        let _bt_chip_result = bt_chip_params.add_chip().unwrap();
+        let wifi_chip_params = test_chip_1_wifi();
+        let _wifi_chip_result = wifi_chip_params.add_chip().unwrap();
+        let bt_chip_2_params = test_chip_2_bt();
+        let _bt_chip_2_result = bt_chip_2_params.add_chip().unwrap();
+
+        // ListDevice Testing
+
+        // Initialize request for ListDevice
+        let request = list_request();
+
+        // Initialize writer
+        let mut stream = Cursor::new(Vec::new());
+        let mut writer = ServerResponseWriter::new(&mut stream);
+
+        // Perform ListDevice
+        handle_device(&request, "", &mut writer);
+
+        // Check the response for ListDevice
+        let expected = include_bytes!("test/initial.txt");
+        let actual = stream.get_ref();
+        assert_eq!(actual, expected);
+
+        // PatchDevice Testing
+
+        // Initialize request for PatchDevice
+        // The patch body will change the visibility and position of the first device.
+        let request = HttpRequest {
+            method: "PATCH".to_string(),
+            uri: "/v1/devices".to_string(),
+            version: "1.1".to_string(),
+            headers: HttpHeaders::new(),
+            body: include_bytes!("test/patch_body.txt").to_vec(),
+        };
+
+        // Initialize writer
+        let mut stream = Cursor::new(Vec::new());
+        let mut writer = ServerResponseWriter::new(&mut stream);
+
+        // Perform PatchDevice
+        handle_device(&request, "", &mut writer);
+
+        // Initialize writer
+        let mut stream = Cursor::new(Vec::new());
+        let mut writer = ServerResponseWriter::new(&mut stream);
+
+        // Perform ListDevice
+        let request = list_request();
+        handle_device(&request, "", &mut writer);
+
+        // Check the response for ListDevice
+        let expected = include_bytes!("test/post_patch.txt");
+        let actual = stream.get_ref();
+        assert_eq!(actual, expected);
+
+        // ResetDevice Testing
+
+        // Initialize request for ResetDevice
+        let request = HttpRequest {
+            method: "PUT".to_string(),
+            uri: "/v1/devices".to_string(),
+            version: "1.1".to_string(),
+            headers: HttpHeaders::new(),
+            body: b"".to_vec(),
+        };
+
+        // Initialize writer
+        let mut stream = Cursor::new(Vec::new());
+        let mut writer = ServerResponseWriter::new(&mut stream);
+
+        // Perform ResetDevice
+        handle_device(&request, "", &mut writer);
+
+        // Initialize writer
+        let mut stream = Cursor::new(Vec::new());
+        let mut writer = ServerResponseWriter::new(&mut stream);
+
+        // Perform ResetDevice
+        let request = list_request();
+        handle_device(&request, "", &mut writer);
+
+        // Check the response for ListDevice
+        let expected = include_bytes!("test/initial.txt");
+        let actual = stream.get_ref();
+        assert_eq!(actual, expected);
+    }
+
+    // Helper function for regenerating golden files
+    fn regenerate_golden_files_helper() {
+        use std::io::Write;
+
+        // Write initial state of the test case (2 bt chip and 1 wifi chip)
+        let mut file = std::fs::File::create("src/devices/test/initial.txt").unwrap();
+        let initial = b"HTTP/1.1 200\r\nContent-Type: text/json\r\nContent-Length: 783\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
+        file.write_all(initial).unwrap();
+
+        // Write the body of the patch request
+        let mut file = std::fs::File::create("src/devices/test/patch_body.txt").unwrap();
+        let patch_body = b"{\"device\": {\"name\": \"test-device-name-1\", \"visible\": \"OFF\", \"position\": {\"x\": 1.0, \"y\": 1.0, \"z\": 1.0}}}";
+        file.write_all(patch_body).unwrap();
+
+        // Write post-patch state of the test case (after PatchDevice)
+        let mut file = std::fs::File::create("src/devices/test/post_patch.txt").unwrap();
+        let post_patch = b"HTTP/1.1 200\r\nContent-Type: text/json\r\nContent-Length: 784\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"OFF\", \"position\": {\"x\": 1.0, \"y\": 1.0, \"z\": 1.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
+        file.write_all(post_patch).unwrap();
+    }
+
+    /// This is not a test function
+    /// Uncomment the helper function and run the test to regenerate golden files.
+    #[test]
+    fn regenerate_golden_files() {
+        // Avoiding Interleaving Operations
+        let _lock = MUTEX.lock().unwrap();
+
+        // regenerate_golden_files_helper();
     }
 }
