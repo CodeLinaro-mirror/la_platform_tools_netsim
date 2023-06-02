@@ -1,6 +1,6 @@
 [book]
-authors = ["Bill Schilit", "Hyun Jae Moon"]
+authors = ["Bill Schilit"]
 language = "en"
 multilingual = false
 src = "src"
-title = "Wireless Network Emulation with Netsim"
+title = "Wireless Network Simulation with netsim"
