@@ -85,9 +85,11 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
            facade_id, device_name.c_str());
     // connect packet responses from chip facade to the peer
     facade_to_stream[ChipFacade(chip_kind, facade_id)] = stream;
+    netsim::transport::RegisterGrpcTransport(chip_kind, facade_id);
     this->ProcessRequests(stream, device_id, chip_kind, facade_id);
 
     // no longer able to send responses to peer
+    netsim::transport::UnregisterGrpcTransport(chip_kind, facade_id);
     facade_to_stream.erase(ChipFacade(chip_kind, facade_id));
 
     // Remove the chip from the device
@@ -135,9 +137,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
           continue;
         }
         auto packet = ToSharedVec(request.mutable_packet());
-        packet_hub::HandleRequest(chip_kind, facade_id,
-
-                                  *packet,
+        packet_hub::HandleRequest(chip_kind, facade_id, *packet,
                                   packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
       } else {
         // TODO: add UWB here
@@ -174,6 +174,14 @@ void HandleResponse(ChipKind kind, uint32_t facade_id,
   } else {
     BtsLog("grpc_server: no stream for %d", facade_id);
   }
+}
+
+// for cxx
+void HandleResponseCxx(uint32_t kind, uint32_t facade_id,
+                       const std::vector<uint8_t> &packet,
+                       /* optional */ uint8_t packet_type) {
+  HandleResponse(ChipKind(kind), facade_id, packet,
+                 packet::HCIPacket_PacketType(packet_type));
 }
 
 }  // namespace backend

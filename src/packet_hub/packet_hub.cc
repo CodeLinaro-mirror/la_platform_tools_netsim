@@ -56,14 +56,8 @@ void HandleBtResponse(uint32_t facade_id,
                       const std::shared_ptr<std::vector<uint8_t>> &packet) {
   netsim::capture::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
                                   packet_type);
-  // TODO: Return true in backend::HandleResponse, fd::HandleResponse and
-  // socket::HandleResponse if the response was handled correctly.
-  netsim::backend::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
-                                  packet_type);
-  netsim::fd::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
-                             packet_type);
-  netsim::socket::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
-                                 packet_type);
+  netsim::transport::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
+                                    packet_type);
 }
 
 // forward from facade to transport via packet_hub
@@ -71,10 +65,8 @@ void HandleWifiResponse(uint32_t facade_id,
                         const std::shared_ptr<std::vector<uint8_t>> &packet) {
   netsim::capture::HandleResponse(ChipKind::WIFI, facade_id, *packet,
                                   packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
-  netsim::backend::HandleResponse(ChipKind::WIFI, facade_id, *packet,
-                                  packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
-  netsim::fd::HandleResponse(ChipKind::WIFI, facade_id, *packet,
-                             packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+  netsim::transport::HandleResponse(ChipKind::WIFI, facade_id, *packet,
+                                    packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
 }
 
 }  // namespace packet_hub

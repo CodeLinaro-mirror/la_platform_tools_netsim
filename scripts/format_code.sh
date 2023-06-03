@@ -26,7 +26,7 @@ find $REPO/tools/netsim/src \( -name '*.cc' -o -name '*.h' -o -name '*.proto' \)
 find $REPO/tools/netsim/rust \( \
   -path $REPO/tools/netsim/rust/target -prune -false \
   -o -name '*.rs' \) \
-  -exec $REPO/prebuilts/rust/$OS-x86/stable/rustfmt -v {} \;
+  -exec $REPO/prebuilts/rust/$OS-x86/1.69.0/bin/rustfmt -v {} \;
 
 # Format TypeScript.
 find $REPO/tools/netsim/ui/ts \( -name '*.ts' \) \

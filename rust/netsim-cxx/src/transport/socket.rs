@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::dispatcher::{register_transport, unregister_transport, Response};
 use crate::ffi::{add_chip_cxx, handle_request_cxx, remove_chip};
 use crate::transport::h4;
 use cxx::let_cxx_string;
-use lazy_static::lazy_static;
-use std::collections::HashMap;
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
-use std::sync::RwLock;
 use std::thread;
 
 // The HCI server implements the Bluetooth UART transport protocol
@@ -31,6 +29,22 @@ use std::thread;
 /// The socket transport reads/writes host-controller messages
 /// for bluetooth (h4 hci) over a [TcpStream] transport.
 ///
+
+struct SocketTransport {
+    stream: TcpStream,
+}
+
+impl Response for SocketTransport {
+    fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+        let mut buffer = Vec::new();
+        buffer.push(packet_type);
+        buffer.extend(packet);
+        if let Err(e) = self.stream.write_all(&buffer[..]) {
+            println!("netsimd: error writing {}", e);
+        };
+    }
+}
+
 pub fn run_socket_transport(hci_port: u16) {
     thread::Builder::new()
         .name("hci_transport".to_string())
@@ -67,29 +81,6 @@ enum ChipKind {
     UWB = 3,
 }
 
-// TRANSPORTS is a singleton that contains the outpurepr: et FiFo
-lazy_static! {
-    static ref TRANSPORTS: RwLock<HashMap<String, TcpStream>> = RwLock::new(HashMap::new());
-}
-
-fn get_key(kind: u32, facade_id: u32) -> String {
-    format!("{}/{}", kind, facade_id)
-}
-
-pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
-    let key = get_key(kind, facade_id);
-    let binding = TRANSPORTS.read().unwrap();
-    if let Some(mut stream) = binding.get(&key) {
-        // todo add error checking
-        let mut buffer = Vec::new();
-        buffer.push(packet_type);
-        buffer.extend(packet);
-        if let Err(e) = stream.write_all(&buffer[..]) {
-            println!("netsimd: error writing {}", e);
-        };
-    };
-}
-
 fn handle_hci_client(stream: TcpStream) {
     // ...
     let_cxx_string!(guid = stream.peer_addr().unwrap().port().to_string());
@@ -105,11 +96,12 @@ fn handle_hci_client(stream: TcpStream) {
         &manufacturer,
         &product_name,
     );
-    let key = get_key(ChipKind::BLUETOOTH as u32, result.get_facade_id());
     let tcp_rx = stream.try_clone().unwrap();
-    {
-        TRANSPORTS.write().unwrap().insert(key.clone(), stream);
-    }
+    register_transport(
+        ChipKind::BLUETOOTH as u32,
+        result.get_facade_id(),
+        Box::new(SocketTransport { stream }),
+    );
 
     let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.get_facade_id());
 
@@ -119,7 +111,8 @@ fn handle_hci_client(stream: TcpStream) {
         result.get_chip_id()
     );
     remove_chip(result.get_device_id(), result.get_chip_id());
-    TRANSPORTS.write().unwrap().remove(&key);
+    // The connection will be closed when the value is dropped.
+    unregister_transport(ChipKind::BLUETOOTH as u32, result.get_facade_id());
 }
 
 /// read from the socket and pass to the packet hub.

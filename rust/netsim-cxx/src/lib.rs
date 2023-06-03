@@ -35,9 +35,9 @@ use ffi::CxxServerResponseWriter;
 use http_server::http_request::StrHeaders;
 use http_server::server_response::ServerResponseWritable;
 
-use crate::transport::fd::handle_response;
+use crate::transport::dispatcher::handle_response;
 use crate::transport::fd::run_fd_transport;
-use crate::transport::socket::handle_response as socket_handle_response;
+use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
@@ -109,20 +109,19 @@ mod ffi {
             body: String,
         );
 
-        // Packet hub
+        // Transport.
 
         #[cxx_name = HandleResponse]
-        #[namespace = "netsim::fd"]
+        #[namespace = "netsim::transport"]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
-        #[cxx_name = HandleResponse]
-        #[namespace = "netsim::socket"]
-        fn socket_handle_response(
-            kind: u32,
-            facade_id: u32,
-            packet: &CxxVector<u8>,
-            packet_type: u8,
-        );
+        #[cxx_name = RegisterGrpcTransport]
+        #[namespace = "netsim::transport"]
+        fn register_grpc_transport(kind: u32, facade_id: u32);
+
+        #[cxx_name = UnregisterGrpcTransport]
+        #[namespace = "netsim::transport"]
+        fn unregister_grpc_transport(kind: u32, facade_id: u32);
 
         // Device Resource
         #[cxx_name = AddChipRust]
@@ -297,6 +296,13 @@ mod ffi {
         #[rust_name = "reset"]
         #[namespace = "netsim::scene_controller"]
         fn Reset();
+
+        // Grpc server.
+        include!("backend/backend_packet_hub.h");
+
+        #[rust_name = handle_grpc_response]
+        #[namespace = "netsim::backend"]
+        fn HandleResponseCxx(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
         // Bluetooth facade.
         include!("hci/hci_packet_hub.h");

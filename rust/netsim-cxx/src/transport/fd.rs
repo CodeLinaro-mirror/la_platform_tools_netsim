@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::dispatcher::{register_transport, unregister_transport, Response};
 /// request packets flow into netsim
 /// response packets flow out of netsim
 /// packet transports read requests and write response packets over gRPC or Fds.
 use super::h4;
 use super::uci;
-use crate::ffi::{add_chip_cxx, handle_request_cxx};
+use crate::ffi::{add_chip_cxx, handle_request_cxx, remove_chip};
 use cxx::let_cxx_string;
-use lazy_static::lazy_static;
+use log::error;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{IoSlice, Write};
 use std::os::fd::FromRawFd;
-use std::sync::RwLock;
 use std::thread::JoinHandle;
 use std::{fmt, thread};
 
@@ -67,31 +66,29 @@ struct Chip {
     loopback: Option<bool>,
 }
 
-// TRANSPORTS is a singleton that contains the output FiFo
-lazy_static! {
-    static ref TRANSPORTS: RwLock<HashMap<String, File>> = RwLock::new(HashMap::new());
+struct FdTransport {
+    file: File,
 }
 
-fn key(kind: u32, facade_id: u32) -> String {
-    format!("{}/{}", kind, facade_id)
-}
-
-pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
-    let binding = TRANSPORTS.read().unwrap();
-    let key = key(kind, facade_id);
-    if let Some(mut fd_out) = binding.get(&key) {
-        // todo add error checking
+impl Response for FdTransport {
+    fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
         let temp = [packet_type];
         let bufs = [IoSlice::new(&temp), IoSlice::new(packet.as_slice())];
-        if let Err(e) = fd_out.write_vectored(&bufs) {
-            println!("netsimd: error writing {}", e);
+        // TODO: write_vectored doesn't work for mac and windows.
+        if let Err(e) = self.file.write_vectored(&bufs) {
+            error!("netsimd: error writing {}", e);
         }
-    };
+    }
 }
 
 /// read from the raw fd and pass to the packet hub.
-///
-fn fd_reader(fd_rx: i32, kind: ChipKindEnum, facade_id: u32) -> JoinHandle<()> {
+fn fd_reader(
+    fd_rx: i32,
+    kind: ChipKindEnum,
+    facade_id: u32,
+    device_id: u32,
+    chip_id: u32,
+) -> JoinHandle<()> {
     thread::Builder::new()
         .name(format!("fd_reader_{}", fd_rx))
         .spawn(move || {
@@ -110,7 +107,7 @@ fn fd_reader(fd_rx: i32, kind: ChipKindEnum, facade_id: u32) -> JoinHandle<()> {
                                 "netsimd: error reading uci control packet fd {} {:?}",
                                 fd_rx, e
                             );
-                            return;
+                            break;
                         }
                         Ok(uci::Packet { payload }) => {
                             handle_request_cxx(kind as u32, facade_id, &payload, 0);
@@ -125,15 +122,19 @@ fn fd_reader(fd_rx: i32, kind: ChipKindEnum, facade_id: u32) -> JoinHandle<()> {
                                 "netsimd: error reading hci control packet fd {} {:?}",
                                 fd_rx, e
                             );
-                            return;
+                            break;
                         }
                     },
                     _ => {
                         println!("netsimd: unknown control packet kind: {:?}", kind);
-                        return;
+                        break;
                     }
                 };
             }
+
+            remove_chip(device_id, chip_id);
+            // File is automatically closed when it goes out of scope.
+            unregister_transport(kind as u32, facade_id);
         })
         .unwrap()
 }
@@ -173,14 +174,23 @@ pub fn run_fd_transport(startup_json: &String) {
                         &manufacturer,
                         &product_name,
                     );
-                    let key = key(chip.kind as u32, result.get_facade_id());
 
                     // Cf writes to fd_out and reads from fd_in
                     let file_in = unsafe { File::from_raw_fd(chip.fd_in as i32) };
 
-                    TRANSPORTS.write().unwrap().insert(key, file_in);
+                    register_transport(
+                        chip.kind as u32,
+                        result.get_facade_id(),
+                        Box::new(FdTransport { file: file_in }),
+                    );
                     // TODO: switch to runtime.spawn once FIFOs are available in Tokio
-                    handles.push(fd_reader(chip.fd_out as i32, chip.kind, result.get_facade_id()));
+                    handles.push(fd_reader(
+                        chip.fd_out as i32,
+                        chip.kind,
+                        result.get_facade_id(),
+                        result.get_device_id(),
+                        result.get_chip_id(),
+                    ));
                 }
             }
             // Wait for all of them to complete.

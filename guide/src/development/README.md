@@ -1,4 +1,4 @@
-# Development
+# Network Simulator Development
 
 This section walks you through building netsim from source.
 
@@ -12,7 +12,7 @@ section to build netsim by `cmake` in `emu-master-dev` manifest branch.
 cuttlefish](#netsim_with_cuttlefish) to build netsim by `soong` in `aosp-master`
 manifest branch.
 
-## emulator and cuttlefish build branches
+## Emulator and cuttlefish build branches
 
 The *netsim* network simulator is built as a component of
 [emulator](https://source.android.com/docs/setup/create/avd)
