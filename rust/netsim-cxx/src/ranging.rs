@@ -34,11 +34,14 @@ const PATH_LOSS_AT_1M: f32 = 40.20;
 ///
 /// The rssi (dBm) that would be measured at that distance.
 pub fn distance_to_rssi(tx_power: i8, distance: f32) -> i8 {
-    assert!(distance >= 0.0);
-    if distance == 0.0 {
-        tx_power
-    } else {
-        (tx_power as f32 - 20.0 * distance.log10() - PATH_LOSS_AT_1M) as i8
+    // TODO(b/285634913): Rootcanal reporting tx_power of 0 or 1 during Nearby Share
+    let new_tx_power = match tx_power == 1 || tx_power == 0 {
+        true => -49,
+        false => tx_power,
+    };
+    match distance == 0.0 {
+        true => (new_tx_power as f32 + PATH_LOSS_AT_1M) as i8,
+        false => (new_tx_power as f32 - 20.0 * distance.log10()) as i8,
     }
 }
 
@@ -46,7 +49,7 @@ mod tests {
     #[test]
     fn zero_distance() {
         let rssi_at_0 = super::distance_to_rssi(-120, 0.0);
-        assert_eq!(rssi_at_0, -120);
+        assert_eq!(rssi_at_0, -79);
     }
     #[test]
     fn rssi_at_far() {
