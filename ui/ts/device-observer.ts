@@ -90,11 +90,11 @@ export class Device {
   }
 
   get visible(): boolean {
-    return this.device.visible ?? true;
+    return this.device.visible === State.ON ? true : false;
   }
 
   set visible(value: boolean) {
-    this.device.visible = value;
+    this.device.visible = value ? State.ON : State.OFF;
   }
 
   toggleChipState(chip: Chip, btType?: string) {
@@ -203,10 +203,10 @@ class SimulationState implements Observable {
         })
   }
 
-  fetchDevice(devices: ProtoDevice[]) {
+  fetchDevice(devices?: ProtoDevice[]) {
     this.simulationInfo.devices = [];
-    for (const device of devices) {
-      this.simulationInfo.devices.push(new Device(device));
+    if (devices) {
+      this.simulationInfo.devices = devices.map(device => new Device(device));
     }
     this.notifyObservers();
   }

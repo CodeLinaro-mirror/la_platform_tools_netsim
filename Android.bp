@@ -43,9 +43,11 @@ cc_defaults {
     local_include_dirs: [
         "src",
     ],
+    shared_libs: [
+        "libgrpc++",
+        "libprotobuf-cpp-full",
+    ],
     include_dirs: [
-        "external/grpc-grpc/include",
-        "external/protobuf/src",
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/gd",
     ],
@@ -70,6 +72,7 @@ rust_defaults {
         "libserde",
         "libserde_json",
         "liblazy_static",
+        "liblog_rust",
     ],
     srcs: ["rust/netsim-cxx/src/lib.rs"],
 }
@@ -128,9 +131,10 @@ cc_library_host_static {
         "src/controller/scene_controller.cc",
         "src/controller/device_notify_manager.cc",
         "src/core/server.cc",
+        "src/frontend/frontend_client_stub.cc",
         "src/frontend/frontend_server.cc",
         "src/backend/fd_server.cc",
-        "src/backend/fd_startup.cc",
+        "src/backend/grpc_server.cc",
         "src/hci/bluetooth_facade.cc",
         "src/hci/hci_debug.cc",
         "src/hci/hci_packet_transport.cc",
@@ -145,9 +149,11 @@ cc_library_host_static {
     generated_headers: [
         "cxx-bridge-header",
         "netsim_cxx_h",
+        "PacketStreamerStub_h",
     ],
     generated_sources: [
         "netsim_cxx_cc",
+        "PacketStreamerStub_cc",
     ],
     shared_libs: [
         "libgrpc++",
@@ -158,7 +164,7 @@ cc_library_host_static {
         "libjsoncpp",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite",
-        "lib-netsim-frontend-proto",
+        "lib-netsimd-proto",
     ],
     whole_static_libs: [
         "libbt-rootcanal",
@@ -229,7 +235,6 @@ cc_test_host {
         "src/controller/device_test.cc",
         "src/controller/scene_controller_test.cc",
         "src/frontend/frontend_server_test.cc",
-        "src/backend/startup_test.cc",
         "src/util/ini_file_test.cc",
         "src/util/os_utils_test.cc",
         "src/util/string_utils_test.cc",
@@ -274,6 +279,8 @@ rust_defaults {
     rustlibs: [
         "libchrono",
         "librand",
+        "liblog_rust",
+        "libenv_logger",
     ],
 }
 

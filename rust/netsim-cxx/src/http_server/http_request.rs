@@ -80,6 +80,12 @@ impl HttpHeaders {
     }
 }
 
+impl Default for HttpHeaders {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct HttpRequest {
     pub method: String,
     pub uri: String,

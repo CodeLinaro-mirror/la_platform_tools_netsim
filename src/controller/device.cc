@@ -120,7 +120,7 @@ std::pair<uint32_t, uint32_t> Device::AddChip(common::ChipKind chip_kind,
 }
 
 void Device::Reset() {
-  this->visible = true;
+  this->visible = model::State::ON;
   this->position.Clear();
   this->orientation.Clear();
   for (auto &[_, chip] : chips_) {

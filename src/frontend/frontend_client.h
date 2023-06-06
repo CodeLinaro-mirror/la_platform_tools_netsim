@@ -17,6 +17,7 @@
 // Frontend command line interface.
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -65,7 +66,7 @@ class FrontendClient {
       ClientResponseReader const &client_reader) const = 0;
 };
 
-std::unique_ptr<FrontendClient> NewFrontendClient();
+std::unique_ptr<FrontendClient> NewFrontendClient(int32_t grpc_port);
 
 }  // namespace frontend
 }  // namespace netsim

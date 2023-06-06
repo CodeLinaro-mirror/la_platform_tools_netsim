@@ -20,7 +20,14 @@
 
 namespace netsim::server {
 
+struct ServerParams {
+  std::string fd_startup_str;
+  bool no_cli_ui;
+  bool no_web_ui;
+  int hci_port;
+};
+
 // Run grpc and http servers.
-void Run();
+void Run(ServerParams params);
 
 }  // namespace netsim::server

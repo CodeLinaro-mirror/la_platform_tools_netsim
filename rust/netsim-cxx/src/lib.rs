@@ -16,13 +16,17 @@
 
 #![allow(dead_code)]
 
-mod captures;
+mod bluetooth;
+pub mod captures;
+mod config;
 mod devices;
 mod http_server;
 mod ranging;
+mod system;
 mod transport;
 mod uwb;
 mod version;
+mod wifi;
 
 use std::pin::Pin;
 
@@ -33,12 +37,20 @@ use http_server::server_response::ServerResponseWritable;
 
 use crate::transport::fd::handle_response;
 use crate::transport::fd::run_fd_transport;
+use crate::transport::socket::handle_response as socket_handle_response;
+use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
     clear_pcap_files, handle_capture_cxx, handle_packet_request, handle_packet_response,
+    update_captures,
+};
+use crate::config::{get_dev, set_dev};
+use crate::devices::devices_handler::{
+    add_chip_rust, get_distance_rust, handle_device_cxx, is_shutdown_time_cxx, remove_chip_rust,
 };
 use crate::http_server::run_http_server;
 use crate::ranging::*;
+use crate::system::netsimd_temp_dir_string;
 use crate::uwb::facade::*;
 use crate::version::*;
 
@@ -46,12 +58,23 @@ use crate::version::*;
 mod ffi {
 
     extern "Rust" {
+        #[cxx_name = "RunSocketTransport"]
+        fn run_socket_transport(hci_port: u16);
 
         #[cxx_name = "RunFdTransport"]
         fn run_fd_transport(startup_json: &String);
 
         #[cxx_name = "RunHttpServer"]
         fn run_http_server();
+
+        // Config
+        #[cxx_name = "GetDev"]
+        #[namespace = "netsim::config"]
+        fn get_dev() -> bool;
+
+        #[cxx_name = "SetDev"]
+        #[namespace = "netsim::config"]
+        fn set_dev(flag: bool);
 
         // Ranging
 
@@ -63,10 +86,23 @@ mod ffi {
         #[cxx_name = "GetVersion"]
         fn get_version() -> String;
 
-        // handle_capture_cxx translates each argument into an appropriate Rust type
+        // System
+
+        #[cxx_name = "NetsimdTempDirString"]
+        fn netsimd_temp_dir_string() -> String;
+
+        // handlers for gRPC server's invocation of API calls
 
         #[cxx_name = "HandleCaptureCxx"]
         fn handle_capture_cxx(
+            responder: Pin<&mut CxxServerResponseWriter>,
+            method: String,
+            param: String,
+            body: String,
+        );
+
+        #[cxx_name = "HandleDeviceCxx"]
+        fn handle_device_cxx(
             responder: Pin<&mut CxxServerResponseWriter>,
             method: String,
             param: String,
@@ -79,10 +115,47 @@ mod ffi {
         #[namespace = "netsim::fd"]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
+        #[cxx_name = HandleResponse]
+        #[namespace = "netsim::socket"]
+        fn socket_handle_response(
+            kind: u32,
+            facade_id: u32,
+            packet: &CxxVector<u8>,
+            packet_type: u8,
+        );
+
+        // Device Resource
+        #[cxx_name = AddChipRust]
+        #[namespace = "netsim::device"]
+        fn add_chip_rust(
+            device_guid: &str,
+            device_name: &str,
+            chip_kind: &CxxString,
+            chip_name: &str,
+            chip_manufacturer: &str,
+            chip_product_name: &str,
+        ) -> UniquePtr<AddChipResult>;
+
+        #[cxx_name = RemoveChipRust]
+        #[namespace = "netsim::device"]
+        fn remove_chip_rust(device_id: u32, chip_id: u32);
+
+        #[cxx_name = GetDistanceRust]
+        #[namespace = "netsim::device"]
+        fn get_distance_rust(a: u32, b: u32) -> f32;
+
+        #[cxx_name = IsShutdownTimeCxx]
+        #[namespace = "netsim::device"]
+        fn is_shutdown_time_cxx() -> bool;
+
         // Capture Resource
 
+        #[cxx_name = UpdateCaptures]
+        #[namespace = "netsim::capture"]
+        fn update_captures();
+
         #[cxx_name = HandleRequest]
-        #[namespace = "netsim::pcap"]
+        #[namespace = "netsim::capture"]
         fn handle_packet_request(
             kind: u32,
             facade_id: u32,
@@ -91,7 +164,7 @@ mod ffi {
         );
 
         #[cxx_name = HandleResponse]
-        #[namespace = "netsim::pcap"]
+        #[namespace = "netsim::capture"]
         fn handle_packet_response(
             kind: u32,
             facade_id: u32,
@@ -102,7 +175,7 @@ mod ffi {
         // Clearing out all pcap Files in temp directory
 
         #[cxx_name = ClearPcapFiles]
-        #[namespace = "netsim::pcap"]
+        #[namespace = "netsim::capture"]
         fn clear_pcap_files() -> bool;
 
         // Uwb Facade.
@@ -149,6 +222,14 @@ mod ffi {
         fn get_chip_id(self: &AddChipResult) -> u32;
         fn get_device_id(self: &AddChipResult) -> u32;
         fn get_facade_id(self: &AddChipResult) -> u32;
+
+        #[rust_name = "new_add_chip_result"]
+        #[namespace = "netsim::scene_controller"]
+        fn NewAddChipResult(
+            device_id: u32,
+            chip_id: u32,
+            facade_id: u32,
+        ) -> UniquePtr<AddChipResult>;
 
         #[rust_name = "add_chip_cxx"]
         #[namespace = "netsim::scene_controller"]
@@ -212,6 +293,84 @@ mod ffi {
         #[rust_name = "handle_request_cxx"]
         #[namespace = "netsim::packet_hub"]
         fn HandleRequestCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
+
+        #[rust_name = "reset"]
+        #[namespace = "netsim::scene_controller"]
+        fn Reset();
+
+        // Bluetooth facade.
+        include!("hci/hci_packet_hub.h");
+
+        #[rust_name = handle_bt_request]
+        #[namespace = "netsim::hci"]
+        fn HandleBtRequestCxx(facade_id: u32, packet_type: u8, packet: &Vec<u8>);
+
+        include!("hci/bluetooth_facade.h");
+
+        #[rust_name = bluetooth_patch_cxx]
+        #[namespace = "netsim::hci::facade"]
+        pub fn PatchCxx(facade_id: u32, proto_bytes: &[u8]);
+
+        #[rust_name = bluetooth_get_cxx]
+        #[namespace = "netsim::hci::facade"]
+        pub fn GetCxx(facade_id: u32) -> Vec<u8>;
+
+        #[rust_name = bluetooth_reset]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Reset(facade_id: u32);
+
+        #[rust_name = bluetooth_remove]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Remove(facade_id: u32);
+
+        #[rust_name = bluetooth_add]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Add(_chip_id: u32) -> u32;
+
+        #[rust_name = bluetooth_start]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Start();
+
+        #[rust_name = bluetooth_stop]
+        #[namespace = "netsim::hci::facade"]
+        pub fn Stop();
+
+        // WiFi facade.
+        include!("wifi/wifi_packet_hub.h");
+
+        #[rust_name = handle_wifi_request]
+        #[namespace = "netsim::wifi"]
+        fn HandleWifiRequestCxx(facade_id: u32, packet: &Vec<u8>);
+
+        include!("wifi/wifi_facade.h");
+
+        #[rust_name = wifi_patch_cxx]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn PatchCxx(facade_id: u32, proto_bytes: &[u8]);
+
+        #[rust_name = wifi_get_cxx]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn GetCxx(facade_id: u32) -> Vec<u8>;
+
+        #[rust_name = wifi_reset]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Reset(facade_id: u32);
+
+        #[rust_name = wifi_remove]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Remove(facade_id: u32);
+
+        #[rust_name = wifi_add]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Add(_chip_id: u32) -> u32;
+
+        #[rust_name = wifi_start]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Start();
+
+        #[rust_name = wifi_stop]
+        #[namespace = "netsim::wifi::facade"]
+        pub fn Stop();
 
     }
 }

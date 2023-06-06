@@ -87,15 +87,31 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status GetDevices(grpc::ServerContext *context,
                           const google::protobuf::Empty *empty,
                           frontend::GetDevicesResponse *reply) {
+    if (netsim::config::GetDev()) {
+      return GetDevicesDev(reply);
+    }
     const auto scene = netsim::controller::SceneController::Singleton().Get();
     for (const auto &device : scene.devices())
       reply->add_devices()->CopyFrom(device);
     return grpc::Status::OK;
   }
 
+  grpc::Status GetDevicesDev(frontend::GetDevicesResponse *reply) {
+    CxxServerResponseWritable writer;
+    HandleDeviceCxx(writer, "GET", "", "");
+    if (writer.is_ok) {
+      google::protobuf::util::JsonStringToMessage(writer.body, reply);
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
+  }
+
   grpc::Status PatchDevice(grpc::ServerContext *context,
                            const frontend::PatchDeviceRequest *request,
                            google::protobuf::Empty *response) {
+    if (netsim::config::GetDev()) {
+      return PatchDeviceDev(request);
+    }
     auto status = netsim::controller::SceneController::Singleton().PatchDevice(
         request->device());
     if (!status)
@@ -104,25 +120,34 @@ class FrontendServer final : public frontend::FrontendService::Service {
     return grpc::Status::OK;
   }
 
-  grpc::Status SetPacketCapture(
-      grpc::ServerContext *context,
-      const frontend::SetPacketCaptureRequest *request,
-      google::protobuf::Empty *empty) {
-    model::Device device;
-    model::Chip chip;
-    // Turn on bt packet capture
-    chip.set_capture(request->capture() ? model::State::ON : model::State::OFF);
-    chip.mutable_bt();
-    device.mutable_chips()->Add()->CopyFrom(chip);
-    controller::SceneController::Singleton().PatchDevice(device);
-    return grpc::Status::OK;
+  grpc::Status PatchDeviceDev(const frontend::PatchDeviceRequest *request) {
+    CxxServerResponseWritable writer;
+    std::string request_json;
+    google::protobuf::util::MessageToJsonString(*request, &request_json);
+    HandleDeviceCxx(writer, "PATCH", "", request_json);
+    if (writer.is_ok) {
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
 
   grpc::Status Reset(grpc::ServerContext *context,
                      const google::protobuf::Empty *request,
                      google::protobuf::Empty *empty) {
+    if (netsim::config::GetDev()) {
+      return ResetDev();
+    }
     netsim::controller::SceneController::Singleton().Reset();
     return grpc::Status::OK;
+  }
+
+  grpc::Status ResetDev() {
+    CxxServerResponseWritable writer;
+    HandleDeviceCxx(writer, "PUT", "", "");
+    if (writer.is_ok) {
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
 
   grpc::Status ListCapture(grpc::ServerContext *context,

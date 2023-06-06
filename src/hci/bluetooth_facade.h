@@ -19,6 +19,7 @@
 #include <string>
 
 #include "model.pb.h"
+#include "rust/cxx.h"
 
 /** Manages the bluetooth chip emulation provided by the root canal library.
  *
@@ -31,11 +32,14 @@ namespace netsim::hci::facade {
 void Reset(uint32_t);
 void Remove(uint32_t);
 void Patch(uint32_t, const model::Chip::Bluetooth &);
-void SetPacketCapture(uint32_t id, bool isOn, std::string device_name);
 model::Chip::Bluetooth Get(uint32_t);
 uint32_t Add(uint32_t simulation_device);
 
 void Start();
 void Stop();
+
+// Cxx functions for rust ffi.
+void PatchCxx(uint32_t id, const rust::Slice<::std::uint8_t const> proto_bytes);
+rust::Vec<::std::uint8_t> GetCxx(uint32_t id);
 
 }  // namespace netsim::hci::facade

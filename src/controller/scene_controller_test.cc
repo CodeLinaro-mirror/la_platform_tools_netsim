@@ -20,7 +20,6 @@
 #include "controller/controller.h"
 #include "controller/device.h"
 #include "gtest/gtest.h"
-#include "hci/bluetooth_facade.h"
 #include "model.pb.h"
 
 namespace netsim {
@@ -28,8 +27,6 @@ namespace controller {
 
 class SceneControllerTest : public ::testing::Test {
  protected:
-  void SetUp() override { netsim::hci::facade::Start(); }
-  void TearDown() { netsim::hci::facade::Stop(); }
   std::shared_ptr<Device> match(const std::string &name) {
     return SceneController::Singleton().MatchDevice(name);
   }
@@ -45,7 +42,7 @@ TEST_F(SceneControllerTest, AddChipTest) {
   auto guid = "guid-SceneControllerTest-AddChipTest";
   auto device_name = "device_name-SceneControllerTest-AddChipTest";
   auto [device_id, chip_id1, _1] =
-      scene_controller::AddChip(guid, device_name, common::ChipKind::BLUETOOTH);
+      scene_controller::AddChip(guid, device_name, common::ChipKind::UWB);
   auto [device_id2, chip_id2, _2] =
       scene_controller::AddChip(guid, device_name, common::ChipKind::WIFI);
 
@@ -56,7 +53,7 @@ TEST_F(SceneControllerTest, AddChipTest) {
   auto device_proto = device->Get();
   EXPECT_EQ(device_proto.id(), device_id);
   EXPECT_EQ(device_proto.name(), device_name);
-  EXPECT_TRUE(device_proto.visible());
+  EXPECT_EQ(device_proto.visible(), model::State::ON);
   EXPECT_TRUE(device_proto.has_position());
   EXPECT_TRUE(device_proto.has_orientation());
 
@@ -64,7 +61,7 @@ TEST_F(SceneControllerTest, AddChipTest) {
   for (const auto &chip : device_proto.chips()) {
     EXPECT_TRUE(chip.id() == chip_id1 || chip.id() == chip_id2);
     if (chip.id() == chip_id1) {
-      EXPECT_TRUE(chip.has_bt());
+      EXPECT_TRUE(chip.has_uwb());
       EXPECT_EQ(chip.id(), chip_id1);
 
     } else if (chip.id() == chip_id2) {
@@ -84,9 +81,9 @@ TEST_F(SceneControllerTest, MatchDeviceTest) {
   auto device_name2 = "device_name-2-SceneControllerTest-MatchDeviceTest";
   auto guid3 = "guid-3-SceneControllerTest-MatchDeviceTest";
   auto device_name3 = "device_name-3-SceneControllerTest-MatchDeviceTest";
-  scene_controller::AddChip(guid1, device_name1, common::ChipKind::BLUETOOTH);
-  scene_controller::AddChip(guid2, device_name2, common::ChipKind::BLUETOOTH);
-  scene_controller::AddChip(guid3, device_name3, common::ChipKind::BLUETOOTH);
+  scene_controller::AddChip(guid1, device_name1, common::ChipKind::UWB);
+  scene_controller::AddChip(guid2, device_name2, common::ChipKind::UWB);
+  scene_controller::AddChip(guid3, device_name3, common::ChipKind::UWB);
 
   //  exact matches with name
   ASSERT_TRUE(match(device_name1));
@@ -107,10 +104,10 @@ TEST_F(SceneControllerTest, PatchDeviceTest) {
   auto guid = "guid-SceneControllerTest-PatchDeviceTest";
   auto device_name = "device_name-SceneControllerTest-PatchDeviceTest";
   auto [device_id, chip_id, _] =
-      scene_controller::AddChip(guid, device_name, common::ChipKind::BLUETOOTH);
+      scene_controller::AddChip(guid, device_name, common::ChipKind::UWB);
   model::Device model;
   model.set_name(device_name);
-  model.set_visible(false);
+  model.set_visible(model::State::OFF);
   model.mutable_position()->set_x(10.0);
   model.mutable_position()->set_y(20.0);
   model.mutable_position()->set_z(30.0);
@@ -122,7 +119,7 @@ TEST_F(SceneControllerTest, PatchDeviceTest) {
   EXPECT_TRUE(status);
   auto device = match(device_name);
   model = device->Get();
-  EXPECT_EQ(model.visible(), false);
+  EXPECT_EQ(model.visible(), model::State::OFF);
   EXPECT_EQ(model.position().x(), 10.0);
   EXPECT_EQ(model.position().y(), 20.0);
   EXPECT_EQ(model.position().z(), 30.0);
@@ -135,10 +132,10 @@ TEST_F(SceneControllerTest, ResetTest) {
   auto guid = "guid-SceneControllerTest-ResetTest";
   auto device_name = "device_name-SceneControllerTest-ResetTest";
   auto [device_id, chip_id, _] =
-      scene_controller::AddChip(guid, device_name, common::ChipKind::BLUETOOTH);
+      scene_controller::AddChip(guid, device_name, common::ChipKind::UWB);
   model::Device model;
   model.set_name(device_name);
-  model.set_visible(false);
+  model.set_visible(model::State::OFF);
   model.mutable_position()->set_x(10.0);
   model.mutable_position()->set_y(20.0);
   model.mutable_position()->set_z(30.0);
@@ -150,7 +147,7 @@ TEST_F(SceneControllerTest, ResetTest) {
   EXPECT_TRUE(status);
   auto device = match(device_name);
   model = device->Get();
-  EXPECT_EQ(model.visible(), false);
+  EXPECT_EQ(model.visible(), model::State::OFF);
   EXPECT_EQ(model.position().x(), 10.0);
   EXPECT_EQ(model.orientation().pitch(), 1.0);
 
@@ -159,7 +156,7 @@ TEST_F(SceneControllerTest, ResetTest) {
   device = match(device_name);
   model = device->Get();
 
-  EXPECT_EQ(model.visible(), true);
+  EXPECT_EQ(model.visible(), model::State::ON);
   EXPECT_EQ(model.position().x(), 0.0);
   EXPECT_EQ(model.position().y(), 0.0);
   EXPECT_EQ(model.position().z(), 0.0);

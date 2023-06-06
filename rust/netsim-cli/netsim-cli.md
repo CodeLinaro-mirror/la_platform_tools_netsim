@@ -4,8 +4,9 @@ Usage:
 * `netsim [Options] <COMMAND>`
 
 Options:
-* `-h, --help`:    Print help information
 * `-v, --verbose`: Set verbose mode
+* `-p, --port <PORT>`: Set custom grpc port
+* `-h, --help`:    Print help information
 
 ## Commands:
 * ### `version`:    Print Netsim version information
@@ -29,25 +30,25 @@ Options:
         * `-c, --continuous`:    Continuously print device(s) information every second
 * ### `reset`:      Reset Netsim device scene
     * Usage: `netsim reset`
-* ### `pcap`:       Control the packet capture functionalities with commands: list, patch, get
-    * Usage: `netsim pcap <COMMAND>`
+* ### `capture`:       Control the packet capture functionalities with commands: list, patch, get [aliases: pcap]
+    * Usage: `netsim capture <COMMAND>`
     * #### Commands
-        * `list`:   List currently available Pcaps (packet captures)
-            * Usage: `netsim pcap list [PATTERNS]...`
+        * `list`:   List currently available Captures (packet captures)
+            * Usage: `netsim capture list [PATTERNS]...`
             * Arguments:
-                * [PATTERNS]...:  Optional strings of pattern for pcaps to list. Possible filter fields
-                                    include Pcap ID, Device Name, and Chip Kind
-        * `patch`:  Patch a Pcap source to turn packet capture on/off
-            * Usage: `netsim pcap patch <STATE> [PATTERNS]...`
+                * [PATTERNS]...:    Optional strings of pattern for captures to list. Possible filter fields
+                                    include ID, Device Name, and Chip Kind
+        * `patch`:  Patch a Capture source to turn packet capture on/off
+            * Usage: `netsim capture patch <STATE> [PATTERNS]...`
             * Arguments:
                 * \<STATE\>:        Packet capture state [possible values: on, off]
-                * [PATTERNS]...:  Optional strings of pattern for pcaps to patch. Possible filter fields
-                                    include Pcap ID, Device Name, and Chip Kind
+                * [PATTERNS]...:  Optional strings of pattern for captures to patch. Possible filter fields
+                                    include ID, Device Name, and Chip Kind
         * `get`:    Download the packet capture content
-            * Usage: `netsim pcap get [OPTIONS] [PATTERNS]...`
+            * Usage: `netsim capture get [OPTIONS] [PATTERNS]...`
             * Arguments:
-                * [PATTERNS]...:  Optional strings of pattern for pcaps to get. Possible filter fields
-                                    include Pcap ID, Device Name, and Chip Kind
+                * [PATTERNS]...:    Optional strings of pattern for captures to get. Possible filter fields
+                                    include ID, Device Name, and Chip Kind
             * Options:
-                * `-o, --location`: Directory to store downloaded pcap(s)
+                * `-o, --location`: Directory to store downloaded capture file(s)
 * ### `help`:       Print this message or the help of the given subcommand(s)

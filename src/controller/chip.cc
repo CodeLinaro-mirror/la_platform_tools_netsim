@@ -33,7 +33,6 @@ model::Chip Chip::Get() {
   model.set_name(name);
   model.set_manufacturer(manufacturer);
   model.set_product_name(product_name);
-  model.set_capture(capture);
   if (kind == common::ChipKind::BLUETOOTH) {
     auto bt = hci::facade::Get(facade_id);
     model.mutable_bt()->CopyFrom(bt);
@@ -52,13 +51,6 @@ model::Chip Chip::Get() {
 void Chip::Patch(const model::Chip &request) {
   BtsLog("Chip::Patch %d", id);
 
-  if (request.capture() != model::State::UNKNOWN &&
-      this->capture != request.capture()) {
-    this->capture = request.capture();
-    hci::facade::SetPacketCapture(this->facade_id,
-                                  request.capture() == model::State::ON,
-                                  this->device_name);
-  }
   if (!request.manufacturer().empty()) {
     this->manufacturer = request.manufacturer();
   }

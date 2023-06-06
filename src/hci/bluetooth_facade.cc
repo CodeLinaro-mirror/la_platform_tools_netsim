@@ -19,6 +19,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
@@ -30,8 +31,13 @@
 #include "model/setup/test_command_handler.h"
 #include "model/setup/test_model.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "rust/cxx.h"
 #include "util/filesystem.h"
 #include "util/log.h"
+
+#ifndef NETSIM_ANDROID_EMULATOR
+#include "net/posix/posix_async_socket_server.h"
+#endif
 
 using netsim::model::State;
 
@@ -89,18 +95,109 @@ size_t phy_classic_index_;
 
 bool mStarted = false;
 std::shared_ptr<rootcanal::AsyncManager> mAsyncManager;
+rootcanal::AsyncUserId gSocketUserId{};
 std::unique_ptr<SimTestModel> gTestModel;
 rootcanal::ControllerProperties controller_properties_;
 
+#ifndef NETSIM_ANDROID_EMULATOR
+// test port
+std::unique_ptr<rootcanal::TestCommandHandler> gTestChannel;
+std::unique_ptr<rootcanal::TestChannelTransport> gTestChannelTransport;
+std::shared_ptr<AsyncDataChannelServer> gTestSocketServer;
+bool gTestChannelOpen{false};
+constexpr int kDefaultTestPort = 7500;
+#endif
+
+namespace {
 bool ChangedState(model::State a, model::State b) {
   return (b != model::State::UNKNOWN && a != b);
 }
+
+#ifndef NETSIM_ANDROID_EMULATOR
+
+using ::android::net::PosixAsyncSocketServer;
+
+void SetUpTestChannel() {
+  gTestSocketServer = std::make_shared<PosixAsyncSocketServer>(
+      kDefaultTestPort, mAsyncManager.get());
+
+  gTestChannel = std::make_unique<rootcanal::TestCommandHandler>(*gTestModel);
+
+  gTestChannelTransport = std::make_unique<rootcanal::TestChannelTransport>();
+  gTestChannelTransport->RegisterCommandHandler(
+      [](const std::string &name, const std::vector<std::string> &args) {
+        mAsyncManager->ExecAsync(
+            gSocketUserId, std::chrono::milliseconds(0), [name, args]() {
+              BtsLog("CommandHandle name:%s", name.c_str());
+              std::string args_str = "";
+              for (auto arg : args) args_str += " " + arg;
+              BtsLog("arg:%s", args_str.c_str());
+              if (name == "END_SIMULATION") {
+                BtsLog("END_SIMULATION");
+              } else {
+                gTestChannel->HandleCommand(name, args);
+              }
+            });
+      });
+
+  bool transport_configured = gTestChannelTransport->SetUp(
+      gTestSocketServer, [](std::shared_ptr<AsyncDataChannel> conn_fd,
+                            AsyncDataChannelServer *server) {
+        BtsLog("Test channel connection accepted.");
+        server->StartListening();
+        if (gTestChannelOpen) {
+          BtsLog("Warning: Only one connection at a time is supported");
+          rootcanal::TestChannelTransport::SendResponse(
+              conn_fd, "The connection is broken");
+          return false;
+        }
+        gTestChannelOpen = true;
+        gTestChannel->RegisterSendResponse(
+            [conn_fd](const std::string &response) {
+              rootcanal::TestChannelTransport::SendResponse(conn_fd, response);
+            });
+
+        conn_fd->WatchForNonBlockingRead([](AsyncDataChannel *conn_fd) {
+          gTestChannelTransport->OnCommandReady(
+              conn_fd, []() { gTestChannelOpen = false; });
+        });
+        return false;
+      });
+
+  gTestChannel->AddDevice({"beacon", "be:ac:01:55:00:01", "1000"});
+  gTestChannel->AddDeviceToPhy({"0", "1"});
+  gTestChannel->AddDevice({"beacon", "be:ac:01:55:00:02", "1000"});
+  gTestChannel->AddDeviceToPhy({"1", "1"});
+  gTestChannel->SetTimerPeriod({"5"});
+  gTestChannel->StartTimer({});
+
+  if (!transport_configured) {
+    BtsLog("Error: Test channel SetUp failed.");
+    return;
+  }
+
+  BtsLog("Test channel SetUp() successful");
+}
+#endif
+
+}  // namespace
 
 // Initialize the rootcanal library.
 void Start() {
   if (mStarted) return;
 
+  // When emulators restore from a snapshot the PacketStreamer connection to
+  // netsim is recreated with a new (uninitialized) Rootcanal device. However
+  // the Android Bluetooth Stack does not re-initialize the controller. Our
+  // solution is for Rootcanal to recognize that it is receiving HCI commands
+  // before a HCI Reset. The flag below causes a hardware error event that
+  // triggers the Reset from the Bluetooth Stack.
+
+  controller_properties_.quirks.hardware_error_before_reset = true;
+
   mAsyncManager = std::make_shared<rootcanal::AsyncManager>();
+  // Get a user ID for tasks scheduled within the test environment.
+  gSocketUserId = mAsyncManager->GetNextUserId();
 
   gTestModel = std::make_unique<SimTestModel>(
       std::bind(&rootcanal::AsyncManager::GetNextUserId, mAsyncManager),
@@ -121,11 +218,15 @@ void Start() {
   phy_classic_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::BR_EDR);
   phy_low_energy_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::LOW_ENERGY);
 
-  // TODO: remove testCommands
+  // TODO: Remove test channel.
+#ifdef NETSIM_ANDROID_EMULATOR
   auto testCommands = rootcanal::TestCommandHandler(*gTestModel);
   testCommands.RegisterSendResponse([](const std::string &) {});
   testCommands.SetTimerPeriod({"5"});
   testCommands.StartTimer({});
+#else
+  SetUpTestChannel();
+#endif
   mStarted = true;
 };
 
@@ -219,7 +320,7 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
 }
 
 void Remove(uint32_t id) {
-  BtsLog("Removing HCI chip for %s");
+  BtsLog("Removing HCI chip for %d", id);
   id_to_chip_info_.erase(id);
   gTestModel->RemoveDevice(id);
   // rootcanal will call HciPacketTransport::Close().
@@ -234,7 +335,17 @@ uint32_t Add(uint32_t simulation_device) {
       rootcanal::HciSniffer::Create(transport));
   auto hci_device =
       std::make_shared<rootcanal::HciDevice>(sniffer, controller_properties_);
-  auto facade_id = gTestModel->AddHciConnection(hci_device);
+
+  // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
+  // invoked atomically, preventing data races.
+  std::promise<uint32_t> facade_id_promise;
+  auto facade_id_future = facade_id_promise.get_future();
+  mAsyncManager->ExecAsync(
+      gSocketUserId, std::chrono::milliseconds(0),
+      [hci_device, &facade_id_promise]() {
+        facade_id_promise.set_value(gTestModel->AddHciConnection(hci_device));
+      });
+  auto facade_id = facade_id_future.get();
 
   HciPacketTransport::Add(facade_id, transport);
   BtsLog("Creating HCI facade %d for device %d", facade_id, simulation_device);
@@ -271,39 +382,39 @@ void IncrRx(uint32_t id, rootcanal::Phy::Type phy_type) {
   }
 }
 
-void SetPacketCapture(uint32_t id, bool isOn, std::string device_name) {
-  if (id_to_chip_info_.find(id) == id_to_chip_info_.end()) {
-    BtsLog("Missing chip_info");
-    return;
-  }
-  auto sniffer = id_to_chip_info_[id]->sniffer;
-  if (!sniffer) {
-    return;
-  }
-  if (!isOn) {
-    sniffer->SetOutputStream(nullptr);
-    return;
-  }
-  // TODO: make multi-os
-  // Filename: emulator-5554-hci.pcap
-  auto filename = "/tmp/" + device_name + "-hci.pcap";
-  for (auto i = 0; netsim::filesystem::exists(filename); ++i) {
-    filename = "/tmp/" + device_name + "-hci-" + std::to_string(i) + ".pcap";
-  }
-  auto file = std::make_shared<std::ofstream>(filename, std::ios::binary);
-  sniffer->SetOutputStream(file);
-}
-
+// TODO: Make SimComputeRssi invoke netsim::device::GetDistanceRust with dev
+// flag
 int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power) {
   if (id_to_chip_info_.find(send_id) == id_to_chip_info_.end() ||
       id_to_chip_info_.find(recv_id) == id_to_chip_info_.end()) {
+#ifdef NETSIM_ANDROID_EMULATOR
+    // NOTE: Ignore log messages in Cuttlefish for beacon devices created by
+    // test channel.
     BtsLog("Missing chip_info");
+#endif
     return tx_power;
   }
   auto a = id_to_chip_info_[send_id]->simulation_device;
   auto b = id_to_chip_info_[recv_id]->simulation_device;
   auto distance = scene_controller::GetDistance(a, b);
   return netsim::DistanceToRssi(tx_power, distance);
+}
+
+void PatchCxx(uint32_t id,
+              const rust::Slice<::std::uint8_t const> proto_bytes) {
+  model::Chip::Bluetooth bluetooth;
+  bluetooth.ParseFromArray(proto_bytes.data(), proto_bytes.size());
+  Patch(id, bluetooth);
+}
+
+rust::Vec<::std::uint8_t> GetCxx(uint32_t id) {
+  auto bluetooth = Get(id);
+  std::vector<uint8_t> proto_bytes(bluetooth.ByteSizeLong());
+  bluetooth.SerializeToArray(proto_bytes.data(), proto_bytes.size());
+  rust::Vec<uint8_t> proto_rust_bytes;
+  std::copy(proto_bytes.begin(), proto_bytes.end(),
+            std::back_inserter(proto_rust_bytes));
+  return proto_rust_bytes;
 }
 
 }  // namespace netsim::hci::facade

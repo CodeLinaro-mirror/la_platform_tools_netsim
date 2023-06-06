@@ -38,6 +38,8 @@ int GetFacadeId(int chip_id);
 
 void RemoveChip(uint32_t device_id, uint32_t chip_id);
 
+void Reset();
+
 /// The C++ definition of AddChip response interface for CXX.
 class AddChipResult {
  public:
@@ -52,6 +54,10 @@ class AddChipResult {
   AddChipResult(uint32_t device_id, uint32_t chip_id, uint32_t facade_id)
       : device_id(device_id), chip_id(chip_id), facade_id(facade_id){};
 };
+
+std::unique_ptr<AddChipResult> NewAddChipResult(uint32_t device_id,
+                                                uint32_t chip_id,
+                                                uint32_t facade_id);
 
 std::unique_ptr<AddChipResult> AddChipCxx(const std::string &guid,
                                           const std::string &device_name,

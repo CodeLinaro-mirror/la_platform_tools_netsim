@@ -15,14 +15,17 @@
  */
 
 #pragma once
-
-#include <chrono>
-#include <cstdio>
-#include <ctime>
-#include <fstream>
-
+#include <cstdarg>
+#include <functional>
+#include <string>
 namespace netsim {
 
-void BtsLog(const char *fmt, ...);
+#define BtsLog(fmt, ...) __BtsLog(0, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+
+void __BtsLog(int priority, const char *file, int line, const char *fmt, ...);
+
+using BtsLogFn = std::function<void(int, const char *, int, const char *)>;
+
+void setBtsLogSink(BtsLogFn logFn);
 
 }  // namespace netsim

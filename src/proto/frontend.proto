@@ -38,14 +38,17 @@ service FrontendService {
   // Register for device movement and emulated radio state events
   rpc RegisterEvents(google.protobuf.Empty) returns (stream Event);
 
-  // Get a list of devices
+  // (deprecated with C++ controller) Get a list of devices
   rpc GetDevices(google.protobuf.Empty) returns (GetDevicesResponse);
 
-  // Patch a device
+  // (deprecated with C++ controller) Patch a device
   rpc PatchDevice(PatchDeviceRequest) returns (google.protobuf.Empty);
 
-  // Reset all devices.
+  // (deprecated with C++ controller) Reset all devices.
   rpc Reset(google.protobuf.Empty) returns (google.protobuf.Empty);
+
+  // Get a list of devices
+  rpc ListDevice(google.protobuf.Empty) returns (ListDeviceResponse);
 
   // TODO: Other hwsim commands - addAccessPoint, addLink, ...
 
@@ -103,16 +106,19 @@ message GetDevicesResponse {
   repeated netsim.model.Device devices = 1;
 }
 
+// Response for ListDevice request.
+//
+// Returns the emulators and accessory devices that are connected to
+// the network simulator.
+message ListDeviceResponse {
+  repeated netsim.model.Device devices = 1;
+}
+
 // Response to the NetCat request.
 //
 // NetCat provides a streaming log of network operations.
 message NetCatStream {
   repeated string result = 1;
-}
-
-message SetPacketCaptureRequest {
-  bool capture = 1;
-  string device_serial = 2;
 }
 
 message PatchCaptureRequest {

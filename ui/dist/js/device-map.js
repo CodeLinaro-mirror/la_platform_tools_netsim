@@ -2,7 +2,7 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as t,
       <ns-device-dropzone role="widget" tabindex="0" aria-label="Device map">
         <div id="dropzone" class="box pattern${this.imageIdx}">
           ${this.deviceData.map(((t,i)=>o`
-              ${!0===t.visible?o`
+              ${o`
                     <ns-device-dragzone
                       .action=${"move"}
                       style=${s({position:"absolute",left:100*t.position.x+"px",top:100*t.position.y+"px"})}
@@ -22,7 +22,7 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as t,
                         aria-live="polite"
                       ></ns-cube-sprite>
                     </ns-device-dragzone>
-                  `:o``}
+                  `}
             `))}
         </div>
         <style>

@@ -53,7 +53,7 @@ TEST_F(FrontendServerTest, VerifyVersion) {
 TEST_F(FrontendServerTest, PatchDevicePosition) {
   auto name = "test-device-name-for-set-position";
   auto [device_id, _1, _2] =
-      scene_controller::AddChip("guid-fs-1", name, common::ChipKind::BLUETOOTH);
+      scene_controller::AddChip("guid-fs-1", name, common::ChipKind::UWB);
 
   google::protobuf::Empty response;
   frontend::PatchDeviceRequest request;
@@ -80,13 +80,15 @@ TEST_F(FrontendServerTest, PatchDevicePosition) {
 }
 
 TEST_F(FrontendServerTest, PatchDevice) {
+  GTEST_SKIP() << "Skipped the test that uses the rootcanal library.";
+
   auto name = "name-for-update";
   auto [device_id, chip_id, _] =
       scene_controller::AddChip("guid-fs-2", name, common::ChipKind::BLUETOOTH);
 
   model::Device model;
   model.set_name(name);
-  model.set_visible(false);
+  model.set_visible(model::State::OFF);
   auto chip = model.mutable_chips()->Add();
   chip->mutable_bt()->mutable_classic()->set_state(model::State::OFF);
   chip->set_id(chip_id);

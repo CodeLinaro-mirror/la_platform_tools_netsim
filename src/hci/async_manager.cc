@@ -15,25 +15,26 @@
  */
 #include "model/setup/async_manager.h"  // for AsyncManager
 
-#include <errno.h>                              // for errno
-#include <atomic>                               // for atomic_bool, atomic_e...
-#include <condition_variable>                   // for condition_variable
-#include <cstring>                              // for strerror
-#include <limits>                               // for numeric_limits
-#include <map>                                  // for map<>::value_type, map
-#include <mutex>                                // for unique_lock, mutex
-#include <ratio>                                // for ratio
-#include <set>                                  // for set
-#include <thread>                               // for thread
-#include <type_traits>                          // for remove_extent_t
-#include <utility>                              // for pair, make_pair, oper...
-#include <vector>                               // for vector
+#include <errno.h>  // for errno
 
-#include "aemu/base/EintrWrapper.h"          // for HANDLE_EINTR
-#include "aemu/base/Log.h"                   // for LogStreamVoidify, Log...
+#include <atomic>              // for atomic_bool, atomic_e...
+#include <condition_variable>  // for condition_variable
+#include <cstring>             // for strerror
+#include <limits>              // for numeric_limits
+#include <map>                 // for map<>::value_type, map
+#include <mutex>               // for unique_lock, mutex
+#include <ratio>               // for ratio
+#include <set>                 // for set
+#include <thread>              // for thread
+#include <type_traits>         // for remove_extent_t
+#include <utility>             // for pair, make_pair, oper...
+#include <vector>              // for vector
+
+#include "aemu/base/EintrWrapper.h"  // for HANDLE_EINTR
+#include "aemu/base/Log.h"           // for LogStreamVoidify, Log...
+#include "aemu/base/logging/CLog.h"
 #include "aemu/base/sockets/SocketUtils.h"   // for socketRecv, socketSet...
 #include "aemu/base/sockets/SocketWaiter.h"  // for SocketWaiter, SocketW...
-#include "aemu/base/logging/CLog.h"
 
 namespace rootcanal {
 // Implementation of AsyncManager is divided between two classes, three if
@@ -81,7 +82,8 @@ namespace rootcanal {
 
 // This number also states the maximum number of scheduled tasks we can handle
 // at a given time
-static const uint16_t kMaxTaskId = -1; /* 2^16 - 1, permisible ids are {1..2^16-1}*/
+static const uint16_t kMaxTaskId =
+    -1; /* 2^16 - 1, permisible ids are {1..2^16-1}*/
 static inline AsyncTaskId NextAsyncTaskId(const AsyncTaskId id) {
   return (id == kMaxTaskId) ? 1 : id + 1;
 }
@@ -97,14 +99,13 @@ static inline AsyncTaskId NextAsyncTaskId(const AsyncTaskId id) {
 // no need to treat that case.
 static const int kNotificationBufferSize = 10;
 
-
 using android::base::SocketWaiter;
 
 // Async File Descriptor Watcher Implementation:
 class AsyncManager::AsyncFdWatcher {
-
  public:
-  int WatchFdForNonBlockingReads(int file_descriptor, const ReadCallback& on_read_fd_ready_callback) {
+  int WatchFdForNonBlockingReads(
+      int file_descriptor, const ReadCallback &on_read_fd_ready_callback) {
     // add file descriptor and callback
     {
       std::unique_lock<std::recursive_mutex> guard(internal_mutex_);
@@ -130,8 +131,8 @@ class AsyncManager::AsyncFdWatcher {
   }
 
   AsyncFdWatcher() = default;
-  AsyncFdWatcher(const AsyncFdWatcher&) = delete;
-  AsyncFdWatcher& operator=(const AsyncFdWatcher&) = delete;
+  AsyncFdWatcher(const AsyncFdWatcher &) = delete;
+  AsyncFdWatcher &operator=(const AsyncFdWatcher &) = delete;
 
   ~AsyncFdWatcher() = default;
 
@@ -145,7 +146,8 @@ class AsyncManager::AsyncFdWatcher {
     if (std::this_thread::get_id() != thread_.get_id()) {
       thread_.join();
     } else {
-      dwarning("%s: Starting thread stop from inside the reading thread itself", __func__);
+      dwarning("%s: Starting thread stop from inside the reading thread itself",
+               __func__);
     }
 
     {
@@ -164,7 +166,8 @@ class AsyncManager::AsyncFdWatcher {
       return 0;  // if already running
     }
     // set up the communication channel
-    if (android::base::socketCreatePair(&notification_listen_fd_, &notification_write_fd_)) {
+    if (android::base::socketCreatePair(&notification_listen_fd_,
+                                        &notification_write_fd_)) {
       derror(
           "%s:Unable to establish a communication channel to the reading "
           "thread",
@@ -191,24 +194,25 @@ class AsyncManager::AsyncFdWatcher {
     return 0;
   }
 
-  void setUpFileDescriptorSet(SocketWaiter* read_fds) {
+  void setUpFileDescriptorSet(SocketWaiter *read_fds) {
     // add comm channel to the set
     read_fds->update(notification_listen_fd_, SocketWaiter::Event::kEventRead);
 
     // add watched FDs to the set
     {
       std::unique_lock<std::recursive_mutex> guard(internal_mutex_);
-      for (auto& fdp : watched_shared_fds_) {
+      for (auto &fdp : watched_shared_fds_) {
         read_fds->update(fdp.first, SocketWaiter::Event::kEventRead);
       }
     }
   }
 
   // check the comm channel and read everything there
-  bool consumeThreadNotifications(SocketWaiter* read_fds) {
+  bool consumeThreadNotifications(SocketWaiter *read_fds) {
     if (read_fds->pendingEventsFor(notification_listen_fd_)) {
       char buffer[kNotificationBufferSize];
-      while (HANDLE_EINTR(android::base::socketRecv(notification_listen_fd_, buffer, kNotificationBufferSize)) ==
+      while (HANDLE_EINTR(android::base::socketRecv(
+                 notification_listen_fd_, buffer, kNotificationBufferSize)) ==
              kNotificationBufferSize) {
       }
       return true;
@@ -217,22 +221,21 @@ class AsyncManager::AsyncFdWatcher {
   }
 
   // check all file descriptors and call callbacks if necesary
-  void runAppropriateCallbacks(SocketWaiter* read_fds) {
+  void runAppropriateCallbacks(SocketWaiter *read_fds) {
     // not a good idea to call a callback while holding the FD lock,
     // nor to release the lock while traversing the map
     std::vector<decltype(watched_shared_fds_)::value_type> fds;
     std::unique_lock<std::recursive_mutex> guard(internal_mutex_);
-    for (auto& fdc : watched_shared_fds_) {
+    for (auto &fdc : watched_shared_fds_) {
       auto pending = read_fds->pendingEventsFor(fdc.first);
       if (pending == SocketWaiter::kEventRead) {
         fds.push_back(fdc);
       }
     }
 
-    for (auto& p : fds) {
+    for (auto &p : fds) {
       p.second(p.first);
     }
-
   }
 
   void ThreadRoutine() {
@@ -266,8 +269,7 @@ class AsyncManager::AsyncFdWatcher {
   std::thread thread_;
   std::recursive_mutex internal_mutex_;
 
-
-  //android::base::SocketWaiter socket_waiter_;
+  // android::base::SocketWaiter socket_waiter_;
   std::map<int, ReadCallback> watched_shared_fds_;
 
   // A pair of FD to send information to the reading thread
@@ -281,7 +283,7 @@ class AsyncManager::AsyncTaskManager {
   AsyncUserId GetNextUserId() { return lastUserId_++; }
 
   AsyncTaskId ExecAsync(AsyncUserId user_id, std::chrono::milliseconds delay,
-                        const TaskCallback& callback) {
+                        const TaskCallback &callback) {
     return scheduleTask(std::make_shared<Task>(
         std::chrono::steady_clock::now() + delay, callback, user_id));
   }
@@ -289,7 +291,7 @@ class AsyncManager::AsyncTaskManager {
   AsyncTaskId ExecAsyncPeriodically(AsyncUserId user_id,
                                     std::chrono::milliseconds delay,
                                     std::chrono::milliseconds period,
-                                    const TaskCallback& callback) {
+                                    const TaskCallback &callback) {
     return scheduleTask(std::make_shared<Task>(
         std::chrono::steady_clock::now() + delay, period, callback, user_id));
   }
@@ -313,14 +315,14 @@ class AsyncManager::AsyncTaskManager {
     return true;
   }
 
-  void Synchronize(const CriticalCallback& critical) {
+  void Synchronize(const CriticalCallback &critical) {
     std::unique_lock<std::mutex> guard(synchronization_mutex_);
     critical();
   }
 
   AsyncTaskManager() = default;
-  AsyncTaskManager(const AsyncTaskManager&) = delete;
-  AsyncTaskManager& operator=(const AsyncTaskManager&) = delete;
+  AsyncTaskManager(const AsyncTaskManager &) = delete;
+  AsyncTaskManager &operator=(const AsyncTaskManager &) = delete;
 
   ~AsyncTaskManager() = default;
 
@@ -339,7 +341,8 @@ class AsyncManager::AsyncTaskManager {
     if (std::this_thread::get_id() != thread_.get_id()) {
       thread_.join();
     } else {
-      dwarning("%s: Starting thread stop from inside the task thread itself", __func__);
+      dwarning("%s: Starting thread stop from inside the task thread itself",
+               __func__);
     }
     return 0;
   }
@@ -349,7 +352,7 @@ class AsyncManager::AsyncTaskManager {
   class Task {
    public:
     Task(std::chrono::steady_clock::time_point time,
-         std::chrono::milliseconds period, const TaskCallback& callback,
+         std::chrono::milliseconds period, const TaskCallback &callback,
          AsyncUserId user)
         : time(time),
           periodic(true),
@@ -358,7 +361,7 @@ class AsyncManager::AsyncTaskManager {
           task_id(kInvalidTaskId),
           user_id(user) {}
     Task(std::chrono::steady_clock::time_point time,
-         const TaskCallback& callback, AsyncUserId user)
+         const TaskCallback &callback, AsyncUserId user)
         : time(time),
           periodic(false),
           callback(callback),
@@ -366,20 +369,19 @@ class AsyncManager::AsyncTaskManager {
           user_id(user) {}
 
     // Operators needed to be in a collection
-    bool operator<(const Task& another) const {
-      return std::make_pair(time, task_id) < std::make_pair(another.time, another.task_id);
+    bool operator<(const Task &another) const {
+      return std::make_pair(time, task_id) <
+             std::make_pair(another.time, another.task_id);
     }
 
-    bool isPeriodic() const {
-      return periodic;
-    }
+    bool isPeriodic() const { return periodic; }
 
     // These fields should no longer be public if the class ever becomes
     // public or gets more complex
     std::chrono::steady_clock::time_point time;
     bool periodic;
     std::chrono::milliseconds period{};
-    std::mutex in_callback; // Taken when the callback is active
+    std::mutex in_callback;  // Taken when the callback is active
     TaskCallback callback;
     AsyncTaskId task_id;
     AsyncUserId user_id;
@@ -387,7 +389,8 @@ class AsyncManager::AsyncTaskManager {
 
   // A comparator class to put shared pointers to tasks in an ordered set
   struct task_p_comparator {
-    bool operator()(const std::shared_ptr<Task>& t1, const std::shared_ptr<Task>& t2) const {
+    bool operator()(const std::shared_ptr<Task> &t1,
+                    const std::shared_ptr<Task> &t2) const {
       return *t1 < *t2;
     }
   };
@@ -415,7 +418,7 @@ class AsyncManager::AsyncTaskManager {
     return true;
   }
 
-  AsyncTaskId scheduleTask(const std::shared_ptr<Task>& task) {
+  AsyncTaskId scheduleTask(const std::shared_ptr<Task> &task) {
     {
       std::unique_lock<std::mutex> guard(internal_mutex_);
       // no more room for new tasks, we need a larger type for IDs
@@ -442,7 +445,7 @@ class AsyncManager::AsyncTaskManager {
     return task->task_id;
   }
 
-  bool isTaskIdInUse(const AsyncTaskId& task_id) const {
+  bool isTaskIdInUse(const AsyncTaskId &task_id) const {
     return tasks_by_id_.count(task_id) != 0;
   }
 
@@ -518,13 +521,15 @@ class AsyncManager::AsyncTaskManager {
 
   AsyncTaskId lastTaskId_ = kInvalidTaskId;
   AsyncUserId lastUserId_{1};
-  std::map<AsyncTaskId, std::shared_ptr<Task> > tasks_by_id_;
+  std::map<AsyncTaskId, std::shared_ptr<Task>> tasks_by_id_;
   std::map<AsyncUserId, std::set<AsyncTaskId>> tasks_by_user_id_;
   std::set<std::shared_ptr<Task>, task_p_comparator> task_queue_;
 };
 
 // Async Manager Implementation:
-AsyncManager::AsyncManager() : fdWatcher_p_(new AsyncFdWatcher()), taskManager_p_(new AsyncTaskManager()) {}
+AsyncManager::AsyncManager()
+    : fdWatcher_p_(new AsyncFdWatcher()),
+      taskManager_p_(new AsyncTaskManager()) {}
 
 AsyncManager::~AsyncManager() {
   // Make sure the threads are stopped before destroying the object.
@@ -537,8 +542,10 @@ AsyncManager::~AsyncManager() {
   taskManager_p_->stopThread();
 }
 
-int AsyncManager::WatchFdForNonBlockingReads(int file_descriptor, const ReadCallback& on_read_fd_ready_callback) {
-  return fdWatcher_p_->WatchFdForNonBlockingReads(file_descriptor, on_read_fd_ready_callback);
+int AsyncManager::WatchFdForNonBlockingReads(
+    int file_descriptor, const ReadCallback &on_read_fd_ready_callback) {
+  return fdWatcher_p_->WatchFdForNonBlockingReads(file_descriptor,
+                                                  on_read_fd_ready_callback);
 }
 
 void AsyncManager::StopWatchingFileDescriptor(int file_descriptor) {
@@ -551,13 +558,13 @@ AsyncUserId AsyncManager::GetNextUserId() {
 
 AsyncTaskId AsyncManager::ExecAsync(AsyncUserId user_id,
                                     std::chrono::milliseconds delay,
-                                    const TaskCallback& callback) {
+                                    const TaskCallback &callback) {
   return taskManager_p_->ExecAsync(user_id, delay, callback);
 }
 
 AsyncTaskId AsyncManager::ExecAsyncPeriodically(
     AsyncUserId user_id, std::chrono::milliseconds delay,
-    std::chrono::milliseconds period, const TaskCallback& callback) {
+    std::chrono::milliseconds period, const TaskCallback &callback) {
   return taskManager_p_->ExecAsyncPeriodically(user_id, delay, period,
                                                callback);
 }
@@ -566,12 +573,11 @@ bool AsyncManager::CancelAsyncTask(AsyncTaskId async_task_id) {
   return taskManager_p_->CancelAsyncTask(async_task_id);
 }
 
-bool AsyncManager::CancelAsyncTasksFromUser(
-    rootcanal::AsyncUserId user_id) {
+bool AsyncManager::CancelAsyncTasksFromUser(rootcanal::AsyncUserId user_id) {
   return taskManager_p_->CancelAsyncTasksFromUser(user_id);
 }
 
-void AsyncManager::Synchronize(const CriticalCallback& critical) {
+void AsyncManager::Synchronize(const CriticalCallback &critical) {
   taskManager_p_->Synchronize(critical);
 }
 }  // namespace rootcanal

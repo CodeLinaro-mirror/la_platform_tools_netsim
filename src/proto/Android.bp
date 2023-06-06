@@ -39,6 +39,25 @@ cc_library {
     ],
 }
 
+cc_library {
+    name: "lib-netsimd-proto",
+    host_supported: true,
+    proto: {
+        export_proto_headers: true,
+        type: "full",
+        canonical_path_from_root: false,
+        include_dirs: ["external/protobuf/src"],
+    },
+    srcs: [
+        "common.proto",
+        "frontend.proto",
+        "hci_packet.proto",
+        "model.proto",
+        "packet_streamer.proto",
+        "startup.proto",
+    ],
+}
+
 genrule {
     name: "FrontendStub_h",
     tools: [
@@ -68,5 +87,37 @@ genrule {
     out: [
         "frontend.grpc.pb.cc",
         "frontend.pb.cc",
+    ],
+}
+
+genrule {
+    name: "PacketStreamerStub_h",
+    tools: [
+        "aprotoc",
+        "protoc-gen-grpc-cpp-plugin",
+    ],
+    cmd: "$(location aprotoc) -Itools/netsim/src/proto -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-cpp-plugin) $(in) --grpc_out=$(genDir) --cpp_out=$(genDir)",
+    srcs: [
+        "packet_streamer.proto",
+    ],
+    out: [
+        "packet_streamer.grpc.pb.h",
+        "packet_streamer.pb.h",
+    ],
+}
+
+genrule {
+    name: "PacketStreamerStub_cc",
+    tools: [
+        "aprotoc",
+        "protoc-gen-grpc-cpp-plugin",
+    ],
+    cmd: "$(location aprotoc) -Itools/netsim/src/proto -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-cpp-plugin) $(in) --grpc_out=$(genDir) --cpp_out=$(genDir)",
+    srcs: [
+        "packet_streamer.proto",
+    ],
+    out: [
+        "packet_streamer.grpc.pb.cc",
+        "packet_streamer.pb.cc",
     ],
 }

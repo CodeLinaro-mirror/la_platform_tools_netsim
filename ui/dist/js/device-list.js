@@ -2,7 +2,7 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
       ${this.deviceData.map(((i,t)=>r`
           <li>
             <center>
-              ${!0===i.visible?r`<ns-cube-sprite
+              ${r`<ns-cube-sprite
                       id=${i.name}
                       color=${e[t%e.length]}
                       size="30px"
@@ -11,16 +11,7 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
                       tabindex="0"
                       aria-label="${i.name} in Device Legends"
                     ></ns-cube-sprite
-                    >${i.name} `:r`<ns-device-dragzone action="move">
-                      <ns-cube-sprite
-                        id=${i.name}
-                        color=${e[t%e.length]}
-                        size="30px"
-                        role="listitem"
-                        tabindex="0"
-                        aria-label="${i.name} in Device Legends"
-                      ></ns-cube-sprite> </ns-device-dragzone
-                    >${i.name}`}
+                    >${i.name} `}
             </center>
           </li>
         `))}

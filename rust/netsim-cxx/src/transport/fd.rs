@@ -79,17 +79,12 @@ fn key(kind: u32, facade_id: u32) -> String {
 pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
     let binding = TRANSPORTS.read().unwrap();
     let key = key(kind, facade_id);
-    match binding.get(&key) {
-        Some(mut fd_out) => {
-            // todo add error checking
-            let temp = [packet_type];
-            let bufs = [IoSlice::new(&temp), IoSlice::new(packet.as_slice())];
-            if let Err(e) = fd_out.write_vectored(&bufs) {
-                println!("netsimd: error writing {}", e);
-            };
-        }
-        None => {
-            println!("netsimd: Error unknown key {}/{}", kind, facade_id);
+    if let Some(mut fd_out) = binding.get(&key) {
+        // todo add error checking
+        let temp = [packet_type];
+        let bufs = [IoSlice::new(&temp), IoSlice::new(packet.as_slice())];
+        if let Err(e) = fd_out.write_vectored(&bufs) {
+            println!("netsimd: error writing {}", e);
         }
     };
 }

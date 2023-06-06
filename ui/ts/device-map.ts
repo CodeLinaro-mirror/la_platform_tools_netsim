@@ -123,7 +123,7 @@ export class DeviceMap extends LitElement implements Notifiable {
         this.deviceData.map(
             (device, idx) => html`
               ${
-                device.visible === true ?
+                true ?  // TODO manage device.visible in Web UI
                     html`
                     <ns-device-dragzone
                       .action=${'move'}

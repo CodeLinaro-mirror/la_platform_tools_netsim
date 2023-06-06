@@ -36,7 +36,7 @@ impl TimeDisplay {
         TimeDisplay { secs, nsecs }
     }
 
-    /// Displayes time in UTC with a format YYYY-MM-DD-HH:MM:SS
+    /// Displays date & time in UTC with a format YYYY-MM-DD-HH:MM:SS
     ///
     /// # Returns
     ///
@@ -55,6 +55,24 @@ impl TimeDisplay {
             );
         }
         "INVALID-TIMESTAMP".to_string()
+    }
+
+    /// Displays time in UTC without date with a format HH:MM:SS
+    ///
+    /// # Returns
+    ///
+    /// `Ok(String)` if the display was successful, `Error` otherwise.
+    pub fn utc_display_hms(&self) -> String {
+        if let Some(datetime) = NaiveDateTime::from_timestamp_opt(self.secs, self.nsecs) {
+            let current_datetime = DateTime::<Utc>::from_utc(datetime, Utc);
+            return format!(
+                "{:02}:{:02}:{:02}",
+                current_datetime.hour(),
+                current_datetime.minute(),
+                current_datetime.second()
+            );
+        }
+        "INVALID".to_string()
     }
 }
 

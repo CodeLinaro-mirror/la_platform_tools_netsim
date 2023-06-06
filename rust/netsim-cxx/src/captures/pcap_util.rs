@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! A utility module for writing pcap files
+//!
+//! This module includes writing appropriate pcap headers with given
+//! linktype and appending records with header based on the assigned
+//! protocol.
+
 use std::{
     fs::File,
     io::{Result, Write},
@@ -25,11 +31,16 @@ macro_rules! be_vec {
        };
     }
 
+/// The indication of packet direction for HCI packets.
 pub enum PacketDirection {
+    /// Host To Controller as u32 value
     HostToController = 0,
+    /// Controller to Host as u32 value
     ControllerToHost = 1,
 }
 
+/// Returns the file size after writing the header of the
+/// pcap file.
 pub fn write_pcap_header(output: &mut File) -> Result<usize> {
     let linktype: u32 = 201; // LINKTYPE_BLUETOOTH_HCI_H4_WITH_PHDR
 
@@ -48,6 +59,7 @@ pub fn write_pcap_header(output: &mut File) -> Result<usize> {
     Ok(header.len())
 }
 
+/// Returns the file size after appending a single packet record.
 pub fn append_record(
     timestamp: Duration,
     output: &mut File,

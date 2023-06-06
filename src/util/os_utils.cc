@@ -91,5 +91,14 @@ std::optional<std::string> GetServerAddress(bool frontend_server) {
   iniFile.Read();
   return iniFile.Get("grpc.port");
 }
+
+void RedirectStdStream(std::string netsim_temp_dir) {
+  // Check if directory has a trailing slash.
+  if (netsim_temp_dir.back() != netsim::filesystem::slash.back())
+    netsim_temp_dir.append(netsim::filesystem::slash);
+
+  std::freopen((netsim_temp_dir + "netsim_stdout.log").c_str(), "w", stdout);
+  std::freopen((netsim_temp_dir + "netsim_stderr.log").c_str(), "w", stderr);
+}
 }  // namespace osutils
 }  // namespace netsim

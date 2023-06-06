@@ -14,12 +14,13 @@
 
 use std::cmp::max;
 
-use crate::args::{self, Command, OnOffState, Pcap};
+use crate::args::{self, Capture, Command, OnOffState};
 use frontend_proto::{
     common::ChipKind,
     frontend::{GetDevicesResponse, ListCaptureResponse, VersionResponse},
     model::{self, chip::Chip as Chip_oneof_chip, State},
 };
+use netsim_common::util::time_display::TimeDisplay;
 use protobuf::Message;
 
 impl args::Command {
@@ -61,12 +62,12 @@ impl args::Command {
                     println!("All devices have been reset.");
                 }
             }
-            Command::Pcap(Pcap::List(cmd)) => Self::print_list_capture_response(
+            Command::Capture(Capture::List(cmd)) => Self::print_list_capture_response(
                 ListCaptureResponse::parse_from_bytes(response).unwrap(),
                 verbose,
                 cmd.patterns.to_owned(),
             ),
-            Command::Pcap(Pcap::Patch(cmd)) => {
+            Command::Capture(Capture::Patch(cmd)) => {
                 if verbose {
                     println!(
                         "Patched Capture state to {}",
@@ -74,9 +75,9 @@ impl args::Command {
                     );
                 }
             }
-            Command::Pcap(Pcap::Get(_)) => {
+            Command::Capture(Capture::Get(cmd)) => {
                 if verbose {
-                    println!("Successfully downloaded Pcap.");
+                    println!("Successfully downloaded file: {}", cmd.current_file);
                 }
             }
             Command::Gui => {
@@ -111,48 +112,44 @@ impl args::Command {
                             if bt.low_energy.is_some() {
                                 let ble_chip = &bt.low_energy;
                                 println!(
-                                    "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
+                                    "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?}",
                                     "",
                                     "ble:",
                                     Self::chip_state_to_string(ble_chip.state.enum_value_or_default()),
                                     ble_chip.rx_count,
                                     ble_chip.tx_count,
-                                    Self::capture_state_to_string(chip.capture.enum_value_or_default())
                                 );
                             }
                             if bt.classic.is_some() {
                                 let classic_chip = &bt.classic;
                                 println!(
-                                    "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
+                                    "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?}",
                                     "",
                                     "classic:",
                                     Self::chip_state_to_string(classic_chip.state.enum_value_or_default()),
                                     classic_chip.rx_count,
                                     classic_chip.tx_count,
-                                    Self::capture_state_to_string(chip.capture.enum_value_or_default())
                                 );
                             }
                         }
                         Some(Chip_oneof_chip::Wifi(wifi_chip)) => {
                             println!(
-                                "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
+                                "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?}",
                                 "",
                                 "wifi:",
                                 Self::chip_state_to_string(wifi_chip.state.enum_value_or_default()),
                                 wifi_chip.rx_count,
                                 wifi_chip.tx_count,
-                                Self::capture_state_to_string(chip.capture.enum_value_or_default())
                             );
                         }
                         Some(Chip_oneof_chip::Uwb(uwb_chip)) => {
                             println!(
-                                "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?} | capture: {}",
+                                "{:chip_indent$}{:radio_width$}{:state_width$}| rx_count: {:cnt_width$?} | tx_count: {:cnt_width$?}",
                                 "",
                                 "uwb:",
                                 Self::chip_state_to_string(uwb_chip.state.enum_value_or_default()),
                                 uwb_chip.rx_count,
                                 uwb_chip.tx_count,
-                                Self::capture_state_to_string(chip.capture.enum_value_or_default())
                             );
                         }
                         _ => println!("{:chip_indent$}Unknown chip: down  ", ""),
@@ -225,9 +222,6 @@ impl args::Command {
                         }
                         _ => {}
                     }
-                    if chip.capture.enum_value_or_default() == State::ON {
-                        print!("{:chip_indent$}capture: on", "");
-                    }
                 }
                 println!();
             }
@@ -293,16 +287,27 @@ impl args::Command {
         let name_hdr = "Device Name";
         let chipkind_hdr = "Chip Kind";
         let state_hdr = "State";
-        let size_hdr = "Size";
+        let time_hdr = "Timestamp";
+        let records_hdr = "Records";
+        let size_hdr = "Size (bytes)";
         let id_width = 4; // ID width of 4 since capture id (=chip_id) starts at 1000
-        let state_width = 7; // State width of 7 for 'unknown'
+        let state_width = 8; // State width of 8 for 'detached' if device is disconnected
         let chipkind_width = 11; // ChipKind width 11 for 'UNSPECIFIED'
+        let time_width = 9; // Timestamp width 9 for header (value format set to HH:MM:SS)
         let name_width = max(
             (response.captures.iter().max_by_key(|x| x.device_name.len()))
                 .unwrap_or_default()
                 .device_name
                 .len(),
             name_hdr.len(),
+        );
+        let records_width = max(
+            (response.captures.iter().max_by_key(|x| x.records))
+                .unwrap_or_default()
+                .records
+                .to_string()
+                .len(),
+            records_hdr.len(),
         );
         let size_width = max(
             (response.captures.iter().max_by_key(|x| x.size))
@@ -316,17 +321,19 @@ impl args::Command {
         println!(
             "{}",
             if verbose {
-                format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:time_width$} | {:records_width$} | {:size_width$} |",
                     id_hdr,
                     name_hdr,
                     chipkind_hdr,
                     state_hdr,
+                    time_hdr,
+                    records_hdr,
                     size_hdr,
                 )
             } else {
                 format!(
-                    "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
-                    name_hdr, chipkind_hdr, state_hdr, size_hdr,
+                    "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:records_width$} |",
+                    name_hdr, chipkind_hdr, state_hdr, records_hdr
                 )
             }
         );
@@ -335,20 +342,25 @@ impl args::Command {
             println!(
                 "{}",
                 if verbose {
-                    format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                    format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:time_width$} | {:records_width$} | {:size_width$} |",
                         capture.id.to_string(),
                         capture.device_name,
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
-                        Self::capture_state_to_string(capture.state.enum_value_or_default()),
+                        if capture.valid {Self::capture_state_to_string(capture.state.enum_value_or_default())} else {"detached".to_string()},
+                        TimeDisplay::new(
+                            capture.timestamp.get_or_default().seconds,
+                            capture.timestamp.get_or_default().nanos as u32,
+                        ).utc_display_hms(),
+                        capture.records,
                         capture.size,
                     )
                 } else {
                     format!(
-                        "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:size_width$} |",
+                        "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:records_width$} |",
                         capture.device_name,
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
-                        Self::capture_state_to_string(capture.state.enum_value_or_default()),
-                        capture.size,
+                        if capture.valid {Self::capture_state_to_string(capture.state.enum_value_or_default())} else {"detached".to_string()},
+                        capture.records,
                     )
                 }
             );

@@ -18,7 +18,12 @@
 
 // Use gRPC HCI PacketType definitions so we don't expose Rootcanal's version
 // outside of the Bluetooth Facade.
+#include <cstdint>
+#include <memory>
+#include <vector>
+
 #include "hci_packet.pb.h"
+#include "rust/cxx.h"
 
 namespace netsim {
 namespace hci {
@@ -29,6 +34,9 @@ namespace hci {
 void handle_bt_request(uint32_t facade_id,
                        packet::HCIPacket_PacketType packet_type,
                        const std::shared_ptr<std::vector<uint8_t>> &packet);
+
+void HandleBtRequestCxx(uint32_t facade_id, uint8_t packet_type,
+                        const rust::Vec<uint8_t> &packet);
 
 }  // namespace hci
 }  // namespace netsim

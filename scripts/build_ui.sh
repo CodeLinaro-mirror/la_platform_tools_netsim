@@ -45,6 +45,7 @@ if [[ $npm_build == "true" ]]; then
     npm run tsproto
     npm run build
     cd ..
+    bash $REPO/tools/netsim/scripts/format_code.sh
 fi
 
 # Copy files from ui/dist into objs/netsim-ui

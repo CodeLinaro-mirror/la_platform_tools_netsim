@@ -34,6 +34,9 @@ pub struct NetsimArgs {
     /// Set verbose mode
     #[arg(short, long)]
     pub verbose: bool,
+    /// Set custom grpc port
+    #[arg(short, long)]
+    pub port: Option<i32>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -52,8 +55,8 @@ pub enum Command {
     /// Open netsim Web UI
     Gui,
     /// Control the packet capture functionalities with commands: list, patch, get
-    #[command(subcommand)]
-    Pcap(Pcap),
+    #[command(subcommand, visible_alias("pcap"))]
+    Capture(Capture),
 }
 
 impl Command {
@@ -117,13 +120,13 @@ impl Command {
             Command::Gui => {
                 unimplemented!("get_request_bytes is not implemented for Gui Command.");
             }
-            Command::Pcap(pcap_cmd) => match pcap_cmd {
-                Pcap::List(_) => Vec::new(),
-                Pcap::Get(_) => {
-                    unimplemented!("get_request_bytes not implemented for Pcap Get command. Use get_requests instead.")
+            Command::Capture(cmd) => match cmd {
+                Capture::List(_) => Vec::new(),
+                Capture::Get(_) => {
+                    unimplemented!("get_request_bytes not implemented for Capture Get command. Use get_requests instead.")
                 }
-                Pcap::Patch(_) => {
-                    unimplemented!("get_request_bytes not implemented for Pcap Patch command. Use get_requests instead.")
+                Capture::Patch(_) => {
+                    unimplemented!("get_request_bytes not implemented for Capture Patch command. Use get_requests instead.")
                 }
             },
         }
@@ -135,7 +138,7 @@ impl Command {
     /// The client is used to send gRPC call(s) to retrieve information needed for request protobufs.
     pub fn get_requests(&mut self, client: &cxx::UniquePtr<FrontendClient>) -> Vec<BinaryProtobuf> {
         match self {
-            Command::Pcap(Pcap::Patch(cmd)) => {
+            Command::Capture(Capture::Patch(cmd)) => {
                 let mut reqs = Vec::new();
                 let filtered_captures = Self::get_filtered_captures(client, &cmd.patterns);
                 // Create a request for each capture
@@ -153,7 +156,7 @@ impl Command {
                 }
                 reqs
             }
-            Command::Pcap(Pcap::Get(cmd)) => {
+            Command::Capture(Capture::Get(cmd)) => {
                 let mut reqs = Vec::new();
                 let filtered_captures = Self::get_filtered_captures(client, &cmd.patterns);
                 // Create a request for each capture
@@ -165,12 +168,14 @@ impl Command {
                         capture.timestamp.get_or_default().seconds,
                         capture.timestamp.get_or_default().nanos as u32,
                     );
+                    let file_extension = "pcap";
                     cmd.filenames.push(format!(
-                        "{:?}-{}-{}-{}",
+                        "{:?}-{}-{}-{}.{}",
                         capture.id,
                         capture.device_name.to_owned().replace(' ', "_"),
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
-                        time_display.utc_display()
+                        time_display.utc_display(),
+                        file_extension
                     ));
                 }
                 reqs
@@ -190,7 +195,7 @@ impl Command {
         // Get list of captures
         let result = client.send_grpc(&GrpcMethod::ListCapture, &Vec::new());
         if !result.is_ok() {
-            eprintln!("Grpc call error: {}", result.err());
+            eprintln!("ListCapture Grpc call error: {}", result.err());
             return Vec::new();
         }
         let mut response =
@@ -267,7 +272,7 @@ pub enum OnOffState {
 }
 
 #[derive(Debug, Subcommand)]
-pub enum Pcap {
+pub enum Capture {
     /// List currently available Captures (packet captures)
     List(ListCapture),
     /// Patch a Capture source to turn packet capture on/off
@@ -295,9 +300,11 @@ pub struct PatchCapture {
 pub struct GetCapture {
     /// Optional strings of pattern for captures to get. Possible filter fields include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
-    /// Directory to store downloaded capture(s)
+    /// Directory to store downloaded capture file(s)
     #[arg(short = 'o', long)]
     pub location: Option<String>,
     #[arg(skip)]
     pub filenames: Vec<String>,
+    #[arg(skip)]
+    pub current_file: String,
 }

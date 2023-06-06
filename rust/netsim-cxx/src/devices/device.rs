@@ -14,28 +14,29 @@
 
 // Device.rs
 
+use frontend_proto::model::State;
 use protobuf::Message;
 
 use crate::devices::chip;
 use crate::devices::chip::Chip;
 use crate::devices::chip::ChipIdentifier;
-use crate::devices::facades::FacadeIdentifier;
+use crate::devices::chip::FacadeIdentifier;
 use frontend_proto::common::ChipKind as ProtoChipKind;
 use frontend_proto::model::Device as ProtoDevice;
 use frontend_proto::model::Orientation as ProtoOrientation;
 use frontend_proto::model::Position as ProtoPosition;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub type DeviceIdentifier = i32;
 
 pub struct Device {
     pub id: DeviceIdentifier,
     pub guid: String,
-    name: String,
-    visible: bool,
+    pub name: String,
+    visible: State,
     pub position: ProtoPosition,
     orientation: ProtoOrientation,
-    pub chips: HashMap<ChipIdentifier, Chip>,
+    pub chips: BTreeMap<ChipIdentifier, Chip>,
 }
 impl Device {
     pub fn new(id: DeviceIdentifier, guid: String, name: String) -> Self {
@@ -43,14 +44,15 @@ impl Device {
             id,
             guid,
             name,
-            visible: true,
+            visible: State::ON,
             position: ProtoPosition::new(),
             orientation: ProtoOrientation::new(),
-            chips: HashMap::new(),
+            chips: BTreeMap::new(),
         }
     }
 }
 
+#[derive(Debug)]
 pub struct AddChipResult {
     pub device_id: DeviceIdentifier,
     pub chip_id: ChipIdentifier,
@@ -58,23 +60,25 @@ pub struct AddChipResult {
 }
 
 impl Device {
-    pub fn get(&self) -> ProtoDevice {
+    pub fn get(&self) -> Result<ProtoDevice, String> {
         let mut device = ProtoDevice::new();
         device.id = self.id;
         device.name = self.name.clone();
-        device.visible = self.visible;
+        device.visible = self.visible.into();
         device.position = protobuf::MessageField::from(Some(self.position.clone()));
         device.orientation = protobuf::MessageField::from(Some(self.orientation.clone()));
         for chip in self.chips.values() {
-            device.chips.push(chip.get());
+            device.chips.push(chip.get()?);
         }
-        device
+        Ok(device)
     }
 
     /// Patch a device and its chips.
-    pub fn patch(&mut self, patch: &ProtoDevice) {
-        // TODO visible should be State
-        self.visible = patch.visible;
+    pub fn patch(&mut self, patch: &ProtoDevice) -> Result<(), String> {
+        let patch_visible = patch.visible.enum_value_or_default();
+        if patch_visible != State::UNKNOWN {
+            self.visible = patch_visible;
+        }
         if patch.position.is_some() {
             self.position.clone_from(&patch.position);
         }
@@ -83,27 +87,45 @@ impl Device {
         }
         // iterate over patched ProtoChip entries and patch matching chip
         for patch_chip in patch.chips.iter() {
-            // Allow default chip kind of BLUETOOTH
-            let patch_chip_kind = patch_chip.kind.enum_value_or(ProtoChipKind::BLUETOOTH);
+            let mut patch_chip_kind = patch_chip.kind.enum_value_or_default();
+            // Check if chip is given when kind is not given.
+            // TODO: Fix patch device request body in CLI to include ChipKind, and remove if block below.
+            if patch_chip_kind == ProtoChipKind::UNSPECIFIED {
+                if patch_chip.has_bt() {
+                    patch_chip_kind = ProtoChipKind::BLUETOOTH;
+                } else if patch_chip.has_wifi() {
+                    patch_chip_kind = ProtoChipKind::WIFI;
+                } else if patch_chip.has_uwb() {
+                    patch_chip_kind = ProtoChipKind::UWB;
+                } else {
+                    break;
+                }
+            }
             let patch_chip_name = &patch_chip.name;
             // Find the matching chip and patch the proto chip
             for chip in self.chips.values_mut() {
-                if chip.name.eq(patch_chip_name) && chip.kind == patch_chip_kind {
-                    chip.patch(patch_chip);
+                if (patch_chip_name.is_empty() || chip.name.eq(patch_chip_name))
+                    && chip.kind == patch_chip_kind
+                {
+                    chip.patch(patch_chip)?;
                     break; // next proto chip
                 }
             }
         }
+        Ok(())
     }
 
     /// Remove a chip from a device.
-    pub fn remove_chip(&mut self, chip_id: ChipIdentifier) {
+    pub fn remove_chip(&mut self, chip_id: ChipIdentifier) -> Result<(), String> {
         if let Some(chip) = self.chips.get_mut(&chip_id) {
-            chip.remove();
+            chip.remove()?;
         } else {
-            eprintln!("RemoveChip id {chip_id} not found");
+            return Err(format!("RemoveChip chip id {chip_id} not found"));
         }
-        self.chips.remove(&chip_id);
+        match self.chips.remove(&chip_id) {
+            Some(_) => Ok(()),
+            None => Err(format!("Key {chip_id} not found in Hashmap")),
+        }
     }
 
     pub fn add_chip(
@@ -113,11 +135,10 @@ impl Device {
         chip_name: &str,
         chip_manufacturer: &str,
         chip_product_name: &str,
-    ) -> Option<AddChipResult> {
+    ) -> Result<AddChipResult, String> {
         for chip in self.chips.values() {
             if chip.kind == chip_kind && chip.name == chip_name {
-                eprintln!("Device::AddChip - duplicate at id {}, skipping.", chip.id);
-                return None;
+                return Err(format!("Device::AddChip - duplicate at id {}, skipping.", chip.id));
             }
         }
         let chip = chip::chip_new(
@@ -127,29 +148,31 @@ impl Device {
             device_name,
             chip_manufacturer,
             chip_product_name,
-        );
+        )?;
         let chip_id = chip.id;
         let facade_id = chip.facade_id;
-        self.chips.insert(chip.id, chip);
-        Some(AddChipResult { device_id: self.id, chip_id, facade_id })
+        self.chips.insert(chip_id, chip);
+        Ok(AddChipResult { device_id: self.id, chip_id, facade_id })
     }
 
     /// Reset a device to its default state.
-    pub fn reset(&mut self) {
-        self.visible = true;
+    pub fn reset(&mut self) -> Result<(), String> {
+        self.visible = State::ON;
         self.position.clear();
         self.orientation.clear();
-        for chp in self.chips.values_mut() {
-            chp.reset();
+        for chip in self.chips.values_mut() {
+            chip.reset()?;
         }
+        Ok(())
     }
 
     /// Remove all chips from a device.
     /// Called at shutdown.
     #[allow(dead_code)]
-    pub fn remove(&mut self) {
+    pub fn remove(&mut self) -> Result<(), String> {
         for (_, chip) in self.chips.iter_mut() {
-            chip.remove();
+            chip.remove()?;
         }
+        Ok(())
     }
 }
