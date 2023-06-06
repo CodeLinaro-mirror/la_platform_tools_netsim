@@ -22,6 +22,7 @@ mod config;
 mod devices;
 mod http_server;
 mod ranging;
+mod resource;
 mod system;
 mod transport;
 mod uwb;

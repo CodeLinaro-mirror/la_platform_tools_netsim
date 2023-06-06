@@ -65,7 +65,7 @@ lazy_static! {
 static IDLE_SECS_FOR_SHUTDOWN: u64 = 300;
 
 /// The Device resource is a singleton that manages all devices.
-struct Devices {
+pub struct Devices {
     // BTreeMap allows ListDevice to output devices in order of identifiers.
     devices: BTreeMap<DeviceIdentifier, Device>,
     id_factory: IdFactory<DeviceIdentifier>,
@@ -73,7 +73,7 @@ struct Devices {
 }
 
 impl Devices {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Devices {
             devices: BTreeMap::new(),
             id_factory: IdFactory::new(INITIAL_DEVICE_ID, 1),
