@@ -125,11 +125,7 @@ cc_library_host_static {
     name: "lib-netsim",
     defaults: ["netsim_defaults"],
     srcs: [
-        "src/controller/chip.cc",
         "src/controller/controller.cc",
-        "src/controller/device.cc",
-        "src/controller/scene_controller.cc",
-        "src/controller/device_notify_manager.cc",
         "src/core/server.cc",
         "src/frontend/frontend_client_stub.cc",
         "src/frontend/frontend_server.cc",
@@ -232,9 +228,6 @@ cc_test_host {
     name: "netsim-test",
     defaults: ["netsim_defaults"],
     srcs: [
-        "src/controller/device_test.cc",
-        "src/controller/scene_controller_test.cc",
-        "src/frontend/frontend_server_test.cc",
         "src/util/ini_file_test.cc",
         "src/util/os_utils_test.cc",
         "src/util/string_utils_test.cc",

@@ -29,10 +29,6 @@ use crate::version::VERSION;
 
 use crate::http_server::thread_pool::ThreadPool;
 
-use crate::ffi::get_devices;
-use crate::ffi::patch_device;
-use crate::ffi::reset;
-use cxx::let_cxx_string;
 use log::{error, info, warn};
 use netsim_common::util::netsim_logger;
 use std::collections::HashSet;
@@ -146,41 +142,6 @@ fn handle_version(_request: &HttpRequest, _param: &str, writer: ResponseWritable
     writer.put_ok("text/plain", body.as_str(), &[]);
 }
 
-fn handle_devices(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
-    if &request.method == "GET" {
-        let_cxx_string!(request = "");
-        let_cxx_string!(response = "");
-        let_cxx_string!(error_message = "");
-        let status = get_devices(&request, response.as_mut(), error_message.as_mut());
-        if status == 200 {
-            writer.put_ok("text/plain", response.to_string().as_str(), &[]);
-        } else {
-            let body = format!("404 Not found (netsim): {:?}", error_message.to_string());
-            writer.put_error(404, body.as_str());
-        }
-    } else if &request.method == "PATCH" {
-        let_cxx_string!(new_request = &request.body);
-        let_cxx_string!(response = "");
-        let_cxx_string!(error_message = "");
-        let status = patch_device(&new_request, response.as_mut(), error_message.as_mut());
-        if status == 200 {
-            writer.put_ok("text/plain", response.to_string().as_str(), &[]);
-        } else {
-            let body = format!("404 Not found (netsim): {:?}", error_message.to_string());
-            writer.put_error(404, body.as_str());
-        }
-    } else if &request.method == "PUT" {
-        reset();
-        writer.put_ok("text/plain", r"Device position reset success", &[]);
-    } else {
-        let body = format!(
-            "404 Not found (netsim): {:?} is not a valid method for this route",
-            request.method.to_string()
-        );
-        writer.put_error(404, body.as_str());
-    }
-}
-
 fn handle_dev(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
     writer.put_ok("text/plain", r"Welcome to netsim developer mode", &[]);
 }
@@ -189,12 +150,8 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
     let mut router = Router::new();
     router.add_route("/", Box::new(handle_index));
     router.add_route("/version", Box::new(handle_version));
-    if crate::config::get_dev() {
-        router.add_route(r"/v1/devices", Box::new(handle_device));
-        router.add_route(r"/v1/devices/{id}", Box::new(handle_device));
-    } else {
-        router.add_route("/v1/devices", Box::new(handle_devices));
-    }
+    router.add_route(r"/v1/devices", Box::new(handle_device));
+    router.add_route(r"/v1/devices/{id}", Box::new(handle_device));
     router.add_route(r"/v1/captures", Box::new(handle_capture));
     router.add_route(r"/v1/captures/{id}", Box::new(handle_capture));
 

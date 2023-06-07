@@ -25,6 +25,7 @@
 use super::chip::ChipIdentifier;
 use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
+use crate::captures::handlers::update_captures;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
 use crate::ffi::CxxServerResponseWriter;
@@ -92,8 +93,7 @@ fn notify_all() {
 ///
 /// The guid is a transport layer identifier for the device (host:port)
 /// that is adding the chip.
-#[allow(dead_code)]
-fn add_chip(
+pub fn add_chip(
     device_guid: &str,
     device_name: &str,
     chip_kind: ProtoChipKind,
@@ -101,22 +101,28 @@ fn add_chip(
     chip_manufacturer: &str,
     chip_product_name: &str,
 ) -> Result<AddChipResult, String> {
-    let mut resource = DEVICES.write().unwrap();
-    resource.idle_since = None;
-    let device_id = get_or_create_device(&mut resource, device_guid, device_name);
-    // This is infrequent, so we can afford to do another lookup for the device.
-    resource.devices.get_mut(&device_id).unwrap().add_chip(
-        device_name,
-        chip_kind,
-        chip_name,
-        chip_manufacturer,
-        chip_product_name,
-    )
+    let result = {
+        let mut resource = DEVICES.write().unwrap();
+        resource.idle_since = None;
+        let device_id = get_or_create_device(&mut resource, device_guid, device_name);
+        // This is infrequent, so we can afford to do another lookup for the device.
+        resource.devices.get_mut(&device_id).unwrap().add_chip(
+            device_name,
+            chip_kind,
+            chip_name,
+            chip_manufacturer,
+            chip_product_name,
+        )
+    };
+    if result.is_ok() {
+        update_captures();
+    }
+    result
 }
 
 /// An AddChip function for Rust Device API.
 /// The backend gRPC code will be invoking this method.
-pub fn add_chip_rust(
+pub fn add_chip_cxx(
     device_guid: &str,
     device_name: &str,
     chip_kind: &CxxString,
@@ -188,26 +194,31 @@ fn remove_device(
 /// Remove a chip from a device.
 ///
 /// Called when the packet transport for the chip shuts down.
-#[allow(dead_code)]
-fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(), String> {
-    let mut resource = DEVICES.write().unwrap();
-    let is_empty = match resource.devices.entry(device_id) {
-        Entry::Occupied(mut entry) => {
-            let device = entry.get_mut();
-            device.remove_chip(chip_id)?;
-            device.chips.is_empty()
+pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(), String> {
+    let result = {
+        let mut resource = DEVICES.write().unwrap();
+        let is_empty = match resource.devices.entry(device_id) {
+            Entry::Occupied(mut entry) => {
+                let device = entry.get_mut();
+                device.remove_chip(chip_id)?;
+                device.chips.is_empty()
+            }
+            Entry::Vacant(_) => return Err(format!("RemoveChip device id {device_id} not found")),
+        };
+        if is_empty {
+            remove_device(&mut resource, device_id)?;
         }
-        Entry::Vacant(_) => return Err(format!("RemoveChip device id {device_id} not found")),
+        Ok(())
     };
-    if is_empty {
-        remove_device(&mut resource, device_id)?;
+    if result.is_ok() {
+        update_captures();
     }
-    Ok(())
+    result
 }
 
 /// A RemoveChip function for Rust Device API.
 /// The backend gRPC code will be invoking this method.
-pub fn remove_chip_rust(device_id: u32, chip_id: u32) {
+pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
     match remove_chip(device_id as i32, chip_id as i32) {
         Ok(_) => info!("Rust Device API Remove Chip Success"),
         Err(err) => error!("Rust Device API Remove Chip Failure: {err}"),
@@ -276,7 +287,7 @@ fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32,
 
 /// A GetDistance function for Rust Device API.
 /// The backend gRPC code will be invoking this method.
-pub fn get_distance_rust(a: u32, b: u32) -> f32 {
+pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
     match get_distance(a as i32, b as i32) {
         Ok(distance) => distance,
         Err(err) => {

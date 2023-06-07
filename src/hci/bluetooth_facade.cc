@@ -396,7 +396,7 @@ int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power) {
   }
   auto a = id_to_chip_info_[send_id]->simulation_device;
   auto b = id_to_chip_info_[recv_id]->simulation_device;
-  auto distance = scene_controller::GetDistance(a, b);
+  auto distance = netsim::device::GetDistanceCxx(a, b);
   return netsim::DistanceToRssi(tx_power, distance);
 }
 

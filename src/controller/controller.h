@@ -14,31 +14,11 @@
 
 #pragma once
 
-#include <chrono>
-#include <optional>
-#include <string>
+#include <memory>
 
-#include "common.pb.h"
 #include "rust/cxx.h"
 
 namespace netsim::scene_controller {
-
-const unsigned int HTTP_STATUS_OK = 200;
-const unsigned int HTTP_STATUS_BAD_REQUEST = 400;
-
-unsigned int PatchDevice(const std::string &request, std::string &response,
-                         std::string &error_message);
-
-unsigned int GetDevices(const std::string &request, std::string &response,
-                        std::string &error_message);
-
-bool GetDevicesBytes(rust::Vec<::rust::u8> &vec);
-
-int GetFacadeId(int chip_id);
-
-void RemoveChip(uint32_t device_id, uint32_t chip_id);
-
-void Reset();
 
 /// The C++ definition of AddChip response interface for CXX.
 class AddChipResult {
@@ -58,21 +38,5 @@ class AddChipResult {
 std::unique_ptr<AddChipResult> NewAddChipResult(uint32_t device_id,
                                                 uint32_t chip_id,
                                                 uint32_t facade_id);
-
-std::unique_ptr<AddChipResult> AddChipCxx(const std::string &guid,
-                                          const std::string &device_name,
-                                          uint32_t chip_kind,
-                                          const std::string &chip_name,
-                                          const std::string &manufacturer,
-                                          const std::string &product_name);
-
-std::tuple<uint32_t, uint32_t, uint32_t> AddChip(
-    const std::string &guid, const std::string &device_name,
-    common::ChipKind chip_kind, const std::string &chip_name = "",
-    const std::string &manufacturer = "", const std::string &product_name = "");
-
-float GetDistance(uint32_t, uint32_t);
-
-std::optional<std::chrono::seconds> GetShutdownTime();
 
 }  // namespace netsim::scene_controller

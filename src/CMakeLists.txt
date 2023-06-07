@@ -95,16 +95,8 @@ if(TARGET Rust::Rustc)
         backend/backend_packet_hub.h
         backend/grpc_server.cc
         backend/grpc_server.h
-        controller/chip.cc
-        controller/chip.h
         controller/controller.cc
         controller/controller.h
-        controller/device.cc
-        controller/device.h
-        controller/device_notify_manager.cc
-        controller/device_notify_manager.h
-        controller/scene_controller.cc
-        controller/scene_controller.h
         core/server.cc
         core/server.h
         frontend/frontend_client_stub.cc

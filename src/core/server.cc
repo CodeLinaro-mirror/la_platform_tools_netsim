@@ -111,16 +111,7 @@ void Run(ServerParams params) {
 
   while (true) {
     std::this_thread::sleep_for(InactivityCheckInterval);
-    if (netsim::config::GetDev()) {
-      if (netsim::device::IsShutdownTimeCxx()) {
-        grpc_server->Shutdown();
-        BtsLog("Netsim has been shutdown due to inactivity.");
-        break;
-      }
-    } else if (auto seconds_to_shutdown =
-                   netsim::scene_controller::GetShutdownTime();
-               seconds_to_shutdown.has_value() &&
-               seconds_to_shutdown.value() < std::chrono::seconds(0)) {
+    if (netsim::device::IsShutdownTimeCxx()) {
       grpc_server->Shutdown();
       BtsLog("Netsim has been shutdown due to inactivity.");
       break;

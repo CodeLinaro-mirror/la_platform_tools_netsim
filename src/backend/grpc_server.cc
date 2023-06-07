@@ -78,8 +78,27 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     auto manufacturer = request.initial_info().chip().manufacturer();
     auto product_name = request.initial_info().chip().product_name();
     // Add a new chip to the device
-    auto [device_id, chip_id, facade_id] = scene_controller::AddChip(
-        peer, device_name, chip_kind, chip_name, manufacturer, product_name);
+    std::string chip_kind_string;
+    switch (chip_kind) {
+      case common::ChipKind::BLUETOOTH:
+        chip_kind_string = "BLUETOOTH";
+        break;
+      case common::ChipKind::WIFI:
+        chip_kind_string = "WIFI";
+        break;
+      case common::ChipKind::UWB:
+        chip_kind_string = "UWB";
+        break;
+      default:
+        chip_kind_string = "UNSPECIFIED";
+        break;
+    }
+    std::unique_ptr<scene_controller::AddChipResult> result_ptr =
+        netsim::device::AddChipCxx(peer, device_name, chip_kind_string,
+                                   chip_name, manufacturer, product_name);
+    uint32_t device_id = result_ptr->device_id;
+    uint32_t chip_id = result_ptr->chip_id;
+    uint32_t facade_id = result_ptr->facade_id;
 
     BtsLog("grpc_server: adding chip %d with facade %d to %s", chip_id,
            facade_id, device_name.c_str());
@@ -93,7 +112,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     facade_to_stream.erase(ChipFacade(chip_kind, facade_id));
 
     // Remove the chip from the device
-    scene_controller::RemoveChip(device_id, chip_id);
+    netsim::device::RemoveChipCxx(device_id, chip_id);
 
     BtsLog("grpc_server: removing chip %d from %s", chip_id,
            device_name.c_str());

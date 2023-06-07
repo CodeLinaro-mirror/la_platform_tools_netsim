@@ -18,8 +18,9 @@ use super::dispatcher::{register_transport, unregister_transport, Response};
 /// packet transports read requests and write response packets over gRPC or Fds.
 use super::h4;
 use super::uci;
-use crate::ffi::{add_chip_cxx, handle_request_cxx, remove_chip};
-use cxx::let_cxx_string;
+use crate::devices::devices_handler::{add_chip, remove_chip};
+use crate::ffi::handle_request_cxx;
+use frontend_proto::common::ChipKind;
 use log::error;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -132,7 +133,9 @@ fn fd_reader(
                 };
             }
 
-            remove_chip(device_id, chip_id);
+            if let Err(err) = remove_chip(device_id as i32, chip_id as i32) {
+                error!("{err}");
+            }
             // File is automatically closed when it goes out of scope.
             unregister_transport(kind as u32, facade_id);
         })
@@ -161,35 +164,42 @@ pub fn run_fd_transport(startup_json: &String) {
             let mut handles = Vec::with_capacity(chip_count);
             for device in startup_info.devices {
                 for chip in device.chips {
-                    let_cxx_string!(guid = chip.fd_in.to_string());
-                    let_cxx_string!(device_name = device.name.clone());
-                    let_cxx_string!(name = chip.id.unwrap_or_default());
-                    let_cxx_string!(manufacturer = chip.manufacturer.unwrap_or_default());
-                    let_cxx_string!(product_name = chip.product_name.unwrap_or_default());
-                    let result = add_chip_cxx(
-                        &guid,
-                        &device_name,
-                        chip.kind as u32,
-                        &name,
-                        &manufacturer,
-                        &product_name,
-                    );
+                    let chip_kind = match chip.kind {
+                        ChipKindEnum::BLUETOOTH => ChipKind::BLUETOOTH,
+                        ChipKindEnum::WIFI => ChipKind::WIFI,
+                        ChipKindEnum::UWB => ChipKind::UWB,
+                        _ => ChipKind::UNSPECIFIED,
+                    };
+                    let result = match add_chip(
+                        &chip.fd_in.to_string(),
+                        &device.name.clone(),
+                        chip_kind,
+                        &chip.id.unwrap_or_default(),
+                        &chip.manufacturer.unwrap_or_default(),
+                        &chip.product_name.unwrap_or_default(),
+                    ) {
+                        Ok(chip_result) => chip_result,
+                        Err(err) => {
+                            error!("{err}");
+                            return;
+                        }
+                    };
 
                     // Cf writes to fd_out and reads from fd_in
                     let file_in = unsafe { File::from_raw_fd(chip.fd_in as i32) };
 
                     register_transport(
                         chip.kind as u32,
-                        result.get_facade_id(),
+                        result.facade_id,
                         Box::new(FdTransport { file: file_in }),
                     );
                     // TODO: switch to runtime.spawn once FIFOs are available in Tokio
                     handles.push(fd_reader(
                         chip.fd_out as i32,
                         chip.kind,
-                        result.get_facade_id(),
-                        result.get_device_id(),
-                        result.get_chip_id(),
+                        result.facade_id,
+                        result.device_id as u32,
+                        result.chip_id as u32,
                     ));
                 }
             }

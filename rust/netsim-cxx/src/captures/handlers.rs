@@ -32,7 +32,6 @@ use frontend_proto::common::ChipKind;
 use frontend_proto::frontend::{GetDevicesResponse, ListCaptureResponse};
 use lazy_static::lazy_static;
 use netsim_common::util::time_display::TimeDisplay;
-use protobuf::Message;
 use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
 use std::collections::HashSet;
 use std::fs::File;
@@ -42,7 +41,7 @@ use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::captures::capture::{Captures, ChipId};
-use crate::ffi::{get_devices_bytes, CxxServerResponseWriter};
+use crate::ffi::CxxServerResponseWriter;
 use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
 use crate::system;
@@ -72,26 +71,11 @@ lazy_static! {
 /// Note: if a device disconnects and there is captured data, the entry
 /// remains with a flag valid = false so it can be retrieved.
 pub fn update_captures() {
-    let device_response = match crate::config::get_dev() {
-        true => match crate::devices::devices_handler::get_devices() {
-            Ok(scene) => GetDevicesResponse { devices: scene.devices, ..Default::default() },
-            Err(err) => {
-                println!("{err}");
-                return;
-            }
-        },
-        false => {
-            // Perform get_devices_bytes ffi to receive bytes of GetDevicesResponse
-            // Print error and return empty hashmap if GetDevicesBytes fails.
-            let mut vec = Vec::<u8>::new();
-            if !get_devices_bytes(&mut vec) {
-                println!(
-                    "netsimd error: GetDevicesBytes failed - returning an empty set of captures"
-                );
-                return;
-            }
-            // Parse get_devices_response
-            GetDevicesResponse::parse_from_bytes(&vec).unwrap()
+    let device_response = match crate::devices::devices_handler::get_devices() {
+        Ok(scene) => GetDevicesResponse { devices: scene.devices, ..Default::default() },
+        Err(err) => {
+            println!("{err}");
+            return;
         }
     };
 
