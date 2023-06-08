@@ -1,4 +1,4 @@
-import {Chip, Device as ProtoDevice, Pcap, State} from './model.js';
+import {Capture, Chip, Device as ProtoDevice, State} from './model.js';
 
 // URL for netsim
 const DEVICES_URL = './v1/devices';
@@ -150,7 +150,7 @@ export class Device {
  */
 export interface SimulationInfo {
   devices: Device[];
-  captures: Pcap[];
+  captures: Capture[];
   selectedId: string;
   dimension: {x: number; y: number; z: number;};
 }
@@ -196,7 +196,7 @@ class SimulationState implements Observable {
     })
         .then(response => response.json())
         .then(data => {
-          this.simulationInfo.captures = data.pcaps;
+          this.simulationInfo.captures = data.captures;
         })
         .catch(error => {
           console.log('Cannot connect to netsim web server', error);

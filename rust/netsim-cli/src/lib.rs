@@ -24,17 +24,17 @@ use std::env;
 use std::fs::File;
 use std::path::PathBuf;
 
-use args::{BinaryProtobuf, GetPcap, NetsimArgs};
+use args::{BinaryProtobuf, GetCapture, NetsimArgs};
 use clap::Parser;
 use cxx::UniquePtr;
 use frontend_client_cxx::ffi::{new_frontend_client, ClientResult, FrontendClient, GrpcMethod};
 use frontend_client_cxx::ClientResponseReader;
-use pcap_handler::PcapHandler;
+use pcap_handler::CaptureHandler;
 
 // helper function to process streaming Grpc request
 fn perform_streaming_request(
     client: &cxx::UniquePtr<FrontendClient>,
-    cmd: &GetPcap,
+    cmd: &GetCapture,
     req: &BinaryProtobuf,
     filename: &str,
 ) -> UniquePtr<ClientResult> {
@@ -50,10 +50,10 @@ fn perform_streaming_request(
         idx += 1;
         output_file = dir.join(format!("{}_{}.pcap", filename, idx));
     }
-    client.get_pcap(
+    client.get_capture(
         req,
         &ClientResponseReader {
-            handler: Box::new(PcapHandler {
+            handler: Box::new(CaptureHandler {
                 file: File::create(&output_file).unwrap_or_else(|_| {
                     panic!("Failed to create file: {}", &output_file.display())
                 }),
