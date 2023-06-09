@@ -12,26 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod dispatcher;
-#[cfg(feature = "cuttlefish")]
-pub mod fd;
-pub mod grpc;
-mod h4;
-pub mod socket;
-#[cfg(feature = "cuttlefish")]
-mod uci;
-pub mod websocket;
+use std::{collections::HashMap, net::TcpStream};
 
-// This provides no-op implementations of fd transport for non-unix systems.
-#[cfg(not(feature = "cuttlefish"))]
-pub mod fd {
-    pub fn handle_response(
-        _kind: u32,
-        _facade_id: u32,
-        _packet: &cxx::CxxVector<u8>,
-        _packet_type: u8,
-    ) {
-    }
-    #[allow(clippy::ptr_arg)]
-    pub fn run_fd_transport(_startup_json: &String) {}
+use log::info;
+
+pub fn run_websocket_transport(_stream: TcpStream, queries: HashMap<&str, &str>) {
+    info!("Running Websocket server");
+    info!("Queries for Websocket: {queries:?}");
+    todo!();
 }

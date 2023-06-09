@@ -53,6 +53,17 @@ impl HttpResponse {
         }
     }
 
+    pub fn new_ok_switch_protocol(connection: &str) -> HttpResponse {
+        HttpResponse {
+            status_code: 101,
+            headers: HttpHeaders::new_with_headers(&[
+                ("Upgrade", connection),
+                ("Connection", "Upgrade"),
+            ]),
+            body: Vec::new(),
+        }
+    }
+
     pub fn new_error(status_code: u16, body: Vec<u8>) -> HttpResponse {
         HttpResponse {
             status_code,

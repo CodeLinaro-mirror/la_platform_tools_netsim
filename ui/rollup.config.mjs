@@ -1,8 +1,8 @@
 // Import rollup plugins
-import {rollupPluginHTML as html} from '@web/rollup-plugin-html';
-import {copy} from '@web/rollup-plugin-copy';
+import { rollupPluginHTML as html } from '@web/rollup-plugin-html';
+import { copy } from '@web/rollup-plugin-copy';
 import resolve from '@rollup/plugin-node-resolve';
-import {terser} from 'rollup-plugin-terser';
+import { terser } from 'rollup-plugin-terser';
 import summary from 'rollup-plugin-summary';
 import { rollupImportMapPlugin } from "rollup-plugin-import-map";
 
@@ -11,12 +11,12 @@ export default {
     // Entry point for application build; can specify a glob to build multiple
     // HTML files for non-SPA app
     html({
-      input: './web/index.html',
+      input: ['./web/index.html', './web/dev.html']
     }),
     // Add Import maps from libraries to CDN urls
     rollupImportMapPlugin([
       {
-        "imports" : {
+        "imports": {
           'lit': 'https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js',
           'lit/decorators.js': 'https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js',
           'lit/directives/live.js': 'https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js',

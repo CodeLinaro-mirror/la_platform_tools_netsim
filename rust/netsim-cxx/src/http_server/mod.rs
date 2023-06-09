@@ -25,13 +25,14 @@ use crate::http_server::http_router::Router;
 use crate::http_server::server_response::{
     ResponseWritable, ServerResponseWritable, ServerResponseWriter,
 };
+use crate::transport::websocket::run_websocket_transport;
 use crate::version::VERSION;
 
 use crate::http_server::thread_pool::ThreadPool;
 
 use log::{error, info, warn};
 use netsim_common::util::netsim_logger;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
 use std::io::BufReader;
@@ -142,8 +143,50 @@ fn handle_version(_request: &HttpRequest, _param: &str, writer: ResponseWritable
     writer.put_ok("text/plain", body.as_str(), &[]);
 }
 
-fn handle_dev(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
-    writer.put_ok("text/plain", r"Welcome to netsim developer mode", &[]);
+/// Collect queries and output key and values into Vec
+fn collect_query(param: &str) -> Result<HashMap<&str, &str>, &str> {
+    let mut result = HashMap::new();
+    for word in param.split('&') {
+        let equal = word.find('=');
+        match equal {
+            Some(equal) => {
+                if result.insert(&word[..equal], &word[equal + 1..]).is_some() {
+                    return Err("Query has duplicate keys");
+                }
+            }
+            None => return Err("Invalid query string"),
+        }
+    }
+    // TODO: Check if initial ChipInfo is included
+    Ok(result)
+}
+
+// handler for websocket server connection
+fn handle_websocket(_request: &HttpRequest, param: &str, writer: ResponseWritable) {
+    match collect_query(param) {
+        Ok(queries) => {
+            let mut name_exists = false;
+            let mut kind_exists = false;
+            for (key, _) in queries {
+                if key == "name" {
+                    name_exists = true;
+                }
+                if key == "kind" {
+                    kind_exists = true;
+                }
+            }
+            if name_exists && kind_exists {
+                writer.put_ok_switch_protocol("websocket")
+            } else {
+                writer.put_error(404, "Missing name(device_name) and/or kind(chip_kind). Query must include name=a&kind=b.")
+            }
+        }
+        Err(err) => writer.put_error(404, err),
+    }
+}
+
+fn handle_dev(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
+    handle_file(&request.method, "dev.html", writer)
 }
 
 fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
@@ -158,6 +201,7 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
     // Adding additional routes in dev mode.
     if crate::config::get_dev() {
         router.add_route("/dev", Box::new(handle_dev));
+        router.add_route(r"/v1/websocket?", Box::new(handle_websocket));
     }
 
     // A closure for checking if path is a static file we wish to serve, and call handle_static
@@ -185,9 +229,39 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
     if let Ok(request) = HttpRequest::parse::<&TcpStream>(&mut BufReader::new(&stream)) {
         let mut response_writer = ServerResponseWriter::new(&mut stream);
         router.handle_request(&request, &mut response_writer);
+        if let Some(response) = response_writer.get_response() {
+            if response.status_code == 101 {
+                let query_start = request.uri.find('?').unwrap();
+                let queries = collect_query(&request.uri[query_start + 1..]).unwrap();
+                run_websocket_transport(stream, queries);
+            }
+        }
     } else {
         let mut response_writer = ServerResponseWriter::new(&mut stream);
         let body = "404 not found (netsim): parse header failed";
         response_writer.put_error(404, body);
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_collect_query() {
+        // Single query pair
+        let mut expected = HashMap::new();
+        expected.insert("name", "hello");
+        assert_eq!(collect_query("name=hello"), Ok(expected));
+
+        // Multiple query pair
+        let mut expected = HashMap::new();
+        expected.insert("name", "hello");
+        expected.insert("kind", "bt");
+        assert_eq!(collect_query("name=hello&kind=bt"), Ok(expected));
+
+        // Invalid query string or duplicate keys
+        assert_eq!(collect_query("hello"), Err("Invalid query string"));
+        assert_eq!(collect_query("name=hello&name=world"), Err("Query has duplicate keys"))
+    }
 }
