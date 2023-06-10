@@ -18,13 +18,13 @@ from setuptools.command.build_py import build_py
 class ProtoBuild(build_py):
     """
     This command automatically compiles all netsim .proto files with `protoc` compiler
-    and places generated files under netsim-grpc/src/proto
+    and places generated files under src/netsim/proto
     """
 
     def run(self):
         here = path.abspath(path.dirname(__file__))
         proto_dir = path.join(path.dirname(path.dirname(here)), "src", "proto")
-        out_dir = path.join(here, "src", "proto")
+        out_dir = path.join(here, "src", "netsim", "proto")
 
         for protofile in filter(
             lambda x: x.endswith(".proto"), os.listdir(proto_dir)
