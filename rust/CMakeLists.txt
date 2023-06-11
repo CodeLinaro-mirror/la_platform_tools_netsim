@@ -34,12 +34,14 @@ if(LINUX)
 endif()
 
 add_subdirectory(frontend-proto)
-# Steps to generate rust files are as follows:
+# Steps to generate protobuf -> rust files are as follows:
 #
-# 1. sudo apt-get install protobuf-compiler
-# 2. Uncomment `build = "build_cargo.rs"` in rust/frontend-proto/Cargo.toml.
-# 3. cargo build
-# 4. bash scripts/format_code.sh
+# 1. Uncomment `build = "build_cargo.rs"` in rust/frontend-proto/Cargo.toml.
+# 2. Uncomment `protobuf = "=3.2.0"` in rust/frontend-proto/Cargo.toml.
+# 3. Uncomment `protobuf-codegen = "3.2.0""` in rust/frontend-proto/Cargo.toml.
+# 4. cargo build
+# 5. git checkout rust/frontend-proto/Cargo.toml
+# 6. bash scripts/format_code.sh
 
 android_license(TARGET "netsim-cxx" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
