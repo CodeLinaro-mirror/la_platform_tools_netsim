@@ -272,7 +272,6 @@ fn distance(a: &ProtoPosition, b: &ProtoPosition) -> f32 {
 
 #[allow(dead_code)]
 fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32, String> {
-    print!("get_distance({:?}, {:?}) = ", id, other_id);
     let devices = &DEVICES.read().unwrap().devices;
     let a = devices
         .get(&id)

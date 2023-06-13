@@ -23,6 +23,7 @@ mod devices;
 mod http_server;
 mod ranging;
 mod resource;
+mod service;
 mod system;
 mod transport;
 mod uwb;
@@ -51,6 +52,7 @@ use crate::devices::devices_handler::{
 };
 use crate::http_server::run_http_server;
 use crate::ranging::*;
+use crate::service::{create_service, Service};
 use crate::system::netsimd_temp_dir_string;
 use crate::uwb::facade::*;
 use crate::version::*;
@@ -86,6 +88,16 @@ mod ffi {
 
         #[cxx_name = "GetVersion"]
         fn get_version() -> String;
+
+        // Service
+
+        type Service;
+        #[cxx_name = "CreateService"]
+        fn create_service() -> Box<Service>;
+        #[cxx_name = "SetUp"]
+        fn set_up(self: &Service);
+        #[cxx_name = "Run"]
+        fn run(self: &Service);
 
         // System
 
