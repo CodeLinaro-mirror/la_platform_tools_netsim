@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use netsim_common::util::netsim_logger;
+
 /// Module to control startup, run, and cleanup netsimd services.
 // TODO: Replace Run() in server.cc.
 
@@ -26,7 +28,8 @@ impl Service {
 
     /// Sets up the states for netsimd.
     pub fn set_up(&self) {
-        // TODO: Set up netsim logger, clean pcap files.
+        // TODO: clean pcap files.
+        netsim_logger::init("netsimd");
     }
 
     /// Runs the netsimd services.

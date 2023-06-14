@@ -31,7 +31,6 @@ use crate::version::VERSION;
 use crate::http_server::thread_pool::ThreadPool;
 
 use log::{error, info, warn};
-use netsim_common::util::netsim_logger;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
@@ -46,7 +45,6 @@ const PATH_PREFIXES: [&str; 3] = ["js", "assets", "node_modules/tslib"];
 
 // TODO: move to main.rs
 pub fn run_http_server() {
-    netsim_logger::init("netsimd");
     let listener = match TcpListener::bind("127.0.0.1:7681") {
         Ok(listener) => listener,
         Err(e) => {
