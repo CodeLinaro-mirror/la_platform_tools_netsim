@@ -169,7 +169,7 @@ mod tests {
         router.handle_request(&request, &mut writer);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: 13\r\n\r\nHello, world!";
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 13\r\n\r\nHello, world!";
         assert_eq!(written_bytes, expected_bytes);
 
         let request = HttpRequest {
@@ -184,7 +184,7 @@ mod tests {
         router.handle_request(&request, &mut writer);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 200\r\nContent-Type: application/json\r\nContent-Length: 12\r\n\r\nHello, 1920!";
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 12\r\n\r\nHello, 1920!";
         assert_eq!(written_bytes, expected_bytes);
     }
 
@@ -204,7 +204,7 @@ mod tests {
         router.handle_request(&request, &mut writer);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 404\r\nContent-Type: text/plain\r\nContent-Length: 59\r\n\r\n404 Not found (netsim): HttpRouter unknown uri /player/1920";
+            b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 59\r\n\r\n404 Not found (netsim): HttpRouter unknown uri /player/1920";
         assert_eq!(written_bytes, expected_bytes);
     }
 
@@ -224,7 +224,7 @@ mod tests {
         router.handle_request(&request, &mut writer);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 200\r\nContent-Type: text/plain\r\nContent-Length: 26\r\n\r\nThe query is 'name=hello'!";
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 26\r\n\r\nThe query is 'name=hello'!";
         assert_eq!(written_bytes, expected_bytes);
     }
 }

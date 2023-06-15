@@ -30,6 +30,10 @@ mod uwb;
 mod version;
 mod wifi;
 
+// This feature is enabled only for CMake builds
+#[cfg(feature = "local_ssl")]
+mod openssl;
+
 use std::pin::Pin;
 
 use cxx::let_cxx_string;
@@ -49,6 +53,7 @@ use crate::captures::handlers::{
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, is_shutdown_time_cxx, remove_chip_cxx,
+    AddChipResultCxx,
 };
 use crate::http_server::run_http_server;
 use crate::ranging::*;
@@ -137,6 +142,16 @@ mod ffi {
         fn unregister_grpc_transport(kind: u32, facade_id: u32);
 
         // Device Resource
+        type AddChipResultCxx;
+        #[cxx_name = "GetDeviceId"]
+        fn get_device_id(self: &AddChipResultCxx) -> u32;
+        #[cxx_name = "GetChipId"]
+        fn get_chip_id(self: &AddChipResultCxx) -> u32;
+        #[cxx_name = "GetFacadeId"]
+        fn get_facade_id(self: &AddChipResultCxx) -> u32;
+        #[cxx_name = "IsError"]
+        fn is_error(self: &AddChipResultCxx) -> bool;
+
         #[cxx_name = AddChipCxx]
         #[namespace = "netsim::device"]
         fn add_chip_cxx(
@@ -146,7 +161,7 @@ mod ffi {
             chip_name: &str,
             chip_manufacturer: &str,
             chip_product_name: &str,
-        ) -> UniquePtr<AddChipResult>;
+        ) -> Box<AddChipResultCxx>;
 
         #[cxx_name = RemoveChipCxx]
         #[namespace = "netsim::device"]
@@ -227,22 +242,6 @@ mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("controller/controller.h");
-
-        #[namespace = "netsim::scene_controller"]
-        type AddChipResult;
-        fn get_chip_id(self: &AddChipResult) -> u32;
-        fn get_device_id(self: &AddChipResult) -> u32;
-        fn get_facade_id(self: &AddChipResult) -> u32;
-
-        #[rust_name = "new_add_chip_result"]
-        #[namespace = "netsim::scene_controller"]
-        fn NewAddChipResult(
-            device_id: u32,
-            chip_id: u32,
-            facade_id: u32,
-        ) -> UniquePtr<AddChipResult>;
-
         /// A C++ class which can be used to respond to a request.
         include!("frontend/server_response_writable.h");
 

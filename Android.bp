@@ -73,6 +73,7 @@ rust_defaults {
         "libserde_json",
         "liblazy_static",
         "liblog_rust",
+        "libopenssl",
     ],
     srcs: ["rust/netsim-cxx/src/lib.rs"],
 }
@@ -125,7 +126,6 @@ cc_library_host_static {
     name: "lib-netsim",
     defaults: ["netsim_defaults"],
     srcs: [
-        "src/controller/controller.cc",
         "src/core/server.cc",
         "src/frontend/frontend_client_stub.cc",
         "src/frontend/frontend_server.cc",

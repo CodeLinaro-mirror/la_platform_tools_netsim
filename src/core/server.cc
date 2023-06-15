@@ -21,7 +21,6 @@
 #include <thread>
 
 #include "backend/grpc_server.h"
-#include "controller/controller.h"
 #include "frontend/frontend_server.h"
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"

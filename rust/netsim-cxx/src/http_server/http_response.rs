@@ -94,7 +94,7 @@ mod tests {
         writer.put_ok_with_vec("text/plain", b"Hello World".to_vec(), &[]);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 200\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
         assert_eq!(written_bytes, expected_bytes);
     }
 }

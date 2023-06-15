@@ -52,7 +52,13 @@ impl<'a> ServerResponseWriter<'a> {
         ServerResponseWriter { writer, response: None }
     }
     pub fn put_response(&mut self, response: HttpResponse) {
-        let mut buffer = format!("HTTP/1.1 {}\r\n", response.status_code).into_bytes();
+        let reason = match response.status_code {
+            101 => "Switching Protocols",
+            200 => "OK",
+            404 => "Not Found",
+            _ => "Unknown Reason",
+        };
+        let mut buffer = format!("HTTP/1.1 {} {}\r\n", response.status_code, reason).into_bytes();
         for (name, value) in response.headers.iter() {
             buffer.extend_from_slice(format!("{name}: {value}\r\n").as_bytes());
         }
@@ -115,7 +121,7 @@ mod tests {
         writer.put_error(404, "Hello World");
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 404\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
+            b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
         assert_eq!(written_bytes, expected_bytes);
     }
 
@@ -126,7 +132,7 @@ mod tests {
         writer.put_ok("text/plain", "Hello World", &[]);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 200\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
         assert_eq!(written_bytes, expected_bytes);
     }
 }

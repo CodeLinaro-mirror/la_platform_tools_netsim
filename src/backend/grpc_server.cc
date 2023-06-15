@@ -23,7 +23,6 @@
 #include <unordered_map>
 
 #include "common.pb.h"
-#include "controller/controller.h"
 #include "google/protobuf/empty.pb.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
@@ -93,12 +92,16 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         chip_kind_string = "UNSPECIFIED";
         break;
     }
-    std::unique_ptr<scene_controller::AddChipResult> result_ptr =
+    auto result =
         netsim::device::AddChipCxx(peer, device_name, chip_kind_string,
                                    chip_name, manufacturer, product_name);
-    uint32_t device_id = result_ptr->device_id;
-    uint32_t chip_id = result_ptr->chip_id;
-    uint32_t facade_id = result_ptr->facade_id;
+    if (result->IsError()) {
+      return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
+                            "AddChipCxx failed to add chip into netsim");
+    }
+    uint32_t device_id = result->GetDeviceId();
+    uint32_t chip_id = result->GetChipId();
+    uint32_t facade_id = result->GetFacadeId();
 
     BtsLog("grpc_server: adding chip %d with facade %d to %s", chip_id,
            facade_id, device_name.c_str());
