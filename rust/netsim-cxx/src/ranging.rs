@@ -28,33 +28,52 @@ const PATH_LOSS_AT_1M: f32 = 40.20;
 /// # Parameters
 ///
 /// * `distance`: distance in meters (m).
-/// * `tx_power1`: transmitted power (dBm) calibrated to 1 meter.
+/// * `tx_power`: transmitted power (dBm) calibrated to 1 meter.
 ///
 /// # Returns
 ///
-/// The rssi (dBm) that would be measured at that distance.
+/// The rssi that would be measured at that distance, in the
+/// range -120..20 dBm,
 pub fn distance_to_rssi(tx_power: i8, distance: f32) -> i8 {
-    // TODO(b/285634913): Rootcanal reporting tx_power of 0 or 1 during Nearby Share
-    let new_tx_power = match tx_power == 1 || tx_power == 0 {
-        true => -49,
-        false => tx_power,
+    // TODO(b/285634913)
+    // Rootcanal reporting tx_power of 0 or 1 during Nearby Share
+    let new_tx_power = match tx_power {
+        0 | 1 => -49,
+        _ => tx_power,
     };
     match distance == 0.0 {
-        true => (new_tx_power as f32 + PATH_LOSS_AT_1M) as i8,
-        false => (new_tx_power as f32 - 20.0 * distance.log10()) as i8,
+        true => (new_tx_power as f32 + PATH_LOSS_AT_1M).clamp(-120.0, 20.0) as i8,
+        false => (new_tx_power as f32 - 20.0 * distance.log10()).clamp(-120.0, 20.0) as i8,
     }
 }
 
+#[cfg(test)]
 mod tests {
     #[test]
-    fn zero_distance() {
-        let rssi_at_0 = super::distance_to_rssi(-120, 0.0);
-        assert_eq!(rssi_at_0, -79);
+    fn rssi_at_0m() {
+        let rssi_at_0m = super::distance_to_rssi(-120, 0.0);
+        assert_eq!(rssi_at_0m, -79);
     }
+
     #[test]
-    fn rssi_at_far() {
+    fn rssi_at_1m() {
         // With transmit power at 0 dBm verify a reasonable rssi at 1m
-        let rssi_at_1 = super::distance_to_rssi(0, 1.0);
-        assert!(rssi_at_1 < -35 && rssi_at_1 > -55);
+        let rssi_at_1m = super::distance_to_rssi(0, 1.0);
+        assert!(rssi_at_1m < -35 && rssi_at_1m > -55);
+    }
+
+    #[test]
+    fn rssi_saturate_inf() {
+        // Verify that the rssi saturates at -120 for very large distances.
+        let rssi_inf = super::distance_to_rssi(-120, 1000.0);
+        assert_eq!(rssi_inf, -120);
+    }
+
+    #[test]
+    fn rssi_saturate_sup() {
+        // Verify that the rssi saturates at +20 for the largest tx power
+        // and nearest distance.
+        let rssi_sup = super::distance_to_rssi(20, 0.0);
+        assert_eq!(rssi_sup, 20);
     }
 }

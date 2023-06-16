@@ -34,6 +34,7 @@ if(LINUX)
 endif()
 
 add_subdirectory(frontend-proto)
+
 # Steps to generate protobuf -> rust files are as follows:
 #
 # 1. Uncomment `build = "build_cargo.rs"` in rust/frontend-proto/Cargo.toml.
