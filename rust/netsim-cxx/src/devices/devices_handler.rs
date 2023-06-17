@@ -174,7 +174,10 @@ pub fn add_chip_cxx(
         chip_product_name,
     ) {
         Ok(result) => {
-            info!("Rust Device API Add Chip Success");
+            info!(
+                "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, chip_id: {}",
+                result.chip_id
+            );
             Box::new(AddChipResultCxx {
                 device_id: result.device_id as u32,
                 chip_id: result.chip_id as u32,
@@ -183,7 +186,7 @@ pub fn add_chip_cxx(
             })
         }
         Err(err) => {
-            error!("Rust Device API Add Chip Error: {err}");
+            error!("Failed to add chip: {err}");
             Box::new(AddChipResultCxx {
                 device_id: u32::MAX,
                 chip_id: u32::MAX,
@@ -219,7 +222,7 @@ fn remove_device(
     resource: &mut RwLockWriteGuard<Devices>,
     id: DeviceIdentifier,
 ) -> Result<(), String> {
-    resource.devices.remove(&id).ok_or(format!("Error removing device id {id}"))?;
+    resource.devices.remove(&id).ok_or(format!("Error removing device with id {id}"))?;
     if resource.devices.is_empty() {
         resource.idle_since = Some(Instant::now());
     }
@@ -255,8 +258,8 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
 /// The backend gRPC code will be invoking this method.
 pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
     match remove_chip(device_id as i32, chip_id as i32) {
-        Ok(_) => info!("Rust Device API Remove Chip Success"),
-        Err(err) => error!("Rust Device API Remove Chip Failure: {err}"),
+        Ok(_) => info!("Removed Chip: chip_id: {chip_id}"),
+        Err(err) => error!("Failed to remove chip: {err}"),
     }
 }
 
@@ -325,7 +328,7 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
     match get_distance(a as i32, b as i32) {
         Ok(distance) => distance,
         Err(err) => {
-            error!("Rust Device API Get Distance Error: {err}");
+            error!("get_distance Error: {err}");
             0.0
         }
     }
