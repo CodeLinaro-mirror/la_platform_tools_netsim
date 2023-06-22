@@ -32,6 +32,7 @@ use crate::ffi::CxxServerResponseWriter;
 use crate::http_server::http_request::HttpHeaders;
 use crate::http_server::http_request::HttpRequest;
 use crate::http_server::server_response::ResponseWritable;
+use crate::resource::get_devices_resource;
 use crate::CxxServerResponseWriterWrapper;
 use cxx::CxxString;
 use frontend_proto::common::ChipKind as ProtoChipKind;
@@ -39,7 +40,6 @@ use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::frontend::PatchDeviceRequest;
 use frontend_proto::model::Position as ProtoPosition;
 use frontend_proto::model::Scene as ProtoScene;
-use lazy_static::lazy_static;
 use log::{error, info};
 use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string_with_options;
@@ -47,7 +47,6 @@ use protobuf_json_mapping::PrintOptions;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::pin::Pin;
-use std::sync::RwLock;
 use std::sync::RwLockWriteGuard;
 use std::time::Instant;
 
@@ -59,9 +58,6 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     _future_options: (),
 };
 
-lazy_static! {
-    static ref DEVICES: RwLock<Devices> = RwLock::new(Devices::new());
-}
 static IDLE_SECS_FOR_SHUTDOWN: u64 = 300;
 
 /// The Device resource is a singleton that manages all devices.
@@ -101,7 +97,8 @@ pub fn add_chip(
     chip_product_name: &str,
 ) -> Result<AddChipResult, String> {
     let result = {
-        let mut resource = DEVICES.write().unwrap();
+        let resource_arc = get_devices_resource();
+        let mut resource = resource_arc.write().unwrap();
         resource.idle_since = None;
         let device_id = get_or_create_device(&mut resource, device_guid, device_name);
         // This is infrequent, so we can afford to do another lookup for the device.
@@ -234,7 +231,8 @@ fn remove_device(
 /// Called when the packet transport for the chip shuts down.
 pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(), String> {
     let result = {
-        let mut resource = DEVICES.write().unwrap();
+        let resource_arc = get_devices_resource();
+        let mut resource = resource_arc.write().unwrap();
         let is_empty = match resource.devices.entry(device_id) {
             Entry::Occupied(mut entry) => {
                 let device = entry.get_mut();
@@ -268,7 +266,8 @@ pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
 fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result<(), String> {
     let mut patch_device_request = PatchDeviceRequest::new();
     if merge_from_str(&mut patch_device_request, patch_json).is_ok() {
-        let mut resource = DEVICES.write().unwrap();
+        let resource_arc = get_devices_resource();
+        let mut resource = resource_arc.write().unwrap();
         let proto_device = patch_device_request.device;
         match id_option {
             Some(id) => match resource.devices.get_mut(&id) {
@@ -310,7 +309,8 @@ fn distance(a: &ProtoPosition, b: &ProtoPosition) -> f32 {
 
 #[allow(dead_code)]
 fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32, String> {
-    let devices = &DEVICES.read().unwrap().devices;
+    let resource_arc = get_devices_resource();
+    let devices = &resource_arc.read().unwrap().devices;
     let a = devices
         .get(&id)
         .map(|device_ref| device_ref.position.clone())
@@ -337,7 +337,8 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
 pub fn get_devices() -> Result<ProtoScene, String> {
     let mut scene = ProtoScene::new();
     // iterate over the devices and add each to the scene
-    let resource = DEVICES.read().unwrap();
+    let resource_arc = get_devices_resource();
+    let resource = resource_arc.read().unwrap();
     for device in resource.devices.values() {
         scene.devices.push(device.get()?);
     }
@@ -346,7 +347,8 @@ pub fn get_devices() -> Result<ProtoScene, String> {
 
 #[allow(dead_code)]
 fn reset(id: DeviceIdentifier) -> Result<(), String> {
-    let mut resource = DEVICES.write().unwrap();
+    let resource_arc = get_devices_resource();
+    let mut resource = resource_arc.write().unwrap();
     match resource.devices.get_mut(&id) {
         Some(device) => device.reset(),
         None => Err(format!("No such device with id {id}")),
@@ -355,7 +357,8 @@ fn reset(id: DeviceIdentifier) -> Result<(), String> {
 
 #[allow(dead_code)]
 fn reset_all() -> Result<(), String> {
-    let mut resource = DEVICES.write().unwrap();
+    let resource_arc = get_devices_resource();
+    let mut resource = resource_arc.write().unwrap();
     for device in resource.devices.values_mut() {
         device.reset()?;
     }
@@ -364,7 +367,9 @@ fn reset_all() -> Result<(), String> {
 
 /// Return true if netsimd is idle for 5 minutes
 pub fn is_shutdown_time_cxx() -> bool {
-    match DEVICES.read().unwrap().idle_since {
+    let resource_arc = get_devices_resource();
+    let resource = resource_arc.read().unwrap();
+    match resource.idle_since {
         Some(idle_since) => {
             IDLE_SECS_FOR_SHUTDOWN.checked_sub(idle_since.elapsed().as_secs()).is_none()
         }
@@ -472,7 +477,8 @@ pub fn handle_device_cxx(
 
 /// Get Facade ID from given chip_id
 pub fn get_facade_id(chip_id: i32) -> Result<u32, String> {
-    let resource = DEVICES.read().unwrap();
+    let resource_arc = get_devices_resource();
+    let resource = resource_arc.read().unwrap();
     for device in resource.devices.values() {
         for (id, chip) in &device.chips {
             if *id == chip_id {
@@ -492,6 +498,7 @@ mod tests {
     };
 
     use frontend_proto::model::{Device as ProtoDevice, Orientation as ProtoOrientation, State};
+    use lazy_static::lazy_static;
     use netsim_common::util::netsim_logger::init_for_test;
     use protobuf_json_mapping::print_to_string;
 
@@ -540,7 +547,8 @@ mod tests {
         }
 
         fn get_or_create_device(&self) -> DeviceIdentifier {
-            let mut resource = DEVICES.write().unwrap();
+            let resource_arc = get_devices_resource();
+            let mut resource = resource_arc.write().unwrap();
             super::get_or_create_device(&mut resource, self.device_guid, self.device_name)
         }
     }
@@ -556,7 +564,8 @@ mod tests {
 
     /// helper function for test cases to refresh DEVICES
     fn refresh_resource() {
-        let mut resource = DEVICES.write().unwrap();
+        let resource_arc = get_devices_resource();
+        let mut resource = resource_arc.write().unwrap();
         resource.devices = BTreeMap::new();
         resource.id_factory = IdFactory::new(1000, 1);
         resource.idle_since = Some(Instant::now());
@@ -567,7 +576,8 @@ mod tests {
 
     /// helper function for traveling back n seconds for idle_since
     fn travel_back_n_seconds_from_now(n: u64) {
-        let mut resource = DEVICES.write().unwrap();
+        let resource_arc = get_devices_resource();
+        let mut resource = resource_arc.write().unwrap();
         resource.idle_since = Some(Instant::now() - Duration::from_secs(n));
     }
 
@@ -991,7 +1001,9 @@ mod tests {
 
         // Add a device and check if idle_since is None
         let _ = test_chip_1_bt().add_chip();
-        assert!(DEVICES.read().unwrap().idle_since.is_none());
+        let resource_arc = get_devices_resource();
+        let resource = resource_arc.read().unwrap();
+        assert!(resource.idle_since.is_none());
         assert!(!is_shutdown_time_cxx());
     }
 
