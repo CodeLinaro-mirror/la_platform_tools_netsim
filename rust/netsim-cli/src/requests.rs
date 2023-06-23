@@ -22,7 +22,7 @@ impl args::Command {
             Command::Version => GrpcMethod::GetVersion,
             Command::Radio(_) => GrpcMethod::PatchDevice,
             Command::Move(_) => GrpcMethod::PatchDevice,
-            Command::Devices(_) => GrpcMethod::GetDevices,
+            Command::Devices(_) => GrpcMethod::ListDevice,
             Command::Reset => GrpcMethod::Reset,
             Command::Capture(cmd) => match cmd {
                 args::Capture::List(_) => GrpcMethod::ListCapture,
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_devices() {
-        test_command("netsim-cli devices", GrpcMethod::GetDevices, Vec::new())
+        test_command("netsim-cli devices", GrpcMethod::ListDevice, Vec::new())
     }
 
     #[test]

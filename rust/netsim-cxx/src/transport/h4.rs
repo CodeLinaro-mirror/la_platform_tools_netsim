@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use log::warn;
+use std::collections::VecDeque;
 use std::io::{Error, Read};
 
 #[derive(Debug)]
@@ -41,7 +43,7 @@ const HCI_SCO_PREAMBLE_SIZE: usize = 3;
 const HCI_EVT_PREAMBLE_SIZE: usize = 2;
 const HCI_ISO_PREAMBLE_SIZE: usize = 4;
 
-// TODO: recovery mode to get back on sync
+/// Read and return the h4 packet.
 pub fn read_h4_packet<R: Read>(reader: &mut R) -> Result<Packet, PacketError> {
     // Read the h4 type and obtain the preamble length
     let mut buffer = [0u8; 1];
@@ -53,7 +55,7 @@ pub fn read_h4_packet<R: Read>(reader: &mut R) -> Result<Packet, PacketError> {
         H4_SCO_TYPE => HCI_SCO_PREAMBLE_SIZE,
         H4_EVT_TYPE => HCI_EVT_PREAMBLE_SIZE,
         H4_ISO_TYPE => HCI_ISO_PREAMBLE_SIZE,
-        _ => return Err(PacketError::InvalidPacketType),
+        _ => return h4_recovery(reader),
     };
 
     // Read the preamble and obtain the payload length
@@ -88,11 +90,44 @@ pub fn read_h4_packet<R: Read>(reader: &mut R) -> Result<Packet, PacketError> {
     Ok(Packet { h4_type, payload: packet })
 }
 
+/// Skip all received bytes until the HCI Reset command is received.
+///
+/// Cuttlefish sometimes sends invalid bytes in the virtio-console to
+/// rootcanal/netsim when the emulator is restarted in the middle of
+/// HCI exchanges. This function recovers from this situation: when an
+/// invalid IDC is received all incoming bytes are dropped until the
+/// HCI RESET command is recognized in the input stream
+///
+/// Based on packages/modules/Bluetooth/tools/rootcanal/model/hci/h4_parser.cc
+///
+fn h4_recovery<R: Read>(mut reader: R) -> Result<Packet, PacketError> {
+    const RESET_COMMAND: [u8; 4] = [0x01, 0x03, 0x0c, 0x00];
+    let reset_pattern = VecDeque::from(RESET_COMMAND.to_vec());
+    let mut buffer = VecDeque::with_capacity(reset_pattern.len());
+
+    warn!("Entering h4 recovery state...");
+
+    let mut byte = [0; 1];
+    loop {
+        reader.read_exact(&mut byte).map_err(PacketError::IoError)?;
+        // bufer contains a sliding window of reset_pattern.len()
+        // across the input bytes.
+        if buffer.len() == reset_pattern.len() {
+            buffer.pop_front();
+        }
+        buffer.push_back(byte[0]);
+        if buffer == reset_pattern {
+            warn!("Received HCI Reset command, exiting recovery state");
+            return Ok(Packet { h4_type: RESET_COMMAND[0], payload: RESET_COMMAND[1..].to_vec() });
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::read_h4_packet;
     use super::H4_ACL_TYPE;
-    use std::io::Cursor;
+    use super::{h4_recovery, read_h4_packet};
+    use std::io::{BufReader, Cursor};
 
     #[test]
     fn test_acl() {
@@ -105,5 +140,26 @@ mod tests {
         assert!(&response.is_ok());
         assert_eq!(response.as_ref().unwrap().h4_type, H4_ACL_TYPE);
         assert_eq!(response.as_ref().unwrap().payload.len(), 21);
+    }
+
+    #[test]
+    fn test_h4_recovery_first() {
+        let input = b"\0x08\x01\x03\x0c\x00";
+        let reader = BufReader::new(&input[..]);
+        assert!(h4_recovery(reader).is_ok());
+    }
+
+    #[test]
+    fn test_h4_recovery_many() {
+        let input = b"randombytes\x01\x03\x0c\x00";
+        let reader = BufReader::new(&input[..]);
+        assert!(h4_recovery(reader).is_ok());
+    }
+
+    #[test]
+    fn test_h4_recovery_eof() {
+        let input = b"\0x08\x01\x03\x0c";
+        let reader = BufReader::new(&input[..]);
+        assert!(h4_recovery(reader).is_err());
     }
 }

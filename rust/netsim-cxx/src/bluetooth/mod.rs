@@ -21,8 +21,11 @@
 mod facade;
 #[cfg(not(all(test)))]
 pub(crate) use self::facade::*;
+#[cfg(not(all(test)))]
+pub(crate) mod beacon;
+pub(crate) mod chip;
 
 #[cfg(all(test))]
-mod mocked;
+pub(crate) mod mocked;
 #[cfg(all(test))]
 pub(crate) use self::mocked::*;

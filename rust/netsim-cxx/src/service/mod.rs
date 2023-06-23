@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::bluetooth as bluetooth_facade;
+use crate::config::get_dev;
 use netsim_common::util::netsim_logger;
 
 /// Module to control startup, run, and cleanup netsimd services.
@@ -35,6 +37,18 @@ impl Service {
     /// Runs the netsimd services.
     pub fn run(&self) {
         // TODO: run servers, like calling run_http_server().
+
+        if get_dev() {
+            // Create two beacon devices in dev mode.
+            bluetooth_facade::beacon::new_beacon(
+                "test_beacon1".to_string(),
+                "be:ac:01:55:00:01".to_string(),
+            );
+            bluetooth_facade::beacon::new_beacon(
+                "test_beacon2".to_string(),
+                "be:ac:01:55:00:02".to_string(),
+            );
+        }
     }
 }
 

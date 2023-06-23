@@ -50,7 +50,7 @@ use std::pin::Pin;
 use std::sync::RwLockWriteGuard;
 use std::time::Instant;
 
-const INITIAL_DEVICE_ID: DeviceIdentifier = 0;
+const INITIAL_DEVICE_ID: DeviceIdentifier = 1;
 const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     enum_values_int: false,
     proto_field_name: false,
