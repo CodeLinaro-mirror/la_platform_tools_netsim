@@ -15,3 +15,4 @@ netsim-common = { path = "../netsim-common" }
 frontend-client-cxx = { path = "../frontend-client-cxx" }
 protobuf = "3.2.0"
 cxx = { version = ">=1.0.85", features = ["c++17"] }
+log = "0.4.17"

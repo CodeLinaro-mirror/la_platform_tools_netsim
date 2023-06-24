@@ -21,7 +21,7 @@ use super::uci;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::ffi::handle_request_cxx;
 use frontend_proto::common::ChipKind;
-use log::error;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{IoSlice, Write};
@@ -95,19 +95,13 @@ fn fd_reader(
         .spawn(move || {
             let mut rx = unsafe { File::from_raw_fd(fd_rx) };
 
-            println!(
-                "netsimd: thread handling kind:{:?} facade_id:{:?} fd:{}",
-                kind, facade_id, fd_rx
-            );
+            info!("thread handling kind:{:?} facade_id:{:?} fd:{}", kind, facade_id, fd_rx);
 
             loop {
                 match kind {
                     ChipKindEnum::UWB => match uci::read_uci_packet(&mut rx) {
                         Err(e) => {
-                            println!(
-                                "netsimd: error reading uci control packet fd {} {:?}",
-                                fd_rx, e
-                            );
+                            error!("error reading uci control packet fd {} {:?}", fd_rx, e);
                             break;
                         }
                         Ok(uci::Packet { payload }) => {
@@ -119,15 +113,12 @@ fn fd_reader(
                             handle_request_cxx(kind as u32, facade_id, &payload, h4_type);
                         }
                         Err(e) => {
-                            println!(
-                                "netsimd: error reading hci control packet fd {} {:?}",
-                                fd_rx, e
-                            );
+                            error!("error reading hci control packet fd {} {:?}", fd_rx, e);
                             break;
                         }
                     },
                     _ => {
-                        println!("netsimd: unknown control packet kind: {:?}", kind);
+                        error!("unknown control packet kind: {:?}", kind);
                         break;
                     }
                 };
@@ -147,10 +138,10 @@ fn fd_reader(
 /// Create threads to read and write to file descriptors
 //
 pub fn run_fd_transport(startup_json: &String) {
-    println!("netsimd: fd_transport starting with {startup_json}");
+    info!("fd_transport starting with {startup_json}");
     let startup_info = match serde_json::from_str::<StartupInfo>(startup_json.as_str()) {
         Err(e) => {
-            println!("Error parsing startup info: {:?}", e);
+            error!("Error parsing startup info: {:?}", e);
             return;
         }
         Ok(startup_info) => startup_info,
@@ -211,14 +202,15 @@ pub fn run_fd_transport(startup_json: &String) {
                 // TODO: use runtime.block_on once FIFOs are available in Tokio
                 handle.join().unwrap();
             }
-            println!("netsimd:: done with all fd handlers");
+            info!("done with all fd handlers");
         })
         .unwrap();
 }
 
+#[cfg(test)]
 mod tests {
-    #[allow(unused)]
     use super::StartupInfo;
+    use log::info;
 
     #[test]
     fn test_serde() {
@@ -236,7 +228,7 @@ mod tests {
     }"#;
         let startup_info = serde_json::from_str::<StartupInfo>(s).unwrap();
         for device in startup_info.devices {
-            println!("device {:?}", device);
+            info!("device {:?}", device);
         }
     }
 }

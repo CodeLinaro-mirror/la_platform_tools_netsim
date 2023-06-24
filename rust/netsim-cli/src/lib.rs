@@ -20,6 +20,7 @@ mod capture_handler;
 mod requests;
 mod response;
 
+use log::error;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
@@ -30,6 +31,7 @@ use clap::Parser;
 use cxx::UniquePtr;
 use frontend_client_cxx::ffi::{new_frontend_client, ClientResult, FrontendClient, GrpcMethod};
 use frontend_client_cxx::ClientResponseReader;
+use netsim_common::util::netsim_logger;
 
 // helper function to process streaming Grpc request
 fn perform_streaming_request(
@@ -89,7 +91,7 @@ fn perform_command(
             _ => client.send_grpc(&grpc_method, req),
         };
         if let Err(e) = process_result(command, result, verbose) {
-            eprintln!("{}", e);
+            error!("{}", e);
             process_error = true;
         };
     }
@@ -115,6 +117,8 @@ fn process_result(
 #[no_mangle]
 /// main Rust netsim CLI function to be called by C wrapper netsim.cc
 pub extern "C" fn rust_main() {
+    netsim_logger::init("netsim");
+
     let mut args = NetsimArgs::parse();
     if matches!(args.command, args::Command::Gui) {
         browser::open("http://localhost:7681/");
@@ -124,13 +128,13 @@ pub extern "C" fn rust_main() {
     let client = new_frontend_client(args.port.unwrap_or_default());
     if client.is_null() {
         if args.port.is_some() {
-            eprintln!("Unable to create frontend client. Please ensure netsimd is running and listening on grpc port {}.", args.port.unwrap_or_default());
+            error!("Unable to create frontend client. Please ensure netsimd is running and listening on grpc port {}.", args.port.unwrap_or_default());
         } else {
-            eprintln!("Unable to create frontend client. Please ensure netsimd is running.");
+            error!("Unable to create frontend client. Please ensure netsimd is running.");
         }
         return;
     }
     if let Err(e) = perform_command(&mut args.command, client, grpc_method, args.verbose) {
-        eprintln!("{e}");
+        error!("{e}");
     }
 }

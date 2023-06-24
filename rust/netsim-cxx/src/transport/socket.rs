@@ -42,7 +42,7 @@ impl Response for SocketTransport {
         buffer.push(packet_type);
         buffer.extend(packet);
         if let Err(e) = self.stream.write_all(&buffer[..]) {
-            println!("netsimd: error writing {}", e);
+            error!("error writing {}", e);
         };
     }
 }
@@ -52,7 +52,7 @@ pub fn run_socket_transport(hci_port: u16) {
         .name("hci_transport".to_string())
         .spawn(move || {
             accept_incoming(hci_port)
-                .unwrap_or_else(|e| println!("netsimd: Failed to accept incoming stream: {:?}", e));
+                .unwrap_or_else(|e| error!("Failed to accept incoming stream: {:?}", e));
         })
         .unwrap();
 }
@@ -60,11 +60,11 @@ pub fn run_socket_transport(hci_port: u16) {
 fn accept_incoming(hci_port: u16) -> std::io::Result<()> {
     let hci_socket = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, hci_port);
     let listener = TcpListener::bind(hci_socket)?;
-    println!("netsimd: hci listening on: {}", hci_port);
+    info!("hci listening on: {}", hci_port);
 
     for stream in listener.incoming() {
         let stream = stream?;
-        println!("netsimd: hci_client host addr: {}", stream.peer_addr().unwrap());
+        info!("hci_client host addr: {}", stream.peer_addr().unwrap());
         thread::Builder::new()
             .name("hci_transport client".to_string())
             .spawn(move || {
@@ -119,11 +119,7 @@ fn reader(mut tcp_rx: TcpStream, kind: ChipKind, facade_id: u32) -> std::io::Res
                     handle_request_cxx(kind, facade_id, &packet.payload, packet.h4_type);
                 }
                 Err(error) => {
-                    println!(
-                        "netsimd: end socket reader {}: {:?}",
-                        &tcp_rx.peer_addr().unwrap(),
-                        error
-                    );
+                    error!("end socket reader {}: {:?}", &tcp_rx.peer_addr().unwrap(), error);
                     return Ok(());
                 }
             }

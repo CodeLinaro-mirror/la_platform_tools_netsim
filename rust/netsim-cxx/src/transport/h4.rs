@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use log::warn;
+use log::{error, warn};
 use std::collections::VecDeque;
 use std::io::{Error, Read};
 
@@ -86,7 +86,11 @@ pub fn read_h4_packet<R: Read>(reader: &mut R) -> Result<Packet, PacketError> {
     };
     // Read and append the payload and return
     packet.resize(preamble_size + payload_length, 0u8);
-    reader.read_exact(&mut packet[preamble_size..]).map_err(PacketError::IoError)?;
+    let result = reader.read_exact(&mut packet[preamble_size..]);
+    if let Err(e) = result {
+        error!("h4 failed to read message body: {e}");
+        return Err(PacketError::IoError(e));
+    }
     Ok(Packet { h4_type, payload: packet })
 }
 

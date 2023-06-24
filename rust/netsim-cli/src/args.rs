@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use log::error;
+
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use frontend_client_cxx::ffi::{FrontendClient, GrpcMethod};
 use frontend_proto::common::ChipKind;
@@ -195,7 +197,7 @@ impl Command {
         // Get list of captures
         let result = client.send_grpc(&GrpcMethod::ListCapture, &Vec::new());
         if !result.is_ok() {
-            eprintln!("ListCapture Grpc call error: {}", result.err());
+            error!("ListCapture Grpc call error: {}", result.err());
             return Vec::new();
         }
         let mut response =

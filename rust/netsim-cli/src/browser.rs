@@ -14,6 +14,7 @@
 
 // Opening Browser on Linux and MacOS
 
+use log::info;
 use std::ffi::OsStr;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use std::process::Command;
@@ -21,7 +22,7 @@ use std::process::Command;
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 pub fn open<T: AsRef<OsStr>>(path: T) {
     let path = path.as_ref();
-    println!("Unsupported OS. Open this url:{:?}", path)
+    info!("Unsupported OS. Open this url:{:?}", path)
 }
 
 #[cfg(target_os = "linux")]
@@ -34,7 +35,7 @@ pub fn open<T: AsRef<OsStr>>(path: T) {
             return;
         }
     }
-    println!("xdg-open, gnome-open, kde-open not working (linux). Open this url:{:?}", path);
+    info!("xdg-open, gnome-open, kde-open not working (linux). Open this url:{:?}", path);
 }
 
 #[cfg(target_os = "macos")]
@@ -43,7 +44,7 @@ pub fn open<T: AsRef<OsStr>>(path: T) {
     if let Ok(_output) = Command::new("/usr/bin/open").arg(path).output() {
         return;
     }
-    println!("/usr/bin/open not working (macos). Open this url:{:?}", path);
+    info!("/usr/bin/open not working (macos). Open this url:{:?}", path);
 }
 
 #[cfg(target_os = "windows")]
@@ -54,5 +55,5 @@ pub fn open<T: AsRef<OsStr>>(path: T) {
     } else if let Ok(_output) = Command::new("explorer").arg(path).output() {
         return;
     }
-    println!("'start' and 'explorer' command not supported (windows). Open this url:{:?}", path);
+    info!("'start' and 'explorer' command not supported (windows). Open this url:{:?}", path);
 }
