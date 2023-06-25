@@ -17,6 +17,7 @@ use super::dispatcher::{register_transport, unregister_transport, Response};
 /// response packets flow out of netsim
 /// packet transports read requests and write response packets over gRPC or Fds.
 use super::h4;
+use super::h4::PacketError;
 use super::uci;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::ffi::handle_request_cxx;
@@ -24,7 +25,7 @@ use frontend_proto::common::ChipKind;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::{IoSlice, Write};
+use std::io::{ErrorKind, IoSlice, Write};
 use std::os::fd::FromRawFd;
 use std::thread::JoinHandle;
 use std::{fmt, thread};
@@ -95,13 +96,13 @@ fn fd_reader(
         .spawn(move || {
             let mut rx = unsafe { File::from_raw_fd(fd_rx) };
 
-            info!("thread handling kind:{:?} facade_id:{:?} fd:{}", kind, facade_id, fd_rx);
+            info!("Handling fd={} for kind={:?} facade_id={:?}", fd_rx, kind, facade_id);
 
             loop {
                 match kind {
                     ChipKindEnum::UWB => match uci::read_uci_packet(&mut rx) {
                         Err(e) => {
-                            error!("error reading uci control packet fd {} {:?}", fd_rx, e);
+                            error!("End reader connection with fd={}. Failed to reading uci control packet: {:?}", fd_rx, e);
                             break;
                         }
                         Ok(uci::Packet { payload }) => {
@@ -112,8 +113,14 @@ fn fd_reader(
                         Ok(h4::Packet { h4_type, payload }) => {
                             handle_request_cxx(kind as u32, facade_id, &payload, h4_type);
                         }
+                        Err(PacketError::IoError(e))
+                            if e.kind() == ErrorKind::UnexpectedEof =>
+                        {
+                            info!("End reader connection with fd={}.", fd_rx);
+                            break;
+                        }
                         Err(e) => {
-                            error!("error reading hci control packet fd {} {:?}", fd_rx, e);
+                            error!("End reader connection with fd={}. Failed to reading hci control packet: {:?}", fd_rx, e);
                             break;
                         }
                     },
@@ -138,7 +145,7 @@ fn fd_reader(
 /// Create threads to read and write to file descriptors
 //
 pub fn run_fd_transport(startup_json: &String) {
-    info!("fd_transport starting with {startup_json}");
+    info!("Running fd transport with {startup_json}");
     let startup_info = match serde_json::from_str::<StartupInfo>(startup_json.as_str()) {
         Err(e) => {
             error!("Error parsing startup info: {:?}", e);

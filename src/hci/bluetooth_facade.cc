@@ -125,18 +125,15 @@ void SetUpTestChannel() {
   gTestChannelTransport = std::make_unique<rootcanal::TestChannelTransport>();
   gTestChannelTransport->RegisterCommandHandler(
       [](const std::string &name, const std::vector<std::string> &args) {
-        mAsyncManager->ExecAsync(
-            gSocketUserId, std::chrono::milliseconds(0), [name, args]() {
-              BtsLog("CommandHandle name:%s", name.c_str());
-              std::string args_str = "";
-              for (auto arg : args) args_str += " " + arg;
-              BtsLog("arg:%s", args_str.c_str());
-              if (name == "END_SIMULATION") {
-                BtsLog("END_SIMULATION");
-              } else {
-                gTestChannel->HandleCommand(name, args);
-              }
-            });
+        mAsyncManager->ExecAsync(gSocketUserId, std::chrono::milliseconds(0),
+                                 [name, args]() {
+                                   std::string args_str = "";
+                                   for (auto arg : args) args_str += " " + arg;
+                                   if (name == "END_SIMULATION") {
+                                   } else {
+                                     gTestChannel->HandleCommand(name, args);
+                                   }
+                                 });
       });
 
   bool transport_configured = gTestChannelTransport->SetUp(
@@ -171,11 +168,11 @@ void SetUpTestChannel() {
   gTestChannel->StartTimer({});
 
   if (!transport_configured) {
-    BtsLog("Error: Test channel SetUp failed.");
+    BtsLog("Error: Failed to set up test channel.");
     return;
   }
 
-  BtsLog("Test channel SetUp() successful");
+  BtsLog("Set up test channel.");
 }
 #endif
 
@@ -312,7 +309,7 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
 }
 
 void Remove(uint32_t id) {
-  BtsLog("Removing HCI chip for %d", id);
+  BtsLog("Removing HCI chip %d.", id);
   id_to_chip_info_.erase(id);
 
   // Use the `AsyncManager` to ensure that the `RemoveDevice` method is
