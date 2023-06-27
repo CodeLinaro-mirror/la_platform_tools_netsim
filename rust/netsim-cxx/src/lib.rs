@@ -479,7 +479,7 @@ impl ServerResponseWritable for CxxServerResponseWriterWrapper<'_> {
     fn put_ok_with_vec(&mut self, _mime_type: &str, _body: Vec<u8>, _headers: StrHeaders) {
         todo!()
     }
-    fn put_ok_switch_protocol(&mut self, _connection: &str) {
+    fn put_ok_switch_protocol(&mut self, _connection: &str, _headers: StrHeaders) {
         todo!()
     }
 }
