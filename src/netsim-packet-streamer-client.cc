@@ -15,7 +15,7 @@
 #include <iostream>
 
 #include "backend/packet_streamer_client.h"
-#include "packet_streamer.grpc.pb.h"
+#include "netsim/packet_streamer.grpc.pb.h"
 
 using netsim::common::ChipKind;
 

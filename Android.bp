@@ -64,7 +64,6 @@ rust_defaults {
     features: ["cuttlefish"],
     rlibs: [
         "libcxx",
-        "libdata_encoding",
         "libfrontend_proto",
         "libnetsim_common",
         "libprotobuf",
@@ -72,7 +71,6 @@ rust_defaults {
         "libregex",
         "libserde",
         "libserde_json",
-        "libtungstenite",
         "liblazy_static",
         "liblog_rust",
         "libopenssl",
@@ -216,8 +214,9 @@ cc_binary_host {
         "libjsoncpp",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite",
-        "lib-netsim-frontend-proto",
+        "lib-netsimd-proto",
         "lib-netsim",
+        "lib-netsim-frontend-proto",
     ],
     whole_static_libs: [
         "libnetsim_cxx",
@@ -252,6 +251,7 @@ cc_test_host {
         "libscriptedbeaconpayload-protos-lite",
         "lib-netsim-frontend-proto",
         "lib-netsim",
+        "lib-netsimd-proto",
     ],
     whole_static_libs: [
         "libnetsim_cxx",

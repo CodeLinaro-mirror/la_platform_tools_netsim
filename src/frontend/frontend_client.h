@@ -22,7 +22,7 @@
 #include <string_view>
 #include <vector>
 
-#include "frontend.grpc.pb.h"
+#include "netsim/frontend.grpc.pb.h"
 #include "rust/cxx.h"
 
 namespace netsim {

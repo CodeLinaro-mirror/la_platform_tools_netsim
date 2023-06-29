@@ -31,13 +31,13 @@
 #include <string_view>
 
 #include "frontend-client-cxx/src/lib.rs.h"
-#include "frontend.grpc.pb.h"
-#include "frontend.pb.h"
 #include "google/protobuf/empty.pb.h"
 #include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/status_code_enum.h"
-#include "model.pb.h"
+#include "netsim/frontend.grpc.pb.h"
+#include "netsim/frontend.pb.h"
+#include "netsim/model.pb.h"
 #include "util/ini_file.h"
 #include "util/log.h"
 #include "util/os_utils.h"

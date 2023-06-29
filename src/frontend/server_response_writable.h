@@ -15,8 +15,8 @@
 #pragma once
 #include <string>
 
-#include "frontend.pb.h"
 #include "grpcpp/support/sync_stream.h"
+#include "netsim/frontend.pb.h"
 #include "rust/cxx.h"
 
 namespace netsim {

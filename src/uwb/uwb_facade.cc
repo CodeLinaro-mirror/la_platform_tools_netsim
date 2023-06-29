@@ -14,8 +14,8 @@
 
 #include "uwb/uwb_facade.h"
 
-#include "model.pb.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "netsim/model.pb.h"
 #include "rust/cxx.h"
 #include "util/log.h"
 

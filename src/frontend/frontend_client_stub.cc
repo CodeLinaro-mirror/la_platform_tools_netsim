@@ -19,10 +19,10 @@
 #include <chrono>
 #include <memory>
 
-#include "frontend.grpc.pb.h"
-#include "frontend.pb.h"
 #include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
+#include "netsim/frontend.grpc.pb.h"
+#include "netsim/frontend.pb.h"
 #include "util/os_utils.h"
 
 namespace netsim {

@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package netsim.model;
 
-import "common.proto";
+import "netsim/common.proto";
 import "google/protobuf/timestamp.proto";
 
 // A 3D position. A valid Position must have both x and y coordinates.

@@ -28,8 +28,8 @@
 
 // Use gRPC HCI PacketType definitions so we don't expose Rootcanal's version
 // outside of the Bluetooth Facade.
-#include "common.pb.h"
-#include "hci_packet.pb.h"
+#include "netsim/common.pb.h"
+#include "netsim/hci_packet.pb.h"
 #include "rust/cxx.h"
 
 namespace netsim {

@@ -20,7 +20,7 @@
 #include <string>
 
 #include "hci/rust_device.h"
-#include "model.pb.h"
+#include "netsim/model.pb.h"
 #include "rust/cxx.h"
 
 /** Manages the bluetooth chip emulation provided by the root canal library.

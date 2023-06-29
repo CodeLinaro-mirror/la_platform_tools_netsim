@@ -21,12 +21,12 @@
 #include <string>
 #include <utility>
 
-#include "frontend.grpc.pb.h"
-#include "frontend.pb.h"
 #include "google/protobuf/empty.pb.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "netsim/frontend.grpc.pb.h"
+#include "netsim/frontend.pb.h"
 
 namespace netsim {
 namespace {

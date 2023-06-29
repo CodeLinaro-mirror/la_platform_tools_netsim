@@ -40,7 +40,7 @@ pub trait ServerResponseWritable {
     fn put_ok(&mut self, mime_type: &str, body: &str, headers: StrHeaders);
     fn put_error(&mut self, error_code: u16, error_message: &str);
     fn put_ok_with_vec(&mut self, mime_type: &str, body: Vec<u8>, headers: StrHeaders);
-    fn put_ok_switch_protocol(&mut self, connection: &str, headers: StrHeaders);
+    fn put_ok_switch_protocol(&mut self, connection: &str);
 }
 
 // A response writer that can contain a TCP stream or other writable.
@@ -105,9 +105,8 @@ impl ServerResponseWritable for ServerResponseWriter<'_> {
         response.add_headers(headers);
         self.put_response(response);
     }
-    fn put_ok_switch_protocol(&mut self, connection: &str, headers: StrHeaders) {
-        let mut response = HttpResponse::new_ok_switch_protocol(connection);
-        response.add_headers(headers);
+    fn put_ok_switch_protocol(&mut self, connection: &str) {
+        let response = HttpResponse::new_ok_switch_protocol(connection);
         self.put_response(response);
     }
 }

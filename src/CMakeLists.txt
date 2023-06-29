@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(proto)
-
 android_add_library(
   TARGET util-lib
   LICENSE Apache-2.0

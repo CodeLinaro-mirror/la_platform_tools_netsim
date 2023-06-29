@@ -22,7 +22,7 @@ fn paths_to_strs<P: AsRef<Path>>(paths: &[P]) -> Vec<&str> {
 }
 
 fn main() {
-    // Proto root is //tools/netsim/src/proto
+    // Proto root is //tools/netsim/proto/netsim
     let proto_root = match env::var("PLATFORM_SUBDIR") {
         Ok(dir) => PathBuf::from(dir).join("tools/netsim"),
         // Currently at //tools/netsim/rust/backend-proto
@@ -32,12 +32,12 @@ fn main() {
     let proto_out_dir = proto_root.join("rust/backend-proto/src");
 
     // Generate protobuf output
-    let proto_dir = proto_root.join("src/proto");
+    let proto_dir = proto_root.join("proto");
     let proto_input_files = [
-        proto_dir.join("packet_streamer.proto"),
-        proto_dir.join("hci_packet.proto"),
-        proto_dir.join("startup.proto"),
-        proto_dir.join("common.proto"),
+        proto_dir.join("netsim/packet_streamer.proto"),
+        proto_dir.join("netsim/hci_packet.proto"),
+        proto_dir.join("netsim/startup.proto"),
+        proto_dir.join("netsim/common.proto"),
     ];
     let proto_include_dirs = [proto_dir.clone()];
 
