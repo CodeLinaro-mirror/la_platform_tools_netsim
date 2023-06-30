@@ -19,6 +19,7 @@
 #include <string>
 #include <string_view>
 
+#include "util/log.h"
 #include "util/string_utils.h"
 
 namespace netsim {
@@ -27,15 +28,14 @@ bool IniFile::Read() {
   data.clear();
 
   if (filepath.empty()) {
-    std::cerr << "Read called without a backing file!";
+    BtsLog("Read called without a backing file!");
     return false;
   }
 
   std::ifstream inFile(filepath);
 
   if (!inFile) {
-    std::cerr << "Failed to process .ini file " << filepath << " for reading."
-              << std::endl;
+    BtsLog("Failed to process .ini file %s for reading.", filepath.c_str());
     return false;
   }
   std::string line;
@@ -52,14 +52,14 @@ bool IniFile::Read() {
 
 bool IniFile::Write() {
   if (filepath.empty()) {
-    std::cerr << "Write called without a backing file!";
+    BtsLog("Write called without a backing file!");
     return false;
   }
 
   std::ofstream outFile(filepath);
 
   if (!outFile) {
-    std::cerr << "Failed to open .ini file " << filepath << " for writing.";
+    BtsLog("Failed to open .ini file %s for writing.", filepath.c_str());
     return false;
   }
 

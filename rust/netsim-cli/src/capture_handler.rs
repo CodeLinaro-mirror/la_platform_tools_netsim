@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use frontend_client_cxx::ClientResponseReadable;
+use log::error;
 use std::fs::File;
 /// Implements handler for pcap operations
 use std::io::Write;
@@ -32,7 +33,7 @@ impl ClientResponseReadable for CaptureHandler {
     }
     // function to handle error response
     fn handle_error(&self, error_code: u32, error_message: &str) {
-        println!(
+        error!(
             "Handling error code: {}, msg: {}, on file: {}",
             error_code,
             error_message,

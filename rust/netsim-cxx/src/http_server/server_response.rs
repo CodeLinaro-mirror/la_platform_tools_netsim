@@ -24,6 +24,8 @@
 
 use std::io::Write;
 
+use log::error;
+
 use crate::http_server::http_response::HttpResponse;
 
 use super::http_request::StrHeaders;
@@ -65,7 +67,7 @@ impl<'a> ServerResponseWriter<'a> {
         buffer.extend_from_slice(b"\r\n");
         buffer.extend_from_slice(&response.body);
         if let Err(e) = self.writer.write_all(&buffer) {
-            println!("netsim: handle_connection error {e}");
+            error!("handle_connection error {e}");
         };
         self.response = Some(response);
     }
@@ -84,7 +86,7 @@ impl ServerResponseWritable for ServerResponseWriter<'_> {
     }
     fn put_chunk(&mut self, chunk: &[u8]) {
         if let Err(e) = self.writer.write_all(chunk) {
-            println!("netsim: handle_connection error {e}");
+            error!("handle_connection error {e}");
         };
         self.writer.flush().unwrap();
     }

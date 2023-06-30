@@ -17,6 +17,9 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 #include <string>
 
@@ -92,11 +95,21 @@ std::optional<std::string> GetServerAddress(bool frontend_server) {
   return iniFile.Get("grpc.port");
 }
 
+bool is_stderr_open() {
+  // TODO: Use `is_terminal` method in `IsTerminal` trait in Rust.
+#if defined(_WIN32)
+  return GetStdHandle(STD_ERROR_HANDLE) != INVALID_HANDLE_VALUE;
+#else
+  return fcntl(STDERR_FILENO, F_GETFD) != -1;
+#endif
+}
+
 void RedirectStdStream(std::string netsim_temp_dir) {
   // Check if directory has a trailing slash.
   if (netsim_temp_dir.back() != netsim::filesystem::slash.back())
     netsim_temp_dir.append(netsim::filesystem::slash);
-
+  if (is_stderr_open())
+    BtsLog("Redirecting logs to %s", netsim_temp_dir.c_str());
   std::freopen((netsim_temp_dir + "netsim_stdout.log").c_str(), "w", stdout);
   std::freopen((netsim_temp_dir + "netsim_stderr.log").c_str(), "w", stderr);
 }

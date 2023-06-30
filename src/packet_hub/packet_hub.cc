@@ -17,10 +17,10 @@
 #include "packet_hub/packet_hub.h"
 
 #include "backend/backend_packet_hub.h"
-#include "common.pb.h"
 #include "hci/hci_packet_hub.h"
-#include "hci_packet.pb.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "netsim/common.pb.h"
+#include "netsim/hci_packet.pb.h"
 #include "wifi/wifi_packet_hub.h"
 
 namespace netsim {

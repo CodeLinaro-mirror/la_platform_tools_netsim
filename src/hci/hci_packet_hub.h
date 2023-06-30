@@ -22,7 +22,7 @@
 #include <memory>
 #include <vector>
 
-#include "hci_packet.pb.h"
+#include "netsim/hci_packet.pb.h"
 #include "rust/cxx.h"
 
 namespace netsim {

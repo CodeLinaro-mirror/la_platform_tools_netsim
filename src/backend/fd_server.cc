@@ -14,8 +14,8 @@
 
 #include <cstdint>
 
-#include "common.pb.h"
-#include "hci_packet.pb.h"
+#include "netsim/common.pb.h"
+#include "netsim/hci_packet.pb.h"
 
 namespace netsim::backend {
 

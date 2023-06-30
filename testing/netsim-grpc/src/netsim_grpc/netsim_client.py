@@ -5,10 +5,12 @@ from typing import Dict, Optional
 
 import grpc
 
-from netsim.proto import common_pb2 as common
-from netsim.proto import model_pb2 as model
-from netsim.proto import frontend_pb2 as frontend
-from netsim.proto import frontend_pb2_grpc as frontend_grpc
+from netsim_grpc.proto.netsim import (
+  common_pb2 as common,
+  model_pb2 as model,
+  frontend_pb2 as frontend,
+  frontend_pb2_grpc as frontend_grpc
+)
 from google.protobuf import empty_pb2
 
 _Empty = empty_pb2.Empty

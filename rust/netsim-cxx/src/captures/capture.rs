@@ -29,7 +29,7 @@ use frontend_proto::{
     common::ChipKind,
     model::{Capture as ProtoCapture, State},
 };
-use log::error;
+use log::{error, info};
 use protobuf::well_known_types::timestamp::Timestamp;
 
 use crate::system;
@@ -215,7 +215,7 @@ impl Captures {
                 capture.stop_capture();
             }
         } else {
-            println!("key does not exist in Captures");
+            info!("key does not exist in Captures");
             return;
         }
         self.chip_id_to_capture.remove(key);

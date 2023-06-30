@@ -17,8 +17,7 @@ syntax = "proto3";
 package netsim.frontend;
 
 import "google/protobuf/empty.proto";
-
-import "model.proto";
+import "netsim/model.proto";
 
 /**
  * The frontend service for the network simulator.

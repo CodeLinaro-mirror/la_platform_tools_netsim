@@ -17,12 +17,12 @@ cmake_minimum_required(VERSION 3.5)
 # For netsimd (netsimd-proto-lib)
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
-  SOURCES ${CMAKE_CURRENT_LIST_DIR}/common.proto
-          ${CMAKE_CURRENT_LIST_DIR}/frontend.proto
-          ${CMAKE_CURRENT_LIST_DIR}/hci_packet.proto
-          ${CMAKE_CURRENT_LIST_DIR}/model.proto
-          ${CMAKE_CURRENT_LIST_DIR}/packet_streamer.proto
-          ${CMAKE_CURRENT_LIST_DIR}/startup.proto
+  SOURCES ${CMAKE_CURRENT_LIST_DIR}/netsim/common.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/frontend.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/hci_packet.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/model.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/packet_streamer.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/startup.proto
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
   GENERATED NETSIM_PROTO_SRC)
 
@@ -35,9 +35,9 @@ target_include_directories(netsimd-proto-lib PRIVATE ${PROTOBUF_INCLUDE_DIR} ..
 # For netsim-cli (netsim-cli-proto-lib)
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
-  SOURCES ${CMAKE_CURRENT_LIST_DIR}/common.proto
-          ${CMAKE_CURRENT_LIST_DIR}/frontend.proto
-          ${CMAKE_CURRENT_LIST_DIR}/model.proto
+  SOURCES ${CMAKE_CURRENT_LIST_DIR}/netsim/common.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/frontend.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/model.proto
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
   GENERATED NETSIM_FRONTEND_GRPC_SRC)
 
@@ -52,10 +52,10 @@ target_include_directories(
 # For network packet streamer client (packet-streamer-proto-lib)
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
-  SOURCES ${CMAKE_CURRENT_LIST_DIR}/common.proto
-          ${CMAKE_CURRENT_LIST_DIR}/hci_packet.proto
-          ${CMAKE_CURRENT_LIST_DIR}/packet_streamer.proto
-          ${CMAKE_CURRENT_LIST_DIR}/startup.proto
+  SOURCES ${CMAKE_CURRENT_LIST_DIR}/netsim/common.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/hci_packet.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/packet_streamer.proto
+          ${CMAKE_CURRENT_LIST_DIR}/netsim/startup.proto
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
   GENERATED NETSIM_PACKET_STREAMER_GRPC_SRC)
 

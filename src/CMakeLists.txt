@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(proto)
-
 android_add_library(
   TARGET util-lib
   LICENSE Apache-2.0
@@ -105,6 +103,8 @@ if(TARGET Rust::Rustc)
         hci/async_manager.cc
         hci/bluetooth_facade.cc
         hci/bluetooth_facade.h
+        hci/rust_device.h
+        hci/rust_device.cc
         hci/hci_debug.cc
         hci/hci_debug.h
         hci/hci_packet_transport.cc

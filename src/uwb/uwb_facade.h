@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "model.pb.h"
 #include "netsim-cxx/src/lib.rs.h"  // For Cxx methods.
+#include "netsim/model.pb.h"
 
 namespace netsim::uwb::facade {
 

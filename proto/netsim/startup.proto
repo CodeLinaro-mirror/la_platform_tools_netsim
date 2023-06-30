@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package netsim.startup;
 
-import "common.proto";
+import "netsim/common.proto";
 
 /**
  * The startup info proto.

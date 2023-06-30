@@ -17,7 +17,7 @@ use std::cmp::max;
 use crate::args::{self, Capture, Command, OnOffState};
 use frontend_proto::{
     common::ChipKind,
-    frontend::{GetDevicesResponse, ListCaptureResponse, VersionResponse},
+    frontend::{ListCaptureResponse, ListDeviceResponse, VersionResponse},
     model::{self, chip::Chip as Chip_oneof_chip, State},
 };
 use netsim_common::util::time_display::TimeDisplay;
@@ -53,7 +53,7 @@ impl args::Command {
             }
             Command::Devices(_) => {
                 Self::print_device_response(
-                    GetDevicesResponse::parse_from_bytes(response).unwrap(),
+                    ListDeviceResponse::parse_from_bytes(response).unwrap(),
                     verbose,
                 );
             }
@@ -86,8 +86,8 @@ impl args::Command {
         }
     }
 
-    /// Helper function to format and print GetDevicesResponse
-    fn print_device_response(response: GetDevicesResponse, verbose: bool) {
+    /// Helper function to format and print ListDeviceResponse
+    fn print_device_response(response: ListDeviceResponse, verbose: bool) {
         let pos_prec = 2;
         let name_width = 16;
         let state_width = 5;
@@ -373,6 +373,7 @@ impl args::Command {
             ChipKind::BLUETOOTH => "BLUETOOTH".to_string(),
             ChipKind::WIFI => "WIFI".to_string(),
             ChipKind::UWB => "UWB".to_string(),
+            ChipKind::BLUETOOTH_BEACON => "BLUETOOTH_BEACON".to_string(),
         }
     }
 

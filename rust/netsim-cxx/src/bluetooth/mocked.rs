@@ -76,3 +76,21 @@ pub fn refresh_resource() {
     let mut resource = IDS.write().unwrap();
     resource.current_id = 0;
 }
+
+pub mod beacon {
+    use super::IDS;
+
+    pub fn bluetooth_beacon_add(
+        device_id: u32,
+        chip_id: u32,
+        device_type: String,
+        address: String,
+    ) -> u32 {
+        let mut resource = IDS.write().unwrap();
+        let facade_id = resource.current_id;
+        resource.current_id += 1;
+        facade_id
+    }
+
+    pub fn new_beacon(beacon_name: String, address: String) {}
+}

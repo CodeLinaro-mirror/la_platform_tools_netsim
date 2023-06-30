@@ -19,7 +19,7 @@
 
 #include <memory>
 
-#include "frontend.grpc.pb.h"
+#include "netsim/frontend.grpc.pb.h"
 
 namespace netsim {
 namespace frontend {

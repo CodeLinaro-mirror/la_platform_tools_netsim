@@ -16,8 +16,8 @@ syntax = "proto3";
 
 package netsim.packet;
 
-import "hci_packet.proto";
-import "startup.proto";
+import "netsim/hci_packet.proto";
+import "netsim/startup.proto";
 
 /**
  * This is the packet service for the network simulator.

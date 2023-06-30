@@ -12,41 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::RwLock;
+use lazy_static::lazy_static;
+use std::sync::{Arc, RwLock};
 
 use crate::captures::capture::Captures;
 use crate::devices::devices_handler::Devices;
 use crate::version::get_version;
 
+lazy_static! {
+    static ref RESOURCES: RwLock<Resource> = RwLock::new(Resource::new());
+}
+
 /// Resource struct includes all the frontend resources for netsim.
 /// This struct will be instantiated by netsimd and passed down to the
 /// servers.
 pub struct Resource {
-    pub version: String,
-    pub devices: RwLock<Devices>,
-    pub captures: RwLock<Captures>,
+    version: String,
+    devices: Arc<RwLock<Devices>>,
+    captures: Arc<RwLock<Captures>>,
 }
 
 impl Resource {
     pub fn new() -> Self {
         Self {
             version: get_version(),
-            devices: RwLock::new(Devices::new()),
-            captures: RwLock::new(Captures::new()),
+            devices: Arc::new(RwLock::new(Devices::new())),
+            captures: Arc::new(RwLock::new(Captures::new())),
         }
     }
 
     pub fn get_version_resource(self) -> String {
         self.version
     }
+}
 
-    pub fn get_devices_resource(self) -> RwLock<Devices> {
-        self.devices
-    }
+pub fn get_devices_resource() -> Arc<RwLock<Devices>> {
+    RESOURCES.write().unwrap().devices.to_owned()
+}
 
-    pub fn get_captures_resource(self) -> RwLock<Captures> {
-        self.captures
-    }
+pub fn get_captures_resource() -> Arc<RwLock<Captures>> {
+    RESOURCES.write().unwrap().captures.to_owned()
 }
 
 #[cfg(test)]
@@ -57,19 +62,5 @@ mod tests {
     fn test_version() {
         let resource = Resource::new();
         assert_eq!(get_version(), resource.get_version_resource());
-    }
-
-    #[test]
-    fn test_devices() {
-        let resource = Resource::new();
-        let devices = resource.get_devices_resource();
-        assert!(!devices.is_poisoned());
-    }
-
-    #[test]
-    fn test_captures() {
-        let resource = Resource::new();
-        let captures = resource.get_captures_resource();
-        assert!(!captures.is_poisoned());
     }
 }

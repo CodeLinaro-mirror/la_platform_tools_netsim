@@ -36,6 +36,8 @@ pub enum ChipKind {
     WIFI = 2,
     // @@protoc_insertion_point(enum_value:netsim.common.ChipKind.UWB)
     UWB = 3,
+    // @@protoc_insertion_point(enum_value:netsim.common.ChipKind.BLUETOOTH_BEACON)
+    BLUETOOTH_BEACON = 4,
 }
 
 impl ::protobuf::Enum for ChipKind {
@@ -51,6 +53,7 @@ impl ::protobuf::Enum for ChipKind {
             1 => ::std::option::Option::Some(ChipKind::BLUETOOTH),
             2 => ::std::option::Option::Some(ChipKind::WIFI),
             3 => ::std::option::Option::Some(ChipKind::UWB),
+            4 => ::std::option::Option::Some(ChipKind::BLUETOOTH_BEACON),
             _ => ::std::option::Option::None
         }
     }
@@ -60,6 +63,7 @@ impl ::protobuf::Enum for ChipKind {
         ChipKind::BLUETOOTH,
         ChipKind::WIFI,
         ChipKind::UWB,
+        ChipKind::BLUETOOTH_BEACON,
     ];
 }
 
@@ -88,9 +92,9 @@ impl ChipKind {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x0ccommon.proto\x12\rnetsim.common*=\n\x08ChipKind\x12\x0f\n\x0bUNSPE\
+    \n\x0ccommon.proto\x12\rnetsim.common*S\n\x08ChipKind\x12\x0f\n\x0bUNSPE\
     CIFIED\x10\0\x12\r\n\tBLUETOOTH\x10\x01\x12\x08\n\x04WIFI\x10\x02\x12\
-    \x07\n\x03UWB\x10\x03b\x06proto3\
+    \x07\n\x03UWB\x10\x03\x12\x14\n\x10BLUETOOTH_BEACON\x10\x04b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

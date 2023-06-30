@@ -1,1 +1,1 @@
-include src/proto/*.proto
+include proto/netsim/*.proto

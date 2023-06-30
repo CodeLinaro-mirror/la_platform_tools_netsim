@@ -95,7 +95,7 @@ size_t phy_classic_index_;
 bool mStarted = false;
 std::shared_ptr<rootcanal::AsyncManager> mAsyncManager;
 rootcanal::AsyncUserId gSocketUserId{};
-std::unique_ptr<SimTestModel> gTestModel;
+std::shared_ptr<SimTestModel> gTestModel;
 rootcanal::ControllerProperties controller_properties_;
 
 #ifndef NETSIM_ANDROID_EMULATOR
@@ -125,18 +125,15 @@ void SetUpTestChannel() {
   gTestChannelTransport = std::make_unique<rootcanal::TestChannelTransport>();
   gTestChannelTransport->RegisterCommandHandler(
       [](const std::string &name, const std::vector<std::string> &args) {
-        mAsyncManager->ExecAsync(
-            gSocketUserId, std::chrono::milliseconds(0), [name, args]() {
-              BtsLog("CommandHandle name:%s", name.c_str());
-              std::string args_str = "";
-              for (auto arg : args) args_str += " " + arg;
-              BtsLog("arg:%s", args_str.c_str());
-              if (name == "END_SIMULATION") {
-                BtsLog("END_SIMULATION");
-              } else {
-                gTestChannel->HandleCommand(name, args);
-              }
-            });
+        mAsyncManager->ExecAsync(gSocketUserId, std::chrono::milliseconds(0),
+                                 [name, args]() {
+                                   std::string args_str = "";
+                                   for (auto arg : args) args_str += " " + arg;
+                                   if (name == "END_SIMULATION") {
+                                   } else {
+                                     gTestChannel->HandleCommand(name, args);
+                                   }
+                                 });
       });
 
   bool transport_configured = gTestChannelTransport->SetUp(
@@ -171,11 +168,11 @@ void SetUpTestChannel() {
   gTestChannel->StartTimer({});
 
   if (!transport_configured) {
-    BtsLog("Error: Test channel SetUp failed.");
+    BtsLog("Error: Failed to set up test channel.");
     return;
   }
 
-  BtsLog("Test channel SetUp() successful");
+  BtsLog("Set up test channel.");
 }
 #endif
 
@@ -312,17 +309,15 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
 }
 
 void Remove(uint32_t id) {
-  BtsLog("Removing HCI chip for %d", id);
+  BtsLog("Removing HCI chip %d.", id);
   id_to_chip_info_.erase(id);
 
   // Use the `AsyncManager` to ensure that the `RemoveDevice` method is
   // invoked atomically, preventing data races.
-  mAsyncManager->ExecAsync(
-    gSocketUserId, std::chrono::milliseconds(0),
-    [id]() {
-      // rootcanal will call HciPacketTransport::Close().
-      gTestModel->RemoveDevice(id);
-    });
+  mAsyncManager->ExecAsync(gSocketUserId, std::chrono::milliseconds(0), [id]() {
+    // rootcanal will call HciPacketTransport::Close().
+    gTestModel->RemoveDevice(id);
+  });
 }
 
 // Rename AddChip(model::Chip, device, transport)
@@ -353,6 +348,28 @@ uint32_t Add(uint32_t simulation_device) {
   id_to_chip_info_.emplace(
       facade_id, std::make_shared<ChipInfo>(simulation_device, model));
   return facade_id;
+}
+
+rust::Box<AddRustDeviceResult> AddRustDevice(
+    uint32_t simulation_device,
+    rust::Box<DynRustBluetoothChipCallbacks> callbacks, const std::string &type,
+    const std::string &address) {
+  auto rust_device =
+      std::make_shared<RustDevice>(std::move(callbacks), type, address);
+
+  // TODO: Use the `AsyncManager` to ensure that the `AddDevice` and
+  // `AddDeviceToPhy` methods are invoked atomically, preventing data races.
+  // For unknown reason, use `AsyncManager` hangs.
+  auto facade_id = gTestModel->AddDevice(rust_device);
+  gTestModel->AddDeviceToPhy(facade_id, phy_low_energy_index_);
+
+  auto model = std::make_shared<model::Chip::Bluetooth>();
+  // Only enable ble for beacon.
+  model->mutable_low_energy()->set_state(model::State::ON);
+  id_to_chip_info_.emplace(
+      facade_id, std::make_shared<ChipInfo>(simulation_device, model));
+  return CreateAddRustDeviceResult(
+      facade_id, std::make_unique<RustBluetoothChip>(rust_device));
 }
 
 void IncrTx(uint32_t id, rootcanal::Phy::Type phy_type) {
