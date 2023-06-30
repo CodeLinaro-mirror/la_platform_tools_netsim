@@ -76,7 +76,9 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
 }  // namespace
 
 void Run(ServerParams params) {
-  auto rust_service = netsim::CreateService();
+  auto rust_service =
+      netsim::CreateService(params.fd_startup_str, params.no_cli_ui,
+                            params.no_web_ui, params.hci_port, params.dev);
   rust_service->SetUp();
 
   // Clear all pcap files in temp directory

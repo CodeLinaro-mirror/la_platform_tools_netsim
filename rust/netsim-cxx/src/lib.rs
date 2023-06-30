@@ -101,7 +101,13 @@ mod ffi {
 
         type Service;
         #[cxx_name = "CreateService"]
-        fn create_service() -> Box<Service>;
+        fn create_service(
+            fd_startup_str: String,
+            no_cli_ui: bool,
+            no_web_ui: bool,
+            hci_port: u16,
+            dev: bool,
+        ) -> Box<Service>;
         #[cxx_name = "SetUp"]
         fn set_up(self: &Service);
         #[cxx_name = "Run"]
@@ -479,7 +485,7 @@ impl ServerResponseWritable for CxxServerResponseWriterWrapper<'_> {
     fn put_ok_with_vec(&mut self, _mime_type: &str, _body: Vec<u8>, _headers: StrHeaders) {
         todo!()
     }
-    fn put_ok_switch_protocol(&mut self, _connection: &str) {
+    fn put_ok_switch_protocol(&mut self, _connection: &str, _headers: StrHeaders) {
         todo!()
     }
 }

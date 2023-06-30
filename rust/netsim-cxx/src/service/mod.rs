@@ -17,15 +17,25 @@ use crate::config::get_dev;
 use netsim_common::util::netsim_logger;
 
 /// Module to control startup, run, and cleanup netsimd services.
+
+pub struct ServiceParams {
+    fd_startup_str: String,
+    no_cli_ui: bool,
+    no_web_ui: bool,
+    hci_port: u16,
+    dev: bool,
+}
+
 // TODO: Replace Run() in server.cc.
 
 pub struct Service {
     // netsimd states, like device resource.
+    service_params: ServiceParams,
 }
 
 impl Service {
-    pub fn new() -> Service {
-        Service {}
+    pub fn new(service_params: ServiceParams) -> Service {
+        Service { service_params }
     }
 
     /// Sets up the states for netsimd.
@@ -53,6 +63,13 @@ impl Service {
 }
 
 // For cxx.
-pub fn create_service() -> Box<Service> {
-    Box::new(Service {})
+pub fn create_service(
+    fd_startup_str: String,
+    no_cli_ui: bool,
+    no_web_ui: bool,
+    hci_port: u16,
+    dev: bool,
+) -> Box<Service> {
+    let service_params = ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, dev };
+    Box::new(Service::new(service_params))
 }

@@ -11,11 +11,13 @@ test = false
 
 [dependencies]
 cxx = { version = ">=1.0.85", features = ["c++17"] }
+data-encoding = "2.4.0"
 frontend-proto = { path = "../frontend-proto" }
 netsim-common = { path = "../netsim-common" }
 protobuf = "3.2.0"
 protobuf-json-mapping = "3.2.0"
 regex = "1.6.0"
+tungstenite = { version = "0.19.0", default-features = false }
 lazy_static = "1.4.0"
 log = "0.4.17"
 

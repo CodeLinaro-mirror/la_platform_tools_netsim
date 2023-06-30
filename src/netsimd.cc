@@ -157,6 +157,7 @@ int main(int argc, char *argv[]) {
   netsim::server::Run({.fd_startup_str = fd_startup_str,
                        .no_cli_ui = no_cli_ui,
                        .no_web_ui = no_web_ui,
-                       .hci_port = hci_port});
+                       .hci_port = hci_port,
+                       .dev = dev});
   return -1;
 }
