@@ -52,7 +52,7 @@ class NetsimClient(object):
     Returns:
       A dict mapping each connected device to its netsim properties.
     """
-    response = self._stub.GetDevices(_Empty())
+    response = self._stub.ListDevice(_Empty())
     return {device.name: device for device in response.devices}
 
   def set_position(

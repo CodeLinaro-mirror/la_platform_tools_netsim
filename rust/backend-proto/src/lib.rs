@@ -13,7 +13,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+pub mod common;
 pub mod hci_packet;
 pub mod packet_streamer;
 pub mod startup;
-pub mod common;
