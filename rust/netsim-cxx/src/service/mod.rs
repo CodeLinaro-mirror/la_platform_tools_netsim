@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use crate::bluetooth as bluetooth_facade;
+use crate::captures::handlers::clear_pcap_files;
 use crate::config::get_dev;
+use crate::wifi as wifi_facade;
+use log::info;
 use netsim_common::util::netsim_logger;
 
 /// Module to control startup, run, and cleanup netsimd services.
@@ -40,8 +43,13 @@ impl Service {
 
     /// Sets up the states for netsimd.
     pub fn set_up(&self) {
-        // TODO: clean pcap files.
         netsim_logger::init("netsimd");
+        if clear_pcap_files() {
+            info!("netsim generated pcap files in temp directory has been removed.");
+        }
+
+        bluetooth_facade::bluetooth_start();
+        wifi_facade::wifi_start();
     }
 
     /// Runs the netsimd services.

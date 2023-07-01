@@ -50,8 +50,7 @@ use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport}
 use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
-    clear_pcap_files, handle_capture_cxx, handle_packet_request, handle_packet_response,
-    update_captures,
+    handle_capture_cxx, handle_packet_request, handle_packet_response, update_captures,
 };
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
@@ -207,12 +206,6 @@ mod ffi {
             packet: &CxxVector<u8>,
             packet_type: u32,
         );
-
-        // Clearing out all pcap Files in temp directory
-
-        #[cxx_name = ClearPcapFiles]
-        #[namespace = "netsim::capture"]
-        fn clear_pcap_files() -> bool;
 
         // Rust Bluetooth device.
         #[namespace = "netsim::hci::facade"]
