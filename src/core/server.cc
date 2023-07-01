@@ -25,13 +25,11 @@
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
-#include "hci/bluetooth_facade.h"
 #include "netsim-cxx/src/lib.rs.h"
 #include "util/filesystem.h"
 #include "util/ini_file.h"
 #include "util/log.h"
 #include "util/os_utils.h"
-#include "wifi/wifi_facade.h"
 #ifdef _WIN32
 #include <Windows.h>
 #else
@@ -76,16 +74,10 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
 }  // namespace
 
 void Run(ServerParams params) {
-  auto rust_service = netsim::CreateService();
+  auto rust_service =
+      netsim::CreateService(params.fd_startup_str, params.no_cli_ui,
+                            params.no_web_ui, params.hci_port, params.dev);
   rust_service->SetUp();
-
-  // Clear all pcap files in temp directory
-  if (netsim::capture::ClearPcapFiles()) {
-    BtsLog("netsim generated pcap files in temp directory has been removed.");
-  }
-
-  netsim::hci::facade::Start();
-  netsim::wifi::facade::Start();
 
 #ifndef NETSIM_ANDROID_EMULATOR
   netsim::RunFdTransport(params.fd_startup_str);

@@ -29,6 +29,7 @@ test = false
 
 [dependencies]
 cxx = { version = ">=1.0.85", features = ["c++17"] }
+data-encoding = "2.4.0"
 frontend-proto = { path = "../frontend-proto" }
 netsim-common = { path = "../netsim-common" }
 protobuf = "3.2.0"
@@ -39,11 +40,13 @@ openssl = "0.10.45"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = {version = "1.25.0", features = ["full"]}
+tungstenite = { version = "0.19.0", default-features = false }
 nix = {version = "0.26.2", optional = true}
 
 [features]
-default = ["cuttlefish"]
+default = ["cuttlefish", "local_ssl"]
 cuttlefish = ["dep:nix"]
+local_ssl = []
 
 [build-dependencies]
 cxx-build = "1.0.92"

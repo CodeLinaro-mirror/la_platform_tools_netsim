@@ -50,8 +50,7 @@ use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport}
 use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
-    clear_pcap_files, handle_capture_cxx, handle_packet_request, handle_packet_response,
-    update_captures,
+    handle_capture_cxx, handle_packet_request, handle_packet_response, update_captures,
 };
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
@@ -101,7 +100,13 @@ mod ffi {
 
         type Service;
         #[cxx_name = "CreateService"]
-        fn create_service() -> Box<Service>;
+        fn create_service(
+            fd_startup_str: String,
+            no_cli_ui: bool,
+            no_web_ui: bool,
+            hci_port: u16,
+            dev: bool,
+        ) -> Box<Service>;
         #[cxx_name = "SetUp"]
         fn set_up(self: &Service);
         #[cxx_name = "Run"]
@@ -201,12 +206,6 @@ mod ffi {
             packet: &CxxVector<u8>,
             packet_type: u32,
         );
-
-        // Clearing out all pcap Files in temp directory
-
-        #[cxx_name = ClearPcapFiles]
-        #[namespace = "netsim::capture"]
-        fn clear_pcap_files() -> bool;
 
         // Rust Bluetooth device.
         #[namespace = "netsim::hci::facade"]
@@ -479,7 +478,7 @@ impl ServerResponseWritable for CxxServerResponseWriterWrapper<'_> {
     fn put_ok_with_vec(&mut self, _mime_type: &str, _body: Vec<u8>, _headers: StrHeaders) {
         todo!()
     }
-    fn put_ok_switch_protocol(&mut self, _connection: &str) {
+    fn put_ok_switch_protocol(&mut self, _connection: &str, _headers: StrHeaders) {
         todo!()
     }
 }
