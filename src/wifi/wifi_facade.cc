@@ -14,8 +14,14 @@
 
 #include "wifi/wifi_facade.h"
 
+#include <memory>
+
+#include "packet_hub/packet_hub.h"
 #include "rust/cxx.h"
 #include "util/log.h"
+#ifdef NETSIM_ANDROID_EMULATOR
+#include "android-qemu2-glue/emulation/WifiService.h"
+#endif
 
 namespace netsim::wifi {
 namespace {
@@ -33,6 +39,10 @@ class ChipInfo {
 };
 
 std::unordered_map<uint32_t, std::shared_ptr<ChipInfo>> id_to_chip_info_;
+#ifdef NETSIM_ANDROID_EMULATOR
+std::shared_ptr<android::qemu2::WifiService> wifi_service;
+#endif
+;
 
 bool ChangedState(model::State a, model::State b) {
   return (b != model::State::UNKNOWN && a != b);
@@ -121,18 +131,54 @@ uint32_t Add(uint32_t simulation_device) {
   return global_chip_id++;
 }
 
-void Start() { BtsLog("wifi::facade::Start()"); }
-void Stop() { BtsLog("wifi::facade::Stop()"); }
+size_t HandleWifiCallback(const uint8_t *buf, size_t size) {
+  //  Broadcast the response to all WiFi chips.
+  std::vector<uint8_t> packet(buf, buf + size);
+  for (auto [chip_id, _] : id_to_chip_info_) {
+    packet_hub::HandleWifiResponse(
+        chip_id, std::make_shared<std::vector<uint8_t>>(packet));
+  }
+  return size;
+}
+
+void Start() {
+  BtsLog("wifi::facade::Start()");
+#ifdef NETSIM_ANDROID_EMULATOR
+  // Initialize hostapd and slirp inside WiFi Service.
+  android::qemu2::HostapdOptions hostapd = {.disabled = false};
+  android::qemu2::SlirpOptions slirpOpts = {.disabled = false};
+
+  auto builder = android::qemu2::WifiService::Builder()
+                     .withHostapd(hostapd)
+                     .withSlirp(slirpOpts)
+                     .withOnReceiveCallback(HandleWifiCallback)
+                     .withVerboseLogging(true);
+  wifi_service = builder.build();
+  if (!wifi_service->init()) {
+    BtsLog("Failed to initialize wifi service");
+  }
+#endif
+}
+void Stop() {
+  BtsLog("wifi::facade::Stop()");
+#ifdef NETSIM_ANDROID_EMULATOR
+  wifi_service->stop();
+#endif
+}
 
 }  // namespace facade
 
 void HandleWifiRequest(uint32_t facade_id,
                        const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  BtsLog("netsim::wifi::HandleWifiRequest()");
   netsim::wifi::IncrTx(facade_id);
 
-  // TODO: Broadcast the packet to other emulators.
-  // TODO: Send the packet to the WiFi service.
+#ifdef NETSIM_ANDROID_EMULATOR
+  // Send the packet to the WiFi service.
+  struct iovec iov[1];
+  iov[0].iov_base = packet->data();
+  iov[0].iov_len = packet->size();
+  wifi_service->send(android::base::IOVector(iov, iov + 1));
+#endif
 }
 
 void HandleWifiRequestCxx(uint32_t facade_id,

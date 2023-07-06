@@ -21,7 +21,6 @@
 #include <string>
 #include <utility>
 
-#include "controller/scene_controller.h"
 #include "frontend.grpc.pb.h"
 #include "frontend.pb.h"
 #include "google/protobuf/empty.pb.h"
@@ -87,16 +86,6 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status GetDevices(grpc::ServerContext *context,
                           const google::protobuf::Empty *empty,
                           frontend::GetDevicesResponse *reply) {
-    if (netsim::config::GetDev()) {
-      return GetDevicesDev(reply);
-    }
-    const auto scene = netsim::controller::SceneController::Singleton().Get();
-    for (const auto &device : scene.devices())
-      reply->add_devices()->CopyFrom(device);
-    return grpc::Status::OK;
-  }
-
-  grpc::Status GetDevicesDev(frontend::GetDevicesResponse *reply) {
     CxxServerResponseWritable writer;
     HandleDeviceCxx(writer, "GET", "", "");
     if (writer.is_ok) {
@@ -109,18 +98,6 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status PatchDevice(grpc::ServerContext *context,
                            const frontend::PatchDeviceRequest *request,
                            google::protobuf::Empty *response) {
-    if (netsim::config::GetDev()) {
-      return PatchDeviceDev(request);
-    }
-    auto status = netsim::controller::SceneController::Singleton().PatchDevice(
-        request->device());
-    if (!status)
-      return grpc::Status(grpc::StatusCode::NOT_FOUND,
-                          "device " + request->device().name() + " not found.");
-    return grpc::Status::OK;
-  }
-
-  grpc::Status PatchDeviceDev(const frontend::PatchDeviceRequest *request) {
     CxxServerResponseWritable writer;
     std::string request_json;
     google::protobuf::util::MessageToJsonString(*request, &request_json);
@@ -134,14 +111,6 @@ class FrontendServer final : public frontend::FrontendService::Service {
   grpc::Status Reset(grpc::ServerContext *context,
                      const google::protobuf::Empty *request,
                      google::protobuf::Empty *empty) {
-    if (netsim::config::GetDev()) {
-      return ResetDev();
-    }
-    netsim::controller::SceneController::Singleton().Reset();
-    return grpc::Status::OK;
-  }
-
-  grpc::Status ResetDev() {
     CxxServerResponseWritable writer;
     HandleDeviceCxx(writer, "PUT", "", "");
     if (writer.is_ok) {

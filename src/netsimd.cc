@@ -142,7 +142,7 @@ int main(int argc, char *argv[]) {
     netsim::osutils::RedirectStdStream(netsim::NetsimdTempDirString().c_str());
   }
 
-  netsim::config::SetDev(true);
+  netsim::config::SetDev(dev);
   int hci_port = get_hci_port(hci_port_flag);
   // Daemon mode -- start radio managers
   // get netsim daemon, starting if it doesn't exist

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::ffi::{add_chip_cxx, handle_request_cxx, remove_chip};
+use super::dispatcher::{register_transport, unregister_transport, Response};
+use crate::devices::devices_handler::{add_chip, remove_chip};
+use crate::ffi::handle_request_cxx;
 use crate::transport::h4;
-use cxx::let_cxx_string;
-use lazy_static::lazy_static;
-use std::collections::HashMap;
+use frontend_proto::common::ChipKind;
+use log::{error, info};
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
-use std::sync::RwLock;
 use std::thread;
 
 // The HCI server implements the Bluetooth UART transport protocol
@@ -31,6 +31,22 @@ use std::thread;
 /// The socket transport reads/writes host-controller messages
 /// for bluetooth (h4 hci) over a [TcpStream] transport.
 ///
+
+struct SocketTransport {
+    stream: TcpStream,
+}
+
+impl Response for SocketTransport {
+    fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+        let mut buffer = Vec::new();
+        buffer.push(packet_type);
+        buffer.extend(packet);
+        if let Err(e) = self.stream.write_all(&buffer[..]) {
+            println!("netsimd: error writing {}", e);
+        };
+    }
+}
+
 pub fn run_socket_transport(hci_port: u16) {
     thread::Builder::new()
         .name("hci_transport".to_string())
@@ -59,67 +75,37 @@ fn accept_incoming(hci_port: u16) -> std::io::Result<()> {
     Ok(())
 }
 
-#[derive(Copy, Clone)]
-enum ChipKind {
-    UNSPECIFIED = 0,
-    BLUETOOTH = 1,
-    WIFI = 2,
-    UWB = 3,
-}
-
-// TRANSPORTS is a singleton that contains the outpurepr: et FiFo
-lazy_static! {
-    static ref TRANSPORTS: RwLock<HashMap<String, TcpStream>> = RwLock::new(HashMap::new());
-}
-
-fn get_key(kind: u32, facade_id: u32) -> String {
-    format!("{}/{}", kind, facade_id)
-}
-
-pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
-    let key = get_key(kind, facade_id);
-    let binding = TRANSPORTS.read().unwrap();
-    if let Some(mut stream) = binding.get(&key) {
-        // todo add error checking
-        let mut buffer = Vec::new();
-        buffer.push(packet_type);
-        buffer.extend(packet);
-        if let Err(e) = stream.write_all(&buffer[..]) {
-            println!("netsimd: error writing {}", e);
-        };
-    };
-}
-
 fn handle_hci_client(stream: TcpStream) {
     // ...
-    let_cxx_string!(guid = stream.peer_addr().unwrap().port().to_string());
-    let_cxx_string!(device_name = format!("socket-{}", stream.peer_addr().unwrap()));
-    let_cxx_string!(name = format!("socket-{}", stream.peer_addr().unwrap()));
-    let_cxx_string!(manufacturer = "Google");
-    let_cxx_string!(product_name = "Google");
-    let result = add_chip_cxx(
-        &guid,
-        &device_name,
-        ChipKind::BLUETOOTH as u32,
-        &name,
-        &manufacturer,
-        &product_name,
-    );
-    let key = get_key(ChipKind::BLUETOOTH as u32, result.get_facade_id());
+    let result = match add_chip(
+        &stream.peer_addr().unwrap().port().to_string(),
+        &format!("socket-{}", stream.peer_addr().unwrap()),
+        ChipKind::BLUETOOTH,
+        &format!("socket-{}", stream.peer_addr().unwrap()),
+        "Google",
+        "Google",
+    ) {
+        Ok(chip_result) => chip_result,
+        Err(err) => {
+            error!("{err}");
+            return;
+        }
+    };
     let tcp_rx = stream.try_clone().unwrap();
-    {
-        TRANSPORTS.write().unwrap().insert(key.clone(), stream);
-    }
-
-    let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.get_facade_id());
-
-    println!(
-        "netsimd: remove chip: device {}, chip {}",
-        result.get_device_id(),
-        result.get_chip_id()
+    register_transport(
+        ChipKind::BLUETOOTH as u32,
+        result.facade_id,
+        Box::new(SocketTransport { stream }),
     );
-    remove_chip(result.get_device_id(), result.get_chip_id());
-    TRANSPORTS.write().unwrap().remove(&key);
+
+    let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.facade_id);
+
+    info!("remove chip: device {}, chip {}", result.device_id, result.chip_id);
+    if let Err(err) = remove_chip(result.device_id, result.chip_id) {
+        error!("{err}");
+    };
+    // The connection will be closed when the value is dropped.
+    unregister_transport(ChipKind::BLUETOOTH as u32, result.facade_id);
 }
 
 /// read from the socket and pass to the packet hub.

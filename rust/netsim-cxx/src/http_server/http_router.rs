@@ -63,7 +63,28 @@ impl Router {
 ///   uri: "/users/33/info"
 ///   result: Some("33")
 ///
+/// Query Example:
+///   pattern: "/users?"
+///   uri: "/users?name=hello&value=0"
+///   result: Some("name=hello&value=0")
+///
 fn match_route<'a>(route: &str, uri: &'a str) -> Option<&'a str> {
+    // check for query string in uri
+    if route.ends_with('?') {
+        let query_start = route.find('?').unwrap();
+        // check for multiple '?' in route
+        if query_start != route.len() - 1 {
+            return None;
+        }
+        // check for match of route like "/user?"
+        let prefix = &route[0..query_start];
+        if uri.starts_with(prefix) && query_start < uri.len() {
+            return Some(&uri[(query_start + 1)..]);
+        } else {
+            return None;
+        }
+    }
+
     let open = route.find('{');
     let close = route.find('}');
 
@@ -106,6 +127,11 @@ mod tests {
         writer.put_ok("application/json", body.as_str(), &[]);
     }
 
+    fn handle_query(_request: &HttpRequest, query: &str, writer: ResponseWritable) {
+        let body = format!("The query is '{query}'!");
+        writer.put_ok("text/plain", body.as_str(), &[]);
+    }
+
     #[test]
     fn test_match_route() {
         assert_eq!(match_route("/user/{id}", "/user/1920"), Some("1920"));
@@ -119,6 +145,11 @@ mod tests {
         assert_eq!(match_route("{id}/", "123|"), None);
         assert_eq!(match_route("/{id}/", "/123|"), None);
         assert_eq!(match_route("/{id}/", "|123/"), None);
+        assert_eq!(match_route("/user?", "/user?name=hello"), Some("name=hello"));
+        assert_eq!(match_route("/user?s", "/user?s=hello"), None);
+        assert_eq!(match_route("/user??", "/user??name=hello"), None);
+        assert_eq!(match_route("/user?", "/user?"), Some(""));
+        assert_eq!(match_route("/a?", "/b?name=hello"), None);
     }
 
     #[test]
@@ -138,7 +169,7 @@ mod tests {
         router.handle_request(&request, &mut writer);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 200\r\nContent-Type: text/html\r\nContent-Length: 13\r\n\r\nHello, world!";
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 13\r\n\r\nHello, world!";
         assert_eq!(written_bytes, expected_bytes);
 
         let request = HttpRequest {
@@ -153,7 +184,7 @@ mod tests {
         router.handle_request(&request, &mut writer);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 200\r\nContent-Type: application/json\r\nContent-Length: 12\r\n\r\nHello, 1920!";
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 12\r\n\r\nHello, 1920!";
         assert_eq!(written_bytes, expected_bytes);
     }
 
@@ -173,7 +204,27 @@ mod tests {
         router.handle_request(&request, &mut writer);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 404\r\nContent-Type: text/plain\r\nContent-Length: 59\r\n\r\n404 Not found (netsim): HttpRouter unknown uri /player/1920";
+            b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 59\r\n\r\n404 Not found (netsim): HttpRouter unknown uri /player/1920";
+        assert_eq!(written_bytes, expected_bytes);
+    }
+
+    #[test]
+    fn test_handle_query() {
+        let mut router = Router::new();
+        router.add_route("/user?", Box::new(handle_query));
+        let request = HttpRequest {
+            method: "GET".to_string(),
+            uri: "/user?name=hello".to_string(),
+            version: "HTTP/1.1".to_string(),
+            headers: HttpHeaders::new(),
+            body: vec![],
+        };
+        let mut stream = Cursor::new(Vec::new());
+        let mut writer = ServerResponseWriter::new(&mut stream);
+        router.handle_request(&request, &mut writer);
+        let written_bytes = stream.get_ref();
+        let expected_bytes =
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 26\r\n\r\nThe query is 'name=hello'!";
         assert_eq!(written_bytes, expected_bytes);
     }
 }

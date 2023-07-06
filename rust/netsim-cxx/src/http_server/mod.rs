@@ -25,17 +25,13 @@ use crate::http_server::http_router::Router;
 use crate::http_server::server_response::{
     ResponseWritable, ServerResponseWritable, ServerResponseWriter,
 };
+use crate::transport::websocket::run_websocket_transport;
 use crate::version::VERSION;
 
 use crate::http_server::thread_pool::ThreadPool;
 
-use crate::ffi::get_devices;
-use crate::ffi::patch_device;
-use crate::ffi::reset;
-use cxx::let_cxx_string;
 use log::{error, info, warn};
-use netsim_common::util::netsim_logger;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
 use std::io::BufReader;
@@ -49,7 +45,6 @@ const PATH_PREFIXES: [&str; 3] = ["js", "assets", "node_modules/tslib"];
 
 // TODO: move to main.rs
 pub fn run_http_server() {
-    netsim_logger::init("netsimd");
     let listener = match TcpListener::bind("127.0.0.1:7681") {
         Ok(listener) => listener,
         Err(e) => {
@@ -146,61 +141,65 @@ fn handle_version(_request: &HttpRequest, _param: &str, writer: ResponseWritable
     writer.put_ok("text/plain", body.as_str(), &[]);
 }
 
-fn handle_devices(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
-    if &request.method == "GET" {
-        let_cxx_string!(request = "");
-        let_cxx_string!(response = "");
-        let_cxx_string!(error_message = "");
-        let status = get_devices(&request, response.as_mut(), error_message.as_mut());
-        if status == 200 {
-            writer.put_ok("text/plain", response.to_string().as_str(), &[]);
-        } else {
-            let body = format!("404 Not found (netsim): {:?}", error_message.to_string());
-            writer.put_error(404, body.as_str());
+/// Collect queries and output key and values into Vec
+fn collect_query(param: &str) -> Result<HashMap<&str, &str>, &str> {
+    let mut result = HashMap::new();
+    for word in param.split('&') {
+        let equal = word.find('=');
+        match equal {
+            Some(equal) => {
+                if result.insert(&word[..equal], &word[equal + 1..]).is_some() {
+                    return Err("Query has duplicate keys");
+                }
+            }
+            None => return Err("Invalid query string"),
         }
-    } else if &request.method == "PATCH" {
-        let_cxx_string!(new_request = &request.body);
-        let_cxx_string!(response = "");
-        let_cxx_string!(error_message = "");
-        let status = patch_device(&new_request, response.as_mut(), error_message.as_mut());
-        if status == 200 {
-            writer.put_ok("text/plain", response.to_string().as_str(), &[]);
-        } else {
-            let body = format!("404 Not found (netsim): {:?}", error_message.to_string());
-            writer.put_error(404, body.as_str());
+    }
+    // TODO: Check if initial ChipInfo is included
+    Ok(result)
+}
+
+// handler for websocket server connection
+fn handle_websocket(_request: &HttpRequest, param: &str, writer: ResponseWritable) {
+    match collect_query(param) {
+        Ok(queries) => {
+            let mut name_exists = false;
+            let mut kind_exists = false;
+            for (key, _) in queries {
+                if key == "name" {
+                    name_exists = true;
+                }
+                if key == "kind" {
+                    kind_exists = true;
+                }
+            }
+            if name_exists && kind_exists {
+                writer.put_ok_switch_protocol("websocket")
+            } else {
+                writer.put_error(404, "Missing name(device_name) and/or kind(chip_kind). Query must include name=a&kind=b.")
+            }
         }
-    } else if &request.method == "PUT" {
-        reset();
-        writer.put_ok("text/plain", r"Device position reset success", &[]);
-    } else {
-        let body = format!(
-            "404 Not found (netsim): {:?} is not a valid method for this route",
-            request.method.to_string()
-        );
-        writer.put_error(404, body.as_str());
+        Err(err) => writer.put_error(404, err),
     }
 }
 
-fn handle_dev(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
-    writer.put_ok("text/plain", r"Welcome to netsim developer mode", &[]);
+fn handle_dev(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
+    handle_file(&request.method, "dev.html", writer)
 }
 
 fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
     let mut router = Router::new();
     router.add_route("/", Box::new(handle_index));
     router.add_route("/version", Box::new(handle_version));
-    if crate::config::get_dev() {
-        router.add_route(r"/v1/devices", Box::new(handle_device));
-        router.add_route(r"/v1/devices/{id}", Box::new(handle_device));
-    } else {
-        router.add_route("/v1/devices", Box::new(handle_devices));
-    }
+    router.add_route(r"/v1/devices", Box::new(handle_device));
+    router.add_route(r"/v1/devices/{id}", Box::new(handle_device));
     router.add_route(r"/v1/captures", Box::new(handle_capture));
     router.add_route(r"/v1/captures/{id}", Box::new(handle_capture));
 
     // Adding additional routes in dev mode.
     if crate::config::get_dev() {
         router.add_route("/dev", Box::new(handle_dev));
+        router.add_route(r"/v1/websocket?", Box::new(handle_websocket));
     }
 
     // A closure for checking if path is a static file we wish to serve, and call handle_static
@@ -228,9 +227,39 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
     if let Ok(request) = HttpRequest::parse::<&TcpStream>(&mut BufReader::new(&stream)) {
         let mut response_writer = ServerResponseWriter::new(&mut stream);
         router.handle_request(&request, &mut response_writer);
+        if let Some(response) = response_writer.get_response() {
+            if response.status_code == 101 {
+                let query_start = request.uri.find('?').unwrap();
+                let queries = collect_query(&request.uri[query_start + 1..]).unwrap();
+                run_websocket_transport(stream, queries);
+            }
+        }
     } else {
         let mut response_writer = ServerResponseWriter::new(&mut stream);
         let body = "404 not found (netsim): parse header failed";
         response_writer.put_error(404, body);
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_collect_query() {
+        // Single query pair
+        let mut expected = HashMap::new();
+        expected.insert("name", "hello");
+        assert_eq!(collect_query("name=hello"), Ok(expected));
+
+        // Multiple query pair
+        let mut expected = HashMap::new();
+        expected.insert("name", "hello");
+        expected.insert("kind", "bt");
+        assert_eq!(collect_query("name=hello&kind=bt"), Ok(expected));
+
+        // Invalid query string or duplicate keys
+        assert_eq!(collect_query("hello"), Err("Invalid query string"));
+        assert_eq!(collect_query("name=hello&name=world"), Err("Query has duplicate keys"))
+    }
 }

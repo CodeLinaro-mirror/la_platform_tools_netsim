@@ -26,7 +26,6 @@
 #include <utility>
 
 #include "hci/hci_packet_transport.h"
-#include "model/hci/hci_sniffer.h"
 #include "model/setup/async_manager.h"
 #include "model/setup/test_command_handler.h"
 #include "model/setup/test_model.h"
@@ -249,22 +248,15 @@ void PatchPhy(int device_id, bool isAddToPhy, bool isLowEnergy) {
 class ChipInfo {
  public:
   uint32_t simulation_device;
-  std::shared_ptr<rootcanal::HciSniffer> sniffer;
   std::shared_ptr<model::Chip::Bluetooth> model;
-  std::shared_ptr<HciPacketTransport> transport;
   int le_tx_count = 0;
   int classic_tx_count = 0;
   int le_rx_count = 0;
   int classic_rx_count = 0;
 
   ChipInfo(uint32_t simulation_device,
-           std::shared_ptr<rootcanal::HciSniffer> sniffer,
-           std::shared_ptr<model::Chip::Bluetooth> model,
-           std::shared_ptr<HciPacketTransport> transport)
-      : simulation_device(simulation_device),
-        sniffer(sniffer),
-        model(model),
-        transport(transport) {}
+           std::shared_ptr<model::Chip::Bluetooth> model)
+      : simulation_device(simulation_device), model(model) {}
 };
 
 std::unordered_map<uint32_t, std::shared_ptr<ChipInfo>> id_to_chip_info_;
@@ -322,19 +314,23 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
 void Remove(uint32_t id) {
   BtsLog("Removing HCI chip for %d", id);
   id_to_chip_info_.erase(id);
-  gTestModel->RemoveDevice(id);
-  // rootcanal will call HciPacketTransport::Close().
+
+  // Use the `AsyncManager` to ensure that the `RemoveDevice` method is
+  // invoked atomically, preventing data races.
+  mAsyncManager->ExecAsync(
+    gSocketUserId, std::chrono::milliseconds(0),
+    [id]() {
+      // rootcanal will call HciPacketTransport::Close().
+      gTestModel->RemoveDevice(id);
+    });
 }
 
 // Rename AddChip(model::Chip, device, transport)
 
 uint32_t Add(uint32_t simulation_device) {
   auto transport = std::make_shared<HciPacketTransport>(mAsyncManager);
-  // rewrap the transport to include a sniffer
-  auto sniffer = std::static_pointer_cast<HciSniffer>(
-      rootcanal::HciSniffer::Create(transport));
   auto hci_device =
-      std::make_shared<rootcanal::HciDevice>(sniffer, controller_properties_);
+      std::make_shared<rootcanal::HciDevice>(transport, controller_properties_);
 
   // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
   // invoked atomically, preventing data races.
@@ -355,8 +351,7 @@ uint32_t Add(uint32_t simulation_device) {
   model->mutable_low_energy()->set_state(model::State::ON);
 
   id_to_chip_info_.emplace(
-      facade_id,
-      std::make_shared<ChipInfo>(simulation_device, sniffer, model, transport));
+      facade_id, std::make_shared<ChipInfo>(simulation_device, model));
   return facade_id;
 }
 
@@ -396,7 +391,7 @@ int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power) {
   }
   auto a = id_to_chip_info_[send_id]->simulation_device;
   auto b = id_to_chip_info_[recv_id]->simulation_device;
-  auto distance = scene_controller::GetDistance(a, b);
+  auto distance = netsim::device::GetDistanceCxx(a, b);
   return netsim::DistanceToRssi(tx_power, distance);
 }
 

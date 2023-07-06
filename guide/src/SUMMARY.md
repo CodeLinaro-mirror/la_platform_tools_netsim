@@ -6,6 +6,10 @@
 
 - [Installation](guide/installation.md)
 
+# Developer Guide
+
+- [Development](development/README.md)
+
 # Reference Guide
 
 - [Command Line Tool](cli/README.md)

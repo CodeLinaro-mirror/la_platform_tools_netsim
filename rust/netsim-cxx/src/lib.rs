@@ -22,11 +22,17 @@ mod config;
 mod devices;
 mod http_server;
 mod ranging;
+mod resource;
+mod service;
 mod system;
 mod transport;
 mod uwb;
 mod version;
 mod wifi;
+
+// This feature is enabled only for CMake builds
+#[cfg(feature = "local_ssl")]
+mod openssl;
 
 use std::pin::Pin;
 
@@ -35,9 +41,9 @@ use ffi::CxxServerResponseWriter;
 use http_server::http_request::StrHeaders;
 use http_server::server_response::ServerResponseWritable;
 
-use crate::transport::fd::handle_response;
+use crate::transport::dispatcher::handle_response;
 use crate::transport::fd::run_fd_transport;
-use crate::transport::socket::handle_response as socket_handle_response;
+use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
@@ -46,10 +52,12 @@ use crate::captures::handlers::{
 };
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
-    add_chip_rust, get_distance_rust, handle_device_cxx, is_shutdown_time_cxx, remove_chip_rust,
+    add_chip_cxx, get_distance_cxx, handle_device_cxx, is_shutdown_time_cxx, remove_chip_cxx,
+    AddChipResultCxx,
 };
 use crate::http_server::run_http_server;
 use crate::ranging::*;
+use crate::service::{create_service, Service};
 use crate::system::netsimd_temp_dir_string;
 use crate::uwb::facade::*;
 use crate::version::*;
@@ -86,6 +94,16 @@ mod ffi {
         #[cxx_name = "GetVersion"]
         fn get_version() -> String;
 
+        // Service
+
+        type Service;
+        #[cxx_name = "CreateService"]
+        fn create_service() -> Box<Service>;
+        #[cxx_name = "SetUp"]
+        fn set_up(self: &Service);
+        #[cxx_name = "Run"]
+        fn run(self: &Service);
+
         // System
 
         #[cxx_name = "NetsimdTempDirString"]
@@ -109,40 +127,49 @@ mod ffi {
             body: String,
         );
 
-        // Packet hub
+        // Transport.
 
         #[cxx_name = HandleResponse]
-        #[namespace = "netsim::fd"]
+        #[namespace = "netsim::transport"]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
-        #[cxx_name = HandleResponse]
-        #[namespace = "netsim::socket"]
-        fn socket_handle_response(
-            kind: u32,
-            facade_id: u32,
-            packet: &CxxVector<u8>,
-            packet_type: u8,
-        );
+        #[cxx_name = RegisterGrpcTransport]
+        #[namespace = "netsim::transport"]
+        fn register_grpc_transport(kind: u32, facade_id: u32);
+
+        #[cxx_name = UnregisterGrpcTransport]
+        #[namespace = "netsim::transport"]
+        fn unregister_grpc_transport(kind: u32, facade_id: u32);
 
         // Device Resource
-        #[cxx_name = AddChipRust]
+        type AddChipResultCxx;
+        #[cxx_name = "GetDeviceId"]
+        fn get_device_id(self: &AddChipResultCxx) -> u32;
+        #[cxx_name = "GetChipId"]
+        fn get_chip_id(self: &AddChipResultCxx) -> u32;
+        #[cxx_name = "GetFacadeId"]
+        fn get_facade_id(self: &AddChipResultCxx) -> u32;
+        #[cxx_name = "IsError"]
+        fn is_error(self: &AddChipResultCxx) -> bool;
+
+        #[cxx_name = AddChipCxx]
         #[namespace = "netsim::device"]
-        fn add_chip_rust(
+        fn add_chip_cxx(
             device_guid: &str,
             device_name: &str,
             chip_kind: &CxxString,
             chip_name: &str,
             chip_manufacturer: &str,
             chip_product_name: &str,
-        ) -> UniquePtr<AddChipResult>;
+        ) -> Box<AddChipResultCxx>;
 
-        #[cxx_name = RemoveChipRust]
+        #[cxx_name = RemoveChipCxx]
         #[namespace = "netsim::device"]
-        fn remove_chip_rust(device_id: u32, chip_id: u32);
+        fn remove_chip_cxx(device_id: u32, chip_id: u32);
 
-        #[cxx_name = GetDistanceRust]
+        #[cxx_name = GetDistanceCxx]
         #[namespace = "netsim::device"]
-        fn get_distance_rust(a: u32, b: u32) -> f32;
+        fn get_distance_cxx(a: u32, b: u32) -> f32;
 
         #[cxx_name = IsShutdownTimeCxx]
         #[namespace = "netsim::device"]
@@ -215,61 +242,6 @@ mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("controller/controller.h");
-
-        #[namespace = "netsim::scene_controller"]
-        type AddChipResult;
-        fn get_chip_id(self: &AddChipResult) -> u32;
-        fn get_device_id(self: &AddChipResult) -> u32;
-        fn get_facade_id(self: &AddChipResult) -> u32;
-
-        #[rust_name = "new_add_chip_result"]
-        #[namespace = "netsim::scene_controller"]
-        fn NewAddChipResult(
-            device_id: u32,
-            chip_id: u32,
-            facade_id: u32,
-        ) -> UniquePtr<AddChipResult>;
-
-        #[rust_name = "add_chip_cxx"]
-        #[namespace = "netsim::scene_controller"]
-        fn AddChipCxx(
-            guid: &CxxString,
-            device_name: &CxxString,
-            chip_kind: u32,
-            chip_name: &CxxString,
-            manufacturer: &CxxString,
-            product_name: &CxxString,
-        ) -> UniquePtr<AddChipResult>;
-
-        #[rust_name = "remove_chip"]
-        #[namespace = "netsim::scene_controller"]
-        fn RemoveChip(device_id: u32, chip_id: u32);
-
-        #[rust_name = "get_devices"]
-        #[namespace = "netsim::scene_controller"]
-        fn GetDevices(
-            request: &CxxString,
-            response: Pin<&mut CxxString>,
-            error_message: Pin<&mut CxxString>,
-        ) -> u32;
-
-        #[rust_name = "get_devices_bytes"]
-        #[namespace = "netsim::scene_controller"]
-        fn GetDevicesBytes(vec: &mut Vec<u8>) -> bool;
-
-        #[rust_name = "get_facade_id"]
-        #[namespace = "netsim::scene_controller"]
-        fn GetFacadeId(chip_id: i32) -> i32;
-
-        #[rust_name = "patch_device"]
-        #[namespace = "netsim::scene_controller"]
-        fn PatchDevice(
-            request: &CxxString,
-            response: Pin<&mut CxxString>,
-            error_message: Pin<&mut CxxString>,
-        ) -> u32;
-
         /// A C++ class which can be used to respond to a request.
         include!("frontend/server_response_writable.h");
 
@@ -294,9 +266,12 @@ mod ffi {
         #[namespace = "netsim::packet_hub"]
         fn HandleRequestCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
 
-        #[rust_name = "reset"]
-        #[namespace = "netsim::scene_controller"]
-        fn Reset();
+        // Grpc server.
+        include!("backend/backend_packet_hub.h");
+
+        #[rust_name = handle_grpc_response]
+        #[namespace = "netsim::backend"]
+        fn HandleResponseCxx(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
         // Bluetooth facade.
         include!("hci/hci_packet_hub.h");
@@ -400,6 +375,9 @@ impl ServerResponseWritable for CxxServerResponseWriterWrapper<'_> {
     }
 
     fn put_ok_with_vec(&mut self, _mime_type: &str, _body: Vec<u8>, _headers: StrHeaders) {
+        todo!()
+    }
+    fn put_ok_switch_protocol(&mut self, _connection: &str) {
         todo!()
     }
 }

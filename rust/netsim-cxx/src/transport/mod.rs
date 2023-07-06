@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod dispatcher;
 #[cfg(feature = "cuttlefish")]
 pub mod fd;
+pub mod grpc;
 mod h4;
 pub mod socket;
 #[cfg(feature = "cuttlefish")]
 mod uci;
+pub mod websocket;
 
 // This provides no-op implementations of fd transport for non-unix systems.
 #[cfg(not(feature = "cuttlefish"))]

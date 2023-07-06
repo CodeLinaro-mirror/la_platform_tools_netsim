@@ -17,7 +17,7 @@
 use std::env;
 use std::path::PathBuf;
 
-/// Get the netsimd temporary directory.
+/// Get or create the netsimd temporary directory.
 ///
 /// This is based on emu System.cpp android::base::getTempDir()
 ///
@@ -43,9 +43,13 @@ pub fn netsimd_temp_dir() -> PathBuf {
     };
     // netsimd files are stored in their own directory
     path.push("netsimd");
+    if !path.is_dir() {
+        std::fs::create_dir_all(&path).unwrap();
+    }
     path
 }
 
+/// For C++.
 pub fn netsimd_temp_dir_string() -> String {
     netsimd_temp_dir().into_os_string().into_string().unwrap()
 }
@@ -65,15 +69,20 @@ mod tests {
         env::set_var("USER", "ryle");
         let tmp_dir = netsimd_temp_dir();
         assert_eq!(tmp_dir.to_str().unwrap(), "/tmp/forge/android-ryle/netsimd");
+        assert!(tmp_dir.is_dir());
     }
 
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_non_forge() {
         let _locked = ENV_MUTEX.lock();
+        let temp_dir = env::temp_dir();
         env::remove_var("ANDROID_TMP");
         env::set_var("USER", "ryle");
-        let tmp_dir = netsimd_temp_dir();
-        assert_eq!(tmp_dir.to_str().unwrap(), "/tmp/android-ryle/netsimd");
+        let netsimd_temp_dir = netsimd_temp_dir();
+        assert_eq!(
+            netsimd_temp_dir.to_str().unwrap(),
+            temp_dir.join("android-ryle/netsimd").to_str().unwrap()
+        );
     }
 }

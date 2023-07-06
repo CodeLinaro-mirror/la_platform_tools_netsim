@@ -30,21 +30,19 @@
 use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend::{GetDevicesResponse, ListCaptureResponse};
-use lazy_static::lazy_static;
 use netsim_common::util::time_display::TimeDisplay;
-use protobuf::Message;
 use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Read, Result};
 use std::pin::Pin;
-use std::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::captures::capture::{Captures, ChipId};
-use crate::ffi::{get_devices_bytes, CxxServerResponseWriter};
+use crate::captures::capture::ChipId;
+use crate::ffi::CxxServerResponseWriter;
 use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
+use crate::resource::get_captures_resource;
 use crate::system;
 use crate::CxxServerResponseWriterWrapper;
 
@@ -60,11 +58,6 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     _future_options: (),
 };
 
-// The Capture resource is a singleton that manages all captures
-lazy_static! {
-    static ref RESOURCE: RwLock<Captures> = RwLock::new(Captures::new());
-}
-
 /// Updates the Captures collection to reflect the currently connected devices.
 ///
 /// This function removes entries from Captures when devices/chips
@@ -72,31 +65,17 @@ lazy_static! {
 /// Note: if a device disconnects and there is captured data, the entry
 /// remains with a flag valid = false so it can be retrieved.
 pub fn update_captures() {
-    let device_response = match crate::config::get_dev() {
-        true => match crate::devices::devices_handler::get_devices() {
-            Ok(scene) => GetDevicesResponse { devices: scene.devices, ..Default::default() },
-            Err(err) => {
-                println!("{err}");
-                return;
-            }
-        },
-        false => {
-            // Perform get_devices_bytes ffi to receive bytes of GetDevicesResponse
-            // Print error and return empty hashmap if GetDevicesBytes fails.
-            let mut vec = Vec::<u8>::new();
-            if !get_devices_bytes(&mut vec) {
-                println!(
-                    "netsimd error: GetDevicesBytes failed - returning an empty set of captures"
-                );
-                return;
-            }
-            // Parse get_devices_response
-            GetDevicesResponse::parse_from_bytes(&vec).unwrap()
+    let device_response = match crate::devices::devices_handler::get_devices() {
+        Ok(scene) => GetDevicesResponse { devices: scene.devices, ..Default::default() },
+        Err(err) => {
+            println!("{err}");
+            return;
         }
     };
 
     // Adding to Captures hashmap
-    let mut captures = RESOURCE.write().unwrap();
+    let captures_arc = get_captures_resource();
+    let mut captures = captures_arc.write().unwrap();
     let mut chip_ids = HashSet::<ChipId>::new();
     for device in device_response.devices {
         for chip in device.chips {
@@ -169,7 +148,8 @@ fn get_file(id: ChipId, device_name: String, chip_kind: ChipKind) -> Result<File
 pub fn handle_capture_get(writer: ResponseWritable, id: ChipId) {
     // Get the most updated active captures
     update_captures();
-    let mut captures = RESOURCE.write().unwrap();
+    let captures_lock = get_captures_resource();
+    let mut captures = captures_lock.write().unwrap();
     if let Some(capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
         if capture.size == 0 {
             writer.put_error(
@@ -216,7 +196,8 @@ pub fn handle_capture_get(writer: ResponseWritable, id: ChipId) {
 pub fn handle_capture_list(writer: ResponseWritable) {
     // Get the most updated active captures
     update_captures();
-    let captures = RESOURCE.write().unwrap();
+    let captures_arc = get_captures_resource();
+    let captures = captures_arc.write().unwrap();
     // Instantiate ListCaptureResponse and add Captures
     let mut response = ListCaptureResponse::new();
     for capture in captures.values() {
@@ -236,7 +217,8 @@ pub fn handle_capture_list(writer: ResponseWritable) {
 pub fn handle_capture_patch(writer: ResponseWritable, id: ChipId, state: bool) {
     // Get the most updated active captures
     update_captures();
-    let mut captures = RESOURCE.write().unwrap();
+    let captures_arc = get_captures_resource();
+    let mut captures = captures_arc.write().unwrap();
     if let Some(mut capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
         match state {
             true => {
@@ -345,7 +327,8 @@ fn handle_packet(
     packet_type: u32,
     direction: PacketDirection,
 ) {
-    let captures = RESOURCE.write().unwrap();
+    let captures_arc = get_captures_resource();
+    let captures = captures_arc.write().unwrap();
     let facade_key = CaptureInfo::new_facade_key(int_to_chip_kind(kind), facade_id as i32);
     // TODO: Create event channel to invoke update_captures when new device is added.
     if !captures.facade_key_to_capture.contains_key(&facade_key) {

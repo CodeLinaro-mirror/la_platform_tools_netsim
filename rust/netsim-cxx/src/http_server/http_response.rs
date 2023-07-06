@@ -53,6 +53,17 @@ impl HttpResponse {
         }
     }
 
+    pub fn new_ok_switch_protocol(connection: &str) -> HttpResponse {
+        HttpResponse {
+            status_code: 101,
+            headers: HttpHeaders::new_with_headers(&[
+                ("Upgrade", connection),
+                ("Connection", "Upgrade"),
+            ]),
+            body: Vec::new(),
+        }
+    }
+
     pub fn new_error(status_code: u16, body: Vec<u8>) -> HttpResponse {
         HttpResponse {
             status_code,
@@ -83,7 +94,7 @@ mod tests {
         writer.put_ok_with_vec("text/plain", b"Hello World".to_vec(), &[]);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 200\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
         assert_eq!(written_bytes, expected_bytes);
     }
 }
