@@ -37,7 +37,6 @@ pub mod ffi {
     pub enum GrpcMethod {
         GetVersion,
         PatchDevice,
-        GetDevices,
         ListDevice,
         Reset,
         ListCapture,
