@@ -1,21 +1,14 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
-import { DeviceDragZone } from './device-dragzone.js';
-import { simulationState } from './device-observer.js';
+import {html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
+
+import {DeviceDragZone} from './device-dragzone.js';
+import {simulationState} from './device-observer.js';
 
 @customElement('ns-device-dropzone')
 export class DeviceDropZone extends LitElement {
-  @property({ type: String, attribute: 'serial' })
-  serial: string = '';
+  @property({type: String, attribute: 'serial'}) serial: string = '';
 
-  @property({ type: String, attribute: 'type' })
-  type: string = '';
-
-  static styles = css`
-    :host {
-      cursor: move;
-    }
-  `;
+  @property({type: String, attribute: 'type'}) type: string = '';
 
   constructor() {
     super();
@@ -35,10 +28,10 @@ export class DeviceDropZone extends LitElement {
   }
 
   slottedDropZone() {
-    // Returns the #dropzone div inside the slotted children, where devices are stored.
-    // note: needs better checking when not the first element.
+    // Returns the #dropzone div inside the slotted children, where devices are
+    // stored. note: needs better checking when not the first element.
     const slot = this.shadowRoot?.querySelector('slot');
-    return slot?.assignedElements({ flatten: true })[0];
+    return slot?.assignedElements({flatten: true})[0];
   }
 
   handleDrop(ev: DragEvent) {
@@ -63,24 +56,19 @@ export class DeviceDropZone extends LitElement {
         dropped.style.top = `${ev.clientY - rect.top}px`;
         dropped.style.opacity = `1.0`;
         // Patch the position of a dropped element
-        let id = dropped
-          .getElementsByTagName('ns-cube-sprite')
-          .item(0)
-          ?.getAttribute('id');
+        let id = dropped.getElementsByTagName('ns-cube-sprite')
+                     .item(0)
+                     ?.getAttribute('id');
         if (id === undefined) {
-          id = dropped
-            .getElementsByTagName('ns-pyramid-sprite')
-            .item(0)
-            ?.getAttribute('id');
+          id = dropped.getElementsByTagName('ns-pyramid-sprite')
+                   .item(0)
+                   ?.getAttribute('id');
         }
         if (id === undefined || id === null) {
           id = '';
         }
         simulationState.handleDrop(
-          id,
-          (ev.clientX - rect.left) / 100,
-          (ev.clientY - rect.top) / 100
-        );
+            id, (ev.clientX - rect.left) / 100, (ev.clientY - rect.top) / 100);
       }
     }
   }

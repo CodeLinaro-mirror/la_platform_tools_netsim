@@ -23,12 +23,11 @@ impl args::Command {
             Command::Radio(_) => GrpcMethod::PatchDevice,
             Command::Move(_) => GrpcMethod::PatchDevice,
             Command::Devices(_) => GrpcMethod::GetDevices,
-            Command::Capture(_) => GrpcMethod::PatchDevice,
             Command::Reset => GrpcMethod::Reset,
             Command::Pcap(cmd) => match cmd {
-                args::Pcap::List => GrpcMethod::ListPcap,
-                args::Pcap::Get(_) => GrpcMethod::GetPcap,
-                args::Pcap::Patch(_) => GrpcMethod::PatchPcap,
+                args::Pcap::List(_) => GrpcMethod::ListCapture,
+                args::Pcap::Get(_) => GrpcMethod::GetCapture,
+                args::Pcap::Patch(_) => GrpcMethod::PatchCapture,
             },
             Command::Gui => {
                 panic!("No GrpcMethod for Ui Command.");
@@ -40,19 +39,23 @@ impl args::Command {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use args::{NetsimArgs, OnOffState};
+    use args::{BinaryProtobuf, NetsimArgs};
     use clap::Parser;
     use frontend_proto::{
         common::ChipKind,
         frontend,
-        model::{self, Chip_Bluetooth, Chip_Radio, Position, State},
+        model::{
+            self,
+            chip::{Bluetooth as Chip_Bluetooth, Radio as Chip_Radio},
+            Device, Position, State,
+        },
     };
     use protobuf::Message;
 
     fn test_command(
         command: &str,
         expected_grpc_method: GrpcMethod,
-        expected_request_byte_str: Vec<u8>,
+        expected_request_byte_str: BinaryProtobuf,
     ) {
         let command = NetsimArgs::parse_from(command.split_whitespace()).command;
         assert_eq!(expected_grpc_method, command.grpc_method());
@@ -65,7 +68,7 @@ mod tests {
         test_command("netsim-cli version", GrpcMethod::GetVersion, Vec::new())
     }
 
-    fn get_expected_radio(name: &str, radio_type: &str, state: &str) -> Vec<u8> {
+    fn get_expected_radio(name: &str, radio_type: &str, state: &str) -> BinaryProtobuf {
         let mut chip = model::Chip { ..Default::default() };
         let chip_state = match state {
             "up" => State::ON,
@@ -73,24 +76,31 @@ mod tests {
         };
         if radio_type == "wifi" {
             let mut wifi_chip = Chip_Radio::new();
-            wifi_chip.set_state(chip_state);
+            wifi_chip.state = chip_state.into();
             chip.set_wifi(wifi_chip);
-            chip.set_kind(ChipKind::WIFI);
+            chip.kind = ChipKind::WIFI.into();
+        } else if radio_type == "uwb" {
+            let mut uwb_chip = Chip_Radio::new();
+            uwb_chip.state = chip_state.into();
+            chip.set_uwb(uwb_chip);
+            chip.kind = ChipKind::UWB.into();
         } else {
             let mut bt_chip = Chip_Bluetooth::new();
+            let mut bt_chip_radio = Chip_Radio::new();
+            bt_chip_radio.state = chip_state.into();
             if radio_type == "ble" {
-                bt_chip.set_low_energy(Chip_Radio { state: chip_state, ..Default::default() });
+                bt_chip.low_energy = Some(bt_chip_radio).into();
             } else {
-                bt_chip.set_classic(Chip_Radio { state: chip_state, ..Default::default() });
+                bt_chip.classic = Some(bt_chip_radio).into();
             }
-            chip.set_kind(ChipKind::BLUETOOTH);
+            chip.kind = ChipKind::BLUETOOTH.into();
             chip.set_bt(bt_chip);
         }
         let mut result = frontend::PatchDeviceRequest::new();
-        let mutable_device = result.mut_device();
-        mutable_device.set_name(name.to_owned());
-        let mutable_chips = mutable_device.mut_chips();
-        mutable_chips.push(chip);
+        let mut device = Device::new();
+        device.name = name.to_owned();
+        device.chips.push(chip);
+        result.device = Some(device).into();
         result.write_to_bytes().unwrap()
     }
 
@@ -103,6 +113,30 @@ mod tests {
         );
         test_command(
             "netsim-cli radio ble up 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("1000", "ble", "up"),
+        );
+    }
+
+    #[test]
+    fn test_radio_ble_aliases() {
+        test_command(
+            "netsim-cli radio ble Down 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("1000", "ble", "down"),
+        );
+        test_command(
+            "netsim-cli radio ble Up 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("1000", "ble", "up"),
+        );
+        test_command(
+            "netsim-cli radio ble DOWN 1000",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("1000", "ble", "down"),
+        );
+        test_command(
+            "netsim-cli radio ble UP 1000",
             GrpcMethod::PatchDevice,
             get_expected_radio("1000", "ble", "up"),
         );
@@ -136,16 +170,27 @@ mod tests {
         );
     }
 
-    fn get_expected_move(name: &str, x: f32, y: f32, z: Option<f32>) -> Vec<u8> {
+    #[test]
+    fn test_radio_uwb() {
+        test_command(
+            "netsim-cli radio uwb down a",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("a", "uwb", "down"),
+        );
+        test_command(
+            "netsim-cli radio uwb up b",
+            GrpcMethod::PatchDevice,
+            get_expected_radio("b", "uwb", "up"),
+        );
+    }
+
+    fn get_expected_move(name: &str, x: f32, y: f32, z: Option<f32>) -> BinaryProtobuf {
         let mut result = frontend::PatchDeviceRequest::new();
-        let mutable_device = result.mut_device();
-        mutable_device.set_name(name.to_owned());
-        mutable_device.set_position(Position {
-            x: x,
-            y: y,
-            z: z.unwrap_or_default(),
-            ..Default::default()
-        });
+        let mut device = Device::new();
+        let position = Position { x, y, z: z.unwrap_or_default(), ..Default::default() };
+        device.name = name.to_owned();
+        device.position = Some(position).into();
+        result.device = Some(device).into();
         result.write_to_bytes().unwrap()
     }
 
@@ -190,68 +235,6 @@ mod tests {
         test_command("netsim-cli devices", GrpcMethod::GetDevices, Vec::new())
     }
 
-    fn get_expected_capture(name: &str, state: OnOffState) -> Vec<u8> {
-        let mut bt_chip = model::Chip {
-            kind: ChipKind::BLUETOOTH,
-            chip: Some(model::Chip_oneof_chip::bt(Chip_Bluetooth { ..Default::default() })),
-            ..Default::default()
-        };
-        let capture_state = match state {
-            OnOffState::On => State::ON,
-            OnOffState::Off => State::OFF,
-        };
-        bt_chip.set_capture(capture_state);
-        let mut result = frontend::PatchDeviceRequest::new();
-        let mutable_device = result.mut_device();
-        mutable_device.set_name(name.to_owned());
-        let mutable_chips = mutable_device.mut_chips();
-        mutable_chips.push(bt_chip);
-        result.write_to_bytes().unwrap()
-    }
-
-    #[test]
-    fn test_capture_lowercase() {
-        test_command(
-            "netsim-cli capture on test_device",
-            GrpcMethod::PatchDevice,
-            get_expected_capture("test_device", OnOffState::On),
-        );
-        test_command(
-            "netsim-cli capture off 1000",
-            GrpcMethod::PatchDevice,
-            get_expected_capture("1000", OnOffState::Off),
-        )
-    }
-
-    // NOTE: Temporarily disable alias tests because clap-3.2.22 is used which does not support aliasing.
-    // #[test]
-    // fn test_capture_mixed_case() {
-    //     test_command(
-    //         "netsim-cli capture On 10",
-    //         GrpcMethod::PatchDevice,
-    //         get_expected_capture("10", OnOffState::On),
-    //     );
-    //     test_command(
-    //         "netsim-cli capture Off 1000",
-    //         GrpcMethod::PatchDevice,
-    //         get_expected_capture("1000", OnOffState::Off),
-    //     )
-    // }
-
-    // #[test]
-    // fn test_capture_uppercase() {
-    //     test_command(
-    //         "netsim-cli capture ON 1000",
-    //         GrpcMethod::PatchDevice,
-    //         get_expected_capture("1000", OnOffState::On),
-    //     );
-    //     test_command(
-    //         "netsim-cli capture OFF 1000",
-    //         GrpcMethod::PatchDevice,
-    //         get_expected_capture("1000", OnOffState::Off),
-    //     )
-    // }
-
     #[test]
     fn test_reset() {
         test_command("netsim-cli reset", GrpcMethod::Reset, Vec::new())
@@ -259,34 +242,8 @@ mod tests {
 
     #[test]
     fn test_pcap_list() {
-        test_command("netsim-cli pcap list", GrpcMethod::ListPcap, Vec::new())
+        test_command("netsim-cli pcap list", GrpcMethod::ListCapture, Vec::new())
     }
 
-    fn get_expected_patch_pcap(id: i32, state: bool) -> Vec<u8> {
-        let mut result = frontend::PatchPcapRequest::new();
-        result.set_id(id);
-        result.set_state(state);
-        result.write_to_bytes().unwrap()
-    }
-
-    #[test]
-    fn test_pcap_patch() {
-        test_command(
-            "netsim-cli pcap patch 1 on",
-            GrpcMethod::PatchPcap,
-            get_expected_patch_pcap(1, true),
-        );
-        test_command(
-            "netsim-cli pcap patch 8 off",
-            GrpcMethod::PatchPcap,
-            get_expected_patch_pcap(8, false),
-        );
-    }
-
-    #[test]
-    fn test_pcap_get() {
-        let mut result = frontend::GetPcapRequest::new();
-        result.set_id(2);
-        test_command("netsim-cli pcap get 2", GrpcMethod::GetPcap, result.write_to_bytes().unwrap())
-    }
+    //TODO: Add pcap patch and get tests once able to run tests with cxx definitions
 }

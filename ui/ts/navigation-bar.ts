@@ -1,9 +1,8 @@
-import { LitElement, html, css } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import {css, html, LitElement} from 'lit';
+import {customElement} from 'lit/decorators.js';
 
 @customElement('ns-navigation-bar')
 export class NavigationBar extends LitElement {
-
   static styles = css`
     :host {
       --border-color: rgb(255, 255, 255, 0.1);
@@ -71,23 +70,21 @@ export class NavigationBar extends LitElement {
   `;
 
   connectedCallback() {
-    super.connectedCallback(); // eslint-disable-line
+    super.connectedCallback();  // eslint-disable-line
   }
 
   disconnectedCallback() {
-    super.disconnectedCallback(); // eslint-disable-line
+    super.disconnectedCallback();  // eslint-disable-line
   }
 
   private handleClick(ev: Event) {
-    let mode = "main";
-    if ((ev.target as HTMLElement).id === "nav-trace-section") {
-      mode = "trace";
-    } else if ((ev.target as HTMLElement).id === "nav-os-library-section") {
-      mode = "oslib";
+    let mode = 'main';
+    if ((ev.target as HTMLElement).id === 'nav-trace-section') {
+      mode = 'trace';
+    } else if ((ev.target as HTMLElement).id === 'nav-os-library-section') {
+      mode = 'oslib';
     }
-    window.dispatchEvent(new CustomEvent('changeModeEvent', {
-      detail: { mode }
-    }));
+    window.dispatchEvent(new CustomEvent('changeModeEvent', {detail: {mode}}));
   }
 
   render() {
@@ -95,18 +92,21 @@ export class NavigationBar extends LitElement {
       <nav>
         <div id="nav-logo-section" class="nav-section">
           <a>
-            <div id="nav-logo-pic" class="logo" @click=${this.handleClick}></div>
+            <div id="nav-logo-pic" class="logo" @click=${
+        this.handleClick} role="tab" tabindex="0" aria-label="Netsim Logo, change view mode to scene view"></div>
           </a>
-          <p>#betosim</p>
+          <p>netsim</p>
         </div>
         <div id="nav-link-section" class="nav-section">
           <a href="http://go/betosim" target="_blank" rel="noopener noreferrer"
             >ABOUT</a
           >
-          <a id="nav-trace-section" @click=${this.handleClick}
+          <a href="javascript:void(0)" id="nav-trace-section" @click=${
+        this.handleClick} role="tab" aria-label="Packet Trace, change view mode to packet trace view"
             >PACKET TRACE</a
           >
-          <a id="nav-os-library-section" @click=${this.handleClick}
+          <a href="javascript:void(0)" id="nav-os-library-section" @click=${
+        this.handleClick} role = "tab" aria-label="Open Source Libraries, change view mode to open source libraries view"
             >OPEN SOURCE LIBRARIES</a
           >
         </div>

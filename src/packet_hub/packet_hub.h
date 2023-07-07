@@ -28,27 +28,29 @@
 
 // Use gRPC HCI PacketType definitions so we don't expose Rootcanal's version
 // outside of the Bluetooth Facade.
+#include "common.pb.h"
 #include "hci_packet.pb.h"
+#include "rust/cxx.h"
 
 namespace netsim {
 namespace packet_hub {
 
 /* Handle packet request/response for the Bluetooth Facade which may come over
    different transports. */
-void handle_bt_request(uint32_t facade_id,
-                       packet::HCIPacket_PacketType packet_type,
-                       const std::shared_ptr<std::vector<uint8_t>> &packet);
 
-void handle_bt_response(uint32_t facade_id,
-                        packet::HCIPacket_PacketType packet_type,
+void HandleRequest(common::ChipKind kind, uint32_t facade_id,
+                   const std::vector<uint8_t> &packet,
+                   packet::HCIPacket_PacketType packet_type);
+
+void HandleRequestCxx(uint32_t kind, uint32_t facade_id,
+                      const rust::Vec<uint8_t> &packet, uint8_t packet_type);
+
+void HandleBtResponse(uint32_t facade_id,
+                      packet::HCIPacket_PacketType packet_type,
+                      const std::shared_ptr<std::vector<uint8_t>> &packet);
+
+void HandleWifiResponse(uint32_t facade_id,
                         const std::shared_ptr<std::vector<uint8_t>> &packet);
-
-/* Handle packet request/response for the WiFi Facade. */
-void handle_wifi_request(uint32_t facade_id,
-                         const std::shared_ptr<std::vector<uint8_t>> &packet);
-
-void handle_wifi_response(uint32_t facade_id,
-                          const std::shared_ptr<std::vector<uint8_t>> &packet);
 
 }  // namespace packet_hub
 }  // namespace netsim

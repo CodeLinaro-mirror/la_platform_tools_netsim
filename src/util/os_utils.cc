@@ -70,9 +70,11 @@ std::string GetDiscoveryDirectory() {
 }
 
 std::string GetNetsimIniFilepath() {
-  return GetDiscoveryDirectory()
-      .append(netsim::filesystem::slash)
-      .append("netsim.ini");
+  auto discovery_dir = GetDiscoveryDirectory();
+  // Check if directory has a trailing slash.
+  if (discovery_dir.back() != netsim::filesystem::slash.back())
+    discovery_dir.append(netsim::filesystem::slash);
+  return discovery_dir.append("netsim.ini");
 }
 
 std::optional<std::string> GetServerAddress(bool frontend_server) {

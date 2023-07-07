@@ -1,6 +1,6 @@
-import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as t,LitElement as n,html as i}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as o,customElement as s}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let c=class extends n{constructor(){super(),this.viewMode="main",this.version="",this.handleChangeModeEvent=e=>{const{detail:t}=e;this.viewMode=t.mode},this.invokeGetVersion()}invokeGetVersion(){fetch("http://localhost:7681/version",{method:"GET"}).then((e=>e.json())).then((e=>{this.version=e.version})).catch((e=>{console.log("Cannot connect to netsim web server",e)}))}connectedCallback(){super.connectedCallback(),window.addEventListener("changeModeEvent",this.handleChangeModeEvent)}disconnectedCallback(){window.removeEventListener("changeModeEvent",this.handleChangeModeEvent),super.disconnectedCallback()}render(){let e=i``;return"main"===this.viewMode?e=i`
-        <ns-customize-button eventName="map-button-clicked" class="primary">Change Background</ns-customize-button>
-        <ns-customize-button eventName="isometric-button-clicked" class="primary">Toggle View</ns-customize-button>
+import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as t,LitElement as n,html as i}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as o,customElement as s}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";let c=class extends n{constructor(){super(),this.viewMode="main",this.version="",this.handleChangeModeEvent=e=>{const{detail:t}=e;this.viewMode=t.mode},this.invokeGetVersion()}invokeGetVersion(){fetch("./version",{method:"GET"}).then((e=>e.json())).then((e=>{this.version=e.version})).catch((e=>{console.log("Cannot connect to netsim web server",e)}))}connectedCallback(){super.connectedCallback(),window.addEventListener("changeModeEvent",this.handleChangeModeEvent)}disconnectedCallback(){window.removeEventListener("changeModeEvent",this.handleChangeModeEvent),super.disconnectedCallback()}render(){let e=i``;return"main"===this.viewMode?e=i`
+        <ns-customize-button eventName="map-button-clicked" class="primary" aria-label="Change background of the device map">Change Background</ns-customize-button>
+        <ns-customize-button eventName="isometric-button-clicked" class="primary" aria-label="Toggle view of the device map">Toggle View</ns-customize-button>
         <div class="container">
           <div class="contentA">
             <ns-device-map></ns-device-map>
@@ -15,9 +15,9 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as t,
       `:"oslib"===this.viewMode&&(e=i`
         <ns-license-info></ns-license-info>
       `),i`
+      <div id="bottom">version: ${this.version}</div>
       <ns-navigation-bar></ns-navigation-bar>
       ${e}
-      <div id="bottom">version: ${this.version}</div>
     `}};c.styles=t`
     .container {
       display: flex;
@@ -33,7 +33,7 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as t,
     }
 
     #bottom {
-      position: absolute;
+      position: relative;
       bottom: 0;
       left: 0;
       font-size: 20px;

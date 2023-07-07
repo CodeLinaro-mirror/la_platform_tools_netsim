@@ -16,103 +16,116 @@
 
 mod args;
 mod browser;
+mod pcap_handler;
 mod requests;
 mod response;
 
-use args::NetsimArgs;
+use std::env;
+use std::fs::File;
+use std::path::PathBuf;
+
+use args::{BinaryProtobuf, GetCapture, NetsimArgs};
 use clap::Parser;
 use cxx::UniquePtr;
 use frontend_client_cxx::ffi::{new_frontend_client, ClientResult, FrontendClient, GrpcMethod};
-use frontend_client_cxx::{ClientResponseReadable, ClientResponseReader};
-
-struct PcapHandler {
-    file: String,
-}
-
-impl Drop for PcapHandler {
-    // handle cleanup for file
-    fn drop(&mut self) {
-        // TODO: close the open file and remove print statement
-        println!("Dropping reader file: {}", self.file);
-    }
-}
-
-impl ClientResponseReadable for PcapHandler {
-    // function to handle writing each chunk to file
-    fn handle_chunk(&self, chunk: &[u8]) {
-        //TODO: write chunk to file
-        println!("handling chunk of length {} on file {}", chunk.len(), self.file);
-    }
-    // function to handle error response
-    fn handle_error(&self, error_code: u32, error_message: &str) {
-        println!(
-            "Handling error code: {}, msg: {}, on file: {}",
-            error_code, error_message, self.file
-        );
-    }
-}
+use frontend_client_cxx::ClientResponseReader;
+use pcap_handler::CaptureHandler;
 
 // helper function to process streaming Grpc request
-fn perform_reader_request(client: &cxx::UniquePtr<FrontendClient>) -> UniquePtr<ClientResult> {
-    client.get_pcap(
-        &Vec::new(),
+fn perform_streaming_request(
+    client: &cxx::UniquePtr<FrontendClient>,
+    cmd: &GetCapture,
+    req: &BinaryProtobuf,
+    filename: &str,
+) -> UniquePtr<ClientResult> {
+    let dir = if cmd.location.is_some() {
+        PathBuf::from(cmd.location.to_owned().unwrap())
+    } else {
+        env::current_dir().unwrap()
+    };
+    // Find next available file name
+    let mut output_file = dir.join(filename.to_string() + ".pcap");
+    let mut idx = 0;
+    while output_file.exists() {
+        idx += 1;
+        output_file = dir.join(format!("{}_{}.pcap", filename, idx));
+    }
+    client.get_capture(
+        req,
         &ClientResponseReader {
-            handler: Box::new(PcapHandler { file: "placeholder file name".to_string() }),
+            handler: Box::new(CaptureHandler {
+                file: File::create(&output_file).unwrap_or_else(|_| {
+                    panic!("Failed to create file: {}", &output_file.display())
+                }),
+                path: output_file,
+            }),
         },
     )
 }
 
-/// helper function to send the Grpc request and handle the response
-fn perform_request(
-    command: args::Command,
+/// helper function to send the Grpc request(s) and handle the response(s) per the given command
+fn perform_command(
+    command: &mut args::Command,
     client: cxx::UniquePtr<FrontendClient>,
     grpc_method: GrpcMethod,
-    request: Vec<u8>,
     verbose: bool,
 ) -> Result<(), String> {
-    let continuous = match command {
-        args::Command::Devices(ref cmd) => cmd.continuous,
-        _ => false,
-    };
-    let streaming = matches!(command, args::Command::Pcap(args::Pcap::Get(_)));
-    loop {
-        let result = if streaming {
-            perform_reader_request(&client)
-        } else {
-            client.send_grpc(&grpc_method, &request)
-        };
-        if result.is_ok() {
-            command.print_response(result.byte_vec().as_slice(), verbose);
-            if !continuous {
-                return Ok(());
-            }
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        } else {
-            return Err(format!("Grpc call error: {}", result.err()));
+    // Get command's gRPC request(s)
+    let requests = match command {
+        args::Command::Pcap(args::Pcap::Patch(_) | args::Pcap::Get(_)) => {
+            command.get_requests(&client)
         }
+        _ => vec![command.get_request_bytes()],
+    };
+
+    // Process each request
+    for (i, req) in requests.iter().enumerate() {
+        let result = match command {
+            // Continuous option sends the gRPC call every second
+            args::Command::Devices(ref cmd) if cmd.continuous => loop {
+                process_result(command, client.send_grpc(&grpc_method, req), verbose)?;
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            },
+            // Get Pcap use streaming gRPC reader request
+            args::Command::Pcap(args::Pcap::Get(ref cmd)) => {
+                perform_streaming_request(&client, cmd, req, &cmd.filenames[i])
+            }
+            // All other commands use a single gRPC call
+            _ => client.send_grpc(&grpc_method, req),
+        };
+        process_result(command, result, verbose)?;
     }
+    Ok(())
 }
 
+/// Check and handle the gRPC call result
+fn process_result(
+    command: &args::Command,
+    result: UniquePtr<ClientResult>,
+    verbose: bool,
+) -> Result<(), String> {
+    if result.is_ok() {
+        command.print_response(result.byte_vec().as_slice(), verbose);
+    } else {
+        return Err(format!("Grpc call error: {}", result.err()));
+    }
+    Ok(())
+}
 #[no_mangle]
 /// main Rust netsim CLI function to be called by C wrapper netsim.cc
 pub extern "C" fn rust_main() {
-    let args = NetsimArgs::parse();
+    let mut args = NetsimArgs::parse();
     if matches!(args.command, args::Command::Gui) {
         browser::open("http://localhost:7681/");
         return;
     }
-    // TODO: remove warning once pcap commands are implemented
-    if matches!(args.command, args::Command::Pcap(_)) {
-        eprintln!("Warning: Pcap subcommands are not fully implemented yet!");
-    }
     let grpc_method = args.command.grpc_method();
-    let request = args.command.get_request_bytes();
     let client = new_frontend_client();
     if client.is_null() {
         eprintln!("Unable to create frontend client. Please ensure netsimd is running.");
         return;
     }
-    if let Err(e) = perform_request(args.command, client, grpc_method, request, args.verbose) {
+    if let Err(e) = perform_command(&mut args.command, client, grpc_method, args.verbose) {
         eprintln!("{e}");
     }
 }

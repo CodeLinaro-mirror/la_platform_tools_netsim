@@ -1,19 +1,17 @@
-import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import {css, html, LitElement} from 'lit';
+import {customElement, property} from 'lit/decorators.js';
 
 @customElement('netsim-app')
 export class NetsimApp extends LitElement {
   /**
    * The view of the netsim app: main (map view), trace (packet trace view)
    */
-  @property()
-  viewMode: string = 'main';
+  @property() viewMode: string = 'main';
 
   /**
    * The version of netsim.
    */
-  @property()
-  version: string = '';
+  @property() version: string = '';
 
   static styles = css`
     .container {
@@ -30,7 +28,7 @@ export class NetsimApp extends LitElement {
     }
 
     #bottom {
-      position: absolute;
+      position: relative;
       bottom: 0;
       left: 0;
       font-size: 20px;
@@ -43,17 +41,17 @@ export class NetsimApp extends LitElement {
   }
 
   invokeGetVersion() {
-    fetch('http://localhost:7681/version', {
+    fetch('./version', {
       method: 'GET',
     })
-      .then(response => response.json())
-      .then(data => {
-        this.version = data.version;
-      })
-      .catch(error => {
-        // eslint-disable-next-line
-        console.log('Cannot connect to netsim web server', error);
-      });
+        .then(response => response.json())
+        .then(data => {
+          this.version = data.version;
+        })
+        .catch(error => {
+          // eslint-disable-next-line
+          console.log('Cannot connect to netsim web server', error);
+        });
   }
 
   connectedCallback() {
@@ -67,7 +65,7 @@ export class NetsimApp extends LitElement {
   }
 
   handleChangeModeEvent = (e: Event) => {
-    const { detail } = (e as CustomEvent);
+    const {detail} = (e as CustomEvent);
     this.viewMode = detail.mode;
   };
 
@@ -75,8 +73,8 @@ export class NetsimApp extends LitElement {
     let page = html``;
     if (this.viewMode === 'main') {
       page = html`
-        <ns-customize-button eventName="map-button-clicked" class="primary">Change Background</ns-customize-button>
-        <ns-customize-button eventName="isometric-button-clicked" class="primary">Toggle View</ns-customize-button>
+        <ns-customize-button eventName="map-button-clicked" class="primary" aria-label="Change background of the device map">Change Background</ns-customize-button>
+        <ns-customize-button eventName="isometric-button-clicked" class="primary" aria-label="Toggle view of the device map">Toggle View</ns-customize-button>
         <div class="container">
           <div class="contentA">
             <ns-device-map></ns-device-map>
@@ -97,9 +95,9 @@ export class NetsimApp extends LitElement {
       `;
     }
     return html`
+      <div id="bottom">version: ${this.version}</div>
       <ns-navigation-bar></ns-navigation-bar>
       ${page}
-      <div id="bottom">version: ${this.version}</div>
     `;
   }
 }

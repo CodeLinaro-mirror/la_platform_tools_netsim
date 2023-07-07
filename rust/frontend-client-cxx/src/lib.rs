@@ -39,9 +39,9 @@ pub mod ffi {
         PatchDevice,
         GetDevices,
         Reset,
-        ListPcap,
-        PatchPcap,
-        GetPcap,
+        ListCapture,
+        PatchCapture,
+        GetCapture,
     }
 
     extern "Rust" {
@@ -62,8 +62,8 @@ pub mod ffi {
         pub fn NewFrontendClient() -> UniquePtr<FrontendClient>;
 
         #[allow(dead_code)]
-        #[rust_name = "get_pcap"]
-        pub fn GetPcap(
+        #[rust_name = "get_capture"]
+        pub fn GetCapture(
             self: &FrontendClient,
             request: &Vec<u8>,
             client_reader: &ClientResponseReader,

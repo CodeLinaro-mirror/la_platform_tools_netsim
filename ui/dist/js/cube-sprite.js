@@ -35,6 +35,7 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
       transform-origin: center;
       transform-style: preserve-3d;
       transform: translateZ(calc(var(--posZ) * 1px));
+      cursor: move;
     }
 
     .cube {

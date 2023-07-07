@@ -108,6 +108,7 @@ if(TARGET Rust::Rustc)
         frontend/frontend_server.cc
         frontend/frontend_server.h
         frontend/server_response_writable.h
+        hci/async_manager.cc
         hci/bluetooth_facade.cc
         hci/bluetooth_facade.h
         hci/hci_debug.cc
@@ -116,6 +117,8 @@ if(TARGET Rust::Rustc)
         hci/hci_packet_transport.h
         packet_hub/packet_hub.cc
         packet_hub/packet_hub.h
+        uwb/uwb_facade.cc
+        uwb/uwb_facade.h
         wifi/wifi_facade.cc
         wifi/wifi_facade.h
         wifi/wifi_packet_hub.h
@@ -123,7 +126,6 @@ if(TARGET Rust::Rustc)
          android-emu-base-headers
          grpc++
          libbt-rootcanal
-         libbt-rootcanal-qemu
          netsim-cxx
          netsimd-proto-lib
          protobuf::libprotobuf

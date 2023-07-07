@@ -17,7 +17,7 @@
 //! This module implements a basic response writer that can pass
 //! chunked http responses between a uri handler and the network.
 //!
-//! The main use is for streaming large files from the pcap_handler()
+//! The main use is for streaming large files from the capture_handler()
 //! to the Http client.
 //!
 //! This library is intended solely for serving netsim clients.
@@ -26,16 +26,18 @@ use std::io::Write;
 
 use crate::http_server::http_response::HttpResponse;
 
+use super::http_request::StrHeaders;
+
 pub type ResponseWritable<'a> = &'a mut dyn ServerResponseWritable;
 
 // ServerResponseWritable trait is used by both the Http and gRPC
 // servers.
 pub trait ServerResponseWritable {
-    fn put_ok_with_length(&mut self, mime_type: &str, length: u32);
+    fn put_ok_with_length(&mut self, mime_type: &str, length: usize, headers: StrHeaders);
     fn put_chunk(&mut self, chunk: &[u8]);
-    fn put_ok(&mut self, mime_type: &str, body: &str);
+    fn put_ok(&mut self, mime_type: &str, body: &str, headers: StrHeaders);
     fn put_error(&mut self, error_code: u16, error_message: &str);
-    fn put_ok_with_vec(&mut self, mime_type: &str, body: Vec<u8>);
+    fn put_ok_with_vec(&mut self, mime_type: &str, body: Vec<u8>, headers: StrHeaders);
 }
 
 // A response writer that can contain a TCP stream or other writable.
@@ -47,7 +49,6 @@ impl<'a> ServerResponseWriter<'a> {
     pub fn new<W: Write>(writer: &mut W) -> ServerResponseWriter {
         ServerResponseWriter { writer }
     }
-
     pub fn put_response(&mut self, response: HttpResponse) {
         let mut buffer = format!("HTTP/1.1 {}\r\n", response.status_code).into_bytes();
         for (name, value) in response.headers.iter() {
@@ -70,21 +71,24 @@ impl ServerResponseWritable for ServerResponseWriter<'_> {
         self.put_response(response);
     }
     fn put_chunk(&mut self, chunk: &[u8]) {
-        println!("Rust put_body_chunk: {}", chunk.len());
         if let Err(e) = self.writer.write_all(chunk) {
             println!("netsim: handle_connection error {e}");
         };
+        self.writer.flush().unwrap();
     }
-    fn put_ok_with_length(&mut self, mime_type: &str, length: u32) {
-        let response = HttpResponse::new_ok_with_length(mime_type, length);
+    fn put_ok_with_length(&mut self, mime_type: &str, length: usize, headers: StrHeaders) {
+        let mut response = HttpResponse::new_ok_with_length(mime_type, length);
+        response.add_headers(headers);
         self.put_response(response);
     }
-    fn put_ok(&mut self, mime_type: &str, body: &str) {
-        let response = HttpResponse::new_ok(mime_type, body.into());
+    fn put_ok(&mut self, mime_type: &str, body: &str, headers: StrHeaders) {
+        let mut response = HttpResponse::new_ok(mime_type, body.into());
+        response.add_headers(headers);
         self.put_response(response);
     }
-    fn put_ok_with_vec(&mut self, mime_type: &str, body: Vec<u8>) {
-        let response = HttpResponse::new_ok(mime_type, body);
+    fn put_ok_with_vec(&mut self, mime_type: &str, body: Vec<u8>, headers: StrHeaders) {
+        let mut response = HttpResponse::new_ok(mime_type, body);
+        response.add_headers(headers);
         self.put_response(response);
     }
 }
@@ -109,7 +113,7 @@ mod tests {
     fn test_put_ok() {
         let mut stream = Cursor::new(Vec::new());
         let mut writer = ServerResponseWriter::new(&mut stream);
-        writer.put_ok("text/plain", "Hello World");
+        writer.put_ok("text/plain", "Hello World", &[]);
         let written_bytes = stream.get_ref();
         let expected_bytes =
             b"HTTP/1.1 200\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
