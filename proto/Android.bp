@@ -14,6 +14,7 @@ filegroup {
         "netsim/frontend.proto",
         "netsim/hci_packet.proto",
         "netsim/model.proto",
+        "netsim/packet_streamer.proto",
         "netsim/startup.proto",
     ],
 }
@@ -30,34 +31,34 @@ genrule_defaults {
         "    --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-cpp-plugin)" +
         "    --grpc_out=$(genDir)" +
         "    --cpp_out=$(genDir)" +
-        "    $(in)",
+        "    $(locations :netsim-protos)",
+    srcs: [
+        ":libprotobuf-internal-protos",
+        ":netsim-protos",
+    ],
 }
 
 genrule {
     name: "FrontendStub_h",
     defaults: ["netsim-grpc-gen-defaults"],
-    srcs: ["netsim/frontend.proto"],
     out: ["netsim/frontend.grpc.pb.h"],
 }
 
 genrule {
     name: "FrontendStub_cc",
     defaults: ["netsim-grpc-gen-defaults"],
-    srcs: ["netsim/frontend.proto"],
     out: ["netsim/frontend.grpc.pb.cc"],
 }
 
 genrule {
     name: "PacketStreamerStub_h",
     defaults: ["netsim-grpc-gen-defaults"],
-    srcs: ["netsim/packet_streamer.proto"],
     out: ["netsim/packet_streamer.grpc.pb.h"],
 }
 
 genrule {
     name: "PacketStreamerStub_cc",
     defaults: ["netsim-grpc-gen-defaults"],
-    srcs: ["netsim/packet_streamer.proto"],
     out: ["netsim/packet_streamer.grpc.pb.cc"],
 }
 

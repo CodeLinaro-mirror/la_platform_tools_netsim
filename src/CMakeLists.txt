@@ -103,12 +103,12 @@ if(TARGET Rust::Rustc)
         hci/async_manager.cc
         hci/bluetooth_facade.cc
         hci/bluetooth_facade.h
-        hci/rust_device.h
-        hci/rust_device.cc
         hci/hci_debug.cc
         hci/hci_debug.h
         hci/hci_packet_transport.cc
         hci/hci_packet_transport.h
+        hci/rust_device.cc
+        hci/rust_device.h
         packet_hub/packet_hub.cc
         packet_hub/packet_hub.h
         uwb/uwb_facade.cc

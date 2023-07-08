@@ -25,7 +25,7 @@ use frontend_proto::common::ChipKind;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::{ErrorKind, IoSlice, Write};
+use std::io::{ErrorKind, Write};
 use std::os::fd::FromRawFd;
 use std::thread::JoinHandle;
 use std::{fmt, thread};
@@ -74,10 +74,10 @@ struct FdTransport {
 
 impl Response for FdTransport {
     fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
-        let temp = [packet_type];
-        let bufs = [IoSlice::new(&temp), IoSlice::new(packet.as_slice())];
-        // TODO: write_vectored doesn't work for mac and windows.
-        if let Err(e) = self.file.write_vectored(&bufs) {
+        let mut buffer = Vec::<u8>::with_capacity(packet.len() + 1);
+        buffer.push(packet_type);
+        buffer.extend(packet);
+        if let Err(e) = self.file.write_all(&buffer[..]) {
             error!("netsimd: error writing {}", e);
         }
     }
