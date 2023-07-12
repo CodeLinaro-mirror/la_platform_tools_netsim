@@ -287,6 +287,9 @@ pub enum Capture {
 pub struct ListCapture {
     /// Optional strings of pattern for captures to list. Possible filter fields include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
+    /// Continuously print Capture information every second
+    #[arg(short, long)]
+    pub continuous: bool,
 }
 
 #[derive(Debug, Args)]

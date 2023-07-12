@@ -123,6 +123,7 @@ if(TARGET Rust::Rustc)
          libbt-rootcanal
          netsim-cxx
          netsimd-proto-lib
+         packet-streamer-proto-lib
          protobuf::libprotobuf
          util-lib)
   target_include_directories(

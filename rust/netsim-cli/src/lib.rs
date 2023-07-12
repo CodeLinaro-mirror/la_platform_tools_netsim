@@ -79,10 +79,12 @@ fn perform_command(
     for (i, req) in requests.iter().enumerate() {
         let result = match command {
             // Continuous option sends the gRPC call every second
-            args::Command::Devices(ref cmd) if cmd.continuous => loop {
-                process_result(command, client.send_grpc(&grpc_method, req), verbose)?;
-                std::thread::sleep(std::time::Duration::from_secs(1));
-            },
+            args::Command::Devices(ref cmd) if cmd.continuous => {
+                continuous_perform_command(command, &client, grpc_method, req, verbose)?
+            }
+            args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
+                continuous_perform_command(command, &client, grpc_method, req, verbose)?
+            }
             // Get Capture use streaming gRPC reader request
             args::Command::Capture(args::Capture::Get(ref mut cmd)) => {
                 perform_streaming_request(&client, cmd, req, &cmd.filenames[i].to_owned())
@@ -101,6 +103,19 @@ fn perform_command(
     Ok(())
 }
 
+/// Check and handle the gRPC call result
+fn continuous_perform_command(
+    command: &args::Command,
+    client: &cxx::UniquePtr<FrontendClient>,
+    grpc_method: GrpcMethod,
+    request: &Vec<u8>,
+    verbose: bool,
+) -> Result<UniquePtr<ClientResult>, String> {
+    loop {
+        process_result(command, client.send_grpc(&grpc_method, request), verbose)?;
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
 /// Check and handle the gRPC call result
 fn process_result(
     command: &args::Command,
