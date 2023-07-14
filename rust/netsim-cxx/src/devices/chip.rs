@@ -23,6 +23,7 @@ use crate::wifi as wifi_facade;
 use frontend_proto::common::ChipKind as ProtoChipKind;
 use frontend_proto::model::Chip as ProtoChip;
 use lazy_static::lazy_static;
+use log::info;
 use protobuf::EnumOrUnknown;
 
 use std::sync::RwLock;
@@ -132,10 +133,12 @@ impl Chip {
         match self.kind {
             ProtoChipKind::BLUETOOTH => {
                 bluetooth_facade::bluetooth_remove(self.facade_id);
+                info!("Removed bt chip with facade_id: {}", self.facade_id);
                 Ok(())
             }
             ProtoChipKind::WIFI => {
                 wifi_facade::wifi_remove(self.facade_id);
+                info!("Removed wifi chip with facade_id: {}", self.facade_id);
                 Ok(())
             }
             _ => Err(format!("Unknown chip kind: {:?}", self.kind)),

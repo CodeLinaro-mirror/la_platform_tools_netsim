@@ -111,7 +111,16 @@ pub fn add_chip(
         )
     };
     if result.is_ok() {
+        info!(
+            "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, device_id: {}, chip_id: {}, facade_id: {}",
+            result.as_ref().unwrap().device_id, result.as_ref().unwrap().chip_id, result.as_ref().unwrap().facade_id
+        );
         update_captures();
+    } else {
+        error!(
+            "Failed to add chip: device_name: {device_name}, chip_kind: {chip_kind:?}, error: {}",
+            result.as_ref().unwrap_err()
+        )
     }
     result
 }
@@ -170,27 +179,18 @@ pub fn add_chip_cxx(
         chip_manufacturer,
         chip_product_name,
     ) {
-        Ok(result) => {
-            info!(
-                "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, chip_id: {}",
-                result.chip_id
-            );
-            Box::new(AddChipResultCxx {
-                device_id: result.device_id as u32,
-                chip_id: result.chip_id as u32,
-                facade_id: result.facade_id,
-                is_error: false,
-            })
-        }
-        Err(err) => {
-            error!("Failed to add chip: {err}");
-            Box::new(AddChipResultCxx {
-                device_id: u32::MAX,
-                chip_id: u32::MAX,
-                facade_id: u32::MAX,
-                is_error: true,
-            })
-        }
+        Ok(result) => Box::new(AddChipResultCxx {
+            device_id: result.device_id as u32,
+            chip_id: result.chip_id as u32,
+            facade_id: result.facade_id,
+            is_error: false,
+        }),
+        Err(_) => Box::new(AddChipResultCxx {
+            device_id: u32::MAX,
+            chip_id: u32::MAX,
+            facade_id: u32::MAX,
+            is_error: true,
+        }),
     }
 }
 
@@ -247,7 +247,10 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
         Ok(())
     };
     if result.is_ok() {
+        info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
         update_captures();
+    } else {
+        error!("Failed to remove chip: device_id: {device_id}, chip_id: {chip_id}")
     }
     result
 }
@@ -255,10 +258,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
 /// A RemoveChip function for Rust Device API.
 /// The backend gRPC code will be invoking this method.
 pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
-    match remove_chip(device_id as i32, chip_id as i32) {
-        Ok(_) => info!("Removed Chip: chip_id: {chip_id}"),
-        Err(err) => error!("Failed to remove chip: {err}"),
-    }
+    let _ = remove_chip(device_id as i32, chip_id as i32);
 }
 
 // lock the devices, find the id and call the patch function
