@@ -36,7 +36,7 @@ where
         self.next_id = self.next_id + self.increment;
         id
     }
-    #[cfg(all(test))]
+    #[cfg(test)]
     pub fn reset_id(&mut self) {
         self.next_id = self.start_id;
     }

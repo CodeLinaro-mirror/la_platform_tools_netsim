@@ -15,9 +15,11 @@
 use crate::bluetooth as bluetooth_facade;
 use crate::captures::handlers::clear_pcap_files;
 use crate::config::get_dev;
+use crate::http_server::run_http_server;
 use crate::wifi as wifi_facade;
 use log::info;
 use netsim_common::util::netsim_logger;
+use std::env;
 
 /// Module to control startup, run, and cleanup netsimd services.
 
@@ -55,6 +57,17 @@ impl Service {
     /// Runs the netsimd services.
     pub fn run(&self) {
         // TODO: run servers, like calling run_http_server().
+
+        // Environment variable "NETSIM_GRPC_PORT" is set in forge
+        // jobs. We do not run http server on forge.
+        let forge_job =
+            env::var("NETSIM_GRPC_PORT").map(|val| val.parse::<u32>().unwrap_or(0)).unwrap_or(0)
+                != 0;
+
+        // forge and no_web_ui disables the web server
+        if !forge_job && !self.service_params.no_web_ui {
+            run_http_server();
+        }
 
         if get_dev() {
             // Create two beacon devices in dev mode.

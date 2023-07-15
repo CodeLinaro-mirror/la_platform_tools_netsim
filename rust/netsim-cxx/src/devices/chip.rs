@@ -195,7 +195,7 @@ pub fn chip_new(
 }
 
 /// For testing
-#[cfg(all(test))]
+#[cfg(test)]
 pub fn refresh_resource() {
     let mut ids = IDS.write().unwrap();
     ids.reset_id();

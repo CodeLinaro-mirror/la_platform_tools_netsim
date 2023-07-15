@@ -40,30 +40,33 @@ use std::net::TcpStream;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::thread;
 
 const PATH_PREFIXES: [&str; 3] = ["js", "assets", "node_modules/tslib"];
 
-// TODO: move to main.rs
-pub fn run_http_server() {
-    let listener = match TcpListener::bind("127.0.0.1:7681") {
-        Ok(listener) => listener,
-        Err(e) => {
-            error!("bind error in netsimd frontend http server. {}", e);
-            return;
-        }
-    };
-    let pool = ThreadPool::new(4);
-    info!("Frontend http server is listening on http://localhost:7681");
-    let valid_files = Arc::new(create_filename_hash_set());
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        let valid_files = valid_files.clone();
-        pool.execute(move || {
-            handle_connection(stream, valid_files);
-        });
-    }
+/// Start the HTTP Server.
 
-    info!("Shutting down frontend http server.");
+pub fn run_http_server() {
+    let _ = thread::Builder::new().name("http_server".to_string()).spawn(move || {
+        let listener = match TcpListener::bind("127.0.0.1:7681") {
+            Ok(listener) => listener,
+            Err(e) => {
+                error!("bind error in netsimd frontend http server. {}", e);
+                return;
+            }
+        };
+        let pool = ThreadPool::new(4);
+        info!("Frontend http server is listening on http://localhost:7681");
+        let valid_files = Arc::new(create_filename_hash_set());
+        for stream in listener.incoming() {
+            let stream = stream.unwrap();
+            let valid_files = valid_files.clone();
+            pool.execute(move || {
+                handle_connection(stream, valid_files);
+            });
+        }
+        info!("Shutting down frontend http server.");
+    });
 }
 
 fn ui_path(suffix: &str) -> PathBuf {

@@ -57,7 +57,6 @@ use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, is_shutdown_time_cxx, remove_chip_cxx,
     AddChipResultCxx,
 };
-use crate::http_server::run_http_server;
 use crate::ranging::*;
 use crate::service::{create_service, Service};
 use crate::system::netsimd_temp_dir_string;
@@ -73,9 +72,6 @@ mod ffi {
 
         #[cxx_name = "RunFdTransport"]
         fn run_fd_transport(startup_json: &String);
-
-        #[cxx_name = "RunHttpServer"]
-        fn run_http_server();
 
         // Config
         #[cxx_name = "GetDev"]

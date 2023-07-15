@@ -97,12 +97,6 @@ void Run(ServerParams params) {
 
   rust_service->Run();
 
-  // no_web_ui disables the web server
-  if (netsim_grpc_port == 0 && !params.no_web_ui) {
-    // Run frontend http server.
-    std::thread(RunHttpServer).detach();
-  }
-
   // Run the socket server.
   BtsLog("RunSocketTransport:%d", params.hci_port);
   RunSocketTransport(params.hci_port);

@@ -19,7 +19,14 @@
 #endif
 
 #if defined(__linux__)
+
+#ifndef NETSIM_ANDROID_EMULATOR
+#include <client/linux/handler/exception_handler.h>
+#include <unwindstack/AndroidUnwinder.h>
+#endif
+
 #include <execinfo.h>
+#include <fmt/format.h>
 #include <signal.h>
 #include <unistd.h>
 
@@ -30,11 +37,43 @@
 #include "core/server.h"
 #include "frontend/frontend_client_stub.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "util/log.h"
 #include "util/os_utils.h"
 
 // Wireless network simulator for android (and other) emulated devices.
 
 #if defined(__linux__)
+#ifndef NETSIM_ANDROID_EMULATOR
+bool crash_callback(const void *crash_context, size_t crash_context_size,
+                    void * /* context */) {
+  std::optional<pid_t> tid;
+  std::cerr << "netsimd crash_callback invoked\n";
+  if (crash_context_size >=
+      sizeof(google_breakpad::ExceptionHandler::CrashContext)) {
+    auto *ctx =
+        static_cast<const google_breakpad::ExceptionHandler::CrashContext *>(
+            crash_context);
+    tid = ctx->tid;
+    int signal_number = ctx->siginfo.si_signo;
+    std::cerr << fmt::format("Process crashed, signal: {}[{}], tid: {}\n",
+                             strsignal(signal_number), signal_number, ctx->tid)
+                     .c_str();
+  } else {
+    std::cerr << "Process crashed, signal: unknown, tid: unknown\n";
+  }
+  unwindstack::AndroidLocalUnwinder unwinder;
+  unwindstack::AndroidUnwinderData data;
+  if (!unwinder.Unwind(tid, data)) {
+    std::cerr << "Unwind failed\n";
+    return false;
+  }
+  std::cerr << "Backtrace:\n";
+  for (const auto &frame : data.frames) {
+    std::cerr << fmt::format("{}\n", unwinder.FormatFrame(frame)).c_str();
+  }
+  return true;
+}
+#else
 // Signal handler to print backtraces and then terminate the program.
 void SignalHandler(int sig) {
   size_t buffer_size = 20;  // Number of entries in that array.
@@ -47,6 +86,7 @@ void SignalHandler(int sig) {
   backtrace_symbols_fd(buffer, size, STDERR_FILENO);
   exit(sig);
 }
+#endif
 #endif
 
 constexpr int DEFAULT_HCI_PORT = 6402;
@@ -78,7 +118,14 @@ void ArgError(char *argv[], int c) {
 
 int main(int argc, char *argv[]) {
 #if defined(__linux__)
+#ifndef NETSIM_ANDROID_EMULATOR
+  google_breakpad::MinidumpDescriptor descriptor("/tmp");
+  google_breakpad::ExceptionHandler eh(descriptor, nullptr, nullptr, nullptr,
+                                       true, -1);
+  eh.set_crash_handler(crash_callback);
+#else
   signal(SIGSEGV, SignalHandler);
+#endif
 #endif
   bool no_web_ui = false;
   bool no_cli_ui = false;

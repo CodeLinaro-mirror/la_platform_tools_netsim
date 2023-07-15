@@ -14,6 +14,7 @@
 
 - [Command Line Tool](cli/README.md)
     - [devices](cli/devices.md)
+- [Web User Interface](ui/README.md)
 - [REST API](api/README.md)
 
 ----------
