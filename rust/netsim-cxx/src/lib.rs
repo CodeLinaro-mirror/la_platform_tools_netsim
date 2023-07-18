@@ -20,6 +20,7 @@ mod bluetooth;
 pub mod captures;
 mod config;
 mod devices;
+mod events;
 mod http_server;
 mod ranging;
 mod resource;
