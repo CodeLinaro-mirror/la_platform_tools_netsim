@@ -23,8 +23,10 @@
 // -- vending device identifiers
 
 use super::chip::ChipIdentifier;
+use super::chip::FacadeIdentifier;
 use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
+use crate::bluetooth as bluetooth_facade;
 use crate::captures::handlers::update_captures;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
@@ -33,6 +35,7 @@ use crate::http_server::http_request::HttpHeaders;
 use crate::http_server::http_request::HttpRequest;
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource::get_devices_resource;
+use crate::wifi as wifi_facade;
 use crate::CxxServerResponseWriterWrapper;
 use cxx::CxxString;
 use frontend_proto::common::ChipKind as ProtoChipKind;
@@ -102,27 +105,55 @@ pub fn add_chip(
         resource.idle_since = None;
         let device_id = get_or_create_device(&mut resource, device_guid, device_name);
         // This is infrequent, so we can afford to do another lookup for the device.
-        resource.devices.get_mut(&device_id).unwrap().add_chip(
-            device_name,
-            chip_kind,
-            chip_name,
-            chip_manufacturer,
-            chip_product_name,
-        )
+        resource
+            .devices
+            .get_mut(&device_id)
+            .ok_or(format!("Device not found for device_id: {device_id}"))?
+            .add_chip(device_name, chip_kind, chip_name, chip_manufacturer, chip_product_name)
     };
-    if result.is_ok() {
-        info!(
-            "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, device_id: {}, chip_id: {}, facade_id: {}",
-            result.as_ref().unwrap().device_id, result.as_ref().unwrap().chip_id, result.as_ref().unwrap().facade_id
-        );
-        update_captures();
-    } else {
-        error!(
-            "Failed to add chip: device_name: {device_name}, chip_kind: {chip_kind:?}, error: {}",
-            result.as_ref().unwrap_err()
-        )
+
+    // Device resource is no longer locked
+    match result {
+        // id_tuple = (DeviceIdentifier, ChipIdentifier)
+        Ok((device_id, chip_id)) => {
+            let facade_id = match chip_kind {
+                ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(device_id as u32),
+                ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::beacon::bluetooth_beacon_add(
+                    device_id as u32,
+                    chip_id as u32,
+                    "beacon".to_string(),
+                    chip_name.to_string(),
+                ),
+                ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id as u32),
+                _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
+            };
+            // Add the facade_id into the resources
+            {
+                get_devices_resource()
+                    .write()
+                    .unwrap()
+                    .devices
+                    .get_mut(&device_id)
+                    .ok_or(format!("Device not found for device_id: {device_id}"))?
+                    .chips
+                    .get_mut(&chip_id)
+                    .ok_or(format!("Chip not found for device_id: {device_id}, chip_id:{chip_id}"))?
+                    .facade_id = Some(facade_id);
+            }
+            info!(
+                "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, device_id: {device_id}, chip_id: {chip_id}, facade_id: {facade_id}",
+            );
+            // Update Capture resource
+            update_captures();
+            Ok(AddChipResult { device_id, chip_id, facade_id })
+        }
+        Err(err) => {
+            error!(
+                "Failed to add chip: device_name: {device_name}, chip_kind: {chip_kind:?}, error: {err}",
+            );
+            Err(err)
+        }
     }
-    result
 }
 
 /// AddChipResult for C++ to handle
@@ -231,12 +262,14 @@ fn remove_device(
 /// Called when the packet transport for the chip shuts down.
 pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(), String> {
     let result = {
+        let mut _facade_id_option: Option<FacadeIdentifier> = None;
+        let mut _chip_kind = ProtoChipKind::UNSPECIFIED;
         let resource_arc = get_devices_resource();
         let mut resource = resource_arc.write().unwrap();
         let is_empty = match resource.devices.entry(device_id) {
             Entry::Occupied(mut entry) => {
                 let device = entry.get_mut();
-                device.remove_chip(chip_id)?;
+                (_facade_id_option, _chip_kind) = device.remove_chip(chip_id)?;
                 device.chips.is_empty()
             }
             Entry::Vacant(_) => return Err(format!("RemoveChip device id {device_id} not found")),
@@ -244,15 +277,33 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
         if is_empty {
             remove_device(&mut resource, device_id)?;
         }
-        Ok(())
+        Ok((_facade_id_option, _chip_kind))
     };
-    if result.is_ok() {
-        info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
-        update_captures();
-    } else {
-        error!("Failed to remove chip: device_id: {device_id}, chip_id: {chip_id}")
+    match result {
+        Ok((facade_id_option, chip_kind)) => {
+            match facade_id_option {
+                Some(facade_id) => match chip_kind {
+                    ProtoChipKind::BLUETOOTH => {
+                        bluetooth_facade::bluetooth_remove(facade_id);
+                    }
+                    ProtoChipKind::WIFI => {
+                        wifi_facade::wifi_remove(facade_id);
+                    }
+                    _ => Err(format!("Unknown chip kind: {:?}", chip_kind))?,
+                },
+                None => Err(format!(
+                    "Facade Id hasn't been added yet to frontend resource for chip_id: {chip_id}"
+                ))?,
+            }
+            info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
+            update_captures();
+            Ok(())
+        }
+        Err(err) => {
+            error!("Failed to remove chip: device_id: {device_id}, chip_id: {chip_id}");
+            Err(err)
+        }
     }
-    result
 }
 
 /// A RemoveChip function for Rust Device API.
@@ -482,7 +533,9 @@ pub fn get_facade_id(chip_id: i32) -> Result<u32, String> {
     for device in resource.devices.values() {
         for (id, chip) in &device.chips {
             if *id == chip_id {
-                return Ok(chip.facade_id);
+                return chip.facade_id.ok_or(format!(
+                    "Facade Id hasn't been added yet to frontend resource for chip_id: {chip_id}"
+                ));
             }
         }
     }
