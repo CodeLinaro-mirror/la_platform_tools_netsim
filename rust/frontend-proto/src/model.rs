@@ -1171,8 +1171,12 @@ pub mod chip {
         // message fields
         // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.bt)
         pub bt: ::protobuf::MessageField<Bluetooth>,
-        // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.frequency)
-        pub frequency: i32,
+        // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.address)
+        pub address: ::std::string::String,
+        // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.settings)
+        pub settings: ::protobuf::MessageField<bluetooth_beacon::AdvertiseSettings>,
+        // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.adv_data)
+        pub adv_data: ::protobuf::MessageField<bluetooth_beacon::AdvertiseData>,
         // special fields
         // @@protoc_insertion_point(special_field:netsim.model.Chip.BluetoothBeacon.special_fields)
         pub special_fields: ::protobuf::SpecialFields,
@@ -1190,7 +1194,7 @@ pub mod chip {
         }
 
         pub(in super) fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-            let mut fields = ::std::vec::Vec::with_capacity(2);
+            let mut fields = ::std::vec::Vec::with_capacity(4);
             let mut oneofs = ::std::vec::Vec::with_capacity(0);
             fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, Bluetooth>(
                 "bt",
@@ -1198,9 +1202,19 @@ pub mod chip {
                 |m: &mut BluetoothBeacon| { &mut m.bt },
             ));
             fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
-                "frequency",
-                |m: &BluetoothBeacon| { &m.frequency },
-                |m: &mut BluetoothBeacon| { &mut m.frequency },
+                "address",
+                |m: &BluetoothBeacon| { &m.address },
+                |m: &mut BluetoothBeacon| { &mut m.address },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, bluetooth_beacon::AdvertiseSettings>(
+                "settings",
+                |m: &BluetoothBeacon| { &m.settings },
+                |m: &mut BluetoothBeacon| { &mut m.settings },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, bluetooth_beacon::AdvertiseData>(
+                "adv_data",
+                |m: &BluetoothBeacon| { &m.adv_data },
+                |m: &mut BluetoothBeacon| { &mut m.adv_data },
             ));
             ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<BluetoothBeacon>(
                 "Chip.BluetoothBeacon",
@@ -1223,8 +1237,14 @@ pub mod chip {
                     10 => {
                         ::protobuf::rt::read_singular_message_into_field(is, &mut self.bt)?;
                     },
-                    16 => {
-                        self.frequency = is.read_int32()?;
+                    18 => {
+                        self.address = is.read_string()?;
+                    },
+                    26 => {
+                        ::protobuf::rt::read_singular_message_into_field(is, &mut self.settings)?;
+                    },
+                    34 => {
+                        ::protobuf::rt::read_singular_message_into_field(is, &mut self.adv_data)?;
                     },
                     tag => {
                         ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
@@ -1242,8 +1262,16 @@ pub mod chip {
                 let len = v.compute_size();
                 my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
             }
-            if self.frequency != 0 {
-                my_size += ::protobuf::rt::int32_size(2, self.frequency);
+            if !self.address.is_empty() {
+                my_size += ::protobuf::rt::string_size(2, &self.address);
+            }
+            if let Some(v) = self.settings.as_ref() {
+                let len = v.compute_size();
+                my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+            }
+            if let Some(v) = self.adv_data.as_ref() {
+                let len = v.compute_size();
+                my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
             }
             my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
             self.special_fields.cached_size().set(my_size as u32);
@@ -1254,8 +1282,14 @@ pub mod chip {
             if let Some(v) = self.bt.as_ref() {
                 ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
             }
-            if self.frequency != 0 {
-                os.write_int32(2, self.frequency)?;
+            if !self.address.is_empty() {
+                os.write_string(2, &self.address)?;
+            }
+            if let Some(v) = self.settings.as_ref() {
+                ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
+            }
+            if let Some(v) = self.adv_data.as_ref() {
+                ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
             }
             os.write_unknown_fields(self.special_fields.unknown_fields())?;
             ::std::result::Result::Ok(())
@@ -1275,14 +1309,18 @@ pub mod chip {
 
         fn clear(&mut self) {
             self.bt.clear();
-            self.frequency = 0;
+            self.address.clear();
+            self.settings.clear();
+            self.adv_data.clear();
             self.special_fields.clear();
         }
 
         fn default_instance() -> &'static BluetoothBeacon {
             static instance: BluetoothBeacon = BluetoothBeacon {
                 bt: ::protobuf::MessageField::none(),
-                frequency: 0,
+                address: ::std::string::String::new(),
+                settings: ::protobuf::MessageField::none(),
+                adv_data: ::protobuf::MessageField::none(),
                 special_fields: ::protobuf::SpecialFields::new(),
             };
             &instance
@@ -1303,6 +1341,731 @@ pub mod chip {
     }
 
     impl ::protobuf::reflect::ProtobufValue for BluetoothBeacon {
+        type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+    }
+
+    /// Nested message and enums of message `BluetoothBeacon`
+    pub mod bluetooth_beacon {
+        #[derive(PartialEq,Clone,Default,Debug)]
+        // @@protoc_insertion_point(message:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings)
+        pub struct AdvertiseSettings {
+            // message fields
+            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.tx_power_level)
+            pub tx_power_level: i32,
+            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.interval)
+            pub interval: u64,
+            // special fields
+            // @@protoc_insertion_point(special_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.special_fields)
+            pub special_fields: ::protobuf::SpecialFields,
+        }
+
+        impl<'a> ::std::default::Default for &'a AdvertiseSettings {
+            fn default() -> &'a AdvertiseSettings {
+                <AdvertiseSettings as ::protobuf::Message>::default_instance()
+            }
+        }
+
+        impl AdvertiseSettings {
+            pub fn new() -> AdvertiseSettings {
+                ::std::default::Default::default()
+            }
+
+            pub(in super::super) fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+                let mut fields = ::std::vec::Vec::with_capacity(2);
+                let mut oneofs = ::std::vec::Vec::with_capacity(0);
+                fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+                    "tx_power_level",
+                    |m: &AdvertiseSettings| { &m.tx_power_level },
+                    |m: &mut AdvertiseSettings| { &mut m.tx_power_level },
+                ));
+                fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+                    "interval",
+                    |m: &AdvertiseSettings| { &m.interval },
+                    |m: &mut AdvertiseSettings| { &mut m.interval },
+                ));
+                ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<AdvertiseSettings>(
+                    "Chip.BluetoothBeacon.AdvertiseSettings",
+                    fields,
+                    oneofs,
+                )
+            }
+        }
+
+        impl ::protobuf::Message for AdvertiseSettings {
+            const NAME: &'static str = "AdvertiseSettings";
+
+            fn is_initialized(&self) -> bool {
+                true
+            }
+
+            fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+                while let Some(tag) = is.read_raw_tag_or_eof()? {
+                    match tag {
+                        8 => {
+                            self.tx_power_level = is.read_int32()?;
+                        },
+                        16 => {
+                            self.interval = is.read_uint64()?;
+                        },
+                        tag => {
+                            ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                        },
+                    };
+                }
+                ::std::result::Result::Ok(())
+            }
+
+            // Compute sizes of nested messages
+            #[allow(unused_variables)]
+            fn compute_size(&self) -> u64 {
+                let mut my_size = 0;
+                if self.tx_power_level != 0 {
+                    my_size += ::protobuf::rt::int32_size(1, self.tx_power_level);
+                }
+                if self.interval != 0 {
+                    my_size += ::protobuf::rt::uint64_size(2, self.interval);
+                }
+                my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+                self.special_fields.cached_size().set(my_size as u32);
+                my_size
+            }
+
+            fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+                if self.tx_power_level != 0 {
+                    os.write_int32(1, self.tx_power_level)?;
+                }
+                if self.interval != 0 {
+                    os.write_uint64(2, self.interval)?;
+                }
+                os.write_unknown_fields(self.special_fields.unknown_fields())?;
+                ::std::result::Result::Ok(())
+            }
+
+            fn special_fields(&self) -> &::protobuf::SpecialFields {
+                &self.special_fields
+            }
+
+            fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+                &mut self.special_fields
+            }
+
+            fn new() -> AdvertiseSettings {
+                AdvertiseSettings::new()
+            }
+
+            fn clear(&mut self) {
+                self.tx_power_level = 0;
+                self.interval = 0;
+                self.special_fields.clear();
+            }
+
+            fn default_instance() -> &'static AdvertiseSettings {
+                static instance: AdvertiseSettings = AdvertiseSettings {
+                    tx_power_level: 0,
+                    interval: 0,
+                    special_fields: ::protobuf::SpecialFields::new(),
+                };
+                &instance
+            }
+        }
+
+        impl ::protobuf::MessageFull for AdvertiseSettings {
+            fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+                static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+                descriptor.get(|| super::super::file_descriptor().message_by_package_relative_name("Chip.BluetoothBeacon.AdvertiseSettings").unwrap()).clone()
+            }
+        }
+
+        impl ::std::fmt::Display for AdvertiseSettings {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                ::protobuf::text_format::fmt(self, f)
+            }
+        }
+
+        impl ::protobuf::reflect::ProtobufValue for AdvertiseSettings {
+            type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+        }
+
+        #[derive(PartialEq,Clone,Default,Debug)]
+        // @@protoc_insertion_point(message:netsim.model.Chip.BluetoothBeacon.AdvertiseData)
+        pub struct AdvertiseData {
+            // message fields
+            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.include_device_name)
+            pub include_device_name: bool,
+            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.include_tx_power_level)
+            pub include_tx_power_level: bool,
+            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.manufacturer_data)
+            pub manufacturer_data: ::std::vec::Vec<u8>,
+            // special fields
+            // @@protoc_insertion_point(special_field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.special_fields)
+            pub special_fields: ::protobuf::SpecialFields,
+        }
+
+        impl<'a> ::std::default::Default for &'a AdvertiseData {
+            fn default() -> &'a AdvertiseData {
+                <AdvertiseData as ::protobuf::Message>::default_instance()
+            }
+        }
+
+        impl AdvertiseData {
+            pub fn new() -> AdvertiseData {
+                ::std::default::Default::default()
+            }
+
+            pub(in super::super) fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+                let mut fields = ::std::vec::Vec::with_capacity(3);
+                let mut oneofs = ::std::vec::Vec::with_capacity(0);
+                fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+                    "include_device_name",
+                    |m: &AdvertiseData| { &m.include_device_name },
+                    |m: &mut AdvertiseData| { &mut m.include_device_name },
+                ));
+                fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+                    "include_tx_power_level",
+                    |m: &AdvertiseData| { &m.include_tx_power_level },
+                    |m: &mut AdvertiseData| { &mut m.include_tx_power_level },
+                ));
+                fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+                    "manufacturer_data",
+                    |m: &AdvertiseData| { &m.manufacturer_data },
+                    |m: &mut AdvertiseData| { &mut m.manufacturer_data },
+                ));
+                ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<AdvertiseData>(
+                    "Chip.BluetoothBeacon.AdvertiseData",
+                    fields,
+                    oneofs,
+                )
+            }
+        }
+
+        impl ::protobuf::Message for AdvertiseData {
+            const NAME: &'static str = "AdvertiseData";
+
+            fn is_initialized(&self) -> bool {
+                true
+            }
+
+            fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+                while let Some(tag) = is.read_raw_tag_or_eof()? {
+                    match tag {
+                        16 => {
+                            self.include_device_name = is.read_bool()?;
+                        },
+                        24 => {
+                            self.include_tx_power_level = is.read_bool()?;
+                        },
+                        34 => {
+                            self.manufacturer_data = is.read_bytes()?;
+                        },
+                        tag => {
+                            ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                        },
+                    };
+                }
+                ::std::result::Result::Ok(())
+            }
+
+            // Compute sizes of nested messages
+            #[allow(unused_variables)]
+            fn compute_size(&self) -> u64 {
+                let mut my_size = 0;
+                if self.include_device_name != false {
+                    my_size += 1 + 1;
+                }
+                if self.include_tx_power_level != false {
+                    my_size += 1 + 1;
+                }
+                if !self.manufacturer_data.is_empty() {
+                    my_size += ::protobuf::rt::bytes_size(4, &self.manufacturer_data);
+                }
+                my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+                self.special_fields.cached_size().set(my_size as u32);
+                my_size
+            }
+
+            fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+                if self.include_device_name != false {
+                    os.write_bool(2, self.include_device_name)?;
+                }
+                if self.include_tx_power_level != false {
+                    os.write_bool(3, self.include_tx_power_level)?;
+                }
+                if !self.manufacturer_data.is_empty() {
+                    os.write_bytes(4, &self.manufacturer_data)?;
+                }
+                os.write_unknown_fields(self.special_fields.unknown_fields())?;
+                ::std::result::Result::Ok(())
+            }
+
+            fn special_fields(&self) -> &::protobuf::SpecialFields {
+                &self.special_fields
+            }
+
+            fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+                &mut self.special_fields
+            }
+
+            fn new() -> AdvertiseData {
+                AdvertiseData::new()
+            }
+
+            fn clear(&mut self) {
+                self.include_device_name = false;
+                self.include_tx_power_level = false;
+                self.manufacturer_data.clear();
+                self.special_fields.clear();
+            }
+
+            fn default_instance() -> &'static AdvertiseData {
+                static instance: AdvertiseData = AdvertiseData {
+                    include_device_name: false,
+                    include_tx_power_level: false,
+                    manufacturer_data: ::std::vec::Vec::new(),
+                    special_fields: ::protobuf::SpecialFields::new(),
+                };
+                &instance
+            }
+        }
+
+        impl ::protobuf::MessageFull for AdvertiseData {
+            fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+                static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+                descriptor.get(|| super::super::file_descriptor().message_by_package_relative_name("Chip.BluetoothBeacon.AdvertiseData").unwrap()).clone()
+            }
+        }
+
+        impl ::std::fmt::Display for AdvertiseData {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                ::protobuf::text_format::fmt(self, f)
+            }
+        }
+
+        impl ::protobuf::reflect::ProtobufValue for AdvertiseData {
+            type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+        }
+    }
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.model.ChipCreate)
+pub struct ChipCreate {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.model.ChipCreate.name)
+    pub name: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.model.ChipCreate.manufacturer)
+    pub manufacturer: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.model.ChipCreate.product_name)
+    pub product_name: ::std::string::String,
+    // message oneof groups
+    pub chip: ::std::option::Option<chip_create::Chip>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.model.ChipCreate.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a ChipCreate {
+    fn default() -> &'a ChipCreate {
+        <ChipCreate as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl ChipCreate {
+    pub fn new() -> ChipCreate {
+        ::std::default::Default::default()
+    }
+
+    // .netsim.model.ChipCreate.BluetoothBeaconCreate ble_beacon = 4;
+
+    pub fn ble_beacon(&self) -> &chip_create::BluetoothBeaconCreate {
+        match self.chip {
+            ::std::option::Option::Some(chip_create::Chip::BleBeacon(ref v)) => v,
+            _ => <chip_create::BluetoothBeaconCreate as ::protobuf::Message>::default_instance(),
+        }
+    }
+
+    pub fn clear_ble_beacon(&mut self) {
+        self.chip = ::std::option::Option::None;
+    }
+
+    pub fn has_ble_beacon(&self) -> bool {
+        match self.chip {
+            ::std::option::Option::Some(chip_create::Chip::BleBeacon(..)) => true,
+            _ => false,
+        }
+    }
+
+    // Param is passed by value, moved
+    pub fn set_ble_beacon(&mut self, v: chip_create::BluetoothBeaconCreate) {
+        self.chip = ::std::option::Option::Some(chip_create::Chip::BleBeacon(v))
+    }
+
+    // Mutable pointer to the field.
+    pub fn mut_ble_beacon(&mut self) -> &mut chip_create::BluetoothBeaconCreate {
+        if let ::std::option::Option::Some(chip_create::Chip::BleBeacon(_)) = self.chip {
+        } else {
+            self.chip = ::std::option::Option::Some(chip_create::Chip::BleBeacon(chip_create::BluetoothBeaconCreate::new()));
+        }
+        match self.chip {
+            ::std::option::Option::Some(chip_create::Chip::BleBeacon(ref mut v)) => v,
+            _ => panic!(),
+        }
+    }
+
+    // Take field
+    pub fn take_ble_beacon(&mut self) -> chip_create::BluetoothBeaconCreate {
+        if self.has_ble_beacon() {
+            match self.chip.take() {
+                ::std::option::Option::Some(chip_create::Chip::BleBeacon(v)) => v,
+                _ => panic!(),
+            }
+        } else {
+            chip_create::BluetoothBeaconCreate::new()
+        }
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(4);
+        let mut oneofs = ::std::vec::Vec::with_capacity(1);
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "name",
+            |m: &ChipCreate| { &m.name },
+            |m: &mut ChipCreate| { &mut m.name },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "manufacturer",
+            |m: &ChipCreate| { &m.manufacturer },
+            |m: &mut ChipCreate| { &mut m.manufacturer },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "product_name",
+            |m: &ChipCreate| { &m.product_name },
+            |m: &mut ChipCreate| { &mut m.product_name },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, chip_create::BluetoothBeaconCreate>(
+            "ble_beacon",
+            ChipCreate::has_ble_beacon,
+            ChipCreate::ble_beacon,
+            ChipCreate::mut_ble_beacon,
+            ChipCreate::set_ble_beacon,
+        ));
+        oneofs.push(chip_create::Chip::generated_oneof_descriptor_data());
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<ChipCreate>(
+            "ChipCreate",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for ChipCreate {
+    const NAME: &'static str = "ChipCreate";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    self.name = is.read_string()?;
+                },
+                18 => {
+                    self.manufacturer = is.read_string()?;
+                },
+                26 => {
+                    self.product_name = is.read_string()?;
+                },
+                34 => {
+                    self.chip = ::std::option::Option::Some(chip_create::Chip::BleBeacon(is.read_message()?));
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if !self.name.is_empty() {
+            my_size += ::protobuf::rt::string_size(1, &self.name);
+        }
+        if !self.manufacturer.is_empty() {
+            my_size += ::protobuf::rt::string_size(2, &self.manufacturer);
+        }
+        if !self.product_name.is_empty() {
+            my_size += ::protobuf::rt::string_size(3, &self.product_name);
+        }
+        if let ::std::option::Option::Some(ref v) = self.chip {
+            match v {
+                &chip_create::Chip::BleBeacon(ref v) => {
+                    let len = v.compute_size();
+                    my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+                },
+            };
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if !self.name.is_empty() {
+            os.write_string(1, &self.name)?;
+        }
+        if !self.manufacturer.is_empty() {
+            os.write_string(2, &self.manufacturer)?;
+        }
+        if !self.product_name.is_empty() {
+            os.write_string(3, &self.product_name)?;
+        }
+        if let ::std::option::Option::Some(ref v) = self.chip {
+            match v {
+                &chip_create::Chip::BleBeacon(ref v) => {
+                    ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
+                },
+            };
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> ChipCreate {
+        ChipCreate::new()
+    }
+
+    fn clear(&mut self) {
+        self.name.clear();
+        self.manufacturer.clear();
+        self.product_name.clear();
+        self.chip = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static ChipCreate {
+        static instance: ChipCreate = ChipCreate {
+            name: ::std::string::String::new(),
+            manufacturer: ::std::string::String::new(),
+            product_name: ::std::string::String::new(),
+            chip: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for ChipCreate {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("ChipCreate").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for ChipCreate {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for ChipCreate {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+/// Nested message and enums of message `ChipCreate`
+pub mod chip_create {
+
+    #[derive(Clone,PartialEq,Debug)]
+    #[non_exhaustive]
+    // @@protoc_insertion_point(oneof:netsim.model.ChipCreate.chip)
+    pub enum Chip {
+        // @@protoc_insertion_point(oneof_field:netsim.model.ChipCreate.ble_beacon)
+        BleBeacon(BluetoothBeaconCreate),
+    }
+
+    impl ::protobuf::Oneof for Chip {
+    }
+
+    impl ::protobuf::OneofFull for Chip {
+        fn descriptor() -> ::protobuf::reflect::OneofDescriptor {
+            static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::OneofDescriptor> = ::protobuf::rt::Lazy::new();
+            descriptor.get(|| <super::ChipCreate as ::protobuf::MessageFull>::descriptor().oneof_by_name("chip").unwrap()).clone()
+        }
+    }
+
+    impl Chip {
+        pub(in super) fn generated_oneof_descriptor_data() -> ::protobuf::reflect::GeneratedOneofDescriptorData {
+            ::protobuf::reflect::GeneratedOneofDescriptorData::new::<Chip>("chip")
+        }
+    }
+    #[derive(PartialEq,Clone,Default,Debug)]
+    // @@protoc_insertion_point(message:netsim.model.ChipCreate.BluetoothBeaconCreate)
+    pub struct BluetoothBeaconCreate {
+        // message fields
+        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BluetoothBeaconCreate.address)
+        pub address: ::std::string::String,
+        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BluetoothBeaconCreate.settings)
+        pub settings: ::protobuf::MessageField<super::chip::bluetooth_beacon::AdvertiseSettings>,
+        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BluetoothBeaconCreate.adv_data)
+        pub adv_data: ::protobuf::MessageField<super::chip::bluetooth_beacon::AdvertiseData>,
+        // special fields
+        // @@protoc_insertion_point(special_field:netsim.model.ChipCreate.BluetoothBeaconCreate.special_fields)
+        pub special_fields: ::protobuf::SpecialFields,
+    }
+
+    impl<'a> ::std::default::Default for &'a BluetoothBeaconCreate {
+        fn default() -> &'a BluetoothBeaconCreate {
+            <BluetoothBeaconCreate as ::protobuf::Message>::default_instance()
+        }
+    }
+
+    impl BluetoothBeaconCreate {
+        pub fn new() -> BluetoothBeaconCreate {
+            ::std::default::Default::default()
+        }
+
+        pub(in super) fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+            let mut fields = ::std::vec::Vec::with_capacity(3);
+            let mut oneofs = ::std::vec::Vec::with_capacity(0);
+            fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+                "address",
+                |m: &BluetoothBeaconCreate| { &m.address },
+                |m: &mut BluetoothBeaconCreate| { &mut m.address },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::chip::bluetooth_beacon::AdvertiseSettings>(
+                "settings",
+                |m: &BluetoothBeaconCreate| { &m.settings },
+                |m: &mut BluetoothBeaconCreate| { &mut m.settings },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::chip::bluetooth_beacon::AdvertiseData>(
+                "adv_data",
+                |m: &BluetoothBeaconCreate| { &m.adv_data },
+                |m: &mut BluetoothBeaconCreate| { &mut m.adv_data },
+            ));
+            ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<BluetoothBeaconCreate>(
+                "ChipCreate.BluetoothBeaconCreate",
+                fields,
+                oneofs,
+            )
+        }
+    }
+
+    impl ::protobuf::Message for BluetoothBeaconCreate {
+        const NAME: &'static str = "BluetoothBeaconCreate";
+
+        fn is_initialized(&self) -> bool {
+            true
+        }
+
+        fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+            while let Some(tag) = is.read_raw_tag_or_eof()? {
+                match tag {
+                    10 => {
+                        self.address = is.read_string()?;
+                    },
+                    26 => {
+                        ::protobuf::rt::read_singular_message_into_field(is, &mut self.settings)?;
+                    },
+                    34 => {
+                        ::protobuf::rt::read_singular_message_into_field(is, &mut self.adv_data)?;
+                    },
+                    tag => {
+                        ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                    },
+                };
+            }
+            ::std::result::Result::Ok(())
+        }
+
+        // Compute sizes of nested messages
+        #[allow(unused_variables)]
+        fn compute_size(&self) -> u64 {
+            let mut my_size = 0;
+            if !self.address.is_empty() {
+                my_size += ::protobuf::rt::string_size(1, &self.address);
+            }
+            if let Some(v) = self.settings.as_ref() {
+                let len = v.compute_size();
+                my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+            }
+            if let Some(v) = self.adv_data.as_ref() {
+                let len = v.compute_size();
+                my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+            }
+            my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+            self.special_fields.cached_size().set(my_size as u32);
+            my_size
+        }
+
+        fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+            if !self.address.is_empty() {
+                os.write_string(1, &self.address)?;
+            }
+            if let Some(v) = self.settings.as_ref() {
+                ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
+            }
+            if let Some(v) = self.adv_data.as_ref() {
+                ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
+            }
+            os.write_unknown_fields(self.special_fields.unknown_fields())?;
+            ::std::result::Result::Ok(())
+        }
+
+        fn special_fields(&self) -> &::protobuf::SpecialFields {
+            &self.special_fields
+        }
+
+        fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+            &mut self.special_fields
+        }
+
+        fn new() -> BluetoothBeaconCreate {
+            BluetoothBeaconCreate::new()
+        }
+
+        fn clear(&mut self) {
+            self.address.clear();
+            self.settings.clear();
+            self.adv_data.clear();
+            self.special_fields.clear();
+        }
+
+        fn default_instance() -> &'static BluetoothBeaconCreate {
+            static instance: BluetoothBeaconCreate = BluetoothBeaconCreate {
+                address: ::std::string::String::new(),
+                settings: ::protobuf::MessageField::none(),
+                adv_data: ::protobuf::MessageField::none(),
+                special_fields: ::protobuf::SpecialFields::new(),
+            };
+            &instance
+        }
+    }
+
+    impl ::protobuf::MessageFull for BluetoothBeaconCreate {
+        fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+            static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+            descriptor.get(|| super::file_descriptor().message_by_package_relative_name("ChipCreate.BluetoothBeaconCreate").unwrap()).clone()
+        }
+    }
+
+    impl ::std::fmt::Display for BluetoothBeaconCreate {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            ::protobuf::text_format::fmt(self, f)
+        }
+    }
+
+    impl ::protobuf::reflect::ProtobufValue for BluetoothBeaconCreate {
         type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
     }
 }
@@ -1519,6 +2282,185 @@ impl ::std::fmt::Display for Device {
 }
 
 impl ::protobuf::reflect::ProtobufValue for Device {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.model.DeviceCreate)
+pub struct DeviceCreate {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.model.DeviceCreate.name)
+    pub name: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.model.DeviceCreate.position)
+    pub position: ::protobuf::MessageField<Position>,
+    // @@protoc_insertion_point(field:netsim.model.DeviceCreate.orientation)
+    pub orientation: ::protobuf::MessageField<Orientation>,
+    // @@protoc_insertion_point(field:netsim.model.DeviceCreate.chips)
+    pub chips: ::std::vec::Vec<ChipCreate>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.model.DeviceCreate.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a DeviceCreate {
+    fn default() -> &'a DeviceCreate {
+        <DeviceCreate as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl DeviceCreate {
+    pub fn new() -> DeviceCreate {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(4);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "name",
+            |m: &DeviceCreate| { &m.name },
+            |m: &mut DeviceCreate| { &mut m.name },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, Position>(
+            "position",
+            |m: &DeviceCreate| { &m.position },
+            |m: &mut DeviceCreate| { &mut m.position },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, Orientation>(
+            "orientation",
+            |m: &DeviceCreate| { &m.orientation },
+            |m: &mut DeviceCreate| { &mut m.orientation },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
+            "chips",
+            |m: &DeviceCreate| { &m.chips },
+            |m: &mut DeviceCreate| { &mut m.chips },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<DeviceCreate>(
+            "DeviceCreate",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for DeviceCreate {
+    const NAME: &'static str = "DeviceCreate";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    self.name = is.read_string()?;
+                },
+                18 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.position)?;
+                },
+                26 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.orientation)?;
+                },
+                34 => {
+                    self.chips.push(is.read_message()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if !self.name.is_empty() {
+            my_size += ::protobuf::rt::string_size(1, &self.name);
+        }
+        if let Some(v) = self.position.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        if let Some(v) = self.orientation.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        for value in &self.chips {
+            let len = value.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        };
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if !self.name.is_empty() {
+            os.write_string(1, &self.name)?;
+        }
+        if let Some(v) = self.position.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
+        }
+        if let Some(v) = self.orientation.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
+        }
+        for v in &self.chips {
+            ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
+        };
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> DeviceCreate {
+        DeviceCreate::new()
+    }
+
+    fn clear(&mut self) {
+        self.name.clear();
+        self.position.clear();
+        self.orientation.clear();
+        self.chips.clear();
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static DeviceCreate {
+        static instance: DeviceCreate = DeviceCreate {
+            name: ::std::string::String::new(),
+            position: ::protobuf::MessageField::none(),
+            orientation: ::protobuf::MessageField::none(),
+            chips: ::std::vec::Vec::new(),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for DeviceCreate {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("DeviceCreate").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for DeviceCreate {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for DeviceCreate {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
@@ -2028,7 +2970,7 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x18\x01\x20\x01(\x02R\x01x\x12\x0c\n\x01y\x18\x02\x20\x01(\x02R\x01y\
     \x12\x0c\n\x01z\x18\x03\x20\x01(\x02R\x01z\"I\n\x0bOrientation\x12\x10\n\
     \x03yaw\x18\x01\x20\x01(\x02R\x03yaw\x12\x14\n\x05pitch\x18\x02\x20\x01(\
-    \x02R\x05pitch\x12\x12\n\x04roll\x18\x03\x20\x01(\x02R\x04roll\"\xd2\x05\
+    \x02R\x05pitch\x12\x12\n\x04roll\x18\x03\x20\x01(\x02R\x04roll\"\xe9\x08\
     \n\x04Chip\x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.common.ChipKi\
     ndR\x04kind\x12\x0e\n\x02id\x18\x02\x20\x01(\x05R\x02id\x12\x12\n\x04nam\
     e\x18\x03\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\x18\x04\x20\x01(\t\
@@ -2043,28 +2985,50 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x05R\x07txCount\x12\x19\n\x08rx_count\x18\x04\x20\x01(\x05R\x07rxCount\
     \x1ax\n\tBluetooth\x127\n\nlow_energy\x18\x01\x20\x01(\x0b2\x18.netsim.m\
     odel.Chip.RadioR\tlowEnergy\x122\n\x07classic\x18\x02\x20\x01(\x0b2\x18.\
-    netsim.model.Chip.RadioR\x07classic\x1a]\n\x0fBluetoothBeacon\x12,\n\x02\
-    bt\x18\x01\x20\x01(\x0b2\x1c.netsim.model.Chip.BluetoothR\x02bt\x12\x1c\
-    \n\tfrequency\x18\x02\x20\x01(\x05R\tfrequencyB\x06\n\x04chip\"\xf6\x01\
+    netsim.model.Chip.RadioR\x07classic\x1a\xf3\x03\n\x0fBluetoothBeacon\x12\
+    ,\n\x02bt\x18\x01\x20\x01(\x0b2\x1c.netsim.model.Chip.BluetoothR\x02bt\
+    \x12\x18\n\x07address\x18\x02\x20\x01(\tR\x07address\x12P\n\x08settings\
+    \x18\x03\x20\x01(\x0b24.netsim.model.Chip.BluetoothBeacon.AdvertiseSetti\
+    ngsR\x08settings\x12K\n\x08adv_data\x18\x04\x20\x01(\x0b20.netsim.model.\
+    Chip.BluetoothBeacon.AdvertiseDataR\x07advData\x1aU\n\x11AdvertiseSettin\
+    gs\x12$\n\x0etx_power_level\x18\x01\x20\x01(\x05R\x0ctxPowerLevel\x12\
+    \x1a\n\x08interval\x18\x02\x20\x01(\x04R\x08interval\x1a\xa1\x01\n\rAdve\
+    rtiseData\x12.\n\x13include_device_name\x18\x02\x20\x01(\x08R\x11include\
+    DeviceName\x123\n\x16include_tx_power_level\x18\x03\x20\x01(\x08R\x13inc\
+    ludeTxPowerLevel\x12+\n\x11manufacturer_data\x18\x04\x20\x01(\x0cR\x10ma\
+    nufacturerDataB\x06\n\x04chip\"\x93\x03\n\nChipCreate\x12\x12\n\x04name\
+    \x18\x01\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\x18\x02\x20\x01(\tR\
+    \x0cmanufacturer\x12!\n\x0cproduct_name\x18\x03\x20\x01(\tR\x0bproductNa\
+    me\x12O\n\nble_beacon\x18\x04\x20\x01(\x0b2..netsim.model.ChipCreate.Blu\
+    etoothBeaconCreateH\0R\tbleBeacon\x1a\xd0\x01\n\x15BluetoothBeaconCreate\
+    \x12\x18\n\x07address\x18\x01\x20\x01(\tR\x07address\x12P\n\x08settings\
+    \x18\x03\x20\x01(\x0b24.netsim.model.Chip.BluetoothBeacon.AdvertiseSetti\
+    ngsR\x08settings\x12K\n\x08adv_data\x18\x04\x20\x01(\x0b20.netsim.model.\
+    Chip.BluetoothBeacon.AdvertiseDataR\x07advDataB\x06\n\x04chip\"\xf6\x01\
     \n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x12\x12\n\x04na\
     me\x18\x02\x20\x01(\tR\x04name\x12-\n\x07visible\x18\x03\x20\x01(\x0e2\
     \x13.netsim.model.StateR\x07visible\x122\n\x08position\x18\x04\x20\x01(\
     \x0b2\x16.netsim.model.PositionR\x08position\x12;\n\x0borientation\x18\
     \x05\x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borientation\x12(\n\
-    \x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chips\"7\n\x05\
-    Scene\x12.\n\x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.model.DeviceR\
-    \x07devices\"\x99\x02\n\x07Capture\x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\
-    \x02id\x124\n\tchip_kind\x18\x02\x20\x01(\x0e2\x17.netsim.common.ChipKin\
-    dR\x08chipKind\x12\x1f\n\x0bdevice_name\x18\x03\x20\x01(\tR\ndeviceName\
-    \x12)\n\x05state\x18\x04\x20\x01(\x0e2\x13.netsim.model.StateR\x05state\
-    \x12\x12\n\x04size\x18\x05\x20\x01(\x05R\x04size\x12\x18\n\x07records\
-    \x18\x06\x20\x01(\x05R\x07records\x128\n\ttimestamp\x18\x07\x20\x01(\x0b\
-    2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x14\n\x05valid\x18\x08\
-    \x20\x01(\x08R\x05valid*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\
-    \x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\
-    \x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RT\
-    T\x10\x05*%\n\x05State\x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\x02ON\x10\
-    \x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
+    \x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chips\"\xc3\
+    \x01\n\x0cDeviceCreate\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04name\x12\
+    2\n\x08position\x18\x02\x20\x01(\x0b2\x16.netsim.model.PositionR\x08posi\
+    tion\x12;\n\x0borientation\x18\x03\x20\x01(\x0b2\x19.netsim.model.Orient\
+    ationR\x0borientation\x12.\n\x05chips\x18\x04\x20\x03(\x0b2\x18.netsim.m\
+    odel.ChipCreateR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\
+    \x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"\x99\x02\n\x07Capture\
+    \x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x124\n\tchip_kind\x18\x02\
+    \x20\x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x1f\n\x0bdevi\
+    ce_name\x18\x03\x20\x01(\tR\ndeviceName\x12)\n\x05state\x18\x04\x20\x01(\
+    \x0e2\x13.netsim.model.StateR\x05state\x12\x12\n\x04size\x18\x05\x20\x01\
+    (\x05R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\x07records\x12\
+    8\n\ttimestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttim\
+    estamp\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05valid*e\n\x07PhyKind\
+    \x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\
+    \n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\
+    \x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07\
+    UNKNOWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto\
+    3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -2084,16 +3048,21 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             let mut deps = ::std::vec::Vec::with_capacity(2);
             deps.push(super::common::file_descriptor().clone());
             deps.push(::protobuf::well_known_types::timestamp::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(9);
+            let mut messages = ::std::vec::Vec::with_capacity(14);
             messages.push(Position::generated_message_descriptor_data());
             messages.push(Orientation::generated_message_descriptor_data());
             messages.push(Chip::generated_message_descriptor_data());
+            messages.push(ChipCreate::generated_message_descriptor_data());
             messages.push(Device::generated_message_descriptor_data());
+            messages.push(DeviceCreate::generated_message_descriptor_data());
             messages.push(Scene::generated_message_descriptor_data());
             messages.push(Capture::generated_message_descriptor_data());
             messages.push(chip::Radio::generated_message_descriptor_data());
             messages.push(chip::Bluetooth::generated_message_descriptor_data());
             messages.push(chip::BluetoothBeacon::generated_message_descriptor_data());
+            messages.push(chip::bluetooth_beacon::AdvertiseSettings::generated_message_descriptor_data());
+            messages.push(chip::bluetooth_beacon::AdvertiseData::generated_message_descriptor_data());
+            messages.push(chip_create::BluetoothBeaconCreate::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(2);
             enums.push(PhyKind::generated_enum_descriptor_data());
             enums.push(State::generated_enum_descriptor_data());

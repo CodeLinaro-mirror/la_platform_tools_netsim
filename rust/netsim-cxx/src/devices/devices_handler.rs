@@ -34,7 +34,7 @@ use crate::ffi::CxxServerResponseWriter;
 use crate::http_server::http_request::HttpHeaders;
 use crate::http_server::http_request::HttpRequest;
 use crate::http_server::server_response::ResponseWritable;
-use crate::resource::get_devices_resource;
+use crate::resource::clone_devices;
 use crate::wifi as wifi_facade;
 use crate::CxxServerResponseWriterWrapper;
 use cxx::CxxString;
@@ -61,12 +61,12 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     _future_options: (),
 };
 
-static IDLE_SECS_FOR_SHUTDOWN: u64 = 300;
+static IDLE_SECS_FOR_SHUTDOWN: u64 = 15;
 
 /// The Device resource is a singleton that manages all devices.
 pub struct Devices {
     // BTreeMap allows ListDevice to output devices in order of identifiers.
-    devices: BTreeMap<DeviceIdentifier, Device>,
+    entries: BTreeMap<DeviceIdentifier, Device>,
     id_factory: IdFactory<DeviceIdentifier>,
     pub idle_since: Option<Instant>,
 }
@@ -74,7 +74,7 @@ pub struct Devices {
 impl Devices {
     pub fn new() -> Self {
         Devices {
-            devices: BTreeMap::new(),
+            entries: BTreeMap::new(),
             id_factory: IdFactory::new(INITIAL_DEVICE_ID, 1),
             idle_since: Some(Instant::now()),
         }
@@ -100,13 +100,13 @@ pub fn add_chip(
     chip_product_name: &str,
 ) -> Result<AddChipResult, String> {
     let result = {
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
-        resource.idle_since = None;
-        let device_id = get_or_create_device(&mut resource, device_guid, device_name);
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
+        devices.idle_since = None;
+        let device_id = get_or_create_device(&mut devices, device_guid, device_name);
         // This is infrequent, so we can afford to do another lookup for the device.
-        resource
-            .devices
+        devices
+            .entries
             .get_mut(&device_id)
             .ok_or(format!("Device not found for device_id: {device_id}"))?
             .add_chip(device_name, chip_kind, chip_name, chip_manufacturer, chip_product_name)
@@ -129,10 +129,10 @@ pub fn add_chip(
             };
             // Add the facade_id into the resources
             {
-                get_devices_resource()
+                clone_devices()
                     .write()
                     .unwrap()
-                    .devices
+                    .entries
                     .get_mut(&device_id)
                     .ok_or(format!("Device not found for device_id: {device_id}"))?
                     .chips
@@ -226,19 +226,15 @@ pub fn add_chip_cxx(
 }
 
 /// Get or create a device.
-fn get_or_create_device(
-    resource: &mut RwLockWriteGuard<Devices>,
-    guid: &str,
-    name: &str,
-) -> DeviceIdentifier {
+fn get_or_create_device(devices: &mut Devices, guid: &str, name: &str) -> DeviceIdentifier {
     // Check if a device with the given guid already exists
-    if let Some(existing_device) = resource.devices.values().find(|d| d.guid == guid) {
+    if let Some(existing_device) = devices.entries.values().find(|d| d.guid == guid) {
         // A device with the same guid already exists, return it
         existing_device.id
     } else {
         // No device with the same guid exists, insert the new device
-        let new_id = resource.id_factory.next_id();
-        resource.devices.insert(new_id, Device::new(new_id, guid.to_string(), name.to_string()));
+        let new_id = devices.id_factory.next_id();
+        devices.entries.insert(new_id, Device::new(new_id, guid.to_string(), name.to_string()));
         new_id
     }
 }
@@ -247,12 +243,12 @@ fn get_or_create_device(
 ///
 /// Called when the last chip for the device is removed.
 fn remove_device(
-    resource: &mut RwLockWriteGuard<Devices>,
+    guard: &mut RwLockWriteGuard<Devices>,
     id: DeviceIdentifier,
 ) -> Result<(), String> {
-    resource.devices.remove(&id).ok_or(format!("Error removing device with id {id}"))?;
-    if resource.devices.is_empty() {
-        resource.idle_since = Some(Instant::now());
+    guard.entries.remove(&id).ok_or(format!("Error removing device with id {id}"))?;
+    if guard.entries.is_empty() {
+        guard.idle_since = Some(Instant::now());
     }
     Ok(())
 }
@@ -264,9 +260,9 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
     let result = {
         let mut _facade_id_option: Option<FacadeIdentifier> = None;
         let mut _chip_kind = ProtoChipKind::UNSPECIFIED;
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
-        let is_empty = match resource.devices.entry(device_id) {
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
+        let is_empty = match devices.entries.entry(device_id) {
             Entry::Occupied(mut entry) => {
                 let device = entry.get_mut();
                 (_facade_id_option, _chip_kind) = device.remove_chip(chip_id)?;
@@ -275,7 +271,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
             Entry::Vacant(_) => return Err(format!("RemoveChip device id {device_id} not found")),
         };
         if is_empty {
-            remove_device(&mut resource, device_id)?;
+            remove_device(&mut devices, device_id)?;
         }
         Ok((_facade_id_option, _chip_kind))
     };
@@ -317,18 +313,18 @@ pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
 fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result<(), String> {
     let mut patch_device_request = PatchDeviceRequest::new();
     if merge_from_str(&mut patch_device_request, patch_json).is_ok() {
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
         let proto_device = patch_device_request.device;
         match id_option {
-            Some(id) => match resource.devices.get_mut(&id) {
+            Some(id) => match devices.entries.get_mut(&id) {
                 Some(device) => device.patch(&proto_device),
                 None => Err(format!("No such device with id {id}")),
             },
             None => {
                 let mut multiple_matches = false;
                 let mut target: Option<&mut Device> = None;
-                for device in resource.devices.values_mut() {
+                for device in devices.entries.values_mut() {
                     if device.name.contains(&proto_device.name) {
                         if device.name == proto_device.name {
                             return device.patch(&proto_device);
@@ -360,13 +356,15 @@ fn distance(a: &ProtoPosition, b: &ProtoPosition) -> f32 {
 
 #[allow(dead_code)]
 fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32, String> {
-    let resource_arc = get_devices_resource();
-    let devices = &resource_arc.read().unwrap().devices;
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
     let a = devices
+        .entries
         .get(&id)
         .map(|device_ref| device_ref.position.clone())
         .ok_or(format!("No such device with id {id}"))?;
     let b = devices
+        .entries
         .get(&other_id)
         .map(|device_ref| device_ref.position.clone())
         .ok_or(format!("No such device with id {other_id}"))?;
@@ -388,9 +386,9 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
 pub fn get_devices() -> Result<ProtoScene, String> {
     let mut scene = ProtoScene::new();
     // iterate over the devices and add each to the scene
-    let resource_arc = get_devices_resource();
-    let resource = resource_arc.read().unwrap();
-    for device in resource.devices.values() {
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
+    for device in devices.entries.values() {
         scene.devices.push(device.get()?);
     }
     Ok(scene)
@@ -398,9 +396,9 @@ pub fn get_devices() -> Result<ProtoScene, String> {
 
 #[allow(dead_code)]
 fn reset(id: DeviceIdentifier) -> Result<(), String> {
-    let resource_arc = get_devices_resource();
-    let mut resource = resource_arc.write().unwrap();
-    match resource.devices.get_mut(&id) {
+    let devices_arc = clone_devices();
+    let mut devices = devices_arc.write().unwrap();
+    match devices.entries.get_mut(&id) {
         Some(device) => device.reset(),
         None => Err(format!("No such device with id {id}")),
     }
@@ -408,9 +406,9 @@ fn reset(id: DeviceIdentifier) -> Result<(), String> {
 
 #[allow(dead_code)]
 fn reset_all() -> Result<(), String> {
-    let resource_arc = get_devices_resource();
-    let mut resource = resource_arc.write().unwrap();
-    for device in resource.devices.values_mut() {
+    let devices_arc = clone_devices();
+    let mut devices = devices_arc.write().unwrap();
+    for device in devices.entries.values_mut() {
         device.reset()?;
     }
     Ok(())
@@ -418,9 +416,9 @@ fn reset_all() -> Result<(), String> {
 
 /// Return true if netsimd is idle for 5 minutes
 pub fn is_shutdown_time_cxx() -> bool {
-    let resource_arc = get_devices_resource();
-    let resource = resource_arc.read().unwrap();
-    match resource.idle_since {
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
+    match devices.idle_since {
         Some(idle_since) => {
             IDLE_SECS_FOR_SHUTDOWN.checked_sub(idle_since.elapsed().as_secs()).is_none()
         }
@@ -438,11 +436,12 @@ fn handle_device_patch(writer: ResponseWritable, id: Option<DeviceIdentifier>, p
 
 /// Performs ListDevices to get the list of Devices and write to writer.
 fn handle_device_list(writer: ResponseWritable) {
-    let devices = get_devices().unwrap();
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
     // Instantiate ListDeviceResponse and add Devices
     let mut response = ListDeviceResponse::new();
-    for device in devices.devices {
-        response.devices.push(device);
+    for device in devices.entries.values() {
+        response.devices.push(device.get().unwrap());
     }
 
     // Perform protobuf-json-mapping with the given protobuf
@@ -528,9 +527,9 @@ pub fn handle_device_cxx(
 
 /// Get Facade ID from given chip_id
 pub fn get_facade_id(chip_id: i32) -> Result<u32, String> {
-    let resource_arc = get_devices_resource();
-    let resource = resource_arc.read().unwrap();
-    for device in resource.devices.values() {
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
+    for device in devices.entries.values() {
         for (id, chip) in &device.chips {
             if *id == chip_id {
                 return chip.facade_id.ok_or(format!(
@@ -600,9 +599,9 @@ mod tests {
         }
 
         fn get_or_create_device(&self) -> DeviceIdentifier {
-            let resource_arc = get_devices_resource();
-            let mut resource = resource_arc.write().unwrap();
-            super::get_or_create_device(&mut resource, self.device_guid, self.device_name)
+            let devices_arc = clone_devices();
+            let mut devices = devices_arc.write().unwrap();
+            super::get_or_create_device(&mut devices, self.device_guid, self.device_name)
         }
     }
 
@@ -617,11 +616,11 @@ mod tests {
 
     /// helper function for test cases to refresh DEVICES
     fn refresh_resource() {
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
-        resource.devices = BTreeMap::new();
-        resource.id_factory = IdFactory::new(1000, 1);
-        resource.idle_since = Some(Instant::now());
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
+        devices.entries = BTreeMap::new();
+        devices.id_factory = IdFactory::new(1000, 1);
+        devices.idle_since = Some(Instant::now());
         crate::devices::chip::refresh_resource();
         crate::bluetooth::refresh_resource();
         crate::wifi::refresh_resource();
@@ -629,9 +628,9 @@ mod tests {
 
     /// helper function for traveling back n seconds for idle_since
     fn travel_back_n_seconds_from_now(n: u64) {
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
-        resource.idle_since = Some(Instant::now() - Duration::from_secs(n));
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
+        devices.idle_since = Some(Instant::now() - Duration::from_secs(n));
     }
 
     fn test_chip_1_bt() -> TestChipParameters<'static> {
@@ -947,7 +946,7 @@ mod tests {
 
         // Remove a wifi chip of first device
         remove_chip(wifi_chip_result.device_id, wifi_chip_result.chip_id).unwrap();
-        assert_eq!(get_devices().unwrap().devices.len(), 1);
+        assert_eq!(clone_devices().read().unwrap().entries.len(), 1);
         match get_devices().unwrap().devices.get(0) {
             Some(device) => assert_eq!(bt_chip_2_params.device_name, device.name),
             None => unreachable!(),
@@ -1041,12 +1040,12 @@ mod tests {
         // Refresh Resource
         refresh_resource();
 
-        // Set the idle_since value to more than 5 minutes before current time
-        travel_back_n_seconds_from_now(301);
+        // Set the idle_since value to more than 15 seconds before current time
+        travel_back_n_seconds_from_now(16);
         assert!(is_shutdown_time_cxx());
 
-        // Set the idle_since value to less than 5 minutes before current time
-        travel_back_n_seconds_from_now(299);
+        // Set the idle_since value to less than 15 seconds before current time
+        travel_back_n_seconds_from_now(14);
         assert!(!is_shutdown_time_cxx());
 
         // Refresh Resource again
@@ -1054,9 +1053,9 @@ mod tests {
 
         // Add a device and check if idle_since is None
         let _ = test_chip_1_bt().add_chip();
-        let resource_arc = get_devices_resource();
-        let resource = resource_arc.read().unwrap();
-        assert!(resource.idle_since.is_none());
+        let devices_arc = clone_devices();
+        let devices = devices_arc.read().unwrap();
+        assert!(devices.idle_since.is_none());
         assert!(!is_shutdown_time_cxx());
     }
 

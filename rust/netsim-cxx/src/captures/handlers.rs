@@ -43,7 +43,7 @@ use crate::captures::capture::ChipId;
 use crate::ffi::CxxServerResponseWriter;
 use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
-use crate::resource::get_captures_resource;
+use crate::resource::clone_captures;
 use crate::system;
 use crate::CxxServerResponseWriterWrapper;
 
@@ -75,7 +75,7 @@ pub fn update_captures() {
     };
 
     // Adding to Captures hashmap
-    let captures_arc = get_captures_resource();
+    let captures_arc = clone_captures();
     let mut captures = captures_arc.write().unwrap();
     let mut chip_ids = HashSet::<ChipId>::new();
     for device in device_response.devices {
@@ -149,8 +149,8 @@ fn get_file(id: ChipId, device_name: String, chip_kind: ChipKind) -> Result<File
 pub fn handle_capture_get(writer: ResponseWritable, id: ChipId) {
     // Get the most updated active captures
     update_captures();
-    let captures_lock = get_captures_resource();
-    let mut captures = captures_lock.write().unwrap();
+    let captures_arc = clone_captures();
+    let mut captures = captures_arc.write().unwrap();
     if let Some(capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
         if capture.size == 0 {
             writer.put_error(
@@ -197,7 +197,7 @@ pub fn handle_capture_get(writer: ResponseWritable, id: ChipId) {
 pub fn handle_capture_list(writer: ResponseWritable) {
     // Get the most updated active captures
     update_captures();
-    let captures_arc = get_captures_resource();
+    let captures_arc = clone_captures();
     let captures = captures_arc.write().unwrap();
     // Instantiate ListCaptureResponse and add Captures
     let mut response = ListCaptureResponse::new();
@@ -218,7 +218,7 @@ pub fn handle_capture_list(writer: ResponseWritable) {
 pub fn handle_capture_patch(writer: ResponseWritable, id: ChipId, state: bool) {
     // Get the most updated active captures
     update_captures();
-    let captures_arc = get_captures_resource();
+    let captures_arc = clone_captures();
     let mut captures = captures_arc.write().unwrap();
     if let Some(mut capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
         match state {
@@ -328,7 +328,7 @@ fn handle_packet(
     packet_type: u32,
     direction: PacketDirection,
 ) {
-    let captures_arc = get_captures_resource();
+    let captures_arc = clone_captures();
     let captures = captures_arc.write().unwrap();
     let facade_key = CaptureInfo::new_facade_key(int_to_chip_kind(kind), facade_id as i32);
     // TODO: Create event channel to invoke update_captures when new device is added.

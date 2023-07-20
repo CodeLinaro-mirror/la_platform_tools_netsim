@@ -20,12 +20,12 @@ use crate::devices::devices_handler::Devices;
 use crate::version::get_version;
 
 lazy_static! {
-    static ref RESOURCES: RwLock<Resource> = RwLock::new(Resource::new());
+    static ref RESOURCES: Resource = Resource::new();
 }
 
-/// Resource struct includes all the frontend resources for netsim.
-/// This struct will be instantiated by netsimd and passed down to the
-/// servers.
+/// Resource struct includes all the global and possibly shared
+/// resources for netsim.  Each field within Resource should be an Arc
+/// protected by a RwLock or Mutex.
 pub struct Resource {
     version: String,
     devices: Arc<RwLock<Devices>>,
@@ -46,12 +46,12 @@ impl Resource {
     }
 }
 
-pub fn get_devices_resource() -> Arc<RwLock<Devices>> {
-    RESOURCES.write().unwrap().devices.to_owned()
+pub fn clone_devices() -> Arc<RwLock<Devices>> {
+    Arc::clone(&RESOURCES.devices)
 }
 
-pub fn get_captures_resource() -> Arc<RwLock<Captures>> {
-    RESOURCES.write().unwrap().captures.to_owned()
+pub fn clone_captures() -> Arc<RwLock<Captures>> {
+    Arc::clone(&RESOURCES.captures)
 }
 
 #[cfg(test)]
