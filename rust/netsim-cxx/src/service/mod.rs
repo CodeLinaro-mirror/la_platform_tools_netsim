@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use crate::bluetooth as bluetooth_facade;
+use crate::captures;
 use crate::captures::handlers::clear_pcap_files;
 use crate::config::get_dev;
 use crate::http_server::run_http_server;
+use crate::resource;
 use crate::wifi as wifi_facade;
 use log::info;
 use netsim_common::util::netsim_logger;
@@ -49,6 +51,10 @@ impl Service {
         if clear_pcap_files() {
             info!("netsim generated pcap files in temp directory has been removed.");
         }
+
+        // Start all the subscribers for events
+        let events_rx = resource::clone_events().lock().unwrap().subscribe();
+        captures::capture::spawn_capture_event_subscriber(events_rx);
 
         bluetooth_facade::bluetooth_start();
         wifi_facade::wifi_start();

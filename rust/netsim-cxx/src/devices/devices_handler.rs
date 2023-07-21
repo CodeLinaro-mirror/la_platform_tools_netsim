@@ -30,10 +30,12 @@ use crate::bluetooth as bluetooth_facade;
 use crate::captures::handlers::update_captures;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
+use crate::events::Event;
 use crate::ffi::CxxServerResponseWriter;
 use crate::http_server::http_request::HttpHeaders;
 use crate::http_server::http_request::HttpRequest;
 use crate::http_server::server_response::ResponseWritable;
+use crate::resource;
 use crate::resource::clone_devices;
 use crate::wifi as wifi_facade;
 use crate::CxxServerResponseWriterWrapper;
@@ -145,6 +147,13 @@ pub fn add_chip(
             );
             // Update Capture resource
             update_captures();
+            resource::clone_events().lock().unwrap().publish(Event::ChipAdded {
+                id: chip_id as u32,
+                device_id: device_id as u32,
+                facade_id,
+                device_name: device_name.to_string(),
+                kind: chip_kind,
+            });
             Ok(AddChipResult { device_id, chip_id, facade_id })
         }
         Err(err) => {
@@ -292,6 +301,10 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                 ))?,
             }
             info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
+            resource::clone_events()
+                .lock()
+                .unwrap()
+                .publish(Event::ChipRemoved { id: chip_id as u32 });
             update_captures();
             Ok(())
         }

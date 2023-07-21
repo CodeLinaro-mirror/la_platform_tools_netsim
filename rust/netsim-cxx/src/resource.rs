@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use lazy_static::lazy_static;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use crate::captures::capture::Captures;
 use crate::devices::devices_handler::Devices;
+use crate::events::Events;
 use crate::version::get_version;
 
 lazy_static! {
@@ -30,6 +31,7 @@ pub struct Resource {
     version: String,
     devices: Arc<RwLock<Devices>>,
     captures: Arc<RwLock<Captures>>,
+    events: Arc<Mutex<Events>>,
 }
 
 impl Resource {
@@ -38,12 +40,17 @@ impl Resource {
             version: get_version(),
             devices: Arc::new(RwLock::new(Devices::new())),
             captures: Arc::new(RwLock::new(Captures::new())),
+            events: Events::new(),
         }
     }
 
     pub fn get_version_resource(self) -> String {
         self.version
     }
+}
+
+pub fn clone_events() -> Arc<Mutex<Events>> {
+    Arc::clone(&RESOURCES.events)
 }
 
 pub fn clone_devices() -> Arc<RwLock<Devices>> {

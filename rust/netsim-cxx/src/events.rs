@@ -43,9 +43,6 @@ pub enum Event {
     },
     ChipRemoved {
         id: ChipIdentifier,
-        facade_id: FacadeIdentifier,
-        device_id: DeviceIdentifier,
-        kind: ChipKind,
     },
 }
 

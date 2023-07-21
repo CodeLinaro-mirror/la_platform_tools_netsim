@@ -22,7 +22,9 @@ use std::collections::btree_map::{Iter, Values};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{File, OpenOptions};
 use std::io::Result;
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use frontend_proto::{
@@ -32,6 +34,7 @@ use frontend_proto::{
 use log::{error, info};
 use protobuf::well_known_types::timestamp::Timestamp;
 
+use crate::events::Event;
 use crate::system;
 
 use super::pcap_util::write_pcap_header;
@@ -231,4 +234,25 @@ impl Default for Captures {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Create a thread to process events that matter to the Capture resource.
+///
+/// We maintain a CaptureInfo for each chip that has been
+/// connected to the simulation. This procedure monitors ChipAdded
+/// and ChipRemoved events and updates the collection of CaptureInfo.
+///
+pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>) {
+    let _ = thread::Builder::new().name("capture_event_subscriber".to_string()).spawn(move || {
+        match event_rx.recv() {
+            Ok(Event::ChipAdded { id, device_name, facade_id, .. }) => {
+                // TODO: resources::clone_captures().write().insert(captureInfo)
+                info!("Capture event: ChipAdded {id} {device_name} facade_id:{facade_id}");
+            }
+            Ok(Event::ChipRemoved { id, .. }) => {
+                info!("Capture event: ChipRemoved {id}");
+            }
+            _ => {}
+        }
+    });
 }
