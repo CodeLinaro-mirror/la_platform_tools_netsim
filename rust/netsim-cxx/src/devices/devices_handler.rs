@@ -27,7 +27,6 @@ use super::chip::FacadeIdentifier;
 use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
 use crate::bluetooth as bluetooth_facade;
-use crate::captures::handlers::update_captures;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
 use crate::events::Event;
@@ -146,13 +145,11 @@ pub fn add_chip(
                 "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, device_id: {device_id}, chip_id: {chip_id}, facade_id: {facade_id}",
             );
             // Update Capture resource
-            update_captures();
             resource::clone_events().lock().unwrap().publish(Event::ChipAdded {
-                id: chip_id as u32,
-                device_id: device_id as u32,
+                chip_id,
+                chip_kind,
                 facade_id,
                 device_name: device_name.to_string(),
-                kind: chip_kind,
             });
             Ok(AddChipResult { device_id, chip_id, facade_id })
         }
@@ -301,11 +298,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                 ))?,
             }
             info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
-            resource::clone_events()
-                .lock()
-                .unwrap()
-                .publish(Event::ChipRemoved { id: chip_id as u32 });
-            update_captures();
+            resource::clone_events().lock().unwrap().publish(Event::ChipRemoved { chip_id });
             Ok(())
         }
         Err(err) => {

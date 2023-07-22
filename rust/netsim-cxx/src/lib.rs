@@ -25,7 +25,6 @@ mod http_server;
 mod ranging;
 mod resource;
 mod service;
-mod system;
 mod transport;
 mod uwb;
 mod version;
@@ -51,7 +50,7 @@ use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport}
 use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
-    handle_capture_cxx, handle_packet_request, handle_packet_response, update_captures,
+    handle_capture_cxx, handle_packet_request, handle_packet_response,
 };
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
@@ -60,9 +59,9 @@ use crate::devices::devices_handler::{
 };
 use crate::ranging::*;
 use crate::service::{create_service, Service};
-use crate::system::netsimd_temp_dir_string;
 use crate::uwb::facade::*;
 use crate::version::*;
+use netsim_common::system::netsimd_temp_dir_string;
 
 #[cxx::bridge(namespace = "netsim")]
 mod ffi {
@@ -181,10 +180,6 @@ mod ffi {
         fn is_shutdown_time_cxx() -> bool;
 
         // Capture Resource
-
-        #[cxx_name = UpdateCaptures]
-        #[namespace = "netsim::capture"]
-        fn update_captures();
 
         #[cxx_name = HandleRequest]
         #[namespace = "netsim::capture"]

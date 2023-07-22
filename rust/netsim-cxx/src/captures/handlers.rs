@@ -29,22 +29,20 @@
 
 use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
-use frontend_proto::frontend::{ListCaptureResponse, ListDeviceResponse};
+use frontend_proto::frontend::ListCaptureResponse;
 use log::error;
 use netsim_common::util::time_display::TimeDisplay;
 use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Read, Result};
 use std::pin::Pin;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::captures::capture::ChipId;
+use crate::devices::chip::ChipIdentifier;
 use crate::ffi::CxxServerResponseWriter;
 use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource::clone_captures;
-use crate::system;
 use crate::CxxServerResponseWriterWrapper;
 
 use super::capture::CaptureInfo;
@@ -59,83 +57,9 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     _future_options: (),
 };
 
-/// Updates the Captures collection to reflect the currently connected devices.
-///
-/// This function removes entries from Captures when devices/chips
-/// go away and adds entries when new devices/chips connect.
-/// Note: if a device disconnects and there is captured data, the entry
-/// remains with a flag valid = false so it can be retrieved.
-pub fn update_captures() {
-    let device_response = match crate::devices::devices_handler::get_devices() {
-        Ok(scene) => ListDeviceResponse { devices: scene.devices, ..Default::default() },
-        Err(err) => {
-            error!("{err}");
-            return;
-        }
-    };
-
-    // Adding to Captures hashmap
-    let captures_arc = clone_captures();
-    let mut captures = captures_arc.write().unwrap();
-    let mut chip_ids = HashSet::<ChipId>::new();
-    for device in device_response.devices {
-        for chip in device.chips {
-            chip_ids.insert(chip.id);
-            if !captures.contains(chip.id) {
-                let mut capture = CaptureInfo::new(
-                    chip.kind.enum_value_or_default(),
-                    chip.id,
-                    device.name.clone(),
-                );
-                // TODO(b/268271460): Add ability to set default capture state.
-                // Currently, the default capture state is ON
-                let _ = capture.start_capture();
-                captures.insert(capture);
-            }
-        }
-    }
-
-    // Two cases when device gets disconnected:
-    // 1. The device had no capture, remove completely.
-    // 2. The device had capture, indicate by capture.set_valid(false)
-    enum RemovalIndicator {
-        Gone(ChipId),   // type ChipId = i32
-        Unused(ChipId), // type ChipId = i32
-    }
-
-    // Check if the active_capture entry still exists in the chips.
-    let mut removal = Vec::<RemovalIndicator>::new();
-    for (chip_id, capture) in captures.iter() {
-        let lock = capture.lock().unwrap();
-        let proto_capture = lock.get_capture_proto();
-        if !chip_ids.contains(chip_id) {
-            if proto_capture.size == 0 {
-                removal.push(RemovalIndicator::Unused(chip_id.to_owned()));
-            } else {
-                removal.push(RemovalIndicator::Gone(chip_id.to_owned()))
-            }
-        }
-    }
-
-    // Now remove/update the captures based on the loop above
-    for indicator in removal {
-        match indicator {
-            RemovalIndicator::Unused(key) => captures.remove(&key),
-            RemovalIndicator::Gone(key) => {
-                for capture in captures.get(key).iter() {
-                    let mut lock = capture.lock().unwrap();
-                    lock.stop_capture();
-                    // Valid is marked false if the capture of the device is disconnected from netsim
-                    lock.valid = false;
-                }
-            }
-        }
-    }
-}
-
 /// Helper function for getting file name from the given fields.
-fn get_file(id: ChipId, device_name: String, chip_kind: ChipKind) -> Result<File> {
-    let mut filename = system::netsimd_temp_dir();
+fn get_file(id: ChipIdentifier, device_name: String, chip_kind: ChipKind) -> Result<File> {
+    let mut filename = netsim_common::system::netsimd_temp_dir();
     filename.push("pcaps");
     filename.push(format!("{:?}-{:}-{:?}.pcap", id, device_name, chip_kind));
     File::open(filename)
@@ -146,9 +70,7 @@ fn get_file(id: ChipId, device_name: String, chip_kind: ChipKind) -> Result<File
 // GET /captures/id/{id} --> Get Capture information
 // GET /captures/contents/{id} --> Download Pcap file
 /// Performs GetCapture to download pcap file and write to writer.
-pub fn handle_capture_get(writer: ResponseWritable, id: ChipId) {
-    // Get the most updated active captures
-    update_captures();
+pub fn handle_capture_get(writer: ResponseWritable, id: ChipIdentifier) {
     let captures_arc = clone_captures();
     let mut captures = captures_arc.write().unwrap();
     if let Some(capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
@@ -195,8 +117,6 @@ pub fn handle_capture_get(writer: ResponseWritable, id: ChipId) {
 
 /// Performs ListCapture to get the list of CaptureInfos and write to writer.
 pub fn handle_capture_list(writer: ResponseWritable) {
-    // Get the most updated active captures
-    update_captures();
     let captures_arc = clone_captures();
     let captures = captures_arc.write().unwrap();
     // Instantiate ListCaptureResponse and add Captures
@@ -215,9 +135,7 @@ pub fn handle_capture_list(writer: ResponseWritable) {
 
 /// Performs PatchCapture to patch a CaptureInfo with id.
 /// Writes the result of PatchCapture to writer.
-pub fn handle_capture_patch(writer: ResponseWritable, id: ChipId, state: bool) {
-    // Get the most updated active captures
-    update_captures();
+pub fn handle_capture_patch(writer: ResponseWritable, id: ChipIdentifier, state: bool) {
     let captures_arc = clone_captures();
     let mut captures = captures_arc.write().unwrap();
     if let Some(mut capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
@@ -330,11 +248,7 @@ fn handle_packet(
 ) {
     let captures_arc = clone_captures();
     let captures = captures_arc.write().unwrap();
-    let facade_key = CaptureInfo::new_facade_key(int_to_chip_kind(kind), facade_id as i32);
-    // TODO: Create event channel to invoke update_captures when new device is added.
-    if !captures.facade_key_to_capture.contains_key(&facade_key) {
-        update_captures();
-    }
+    let facade_key = CaptureInfo::new_facade_key(int_to_chip_kind(kind), facade_id);
     if let Some(mut capture) = captures
         .facade_key_to_capture
         .get(&facade_key)
@@ -370,7 +284,7 @@ pub fn handle_packet_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>,
 
 /// Cxx Method for clearing pcap files in temp directory
 pub fn clear_pcap_files() -> bool {
-    let mut path = system::netsimd_temp_dir();
+    let mut path = netsim_common::system::netsimd_temp_dir();
     path.push("pcaps");
 
     // Check if the directory exists.

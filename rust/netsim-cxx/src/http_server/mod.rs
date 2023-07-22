@@ -42,7 +42,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 
-const PATH_PREFIXES: [&str; 3] = ["js", "assets", "node_modules/tslib"];
+const PATH_PREFIXES: [&str; 4] = ["js", "js/netsim", "assets", "node_modules/tslib"];
 
 /// Start the HTTP Server.
 

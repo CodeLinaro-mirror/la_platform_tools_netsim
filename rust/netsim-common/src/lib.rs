@@ -17,4 +17,5 @@
 //!
 //! A collection of utilities for netsimd and netsim.
 
+pub mod system;
 pub mod util;

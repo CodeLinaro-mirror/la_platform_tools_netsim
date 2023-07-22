@@ -18,9 +18,9 @@ use frontend_proto::common::ChipKind;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
-type DeviceIdentifier = u32;
-type ChipIdentifier = u32;
-type FacadeIdentifier = u32;
+use crate::devices::chip::ChipIdentifier;
+use crate::devices::chip::FacadeIdentifier;
+use crate::devices::device::DeviceIdentifier;
 
 /// Event messages shared across various components in a loosely
 /// coupled manner.
@@ -35,14 +35,13 @@ pub enum Event {
         name: String,
     },
     ChipAdded {
-        device_name: String,
-        id: ChipIdentifier,
+        chip_id: ChipIdentifier,
+        chip_kind: ChipKind,
         facade_id: FacadeIdentifier,
-        device_id: DeviceIdentifier,
-        kind: ChipKind,
+        device_name: String,
     },
     ChipRemoved {
-        id: ChipIdentifier,
+        chip_id: ChipIdentifier,
     },
 }
 

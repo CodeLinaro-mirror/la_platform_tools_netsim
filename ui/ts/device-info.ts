@@ -4,7 +4,7 @@ import {live} from 'lit/directives/live.js';
 import {styleMap} from 'lit/directives/style-map.js';
 
 import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
-import {State} from './model.js'
+import {State} from './netsim/model.js'
 
     @customElement('ns-device-info') export class DeviceInformation extends LitElement implements Notifiable {
 
@@ -12,44 +12,44 @@ import {State} from './model.js'
       @property() selectedDevice: Device|undefined;
 
       /**
-   * the yaw value in orientation for ns-cube-sprite
-   * unit: deg
-   */
+* the yaw value in orientation for ns-cube-sprite
+* unit: deg
+*/
       @property({type : Number}) yaw = 0;
 
       /**
-   * the pitch value in orientation for ns-cube-spriteß
-   * unit: deg
-   */
+* the pitch value in orientation for ns-cube-spriteß
+* unit: deg
+*/
       @property({type : Number}) pitch = 0;
 
       /**
-   * the roll value in orientation for ns-cube-sprite
-   * unit: deg
-   */
+* the roll value in orientation for ns-cube-sprite
+* unit: deg
+*/
       @property({type : Number}) roll = 0;
 
       /**
-   * The state of device info. True if edit mode.
-   */
+* The state of device info. True if edit mode.
+*/
       @property({type : Boolean}) editMode = false;
 
       /**
-   * the x value in position for ns-cube-sprite
-   * unit: cm
-   */
+* the x value in position for ns-cube-sprite
+* unit: cm
+*/
       @property({type : Number}) posX = 0;
 
       /**
-   * the y value in position for ns-cube-sprite
-   * unit: cm
-   */
+* the y value in position for ns-cube-sprite
+* unit: cm
+*/
       @property({type : Number}) posY = 0;
 
       /**
-   * the z value in position for ns-cube-sprite
-   * unit: cm
-   */
+* the z value in position for ns-cube-sprite
+* unit: cm
+*/
       @property({type : Number}) posZ = 0;
 
       holdRange = false;
@@ -207,7 +207,7 @@ import {State} from './model.js'
       for (const device of data.devices) {
         if (device.name === data.selectedId) {
           this.selectedDevice = device;
-          if (!this.holdRange){
+          if (!this.holdRange) {
             this.yaw = device.orientation.yaw;
             this.pitch = device.orientation.pitch;
             this.roll = device.orientation.roll;
@@ -246,7 +246,7 @@ import {State} from './model.js'
     this.holdRange = false;
     console.assert(this.selectedDevice !== undefined); // eslint-disable-line
     if (this.selectedDevice === undefined) return;
-    this.selectedDevice.orientation = {yaw: this.yaw, pitch: this.pitch, roll: this.roll};
+    this.selectedDevice.orientation = { yaw: this.yaw, pitch: this.pitch, roll: this.roll };
     simulationState.patchDevice({
       device: {
         name: this.selectedDevice.name,
@@ -336,16 +336,16 @@ import {State} from './model.js'
         for (const chip of this.selectedDevice.chips) {
           if ('bt' in chip && chip.bt) {
             if ('lowEnergy' in chip.bt && chip.bt.lowEnergy && 'state' in chip.bt.lowEnergy) {
-              lowEnergyCheckbox = html `
+              lowEnergyCheckbox = html`
                 <input
                   id="lowEnergy"
                   type="checkbox"
                   .checked=${live(chip.bt.lowEnergy.state === State.ON)}
                   @click=${() => {
-                    // eslint-disable-next-line
-                    this.selectedDevice?.toggleChipState(chip, 'lowEnergy');
-                    this.patchRadio();
-                  }}
+                  // eslint-disable-next-line
+                  this.selectedDevice?.toggleChipState(chip, 'lowEnergy');
+                  this.patchRadio();
+                }}
                 />
                 <span class="slider round"></span>
               `;
@@ -357,10 +357,10 @@ import {State} from './model.js'
                   type="checkbox"
                   .checked=${live(chip.bt.classic.state === State.ON)}
                   @click=${() => {
-                    // eslint-disable-next-line
-                    this.selectedDevice?.toggleChipState(chip, 'classic');
-                    this.patchRadio();
-                  }}
+                  // eslint-disable-next-line
+                  this.selectedDevice?.toggleChipState(chip, 'classic');
+                  this.patchRadio();
+                }}
                 />
                 <span class="slider round"></span>
               `;
@@ -374,10 +374,10 @@ import {State} from './model.js'
                 type="checkbox"
                 .checked=${live(chip.wifi.state === State.ON)}
                 @click=${() => {
-                  // eslint-disable-next-line
-                  this.selectedDevice?.toggleChipState(chip);
-                  this.patchRadio();
-                }}
+                // eslint-disable-next-line
+                this.selectedDevice?.toggleChipState(chip);
+                this.patchRadio();
+              }}
               />
               <span class="slider round"></span>
             `;
@@ -390,10 +390,10 @@ import {State} from './model.js'
                 type="checkbox"
                 .checked=${live(chip.uwb.state === State.ON)}
                 @click=${() => {
-                  // eslint-disable-next-line
-                  this.selectedDevice?.toggleChipState(chip);
-                  this.patchRadio();
-                }}
+                // eslint-disable-next-line
+                this.selectedDevice?.toggleChipState(chip);
+                this.patchRadio();
+              }}
               />
               <span class="slider round"></span>
             `;
@@ -442,32 +442,32 @@ import {State} from './model.js'
             <div class="label">X</div>
             <div class="info" style=${styleMap({ color: 'red' })}>
               ${this.editMode
-                ? html`<input
+          ? html`<input
                     type="text"
                     id="editPosX"
                     .value=${this.posX.toString()}
                   />`
-                : html`${this.posX}`}
+          : html`${this.posX}`}
             </div>
             <div class="label">Y</div>
             <div class="info" style=${styleMap({ color: 'green' })}>
               ${this.editMode
-                ? html`<input
+          ? html`<input
                     type="text"
                     id="editPosY"
                     .value=${this.posY.toString()}
                   />`
-                : html`${this.posY}`}
+          : html`${this.posY}`}
             </div>
             <div class="label">Z</div>
             <div class="info" style=${styleMap({ color: 'blue' })}>
               ${this.editMode
-                ? html`<input
+          ? html`<input
                     type="text"
                     id="editPosZ"
                     .value=${this.posZ.toString()}
                   />`
-                : html`${this.posZ}`}
+          : html`${this.posZ}`}
             </div>
           </div>
           <div class="setting">
@@ -485,13 +485,13 @@ import {State} from './model.js'
                 @change=${this.patchOrientation}
               />
               ${this.editMode
-                ? html`<input
+          ? html`<input
                     type="text"
                     id="editOriYaw"
                     class="orientation"
                     .value=${this.yaw.toString()}
                   />`
-                : html`<div class="text">(${this.yaw})</div>`}
+          : html`<div class="text">(${this.yaw})</div>`}
             </div>
             <div class="label">Pitch</div>
             <div class="info">
@@ -506,13 +506,13 @@ import {State} from './model.js'
                 @change=${this.patchOrientation}
               />
               ${this.editMode
-                ? html`<input
+          ? html`<input
                     type="text"
                     id="editOriPitch"
                     class="orientation"
                     .value=${this.pitch.toString()}
                   />`
-                : html`<div class="text">(${this.pitch})</div>`}
+          : html`<div class="text">(${this.pitch})</div>`}
             </div>
             <div class="label">Roll</div>
             <div class="info">
@@ -527,18 +527,18 @@ import {State} from './model.js'
                 @change=${this.patchOrientation}
               />
               ${this.editMode
-                ? html`<input
+          ? html`<input
                     type="text"
                     id="editOriRoll"
                     class="orientation"
                     .value=${this.roll.toString()}
                   />`
-                : html`<div class="text">(${this.roll})</div>`}
+          : html`<div class="text">(${this.roll})</div>`}
             </div>
           </div>
           <div class="setting">
             ${this.editMode
-              ? html`
+          ? html`
                   <input type="button" value="Save" @click=${this.handleSave} />
                   <input
                     type="button"
@@ -546,7 +546,7 @@ import {State} from './model.js'
                     @click=${this.handleEditForm}
                   />
                 `
-              : html`<input
+          : html`<input
                   type="button"
                   value="Edit"
                   @click=${this.handleEditForm}

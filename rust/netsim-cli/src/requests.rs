@@ -32,6 +32,9 @@ impl args::Command {
             Command::Gui => {
                 panic!("No GrpcMethod for Ui Command.");
             }
+            Command::Artifact => {
+                panic!("No GrpcMethod for Artifact Command.");
+            }
         }
     }
 }

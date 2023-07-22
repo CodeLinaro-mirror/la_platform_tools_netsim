@@ -59,6 +59,8 @@ pub enum Command {
     /// Control the packet capture functionalities with commands: list, patch, get
     #[command(subcommand, visible_alias("pcap"))]
     Capture(Capture),
+    /// Opens netsim artifacts directory (log, pcaps)
+    Artifact,
 }
 
 impl Command {
@@ -131,6 +133,9 @@ impl Command {
                     unimplemented!("get_request_bytes not implemented for Capture Patch command. Use get_requests instead.")
                 }
             },
+            Command::Artifact => {
+                unimplemented!("get_request_bytes is not implemented for Artifact Command.")
+            }
         }
     }
 

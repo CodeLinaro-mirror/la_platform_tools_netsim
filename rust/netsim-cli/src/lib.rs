@@ -138,6 +138,9 @@ pub extern "C" fn rust_main() {
     if matches!(args.command, args::Command::Gui) {
         browser::open("http://localhost:7681/");
         return;
+    } else if matches!(args.command, args::Command::Artifact) {
+        browser::open(netsim_common::system::netsimd_temp_dir());
+        return;
     }
     let grpc_method = args.command.grpc_method();
     let client = new_frontend_client(args.port.unwrap_or_default());

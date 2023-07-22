@@ -1,4 +1,4 @@
-import {Capture, Chip, Device as ProtoDevice, State} from './model.js';
+import {Capture, Chip, Device as ProtoDevice, State} from './netsim/model.js';
 
 // URL for netsim
 const DEVICES_URL = './v1/devices';

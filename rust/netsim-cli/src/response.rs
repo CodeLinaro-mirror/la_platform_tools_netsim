@@ -83,6 +83,9 @@ impl args::Command {
             Command::Gui => {
                 unimplemented!("No Grpc Response for Gui Command.");
             }
+            Command::Artifact => {
+                unimplemented!("No Grpc Response for Artifact Command.");
+            }
         }
     }
 

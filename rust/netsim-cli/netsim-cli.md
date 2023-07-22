@@ -53,4 +53,6 @@ Options:
                                     include ID, Device Name, and Chip Kind
             * Options:
                 * `-o, --location`: Directory to store downloaded capture file(s)
+* ### `gui`:        Opens netsim Web UI
+* ### `artifact`:   Opens netsim artifacts directory (log, pcaps)
 * ### `help`:       Print this message or the help of the given subcommand(s)
