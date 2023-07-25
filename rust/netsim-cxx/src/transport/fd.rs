@@ -22,7 +22,7 @@ use super::uci;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::ffi::handle_request_cxx;
 use frontend_proto::common::ChipKind;
-use log::{error, info};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{ErrorKind, Write};
@@ -132,7 +132,7 @@ fn fd_reader(
             }
 
             if let Err(err) = remove_chip(device_id as i32, chip_id as i32) {
-                error!("{err}");
+                warn!("{err}");
             }
             // File is automatically closed when it goes out of scope.
             unregister_transport(kind as u32, facade_id);
@@ -178,7 +178,7 @@ pub fn run_fd_transport(startup_json: &String) {
                     ) {
                         Ok(chip_result) => chip_result,
                         Err(err) => {
-                            error!("{err}");
+                            warn!("{err}");
                             return;
                         }
                     };

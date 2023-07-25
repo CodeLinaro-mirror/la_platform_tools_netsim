@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, io::Cursor, net::TcpStream};
 
 use frontend_proto::common::ChipKind;
-use log::{error, info};
+use log::{error, info, warn};
 use tungstenite::{protocol::Role, Message, WebSocket};
 
 use crate::http_server::{
@@ -94,7 +94,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {
-            error!("{err}");
+            warn!("{err}");
             return;
         }
     };
@@ -167,7 +167,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
     // Remove Chip
     info!("remove chip: device {}, chip {}", result.device_id, result.chip_id);
     if let Err(err) = remove_chip(result.device_id, result.chip_id) {
-        error!("{err}");
+        warn!("{err}");
     };
     // The connection will be closed when the value is dropped.
     unregister_transport(ChipKind::BLUETOOTH as u32, result.facade_id);

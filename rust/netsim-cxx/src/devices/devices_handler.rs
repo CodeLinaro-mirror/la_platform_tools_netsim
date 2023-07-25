@@ -44,7 +44,7 @@ use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::frontend::PatchDeviceRequest;
 use frontend_proto::model::Position as ProtoPosition;
 use frontend_proto::model::Scene as ProtoScene;
-use log::{error, info};
+use log::{info, warn};
 use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string_with_options;
 use protobuf_json_mapping::PrintOptions;
@@ -154,7 +154,7 @@ pub fn add_chip(
             Ok(AddChipResult { device_id, chip_id, facade_id })
         }
         Err(err) => {
-            error!(
+            warn!(
                 "Failed to add chip: device_name: {device_name}, chip_kind: {chip_kind:?}, error: {err}",
             );
             Err(err)
@@ -302,7 +302,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
             Ok(())
         }
         Err(err) => {
-            error!("Failed to remove chip: device_id: {device_id}, chip_id: {chip_id}");
+            warn!("Failed to remove chip: device_id: {device_id}, chip_id: {chip_id}");
             Err(err)
         }
     }
@@ -383,7 +383,7 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
     match get_distance(a as i32, b as i32) {
         Ok(distance) => distance,
         Err(err) => {
-            error!("get_distance Error: {err}");
+            warn!("get_distance Error: {err}");
             0.0
         }
     }
@@ -1011,8 +1011,7 @@ mod tests {
         match get_facade_id(bt_chip_result.chip_id) {
             Ok(facade_id) => assert_eq!(facade_id, 0),
             Err(err) => {
-                error!("{err}");
-                unreachable!();
+                unreachable!("{err}");
             }
         }
 
@@ -1020,8 +1019,7 @@ mod tests {
         match get_facade_id(wifi_chip_result.chip_id) {
             Ok(facade_id) => assert_eq!(facade_id, 0),
             Err(err) => {
-                error!("{err}");
-                unreachable!();
+                unreachable!("{err}");
             }
         }
 
@@ -1029,8 +1027,7 @@ mod tests {
         match get_facade_id(bt_chip_2_result.chip_id) {
             Ok(facade_id) => assert_eq!(facade_id, 1),
             Err(err) => {
-                error!("{err}");
-                unreachable!();
+                unreachable!("{err}");
             }
         }
     }

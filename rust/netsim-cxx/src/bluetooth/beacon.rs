@@ -160,7 +160,7 @@ pub fn new_beacon(beacon_name: String, address: String) {
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {
-            error!("{err}");
+            warn!("{err}");
             return;
         }
     };

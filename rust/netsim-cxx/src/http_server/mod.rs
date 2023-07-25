@@ -30,7 +30,7 @@ use crate::version::VERSION;
 
 use crate::http_server::thread_pool::ThreadPool;
 
-use log::{error, info, warn};
+use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
@@ -51,7 +51,7 @@ pub fn run_http_server() {
         let listener = match TcpListener::bind("127.0.0.1:7681") {
             Ok(listener) => listener,
             Err(e) => {
-                error!("bind error in netsimd frontend http server. {}", e);
+                warn!("bind error in netsimd frontend http server. {}", e);
                 return;
             }
         };

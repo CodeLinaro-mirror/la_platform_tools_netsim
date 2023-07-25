@@ -18,7 +18,7 @@ use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::ffi::handle_request_cxx;
 use crate::transport::h4;
 use frontend_proto::common::ChipKind;
-use log::{error, info};
+use log::{error, info, warn};
 use std::io::{ErrorKind, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::thread;
@@ -89,7 +89,7 @@ fn handle_hci_client(stream: TcpStream) {
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {
-            error!("{err}");
+            warn!("{err}");
             return;
         }
     };
@@ -103,7 +103,7 @@ fn handle_hci_client(stream: TcpStream) {
     let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.facade_id);
 
     if let Err(err) = remove_chip(result.device_id, result.chip_id) {
-        error!("{err}");
+        warn!("{err}");
     };
     // The connection will be closed when the value is dropped.
     unregister_transport(ChipKind::BLUETOOTH as u32, result.facade_id);

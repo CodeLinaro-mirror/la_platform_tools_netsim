@@ -30,7 +30,7 @@
 use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend::ListCaptureResponse;
-use log::error;
+use log::warn;
 use netsim_common::util::time_display::TimeDisplay;
 use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
 use std::fs::File;
@@ -264,7 +264,7 @@ fn handle_packet(
                         capture.records += 1;
                     }
                     Err(err) => {
-                        error!("{err:?}");
+                        warn!("{err:?}");
                     }
                 }
             }
