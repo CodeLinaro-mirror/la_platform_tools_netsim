@@ -63,6 +63,7 @@ use crate::uwb::facade::*;
 use crate::version::*;
 use netsim_common::system::netsimd_temp_dir_string;
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[cxx::bridge(namespace = "netsim")]
 mod ffi {
 
@@ -71,7 +72,7 @@ mod ffi {
         fn run_socket_transport(hci_port: u16);
 
         #[cxx_name = "RunFdTransport"]
-        fn run_fd_transport(startup_json: &String);
+        unsafe fn run_fd_transport(startup_json: &String);
 
         // Config
         #[cxx_name = "GetDev"]
@@ -419,7 +420,8 @@ mod ffi {
 }
 
 // It's required so `RustBluetoothChip` can be sent between threads safely.
-//Ref: How to use opaque types in threads? https://github.com/dtolnay/cxx/issues/1175
+// Ref: How to use opaque types in threads? https://github.com/dtolnay/cxx/issues/1175
+// SAFETY: Nothing in `RustBluetoothChip` depends on being run on a particular thread.
 unsafe impl Send for ffi::RustBluetoothChip {}
 
 type DynRustBluetoothChipCallbacks = Box<dyn RustBluetoothChipCallbacks>;
