@@ -42,7 +42,7 @@ namespace {
 constexpr std::chrono::seconds InactivityCheckInterval(5);
 
 std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
-                                            bool no_cli_ui) {
+                                            bool no_cli_ui, int instance_num) {
   grpc::ServerBuilder builder;
   int selected_port;
   builder.AddListeningPort("0.0.0.0:" + std::to_string(netsim_grpc_port),
@@ -63,7 +63,7 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
          std::to_string(selected_port).c_str());
 
   // Writes grpc port to ini file.
-  auto filepath = osutils::GetNetsimIniFilepath();
+  auto filepath = osutils::GetNetsimIniFilepath(instance_num);
   IniFile iniFile(filepath);
   iniFile.Read();
   iniFile.Set("grpc.port", std::to_string(selected_port));
@@ -74,9 +74,9 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
 }  // namespace
 
 void Run(ServerParams params) {
-  auto rust_service =
-      netsim::CreateService(params.fd_startup_str, params.no_cli_ui,
-                            params.no_web_ui, params.hci_port, params.dev);
+  auto rust_service = netsim::CreateService(
+      params.fd_startup_str, params.no_cli_ui, params.no_web_ui,
+      params.hci_port, params.instance_num, params.dev);
   rust_service->SetUp();
 
 #ifndef NETSIM_ANDROID_EMULATOR
@@ -89,7 +89,8 @@ void Run(ServerParams params) {
   auto netsim_grpc_port = std::stoi(osutils::GetEnv("NETSIM_GRPC_PORT", "0"));
 
   // Run backend and optionally frontend grpc servers (based on no_cli_ui).
-  auto grpc_server = RunGrpcServer(netsim_grpc_port, params.no_cli_ui);
+  auto grpc_server =
+      RunGrpcServer(netsim_grpc_port, params.no_cli_ui, params.instance_num);
   if (grpc_server == nullptr) {
     BtsLog("Failed to start Grpc server");
     return;

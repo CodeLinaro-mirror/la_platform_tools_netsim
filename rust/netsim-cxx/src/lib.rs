@@ -102,6 +102,7 @@ mod ffi {
             no_cli_ui: bool,
             no_web_ui: bool,
             hci_port: u16,
+            instance_num: u16,
             dev: bool,
         ) -> Box<Service>;
         #[cxx_name = "SetUp"]
@@ -373,7 +374,7 @@ mod ffi {
 
         #[rust_name = bluetooth_start]
         #[namespace = "netsim::hci::facade"]
-        pub fn Start();
+        pub fn Start(instance_num: u16);
 
         #[rust_name = bluetooth_stop]
         #[namespace = "netsim::hci::facade"]

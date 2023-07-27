@@ -30,6 +30,7 @@ pub struct ServiceParams {
     no_cli_ui: bool,
     no_web_ui: bool,
     hci_port: u16,
+    instance_num: u16,
     dev: bool,
 }
 
@@ -56,7 +57,7 @@ impl Service {
         let events_rx = resource::clone_events().lock().unwrap().subscribe();
         captures::capture::spawn_capture_event_subscriber(events_rx);
 
-        bluetooth_facade::bluetooth_start();
+        bluetooth_facade::bluetooth_start(self.service_params.instance_num);
         wifi_facade::wifi_start();
     }
 
@@ -72,7 +73,7 @@ impl Service {
 
         // forge and no_web_ui disables the web server
         if !forge_job && !self.service_params.no_web_ui {
-            run_http_server();
+            run_http_server(self.service_params.instance_num);
         }
 
         if get_dev() {
@@ -95,8 +96,10 @@ pub fn create_service(
     no_cli_ui: bool,
     no_web_ui: bool,
     hci_port: u16,
+    instance_num: u16,
     dev: bool,
 ) -> Box<Service> {
-    let service_params = ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, dev };
+    let service_params =
+        ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev };
     Box::new(Service::new(service_params))
 }

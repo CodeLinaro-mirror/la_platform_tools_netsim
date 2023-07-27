@@ -21,6 +21,7 @@
 mod facade;
 #[cfg(not(test))]
 pub(crate) use self::facade::*;
+pub(crate) mod adv_data;
 #[cfg(not(test))]
 pub(crate) mod beacon;
 pub(crate) mod chip;

@@ -62,7 +62,7 @@ pub fn bluetooth_add(device_id: u32) -> u32 {
 }
 
 /// Starts the Bluetooth service.
-pub fn bluetooth_start() {
+pub fn bluetooth_start(_instance_num: u16) {
     info!("bluetooth service started");
 }
 

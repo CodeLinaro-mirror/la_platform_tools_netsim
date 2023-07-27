@@ -45,7 +45,7 @@ rust::Box<AddRustDeviceResult> AddRustDevice(
     rust::Box<DynRustBluetoothChipCallbacks> callbacks, const std::string &type,
     const std::string &address);
 
-void Start();
+void Start(uint16_t instance_num);
 void Stop();
 
 // Cxx functions for rust ffi.
