@@ -47,10 +47,6 @@ cc_defaults {
         "libgrpc++",
         "libprotobuf-cpp-full",
     ],
-    include_dirs: [
-        "packages/modules/Bluetooth/system",
-        "packages/modules/Bluetooth/system/gd",
-    ],
     generated_headers: [
         "FrontendStub_h",
     ],

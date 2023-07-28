@@ -43,9 +43,16 @@ if(TARGET Rust::Rustc)
          protobuf::libprotobuf util-lib)
 
   android_add_executable(
-    TARGET netsimd LICENSE Apache-2.0 INSTALL . SRC src/netsimd.cc
-    DEPS grpc++ libbt-rootcanal netsim-cxx netsimd-lib netsimd-proto-lib
-         packet-streamer-proto-lib netsim-cli-proto-lib)
+    TARGET netsimd
+    LICENSE Apache-2.0 INSTALL .
+    SRC src/netsimd.cc
+    DEPS grpc++
+         libbt-rootcanal
+         netsim-cli-proto-lib
+         netsim-cxx
+         netsimd-lib
+         netsimd-proto-lib
+         packet-streamer-proto-lib)
   if(NOT DARWIN_AARCH64 AND NOT DARWIN_X86_64)
     # Prevent duplicate symbol for cxx Rust crate.
     target_link_libraries(netsimd PRIVATE -Wl,--allow-multiple-definition)

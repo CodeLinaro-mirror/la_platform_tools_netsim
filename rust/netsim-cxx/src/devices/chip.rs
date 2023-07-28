@@ -27,7 +27,7 @@ use protobuf::EnumOrUnknown;
 
 use std::sync::RwLock;
 
-pub type ChipIdentifier = i32;
+pub type ChipIdentifier = u32;
 pub type FacadeIdentifier = u32;
 
 const INITIAL_CHIP_ID: ChipIdentifier = 1000;

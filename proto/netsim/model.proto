@@ -51,7 +51,7 @@ enum State {
 
 message Chip {
   netsim.common.ChipKind kind = 1;
-  int32 id = 2;
+  uint32 id = 2;
   string name = 3;  // optional like "rear-right"
 
   string manufacturer = 4;  // optional like Quorvo
@@ -82,7 +82,8 @@ message Chip {
     message AdvertiseData {
       // Whether the device name should be included in advertise packet.
       bool include_device_name = 2;
-      // Whether the transmission power level should be included in the advertise packet.
+      // Whether the transmission power level should be included in the
+      // advertise packet.
       bool include_tx_power_level = 3;
       // Add manufacturer specific data.
       bytes manufacturer_data = 4;
@@ -118,7 +119,7 @@ message ChipCreate {
 }
 
 message Device {
-  int32 id = 1;
+  uint32 id = 1;
   string name = 2;  // settable at creation
   State visible = 3;
   Position position = 4;
@@ -139,7 +140,7 @@ message Scene {
 }
 
 message Capture {
-  int32 id = 1;  // same as chip_id
+  uint32 id = 1;  // same as chip_id
   netsim.common.ChipKind chip_kind = 2;
   // device AVD name
   string device_name = 3;

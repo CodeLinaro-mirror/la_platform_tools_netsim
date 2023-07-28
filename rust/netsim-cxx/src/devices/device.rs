@@ -27,7 +27,7 @@ use frontend_proto::model::Orientation as ProtoOrientation;
 use frontend_proto::model::Position as ProtoPosition;
 use std::collections::BTreeMap;
 
-pub type DeviceIdentifier = i32;
+pub type DeviceIdentifier = u32;
 
 pub struct Device {
     pub id: DeviceIdentifier,

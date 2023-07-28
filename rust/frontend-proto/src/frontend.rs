@@ -819,7 +819,7 @@ impl ::protobuf::reflect::ProtobufValue for NetCatStream {
 pub struct PatchCaptureRequest {
     // message fields
     // @@protoc_insertion_point(field:netsim.frontend.PatchCaptureRequest.id)
-    pub id: i32,
+    pub id: u32,
     // @@protoc_insertion_point(field:netsim.frontend.PatchCaptureRequest.patch)
     pub patch: ::protobuf::MessageField<patch_capture_request::PatchCapture>,
     // special fields
@@ -870,7 +870,7 @@ impl ::protobuf::Message for PatchCaptureRequest {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 8 => {
-                    self.id = is.read_int32()?;
+                    self.id = is.read_uint32()?;
                 },
                 18 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.patch)?;
@@ -888,7 +888,7 @@ impl ::protobuf::Message for PatchCaptureRequest {
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
         if self.id != 0 {
-            my_size += ::protobuf::rt::int32_size(1, self.id);
+            my_size += ::protobuf::rt::uint32_size(1, self.id);
         }
         if let Some(v) = self.patch.as_ref() {
             let len = v.compute_size();
@@ -901,7 +901,7 @@ impl ::protobuf::Message for PatchCaptureRequest {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         if self.id != 0 {
-            os.write_int32(1, self.id)?;
+            os.write_uint32(1, self.id)?;
         }
         if let Some(v) = self.patch.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
@@ -1208,7 +1208,7 @@ impl ::protobuf::reflect::ProtobufValue for ListCaptureResponse {
 pub struct GetCaptureRequest {
     // message fields
     // @@protoc_insertion_point(field:netsim.frontend.GetCaptureRequest.id)
-    pub id: i32,
+    pub id: u32,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.frontend.GetCaptureRequest.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -1252,7 +1252,7 @@ impl ::protobuf::Message for GetCaptureRequest {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 8 => {
-                    self.id = is.read_int32()?;
+                    self.id = is.read_uint32()?;
                 },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
@@ -1267,7 +1267,7 @@ impl ::protobuf::Message for GetCaptureRequest {
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
         if self.id != 0 {
-            my_size += ::protobuf::rt::int32_size(1, self.id);
+            my_size += ::protobuf::rt::uint32_size(1, self.id);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
@@ -1276,7 +1276,7 @@ impl ::protobuf::Message for GetCaptureRequest {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         if self.id != 0 {
-            os.write_int32(1, self.id)?;
+            os.write_uint32(1, self.id)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -1618,12 +1618,12 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     eR\x07devices\"D\n\x12ListDeviceResponse\x12.\n\x07devices\x18\x01\x20\
     \x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"&\n\x0cNetCatStream\x12\
     \x16\n\x06result\x18\x01\x20\x03(\tR\x06result\"\xa9\x01\n\x13PatchCaptu\
-    reRequest\x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x12G\n\x05patch\
-    \x18\x02\x20\x01(\x0b21.netsim.frontend.PatchCaptureRequest.PatchCapture\
-    R\x05patch\x1a9\n\x0cPatchCapture\x12)\n\x05state\x18\x01\x20\x01(\x0e2\
+    reRequest\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x12G\n\x05patch\x18\
+    \x02\x20\x01(\x0b21.netsim.frontend.PatchCaptureRequest.PatchCaptureR\
+    \x05patch\x1a9\n\x0cPatchCapture\x12)\n\x05state\x18\x01\x20\x01(\x0e2\
     \x13.netsim.model.StateR\x05state\"H\n\x13ListCaptureResponse\x121\n\x08\
     captures\x18\x01\x20\x03(\x0b2\x15.netsim.model.CaptureR\x08captures\"#\
-    \n\x11GetCaptureRequest\x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\";\n\
+    \n\x11GetCaptureRequest\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\";\n\
     \x12GetCaptureResponse\x12%\n\x0ecapture_stream\x18\x01\x20\x01(\x0cR\rc\
     aptureStream\"`\n\rErrorResponse\x12\x12\n\x04code\x18\x01\x20\x01(\x05R\
     \x04code\x12#\n\rerror_message\x18\x02\x20\x01(\tR\x0cerrorMessage\x12\

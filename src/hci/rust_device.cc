@@ -27,7 +27,7 @@ void RustDevice::Tick() { ::netsim::hci::facade::Tick(*callbacks_); }
 void RustDevice::ReceiveLinkLayerPacket(
     ::model::packets::LinkLayerPacketView packet, rootcanal::Phy::Type type,
     int8_t rssi) {
-  auto packet_vec = std::vector<uint8_t>(packet.begin(), packet.end());
+  auto packet_vec = packet.bytes().bytes();
   auto slice = rust::Slice<const uint8_t>(packet_vec.data(), packet_vec.size());
 
   ::netsim::hci::facade::ReceiveLinkLayerPacket(

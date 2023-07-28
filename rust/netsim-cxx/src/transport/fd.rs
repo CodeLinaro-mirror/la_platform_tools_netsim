@@ -136,7 +136,7 @@ unsafe fn fd_reader(
                 };
             }
 
-            if let Err(err) = remove_chip(device_id as i32, chip_id as i32) {
+            if let Err(err) = remove_chip(device_id, chip_id) {
                 warn!("{err}");
             }
             // File is automatically closed when it goes out of scope.
@@ -209,8 +209,8 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
                             chip.fd_out as i32,
                             chip.kind,
                             result.facade_id,
-                            result.device_id as u32,
-                            result.chip_id as u32,
+                            result.device_id,
+                            result.chip_id,
                         )
                     });
                 }

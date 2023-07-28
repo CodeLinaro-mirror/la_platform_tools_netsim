@@ -118,14 +118,14 @@ pub fn add_chip(
         // id_tuple = (DeviceIdentifier, ChipIdentifier)
         Ok((device_id, chip_id)) => {
             let facade_id = match chip_kind {
-                ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(device_id as u32),
+                ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(device_id),
                 ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::beacon::bluetooth_beacon_add(
-                    device_id as u32,
-                    chip_id as u32,
+                    device_id,
+                    chip_id,
                     "beacon".to_string(),
                     chip_name.to_string(),
                 ),
-                ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id as u32),
+                ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id),
                 _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
             };
             // Add the facade_id into the resources
@@ -217,8 +217,8 @@ pub fn add_chip_cxx(
         chip_product_name,
     ) {
         Ok(result) => Box::new(AddChipResultCxx {
-            device_id: result.device_id as u32,
-            chip_id: result.chip_id as u32,
+            device_id: result.device_id,
+            chip_id: result.chip_id,
             facade_id: result.facade_id,
             is_error: false,
         }),
@@ -311,7 +311,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
 /// A RemoveChip function for Rust Device API.
 /// The backend gRPC code will be invoking this method.
 pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
-    let _ = remove_chip(device_id as i32, chip_id as i32);
+    let _ = remove_chip(device_id, chip_id);
 }
 
 // lock the devices, find the id and call the patch function
@@ -380,7 +380,7 @@ fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32,
 /// A GetDistance function for Rust Device API.
 /// The backend gRPC code will be invoking this method.
 pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
-    match get_distance(a as i32, b as i32) {
+    match get_distance(a, b) {
         Ok(distance) => distance,
         Err(err) => {
             warn!("get_distance Error: {err}");
@@ -489,10 +489,10 @@ pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritabl
         // Routes with ID specified
         match request.method.as_str() {
             "PATCH" => {
-                let id = match param.parse::<i32>() {
+                let id = match param.parse::<u32>() {
                     Ok(num) => num,
                     Err(_) => {
-                        writer.put_error(404, "Incorrect Id type for devices, ID should be i32.");
+                        writer.put_error(404, "Incorrect Id type for devices, ID should be u32.");
                         return;
                     }
                 };
@@ -532,7 +532,7 @@ pub fn handle_device_cxx(
 }
 
 /// Get Facade ID from given chip_id
-pub fn get_facade_id(chip_id: i32) -> Result<u32, String> {
+pub fn get_facade_id(chip_id: u32) -> Result<u32, String> {
     let devices_arc = clone_devices();
     let devices = devices_arc.read().unwrap();
     for device in devices.entries.values() {

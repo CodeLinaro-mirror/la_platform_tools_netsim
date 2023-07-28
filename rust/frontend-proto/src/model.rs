@@ -348,7 +348,7 @@ pub struct Chip {
     // @@protoc_insertion_point(field:netsim.model.Chip.kind)
     pub kind: ::protobuf::EnumOrUnknown<super::common::ChipKind>,
     // @@protoc_insertion_point(field:netsim.model.Chip.id)
-    pub id: i32,
+    pub id: u32,
     // @@protoc_insertion_point(field:netsim.model.Chip.name)
     pub name: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.model.Chip.manufacturer)
@@ -648,7 +648,7 @@ impl ::protobuf::Message for Chip {
                     self.kind = is.read_enum_or_unknown()?;
                 },
                 16 => {
-                    self.id = is.read_int32()?;
+                    self.id = is.read_uint32()?;
                 },
                 26 => {
                     self.name = is.read_string()?;
@@ -687,7 +687,7 @@ impl ::protobuf::Message for Chip {
             my_size += ::protobuf::rt::int32_size(1, self.kind.value());
         }
         if self.id != 0 {
-            my_size += ::protobuf::rt::int32_size(2, self.id);
+            my_size += ::protobuf::rt::uint32_size(2, self.id);
         }
         if !self.name.is_empty() {
             my_size += ::protobuf::rt::string_size(3, &self.name);
@@ -728,7 +728,7 @@ impl ::protobuf::Message for Chip {
             os.write_enum(1, ::protobuf::EnumOrUnknown::value(&self.kind))?;
         }
         if self.id != 0 {
-            os.write_int32(2, self.id)?;
+            os.write_uint32(2, self.id)?;
         }
         if !self.name.is_empty() {
             os.write_string(3, &self.name)?;
@@ -2075,7 +2075,7 @@ pub mod chip_create {
 pub struct Device {
     // message fields
     // @@protoc_insertion_point(field:netsim.model.Device.id)
-    pub id: i32,
+    pub id: u32,
     // @@protoc_insertion_point(field:netsim.model.Device.name)
     pub name: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.model.Device.visible)
@@ -2154,7 +2154,7 @@ impl ::protobuf::Message for Device {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 8 => {
-                    self.id = is.read_int32()?;
+                    self.id = is.read_uint32()?;
                 },
                 18 => {
                     self.name = is.read_string()?;
@@ -2184,7 +2184,7 @@ impl ::protobuf::Message for Device {
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
         if self.id != 0 {
-            my_size += ::protobuf::rt::int32_size(1, self.id);
+            my_size += ::protobuf::rt::uint32_size(1, self.id);
         }
         if !self.name.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.name);
@@ -2211,7 +2211,7 @@ impl ::protobuf::Message for Device {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         if self.id != 0 {
-            os.write_int32(1, self.id)?;
+            os.write_uint32(1, self.id)?;
         }
         if !self.name.is_empty() {
             os.write_string(2, &self.name)?;
@@ -2592,7 +2592,7 @@ impl ::protobuf::reflect::ProtobufValue for Scene {
 pub struct Capture {
     // message fields
     // @@protoc_insertion_point(field:netsim.model.Capture.id)
-    pub id: i32,
+    pub id: u32,
     // @@protoc_insertion_point(field:netsim.model.Capture.chip_kind)
     pub chip_kind: ::protobuf::EnumOrUnknown<super::common::ChipKind>,
     // @@protoc_insertion_point(field:netsim.model.Capture.device_name)
@@ -2685,7 +2685,7 @@ impl ::protobuf::Message for Capture {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 8 => {
-                    self.id = is.read_int32()?;
+                    self.id = is.read_uint32()?;
                 },
                 16 => {
                     self.chip_kind = is.read_enum_or_unknown()?;
@@ -2721,7 +2721,7 @@ impl ::protobuf::Message for Capture {
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
         if self.id != 0 {
-            my_size += ::protobuf::rt::int32_size(1, self.id);
+            my_size += ::protobuf::rt::uint32_size(1, self.id);
         }
         if self.chip_kind != ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED) {
             my_size += ::protobuf::rt::int32_size(2, self.chip_kind.value());
@@ -2752,7 +2752,7 @@ impl ::protobuf::Message for Capture {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         if self.id != 0 {
-            os.write_int32(1, self.id)?;
+            os.write_uint32(1, self.id)?;
         }
         if self.chip_kind != ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED) {
             os.write_enum(2, ::protobuf::EnumOrUnknown::value(&self.chip_kind))?;
@@ -2972,14 +2972,14 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x03yaw\x18\x01\x20\x01(\x02R\x03yaw\x12\x14\n\x05pitch\x18\x02\x20\x01(\
     \x02R\x05pitch\x12\x12\n\x04roll\x18\x03\x20\x01(\x02R\x04roll\"\xe9\x08\
     \n\x04Chip\x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.common.ChipKi\
-    ndR\x04kind\x12\x0e\n\x02id\x18\x02\x20\x01(\x05R\x02id\x12\x12\n\x04nam\
-    e\x18\x03\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\x18\x04\x20\x01(\t\
-    R\x0cmanufacturer\x12!\n\x0cproduct_name\x18\x05\x20\x01(\tR\x0bproductN\
-    ame\x12.\n\x02bt\x18\x06\x20\x01(\x0b2\x1c.netsim.model.Chip.BluetoothH\
-    \0R\x02bt\x12C\n\nble_beacon\x18\t\x20\x01(\x0b2\".netsim.model.Chip.Blu\
-    etoothBeaconH\0R\tbleBeacon\x12,\n\x03uwb\x18\x07\x20\x01(\x0b2\x18.nets\
-    im.model.Chip.RadioH\0R\x03uwb\x12.\n\x04wifi\x18\x08\x20\x01(\x0b2\x18.\
-    netsim.model.Chip.RadioH\0R\x04wifi\x1a~\n\x05Radio\x12)\n\x05state\x18\
+    ndR\x04kind\x12\x0e\n\x02id\x18\x02\x20\x01(\rR\x02id\x12\x12\n\x04name\
+    \x18\x03\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\
+    \x0cmanufacturer\x12!\n\x0cproduct_name\x18\x05\x20\x01(\tR\x0bproductNa\
+    me\x12.\n\x02bt\x18\x06\x20\x01(\x0b2\x1c.netsim.model.Chip.BluetoothH\0\
+    R\x02bt\x12C\n\nble_beacon\x18\t\x20\x01(\x0b2\".netsim.model.Chip.Bluet\
+    oothBeaconH\0R\tbleBeacon\x12,\n\x03uwb\x18\x07\x20\x01(\x0b2\x18.netsim\
+    .model.Chip.RadioH\0R\x03uwb\x12.\n\x04wifi\x18\x08\x20\x01(\x0b2\x18.ne\
+    tsim.model.Chip.RadioH\0R\x04wifi\x1a~\n\x05Radio\x12)\n\x05state\x18\
     \x01\x20\x01(\x0e2\x13.netsim.model.StateR\x05state\x12\x14\n\x05range\
     \x18\x02\x20\x01(\x02R\x05range\x12\x19\n\x08tx_count\x18\x03\x20\x01(\
     \x05R\x07txCount\x12\x19\n\x08rx_count\x18\x04\x20\x01(\x05R\x07rxCount\
@@ -3005,30 +3005,29 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x18\x03\x20\x01(\x0b24.netsim.model.Chip.BluetoothBeacon.AdvertiseSetti\
     ngsR\x08settings\x12K\n\x08adv_data\x18\x04\x20\x01(\x0b20.netsim.model.\
     Chip.BluetoothBeacon.AdvertiseDataR\x07advDataB\x06\n\x04chip\"\xf6\x01\
-    \n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x12\x12\n\x04na\
-    me\x18\x02\x20\x01(\tR\x04name\x12-\n\x07visible\x18\x03\x20\x01(\x0e2\
-    \x13.netsim.model.StateR\x07visible\x122\n\x08position\x18\x04\x20\x01(\
-    \x0b2\x16.netsim.model.PositionR\x08position\x12;\n\x0borientation\x18\
-    \x05\x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borientation\x12(\n\
-    \x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chips\"\xc3\
-    \x01\n\x0cDeviceCreate\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04name\x12\
-    2\n\x08position\x18\x02\x20\x01(\x0b2\x16.netsim.model.PositionR\x08posi\
-    tion\x12;\n\x0borientation\x18\x03\x20\x01(\x0b2\x19.netsim.model.Orient\
-    ationR\x0borientation\x12.\n\x05chips\x18\x04\x20\x03(\x0b2\x18.netsim.m\
-    odel.ChipCreateR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\
-    \x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"\x99\x02\n\x07Capture\
-    \x12\x0e\n\x02id\x18\x01\x20\x01(\x05R\x02id\x124\n\tchip_kind\x18\x02\
-    \x20\x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x1f\n\x0bdevi\
-    ce_name\x18\x03\x20\x01(\tR\ndeviceName\x12)\n\x05state\x18\x04\x20\x01(\
-    \x0e2\x13.netsim.model.StateR\x05state\x12\x12\n\x04size\x18\x05\x20\x01\
-    (\x05R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\x07records\x12\
-    8\n\ttimestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttim\
-    estamp\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05valid*e\n\x07PhyKind\
-    \x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\
-    \n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\
-    \x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07\
-    UNKNOWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto\
-    3\
+    \n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x12\x12\n\x04name\
+    \x18\x02\x20\x01(\tR\x04name\x12-\n\x07visible\x18\x03\x20\x01(\x0e2\x13\
+    .netsim.model.StateR\x07visible\x122\n\x08position\x18\x04\x20\x01(\x0b2\
+    \x16.netsim.model.PositionR\x08position\x12;\n\x0borientation\x18\x05\
+    \x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borientation\x12(\n\x05ch\
+    ips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chips\"\xc3\x01\n\
+    \x0cDeviceCreate\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04name\x122\n\
+    \x08position\x18\x02\x20\x01(\x0b2\x16.netsim.model.PositionR\x08positio\
+    n\x12;\n\x0borientation\x18\x03\x20\x01(\x0b2\x19.netsim.model.Orientati\
+    onR\x0borientation\x12.\n\x05chips\x18\x04\x20\x03(\x0b2\x18.netsim.mode\
+    l.ChipCreateR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\x03(\
+    \x0b2\x14.netsim.model.DeviceR\x07devices\"\x99\x02\n\x07Capture\x12\x0e\
+    \n\x02id\x18\x01\x20\x01(\rR\x02id\x124\n\tchip_kind\x18\x02\x20\x01(\
+    \x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x1f\n\x0bdevice_name\
+    \x18\x03\x20\x01(\tR\ndeviceName\x12)\n\x05state\x18\x04\x20\x01(\x0e2\
+    \x13.netsim.model.StateR\x05state\x12\x12\n\x04size\x18\x05\x20\x01(\x05\
+    R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\x07records\x128\n\t\
+    timestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestam\
+    p\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05valid*e\n\x07PhyKind\x12\
+    \x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\
+    \x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03\
+    UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07UNKN\
+    OWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

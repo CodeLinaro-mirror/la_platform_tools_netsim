@@ -172,20 +172,20 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
     } else {
         match request.method.as_str() {
             "GET" => {
-                let id = match param.parse::<i32>() {
+                let id = match param.parse::<u32>() {
                     Ok(num) => num,
                     Err(_) => {
-                        writer.put_error(404, "Incorrect ID type for capture, ID should be i32.");
+                        writer.put_error(404, "Incorrect ID type for capture, ID should be u32.");
                         return;
                     }
                 };
                 handle_capture_get(writer, id);
             }
             "PATCH" => {
-                let id = match param.parse::<i32>() {
+                let id = match param.parse::<u32>() {
                     Ok(num) => num,
                     Err(_) => {
-                        writer.put_error(404, "Incorrect ID type for capture, ID should be i32.");
+                        writer.put_error(404, "Incorrect ID type for capture, ID should be u32.");
                         return;
                     }
                 };

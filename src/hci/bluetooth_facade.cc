@@ -38,6 +38,10 @@
 #include "net/posix/posix_async_socket_server.h"
 #endif
 
+namespace rootcanal::log {
+void SetLogColorEnable(bool);
+}
+
 using netsim::model::State;
 
 namespace netsim::hci::facade {
@@ -182,6 +186,9 @@ void SetUpTestChannel(uint16_t instance_num) {
 void Start(uint16_t instance_num) {
   if (mStarted) return;
 
+  // output is to a file, so no color wanted
+  rootcanal::log::SetLogColorEnable(false);
+
   // When emulators restore from a snapshot the PacketStreamer connection to
   // netsim is recreated with a new (uninitialized) Rootcanal device. However
   // the Android Bluetooth Stack does not re-initialize the controller. Our
@@ -325,8 +332,8 @@ void Remove(uint32_t id) {
 
 uint32_t Add(uint32_t simulation_device) {
   auto transport = std::make_shared<HciPacketTransport>(mAsyncManager);
-  auto hci_device =
-      std::make_shared<rootcanal::HciDevice>(transport, *controller_properties_);
+  auto hci_device = std::make_shared<rootcanal::HciDevice>(
+      transport, *controller_properties_);
 
   // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
   // invoked atomically, preventing data races.

@@ -110,7 +110,7 @@ message NetCatStream {
 }
 
 message PatchCaptureRequest {
-  int32 id = 1;
+  uint32 id = 1;
 
   // Body of PatchCapture that will be channeled into
   // body for HandleCaptureCxx
@@ -126,7 +126,7 @@ message ListCaptureResponse {
 }
 
 message GetCaptureRequest {
-  int32 id = 1;
+  uint32 id = 1;
 }
 
 message GetCaptureResponse {
