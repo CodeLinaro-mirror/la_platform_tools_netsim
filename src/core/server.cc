@@ -94,10 +94,6 @@ void Run(ServerParams params) {
 
   rust_service->Run();
 
-  // Run the socket server.
-  BtsLog("RunSocketTransport:%d", params.hci_port);
-  RunSocketTransport(params.hci_port);
-
   while (true) {
     std::this_thread::sleep_for(InactivityCheckInterval);
     if (netsim::device::IsShutdownTimeCxx()) {

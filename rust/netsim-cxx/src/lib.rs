@@ -46,7 +46,6 @@ use http_server::server_response::ServerResponseWritable;
 
 use crate::transport::dispatcher::handle_response;
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
-use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
     handle_capture_cxx, handle_packet_request, handle_packet_response,
@@ -67,9 +66,6 @@ use netsim_common::system::netsimd_temp_dir_string;
 mod ffi {
 
     extern "Rust" {
-        #[cxx_name = "RunSocketTransport"]
-        fn run_socket_transport(hci_port: u16);
-
         // Config
         #[cxx_name = "GetDev"]
         #[namespace = "netsim::config"]

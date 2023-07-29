@@ -18,6 +18,7 @@ use crate::captures::handlers::clear_pcap_files;
 use crate::config::get_dev;
 use crate::http_server::run_http_server;
 use crate::resource;
+use crate::transport::socket::run_socket_transport;
 use crate::wifi as wifi_facade;
 use log::info;
 use log::warn;
@@ -83,6 +84,9 @@ impl Service {
         if !forge_job && !self.service_params.no_web_ui {
             run_http_server(self.service_params.instance_num);
         }
+
+        // Run the socket server.
+        run_socket_transport(self.service_params.hci_port);
 
         if get_dev() {
             new_test_beacon(0);
