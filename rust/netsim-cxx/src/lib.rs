@@ -45,7 +45,6 @@ use http_server::http_request::StrHeaders;
 use http_server::server_response::ServerResponseWritable;
 
 use crate::transport::dispatcher::handle_response;
-use crate::transport::fd::run_fd_transport;
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 use crate::transport::socket::run_socket_transport;
 
@@ -70,9 +69,6 @@ mod ffi {
     extern "Rust" {
         #[cxx_name = "RunSocketTransport"]
         fn run_socket_transport(hci_port: u16);
-
-        #[cxx_name = "RunFdTransport"]
-        unsafe fn run_fd_transport(startup_json: &String);
 
         // Config
         #[cxx_name = "GetDev"]

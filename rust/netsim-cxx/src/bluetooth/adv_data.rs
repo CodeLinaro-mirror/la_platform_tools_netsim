@@ -14,6 +14,10 @@
 
 //! Builder for Advertising Data
 
+use frontend_proto::model::{
+    chip::bluetooth_beacon::AdvertiseData as AdvertiseDataProto,
+    chip_create::BluetoothBeaconCreate as BluetoothBeaconCreateProto,
+};
 use std::convert::TryInto;
 
 // Core Specification (v5.3 Vol 6 Part B §2.3.1.3 and §2.3.1.4)
@@ -36,6 +40,24 @@ impl Builder {
     /// Returns a new advertisement data builder with no fields.
     pub fn new() -> Self {
         Builder::default()
+    }
+
+    pub fn from_proto(device_name: String, tx_power_level: i8, proto: &AdvertiseDataProto) -> Self {
+        let mut builder = Self::new();
+
+        if proto.include_device_name {
+            builder.device_name(device_name);
+        }
+
+        if proto.include_tx_power_level {
+            builder.tx_power(tx_power_level);
+        }
+
+        if !proto.manufacturer_data.is_empty() {
+            builder.manufacturer_data(proto.manufacturer_data.clone());
+        }
+
+        builder
     }
 
     /// Build the advertisement data.
@@ -123,8 +145,56 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use frontend_proto::model::chip::bluetooth_beacon::AdvertiseSettings as AdvertiseSettingsProto;
+    use protobuf::MessageField;
 
     const HEADER_LEN: usize = 2;
+
+    #[test]
+    fn test_from_proto_succeeds() {
+        let device_name = String::from("test-device-name");
+        let tx_power: i8 = 1;
+        let exp_name_len = HEADER_LEN + device_name.len();
+        let exp_tx_power_len = HEADER_LEN + 1;
+
+        let data = Builder::from_proto(
+            device_name.clone(),
+            tx_power,
+            &AdvertiseDataProto {
+                include_device_name: true,
+                include_tx_power_level: true,
+                ..Default::default()
+            },
+        )
+        .build();
+
+        assert!(data.is_ok());
+        let data = data.unwrap();
+
+        assert_eq!(exp_name_len + exp_tx_power_len, data.len());
+        assert_eq!(
+            [
+                vec![(exp_name_len - 1) as u8, AD_TYPE_COMPLETE_NAME],
+                device_name.into_bytes(),
+                vec![(exp_tx_power_len - 1) as u8, AD_TYPE_TX_POWER, tx_power as u8]
+            ]
+            .concat(),
+            data
+        );
+    }
+
+    #[test]
+    fn test_from_proto_fails() {
+        let device_name = "a".repeat(MAX_ADV_NONCONN_DATA_LEN - HEADER_LEN + 1);
+        let data = Builder::from_proto(
+            device_name,
+            0,
+            &AdvertiseDataProto { include_device_name: true, ..Default::default() },
+        )
+        .build();
+
+        assert!(data.is_err());
+    }
 
     #[test]
     fn test_set_device_name_succeeds() {

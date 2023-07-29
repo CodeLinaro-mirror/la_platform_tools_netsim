@@ -16,17 +16,15 @@
 // [cfg(not(test))] avoids getting compiled during local Rust unit tests
 
 #![allow(unused)]
-
+mod beacon;
 #[cfg(not(test))]
 mod facade;
+#[cfg(test)]
+mod mocked;
+pub(crate) use self::beacon::*;
 #[cfg(not(test))]
 pub(crate) use self::facade::*;
-pub(crate) mod adv_data;
-#[cfg(not(test))]
-pub(crate) mod beacon;
-pub(crate) mod chip;
-
-#[cfg(test)]
-pub(crate) mod mocked;
 #[cfg(test)]
 pub(crate) use self::mocked::*;
+pub(crate) mod adv_data;
+pub(crate) mod chip;

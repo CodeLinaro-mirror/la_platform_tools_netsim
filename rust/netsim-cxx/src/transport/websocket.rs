@@ -164,11 +164,13 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
         }
     }
 
-    // Remove Chip
-    info!("remove chip: device {}, chip {}", result.device_id, result.chip_id);
+    // unregister before remove_chip because facade may re-use facade_id
+    // on an intertwining create_chip and the unregister here might remove
+    // the recently added chip creating a disconnected transport.
+    unregister_transport(ChipKind::BLUETOOTH as u32, result.facade_id);
+
     if let Err(err) = remove_chip(result.device_id, result.chip_id) {
         warn!("{err}");
     };
-    // The connection will be closed when the value is dropped.
-    unregister_transport(ChipKind::BLUETOOTH as u32, result.facade_id);
+    info!("Removed chip: device_id={}, chip_id={}", result.device_id, result.chip_id);
 }

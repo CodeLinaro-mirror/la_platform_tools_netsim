@@ -79,10 +79,6 @@ void Run(ServerParams params) {
       params.hci_port, params.instance_num, params.dev);
   rust_service->SetUp();
 
-#ifndef NETSIM_ANDROID_EMULATOR
-  netsim::RunFdTransport(params.fd_startup_str);
-#endif
-
   // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge. If set:
   // 1. Use the fixed port for grpc server.
   // 2. Don't start http server.

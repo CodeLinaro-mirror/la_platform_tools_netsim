@@ -136,11 +136,14 @@ unsafe fn fd_reader(
                 };
             }
 
+            // unregister before remove_chip because facade may re-use facade_id
+            // on an intertwining create_chip and the unregister here might remove
+            // the recently added chip creating a disconnected transport.
+            unregister_transport(kind as u32, facade_id);
+
             if let Err(err) = remove_chip(device_id, chip_id) {
                 warn!("{err}");
             }
-            // File is automatically closed when it goes out of scope.
-            unregister_transport(kind as u32, facade_id);
         })
         .unwrap()
 }
