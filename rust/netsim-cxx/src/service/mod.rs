@@ -44,7 +44,11 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(service_params: ServiceParams) -> Service {
+    /// # Safety
+    ///
+    /// The file descriptors in `service_params.fd_startup_str` must be valid and open, and must
+    /// remain so for as long as the `Service` exists.
+    pub unsafe fn new(service_params: ServiceParams) -> Service {
         Service { service_params }
     }
 
@@ -68,6 +72,9 @@ impl Service {
         // TODO: run grpc server.
 
         if !self.service_params.fd_startup_str.is_empty() {
+            // SAFETY: When the `Service` was constructed by `Service::new` the caller guaranteed
+            // that the file descriptors in `service_params.fd_startup_str` would remain valid and
+            // open.
             unsafe {
                 use crate::transport::fd::run_fd_transport;
                 run_fd_transport(&self.service_params.fd_startup_str);
@@ -96,7 +103,11 @@ impl Service {
 }
 
 // For cxx.
-pub fn create_service(
+/// # Safety
+///
+/// The file descriptors in `fd_startup_str` must be valid and open, and must remain so for as long
+/// as the returned `Service` exists.
+pub unsafe fn create_service(
     fd_startup_str: String,
     no_cli_ui: bool,
     no_web_ui: bool,
@@ -106,7 +117,9 @@ pub fn create_service(
 ) -> Box<Service> {
     let service_params =
         ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev };
-    Box::new(Service::new(service_params))
+    // SAFETY: The caller guarandeed that the file descriptors in `fd_startup_str` would remain
+    // valid and open for as long as the `Service` exists.
+    Box::new(unsafe { Service::new(service_params) })
 }
 
 pub fn new_test_beacon(idx: u32) {

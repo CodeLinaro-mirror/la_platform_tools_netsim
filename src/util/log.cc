@@ -32,7 +32,7 @@ void BtsLogDefault(int priority, const char *file, int lineNumber,
                          std::localtime(&now_t));
   snprintf(prefix + l, sizeof(prefix) - l, ".%03u",
            static_cast<unsigned int>(now_ms.time_since_epoch().count() % 1000));
-  fprintf(stderr, "netsim D %s %s\n", prefix, buffer);
+  fprintf(stderr, "netsimd D %s %s\n", prefix, buffer);
 }
 
 static BtsLogFn logFunction = BtsLogDefault;

@@ -36,6 +36,13 @@ pub struct Builder {
     manufacturer_data: Option<Vec<u8>>,
 }
 
+pub struct AdvertiseData {
+    /// Raw bytes to be sent in the advertise data field of a BLE advertisement packet.
+    pub bytes: Vec<u8>,
+    /// Protobuf representation of the advertise data.
+    pub proto: AdvertiseDataProto,
+}
+
 impl Builder {
     /// Returns a new advertisement data builder with no fields.
     pub fn new() -> Self {
@@ -63,8 +70,9 @@ impl Builder {
     /// Build the advertisement data.
     ///
     /// Returns a vector of bytes holding the serialized advertisement data based on the fields added to the builder, or `Err(String)` if the data would be malformed.
-    pub fn build(&mut self) -> Result<Vec<u8>, String> {
-        let mut data = Vec::new();
+    pub fn build(&mut self) -> Result<AdvertiseData, String> {
+        let mut bytes = Vec::new();
+        let mut proto = AdvertiseDataProto::new();
 
         if let Some(device_name) = &self.device_name {
             let device_name = device_name.as_bytes();
@@ -76,17 +84,19 @@ impl Builder {
                 ));
             }
 
-            data.extend(vec![
+            bytes.extend(vec![
                 (1 + device_name.len())
                     .try_into()
                     .map_err(|_| "complete name must be less than 255 chars")?,
                 AD_TYPE_COMPLETE_NAME,
             ]);
-            data.extend_from_slice(device_name);
+            bytes.extend_from_slice(device_name);
+            proto.include_device_name = true;
         }
 
         if let Some(tx_power) = self.tx_power {
-            data.extend(vec![2, AD_TYPE_TX_POWER, tx_power as u8]);
+            bytes.extend(vec![2, AD_TYPE_TX_POWER, tx_power as u8]);
+            proto.include_tx_power_level = true;
         }
 
         if let Some(manufacturer_data) = &self.manufacturer_data {
@@ -102,23 +112,24 @@ impl Builder {
                 ));
             }
 
-            data.extend(vec![
+            bytes.extend(vec![
                 (1 + manufacturer_data.len())
                     .try_into()
                     .map_err(|_| "manufacturer data must be less than 255 bytes")?,
                 AD_TYPE_MANUFACTURER_DATA,
             ]);
-            data.extend_from_slice(manufacturer_data);
+            bytes.extend_from_slice(manufacturer_data);
+            proto.manufacturer_data = manufacturer_data.clone();
         }
 
-        if data.len() > MAX_ADV_NONCONN_DATA_LEN {
+        if bytes.len() > MAX_ADV_NONCONN_DATA_LEN {
             return Err(format!(
                 "exceeded maximum advertising packet length of {} bytes",
                 MAX_ADV_NONCONN_DATA_LEN
             ));
         }
 
-        Ok(data)
+        Ok(AdvertiseData { bytes, proto })
     }
 
     /// Add a complete device name field to the advertisement data.
@@ -157,7 +168,7 @@ mod tests {
         let exp_name_len = HEADER_LEN + device_name.len();
         let exp_tx_power_len = HEADER_LEN + 1;
 
-        let data = Builder::from_proto(
+        let ad = Builder::from_proto(
             device_name.clone(),
             tx_power,
             &AdvertiseDataProto {
@@ -168,10 +179,10 @@ mod tests {
         )
         .build();
 
-        assert!(data.is_ok());
-        let data = data.unwrap();
+        assert!(ad.is_ok());
+        let bytes = ad.unwrap().bytes;
 
-        assert_eq!(exp_name_len + exp_tx_power_len, data.len());
+        assert_eq!(exp_name_len + exp_tx_power_len, bytes.len());
         assert_eq!(
             [
                 vec![(exp_name_len - 1) as u8, AD_TYPE_COMPLETE_NAME],
@@ -179,7 +190,7 @@ mod tests {
                 vec![(exp_tx_power_len - 1) as u8, AD_TYPE_TX_POWER, tx_power as u8]
             ]
             .concat(),
-            data
+            bytes
         );
     }
 
@@ -197,18 +208,34 @@ mod tests {
     }
 
     #[test]
+    fn test_from_proto_sets_proto_field() {
+        let device_name = String::from("test-device-name");
+        let tx_power: i8 = 1;
+        let ad_proto = AdvertiseDataProto {
+            include_device_name: true,
+            include_tx_power_level: true,
+            ..Default::default()
+        };
+
+        let ad = Builder::from_proto(device_name.clone(), tx_power, &ad_proto).build();
+
+        assert!(ad.is_ok());
+        assert_eq!(ad_proto, ad.unwrap().proto);
+    }
+
+    #[test]
     fn test_set_device_name_succeeds() {
         let device_name = String::from("test-device-name");
-        let data = Builder::new().device_name(device_name.clone()).build();
+        let ad = Builder::new().device_name(device_name.clone()).build();
         let exp_len = HEADER_LEN + device_name.len();
 
-        assert!(data.is_ok());
-        let data = data.unwrap();
+        assert!(ad.is_ok());
+        let bytes = ad.unwrap().bytes;
 
-        assert_eq!(exp_len, data.len());
+        assert_eq!(exp_len, bytes.len());
         assert_eq!(
             [vec![(exp_len - 1) as u8, AD_TYPE_COMPLETE_NAME], device_name.into_bytes()].concat(),
-            data
+            bytes
         );
     }
 
@@ -223,30 +250,30 @@ mod tests {
     #[test]
     fn test_set_tx_power() {
         let tx_power: i8 = -6;
-        let data = Builder::new().tx_power(tx_power).build();
+        let ad = Builder::new().tx_power(tx_power).build();
         let exp_len = HEADER_LEN + 1;
 
-        assert!(data.is_ok());
-        let data = data.unwrap();
+        assert!(ad.is_ok());
+        let bytes = ad.unwrap().bytes;
 
-        assert_eq!(exp_len, data.len());
-        assert_eq!(vec![(exp_len - 1) as u8, AD_TYPE_TX_POWER, tx_power as u8], data);
+        assert_eq!(exp_len, bytes.len());
+        assert_eq!(vec![(exp_len - 1) as u8, AD_TYPE_TX_POWER, tx_power as u8], bytes);
     }
 
     #[test]
     fn test_set_manufacturer_data_succeeds() {
         let manufacturer_data = String::from("test-manufacturer-data");
-        let data = Builder::new().manufacturer_data(manufacturer_data.clone().into_bytes()).build();
+        let ad = Builder::new().manufacturer_data(manufacturer_data.clone().into_bytes()).build();
         let exp_len = HEADER_LEN + manufacturer_data.len();
 
-        assert!(data.is_ok());
-        let data = data.unwrap();
+        assert!(ad.is_ok());
+        let bytes = ad.unwrap().bytes;
 
-        assert_eq!(exp_len, data.len());
+        assert_eq!(exp_len, bytes.len());
         assert_eq!(
             [vec![(exp_len - 1) as u8, AD_TYPE_MANUFACTURER_DATA], manufacturer_data.into_bytes()]
                 .concat(),
-            data
+            bytes
         );
     }
 
@@ -267,6 +294,6 @@ mod tests {
         let data = Builder::new().device_name(String::from("gDevice-beacon")).tx_power(0).build();
 
         assert!(data.is_ok());
-        assert_eq!(exp_data, data.unwrap().as_slice());
+        assert_eq!(exp_data, data.unwrap().bytes.as_slice());
     }
 }

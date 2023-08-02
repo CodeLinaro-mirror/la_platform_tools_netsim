@@ -16,12 +16,11 @@ use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, io::Cursor, net::TcpStream};
 
 use frontend_proto::common::ChipKind;
+use http::Request;
 use log::{error, info, warn};
 use tungstenite::{protocol::Role, Message, WebSocket};
 
-use crate::http_server::{
-    collect_query, http_request::HttpRequest, server_response::ResponseWritable,
-};
+use crate::http_server::{collect_query, server_response::ResponseWritable};
 use crate::{
     devices::devices_handler::{add_chip, remove_chip},
     ffi::handle_request_cxx,
@@ -42,21 +41,30 @@ fn generate_websocket_accept(websocket_key: String) -> String {
 }
 
 /// Check if all required fields exist in queries and request headers
-fn has_required_websocket_fields(queries: &HashMap<&str, &str>, request: &HttpRequest) -> bool {
+fn has_required_websocket_fields(
+    queries: &HashMap<&str, &str>,
+    request: &Request<Vec<u8>>,
+) -> bool {
     queries.contains_key("name")
         && queries.contains_key("kind")
-        && request.headers.get("Sec-Websocket-Key").is_some()
+        && request.headers().get("Sec-Websocket-Key").is_some()
 }
 
 /// Handler for websocket server connection
-pub fn handle_websocket(request: &HttpRequest, param: &str, writer: ResponseWritable) {
+pub fn handle_websocket(request: &Request<Vec<u8>>, param: &str, writer: ResponseWritable) {
     match collect_query(param) {
         Ok(queries) if has_required_websocket_fields(&queries, request) => {
             let websocket_accept =
-                generate_websocket_accept(request.headers.get("Sec-Websocket-Key").unwrap());
+                match request.headers().get("Sec-Websocket-Key").unwrap().to_str() {
+                    Ok(value) => generate_websocket_accept(value.to_string()),
+                    Err(err) => {
+                        warn!("{err:?}");
+                        return;
+                    }
+                };
             writer.put_ok_switch_protocol(
                 "websocket",
-                &[("Sec-WebSocket-Accept", websocket_accept.as_str())],
+                vec![("Sec-WebSocket-Accept".to_string(), websocket_accept)],
             )
         }
         Ok(_) => writer.put_error(404, "Missing query fields and/or Sec-Websocket-Key"),

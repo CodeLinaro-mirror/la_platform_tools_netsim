@@ -30,6 +30,7 @@
 use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend::ListCaptureResponse;
+use http::{Request, Version};
 use log::warn;
 use netsim_common::util::time_display::TimeDisplay;
 use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
@@ -40,7 +41,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::devices::chip::ChipIdentifier;
 use crate::ffi::CxxServerResponseWriter;
-use crate::http_server::http_request::{HttpHeaders, HttpRequest};
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource::clone_captures;
 use crate::CxxServerResponseWriterWrapper;
@@ -95,7 +95,7 @@ pub fn handle_capture_get(writer: ResponseWritable, id: ChipIdentifier) {
             writer.put_ok_with_length(
                 PCAP_MIME_TYPE,
                 capture.size,
-                &[("Content-Disposition", header_value.as_str())],
+                vec![("Content-Disposition".to_string(), header_value)],
             );
             loop {
                 match file.read(&mut buffer) {
@@ -127,7 +127,7 @@ pub fn handle_capture_list(writer: ResponseWritable) {
 
     // Perform protobuf-json-mapping with the given protobuf
     if let Ok(json_response) = print_to_string_with_options(&response, &JSON_PRINT_OPTION) {
-        writer.put_ok("text/json", &json_response, &[])
+        writer.put_ok("text/json", &json_response, vec![])
     } else {
         writer.put_error(404, "proto to JSON mapping failure")
     }
@@ -153,7 +153,7 @@ pub fn handle_capture_patch(writer: ResponseWritable, id: ChipIdentifier, state:
         if let Ok(json_response) =
             print_to_string_with_options(&capture.get_capture_proto(), &JSON_PRINT_OPTION)
         {
-            writer.put_ok("text/json", &json_response, &[]);
+            writer.put_ok("text/json", &json_response, vec![]);
         } else {
             writer.put_error(404, "proto to JSON mapping failure");
         }
@@ -161,16 +161,16 @@ pub fn handle_capture_patch(writer: ResponseWritable, id: ChipIdentifier, state:
 }
 
 /// The Rust capture handler used directly by Http frontend or handle_capture_cxx for LIST, GET, and PATCH
-pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritable) {
-    if request.uri.as_str() == "/v1/captures" {
-        match request.method.as_str() {
+pub fn handle_capture(request: &Request<Vec<u8>>, param: &str, writer: ResponseWritable) {
+    if request.uri() == "/v1/captures" {
+        match request.method().as_str() {
             "GET" => {
                 handle_capture_list(writer);
             }
             _ => writer.put_error(404, "Not found."),
         }
     } else {
-        match request.method.as_str() {
+        match request.method().as_str() {
             "GET" => {
                 let id = match param.parse::<u32>() {
                     Ok(num) => num,
@@ -189,7 +189,7 @@ pub fn handle_capture(request: &HttpRequest, param: &str, writer: ResponseWritab
                         return;
                     }
                 };
-                let body = &request.body;
+                let body = request.body();
                 let state = String::from_utf8(body.to_vec()).unwrap();
                 match state.as_str() {
                     "1" => handle_capture_patch(writer, id, true),
@@ -209,18 +209,20 @@ pub fn handle_capture_cxx(
     param: String,
     body: String,
 ) {
-    let mut request = HttpRequest {
-        method,
-        uri: String::new(),
-        headers: HttpHeaders::new(),
-        version: "1.1".to_string(),
-        body: body.as_bytes().to_vec(),
-    };
+    let mut builder = Request::builder().method(method.as_str());
     if param.is_empty() {
-        request.uri = "/v1/captures".to_string();
+        builder = builder.uri("/v1/captures");
     } else {
-        request.uri = format!("/v1/captures/{}", param);
+        builder = builder.uri(format!("/v1/captures/{}", param));
     }
+    builder = builder.version(Version::HTTP_11);
+    let request = match builder.body(body.as_bytes().to_vec()) {
+        Ok(request) => request,
+        Err(err) => {
+            warn!("{err:?}");
+            return;
+        }
+    };
     handle_capture(
         &request,
         param.as_str(),

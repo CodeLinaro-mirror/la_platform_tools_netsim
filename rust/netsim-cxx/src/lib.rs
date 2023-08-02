@@ -41,8 +41,8 @@ use bluetooth::chip::{
 };
 use cxx::let_cxx_string;
 use ffi::CxxServerResponseWriter;
-use http_server::http_request::StrHeaders;
 use http_server::server_response::ServerResponseWritable;
+use http_server::server_response::StrHeaders;
 
 use crate::transport::dispatcher::handle_response;
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
@@ -89,7 +89,7 @@ mod ffi {
 
         type Service;
         #[cxx_name = "CreateService"]
-        fn create_service(
+        unsafe fn create_service(
             fd_startup_str: String,
             no_cli_ui: bool,
             no_web_ui: bool,

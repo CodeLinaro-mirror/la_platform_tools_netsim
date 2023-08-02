@@ -28,9 +28,9 @@ use log::error;
 
 use crate::http_server::http_response::HttpResponse;
 
-use super::http_request::StrHeaders;
-
 pub type ResponseWritable<'a> = &'a mut dyn ServerResponseWritable;
+
+pub type StrHeaders = Vec<(String, String)>;
 
 // ServerResponseWritable trait is used by both the Http and gRPC
 // servers.
@@ -62,7 +62,8 @@ impl<'a> ServerResponseWriter<'a> {
         };
         let mut buffer = format!("HTTP/1.1 {} {}\r\n", response.status_code, reason).into_bytes();
         for (name, value) in response.headers.iter() {
-            buffer.extend_from_slice(format!("{name}: {value}\r\n").as_bytes());
+            buffer
+                .extend_from_slice(format!("{}: {}\r\n", name, value.to_str().unwrap()).as_bytes());
         }
         buffer.extend_from_slice(b"\r\n");
         buffer.extend_from_slice(&response.body);
@@ -124,7 +125,7 @@ mod tests {
         writer.put_error(404, "Hello World");
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
+            b"HTTP/1.1 404 Not Found\r\ncontent-type: text/plain\r\ncontent-length: 11\r\n\r\nHello World";
         assert_eq!(written_bytes, expected_bytes);
     }
 
@@ -132,10 +133,10 @@ mod tests {
     fn test_put_ok() {
         let mut stream = Cursor::new(Vec::new());
         let mut writer = ServerResponseWriter::new(&mut stream);
-        writer.put_ok("text/plain", "Hello World", &[]);
+        writer.put_ok("text/plain", "Hello World", vec![]);
         let written_bytes = stream.get_ref();
         let expected_bytes =
-            b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\n\r\nHello World";
+            b"HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: 11\r\n\r\nHello World";
         assert_eq!(written_bytes, expected_bytes);
     }
 }

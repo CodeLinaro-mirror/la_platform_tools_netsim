@@ -82,14 +82,13 @@ impl TimeDisplay {
         if let Some(datetime) = NaiveDateTime::from_timestamp_opt(self.secs, self.nsecs) {
             let current_datetime = DateTime::<Utc>::from_utc(datetime, Utc);
             return format!(
-                "{}-{:02}-{:02} {:02}:{:02}:{:02}.{:?}",
-                current_datetime.year(),
+                "{:02}-{:02} {:02}:{:02}:{:02}.{:.3}",
                 current_datetime.month(),
                 current_datetime.day(),
                 current_datetime.hour(),
                 current_datetime.minute(),
                 current_datetime.second(),
-                current_datetime.nanosecond(),
+                current_datetime.timestamp_subsec_nanos().to_string(),
             );
         }
         "INVALID-TIMESTAMP".to_string()

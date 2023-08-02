@@ -26,5 +26,5 @@ pub(crate) use self::beacon::*;
 pub(crate) use self::facade::*;
 #[cfg(test)]
 pub(crate) use self::mocked::*;
-pub(crate) mod adv_data;
+pub(crate) mod advertise_data;
 pub(crate) mod chip;

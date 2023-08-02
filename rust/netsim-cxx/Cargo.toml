@@ -7,12 +7,12 @@ build = "build.rs"
 [lib]
 crate-type = ["staticlib", "lib"]
 doctest = false
-test = false
 
 [dependencies]
 cxx = { version = ">=1.0.85", features = ["c++17"] }
 data-encoding = "2.4.0"
 frontend-proto = { path = "../frontend-proto" }
+http = "0.2.9"
 netsim-common = { path = "../netsim-common" }
 protobuf = "3.2.0"
 protobuf-json-mapping = "3.2.0"

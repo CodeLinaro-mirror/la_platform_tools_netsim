@@ -20,7 +20,6 @@ mod thread_pool;
 
 use crate::captures::handlers::*;
 use crate::devices::devices_handler::handle_device;
-use crate::http_server::http_request::HttpRequest;
 use crate::http_server::http_router::Router;
 use crate::http_server::server_response::{
     ResponseWritable, ServerResponseWritable, ServerResponseWriter,
@@ -30,6 +29,7 @@ use crate::version::VERSION;
 
 use crate::http_server::thread_pool::ThreadPool;
 
+use http::Request;
 use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
@@ -41,6 +41,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
+
+use self::http_request::parse_http_request;
 
 const PATH_PREFIXES: [&str; 4] = ["js", "js/netsim", "assets", "node_modules/tslib"];
 const DEFAULT_HTTP_PORT: u16 = 7681;
@@ -123,7 +125,7 @@ fn handle_file(method: &str, path: &str, writer: ResponseWritable) {
             None => ui_path(path),
         };
         if let Ok(body) = fs::read(&filepath) {
-            writer.put_ok_with_vec(to_content_type(&filepath), body, &[]);
+            writer.put_ok_with_vec(to_content_type(&filepath), body, vec![]);
             return;
         }
     }
@@ -132,18 +134,18 @@ fn handle_file(method: &str, path: &str, writer: ResponseWritable) {
 }
 
 // TODO handlers accept additional "context" including filepath
-fn handle_index(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
-    handle_file(&request.method, "index.html", writer)
+fn handle_index(request: &Request<Vec<u8>>, _param: &str, writer: ResponseWritable) {
+    handle_file(request.method().as_str(), "index.html", writer)
 }
 
-fn handle_static(request: &HttpRequest, path: &str, writer: ResponseWritable) {
+fn handle_static(request: &Request<Vec<u8>>, path: &str, writer: ResponseWritable) {
     // The path verification happens in the closure wrapper around handle_static.
-    handle_file(&request.method, path, writer)
+    handle_file(request.method().as_str(), path, writer)
 }
 
-fn handle_version(_request: &HttpRequest, _param: &str, writer: ResponseWritable) {
+fn handle_version(_request: &Request<Vec<u8>>, _param: &str, writer: ResponseWritable) {
     let body = format!("{{\"version\": \"{}\"}}", VERSION);
-    writer.put_ok("text/plain", body.as_str(), &[]);
+    writer.put_ok("text/plain", body.as_str(), vec![]);
 }
 
 /// Collect queries and output key and values into Vec
@@ -164,8 +166,8 @@ pub fn collect_query(param: &str) -> Result<HashMap<&str, &str>, &str> {
     Ok(result)
 }
 
-fn handle_dev(request: &HttpRequest, _param: &str, writer: ResponseWritable) {
-    handle_file(&request.method, "dev.html", writer)
+fn handle_dev(request: &Request<Vec<u8>>, _param: &str, writer: ResponseWritable) {
+    handle_file(request.method().as_str(), "dev.html", writer)
 }
 
 fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
@@ -185,7 +187,7 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
 
     // A closure for checking if path is a static file we wish to serve, and call handle_static
     let handle_static_wrapper =
-        move |request: &HttpRequest, path: &str, writer: ResponseWritable| {
+        move |request: &Request<Vec<u8>>, path: &str, writer: ResponseWritable| {
             for prefix in PATH_PREFIXES {
                 let new_path = format!("{prefix}/{path}");
                 if check_valid_file_path(new_path.as_str(), &valid_files) {
@@ -205,13 +207,14 @@ fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
         )
     }
 
-    if let Ok(request) = HttpRequest::parse::<&TcpStream>(&mut BufReader::new(&stream)) {
+    if let Ok(request) = parse_http_request::<&TcpStream>(&mut BufReader::new(&stream)) {
         let mut response_writer = ServerResponseWriter::new(&mut stream);
         router.handle_request(&request, &mut response_writer);
         if let Some(response) = response_writer.get_response() {
             if response.status_code == 101 {
-                let query_start = request.uri.find('?').unwrap();
-                let queries = collect_query(&request.uri[query_start + 1..]).unwrap();
+                let query_start = request.uri().to_string().find('?').unwrap();
+                let binding = request.uri().to_string();
+                let queries = collect_query(&binding[query_start + 1..]).unwrap();
                 run_websocket_transport(stream, queries);
             }
         }

@@ -31,8 +31,6 @@ use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
 use crate::events::Event;
 use crate::ffi::CxxServerResponseWriter;
-use crate::http_server::http_request::HttpHeaders;
-use crate::http_server::http_request::HttpRequest;
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource;
 use crate::resource::clone_devices;
@@ -44,6 +42,8 @@ use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::frontend::PatchDeviceRequest;
 use frontend_proto::model::Position as ProtoPosition;
 use frontend_proto::model::Scene as ProtoScene;
+use http::Request;
+use http::Version;
 use log::{info, warn};
 use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string_with_options;
@@ -435,7 +435,7 @@ pub fn is_shutdown_time_cxx() -> bool {
 /// Performs PatchDevice to patch a single device
 fn handle_device_patch(writer: ResponseWritable, id: Option<DeviceIdentifier>, patch_json: &str) {
     match patch_device(id, patch_json) {
-        Ok(()) => writer.put_ok("text/plain", "Device Patch Success", &[]),
+        Ok(()) => writer.put_ok("text/plain", "Device Patch Success", vec![]),
         Err(err) => writer.put_error(404, err.as_str()),
     }
 }
@@ -452,7 +452,7 @@ fn handle_device_list(writer: ResponseWritable) {
 
     // Perform protobuf-json-mapping with the given protobuf
     if let Ok(json_response) = print_to_string_with_options(&response, &JSON_PRINT_OPTION) {
-        writer.put_ok("text/json", &json_response, &[])
+        writer.put_ok("text/json", &json_response, vec![])
     } else {
         writer.put_error(404, "proto to JSON mapping failure")
     }
@@ -461,17 +461,17 @@ fn handle_device_list(writer: ResponseWritable) {
 /// Performs ResetDevice for all devices
 fn handle_device_reset(writer: ResponseWritable) {
     match reset_all() {
-        Ok(()) => writer.put_ok("text/plain", "Device Reset Success", &[]),
+        Ok(()) => writer.put_ok("text/plain", "Device Reset Success", vec![]),
         Err(err) => writer.put_error(404, err.as_str()),
     }
 }
 
 /// The Rust device handler used directly by Http frontend or handle_device_cxx for LIST, GET, and PATCH
-pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritable) {
+pub fn handle_device(request: &Request<Vec<u8>>, param: &str, writer: ResponseWritable) {
     // Route handling
-    if request.uri.as_str() == "/v1/devices" {
+    if request.uri() == "/v1/devices" {
         // Routes with ID not specified
-        match request.method.as_str() {
+        match request.method().as_str() {
             "GET" => {
                 handle_device_list(writer);
             }
@@ -479,7 +479,7 @@ pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritabl
                 handle_device_reset(writer);
             }
             "PATCH" => {
-                let body = &request.body;
+                let body = request.body();
                 let patch_json = String::from_utf8(body.to_vec()).unwrap();
                 handle_device_patch(writer, None, patch_json.as_str());
             }
@@ -487,7 +487,7 @@ pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritabl
         }
     } else {
         // Routes with ID specified
-        match request.method.as_str() {
+        match request.method().as_str() {
             "PATCH" => {
                 let id = match param.parse::<u32>() {
                     Ok(num) => num,
@@ -496,7 +496,7 @@ pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritabl
                         return;
                     }
                 };
-                let body = &request.body;
+                let body = request.body();
                 let patch_json = String::from_utf8(body.to_vec()).unwrap();
                 handle_device_patch(writer, Some(id), patch_json.as_str());
             }
@@ -512,18 +512,20 @@ pub fn handle_device_cxx(
     param: String,
     body: String,
 ) {
-    let mut request = HttpRequest {
-        method,
-        uri: String::new(),
-        headers: HttpHeaders::new(),
-        version: "1.1".to_string(),
-        body: body.as_bytes().to_vec(),
-    };
+    let mut builder = Request::builder().method(method.as_str());
     if param.is_empty() {
-        request.uri = "/v1/devices".to_string();
+        builder = builder.uri("/v1/devices");
     } else {
-        request.uri = format!("/v1/devices/{}", param)
+        builder = builder.uri(format!("/v1/devices/{}", param));
     }
+    builder = builder.version(Version::HTTP_11);
+    let request = match builder.body(body.as_bytes().to_vec()) {
+        Ok(request) => request,
+        Err(err) => {
+            warn!("{err:?}");
+            return;
+        }
+    };
     handle_device(
         &request,
         param.as_str(),
@@ -1062,14 +1064,13 @@ mod tests {
         assert!(!is_shutdown_time_cxx());
     }
 
-    fn list_request() -> HttpRequest {
-        HttpRequest {
-            method: "GET".to_string(),
-            uri: "/v1/devices".to_string(),
-            version: "1.1".to_string(),
-            headers: HttpHeaders::new(),
-            body: b"".to_vec(),
-        }
+    fn list_request() -> Request<Vec<u8>> {
+        Request::builder()
+            .method("GET")
+            .uri("/v1/devices")
+            .version(Version::HTTP_11)
+            .body(Vec::<u8>::new())
+            .unwrap()
     }
 
     #[test]
@@ -1112,13 +1113,12 @@ mod tests {
 
         // Initialize request for PatchDevice
         // The patch body will change the visibility and position of the first device.
-        let request = HttpRequest {
-            method: "PATCH".to_string(),
-            uri: "/v1/devices".to_string(),
-            version: "1.1".to_string(),
-            headers: HttpHeaders::new(),
-            body: include_bytes!("test/patch_body.txt").to_vec(),
-        };
+        let request = Request::builder()
+            .method("PATCH")
+            .uri("/v1/devices")
+            .version(Version::HTTP_11)
+            .body(include_bytes!("test/patch_body.txt").to_vec())
+            .unwrap();
 
         // Initialize writer
         let mut stream = Cursor::new(Vec::new());
@@ -1143,13 +1143,12 @@ mod tests {
         // ResetDevice Testing
 
         // Initialize request for ResetDevice
-        let request = HttpRequest {
-            method: "PUT".to_string(),
-            uri: "/v1/devices".to_string(),
-            version: "1.1".to_string(),
-            headers: HttpHeaders::new(),
-            body: b"".to_vec(),
-        };
+        let request = Request::builder()
+            .method("PUT")
+            .uri("/v1/devices")
+            .version(Version::HTTP_11)
+            .body(Vec::<u8>::new())
+            .unwrap();
 
         // Initialize writer
         let mut stream = Cursor::new(Vec::new());
@@ -1178,7 +1177,7 @@ mod tests {
 
         // Write initial state of the test case (2 bt chip and 1 wifi chip)
         let mut file = std::fs::File::create("src/devices/test/initial.txt").unwrap();
-        let initial = b"HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: 783\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
+        let initial = b"HTTP/1.1 200 OK\r\ncontent-type: text/json\r\ncontent-length: 783\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
         file.write_all(initial).unwrap();
 
         // Write the body of the patch request
@@ -1188,7 +1187,7 @@ mod tests {
 
         // Write post-patch state of the test case (after PatchDevice)
         let mut file = std::fs::File::create("src/devices/test/post_patch.txt").unwrap();
-        let post_patch = b"HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: 784\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"OFF\", \"position\": {\"x\": 1.0, \"y\": 1.0, \"z\": 1.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
+        let post_patch = b"HTTP/1.1 200 OK\r\ncontent-type: text/json\r\ncontent-length: 784\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"OFF\", \"position\": {\"x\": 1.0, \"y\": 1.0, \"z\": 1.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
         file.write_all(post_patch).unwrap();
     }
 
@@ -1202,10 +1201,7 @@ mod tests {
         // regenerate_golden_files_helper();
     }
 
-    use bluetooth_facade::tests::MUTEX as BEACON_MUTEX;
-    use bluetooth_facade::ADVERTISING_INTERVAL_MS;
-    use frontend_proto::model::chip::Chip::BleBeacon;
-    use frontend_proto::model::chip::{bluetooth_beacon::AdvertiseSettings, BluetoothBeacon, Chip};
+    use frontend_proto::model::chip::{BluetoothBeacon, Chip};
     use frontend_proto::model::chip_create;
     use frontend_proto::model::Chip as ChipProto;
     use frontend_proto::model::Device as DeviceProto;
@@ -1216,10 +1212,6 @@ mod tests {
         bluetooth_facade::new_beacon(&DeviceCreate {
             chips: vec![ChipCreate {
                 chip: Some(chip_create::Chip::BleBeacon(chip_create::BluetoothBeaconCreate {
-                    settings: MessageField::some(AdvertiseSettings {
-                        interval: ADVERTISING_INTERVAL_MS,
-                        ..Default::default()
-                    }),
                     ..Default::default()
                 })),
                 ..Default::default()
@@ -1231,7 +1223,7 @@ mod tests {
 
     #[test]
     fn test_get_beacon_device() {
-        let _locks = (MUTEX.lock().unwrap(), BEACON_MUTEX.lock().unwrap());
+        let _lock = MUTEX.lock().unwrap();
 
         logger_setup();
         refresh_resource();
@@ -1246,22 +1238,20 @@ mod tests {
 
         let device_proto = device.get();
         assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
-
-        if let BleBeacon(beacon_proto) = device_proto.unwrap().chips[0].chip.as_ref().unwrap() {
-            assert_eq!(ADVERTISING_INTERVAL_MS, beacon_proto.settings.interval);
-        } else {
-            panic!("Expected a bluetooth beacon chip in test device")
-        }
+        assert_eq!(1, device_proto.as_ref().unwrap().chips.len());
+        assert!(device_proto.as_ref().unwrap().chips[0].chip.is_some());
+        assert!(matches!(
+            device_proto.as_ref().unwrap().chips[0].chip.as_ref().unwrap(),
+            Chip::BleBeacon(_)
+        ));
     }
 
     #[test]
     fn test_patch_beacon_device() {
-        let _locks = (MUTEX.lock().unwrap(), BEACON_MUTEX.lock().unwrap());
+        let _lock = MUTEX.lock().unwrap();
 
         logger_setup();
         refresh_resource();
-
-        let interval = 1000;
 
         let ids = bluetooth_beacon_create();
         let devices = clone_devices();
@@ -1278,10 +1268,6 @@ mod tests {
                 kind: EnumOrUnknown::new(ProtoChipKind::BLUETOOTH_BEACON),
                 chip: Some(Chip::BleBeacon(BluetoothBeacon {
                     bt: MessageField::some(Default::default()),
-                    settings: MessageField::some(AdvertiseSettings {
-                        interval,
-                        ..Default::default()
-                    }),
                     ..Default::default()
                 })),
                 ..Default::default()
@@ -1293,11 +1279,11 @@ mod tests {
 
         let patched_device = device.get();
         assert!(patched_device.is_ok(), "{}", patched_device.unwrap_err());
-
-        if let BleBeacon(patched_beacon) = patched_device.unwrap().chips[0].chip.as_ref().unwrap() {
-            assert_eq!(interval, patched_beacon.settings.interval);
-        } else {
-            panic!("Expected a bluetooth beacon chip in test device")
-        }
+        assert_eq!(1, patched_device.as_ref().unwrap().chips.len());
+        assert!(patched_device.as_ref().unwrap().chips[0].chip.is_some());
+        assert!(matches!(
+            patched_device.as_ref().unwrap().chips[0].chip.as_ref().unwrap(),
+            Chip::BleBeacon(_)
+        ));
     }
 }

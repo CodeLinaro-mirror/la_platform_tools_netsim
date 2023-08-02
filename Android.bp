@@ -62,6 +62,7 @@ rust_defaults {
         "libcxx",
         "libdata_encoding",
         "libfrontend_proto",
+        "libhttp",
         "libnetsim_common",
         "libprotobuf",
         "libprotobuf_json_mapping",
