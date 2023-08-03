@@ -37,6 +37,9 @@ service FrontendService {
   // Register for device movement and emulated radio state events
   rpc RegisterEvents(google.protobuf.Empty) returns (stream Event);
 
+  // Create a builtin device
+  rpc CreateDevice(CreateDeviceRequest) returns (CreateDeviceResponse);
+
   // (deprecated with C++ controller) Patch a device
   rpc PatchDevice(PatchDeviceRequest) returns (google.protobuf.Empty);
 
@@ -83,6 +86,14 @@ message SetLinkLossRequest {
   netsim.model.PhyKind radio = 3;
   // As a percent between 0 and 1
   float link_loss = 4;
+}
+
+message CreateDeviceRequest {
+  netsim.model.DeviceCreate device = 1;
+}
+
+message CreateDeviceResponse {
+  netsim.model.Device device = 1;
 }
 
 message PatchDeviceRequest {

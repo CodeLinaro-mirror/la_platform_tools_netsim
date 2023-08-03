@@ -324,6 +324,252 @@ impl ::protobuf::reflect::ProtobufValue for SetLinkLossRequest {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.frontend.CreateDeviceRequest)
+pub struct CreateDeviceRequest {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.frontend.CreateDeviceRequest.device)
+    pub device: ::protobuf::MessageField<super::model::DeviceCreate>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.frontend.CreateDeviceRequest.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a CreateDeviceRequest {
+    fn default() -> &'a CreateDeviceRequest {
+        <CreateDeviceRequest as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl CreateDeviceRequest {
+    pub fn new() -> CreateDeviceRequest {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::DeviceCreate>(
+            "device",
+            |m: &CreateDeviceRequest| { &m.device },
+            |m: &mut CreateDeviceRequest| { &mut m.device },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<CreateDeviceRequest>(
+            "CreateDeviceRequest",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for CreateDeviceRequest {
+    const NAME: &'static str = "CreateDeviceRequest";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.device)?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.device.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.device.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> CreateDeviceRequest {
+        CreateDeviceRequest::new()
+    }
+
+    fn clear(&mut self) {
+        self.device.clear();
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static CreateDeviceRequest {
+        static instance: CreateDeviceRequest = CreateDeviceRequest {
+            device: ::protobuf::MessageField::none(),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for CreateDeviceRequest {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("CreateDeviceRequest").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for CreateDeviceRequest {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for CreateDeviceRequest {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.frontend.CreateDeviceResponse)
+pub struct CreateDeviceResponse {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.frontend.CreateDeviceResponse.device)
+    pub device: ::protobuf::MessageField<super::model::Device>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.frontend.CreateDeviceResponse.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a CreateDeviceResponse {
+    fn default() -> &'a CreateDeviceResponse {
+        <CreateDeviceResponse as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl CreateDeviceResponse {
+    pub fn new() -> CreateDeviceResponse {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::Device>(
+            "device",
+            |m: &CreateDeviceResponse| { &m.device },
+            |m: &mut CreateDeviceResponse| { &mut m.device },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<CreateDeviceResponse>(
+            "CreateDeviceResponse",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for CreateDeviceResponse {
+    const NAME: &'static str = "CreateDeviceResponse";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.device)?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.device.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.device.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> CreateDeviceResponse {
+        CreateDeviceResponse::new()
+    }
+
+    fn clear(&mut self) {
+        self.device.clear();
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static CreateDeviceResponse {
+        static instance: CreateDeviceResponse = CreateDeviceResponse {
+            device: ::protobuf::MessageField::none(),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for CreateDeviceResponse {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("CreateDeviceResponse").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for CreateDeviceResponse {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for CreateDeviceResponse {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
 // @@protoc_insertion_point(message:netsim.frontend.PatchDeviceRequest)
 pub struct PatchDeviceRequest {
     // message fields
@@ -1612,7 +1858,10 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     equest\x12\x1f\n\x0bdevice_name\x18\x01\x20\x01(\tR\ndeviceName\x12!\n\
     \x0cother_device\x18\x02\x20\x01(\tR\x0botherDevice\x12+\n\x05radio\x18\
     \x03\x20\x01(\x0e2\x15.netsim.model.PhyKindR\x05radio\x12\x1b\n\tlink_lo\
-    ss\x18\x04\x20\x01(\x02R\x08linkLoss\"B\n\x12PatchDeviceRequest\x12,\n\
+    ss\x18\x04\x20\x01(\x02R\x08linkLoss\"I\n\x13CreateDeviceRequest\x122\n\
+    \x06device\x18\x01\x20\x01(\x0b2\x1a.netsim.model.DeviceCreateR\x06devic\
+    e\"D\n\x14CreateDeviceResponse\x12,\n\x06device\x18\x01\x20\x01(\x0b2\
+    \x14.netsim.model.DeviceR\x06device\"B\n\x12PatchDeviceRequest\x12,\n\
     \x06device\x18\x02\x20\x01(\x0b2\x14.netsim.model.DeviceR\x06device\"7\n\
     \x05Event\x12.\n\x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.model.Devic\
     eR\x07devices\"D\n\x12ListDeviceResponse\x12.\n\x07devices\x18\x01\x20\
@@ -1627,20 +1876,22 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x12GetCaptureResponse\x12%\n\x0ecapture_stream\x18\x01\x20\x01(\x0cR\rc\
     aptureStream\"`\n\rErrorResponse\x12\x12\n\x04code\x18\x01\x20\x01(\x05R\
     \x04code\x12#\n\rerror_message\x18\x02\x20\x01(\tR\x0cerrorMessage\x12\
-    \x16\n\x06status\x18\x03\x20\x01(\tR\x06status2\xf0\x05\n\x0fFrontendSer\
+    \x16\n\x06status\x18\x03\x20\x01(\tR\x06status2\xcd\x06\n\x0fFrontendSer\
     vice\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.fro\
     ntend.VersionResponse\x12B\n\x0eRegisterEvents\x12\x16.google.protobuf.E\
-    mpty\x1a\x16.netsim.frontend.Event0\x01\x12J\n\x0bPatchDevice\x12#.netsi\
-    m.frontend.PatchDeviceRequest\x1a\x16.google.protobuf.Empty\x127\n\x05Re\
-    set\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\x12I\n\n\
-    ListDevice\x12\x16.google.protobuf.Empty\x1a#.netsim.frontend.ListDevice\
-    Response\x12J\n\x0bSetLinkLoss\x12#.netsim.frontend.SetLinkLossRequest\
-    \x1a\x16.google.protobuf.Empty\x12A\n\x06NetCat\x12\x16.google.protobuf.\
-    Empty\x1a\x1d.netsim.frontend.NetCatStream0\x01\x12L\n\x0cPatchCapture\
-    \x12$.netsim.frontend.PatchCaptureRequest\x1a\x16.google.protobuf.Empty\
-    \x12K\n\x0bListCapture\x12\x16.google.protobuf.Empty\x1a$.netsim.fronten\
-    d.ListCaptureResponse\x12W\n\nGetCapture\x12\".netsim.frontend.GetCaptur\
-    eRequest\x1a#.netsim.frontend.GetCaptureResponse0\x01b\x06proto3\
+    mpty\x1a\x16.netsim.frontend.Event0\x01\x12[\n\x0cCreateDevice\x12$.nets\
+    im.frontend.CreateDeviceRequest\x1a%.netsim.frontend.CreateDeviceRespons\
+    e\x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.\
+    google.protobuf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\
+    \x16.google.protobuf.Empty\x12I\n\nListDevice\x12\x16.google.protobuf.Em\
+    pty\x1a#.netsim.frontend.ListDeviceResponse\x12J\n\x0bSetLinkLoss\x12#.n\
+    etsim.frontend.SetLinkLossRequest\x1a\x16.google.protobuf.Empty\x12A\n\
+    \x06NetCat\x12\x16.google.protobuf.Empty\x1a\x1d.netsim.frontend.NetCatS\
+    tream0\x01\x12L\n\x0cPatchCapture\x12$.netsim.frontend.PatchCaptureReque\
+    st\x1a\x16.google.protobuf.Empty\x12K\n\x0bListCapture\x12\x16.google.pr\
+    otobuf.Empty\x1a$.netsim.frontend.ListCaptureResponse\x12W\n\nGetCapture\
+    \x12\".netsim.frontend.GetCaptureRequest\x1a#.netsim.frontend.GetCapture\
+    Response0\x01b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -1660,9 +1911,11 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             let mut deps = ::std::vec::Vec::with_capacity(2);
             deps.push(::protobuf::well_known_types::empty::file_descriptor().clone());
             deps.push(super::model::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(12);
+            let mut messages = ::std::vec::Vec::with_capacity(14);
             messages.push(VersionResponse::generated_message_descriptor_data());
             messages.push(SetLinkLossRequest::generated_message_descriptor_data());
+            messages.push(CreateDeviceRequest::generated_message_descriptor_data());
+            messages.push(CreateDeviceResponse::generated_message_descriptor_data());
             messages.push(PatchDeviceRequest::generated_message_descriptor_data());
             messages.push(Event::generated_message_descriptor_data());
             messages.push(ListDeviceResponse::generated_message_descriptor_data());

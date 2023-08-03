@@ -7,6 +7,7 @@ build = "build.rs"
 [lib]
 crate-type = ["staticlib", "lib"]
 doctest = false
+test = false
 
 [dependencies]
 cxx = { version = ">=1.0.85", features = ["c++17"] }

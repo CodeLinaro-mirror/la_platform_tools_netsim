@@ -54,37 +54,27 @@ void HciPacketTransport::Connect(rootcanal::PhyDevice::Identifier device_id) {
 }
 
 // Called by HCITransport (rootcanal)
-void HciPacketTransport::SendEvent(const std::vector<uint8_t> &data) {
-  this->Response(HCIPacket::EVENT, data);
-}
-
-// Called by HCITransport (rootcanal)
-void HciPacketTransport::SendAcl(const std::vector<uint8_t> &data) {
-  this->Response(HCIPacket::ACL, data);
-}
-
-// Called by HCITransport (rootcanal)
-void HciPacketTransport::SendSco(const std::vector<uint8_t> &data) {
-  this->Response(HCIPacket::SCO, data);
-}
-
-// Called by HCITransport (rootcanal)
-void HciPacketTransport::SendIso(const std::vector<uint8_t> &data) {
-  this->Response(HCIPacket::ISO, data);
+void HciPacketTransport::Send(rootcanal::PacketType packet_type, const std::vector<uint8_t>& data) {
+  // The packet types have standard values, converting from
+  // rootcanal::PacketType to HCIPacket_PacketType is safe.
+  packet::HCIPacket_PacketType hci_packet_type =
+      static_cast<packet::HCIPacket_PacketType>(packet_type);
+  if (!mDeviceId.has_value()) {
+    BtsLog("hci_packet_transport: response with no device.");
+    return;
+  }
+  // Send response to packet_hub.
+  auto shared_packet = std::make_shared<std::vector<uint8_t>>(data);
+  netsim::packet_hub::HandleBtResponse(mDeviceId.value(), hci_packet_type,
+                                       shared_packet);
 }
 
 // Called by HCITransport (rootcanal)
 void HciPacketTransport::RegisterCallbacks(
-    rootcanal::PacketCallback commandCallback,
-    rootcanal::PacketCallback aclCallback,
-    rootcanal::PacketCallback scoCallback,
-    rootcanal::PacketCallback isoCallback,
+    rootcanal::PacketCallback packetCallback,
     rootcanal::CloseCallback closeCallback) {
   BtsLog("hci_packet_transport: registered");
-  mCommandCallback = commandCallback;
-  mAclCallback = aclCallback;
-  mScoCallback = scoCallback;
-  mIsoCallback = isoCallback;
+  mPacketCallback = packetCallback;
   mCloseCallback = closeCallback;
 }
 
@@ -94,17 +84,17 @@ void HciPacketTransport::Tick() {}
 void HciPacketTransport::Request(
     packet::HCIPacket_PacketType packet_type,
     const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  auto packet_callback = PacketTypeCallback(packet_type);
-  if (!packet_callback) {
-    BtsLog("hci_transport: unknown packet_callback");
-    return;
-  }
+
+  assert(mPacketCallback);
+  // The packet types have standard values, converting from
+  // HCIPacket_PacketType to rootcanal::PacketType is safe.
+  rootcanal::PacketType rootcanal_packet_type =
+      static_cast<rootcanal::PacketType>(packet_type);
   if (packet_type == HCIPacket::COMMAND) {
     auto cmd = HciCommandToString(packet->at(0), packet->at(1));
   }
-  // Copy the packet bytes for rootcanal.
   mAsyncManager->Synchronize(
-      [packet_callback, packet]() { packet_callback(packet); });
+      [this, rootcanal_packet_type, packet]() { mPacketCallback(rootcanal_packet_type, packet); });
 }
 
 void HciPacketTransport::Add(
@@ -121,37 +111,6 @@ void HciPacketTransport::Close() {
 
   BtsLog("hci_packet_transport close from rootcanal");
   mDeviceId = std::nullopt;
-}
-
-// Send response to packet_hub.
-// TODO: future optimization by having rootcanal send shared_ptr.
-void HciPacketTransport::Response(packet::HCIPacket_PacketType packet_type,
-                                  const std::vector<uint8_t> &packet) {
-  if (!mDeviceId.has_value()) {
-    BtsLog("hci_packet_transport: response with no device.");
-    return;
-  }
-  auto shared_packet = std::make_shared<std::vector<uint8_t>>(packet);
-  netsim::packet_hub::HandleBtResponse(mDeviceId.value(), packet_type,
-                                       shared_packet);
-}
-
-rootcanal::PacketCallback HciPacketTransport::PacketTypeCallback(
-    packet::HCIPacket_PacketType packet_type) {
-  switch (packet_type) {
-    case HCIPacket::COMMAND:
-      assert(mCommandCallback);
-      return mCommandCallback;
-    case HCIPacket::ACL:
-      return mAclCallback;
-    case HCIPacket::SCO:
-      return mScoCallback;
-    case HCIPacket::ISO:
-      return mIsoCallback;
-    default:
-      BtsLog("hci_transport Ignoring unknown packet.");
-      return nullptr;
-  }
 }
 
 // handle_request is the main entry for incoming packets called by
