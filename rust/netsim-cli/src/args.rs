@@ -39,6 +39,9 @@ pub struct NetsimArgs {
     /// Set custom grpc port
     #[arg(short, long)]
     pub port: Option<i32>,
+    /// Set netsimd instance number to connect
+    #[arg(short, long)]
+    pub instance: Option<u16>,
 }
 
 #[derive(Debug, Subcommand)]

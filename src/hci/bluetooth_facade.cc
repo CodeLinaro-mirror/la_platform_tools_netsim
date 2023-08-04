@@ -319,12 +319,11 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
 void Remove(uint32_t id) {
   BtsLog("Removing HCI chip %d.", id);
   id_to_chip_info_.erase(id);
-
-  // Use the `AsyncManager` to ensure that the `RemoveDevice` method is
-  // invoked atomically, preventing data races.
+  // Call the transport close callback. This invokes HciDevice::Close and
+  // TestModel close callback.
   mAsyncManager->ExecAsync(gSocketUserId, std::chrono::milliseconds(0), [id]() {
     // rootcanal will call HciPacketTransport::Close().
-    gTestModel->RemoveDevice(id);
+   HciPacketTransport::Remove(id);
   });
 }
 

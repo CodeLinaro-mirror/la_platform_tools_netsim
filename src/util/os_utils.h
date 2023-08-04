@@ -49,5 +49,10 @@ std::optional<std::string> GetServerAddress(uint16_t instance_num = 0);
  */
 void RedirectStdStream(std::string netsim_temp_dir);
 
+/**
+ * Get netsimd instance number.
+ */
+uint16_t GetInstance(uint16_t instance_flag);
+
 }  // namespace osutils
 }  // namespace netsim

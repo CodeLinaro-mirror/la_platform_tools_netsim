@@ -19,10 +19,8 @@
 
 #include <cstdint>
 #include <memory>
-#include <string_view>
 #include <vector>
 
-#include "netsim/frontend.grpc.pb.h"
 #include "rust/cxx.h"
 
 namespace netsim {
@@ -66,7 +64,8 @@ class FrontendClient {
       ClientResponseReader const &client_reader) const = 0;
 };
 
-std::unique_ptr<FrontendClient> NewFrontendClient(int32_t grpc_port);
+std::unique_ptr<FrontendClient> NewFrontendClient(int32_t grpc_port,
+                                                  uint16_t instance_num);
 
 }  // namespace frontend
 }  // namespace netsim

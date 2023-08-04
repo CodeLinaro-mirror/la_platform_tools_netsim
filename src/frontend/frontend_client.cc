@@ -21,14 +21,10 @@
 
 #include <chrono>
 #include <cstdint>
-#include <iomanip>
-#include <iostream>
 #include <iterator>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <string>
-#include <string_view>
 
 #include "frontend-client-cxx/src/lib.rs.h"
 #include "google/protobuf/empty.pb.h"
@@ -38,10 +34,8 @@
 #include "netsim/frontend.grpc.pb.h"
 #include "netsim/frontend.pb.h"
 #include "netsim/model.pb.h"
-#include "util/ini_file.h"
 #include "util/log.h"
 #include "util/os_utils.h"
-#include "util/string_utils.h"
 
 namespace netsim {
 namespace frontend {
@@ -49,10 +43,10 @@ namespace {
 const std::chrono::duration kConnectionDeadline = std::chrono::seconds(1);
 
 std::unique_ptr<frontend::FrontendService::Stub> NewFrontendStub(
-    std::string port) {
+    std::string port, uint16_t instance_num) {
   // Find local grpc port if not specified
   if (port == "0") {
-    auto local_port = netsim::osutils::GetServerAddress();
+    auto local_port = netsim::osutils::GetServerAddress(instance_num);
     if (!local_port.has_value()) {
       return {};
     }
@@ -233,8 +227,9 @@ class FrontendClientImpl : public FrontendClient {
 
 }  // namespace
 
-std::unique_ptr<FrontendClient> NewFrontendClient(int32_t port) {
-  auto stub = NewFrontendStub(std::to_string(port));
+std::unique_ptr<FrontendClient> NewFrontendClient(int32_t port,
+                                                  uint16_t instance_num) {
+  auto stub = NewFrontendStub(std::to_string(port), instance_num);
   return (stub == nullptr
               ? nullptr
               : std::make_unique<FrontendClientImpl>(std::move(stub)));

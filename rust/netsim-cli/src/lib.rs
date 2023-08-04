@@ -29,7 +29,9 @@ use args::{BinaryProtobuf, GetCapture, NetsimArgs};
 use capture_handler::CaptureHandler;
 use clap::Parser;
 use cxx::UniquePtr;
-use frontend_client_cxx::ffi::{new_frontend_client, ClientResult, FrontendClient, GrpcMethod};
+use frontend_client_cxx::ffi::{
+    get_instance_num, new_frontend_client, ClientResult, FrontendClient, GrpcMethod,
+};
 use frontend_client_cxx::ClientResponseReader;
 use netsim_common::util::netsim_logger;
 
@@ -143,7 +145,9 @@ pub extern "C" fn rust_main() {
         return;
     }
     let grpc_method = args.command.grpc_method();
-    let client = new_frontend_client(args.port.unwrap_or_default());
+    let instance_flag = args.instance.unwrap_or_default();
+    let client =
+        new_frontend_client(args.port.unwrap_or_default(), get_instance_num(instance_flag));
     if client.is_null() {
         if args.port.is_some() {
             error!("Unable to create frontend client. Please ensure netsimd is running and listening on grpc port {}.", args.port.unwrap_or_default());

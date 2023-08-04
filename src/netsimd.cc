@@ -89,30 +89,9 @@ void SignalHandler(int sig) {
 #endif
 #endif
 
-constexpr int DEFAULT_INSTANCE_NUM = 0;
 constexpr int DEFAULT_HCI_PORT = 6402;
 
-uint16_t get_instance_num(uint16_t instance_num_flag) {
-  // The following priorities are used to determine the instance number:
-  //
-  // 1. The environment variable `NETSIM_INSTANCE_NUM`.
-  // 2. The CLI flag `--instance_num`.
-  // 3. The default value `DEFAULT_INSTANCE_NUM`.
-  uint16_t instance_num = 0;
-  if (auto netsim_instance_num =
-          netsim::osutils::GetEnv("NETSIM_INSTANCE_NUM", "");
-      netsim_instance_num != "") {
-    char *ptr;
-    instance_num = strtol(netsim_instance_num.c_str(), &ptr, 10);
-  } else if (instance_num_flag != 0) {
-    instance_num = instance_num_flag;
-  } else {
-    instance_num = DEFAULT_INSTANCE_NUM;
-  }
-  return instance_num;
-}
-
-int get_hci_port(int hci_port_flag, uint16_t instance_num) {
+int get_hci_port(int hci_port_flag, uint16_t instance) {
   // The following priorities are used to determine the HCI port number:
   //
   // 1. The CLI flag `-hci_port`.
@@ -127,7 +106,7 @@ int get_hci_port(int hci_port_flag, uint16_t instance_num) {
     char *ptr;
     hci_port = strtol(netsim_hci_port.c_str(), &ptr, 10);
   } else {
-    hci_port = DEFAULT_HCI_PORT + instance_num;
+    hci_port = DEFAULT_HCI_PORT + instance;
   }
   return hci_port;
 }
@@ -157,14 +136,15 @@ int main(int argc, char *argv[]) {
       {"no_web_ui", no_argument, 0, 'w'},
       {"rootcanal_controller_properties_file", required_argument, 0, 'p'},
       {"hci_port", required_argument, 0, 'b'},
-      {"instance_num", required_argument, 0, 'i'},
+      {"instance", required_argument, 0, 'i'},
+      {"instance_num", required_argument, 0, 'I'},
   };
 
   bool dev = false;
   std::string fd_startup_str;
   std::string rootcanal_controller_properties_file;
   int hci_port_flag = 0;
-  uint16_t instance_num_flag = 0;
+  uint16_t instance_flag = 0;
 
   int c;
 
@@ -196,11 +176,11 @@ int main(int argc, char *argv[]) {
         hci_port_flag = std::atoi(optarg);
         break;
 
+      case 'I':
       case 'i':
         // NOTE: --instance_num flag is used to run multiple netsimd instances.
-        instance_num_flag = std::atoi(optarg);
-        std::cerr << "Netsimd instance number: " << instance_num_flag
-                  << std::endl;
+        instance_flag = std::atoi(optarg);
+        std::cerr << "Netsimd instance: " << instance_flag << std::endl;
         break;
 
       default:
@@ -220,7 +200,7 @@ int main(int argc, char *argv[]) {
   }
 
   netsim::config::SetDev(dev);
-  uint16_t instance_num = get_instance_num(instance_num_flag);
+  auto instance_num = netsim::osutils::GetInstance(instance_flag);
   int hci_port = get_hci_port(hci_port_flag, instance_num);
   // Daemon mode -- start radio managers
   // get netsim daemon, starting if it doesn't exist

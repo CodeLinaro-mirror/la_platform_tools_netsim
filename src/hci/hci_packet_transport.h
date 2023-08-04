@@ -42,6 +42,8 @@ class HciPacketTransport : public rootcanal::HciTransport {
   static void Add(rootcanal::PhyDevice::Identifier id,
                   const std::shared_ptr<HciPacketTransport> &transport);
 
+  static void Remove(rootcanal::PhyDevice::Identifier id);
+
   /**
    * @brief Constructor for HciPacketTransport class.
    *

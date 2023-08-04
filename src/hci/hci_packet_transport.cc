@@ -104,11 +104,21 @@ void HciPacketTransport::Add(
   device_to_transport_[device_id] = transport;
 }
 
+void HciPacketTransport::Remove(rootcanal::PhyDevice::Identifier device_id) {
+  BtsLog("hci_packet_transport remove from netsim");
+  if (device_to_transport_.find(device_id) != device_to_transport_.end() &&
+      device_to_transport_[device_id]) {
+    // Calls HciDevice::Close, will disconnect AclHandles with
+    // CONNECTION_TIMEOUT, and call TestModel::CloseCallback.
+    device_to_transport_[device_id]->mCloseCallback();
+  }
+}
+
+// Called by HciDevice::Close
 void HciPacketTransport::Close() {
   if (mDeviceId.has_value()) {
     device_to_transport_.erase(mDeviceId.value());
   }
-
   BtsLog("hci_packet_transport close from rootcanal");
   mDeviceId = std::nullopt;
 }
