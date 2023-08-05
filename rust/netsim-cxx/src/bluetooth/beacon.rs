@@ -126,7 +126,9 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
         let guard = BEACON_CHIPS.read().unwrap();
         let mut beacon = guard
             .get(&self.chip_id)
-            .expect("could not find bluetooth beacon with chip id {chip_id}")
+            .unwrap_or_else(|| {
+                panic!("could not find bluetooth beacon with chip id {}", self.chip_id)
+            })
             .lock()
             .unwrap();
 
@@ -168,7 +170,7 @@ pub fn bluetooth_beacon_add(
     let beacon_chip = BeaconChip::new(chip_id, address.clone());
 
     if BEACON_CHIPS.write().unwrap().insert(chip_id, Mutex::new(beacon_chip)).is_some() {
-        return Err(String::from(
+        return Err(format!(
             "Failed to create a Bluetooth beacon chip with ID {chip_id}: chip ID already exists.",
         ));
     }
@@ -193,7 +195,7 @@ pub fn bluetooth_beacon_patch(
     let guard = BEACON_CHIPS.read().unwrap();
     let mut beacon = guard
         .get(&chip_id)
-        .ok_or("could not find bluetooth beacon with chip id {chip_id} for patching")?
+        .ok_or(format!("could not find bluetooth beacon with chip id {chip_id} for patching"))?
         .lock()
         .unwrap();
 
@@ -207,7 +209,7 @@ pub fn bluetooth_beacon_get(chip_id: ChipIdentifier) -> Result<BluetoothBeaconPr
     let guard = BEACON_CHIPS.read().unwrap();
     let beacon = guard
         .get(&chip_id)
-        .ok_or("could not get bluetooth beacon with chip id {chip_id}")?
+        .ok_or(format!("could not get bluetooth beacon with chip id {chip_id}"))?
         .lock()
         .unwrap();
 
@@ -218,7 +220,7 @@ pub fn bluetooth_beacon_get(chip_id: ChipIdentifier) -> Result<BluetoothBeaconPr
                 .advertise_interval
                 .as_millis()
                 .try_into()
-                .map_err(|err| String::from("{err}"))?,
+                .map_err(|err| format!("{err}"))?,
             ..Default::default()
         }),
         adv_data: MessageField::none(),
@@ -244,7 +246,7 @@ pub fn new_beacon(device_proto: &DeviceCreateProto) -> Result<AddChipResult, Str
 
     let mut device_guid = BEACON_DEVICE_GUID_FACTORY.lock().unwrap().next_id();
     let ids = add_chip(
-        &format!("beacon-device-{}", device_guid),
+        &format!("beacon-device-{device_guid}"),
         &device_proto.name,
         chip_kind,
         &chip_proto.name,
@@ -304,8 +306,9 @@ pub mod tests {
         assert!(ids.is_ok());
         let chip_id = ids.unwrap().chip_id;
 
-        let beacon = bluetooth_beacon_get(chip_id)
-            .expect("could not get bluetooth beacon with id {chip_id} for testing");
+        let beacon = bluetooth_beacon_get(chip_id).unwrap_or_else(|_| {
+            panic!("could not get bluetooth beacon with id {chip_id} for testing")
+        });
 
         assert_eq!(interval, beacon.settings.interval);
         cleanup_beacon(chip_id);

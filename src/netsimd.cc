@@ -37,7 +37,6 @@
 #include "core/server.h"
 #include "frontend/frontend_client_stub.h"
 #include "netsim-cxx/src/lib.rs.h"
-#include "util/log.h"
 #include "util/os_utils.h"
 
 // Wireless network simulator for android (and other) emulated devices.
@@ -130,7 +129,7 @@ int main(int argc, char *argv[]) {
   bool no_web_ui = false;
   bool no_cli_ui = false;
 
-  const char *kShortOpt = "s:d";
+  const char *kShortOpt = "s:dl";
   const option kLongOptions[] = {
       {"no_cli_ui", no_argument, 0, 'f'},
       {"no_web_ui", no_argument, 0, 'w'},
@@ -138,6 +137,7 @@ int main(int argc, char *argv[]) {
       {"hci_port", required_argument, 0, 'b'},
       {"instance", required_argument, 0, 'i'},
       {"instance_num", required_argument, 0, 'I'},
+      {"logtostderr", no_argument, 0, 'l'},
   };
 
   bool dev = false;
@@ -145,6 +145,7 @@ int main(int argc, char *argv[]) {
   std::string rootcanal_controller_properties_file;
   int hci_port_flag = 0;
   uint16_t instance_flag = 0;
+  bool logtostderr = false;
 
   int c;
 
@@ -183,6 +184,11 @@ int main(int argc, char *argv[]) {
         std::cerr << "Netsimd instance: " << instance_flag << std::endl;
         break;
 
+      case 'l':
+        // Set whether log messages go to stderr instead of logfiles.
+        logtostderr = true;
+        break;
+
       default:
         ArgError(argv, c);
         return (-2);
@@ -196,7 +202,9 @@ int main(int argc, char *argv[]) {
 #endif
     // NOTE: Redirect stdout and stderr to files only if netsimd is not invoked
     // by Cuttlefish. Some Cuttlefish builds fail when writing logs to files.
-    netsim::osutils::RedirectStdStream(netsim::NetsimdTempDirString().c_str());
+    if (!logtostderr)
+      netsim::osutils::RedirectStdStream(
+          netsim::NetsimdTempDirString().c_str());
   }
 
   netsim::config::SetDev(dev);

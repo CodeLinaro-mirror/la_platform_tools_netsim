@@ -33,6 +33,7 @@ void BtsLogDefault(int priority, const char *file, int lineNumber,
   snprintf(prefix + l, sizeof(prefix) - l, ".%03u",
            static_cast<unsigned int>(now_ms.time_since_epoch().count() % 1000));
   fprintf(stderr, "netsimd D %s %s\n", prefix, buffer);
+  fflush(stderr);
 }
 
 static BtsLogFn logFunction = BtsLogDefault;

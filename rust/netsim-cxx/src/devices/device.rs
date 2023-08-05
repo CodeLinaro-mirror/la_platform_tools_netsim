@@ -105,16 +105,59 @@ impl Device {
             }
             let patch_chip_name = &patch_chip.name;
             // Find the matching chip and patch the proto chip
-            for chip in self.chips.values_mut() {
-                if (patch_chip_name.is_empty() || chip.name.eq(patch_chip_name))
-                    && chip.kind == patch_chip_kind
-                {
-                    chip.patch(patch_chip)?;
-                    break; // next proto chip
+            let target = self.match_target_chip(patch_chip_kind, patch_chip_name)?;
+            match target {
+                Some(chip) => chip.patch(patch_chip)?,
+                None => {
+                    return Err(format!(
+                        "Chip {} not found in device {}",
+                        patch_chip_name, self.name
+                    ))
                 }
             }
         }
         Ok(())
+    }
+
+    fn match_target_chip(
+        &mut self,
+        patch_chip_kind: ProtoChipKind,
+        patch_chip_name: &str,
+    ) -> Result<Option<&mut Chip>, String> {
+        let mut multiple_matches = false;
+        let mut target: Option<&mut Chip> = None;
+        for chip in self.chips.values_mut() {
+            // Check for specified chip kind and matching chip name
+            if chip.kind == patch_chip_kind && chip.name.contains(patch_chip_name) {
+                // Check for exact match
+                if chip.name == patch_chip_name {
+                    multiple_matches = false;
+                    target = Some(chip);
+                    break;
+                }
+                // Check for ambiguous match
+                if target.is_none() {
+                    target = Some(chip);
+                } else {
+                    // Return if no chip name is supplied but multiple chips of specified kind exist
+                    if patch_chip_name.is_empty() {
+                        return Err(format!(
+                            "No chip name is supplied but multiple chips of chip kind {:?} exist.",
+                            chip.kind
+                        ));
+                    }
+                    // Multiple matches were found - continue to look for possible exact match
+                    multiple_matches = true;
+                }
+            }
+        }
+        if multiple_matches {
+            return Err(format!(
+                "Multiple ambiguous matches were found with chip name {}",
+                patch_chip_name
+            ));
+        }
+        Ok(target)
     }
 
     /// Remove a chip from a device.
@@ -169,5 +212,88 @@ impl Device {
             chip.reset()?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    static PATCH_CHIP_KIND: ProtoChipKind = ProtoChipKind::BLUETOOTH;
+    static TEST_DEVICE_NAME: &str = "test_device";
+    static TEST_CHIP_NAME_1: &str = "test-bt-chip-1";
+    static TEST_CHIP_NAME_2: &str = "test-bt-chip-2";
+
+    fn create_test_device() -> Result<Device, String> {
+        let mut device = Device::new(0, "0".to_string(), TEST_DEVICE_NAME.to_string());
+        device.add_chip(
+            &device.name.clone(),
+            ProtoChipKind::BLUETOOTH,
+            TEST_CHIP_NAME_1,
+            "test_manufacturer",
+            "test_product_name",
+        )?;
+        device.add_chip(
+            &device.name.clone(),
+            ProtoChipKind::BLUETOOTH,
+            TEST_CHIP_NAME_2,
+            "test_manufacturer",
+            "test_product_name",
+        )?;
+        Ok(device)
+    }
+
+    #[test]
+    fn test_exact_target_match() {
+        let mut device = create_test_device().unwrap();
+        let result = device.match_target_chip(PATCH_CHIP_KIND, TEST_CHIP_NAME_1);
+        assert!(result.is_ok());
+        let target = result.unwrap();
+        assert!(target.is_some());
+        assert_eq!(target.unwrap().name, TEST_CHIP_NAME_1);
+    }
+
+    #[test]
+    fn test_substring_target_match() {
+        let mut device = create_test_device().unwrap();
+        let result = device.match_target_chip(PATCH_CHIP_KIND, "chip-1");
+        assert!(result.is_ok());
+        let target = result.unwrap();
+        assert!(target.is_some());
+        assert_eq!(target.unwrap().name, TEST_CHIP_NAME_1);
+    }
+
+    #[test]
+    fn test_ambiguous_target_match() {
+        let mut device = create_test_device().unwrap();
+        let result = device.match_target_chip(PATCH_CHIP_KIND, "chip");
+        assert!(result.is_err());
+        assert_eq!(
+            result.err(),
+            Some("Multiple ambiguous matches were found with chip name chip".to_string())
+        );
+    }
+
+    #[test]
+    fn test_ambiguous_empty_target_match() {
+        let mut device = create_test_device().unwrap();
+        let result = device.match_target_chip(PATCH_CHIP_KIND, "");
+        assert!(result.is_err());
+        assert_eq!(
+            result.err(),
+            Some(format!(
+                "No chip name is supplied but multiple chips of chip kind {:?} exist.",
+                PATCH_CHIP_KIND
+            ))
+        );
+    }
+
+    #[test]
+    fn test_no_target_match() {
+        let mut device = create_test_device().unwrap();
+        let invalid_chip_name = "invalid-chip";
+        let result = device.match_target_chip(PATCH_CHIP_KIND, invalid_chip_name);
+        assert!(result.is_ok());
+        let target = result.unwrap();
+        assert!(target.is_none());
     }
 }
