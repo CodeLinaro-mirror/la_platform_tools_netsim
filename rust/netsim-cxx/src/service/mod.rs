@@ -16,16 +16,19 @@ use crate::bluetooth as bluetooth_facade;
 use crate::captures;
 use crate::captures::handlers::clear_pcap_files;
 use crate::config::get_dev;
+use crate::devices::devices_handler::is_shutdown_time;
+use crate::ffi::run_grpc_server_cxx;
 use crate::http_server::run_http_server;
 use crate::resource;
 use crate::transport::socket::run_socket_transport;
 use crate::wifi as wifi_facade;
-use log::info;
-use log::warn;
+use log::{error, info, warn};
 use netsim_common::util::netsim_logger;
 use std::env;
 
 /// Module to control startup, run, and cleanup netsimd services.
+
+const INACTIVITY_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 pub struct ServiceParams {
     fd_startup_str: String,
@@ -80,12 +83,22 @@ impl Service {
                 run_fd_transport(&self.service_params.fd_startup_str);
             }
         }
+        // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge jobs. If set:
+        // 1. Use the fixed port for grpc server.
+        // 2. Don't start http server.
+        let netsim_grpc_port =
+            env::var("NETSIM_GRPC_PORT").map(|val| val.parse::<u32>().unwrap_or(0)).unwrap_or(0);
+        let grpc_server = run_grpc_server_cxx(
+            netsim_grpc_port,
+            self.service_params.no_cli_ui,
+            self.service_params.instance_num,
+        );
+        if grpc_server.is_null() {
+            error!("Failed to run netsimd because unable to start grpc server");
+            return;
+        }
 
-        // Environment variable "NETSIM_GRPC_PORT" is set in forge
-        // jobs. We do not run http server on forge.
-        let forge_job =
-            env::var("NETSIM_GRPC_PORT").map(|val| val.parse::<u32>().unwrap_or(0)).unwrap_or(0)
-                != 0;
+        let forge_job = netsim_grpc_port != 0;
 
         // forge and no_web_ui disables the web server
         if !forge_job && !self.service_params.no_web_ui {
@@ -98,6 +111,15 @@ impl Service {
         if get_dev() {
             new_test_beacon(0);
             new_test_beacon(1);
+        }
+
+        loop {
+            std::thread::sleep(INACTIVITY_CHECK_INTERVAL);
+            if is_shutdown_time() {
+                grpc_server.shut_down();
+                info!("Netsim has been shutdown due to inactivity.");
+                break;
+            }
         }
     }
 }

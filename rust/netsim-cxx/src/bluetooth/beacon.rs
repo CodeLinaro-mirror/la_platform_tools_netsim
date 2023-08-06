@@ -200,6 +200,7 @@ pub fn bluetooth_beacon_patch(
         .unwrap();
 
     // TODO(jmes): Support patching other beacon parameters
+    beacon.address = patch.address.clone();
     beacon.advertise_interval = Duration::from_millis(patch.settings.interval);
 
     Ok(())

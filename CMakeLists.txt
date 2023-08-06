@@ -74,6 +74,7 @@ if(TARGET Rust::Rustc)
          gtest
          gtest_main
          libbt-rootcanal
+         netsim-cli-proto-lib
          netsim-cxx
          netsimd-lib
          netsimd-proto-lib

@@ -52,8 +52,7 @@ use crate::captures::handlers::{
 };
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
-    add_chip_cxx, get_distance_cxx, handle_device_cxx, is_shutdown_time_cxx, remove_chip_cxx,
-    AddChipResultCxx,
+    add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
 };
 use crate::ranging::*;
 use crate::service::{create_service, Service};
@@ -168,10 +167,6 @@ mod ffi {
         #[cxx_name = GetDistanceCxx]
         #[namespace = "netsim::device"]
         fn get_distance_cxx(a: u32, b: u32) -> f32;
-
-        #[cxx_name = IsShutdownTimeCxx]
-        #[namespace = "netsim::device"]
-        fn is_shutdown_time_cxx() -> bool;
 
         // Capture Resource
 
@@ -408,6 +403,23 @@ mod ffi {
         #[rust_name = wifi_stop]
         #[namespace = "netsim::wifi::facade"]
         pub fn Stop();
+
+        // Grpc server.
+        include!("core/server.h");
+
+        #[namespace = "netsim::server"]
+        type GrpcServer;
+        #[rust_name = shut_down]
+        #[namespace = "netsim::server"]
+        fn Shutdown(self: &GrpcServer);
+
+        #[rust_name = run_grpc_server_cxx]
+        #[namespace = "netsim::server"]
+        pub fn RunGrpcServerCxx(
+            netsim_grpc_port: u32,
+            no_cli_ui: bool,
+            instance_num: u16,
+        ) -> UniquePtr<GrpcServer>;
 
     }
 }

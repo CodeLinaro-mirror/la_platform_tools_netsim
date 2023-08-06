@@ -28,6 +28,34 @@ Options:
     * Usage: `netsim devices [OPTIONS]`
     * Options:
         * `-c, --continuous`:    Continuously print device(s) information every second
+* ### `beacon`: A chip that sends advertisements at a set interval
+    * Usage: `netsim beacon <COMMAND>`
+    * #### Commands:
+        * `create`: Create a beacon chip
+            * Usage: `netsim beacon create <COMMAND>`
+                * ##### Commands:
+                    * `ble`: Create a Bluetooth low-energy beacon chip
+                        * Usage: `netsim beacon create ble [DEVICE_NAME | DEVICE_NAME CHIP_NAME] [OPTIONS]`
+                        * Arguments:
+                            * \[DEVICE_NAME\]: Optional name of the device to create. A default name will be generated if not supplied
+                            * \[CHIP_NAME\]: Optional name of the beacon chip to create within the new device. May only be specified if DEVICE_NAME is specified. A default name will be generated if not supplied
+                        * Options:
+                            * `--interval`: Set the advertise interval in ms
+        * `patch`: Modify a beacon chip
+            * Usage: `netsim beacon patch <COMMAND>`
+                * ##### Commands:
+                    * `ble`: Modify a Bluetooth low-energy beacon chip
+                        * Usage: `netsim beacon patch ble <DEVICE_NAME> <CHIP_NAME> <OPTIONS>`
+                        * Arguments:
+                            * \<DEVICE_NAME\>: Name of the device that contains the beacon chip
+                            * \<CHIP_NAME\>: Name of the beacon chip to modify
+                        * Options:
+                            * `--interval`: Set the advertise interval in ms
+        * `remove`: Remove a beacon chip
+            * Usage: `netsim beacon remove <DEVICE_NAME> [CHIP_NAME]`
+            * Arguments:
+                * \<DEVICE_NAME\>: Name of the device to remove
+                * \[CHIP_NAME\]: Optional name of the beacon chip to remove
 * ### `reset`:      Reset Netsim device scene
     * Usage: `netsim reset`
 * ### `capture`:       Control the packet capture functionalities with commands: list, patch, get [aliases: pcap]

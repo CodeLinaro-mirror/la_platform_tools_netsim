@@ -51,8 +51,15 @@ fn has_required_websocket_fields(
 }
 
 /// Handler for websocket server connection
-pub fn handle_websocket(request: &Request<Vec<u8>>, param: &str, writer: ResponseWritable) {
-    match collect_query(param) {
+pub fn handle_websocket(request: &Request<Vec<u8>>, _param: &str, writer: ResponseWritable) {
+    let query = match request.uri().query() {
+        Some(q) => q,
+        None => {
+            writer.put_error(404, "Missing query fields");
+            return;
+        }
+    };
+    match collect_query(query) {
         Ok(queries) if has_required_websocket_fields(&queries, request) => {
             let websocket_accept =
                 match request.headers().get("Sec-Websocket-Key").unwrap().to_str() {

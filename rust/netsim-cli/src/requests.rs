@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::args::{self, Command};
+use crate::args::{self, Beacon, Command};
 use frontend_client_cxx::ffi::GrpcMethod;
 
 impl args::Command {
@@ -35,6 +35,11 @@ impl args::Command {
             Command::Artifact => {
                 panic!("No GrpcMethod for Artifact Command.");
             }
+            Command::Beacon(action) => match action {
+                Beacon::Create(_) => todo!("Beacon create grpc method not yet implemented"),
+                Beacon::Patch(_) => GrpcMethod::PatchDevice,
+                Beacon::Remove(_) => todo!("Beacon remove grpc method not yet implemented"),
+            },
         }
     }
 }

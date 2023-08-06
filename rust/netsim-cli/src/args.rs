@@ -20,11 +20,14 @@ use frontend_proto::common::ChipKind;
 use frontend_proto::frontend;
 use frontend_proto::frontend::patch_capture_request::PatchCapture as PatchCaptureProto;
 use frontend_proto::model;
-use frontend_proto::model::chip::{Bluetooth as Chip_Bluetooth, Radio as Chip_Radio};
-use frontend_proto::model::{Chip, State};
-use frontend_proto::model::{Device, Position};
+use frontend_proto::model::chip::bluetooth_beacon::AdvertiseSettings;
+use frontend_proto::model::chip::{
+    Bluetooth as Chip_Bluetooth, BluetoothBeacon as Chip_Ble_Beacon, Chip as Chip_Type,
+    Radio as Chip_Radio,
+};
+use frontend_proto::model::{Chip, Device, Position, State};
 use netsim_common::util::time_display::TimeDisplay;
-use protobuf::Message;
+use protobuf::{Message, MessageField};
 use std::fmt;
 
 pub type BinaryProtobuf = Vec<u8>;
@@ -64,6 +67,9 @@ pub enum Command {
     Capture(Capture),
     /// Opens netsim artifacts directory (log, pcaps)
     Artifact,
+    /// A chip that sends advertisements at a set interval
+    #[command(subcommand)]
+    Beacon(Beacon),
 }
 
 impl Command {
@@ -139,6 +145,38 @@ impl Command {
             Command::Artifact => {
                 unimplemented!("get_request_bytes is not implemented for Artifact Command.")
             }
+            Command::Beacon(action) => match action {
+                Beacon::Create(_) => {
+                    todo!("get_request_bytes is not yet implemented for beacon create command.")
+                }
+                Beacon::Patch(kind) => match kind {
+                    BeaconPatch::Ble(args) => {
+                        let device = MessageField::some(Device {
+                            name: args.device_name.clone(),
+                            chips: vec![Chip {
+                                name: args.chip_name.clone(),
+                                kind: ChipKind::BLUETOOTH_BEACON.into(),
+                                chip: Some(Chip_Type::BleBeacon(Chip_Ble_Beacon {
+                                    bt: MessageField::some(Chip_Bluetooth::new()),
+                                    settings: MessageField::some(AdvertiseSettings {
+                                        interval: args.settings.interval.unwrap_or_default(),
+                                        ..Default::default()
+                                    }),
+                                    ..Default::default()
+                                })),
+                                ..Default::default()
+                            }],
+                            ..Default::default()
+                        });
+
+                        let result = frontend::PatchDeviceRequest { device, ..Default::default() };
+                        result.write_to_bytes().unwrap()
+                    }
+                },
+                Beacon::Remove(_) => {
+                    todo!("get_request_bytes is not yet implemented for beacon remove command.")
+                }
+            },
         }
     }
 
@@ -279,6 +317,66 @@ pub struct Devices {
 pub enum OnOffState {
     On,
     Off,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Beacon {
+    /// Create a beacon chip
+    #[command(subcommand)]
+    Create(BeaconCreate),
+    /// Modify a beacon chip
+    #[command(subcommand)]
+    Patch(BeaconPatch),
+    /// Remove a beacon chip
+    Remove(BeaconRemove),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BeaconCreate {
+    /// Create a Bluetooth low-energy beacon chip
+    Ble(BeaconCreateBle),
+}
+
+#[derive(Debug, Args)]
+pub struct BeaconCreateBle {
+    /// Name of the device to create
+    pub device_name: Option<String>,
+    /// Name of the beacon chip to create within the new device. May only be specified if device_name is specified
+    pub chip_name: Option<String>,
+    #[command(flatten)]
+    pub settings: BeaconBleSettings,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BeaconPatch {
+    /// Modify a Bluetooth low-energy beacon chip
+    Ble(BeaconPatchBle),
+}
+
+#[derive(Debug, Args)]
+pub struct BeaconPatchBle {
+    /// Name of the device that contains the chip
+    pub device_name: String,
+    /// Name of the beacon chip to modify
+    pub chip_name: String,
+    #[command(flatten)]
+    #[group(required = true, multiple = true)]
+    pub settings: BeaconBleSettings,
+}
+
+#[derive(Debug, Args)]
+pub struct BeaconRemove {
+    /// Name of the device to remove
+    pub device_name: String,
+    /// Name of the beacon chip to remove
+    pub chip_name: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BeaconBleSettings {
+    /// Duration between advertisements in ms
+    #[arg(long)]
+    pub interval: Option<u64>,
 }
 
 #[derive(Debug, Subcommand)]

@@ -420,8 +420,8 @@ fn reset_all() -> Result<(), String> {
     Ok(())
 }
 
-/// Return true if netsimd is idle for 5 minutes
-pub fn is_shutdown_time_cxx() -> bool {
+/// Return true if netsimd is idle for a certain duration.
+pub fn is_shutdown_time() -> bool {
     let devices_arc = clone_devices();
     let devices = devices_arc.read().unwrap();
     match devices.idle_since {
@@ -1035,7 +1035,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_shutdown_time_cxx() {
+    fn test_is_shutdown_time() {
         // Avoiding Interleaving Operations
         let _lock = MUTEX.lock().unwrap();
 
@@ -1047,11 +1047,11 @@ mod tests {
 
         // Set the idle_since value to more than 15 seconds before current time
         travel_back_n_seconds_from_now(16);
-        assert!(is_shutdown_time_cxx());
+        assert!(is_shutdown_time());
 
         // Set the idle_since value to less than 15 seconds before current time
         travel_back_n_seconds_from_now(14);
-        assert!(!is_shutdown_time_cxx());
+        assert!(!is_shutdown_time());
 
         // Refresh Resource again
         refresh_resource();
@@ -1061,7 +1061,7 @@ mod tests {
         let devices_arc = clone_devices();
         let devices = devices_arc.read().unwrap();
         assert!(devices.idle_since.is_none());
-        assert!(!is_shutdown_time_cxx());
+        assert!(!is_shutdown_time());
     }
 
     fn list_request() -> Request<Vec<u8>> {

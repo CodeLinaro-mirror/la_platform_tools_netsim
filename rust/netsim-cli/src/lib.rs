@@ -17,6 +17,7 @@
 mod args;
 mod browser;
 mod capture_handler;
+mod display;
 mod requests;
 mod response;
 
