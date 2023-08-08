@@ -64,6 +64,7 @@ rust_defaults {
     features: ["cuttlefish"],
     rlibs: [
         "libcxx",
+        "libdata_encoding",
         "libfrontend_proto",
         "libnetsim_common",
         "libprotobuf",
@@ -71,6 +72,7 @@ rust_defaults {
         "libregex",
         "libserde",
         "libserde_json",
+        "libtungstenite",
         "liblazy_static",
         "liblog_rust",
         "libopenssl",
@@ -134,6 +136,7 @@ cc_library_host_static {
         "src/hci/bluetooth_facade.cc",
         "src/hci/hci_debug.cc",
         "src/hci/hci_packet_transport.cc",
+        "src/hci/rust_device.cc",
         "src/packet_hub/packet_hub.cc",
         "src/util/ini_file.cc",
         "src/util/log.cc",
@@ -213,8 +216,9 @@ cc_binary_host {
         "libjsoncpp",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite",
-        "lib-netsim-frontend-proto",
+        "lib-netsimd-proto",
         "lib-netsim",
+        "lib-netsim-frontend-proto",
     ],
     whole_static_libs: [
         "libnetsim_cxx",
@@ -249,6 +253,7 @@ cc_test_host {
         "libscriptedbeaconpayload-protos-lite",
         "lib-netsim-frontend-proto",
         "lib-netsim",
+        "lib-netsimd-proto",
     ],
     whole_static_libs: [
         "libnetsim_cxx",
@@ -324,6 +329,7 @@ rust_defaults {
         "libnetsim_common",
         "libprotobuf",
         "libcxx",
+        "liblog_rust",
     ],
 }
 

@@ -18,10 +18,10 @@
 
 #include <memory>
 
-#include "hci_packet.pb.h"
 #include "model/hci/hci_transport.h"    // for HciTransport
 #include "model/setup/async_manager.h"  // for AsyncManager
 #include "model/setup/phy_device.h"     // for Identifier
+#include "netsim/hci_packet.pb.h"
 
 namespace netsim {
 namespace hci {

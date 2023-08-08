@@ -21,12 +21,12 @@
 #include <string>
 #include <utility>
 
-#include "frontend.grpc.pb.h"
-#include "frontend.pb.h"
 #include "google/protobuf/empty.pb.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "netsim/frontend.grpc.pb.h"
+#include "netsim/frontend.pb.h"
 
 namespace netsim {
 namespace {
@@ -95,13 +95,33 @@ class FrontendServer final : public frontend::FrontendService::Service {
     return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
 
+  grpc::Status ListDevice(grpc::ServerContext *context,
+                          const google::protobuf::Empty *empty,
+                          frontend::ListDeviceResponse *reply) {
+    CxxServerResponseWritable writer;
+    HandleDeviceCxx(writer, "GET", "", "");
+    if (writer.is_ok) {
+      google::protobuf::util::JsonStringToMessage(writer.body, reply);
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
+  }
+
   grpc::Status PatchDevice(grpc::ServerContext *context,
                            const frontend::PatchDeviceRequest *request,
                            google::protobuf::Empty *response) {
     CxxServerResponseWritable writer;
     std::string request_json;
     google::protobuf::util::MessageToJsonString(*request, &request_json);
-    HandleDeviceCxx(writer, "PATCH", "", request_json);
+    auto device = request->device();
+    // device.id() starts from 1.
+    // If you don't populate the id, you must fill the name field.
+    if (device.id() == 0) {
+      HandleDeviceCxx(writer, "PATCH", "", request_json);
+    } else {
+      HandleDeviceCxx(writer, "PATCH", std::to_string(device.id()),
+                      request_json);
+    }
     if (writer.is_ok) {
       return grpc::Status::OK;
     }

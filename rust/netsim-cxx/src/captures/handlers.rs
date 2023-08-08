@@ -29,7 +29,8 @@
 
 use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
-use frontend_proto::frontend::{GetDevicesResponse, ListCaptureResponse};
+use frontend_proto::frontend::{ListCaptureResponse, ListDeviceResponse};
+use log::error;
 use netsim_common::util::time_display::TimeDisplay;
 use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
 use std::collections::HashSet;
@@ -66,9 +67,9 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
 /// remains with a flag valid = false so it can be retrieved.
 pub fn update_captures() {
     let device_response = match crate::devices::devices_handler::get_devices() {
-        Ok(scene) => GetDevicesResponse { devices: scene.devices, ..Default::default() },
+        Ok(scene) => ListDeviceResponse { devices: scene.devices, ..Default::default() },
         Err(err) => {
-            println!("{err}");
+            error!("{err}");
             return;
         }
     };
@@ -349,7 +350,7 @@ fn handle_packet(
                         capture.records += 1;
                     }
                     Err(err) => {
-                        println!("netsimd: {err:?}");
+                        error!("{err:?}");
                     }
                 }
             }

@@ -18,19 +18,21 @@ from setuptools.command.build_py import build_py
 class ProtoBuild(build_py):
     """
     This command automatically compiles all netsim .proto files with `protoc` compiler
-    and places generated files under src/netsim/proto
+    and places generated files under src/netsim_grpc/proto/
     """
 
     def run(self):
         here = path.abspath(path.dirname(__file__))
-        proto_dir = path.join(path.dirname(path.dirname(here)), "src", "proto")
-        out_dir = path.join(here, "src", "netsim", "proto")
+        root_dir = path.dirname(path.dirname(here))
+        proto_root_dir = path.join(root_dir, "proto")
+        proto_dir = path.join(proto_root_dir, "netsim")
+        out_dir = path.join(here, "src", "netsim_grpc", "proto")
 
-        for protofile in filter(
+        for proto_file in filter(
             lambda x: x.endswith(".proto"), os.listdir(proto_dir)
         ):
-            source = path.join(proto_dir, protofile)
-            output = path.join(out_dir, protofile).replace(".proto", "_pb2.py")
+            source = path.join(proto_dir, proto_file)
+            output = path.join(out_dir, "netsim", proto_file).replace(".proto", "_pb2.py")
 
             if not path.exists(output) or (
                 path.getmtime(source) > path.getmtime(output)
@@ -42,12 +44,13 @@ class ProtoBuild(build_py):
                         sys.executable,
                         "-m",
                         "grpc_tools.protoc",
-                        f"-I{proto_dir}",
+                        f"-I{proto_root_dir}",
                         f"--python_out={out_dir}",
                         f"--grpc_python_out={out_dir}",
                         source,
                     ]
                 )
+
         super().run()
 
 

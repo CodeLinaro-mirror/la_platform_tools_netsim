@@ -17,7 +17,7 @@
 #pragma once
 
 #include "grpcpp/channel.h"
-#include "packet_streamer.pb.h"
+#include "netsim/packet_streamer.pb.h"
 
 namespace netsim::packet {
 /*

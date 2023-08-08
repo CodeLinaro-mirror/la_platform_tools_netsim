@@ -22,14 +22,14 @@
 #include <string>
 #include <unordered_map>
 
-#include "common.pb.h"
 #include "google/protobuf/empty.pb.h"
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "netsim/common.pb.h"
+#include "netsim/packet_streamer.grpc.pb.h"
+#include "netsim/packet_streamer.pb.h"
 #include "packet_hub/packet_hub.h"
-#include "packet_streamer.grpc.pb.h"
-#include "packet_streamer.pb.h"
 #include "util/log.h"
 
 #ifdef NETSIM_ANDROID_EMULATOR

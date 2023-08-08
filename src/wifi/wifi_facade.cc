@@ -142,7 +142,6 @@ size_t HandleWifiCallback(const uint8_t *buf, size_t size) {
 }
 
 void Start() {
-  BtsLog("wifi::facade::Start()");
 #ifdef NETSIM_ANDROID_EMULATOR
   // Initialize hostapd and slirp inside WiFi Service.
   android::qemu2::HostapdOptions hostapd = {.disabled = false};
@@ -160,7 +159,6 @@ void Start() {
 #endif
 }
 void Stop() {
-  BtsLog("wifi::facade::Stop()");
 #ifdef NETSIM_ANDROID_EMULATOR
   wifi_service->stop();
 #endif

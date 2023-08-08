@@ -24,6 +24,8 @@
 
 use std::io::Write;
 
+use log::error;
+
 use crate::http_server::http_response::HttpResponse;
 
 use super::http_request::StrHeaders;
@@ -38,7 +40,7 @@ pub trait ServerResponseWritable {
     fn put_ok(&mut self, mime_type: &str, body: &str, headers: StrHeaders);
     fn put_error(&mut self, error_code: u16, error_message: &str);
     fn put_ok_with_vec(&mut self, mime_type: &str, body: Vec<u8>, headers: StrHeaders);
-    fn put_ok_switch_protocol(&mut self, connection: &str);
+    fn put_ok_switch_protocol(&mut self, connection: &str, headers: StrHeaders);
 }
 
 // A response writer that can contain a TCP stream or other writable.
@@ -65,7 +67,7 @@ impl<'a> ServerResponseWriter<'a> {
         buffer.extend_from_slice(b"\r\n");
         buffer.extend_from_slice(&response.body);
         if let Err(e) = self.writer.write_all(&buffer) {
-            println!("netsim: handle_connection error {e}");
+            error!("handle_connection error {e}");
         };
         self.response = Some(response);
     }
@@ -84,7 +86,7 @@ impl ServerResponseWritable for ServerResponseWriter<'_> {
     }
     fn put_chunk(&mut self, chunk: &[u8]) {
         if let Err(e) = self.writer.write_all(chunk) {
-            println!("netsim: handle_connection error {e}");
+            error!("handle_connection error {e}");
         };
         self.writer.flush().unwrap();
     }
@@ -103,8 +105,9 @@ impl ServerResponseWritable for ServerResponseWriter<'_> {
         response.add_headers(headers);
         self.put_response(response);
     }
-    fn put_ok_switch_protocol(&mut self, connection: &str) {
-        let response = HttpResponse::new_ok_switch_protocol(connection);
+    fn put_ok_switch_protocol(&mut self, connection: &str, headers: StrHeaders) {
+        let mut response = HttpResponse::new_ok_switch_protocol(connection);
+        response.add_headers(headers);
         self.put_response(response);
     }
 }

@@ -38,6 +38,7 @@ pub mod ffi {
         GetVersion,
         PatchDevice,
         GetDevices,
+        ListDevice,
         Reset,
         ListCapture,
         PatchCapture,

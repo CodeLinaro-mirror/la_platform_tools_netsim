@@ -15,10 +15,12 @@
  */
 
 #pragma once
+#include <cstdint>
 #include <memory>
 #include <string>
 
-#include "model.pb.h"
+#include "hci/rust_device.h"
+#include "netsim/model.pb.h"
 #include "rust/cxx.h"
 
 /** Manages the bluetooth chip emulation provided by the root canal library.
@@ -28,12 +30,20 @@
  */
 
 namespace netsim::hci::facade {
+// Use forward declaration instead of including "netsim-cxx/src/lib.rs.h".
+struct DynRustBluetoothChipCallbacks;
+struct AddRustDeviceResult;
 
 void Reset(uint32_t);
 void Remove(uint32_t);
 void Patch(uint32_t, const model::Chip::Bluetooth &);
 model::Chip::Bluetooth Get(uint32_t);
 uint32_t Add(uint32_t simulation_device);
+
+rust::Box<AddRustDeviceResult> AddRustDevice(
+    uint32_t simulation_device,
+    rust::Box<DynRustBluetoothChipCallbacks> callbacks, const std::string &type,
+    const std::string &address);
 
 void Start();
 void Stop();

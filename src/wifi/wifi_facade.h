@@ -18,7 +18,7 @@
 #include <memory>
 #include <string>
 
-#include "model.pb.h"
+#include "netsim/model.pb.h"
 #include "rust/cxx.h"
 
 /** Manages the WiFi chip emulation provided by the WiFi service library.

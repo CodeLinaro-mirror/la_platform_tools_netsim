@@ -85,6 +85,9 @@ impl Chip {
             Ok(ProtoChipKind::BLUETOOTH) => {
                 chip.set_bt(bluetooth_facade::bluetooth_get(self.facade_id));
             }
+            Ok(ProtoChipKind::BLUETOOTH_BEACON) => {
+                chip.set_bt(bluetooth_facade::bluetooth_get(self.facade_id));
+            }
             Ok(ProtoChipKind::WIFI) => {
                 chip.set_wifi(wifi_facade::wifi_get(self.facade_id));
             }
@@ -107,6 +110,15 @@ impl Chip {
         // Check both ChipKind and RadioKind fields, they should be consistent
         if self.kind == ProtoChipKind::BLUETOOTH && patch.has_bt() {
             bluetooth_facade::bluetooth_patch(self.facade_id, patch.bt());
+            Ok(())
+        } else if self.kind == ProtoChipKind::BLUETOOTH_BEACON
+            && patch.has_ble_beacon()
+            && patch.ble_beacon().bt.is_some()
+        {
+            bluetooth_facade::bluetooth_patch(
+                self.facade_id,
+                &patch.ble_beacon().bt.clone().unwrap(),
+            );
             Ok(())
         } else if self.kind == ProtoChipKind::WIFI && patch.has_wifi() {
             wifi_facade::wifi_patch(self.facade_id, patch.wifi());
@@ -154,15 +166,22 @@ pub fn chip_new(
     chip_manufacturer: &str,
     chip_product_name: &str,
 ) -> Result<Chip, String> {
-    let id = IDS.write().unwrap().next_id();
-    let id_u32 = u32::try_from(device_id).map_err(|err| err.to_string())?;
+    let chip_id = IDS.write().unwrap().next_id();
+    let chip_id_u32 = u32::try_from(chip_id).map_err(|err| err.to_string())?;
+    let device_id_u32 = u32::try_from(device_id).map_err(|err| err.to_string())?;
     let facade_id = match chip_kind {
-        ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(id_u32),
-        ProtoChipKind::WIFI => wifi_facade::wifi_add(id_u32),
+        ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(device_id_u32),
+        ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::beacon::bluetooth_beacon_add(
+            device_id_u32,
+            chip_id_u32,
+            "beacon".to_string(),
+            chip_name.to_string(),
+        ),
+        ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id_u32),
         _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
     };
     Ok(Chip::new(
-        id,
+        chip_id,
         facade_id,
         chip_kind,
         chip_name,

@@ -19,8 +19,8 @@
 #include <optional>
 
 #include "hci/hci_debug.h"
-#include "hci_packet.pb.h"
 #include "model/hci/hci_transport.h"
+#include "netsim/hci_packet.pb.h"
 #include "packet_hub/packet_hub.h"
 #include "rust/cxx.h"
 #include "util/log.h"
