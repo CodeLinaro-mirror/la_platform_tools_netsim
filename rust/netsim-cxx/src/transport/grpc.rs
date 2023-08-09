@@ -26,8 +26,8 @@ struct GrpcTransport {
 }
 
 impl Response for GrpcTransport {
-    fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
-        handle_grpc_response(self.kind, self.facade_id, packet, packet_type)
+    fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
+        handle_grpc_response(self.kind, self.facade_id, &packet, packet_type)
     }
 }
 

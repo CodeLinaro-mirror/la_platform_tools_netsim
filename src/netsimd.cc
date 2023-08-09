@@ -88,28 +88,6 @@ void SignalHandler(int sig) {
 #endif
 #endif
 
-constexpr int DEFAULT_HCI_PORT = 6402;
-
-int get_hci_port(int hci_port_flag, uint16_t instance) {
-  // The following priorities are used to determine the HCI port number:
-  //
-  // 1. The CLI flag `-hci_port`.
-  // 2. The environment variable `NETSIM_HCI_PORT`.
-  // 3. The default value `DEFAULT_HCI_PORT`.
-  int hci_port = 0;
-  if (hci_port_flag != 0) {
-    hci_port = hci_port_flag;
-  } else if (auto netsim_hci_port =
-                 netsim::osutils::GetEnv("NETSIM_HCI_PORT", "0");
-             netsim_hci_port != "0") {
-    char *ptr;
-    hci_port = strtol(netsim_hci_port.c_str(), &ptr, 10);
-  } else {
-    hci_port = DEFAULT_HCI_PORT + instance;
-  }
-  return hci_port;
-}
-
 void ArgError(char *argv[], int c) {
   std::cerr << argv[0] << ": invalid option -- " << (char)c << "\n";
   std::cerr << "Try `" << argv[0] << " --help' for more information.\n";
@@ -209,7 +187,7 @@ int main(int argc, char *argv[]) {
 
   netsim::config::SetDev(dev);
   auto instance_num = netsim::osutils::GetInstance(instance_flag);
-  int hci_port = get_hci_port(hci_port_flag, instance_num);
+  int hci_port = netsim::osutils::GetHciPort(hci_port_flag, instance_num);
   // Daemon mode -- start radio managers
   // get netsim daemon, starting if it doesn't exist
   // Create a frontend grpc client to check if a netsimd is already running.

@@ -282,7 +282,7 @@ mod ffi {
 
         #[rust_name = handle_grpc_response]
         #[namespace = "netsim::backend"]
-        fn HandleResponseCxx(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
+        fn HandleResponseCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
 
         // Bluetooth facade.
         include!("hci/hci_packet_hub.h");
@@ -421,6 +421,16 @@ mod ffi {
             instance_num: u16,
         ) -> UniquePtr<GrpcServer>;
 
+        // OS utilities.
+        include!("util/os_utils.h");
+
+        #[rust_name = get_instance]
+        #[namespace = "netsim::osutils"]
+        pub fn GetInstance(instance_flag: u16) -> u16;
+
+        #[rust_name = get_hci_port]
+        #[namespace = "netsim::osutils"]
+        pub fn GetHciPort(hci_port_flag: u32, instance_flag: u16) -> u32;
     }
 }
 

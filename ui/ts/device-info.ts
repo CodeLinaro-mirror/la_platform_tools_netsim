@@ -334,6 +334,44 @@ import {State} from './netsim/model.js'
     if (this.selectedDevice) {
       if ('chips' in this.selectedDevice && this.selectedDevice.chips) {
         for (const chip of this.selectedDevice.chips) {
+          if ('bleBeacon' in chip && chip.bleBeacon) {
+            let beaconLowEnergyCheckbox = disabledCheckbox;
+            let beaconClassicCheckbox = disabledCheckbox;
+            if ('bt' in chip.bleBeacon && chip.bleBeacon.bt) {
+              if ('lowEnergy' in chip.bleBeacon.bt && chip.bleBeacon.bt.lowEnergy && 'state' in chip.bleBeacon.bt.lowEnergy) {
+                beaconLowEnergyCheckbox = html`
+                <input
+                    id="bleBeacon"
+                    type="checkbox"
+                    .checked=${live(chip.bleBeacon.bt.lowEnergy.state === State.ON)}
+                  />
+                  `
+              }
+              if ('classic' in chip.bleBeacon.bt && chip.bleBeacon.bt.classic && 'state' in chip.bleBeacon.bt.classic) {
+                beaconClassicCheckbox = html`
+                <input
+                    id="classicBeacon"
+                    type="checkbox"
+                    .checked=${live(chip.bleBeacon.bt.classic.state === State.ON)}
+                  />
+                `
+              }
+            }
+            return html`
+              <div class="label">Beacon BLE</div>
+              <div class="info">
+                <label class="switch">
+                  ${beaconLowEnergyCheckbox}
+                </label>
+              </div>
+              <div class="label">Beacon Classic</div>
+              <div class="info">
+                <label class="switch">
+                  ${beaconClassicCheckbox}
+                </label>
+              </div>
+            `
+          }
           if ('bt' in chip && chip.bt) {
             if ('lowEnergy' in chip.bt && chip.bt.lowEnergy && 'state' in chip.bt.lowEnergy) {
               lowEnergyCheckbox = html`

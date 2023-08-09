@@ -211,9 +211,10 @@ void HandleResponse(ChipKind kind, uint32_t facade_id,
 
 // for cxx
 void HandleResponseCxx(uint32_t kind, uint32_t facade_id,
-                       const std::vector<uint8_t> &packet,
+                       const rust::Vec<rust::u8> &packet,
                        /* optional */ uint8_t packet_type) {
-  HandleResponse(ChipKind(kind), facade_id, packet,
+  std::vector<uint8_t> vec(packet.begin(), packet.end());
+  HandleResponse(ChipKind(kind), facade_id, vec,
                  packet::HCIPacket_PacketType(packet_type));
 }
 

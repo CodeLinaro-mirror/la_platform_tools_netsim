@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use lazy_static::lazy_static;
-use log::warn;
+use log::{error, info, warn};
 use std::collections::HashMap;
-use std::sync::{Mutex, RwLock};
+use std::sync::mpsc::{channel, Sender};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 /// The Dispatcher module routes packets from a chip controller instance to
 /// different transport managers. Currently transport managers include
@@ -24,14 +26,26 @@ use std::sync::{Mutex, RwLock};
 /// - FD is a file descriptor to a pair of Unix Fifos used by "-s" startup
 /// - SOCKET is a TCP stream
 
+// When a connection arrives, the transport registers a responder
+// implementing Response trait for the packet stream.
 pub trait Response {
-    fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8);
+    fn response(&mut self, packet: Vec<u8>, packet_type: u8);
 }
 
-// TRANSPORTS is a singleton that contains a hash map from (kind,facade id) to Response.
+// When a responder is registered a responder thread is created to
+// decouple the chip controller from the network. The thread reads
+// ResponsePacket from a queue and sends to responder.
+struct ResponsePacket {
+    packet: Vec<u8>,
+    packet_type: u8,
+}
+
+// SENDERS is a singleton that contains a hash map from
+// (kind,facade_id) to responder queue.
+
 lazy_static! {
-    static ref TRANSPORTS: RwLock<HashMap<String, Mutex<Box<dyn Response + Send>>>> =
-        RwLock::new(HashMap::new());
+    static ref SENDERS: Arc<Mutex<HashMap<String, Sender<ResponsePacket>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 }
 
 fn get_key(kind: u32, facade_id: u32) -> String {
@@ -39,24 +53,58 @@ fn get_key(kind: u32, facade_id: u32) -> String {
 }
 
 /// Register a chip controller instance to a transport manager.
-pub fn register_transport(kind: u32, facade_id: u32, response: Box<dyn Response + Send>) {
+pub fn register_transport(kind: u32, facade_id: u32, mut responder: Box<dyn Response + Send>) {
     let key = get_key(kind, facade_id);
-    TRANSPORTS.write().unwrap().insert(key, Mutex::new(response));
+    let (tx, rx) = channel::<ResponsePacket>();
+    match SENDERS.lock() {
+        Ok(mut map) => {
+            if map.contains_key(&key) {
+                error!("register_transport: key already present for {key}");
+            }
+            map.insert(key.clone(), tx);
+        }
+        Err(_) => panic!("register_transport: poisoned lock"),
+    }
+    let _ = thread::Builder::new().name("transport writer {key}".to_string()).spawn(move || {
+        info!("register_transport: started thread {key}");
+        loop {
+            match rx.recv() {
+                Ok(ResponsePacket { packet, packet_type }) => {
+                    responder.response(packet, packet_type);
+                }
+                Err(_) => {
+                    info!("register_transport: finished thread {key}");
+                    break;
+                }
+            }
+        }
+    });
 }
 
 /// Unregister a chip controller instance.
 pub fn unregister_transport(kind: u32, facade_id: u32) {
     let key = get_key(kind, facade_id);
-    TRANSPORTS.write().unwrap().remove(&key);
+    // Shuts down the responder thread, because sender is dropped.
+    SENDERS.lock().unwrap().remove(&key);
 }
 
-/// For packet_hub in C++.
+// Called by the packet_hub in C++.
+//
+// Queue the response packet to be handled by the responder thread.
+//
 pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
-    let binding = TRANSPORTS.read().unwrap();
-    if let Some(response) = binding.get(&get_key(kind, facade_id)) {
-        response.lock().unwrap().response(packet, packet_type);
+    let key = get_key(kind, facade_id);
+    let mut binding = SENDERS.lock().unwrap();
+    if let Some(responder) = binding.get(&key) {
+        if responder
+            .send(ResponsePacket { packet: packet.as_slice().to_vec(), packet_type })
+            .is_err()
+        {
+            warn!("handle_response: send failed for {key}");
+            binding.remove(&key);
+        }
     } else {
-        warn!("Failed to dispatch response for unknown chip kind `{kind}` and facade ID `{facade_id}`.");
+        warn!("handle_response: unknown chip kind `{kind}` and facade ID `{facade_id}`.");
     };
 }
 
@@ -73,7 +121,7 @@ mod tests {
 
     struct TestTransport {}
     impl Response for TestTransport {
-        fn response(&mut self, _packet: &cxx::CxxVector<u8>, _packet_type: u8) {}
+        fn response(&mut self, _packet: Vec<u8>, _packet_type: u8) {}
     }
 
     #[test]
@@ -82,17 +130,17 @@ mod tests {
         register_transport(0, 0, val);
         let key = get_key(0, 0);
         {
-            let binding = TRANSPORTS.read().unwrap();
+            let binding = SENDERS.lock().unwrap();
             assert!(binding.contains_key(&key));
         }
 
-        TRANSPORTS.write().unwrap().remove(&key);
+        SENDERS.lock().unwrap().remove(&key);
     }
 
     #[test]
     fn test_unregister_transport() {
         register_transport(0, 1, Box::new(TestTransport {}));
         unregister_transport(0, 1);
-        assert!(TRANSPORTS.read().unwrap().get(&get_key(0, 1)).is_none());
+        assert!(SENDERS.lock().unwrap().get(&get_key(0, 1)).is_none());
     }
 }

@@ -31,7 +31,8 @@ namespace netsim {
 namespace osutils {
 namespace {
 
-constexpr int DEFAULT_INSTANCE = 0;
+constexpr uint16_t DEFAULT_INSTANCE = 0;
+constexpr uint32_t DEFAULT_HCI_PORT = 6402;
 
 struct DiscoveryDir {
   const char *root_env;
@@ -138,5 +139,26 @@ uint16_t GetInstance(uint16_t instance_flag) {
   }
   return instance;
 }
+
+uint32_t GetHciPort(uint32_t hci_port_flag, uint16_t instance) {
+  // The following priorities are used to determine the HCI port number:
+  //
+  // 1. The CLI flag `-hci_port`.
+  // 2. The environment variable `NETSIM_HCI_PORT`.
+  // 3. The default value `DEFAULT_HCI_PORT`.
+  uint32_t hci_port = 0;
+  if (hci_port_flag != 0) {
+    hci_port = hci_port_flag;
+  } else if (auto netsim_hci_port =
+                 netsim::osutils::GetEnv("NETSIM_HCI_PORT", "0");
+             netsim_hci_port != "0") {
+    char *ptr;
+    hci_port = strtol(netsim_hci_port.c_str(), &ptr, 10);
+  } else {
+    hci_port = DEFAULT_HCI_PORT + instance;
+  }
+  return hci_port;
+}
+
 }  // namespace osutils
 }  // namespace netsim

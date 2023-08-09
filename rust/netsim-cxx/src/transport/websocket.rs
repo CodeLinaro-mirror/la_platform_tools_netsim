@@ -72,7 +72,7 @@ struct WebSocketTransport {
 }
 
 impl Response for WebSocketTransport {
-    fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+    fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
         let mut buffer = Vec::new();
         buffer.push(packet_type);
         buffer.extend(packet);

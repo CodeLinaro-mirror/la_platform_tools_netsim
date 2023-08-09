@@ -57,6 +57,9 @@ export class DeviceList extends LitElement implements Notifiable {
     this.requestUpdate();
   }
 
+  checkBle(device: Device):
+      boolean{return device.chips.at(0)?.bleBeacon !== undefined}
+
   render() {
     const rainbow = [
       'red',
@@ -77,7 +80,7 @@ export class DeviceList extends LitElement implements Notifiable {
             <center>
               ${
                 true ?  // TODO manage device.visible in Web UI
-                    html`<ns-cube-sprite
+                    this.checkBle(device) ? html`<ns-pyramid-sprite
                       id=${device.name}
                       color=${rainbow[idx % rainbow.length]}
                       size="30px"
@@ -85,18 +88,39 @@ export class DeviceList extends LitElement implements Notifiable {
                       role="listitem"
                       tabindex="0"
                       aria-label="${device.name} in Device Legends"
-                    ></ns-cube-sprite
+                    ></ns-pyramid-sprite
                     >${device.name} ` :
+                                            html`<ns-cube-sprite
+                    id=${device.name}
+                    color=${rainbow[idx % rainbow.length]}
+                    size="30px"
+                    style="opacity:0.5;"
+                    role="listitem"
+                    tabindex="0"
+                    aria-label="${device.name} in Device Legends"
+                  ></ns-cube-sprite
+                  >${device.name} ` :
+                    this.checkBle(device) ?
                     html`<ns-device-dragzone action="move">
-                      <ns-cube-sprite
+                      <ns-pyramid-sprite
                         id=${device.name}
                         color=${rainbow[idx % rainbow.length]}
                         size="30px"
                         role="listitem"
                         tabindex="0"
                         aria-label="${device.name} in Device Legends"
-                      ></ns-cube-sprite> </ns-device-dragzone
-                    >${device.name}`}
+                      ></ns-pyramid-sprite> </ns-device-dragzone
+                    >${device.name}` :
+                    html`<ns-device-dragzone action="move">
+                  <ns-cube-sprite
+                    id=${device.name}
+                    color=${rainbow[idx % rainbow.length]}
+                    size="30px"
+                    role="listitem"
+                    tabindex="0"
+                    aria-label="${device.name} in Device Legends"
+                  ></ns-cube-sprite> </ns-device-dragzone
+                >${device.name}`}
             </center>
           </li>
         `)}

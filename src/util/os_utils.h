@@ -54,5 +54,10 @@ void RedirectStdStream(std::string netsim_temp_dir);
  */
 uint16_t GetInstance(uint16_t instance_flag);
 
+/**
+ * Get hci port number.
+ */
+uint32_t GetHciPort(uint32_t hci_port_flag, uint16_t instance);
+
 }  // namespace osutils
 }  // namespace netsim

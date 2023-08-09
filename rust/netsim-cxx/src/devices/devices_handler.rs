@@ -110,7 +110,7 @@ pub fn add_chip(
             .entries
             .get_mut(&device_id)
             .ok_or(format!("Device not found for device_id: {device_id}"))?
-            .add_chip(device_name, chip_kind, chip_name, chip_manufacturer, chip_product_name)
+            .add_chip(chip_kind, chip_name, chip_manufacturer, chip_product_name)
     };
 
     // Device resource is no longer locked

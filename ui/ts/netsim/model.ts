@@ -87,8 +87,8 @@ export interface Chip_BluetoothBeacon_AdvertiseData {
   /** Whether the device name should be included in advertise packet. */
   includeDeviceName: boolean;
   /**
-   * Whether the transmission power level should be included in the advertise
-   * packet.
+   * Whether the transmission power level should be included in the
+   * advertise packet.
    */
   includeTxPowerLevel: boolean;
   /** Add manufacturer specific data. */

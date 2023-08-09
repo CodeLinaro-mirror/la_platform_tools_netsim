@@ -73,7 +73,7 @@ struct FdTransport {
 }
 
 impl Response for FdTransport {
-    fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+    fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
         let mut buffer = Vec::<u8>::with_capacity(packet.len() + 1);
         buffer.push(packet_type);
         buffer.extend(packet);

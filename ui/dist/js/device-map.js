@@ -1,37 +1,57 @@
-import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as t,LitElement as i,html as o}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as n,customElement as r}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{styleMap as s}from"https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js";import{simulationState as a}from"./device-observer.js";let d=class extends i{constructor(){super(...arguments),this.deviceData=[],this.imageIdx=0,this.numImages=3,this.isometric=!1,this.onChangeMap=()=>{this.imageIdx=(this.imageIdx+1)%this.numImages},this.handleIsometricView=()=>{this.isometric=!this.isometric}}connectedCallback(){super.connectedCallback(),a.registerObserver(this),window.addEventListener("map-button-clicked",this.onChangeMap),window.addEventListener("isometric-button-clicked",this.handleIsometricView)}disconnectedCallback(){window.removeEventListener("isometric-button-clicked",this.handleIsometricView),window.removeEventListener("map-button-clicked",this.onChangeMap),a.removeObserver(this),super.disconnectedCallback()}onNotify(e){this.deviceData=e.devices,this.requestUpdate()}render(){const e=["red","orange","yellow","green","blue","indigo","purple"],t=this.isometric?"perspective(200rem) rotateX(60deg) rotateY(0deg) rotateZ(0deg) scale3d(0.8,0.8,0.8); top: 250px":"none; top: 0px;";return o`
+import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,LitElement as t,html as o}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as n,customElement as r}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{styleMap as s}from"https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js";import{simulationState as a}from"./device-observer.js";let d=class extends t{constructor(){super(...arguments),this.deviceData=[],this.imageIdx=0,this.numImages=3,this.isometric=!1,this.onChangeMap=()=>{this.imageIdx=(this.imageIdx+1)%this.numImages},this.handleIsometricView=()=>{this.isometric=!this.isometric}}connectedCallback(){super.connectedCallback(),a.registerObserver(this),window.addEventListener("map-button-clicked",this.onChangeMap),window.addEventListener("isometric-button-clicked",this.handleIsometricView)}disconnectedCallback(){window.removeEventListener("isometric-button-clicked",this.handleIsometricView),window.removeEventListener("map-button-clicked",this.onChangeMap),a.removeObserver(this),super.disconnectedCallback()}onNotify(e){this.deviceData=e.devices,this.requestUpdate()}checkBle(e){var i;return void 0!==(null===(i=e.chips.at(0))||void 0===i?void 0:i.bleBeacon)}render(){const e=["red","orange","yellow","green","blue","indigo","purple"],i=this.isometric?"perspective(200rem) rotateX(60deg) rotateY(0deg) rotateZ(0deg) scale3d(0.8,0.8,0.8); top: 250px":"none; top: 0px;";return o`
       <ns-device-dropzone role="widget" tabindex="0" aria-label="Device map">
         <div id="dropzone" class="box pattern${this.imageIdx}">
-          ${this.deviceData.map(((t,i)=>o`
-              ${o`
+          ${this.deviceData.map(((i,t)=>o`
+              ${this.checkBle(i)?o`
                     <ns-device-dragzone
                       .action=${"move"}
-                      style=${s({position:"absolute",left:100*t.position.x+"px",top:100*t.position.y+"px"})}
+                      style=${s({position:"absolute",left:100*i.position.x+"px",top:100*i.position.y+"px"})}
                     >
-                      <ns-cube-sprite
-                        id=${t.name}
-                        .color=${e[i%e.length]}
+                      <ns-pyramid-sprite
+                        id=${i.name}
+                        .color=${e[t%e.length]}
                         .size=${"30px"}
                         .controls=${!0}
-                        yaw=${t.orientation.yaw}
-                        pitch=${t.orientation.pitch}
-                        roll=${t.orientation.roll}
-                        posZ=${100*t.position.z}
+                        yaw=${i.orientation.yaw}
+                        pitch=${i.orientation.pitch}
+                        roll=${i.orientation.roll}
+                        posZ=${100*i.position.z}
                         role="widget"
                         tabindex="1"
-                        aria-label="${t.name} on Device Map, Position: ${Math.round(100*t.position.x)}, ${Math.round(100*t.position.y)}, ${Math.round(100*t.position.z)}, Orientation: yaw: ${t.orientation.yaw}, pitch: ${t.orientation.pitch}, roll: ${t.orientation.roll}"
+                        aria-label="${i.name} on Device Map, Position: ${Math.round(100*i.position.x)}, ${Math.round(100*i.position.y)}, ${Math.round(100*i.position.z)}, Orientation: yaw: ${i.orientation.yaw}, pitch: ${i.orientation.pitch}, roll: ${i.orientation.roll}"
                         aria-live="polite"
-                      ></ns-cube-sprite>
+                      ></ns-pyramid-sprite>
                     </ns-device-dragzone>
-                  `}
+                  `:o`
+                  <ns-device-dragzone
+                    .action=${"move"}
+                    style=${s({position:"absolute",left:100*i.position.x+"px",top:100*i.position.y+"px"})}
+                  >
+                    <ns-cube-sprite
+                      id=${i.name}
+                      .color=${e[t%e.length]}
+                      .size=${"30px"}
+                      .controls=${!0}
+                      yaw=${i.orientation.yaw}
+                      pitch=${i.orientation.pitch}
+                      roll=${i.orientation.roll}
+                      posZ=${100*i.position.z}
+                      role="widget"
+                      tabindex="1"
+                      aria-label="${i.name} on Device Map, Position: ${Math.round(100*i.position.x)}, ${Math.round(100*i.position.y)}, ${Math.round(100*i.position.z)}, Orientation: yaw: ${i.orientation.yaw}, pitch: ${i.orientation.pitch}, roll: ${i.orientation.roll}"
+                      aria-live="polite"
+                    ></ns-cube-sprite>
+                  </ns-device-dragzone>
+                `}
             `))}
         </div>
         <style>
           #dropzone {
-            transform: ${t};
+            transform: ${i};
           }
         </style>
       </ns-device-dropzone>
-    `}};d.styles=t`
+    `}};d.styles=i`
     #dropzone {
       margin-left: 200px;
       margin-right: 200px;

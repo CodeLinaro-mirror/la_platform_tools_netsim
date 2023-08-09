@@ -1,8 +1,8 @@
-import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,LitElement as t,html as r}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as s,customElement as n}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as a}from"./device-observer.js";let l=class extends t{constructor(){super(...arguments),this.deviceData=[]}connectedCallback(){super.connectedCallback(),a.registerObserver(this)}disconnectedCallback(){super.disconnectedCallback(),a.removeObserver(this)}onNotify(e){this.deviceData=e.devices,this.requestUpdate()}render(){const e=["red","orange","yellow","green","blue","indigo","purple"];return r`
+import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,LitElement as t,html as r}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as s,customElement as n}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as a}from"./device-observer.js";let l=class extends t{constructor(){super(...arguments),this.deviceData=[]}connectedCallback(){super.connectedCallback(),a.registerObserver(this)}disconnectedCallback(){super.disconnectedCallback(),a.removeObserver(this)}onNotify(e){this.deviceData=e.devices,this.requestUpdate()}checkBle(e){var i;return void 0!==(null===(i=e.chips.at(0))||void 0===i?void 0:i.bleBeacon)}render(){const e=["red","orange","yellow","green","blue","indigo","purple"];return r`
       ${this.deviceData.map(((i,t)=>r`
           <li>
             <center>
-              ${r`<ns-cube-sprite
+              ${this.checkBle(i)?r`<ns-pyramid-sprite
                       id=${i.name}
                       color=${e[t%e.length]}
                       size="30px"
@@ -10,8 +10,17 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
                       role="listitem"
                       tabindex="0"
                       aria-label="${i.name} in Device Legends"
-                    ></ns-cube-sprite
-                    >${i.name} `}
+                    ></ns-pyramid-sprite
+                    >${i.name} `:r`<ns-cube-sprite
+                    id=${i.name}
+                    color=${e[t%e.length]}
+                    size="30px"
+                    style="opacity:0.5;"
+                    role="listitem"
+                    tabindex="0"
+                    aria-label="${i.name} in Device Legends"
+                  ></ns-cube-sprite
+                  >${i.name} `}
             </center>
           </li>
         `))}
