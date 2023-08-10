@@ -15,6 +15,7 @@
 use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::model::{
     self,
+    chip::bluetooth_beacon::advertise_settings,
     chip::bluetooth_beacon::{AdvertiseData, AdvertiseSettings},
 };
 use protobuf::MessageField;
@@ -38,8 +39,8 @@ impl<T> Displayer<T> {
     }
 
     /// Indent the displayed string by a given amount. Returns `self`.
-    pub fn indent(&mut self, indent: usize) -> &Self {
-        self.indent = indent * INDENT_WIDTH;
+    pub fn indent(&mut self, current_indent: usize) -> &Self {
+        self.indent = current_indent + INDENT_WIDTH;
         self
     }
 }
@@ -75,12 +76,7 @@ impl fmt::Display for Displayer<&model::Device> {
 
         let mut chips = self.value.chips.iter().peekable();
         while let Some(chip) = chips.next() {
-            write!(
-                f,
-                "{:indent$}{}",
-                "",
-                Displayer::new(chip, self.verbose).indent(self.indent + 1)
-            )?;
+            write!(f, "{:indent$}{}", "", Displayer::new(chip, self.verbose).indent(self.indent))?;
             if chips.peek().is_some() {
                 writeln!(f)?;
             }
@@ -112,11 +108,7 @@ impl fmt::Display for Displayer<&model::Chip> {
                 }
 
                 if self.verbose {
-                    write!(
-                        f,
-                        "{}",
-                        Displayer::new(ble_beacon, self.verbose).indent(self.indent + 1)
-                    )?;
+                    write!(f, "{}", Displayer::new(ble_beacon, self.verbose).indent(self.indent))?;
                 }
             }
             Some(model::chip::Chip::Bt(bt)) => {
@@ -194,10 +186,10 @@ impl fmt::Display for Displayer<&model::chip::BluetoothBeacon> {
             writeln!(f)?;
             write!(
                 f,
-                "{:indent$}advertise settings:\n{}",
+                "{:indent$}advertise settings:{}",
                 "",
                 Displayer::new(self.value.settings.as_ref().unwrap_or_default(), self.verbose)
-                    .indent(self.indent + 1)
+                    .indent(self.indent)
             )?;
         }
 
@@ -207,10 +199,10 @@ impl fmt::Display for Displayer<&model::chip::BluetoothBeacon> {
             writeln!(f)?;
             write!(
                 f,
-                "{:indent$}advertise packet data:\n{}",
+                "{:indent$}advertise packet data:{}",
                 "",
                 Displayer::new(self.value.adv_data.as_ref().unwrap_or_default(), self.verbose)
-                    .indent(self.indent + 1)
+                    .indent(self.indent)
             )?;
         }
 
@@ -244,17 +236,15 @@ impl fmt::Display for Displayer<&model::Position> {
 impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseSettings> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
-        let width = 25;
-        if self.value.tx_power_level != i32::default() {
-            writeln!(
-                f,
-                "{:indent$}{:width$}: {} dBm",
-                "", "tx power level", self.value.tx_power_level
-            )?;
+
+        if let Some(tx_power_level) = self.value.tx_power_level.as_ref() {
+            writeln!(f)?;
+            write!(f, "{:indent$}{}", "", Displayer::new(tx_power_level, self.verbose))?;
         }
 
-        if self.value.interval != u64::default() {
-            write!(f, "{:indent$}{:width$}: {} ms", "", "interval", self.value.interval)?;
+        if let Some(mode) = self.value.advertise_mode.as_ref() {
+            writeln!(f)?;
+            write!(f, "{:indent$}{}", "", Displayer::new(mode, self.verbose))?;
         }
 
         Ok(())
@@ -267,7 +257,8 @@ impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseData> {
         let width = 25;
 
         if self.value.include_device_name != bool::default() {
-            writeln!(
+            writeln!(f)?;
+            write!(
                 f,
                 "{:indent$}{:width$}: {}",
                 "", "include device name", self.value.include_device_name
@@ -275,7 +266,8 @@ impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseData> {
         }
 
         if self.value.include_tx_power_level != bool::default() {
-            writeln!(
+            writeln!(f)?;
+            write!(
                 f,
                 "{:indent$}{:width$}: {}",
                 "", "include tx power level", self.value.include_tx_power_level
@@ -283,6 +275,7 @@ impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseData> {
         }
 
         if self.value.manufacturer_data != Vec::<u8>::default() {
+            writeln!(f)?;
             write!(
                 f,
                 "{:indent$}{:width$}: {}",
@@ -293,6 +286,36 @@ impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseData> {
         }
 
         Ok(())
+    }
+}
+
+impl fmt::Display for Displayer<&advertise_settings::Advertise_mode> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let indent = self.indent;
+        let width = 25;
+
+        match self.value {
+            advertise_settings::Advertise_mode::ModeNumeric(interval) => {
+                write!(f, "{:indent$}{:width$}: {} ms", "", "interval", interval)
+            }
+            // TODO(jmes): Support displaying named advertise modes.
+            _ => Err(fmt::Error),
+        }
+    }
+}
+
+impl fmt::Display for Displayer<&advertise_settings::Tx_power_level> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let indent = self.indent;
+        let width = 25;
+
+        match self.value {
+            advertise_settings::Tx_power_level::LevelNumeric(level) => {
+                write!(f, "{:indent$}{:width$}: {} dBm", "", "tx power level", level)
+            }
+            // TODO(jmes): Support displaying named tx power levels.
+            _ => Err(fmt::Error),
+        }
     }
 }
 

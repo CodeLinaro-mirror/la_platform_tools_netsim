@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use frontend_proto::model::chip::bluetooth_beacon::advertise_settings::Advertise_mode;
 use log::error;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -159,7 +160,10 @@ impl Command {
                                 chip: Some(Chip_Type::BleBeacon(Chip_Ble_Beacon {
                                     bt: MessageField::some(Chip_Bluetooth::new()),
                                     settings: MessageField::some(AdvertiseSettings {
-                                        interval: args.settings.interval.unwrap_or_default(),
+                                        advertise_mode: args
+                                            .settings
+                                            .interval
+                                            .map(Advertise_mode::ModeNumeric),
                                         ..Default::default()
                                     }),
                                     ..Default::default()

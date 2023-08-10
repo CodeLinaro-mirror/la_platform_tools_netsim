@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::bluetooth as bluetooth_facade;
+use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures;
 use crate::captures::handlers::clear_pcap_files;
 use crate::config::get_dev;
@@ -25,6 +26,7 @@ use crate::wifi as wifi_facade;
 use log::{error, info, warn};
 use netsim_common::util::netsim_logger;
 use std::env;
+use std::time::Duration;
 
 /// Module to control startup, run, and cleanup netsimd services.
 
@@ -162,8 +164,11 @@ pub fn new_test_beacon(idx: u32) {
             chip: Some(ChipProto::BleBeacon(BluetoothBeaconCreateProto {
                 address: format!("00:00:00:00:00:{:x}", idx),
                 settings: MessageField::some(AdvertiseSettingsProto {
-                    tx_power_level: 0,
-                    interval: 1280,
+                    advertise_mode: Some(
+                        ble_advertise_settings::AdvertiseMode::from(Duration::from_millis(1280))
+                            .try_into()
+                            .unwrap(),
+                    ),
                     ..Default::default()
                 }),
                 adv_data: MessageField::some(AdvertiseDataProto {

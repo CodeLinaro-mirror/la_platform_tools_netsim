@@ -81,13 +81,17 @@ if(TARGET Rust::Rustc)
          protobuf::libprotobuf
          util-lib)
 
-  add_dependencies(netsim-test netsimd)
   target_compile_definitions(netsim-test PUBLIC NETSIM_ANDROID_EMULATOR)
-
-  if(ANDROID_EMULATOR_BUILD)
-    add_dependencies(netsim-test emulator) # For PacketStreamerClientTest.
-  endif()
   target_include_directories(netsim-test PRIVATE src)
+
+  # Link NtDll to netsim executables.
+  if(WIN32)
+    target_link_libraries(netsim PRIVATE ntdll)
+    target_link_libraries(netsimd PRIVATE ntdll)
+    target_link_libraries(netsim-test PRIVATE ntdll)
+    android_license(TARGET "ntdll" LIBNAME None SPDX None LICENSE None
+                    LOCAL None)
+  endif()
 endif()
 
 if(NOT NETSIM_EXT)

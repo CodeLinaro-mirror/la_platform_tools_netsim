@@ -73,21 +73,63 @@ message Chip {
 
   message BluetoothBeacon {
     message AdvertiseSettings {
-      // Transmission power in dBm. Must be within [-127, 127].
-      int32 tx_power_level = 1;
-      // Time interval between advertisements in ms.
-      uint64 interval = 2;
+      // From packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
+      enum AdvertiseMode {
+        // 1 second advertise interval
+        LOW_POWER = 0;
+        // 250 ms advertise interval
+        BALANCED = 1;
+        // 100 ms advertise interval
+        LOW_LATENCY = 2;
+      }
+
+      // From packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
+      enum TxPowerLevel {
+        // -21 dBm
+        ULTRA_LOW = 0;
+        // -15 dBm
+        LOW = 1;
+        // -7 dBm
+        MEDIUM = 2;
+        // 1 dBm
+        HIGH = 3;
+      }
+
+      // Advertising latency.
+      oneof advertise_mode {
+        AdvertiseMode mode = 1;
+        // Numeric time interval between advertisements in ms.
+        uint64 mode_numeric = 2;
+      }
+
+      // Transmission power level.
+      oneof tx_power_level {
+        TxPowerLevel level = 3;
+        // Numeric transmission power in dBm. Must be within [-127, 127].
+        int32 level_numeric = 4;
+      }
+
+      bool scannable = 5;
+      uint64 timeout = 6;
     }
 
     message AdvertiseData {
+      message Service {
+        string uuid = 1;
+        bytes data = 2;
+      }
+
       // Whether the device name should be included in advertise packet.
-      bool include_device_name = 2;
+      bool include_device_name = 1;
       // Whether the transmission power level should be included in the
       // advertise packet.
-      bool include_tx_power_level = 3;
-      // Add manufacturer specific data.
-      bytes manufacturer_data = 4;
+      bool include_tx_power_level = 2;
+      // Manufacturer specific data.
+      bytes manufacturer_data = 3;
+      // GATT services supported by the devices
+      repeated Service services = 4;
     }
+
     // TODO: Only include Radio low_energy.
     Bluetooth bt = 1;
     string address = 2;
