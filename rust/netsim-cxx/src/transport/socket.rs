@@ -18,6 +18,7 @@ use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::ffi::handle_request_cxx;
 use crate::transport::h4;
 use frontend_proto::common::ChipKind;
+use frontend_proto::model::ChipCreate;
 use log::{error, info, warn};
 use std::io::{ErrorKind, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
@@ -79,13 +80,17 @@ fn accept_incoming(hci_port: u16) -> std::io::Result<()> {
 
 fn handle_hci_client(stream: TcpStream) {
     // ...
+    let chip_create_proto = ChipCreate {
+        kind: ChipKind::BLUETOOTH.into(),
+        name: format!("socket-{}", stream.peer_addr().unwrap()),
+        manufacturer: "Google".to_string(),
+        product_name: "Google".to_string(),
+        ..Default::default()
+    };
     let result = match add_chip(
         &stream.peer_addr().unwrap().port().to_string(),
         &format!("socket-{}", stream.peer_addr().unwrap()),
-        ChipKind::BLUETOOTH,
-        &format!("socket-{}", stream.peer_addr().unwrap()),
-        "Google",
-        "Google",
+        &chip_create_proto,
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {

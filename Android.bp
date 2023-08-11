@@ -224,6 +224,9 @@ cc_binary_host {
     ],
     ldflags: ["-Wl,--allow-multiple-definition"],
     required: netsim_ui_modules,
+    strip: {
+        keep_symbols_and_debug_frame: true,
+    },
 }
 
 cc_test_host {

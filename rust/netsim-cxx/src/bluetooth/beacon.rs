@@ -244,14 +244,15 @@ pub fn new_beacon(device_proto: &DeviceCreateProto) -> Result<AddChipResult, Str
     };
 
     let mut device_guid = BEACON_DEVICE_GUID_FACTORY.lock().unwrap().next_id();
-    let ids = add_chip(
-        &format!("beacon-device-{device_guid}"),
-        &device_proto.name,
-        chip_kind,
-        &chip_proto.name,
-        &chip_proto.manufacturer,
-        &chip_proto.product_name,
-    )?;
+    let chip_create_proto = ChipCreateProto {
+        kind: chip_kind.into(),
+        name: chip_proto.name.clone(),
+        manufacturer: chip_proto.manufacturer.clone(),
+        product_name: chip_proto.product_name.clone(),
+        ..Default::default()
+    };
+    let ids =
+        add_chip(&format!("beacon-device-{device_guid}"), &device_proto.name, &chip_create_proto)?;
 
     bluetooth_beacon_patch(
         ids.chip_id,

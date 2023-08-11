@@ -40,6 +40,7 @@ use cxx::CxxString;
 use frontend_proto::common::ChipKind as ProtoChipKind;
 use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::frontend::PatchDeviceRequest;
+use frontend_proto::model::ChipCreate;
 use frontend_proto::model::Position as ProtoPosition;
 use frontend_proto::model::Scene as ProtoScene;
 use http::Request;
@@ -92,14 +93,14 @@ fn notify_all() {
 ///
 /// The guid is a transport layer identifier for the device (host:port)
 /// that is adding the chip.
+///
+/// TODO: Replace the parameter of add_chip with a single protobuf
 pub fn add_chip(
     device_guid: &str,
     device_name: &str,
-    chip_kind: ProtoChipKind,
-    chip_name: &str,
-    chip_manufacturer: &str,
-    chip_product_name: &str,
+    chip_create_proto: &ChipCreate,
 ) -> Result<AddChipResult, String> {
+    let chip_kind = chip_create_proto.kind.enum_value_or(ProtoChipKind::UNSPECIFIED);
     let result = {
         let devices_arc = clone_devices();
         let mut devices = devices_arc.write().unwrap();
@@ -110,7 +111,12 @@ pub fn add_chip(
             .entries
             .get_mut(&device_id)
             .ok_or(format!("Device not found for device_id: {device_id}"))?
-            .add_chip(chip_kind, chip_name, chip_manufacturer, chip_product_name)
+            .add_chip(
+                chip_kind,
+                &chip_create_proto.name,
+                &chip_create_proto.manufacturer,
+                &chip_create_proto.product_name,
+            )
     };
 
     // Device resource is no longer locked
@@ -123,7 +129,7 @@ pub fn add_chip(
                     device_id,
                     chip_id,
                     "beacon".to_string(),
-                    chip_name.to_string(),
+                    chip_create_proto.name.clone(),
                 )?,
                 ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id),
                 _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
@@ -208,14 +214,14 @@ pub fn add_chip_cxx(
         "UWB" => ProtoChipKind::UWB,
         _ => ProtoChipKind::UNSPECIFIED,
     };
-    match add_chip(
-        device_guid,
-        device_name,
-        chip_kind_proto,
-        chip_name,
-        chip_manufacturer,
-        chip_product_name,
-    ) {
+    let chip_create_proto = ChipCreate {
+        kind: chip_kind_proto.into(),
+        name: chip_name.to_string(),
+        manufacturer: chip_manufacturer.to_string(),
+        product_name: chip_product_name.to_string(),
+        ..Default::default()
+    };
+    match add_chip(device_guid, device_name, &chip_create_proto) {
         Ok(result) => Box::new(AddChipResultCxx {
             device_id: result.device_id,
             chip_id: result.chip_id,
@@ -596,14 +602,14 @@ mod tests {
 
     impl TestChipParameters<'_> {
         fn add_chip(&self) -> Result<AddChipResult, String> {
-            super::add_chip(
-                self.device_guid,
-                self.device_name,
-                self.chip_kind,
-                self.chip_name,
-                self.chip_manufacturer,
-                self.chip_product_name,
-            )
+            let chip_create_proto = ChipCreate {
+                kind: self.chip_kind.into(),
+                name: self.chip_name.to_string(),
+                manufacturer: self.chip_manufacturer.to_string(),
+                product_name: self.chip_product_name.to_string(),
+                ..Default::default()
+            };
+            super::add_chip(self.device_guid, self.device_name, &chip_create_proto)
         }
 
         fn get_or_create_device(&self) -> DeviceIdentifier {

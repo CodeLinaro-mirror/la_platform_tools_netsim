@@ -2184,6 +2184,8 @@ pub mod chip {
 // @@protoc_insertion_point(message:netsim.model.ChipCreate)
 pub struct ChipCreate {
     // message fields
+    // @@protoc_insertion_point(field:netsim.model.ChipCreate.kind)
+    pub kind: ::protobuf::EnumOrUnknown<super::common::ChipKind>,
     // @@protoc_insertion_point(field:netsim.model.ChipCreate.name)
     pub name: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.model.ChipCreate.manufacturer)
@@ -2208,7 +2210,7 @@ impl ChipCreate {
         ::std::default::Default::default()
     }
 
-    // .netsim.model.ChipCreate.BluetoothBeaconCreate ble_beacon = 4;
+    // .netsim.model.ChipCreate.BluetoothBeaconCreate ble_beacon = 5;
 
     pub fn ble_beacon(&self) -> &chip_create::BluetoothBeaconCreate {
         match self.chip {
@@ -2258,8 +2260,13 @@ impl ChipCreate {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(4);
+        let mut fields = ::std::vec::Vec::with_capacity(5);
         let mut oneofs = ::std::vec::Vec::with_capacity(1);
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "kind",
+            |m: &ChipCreate| { &m.kind },
+            |m: &mut ChipCreate| { &mut m.kind },
+        ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "name",
             |m: &ChipCreate| { &m.name },
@@ -2301,16 +2308,19 @@ impl ::protobuf::Message for ChipCreate {
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
-                10 => {
-                    self.name = is.read_string()?;
+                8 => {
+                    self.kind = is.read_enum_or_unknown()?;
                 },
                 18 => {
-                    self.manufacturer = is.read_string()?;
+                    self.name = is.read_string()?;
                 },
                 26 => {
-                    self.product_name = is.read_string()?;
+                    self.manufacturer = is.read_string()?;
                 },
                 34 => {
+                    self.product_name = is.read_string()?;
+                },
+                42 => {
                     self.chip = ::std::option::Option::Some(chip_create::Chip::BleBeacon(is.read_message()?));
                 },
                 tag => {
@@ -2325,14 +2335,17 @@ impl ::protobuf::Message for ChipCreate {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
+        if self.kind != ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED) {
+            my_size += ::protobuf::rt::int32_size(1, self.kind.value());
+        }
         if !self.name.is_empty() {
-            my_size += ::protobuf::rt::string_size(1, &self.name);
+            my_size += ::protobuf::rt::string_size(2, &self.name);
         }
         if !self.manufacturer.is_empty() {
-            my_size += ::protobuf::rt::string_size(2, &self.manufacturer);
+            my_size += ::protobuf::rt::string_size(3, &self.manufacturer);
         }
         if !self.product_name.is_empty() {
-            my_size += ::protobuf::rt::string_size(3, &self.product_name);
+            my_size += ::protobuf::rt::string_size(4, &self.product_name);
         }
         if let ::std::option::Option::Some(ref v) = self.chip {
             match v {
@@ -2348,19 +2361,22 @@ impl ::protobuf::Message for ChipCreate {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if self.kind != ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED) {
+            os.write_enum(1, ::protobuf::EnumOrUnknown::value(&self.kind))?;
+        }
         if !self.name.is_empty() {
-            os.write_string(1, &self.name)?;
+            os.write_string(2, &self.name)?;
         }
         if !self.manufacturer.is_empty() {
-            os.write_string(2, &self.manufacturer)?;
+            os.write_string(3, &self.manufacturer)?;
         }
         if !self.product_name.is_empty() {
-            os.write_string(3, &self.product_name)?;
+            os.write_string(4, &self.product_name)?;
         }
         if let ::std::option::Option::Some(ref v) = self.chip {
             match v {
                 &chip_create::Chip::BleBeacon(ref v) => {
-                    ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
+                    ::protobuf::rt::write_message_field_with_cached_size(5, v, os)?;
                 },
             };
         }
@@ -2381,6 +2397,7 @@ impl ::protobuf::Message for ChipCreate {
     }
 
     fn clear(&mut self) {
+        self.kind = ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED);
         self.name.clear();
         self.manufacturer.clear();
         self.product_name.clear();
@@ -2390,6 +2407,7 @@ impl ::protobuf::Message for ChipCreate {
 
     fn default_instance() -> &'static ChipCreate {
         static instance: ChipCreate = ChipCreate {
+            kind: ::protobuf::EnumOrUnknown::from_i32(0),
             name: ::std::string::String::new(),
             manufacturer: ::std::string::String::new(),
             product_name: ::std::string::String::new(),
@@ -3542,10 +3560,11 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     rerData\x12T\n\x08services\x18\x04\x20\x03(\x0b28.netsim.model.Chip.Blue\
     toothBeacon.AdvertiseData.ServiceR\x08services\x1a1\n\x07Service\x12\x12\
     \n\x04uuid\x18\x01\x20\x01(\tR\x04uuid\x12\x12\n\x04data\x18\x02\x20\x01\
-    (\x0cR\x04dataB\x06\n\x04chip\"\x93\x03\n\nChipCreate\x12\x12\n\x04name\
-    \x18\x01\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\x18\x02\x20\x01(\tR\
-    \x0cmanufacturer\x12!\n\x0cproduct_name\x18\x03\x20\x01(\tR\x0bproductNa\
-    me\x12O\n\nble_beacon\x18\x04\x20\x01(\x0b2..netsim.model.ChipCreate.Blu\
+    (\x0cR\x04dataB\x06\n\x04chip\"\xc0\x03\n\nChipCreate\x12+\n\x04kind\x18\
+    \x01\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x12\n\x04name\
+    \x18\x02\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\x18\x03\x20\x01(\tR\
+    \x0cmanufacturer\x12!\n\x0cproduct_name\x18\x04\x20\x01(\tR\x0bproductNa\
+    me\x12O\n\nble_beacon\x18\x05\x20\x01(\x0b2..netsim.model.ChipCreate.Blu\
     etoothBeaconCreateH\0R\tbleBeacon\x1a\xd0\x01\n\x15BluetoothBeaconCreate\
     \x12\x18\n\x07address\x18\x01\x20\x01(\tR\x07address\x12P\n\x08settings\
     \x18\x03\x20\x01(\x0b24.netsim.model.Chip.BluetoothBeacon.AdvertiseSetti\

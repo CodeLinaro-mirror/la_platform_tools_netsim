@@ -22,6 +22,7 @@ use super::uci;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::ffi::handle_request_cxx;
 use frontend_proto::common::ChipKind;
+use frontend_proto::model::ChipCreate;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -179,13 +180,17 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
                         ChipKindEnum::UWB => ChipKind::UWB,
                         _ => ChipKind::UNSPECIFIED,
                     };
+                    let chip_create_proto = ChipCreate {
+                        kind: chip_kind.into(),
+                        name: chip.id.unwrap_or_default(),
+                        manufacturer: chip.manufacturer.unwrap_or_default(),
+                        product_name: chip.product_name.unwrap_or_default(),
+                        ..Default::default()
+                    };
                     let result = match add_chip(
                         &chip.fd_in.to_string(),
                         &device.name.clone(),
-                        chip_kind,
-                        &chip.id.unwrap_or_default(),
-                        &chip.manufacturer.unwrap_or_default(),
-                        &chip.product_name.unwrap_or_default(),
+                        &chip_create_proto,
                     ) {
                         Ok(chip_result) => chip_result,
                         Err(err) => {

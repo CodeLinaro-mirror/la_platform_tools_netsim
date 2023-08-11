@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, io::Cursor, net::TcpStream};
 
 use frontend_proto::common::ChipKind;
+use frontend_proto::model::ChipCreate;
 use http::Request;
 use log::{error, info, warn};
 use tungstenite::{protocol::Role, Message, WebSocket};
@@ -86,16 +87,20 @@ impl Response for WebSocketTransport {
 
 /// Run websocket transport for packet flow in netsim
 pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) {
+    let chip_create_proto = ChipCreate {
+        kind: ChipKind::BLUETOOTH.into(),
+        name: format!("websocket-{}", stream.peer_addr().unwrap()),
+        manufacturer: "Google".to_string(),
+        product_name: "Google".to_string(),
+        ..Default::default()
+    };
     // Add Chip
     let result = match add_chip(
         &stream.peer_addr().unwrap().port().to_string(),
         queries
             .get("name")
             .unwrap_or(&format!("websocket-device-{}", stream.peer_addr().unwrap()).as_str()),
-        ChipKind::BLUETOOTH,
-        &format!("websocket-{}", stream.peer_addr().unwrap()),
-        "Google",
-        "Google",
+        &chip_create_proto,
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {
