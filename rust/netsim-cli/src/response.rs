@@ -14,11 +14,11 @@
 
 use std::cmp::max;
 
-use crate::args::{self, Beacon, BeaconPatch, Capture, Command, OnOffState};
+use crate::args::{self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, OnOffState};
 use crate::display::Displayer;
 use frontend_proto::{
     common::ChipKind,
-    frontend::{ListCaptureResponse, ListDeviceResponse, VersionResponse},
+    frontend::{CreateDeviceResponse, ListCaptureResponse, ListDeviceResponse, VersionResponse},
     model::{self, State},
 };
 use netsim_common::util::time_display::TimeDisplay;
@@ -91,7 +91,18 @@ impl args::Command {
                 unimplemented!("No Grpc Response for Artifact Command.");
             }
             Command::Beacon(action) => match action {
-                Beacon::Create(_) => todo!("Beacon create response not yet implemented."),
+                Beacon::Create(kind) => match kind {
+                    BeaconCreate::Ble(_) => {
+                        if verbose {
+                            let response_proto = CreateDeviceResponse::parse_from_bytes(response)
+                                .expect("could not read device from response");
+                            todo!(
+                                "Created device '{}', but chip creation is not yet implemented!",
+                                response_proto.device.name
+                            );
+                        }
+                    }
+                },
                 Beacon::Patch(kind) => match kind {
                     BeaconPatch::Ble(args) => {
                         if verbose {

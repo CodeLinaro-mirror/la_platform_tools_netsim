@@ -51,7 +51,8 @@ class HciPacketTransport : public rootcanal::HciTransport {
    */
   void Connect(rootcanal::PhyDevice::Identifier device_id);
 
-  void Send(rootcanal::PacketType packet_type, const std::vector<uint8_t> &packet) override;
+  void Send(rootcanal::PacketType packet_type,
+            const std::vector<uint8_t> &packet) override;
 
   void RegisterCallbacks(PacketCallback packet_callback,
                          CloseCallback close_callback) override;

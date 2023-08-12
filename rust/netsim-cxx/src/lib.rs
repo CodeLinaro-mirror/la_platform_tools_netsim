@@ -431,6 +431,13 @@ mod ffi {
         #[rust_name = get_hci_port]
         #[namespace = "netsim::osutils"]
         pub fn GetHciPort(hci_port_flag: u32, instance_flag: u16) -> u32;
+
+        // Crash report.
+        include!("util/crash_report.h");
+
+        #[rust_name = set_up_crash_report]
+        #[namespace = "netsim"]
+        pub fn SetUpCrashReport();
     }
 }
 

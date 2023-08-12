@@ -20,13 +20,12 @@ use frontend_client_cxx::ffi::{FrontendClient, GrpcMethod};
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend;
 use frontend_proto::frontend::patch_capture_request::PatchCapture as PatchCaptureProto;
-use frontend_proto::model;
 use frontend_proto::model::chip::bluetooth_beacon::AdvertiseSettings;
 use frontend_proto::model::chip::{
     Bluetooth as Chip_Bluetooth, BluetoothBeacon as Chip_Ble_Beacon, Chip as Chip_Type,
     Radio as Chip_Radio,
 };
-use frontend_proto::model::{Chip, Device, Position, State};
+use frontend_proto::model::{self, Chip, Device, DeviceCreate, Position, State};
 use netsim_common::util::time_display::TimeDisplay;
 use protobuf::{Message, MessageField};
 use std::fmt;
@@ -147,9 +146,18 @@ impl Command {
                 unimplemented!("get_request_bytes is not implemented for Artifact Command.")
             }
             Command::Beacon(action) => match action {
-                Beacon::Create(_) => {
-                    todo!("get_request_bytes is not yet implemented for beacon create command.")
-                }
+                Beacon::Create(kind) => match kind {
+                    BeaconCreate::Ble(args) => {
+                        let device = MessageField::some(DeviceCreate {
+                            name: args.device_name.clone().unwrap_or_default(),
+                            // TODO(jmes): Handle chip creation
+                            ..Default::default()
+                        });
+
+                        let result = frontend::CreateDeviceRequest { device, ..Default::default() };
+                        result.write_to_bytes().unwrap()
+                    }
+                },
                 Beacon::Patch(kind) => match kind {
                     BeaconPatch::Ble(args) => {
                         let device = MessageField::some(Device {

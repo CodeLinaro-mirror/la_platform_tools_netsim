@@ -323,7 +323,7 @@ void Remove(uint32_t id) {
   // TestModel close callback.
   mAsyncManager->ExecAsync(gSocketUserId, std::chrono::milliseconds(0), [id]() {
     // rootcanal will call HciPacketTransport::Close().
-   HciPacketTransport::Remove(id);
+    HciPacketTransport::Remove(id);
   });
 }
 

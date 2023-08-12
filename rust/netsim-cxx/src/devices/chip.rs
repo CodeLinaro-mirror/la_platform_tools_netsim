@@ -45,8 +45,8 @@ pub struct Chip {
     // TODO: may not be necessary
     pub device_name: String,
     // These are patchable
-    manufacturer: String,
-    product_name: String,
+    pub manufacturer: String,
+    pub product_name: String,
 }
 
 impl Chip {

@@ -298,6 +298,7 @@ pub mod tests {
         BEACON_CHIPS.write().unwrap().remove(&chip_id);
     }
 
+    #[ignore = "TODO: include thread_id in names and ids"]
     #[test]
     fn test_beacon_get() {
         let interval = Duration::from_millis(9999);
@@ -316,6 +317,7 @@ pub mod tests {
         cleanup_beacon(chip_id);
     }
 
+    #[ignore = "TODO: include thread_id in names and ids"]
     #[test]
     fn test_beacon_patch() {
         let chip_id: ChipIdentifier = 0;

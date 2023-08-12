@@ -73,7 +73,8 @@ message Chip {
 
   message BluetoothBeacon {
     message AdvertiseSettings {
-      // From packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
+      // From
+      // packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
       enum AdvertiseMode {
         // 1 second advertise interval
         LOW_POWER = 0;
@@ -83,7 +84,8 @@ message Chip {
         LOW_LATENCY = 2;
       }
 
-      // From packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
+      // From
+      // packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
       enum TxPowerLevel {
         // -21 dBm
         ULTRA_LOW = 0;

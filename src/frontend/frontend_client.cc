@@ -105,6 +105,24 @@ class FrontendClientImpl : public FrontendClient {
     return make_result(status, response);
   }
 
+  std::unique_ptr<ClientResult> CreateDevice(
+      rust::Vec<::rust::u8> const &request_byte_vec) const {
+    frontend::CreateDeviceResponse response;
+    grpc::ClientContext context_;
+    frontend::CreateDeviceRequest request;
+    if (!request.ParseFromArray(request_byte_vec.data(),
+                                request_byte_vec.size())) {
+      return make_result(
+          grpc::Status(
+              grpc::StatusCode::INVALID_ARGUMENT,
+              "Error parsing CreateDevice request protobuf. request size:" +
+                  std::to_string(request_byte_vec.size())),
+          response);
+    }
+    auto status = stub_->CreateDevice(&context_, request, &response);
+    return make_result(status, response);
+  }
+
   // Patchs the information of the device
   std::unique_ptr<ClientResult> PatchDevice(
       rust::Vec<::rust::u8> const &request_byte_vec) const override {
@@ -191,6 +209,8 @@ class FrontendClientImpl : public FrontendClient {
     switch (grpc_method) {
       case frontend::GrpcMethod::GetVersion:
         return GetVersion();
+      case frontend::GrpcMethod::CreateDevice:
+        return CreateDevice(request_byte_vec);
       case frontend::GrpcMethod::PatchDevice:
         return PatchDevice(request_byte_vec);
       case frontend::GrpcMethod::ListDevice:

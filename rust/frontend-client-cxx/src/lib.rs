@@ -37,6 +37,7 @@ pub mod ffi {
     #[derive(Debug, PartialEq, Eq)]
     pub enum GrpcMethod {
         GetVersion,
+        CreateDevice,
         PatchDevice,
         ListDevice,
         Reset,

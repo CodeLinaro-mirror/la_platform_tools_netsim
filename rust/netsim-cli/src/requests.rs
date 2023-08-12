@@ -36,7 +36,7 @@ impl args::Command {
                 panic!("No GrpcMethod for Artifact Command.");
             }
             Command::Beacon(action) => match action {
-                Beacon::Create(_) => todo!("Beacon create grpc method not yet implemented"),
+                Beacon::Create(_) => GrpcMethod::CreateDevice,
                 Beacon::Patch(_) => GrpcMethod::PatchDevice,
                 Beacon::Remove(_) => todo!("Beacon remove grpc method not yet implemented"),
             },

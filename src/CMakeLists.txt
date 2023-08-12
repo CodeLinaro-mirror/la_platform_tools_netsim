@@ -15,7 +15,9 @@
 android_add_library(
   TARGET util-lib
   LICENSE Apache-2.0
-  SRC util/filesystem.h
+  SRC util/crash_report.cc
+      util/crash_report.h
+      util/filesystem.h
       util/ini_file.cc
       util/ini_file.h
       util/log.cc
@@ -25,6 +27,7 @@ android_add_library(
       util/string_utils.cc
       util/string_utils.h)
 target_include_directories(util-lib PRIVATE .)
+target_compile_definitions(util-lib PUBLIC NETSIM_ANDROID_EMULATOR)
 
 if(TARGET Rust::Rustc)
   set(cxx_bridge_binary_folder

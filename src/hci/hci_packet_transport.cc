@@ -54,7 +54,8 @@ void HciPacketTransport::Connect(rootcanal::PhyDevice::Identifier device_id) {
 }
 
 // Called by HCITransport (rootcanal)
-void HciPacketTransport::Send(rootcanal::PacketType packet_type, const std::vector<uint8_t>& data) {
+void HciPacketTransport::Send(rootcanal::PacketType packet_type,
+                              const std::vector<uint8_t> &data) {
   // The packet types have standard values, converting from
   // rootcanal::PacketType to HCIPacket_PacketType is safe.
   packet::HCIPacket_PacketType hci_packet_type =
@@ -84,7 +85,6 @@ void HciPacketTransport::Tick() {}
 void HciPacketTransport::Request(
     packet::HCIPacket_PacketType packet_type,
     const std::shared_ptr<std::vector<uint8_t>> &packet) {
-
   assert(mPacketCallback);
   // The packet types have standard values, converting from
   // HCIPacket_PacketType to rootcanal::PacketType is safe.
@@ -93,8 +93,9 @@ void HciPacketTransport::Request(
   if (packet_type == HCIPacket::COMMAND) {
     auto cmd = HciCommandToString(packet->at(0), packet->at(1));
   }
-  mAsyncManager->Synchronize(
-      [this, rootcanal_packet_type, packet]() { mPacketCallback(rootcanal_packet_type, packet); });
+  mAsyncManager->Synchronize([this, rootcanal_packet_type, packet]() {
+    mPacketCallback(rootcanal_packet_type, packet);
+  });
 }
 
 void HciPacketTransport::Add(
