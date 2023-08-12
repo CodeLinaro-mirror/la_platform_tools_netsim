@@ -53,6 +53,7 @@ impl fmt::Display for Displayer<ListDeviceResponse> {
         while let Some(device) = devices.next() {
             write!(f, "{:indent$}{}", "", Displayer::new(device, self.verbose))?;
             if devices.peek().is_some() {
+                // We print the newline here instead of in the Device displayer because we don't want a newline before the very first device.
                 writeln!(f)?;
             }
         }
@@ -74,12 +75,8 @@ impl fmt::Display for Displayer<&model::Device> {
             Displayer::new(self.value.position.as_ref().unwrap_or_default(), self.verbose)
         )?;
 
-        let mut chips = self.value.chips.iter().peekable();
-        while let Some(chip) = chips.next() {
+        for chip in self.value.chips.iter() {
             write!(f, "{:indent$}{}", "", Displayer::new(chip, self.verbose).indent(self.indent))?;
-            if chips.peek().is_some() {
-                writeln!(f)?;
-            }
         }
 
         Ok(())
@@ -98,7 +95,7 @@ impl fmt::Display for Displayer<&model::Chip> {
 
                 if self.verbose || radio.state.enum_value_or_default() == model::State::OFF {
                     writeln!(f)?;
-                    writeln!(
+                    write!(
                         f,
                         "{:indent$}{:beacon_width$} {}",
                         "",
@@ -108,6 +105,7 @@ impl fmt::Display for Displayer<&model::Chip> {
                 }
 
                 if self.verbose {
+                    writeln!(f)?;
                     write!(f, "{}", Displayer::new(ble_beacon, self.verbose).indent(self.indent))?;
                 }
             }

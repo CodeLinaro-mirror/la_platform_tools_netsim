@@ -19,8 +19,8 @@
 //! the RUST_LOG environment variable.
 
 use env_logger::{Builder, Env};
-use log::Level;
-use std::io::Write;
+use log::{Level, Record};
+use std::{ffi::OsStr, io::Write, path::Path};
 
 use crate::util::time_display::log_current_time;
 
@@ -31,7 +31,15 @@ pub fn init(prefix: &'static str) {
     let mut builder = Builder::from_env(Env::default().default_filter_or("info"));
     builder.format(move |buf, record| {
         let level = level_to_string(record.level());
-        let message = format!("{} {} {} {}", prefix, level, log_current_time(), record.args());
+        let message = format!(
+            "{} {} {} {}:{} - {}",
+            prefix,
+            level,
+            log_current_time(),
+            format_file(record),
+            record.line().unwrap_or(0),
+            record.args()
+        );
         writeln!(buf, "{}", message)
     });
     builder.init();
@@ -50,6 +58,16 @@ pub fn init_for_test() {
         writeln!(buf, "{}", message)
     });
     builder.init();
+}
+
+/// Helper function for parsing the file name from given record file path
+fn format_file<'a>(record: &'a Record<'a>) -> &'a str {
+    match record.file() {
+        Some(filepath) => {
+            Path::new(filepath).file_name().unwrap_or(OsStr::new("N/A")).to_str().unwrap()
+        }
+        None => "N/A",
+    }
 }
 
 /// Helper function for translating log levels to string.
