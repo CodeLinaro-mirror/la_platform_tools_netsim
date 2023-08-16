@@ -94,12 +94,18 @@ impl args::Command {
                 Beacon::Create(kind) => match kind {
                     BeaconCreate::Ble(_) => {
                         if verbose {
-                            let response_proto = CreateDeviceResponse::parse_from_bytes(response)
-                                .expect("could not read device from response");
-                            todo!(
-                                "Created device '{}', but chip creation is not yet implemented!",
-                                response_proto.device.name
-                            );
+                            let device = CreateDeviceResponse::parse_from_bytes(response)
+                                .expect("could not read device from response")
+                                .device;
+
+                            if device.chips.len() == 1 {
+                                println!(
+                                    "Created device '{}' with ble beacon chip '{}'",
+                                    device.name, device.chips[0].name
+                                );
+                            } else {
+                                panic!("Chip was not created successfully");
+                            }
                         }
                     }
                 },

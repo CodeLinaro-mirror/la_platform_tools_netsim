@@ -86,7 +86,7 @@ message Chip {
 
       // From
       // packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
-      enum TxPowerLevel {
+      enum AdvertiseTxPower {
         // -21 dBm
         ULTRA_LOW = 0;
         // -15 dBm
@@ -97,18 +97,18 @@ message Chip {
         HIGH = 3;
       }
 
-      // Advertising latency.
-      oneof advertise_mode {
-        AdvertiseMode mode = 1;
+      // Time interval between advertisments.
+      oneof interval {
+        AdvertiseMode advertise_mode = 1;
         // Numeric time interval between advertisements in ms.
-        uint64 mode_numeric = 2;
+        uint64 milliseconds = 2;
       }
 
       // Transmission power level.
-      oneof tx_power_level {
-        TxPowerLevel level = 3;
+      oneof tx_power {
+        AdvertiseTxPower tx_power_level = 3;
         // Numeric transmission power in dBm. Must be within [-127, 127].
-        int32 level_numeric = 4;
+        int32 dbm = 4;
       }
 
       bool scannable = 5;

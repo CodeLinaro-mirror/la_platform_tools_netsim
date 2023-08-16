@@ -235,14 +235,14 @@ impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseSetting
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
 
-        if let Some(tx_power_level) = self.value.tx_power_level.as_ref() {
+        if let Some(tx_power) = self.value.tx_power.as_ref() {
             writeln!(f)?;
-            write!(f, "{:indent$}{}", "", Displayer::new(tx_power_level, self.verbose))?;
+            write!(f, "{:indent$}{}", "", Displayer::new(tx_power, self.verbose))?;
         }
 
-        if let Some(mode) = self.value.advertise_mode.as_ref() {
+        if let Some(interval) = self.value.interval.as_ref() {
             writeln!(f)?;
-            write!(f, "{:indent$}{}", "", Displayer::new(mode, self.verbose))?;
+            write!(f, "{:indent$}{}", "", Displayer::new(interval, self.verbose))?;
         }
 
         Ok(())
@@ -287,13 +287,13 @@ impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseData> {
     }
 }
 
-impl fmt::Display for Displayer<&advertise_settings::Advertise_mode> {
+impl fmt::Display for Displayer<&advertise_settings::Interval> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 25;
 
         match self.value {
-            advertise_settings::Advertise_mode::ModeNumeric(interval) => {
+            advertise_settings::Interval::Milliseconds(interval) => {
                 write!(f, "{:indent$}{:width$}: {} ms", "", "interval", interval)
             }
             // TODO(jmes): Support displaying named advertise modes.
@@ -302,14 +302,14 @@ impl fmt::Display for Displayer<&advertise_settings::Advertise_mode> {
     }
 }
 
-impl fmt::Display for Displayer<&advertise_settings::Tx_power_level> {
+impl fmt::Display for Displayer<&advertise_settings::Tx_power> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 25;
 
         match self.value {
-            advertise_settings::Tx_power_level::LevelNumeric(level) => {
-                write!(f, "{:indent$}{:width$}: {} dBm", "", "tx power level", level)
+            advertise_settings::Tx_power::Dbm(dbm) => {
+                write!(f, "{:indent$}{:width$}: {} dBm", "", "tx power level", dbm)
             }
             // TODO(jmes): Support displaying named tx power levels.
             _ => Err(fmt::Error),

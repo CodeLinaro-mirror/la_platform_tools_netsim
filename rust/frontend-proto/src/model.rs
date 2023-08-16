@@ -1355,8 +1355,8 @@ pub mod chip {
             // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.timeout)
             pub timeout: u64,
             // message oneof groups
-            pub advertise_mode: ::std::option::Option<advertise_settings::Advertise_mode>,
-            pub tx_power_level: ::std::option::Option<advertise_settings::Tx_power_level>,
+            pub interval: ::std::option::Option<advertise_settings::Interval>,
+            pub tx_power: ::std::option::Option<advertise_settings::Tx_power>,
             // special fields
             // @@protoc_insertion_point(special_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.special_fields)
             pub special_fields: ::protobuf::SpecialFields,
@@ -1373,142 +1373,142 @@ pub mod chip {
                 ::std::default::Default::default()
             }
 
-            // .netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode mode = 1;
+            // .netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode advertise_mode = 1;
 
-            pub fn mode(&self) -> advertise_settings::AdvertiseMode {
-                match self.advertise_mode {
-                    ::std::option::Option::Some(advertise_settings::Advertise_mode::Mode(v)) => ::protobuf::EnumOrUnknown::enum_value_or_default(&v),
+            pub fn advertise_mode(&self) -> advertise_settings::AdvertiseMode {
+                match self.interval {
+                    ::std::option::Option::Some(advertise_settings::Interval::AdvertiseMode(v)) => ::protobuf::EnumOrUnknown::enum_value_or_default(&v),
                     _ => advertise_settings::AdvertiseMode::LOW_POWER,
                 }
             }
 
-            pub fn clear_mode(&mut self) {
-                self.advertise_mode = ::std::option::Option::None;
+            pub fn clear_advertise_mode(&mut self) {
+                self.interval = ::std::option::Option::None;
             }
 
-            pub fn has_mode(&self) -> bool {
-                match self.advertise_mode {
-                    ::std::option::Option::Some(advertise_settings::Advertise_mode::Mode(..)) => true,
+            pub fn has_advertise_mode(&self) -> bool {
+                match self.interval {
+                    ::std::option::Option::Some(advertise_settings::Interval::AdvertiseMode(..)) => true,
                     _ => false,
                 }
             }
 
             // Param is passed by value, moved
-            pub fn set_mode(&mut self, v: advertise_settings::AdvertiseMode) {
-                self.advertise_mode = ::std::option::Option::Some(advertise_settings::Advertise_mode::Mode(::protobuf::EnumOrUnknown::new(v)))
+            pub fn set_advertise_mode(&mut self, v: advertise_settings::AdvertiseMode) {
+                self.interval = ::std::option::Option::Some(advertise_settings::Interval::AdvertiseMode(::protobuf::EnumOrUnknown::new(v)))
             }
 
-            // uint64 mode_numeric = 2;
+            // uint64 milliseconds = 2;
 
-            pub fn mode_numeric(&self) -> u64 {
-                match self.advertise_mode {
-                    ::std::option::Option::Some(advertise_settings::Advertise_mode::ModeNumeric(v)) => v,
+            pub fn milliseconds(&self) -> u64 {
+                match self.interval {
+                    ::std::option::Option::Some(advertise_settings::Interval::Milliseconds(v)) => v,
                     _ => 0,
                 }
             }
 
-            pub fn clear_mode_numeric(&mut self) {
-                self.advertise_mode = ::std::option::Option::None;
+            pub fn clear_milliseconds(&mut self) {
+                self.interval = ::std::option::Option::None;
             }
 
-            pub fn has_mode_numeric(&self) -> bool {
-                match self.advertise_mode {
-                    ::std::option::Option::Some(advertise_settings::Advertise_mode::ModeNumeric(..)) => true,
+            pub fn has_milliseconds(&self) -> bool {
+                match self.interval {
+                    ::std::option::Option::Some(advertise_settings::Interval::Milliseconds(..)) => true,
                     _ => false,
                 }
             }
 
             // Param is passed by value, moved
-            pub fn set_mode_numeric(&mut self, v: u64) {
-                self.advertise_mode = ::std::option::Option::Some(advertise_settings::Advertise_mode::ModeNumeric(v))
+            pub fn set_milliseconds(&mut self, v: u64) {
+                self.interval = ::std::option::Option::Some(advertise_settings::Interval::Milliseconds(v))
             }
 
-            // .netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.TxPowerLevel level = 3;
+            // .netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower tx_power_level = 3;
 
-            pub fn level(&self) -> advertise_settings::TxPowerLevel {
-                match self.tx_power_level {
-                    ::std::option::Option::Some(advertise_settings::Tx_power_level::Level(v)) => ::protobuf::EnumOrUnknown::enum_value_or_default(&v),
-                    _ => advertise_settings::TxPowerLevel::ULTRA_LOW,
+            pub fn tx_power_level(&self) -> advertise_settings::AdvertiseTxPower {
+                match self.tx_power {
+                    ::std::option::Option::Some(advertise_settings::Tx_power::TxPowerLevel(v)) => ::protobuf::EnumOrUnknown::enum_value_or_default(&v),
+                    _ => advertise_settings::AdvertiseTxPower::ULTRA_LOW,
                 }
             }
 
-            pub fn clear_level(&mut self) {
-                self.tx_power_level = ::std::option::Option::None;
+            pub fn clear_tx_power_level(&mut self) {
+                self.tx_power = ::std::option::Option::None;
             }
 
-            pub fn has_level(&self) -> bool {
-                match self.tx_power_level {
-                    ::std::option::Option::Some(advertise_settings::Tx_power_level::Level(..)) => true,
+            pub fn has_tx_power_level(&self) -> bool {
+                match self.tx_power {
+                    ::std::option::Option::Some(advertise_settings::Tx_power::TxPowerLevel(..)) => true,
                     _ => false,
                 }
             }
 
             // Param is passed by value, moved
-            pub fn set_level(&mut self, v: advertise_settings::TxPowerLevel) {
-                self.tx_power_level = ::std::option::Option::Some(advertise_settings::Tx_power_level::Level(::protobuf::EnumOrUnknown::new(v)))
+            pub fn set_tx_power_level(&mut self, v: advertise_settings::AdvertiseTxPower) {
+                self.tx_power = ::std::option::Option::Some(advertise_settings::Tx_power::TxPowerLevel(::protobuf::EnumOrUnknown::new(v)))
             }
 
-            // int32 level_numeric = 4;
+            // int32 dbm = 4;
 
-            pub fn level_numeric(&self) -> i32 {
-                match self.tx_power_level {
-                    ::std::option::Option::Some(advertise_settings::Tx_power_level::LevelNumeric(v)) => v,
+            pub fn dbm(&self) -> i32 {
+                match self.tx_power {
+                    ::std::option::Option::Some(advertise_settings::Tx_power::Dbm(v)) => v,
                     _ => 0,
                 }
             }
 
-            pub fn clear_level_numeric(&mut self) {
-                self.tx_power_level = ::std::option::Option::None;
+            pub fn clear_dbm(&mut self) {
+                self.tx_power = ::std::option::Option::None;
             }
 
-            pub fn has_level_numeric(&self) -> bool {
-                match self.tx_power_level {
-                    ::std::option::Option::Some(advertise_settings::Tx_power_level::LevelNumeric(..)) => true,
+            pub fn has_dbm(&self) -> bool {
+                match self.tx_power {
+                    ::std::option::Option::Some(advertise_settings::Tx_power::Dbm(..)) => true,
                     _ => false,
                 }
             }
 
             // Param is passed by value, moved
-            pub fn set_level_numeric(&mut self, v: i32) {
-                self.tx_power_level = ::std::option::Option::Some(advertise_settings::Tx_power_level::LevelNumeric(v))
+            pub fn set_dbm(&mut self, v: i32) {
+                self.tx_power = ::std::option::Option::Some(advertise_settings::Tx_power::Dbm(v))
             }
 
             pub(in super::super) fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
                 let mut fields = ::std::vec::Vec::with_capacity(6);
                 let mut oneofs = ::std::vec::Vec::with_capacity(2);
                 fields.push(::protobuf::reflect::rt::v2::make_oneof_enum_accessors::<_, _>(
-                    "mode",
-                    |message: &AdvertiseSettings| match &message.advertise_mode {
-                        ::std::option::Option::Some(advertise_settings::Advertise_mode::Mode(e)) => ::std::option::Option::Some(*e),
+                    "advertise_mode",
+                    |message: &AdvertiseSettings| match &message.interval {
+                        ::std::option::Option::Some(advertise_settings::Interval::AdvertiseMode(e)) => ::std::option::Option::Some(*e),
                         _ => ::std::option::Option::None,
                     },
                     |message: &mut AdvertiseSettings, e: ::protobuf::EnumOrUnknown<advertise_settings::AdvertiseMode>| {
-                        message.advertise_mode = ::std::option::Option::Some(advertise_settings::Advertise_mode::Mode(e));
+                        message.interval = ::std::option::Option::Some(advertise_settings::Interval::AdvertiseMode(e));
                     },
                     advertise_settings::AdvertiseMode::LOW_POWER,
                 ));
                 fields.push(::protobuf::reflect::rt::v2::make_oneof_copy_has_get_set_simpler_accessors::<_, _>(
-                    "mode_numeric",
-                    AdvertiseSettings::has_mode_numeric,
-                    AdvertiseSettings::mode_numeric,
-                    AdvertiseSettings::set_mode_numeric,
+                    "milliseconds",
+                    AdvertiseSettings::has_milliseconds,
+                    AdvertiseSettings::milliseconds,
+                    AdvertiseSettings::set_milliseconds,
                 ));
                 fields.push(::protobuf::reflect::rt::v2::make_oneof_enum_accessors::<_, _>(
-                    "level",
-                    |message: &AdvertiseSettings| match &message.tx_power_level {
-                        ::std::option::Option::Some(advertise_settings::Tx_power_level::Level(e)) => ::std::option::Option::Some(*e),
+                    "tx_power_level",
+                    |message: &AdvertiseSettings| match &message.tx_power {
+                        ::std::option::Option::Some(advertise_settings::Tx_power::TxPowerLevel(e)) => ::std::option::Option::Some(*e),
                         _ => ::std::option::Option::None,
                     },
-                    |message: &mut AdvertiseSettings, e: ::protobuf::EnumOrUnknown<advertise_settings::TxPowerLevel>| {
-                        message.tx_power_level = ::std::option::Option::Some(advertise_settings::Tx_power_level::Level(e));
+                    |message: &mut AdvertiseSettings, e: ::protobuf::EnumOrUnknown<advertise_settings::AdvertiseTxPower>| {
+                        message.tx_power = ::std::option::Option::Some(advertise_settings::Tx_power::TxPowerLevel(e));
                     },
-                    advertise_settings::TxPowerLevel::ULTRA_LOW,
+                    advertise_settings::AdvertiseTxPower::ULTRA_LOW,
                 ));
                 fields.push(::protobuf::reflect::rt::v2::make_oneof_copy_has_get_set_simpler_accessors::<_, _>(
-                    "level_numeric",
-                    AdvertiseSettings::has_level_numeric,
-                    AdvertiseSettings::level_numeric,
-                    AdvertiseSettings::set_level_numeric,
+                    "dbm",
+                    AdvertiseSettings::has_dbm,
+                    AdvertiseSettings::dbm,
+                    AdvertiseSettings::set_dbm,
                 ));
                 fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
                     "scannable",
@@ -1520,8 +1520,8 @@ pub mod chip {
                     |m: &AdvertiseSettings| { &m.timeout },
                     |m: &mut AdvertiseSettings| { &mut m.timeout },
                 ));
-                oneofs.push(advertise_settings::Advertise_mode::generated_oneof_descriptor_data());
-                oneofs.push(advertise_settings::Tx_power_level::generated_oneof_descriptor_data());
+                oneofs.push(advertise_settings::Interval::generated_oneof_descriptor_data());
+                oneofs.push(advertise_settings::Tx_power::generated_oneof_descriptor_data());
                 ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<AdvertiseSettings>(
                     "Chip.BluetoothBeacon.AdvertiseSettings",
                     fields,
@@ -1541,16 +1541,16 @@ pub mod chip {
                 while let Some(tag) = is.read_raw_tag_or_eof()? {
                     match tag {
                         8 => {
-                            self.advertise_mode = ::std::option::Option::Some(advertise_settings::Advertise_mode::Mode(is.read_enum_or_unknown()?));
+                            self.interval = ::std::option::Option::Some(advertise_settings::Interval::AdvertiseMode(is.read_enum_or_unknown()?));
                         },
                         16 => {
-                            self.advertise_mode = ::std::option::Option::Some(advertise_settings::Advertise_mode::ModeNumeric(is.read_uint64()?));
+                            self.interval = ::std::option::Option::Some(advertise_settings::Interval::Milliseconds(is.read_uint64()?));
                         },
                         24 => {
-                            self.tx_power_level = ::std::option::Option::Some(advertise_settings::Tx_power_level::Level(is.read_enum_or_unknown()?));
+                            self.tx_power = ::std::option::Option::Some(advertise_settings::Tx_power::TxPowerLevel(is.read_enum_or_unknown()?));
                         },
                         32 => {
-                            self.tx_power_level = ::std::option::Option::Some(advertise_settings::Tx_power_level::LevelNumeric(is.read_int32()?));
+                            self.tx_power = ::std::option::Option::Some(advertise_settings::Tx_power::Dbm(is.read_int32()?));
                         },
                         40 => {
                             self.scannable = is.read_bool()?;
@@ -1576,22 +1576,22 @@ pub mod chip {
                 if self.timeout != 0 {
                     my_size += ::protobuf::rt::uint64_size(6, self.timeout);
                 }
-                if let ::std::option::Option::Some(ref v) = self.advertise_mode {
+                if let ::std::option::Option::Some(ref v) = self.interval {
                     match v {
-                        &advertise_settings::Advertise_mode::Mode(v) => {
+                        &advertise_settings::Interval::AdvertiseMode(v) => {
                             my_size += ::protobuf::rt::int32_size(1, v.value());
                         },
-                        &advertise_settings::Advertise_mode::ModeNumeric(v) => {
+                        &advertise_settings::Interval::Milliseconds(v) => {
                             my_size += ::protobuf::rt::uint64_size(2, v);
                         },
                     };
                 }
-                if let ::std::option::Option::Some(ref v) = self.tx_power_level {
+                if let ::std::option::Option::Some(ref v) = self.tx_power {
                     match v {
-                        &advertise_settings::Tx_power_level::Level(v) => {
+                        &advertise_settings::Tx_power::TxPowerLevel(v) => {
                             my_size += ::protobuf::rt::int32_size(3, v.value());
                         },
-                        &advertise_settings::Tx_power_level::LevelNumeric(v) => {
+                        &advertise_settings::Tx_power::Dbm(v) => {
                             my_size += ::protobuf::rt::int32_size(4, v);
                         },
                     };
@@ -1608,22 +1608,22 @@ pub mod chip {
                 if self.timeout != 0 {
                     os.write_uint64(6, self.timeout)?;
                 }
-                if let ::std::option::Option::Some(ref v) = self.advertise_mode {
+                if let ::std::option::Option::Some(ref v) = self.interval {
                     match v {
-                        &advertise_settings::Advertise_mode::Mode(v) => {
+                        &advertise_settings::Interval::AdvertiseMode(v) => {
                             os.write_enum(1, ::protobuf::EnumOrUnknown::value(&v))?;
                         },
-                        &advertise_settings::Advertise_mode::ModeNumeric(v) => {
+                        &advertise_settings::Interval::Milliseconds(v) => {
                             os.write_uint64(2, v)?;
                         },
                     };
                 }
-                if let ::std::option::Option::Some(ref v) = self.tx_power_level {
+                if let ::std::option::Option::Some(ref v) = self.tx_power {
                     match v {
-                        &advertise_settings::Tx_power_level::Level(v) => {
+                        &advertise_settings::Tx_power::TxPowerLevel(v) => {
                             os.write_enum(3, ::protobuf::EnumOrUnknown::value(&v))?;
                         },
-                        &advertise_settings::Tx_power_level::LevelNumeric(v) => {
+                        &advertise_settings::Tx_power::Dbm(v) => {
                             os.write_int32(4, v)?;
                         },
                     };
@@ -1645,10 +1645,10 @@ pub mod chip {
             }
 
             fn clear(&mut self) {
-                self.advertise_mode = ::std::option::Option::None;
-                self.advertise_mode = ::std::option::Option::None;
-                self.tx_power_level = ::std::option::Option::None;
-                self.tx_power_level = ::std::option::Option::None;
+                self.interval = ::std::option::Option::None;
+                self.interval = ::std::option::Option::None;
+                self.tx_power = ::std::option::Option::None;
+                self.tx_power = ::std::option::Option::None;
                 self.scannable = false;
                 self.timeout = 0;
                 self.special_fields.clear();
@@ -1658,8 +1658,8 @@ pub mod chip {
                 static instance: AdvertiseSettings = AdvertiseSettings {
                     scannable: false,
                     timeout: 0,
-                    advertise_mode: ::std::option::Option::None,
-                    tx_power_level: ::std::option::Option::None,
+                    interval: ::std::option::Option::None,
+                    tx_power: ::std::option::Option::None,
                     special_fields: ::protobuf::SpecialFields::new(),
                 };
                 &instance
@@ -1688,53 +1688,53 @@ pub mod chip {
 
             #[derive(Clone,PartialEq,Debug)]
             #[non_exhaustive]
-            // @@protoc_insertion_point(oneof:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.advertise_mode)
-            pub enum Advertise_mode {
-                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.mode)
-                Mode(::protobuf::EnumOrUnknown<AdvertiseMode>),
-                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.mode_numeric)
-                ModeNumeric(u64),
+            // @@protoc_insertion_point(oneof:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.interval)
+            pub enum Interval {
+                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.advertise_mode)
+                AdvertiseMode(::protobuf::EnumOrUnknown<AdvertiseMode>),
+                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.milliseconds)
+                Milliseconds(u64),
             }
 
-            impl ::protobuf::Oneof for Advertise_mode {
+            impl ::protobuf::Oneof for Interval {
             }
 
-            impl ::protobuf::OneofFull for Advertise_mode {
+            impl ::protobuf::OneofFull for Interval {
                 fn descriptor() -> ::protobuf::reflect::OneofDescriptor {
                     static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::OneofDescriptor> = ::protobuf::rt::Lazy::new();
-                    descriptor.get(|| <super::AdvertiseSettings as ::protobuf::MessageFull>::descriptor().oneof_by_name("advertise_mode").unwrap()).clone()
+                    descriptor.get(|| <super::AdvertiseSettings as ::protobuf::MessageFull>::descriptor().oneof_by_name("interval").unwrap()).clone()
                 }
             }
 
-            impl Advertise_mode {
+            impl Interval {
                 pub(in super::super::super) fn generated_oneof_descriptor_data() -> ::protobuf::reflect::GeneratedOneofDescriptorData {
-                    ::protobuf::reflect::GeneratedOneofDescriptorData::new::<Advertise_mode>("advertise_mode")
+                    ::protobuf::reflect::GeneratedOneofDescriptorData::new::<Interval>("interval")
                 }
             }
 
             #[derive(Clone,PartialEq,Debug)]
             #[non_exhaustive]
-            // @@protoc_insertion_point(oneof:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.tx_power_level)
-            pub enum Tx_power_level {
-                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.level)
-                Level(::protobuf::EnumOrUnknown<TxPowerLevel>),
-                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.level_numeric)
-                LevelNumeric(i32),
+            // @@protoc_insertion_point(oneof:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.tx_power)
+            pub enum Tx_power {
+                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.tx_power_level)
+                TxPowerLevel(::protobuf::EnumOrUnknown<AdvertiseTxPower>),
+                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.dbm)
+                Dbm(i32),
             }
 
-            impl ::protobuf::Oneof for Tx_power_level {
+            impl ::protobuf::Oneof for Tx_power {
             }
 
-            impl ::protobuf::OneofFull for Tx_power_level {
+            impl ::protobuf::OneofFull for Tx_power {
                 fn descriptor() -> ::protobuf::reflect::OneofDescriptor {
                     static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::OneofDescriptor> = ::protobuf::rt::Lazy::new();
-                    descriptor.get(|| <super::AdvertiseSettings as ::protobuf::MessageFull>::descriptor().oneof_by_name("tx_power_level").unwrap()).clone()
+                    descriptor.get(|| <super::AdvertiseSettings as ::protobuf::MessageFull>::descriptor().oneof_by_name("tx_power").unwrap()).clone()
                 }
             }
 
-            impl Tx_power_level {
+            impl Tx_power {
                 pub(in super::super::super) fn generated_oneof_descriptor_data() -> ::protobuf::reflect::GeneratedOneofDescriptorData {
-                    ::protobuf::reflect::GeneratedOneofDescriptorData::new::<Tx_power_level>("tx_power_level")
+                    ::protobuf::reflect::GeneratedOneofDescriptorData::new::<Tx_power>("tx_power")
                 }
             }
             #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
@@ -1796,47 +1796,47 @@ pub mod chip {
             }
 
             #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-            // @@protoc_insertion_point(enum:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.TxPowerLevel)
-            pub enum TxPowerLevel {
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.TxPowerLevel.ULTRA_LOW)
+            // @@protoc_insertion_point(enum:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower)
+            pub enum AdvertiseTxPower {
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower.ULTRA_LOW)
                 ULTRA_LOW = 0,
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.TxPowerLevel.LOW)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower.LOW)
                 LOW = 1,
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.TxPowerLevel.MEDIUM)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower.MEDIUM)
                 MEDIUM = 2,
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.TxPowerLevel.HIGH)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower.HIGH)
                 HIGH = 3,
             }
 
-            impl ::protobuf::Enum for TxPowerLevel {
-                const NAME: &'static str = "TxPowerLevel";
+            impl ::protobuf::Enum for AdvertiseTxPower {
+                const NAME: &'static str = "AdvertiseTxPower";
 
                 fn value(&self) -> i32 {
                     *self as i32
                 }
 
-                fn from_i32(value: i32) -> ::std::option::Option<TxPowerLevel> {
+                fn from_i32(value: i32) -> ::std::option::Option<AdvertiseTxPower> {
                     match value {
-                        0 => ::std::option::Option::Some(TxPowerLevel::ULTRA_LOW),
-                        1 => ::std::option::Option::Some(TxPowerLevel::LOW),
-                        2 => ::std::option::Option::Some(TxPowerLevel::MEDIUM),
-                        3 => ::std::option::Option::Some(TxPowerLevel::HIGH),
+                        0 => ::std::option::Option::Some(AdvertiseTxPower::ULTRA_LOW),
+                        1 => ::std::option::Option::Some(AdvertiseTxPower::LOW),
+                        2 => ::std::option::Option::Some(AdvertiseTxPower::MEDIUM),
+                        3 => ::std::option::Option::Some(AdvertiseTxPower::HIGH),
                         _ => ::std::option::Option::None
                     }
                 }
 
-                const VALUES: &'static [TxPowerLevel] = &[
-                    TxPowerLevel::ULTRA_LOW,
-                    TxPowerLevel::LOW,
-                    TxPowerLevel::MEDIUM,
-                    TxPowerLevel::HIGH,
+                const VALUES: &'static [AdvertiseTxPower] = &[
+                    AdvertiseTxPower::ULTRA_LOW,
+                    AdvertiseTxPower::LOW,
+                    AdvertiseTxPower::MEDIUM,
+                    AdvertiseTxPower::HIGH,
                 ];
             }
 
-            impl ::protobuf::EnumFull for TxPowerLevel {
+            impl ::protobuf::EnumFull for AdvertiseTxPower {
                 fn enum_descriptor() -> ::protobuf::reflect::EnumDescriptor {
                     static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::EnumDescriptor> = ::protobuf::rt::Lazy::new();
-                    descriptor.get(|| super::super::super::file_descriptor().enum_by_package_relative_name("Chip.BluetoothBeacon.AdvertiseSettings.TxPowerLevel").unwrap()).clone()
+                    descriptor.get(|| super::super::super::file_descriptor().enum_by_package_relative_name("Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower").unwrap()).clone()
                 }
 
                 fn descriptor(&self) -> ::protobuf::reflect::EnumValueDescriptor {
@@ -1845,15 +1845,15 @@ pub mod chip {
                 }
             }
 
-            impl ::std::default::Default for TxPowerLevel {
+            impl ::std::default::Default for AdvertiseTxPower {
                 fn default() -> Self {
-                    TxPowerLevel::ULTRA_LOW
+                    AdvertiseTxPower::ULTRA_LOW
                 }
             }
 
-            impl TxPowerLevel {
+            impl AdvertiseTxPower {
                 pub(in super::super::super) fn generated_enum_descriptor_data() -> ::protobuf::reflect::GeneratedEnumDescriptorData {
-                    ::protobuf::reflect::GeneratedEnumDescriptorData::new::<TxPowerLevel>("Chip.BluetoothBeacon.AdvertiseSettings.TxPowerLevel")
+                    ::protobuf::reflect::GeneratedEnumDescriptorData::new::<AdvertiseTxPower>("Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower")
                 }
             }
         }
@@ -3522,7 +3522,7 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x18\x01\x20\x01(\x02R\x01x\x12\x0c\n\x01y\x18\x02\x20\x01(\x02R\x01y\
     \x12\x0c\n\x01z\x18\x03\x20\x01(\x02R\x01z\"I\n\x0bOrientation\x12\x10\n\
     \x03yaw\x18\x01\x20\x01(\x02R\x03yaw\x12\x14\n\x05pitch\x18\x02\x20\x01(\
-    \x02R\x05pitch\x12\x12\n\x04roll\x18\x03\x20\x01(\x02R\x04roll\"\x8b\r\n\
+    \x02R\x05pitch\x12\x12\n\x04roll\x18\x03\x20\x01(\x02R\x04roll\"\x98\r\n\
     \x04Chip\x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.common.ChipKind\
     R\x04kind\x12\x0e\n\x02id\x18\x02\x20\x01(\rR\x02id\x12\x12\n\x04name\
     \x18\x03\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\
@@ -3537,62 +3537,63 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x05R\x07txCount\x12\x19\n\x08rx_count\x18\x04\x20\x01(\x05R\x07rxCount\
     \x1ax\n\tBluetooth\x127\n\nlow_energy\x18\x01\x20\x01(\x0b2\x18.netsim.m\
     odel.Chip.RadioR\tlowEnergy\x122\n\x07classic\x18\x02\x20\x01(\x0b2\x18.\
-    netsim.model.Chip.RadioR\x07classic\x1a\x95\x08\n\x0fBluetoothBeacon\x12\
+    netsim.model.Chip.RadioR\x07classic\x1a\xa2\x08\n\x0fBluetoothBeacon\x12\
     ,\n\x02bt\x18\x01\x20\x01(\x0b2\x1c.netsim.model.Chip.BluetoothR\x02bt\
     \x12\x18\n\x07address\x18\x02\x20\x01(\tR\x07address\x12P\n\x08settings\
     \x18\x03\x20\x01(\x0b24.netsim.model.Chip.BluetoothBeacon.AdvertiseSetti\
     ngsR\x08settings\x12K\n\x08adv_data\x18\x04\x20\x01(\x0b20.netsim.model.\
-    Chip.BluetoothBeacon.AdvertiseDataR\x07advData\x1a\xed\x03\n\x11Advertis\
-    eSettings\x12X\n\x04mode\x18\x01\x20\x01(\x0e2B.netsim.model.Chip.Blueto\
-    othBeacon.AdvertiseSettings.AdvertiseModeH\0R\x04mode\x12#\n\x0cmode_num\
-    eric\x18\x02\x20\x01(\x04H\0R\x0bmodeNumeric\x12Y\n\x05level\x18\x03\x20\
-    \x01(\x0e2A.netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.TxPowerL\
-    evelH\x01R\x05level\x12%\n\rlevel_numeric\x18\x04\x20\x01(\x05H\x01R\x0c\
-    levelNumeric\x12\x1c\n\tscannable\x18\x05\x20\x01(\x08R\tscannable\x12\
-    \x18\n\x07timeout\x18\x06\x20\x01(\x04R\x07timeout\"=\n\rAdvertiseMode\
-    \x12\r\n\tLOW_POWER\x10\0\x12\x0c\n\x08BALANCED\x10\x01\x12\x0f\n\x0bLOW\
-    _LATENCY\x10\x02\"<\n\x0cTxPowerLevel\x12\r\n\tULTRA_LOW\x10\0\x12\x07\n\
-    \x03LOW\x10\x01\x12\n\n\x06MEDIUM\x10\x02\x12\x08\n\x04HIGH\x10\x03B\x10\
-    \n\x0eadvertise_modeB\x10\n\x0etx_power_level\x1a\xaa\x02\n\rAdvertiseDa\
-    ta\x12.\n\x13include_device_name\x18\x01\x20\x01(\x08R\x11includeDeviceN\
-    ame\x123\n\x16include_tx_power_level\x18\x02\x20\x01(\x08R\x13includeTxP\
-    owerLevel\x12+\n\x11manufacturer_data\x18\x03\x20\x01(\x0cR\x10manufactu\
-    rerData\x12T\n\x08services\x18\x04\x20\x03(\x0b28.netsim.model.Chip.Blue\
-    toothBeacon.AdvertiseData.ServiceR\x08services\x1a1\n\x07Service\x12\x12\
-    \n\x04uuid\x18\x01\x20\x01(\tR\x04uuid\x12\x12\n\x04data\x18\x02\x20\x01\
-    (\x0cR\x04dataB\x06\n\x04chip\"\xc0\x03\n\nChipCreate\x12+\n\x04kind\x18\
-    \x01\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x12\n\x04name\
-    \x18\x02\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\x18\x03\x20\x01(\tR\
-    \x0cmanufacturer\x12!\n\x0cproduct_name\x18\x04\x20\x01(\tR\x0bproductNa\
-    me\x12O\n\nble_beacon\x18\x05\x20\x01(\x0b2..netsim.model.ChipCreate.Blu\
-    etoothBeaconCreateH\0R\tbleBeacon\x1a\xd0\x01\n\x15BluetoothBeaconCreate\
-    \x12\x18\n\x07address\x18\x01\x20\x01(\tR\x07address\x12P\n\x08settings\
-    \x18\x03\x20\x01(\x0b24.netsim.model.Chip.BluetoothBeacon.AdvertiseSetti\
-    ngsR\x08settings\x12K\n\x08adv_data\x18\x04\x20\x01(\x0b20.netsim.model.\
-    Chip.BluetoothBeacon.AdvertiseDataR\x07advDataB\x06\n\x04chip\"\xf6\x01\
-    \n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x12\x12\n\x04name\
-    \x18\x02\x20\x01(\tR\x04name\x12-\n\x07visible\x18\x03\x20\x01(\x0e2\x13\
-    .netsim.model.StateR\x07visible\x122\n\x08position\x18\x04\x20\x01(\x0b2\
-    \x16.netsim.model.PositionR\x08position\x12;\n\x0borientation\x18\x05\
-    \x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borientation\x12(\n\x05ch\
-    ips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chips\"\xc3\x01\n\
-    \x0cDeviceCreate\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04name\x122\n\
-    \x08position\x18\x02\x20\x01(\x0b2\x16.netsim.model.PositionR\x08positio\
-    n\x12;\n\x0borientation\x18\x03\x20\x01(\x0b2\x19.netsim.model.Orientati\
-    onR\x0borientation\x12.\n\x05chips\x18\x04\x20\x03(\x0b2\x18.netsim.mode\
-    l.ChipCreateR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\x20\x03(\
-    \x0b2\x14.netsim.model.DeviceR\x07devices\"\x99\x02\n\x07Capture\x12\x0e\
-    \n\x02id\x18\x01\x20\x01(\rR\x02id\x124\n\tchip_kind\x18\x02\x20\x01(\
-    \x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x1f\n\x0bdevice_name\
-    \x18\x03\x20\x01(\tR\ndeviceName\x12)\n\x05state\x18\x04\x20\x01(\x0e2\
-    \x13.netsim.model.StateR\x05state\x12\x12\n\x04size\x18\x05\x20\x01(\x05\
-    R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\x07records\x128\n\t\
-    timestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestam\
-    p\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05valid*e\n\x07PhyKind\x12\
-    \x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\
-    \x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03\
-    UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07UNKN\
-    OWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto3\
+    Chip.BluetoothBeacon.AdvertiseDataR\x07advData\x1a\xfa\x03\n\x11Advertis\
+    eSettings\x12k\n\x0eadvertise_mode\x18\x01\x20\x01(\x0e2B.netsim.model.C\
+    hip.BluetoothBeacon.AdvertiseSettings.AdvertiseModeH\0R\radvertiseMode\
+    \x12$\n\x0cmilliseconds\x18\x02\x20\x01(\x04H\0R\x0cmilliseconds\x12m\n\
+    \x0etx_power_level\x18\x03\x20\x01(\x0e2E.netsim.model.Chip.BluetoothBea\
+    con.AdvertiseSettings.AdvertiseTxPowerH\x01R\x0ctxPowerLevel\x12\x12\n\
+    \x03dbm\x18\x04\x20\x01(\x05H\x01R\x03dbm\x12\x1c\n\tscannable\x18\x05\
+    \x20\x01(\x08R\tscannable\x12\x18\n\x07timeout\x18\x06\x20\x01(\x04R\x07\
+    timeout\"=\n\rAdvertiseMode\x12\r\n\tLOW_POWER\x10\0\x12\x0c\n\x08BALANC\
+    ED\x10\x01\x12\x0f\n\x0bLOW_LATENCY\x10\x02\"@\n\x10AdvertiseTxPower\x12\
+    \r\n\tULTRA_LOW\x10\0\x12\x07\n\x03LOW\x10\x01\x12\n\n\x06MEDIUM\x10\x02\
+    \x12\x08\n\x04HIGH\x10\x03B\n\n\x08intervalB\n\n\x08tx_power\x1a\xaa\x02\
+    \n\rAdvertiseData\x12.\n\x13include_device_name\x18\x01\x20\x01(\x08R\
+    \x11includeDeviceName\x123\n\x16include_tx_power_level\x18\x02\x20\x01(\
+    \x08R\x13includeTxPowerLevel\x12+\n\x11manufacturer_data\x18\x03\x20\x01\
+    (\x0cR\x10manufacturerData\x12T\n\x08services\x18\x04\x20\x03(\x0b28.net\
+    sim.model.Chip.BluetoothBeacon.AdvertiseData.ServiceR\x08services\x1a1\n\
+    \x07Service\x12\x12\n\x04uuid\x18\x01\x20\x01(\tR\x04uuid\x12\x12\n\x04d\
+    ata\x18\x02\x20\x01(\x0cR\x04dataB\x06\n\x04chip\"\xc0\x03\n\nChipCreate\
+    \x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kin\
+    d\x12\x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x12\"\n\x0cmanufacturer\
+    \x18\x03\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cproduct_name\x18\x04\x20\
+    \x01(\tR\x0bproductName\x12O\n\nble_beacon\x18\x05\x20\x01(\x0b2..netsim\
+    .model.ChipCreate.BluetoothBeaconCreateH\0R\tbleBeacon\x1a\xd0\x01\n\x15\
+    BluetoothBeaconCreate\x12\x18\n\x07address\x18\x01\x20\x01(\tR\x07addres\
+    s\x12P\n\x08settings\x18\x03\x20\x01(\x0b24.netsim.model.Chip.BluetoothB\
+    eacon.AdvertiseSettingsR\x08settings\x12K\n\x08adv_data\x18\x04\x20\x01(\
+    \x0b20.netsim.model.Chip.BluetoothBeacon.AdvertiseDataR\x07advDataB\x06\
+    \n\x04chip\"\xf6\x01\n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02\
+    id\x12\x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x12-\n\x07visible\x18\
+    \x03\x20\x01(\x0e2\x13.netsim.model.StateR\x07visible\x122\n\x08position\
+    \x18\x04\x20\x01(\x0b2\x16.netsim.model.PositionR\x08position\x12;\n\x0b\
+    orientation\x18\x05\x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borien\
+    tation\x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05c\
+    hips\"\xc3\x01\n\x0cDeviceCreate\x12\x12\n\x04name\x18\x01\x20\x01(\tR\
+    \x04name\x122\n\x08position\x18\x02\x20\x01(\x0b2\x16.netsim.model.Posit\
+    ionR\x08position\x12;\n\x0borientation\x18\x03\x20\x01(\x0b2\x19.netsim.\
+    model.OrientationR\x0borientation\x12.\n\x05chips\x18\x04\x20\x03(\x0b2\
+    \x18.netsim.model.ChipCreateR\x05chips\"7\n\x05Scene\x12.\n\x07devices\
+    \x18\x01\x20\x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"\x99\x02\n\
+    \x07Capture\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x124\n\tchip_kind\
+    \x18\x02\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x1f\n\
+    \x0bdevice_name\x18\x03\x20\x01(\tR\ndeviceName\x12)\n\x05state\x18\x04\
+    \x20\x01(\x0e2\x13.netsim.model.StateR\x05state\x12\x12\n\x04size\x18\
+    \x05\x20\x01(\x05R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\
+    \x07records\x128\n\ttimestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.\
+    TimestampR\ttimestamp\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05valid*\
+    e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\
+    \x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\
+    \x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\
+    \x12\x0b\n\x07UNKNOWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\
+    \x02b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -3632,7 +3633,7 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             enums.push(PhyKind::generated_enum_descriptor_data());
             enums.push(State::generated_enum_descriptor_data());
             enums.push(chip::bluetooth_beacon::advertise_settings::AdvertiseMode::generated_enum_descriptor_data());
-            enums.push(chip::bluetooth_beacon::advertise_settings::TxPowerLevel::generated_enum_descriptor_data());
+            enums.push(chip::bluetooth_beacon::advertise_settings::AdvertiseTxPower::generated_enum_descriptor_data());
             ::protobuf::reflect::GeneratedFileDescriptor::new_generated(
                 file_descriptor_proto(),
                 deps,

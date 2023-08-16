@@ -16,8 +16,8 @@ use crate::bluetooth::{BeaconChip, BEACON_CHIPS};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use frontend_proto::model::chip::{Bluetooth, BluetoothBeacon};
-use frontend_proto::model::DeviceCreate;
-
+use frontend_proto::model::chip_create::Chip as Builtin;
+use frontend_proto::model::{ChipCreate, DeviceCreate};
 use lazy_static::lazy_static;
 use log::info;
 use std::sync::Mutex;
@@ -88,15 +88,19 @@ pub fn refresh_resource() {
 // Avoid crossing cxx boundary in tests
 pub fn bluetooth_beacon_add(
     device_id: DeviceIdentifier,
+    device_name: String,
     chip_id: ChipIdentifier,
-    device_type: String,
-    address: String,
+    chip_proto: &ChipCreate,
 ) -> Result<FacadeIdentifier, String> {
-    let beacon_chip = BeaconChip::new(chip_id, address.clone());
+    let beacon_proto = match &chip_proto.chip {
+        Some(Builtin::BleBeacon(beacon_proto)) => beacon_proto,
+        _ => return Err(String::from("failed to create ble beacon: unexpected chip type")),
+    };
 
+    let beacon_chip = BeaconChip::from_proto(device_name, chip_id, beacon_proto)?;
     if BEACON_CHIPS.write().unwrap().insert(chip_id, Mutex::new(beacon_chip)).is_some() {
-        return Err(String::from(
-            "Failed to create a Bluetooth beacon chip with ID {chip_id}: chip ID already exists.",
+        return Err(format!(
+            "failed to create a bluetooth beacon chip with id {chip_id}: chip id already exists.",
         ));
     }
 

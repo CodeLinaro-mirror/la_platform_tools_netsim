@@ -1,92 +1,74 @@
-import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,LitElement as t,html as s}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as o,customElement as a}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{styleMap as l,live as n}from"https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js";import{simulationState as c}from"./device-observer.js";import{State as d}from"./netsim/model.js";var r;let h=r=class extends t{constructor(){super(...arguments),this.yaw=0,this.pitch=0,this.roll=0,this.editMode=!1,this.posX=0,this.posY=0,this.posZ=0,this.holdRange=!1}connectedCallback(){super.connectedCallback(),c.registerObserver(this)}disconnectedCallback(){c.removeObserver(this),super.disconnectedCallback()}onNotify(e){if(e.selectedId&&!1===this.editMode)for(const i of e.devices)if(i.name===e.selectedId){this.selectedDevice=i,this.holdRange||(this.yaw=i.orientation.yaw,this.pitch=i.orientation.pitch,this.roll=i.orientation.roll),this.posX=Math.floor(100*i.position.x),this.posY=Math.floor(100*i.position.y),this.posZ=Math.floor(100*i.position.z);break}}changeRange(e){var i;this.holdRange=!0,console.assert(null!==this.selectedDevice);const t=e.target,s=new CustomEvent("orientationEvent",{detail:{name:null===(i=this.selectedDevice)||void 0===i?void 0:i.name,type:t.id,value:t.value}});window.dispatchEvent(s),"yaw"===t.id?this.yaw=Number(t.value):"pitch"===t.id?this.pitch=Number(t.value):this.roll=Number(t.value)}patchOrientation(){this.holdRange=!1,console.assert(void 0!==this.selectedDevice),void 0!==this.selectedDevice&&(this.selectedDevice.orientation={yaw:this.yaw,pitch:this.pitch,roll:this.roll},c.patchDevice({device:{name:this.selectedDevice.name,orientation:this.selectedDevice.orientation}}))}patchRadio(){console.assert(void 0!==this.selectedDevice),void 0!==this.selectedDevice&&c.patchDevice({device:{name:this.selectedDevice.name,chips:this.selectedDevice.chips}})}handleEditForm(){this.editMode?(c.invokeGetDevice(),this.editMode=!1):this.editMode=!0}static checkPositionBound(e){return e>10?10:e<0?0:e}static checkOrientationBound(e){return e>90?90:e<-90?-90:e}handleSave(){if(console.assert(void 0!==this.selectedDevice),void 0===this.selectedDevice)return;const e=this.renderRoot.querySelectorAll('[id^="edit"]'),i={name:this.selectedDevice.name,position:this.selectedDevice.position,orientation:this.selectedDevice.orientation};e.forEach((e=>{const t=e;"editName"===t.id?i.name=t.value:t.id.startsWith("editPos")?Number.isNaN(Number(t.value))||(i.position[t.id.slice(7).toLowerCase()]=r.checkPositionBound(Number(t.value)/100)):t.id.startsWith("editOri")&&(Number.isNaN(Number(t.value))||(i.orientation[t.id.slice(7).toLowerCase()]=r.checkOrientationBound(Number(t.value))))})),this.selectedDevice.name=i.name,this.selectedDevice.position=i.position,this.selectedDevice.orientation=i.orientation,this.handleEditForm(),c.patchDevice({device:i})}handleGetChips(){const e=s`
-      <input type="checkbox" disabled />
-        <span
-          class="slider round"
-          style=${l({opacity:"0.7"})}
-        ></span>
-    `;let i=e,t=e,o=e,a=e;if(this.selectedDevice&&"chips"in this.selectedDevice&&this.selectedDevice.chips)for(const l of this.selectedDevice.chips){if("bleBeacon"in l&&l.bleBeacon){let i=e,t=e;return"bt"in l.bleBeacon&&l.bleBeacon.bt&&("lowEnergy"in l.bleBeacon.bt&&l.bleBeacon.bt.lowEnergy&&"state"in l.bleBeacon.bt.lowEnergy&&(i=s`
-                <input
-                    id="bleBeacon"
-                    type="checkbox"
-                    .checked=${n(l.bleBeacon.bt.lowEnergy.state===d.ON)}
-                  />
-                  `),"classic"in l.bleBeacon.bt&&l.bleBeacon.bt.classic&&"state"in l.bleBeacon.bt.classic&&(t=s`
-                <input
-                    id="classicBeacon"
-                    type="checkbox"
-                    .checked=${n(l.bleBeacon.bt.classic.state===d.ON)}
-                  />
-                `)),s`
-              <div class="label">Beacon BLE</div>
+import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{html as i,css as t,LitElement as s}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as o,customElement as a}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{styleMap as d,live as l}from"https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js";import{simulationState as n}from"./device-observer.js";import{State as c}from"./netsim/model.js";var r,v;!function(e){e.UNSPECIFIED="UNSPECIFIED",e.BLUETOOTH="BLUETOOTH",e.WIFI="WIFI",e.UWB="UWB",e.BLUETOOTH_BEACON="BLUETOOTH_BEACON",e.UNRECOGNIZED="UNRECOGNIZED"}(v||(v={})),i`
+  <input type="checkbox" disabled />
+  <span
+    class="slider round"
+    style=${d({opacity:"0.7"})}
+  ></span>
+`;let h=r=class extends s{constructor(){super(...arguments),this.yaw=0,this.pitch=0,this.roll=0,this.editMode=!1,this.posX=0,this.posY=0,this.posZ=0,this.holdRange=!1,this.getRadioCheckbox=(e,t)=>i`<label class="switch">
+      <input
+        id=${t}
+        type="checkbox"
+        .checked=${l(e.state===c.ON)}
+        @click=${()=>{var i;null===(i=this.selectedDevice)||void 0===i||i.toggleChipState(e),this.patchRadio()}}
+      />
+      <span class="slider round"></span>
+    </label> `}connectedCallback(){super.connectedCallback(),n.registerObserver(this)}disconnectedCallback(){n.removeObserver(this),super.disconnectedCallback()}onNotify(e){if(e.selectedId&&!1===this.editMode)for(const i of e.devices)if(i.name===e.selectedId){this.selectedDevice=i,this.holdRange||(this.yaw=i.orientation.yaw,this.pitch=i.orientation.pitch,this.roll=i.orientation.roll),this.posX=Math.floor(100*i.position.x),this.posY=Math.floor(100*i.position.y),this.posZ=Math.floor(100*i.position.z);break}}changeRange(e){var i;this.holdRange=!0,console.assert(null!==this.selectedDevice);const t=e.target,s=new CustomEvent("orientationEvent",{detail:{name:null===(i=this.selectedDevice)||void 0===i?void 0:i.name,type:t.id,value:t.value}});window.dispatchEvent(s),"yaw"===t.id?this.yaw=Number(t.value):"pitch"===t.id?this.pitch=Number(t.value):this.roll=Number(t.value)}patchOrientation(){this.holdRange=!1,console.assert(void 0!==this.selectedDevice),void 0!==this.selectedDevice&&(this.selectedDevice.orientation={yaw:this.yaw,pitch:this.pitch,roll:this.roll},n.patchDevice({device:{name:this.selectedDevice.name,orientation:this.selectedDevice.orientation}}))}patchRadio(){console.assert(void 0!==this.selectedDevice),void 0!==this.selectedDevice&&n.patchDevice({device:{name:this.selectedDevice.name,chips:this.selectedDevice.chips}})}handleEditForm(){this.editMode?(n.invokeGetDevice(),this.editMode=!1):this.editMode=!0}static checkPositionBound(e){return e>10?10:e<0?0:e}static checkOrientationBound(e){return e>90?90:e<-90?-90:e}handleSave(){if(console.assert(void 0!==this.selectedDevice),void 0===this.selectedDevice)return;const e=this.renderRoot.querySelectorAll('[id^="edit"]'),i={name:this.selectedDevice.name,position:this.selectedDevice.position,orientation:this.selectedDevice.orientation};e.forEach((e=>{const t=e;"editName"===t.id?i.name=t.value:t.id.startsWith("editPos")?Number.isNaN(Number(t.value))||(i.position[t.id.slice(7).toLowerCase()]=r.checkPositionBound(Number(t.value)/100)):t.id.startsWith("editOri")&&(Number.isNaN(Number(t.value))||(i.orientation[t.id.slice(7).toLowerCase()]=r.checkOrientationBound(Number(t.value))))})),this.selectedDevice.name=i.name,this.selectedDevice.position=i.position,this.selectedDevice.orientation=i.orientation,this.handleEditForm(),n.patchDevice({device:i})}handleGetBleBeacon(e){return i`${e.settings?i`<div class="setting">
+        <div class="name">Settings</div>
+
+        ${e.settings.mode?i`<div class="label">Advertise Mode:</div>
               <div class="info">
-                <label class="switch">
-                  ${i}
-                </label>
-              </div>
-              <div class="label">Beacon Classic</div>
+                ${null===(t=e.settings.mode)||void 0===t?void 0:t.replace("-"," ")}
+              </div>`:i`<div class="label">Advertise Interval:</div>
               <div class="info">
-                <label class="switch">
-                  ${t}
-                </label>
-              </div>
-            `}"bt"in l&&l.bt&&("lowEnergy"in l.bt&&l.bt.lowEnergy&&"state"in l.bt.lowEnergy&&(i=s`
-                <input
-                  id="lowEnergy"
-                  type="checkbox"
-                  .checked=${n(l.bt.lowEnergy.state===d.ON)}
-                  @click=${()=>{var e;null===(e=this.selectedDevice)||void 0===e||e.toggleChipState(l,"lowEnergy"),this.patchRadio()}}
-                />
-                <span class="slider round"></span>
-              `),"classic"in l.bt&&l.bt.classic&&"state"in l.bt.classic&&(t=s`
-                <input
-                  id="classic"
-                  type="checkbox"
-                  .checked=${n(l.bt.classic.state===d.ON)}
-                  @click=${()=>{var e;null===(e=this.selectedDevice)||void 0===e||e.toggleChipState(l,"classic"),this.patchRadio()}}
-                />
-                <span class="slider round"></span>
-              `)),"wifi"in l&&l.wifi&&(o=s`
-              <input
-                id="wifi"
-                type="checkbox"
-                .checked=${n(l.wifi.state===d.ON)}
-                @click=${()=>{var e;null===(e=this.selectedDevice)||void 0===e||e.toggleChipState(l),this.patchRadio()}}
-              />
-              <span class="slider round"></span>
-            `),"uwb"in l&&l.uwb&&(a=s`
-              <input
-                id="uwb"
-                type="checkbox"
-                .checked=${n(l.uwb.state===d.ON)}
-                @click=${()=>{var e;null===(e=this.selectedDevice)||void 0===e||e.toggleChipState(l),this.patchRadio()}}
-              />
-              <span class="slider round"></span>
-            `)}return s`
-      <div class="label">BLE</div>
-      <div class="info">
-        <label class="switch">
-          ${i}
-        </label>
-      </div>
-      <div class="label">Classic</div>
-      <div class="info">
-        <label class="switch">
-          ${t}
-        </label>
-      </div>
-      <div class="label">WIFI</div>
-      <div class="info">
-        <label class="switch">
-          ${o}
-        </label>
-      </div>
-      <div class="label">UWB</div>
-      <div class="info">
-        <label class="switch">
-          ${a}
-        </label>
-      </div>
-    `}render(){return s`${this.selectedDevice?s`
+                ${null===(s=e.settings.modeNumeric)||void 0===s?void 0:s.toString().concat(" ms")}
+              </div>`}
+        ${e.settings.level?i`<div class="label">Transmit Power Level:</div>
+              <div class="info">
+                ${null===(o=e.settings.level)||void 0===o?void 0:o.replace("-"," ")}
+              </div>`:i`<div class="label">Transmit Power:</div>
+              <div class="info">
+                ${null===(a=e.settings.levelNumeric)||void 0===a?void 0:a.toString().concat(" dBm")}
+              </div>`}
+
+        <div class="label">Scannable:</div>
+        <div class="info">${e.settings.scannable}</div>
+
+        <div class="label">Timeout:</div>
+        <div class="info">
+          ${null===(d=e.settings.timeout)||void 0===d?void 0:d.toString().concat(" ms")}
+        </div>
+      </div>`:i``} ${e.advData?i`<div class="setting">
+        <div class="name">Advertise Data</div>
+
+        <div class="label">Include Device Name:</div>
+        <div class="info">${e.advData.includeDeviceName}</div>
+
+        <div class="label">Include Transmit Power:</div>
+        <div class="info">${e.advData.includeTxPowerLevel}</div>
+
+        ${e.advData.manufacturerData.length?i` <div class="label">Manufacturer Data Length:</div>
+              <div class="info">
+                ${e.advData.manufacturerData.length}
+              </div>`:i``}
+        ${e.advData.services.length?i` <div class="label">Number of Supported Services:</div>
+              <div class="info">${e.advData.services.length}</div>`:i``}
+      </div>`:i``}`;var t,s,o,a,d}getBluetoothRadioCheckboxes(e){let i,t;return e.lowEnergy&&e.lowEnergy.state&&(i=this.getRadioCheckbox(e.lowEnergy,"lowEnergy")),e.classic&&e.classic&&(t=this.getRadioCheckbox(e.classic,"classic")),[i,t]}handleGetChip(e,t){if(e.bleBeacon){let s={};return e.bleBeacon.bt&&([s["Low Energy"],s.Classic]=this.getBluetoothRadioCheckboxes(e.bleBeacon.bt)),i`<div class="title">
+          Chip ${t+1}: ${e.kind.replace("_"," ")}
+        </div>
+        <div class="setting">
+          <div class="name">Name</div>
+          <div class="info">${e.name}</div>
+        </div>
+        <div class="setting">
+          ${Object.entries(s).length?i`<div class="name">Radios</div>`:i``}
+          ${Object.entries(s).map((([e,t])=>i`<div class="label">${e}</div>
+              <div class="info">${t}</div>`))}
+        </div>
+        ${this.handleGetBleBeacon(e.bleBeacon)}`}return""}handleGetChips(){if(!this.selectedDevice||!this.selectedDevice.chips)return i``;if(this.selectedDevice.chips.some((e=>(e=>e.kind===v.BLUETOOTH_BEACON&&e.bleBeacon)(e))))return i`${this.selectedDevice.chips.map(((e,i)=>this.handleGetChip(e,i)))}`;let e={};for(const i of this.selectedDevice.chips)i&&(i.bt&&([e["Low Energy"],e.Classic]=this.getBluetoothRadioCheckboxes(i.bt)),i.wifi&&(e.WIFI=this.getRadioCheckbox(i.wifi,"wifi")),i.uwb&&(e.UWB=this.getRadioCheckbox(i.uwb,"uwb")));return Object.keys(e).length?i`<div class="setting">
+        <div class="name">Radios</div>
+        ${Object.entries(e).map((([e,t])=>i`<div class="label">${e}</div>
+            <div class="info">${t}</div>`))}
+      </div>`:i``}render(){return i`${this.selectedDevice?i`
           <div class="title">Device Info</div>
           <div class="setting">
             <div class="name">Name</div>
@@ -95,28 +77,37 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
           <div class="setting">
             <div class="name">Position</div>
             <div class="label">X</div>
-            <div class="info" style=${l({color:"red"})}>
-              ${this.editMode?s`<input
+            <div
+              class="info"
+              style=${d({color:"red"})}
+            >
+              ${this.editMode?i`<input
                     type="text"
                     id="editPosX"
                     .value=${this.posX.toString()}
-                  />`:s`${this.posX}`}
+                  />`:i`${this.posX}`}
             </div>
             <div class="label">Y</div>
-            <div class="info" style=${l({color:"green"})}>
-              ${this.editMode?s`<input
+            <div
+              class="info"
+              style=${d({color:"green"})}
+            >
+              ${this.editMode?i`<input
                     type="text"
                     id="editPosY"
                     .value=${this.posY.toString()}
-                  />`:s`${this.posY}`}
+                  />`:i`${this.posY}`}
             </div>
             <div class="label">Z</div>
-            <div class="info" style=${l({color:"blue"})}>
-              ${this.editMode?s`<input
+            <div
+              class="info"
+              style=${d({color:"blue"})}
+            >
+              ${this.editMode?i`<input
                     type="text"
                     id="editPosZ"
                     .value=${this.posZ.toString()}
-                  />`:s`${this.posZ}`}
+                  />`:i`${this.posZ}`}
             </div>
           </div>
           <div class="setting">
@@ -133,12 +124,12 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
                 @input=${this.changeRange}
                 @change=${this.patchOrientation}
               />
-              ${this.editMode?s`<input
+              ${this.editMode?i`<input
                     type="text"
                     id="editOriYaw"
                     class="orientation"
                     .value=${this.yaw.toString()}
-                  />`:s`<div class="text">(${this.yaw})</div>`}
+                  />`:i`<div class="text">(${this.yaw})</div>`}
             </div>
             <div class="label">Pitch</div>
             <div class="info">
@@ -152,12 +143,12 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
                 @input=${this.changeRange}
                 @change=${this.patchOrientation}
               />
-              ${this.editMode?s`<input
+              ${this.editMode?i`<input
                     type="text"
                     id="editOriPitch"
                     class="orientation"
                     .value=${this.pitch.toString()}
-                  />`:s`<div class="text">(${this.pitch})</div>`}
+                  />`:i`<div class="text">(${this.pitch})</div>`}
             </div>
             <div class="label">Roll</div>
             <div class="info">
@@ -171,33 +162,31 @@ import{__decorate as e}from"../node_modules/tslib/tslib.es6.js";import{css as i,
                 @input=${this.changeRange}
                 @change=${this.patchOrientation}
               />
-              ${this.editMode?s`<input
+              ${this.editMode?i`<input
                     type="text"
                     id="editOriRoll"
                     class="orientation"
                     .value=${this.roll.toString()}
-                  />`:s`<div class="text">(${this.roll})</div>`}
+                  />`:i`<div class="text">(${this.roll})</div>`}
             </div>
           </div>
           <div class="setting">
-            ${this.editMode?s`
+            ${this.editMode?i`
                   <input type="button" value="Save" @click=${this.handleSave} />
                   <input
                     type="button"
                     value="Cancel"
                     @click=${this.handleEditForm}
                   />
-                `:s`<input
+                `:i`<input
                   type="button"
                   value="Edit"
                   @click=${this.handleEditForm}
                 />`}
           </div>
-          <div class="setting">
-            <div class="name">Radio States</div>
-            ${this.handleGetChips()}
-          </div>
-        `:s`<div class="title">Device Info</div>`}`}};h.styles=i`
+
+          ${this.handleGetChips()}
+        `:i`<div class="title">Device Info</div>`}`}};h.styles=t`
     :host {
       cursor: pointer;
       display: grid;

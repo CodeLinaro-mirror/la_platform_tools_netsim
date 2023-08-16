@@ -42,6 +42,7 @@ use frontend_proto::frontend::CreateDeviceRequest;
 use frontend_proto::frontend::CreateDeviceResponse;
 use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::frontend::PatchDeviceRequest;
+use frontend_proto::model::chip_create::Chip as ProtoBuiltin;
 use frontend_proto::model::ChipCreate;
 use frontend_proto::model::Position as ProtoPosition;
 use frontend_proto::model::Scene as ProtoScene;
@@ -111,6 +112,9 @@ pub fn add_chip(
         devices.idle_since = None;
         let (device_id, _) =
             get_or_create_device(&mut devices, Some(device_guid), Some(device_name));
+
+        let chip_name = (chip_create_proto.name != String::default())
+            .then_some(chip_create_proto.name.as_str());
         // This is infrequent, so we can afford to do another lookup for the device.
         devices
             .entries
@@ -118,7 +122,7 @@ pub fn add_chip(
             .ok_or(format!("Device not found for device_id: {device_id}"))?
             .add_chip(
                 chip_kind,
-                &chip_create_proto.name,
+                chip_name,
                 &chip_create_proto.manufacturer,
                 &chip_create_proto.product_name,
             )
@@ -132,9 +136,9 @@ pub fn add_chip(
                 ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(device_id),
                 ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::bluetooth_beacon_add(
                     device_id,
+                    String::from(device_name),
                     chip_id,
-                    "beacon".to_string(),
-                    chip_create_proto.name.clone(),
+                    chip_create_proto,
                 )?,
                 ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id),
                 _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
@@ -340,7 +344,7 @@ pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
 /// Create a device from a CreateDeviceRequest json.
 /// Uses a default name if none is provided.
 /// Returns an error if the device already exists.
-fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
+pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
     let mut create_device_request = CreateDeviceRequest::new();
     if merge_from_str(&mut create_device_request, create_json).is_err() {
         return Err(format!(
@@ -359,9 +363,24 @@ fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
         return Err(String::from("failed to create device: device already exists"));
     }
 
-    // TODO: b/293661077 - Create builtin chips within device.
+    if new_device.chips.is_empty() {
+        return Err(String::from("failed to create device: device must contain at least 1 chip"));
+    }
+    new_device.chips.iter().try_for_each(|chip| match chip.chip {
+        Some(ProtoBuiltin::BleBeacon(_)) => Ok(()),
+        Some(_) => Err(format!("failed to create device: chip {} was not a built-in", chip.name)),
+        None => Err(format!("failed to create device: chip {} was missing a radio", chip.name)),
+    })?;
+
     let device_name = (new_device.name != String::default()).then_some(new_device.name.as_str());
     let (device_id, device_name) = get_or_create_device(&mut devices, device_name, device_name);
+
+    // Release devices lock so that add_chip can take it.
+    drop(devices);
+    new_device
+        .chips
+        .iter()
+        .try_for_each(|chip| add_chip(&device_name, &device_name, chip).map(|_| ()))?;
 
     resource::clone_events()
         .lock()
@@ -1070,12 +1089,13 @@ mod tests {
     }
 
     use frontend_proto::model::chip::{
-        bluetooth_beacon::AdvertiseData, bluetooth_beacon::AdvertiseSettings,
+        bluetooth_beacon::AdvertiseData, bluetooth_beacon::AdvertiseSettings, BluetoothBeacon, Chip,
     };
     use frontend_proto::model::chip_create::{BluetoothBeaconCreate, Chip as BuiltChipProto};
+    use frontend_proto::model::Chip as ChipProto;
     use frontend_proto::model::ChipCreate;
     use frontend_proto::model::Device as DeviceProto;
-    use protobuf::MessageField;
+    use protobuf::{EnumOrUnknown, MessageField};
 
     fn get_test_create_device_request(device_name: Option<String>) -> CreateDeviceRequest {
         let beacon_proto = BluetoothBeaconCreate {
@@ -1127,6 +1147,56 @@ mod tests {
 
         let device_proto = get_device_proto(id);
         assert_eq!(request.device.name, device_proto.name);
+        assert_eq!(1, device_proto.chips.len());
+        assert_eq!(request.device.chips[0].name, device_proto.chips[0].name);
+    }
+
+    #[test]
+    fn test_create_chipless_device_fails() {
+        logger_setup();
+
+        let request = CreateDeviceRequest {
+            device: MessageField::some(ProtoDeviceCreate { ..Default::default() }),
+            ..Default::default()
+        };
+
+        let id = create_device(&print_to_string(&request).unwrap());
+        assert!(id.is_err(), "{}", id.unwrap());
+    }
+
+    #[test]
+    fn test_create_radioless_device_fails() {
+        logger_setup();
+
+        let request = CreateDeviceRequest {
+            device: MessageField::some(ProtoDeviceCreate {
+                chips: vec![ChipCreate::default()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let id = create_device(&print_to_string(&request).unwrap());
+        assert!(id.is_err(), "{}", id.unwrap());
+    }
+
+    #[test]
+    fn test_get_beacon_device() {
+        logger_setup();
+
+        let request = get_test_create_device_request(Some(format!(
+            "bob-the-beacon-{:?}",
+            thread::current().id()
+        )));
+
+        let id = create_device(&print_to_string(&request).unwrap());
+        assert!(id.is_ok(), "{}", id.unwrap_err());
+        let id = id.unwrap();
+
+        let device_proto = get_device_proto(id);
+        assert_eq!(1, device_proto.chips.len());
+        assert!(device_proto.chips[0].chip.is_some());
+        assert!(matches!(device_proto.chips[0].chip, Some(Chip::BleBeacon(_))));
     }
 
     #[test]
@@ -1189,11 +1259,23 @@ mod tests {
         let patch_result = device.patch(&DeviceProto {
             name: device_proto.name.clone(),
             id,
+            chips: vec![ChipProto {
+                name: request.device.chips[0].name.clone(),
+                kind: EnumOrUnknown::new(ProtoChipKind::BLUETOOTH_BEACON),
+                chip: Some(Chip::BleBeacon(BluetoothBeacon {
+                    bt: MessageField::some(Default::default()),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            }],
             ..Default::default()
         });
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
 
         let patched_device = device.get();
         assert!(patched_device.is_ok(), "{}", patched_device.unwrap_err());
+        let patched_device = patched_device.unwrap();
+        assert_eq!(1, patched_device.chips.len());
+        assert!(matches!(patched_device.chips[0].chip, Some(Chip::BleBeacon(_))));
     }
 }

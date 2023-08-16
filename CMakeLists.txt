@@ -70,6 +70,7 @@ if(TARGET Rust::Rustc)
         src/util/string_utils_test.cc src/wifi/wifi_facade_test.cc
     DEPS android-emu-base-headers
          frontend-proto
+         backend-proto
          grpc++
          gtest
          gtest_main

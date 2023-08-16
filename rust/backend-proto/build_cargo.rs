@@ -30,13 +30,16 @@ fn main() {
 
     // Generate protobuf output
     let proto_dir = proto_root.join("proto");
+    let rootcanal_dir = proto_root.join("../../packages/modules/Bluetooth/tools/rootcanal/proto");
     let proto_input_files = [
+        rootcanal_dir.join("rootcanal/configuration.proto"),
         proto_dir.join("netsim/packet_streamer.proto"),
         proto_dir.join("netsim/hci_packet.proto"),
         proto_dir.join("netsim/startup.proto"),
         proto_dir.join("netsim/common.proto"),
     ];
-    let proto_include_dirs = [proto_dir.clone()];
+
+    let proto_include_dirs = [proto_dir.clone(), rootcanal_dir.clone()];
     let proto_out_dir = proto_root.join("rust/backend-proto/src");
 
     println!("cargo:warning=proto_outdir={:?}", proto_out_dir);

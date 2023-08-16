@@ -158,16 +158,18 @@ impl Chip {
 /// Allocates a new chip with a facade_id.
 pub fn chip_new(
     chip_kind: ProtoChipKind,
-    chip_name: &str,
+    chip_name: Option<&str>,
     device_name: &str,
     chip_manufacturer: &str,
     chip_product_name: &str,
 ) -> Result<Chip, String> {
+    let id = IDS.write().unwrap().next_id();
+
     Ok(Chip::new(
-        IDS.write().unwrap().next_id(),
+        id,
         None,
         chip_kind,
-        chip_name,
+        chip_name.unwrap_or(&format!("chip-{id}")),
         device_name,
         chip_manufacturer,
         chip_product_name,

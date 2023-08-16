@@ -181,19 +181,26 @@ impl Device {
     pub fn add_chip(
         &mut self,
         chip_kind: ProtoChipKind,
-        chip_name: &str,
+        chip_name: Option<&str>,
         chip_manufacturer: &str,
         chip_product_name: &str,
     ) -> Result<(DeviceIdentifier, ChipIdentifier), String> {
-        for chip in self.chips.values() {
-            if chip.kind == chip_kind && chip.name == chip_name {
-                return Err(format!("Device::AddChip - duplicate at id {}, skipping.", chip.id));
+        if let Some(chip_name) = chip_name {
+            for chip in self.chips.values() {
+                if chip.kind == chip_kind && chip.name == chip_name {
+                    return Err(format!(
+                        "Device::AddChip - duplicate at id {}, skipping.",
+                        chip.id
+                    ));
+                }
             }
         }
+
         let chip =
             chip::chip_new(chip_kind, chip_name, &self.name, chip_manufacturer, chip_product_name)?;
         let chip_id = chip.id;
         self.chips.insert(chip_id, chip);
+
         Ok((self.id, chip_id))
     }
 
@@ -221,13 +228,13 @@ mod tests {
         let mut device = Device::new(0, "0".to_string(), TEST_DEVICE_NAME.to_string());
         device.add_chip(
             ProtoChipKind::BLUETOOTH,
-            TEST_CHIP_NAME_1,
+            Some(TEST_CHIP_NAME_1),
             "test_manufacturer",
             "test_product_name",
         )?;
         device.add_chip(
             ProtoChipKind::BLUETOOTH,
-            TEST_CHIP_NAME_2,
+            Some(TEST_CHIP_NAME_2),
             "test_manufacturer",
             "test_product_name",
         )?;

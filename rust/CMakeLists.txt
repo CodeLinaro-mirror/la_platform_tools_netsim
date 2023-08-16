@@ -9,6 +9,7 @@ corrosion_set_env_vars(netsim-common CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(netsim-cxx CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(netsim-cli CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(frontend-proto CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(backend-proto CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(frontend-client-cxx CARGO_HOME=${Rust_CARGO_HOME})
 
 # cxx crates
@@ -37,6 +38,7 @@ if(LINUX)
 endif()
 
 add_subdirectory(frontend-proto)
+add_subdirectory(backend-proto)
 
 # Steps to generate protobuf -> rust files are as follows:
 #

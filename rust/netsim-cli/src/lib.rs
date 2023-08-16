@@ -139,10 +139,13 @@ pub extern "C" fn rust_main() {
 
     let mut args = NetsimArgs::parse();
     if matches!(args.command, args::Command::Gui) {
+        println!("Opening netsim web UI on default web browser");
         browser::open("http://localhost:7681/");
         return;
     } else if matches!(args.command, args::Command::Artifact) {
-        browser::open(netsim_common::system::netsimd_temp_dir());
+        let artifact_dir = netsim_common::system::netsimd_temp_dir();
+        println!("netsim artifact directory: {}", artifact_dir.display());
+        browser::open(artifact_dir);
         return;
     }
     let grpc_method = args.command.grpc_method();

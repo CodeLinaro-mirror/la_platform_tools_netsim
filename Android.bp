@@ -130,7 +130,6 @@ cc_library_host_static {
         "src/frontend/frontend_server.cc",
         "src/backend/grpc_server.cc",
         "src/hci/bluetooth_facade.cc",
-        "src/hci/hci_debug.cc",
         "src/hci/hci_packet_transport.cc",
         "src/hci/rust_device.cc",
         "src/packet_hub/packet_hub.cc",

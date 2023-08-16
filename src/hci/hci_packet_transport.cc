@@ -18,7 +18,6 @@
 #include <memory>
 #include <optional>
 
-#include "hci/hci_debug.h"
 #include "model/hci/hci_transport.h"
 #include "netsim/hci_packet.pb.h"
 #include "packet_hub/packet_hub.h"
@@ -90,9 +89,6 @@ void HciPacketTransport::Request(
   // HCIPacket_PacketType to rootcanal::PacketType is safe.
   rootcanal::PacketType rootcanal_packet_type =
       static_cast<rootcanal::PacketType>(packet_type);
-  if (packet_type == HCIPacket::COMMAND) {
-    auto cmd = HciCommandToString(packet->at(0), packet->at(1));
-  }
   mAsyncManager->Synchronize([this, rootcanal_packet_type, packet]() {
     mPacketCallback(rootcanal_packet_type, packet);
   });
