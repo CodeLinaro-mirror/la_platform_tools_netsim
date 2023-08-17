@@ -19,6 +19,8 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use crate::captures::handlers as captures_handlers;
+
 /// The Dispatcher module routes packets from a chip controller instance to
 /// different transport managers. Currently transport managers include
 ///
@@ -93,6 +95,8 @@ pub fn unregister_transport(kind: u32, facade_id: u32) {
 // Queue the response packet to be handled by the responder thread.
 //
 pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+    captures_handlers::handle_packet_response(kind, facade_id, packet, packet_type.into());
+
     let key = get_key(kind, facade_id);
     let mut binding = SENDERS.lock().unwrap();
     if let Some(responder) = binding.get(&key) {

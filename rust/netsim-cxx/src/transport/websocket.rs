@@ -89,6 +89,7 @@ impl Response for WebSocketTransport {
 pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) {
     let chip_create_proto = ChipCreate {
         kind: ChipKind::BLUETOOTH.into(),
+        address: queries.get("address").unwrap_or(&"").to_string(),
         name: format!("websocket-{}", stream.peer_addr().unwrap()),
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),

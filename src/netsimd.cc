@@ -24,8 +24,8 @@
 #include "core/server.h"
 #include "frontend/frontend_client_stub.h"
 #include "netsim-cxx/src/lib.rs.h"
-#include "util/os_utils.h"
 #include "util/crash_report.h"
+#include "util/os_utils.h"
 
 // Wireless network simulator for android (and other) emulated devices.
 
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
   bool no_web_ui = false;
   bool no_cli_ui = false;
 
-  const char *kShortOpt = "s:dl";
+  const char *kShortOpt = "s:dlv:";
   const option kLongOptions[] = {
       {"no_cli_ui", no_argument, 0, 'f'},
       {"no_web_ui", no_argument, 0, 'w'},
@@ -49,6 +49,7 @@ int main(int argc, char *argv[]) {
       {"instance", required_argument, 0, 'i'},
       {"instance_num", required_argument, 0, 'I'},
       {"logtostderr", no_argument, 0, 'l'},
+      {"vsock", required_argument, 0, 'v'},
   };
 
   bool dev = false;
@@ -57,6 +58,7 @@ int main(int argc, char *argv[]) {
   int hci_port_flag = 0;
   uint16_t instance_flag = 0;
   bool logtostderr = false;
+  uint16_t vsock = 0;
 
   int c;
 
@@ -100,6 +102,10 @@ int main(int argc, char *argv[]) {
         logtostderr = true;
         break;
 
+      case 'v':
+        vsock = std::atoi(optarg);
+        break;
+
       default:
         ArgError(argv, c);
         return (-2);
@@ -136,6 +142,7 @@ int main(int argc, char *argv[]) {
                        .no_web_ui = no_web_ui,
                        .hci_port = hci_port,
                        .instance_num = instance_num,
-                       .dev = dev});
+                       .dev = dev,
+                       .vsock = vsock});
   return -1;
 }

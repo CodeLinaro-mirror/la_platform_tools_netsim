@@ -10,6 +10,7 @@ doctest = false
 test = false
 
 [dependencies]
+clap = { version = "4.1.8", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
 cxx = { version = ">=1.0.85", features = ["c++17"] }
 data-encoding = "2.4.0"
 frontend-proto = { path = "../frontend-proto" }

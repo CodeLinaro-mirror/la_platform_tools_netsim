@@ -69,6 +69,8 @@ message Chip {
   message Bluetooth {
     Radio low_energy = 1;
     Radio classic = 2;
+    // BD_ADDR address
+    string address = 3;
   }
 
   message BluetoothBeacon {
@@ -155,11 +157,12 @@ message ChipCreate {
   }
 
   netsim.common.ChipKind kind = 1;
-  string name = 2;
-  string manufacturer = 3;
-  string product_name = 4;
+  string address = 2;
+  string name = 3;
+  string manufacturer = 4;
+  string product_name = 5;
   oneof chip {
-    BluetoothBeaconCreate ble_beacon = 5;
+    BluetoothBeaconCreate ble_beacon = 6;
   }
 }
 

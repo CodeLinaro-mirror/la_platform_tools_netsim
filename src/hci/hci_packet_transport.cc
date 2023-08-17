@@ -19,8 +19,8 @@
 #include <optional>
 
 #include "model/hci/hci_transport.h"
+#include "netsim-cxx/src/lib.rs.h"
 #include "netsim/hci_packet.pb.h"
-#include "packet_hub/packet_hub.h"
 #include "rust/cxx.h"
 #include "util/log.h"
 
@@ -63,10 +63,9 @@ void HciPacketTransport::Send(rootcanal::PacketType packet_type,
     BtsLog("hci_packet_transport: response with no device.");
     return;
   }
-  // Send response to packet_hub.
-  auto shared_packet = std::make_shared<std::vector<uint8_t>>(data);
-  netsim::packet_hub::HandleBtResponse(mDeviceId.value(), hci_packet_type,
-                                       shared_packet);
+  // Send response to transport dispatcher.
+  netsim::transport::HandleResponse(common::ChipKind::BLUETOOTH,
+                                    mDeviceId.value(), data, hci_packet_type);
 }
 
 // Called by HCITransport (rootcanal)

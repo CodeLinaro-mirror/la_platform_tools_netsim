@@ -111,7 +111,8 @@ bool is_stderr_open() {
 #endif
 }
 
-void RedirectStdStream(std::string netsim_temp_dir) {
+void RedirectStdStream(const std::string &netsim_temp_dir_const) {
+  auto netsim_temp_dir = netsim_temp_dir_const;
   // Check if directory has a trailing slash.
   if (netsim_temp_dir.back() != netsim::filesystem::slash.back())
     netsim_temp_dir.append(netsim::filesystem::slash);

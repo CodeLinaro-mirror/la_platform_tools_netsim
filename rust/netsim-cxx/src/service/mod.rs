@@ -16,7 +16,7 @@ use crate::bluetooth as bluetooth_facade;
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures;
 use crate::captures::handlers::clear_pcap_files;
-use crate::config::get_dev;
+use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::is_shutdown_time;
 use crate::ffi::run_grpc_server_cxx;
 use crate::http_server::server::run_http_server;
@@ -39,9 +39,22 @@ pub struct ServiceParams {
     hci_port: u16,
     instance_num: u16,
     dev: bool,
+    vsock: u16,
 }
 
-// TODO: Replace Run() in server.cc.
+impl ServiceParams {
+    pub fn new(
+        fd_startup_str: String,
+        no_cli_ui: bool,
+        no_web_ui: bool,
+        hci_port: u16,
+        instance_num: u16,
+        dev: bool,
+        vsock: u16,
+    ) -> Self {
+        ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev, vsock }
+    }
+}
 
 pub struct Service {
     // netsimd states, like device resource.
@@ -63,6 +76,7 @@ impl Service {
         if clear_pcap_files() {
             info!("netsim generated pcap files in temp directory has been removed.");
         }
+        set_dev(self.service_params.dev);
 
         // Start all the subscribers for events
         let events_rx = resource::clone_events().lock().unwrap().subscribe();
@@ -94,6 +108,7 @@ impl Service {
             netsim_grpc_port,
             self.service_params.no_cli_ui,
             self.service_params.instance_num,
+            self.service_params.vsock,
         );
         if grpc_server.is_null() {
             error!("Failed to run netsimd because unable to start grpc server");
@@ -138,10 +153,11 @@ pub unsafe fn create_service(
     hci_port: u16,
     instance_num: u16,
     dev: bool,
+    vsock: u16,
 ) -> Box<Service> {
     let service_params =
-        ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev };
-    // SAFETY: The caller guarandeed that the file descriptors in `fd_startup_str` would remain
+        ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev, vsock };
+    // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
     // valid and open for as long as the `Service` exists.
     Box::new(unsafe { Service::new(service_params) })
 }

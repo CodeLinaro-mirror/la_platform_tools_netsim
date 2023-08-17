@@ -77,12 +77,14 @@ export interface Chip_BluetoothBeacon {
 }
 
 export interface Chip_BluetoothBeacon_AdvertiseSettings {
-  mode?:|Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode|undefined;
+  advertiseMode?:|Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode|
+      undefined;
   /** Numeric time interval between advertisements in ms. */
-  modeNumeric?: number|undefined;
-  level?:|Chip_BluetoothBeacon_AdvertiseSettings_TxPowerLevel|undefined;
+  milliseconds?: number|undefined;
+  txPowerLevel?:|Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower|
+      undefined;
   /** Numeric transmission power in dBm. Must be within [-127, 127]. */
-  levelNumeric?: number|undefined;
+  dbm?: number|undefined;
   scannable: boolean;
   timeout: number;
 }
@@ -105,7 +107,7 @@ export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode {
  * From
  * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
  */
-export enum Chip_BluetoothBeacon_AdvertiseSettings_TxPowerLevel {
+export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower {
   /** ULTRA_LOW - -21 dBm */
   ULTRA_LOW = 'ULTRA_LOW',
   /** LOW - -15 dBm */
@@ -137,6 +139,7 @@ export interface Chip_BluetoothBeacon_AdvertiseData_Service {
 }
 
 export interface ChipCreate {
+  kind: ChipKind;
   name: string;
   manufacturer: string;
   productName: string;

@@ -16,7 +16,8 @@
 
 #include <memory>
 
-#include "packet_hub/packet_hub.h"
+#include "netsim-cxx/src/lib.rs.h"
+#include "netsim/hci_packet.pb.h"
 #include "rust/cxx.h"
 #include "util/log.h"
 #ifdef NETSIM_ANDROID_EMULATOR
@@ -135,8 +136,8 @@ size_t HandleWifiCallback(const uint8_t *buf, size_t size) {
   //  Broadcast the response to all WiFi chips.
   std::vector<uint8_t> packet(buf, buf + size);
   for (auto [chip_id, _] : id_to_chip_info_) {
-    packet_hub::HandleWifiResponse(
-        chip_id, std::make_shared<std::vector<uint8_t>>(packet));
+    transport::HandleResponse(common::ChipKind::WIFI, chip_id, packet,
+                              packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
   }
   return size;
 }

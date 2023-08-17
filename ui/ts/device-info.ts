@@ -352,24 +352,24 @@ export class DeviceInformation extends LitElement implements Notifiable {
         <div class="name">Settings</div>
 
         ${
-          ble_beacon.settings.mode ?
+          ble_beacon.settings.advertiseMode ?
               html`<div class="label">Advertise Mode:</div>
               <div class="info">
-                ${ble_beacon.settings.mode?.replace('-', ' ')}
+                ${ble_beacon.settings.advertiseMode?.replace('-', ' ')}
               </div>` :
               html`<div class="label">Advertise Interval:</div>
               <div class="info">
-                ${ble_beacon.settings.modeNumeric?.toString().concat(' ms')}
+                ${ble_beacon.settings.milliseconds?.toString().concat(' ms')}
               </div>`}
         ${
-          ble_beacon.settings.level ?
+          ble_beacon.settings.txPowerLevel ?
               html`<div class="label">Transmit Power Level:</div>
               <div class="info">
-                ${ble_beacon.settings.level?.replace('-', ' ')}
+                ${ble_beacon.settings.txPowerLevel?.replace('-', ' ')}
               </div>` :
               html`<div class="label">Transmit Power:</div>
               <div class="info">
-                ${ble_beacon.settings.levelNumeric?.toString().concat(' dBm')}
+                ${ble_beacon.settings.dbm?.toString().concat(' dBm')}
               </div>`}
 
         <div class="label">Scannable:</div>

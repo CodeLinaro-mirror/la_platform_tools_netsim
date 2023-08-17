@@ -42,6 +42,16 @@ if(TARGET Rust::Rustc)
     DEPS frontend-client grpc++ netsim-cli-proto-lib netsim-cli-rust-lib
          protobuf::libprotobuf util-lib)
 
+    android_add_executable(
+        TARGET netsimd-rs LICENSE Apache-2.0 INSTALL . SRC rust/netsimd.cc
+        DEPS grpc++
+        libbt-rootcanal
+        netsim-cli-proto-lib
+        netsim-cxx
+        netsimd-lib
+        netsimd-proto-lib
+        packet-streamer-proto-lib)
+
   android_add_executable(
     TARGET netsimd
     LICENSE Apache-2.0 INSTALL .
@@ -56,11 +66,13 @@ if(TARGET Rust::Rustc)
   if(NOT DARWIN_AARCH64 AND NOT DARWIN_X86_64)
     # Prevent duplicate symbol for cxx Rust crate.
     target_link_libraries(netsimd PRIVATE -Wl,--allow-multiple-definition)
+    target_link_libraries(netsimd-rs PRIVATE -Wl,--allow-multiple-definition)
   endif()
 
   target_include_directories(netsimd PRIVATE src)
 
   android_target_dependency(netsimd linux TCMALLOC_OS_DEPENDENCIES)
+  android_target_dependency(netsimd-rs linux TCMALLOC_OS_DEPENDENCIES)
 
   target_compile_definitions(netsimd PUBLIC NETSIM_ANDROID_EMULATOR)
 

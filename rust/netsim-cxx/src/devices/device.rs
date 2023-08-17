@@ -181,6 +181,7 @@ impl Device {
     pub fn add_chip(
         &mut self,
         chip_kind: ProtoChipKind,
+        chip_address: &str,
         chip_name: Option<&str>,
         chip_manufacturer: &str,
         chip_product_name: &str,
@@ -196,8 +197,14 @@ impl Device {
             }
         }
 
-        let chip =
-            chip::chip_new(chip_kind, chip_name, &self.name, chip_manufacturer, chip_product_name)?;
+        let chip = chip::chip_new(
+            chip_kind,
+            chip_address,
+            chip_name,
+            &self.name,
+            chip_manufacturer,
+            chip_product_name,
+        )?;
         let chip_id = chip.id;
         self.chips.insert(chip_id, chip);
 
@@ -228,12 +235,14 @@ mod tests {
         let mut device = Device::new(0, "0".to_string(), TEST_DEVICE_NAME.to_string());
         device.add_chip(
             ProtoChipKind::BLUETOOTH,
+            "",
             Some(TEST_CHIP_NAME_1),
             "test_manufacturer",
             "test_product_name",
         )?;
         device.add_chip(
             ProtoChipKind::BLUETOOTH,
+            "",
             Some(TEST_CHIP_NAME_2),
             "test_manufacturer",
             "test_product_name",

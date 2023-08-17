@@ -84,7 +84,7 @@ impl IniFile {
         for (key, value) in &self.data {
             writeln!(&mut f, "{}={}", key, value)?;
         }
-
+        f.flush()?;
         Ok(())
     }
 

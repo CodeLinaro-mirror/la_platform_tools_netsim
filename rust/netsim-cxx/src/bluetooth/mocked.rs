@@ -60,7 +60,7 @@ pub fn bluetooth_get(facade_id: u32) -> Bluetooth {
 }
 
 // Returns facade_id
-pub fn bluetooth_add(device_id: u32) -> u32 {
+pub fn bluetooth_add(device_id: u32, _address: &str) -> u32 {
     info!("hci_add({device_id})");
     let mut resource = IDS.write().unwrap();
     let facade_id = resource.current_id;

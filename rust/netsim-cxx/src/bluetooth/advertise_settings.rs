@@ -52,30 +52,8 @@ pub struct AdvertiseSettings {
 
 impl AdvertiseSettings {
     /// Returns a new advertise settings builder with no fields.
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
-    pub fn from_proto(proto: &AdvertiseSettingsProto) -> Result<Builder, String> {
-        let mut builder = Builder::default();
-
-        if let Some(mode) = proto.interval.as_ref() {
-            builder.mode(mode.into());
-        }
-
-        if let Some(tx_power) = proto.tx_power.as_ref() {
-            builder.tx_power_level(tx_power.try_into()?);
-        }
-
-        if proto.scannable {
-            builder.scannable();
-        }
-
-        if proto.timeout != u64::default() {
-            builder.timeout(Duration::from_millis(proto.timeout));
-        }
-
-        Ok(builder)
+    pub fn builder() -> AdvertiseSettingsBuilder {
+        AdvertiseSettingsBuilder::default()
     }
 }
 
@@ -97,14 +75,52 @@ impl TryFrom<&AdvertiseSettings> for AdvertiseSettingsProto {
 
 #[derive(Default)]
 /// Builder for BLE beacon advertise settings.
-pub struct Builder {
+pub struct AdvertiseSettingsBuilder {
     mode: Option<AdvertiseMode>,
     tx_power_level: Option<TxPowerLevel>,
     scannable: bool,
     timeout: Option<Duration>,
 }
 
-impl Builder {
+impl AdvertiseSettingsBuilder {
+    /// Returns a new advertise settings builder with empty fields.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns a new advertise settings builder with fields from a protobuf.
+    pub fn from_proto(proto: &AdvertiseSettingsProto) -> Result<AdvertiseSettingsBuilder, String> {
+        let mut builder = AdvertiseSettingsBuilder::default();
+
+        if let Some(mode) = proto.interval.as_ref() {
+            builder.mode(mode.into());
+        }
+
+        if let Some(tx_power) = proto.tx_power.as_ref() {
+            builder.tx_power_level(tx_power.try_into()?);
+        }
+
+        if proto.scannable {
+            builder.scannable();
+        }
+
+        if proto.timeout != u64::default() {
+            builder.timeout(Duration::from_millis(proto.timeout));
+        }
+
+        Ok(builder)
+    }
+
+    /// Build the advertise settings.
+    pub fn build(&self) -> AdvertiseSettings {
+        AdvertiseSettings {
+            mode: self.mode.unwrap_or_default(),
+            tx_power_level: self.tx_power_level.unwrap_or_default(),
+            scannable: self.scannable,
+            timeout: self.timeout,
+        }
+    }
+
     /// Set the advertise mode.
     pub fn mode(&mut self, mode: AdvertiseMode) -> &mut Self {
         self.mode = Some(mode);
@@ -127,16 +143,6 @@ impl Builder {
     pub fn timeout(&mut self, timeout: Duration) -> &mut Self {
         self.timeout = Some(timeout);
         self
-    }
-
-    /// Build the advertise settings.
-    pub fn build(&mut self) -> AdvertiseSettings {
-        AdvertiseSettings {
-            mode: self.mode.unwrap_or_default(),
-            tx_power_level: self.tx_power_level.unwrap_or_default(),
-            scannable: self.scannable,
-            timeout: self.timeout,
-        }
     }
 }
 
@@ -197,19 +203,19 @@ impl TryFrom<AdvertiseMode> for IntervalProto {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct TxPowerLevel {
     /// The transmit power in dBm.
-    pub tx_power: i8,
+    pub dbm: i8,
 }
 
 impl TxPowerLevel {
     /// Create a `TxPowerLevel` from an `i8` measuring power in dBm.
-    fn new(tx_power: i8) -> Self {
-        TxPowerLevel { tx_power }
+    pub fn new(dbm: i8) -> Self {
+        TxPowerLevel { dbm }
     }
 }
 
 impl Default for TxPowerLevel {
     fn default() -> Self {
-        TxPowerLevel { tx_power: TX_POWER_DEFAULT_DBM }
+        TxPowerLevel { dbm: TX_POWER_DEFAULT_DBM }
     }
 }
 
@@ -218,7 +224,7 @@ impl TryFrom<&TxPowerProto> for TxPowerLevel {
 
     fn try_from(value: &TxPowerProto) -> Result<Self, Self::Error> {
         Ok(Self {
-            tx_power: (match value {
+            dbm: (match value {
                 TxPowerProto::Dbm(dbm) => (*dbm)
                     .try_into()
                     .map_err(|_| "failed to convert tx power level: it must fit in an i8")?,
@@ -236,7 +242,7 @@ impl TryFrom<&TxPowerProto> for TxPowerLevel {
 
 impl From<TxPowerLevel> for TxPowerProto {
     fn from(value: TxPowerLevel) -> Self {
-        match value.tx_power {
+        match value.dbm {
             TX_POWER_ULTRA_LOW_DBM => TxPowerProto::TxPowerLevel(Level::ULTRA_LOW.into()),
             TX_POWER_LOW_DBM => TxPowerProto::TxPowerLevel(Level::LOW.into()),
             TX_POWER_MEDIUM_DBM => TxPowerProto::TxPowerLevel(Level::MEDIUM.into()),
@@ -256,7 +262,7 @@ mod tests {
         let tx_power_level = TxPowerLevel::new(-1);
         let timeout = Duration::from_millis(8000);
 
-        let settings = AdvertiseSettings::builder()
+        let settings = AdvertiseSettingsBuilder::new()
             .mode(mode)
             .tx_power_level(tx_power_level)
             .scannable()
@@ -283,14 +289,14 @@ mod tests {
             ..Default::default()
         };
 
-        let settings = AdvertiseSettings::from_proto(&proto);
+        let settings = AdvertiseSettingsBuilder::from_proto(&proto);
         assert!(settings.is_ok());
 
         let tx_power: Result<TxPowerLevel, _> = (&tx_power).try_into();
         assert!(tx_power.is_ok());
         let tx_power_level = tx_power.unwrap();
 
-        let exp_settings = AdvertiseSettings::builder()
+        let exp_settings = AdvertiseSettingsBuilder::new()
             .mode((&interval).into())
             .tx_power_level(tx_power_level)
             .scannable()
@@ -307,7 +313,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(AdvertiseSettings::from_proto(&proto).is_err());
+        assert!(AdvertiseSettingsBuilder::from_proto(&proto).is_err());
     }
 
     #[test]
@@ -320,7 +326,7 @@ mod tests {
             ..Default::default()
         };
 
-        let settings = AdvertiseSettings::from_proto(&proto);
+        let settings = AdvertiseSettingsBuilder::from_proto(&proto);
         assert!(settings.is_ok());
         let settings: Result<AdvertiseSettingsProto, _> = (&settings.unwrap().build()).try_into();
         assert!(settings.is_ok());
@@ -336,7 +342,7 @@ mod tests {
             ..Default::default()
         };
 
-        let settings = AdvertiseSettings::from_proto(&proto);
+        let settings = AdvertiseSettingsBuilder::from_proto(&proto);
         assert!(settings.is_ok());
         let settings = settings.unwrap();
 
@@ -345,7 +351,7 @@ mod tests {
             .as_ref()
             .map(|proto| TxPowerLevel::try_from(proto).unwrap())
             .unwrap_or_default()
-            .tx_power;
+            .dbm;
         let interval: Duration =
             proto.interval.as_ref().map(AdvertiseMode::from).unwrap_or_default().interval;
 
@@ -357,7 +363,7 @@ mod tests {
     fn test_from_proto_timeout_unset() {
         let proto = AdvertiseSettingsProto::default();
 
-        let settings = AdvertiseSettings::from_proto(&proto);
+        let settings = AdvertiseSettingsBuilder::from_proto(&proto);
         assert!(settings.is_ok());
         let settings = settings.unwrap();
 

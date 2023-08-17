@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// Frontend command line interface.
+// Frontend client
 #pragma once
 
 #include <cstdint>
@@ -64,8 +64,8 @@ class FrontendClient {
       ClientResponseReader const &client_reader) const = 0;
 };
 
-std::unique_ptr<FrontendClient> NewFrontendClient(int32_t grpc_port,
-                                                  uint16_t instance_num);
+std::unique_ptr<FrontendClient> NewFrontendClient(
+    int32_t grpc_port, uint16_t instance_num, const std::string &vsock_addr);
 
 }  // namespace frontend
 }  // namespace netsim

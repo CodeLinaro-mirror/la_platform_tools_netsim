@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::advertise_data::{self, AdvertiseData};
-use super::advertise_settings::{AdvertiseMode, AdvertiseSettings, TxPowerLevel};
+use super::advertise_data::{AdvertiseData, AdvertiseDataBuilder};
+use super::advertise_settings::{
+    AdvertiseMode, AdvertiseSettings, AdvertiseSettingsBuilder, TxPowerLevel,
+};
 use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
@@ -66,7 +68,7 @@ impl BeaconChip {
             chip_id,
             address,
             advertise_settings: AdvertiseSettings::builder().build(),
-            advertise_data: advertise_data::Builder::new().build().unwrap(),
+            advertise_data: AdvertiseData::builder().build().unwrap(),
             advertise_last: None,
         }
     }
@@ -76,8 +78,9 @@ impl BeaconChip {
         chip_id: ChipIdentifier,
         beacon_proto: &BluetoothBeaconCreateProto,
     ) -> Result<Self, String> {
-        let advertise_settings = AdvertiseSettings::from_proto(&beacon_proto.settings)?.build();
-        let advertise_data = advertise_data::Builder::from_proto(
+        let advertise_settings =
+            AdvertiseSettingsBuilder::from_proto(&beacon_proto.settings)?.build();
+        let advertise_data = AdvertiseDataBuilder::from_proto(
             device_name,
             beacon_proto
                 .settings
@@ -85,8 +88,7 @@ impl BeaconChip {
                 .as_ref()
                 .map(TxPowerLevel::try_from)
                 .transpose()?
-                .unwrap_or_default()
-                .tx_power,
+                .unwrap_or_default(),
             &beacon_proto.adv_data,
         )
         .build()?;
@@ -138,8 +140,8 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
         }
 
         beacon.advertise_last = Some(Instant::now());
-        let packet = generate_advertising_packet(&beacon.address, &beacon.advertise_data.bytes);
-        beacon.send_link_layer_packet(&packet, PHY_TYPE_LE, TxPowerLevel::default().tx_power);
+        let packet = generate_advertising_packet(&beacon.address, beacon.advertise_data.as_bytes());
+        beacon.send_link_layer_packet(&packet, PHY_TYPE_LE, TxPowerLevel::default().dbm);
     }
 
     fn receive_link_layer_packet(

@@ -16,6 +16,7 @@
 
 #![allow(dead_code)]
 
+mod args;
 mod bluetooth;
 pub mod captures;
 mod config;
@@ -24,6 +25,7 @@ mod events;
 mod http_server;
 mod ranging;
 mod resource;
+mod rust_main;
 mod service;
 mod transport;
 mod uwb;
@@ -95,6 +97,7 @@ mod ffi {
             hci_port: u16,
             instance_num: u16,
             dev: bool,
+            vsock: u16,
         ) -> Box<Service>;
         #[cxx_name = "SetUp"]
         fn set_up(self: &Service);
@@ -155,6 +158,7 @@ mod ffi {
             device_guid: &str,
             device_name: &str,
             chip_kind: &CxxString,
+            chip_address: &str,
             chip_name: &str,
             chip_manufacturer: &str,
             chip_product_name: &str,
@@ -337,7 +341,7 @@ mod ffi {
 
         #[rust_name = bluetooth_add]
         #[namespace = "netsim::hci::facade"]
-        pub fn Add(_chip_id: u32) -> u32;
+        pub fn Add(_chip_id: u32, address: &CxxString) -> u32;
 
         /*
         From https://cxx.rs/binding/box.html#restrictions,
@@ -419,6 +423,7 @@ mod ffi {
             netsim_grpc_port: u32,
             no_cli_ui: bool,
             instance_num: u16,
+            vsock: u16,
         ) -> UniquePtr<GrpcServer>;
 
         // OS utilities.
@@ -432,12 +437,24 @@ mod ffi {
         #[namespace = "netsim::osutils"]
         pub fn GetHciPort(hci_port_flag: u32, instance_flag: u16) -> u32;
 
+        #[rust_name = redirect_std_stream]
+        #[namespace = "netsim::osutils"]
+        pub fn RedirectStdStream(netsim_temp_dir: &CxxString);
+
         // Crash report.
         include!("util/crash_report.h");
 
         #[rust_name = set_up_crash_report]
         #[namespace = "netsim"]
         pub fn SetUpCrashReport();
+
+        // Frontend client.
+        include!("frontend/frontend_client_stub.h");
+
+        #[rust_name = is_netsimd_alive]
+        #[namespace = "netsim::frontend"]
+        pub fn IsNetsimdAlive(instance_num: u16) -> bool;
+
     }
 }
 

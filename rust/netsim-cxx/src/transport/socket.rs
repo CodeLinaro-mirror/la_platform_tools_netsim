@@ -82,6 +82,7 @@ fn handle_hci_client(stream: TcpStream) {
     // ...
     let chip_create_proto = ChipCreate {
         kind: ChipKind::BLUETOOTH.into(),
+        address: String::new(),
         name: format!("socket-{}", stream.peer_addr().unwrap()),
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),

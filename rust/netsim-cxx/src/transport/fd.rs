@@ -56,6 +56,7 @@ impl fmt::Display for ChipKindEnum {
     }
 }
 
+// TODO use proto
 #[derive(Serialize, Deserialize, Debug)]
 struct Chip {
     kind: ChipKindEnum,
@@ -67,6 +68,7 @@ struct Chip {
     #[serde(rename = "fdOut")]
     fd_out: u32,
     loopback: Option<bool>,
+    address: Option<String>,
 }
 
 struct FdTransport {
@@ -182,6 +184,7 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
                     };
                     let chip_create_proto = ChipCreate {
                         kind: chip_kind.into(),
+                        address: chip.address.unwrap_or_default(),
                         name: chip.id.unwrap_or_default(),
                         manufacturer: chip.manufacturer.unwrap_or_default(),
                         product_name: chip.product_name.unwrap_or_default(),

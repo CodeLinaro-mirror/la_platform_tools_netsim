@@ -40,8 +40,6 @@
 #include <cstdlib>
 #endif
 
-
-
 #include "util/filesystem.h"
 #include "util/ini_file.h"
 #include "util/log.h"

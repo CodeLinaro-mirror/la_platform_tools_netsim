@@ -122,6 +122,7 @@ pub fn add_chip(
             .ok_or(format!("Device not found for device_id: {device_id}"))?
             .add_chip(
                 chip_kind,
+                &chip_create_proto.address,
                 chip_name,
                 &chip_create_proto.manufacturer,
                 &chip_create_proto.product_name,
@@ -133,7 +134,9 @@ pub fn add_chip(
         // id_tuple = (DeviceIdentifier, ChipIdentifier)
         Ok((device_id, chip_id)) => {
             let facade_id = match chip_kind {
-                ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(device_id),
+                ProtoChipKind::BLUETOOTH => {
+                    bluetooth_facade::bluetooth_add(device_id, &chip_create_proto.address)
+                }
                 ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::bluetooth_beacon_add(
                     device_id,
                     String::from(device_name),
@@ -213,6 +216,7 @@ pub fn add_chip_cxx(
     device_guid: &str,
     device_name: &str,
     chip_kind: &CxxString,
+    chip_address: &str,
     chip_name: &str,
     chip_manufacturer: &str,
     chip_product_name: &str,
@@ -225,6 +229,7 @@ pub fn add_chip_cxx(
     };
     let chip_create_proto = ChipCreate {
         kind: chip_kind_proto.into(),
+        address: chip_address.to_string(),
         name: chip_name.to_string(),
         manufacturer: chip_manufacturer.to_string(),
         product_name: chip_product_name.to_string(),
@@ -400,7 +405,17 @@ fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result
         let proto_device = patch_device_request.device;
         match id_option {
             Some(id) => match devices.entries.get_mut(&id) {
-                Some(device) => device.patch(&proto_device),
+                Some(device) => {
+                    let result = device.patch(&proto_device);
+                    if result.is_ok() {
+                        // Publish Device Patched event
+                        resource::clone_events()
+                            .lock()
+                            .unwrap()
+                            .publish(Event::DevicePatched { id, name: device.name.clone() });
+                    }
+                    result
+                }
                 None => Err(format!("No such device with id {id}")),
             },
             None => {
@@ -422,7 +437,16 @@ fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result
                     ));
                 }
                 match target {
-                    Some(device) => device.patch(&proto_device),
+                    Some(device) => {
+                        let result = device.patch(&proto_device);
+                        if result.is_ok() {
+                            // Publish Device Patched event
+                            resource::clone_events().lock().unwrap().publish(
+                                Event::DevicePatched { id: device.id, name: device.name.clone() },
+                            );
+                        }
+                        result
+                    }
                     None => Err(format!("No such device with name {}", proto_device.name)),
                 }
             }
