@@ -28,6 +28,7 @@ mod resource;
 mod rust_main;
 mod service;
 mod transport;
+mod util;
 mod uwb;
 mod version;
 mod wifi;
@@ -46,19 +47,16 @@ use ffi::CxxServerResponseWriter;
 use http_server::server_response::ServerResponseWritable;
 use http_server::server_response::StrHeaders;
 
-use crate::transport::dispatcher::handle_response;
+use crate::transport::dispatcher::{handle_request_cxx, handle_response};
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 
-use crate::captures::handlers::{
-    handle_capture_cxx, handle_packet_request, handle_packet_response,
-};
+use crate::captures::handlers::handle_capture_cxx;
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
 };
 use crate::ranging::*;
 use crate::service::{create_service, Service};
-use crate::uwb::facade::*;
 use crate::version::*;
 use netsim_common::system::netsimd_temp_dir_string;
 
@@ -129,6 +127,10 @@ mod ffi {
 
         // Transport.
 
+        #[cxx_name = HandleRequestCxx]
+        #[namespace = "netsim::transport"]
+        fn handle_request_cxx(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
+
         #[cxx_name = HandleResponse]
         #[namespace = "netsim::transport"]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
@@ -172,26 +174,6 @@ mod ffi {
         #[namespace = "netsim::device"]
         fn get_distance_cxx(a: u32, b: u32) -> f32;
 
-        // Capture Resource
-
-        #[cxx_name = HandleRequest]
-        #[namespace = "netsim::capture"]
-        fn handle_packet_request(
-            kind: u32,
-            facade_id: u32,
-            packet: &CxxVector<u8>,
-            packet_type: u32,
-        );
-
-        #[cxx_name = HandleResponse]
-        #[namespace = "netsim::capture"]
-        fn handle_packet_response(
-            kind: u32,
-            facade_id: u32,
-            packet: &CxxVector<u8>,
-            packet_type: u32,
-        );
-
         // Rust Bluetooth device.
         #[namespace = "netsim::hci::facade"]
         type DynRustBluetoothChipCallbacks;
@@ -220,40 +202,6 @@ mod ffi {
             rust_chip: UniquePtr<RustBluetoothChip>,
         ) -> Box<AddRustDeviceResult>;
 
-        // Uwb Facade.
-
-        #[cxx_name = HandleUwbRequestCxx]
-        #[namespace = "netsim::uwb"]
-        fn handle_uwb_request(facade_id: u32, packet: &[u8]);
-
-        #[cxx_name = PatchCxx]
-        #[namespace = "netsim::uwb::facade"]
-        pub fn uwb_patch(_facade_id: u32, _proto_bytes: &[u8]);
-
-        #[cxx_name = GetCxx]
-        #[namespace = "netsim::uwb::facade"]
-        pub fn uwb_get(_facade_id: u32) -> Vec<u8>;
-
-        #[cxx_name = Reset]
-        #[namespace = "netsim::uwb::facade"]
-        pub fn uwb_reset(_facade_id: u32);
-
-        #[cxx_name = Remove]
-        #[namespace = "netsim::uwb::facade"]
-        pub fn uwb_remove(_facade_id: u32);
-
-        #[cxx_name = Add]
-        #[namespace = "netsim::uwb::facade"]
-        pub fn uwb_add(_chip_id: u32) -> u32;
-
-        #[cxx_name = Start]
-        #[namespace = "netsim::uwb::facade"]
-        pub fn uwb_start();
-
-        #[cxx_name = Stop]
-        #[namespace = "netsim::uwb::facade"]
-        pub fn uwb_stop();
-
     }
 
     unsafe extern "C++" {
@@ -274,12 +222,6 @@ mod ffi {
 
         #[namespace = "netsim::frontend"]
         fn put_error(self: &CxxServerResponseWriter, error_code: u32, error_message: &CxxString);
-
-        include!("packet_hub/packet_hub.h");
-
-        #[rust_name = "handle_request_cxx"]
-        #[namespace = "netsim::packet_hub"]
-        fn HandleRequestCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
 
         // Grpc server.
         include!("backend/backend_packet_hub.h");
@@ -417,6 +359,10 @@ mod ffi {
         #[namespace = "netsim::server"]
         fn Shutdown(self: &GrpcServer);
 
+        #[rust_name = get_grpc_port]
+        #[namespace = "netsim::server"]
+        fn GetGrpcPort(self: &GrpcServer) -> u32;
+
         #[rust_name = run_grpc_server_cxx]
         #[namespace = "netsim::server"]
         pub fn RunGrpcServerCxx(
@@ -428,6 +374,10 @@ mod ffi {
 
         // OS utilities.
         include!("util/os_utils.h");
+
+        #[rust_name = get_netsim_ini_file_path_cxx]
+        #[namespace = "netsim::osutils"]
+        pub fn GetNetsimIniFilepathCxx(instance_num: u16) -> UniquePtr<CxxString>;
 
         #[rust_name = get_instance]
         #[namespace = "netsim::osutils"]

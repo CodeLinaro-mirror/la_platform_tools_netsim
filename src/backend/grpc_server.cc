@@ -29,7 +29,6 @@
 #include "netsim/common.pb.h"
 #include "netsim/packet_streamer.grpc.pb.h"
 #include "netsim/packet_streamer.pb.h"
-#include "packet_hub/packet_hub.h"
 #include "util/log.h"
 
 #ifdef NETSIM_ANDROID_EMULATOR
@@ -157,15 +156,15 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         auto packet_type = request.hci_packet().packet_type();
         auto packet =
             ToSharedVec(request.mutable_hci_packet()->mutable_packet());
-        packet_hub::HandleRequest(chip_kind, facade_id, *packet, packet_type);
+        transport::HandleRequestCxx(chip_kind, facade_id, *packet, packet_type);
       } else if (chip_kind == common::ChipKind::WIFI) {
         if (!request.has_packet()) {
           BtsLog("grpc_server: unknown packet type from %d", facade_id);
           continue;
         }
         auto packet = ToSharedVec(request.mutable_packet());
-        packet_hub::HandleRequest(chip_kind, facade_id, *packet,
-                                  packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+        transport::HandleRequestCxx(chip_kind, facade_id, *packet,
+                                    packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
 #ifdef NETSIM_ANDROID_EMULATOR
         // main_loop_wait is a non-blocking call where fds maintained by the
         // WiFi service (slirp) are polled and serviced for I/O. When any fd

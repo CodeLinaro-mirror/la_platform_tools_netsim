@@ -137,13 +137,11 @@ cc_library_host_static {
         "src/hci/bluetooth_facade.cc",
         "src/hci/hci_packet_transport.cc",
         "src/hci/rust_device.cc",
-        "src/packet_hub/packet_hub.cc",
         "src/util/crash_report.cc",
         "src/util/ini_file.cc",
         "src/util/log.cc",
         "src/util/os_utils.cc",
         "src/util/string_utils.cc",
-        "src/uwb/uwb_facade.cc",
         "src/wifi/wifi_facade.cc",
     ],
     generated_headers: [

@@ -27,7 +27,6 @@
 // TODO(b/274506882): Implement gRPC status proto on error responses. Also write better
 // and more descriptive error messages with proper error codes.
 
-use cxx::CxxVector;
 use frontend_proto::common::ChipKind;
 use frontend_proto::frontend::ListCaptureResponse;
 use http::{Request, Version};
@@ -43,6 +42,7 @@ use crate::devices::chip::ChipIdentifier;
 use crate::ffi::CxxServerResponseWriter;
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource::clone_captures;
+use crate::util::int_to_chip_kind;
 use crate::CxxServerResponseWriterWrapper;
 
 use super::capture::CaptureInfo;
@@ -230,21 +230,11 @@ pub fn handle_capture_cxx(
     );
 }
 
-/// Helper function for translating u32 representation of ChipKind
-fn int_to_chip_kind(kind: u32) -> ChipKind {
-    match kind {
-        1 => ChipKind::BLUETOOTH,
-        2 => ChipKind::WIFI,
-        3 => ChipKind::UWB,
-        _ => ChipKind::UNSPECIFIED,
-    }
-}
-
-/// A common code for handle_request and handle_response cxx mehtods
+/// A common code for handle_request and handle_response methods.
 fn handle_packet(
     kind: u32,
     facade_id: u32,
-    packet: &CxxVector<u8>,
+    packet: &Vec<u8>,
     packet_type: u32,
     direction: PacketDirection,
 ) {
@@ -274,17 +264,17 @@ fn handle_packet(
     };
 }
 
-/// Cxx Method for packet_hub to invoke (Host to Controller Packet Flow)
-pub fn handle_packet_request(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u32) {
+/// Method for dispatcher to invoke (Host to Controller Packet Flow)
+pub fn handle_packet_request(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u32) {
     handle_packet(kind, facade_id, packet, packet_type, PacketDirection::HostToController)
 }
 
-/// Cxx Method for packet_hub to invoke (Controller to Host Packet Flow)
-pub fn handle_packet_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u32) {
+/// Method for dispatcher to invoke (Controller to Host Packet Flow)
+pub fn handle_packet_response(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u32) {
     handle_packet(kind, facade_id, packet, packet_type, PacketDirection::ControllerToHost)
 }
 
-/// Cxx Method for clearing pcap files in temp directory
+/// Method for clearing pcap files in temp directory
 pub fn clear_pcap_files() -> bool {
     let mut path = netsim_common::system::netsimd_temp_dir();
     path.push("pcaps");

@@ -17,6 +17,7 @@
 #pragma once
 // OS specific utility functions.
 
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -38,6 +39,11 @@ std::string GetDiscoveryDirectory();
  * Return the path of netsim ini file.
  */
 std::string GetNetsimIniFilepath(uint16_t instance_num);
+
+/**
+ * Return the path of netsim ini file (Rust).
+ */
+std::unique_ptr<std::string> GetNetsimIniFilepathCxx(uint16_t instance_num);
 
 /**
  * Return the frontend grpc port.

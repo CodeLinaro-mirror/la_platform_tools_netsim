@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::dispatcher::{register_transport, unregister_transport, Response};
+use super::dispatcher::{handle_request, register_transport, unregister_transport, Response};
 use super::h4::PacketError;
 use crate::devices::devices_handler::{add_chip, remove_chip};
-use crate::ffi::handle_request_cxx;
 use crate::transport::h4;
 use frontend_proto::common::ChipKind;
 use frontend_proto::model::ChipCreate;
@@ -127,7 +126,7 @@ fn reader(mut tcp_rx: TcpStream, kind: ChipKind, facade_id: u32) -> std::io::Res
             match h4::read_h4_packet(&mut tcp_rx) {
                 Ok(packet) => {
                     let kind: u32 = kind as u32;
-                    handle_request_cxx(kind, facade_id, &packet.payload, packet.h4_type);
+                    handle_request(kind, facade_id, &packet.payload, packet.h4_type);
                 }
                 Err(PacketError::IoError(e)) if e.kind() == ErrorKind::UnexpectedEof => {
                     info!("End socket reader connection with {}.", &tcp_rx.peer_addr().unwrap());

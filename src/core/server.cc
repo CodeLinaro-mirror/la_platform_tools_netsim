@@ -17,6 +17,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "backend/grpc_server.h"
 #include "frontend/frontend_server.h"
@@ -43,9 +44,8 @@ namespace netsim::server {
 namespace {
 constexpr std::chrono::seconds InactivityCheckInterval(5);
 
-std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
-                                            bool no_cli_ui, int instance_num,
-                                            int vsock) {
+std::pair<std::unique_ptr<grpc::Server>, uint32_t> RunGrpcServer(
+    int netsim_grpc_port, bool no_cli_ui, int instance_num, int vsock) {
   grpc::ServerBuilder builder;
   int selected_port;
   builder.AddListeningPort("0.0.0.0:" + std::to_string(netsim_grpc_port),
@@ -69,20 +69,14 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
   builder.AddChannelArgument(GRPC_ARG_ALLOW_REUSEPORT, 0);
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
   if (server == nullptr) {
-    return nullptr;
+    return std::make_pair(nullptr, static_cast<uint32_t>(selected_port));
   }
 
   BtsLog("Grpc server listening on localhost: %s",
          std::to_string(selected_port).c_str());
 
-  // Writes grpc port to ini file.
-  auto filepath = osutils::GetNetsimIniFilepath(instance_num);
-  IniFile iniFile(filepath);
-  iniFile.Read();
-  iniFile.Set("grpc.port", std::to_string(selected_port));
-  iniFile.Write();
-
-  return std::move(server);
+  return std::make_pair(std::move(server),
+                        static_cast<uint32_t>(selected_port));
 }
 }  // namespace
 
@@ -90,10 +84,10 @@ std::unique_ptr<GrpcServer> RunGrpcServerCxx(uint32_t netsim_grpc_port,
                                              bool no_cli_ui,
                                              uint16_t instance_num,
                                              uint16_t vsock) {
-  auto grpc_server =
+  auto [grpc_server, port] =
       RunGrpcServer(netsim_grpc_port, no_cli_ui, instance_num, vsock);
   if (grpc_server == nullptr) return nullptr;
-  return std::make_unique<GrpcServer>(std::move(grpc_server));
+  return std::make_unique<GrpcServer>(std::move(grpc_server), port);
 }
 
 void Run(ServerParams params) {

@@ -18,12 +18,13 @@ use crate::captures;
 use crate::captures::handlers::clear_pcap_files;
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::is_shutdown_time;
-use crate::ffi::run_grpc_server_cxx;
+use crate::ffi::{get_netsim_ini_file_path_cxx, run_grpc_server_cxx};
 use crate::http_server::server::run_http_server;
 use crate::resource;
 use crate::transport::socket::run_socket_transport;
 use crate::wifi as wifi_facade;
 use log::{error, info, warn};
+use netsim_common::util::ini_file::IniFile;
 use netsim_common::util::netsim_logger;
 use std::env;
 use std::time::Duration;
@@ -120,6 +121,14 @@ impl Service {
         // forge and no_web_ui disables the web server
         if !forge_job && !self.service_params.no_web_ui {
             run_http_server(self.service_params.instance_num);
+        }
+
+        // Write to netsim.ini file
+        let filepath = get_netsim_ini_file_path_cxx(self.service_params.instance_num);
+        let mut ini_file = IniFile::new(filepath.to_string());
+        ini_file.insert("grpc.port", &grpc_server.get_grpc_port().to_string());
+        if let Err(err) = ini_file.write() {
+            error!("{err:?}");
         }
 
         // Run the socket server.

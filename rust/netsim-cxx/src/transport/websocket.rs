@@ -24,8 +24,10 @@ use tungstenite::{protocol::Role, Message, WebSocket};
 use crate::http_server::server_response::ResponseWritable;
 use crate::{
     devices::devices_handler::{add_chip, remove_chip},
-    ffi::handle_request_cxx,
-    transport::{dispatcher::unregister_transport, h4},
+    transport::{
+        dispatcher::{handle_request, unregister_transport},
+        h4,
+    },
 };
 
 use super::dispatcher::{register_transport, Response};
@@ -141,7 +143,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
             match h4::read_h4_packet(&mut cursor) {
                 Ok(packet) => {
                     let kind = ChipKind::BLUETOOTH as u32;
-                    handle_request_cxx(kind, result.facade_id, &packet.payload, packet.h4_type);
+                    handle_request(kind, result.facade_id, &packet.payload, packet.h4_type);
                 }
                 Err(error) => {
                     error!(

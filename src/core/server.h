@@ -36,13 +36,15 @@ struct ServerParams {
 
 class GrpcServer {
  public:
-  GrpcServer(std::unique_ptr<grpc::Server> server)
-      : server(std::move(server)) {}
+  GrpcServer(std::unique_ptr<grpc::Server> server, std::uint32_t port)
+      : server(std::move(server)), port(port) {}
 
   void Shutdown() const { server->Shutdown(); }
+  uint32_t GetGrpcPort() const { return port; };
 
  private:
   std::unique_ptr<grpc::Server> server;
+  std::uint32_t port;
 };
 
 // Run grpc server.

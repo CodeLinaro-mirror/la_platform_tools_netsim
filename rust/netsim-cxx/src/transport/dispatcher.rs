@@ -19,7 +19,12 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use frontend_proto::common::ChipKind;
+
+use crate::bluetooth::handle_bluetooth_request;
 use crate::captures::handlers as captures_handlers;
+use crate::util::int_to_chip_kind;
+use crate::wifi::handle_wifi_request;
 
 /// The Dispatcher module routes packets from a chip controller instance to
 /// different transport managers. Currently transport managers include
@@ -90,26 +95,47 @@ pub fn unregister_transport(kind: u32, facade_id: u32) {
     SENDERS.lock().unwrap().remove(&key);
 }
 
-// Called by the packet_hub in C++.
+// Handle response from facades.
 //
 // Queue the response packet to be handled by the responder thread.
 //
 pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
-    captures_handlers::handle_packet_response(kind, facade_id, packet, packet_type.into());
+    let packet_vec = packet.as_slice().to_vec();
+    captures_handlers::handle_packet_response(kind, facade_id, &packet_vec, packet_type.into());
 
     let key = get_key(kind, facade_id);
     let mut binding = SENDERS.lock().unwrap();
     if let Some(responder) = binding.get(&key) {
-        if responder
-            .send(ResponsePacket { packet: packet.as_slice().to_vec(), packet_type })
-            .is_err()
-        {
+        if responder.send(ResponsePacket { packet: packet_vec, packet_type }).is_err() {
             warn!("handle_response: send failed for {key}");
             binding.remove(&key);
         }
     } else {
         warn!("handle_response: unknown chip kind `{kind}` and facade ID `{facade_id}`.");
     };
+}
+
+/// Handle requests from transports.
+pub fn handle_request(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8) {
+    captures_handlers::handle_packet_request(kind, facade_id, packet, packet_type.into());
+
+    match int_to_chip_kind(kind) {
+        ChipKind::BLUETOOTH => {
+            handle_bluetooth_request(facade_id, packet_type, packet);
+        }
+        ChipKind::WIFI => {
+            handle_wifi_request(facade_id, packet);
+        }
+        chip_kind => {
+            warn!("Unable to handle request from ChipKind {:?}", chip_kind);
+        }
+    }
+}
+
+/// Handle requests from transports in C++.
+pub fn handle_request_cxx(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+    let packet_vec = packet.as_slice().to_vec();
+    handle_request(kind, facade_id, &packet_vec, packet_type);
 }
 
 #[cfg(test)]
