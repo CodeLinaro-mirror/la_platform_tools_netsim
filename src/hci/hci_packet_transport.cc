@@ -19,7 +19,7 @@
 #include <optional>
 
 #include "model/hci/hci_transport.h"
-#include "netsim-cxx/src/lib.rs.h"
+#include "netsim-daemon/src/lib.rs.h"
 #include "netsim/hci_packet.pb.h"
 #include "rust/cxx.h"
 #include "util/log.h"
@@ -60,7 +60,7 @@ void HciPacketTransport::Send(rootcanal::PacketType packet_type,
   packet::HCIPacket_PacketType hci_packet_type =
       static_cast<packet::HCIPacket_PacketType>(packet_type);
   if (!mDeviceId.has_value()) {
-    BtsLog("hci_packet_transport: response with no device.");
+    BtsLogWarn("hci_packet_transport: response with no device.");
     return;
   }
   // Send response to transport dispatcher.
@@ -72,7 +72,7 @@ void HciPacketTransport::Send(rootcanal::PacketType packet_type,
 void HciPacketTransport::RegisterCallbacks(
     rootcanal::PacketCallback packetCallback,
     rootcanal::CloseCallback closeCallback) {
-  BtsLog("hci_packet_transport: registered");
+  BtsLogInfo("hci_packet_transport: registered");
   mPacketCallback = packetCallback;
   mCloseCallback = closeCallback;
 }
@@ -101,7 +101,7 @@ void HciPacketTransport::Add(
 }
 
 void HciPacketTransport::Remove(rootcanal::PhyDevice::Identifier device_id) {
-  BtsLog("hci_packet_transport remove from netsim");
+  BtsLogInfo("hci_packet_transport remove from netsim");
   if (device_to_transport_.find(device_id) != device_to_transport_.end() &&
       device_to_transport_[device_id]) {
     // Calls HciDevice::Close, will disconnect AclHandles with
@@ -115,7 +115,7 @@ void HciPacketTransport::Close() {
   if (mDeviceId.has_value()) {
     device_to_transport_.erase(mDeviceId.value());
   }
-  BtsLog("hci_packet_transport close from rootcanal");
+  BtsLogInfo("hci_packet_transport close from rootcanal");
   mDeviceId = std::nullopt;
 }
 
@@ -135,8 +135,9 @@ void handle_bt_request(uint32_t facade_id,
     std::cout << "device_to_transport_ ids ";
     for (auto [k, _] : device_to_transport_) std::cout << k << " ";
     std::cout << std::endl;
-    BtsLog(
-        "hci_packet_transport: handle_request with no transport for device %d",
+    BtsLogWarn(
+        "hci_packet_transport: handle_request with no transport for device "
+        "with facade_id: %d",
         facade_id);
   }
 }

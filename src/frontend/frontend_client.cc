@@ -63,7 +63,7 @@ std::unique_ptr<frontend::FrontendService::Stub> NewFrontendStub(
 
   auto deadline = std::chrono::system_clock::now() + kConnectionDeadline;
   if (!channel->WaitForConnected(deadline)) {
-    BtsLog("Frontend gRPC channel not connected");
+    BtsLogWarn("Frontend gRPC channel not connected");
     return nullptr;
   }
 
@@ -241,12 +241,12 @@ class FrontendClientImpl : public FrontendClient {
                           const std::string &message) {
     if (status.ok()) return true;
     if (status.error_code() == grpc::StatusCode::UNAVAILABLE)
-      BtsLog(
-          "error: netsim frontend service is unavailable, "
+      BtsLogError(
+          "netsim frontend service is unavailable, "
           "please restart.");
     else
-      BtsLog("error: request to service failed (%d) - %s", status.error_code(),
-             status.error_message().c_str());
+      BtsLogError("request to frontend service failed (%d) - %s",
+                  status.error_code(), status.error_message().c_str());
     return false;
   }
 };

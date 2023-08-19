@@ -28,14 +28,14 @@ bool IniFile::Read() {
   data.clear();
 
   if (filepath.empty()) {
-    BtsLog("Read called without a backing file!");
+    BtsLogWarn("Read called without a backing ini file!");
     return false;
   }
 
   std::ifstream inFile(filepath);
 
   if (!inFile) {
-    BtsLog("Failed to process .ini file %s for reading.", filepath.c_str());
+    BtsLogWarn("Failed to process .ini file %s for reading.", filepath.c_str());
     return false;
   }
   std::string line;
@@ -52,14 +52,14 @@ bool IniFile::Read() {
 
 bool IniFile::Write() {
   if (filepath.empty()) {
-    BtsLog("Write called without a backing file!");
+    BtsLogWarn("Write called without a backing ini file!");
     return false;
   }
 
   std::ofstream outFile(filepath);
 
   if (!outFile) {
-    BtsLog("Failed to open .ini file %s for writing.", filepath.c_str());
+    BtsLogWarn("Failed to open .ini file %s for writing.", filepath.c_str());
     return false;
   }
 

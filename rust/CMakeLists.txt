@@ -6,10 +6,9 @@ file(REMOVE ${CMAKE_CURRENT_LIST_DIR}/Cargo.lock)
 # This will automatically register all the tests as well.
 corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
 corrosion_set_env_vars(netsim-common CARGO_HOME=${Rust_CARGO_HOME})
-corrosion_set_env_vars(netsim-cxx CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(netsim-daemon CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(netsim-cli CARGO_HOME=${Rust_CARGO_HOME})
-corrosion_set_env_vars(frontend-proto CARGO_HOME=${Rust_CARGO_HOME})
-corrosion_set_env_vars(backend-proto CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(netsim-proto CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(frontend-client-cxx CARGO_HOME=${Rust_CARGO_HOME})
 
 # cxx crates
@@ -26,7 +25,7 @@ if(WIN32)
   set(CXXFLAGS "${CMAKE_CXX_FLAGS} /DRUST_CXX_NO_EXCEPTIONS")
   corrosion_set_env_vars(frontend-client-cxx CXXFLAGS=${CXXFLAGS})
   corrosion_set_env_vars(netsim-cli CXXFLAGS=${CXXFLAGS})
-  corrosion_set_env_vars(netsim-cxx CXXFLAGS=${CXXFLAGS})
+  corrosion_set_env_vars(netsim-daemon CXXFLAGS=${CXXFLAGS})
 endif()
 
 if(LINUX)
@@ -34,11 +33,10 @@ if(LINUX)
   set(RUSTFLAGS "-Clink-args=-Wl,-rpath,${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
   corrosion_add_target_rustflags(frontend-client-cxx ${RUSTFLAGS})
   corrosion_add_target_rustflags(netsim-cli ${RUSTFLAGS})
-  corrosion_add_target_rustflags(netsim-cxx ${RUSTFLAGS})
+  corrosion_add_target_rustflags(netsim-daemon ${RUSTFLAGS})
 endif()
 
-add_subdirectory(frontend-proto)
-add_subdirectory(backend-proto)
+add_subdirectory(proto)
 
 # Steps to generate protobuf -> rust files are as follows:
 #
@@ -48,19 +46,17 @@ add_subdirectory(backend-proto)
 #
 # Mac: brew install protobuf
 #
-# 1. Uncomment the following lines in rust/frontend-proto/Cargo.toml. build =
+# 1. Uncomment the following lines in rust/proto/Cargo.toml. build =
 #    "build_cargo.rs" protobuf = "=3.2.0" protobuf-codegen = "3.2.0"
 # 2. export CARGO_HOME=$REPO_EMU/tools/netsim/objs/rust/.cargo
 # 3. cd $REPO_EMU/tools/netsim
-# 4. cargo build --manifest-path rust/frontend-proto/Cargo.toml
-# 5. git checkout rust/frontend-proto/Cargo.toml
+# 4. cargo build --manifest-path rust/proto/Cargo.toml
+# 5. git checkout rust/proto/Cargo.toml
 # 6. bash scripts/format_code.sh
 
-android_license(TARGET "netsim-cxx" LIBNAME None SPDX None LICENSE None
+android_license(TARGET "netsim-daemon" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
-android_license(TARGET "backend-proto" LIBNAME None SPDX None LICENSE None
-                LOCAL None)
-android_license(TARGET "frontend-proto" LIBNAME None SPDX None LICENSE None
+android_license(TARGET "netsim-proto" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
 android_license(TARGET "frontend-client-cxx" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
@@ -68,7 +64,7 @@ android_license(TARGET "frontend-client-cxx" LIBNAME None SPDX None LICENSE None
 add_library(netsim-cli-rust-lib INTERFACE)
 
 target_link_libraries(netsim-cli-rust-lib
-                      INTERFACE frontend-proto frontend-client-cxx netsim-cli)
+                      INTERFACE netsim-proto frontend-client-cxx netsim-cli)
 
 android_license(TARGET netsim-cli-rust-lib LIBNAME None SPDX None LICENSE None
                 LOCAL None)

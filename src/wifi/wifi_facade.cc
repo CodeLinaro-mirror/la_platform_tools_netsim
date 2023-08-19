@@ -16,7 +16,7 @@
 
 #include <memory>
 
-#include "netsim-cxx/src/lib.rs.h"
+#include "netsim-daemon/src/lib.rs.h"
 #include "netsim/hci_packet.pb.h"
 #include "rust/cxx.h"
 #include "util/log.h"
@@ -85,7 +85,7 @@ void Patch(uint32_t id, const model::Chip::Radio &request) {
   BtsLog("wifi::facade::Patch(%d)", id);
   auto it = id_to_chip_info_.find(id);
   if (it == id_to_chip_info_.end()) {
-    BtsLog("Patch an unknown id %d", id);
+    BtsLogWarn("Patch an unknown facade_id: %d", id);
     return;
   }
   auto &model = it->second->model;
@@ -155,7 +155,7 @@ void Start() {
                      .withVerboseLogging(true);
   wifi_service = builder.build();
   if (!wifi_service->init()) {
-    BtsLog("Failed to initialize wifi service");
+    BtsLogWarn("Failed to initialize wifi service");
   }
 #endif
 }

@@ -60,13 +60,13 @@ cc_defaults {
 }
 
 rust_defaults {
-    name: "libnetsim_cxx_defaults",
+    name: "libnetsim_daemon_defaults",
     features: ["cuttlefish"],
     rlibs: [
         "libclap",
         "libcxx",
         "libdata_encoding",
-        "libfrontend_proto",
+        "libnetsim_proto",
         "libhttp",
         "libnetsim_common",
         "libprotobuf",
@@ -79,35 +79,35 @@ rust_defaults {
         "liblog_rust",
         "libopenssl",
     ],
-    srcs: ["rust/netsim-cxx/src/lib.rs"],
+    srcs: ["rust/daemon/src/lib.rs"],
 }
 
 rust_ffi_host_static {
-    name: "libnetsim_cxx",
-    crate_name: "netsim_cxx",
-    defaults: ["libnetsim_cxx_defaults"],
+    name: "libnetsim_daemon",
+    crate_name: "netsim_daemon",
+    defaults: ["libnetsim_daemon_defaults"],
 }
 
 rust_test_host {
-    name: "libnetsim_cxx_tests",
-    defaults: ["libnetsim_cxx_defaults"],
+    name: "libnetsim_daemon_tests",
+    defaults: ["libnetsim_daemon_defaults"],
     test_suites: ["general_tests"],
 }
 
 genrule {
-    name: "netsim_cxx_cc",
+    name: "netsim_daemon_cc",
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) >> $(out)",
-    srcs: ["rust/netsim-cxx/src/lib.rs"],
-    out: ["netsim-cxx/src/lib.rs.cc"],
+    srcs: ["rust/daemon/src/lib.rs"],
+    out: ["netsim-daemon/src/lib.rs.cc"],
 }
 
 genrule {
-    name: "netsim_cxx_h",
+    name: "netsim_daemon_h",
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) --header >> $(out)",
-    srcs: ["rust/netsim-cxx/src/lib.rs"],
-    out: ["netsim-cxx/src/lib.rs.h"],
+    srcs: ["rust/daemon/src/lib.rs"],
+    out: ["netsim-daemon/src/lib.rs.h"],
 }
 
 genrule {
@@ -146,11 +146,11 @@ cc_library_host_static {
     ],
     generated_headers: [
         "cxx-bridge-header",
-        "netsim_cxx_h",
+        "netsim_daemon_h",
         "PacketStreamerStub_h",
     ],
     generated_sources: [
-        "netsim_cxx_cc",
+        "netsim_daemon_cc",
         "PacketStreamerStub_cc",
     ],
     shared_libs: [
@@ -204,7 +204,7 @@ cc_binary_host {
     ],
     generated_headers: [
         "cxx-bridge-header",
-        "netsim_cxx_h",
+        "netsim_daemon_h",
     ],
     shared_libs: [
         "libbase",
@@ -225,7 +225,7 @@ cc_binary_host {
         "lib-netsim-frontend-proto",
     ],
     whole_static_libs: [
-        "libnetsim_cxx",
+        "libnetsim_daemon",
         "libbt-rootcanal",
     ],
     ldflags: ["-Wl,--allow-multiple-definition"],
@@ -243,7 +243,7 @@ cc_binary_host {
     ],
     generated_headers: [
         "cxx-bridge-header",
-        "netsim_cxx_h",
+        "netsim_daemon_h",
     ],
     shared_libs: [
         "libbase",
@@ -263,7 +263,7 @@ cc_binary_host {
         "lib-netsim-frontend-proto",
     ],
     whole_static_libs: [
-        "libnetsim_cxx",
+        "libnetsim_daemon",
         "libbt-rootcanal",
     ],
     ldflags: ["-Wl,--allow-multiple-definition"],
@@ -285,7 +285,7 @@ cc_test_host {
     ],
     generated_headers: [
         "cxx-bridge-header",
-        "netsim_cxx_h",
+        "netsim_daemon_h",
     ],
     shared_libs: [
         "libgrpc++",
@@ -304,16 +304,16 @@ cc_test_host {
         "lib-netsimd-proto",
     ],
     whole_static_libs: [
-        "libnetsim_cxx",
+        "libnetsim_daemon",
         "libbt-rootcanal",
     ],
     ldflags: ["-Wl,--allow-multiple-definition"],
 }
 
 rust_library_host {
-    name: "libfrontend_proto",
-    crate_name: "frontend_proto",
-    srcs: ["rust/frontend-proto/src/lib.rs"],
+    name: "libnetsim_proto",
+    crate_name: "netsim_proto",
+    srcs: ["rust/proto/src/lib.rs"],
     rustlibs: [
         "libprotobuf",
     ],
@@ -321,7 +321,7 @@ rust_library_host {
 
 rust_defaults {
     name: "libnetsim_common_defaults",
-    srcs: ["rust/netsim-common/src/lib.rs"],
+    srcs: ["rust/common/src/lib.rs"],
     rustlibs: [
         "libchrono",
         "librand",
@@ -369,10 +369,10 @@ rust_library_host {
 
 rust_defaults {
     name: "libnetsim_cli_defaults",
-    srcs: ["rust/netsim-cli/src/lib.rs"],
+    srcs: ["rust/cli/src/lib.rs"],
     rustlibs: [
         "libclap",
-        "libfrontend_proto",
+        "libnetsim_proto",
         "libfrontend_client_cxx",
         "libnetsim_common",
         "libprotobuf",

@@ -70,7 +70,7 @@ std::string GetDiscoveryDirectory() {
   }
   const char *env_p = std::getenv(discovery.root_env);
   if (!env_p) {
-    BtsLog("No discovery env for %s, using tmp/", discovery.root_env);
+    BtsLogWarn("No discovery env for %s, using tmp/", discovery.root_env);
     env_p = "/tmp";
   }
   return std::string(env_p) + netsim::filesystem::slash + discovery.subdir;
@@ -96,11 +96,11 @@ std::unique_ptr<std::string> GetNetsimIniFilepathCxx(uint16_t instance_num) {
 std::optional<std::string> GetServerAddress(uint16_t instance_num) {
   auto filepath = GetNetsimIniFilepath(instance_num);
   if (!netsim::filesystem::exists(filepath)) {
-    BtsLog("Unable to find netsim ini file: %s", filepath.c_str());
+    BtsLogError("Unable to find netsim ini file: %s", filepath.c_str());
     return std::nullopt;
   }
   if (!netsim::filesystem::is_regular_file(filepath)) {
-    BtsLog("Not a regular file: %s", filepath.c_str());
+    BtsLogError("Not a regular file: %s", filepath.c_str());
     return std::nullopt;
   }
   IniFile iniFile(filepath);
@@ -123,7 +123,7 @@ void RedirectStdStream(const std::string &netsim_temp_dir_const) {
   if (netsim_temp_dir.back() != netsim::filesystem::slash.back())
     netsim_temp_dir.append(netsim::filesystem::slash);
   if (is_stderr_open())
-    BtsLog("Redirecting logs to %s", netsim_temp_dir.c_str());
+    BtsLogInfo("Redirecting logs to %s", netsim_temp_dir.c_str());
   std::freopen((netsim_temp_dir + "netsim_stdout.log").c_str(), "w", stdout);
   std::freopen((netsim_temp_dir + "netsim_stderr.log").c_str(), "w", stderr);
 }

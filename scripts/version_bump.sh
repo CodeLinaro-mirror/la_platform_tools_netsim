@@ -22,9 +22,9 @@
 
 # Absolute path to this script
 SCRIPT=$(dirname $(readlink -f "$0"))
-export CARGO=$SCRIPT/../rust/netsim-cxx/Cargo.toml
-export CARGO_CLI=$SCRIPT/../rust/netsim-cli/Cargo.toml
-export VERSION=$SCRIPT/../rust/netsim-cxx/src/version.rs
+export CARGO=$SCRIPT/../rust/daemon/Cargo.toml
+export CARGO_CLI=$SCRIPT/../rust/cli/Cargo.toml
+export VERSION=$SCRIPT/../rust/daemon/src/version.rs
 python <<EOF
 import re
 import os

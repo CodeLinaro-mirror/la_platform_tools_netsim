@@ -146,8 +146,8 @@ class SimulationState implements Observable {
     this.invokeListCaptures();
   }
 
-  invokeGetDevice() {
-    fetch(DEVICES_URL, {
+  async invokeGetDevice() {
+    await fetch(DEVICES_URL, {
       method: 'GET',
     })
         .then(response => response.json())
@@ -160,8 +160,8 @@ class SimulationState implements Observable {
         });
   }
 
-  invokeListCaptures() {
-    fetch(CAPTURES_URL, {
+  async invokeListCaptures() {
+    await fetch(CAPTURES_URL, {
       method: 'GET',
     })
         .then(response => response.json())
@@ -255,13 +255,30 @@ class SimulationState implements Observable {
 /** Subscribed observers must register itself to the simulationState */
 export const simulationState = new SimulationState();
 
-async function subscribe() {
+async function subscribeCaptures() {
   const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
   while (true) {
-    simulationState.invokeGetDevice();
-    simulationState.invokeListCaptures();
+    await simulationState.invokeListCaptures();
     await delay(1000);
   }
 }
 
-subscribe();
+async function subscribeDevices() {
+  await simulationState.invokeGetDevice();
+  while (true) {
+    await fetch(DEVICES_URL, {
+      method: 'SUBSCRIBE',
+    })
+        .then(response => response.json())
+        .then(data => {
+          simulationState.fetchDevice(data.devices);
+        })
+        .catch(error => {
+          // eslint-disable-next-line
+          console.log('Cannot connect to netsim web server', error);
+        });
+  }
+}
+
+subscribeCaptures();
+subscribeDevices();
