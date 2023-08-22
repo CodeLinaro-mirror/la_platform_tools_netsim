@@ -30,6 +30,7 @@ const AD_TYPE_COMPLETE_NAME: u8 = 0x09;
 const AD_TYPE_TX_POWER: u8 = 0x0A;
 const AD_TYPE_MANUFACTURER_DATA: u8 = 0xFF;
 
+#[derive(Debug)]
 pub struct AdvertiseData {
     /// Whether or not to include the device name in the packet.
     pub include_device_name: bool,
@@ -42,8 +43,31 @@ pub struct AdvertiseData {
 
 impl AdvertiseData {
     /// Returns a new advertise data builder with no fields.
-    pub fn builder() -> AdvertiseDataBuilder {
-        AdvertiseDataBuilder::default()
+    pub fn builder(device_name: String, tx_power_level: TxPowerLevel) -> AdvertiseDataBuilder {
+        AdvertiseDataBuilder::new(device_name, tx_power_level)
+    }
+
+    /// Returns a new advertise data with fields from a protobuf.
+    pub fn from_proto(
+        device_name: String,
+        tx_power_level: TxPowerLevel,
+        proto: &AdvertiseDataProto,
+    ) -> Result<Self, String> {
+        let mut builder = AdvertiseDataBuilder::new(device_name, tx_power_level);
+
+        if proto.include_device_name {
+            builder.include_device_name();
+        }
+
+        if proto.include_tx_power_level {
+            builder.include_tx_power_level();
+        }
+
+        if !proto.manufacturer_data.is_empty() {
+            builder.manufacturer_data(proto.manufacturer_data.clone());
+        }
+
+        builder.build()
     }
 
     /// Gets the raw bytes to be sent in the advertise data field of a BLE advertise packet.
@@ -66,38 +90,17 @@ impl From<&AdvertiseData> for AdvertiseDataProto {
 #[derive(Default)]
 /// Builder for the advertise data field of a Bluetooth packet.
 pub struct AdvertiseDataBuilder {
-    device_name: Option<String>,
-    tx_power_level: Option<TxPowerLevel>,
+    device_name: String,
+    tx_power_level: TxPowerLevel,
+    include_device_name: bool,
+    include_tx_power_level: bool,
     manufacturer_data: Option<Vec<u8>>,
 }
 
 impl AdvertiseDataBuilder {
     /// Returns a new advertise data builder with empty fields.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Returns a new advertise data builder with fields from a protobuf.
-    pub fn from_proto(
-        device_name: String,
-        tx_power_level: TxPowerLevel,
-        proto: &AdvertiseDataProto,
-    ) -> Self {
-        let mut builder = Self::default();
-
-        if proto.include_device_name {
-            builder.include_device_name(device_name);
-        }
-
-        if proto.include_tx_power_level {
-            builder.include_tx_power_level(tx_power_level);
-        }
-
-        if !proto.manufacturer_data.is_empty() {
-            builder.manufacturer_data(proto.manufacturer_data.clone());
-        }
-
-        builder
+    pub fn new(device_name: String, tx_power_level: TxPowerLevel) -> Self {
+        AdvertiseDataBuilder { device_name, tx_power_level, ..Self::default() }
     }
 
     /// Build the advertise data.
@@ -105,22 +108,22 @@ impl AdvertiseDataBuilder {
     /// Returns a vector of bytes holding the serialized advertise data based on the fields added to the builder, or `Err(String)` if the data would be malformed.
     pub fn build(&self) -> Result<AdvertiseData, String> {
         Ok(AdvertiseData {
-            include_device_name: self.device_name.is_some(),
-            include_tx_power_level: self.tx_power_level.is_some(),
+            include_device_name: self.include_device_name,
+            include_tx_power_level: self.include_tx_power_level,
             manufacturer_data: self.manufacturer_data.clone(),
             bytes: self.serialize()?,
         })
     }
 
     /// Add a complete device name field to the advertise data.
-    pub fn include_device_name(&mut self, device_name: String) -> &mut Self {
-        self.device_name = Some(device_name);
+    pub fn include_device_name(&mut self) -> &mut Self {
+        self.include_device_name = true;
         self
     }
 
     /// Add a transmit power field to the advertise data.
-    pub fn include_tx_power_level(&mut self, tx_power_level: TxPowerLevel) -> &mut Self {
-        self.tx_power_level = Some(tx_power_level);
+    pub fn include_tx_power_level(&mut self) -> &mut Self {
+        self.include_tx_power_level = true;
         self
     }
 
@@ -133,8 +136,8 @@ impl AdvertiseDataBuilder {
     fn serialize(&self) -> Result<Vec<u8>, String> {
         let mut bytes = Vec::new();
 
-        if let Some(device_name) = &self.device_name {
-            let device_name = device_name.as_bytes();
+        if self.include_device_name {
+            let device_name = self.device_name.as_bytes();
 
             if device_name.len() > MAX_ADV_NONCONN_DATA_LEN - 2 {
                 return Err(format!(
@@ -152,8 +155,8 @@ impl AdvertiseDataBuilder {
             bytes.extend_from_slice(device_name);
         }
 
-        if let Some(tx_power) = self.tx_power_level {
-            bytes.extend(vec![2, AD_TYPE_TX_POWER, tx_power.dbm as u8]);
+        if self.include_tx_power_level {
+            bytes.extend(vec![2, AD_TYPE_TX_POWER, self.tx_power_level.dbm as u8]);
         }
 
         if let Some(manufacturer_data) = &self.manufacturer_data {
@@ -204,7 +207,7 @@ mod tests {
         let exp_name_len = HEADER_LEN + device_name.len();
         let exp_tx_power_len = HEADER_LEN + 1;
 
-        let ad = AdvertiseDataBuilder::from_proto(
+        let ad = AdvertiseData::from_proto(
             device_name.clone(),
             tx_power,
             &AdvertiseDataProto {
@@ -212,8 +215,7 @@ mod tests {
                 include_tx_power_level: true,
                 ..Default::default()
             },
-        )
-        .build();
+        );
 
         assert!(ad.is_ok());
         let bytes = ad.unwrap().bytes;
@@ -233,12 +235,11 @@ mod tests {
     #[test]
     fn test_from_proto_fails() {
         let device_name = "a".repeat(MAX_ADV_NONCONN_DATA_LEN - HEADER_LEN + 1);
-        let data = AdvertiseDataBuilder::from_proto(
+        let data = AdvertiseData::from_proto(
             device_name,
             TxPowerLevel::new(0),
             &AdvertiseDataProto { include_device_name: true, ..Default::default() },
-        )
-        .build();
+        );
 
         assert!(data.is_err());
     }
@@ -253,7 +254,7 @@ mod tests {
             ..Default::default()
         };
 
-        let ad = AdvertiseDataBuilder::from_proto(device_name.clone(), tx_power, &ad_proto).build();
+        let ad = AdvertiseData::from_proto(device_name.clone(), tx_power, &ad_proto);
 
         assert!(ad.is_ok());
         assert_eq!(ad_proto, (&ad.unwrap()).into());
@@ -262,7 +263,9 @@ mod tests {
     #[test]
     fn test_set_device_name_succeeds() {
         let device_name = String::from("test-device-name");
-        let ad = AdvertiseData::builder().include_device_name(device_name.clone()).build();
+        let ad = AdvertiseData::builder(device_name.clone(), TxPowerLevel::default())
+            .include_device_name()
+            .build();
         let exp_len = HEADER_LEN + device_name.len();
 
         assert!(ad.is_ok());
@@ -278,7 +281,9 @@ mod tests {
     #[test]
     fn test_set_device_name_fails() {
         let device_name = "a".repeat(MAX_ADV_NONCONN_DATA_LEN - HEADER_LEN + 1);
-        let data = AdvertiseData::builder().include_device_name(device_name).build();
+        let data = AdvertiseData::builder(device_name, TxPowerLevel::default())
+            .include_device_name()
+            .build();
 
         assert!(data.is_err());
     }
@@ -286,7 +291,8 @@ mod tests {
     #[test]
     fn test_set_tx_power_level() {
         let tx_power = TxPowerLevel::new(-6);
-        let ad = AdvertiseData::builder().include_tx_power_level(tx_power).build();
+        let ad =
+            AdvertiseData::builder(String::default(), tx_power).include_tx_power_level().build();
         let exp_len = HEADER_LEN + 1;
 
         assert!(ad.is_ok());
@@ -299,7 +305,7 @@ mod tests {
     #[test]
     fn test_set_manufacturer_data_succeeds() {
         let manufacturer_data = String::from("test-manufacturer-data");
-        let ad = AdvertiseData::builder()
+        let ad = AdvertiseData::builder(String::default(), TxPowerLevel::default())
             .manufacturer_data(manufacturer_data.clone().into_bytes())
             .build();
         let exp_len = HEADER_LEN + manufacturer_data.len();
@@ -318,8 +324,9 @@ mod tests {
     #[test]
     fn test_set_manufacturer_data_fails() {
         let manufacturer_data = "a".repeat(MAX_ADV_NONCONN_DATA_LEN - HEADER_LEN + 1);
-        let data =
-            AdvertiseData::builder().manufacturer_data(manufacturer_data.into_bytes()).build();
+        let data = AdvertiseData::builder(String::default(), TxPowerLevel::default())
+            .manufacturer_data(manufacturer_data.into_bytes())
+            .build();
 
         assert!(data.is_err());
     }
@@ -330,9 +337,9 @@ mod tests {
             0x0F, 0x09, b'g', b'D', b'e', b'v', b'i', b'c', b'e', b'-', b'b', b'e', b'a', b'c',
             b'o', b'n', 0x02, 0x0A, 0x0,
         ];
-        let data = AdvertiseData::builder()
-            .include_device_name(String::from("gDevice-beacon"))
-            .include_tx_power_level(TxPowerLevel::new(0))
+        let data = AdvertiseData::builder(String::from("gDevice-beacon"), TxPowerLevel::new(0))
+            .include_device_name()
+            .include_tx_power_level()
             .build();
 
         assert!(data.is_ok());

@@ -55,6 +55,37 @@ impl AdvertiseSettings {
     pub fn builder() -> AdvertiseSettingsBuilder {
         AdvertiseSettingsBuilder::default()
     }
+
+    /// Returns a new advertise settings with fields from a protobuf.
+    pub fn from_proto(proto: &AdvertiseSettingsProto) -> Result<Self, String> {
+        proto.try_into()
+    }
+}
+
+impl TryFrom<&AdvertiseSettingsProto> for AdvertiseSettings {
+    type Error = String;
+
+    fn try_from(value: &AdvertiseSettingsProto) -> Result<Self, Self::Error> {
+        let mut builder = AdvertiseSettingsBuilder::default();
+
+        if let Some(mode) = value.interval.as_ref() {
+            builder.mode(mode.into());
+        }
+
+        if let Some(tx_power) = value.tx_power.as_ref() {
+            builder.tx_power_level(tx_power.try_into()?);
+        }
+
+        if value.scannable {
+            builder.scannable();
+        }
+
+        if value.timeout != u64::default() {
+            builder.timeout(Duration::from_millis(value.timeout));
+        }
+
+        Ok(builder.build())
+    }
 }
 
 impl TryFrom<&AdvertiseSettings> for AdvertiseSettingsProto {
@@ -86,29 +117,6 @@ impl AdvertiseSettingsBuilder {
     /// Returns a new advertise settings builder with empty fields.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Returns a new advertise settings builder with fields from a protobuf.
-    pub fn from_proto(proto: &AdvertiseSettingsProto) -> Result<AdvertiseSettingsBuilder, String> {
-        let mut builder = AdvertiseSettingsBuilder::default();
-
-        if let Some(mode) = proto.interval.as_ref() {
-            builder.mode(mode.into());
-        }
-
-        if let Some(tx_power) = proto.tx_power.as_ref() {
-            builder.tx_power_level(tx_power.try_into()?);
-        }
-
-        if proto.scannable {
-            builder.scannable();
-        }
-
-        if proto.timeout != u64::default() {
-            builder.timeout(Duration::from_millis(proto.timeout));
-        }
-
-        Ok(builder)
     }
 
     /// Build the advertise settings.
@@ -289,7 +297,7 @@ mod tests {
             ..Default::default()
         };
 
-        let settings = AdvertiseSettingsBuilder::from_proto(&proto);
+        let settings = AdvertiseSettings::from_proto(&proto);
         assert!(settings.is_ok());
 
         let tx_power: Result<TxPowerLevel, _> = (&tx_power).try_into();
@@ -303,7 +311,7 @@ mod tests {
             .timeout(Duration::from_millis(timeout_ms))
             .build();
 
-        assert_eq!(exp_settings, settings.unwrap().build());
+        assert_eq!(exp_settings, settings.unwrap());
     }
 
     #[test]
@@ -313,7 +321,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(AdvertiseSettingsBuilder::from_proto(&proto).is_err());
+        assert!(AdvertiseSettings::from_proto(&proto).is_err());
     }
 
     #[test]
@@ -326,9 +334,9 @@ mod tests {
             ..Default::default()
         };
 
-        let settings = AdvertiseSettingsBuilder::from_proto(&proto);
+        let settings = AdvertiseSettings::from_proto(&proto);
         assert!(settings.is_ok());
-        let settings: Result<AdvertiseSettingsProto, _> = (&settings.unwrap().build()).try_into();
+        let settings: Result<AdvertiseSettingsProto, _> = settings.as_ref().unwrap().try_into();
         assert!(settings.is_ok());
 
         assert_eq!(proto, settings.unwrap());
@@ -342,7 +350,7 @@ mod tests {
             ..Default::default()
         };
 
-        let settings = AdvertiseSettingsBuilder::from_proto(&proto);
+        let settings = AdvertiseSettings::from_proto(&proto);
         assert!(settings.is_ok());
         let settings = settings.unwrap();
 
@@ -363,7 +371,7 @@ mod tests {
     fn test_from_proto_timeout_unset() {
         let proto = AdvertiseSettingsProto::default();
 
-        let settings = AdvertiseSettingsBuilder::from_proto(&proto);
+        let settings = AdvertiseSettings::from_proto(&proto);
         assert!(settings.is_ok());
         let settings = settings.unwrap();
 
