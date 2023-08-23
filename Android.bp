@@ -63,6 +63,7 @@ rust_defaults {
     name: "libnetsim_daemon_defaults",
     features: ["cuttlefish"],
     rlibs: [
+        "libbytes",
         "libclap",
         "libcxx",
         "libdata_encoding",
@@ -74,12 +75,16 @@ rust_defaults {
         "libregex",
         "libserde",
         "libserde_json",
+        "libthiserror",
         "libtungstenite",
         "liblazy_static",
         "liblog_rust",
         "libopenssl",
     ],
-    srcs: ["rust/daemon/src/lib.rs"],
+    srcs: [
+        "rust/daemon/src/lib.rs",
+        ":rootcanal_link_layer_packets_rust_gen",
+    ],
 }
 
 rust_ffi_host_static {

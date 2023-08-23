@@ -13,7 +13,18 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::env;
+use std::path::PathBuf;
+
 fn main() {
     let _build = cxx_build::bridge("src/lib.rs");
     println!("cargo:rerun-if-changed=src/lib.rs");
+
+    let link_layer_prebuilt = env::var("LINK_LAYER_PACKETS_PREBUILT").unwrap();
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap_or("link_layer_packets.rs".to_owned()));
+    std::fs::copy(
+        link_layer_prebuilt.as_str(),
+        out_dir.join("link_layer_packets.rs").as_os_str().to_str().unwrap(),
+    )
+    .unwrap();
 }
