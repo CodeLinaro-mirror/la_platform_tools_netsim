@@ -110,3 +110,15 @@ pub fn bluetooth_beacon_add(
 
     Ok(facade_id)
 }
+
+pub fn bluetooth_beacon_remove(
+    device_id: DeviceIdentifier,
+    chip_id: ChipIdentifier,
+    facade_id: FacadeIdentifier,
+) -> Result<(), String> {
+    if BEACON_CHIPS.write().unwrap().remove(&chip_id).is_none() {
+        Err(format!("failed to delete ble beacon chip: chip with id {chip_id} does not exist"))
+    } else {
+        Ok(())
+    }
+}

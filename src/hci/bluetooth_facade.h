@@ -45,6 +45,8 @@ rust::Box<AddRustDeviceResult> AddRustDevice(
     rust::Box<DynRustBluetoothChipCallbacks> callbacks, const std::string &type,
     const std::string &address);
 
+void RemoveRustDevice(uint32_t facade_id);
+
 void Start(uint16_t instance_num);
 void Stop();
 

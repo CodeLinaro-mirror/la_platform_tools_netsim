@@ -101,8 +101,21 @@ class FrontendServer final : public frontend::FrontendService::Service {
     CxxServerResponseWritable writer;
     std::string request_json;
     google::protobuf::util::MessageToJsonString(*request, &request_json);
-    auto device = request->device();
     HandleDeviceCxx(writer, "POST", "", request_json);
+    if (writer.is_ok) {
+      google::protobuf::util::JsonStringToMessage(writer.body, response);
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
+  }
+
+  grpc::Status DeleteChip(grpc::ServerContext *context,
+                          const frontend::DeleteChipRequest *request,
+                          google::protobuf::Empty *response) {
+    CxxServerResponseWritable writer;
+    std::string request_json;
+    google::protobuf::util::MessageToJsonString(*request, &request_json);
+    HandleDeviceCxx(writer, "DELETE", "", request_json);
     if (writer.is_ok) {
       google::protobuf::util::JsonStringToMessage(writer.body, response);
       return grpc::Status::OK;

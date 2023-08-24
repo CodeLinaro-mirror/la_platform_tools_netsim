@@ -36,6 +36,7 @@ void ArgError(char *argv[], int c) {
 
 int main(int argc, char *argv[]) {
   netsim::SetUpCrashReport();
+  netsim::InitializeNetsimdLogger();
 
   bool no_web_ui = false;
   bool no_cli_ui = false;

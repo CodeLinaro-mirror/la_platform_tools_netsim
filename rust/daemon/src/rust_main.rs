@@ -15,9 +15,12 @@
 use clap::Parser;
 use log::warn;
 
+use netsim_common::util::netsim_logger;
+
 use crate::args::NetsimdArgs;
 use crate::ffi;
 use crate::service::{Service, ServiceParams};
+use std::ffi::{c_char, c_int};
 
 /// Wireless network simulator for android (and other) emulated devices.
 ///
@@ -26,12 +29,33 @@ use crate::service::{Service, ServiceParams};
 /// The file descriptors passed in `NetsimdArgs::fd_startup_str` must remain valid and open for as
 /// long as the program runs.
 #[no_mangle]
-pub unsafe extern "C" fn rust_main() {
+pub unsafe extern "C" fn rust_main(argc: c_int, argv: *const *const c_char) {
     ffi::set_up_crash_report();
+    netsim_logger::init("netsimd");
+    let netsimd_args = get_netsimd_args(argc, argv);
+    run_netsimd_with_args(netsimd_args);
+}
 
-    // TODO: Initialize netsim logger in the beginning of main.
-    let netsimd_args = NetsimdArgs::parse();
+#[allow(unused)]
+fn get_netsimd_args(argc: c_int, argv: *const *const c_char) -> NetsimdArgs {
+    #[cfg(feature = "cuttlefish")]
+    {
+        // TODO: Use NetsimdArgs::parse() after netsimd binary is built with netsimd.rs.
+        // In linux arm64 in aosp-main, it can't access CLI arguments by std::env::args() with netsimd.cc wrapper.
+        let argv: Vec<_> = (0..argc)
+            .map(|i|
+                // SAFETY: argc and argv will remain valid as long as the program runs.
+                unsafe {
+                    std::ffi::CStr::from_ptr(*argv.add(i as usize)).to_str().unwrap().to_owned()
+                })
+            .collect();
+        NetsimdArgs::parse_from(argv)
+    }
+    #[cfg(not(feature = "cuttlefish"))]
+    NetsimdArgs::parse()
+}
 
+fn run_netsimd_with_args(netsimd_args: NetsimdArgs) {
     // Redirect stdout and stderr to files only if netsimd is not invoked
     // by Cuttlefish. Some Cuttlefish builds fail when writing logs to files.
     #[cfg(not(feature = "cuttlefish"))]

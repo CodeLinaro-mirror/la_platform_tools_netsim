@@ -364,6 +364,10 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string) {
   return facade_id;
 }
 
+void RemoveRustDevice(uint32_t facade_id) {
+  gTestModel->RemoveDevice(facade_id);
+}
+
 rust::Box<AddRustDeviceResult> AddRustDevice(
     uint32_t simulation_device,
     rust::Box<DynRustBluetoothChipCallbacks> callbacks, const std::string &type,

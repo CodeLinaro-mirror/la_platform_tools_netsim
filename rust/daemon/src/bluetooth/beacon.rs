@@ -20,7 +20,7 @@ use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::{devices_handler::add_chip, id_factory::IdFactory};
-use crate::ffi::{generate_advertising_packet, generate_scan_response_packet, RustBluetoothChip};
+use crate::ffi;
 use cxx::{let_cxx_string, UniquePtr};
 use lazy_static::lazy_static;
 use log::{error, info, warn};
@@ -46,7 +46,7 @@ static PHY_TYPE_LE: u8 = 0;
 lazy_static! {
     // A singleton that contains a hash map from chip id to RustBluetoothChip.
     // It's used by `BeaconChip` to access `RustBluetoothChip` to call send_link_layer_packet().
-    static ref BT_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<RustBluetoothChip>>>> =
+    static ref BT_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi::RustBluetoothChip>>>> =
         RwLock::new(HashMap::new());
     // Used to find beacon chip based on it's id from static methods.
     pub(crate) static ref BEACON_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<BeaconChip>>> =
@@ -155,7 +155,8 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
         }
 
         beacon.advertise_last = Some(Instant::now());
-        let packet = generate_advertising_packet(&beacon.address, beacon.advertise_data.as_bytes());
+        let packet =
+            ffi::generate_advertising_packet(&beacon.address, beacon.advertise_data.as_bytes());
         beacon.send_link_layer_packet(
             &packet,
             PHY_TYPE_LE,
@@ -230,7 +231,21 @@ pub fn bluetooth_beacon_add(
     Ok(facade_id)
 }
 
-// TODO(jmes) Support removing Beacon (b/292234625).
+#[cfg(not(test))]
+pub fn bluetooth_beacon_remove(
+    device_id: DeviceIdentifier,
+    chip_id: ChipIdentifier,
+    facade_id: FacadeIdentifier,
+) -> Result<(), String> {
+    let removed_beacon = BEACON_CHIPS.write().unwrap().remove(&chip_id);
+    let removed_radio = BT_CHIPS.write().unwrap().remove(&chip_id);
+    if removed_beacon.is_none() || removed_radio.is_none() {
+        Err(format!("failed to delete ble beacon chip: chip with id {chip_id} does not exist"))
+    } else {
+        ffi::bluetooth_remove_rust_device(facade_id);
+        Ok(())
+    }
+}
 
 pub fn bluetooth_beacon_patch(
     chip_id: ChipIdentifier,

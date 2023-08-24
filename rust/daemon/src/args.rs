@@ -29,7 +29,7 @@ pub struct NetsimdArgs {
     pub no_web_ui: bool,
 
     /// Set custom hci port
-    #[arg(long)]
+    #[arg(long, alias = "hci_port")]
     pub hci_port: Option<u32>,
 
     /// Netsimd instance number

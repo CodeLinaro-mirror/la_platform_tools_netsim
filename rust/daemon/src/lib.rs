@@ -59,6 +59,7 @@ use crate::ranging::*;
 use crate::service::{create_service, Service};
 use crate::version::*;
 use netsim_common::system::netsimd_temp_dir_string;
+use netsim_common::util::netsim_logger;
 
 #[allow(unsafe_op_in_unsafe_fn)]
 #[cxx::bridge(namespace = "netsim")]
@@ -101,6 +102,11 @@ mod ffi {
         fn set_up(self: &Service);
         #[cxx_name = "Run"]
         fn run(self: &Service);
+
+        // Netsimd logger
+
+        #[cxx_name = "InitializeNetsimdLogger"]
+        fn initialize_netsimd_logger();
 
         // System
 
@@ -305,6 +311,10 @@ mod ffi {
             address: &CxxString,
         ) -> Box<AddRustDeviceResult>;
 
+        #[rust_name = bluetooth_remove_rust_device]
+        #[namespace = "netsim::hci::facade"]
+        pub fn RemoveRustDevice(facade_id: u32);
+
         #[rust_name = bluetooth_start]
         #[namespace = "netsim::hci::facade"]
         pub fn Start(instance_num: u16);
@@ -406,6 +416,11 @@ mod ffi {
         pub fn IsNetsimdAlive(instance_num: u16) -> bool;
 
     }
+}
+
+// It's used by src/netsimd.cc
+fn initialize_netsimd_logger() {
+    netsim_logger::init("netsimd");
 }
 
 // It's required so `RustBluetoothChip` can be sent between threads safely.

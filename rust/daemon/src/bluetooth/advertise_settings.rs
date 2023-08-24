@@ -22,15 +22,11 @@ use netsim_proto::model::chip::bluetooth_beacon::{
 
 use std::time::Duration;
 
-// From Beacon::Beacon constructor referenced in packages/modules/Bluetooth/tools/model/devices/beacon.cc
-const MODE_DEFAULT_MS: u64 = 1280;
 // From packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
-const MODE_LOW_POWER_MS: u64 = 160;
-const MODE_BALANCED_MS: u64 = 400;
-const MODE_LOW_LATENCY_MS: u64 = 1600;
+const MODE_LOW_POWER_MS: u64 = 1000;
+const MODE_BALANCED_MS: u64 = 250;
+const MODE_LOW_LATENCY_MS: u64 = 100;
 
-// Default parameter value for SendLinkLayerPacket in packages/modules/Bluetooth/tools/model/devices/device.h
-const TX_POWER_DEFAULT_DBM: i8 = 0;
 // From packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
 const TX_POWER_ULTRA_LOW_DBM: i8 = -21;
 const TX_POWER_LOW_DBM: i8 = -15;
@@ -170,7 +166,7 @@ impl AdvertiseMode {
 
 impl Default for AdvertiseMode {
     fn default() -> Self {
-        Self { interval: Duration::from_millis(MODE_DEFAULT_MS) }
+        Self { interval: Duration::from_millis(MODE_LOW_POWER_MS) }
     }
 }
 
@@ -184,7 +180,7 @@ impl From<&IntervalProto> for AdvertiseMode {
                     Mode::BALANCED => MODE_BALANCED_MS,
                     Mode::LOW_LATENCY => MODE_LOW_LATENCY_MS,
                 },
-                _ => MODE_DEFAULT_MS,
+                _ => MODE_LOW_POWER_MS,
             }),
         }
     }
@@ -223,7 +219,7 @@ impl TxPowerLevel {
 
 impl Default for TxPowerLevel {
     fn default() -> Self {
-        TxPowerLevel { dbm: TX_POWER_DEFAULT_DBM }
+        TxPowerLevel { dbm: TX_POWER_LOW_DBM }
     }
 }
 
@@ -242,7 +238,7 @@ impl TryFrom<&TxPowerProto> for TxPowerLevel {
                     Level::MEDIUM => TX_POWER_MEDIUM_DBM,
                     Level::HIGH => TX_POWER_HIGH_DBM,
                 },
-                _ => TX_POWER_DEFAULT_DBM,
+                _ => TX_POWER_LOW_DBM,
             }),
         })
     }
@@ -363,8 +359,8 @@ mod tests {
         let interval: Duration =
             proto.interval.as_ref().map(AdvertiseMode::from).unwrap_or_default().interval;
 
-        assert_eq!(TX_POWER_DEFAULT_DBM, tx_power);
-        assert_eq!(Duration::from_millis(MODE_DEFAULT_MS), interval);
+        assert_eq!(TX_POWER_LOW_DBM, tx_power);
+        assert_eq!(Duration::from_millis(MODE_LOW_POWER_MS), interval);
     }
 
     #[test]

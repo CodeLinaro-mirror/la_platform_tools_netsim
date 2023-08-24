@@ -148,6 +148,24 @@ class FrontendClientImpl : public FrontendClient {
     return make_result(status, response);
   }
 
+  std::unique_ptr<ClientResult> DeleteChip(
+      rust::Vec<::rust::u8> const &request_byte_vec) const {
+    google::protobuf::Empty response;
+    grpc::ClientContext context_;
+    frontend::DeleteChipRequest request;
+    if (!request.ParseFromArray(request_byte_vec.data(),
+                                request_byte_vec.size())) {
+      return make_result(
+          grpc::Status(
+              grpc::StatusCode::INVALID_ARGUMENT,
+              "Error parsing DeleteChip request protobuf. request size:" +
+                  std::to_string(request_byte_vec.size())),
+          response);
+    }
+    auto status = stub_->DeleteChip(&context_, request, &response);
+    return make_result(status, response);
+  }
+
   // Get the list of Capture information
   std::unique_ptr<ClientResult> ListCapture() const override {
     frontend::ListCaptureResponse response;
@@ -217,6 +235,8 @@ class FrontendClientImpl : public FrontendClient {
         return GetVersion();
       case frontend::GrpcMethod::CreateDevice:
         return CreateDevice(request_byte_vec);
+      case frontend::GrpcMethod::DeleteChip:
+        return DeleteChip(request_byte_vec);
       case frontend::GrpcMethod::PatchDevice:
         return PatchDevice(request_byte_vec);
       case frontend::GrpcMethod::ListDevice:

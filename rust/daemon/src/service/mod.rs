@@ -25,7 +25,6 @@ use crate::transport::socket::run_socket_transport;
 use crate::wifi as wifi_facade;
 use log::{error, info, warn};
 use netsim_common::util::ini_file::IniFile;
-use netsim_common::util::netsim_logger;
 use std::env;
 use std::time::Duration;
 
@@ -73,7 +72,6 @@ impl Service {
 
     /// Sets up the states for netsimd.
     pub fn set_up(&self) {
-        netsim_logger::init("netsimd");
         if clear_pcap_files() {
             info!("netsim generated pcap files in temp directory has been removed.");
         }

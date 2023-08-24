@@ -43,6 +43,7 @@ use log::{info, warn};
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::frontend::CreateDeviceRequest;
 use netsim_proto::frontend::CreateDeviceResponse;
+use netsim_proto::frontend::DeleteChipRequest;
 use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
@@ -324,6 +325,9 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                     ProtoChipKind::WIFI => {
                         wifi_facade::wifi_remove(facade_id);
                     }
+                    ProtoChipKind::BLUETOOTH_BEACON => {
+                        bluetooth_facade::bluetooth_beacon_remove(device_id, chip_id, facade_id)?;
+                    }
                     _ => Err(format!("Unknown chip kind: {:?}", chip_kind))?,
                 },
                 None => Err(format!(
@@ -339,6 +343,29 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
             Err(err)
         }
     }
+}
+
+pub fn delete_chip(delete_json: &str) -> Result<(), String> {
+    let mut request = DeleteChipRequest::new();
+    if merge_from_str(&mut request, delete_json).is_err() {
+        return Err(format!(
+            "failed to delete chip: incorrectly formatted delete json: {}",
+            delete_json
+        ));
+    };
+
+    let device_id = {
+        let devices_arc = clone_devices();
+        let devices = devices_arc.read().unwrap();
+        devices
+            .entries
+            .iter()
+            .find(|(_, device)| device.chips.contains_key(&request.id))
+            .map(|(id, _)| *id)
+            .ok_or(format!("failed to delete chip: could not find chip with id {}", request.id))?
+    };
+
+    remove_chip(device_id, request.id)
 }
 
 /// A RemoveChip function for Rust Device API.
@@ -564,6 +591,13 @@ fn handle_device_patch(writer: ResponseWritable, id: Option<DeviceIdentifier>, p
     }
 }
 
+fn handle_chip_delete(writer: ResponseWritable, delete_json: &str) {
+    match delete_chip(delete_json) {
+        Ok(()) => writer.put_ok("text/plain", "Chip Delete Success", vec![]),
+        Err(err) => writer.put_error(404, err.as_str()),
+    }
+}
+
 /// Performs ListDevices to get the list of Devices and write to writer.
 fn handle_device_list(writer: ResponseWritable) {
     let devices_arc = clone_devices();
@@ -627,6 +661,11 @@ pub fn handle_device(request: &Request<Vec<u8>>, param: &str, writer: ResponseWr
                 let body = &request.body();
                 let create_json = String::from_utf8(body.to_vec()).unwrap();
                 handle_device_create(writer, create_json.as_str());
+            }
+            "DELETE" => {
+                let body = &request.body();
+                let delete_json = String::from_utf8(body.to_vec()).unwrap();
+                handle_chip_delete(writer, delete_json.as_str());
             }
             _ => writer.put_error(404, "Not found."),
         }
@@ -1331,5 +1370,54 @@ mod tests {
         let patched_device = patched_device.unwrap();
         assert_eq!(1, patched_device.chips.len());
         assert!(matches!(patched_device.chips[0].chip, Some(Chip::BleBeacon(_))));
+    }
+
+    #[test]
+    fn test_remove_beacon_device_succeeds() {
+        logger_setup();
+
+        let create_request = get_test_create_device_request(None);
+        let device_id = create_device(&print_to_string(&create_request).unwrap());
+        assert!(device_id.is_ok(), "{}", device_id.unwrap_err());
+
+        let device_id = device_id.unwrap();
+        let chip_id = {
+            let devices = clone_devices();
+            let devices_guard = devices.read().unwrap();
+            let device = devices_guard.entries.get(&device_id).unwrap();
+            device.chips.first_key_value().map(|(id, _)| *id).unwrap()
+        };
+
+        let delete_request = DeleteChipRequest { id: chip_id, ..Default::default() };
+        let delete_result = delete_chip(&print_to_string(&delete_request).unwrap());
+        assert!(delete_result.is_ok(), "{}", delete_result.unwrap_err());
+
+        let devices = clone_devices();
+        let devices_guard = devices.read().unwrap();
+        assert!(devices_guard.entries.get(&device_id).is_none())
+    }
+
+    #[test]
+    fn test_remove_beacon_device_fails() {
+        logger_setup();
+
+        let create_request = get_test_create_device_request(None);
+        let device_id = create_device(&print_to_string(&create_request).unwrap());
+        assert!(device_id.is_ok(), "{}", device_id.unwrap_err());
+
+        let device_id = device_id.unwrap();
+        let chip_id = {
+            let devices = clone_devices();
+            let devices_guard = devices.read().unwrap();
+            let device = devices_guard.entries.get(&device_id).unwrap();
+            device.chips.first_key_value().map(|(id, _)| *id).unwrap()
+        };
+
+        let delete_request = DeleteChipRequest { id: chip_id, ..Default::default() };
+        let delete_result = delete_chip(&print_to_string(&delete_request).unwrap());
+        assert!(delete_result.is_ok(), "{}", delete_result.unwrap_err());
+
+        let delete_result = delete_chip(&print_to_string(&delete_request).unwrap());
+        assert!(delete_result.is_err());
     }
 }
