@@ -25,9 +25,7 @@
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
 #include "netsim-daemon/src/lib.rs.h"
-#include "util/ini_file.h"
 #include "util/log.h"
-#include "util/os_utils.h"
 #ifdef _WIN32
 #include <Windows.h>
 #else
@@ -88,15 +86,6 @@ std::unique_ptr<GrpcServer> RunGrpcServerCxx(uint32_t netsim_grpc_port,
       RunGrpcServer(netsim_grpc_port, no_cli_ui, instance_num, vsock);
   if (grpc_server == nullptr) return nullptr;
   return std::make_unique<GrpcServer>(std::move(grpc_server), port);
-}
-
-void Run(ServerParams params) {
-  auto rust_service = netsim::CreateService(
-      params.fd_startup_str, params.no_cli_ui, params.no_web_ui,
-      params.hci_port, params.instance_num, params.dev, params.vsock);
-  rust_service->SetUp();
-
-  rust_service->Run();
 }
 
 }  // namespace netsim::server

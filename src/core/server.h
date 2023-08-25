@@ -18,21 +18,10 @@
 
 #include <cstdint>
 #include <memory>
-#include <string>
 
 #include "grpcpp/server.h"
 
 namespace netsim::server {
-
-struct ServerParams {
-  std::string fd_startup_str;
-  bool no_cli_ui;
-  bool no_web_ui;
-  int hci_port;
-  int instance_num;
-  bool dev;
-  int vsock;
-};
 
 class GrpcServer {
  public:
@@ -52,7 +41,5 @@ std::unique_ptr<GrpcServer> RunGrpcServerCxx(uint32_t netsim_grpc_port,
                                              bool no_cli_ui,
                                              uint16_t instance_num,
                                              uint16_t vsock);
-// Run grpc and http servers.
-void Run(ServerParams params);
 
 }  // namespace netsim::server

@@ -22,6 +22,8 @@ mod requests;
 mod response;
 
 use log::error;
+use netsim_proto::frontend::{DeleteChipRequest, ListDeviceResponse};
+use protobuf::Message;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
@@ -75,6 +77,9 @@ fn perform_command(
         args::Command::Capture(args::Capture::Patch(_) | args::Capture::Get(_)) => {
             command.get_requests(&client)
         }
+        args::Command::Beacon(args::Beacon::Remove(_)) => {
+            vec![args::Command::Devices(args::Devices { continuous: false }).get_request_bytes()]
+        }
         _ => vec![command.get_request_bytes()],
     };
     let mut process_error = false;
@@ -92,6 +97,15 @@ fn perform_command(
             args::Command::Capture(args::Capture::Get(ref mut cmd)) => {
                 perform_streaming_request(&client, cmd, req, &cmd.filenames[i].to_owned())
             }
+            args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
+                let devices = client.send_grpc(&GrpcMethod::ListDevice, req);
+                let id = find_id_for_remove(devices.byte_vec().as_slice(), cmd)?;
+                let req = &DeleteChipRequest { id, ..Default::default() }
+                    .write_to_bytes()
+                    .map_err(|err| format!("{err}"))?;
+
+                client.send_grpc(&grpc_method, req)
+            }
             // All other commands use a single gRPC call
             _ => client.send_grpc(&grpc_method, req),
         };
@@ -104,6 +118,24 @@ fn perform_command(
         return Err("Not all requests were processed successfully.".to_string());
     }
     Ok(())
+}
+
+fn find_id_for_remove(response: &[u8], cmd: &args::BeaconRemove) -> Result<u32, String> {
+    let devices = ListDeviceResponse::parse_from_bytes(response).unwrap().devices;
+    let id = devices
+        .iter()
+        .find(|device| device.name == cmd.device_name)
+        .and_then(|device| cmd.chip_name.as_ref().map_or(
+            (device.chips.len() == 1).then_some(&device.chips[0]),
+            |chip_name| device.chips.iter().find(|chip| &chip.name == chip_name)
+        ))
+        .ok_or(cmd.chip_name.as_ref().map_or(
+            format!("failed to delete chip: device '{}' has multiple possible candidates, please specify a chip name", cmd.device_name),
+            |chip_name| format!("failed to delete chip: could not find chip '{}' on device '{}'", chip_name, cmd.device_name))
+        )?
+        .id;
+
+    Ok(id)
 }
 
 /// Check and handle the gRPC call result
@@ -163,5 +195,127 @@ pub extern "C" fn rust_main() {
     }
     if let Err(e) = perform_command(&mut args.command, client, grpc_method, args.verbose) {
         error!("{e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::args::BeaconRemove;
+    use netsim_proto::{
+        frontend::ListDeviceResponse,
+        model::{Chip as ChipProto, Device as DeviceProto},
+    };
+    use protobuf::Message;
+
+    use crate::find_id_for_remove;
+
+    #[test]
+    fn test_remove_device() {
+        let device_name = String::from("a-device");
+        let chip_id = 7;
+
+        let cmd = &BeaconRemove { device_name: device_name.clone(), chip_name: None };
+
+        let response = ListDeviceResponse {
+            devices: vec![DeviceProto {
+                id: 0,
+                name: device_name,
+                chips: vec![ChipProto { id: chip_id, ..Default::default() }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let id = find_id_for_remove(response.write_to_bytes().unwrap().as_slice(), cmd);
+        assert!(id.is_ok(), "{}", id.unwrap_err());
+        let id = id.unwrap();
+
+        assert_eq!(chip_id, id);
+    }
+
+    #[test]
+    fn test_remove_chip() {
+        let device_name = String::from("a-device");
+        let chip_name = String::from("should-be-deleted");
+        let device_id = 4;
+        let chip_id = 2;
+
+        let cmd =
+            &BeaconRemove { device_name: device_name.clone(), chip_name: Some(chip_name.clone()) };
+
+        let response = ListDeviceResponse {
+            devices: vec![DeviceProto {
+                id: device_id,
+                name: device_name,
+                chips: vec![
+                    ChipProto { id: chip_id, name: chip_name, ..Default::default() },
+                    ChipProto {
+                        id: chip_id + 1,
+                        name: String::from("shouldnt-be-deleted"),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let id = find_id_for_remove(response.write_to_bytes().unwrap().as_slice(), cmd);
+        assert!(id.is_ok(), "{}", id.unwrap_err());
+        let id = id.unwrap();
+
+        assert_eq!(chip_id, id);
+    }
+
+    #[test]
+    fn test_remove_multiple_chips_fails() {
+        let device_name = String::from("a-device");
+        let device_id = 3;
+
+        let cmd = &BeaconRemove { device_name: device_name.clone(), chip_name: None };
+
+        let response = ListDeviceResponse {
+            devices: vec![DeviceProto {
+                id: device_id,
+                name: device_name,
+                chips: vec![
+                    ChipProto { id: 1, name: String::from("chip-1"), ..Default::default() },
+                    ChipProto { id: 2, name: String::from("chip-2"), ..Default::default() },
+                ],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let id = find_id_for_remove(response.write_to_bytes().unwrap().as_slice(), cmd);
+        assert!(id.is_err());
+    }
+
+    #[test]
+    fn test_remove_nonexistent_chip_fails() {
+        let device_name = String::from("a-device");
+        let device_id = 1;
+
+        let cmd = &BeaconRemove {
+            device_name: device_name.clone(),
+            chip_name: Some(String::from("nonexistent-chip")),
+        };
+
+        let response = ListDeviceResponse {
+            devices: vec![DeviceProto {
+                id: device_id,
+                name: device_name,
+                chips: vec![ChipProto {
+                    id: 1,
+                    name: String::from("this-chip-exists"),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let id = find_id_for_remove(response.write_to_bytes().unwrap().as_slice(), cmd);
+        assert!(id.is_err());
     }
 }

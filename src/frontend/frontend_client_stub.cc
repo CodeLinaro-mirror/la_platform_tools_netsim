@@ -27,6 +27,7 @@
 
 namespace netsim {
 namespace frontend {
+namespace {
 const std::chrono::duration kConnectionDeadline = std::chrono::seconds(1);
 
 std::unique_ptr<frontend::FrontendService::Stub> NewFrontendClient(
@@ -46,6 +47,7 @@ std::unique_ptr<frontend::FrontendService::Stub> NewFrontendClient(
 
   return frontend::FrontendService::NewStub(channel);
 }
+}  // namespace
 
 bool IsNetsimdAlive(uint16_t instance_num) {
   return NewFrontendClient(instance_num) != nullptr;

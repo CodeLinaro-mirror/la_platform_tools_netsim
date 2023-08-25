@@ -234,6 +234,7 @@ impl fmt::Display for Displayer<&model::Position> {
 impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseSettings> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
+        let width = 25;
 
         if let Some(tx_power) = self.value.tx_power.as_ref() {
             writeln!(f)?;
@@ -243,6 +244,16 @@ impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseSetting
         if let Some(interval) = self.value.interval.as_ref() {
             writeln!(f)?;
             write!(f, "{:indent$}{}", "", Displayer::new(interval, self.verbose))?;
+        }
+
+        if self.value.scannable {
+            writeln!(f)?;
+            write!(f, "{:indent$}{:width$}: {}", "", "scannable", self.value.scannable)?;
+        }
+
+        if self.value.timeout != u64::default() {
+            writeln!(f)?;
+            write!(f, "{:indent$}{:width$}: {} ms", "", "timeout", self.value.timeout)?;
         }
 
         Ok(())
@@ -296,7 +307,9 @@ impl fmt::Display for Displayer<&advertise_settings::Interval> {
             advertise_settings::Interval::Milliseconds(interval) => {
                 write!(f, "{:indent$}{:width$}: {} ms", "", "interval", interval)
             }
-            // TODO(jmes): Support displaying named advertise modes.
+            advertise_settings::Interval::AdvertiseMode(mode) => {
+                write!(f, "{:indent$}{:width$}: {:?}", "", "advertise mode", mode)
+            }
             _ => Err(fmt::Error),
         }
     }
@@ -309,9 +322,11 @@ impl fmt::Display for Displayer<&advertise_settings::Tx_power> {
 
         match self.value {
             advertise_settings::Tx_power::Dbm(dbm) => {
-                write!(f, "{:indent$}{:width$}: {} dBm", "", "tx power level", dbm)
+                write!(f, "{:indent$}{:width$}: {} dBm", "", "tx power", dbm)
             }
-            // TODO(jmes): Support displaying named tx power levels.
+            advertise_settings::Tx_power::TxPowerLevel(level) => {
+                write!(f, "{:indent$}{:width$}: {:?}", "", "tx power level", level)
+            }
             _ => Err(fmt::Error),
         }
     }

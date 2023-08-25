@@ -93,32 +93,68 @@ impl args::Command {
             Command::Beacon(action) => match action {
                 Beacon::Create(kind) => match kind {
                     BeaconCreate::Ble(_) => {
-                        if verbose {
-                            let device = CreateDeviceResponse::parse_from_bytes(response)
-                                .expect("could not read device from response")
-                                .device;
+                        if !verbose {
+                            return;
+                        }
+                        let device = CreateDeviceResponse::parse_from_bytes(response)
+                            .expect("could not read device from response")
+                            .device;
 
-                            if device.chips.len() == 1 {
-                                println!(
-                                    "Created device '{}' with ble beacon chip '{}'",
-                                    device.name, device.chips[0].name
-                                );
-                            } else {
-                                panic!("Chip was not created successfully");
-                            }
+                        if device.chips.len() == 1 {
+                            println!(
+                                "Created device '{}' with ble beacon chip '{}'",
+                                device.name, device.chips[0].name
+                            );
+                        } else {
+                            panic!("the gRPC request completed successfully but the response contained an unexpected number of chips");
                         }
                     }
                 },
                 Beacon::Patch(kind) => match kind {
                     BeaconPatch::Ble(args) => {
-                        if verbose {
-                            if let Some(interval) = args.settings.interval {
-                                println!("Set interval to {}", interval)
+                        if !verbose {
+                            return;
+                        }
+                        if let Some(advertise_mode) = &args.settings.advertise_mode {
+                            match advertise_mode {
+                                args::Interval::Mode(mode) => {
+                                    println!("Set advertise mode to {:#?}", mode)
+                                }
+                                args::Interval::Milliseconds(ms) => {
+                                    println!("Set advertise interval to {} ms", ms)
+                                }
                             }
+                        }
+                        if let Some(tx_power_level) = &args.settings.tx_power_level {
+                            match tx_power_level {
+                                args::TxPower::Level(level) => {
+                                    println!("Set transmit power level to {:#?}", level)
+                                }
+                                args::TxPower::Dbm(dbm) => {
+                                    println!("Set transmit power level to {} dBm", dbm)
+                                }
+                            }
+                        }
+                        if args.settings.scannable {
+                            println!("Set scannable to true");
+                        }
+                        if let Some(timeout) = args.settings.timeout {
+                            println!("Set timeout to {} ms", timeout);
                         }
                     }
                 },
-                Beacon::Remove(_) => todo!("Beacon remove response not yet implemented."),
+                Beacon::Remove(args) => {
+                    if verbose {
+                        if let Some(chip_name) = &args.chip_name {
+                            println!(
+                                "Removed chip '{}' from device '{}'",
+                                chip_name, args.device_name
+                            )
+                        } else {
+                            println!("Removed device '{}'", args.device_name)
+                        }
+                    }
+                }
             },
         }
     }

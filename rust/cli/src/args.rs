@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use clap::builder::{PossibleValue, TypedValueParser};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use frontend_client_cxx::ffi::{FrontendClient, GrpcMethod};
 use log::error;
@@ -19,8 +20,13 @@ use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::common::ChipKind;
 use netsim_proto::frontend;
 use netsim_proto::frontend::patch_capture_request::PatchCapture as PatchCaptureProto;
-use netsim_proto::model::chip::bluetooth_beacon::advertise_settings::Interval;
-use netsim_proto::model::chip::bluetooth_beacon::{AdvertiseData, AdvertiseSettings};
+use netsim_proto::model::chip::bluetooth_beacon::advertise_settings::{
+    AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
+    Interval as IntervalProto, Tx_power as TxPowerProto,
+};
+use netsim_proto::model::chip::bluetooth_beacon::{
+    AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
+};
 use netsim_proto::model::chip::{
     Bluetooth as Chip_Bluetooth, BluetoothBeacon as Chip_Ble_Beacon, Chip as Chip_Type,
     Radio as Chip_Radio,
@@ -31,6 +37,7 @@ use netsim_proto::model::{
 };
 use protobuf::{Message, MessageField};
 use std::fmt;
+use std::iter;
 
 pub type BinaryProtobuf = Vec<u8>;
 
@@ -160,14 +167,8 @@ impl Command {
                                 kind: ChipKind::BLUETOOTH_BEACON.into(),
                                 chip: Some(chip_create::Chip::BleBeacon(
                                     chip_create::BluetoothBeaconCreate {
-                                        settings: MessageField::some(AdvertiseSettings {
-                                            interval: args
-                                                .settings
-                                                .interval
-                                                .map(Interval::Milliseconds),
-                                            ..Default::default()
-                                        }),
-                                        adv_data: MessageField::some(AdvertiseData {
+                                        settings: MessageField::some((&args.settings).into()),
+                                        adv_data: MessageField::some(AdvertiseDataProto {
                                             ..Default::default()
                                         }),
                                         ..Default::default()
@@ -191,13 +192,7 @@ impl Command {
                                 kind: ChipKind::BLUETOOTH_BEACON.into(),
                                 chip: Some(Chip_Type::BleBeacon(Chip_Ble_Beacon {
                                     bt: MessageField::some(Chip_Bluetooth::new()),
-                                    settings: MessageField::some(AdvertiseSettings {
-                                        interval: args
-                                            .settings
-                                            .interval
-                                            .map(Interval::Milliseconds),
-                                        ..Default::default()
-                                    }),
+                                    settings: MessageField::some((&args.settings).into()),
                                     ..Default::default()
                                 })),
                                 ..Default::default()
@@ -209,9 +204,7 @@ impl Command {
                         result.write_to_bytes().unwrap()
                     }
                 },
-                Beacon::Remove(_) => {
-                    todo!("get_request_bytes is not yet implemented for beacon remove command.")
-                }
+                Beacon::Remove(_) => Vec::new(),
             },
         }
     }
@@ -404,15 +397,122 @@ pub struct BeaconPatchBle {
 pub struct BeaconRemove {
     /// Name of the device to remove
     pub device_name: String,
-    /// Name of the beacon chip to remove
+    /// Name of the beacon chip to remove. Can be omitted if the device has exactly 1 chip
     pub chip_name: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct BeaconBleSettings {
-    /// Duration between advertisements in ms
+    /// Set advertise mode to control the advertising latency
+    #[arg(long, value_parser = IntervalParser)]
+    pub advertise_mode: Option<Interval>,
+    /// Set advertise TX power level to control the beacon's transmission power
+    #[arg(long, value_parser = TxPowerParser, allow_hyphen_values = true)]
+    pub tx_power_level: Option<TxPower>,
+    /// Set whether the beacon will respond to scan requests
     #[arg(long)]
-    pub interval: Option<u64>,
+    pub scannable: bool,
+    /// Limit advertising to an amount of time given in milliseconds
+    #[arg(long, value_name = "MS")]
+    pub timeout: Option<u64>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Interval {
+    Mode(AdvertiseMode),
+    Milliseconds(u64),
+}
+
+#[derive(Clone)]
+struct IntervalParser;
+
+impl TypedValueParser for IntervalParser {
+    type Value = Interval;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<Self::Value, clap::Error> {
+        let millis_parser = clap::value_parser!(u64);
+        let mode_parser = clap::value_parser!(AdvertiseMode);
+
+        mode_parser
+            .parse_ref(cmd, arg, value)
+            .map(Self::Value::Mode)
+            .or(millis_parser.parse_ref(cmd, arg, value).map(Self::Value::Milliseconds))
+    }
+
+    fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
+        Some(Box::new(
+            AdvertiseMode::value_variants().iter().map(|v| v.to_possible_value().unwrap()).chain(
+                iter::once(
+                    PossibleValue::new("<MS>").help("An exact advertise interval in milliseconds"),
+                ),
+            ),
+        ))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum TxPower {
+    Level(TxPowerLevel),
+    Dbm(i8),
+}
+
+#[derive(Clone)]
+struct TxPowerParser;
+
+impl TypedValueParser for TxPowerParser {
+    type Value = TxPower;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<Self::Value, clap::Error> {
+        let dbm_parser = clap::value_parser!(i8);
+        let level_parser = clap::value_parser!(TxPowerLevel);
+
+        level_parser
+            .parse_ref(cmd, arg, value)
+            .map(Self::Value::Level)
+            .or(dbm_parser.parse_ref(cmd, arg, value).map(Self::Value::Dbm))
+    }
+
+    fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
+        Some(Box::new(
+            TxPowerLevel::value_variants().iter().map(|v| v.to_possible_value().unwrap()).chain(
+                iter::once(
+                    PossibleValue::new("<DBM>").help("An exact transmit power level in dBm"),
+                ),
+            ),
+        ))
+    }
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum AdvertiseMode {
+    /// Lowest power consumption, preferred advertising mode
+    LowPower,
+    /// Balanced between advertising frequency and power consumption
+    Balanced,
+    /// Highest power consumption
+    LowLatency,
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum TxPowerLevel {
+    /// Lowest transmission power level
+    UltraLow,
+    /// Low transmission power level
+    Low,
+    /// Medium transmission power level
+    Medium,
+    /// High transmission power level
+    High,
 }
 
 #[derive(Debug, Subcommand)]
@@ -454,4 +554,49 @@ pub struct GetCapture {
     pub filenames: Vec<String>,
     #[arg(skip)]
     pub current_file: String,
+}
+
+impl From<&BeaconBleSettings> for AdvertiseSettingsProto {
+    fn from(value: &BeaconBleSettings) -> Self {
+        AdvertiseSettingsProto {
+            interval: value.advertise_mode.as_ref().map(IntervalProto::from),
+            tx_power: value.tx_power_level.as_ref().map(TxPowerProto::from),
+            scannable: value.scannable,
+            timeout: value.timeout.unwrap_or_default(),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<&Interval> for IntervalProto {
+    fn from(value: &Interval) -> Self {
+        match value {
+            Interval::Mode(mode) => IntervalProto::AdvertiseMode(
+                match mode {
+                    AdvertiseMode::LowPower => AdvertiseModeProto::LOW_POWER,
+                    AdvertiseMode::Balanced => AdvertiseModeProto::BALANCED,
+                    AdvertiseMode::LowLatency => AdvertiseModeProto::LOW_LATENCY,
+                }
+                .into(),
+            ),
+            Interval::Milliseconds(ms) => IntervalProto::Milliseconds(*ms),
+        }
+    }
+}
+
+impl From<&TxPower> for TxPowerProto {
+    fn from(value: &TxPower) -> Self {
+        match value {
+            TxPower::Level(level) => TxPowerProto::TxPowerLevel(
+                match level {
+                    TxPowerLevel::UltraLow => AdvertiseTxPowerProto::ULTRA_LOW,
+                    TxPowerLevel::Low => AdvertiseTxPowerProto::LOW,
+                    TxPowerLevel::Medium => AdvertiseTxPowerProto::MEDIUM,
+                    TxPowerLevel::High => AdvertiseTxPowerProto::HIGH,
+                }
+                .into(),
+            ),
+            TxPower::Dbm(dbm) => TxPowerProto::Dbm((*dbm).into()),
+        }
+    }
 }

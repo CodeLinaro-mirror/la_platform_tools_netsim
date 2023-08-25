@@ -51,30 +51,17 @@ use crate::transport::dispatcher::{handle_request_cxx, handle_response};
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 
 use crate::captures::handlers::handle_capture_cxx;
-use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
 };
 use crate::ranging::*;
-use crate::service::{create_service, Service};
 use crate::version::*;
-use netsim_common::system::netsimd_temp_dir_string;
-use netsim_common::util::netsim_logger;
 
 #[allow(unsafe_op_in_unsafe_fn)]
 #[cxx::bridge(namespace = "netsim")]
 mod ffi {
 
     extern "Rust" {
-        // Config
-        #[cxx_name = "GetDev"]
-        #[namespace = "netsim::config"]
-        fn get_dev() -> bool;
-
-        #[cxx_name = "SetDev"]
-        #[namespace = "netsim::config"]
-        fn set_dev(flag: bool);
-
         // Ranging
 
         #[cxx_name = "DistanceToRssi"]
@@ -84,34 +71,6 @@ mod ffi {
 
         #[cxx_name = "GetVersion"]
         fn get_version() -> String;
-
-        // Service
-
-        type Service;
-        #[cxx_name = "CreateService"]
-        unsafe fn create_service(
-            fd_startup_str: String,
-            no_cli_ui: bool,
-            no_web_ui: bool,
-            hci_port: u16,
-            instance_num: u16,
-            dev: bool,
-            vsock: u16,
-        ) -> Box<Service>;
-        #[cxx_name = "SetUp"]
-        fn set_up(self: &Service);
-        #[cxx_name = "Run"]
-        fn run(self: &Service);
-
-        // Netsimd logger
-
-        #[cxx_name = "InitializeNetsimdLogger"]
-        fn initialize_netsimd_logger();
-
-        // System
-
-        #[cxx_name = "NetsimdTempDirString"]
-        fn netsimd_temp_dir_string() -> String;
 
         // handlers for gRPC server's invocation of API calls
 
@@ -416,11 +375,6 @@ mod ffi {
         pub fn IsNetsimdAlive(instance_num: u16) -> bool;
 
     }
-}
-
-// It's used by src/netsimd.cc
-fn initialize_netsimd_logger() {
-    netsim_logger::init("netsimd");
 }
 
 // It's required so `RustBluetoothChip` can be sent between threads safely.
