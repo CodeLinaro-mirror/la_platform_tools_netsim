@@ -16,7 +16,7 @@
 
 #include <memory>
 
-#include "netsim-daemon/src/lib.rs.h"
+#include "netsim-daemon/src/ffi.rs.h"
 #include "netsim/hci_packet.pb.h"
 #include "rust/cxx.h"
 #include "util/log.h"

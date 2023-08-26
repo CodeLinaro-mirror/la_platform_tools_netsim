@@ -168,9 +168,7 @@ impl Command {
                                 chip: Some(chip_create::Chip::BleBeacon(
                                     chip_create::BluetoothBeaconCreate {
                                         settings: MessageField::some((&args.settings).into()),
-                                        adv_data: MessageField::some(AdvertiseDataProto {
-                                            ..Default::default()
-                                        }),
+                                        adv_data: MessageField::some((&args.advertise_data).into()),
                                         ..Default::default()
                                     },
                                 )),
@@ -193,6 +191,7 @@ impl Command {
                                 chip: Some(Chip_Type::BleBeacon(Chip_Ble_Beacon {
                                     bt: MessageField::some(Chip_Bluetooth::new()),
                                     settings: MessageField::some((&args.settings).into()),
+                                    adv_data: MessageField::some((&args.advertise_data).into()),
                                     ..Default::default()
                                 })),
                                 ..Default::default()
@@ -374,6 +373,8 @@ pub struct BeaconCreateBle {
     pub chip_name: Option<String>,
     #[command(flatten)]
     pub settings: BeaconBleSettings,
+    #[command(flatten)]
+    pub advertise_data: BeaconBleAdvertiseData,
 }
 
 #[derive(Debug, Subcommand)]
@@ -389,8 +390,9 @@ pub struct BeaconPatchBle {
     /// Name of the beacon chip to modify
     pub chip_name: String,
     #[command(flatten)]
-    #[group(required = true, multiple = true)]
     pub settings: BeaconBleSettings,
+    #[command(flatten)]
+    pub advertise_data: BeaconBleAdvertiseData,
 }
 
 #[derive(Debug, Args)]
@@ -399,6 +401,19 @@ pub struct BeaconRemove {
     pub device_name: String,
     /// Name of the beacon chip to remove. Can be omitted if the device has exactly 1 chip
     pub chip_name: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct BeaconBleAdvertiseData {
+    /// Whether the device name should be included in the advertise packet
+    #[arg(long, required = false)]
+    pub include_device_name: bool,
+    /// Whether the transmission power level should be included in the advertise packet.
+    #[arg(long, required = false)]
+    pub include_tx_power_level: bool,
+    /// Manufacturer specific data.
+    #[arg(long)]
+    pub manufacturer_data: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -597,6 +612,21 @@ impl From<&TxPower> for TxPowerProto {
                 .into(),
             ),
             TxPower::Dbm(dbm) => TxPowerProto::Dbm((*dbm).into()),
+        }
+    }
+}
+
+impl From<&BeaconBleAdvertiseData> for AdvertiseDataProto {
+    fn from(value: &BeaconBleAdvertiseData) -> Self {
+        AdvertiseDataProto {
+            include_device_name: value.include_device_name,
+            include_tx_power_level: value.include_tx_power_level,
+            manufacturer_data: value
+                .manufacturer_data
+                .clone()
+                .map(String::into_bytes)
+                .unwrap_or_default(),
+            ..Default::default()
         }
     }
 }

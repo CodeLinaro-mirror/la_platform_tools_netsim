@@ -110,49 +110,64 @@ impl args::Command {
                         }
                     }
                 },
-                Beacon::Patch(kind) => match kind {
-                    BeaconPatch::Ble(args) => {
-                        if !verbose {
-                            return;
-                        }
-                        if let Some(advertise_mode) = &args.settings.advertise_mode {
-                            match advertise_mode {
-                                args::Interval::Mode(mode) => {
-                                    println!("Set advertise mode to {:#?}", mode)
-                                }
-                                args::Interval::Milliseconds(ms) => {
-                                    println!("Set advertise interval to {} ms", ms)
+                Beacon::Patch(kind) => {
+                    match kind {
+                        BeaconPatch::Ble(args) => {
+                            if !verbose {
+                                return;
+                            }
+                            if let Some(advertise_mode) = &args.settings.advertise_mode {
+                                match advertise_mode {
+                                    args::Interval::Mode(mode) => {
+                                        println!("Set advertise mode to {:#?}", mode)
+                                    }
+                                    args::Interval::Milliseconds(ms) => {
+                                        println!("Set advertise interval to {} ms", ms)
+                                    }
                                 }
                             }
-                        }
-                        if let Some(tx_power_level) = &args.settings.tx_power_level {
-                            match tx_power_level {
-                                args::TxPower::Level(level) => {
-                                    println!("Set transmit power level to {:#?}", level)
-                                }
-                                args::TxPower::Dbm(dbm) => {
-                                    println!("Set transmit power level to {} dBm", dbm)
+                            if let Some(tx_power_level) = &args.settings.tx_power_level {
+                                match tx_power_level {
+                                    args::TxPower::Level(level) => {
+                                        println!("Set transmit power level to {:#?}", level)
+                                    }
+                                    args::TxPower::Dbm(dbm) => {
+                                        println!("Set transmit power level to {} dBm", dbm)
+                                    }
                                 }
                             }
-                        }
-                        if args.settings.scannable {
-                            println!("Set scannable to true");
-                        }
-                        if let Some(timeout) = args.settings.timeout {
-                            println!("Set timeout to {} ms", timeout);
+                            if args.settings.scannable {
+                                println!("Set scannable to true");
+                            }
+                            if let Some(timeout) = args.settings.timeout {
+                                println!("Set timeout to {} ms", timeout);
+                            }
+                            if args.advertise_data.include_device_name {
+                                println!("Added the device's name to the advertise packet")
+                            }
+                            if args.advertise_data.include_tx_power_level {
+                                println!("Added the beacon's transmit power level to the advertise packet")
+                            }
+                            if args.advertise_data.manufacturer_data.is_some() {
+                                println!("Added manufacturer data to the advertise packet")
+                            }
+                            if args.settings.scannable {
+                                println!("Set scannable to true");
+                            }
+                            if let Some(timeout) = args.settings.timeout {
+                                println!("Set timeout to {} ms", timeout);
+                            }
                         }
                     }
-                },
+                }
                 Beacon::Remove(args) => {
-                    if verbose {
-                        if let Some(chip_name) = &args.chip_name {
-                            println!(
-                                "Removed chip '{}' from device '{}'",
-                                chip_name, args.device_name
-                            )
-                        } else {
-                            println!("Removed device '{}'", args.device_name)
-                        }
+                    if !verbose {
+                        return;
+                    }
+                    if let Some(chip_name) = &args.chip_name {
+                        println!("Removed chip '{}' from device '{}'", chip_name, args.device_name)
+                    } else {
+                        println!("Removed device '{}'", args.device_name)
                     }
                 }
             },

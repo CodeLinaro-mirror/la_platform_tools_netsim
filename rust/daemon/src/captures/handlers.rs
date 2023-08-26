@@ -40,10 +40,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::devices::chip::ChipIdentifier;
 use crate::ffi::CxxServerResponseWriter;
+use crate::ffi::CxxServerResponseWriterWrapper;
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource::clone_captures;
 use crate::util::int_to_chip_kind;
-use crate::CxxServerResponseWriterWrapper;
 
 use super::capture::CaptureInfo;
 use super::pcap_util::{append_record, PacketDirection};

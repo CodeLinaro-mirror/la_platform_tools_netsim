@@ -189,7 +189,7 @@ pub fn new_test_beacon(idx: u32) {
     use protobuf_json_mapping::print_to_string;
 
     let beacon_proto = BluetoothBeaconCreateProto {
-        address: format!("00:00:00:00:00:{:x}", idx),
+        address: format!("be:ac:01:55:00:{:02x}", idx),
         settings: MessageField::some(AdvertiseSettingsProto {
             interval: Some(
                 ble_advertise_settings::AdvertiseMode::new(Duration::from_millis(1280))
@@ -208,14 +208,14 @@ pub fn new_test_beacon(idx: u32) {
     };
 
     let chip_proto = ChipCreateProto {
-        name: format!("test-beacon-chip-{idx}"),
+        name: format!("beacon-{idx}"),
         kind: ChipKind::BLUETOOTH_BEACON.into(),
         chip: Some(ChipProto::BleBeacon(beacon_proto)),
         ..Default::default()
     };
 
     let device_proto = DeviceCreateProto {
-        name: format!("test-beacon-device-{idx}"),
+        name: format!("device-{idx}"),
         chips: vec![chip_proto],
         ..Default::default()
     };

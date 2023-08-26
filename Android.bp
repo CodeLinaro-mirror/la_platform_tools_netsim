@@ -103,16 +103,16 @@ genrule {
     name: "netsim_daemon_cc",
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) >> $(out)",
-    srcs: ["rust/daemon/src/lib.rs"],
-    out: ["netsim-daemon/src/lib.rs.cc"],
+    srcs: ["rust/daemon/src/ffi.rs"],
+    out: ["netsim-daemon/src/ffi.rs.cc"],
 }
 
 genrule {
     name: "netsim_daemon_h",
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) --header >> $(out)",
-    srcs: ["rust/daemon/src/lib.rs"],
-    out: ["netsim-daemon/src/lib.rs.h"],
+    srcs: ["rust/daemon/src/ffi.rs"],
+    out: ["netsim-daemon/src/ffi.rs.h"],
 }
 
 genrule {

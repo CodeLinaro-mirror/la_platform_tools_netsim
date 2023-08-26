@@ -29,7 +29,7 @@
 #include "model/setup/async_manager.h"
 #include "model/setup/test_command_handler.h"
 #include "model/setup/test_model.h"
-#include "netsim-daemon/src/lib.rs.h"
+#include "netsim-daemon/src/ffi.rs.h"
 #include "rust/cxx.h"
 #include "util/filesystem.h"
 #include "util/log.h"

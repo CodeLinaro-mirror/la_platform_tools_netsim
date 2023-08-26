@@ -32,31 +32,67 @@ Options:
 * ### `beacon`: A chip that sends advertisements at a set interval
     * Usage: `netsim beacon <COMMAND>`
     * #### Commands:
-        * `create`: Create a beacon chip
+        * `create`: Create a beacon
             * Usage: `netsim beacon create <COMMAND>`
                 * ##### Commands:
-                    * `ble`: Create a Bluetooth low-energy beacon chip
+                    * `ble`: Create a Bluetooth low-energy beacon
                         * Usage: `netsim beacon create ble [DEVICE_NAME | DEVICE_NAME CHIP_NAME] [OPTIONS]`
                         * Arguments:
                             * \[DEVICE_NAME\]: Optional name of the device to create. A default name will be generated if not supplied
-                            * \[CHIP_NAME\]: Optional name of the beacon chip to create within the new device. May only be specified if DEVICE_NAME is specified. A default name will be generated if not supplied
-                        * Options:
-                            * `--interval`: Set the advertise interval in ms
-        * `patch`: Modify a beacon chip
+                            * \[CHIP_NAME\]: Optional name of the beacon to create within the new device. May only be specified if DEVICE_NAME is specified. A default name will be generated if not supplied
+                        * Advertisement Options:
+                            * `--advertise-mode <MODE>`: Set the advertise mode which controls the duration between advertisements
+                                * Possible values:
+                                    * `low-power`
+                                    * `balanced`
+                                    * `low-latency`
+                                    * A number measuring duration in milliseconds
+                            * `--tx-power-level <LEVEL>`: Set the beacon's transmission power level
+                                * Possible values:
+                                    * `ultra-low`
+                                    * `low`
+                                    * `medium`
+                                    * `high`
+                                    * A number measuring transmission power in dBm
+                            * `--scannable`: Set whether the beacon will respond to scan requests
+                            * `--timeout <MS>`: Limit advertising to an amount of time given in milliseconds
+                        * Advertise Packet Options:
+                            * `--include-device-name`: Set whether the device name should be included in the advertise packet
+                            * `--include-tx-power-level`: Set whether the transmit power level should be included in the advertise packet
+                            * `--manufacturer-data <DATA>`: Add manufacturer specific data to the advertise packet
+        * `patch`: Modify a beacon
             * Usage: `netsim beacon patch <COMMAND>`
                 * ##### Commands:
-                    * `ble`: Modify a Bluetooth low-energy beacon chip
+                    * `ble`: Modify a Bluetooth low-energy beacon
                         * Usage: `netsim beacon patch ble <DEVICE_NAME> <CHIP_NAME> <OPTIONS>`
                         * Arguments:
-                            * \<DEVICE_NAME\>: Name of the device that contains the beacon chip
-                            * \<CHIP_NAME\>: Name of the beacon chip to modify
-                        * Options:
-                            * `--interval`: Set the advertise interval in ms
-        * `remove`: Remove a beacon chip
+                            * \<DEVICE_NAME\>: Name of the device that contains the beacon
+                            * \<CHIP_NAME\>: Name of the beacon to modify
+                        * Advertisement Options:
+                            * `--advertise-mode <MODE>`: Change the advertise mode which controls the duration between advertisements
+                                * Possible values:
+                                    * `low-power`
+                                    * `balanced`
+                                    * `low-latency`
+                                    * A number measuring duration in milliseconds
+                            * `--tx-power-level <LEVEL>`: Change the beacon's transmission power level
+                                * Possible values:
+                                    * `ultra-low`
+                                    * `low`
+                                    * `medium`
+                                    * `high`
+                                    * A number measuring transmission power in dBm
+                            * `--scannable`: Change whether the beacon will respond to scan requests
+                            * `--timeout <MS>`: Limit advertising to an amount of time given in milliseconds
+                        * Advertise Packet Options:
+                            * `--include-device-name`: Change whether the device name should be included in the advertise packet
+                            * `--include-tx-power-level`: Change whether the transmit power level should be included in the advertise packet
+                            * `--manufacturer-data <DATA>`: Change manufacturer specific data within the advertise packet
+        * `remove`: Remove a beacon
             * Usage: `netsim beacon remove <DEVICE_NAME> [CHIP_NAME]`
             * Arguments:
                 * \<DEVICE_NAME\>: Name of the device to remove
-                * \[CHIP_NAME\]: Optional name of the beacon chip to remove
+                * \[CHIP_NAME\]: Optional name of the beacon to remove
 * ### `reset`:      Reset Netsim device scene
     * Usage: `netsim reset`
 * ### `capture`:       Control the packet capture functionalities with commands: list, patch, get [aliases: pcap]
