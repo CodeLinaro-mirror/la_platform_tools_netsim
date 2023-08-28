@@ -24,8 +24,10 @@ class ProtoBuild(build_py):
     def run(self):
         here = path.abspath(path.dirname(__file__))
         root_dir = path.dirname(path.dirname(here))
+        aosp_dir = path.dirname(path.dirname(root_dir))
         proto_root_dir = path.join(root_dir, "proto")
         proto_dir = path.join(proto_root_dir, "netsim")
+        rootcanal_proto_dir = path.join(aosp_dir, "packages", "modules", "Bluetooth", "tools", "rootcanal", "proto")
         out_dir = path.join(here, "src", "netsim_grpc", "proto")
 
         for proto_file in filter(
@@ -45,6 +47,7 @@ class ProtoBuild(build_py):
                         "-m",
                         "grpc_tools.protoc",
                         f"-I{proto_root_dir}",
+                        f"-I{rootcanal_proto_dir}",
                         f"--python_out={out_dir}",
                         f"--grpc_python_out={out_dir}",
                         source,

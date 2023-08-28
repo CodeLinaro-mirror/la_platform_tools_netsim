@@ -54,7 +54,6 @@ class FrontendClient {
       frontend::GrpcMethod const &grpc_method,
       rust::Vec<rust::u8> const &request_byte_vec) const = 0;
   virtual std::unique_ptr<ClientResult> GetVersion() const = 0;
-  virtual std::unique_ptr<ClientResult> GetDevices() const = 0;
   virtual std::unique_ptr<ClientResult> ListDevice() const = 0;
   virtual std::unique_ptr<ClientResult> PatchDevice(
       rust::Vec<rust::u8> const &request_byte_vec) const = 0;

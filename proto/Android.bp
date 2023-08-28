@@ -14,6 +14,7 @@ filegroup {
         "netsim/frontend.proto",
         "netsim/hci_packet.proto",
         "netsim/model.proto",
+        "netsim/packet_streamer.proto",
         "netsim/startup.proto",
     ],
 }
@@ -27,37 +28,38 @@ genrule_defaults {
     cmd: "$(location aprotoc)" +
         "    -Itools/netsim/proto" +
         "    -Iexternal/protobuf/src" +
+        "    -Ipackages/modules/Bluetooth/tools/rootcanal/proto" +
         "    --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-cpp-plugin)" +
         "    --grpc_out=$(genDir)" +
         "    --cpp_out=$(genDir)" +
-        "    $(in)",
+        "    $(locations :netsim-protos)",
+    srcs: [
+        ":libprotobuf-internal-protos",
+        ":netsim-protos",
+    ],
 }
 
 genrule {
     name: "FrontendStub_h",
     defaults: ["netsim-grpc-gen-defaults"],
-    srcs: ["netsim/frontend.proto"],
     out: ["netsim/frontend.grpc.pb.h"],
 }
 
 genrule {
     name: "FrontendStub_cc",
     defaults: ["netsim-grpc-gen-defaults"],
-    srcs: ["netsim/frontend.proto"],
     out: ["netsim/frontend.grpc.pb.cc"],
 }
 
 genrule {
     name: "PacketStreamerStub_h",
     defaults: ["netsim-grpc-gen-defaults"],
-    srcs: ["netsim/packet_streamer.proto"],
     out: ["netsim/packet_streamer.grpc.pb.h"],
 }
 
 genrule {
     name: "PacketStreamerStub_cc",
     defaults: ["netsim-grpc-gen-defaults"],
-    srcs: ["netsim/packet_streamer.proto"],
     out: ["netsim/packet_streamer.grpc.pb.cc"],
 }
 
@@ -71,15 +73,19 @@ cc_library {
         include_dirs: [
             "external/protobuf/src",
             "tools/netsim/proto",
+            "packages/modules/Bluetooth/tools/rootcanal/proto",
         ],
     },
-    shared_libs: ["libprotobuf-cpp-full"],
+    shared_libs: [
+        "libprotobuf-cpp-full",
+    ],
     srcs: [
         "netsim/common.proto",
         "netsim/frontend.proto",
         "netsim/hci_packet.proto",
         "netsim/model.proto",
         "netsim/startup.proto",
+        ":rootcanal-protos",
     ],
 }
 
@@ -93,6 +99,7 @@ cc_library {
         include_dirs: [
             "external/protobuf/src",
             "tools/netsim/proto",
+            "packages/modules/Bluetooth/tools/rootcanal/proto",
         ],
     },
     srcs: [
@@ -102,6 +109,7 @@ cc_library {
         "netsim/model.proto",
         "netsim/packet_streamer.proto",
         "netsim/startup.proto",
+        ":rootcanal-protos",
     ],
 }
 
@@ -113,15 +121,18 @@ genrule {
     ],
     cmd: "$(location aprotoc)" +
         "    -Itools/netsim/proto" +
+        "    -Ipackages/modules/Bluetooth/tools/rootcanal/proto" +
         "    -Iexternal/protobuf/src" +
         "    --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-python-plugin)" +
         "    --python_out=$(genDir)" +
         "    --grpc_out=$(genDir)" +
-        "    $(locations :netsim-protos) &&" +
+        "    $(locations :netsim-protos)" +
+        "    $(locations :rootcanal-protos) &&" +
         "touch $(genDir)/netsim/__init__.py",
     srcs: [
         ":libprotobuf-internal-protos",
         ":netsim-protos",
+        ":rootcanal-protos",
     ],
     out: [
         "netsim/__init__.py",
@@ -135,6 +146,7 @@ genrule {
         "netsim/model_pb2_grpc.py",
         "netsim/startup_pb2.py",
         "netsim/startup_pb2_grpc.py",
+        "rootcanal/configuration_pb2.py",
     ],
     visibility: [
         "//packages/modules/Bluetooth/android/pandora/mmi2grpc",

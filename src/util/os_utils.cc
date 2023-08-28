@@ -72,16 +72,20 @@ std::string GetDiscoveryDirectory() {
   return std::string(env_p) + netsim::filesystem::slash + discovery.subdir;
 }
 
-std::string GetNetsimIniFilepath() {
+std::string GetNetsimIniFilepath(uint16_t instance_num) {
   auto discovery_dir = GetDiscoveryDirectory();
   // Check if directory has a trailing slash.
   if (discovery_dir.back() != netsim::filesystem::slash.back())
     discovery_dir.append(netsim::filesystem::slash);
-  return discovery_dir.append("netsim.ini");
+  auto filename = (instance_num == 0)
+                      ? "netsim.ini"
+                      : "netsim_" + std::to_string(instance_num) + ".ini";
+  discovery_dir.append(filename);
+  return discovery_dir;
 }
 
-std::optional<std::string> GetServerAddress(bool frontend_server) {
-  auto filepath = GetNetsimIniFilepath();
+std::optional<std::string> GetServerAddress(uint16_t instance_num) {
+  auto filepath = GetNetsimIniFilepath(instance_num);
   if (!netsim::filesystem::exists(filepath)) {
     BtsLog("Unable to find netsim ini file: %s", filepath.c_str());
     return std::nullopt;

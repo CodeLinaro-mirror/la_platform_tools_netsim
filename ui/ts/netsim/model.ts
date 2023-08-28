@@ -46,7 +46,10 @@ export interface Chip {
   manufacturer: string;
   /** optional like DW300 */
   productName: string;
-  bt?: Chip_Bluetooth|undefined;
+  /** dual mode. */
+  bt?:|Chip_Bluetooth|undefined;
+  /** low energy for beacon. */
+  bleBeacon?: Chip_BluetoothBeacon|undefined;
   uwb?: Chip_Radio|undefined;
   wifi?: Chip_Radio|undefined;
 }
@@ -65,6 +68,46 @@ export interface Chip_Bluetooth {
   classic: Chip_Radio|undefined;
 }
 
+export interface Chip_BluetoothBeacon {
+  /** TODO: Only include Radio low_energy. */
+  bt: Chip_Bluetooth|undefined;
+  address: string;
+  settings: Chip_BluetoothBeacon_AdvertiseSettings|undefined;
+  advData: Chip_BluetoothBeacon_AdvertiseData|undefined;
+}
+
+export interface Chip_BluetoothBeacon_AdvertiseSettings {
+  /** Transmission power in dBm. Must be within [-127, 127]. */
+  txPowerLevel: number;
+  /** Time interval between advertisements in ms. */
+  interval: number;
+}
+
+export interface Chip_BluetoothBeacon_AdvertiseData {
+  /** Whether the device name should be included in advertise packet. */
+  includeDeviceName: boolean;
+  /**
+   * Whether the transmission power level should be included in the advertise
+   * packet.
+   */
+  includeTxPowerLevel: boolean;
+  /** Add manufacturer specific data. */
+  manufacturerData: Uint8Array;
+}
+
+export interface ChipCreate {
+  name: string;
+  manufacturer: string;
+  productName: string;
+  bleBeacon?: ChipCreate_BluetoothBeaconCreate|undefined;
+}
+
+export interface ChipCreate_BluetoothBeaconCreate {
+  address: string;
+  settings: Chip_BluetoothBeacon_AdvertiseSettings|undefined;
+  advData: Chip_BluetoothBeacon_AdvertiseData|undefined;
+}
+
 export interface Device {
   id: number;
   /** settable at creation */
@@ -74,6 +117,13 @@ export interface Device {
   orientation:|Orientation|undefined;
   /** Device can have multiple chips of the same kind. */
   chips: Chip[];
+}
+
+export interface DeviceCreate {
+  name: string;
+  position: Position|undefined;
+  orientation: Orientation|undefined;
+  chips: ChipCreate[];
 }
 
 export interface Scene {

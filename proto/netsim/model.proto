@@ -51,7 +51,7 @@ enum State {
 
 message Chip {
   netsim.common.ChipKind kind = 1;
-  int32 id = 2;
+  uint32 id = 2;
   string name = 3;  // optional like "rear-right"
 
   string manufacturer = 4;  // optional like Quorvo
@@ -72,9 +72,27 @@ message Chip {
   }
 
   message BluetoothBeacon {
+    message AdvertiseSettings {
+      // Transmission power in dBm. Must be within [-127, 127].
+      int32 tx_power_level = 1;
+      // Time interval between advertisements in ms.
+      uint64 interval = 2;
+    }
+
+    message AdvertiseData {
+      // Whether the device name should be included in advertise packet.
+      bool include_device_name = 2;
+      // Whether the transmission power level should be included in the
+      // advertise packet.
+      bool include_tx_power_level = 3;
+      // Add manufacturer specific data.
+      bytes manufacturer_data = 4;
+    }
     // TODO: Only include Radio low_energy.
     Bluetooth bt = 1;
-    int32 frequency = 2;  // Other beacon parameters.
+    string address = 2;
+    AdvertiseSettings settings = 3;
+    AdvertiseData adv_data = 4;
   }
 
   oneof chip {
@@ -85,8 +103,23 @@ message Chip {
   }
 }
 
+message ChipCreate {
+  message BluetoothBeaconCreate {
+    string address = 1;
+    Chip.BluetoothBeacon.AdvertiseSettings settings = 3;
+    Chip.BluetoothBeacon.AdvertiseData adv_data = 4;
+  }
+
+  string name = 1;
+  string manufacturer = 2;
+  string product_name = 3;
+  oneof chip {
+    BluetoothBeaconCreate ble_beacon = 4;
+  }
+}
+
 message Device {
-  int32 id = 1;
+  uint32 id = 1;
   string name = 2;  // settable at creation
   State visible = 3;
   Position position = 4;
@@ -95,12 +128,19 @@ message Device {
   repeated Chip chips = 6;
 }
 
+message DeviceCreate {
+  string name = 1;
+  Position position = 2;
+  Orientation orientation = 3;
+  repeated ChipCreate chips = 4;
+}
+
 message Scene {
   repeated Device devices = 1;
 }
 
 message Capture {
-  int32 id = 1;  // same as chip_id
+  uint32 id = 1;  // same as chip_id
   netsim.common.ChipKind chip_kind = 2;
   // device AVD name
   string device_name = 3;

@@ -23,16 +23,18 @@
 // -- vending device identifiers
 
 use super::chip::ChipIdentifier;
+use super::chip::FacadeIdentifier;
 use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
-use crate::captures::handlers::update_captures;
+use crate::bluetooth as bluetooth_facade;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
+use crate::events::Event;
 use crate::ffi::CxxServerResponseWriter;
-use crate::http_server::http_request::HttpHeaders;
-use crate::http_server::http_request::HttpRequest;
 use crate::http_server::server_response::ResponseWritable;
-use crate::resource::get_devices_resource;
+use crate::resource;
+use crate::resource::clone_devices;
+use crate::wifi as wifi_facade;
 use crate::CxxServerResponseWriterWrapper;
 use cxx::CxxString;
 use frontend_proto::common::ChipKind as ProtoChipKind;
@@ -40,7 +42,9 @@ use frontend_proto::frontend::ListDeviceResponse;
 use frontend_proto::frontend::PatchDeviceRequest;
 use frontend_proto::model::Position as ProtoPosition;
 use frontend_proto::model::Scene as ProtoScene;
-use log::{error, info};
+use http::Request;
+use http::Version;
+use log::{info, warn};
 use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string_with_options;
 use protobuf_json_mapping::PrintOptions;
@@ -58,12 +62,12 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     _future_options: (),
 };
 
-static IDLE_SECS_FOR_SHUTDOWN: u64 = 300;
+static IDLE_SECS_FOR_SHUTDOWN: u64 = 15;
 
 /// The Device resource is a singleton that manages all devices.
 pub struct Devices {
     // BTreeMap allows ListDevice to output devices in order of identifiers.
-    devices: BTreeMap<DeviceIdentifier, Device>,
+    entries: BTreeMap<DeviceIdentifier, Device>,
     id_factory: IdFactory<DeviceIdentifier>,
     pub idle_since: Option<Instant>,
 }
@@ -71,7 +75,7 @@ pub struct Devices {
 impl Devices {
     pub fn new() -> Self {
         Devices {
-            devices: BTreeMap::new(),
+            entries: BTreeMap::new(),
             id_factory: IdFactory::new(INITIAL_DEVICE_ID, 1),
             idle_since: Some(Instant::now()),
         }
@@ -97,23 +101,65 @@ pub fn add_chip(
     chip_product_name: &str,
 ) -> Result<AddChipResult, String> {
     let result = {
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
-        resource.idle_since = None;
-        let device_id = get_or_create_device(&mut resource, device_guid, device_name);
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
+        devices.idle_since = None;
+        let device_id = get_or_create_device(&mut devices, device_guid, device_name);
         // This is infrequent, so we can afford to do another lookup for the device.
-        resource.devices.get_mut(&device_id).unwrap().add_chip(
-            device_name,
-            chip_kind,
-            chip_name,
-            chip_manufacturer,
-            chip_product_name,
-        )
+        devices
+            .entries
+            .get_mut(&device_id)
+            .ok_or(format!("Device not found for device_id: {device_id}"))?
+            .add_chip(device_name, chip_kind, chip_name, chip_manufacturer, chip_product_name)
     };
-    if result.is_ok() {
-        update_captures();
+
+    // Device resource is no longer locked
+    match result {
+        // id_tuple = (DeviceIdentifier, ChipIdentifier)
+        Ok((device_id, chip_id)) => {
+            let facade_id = match chip_kind {
+                ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(device_id),
+                ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::bluetooth_beacon_add(
+                    device_id,
+                    chip_id,
+                    "beacon".to_string(),
+                    chip_name.to_string(),
+                )?,
+                ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id),
+                _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
+            };
+            // Add the facade_id into the resources
+            {
+                clone_devices()
+                    .write()
+                    .unwrap()
+                    .entries
+                    .get_mut(&device_id)
+                    .ok_or(format!("Device not found for device_id: {device_id}"))?
+                    .chips
+                    .get_mut(&chip_id)
+                    .ok_or(format!("Chip not found for device_id: {device_id}, chip_id:{chip_id}"))?
+                    .facade_id = Some(facade_id);
+            }
+            info!(
+                "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, device_id: {device_id}, chip_id: {chip_id}, facade_id: {facade_id}",
+            );
+            // Update Capture resource
+            resource::clone_events().lock().unwrap().publish(Event::ChipAdded {
+                chip_id,
+                chip_kind,
+                facade_id,
+                device_name: device_name.to_string(),
+            });
+            Ok(AddChipResult { device_id, chip_id, facade_id })
+        }
+        Err(err) => {
+            warn!(
+                "Failed to add chip: device_name: {device_name}, chip_kind: {chip_kind:?}, error: {err}",
+            );
+            Err(err)
+        }
     }
-    result
 }
 
 /// AddChipResult for C++ to handle
@@ -170,44 +216,31 @@ pub fn add_chip_cxx(
         chip_manufacturer,
         chip_product_name,
     ) {
-        Ok(result) => {
-            info!(
-                "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, chip_id: {}",
-                result.chip_id
-            );
-            Box::new(AddChipResultCxx {
-                device_id: result.device_id as u32,
-                chip_id: result.chip_id as u32,
-                facade_id: result.facade_id,
-                is_error: false,
-            })
-        }
-        Err(err) => {
-            error!("Failed to add chip: {err}");
-            Box::new(AddChipResultCxx {
-                device_id: u32::MAX,
-                chip_id: u32::MAX,
-                facade_id: u32::MAX,
-                is_error: true,
-            })
-        }
+        Ok(result) => Box::new(AddChipResultCxx {
+            device_id: result.device_id,
+            chip_id: result.chip_id,
+            facade_id: result.facade_id,
+            is_error: false,
+        }),
+        Err(_) => Box::new(AddChipResultCxx {
+            device_id: u32::MAX,
+            chip_id: u32::MAX,
+            facade_id: u32::MAX,
+            is_error: true,
+        }),
     }
 }
 
 /// Get or create a device.
-fn get_or_create_device(
-    resource: &mut RwLockWriteGuard<Devices>,
-    guid: &str,
-    name: &str,
-) -> DeviceIdentifier {
+fn get_or_create_device(devices: &mut Devices, guid: &str, name: &str) -> DeviceIdentifier {
     // Check if a device with the given guid already exists
-    if let Some(existing_device) = resource.devices.values().find(|d| d.guid == guid) {
+    if let Some(existing_device) = devices.entries.values().find(|d| d.guid == guid) {
         // A device with the same guid already exists, return it
         existing_device.id
     } else {
         // No device with the same guid exists, insert the new device
-        let new_id = resource.id_factory.next_id();
-        resource.devices.insert(new_id, Device::new(new_id, guid.to_string(), name.to_string()));
+        let new_id = devices.id_factory.next_id();
+        devices.entries.insert(new_id, Device::new(new_id, guid.to_string(), name.to_string()));
         new_id
     }
 }
@@ -216,12 +249,12 @@ fn get_or_create_device(
 ///
 /// Called when the last chip for the device is removed.
 fn remove_device(
-    resource: &mut RwLockWriteGuard<Devices>,
+    guard: &mut RwLockWriteGuard<Devices>,
     id: DeviceIdentifier,
 ) -> Result<(), String> {
-    resource.devices.remove(&id).ok_or(format!("Error removing device with id {id}"))?;
-    if resource.devices.is_empty() {
-        resource.idle_since = Some(Instant::now());
+    guard.entries.remove(&id).ok_or(format!("Error removing device with id {id}"))?;
+    if guard.entries.is_empty() {
+        guard.idle_since = Some(Instant::now());
     }
     Ok(())
 }
@@ -231,34 +264,54 @@ fn remove_device(
 /// Called when the packet transport for the chip shuts down.
 pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(), String> {
     let result = {
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
-        let is_empty = match resource.devices.entry(device_id) {
+        let mut _facade_id_option: Option<FacadeIdentifier> = None;
+        let mut _chip_kind = ProtoChipKind::UNSPECIFIED;
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
+        let is_empty = match devices.entries.entry(device_id) {
             Entry::Occupied(mut entry) => {
                 let device = entry.get_mut();
-                device.remove_chip(chip_id)?;
+                (_facade_id_option, _chip_kind) = device.remove_chip(chip_id)?;
                 device.chips.is_empty()
             }
             Entry::Vacant(_) => return Err(format!("RemoveChip device id {device_id} not found")),
         };
         if is_empty {
-            remove_device(&mut resource, device_id)?;
+            remove_device(&mut devices, device_id)?;
         }
-        Ok(())
+        Ok((_facade_id_option, _chip_kind))
     };
-    if result.is_ok() {
-        update_captures();
+    match result {
+        Ok((facade_id_option, chip_kind)) => {
+            match facade_id_option {
+                Some(facade_id) => match chip_kind {
+                    ProtoChipKind::BLUETOOTH => {
+                        bluetooth_facade::bluetooth_remove(facade_id);
+                    }
+                    ProtoChipKind::WIFI => {
+                        wifi_facade::wifi_remove(facade_id);
+                    }
+                    _ => Err(format!("Unknown chip kind: {:?}", chip_kind))?,
+                },
+                None => Err(format!(
+                    "Facade Id hasn't been added yet to frontend resource for chip_id: {chip_id}"
+                ))?,
+            }
+            info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
+            resource::clone_events().lock().unwrap().publish(Event::ChipRemoved { chip_id });
+            Ok(())
+        }
+        Err(err) => {
+            warn!("Failed to remove chip: device_id: {device_id}, chip_id: {chip_id}");
+            Err(err)
+        }
     }
-    result
 }
 
 /// A RemoveChip function for Rust Device API.
 /// The backend gRPC code will be invoking this method.
 pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
-    match remove_chip(device_id as i32, chip_id as i32) {
-        Ok(_) => info!("Removed Chip: chip_id: {chip_id}"),
-        Err(err) => error!("Failed to remove chip: {err}"),
-    }
+    let _ = remove_chip(device_id, chip_id);
 }
 
 // lock the devices, find the id and call the patch function
@@ -266,18 +319,18 @@ pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
 fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result<(), String> {
     let mut patch_device_request = PatchDeviceRequest::new();
     if merge_from_str(&mut patch_device_request, patch_json).is_ok() {
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
         let proto_device = patch_device_request.device;
         match id_option {
-            Some(id) => match resource.devices.get_mut(&id) {
+            Some(id) => match devices.entries.get_mut(&id) {
                 Some(device) => device.patch(&proto_device),
                 None => Err(format!("No such device with id {id}")),
             },
             None => {
                 let mut multiple_matches = false;
                 let mut target: Option<&mut Device> = None;
-                for device in resource.devices.values_mut() {
+                for device in devices.entries.values_mut() {
                     if device.name.contains(&proto_device.name) {
                         if device.name == proto_device.name {
                             return device.patch(&proto_device);
@@ -309,13 +362,15 @@ fn distance(a: &ProtoPosition, b: &ProtoPosition) -> f32 {
 
 #[allow(dead_code)]
 fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32, String> {
-    let resource_arc = get_devices_resource();
-    let devices = &resource_arc.read().unwrap().devices;
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
     let a = devices
+        .entries
         .get(&id)
         .map(|device_ref| device_ref.position.clone())
         .ok_or(format!("No such device with id {id}"))?;
     let b = devices
+        .entries
         .get(&other_id)
         .map(|device_ref| device_ref.position.clone())
         .ok_or(format!("No such device with id {other_id}"))?;
@@ -325,10 +380,10 @@ fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32,
 /// A GetDistance function for Rust Device API.
 /// The backend gRPC code will be invoking this method.
 pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
-    match get_distance(a as i32, b as i32) {
+    match get_distance(a, b) {
         Ok(distance) => distance,
         Err(err) => {
-            error!("get_distance Error: {err}");
+            warn!("get_distance Error: {err}");
             0.0
         }
     }
@@ -337,9 +392,9 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
 pub fn get_devices() -> Result<ProtoScene, String> {
     let mut scene = ProtoScene::new();
     // iterate over the devices and add each to the scene
-    let resource_arc = get_devices_resource();
-    let resource = resource_arc.read().unwrap();
-    for device in resource.devices.values() {
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
+    for device in devices.entries.values() {
         scene.devices.push(device.get()?);
     }
     Ok(scene)
@@ -347,9 +402,9 @@ pub fn get_devices() -> Result<ProtoScene, String> {
 
 #[allow(dead_code)]
 fn reset(id: DeviceIdentifier) -> Result<(), String> {
-    let resource_arc = get_devices_resource();
-    let mut resource = resource_arc.write().unwrap();
-    match resource.devices.get_mut(&id) {
+    let devices_arc = clone_devices();
+    let mut devices = devices_arc.write().unwrap();
+    match devices.entries.get_mut(&id) {
         Some(device) => device.reset(),
         None => Err(format!("No such device with id {id}")),
     }
@@ -357,9 +412,9 @@ fn reset(id: DeviceIdentifier) -> Result<(), String> {
 
 #[allow(dead_code)]
 fn reset_all() -> Result<(), String> {
-    let resource_arc = get_devices_resource();
-    let mut resource = resource_arc.write().unwrap();
-    for device in resource.devices.values_mut() {
+    let devices_arc = clone_devices();
+    let mut devices = devices_arc.write().unwrap();
+    for device in devices.entries.values_mut() {
         device.reset()?;
     }
     Ok(())
@@ -367,9 +422,9 @@ fn reset_all() -> Result<(), String> {
 
 /// Return true if netsimd is idle for 5 minutes
 pub fn is_shutdown_time_cxx() -> bool {
-    let resource_arc = get_devices_resource();
-    let resource = resource_arc.read().unwrap();
-    match resource.idle_since {
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
+    match devices.idle_since {
         Some(idle_since) => {
             IDLE_SECS_FOR_SHUTDOWN.checked_sub(idle_since.elapsed().as_secs()).is_none()
         }
@@ -380,23 +435,24 @@ pub fn is_shutdown_time_cxx() -> bool {
 /// Performs PatchDevice to patch a single device
 fn handle_device_patch(writer: ResponseWritable, id: Option<DeviceIdentifier>, patch_json: &str) {
     match patch_device(id, patch_json) {
-        Ok(()) => writer.put_ok("text/plain", "Device Patch Success", &[]),
+        Ok(()) => writer.put_ok("text/plain", "Device Patch Success", vec![]),
         Err(err) => writer.put_error(404, err.as_str()),
     }
 }
 
 /// Performs ListDevices to get the list of Devices and write to writer.
 fn handle_device_list(writer: ResponseWritable) {
-    let devices = get_devices().unwrap();
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
     // Instantiate ListDeviceResponse and add Devices
     let mut response = ListDeviceResponse::new();
-    for device in devices.devices {
-        response.devices.push(device);
+    for device in devices.entries.values() {
+        response.devices.push(device.get().unwrap());
     }
 
     // Perform protobuf-json-mapping with the given protobuf
     if let Ok(json_response) = print_to_string_with_options(&response, &JSON_PRINT_OPTION) {
-        writer.put_ok("text/json", &json_response, &[])
+        writer.put_ok("text/json", &json_response, vec![])
     } else {
         writer.put_error(404, "proto to JSON mapping failure")
     }
@@ -405,17 +461,17 @@ fn handle_device_list(writer: ResponseWritable) {
 /// Performs ResetDevice for all devices
 fn handle_device_reset(writer: ResponseWritable) {
     match reset_all() {
-        Ok(()) => writer.put_ok("text/plain", "Device Reset Success", &[]),
+        Ok(()) => writer.put_ok("text/plain", "Device Reset Success", vec![]),
         Err(err) => writer.put_error(404, err.as_str()),
     }
 }
 
 /// The Rust device handler used directly by Http frontend or handle_device_cxx for LIST, GET, and PATCH
-pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritable) {
+pub fn handle_device(request: &Request<Vec<u8>>, param: &str, writer: ResponseWritable) {
     // Route handling
-    if request.uri.as_str() == "/v1/devices" {
+    if request.uri() == "/v1/devices" {
         // Routes with ID not specified
-        match request.method.as_str() {
+        match request.method().as_str() {
             "GET" => {
                 handle_device_list(writer);
             }
@@ -423,7 +479,7 @@ pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritabl
                 handle_device_reset(writer);
             }
             "PATCH" => {
-                let body = &request.body;
+                let body = request.body();
                 let patch_json = String::from_utf8(body.to_vec()).unwrap();
                 handle_device_patch(writer, None, patch_json.as_str());
             }
@@ -431,16 +487,16 @@ pub fn handle_device(request: &HttpRequest, param: &str, writer: ResponseWritabl
         }
     } else {
         // Routes with ID specified
-        match request.method.as_str() {
+        match request.method().as_str() {
             "PATCH" => {
-                let id = match param.parse::<i32>() {
+                let id = match param.parse::<u32>() {
                     Ok(num) => num,
                     Err(_) => {
-                        writer.put_error(404, "Incorrect Id type for devices, ID should be i32.");
+                        writer.put_error(404, "Incorrect Id type for devices, ID should be u32.");
                         return;
                     }
                 };
-                let body = &request.body;
+                let body = request.body();
                 let patch_json = String::from_utf8(body.to_vec()).unwrap();
                 handle_device_patch(writer, Some(id), patch_json.as_str());
             }
@@ -456,18 +512,20 @@ pub fn handle_device_cxx(
     param: String,
     body: String,
 ) {
-    let mut request = HttpRequest {
-        method,
-        uri: String::new(),
-        headers: HttpHeaders::new(),
-        version: "1.1".to_string(),
-        body: body.as_bytes().to_vec(),
-    };
+    let mut builder = Request::builder().method(method.as_str());
     if param.is_empty() {
-        request.uri = "/v1/devices".to_string();
+        builder = builder.uri("/v1/devices");
     } else {
-        request.uri = format!("/v1/devices/{}", param)
+        builder = builder.uri(format!("/v1/devices/{}", param));
     }
+    builder = builder.version(Version::HTTP_11);
+    let request = match builder.body(body.as_bytes().to_vec()) {
+        Ok(request) => request,
+        Err(err) => {
+            warn!("{err:?}");
+            return;
+        }
+    };
     handle_device(
         &request,
         param.as_str(),
@@ -476,13 +534,15 @@ pub fn handle_device_cxx(
 }
 
 /// Get Facade ID from given chip_id
-pub fn get_facade_id(chip_id: i32) -> Result<u32, String> {
-    let resource_arc = get_devices_resource();
-    let resource = resource_arc.read().unwrap();
-    for device in resource.devices.values() {
+pub fn get_facade_id(chip_id: u32) -> Result<u32, String> {
+    let devices_arc = clone_devices();
+    let devices = devices_arc.read().unwrap();
+    for device in devices.entries.values() {
         for (id, chip) in &device.chips {
             if *id == chip_id {
-                return Ok(chip.facade_id);
+                return chip.facade_id.ok_or(format!(
+                    "Facade Id hasn't been added yet to frontend resource for chip_id: {chip_id}"
+                ));
             }
         }
     }
@@ -547,9 +607,9 @@ mod tests {
         }
 
         fn get_or_create_device(&self) -> DeviceIdentifier {
-            let resource_arc = get_devices_resource();
-            let mut resource = resource_arc.write().unwrap();
-            super::get_or_create_device(&mut resource, self.device_guid, self.device_name)
+            let devices_arc = clone_devices();
+            let mut devices = devices_arc.write().unwrap();
+            super::get_or_create_device(&mut devices, self.device_guid, self.device_name)
         }
     }
 
@@ -564,11 +624,11 @@ mod tests {
 
     /// helper function for test cases to refresh DEVICES
     fn refresh_resource() {
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
-        resource.devices = BTreeMap::new();
-        resource.id_factory = IdFactory::new(1000, 1);
-        resource.idle_since = Some(Instant::now());
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
+        devices.entries = BTreeMap::new();
+        devices.id_factory = IdFactory::new(1000, 1);
+        devices.idle_since = Some(Instant::now());
         crate::devices::chip::refresh_resource();
         crate::bluetooth::refresh_resource();
         crate::wifi::refresh_resource();
@@ -576,9 +636,9 @@ mod tests {
 
     /// helper function for traveling back n seconds for idle_since
     fn travel_back_n_seconds_from_now(n: u64) {
-        let resource_arc = get_devices_resource();
-        let mut resource = resource_arc.write().unwrap();
-        resource.idle_since = Some(Instant::now() - Duration::from_secs(n));
+        let devices_arc = clone_devices();
+        let mut devices = devices_arc.write().unwrap();
+        devices.idle_since = Some(Instant::now() - Duration::from_secs(n));
     }
 
     fn test_chip_1_bt() -> TestChipParameters<'static> {
@@ -894,7 +954,7 @@ mod tests {
 
         // Remove a wifi chip of first device
         remove_chip(wifi_chip_result.device_id, wifi_chip_result.chip_id).unwrap();
-        assert_eq!(get_devices().unwrap().devices.len(), 1);
+        assert_eq!(clone_devices().read().unwrap().entries.len(), 1);
         match get_devices().unwrap().devices.get(0) {
             Some(device) => assert_eq!(bt_chip_2_params.device_name, device.name),
             None => unreachable!(),
@@ -953,8 +1013,7 @@ mod tests {
         match get_facade_id(bt_chip_result.chip_id) {
             Ok(facade_id) => assert_eq!(facade_id, 0),
             Err(err) => {
-                error!("{err}");
-                unreachable!();
+                unreachable!("{err}");
             }
         }
 
@@ -962,8 +1021,7 @@ mod tests {
         match get_facade_id(wifi_chip_result.chip_id) {
             Ok(facade_id) => assert_eq!(facade_id, 0),
             Err(err) => {
-                error!("{err}");
-                unreachable!();
+                unreachable!("{err}");
             }
         }
 
@@ -971,8 +1029,7 @@ mod tests {
         match get_facade_id(bt_chip_2_result.chip_id) {
             Ok(facade_id) => assert_eq!(facade_id, 1),
             Err(err) => {
-                error!("{err}");
-                unreachable!();
+                unreachable!("{err}");
             }
         }
     }
@@ -988,12 +1045,12 @@ mod tests {
         // Refresh Resource
         refresh_resource();
 
-        // Set the idle_since value to more than 5 minutes before current time
-        travel_back_n_seconds_from_now(301);
+        // Set the idle_since value to more than 15 seconds before current time
+        travel_back_n_seconds_from_now(16);
         assert!(is_shutdown_time_cxx());
 
-        // Set the idle_since value to less than 5 minutes before current time
-        travel_back_n_seconds_from_now(299);
+        // Set the idle_since value to less than 15 seconds before current time
+        travel_back_n_seconds_from_now(14);
         assert!(!is_shutdown_time_cxx());
 
         // Refresh Resource again
@@ -1001,20 +1058,19 @@ mod tests {
 
         // Add a device and check if idle_since is None
         let _ = test_chip_1_bt().add_chip();
-        let resource_arc = get_devices_resource();
-        let resource = resource_arc.read().unwrap();
-        assert!(resource.idle_since.is_none());
+        let devices_arc = clone_devices();
+        let devices = devices_arc.read().unwrap();
+        assert!(devices.idle_since.is_none());
         assert!(!is_shutdown_time_cxx());
     }
 
-    fn list_request() -> HttpRequest {
-        HttpRequest {
-            method: "GET".to_string(),
-            uri: "/v1/devices".to_string(),
-            version: "1.1".to_string(),
-            headers: HttpHeaders::new(),
-            body: b"".to_vec(),
-        }
+    fn list_request() -> Request<Vec<u8>> {
+        Request::builder()
+            .method("GET")
+            .uri("/v1/devices")
+            .version(Version::HTTP_11)
+            .body(Vec::<u8>::new())
+            .unwrap()
     }
 
     #[test]
@@ -1057,13 +1113,12 @@ mod tests {
 
         // Initialize request for PatchDevice
         // The patch body will change the visibility and position of the first device.
-        let request = HttpRequest {
-            method: "PATCH".to_string(),
-            uri: "/v1/devices".to_string(),
-            version: "1.1".to_string(),
-            headers: HttpHeaders::new(),
-            body: include_bytes!("test/patch_body.txt").to_vec(),
-        };
+        let request = Request::builder()
+            .method("PATCH")
+            .uri("/v1/devices")
+            .version(Version::HTTP_11)
+            .body(include_bytes!("test/patch_body.txt").to_vec())
+            .unwrap();
 
         // Initialize writer
         let mut stream = Cursor::new(Vec::new());
@@ -1088,13 +1143,12 @@ mod tests {
         // ResetDevice Testing
 
         // Initialize request for ResetDevice
-        let request = HttpRequest {
-            method: "PUT".to_string(),
-            uri: "/v1/devices".to_string(),
-            version: "1.1".to_string(),
-            headers: HttpHeaders::new(),
-            body: b"".to_vec(),
-        };
+        let request = Request::builder()
+            .method("PUT")
+            .uri("/v1/devices")
+            .version(Version::HTTP_11)
+            .body(Vec::<u8>::new())
+            .unwrap();
 
         // Initialize writer
         let mut stream = Cursor::new(Vec::new());
@@ -1123,7 +1177,7 @@ mod tests {
 
         // Write initial state of the test case (2 bt chip and 1 wifi chip)
         let mut file = std::fs::File::create("src/devices/test/initial.txt").unwrap();
-        let initial = b"HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: 783\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
+        let initial = b"HTTP/1.1 200 OK\r\ncontent-type: text/json\r\ncontent-length: 783\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
         file.write_all(initial).unwrap();
 
         // Write the body of the patch request
@@ -1133,7 +1187,7 @@ mod tests {
 
         // Write post-patch state of the test case (after PatchDevice)
         let mut file = std::fs::File::create("src/devices/test/post_patch.txt").unwrap();
-        let post_patch = b"HTTP/1.1 200 OK\r\nContent-Type: text/json\r\nContent-Length: 784\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"OFF\", \"position\": {\"x\": 1.0, \"y\": 1.0, \"z\": 1.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
+        let post_patch = b"HTTP/1.1 200 OK\r\ncontent-type: text/json\r\ncontent-length: 784\r\n\r\n{\"devices\": [{\"id\": 1000, \"name\": \"test-device-name-1\", \"visible\": \"OFF\", \"position\": {\"x\": 1.0, \"y\": 1.0, \"z\": 1.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1000, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}, {\"kind\": \"WIFI\", \"id\": 1001, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"wifi\": {\"state\": \"UNKNOWN\", \"range\": 0.0, \"txCount\": 0, \"rxCount\": 0}}]}, {\"id\": 1001, \"name\": \"test-device-name-2\", \"visible\": \"ON\", \"position\": {\"x\": 0.0, \"y\": 0.0, \"z\": 0.0}, \"orientation\": {\"yaw\": 0.0, \"pitch\": 0.0, \"roll\": 0.0}, \"chips\": [{\"kind\": \"BLUETOOTH\", \"id\": 1002, \"name\": \"bt_chip_name\", \"manufacturer\": \"netsim\", \"productName\": \"netsim_bt\", \"bt\": {}}]}]}";
         file.write_all(post_patch).unwrap();
     }
 
@@ -1145,5 +1199,91 @@ mod tests {
         let _lock = MUTEX.lock().unwrap();
 
         // regenerate_golden_files_helper();
+    }
+
+    use frontend_proto::model::chip::{BluetoothBeacon, Chip};
+    use frontend_proto::model::chip_create;
+    use frontend_proto::model::Chip as ChipProto;
+    use frontend_proto::model::Device as DeviceProto;
+    use frontend_proto::model::{ChipCreate, DeviceCreate};
+    use protobuf::{EnumOrUnknown, MessageField};
+
+    fn bluetooth_beacon_create() -> AddChipResult {
+        bluetooth_facade::new_beacon(&DeviceCreate {
+            chips: vec![ChipCreate {
+                chip: Some(chip_create::Chip::BleBeacon(chip_create::BluetoothBeaconCreate {
+                    ..Default::default()
+                })),
+                ..Default::default()
+            }],
+            ..Default::default()
+        })
+        .expect("Error creating beacon device for testing: {err}")
+    }
+
+    #[test]
+    fn test_get_beacon_device() {
+        let _lock = MUTEX.lock().unwrap();
+
+        logger_setup();
+        refresh_resource();
+
+        let ids = bluetooth_beacon_create();
+        let devices = clone_devices();
+        let devices_guard = devices.read().unwrap();
+        let device = devices_guard
+            .entries
+            .get(&ids.device_id)
+            .expect("Could not find test bluetooth beacon device");
+
+        let device_proto = device.get();
+        assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
+        assert_eq!(1, device_proto.as_ref().unwrap().chips.len());
+        assert!(device_proto.as_ref().unwrap().chips[0].chip.is_some());
+        assert!(matches!(
+            device_proto.as_ref().unwrap().chips[0].chip.as_ref().unwrap(),
+            Chip::BleBeacon(_)
+        ));
+    }
+
+    #[test]
+    fn test_patch_beacon_device() {
+        let _lock = MUTEX.lock().unwrap();
+
+        logger_setup();
+        refresh_resource();
+
+        let ids = bluetooth_beacon_create();
+        let devices = clone_devices();
+        let mut devices_guard = devices.write().unwrap();
+        let device = devices_guard
+            .entries
+            .get_mut(&ids.device_id)
+            .expect("Could not find test bluetooth beacon device");
+
+        if let Err(err) = device.patch(&DeviceProto {
+            id: ids.device_id,
+            chips: vec![ChipProto {
+                id: ids.chip_id,
+                kind: EnumOrUnknown::new(ProtoChipKind::BLUETOOTH_BEACON),
+                chip: Some(Chip::BleBeacon(BluetoothBeacon {
+                    bt: MessageField::some(Default::default()),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }) {
+            panic!("{err}");
+        }
+
+        let patched_device = device.get();
+        assert!(patched_device.is_ok(), "{}", patched_device.unwrap_err());
+        assert_eq!(1, patched_device.as_ref().unwrap().chips.len());
+        assert!(patched_device.as_ref().unwrap().chips[0].chip.is_some());
+        assert!(matches!(
+            patched_device.as_ref().unwrap().chips[0].chip.as_ref().unwrap(),
+            Chip::BleBeacon(_)
+        ));
     }
 }

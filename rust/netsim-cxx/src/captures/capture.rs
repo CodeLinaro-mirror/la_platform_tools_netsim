@@ -15,40 +15,40 @@
 //! The internal structure of CaptureInfo and CaptureMaps
 //!
 //! CaptureInfo is the internal structure of any Capture that includes
-//! the protobuf structure. CaptureMaps contains mappings of ChipId
-//! and FacadeId to CaptureInfo.
+//! the protobuf structure. CaptureMaps contains mappings of
+//! ChipIdentifier and <FacadeIdentifier, Kind> to CaptureInfo.
 
 use std::collections::btree_map::{Iter, Values};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{File, OpenOptions};
 use std::io::Result;
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::pcap_util::write_pcap_header;
 use frontend_proto::{
     common::ChipKind,
     model::{Capture as ProtoCapture, State},
 };
-use log::{error, info};
+use log::info;
 use protobuf::well_known_types::timestamp::Timestamp;
 
-use crate::system;
+use crate::events::Event;
+use crate::resource::clone_captures;
 
-use super::pcap_util::write_pcap_header;
-
-/// ChipId: i32 (for distinguishing identifiers)
-pub type ChipId = i32;
-/// FacadeId: i32 (for distinguishing identifiers)
-pub type FacadeId = i32;
+use crate::devices::chip::ChipIdentifier;
+use crate::devices::chip::FacadeIdentifier;
 
 /// Internal Capture struct
 pub struct CaptureInfo {
-    facade_id: FacadeId,
+    facade_id: FacadeIdentifier,
     /// Some(File) if the file is opened and capture is actively happening.
     /// None if the file is not opened.
     pub file: Option<File>,
     // Following items will be returned as ProtoCapture. (state: file.is_some())
-    id: ChipId,
+    id: ChipIdentifier,
     /// ChipKind (BLUETOOTH, WIFI, or UWB)
     pub chip_kind: ChipKind,
     /// Device name
@@ -73,25 +73,24 @@ pub struct CaptureInfo {
 /// is invoked from packet_hub.
 pub struct Captures {
     /// A mapping of (chip kind, facade id) to CaptureInfo.
-    pub facade_key_to_capture: HashMap<(ChipKind, FacadeId), Arc<Mutex<CaptureInfo>>>,
+    pub facade_key_to_capture: HashMap<(ChipKind, FacadeIdentifier), Arc<Mutex<CaptureInfo>>>,
     /// A mapping of chip id to CaptureInfo.
     ///
     /// BTreeMap is used for chip_id_to_capture, so that the CaptureInfo can always be
     /// ordered by ChipId. ListCaptureResponse will produce a ordered list of CaptureInfos.
-    pub chip_id_to_capture: BTreeMap<ChipId, Arc<Mutex<CaptureInfo>>>,
+    pub chip_id_to_capture: BTreeMap<ChipIdentifier, Arc<Mutex<CaptureInfo>>>,
 }
 
 impl CaptureInfo {
     /// Create an instance of CaptureInfo
-    pub fn new(chip_kind: ChipKind, chip_id: ChipId, device_name: String) -> Self {
+    pub fn new(
+        chip_kind: ChipKind,
+        facade_id: FacadeIdentifier,
+        chip_id: ChipIdentifier,
+        device_name: String,
+    ) -> Self {
         CaptureInfo {
-            facade_id: match crate::devices::devices_handler::get_facade_id(chip_id) {
-                Ok(id) => id as i32,
-                Err(err) => {
-                    error!("{err}");
-                    i32::MAX
-                }
-            },
+            facade_id,
             id: chip_id,
             chip_kind,
             device_name,
@@ -112,7 +111,7 @@ impl CaptureInfo {
         if self.file.is_some() {
             return Ok(());
         }
-        let mut filename = system::netsimd_temp_dir();
+        let mut filename = netsim_common::system::netsimd_temp_dir();
         filename.push("pcaps");
         std::fs::create_dir_all(&filename)?;
         filename.push(format!("{:?}-{:}-{:?}.pcap", self.id, self.device_name, self.chip_kind));
@@ -138,11 +137,14 @@ impl CaptureInfo {
     /// A static helper function that returns facade_key from chip kind and facade id.
     ///
     /// This key will be used for facade_key_to_capture.
-    pub fn new_facade_key(kind: ChipKind, facade_id: FacadeId) -> (ChipKind, FacadeId) {
+    pub fn new_facade_key(
+        kind: ChipKind,
+        facade_id: FacadeIdentifier,
+    ) -> (ChipKind, FacadeIdentifier) {
         (kind, facade_id)
     }
 
-    fn get_facade_key(&self) -> (ChipKind, FacadeId) {
+    fn get_facade_key(&self) -> (ChipKind, FacadeIdentifier) {
         CaptureInfo::new_facade_key(self.chip_kind, self.facade_id)
     }
 
@@ -171,18 +173,19 @@ impl Captures {
     /// Create an instance of Captures, which includes 2 empty hashmaps
     pub fn new() -> Self {
         Captures {
-            facade_key_to_capture: HashMap::<(ChipKind, FacadeId), Arc<Mutex<CaptureInfo>>>::new(),
-            chip_id_to_capture: BTreeMap::<ChipId, Arc<Mutex<CaptureInfo>>>::new(),
+            facade_key_to_capture:
+                HashMap::<(ChipKind, FacadeIdentifier), Arc<Mutex<CaptureInfo>>>::new(),
+            chip_id_to_capture: BTreeMap::<ChipIdentifier, Arc<Mutex<CaptureInfo>>>::new(),
         }
     }
 
     /// Returns true if key exists in Captures.chip_id_to_capture
-    pub fn contains(&self, key: ChipId) -> bool {
+    pub fn contains(&self, key: ChipIdentifier) -> bool {
         self.chip_id_to_capture.contains_key(&key)
     }
 
     /// Returns an Option of lockable and mutable CaptureInfo with given key
-    pub fn get(&mut self, key: ChipId) -> Option<&mut Arc<Mutex<CaptureInfo>>> {
+    pub fn get(&mut self, key: ChipIdentifier) -> Option<&mut Arc<Mutex<CaptureInfo>>> {
         self.chip_id_to_capture.get_mut(&key)
     }
 
@@ -201,28 +204,28 @@ impl Captures {
     }
 
     /// Returns an iterable object of chip_id_to_capture hashmap
-    pub fn iter(&self) -> Iter<ChipId, Arc<Mutex<CaptureInfo>>> {
+    pub fn iter(&self) -> Iter<ChipIdentifier, Arc<Mutex<CaptureInfo>>> {
         self.chip_id_to_capture.iter()
     }
 
     /// Removes a CaptureInfo with given key from Captures
     ///
     /// When Capture is removed, remove from each map and also invoke closing of files.
-    pub fn remove(&mut self, key: &ChipId) {
+    pub fn remove(&mut self, key: &ChipIdentifier) {
         if let Some(arc_capture) = self.chip_id_to_capture.get(key) {
             if let Ok(mut capture) = arc_capture.lock() {
-                self.facade_key_to_capture.remove(&capture.get_facade_key());
+                // Valid is marked false when chip is disconnected from netsim
+                capture.valid = false;
                 capture.stop_capture();
             }
         } else {
             info!("key does not exist in Captures");
-            return;
         }
-        self.chip_id_to_capture.remove(key);
+        // CaptureInfo is not removed even after chip is removed
     }
 
     /// Returns Values of chip_id_to_capture hashmap values
-    pub fn values(&self) -> Values<ChipId, Arc<Mutex<CaptureInfo>>> {
+    pub fn values(&self) -> Values<ChipIdentifier, Arc<Mutex<CaptureInfo>>> {
         self.chip_id_to_capture.values()
     }
 }
@@ -231,4 +234,33 @@ impl Default for Captures {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Create a thread to process events that matter to the Capture resource.
+///
+/// We maintain a CaptureInfo for each chip that has been
+/// connected to the simulation. This procedure monitors ChipAdded
+/// and ChipRemoved events and updates the collection of CaptureInfo.
+///
+pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>) {
+    let _ = thread::Builder::new().name("capture_event_subscriber".to_string()).spawn(move || {
+        loop {
+            match event_rx.recv() {
+                Ok(Event::ChipAdded { chip_id, chip_kind, facade_id, device_name, .. }) => {
+                    let mut capture_info =
+                        CaptureInfo::new(chip_kind, facade_id, chip_id, device_name.clone());
+                    // TODO(b/268271460): Add ability to set default capture state.
+                    // Currently, the default capture state is ON
+                    let _ = capture_info.start_capture();
+                    clone_captures().write().unwrap().insert(capture_info);
+                    info!("Capture event: ChipAdded {chip_id} {device_name} facade_id:{facade_id}");
+                }
+                Ok(Event::ChipRemoved { chip_id }) => {
+                    clone_captures().write().unwrap().remove(&chip_id);
+                    info!("Capture event: ChipRemoved {chip_id}");
+                }
+                _ => {}
+            }
+        }
+    });
 }

@@ -17,6 +17,7 @@ syntax = "proto3";
 package netsim.startup;
 
 import "netsim/common.proto";
+import "rootcanal/configuration.proto";
 
 /**
  * The startup info proto.
@@ -62,4 +63,6 @@ message Chip {
   int32 fd_in = 5;           // optional guest os input
   int32 fd_out = 6;          // optional guest os output
   bool loopback = 7;         // optional for testing
+  // optional for bluetooth chipsets
+  rootcanal.configuration.Controller bt_properties = 8;
 }

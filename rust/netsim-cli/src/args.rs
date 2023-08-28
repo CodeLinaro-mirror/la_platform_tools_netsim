@@ -59,6 +59,8 @@ pub enum Command {
     /// Control the packet capture functionalities with commands: list, patch, get
     #[command(subcommand, visible_alias("pcap"))]
     Capture(Capture),
+    /// Opens netsim artifacts directory (log, pcaps)
+    Artifact,
 }
 
 impl Command {
@@ -131,6 +133,9 @@ impl Command {
                     unimplemented!("get_request_bytes not implemented for Capture Patch command. Use get_requests instead.")
                 }
             },
+            Command::Artifact => {
+                unimplemented!("get_request_bytes is not implemented for Artifact Command.")
+            }
         }
     }
 
@@ -287,6 +292,9 @@ pub enum Capture {
 pub struct ListCapture {
     /// Optional strings of pattern for captures to list. Possible filter fields include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
+    /// Continuously print Capture information every second
+    #[arg(short, long)]
+    pub continuous: bool,
 }
 
 #[derive(Debug, Args)]

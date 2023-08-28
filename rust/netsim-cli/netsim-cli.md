@@ -38,6 +38,8 @@ Options:
             * Arguments:
                 * [PATTERNS]...:    Optional strings of pattern for captures to list. Possible filter fields
                                     include ID, Device Name, and Chip Kind
+            * Options:
+                * `-c, --continuous`:    Continuously print Capture information every second
         * `patch`:  Patch a Capture source to turn packet capture on/off
             * Usage: `netsim capture patch <STATE> [PATTERNS]...`
             * Arguments:
@@ -51,4 +53,6 @@ Options:
                                     include ID, Device Name, and Chip Kind
             * Options:
                 * `-o, --location`: Directory to store downloaded capture file(s)
+* ### `gui`:        Opens netsim Web UI
+* ### `artifact`:   Opens netsim artifacts directory (log, pcaps)
 * ### `help`:       Print this message or the help of the given subcommand(s)

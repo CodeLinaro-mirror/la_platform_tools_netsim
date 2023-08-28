@@ -19,7 +19,7 @@
 #![allow(unused_results)]
 #![allow(unused_mut)]
 
-//! Generated file from `common.proto`
+//! Generated file from `netsim/common.proto`
 
 /// Generated files are compatible only with the same version
 /// of protobuf runtime.
@@ -92,9 +92,10 @@ impl ChipKind {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x0ccommon.proto\x12\rnetsim.common*S\n\x08ChipKind\x12\x0f\n\x0bUNSPE\
-    CIFIED\x10\0\x12\r\n\tBLUETOOTH\x10\x01\x12\x08\n\x04WIFI\x10\x02\x12\
-    \x07\n\x03UWB\x10\x03\x12\x14\n\x10BLUETOOTH_BEACON\x10\x04b\x06proto3\
+    \n\x13netsim/common.proto\x12\rnetsim.common*S\n\x08ChipKind\x12\x0f\n\
+    \x0bUNSPECIFIED\x10\0\x12\r\n\tBLUETOOTH\x10\x01\x12\x08\n\x04WIFI\x10\
+    \x02\x12\x07\n\x03UWB\x10\x03\x12\x14\n\x10BLUETOOTH_BEACON\x10\x04b\x06\
+    proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

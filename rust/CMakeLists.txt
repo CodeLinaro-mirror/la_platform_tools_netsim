@@ -1,5 +1,8 @@
 message(STATUS "Adding rust ${CMAKE_CURRENT_LIST_DIR}/Cargo.toml")
 
+# Delete any old Cargo.lock files
+file(REMOVE ${CMAKE_CURRENT_LIST_DIR}/Cargo.lock)
+
 # This will automatically register all the tests as well.
 corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
 corrosion_set_env_vars(netsim-common CARGO_HOME=${Rust_CARGO_HOME})
@@ -38,17 +41,18 @@ add_subdirectory(frontend-proto)
 # Steps to generate protobuf -> rust files are as follows:
 #
 # 1. Install protobuf for protoc binary.
-#      sudo apt-get install protobuf-compiler // Linux
-#      brew install protobuf // Mac
-# 2. Uncomment the following lines in rust/frontend-proto/Cargo.toml.
-#      build = "build_cargo.rs"
-#      protobuf = "=3.2.0"
-#      protobuf-codegen = "3.2.0"
-# 3. export CARGO_HOME=$REPO_EMU/tools/netsim/objs/rust/.cargo
-# 4. cd $REPO_EMU/tools/netsim
-# 5. cargo build --manifest-path rust/frontend-proto/Cargo.toml
-# 6. git checkout rust/frontend-proto/Cargo.toml
-# 7. bash scripts/format_code.sh
+#
+# Linux: sudo apt-get install protobuf-compiler
+#
+# Mac: brew install protobuf
+#
+# 1. Uncomment the following lines in rust/frontend-proto/Cargo.toml. build =
+#    "build_cargo.rs" protobuf = "=3.2.0" protobuf-codegen = "3.2.0"
+# 2. export CARGO_HOME=$REPO_EMU/tools/netsim/objs/rust/.cargo
+# 3. cd $REPO_EMU/tools/netsim
+# 4. cargo build --manifest-path rust/frontend-proto/Cargo.toml
+# 5. git checkout rust/frontend-proto/Cargo.toml
+# 6. bash scripts/format_code.sh
 
 android_license(TARGET "netsim-cxx" LIBNAME None SPDX None LICENSE None
                 LOCAL None)

@@ -19,7 +19,6 @@
 //! protocol.
 
 use std::{
-    fs::File,
     io::{Result, Write},
     time::Duration,
 };
@@ -41,7 +40,7 @@ pub enum PacketDirection {
 
 /// Returns the file size after writing the header of the
 /// pcap file.
-pub fn write_pcap_header(output: &mut File) -> Result<usize> {
+pub fn write_pcap_header<W: Write>(output: &mut W) -> Result<usize> {
     let linktype: u32 = 201; // LINKTYPE_BLUETOOTH_HCI_H4_WITH_PHDR
 
     // https://tools.ietf.org/id/draft-gharris-opsawg-pcap-00.html#name-file-header
@@ -60,9 +59,9 @@ pub fn write_pcap_header(output: &mut File) -> Result<usize> {
 }
 
 /// Returns the file size after appending a single packet record.
-pub fn append_record(
+pub fn append_record<W: Write>(
     timestamp: Duration,
-    output: &mut File,
+    output: &mut W,
     packet_direction: PacketDirection,
     packet_type: u32,
     packet: &[u8],
@@ -89,11 +88,9 @@ pub fn append_record(
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::Read, time::Duration};
+    use std::time::Duration;
 
-    use crate::captures::pcap_util::{append_record, PacketDirection};
-
-    use super::write_pcap_header;
+    use super::*;
 
     static EXPECTED: &[u8; 76] = include_bytes!("sample.pcap");
 
@@ -102,38 +99,24 @@ mod tests {
     /// Packet 1: HCI_EVT from Controller to Host (Sent Command Complete (LE Set Advertise Enable))
     /// Packet 2: HCI_CMD from Host to Controller (Rcvd LE Set Advertise Enable) [250 milisecs later]
     fn test_pcap_file() {
-        let mut temp_dir = std::env::temp_dir();
-        temp_dir.push("test.pcap");
-        if let Ok(mut file) = File::create(temp_dir.clone()) {
-            write_pcap_header(&mut file).unwrap();
-            append_record(
-                Duration::from_secs(0),
-                &mut file,
-                PacketDirection::HostToController,
-                4u32,
-                &[14, 4, 1, 10, 32, 0],
-            )
-            .unwrap();
-            append_record(
-                Duration::from_millis(250),
-                &mut file,
-                PacketDirection::ControllerToHost,
-                1u32,
-                &[10, 32, 1, 0],
-            )
-            .unwrap();
-        } else {
-            panic!("Cannot create temp file")
-        }
-        if let Ok(mut file) = File::open(temp_dir) {
-            let mut buffer = [0u8; 76];
-            #[allow(clippy::unused_io_amount)]
-            {
-                file.read(&mut buffer).unwrap();
-            }
-            assert_eq!(&buffer, EXPECTED);
-        } else {
-            panic!("Cannot create temp file")
-        }
+        let mut actual = Vec::<u8>::new();
+        write_pcap_header(&mut actual).unwrap();
+        append_record(
+            Duration::from_secs(0),
+            &mut actual,
+            PacketDirection::HostToController,
+            4u32,
+            &[14, 4, 1, 10, 32, 0],
+        )
+        .unwrap();
+        append_record(
+            Duration::from_millis(250),
+            &mut actual,
+            PacketDirection::ControllerToHost,
+            1u32,
+            &[10, 32, 1, 0],
+        )
+        .unwrap();
+        assert_eq!(actual, EXPECTED);
     }
 }

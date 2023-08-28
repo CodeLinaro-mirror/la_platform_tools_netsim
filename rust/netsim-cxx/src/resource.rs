@@ -13,23 +13,25 @@
 // limitations under the License.
 
 use lazy_static::lazy_static;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use crate::captures::capture::Captures;
 use crate::devices::devices_handler::Devices;
+use crate::events::Events;
 use crate::version::get_version;
 
 lazy_static! {
-    static ref RESOURCES: RwLock<Resource> = RwLock::new(Resource::new());
+    static ref RESOURCES: Resource = Resource::new();
 }
 
-/// Resource struct includes all the frontend resources for netsim.
-/// This struct will be instantiated by netsimd and passed down to the
-/// servers.
+/// Resource struct includes all the global and possibly shared
+/// resources for netsim.  Each field within Resource should be an Arc
+/// protected by a RwLock or Mutex.
 pub struct Resource {
     version: String,
     devices: Arc<RwLock<Devices>>,
     captures: Arc<RwLock<Captures>>,
+    events: Arc<Mutex<Events>>,
 }
 
 impl Resource {
@@ -38,6 +40,7 @@ impl Resource {
             version: get_version(),
             devices: Arc::new(RwLock::new(Devices::new())),
             captures: Arc::new(RwLock::new(Captures::new())),
+            events: Events::new(),
         }
     }
 
@@ -46,12 +49,16 @@ impl Resource {
     }
 }
 
-pub fn get_devices_resource() -> Arc<RwLock<Devices>> {
-    RESOURCES.write().unwrap().devices.to_owned()
+pub fn clone_events() -> Arc<Mutex<Events>> {
+    Arc::clone(&RESOURCES.events)
 }
 
-pub fn get_captures_resource() -> Arc<RwLock<Captures>> {
-    RESOURCES.write().unwrap().captures.to_owned()
+pub fn clone_devices() -> Arc<RwLock<Devices>> {
+    Arc::clone(&RESOURCES.devices)
+}
+
+pub fn clone_captures() -> Arc<RwLock<Captures>> {
+    Arc::clone(&RESOURCES.captures)
 }
 
 #[cfg(test)]

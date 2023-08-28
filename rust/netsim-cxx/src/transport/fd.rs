@@ -22,10 +22,10 @@ use super::uci;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::ffi::handle_request_cxx;
 use frontend_proto::common::ChipKind;
-use log::{error, info};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::{ErrorKind, IoSlice, Write};
+use std::io::{ErrorKind, Write};
 use std::os::fd::FromRawFd;
 use std::thread::JoinHandle;
 use std::{fmt, thread};
@@ -74,17 +74,21 @@ struct FdTransport {
 
 impl Response for FdTransport {
     fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
-        let temp = [packet_type];
-        let bufs = [IoSlice::new(&temp), IoSlice::new(packet.as_slice())];
-        // TODO: write_vectored doesn't work for mac and windows.
-        if let Err(e) = self.file.write_vectored(&bufs) {
+        let mut buffer = Vec::<u8>::with_capacity(packet.len() + 1);
+        buffer.push(packet_type);
+        buffer.extend(packet);
+        if let Err(e) = self.file.write_all(&buffer[..]) {
             error!("netsimd: error writing {}", e);
         }
     }
 }
 
 /// read from the raw fd and pass to the packet hub.
-fn fd_reader(
+///
+/// # Safety
+///
+/// `fd_rx` must be a valid and open file descriptor.
+unsafe fn fd_reader(
     fd_rx: i32,
     kind: ChipKindEnum,
     facade_id: u32,
@@ -94,6 +98,7 @@ fn fd_reader(
     thread::Builder::new()
         .name(format!("fd_reader_{}", fd_rx))
         .spawn(move || {
+            // SAFETY: The caller promises that `fd_rx` is valid and open.
             let mut rx = unsafe { File::from_raw_fd(fd_rx) };
 
             info!("Handling fd={} for kind={:?} facade_id={:?}", fd_rx, kind, facade_id);
@@ -131,11 +136,14 @@ fn fd_reader(
                 };
             }
 
-            if let Err(err) = remove_chip(device_id as i32, chip_id as i32) {
-                error!("{err}");
-            }
-            // File is automatically closed when it goes out of scope.
+            // unregister before remove_chip because facade may re-use facade_id
+            // on an intertwining create_chip and the unregister here might remove
+            // the recently added chip creating a disconnected transport.
             unregister_transport(kind as u32, facade_id);
+
+            if let Err(err) = remove_chip(device_id, chip_id) {
+                warn!("{err}");
+            }
         })
         .unwrap()
 }
@@ -143,8 +151,11 @@ fn fd_reader(
 /// start_fd_transport
 ///
 /// Create threads to read and write to file descriptors
-//
-pub fn run_fd_transport(startup_json: &String) {
+///
+/// # Safety
+///
+/// The file descriptors in the JSON must be valid and open.
+pub unsafe fn run_fd_transport(startup_json: &String) {
     info!("Running fd transport with {startup_json}");
     let startup_info = match serde_json::from_str::<StartupInfo>(startup_json.as_str()) {
         Err(e) => {
@@ -178,12 +189,14 @@ pub fn run_fd_transport(startup_json: &String) {
                     ) {
                         Ok(chip_result) => chip_result,
                         Err(err) => {
-                            error!("{err}");
+                            warn!("{err}");
                             return;
                         }
                     };
 
                     // Cf writes to fd_out and reads from fd_in
+                    // SAFETY: Our caller promises that the file descriptors in the JSON are valid
+                    // and open.
                     let file_in = unsafe { File::from_raw_fd(chip.fd_in as i32) };
 
                     register_transport(
@@ -192,13 +205,17 @@ pub fn run_fd_transport(startup_json: &String) {
                         Box::new(FdTransport { file: file_in }),
                     );
                     // TODO: switch to runtime.spawn once FIFOs are available in Tokio
-                    handles.push(fd_reader(
-                        chip.fd_out as i32,
-                        chip.kind,
-                        result.facade_id,
-                        result.device_id as u32,
-                        result.chip_id as u32,
-                    ));
+                    // SAFETY: Our caller promises that the file descriptors in the JSON are valid
+                    // and open.
+                    handles.push(unsafe {
+                        fd_reader(
+                            chip.fd_out as i32,
+                            chip.kind,
+                            result.facade_id,
+                            result.device_id,
+                            result.chip_id,
+                        )
+                    });
                 }
             }
             // Wait for all of them to complete.

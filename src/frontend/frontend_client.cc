@@ -97,14 +97,6 @@ class FrontendClientImpl : public FrontendClient {
   }
 
   // Gets the list of device information
-  std::unique_ptr<ClientResult> GetDevices() const override {
-    frontend::GetDevicesResponse response;
-    grpc::ClientContext context_;
-    auto status = stub_->GetDevices(&context_, {}, &response);
-    return make_result(status, response);
-  }
-
-  // Gets the list of device information
   std::unique_ptr<ClientResult> ListDevice() const override {
     frontend::ListDeviceResponse response;
     grpc::ClientContext context_;
@@ -207,8 +199,6 @@ class FrontendClientImpl : public FrontendClient {
         return GetVersion();
       case frontend::GrpcMethod::PatchDevice:
         return PatchDevice(request_byte_vec);
-      case frontend::GrpcMethod::GetDevices:
-        return GetDevices();
       case frontend::GrpcMethod::ListDevice:
         return ListDevice();
       case frontend::GrpcMethod::Reset:

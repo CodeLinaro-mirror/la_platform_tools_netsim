@@ -83,18 +83,6 @@ class FrontendServer final : public frontend::FrontendService::Service {
     return grpc::Status::OK;
   }
 
-  grpc::Status GetDevices(grpc::ServerContext *context,
-                          const google::protobuf::Empty *empty,
-                          frontend::GetDevicesResponse *reply) {
-    CxxServerResponseWritable writer;
-    HandleDeviceCxx(writer, "GET", "", "");
-    if (writer.is_ok) {
-      google::protobuf::util::JsonStringToMessage(writer.body, reply);
-      return grpc::Status::OK;
-    }
-    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
-  }
-
   grpc::Status ListDevice(grpc::ServerContext *context,
                           const google::protobuf::Empty *empty,
                           frontend::ListDeviceResponse *reply) {

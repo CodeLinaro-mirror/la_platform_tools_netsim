@@ -15,6 +15,8 @@
 
 //! # Time Display class
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use chrono::{DateTime, Datelike, NaiveDateTime, Timelike, Utc};
 
 /// A simple class that contains information required to display time
@@ -74,6 +76,30 @@ impl TimeDisplay {
         }
         "INVALID".to_string()
     }
+
+    /// Displays time in UTC for logs
+    fn utc_display_log(&self) -> String {
+        if let Some(datetime) = NaiveDateTime::from_timestamp_opt(self.secs, self.nsecs) {
+            let current_datetime = DateTime::<Utc>::from_utc(datetime, Utc);
+            return format!(
+                "{:02}-{:02} {:02}:{:02}:{:02}.{:.3}",
+                current_datetime.month(),
+                current_datetime.day(),
+                current_datetime.hour(),
+                current_datetime.minute(),
+                current_datetime.second(),
+                current_datetime.timestamp_subsec_nanos().to_string(),
+            );
+        }
+        "INVALID-TIMESTAMP".to_string()
+    }
+}
+
+/// Return the timestamp of the current time for logs
+pub fn log_current_time() -> String {
+    let since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+    let time_display = TimeDisplay::new(since_epoch.as_secs() as i64, since_epoch.subsec_nanos());
+    time_display.utc_display_log()
 }
 
 #[cfg(test)]

@@ -22,6 +22,8 @@ use env_logger::{Builder, Env};
 use log::Level;
 use std::io::Write;
 
+use crate::util::time_display::log_current_time;
+
 /// Initiating the environment for logging with given prefix
 ///
 /// The current log format follows the same format as Android Emulator team.
@@ -29,7 +31,7 @@ pub fn init(prefix: &'static str) {
     let mut builder = Builder::from_env(Env::default().default_filter_or("info"));
     builder.format(move |buf, record| {
         let level = level_to_string(record.level());
-        let message = format!("{}\t| {}: {}", level, prefix, record.args());
+        let message = format!("{} {} {} {}", prefix, level, log_current_time(), record.args());
         writeln!(buf, "{}", message)
     });
     builder.init();
@@ -43,7 +45,8 @@ pub fn init_for_test() {
     let builder = binding.is_test(true);
     builder.format(move |buf, record| {
         let level = level_to_string(record.level());
-        let message = format!("{}\t| netsim-test: {}", level, record.args());
+        let message =
+            format!("{} {} \t| netsim-test: {}", level, log_current_time(), record.args());
         writeln!(buf, "{}", message)
     });
     builder.init();
@@ -52,11 +55,11 @@ pub fn init_for_test() {
 /// Helper function for translating log levels to string.
 fn level_to_string(level: Level) -> &'static str {
     match level {
-        Level::Error => "ERROR",
-        Level::Warn => "WARN",
-        Level::Info => "INFO",
-        Level::Debug => "DEBUG",
-        Level::Trace => "TRACE",
+        Level::Error => "E",
+        Level::Warn => "W",
+        Level::Info => "I",
+        Level::Debug => "D",
+        Level::Trace => "T",
     }
 }
 

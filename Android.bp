@@ -47,10 +47,6 @@ cc_defaults {
         "libgrpc++",
         "libprotobuf-cpp-full",
     ],
-    include_dirs: [
-        "packages/modules/Bluetooth/system",
-        "packages/modules/Bluetooth/system/gd",
-    ],
     generated_headers: [
         "FrontendStub_h",
     ],
@@ -66,6 +62,7 @@ rust_defaults {
         "libcxx",
         "libdata_encoding",
         "libfrontend_proto",
+        "libhttp",
         "libnetsim_common",
         "libprotobuf",
         "libprotobuf_json_mapping",
@@ -131,7 +128,6 @@ cc_library_host_static {
         "src/core/server.cc",
         "src/frontend/frontend_client_stub.cc",
         "src/frontend/frontend_server.cc",
-        "src/backend/fd_server.cc",
         "src/backend/grpc_server.cc",
         "src/hci/bluetooth_facade.cc",
         "src/hci/hci_debug.cc",
@@ -210,8 +206,10 @@ cc_binary_host {
         "libcap",
         "libcrypto",
         "libssl",
+        "libunwindstack",
     ],
     static_libs: [
+        "breakpad_client",
         "libc++fs",
         "libjsoncpp",
         "libprotobuf-cpp-full",

@@ -54,6 +54,7 @@ pub fn netsimd_temp_dir_string() -> String {
     netsimd_temp_dir().into_os_string().into_string().unwrap()
 }
 
+#[cfg(not(target_os = "windows"))]
 #[cfg(test)]
 mod tests {
     use super::netsimd_temp_dir;
@@ -72,7 +73,6 @@ mod tests {
         assert!(tmp_dir.is_dir());
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_non_forge() {
         let _locked = ENV_MUTEX.lock();

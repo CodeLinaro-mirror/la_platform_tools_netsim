@@ -38,6 +38,10 @@
 #include "net/posix/posix_async_socket_server.h"
 #endif
 
+namespace rootcanal::log {
+void SetLogColorEnable(bool);
+}
+
 using netsim::model::State;
 
 namespace netsim::hci::facade {
@@ -96,7 +100,7 @@ bool mStarted = false;
 std::shared_ptr<rootcanal::AsyncManager> mAsyncManager;
 rootcanal::AsyncUserId gSocketUserId{};
 std::shared_ptr<SimTestModel> gTestModel;
-rootcanal::ControllerProperties controller_properties_;
+std::unique_ptr<rootcanal::ControllerProperties> controller_properties_;
 
 #ifndef NETSIM_ANDROID_EMULATOR
 // test port
@@ -116,9 +120,9 @@ bool ChangedState(model::State a, model::State b) {
 
 using ::android::net::PosixAsyncSocketServer;
 
-void SetUpTestChannel() {
+void SetUpTestChannel(uint16_t instance_num) {
   gTestSocketServer = std::make_shared<PosixAsyncSocketServer>(
-      kDefaultTestPort, mAsyncManager.get());
+      kDefaultTestPort + instance_num, mAsyncManager.get());
 
   gTestChannel = std::make_unique<rootcanal::TestCommandHandler>(*gTestModel);
 
@@ -179,8 +183,11 @@ void SetUpTestChannel() {
 }  // namespace
 
 // Initialize the rootcanal library.
-void Start() {
+void Start(uint16_t instance_num) {
   if (mStarted) return;
+
+  // output is to a file, so no color wanted
+  rootcanal::log::SetLogColorEnable(false);
 
   // When emulators restore from a snapshot the PacketStreamer connection to
   // netsim is recreated with a new (uninitialized) Rootcanal device. However
@@ -189,7 +196,8 @@ void Start() {
   // before a HCI Reset. The flag below causes a hardware error event that
   // triggers the Reset from the Bluetooth Stack.
 
-  controller_properties_.quirks.hardware_error_before_reset = true;
+  controller_properties_ = std::make_unique<rootcanal::ControllerProperties>();
+  controller_properties_->quirks.hardware_error_before_reset = true;
 
   mAsyncManager = std::make_shared<rootcanal::AsyncManager>();
   // Get a user ID for tasks scheduled within the test environment.
@@ -221,7 +229,7 @@ void Start() {
   testCommands.SetTimerPeriod({"5"});
   testCommands.StartTimer({});
 #else
-  SetUpTestChannel();
+  SetUpTestChannel(instance_num);
 #endif
   mStarted = true;
 };
@@ -324,8 +332,8 @@ void Remove(uint32_t id) {
 
 uint32_t Add(uint32_t simulation_device) {
   auto transport = std::make_shared<HciPacketTransport>(mAsyncManager);
-  auto hci_device =
-      std::make_shared<rootcanal::HciDevice>(transport, controller_properties_);
+  auto hci_device = std::make_shared<rootcanal::HciDevice>(
+      transport, *controller_properties_);
 
   // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
   // invoked atomically, preventing data races.

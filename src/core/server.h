@@ -25,6 +25,7 @@ struct ServerParams {
   bool no_cli_ui;
   bool no_web_ui;
   int hci_port;
+  int instance_num;
   bool dev;
 };
 

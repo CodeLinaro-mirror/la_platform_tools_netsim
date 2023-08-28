@@ -24,12 +24,9 @@ use frontend_proto::common::ChipKind as ProtoChipKind;
 use frontend_proto::model::Chip as ProtoChip;
 use lazy_static::lazy_static;
 use protobuf::EnumOrUnknown;
-
 use std::sync::RwLock;
 
-use crate::devices::device::DeviceIdentifier;
-
-pub type ChipIdentifier = i32;
+pub type ChipIdentifier = u32;
 pub type FacadeIdentifier = u32;
 
 const INITIAL_CHIP_ID: ChipIdentifier = 1000;
@@ -42,7 +39,7 @@ lazy_static! {
 
 pub struct Chip {
     pub id: ChipIdentifier,
-    pub facade_id: FacadeIdentifier,
+    pub facade_id: Option<FacadeIdentifier>,
     pub kind: ProtoChipKind,
     pub name: String,
     // TODO: may not be necessary
@@ -55,7 +52,7 @@ pub struct Chip {
 impl Chip {
     fn new(
         id: ChipIdentifier,
-        facade_id: FacadeIdentifier,
+        facade_id: Option<FacadeIdentifier>,
         kind: ProtoChipKind,
         name: &str,
         device_name: &str,
@@ -81,15 +78,21 @@ impl Chip {
         chip.name = self.name.clone();
         chip.manufacturer = self.manufacturer.clone();
         chip.product_name = self.product_name.clone();
-        match chip.kind.enum_value() {
-            Ok(ProtoChipKind::BLUETOOTH) => {
-                chip.set_bt(bluetooth_facade::bluetooth_get(self.facade_id));
+        match (chip.kind.enum_value(), self.facade_id) {
+            (Ok(ProtoChipKind::BLUETOOTH), Some(facade_id)) => {
+                chip.set_bt(bluetooth_facade::bluetooth_get(facade_id));
             }
-            Ok(ProtoChipKind::BLUETOOTH_BEACON) => {
-                chip.set_bt(bluetooth_facade::bluetooth_get(self.facade_id));
+            (Ok(ProtoChipKind::BLUETOOTH_BEACON), Some(_)) => {
+                chip.set_ble_beacon(bluetooth_facade::bluetooth_beacon_get(self.id)?);
             }
-            Ok(ProtoChipKind::WIFI) => {
-                chip.set_wifi(wifi_facade::wifi_get(self.facade_id));
+            (Ok(ProtoChipKind::WIFI), Some(facade_id)) => {
+                chip.set_wifi(wifi_facade::wifi_get(facade_id));
+            }
+            (_, None) => {
+                return Err(format!(
+                    "Facade Id hasn't been added yet to frontend resource for chip_id: {}",
+                    self.id
+                ));
             }
             _ => {
                 return Err(format!("Unknown chip kind: {:?}", chip.kind));
@@ -107,51 +110,46 @@ impl Chip {
         if !patch.product_name.is_empty() {
             self.product_name = patch.product_name.clone();
         }
-        // Check both ChipKind and RadioKind fields, they should be consistent
-        if self.kind == ProtoChipKind::BLUETOOTH && patch.has_bt() {
-            bluetooth_facade::bluetooth_patch(self.facade_id, patch.bt());
-            Ok(())
-        } else if self.kind == ProtoChipKind::BLUETOOTH_BEACON
-            && patch.has_ble_beacon()
-            && patch.ble_beacon().bt.is_some()
-        {
-            bluetooth_facade::bluetooth_patch(
-                self.facade_id,
-                &patch.ble_beacon().bt.clone().unwrap(),
-            );
-            Ok(())
-        } else if self.kind == ProtoChipKind::WIFI && patch.has_wifi() {
-            wifi_facade::wifi_patch(self.facade_id, patch.wifi());
-            Ok(())
-        } else {
-            Err(format!("Unknown chip kind or missing radio: {:?}", self.kind))
-        }
-    }
-
-    pub fn remove(&mut self) -> Result<(), String> {
-        match self.kind {
-            ProtoChipKind::BLUETOOTH => {
-                bluetooth_facade::bluetooth_remove(self.facade_id);
-                Ok(())
+        match self.facade_id {
+            Some(facade_id) => {
+                // Check both ChipKind and RadioKind fields, they should be consistent
+                if self.kind == ProtoChipKind::BLUETOOTH && patch.has_bt() {
+                    bluetooth_facade::bluetooth_patch(facade_id, patch.bt());
+                    Ok(())
+                } else if self.kind == ProtoChipKind::BLUETOOTH_BEACON
+                    && patch.has_ble_beacon()
+                    && patch.ble_beacon().bt.is_some()
+                {
+                    bluetooth_facade::bluetooth_beacon_patch(self.id, patch.ble_beacon())?;
+                    Ok(())
+                } else if self.kind == ProtoChipKind::WIFI && patch.has_wifi() {
+                    wifi_facade::wifi_patch(facade_id, patch.wifi());
+                    Ok(())
+                } else {
+                    Err(format!("Unknown chip kind or missing radio: {:?}", self.kind))
+                }
             }
-            ProtoChipKind::WIFI => {
-                wifi_facade::wifi_remove(self.facade_id);
-                Ok(())
-            }
-            _ => Err(format!("Unknown chip kind: {:?}", self.kind)),
+            None => Err(format!(
+                "Facade Id hasn't been added yet to frontend resource for chip_id: {}",
+                self.id
+            )),
         }
     }
 
     pub fn reset(&mut self) -> Result<(), String> {
-        match self.kind {
-            ProtoChipKind::BLUETOOTH => {
-                bluetooth_facade::bluetooth_reset(self.facade_id);
+        match (self.kind, self.facade_id) {
+            (ProtoChipKind::BLUETOOTH, Some(facade_id)) => {
+                bluetooth_facade::bluetooth_reset(facade_id);
                 Ok(())
             }
-            ProtoChipKind::WIFI => {
-                wifi_facade::wifi_reset(self.facade_id);
+            (ProtoChipKind::WIFI, Some(facade_id)) => {
+                wifi_facade::wifi_reset(facade_id);
                 Ok(())
             }
+            (_, None) => Err(format!(
+                "Facade Id hasn't been added yet to frontend resource for chip_id: {}",
+                self.id
+            )),
             _ => Err(format!("Unknown chip kind: {:?}", self.kind)),
         }
     }
@@ -159,30 +157,15 @@ impl Chip {
 
 /// Allocates a new chip with a facade_id.
 pub fn chip_new(
-    device_id: DeviceIdentifier,
     chip_kind: ProtoChipKind,
     chip_name: &str,
     device_name: &str,
     chip_manufacturer: &str,
     chip_product_name: &str,
 ) -> Result<Chip, String> {
-    let chip_id = IDS.write().unwrap().next_id();
-    let chip_id_u32 = u32::try_from(chip_id).map_err(|err| err.to_string())?;
-    let device_id_u32 = u32::try_from(device_id).map_err(|err| err.to_string())?;
-    let facade_id = match chip_kind {
-        ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(device_id_u32),
-        ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::beacon::bluetooth_beacon_add(
-            device_id_u32,
-            chip_id_u32,
-            "beacon".to_string(),
-            chip_name.to_string(),
-        ),
-        ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id_u32),
-        _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
-    };
     Ok(Chip::new(
-        chip_id,
-        facade_id,
+        IDS.write().unwrap().next_id(),
+        None,
         chip_kind,
         chip_name,
         device_name,
@@ -192,7 +175,7 @@ pub fn chip_new(
 }
 
 /// For testing
-#[cfg(all(test))]
+#[cfg(test)]
 pub fn refresh_resource() {
     let mut ids = IDS.write().unwrap();
     ids.reset_id();

@@ -19,7 +19,14 @@
 #endif
 
 #if defined(__linux__)
+
+#ifndef NETSIM_ANDROID_EMULATOR
+#include <client/linux/handler/exception_handler.h>
+#include <unwindstack/AndroidUnwinder.h>
+#endif
+
 #include <execinfo.h>
+#include <fmt/format.h>
 #include <signal.h>
 #include <unistd.h>
 
@@ -30,11 +37,43 @@
 #include "core/server.h"
 #include "frontend/frontend_client_stub.h"
 #include "netsim-cxx/src/lib.rs.h"
+#include "util/log.h"
 #include "util/os_utils.h"
 
 // Wireless network simulator for android (and other) emulated devices.
 
 #if defined(__linux__)
+#ifndef NETSIM_ANDROID_EMULATOR
+bool crash_callback(const void *crash_context, size_t crash_context_size,
+                    void * /* context */) {
+  std::optional<pid_t> tid;
+  std::cerr << "netsimd crash_callback invoked\n";
+  if (crash_context_size >=
+      sizeof(google_breakpad::ExceptionHandler::CrashContext)) {
+    auto *ctx =
+        static_cast<const google_breakpad::ExceptionHandler::CrashContext *>(
+            crash_context);
+    tid = ctx->tid;
+    int signal_number = ctx->siginfo.si_signo;
+    std::cerr << fmt::format("Process crashed, signal: {}[{}], tid: {}\n",
+                             strsignal(signal_number), signal_number, ctx->tid)
+                     .c_str();
+  } else {
+    std::cerr << "Process crashed, signal: unknown, tid: unknown\n";
+  }
+  unwindstack::AndroidLocalUnwinder unwinder;
+  unwindstack::AndroidUnwinderData data;
+  if (!unwinder.Unwind(tid, data)) {
+    std::cerr << "Unwind failed\n";
+    return false;
+  }
+  std::cerr << "Backtrace:\n";
+  for (const auto &frame : data.frames) {
+    std::cerr << fmt::format("{}\n", unwinder.FormatFrame(frame)).c_str();
+  }
+  return true;
+}
+#else
 // Signal handler to print backtraces and then terminate the program.
 void SignalHandler(int sig) {
   size_t buffer_size = 20;  // Number of entries in that array.
@@ -48,10 +87,32 @@ void SignalHandler(int sig) {
   exit(sig);
 }
 #endif
+#endif
 
+constexpr int DEFAULT_INSTANCE_NUM = 0;
 constexpr int DEFAULT_HCI_PORT = 6402;
 
-int get_hci_port(int hci_port_flag) {
+uint16_t get_instance_num(uint16_t instance_num_flag) {
+  // The following priorities are used to determine the instance number:
+  //
+  // 1. The environment variable `NETSIM_INSTANCE_NUM`.
+  // 2. The CLI flag `--instance_num`.
+  // 3. The default value `DEFAULT_INSTANCE_NUM`.
+  uint16_t instance_num = 0;
+  if (auto netsim_instance_num =
+          netsim::osutils::GetEnv("NETSIM_INSTANCE_NUM", "");
+      netsim_instance_num != "") {
+    char *ptr;
+    instance_num = strtol(netsim_instance_num.c_str(), &ptr, 10);
+  } else if (instance_num_flag != 0) {
+    instance_num = instance_num_flag;
+  } else {
+    instance_num = DEFAULT_INSTANCE_NUM;
+  }
+  return instance_num;
+}
+
+int get_hci_port(int hci_port_flag, uint16_t instance_num) {
   // The following priorities are used to determine the HCI port number:
   //
   // 1. The CLI flag `-hci_port`.
@@ -66,7 +127,7 @@ int get_hci_port(int hci_port_flag) {
     char *ptr;
     hci_port = strtol(netsim_hci_port.c_str(), &ptr, 10);
   } else {
-    hci_port = DEFAULT_HCI_PORT;
+    hci_port = DEFAULT_HCI_PORT + instance_num;
   }
   return hci_port;
 }
@@ -78,7 +139,14 @@ void ArgError(char *argv[], int c) {
 
 int main(int argc, char *argv[]) {
 #if defined(__linux__)
+#ifndef NETSIM_ANDROID_EMULATOR
+  google_breakpad::MinidumpDescriptor descriptor("/tmp");
+  google_breakpad::ExceptionHandler eh(descriptor, nullptr, nullptr, nullptr,
+                                       true, -1);
+  eh.set_crash_handler(crash_callback);
+#else
   signal(SIGSEGV, SignalHandler);
+#endif
 #endif
   bool no_web_ui = false;
   bool no_cli_ui = false;
@@ -89,12 +157,14 @@ int main(int argc, char *argv[]) {
       {"no_web_ui", no_argument, 0, 'w'},
       {"rootcanal_controller_properties_file", required_argument, 0, 'p'},
       {"hci_port", required_argument, 0, 'b'},
+      {"instance_num", required_argument, 0, 'i'},
   };
 
   bool dev = false;
   std::string fd_startup_str;
   std::string rootcanal_controller_properties_file;
   int hci_port_flag = 0;
+  uint16_t instance_num_flag = 0;
 
   int c;
 
@@ -126,6 +196,13 @@ int main(int argc, char *argv[]) {
         hci_port_flag = std::atoi(optarg);
         break;
 
+      case 'i':
+        // NOTE: --instance_num flag is used to run multiple netsimd instances.
+        instance_num_flag = std::atoi(optarg);
+        std::cerr << "Netsimd instance number: " << instance_num_flag
+                  << std::endl;
+        break;
+
       default:
         ArgError(argv, c);
         return (-2);
@@ -143,11 +220,12 @@ int main(int argc, char *argv[]) {
   }
 
   netsim::config::SetDev(dev);
-  int hci_port = get_hci_port(hci_port_flag);
+  uint16_t instance_num = get_instance_num(instance_num_flag);
+  int hci_port = get_hci_port(hci_port_flag, instance_num);
   // Daemon mode -- start radio managers
   // get netsim daemon, starting if it doesn't exist
   // Create a frontend grpc client to check if a netsimd is already running.
-  auto frontend_stub = netsim::frontend::NewFrontendClient();
+  auto frontend_stub = netsim::frontend::NewFrontendClient(instance_num);
   if (frontend_stub != nullptr) {
     std::cerr << "Failed to start netsim daemon because a netsim daemon is "
                  "already running\n";
@@ -158,6 +236,7 @@ int main(int argc, char *argv[]) {
                        .no_cli_ui = no_cli_ui,
                        .no_web_ui = no_web_ui,
                        .hci_port = hci_port,
+                       .instance_num = instance_num,
                        .dev = dev});
   return -1;
 }

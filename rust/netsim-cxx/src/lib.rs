@@ -20,11 +20,11 @@ mod bluetooth;
 pub mod captures;
 mod config;
 mod devices;
+mod events;
 mod http_server;
 mod ranging;
 mod resource;
 mod service;
-mod system;
 mod transport;
 mod uwb;
 mod version;
@@ -41,42 +41,31 @@ use bluetooth::chip::{
 };
 use cxx::let_cxx_string;
 use ffi::CxxServerResponseWriter;
-use http_server::http_request::StrHeaders;
 use http_server::server_response::ServerResponseWritable;
+use http_server::server_response::StrHeaders;
 
 use crate::transport::dispatcher::handle_response;
-use crate::transport::fd::run_fd_transport;
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
-use crate::transport::socket::run_socket_transport;
 
 use crate::captures::handlers::{
-    handle_capture_cxx, handle_packet_request, handle_packet_response, update_captures,
+    handle_capture_cxx, handle_packet_request, handle_packet_response,
 };
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, is_shutdown_time_cxx, remove_chip_cxx,
     AddChipResultCxx,
 };
-use crate::http_server::run_http_server;
 use crate::ranging::*;
 use crate::service::{create_service, Service};
-use crate::system::netsimd_temp_dir_string;
 use crate::uwb::facade::*;
 use crate::version::*;
+use netsim_common::system::netsimd_temp_dir_string;
 
+#[allow(unsafe_op_in_unsafe_fn)]
 #[cxx::bridge(namespace = "netsim")]
 mod ffi {
 
     extern "Rust" {
-        #[cxx_name = "RunSocketTransport"]
-        fn run_socket_transport(hci_port: u16);
-
-        #[cxx_name = "RunFdTransport"]
-        fn run_fd_transport(startup_json: &String);
-
-        #[cxx_name = "RunHttpServer"]
-        fn run_http_server();
-
         // Config
         #[cxx_name = "GetDev"]
         #[namespace = "netsim::config"]
@@ -100,11 +89,12 @@ mod ffi {
 
         type Service;
         #[cxx_name = "CreateService"]
-        fn create_service(
+        unsafe fn create_service(
             fd_startup_str: String,
             no_cli_ui: bool,
             no_web_ui: bool,
             hci_port: u16,
+            instance_num: u16,
             dev: bool,
         ) -> Box<Service>;
         #[cxx_name = "SetUp"]
@@ -184,10 +174,6 @@ mod ffi {
         fn is_shutdown_time_cxx() -> bool;
 
         // Capture Resource
-
-        #[cxx_name = UpdateCaptures]
-        #[namespace = "netsim::capture"]
-        fn update_captures();
 
         #[cxx_name = HandleRequest]
         #[namespace = "netsim::capture"]
@@ -380,7 +366,7 @@ mod ffi {
 
         #[rust_name = bluetooth_start]
         #[namespace = "netsim::hci::facade"]
-        pub fn Start();
+        pub fn Start(instance_num: u16);
 
         #[rust_name = bluetooth_stop]
         #[namespace = "netsim::hci::facade"]
@@ -427,7 +413,8 @@ mod ffi {
 }
 
 // It's required so `RustBluetoothChip` can be sent between threads safely.
-//Ref: How to use opaque types in threads? https://github.com/dtolnay/cxx/issues/1175
+// Ref: How to use opaque types in threads? https://github.com/dtolnay/cxx/issues/1175
+// SAFETY: Nothing in `RustBluetoothChip` depends on being run on a particular thread.
 unsafe impl Send for ffi::RustBluetoothChip {}
 
 type DynRustBluetoothChipCallbacks = Box<dyn RustBluetoothChipCallbacks>;

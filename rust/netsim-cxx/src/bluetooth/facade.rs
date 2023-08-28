@@ -43,8 +43,8 @@ pub fn bluetooth_add(device_id: u32) -> u32 {
 }
 
 /// Starts the Bluetooth service.
-pub fn bluetooth_start() {
-    crate::ffi::bluetooth_start();
+pub fn bluetooth_start(instance_num: u16) {
+    crate::ffi::bluetooth_start(instance_num);
 }
 
 /// Stops the Bluetooth service.

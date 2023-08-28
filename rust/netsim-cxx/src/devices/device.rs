@@ -27,7 +27,7 @@ use frontend_proto::model::Orientation as ProtoOrientation;
 use frontend_proto::model::Position as ProtoPosition;
 use std::collections::BTreeMap;
 
-pub type DeviceIdentifier = i32;
+pub type DeviceIdentifier = u32;
 
 pub struct Device {
     pub id: DeviceIdentifier,
@@ -52,7 +52,7 @@ impl Device {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AddChipResult {
     pub device_id: DeviceIdentifier,
     pub chip_id: ChipIdentifier,
@@ -93,6 +93,8 @@ impl Device {
             if patch_chip_kind == ProtoChipKind::UNSPECIFIED {
                 if patch_chip.has_bt() {
                     patch_chip_kind = ProtoChipKind::BLUETOOTH;
+                } else if patch_chip.has_ble_beacon() {
+                    patch_chip_kind = ProtoChipKind::BLUETOOTH_BEACON;
                 } else if patch_chip.has_wifi() {
                     patch_chip_kind = ProtoChipKind::WIFI;
                 } else if patch_chip.has_uwb() {
@@ -116,14 +118,19 @@ impl Device {
     }
 
     /// Remove a chip from a device.
-    pub fn remove_chip(&mut self, chip_id: ChipIdentifier) -> Result<(), String> {
-        if let Some(chip) = self.chips.get_mut(&chip_id) {
-            chip.remove()?;
-        } else {
-            return Err(format!("RemoveChip chip id {chip_id} not found"));
-        }
+    pub fn remove_chip(
+        &mut self,
+        chip_id: ChipIdentifier,
+    ) -> Result<(Option<FacadeIdentifier>, ProtoChipKind), String> {
+        let (facade_id, kind) = {
+            if let Some(chip) = self.chips.get_mut(&chip_id) {
+                (chip.facade_id, chip.kind)
+            } else {
+                return Err(format!("RemoveChip chip id {chip_id} not found"));
+            }
+        };
         match self.chips.remove(&chip_id) {
-            Some(_) => Ok(()),
+            Some(_) => Ok((facade_id, kind)),
             None => Err(format!("Key {chip_id} not found in Hashmap")),
         }
     }
@@ -135,14 +142,13 @@ impl Device {
         chip_name: &str,
         chip_manufacturer: &str,
         chip_product_name: &str,
-    ) -> Result<AddChipResult, String> {
+    ) -> Result<(DeviceIdentifier, ChipIdentifier), String> {
         for chip in self.chips.values() {
             if chip.kind == chip_kind && chip.name == chip_name {
                 return Err(format!("Device::AddChip - duplicate at id {}, skipping.", chip.id));
             }
         }
         let chip = chip::chip_new(
-            self.id,
             chip_kind,
             chip_name,
             device_name,
@@ -150,9 +156,8 @@ impl Device {
             chip_product_name,
         )?;
         let chip_id = chip.id;
-        let facade_id = chip.facade_id;
         self.chips.insert(chip_id, chip);
-        Ok(AddChipResult { device_id: self.id, chip_id, facade_id })
+        Ok((self.id, chip_id))
     }
 
     /// Reset a device to its default state.
@@ -162,16 +167,6 @@ impl Device {
         self.orientation.clear();
         for chip in self.chips.values_mut() {
             chip.reset()?;
-        }
-        Ok(())
-    }
-
-    /// Remove all chips from a device.
-    /// Called at shutdown.
-    #[allow(dead_code)]
-    pub fn remove(&mut self) -> Result<(), String> {
-        for (_, chip) in self.chips.iter_mut() {
-            chip.remove()?;
         }
         Ok(())
     }
