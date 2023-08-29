@@ -191,10 +191,6 @@ pub struct AddChipResultCxx {
 }
 
 impl AddChipResultCxx {
-    fn new(device_id: u32, chip_id: u32, facade_id: u32, is_error: bool) -> AddChipResultCxx {
-        AddChipResultCxx { device_id, chip_id, facade_id, is_error }
-    }
-
     pub fn get_device_id(&self) -> u32 {
         self.device_id
     }
@@ -527,6 +523,7 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
     }
 }
 
+#[allow(dead_code)]
 pub fn get_devices() -> Result<ProtoScene, String> {
     let mut scene = ProtoScene::new();
     // iterate over the devices and add each to the scene
@@ -718,6 +715,7 @@ pub fn handle_device_cxx(
 }
 
 /// Get Facade ID from given chip_id
+#[allow(dead_code)]
 pub fn get_facade_id(chip_id: u32) -> Result<u32, String> {
     let devices_arc = clone_devices();
     let devices = devices_arc.read().unwrap();
@@ -735,7 +733,7 @@ pub fn get_facade_id(chip_id: u32) -> Result<u32, String> {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Once, thread, time::Duration};
+    use std::{sync::Once, thread};
 
     use netsim_common::util::netsim_logger::init_for_test;
     use netsim_proto::model::{
@@ -799,13 +797,6 @@ mod tests {
 
     fn new_orientation(yaw: f32, pitch: f32, roll: f32) -> ProtoOrientation {
         ProtoOrientation { yaw, pitch, roll, ..Default::default() }
-    }
-
-    /// helper function for traveling back n seconds for idle_since
-    fn travel_back_n_seconds_from_now(n: u64) {
-        let devices_arc = clone_devices();
-        let mut devices = devices_arc.write().unwrap();
-        devices.idle_since = Some(Instant::now() - Duration::from_secs(n));
     }
 
     fn test_chip_1_bt() -> TestChipParameters {
@@ -1172,6 +1163,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     fn list_request() -> Request<Vec<u8>> {
         Request::builder()
             .method("GET")

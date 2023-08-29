@@ -152,27 +152,6 @@ impl Service {
     }
 }
 
-// For cxx.
-/// # Safety
-///
-/// The file descriptors in `fd_startup_str` must be valid and open, and must remain so for as long
-/// as the returned `Service` exists.
-pub unsafe fn create_service(
-    fd_startup_str: String,
-    no_cli_ui: bool,
-    no_web_ui: bool,
-    hci_port: u16,
-    instance_num: u16,
-    dev: bool,
-    vsock: u16,
-) -> Box<Service> {
-    let service_params =
-        ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev, vsock };
-    // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
-    // valid and open for as long as the `Service` exists.
-    Box::new(unsafe { Service::new(service_params) })
-}
-
 pub fn new_test_beacon(idx: u32) {
     use crate::devices::devices_handler::create_device;
     use netsim_proto::common::ChipKind;
@@ -189,13 +168,14 @@ pub fn new_test_beacon(idx: u32) {
     use protobuf_json_mapping::print_to_string;
 
     let beacon_proto = BluetoothBeaconCreateProto {
-        address: format!("be:ac:01:55:00:{:02x}", idx),
+        address: format!("be:ac:01:be:ef:{:02x}", idx),
         settings: MessageField::some(AdvertiseSettingsProto {
             interval: Some(
                 ble_advertise_settings::AdvertiseMode::new(Duration::from_millis(1280))
                     .try_into()
                     .unwrap(),
             ),
+            scannable: true,
             ..Default::default()
         }),
         adv_data: MessageField::some(AdvertiseDataProto {

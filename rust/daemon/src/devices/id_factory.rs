@@ -19,6 +19,7 @@ pub struct IdFactory<T>
 where
     T: Add<Output = T> + Copy,
 {
+    #[allow(dead_code)]
     start_id: T,
     next_id: T,
     increment: T,
@@ -35,10 +36,6 @@ where
         let id = self.next_id;
         self.next_id = self.next_id + self.increment;
         id
-    }
-    #[cfg(test)]
-    pub fn reset_id(&mut self) {
-        self.next_id = self.start_id;
     }
 }
 

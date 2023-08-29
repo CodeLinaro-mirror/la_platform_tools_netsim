@@ -25,7 +25,9 @@ pub struct Packet {
 #[derive(Debug)]
 pub enum PacketError {
     IoError(Error),
+    #[allow(dead_code)]
     InvalidPacketType,
+    #[allow(dead_code)]
     InvalidPacket,
 }
 

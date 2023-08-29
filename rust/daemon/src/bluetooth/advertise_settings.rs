@@ -58,7 +58,7 @@ impl AdvertiseSettings {
         proto.try_into()
     }
 
-    /// Returns the PDU type of advertise packets with settings matching `self`'s
+    /// Returns the PDU type of advertise packets with the provided settings
     pub fn get_packet_type(&self) -> LegacyAdvertisingType {
         if self.scannable {
             LegacyAdvertisingType::AdvScanInd

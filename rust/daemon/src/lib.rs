@@ -14,8 +14,6 @@
 
 //! Netsim daemon libraries.
 
-#![allow(dead_code)]
-
 mod args;
 mod bluetooth;
 pub mod captures;

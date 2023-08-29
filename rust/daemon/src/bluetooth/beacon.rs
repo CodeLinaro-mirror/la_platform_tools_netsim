@@ -17,7 +17,9 @@ use super::advertise_settings::{
     AdvertiseMode, AdvertiseSettings, AdvertiseSettingsBuilder, TxPowerLevel,
 };
 use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
-use super::packets::link_layer::{Address, AddressType, LeLegacyAdvertisingPduBuilder, Packet};
+use super::packets::link_layer::{
+    Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, Packet, PacketType,
+};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::{devices_handler::add_chip, id_factory::IdFactory};
@@ -60,6 +62,7 @@ pub struct BeaconChip {
     address_str: String,
     advertise_settings: AdvertiseSettings,
     advertise_data: AdvertiseData,
+    scan_response_data: AdvertiseData,
     advertise_last: Option<Instant>,
     advertise_start: Option<Instant>,
 }
@@ -76,7 +79,10 @@ impl BeaconChip {
             address_str: address.clone(),
             address: parse_addr(&address)?,
             advertise_settings: AdvertiseSettings::builder().build(),
-            advertise_data: AdvertiseData::builder(device_name, TxPowerLevel::default())
+            advertise_data: AdvertiseData::builder(device_name.clone(), TxPowerLevel::default())
+                .build()
+                .unwrap(),
+            scan_response_data: AdvertiseData::builder(device_name, TxPowerLevel::default())
                 .build()
                 .unwrap(),
             advertise_last: None,
@@ -101,6 +107,11 @@ impl BeaconChip {
                 .unwrap_or_default(),
             &beacon_proto.adv_data,
         )?;
+        let scan_response_data = AdvertiseData::from_proto(
+            device_name.clone(),
+            advertise_settings.tx_power_level,
+            &beacon_proto.scan_response,
+        )?;
 
         Ok(BeaconChip {
             device_name,
@@ -109,6 +120,7 @@ impl BeaconChip {
             address: parse_addr(&beacon_proto.address)?,
             advertise_settings,
             advertise_data,
+            scan_response_data,
             advertise_last: None,
             advertise_start: None,
         })
@@ -164,7 +176,7 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
 
         let packet = LeLegacyAdvertisingPduBuilder {
             advertising_type: beacon.advertise_settings.get_packet_type(),
-            advertising_data: beacon.advertise_data.as_bytes().to_vec(),
+            advertising_data: beacon.advertise_data.to_bytes(),
             advertising_address_type: AddressType::Public,
             target_address_type: AddressType::Public,
             source_address: beacon.address,
@@ -184,20 +196,28 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
         packet: &[u8],
     ) {
         let guard = BEACON_CHIPS.read().unwrap();
-        let mut beacon = guard.get(&self.chip_id);
+        let beacon = guard.get(&self.chip_id);
         if beacon.is_none() {
             error!("could not find bluetooth beacon with chip id {}", self.chip_id);
             return;
         }
-        let mut beacon = beacon.unwrap().lock().unwrap();
+        let beacon = beacon.unwrap().lock().unwrap();
 
-        if !beacon.advertise_settings.scannable {
-            return;
+        if beacon.advertise_settings.scannable
+            && destination_address == beacon.address_str
+            && packet_type == u8::from(PacketType::LeScan)
+        {
+            let packet = LeScanResponseBuilder {
+                advertising_address_type: AddressType::Public,
+                source_address: beacon.address,
+                destination_address: parse_addr(&source_address).unwrap(),
+                scan_response_data: beacon.scan_response_data.to_bytes(),
+            }
+            .build()
+            .to_vec();
+
+            beacon.send_link_layer_le_packet(&packet, beacon.advertise_settings.tx_power_level.dbm);
         }
-
-        // TODO(jmes): Implement by following the example of Beacon::ReceiveLinkLayerPacket()
-        //             in packages/modules/Bluetooth/tools/rootcanal/model/devices/beacon.cc.
-        warn!("scan response is not yet implemented");
     }
 }
 
@@ -358,7 +378,7 @@ pub mod tests {
     };
 
     use super::*;
-    use crate::bluetooth::{bluetooth_beacon_add, refresh_resource};
+    use crate::bluetooth::bluetooth_beacon_add;
 
     lazy_static! {
         static ref TEST_GUID_GENERATOR: Mutex<IdFactory<u32>> = Mutex::new(IdFactory::new(0, 1));

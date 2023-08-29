@@ -148,6 +148,7 @@ mod inner {
 
     }
 
+    #[allow(dead_code)]
     unsafe extern "C++" {
         /// A C++ class which can be used to respond to a request.
         include!("frontend/server_response_writable.h");
@@ -320,6 +321,7 @@ mod inner {
 
         #[rust_name = redirect_std_stream]
         #[namespace = "netsim::osutils"]
+        #[cfg(not(feature = "cuttlefish"))]
         pub fn RedirectStdStream(netsim_temp_dir: &CxxString);
 
         // Crash report.
