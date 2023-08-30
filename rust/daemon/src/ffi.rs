@@ -26,7 +26,7 @@ use cxx::let_cxx_string;
 use crate::transport::dispatcher::{handle_request_cxx, handle_response};
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 
-use crate::captures::handlers::handle_capture_cxx;
+use crate::captures::captures_handler::handle_capture_cxx;
 use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
 };

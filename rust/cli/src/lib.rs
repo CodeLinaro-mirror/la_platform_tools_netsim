@@ -16,8 +16,8 @@
 
 mod args;
 mod browser;
-mod capture_handler;
 mod display;
+mod file_handler;
 mod requests;
 mod response;
 
@@ -29,9 +29,9 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use args::{BinaryProtobuf, GetCapture, NetsimArgs};
-use capture_handler::CaptureHandler;
 use clap::Parser;
 use cxx::{let_cxx_string, UniquePtr};
+use file_handler::FileHandler;
 use frontend_client_cxx::ffi::{
     get_instance_num, new_frontend_client, ClientResult, FrontendClient, GrpcMethod,
 };
@@ -55,7 +55,7 @@ fn perform_streaming_request(
     client.get_capture(
         req,
         &ClientResponseReader {
-            handler: Box::new(CaptureHandler {
+            handler: Box::new(FileHandler {
                 file: File::create(&output_file).unwrap_or_else(|_| {
                     panic!("Failed to create file: {}", &output_file.display())
                 }),

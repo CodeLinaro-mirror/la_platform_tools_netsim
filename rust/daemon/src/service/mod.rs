@@ -15,7 +15,7 @@
 use crate::bluetooth as bluetooth_facade;
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures;
-use crate::captures::handlers::clear_pcap_files;
+use crate::captures::captures_handler::clear_pcap_files;
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::is_shutdown_time;
 use crate::ffi::{get_netsim_ini_file_path_cxx, run_grpc_server_cxx};
