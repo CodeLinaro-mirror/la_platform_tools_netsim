@@ -33,91 +33,58 @@ use crate::devices::devices_handler::{
 use crate::ranging::*;
 use crate::version::*;
 
-// Expose the inner module to maintain backward compatibility.
-// TODO: Move the functions to different modules to improve code organization and readability.
-pub use inner::*;
-
 #[allow(unsafe_op_in_unsafe_fn)]
-#[cxx::bridge(namespace = "netsim")]
-mod inner {
+#[cxx::bridge(namespace = "netsim::transport")]
+pub mod ffi_transport {
     extern "Rust" {
-        // Ranging
-
-        #[cxx_name = "DistanceToRssi"]
-        fn distance_to_rssi(tx_power: i8, distance: f32) -> i8;
-
-        // Version
-
-        #[cxx_name = "GetVersion"]
-        fn get_version() -> String;
-
-        // handlers for gRPC server's invocation of API calls
-
-        #[cxx_name = "HandleCaptureCxx"]
-        fn handle_capture_cxx(
-            responder: Pin<&mut CxxServerResponseWriter>,
-            method: String,
-            param: String,
-            body: String,
-        );
-
-        #[cxx_name = "HandleDeviceCxx"]
-        fn handle_device_cxx(
-            responder: Pin<&mut CxxServerResponseWriter>,
-            method: String,
-            param: String,
-            body: String,
-        );
-
-        // Transport.
-
         #[cxx_name = HandleRequestCxx]
-        #[namespace = "netsim::transport"]
         fn handle_request_cxx(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
         #[cxx_name = HandleResponse]
-        #[namespace = "netsim::transport"]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
         #[cxx_name = RegisterGrpcTransport]
-        #[namespace = "netsim::transport"]
         fn register_grpc_transport(kind: u32, facade_id: u32);
 
         #[cxx_name = UnregisterGrpcTransport]
-        #[namespace = "netsim::transport"]
         fn unregister_grpc_transport(kind: u32, facade_id: u32);
+    }
 
-        // Device Resource
-        type AddChipResultCxx;
-        #[cxx_name = "GetDeviceId"]
-        fn get_device_id(self: &AddChipResultCxx) -> u32;
-        #[cxx_name = "GetChipId"]
-        fn get_chip_id(self: &AddChipResultCxx) -> u32;
-        #[cxx_name = "GetFacadeId"]
-        fn get_facade_id(self: &AddChipResultCxx) -> u32;
-        #[cxx_name = "IsError"]
-        fn is_error(self: &AddChipResultCxx) -> bool;
+    unsafe extern "C++" {
+        // Grpc server.
+        include!("backend/backend_packet_hub.h");
 
-        #[cxx_name = AddChipCxx]
-        #[namespace = "netsim::device"]
-        fn add_chip_cxx(
-            device_guid: &str,
-            device_name: &str,
-            chip_kind: &CxxString,
-            chip_address: &str,
-            chip_name: &str,
-            chip_manufacturer: &str,
-            chip_product_name: &str,
-        ) -> Box<AddChipResultCxx>;
+        #[rust_name = handle_grpc_response]
+        #[namespace = "netsim::backend"]
+        fn HandleResponseCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
 
-        #[cxx_name = RemoveChipCxx]
-        #[namespace = "netsim::device"]
-        fn remove_chip_cxx(device_id: u32, chip_id: u32);
+        include!("core/server.h");
 
-        #[cxx_name = GetDistanceCxx]
-        #[namespace = "netsim::device"]
-        fn get_distance_cxx(a: u32, b: u32) -> f32;
+        #[namespace = "netsim::server"]
+        type GrpcServer;
+        #[rust_name = shut_down]
+        #[namespace = "netsim::server"]
+        fn Shutdown(self: &GrpcServer);
 
+        #[rust_name = get_grpc_port]
+        #[namespace = "netsim::server"]
+        fn GetGrpcPort(self: &GrpcServer) -> u32;
+
+        #[rust_name = run_grpc_server_cxx]
+        #[namespace = "netsim::server"]
+        pub fn RunGrpcServerCxx(
+            netsim_grpc_port: u32,
+            no_cli_ui: bool,
+            instance_num: u16,
+            vsock: u16,
+        ) -> UniquePtr<GrpcServer>;
+    }
+}
+
+#[allow(unsafe_op_in_unsafe_fn)]
+#[cxx::bridge(namespace = "netsim")]
+pub mod ffi_bluetooth {
+    extern "Rust" {
         // Rust Bluetooth device.
         #[namespace = "netsim::hci::facade"]
         type DynRustBluetoothChipCallbacks;
@@ -145,36 +112,10 @@ mod inner {
             facade_id: u32,
             rust_chip: UniquePtr<RustBluetoothChip>,
         ) -> Box<AddRustDeviceResult>;
-
     }
 
     #[allow(dead_code)]
     unsafe extern "C++" {
-        /// A C++ class which can be used to respond to a request.
-        include!("frontend/server_response_writable.h");
-
-        #[namespace = "netsim::frontend"]
-        type CxxServerResponseWriter;
-
-        #[namespace = "netsim::frontend"]
-        fn put_ok_with_length(self: &CxxServerResponseWriter, mime_type: &CxxString, length: usize);
-
-        #[namespace = "netsim::frontend"]
-        fn put_chunk(self: &CxxServerResponseWriter, chunk: &[u8]);
-
-        #[namespace = "netsim::frontend"]
-        fn put_ok(self: &CxxServerResponseWriter, mime_type: &CxxString, body: &CxxString);
-
-        #[namespace = "netsim::frontend"]
-        fn put_error(self: &CxxServerResponseWriter, error_code: u32, error_message: &CxxString);
-
-        // Grpc server.
-        include!("backend/backend_packet_hub.h");
-
-        #[rust_name = handle_grpc_response]
-        #[namespace = "netsim::backend"]
-        fn HandleResponseCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
-
         // Bluetooth facade.
         include!("hci/hci_packet_hub.h");
 
@@ -244,7 +185,13 @@ mod inner {
         #[rust_name = bluetooth_stop]
         #[namespace = "netsim::hci::facade"]
         pub fn Stop();
+    }
+}
 
+#[cxx::bridge(namespace = "netsim::wifi::facade")]
+pub mod ffi_wifi {
+    #[allow(dead_code)]
+    unsafe extern "C++" {
         // WiFi facade.
         include!("wifi/wifi_packet_hub.h");
 
@@ -255,54 +202,126 @@ mod inner {
         include!("wifi/wifi_facade.h");
 
         #[rust_name = wifi_patch_cxx]
-        #[namespace = "netsim::wifi::facade"]
         pub fn PatchCxx(facade_id: u32, proto_bytes: &[u8]);
 
         #[rust_name = wifi_get_cxx]
-        #[namespace = "netsim::wifi::facade"]
         pub fn GetCxx(facade_id: u32) -> Vec<u8>;
 
         #[rust_name = wifi_reset]
-        #[namespace = "netsim::wifi::facade"]
         pub fn Reset(facade_id: u32);
 
         #[rust_name = wifi_remove]
-        #[namespace = "netsim::wifi::facade"]
         pub fn Remove(facade_id: u32);
 
         #[rust_name = wifi_add]
-        #[namespace = "netsim::wifi::facade"]
         pub fn Add(_chip_id: u32) -> u32;
 
         #[rust_name = wifi_start]
-        #[namespace = "netsim::wifi::facade"]
         pub fn Start();
 
         #[rust_name = wifi_stop]
-        #[namespace = "netsim::wifi::facade"]
         pub fn Stop();
 
-        // Grpc server.
-        include!("core/server.h");
+    }
+}
 
-        #[namespace = "netsim::server"]
-        type GrpcServer;
-        #[rust_name = shut_down]
-        #[namespace = "netsim::server"]
-        fn Shutdown(self: &GrpcServer);
+#[allow(unsafe_op_in_unsafe_fn)]
+#[cxx::bridge(namespace = "netsim::device")]
+pub mod ffi_devices {
+    extern "Rust" {
 
-        #[rust_name = get_grpc_port]
-        #[namespace = "netsim::server"]
-        fn GetGrpcPort(self: &GrpcServer) -> u32;
+        // Device Resource
+        type AddChipResultCxx;
+        #[cxx_name = "GetDeviceId"]
+        fn get_device_id(self: &AddChipResultCxx) -> u32;
+        #[cxx_name = "GetChipId"]
+        fn get_chip_id(self: &AddChipResultCxx) -> u32;
+        #[cxx_name = "GetFacadeId"]
+        fn get_facade_id(self: &AddChipResultCxx) -> u32;
+        #[cxx_name = "IsError"]
+        fn is_error(self: &AddChipResultCxx) -> bool;
 
-        #[rust_name = run_grpc_server_cxx]
-        #[namespace = "netsim::server"]
-        pub fn RunGrpcServerCxx(
-            netsim_grpc_port: u32,
-            no_cli_ui: bool,
-            instance_num: u16,
-            vsock: u16,
-        ) -> UniquePtr<GrpcServer>;
+        #[cxx_name = AddChipCxx]
+        fn add_chip_cxx(
+            device_guid: &str,
+            device_name: &str,
+            chip_kind: &CxxString,
+            chip_address: &str,
+            chip_name: &str,
+            chip_manufacturer: &str,
+            chip_product_name: &str,
+        ) -> Box<AddChipResultCxx>;
+
+        #[cxx_name = RemoveChipCxx]
+        fn remove_chip_cxx(device_id: u32, chip_id: u32);
+
+        #[cxx_name = GetDistanceCxx]
+        fn get_distance_cxx(a: u32, b: u32) -> f32;
+    }
+}
+
+#[allow(unsafe_op_in_unsafe_fn)]
+#[cxx::bridge(namespace = "netsim")]
+pub mod ffi_response_writable {
+    extern "Rust" {
+        // handlers for gRPC server's invocation of API calls
+
+        #[cxx_name = "HandleCaptureCxx"]
+        fn handle_capture_cxx(
+            responder: Pin<&mut CxxServerResponseWriter>,
+            method: String,
+            param: String,
+            body: String,
+        );
+
+        #[cxx_name = "HandleDeviceCxx"]
+        fn handle_device_cxx(
+            responder: Pin<&mut CxxServerResponseWriter>,
+            method: String,
+            param: String,
+            body: String,
+        );
+    }
+    unsafe extern "C++" {
+        /// A C++ class which can be used to respond to a request.
+        include!("frontend/server_response_writable.h");
+
+        #[namespace = "netsim::frontend"]
+        type CxxServerResponseWriter;
+
+        #[namespace = "netsim::frontend"]
+        fn put_ok_with_length(self: &CxxServerResponseWriter, mime_type: &CxxString, length: usize);
+
+        #[namespace = "netsim::frontend"]
+        fn put_chunk(self: &CxxServerResponseWriter, chunk: &[u8]);
+
+        #[namespace = "netsim::frontend"]
+        fn put_ok(self: &CxxServerResponseWriter, mime_type: &CxxString, body: &CxxString);
+
+        #[namespace = "netsim::frontend"]
+        fn put_error(self: &CxxServerResponseWriter, error_code: u32, error_message: &CxxString);
+
+    }
+}
+
+#[allow(unsafe_op_in_unsafe_fn)]
+#[cxx::bridge(namespace = "netsim")]
+pub mod ffi_util {
+    extern "Rust" {
+        // Ranging
+
+        #[cxx_name = "DistanceToRssi"]
+        fn distance_to_rssi(tx_power: i8, distance: f32) -> i8;
+
+        // Version
+
+        #[cxx_name = "GetVersion"]
+        fn get_version() -> String;
+
+    }
+
+    #[allow(dead_code)]
+    unsafe extern "C++" {
 
         // OS utilities.
         include!("util/os_utils.h");
@@ -344,7 +363,7 @@ mod inner {
 // It's required so `RustBluetoothChip` can be sent between threads safely.
 // Ref: How to use opaque types in threads? https://github.com/dtolnay/cxx/issues/1175
 // SAFETY: Nothing in `RustBluetoothChip` depends on being run on a particular thread.
-unsafe impl Send for inner::RustBluetoothChip {}
+unsafe impl Send for ffi_bluetooth::RustBluetoothChip {}
 
 type DynRustBluetoothChipCallbacks = Box<dyn RustBluetoothChipCallbacks>;
 
@@ -370,7 +389,7 @@ fn receive_link_layer_packet(
 /// CxxServerResponseWriter is defined in server_response_writable.h
 /// Wrapper struct allows the impl to discover the respective C++ methods
 pub struct CxxServerResponseWriterWrapper<'a> {
-    pub writer: Pin<&'a mut CxxServerResponseWriter>,
+    pub writer: Pin<&'a mut ffi_response_writable::CxxServerResponseWriter>,
 }
 
 impl ServerResponseWritable for CxxServerResponseWriterWrapper<'_> {

@@ -30,7 +30,7 @@ use crate::bluetooth as bluetooth_facade;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
 use crate::events::Event;
-use crate::ffi::CxxServerResponseWriter;
+use crate::ffi::ffi_response_writable::CxxServerResponseWriter;
 use crate::ffi::CxxServerResponseWriterWrapper;
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource;

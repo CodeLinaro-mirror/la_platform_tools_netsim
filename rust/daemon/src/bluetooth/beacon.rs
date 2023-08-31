@@ -23,7 +23,7 @@ use super::packets::link_layer::{
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::{devices_handler::add_chip, id_factory::IdFactory};
-use crate::ffi;
+use crate::ffi::ffi_bluetooth;
 use cxx::{let_cxx_string, UniquePtr};
 use lazy_static::lazy_static;
 use log::{error, info, warn};
@@ -47,7 +47,7 @@ lazy_static! {
     static ref EMPTY_ADDRESS: Address = Address::try_from(0u64).unwrap();
     // A singleton that contains a hash map from chip id to RustBluetoothChip.
     // It's used by `BeaconChip` to access `RustBluetoothChip` to call send_link_layer_packet().
-    static ref BT_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi::RustBluetoothChip>>>> =
+    static ref BT_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi_bluetooth::RustBluetoothChip>>>> =
         RwLock::new(HashMap::new());
     // Used to find beacon chip based on it's id from static methods.
     pub(crate) static ref BEACON_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<BeaconChip>>> =
@@ -274,7 +274,7 @@ pub fn bluetooth_beacon_remove(
     if removed_beacon.is_none() || removed_radio.is_none() {
         Err(format!("failed to delete ble beacon chip: chip with id {chip_id} does not exist"))
     } else {
-        ffi::bluetooth_remove_rust_device(facade_id);
+        ffi_bluetooth::bluetooth_remove_rust_device(facade_id);
         Ok(())
     }
 }
