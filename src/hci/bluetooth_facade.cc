@@ -16,15 +16,18 @@
 
 #include <sys/types.h>
 
+#include <array>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <future>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
 #include <utility>
 
+#include "hci/address.h"
 #include "hci/hci_packet_transport.h"
 #include "model/setup/async_manager.h"
 #include "model/setup/test_command_handler.h"
@@ -218,6 +221,9 @@ void Start(uint16_t instance_num) {
       [](const std::string & /* server */, int /* port */,
          rootcanal::Phy::Type /* phy_type */) { return nullptr; });
 
+  // Disable Address Reuse if '--disable_address_reuse' flag is true
+  gTestModel->SetReuseDeviceAddresses(!netsim::GetDisableAddressReuse());
+
   // NOTE: 0:BR_EDR, 1:LOW_ENERGY. The order is used by bluetooth CTS.
   phy_classic_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::BR_EDR);
   phy_low_energy_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::LOW_ENERGY);
@@ -388,6 +394,14 @@ rust::Box<AddRustDeviceResult> AddRustDevice(
       facade_id, std::make_shared<ChipInfo>(simulation_device, model));
   return CreateAddRustDeviceResult(
       facade_id, std::make_unique<RustBluetoothChip>(rust_device));
+}
+
+void SetRustDeviceAddress(
+    uint32_t facade_id,
+    std::array<uint8_t, rootcanal::Address::kLength> address) {
+  uint8_t addr[rootcanal::Address::kLength];
+  std::memcpy(addr, address.data(), rootcanal::Address::kLength);
+  gTestModel->SetDeviceAddress(facade_id, rootcanal::Address(addr));
 }
 
 void IncrTx(uint32_t id, rootcanal::Phy::Type phy_type) {

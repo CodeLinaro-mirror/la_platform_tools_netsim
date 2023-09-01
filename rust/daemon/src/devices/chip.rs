@@ -124,7 +124,11 @@ impl Chip {
                     && patch.has_ble_beacon()
                     && patch.ble_beacon().bt.is_some()
                 {
-                    bluetooth_facade::bluetooth_beacon_patch(self.id, patch.ble_beacon())?;
+                    bluetooth_facade::bluetooth_beacon_patch(
+                        facade_id,
+                        self.id,
+                        patch.ble_beacon(),
+                    )?;
                     Ok(())
                 } else if self.kind == ProtoChipKind::WIFI && patch.has_wifi() {
                     wifi_facade::wifi_patch(facade_id, patch.wifi());

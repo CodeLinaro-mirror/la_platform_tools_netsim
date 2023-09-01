@@ -167,6 +167,7 @@ impl Command {
                                 kind: ChipKind::BLUETOOTH_BEACON.into(),
                                 chip: Some(chip_create::Chip::BleBeacon(
                                     chip_create::BluetoothBeaconCreate {
+                                        address: args.address.clone().unwrap_or_default(),
                                         settings: MessageField::some((&args.settings).into()),
                                         adv_data: MessageField::some((&args.advertise_data).into()),
                                         ..Default::default()
@@ -190,6 +191,7 @@ impl Command {
                                 kind: ChipKind::BLUETOOTH_BEACON.into(),
                                 chip: Some(Chip_Type::BleBeacon(Chip_Ble_Beacon {
                                     bt: MessageField::some(Chip_Bluetooth::new()),
+                                    address: args.address.clone().unwrap_or_default(),
                                     settings: MessageField::some((&args.settings).into()),
                                     adv_data: MessageField::some((&args.advertise_data).into()),
                                     ..Default::default()
@@ -371,6 +373,9 @@ pub struct BeaconCreateBle {
     pub device_name: Option<String>,
     /// Name of the beacon chip to create within the new device. May only be specified if device_name is specified
     pub chip_name: Option<String>,
+    /// Bluetooth address of the beacon. Must be a 6-byte hex string with each byte separated by a colon. Will be generated if not provided
+    #[arg(long)]
+    pub address: Option<String>,
     #[command(flatten)]
     pub settings: BeaconBleSettings,
     #[command(flatten)]
@@ -389,6 +394,9 @@ pub struct BeaconPatchBle {
     pub device_name: String,
     /// Name of the beacon chip to modify
     pub chip_name: String,
+    /// Bluetooth address of the beacon. Must be a 6-byte hex string with each byte separated by a colon
+    #[arg(long)]
+    pub address: Option<String>,
     #[command(flatten)]
     pub settings: BeaconBleSettings,
     #[command(flatten)]

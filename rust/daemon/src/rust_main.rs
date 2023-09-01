@@ -67,6 +67,8 @@ fn run_netsimd_with_args(netsimd_args: NetsimdArgs) {
     let fd_startup_str = netsimd_args.fd_startup_str.unwrap_or_default();
     let no_cli_ui = netsimd_args.no_cli_ui;
     let no_web_ui = netsimd_args.no_web_ui;
+    let pcap = netsimd_args.pcap;
+    let disable_address_reuse = netsimd_args.disable_address_reuse;
     let instance_num = ffi_util::get_instance(netsimd_args.instance.unwrap_or_default());
     let hci_port: u16 =
         ffi_util::get_hci_port(netsimd_args.hci_port.unwrap_or_default(), instance_num)
@@ -89,6 +91,8 @@ fn run_netsimd_with_args(netsimd_args: NetsimdArgs) {
         fd_startup_str,
         no_cli_ui,
         no_web_ui,
+        pcap,
+        disable_address_reuse,
         hci_port,
         instance_num,
         dev,

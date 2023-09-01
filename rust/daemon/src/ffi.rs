@@ -26,6 +26,8 @@ use cxx::let_cxx_string;
 use crate::transport::dispatcher::{handle_request_cxx, handle_response};
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 
+use crate::config::get_disable_address_reuse;
+
 use crate::captures::captures_handler::handle_capture_cxx;
 use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
@@ -174,6 +176,11 @@ pub mod ffi_bluetooth {
             address: &CxxString,
         ) -> Box<AddRustDeviceResult>;
 
+        /// The provided address must be 6 bytes in length
+        #[rust_name = bluetooth_set_rust_device_address]
+        #[namespace = "netsim::hci::facade"]
+        pub fn SetRustDeviceAddress(facade_id: u32, address: [u8; 6]);
+
         #[rust_name = bluetooth_remove_rust_device]
         #[namespace = "netsim::hci::facade"]
         pub fn RemoveRustDevice(facade_id: u32);
@@ -317,6 +324,11 @@ pub mod ffi_util {
 
         #[cxx_name = "GetVersion"]
         fn get_version() -> String;
+
+        // Disable Address Reuse Flag
+
+        #[cxx_name = "GetDisableAddressReuse"]
+        fn get_disable_address_reuse() -> bool;
 
     }
 

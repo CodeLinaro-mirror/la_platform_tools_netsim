@@ -462,7 +462,73 @@ mod tests {
     }
 
     #[test]
-    fn test_create_beacon_negative_timeout_fails() {
+    fn test_beacon_create_ble_with_address() {
+        let address = String::from("12:34:56:78:9a:bc");
+
+        let device = MessageField::some(DeviceCreateProto {
+            chips: vec![ChipCreateProto {
+                kind: ChipKind::BLUETOOTH_BEACON.into(),
+                chip: Some(ChipKindCreateProto::BleBeacon(BluetoothBeaconCreateProto {
+                    address: address.clone(),
+                    settings: MessageField::some(AdvertiseSettingsProto::default()),
+                    adv_data: MessageField::some(AdvertiseDataProto::default()),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+
+        let request = frontend::CreateDeviceRequest { device, ..Default::default() }
+            .write_to_bytes()
+            .unwrap();
+
+        test_command(
+            format!("netsim-cli beacon create ble --address {}", address).as_str(),
+            GrpcMethod::CreateDevice,
+            request,
+        )
+    }
+
+    #[test]
+    fn test_beacon_patch_ble_with_address() {
+        let address = String::from("12:34:56:78:9a:bc");
+        let device_name = String::from("device");
+        let chip_name = String::from("chip");
+
+        let device = MessageField::some(Device {
+            name: device_name.clone(),
+            chips: vec![ChipProto {
+                name: chip_name.clone(),
+                kind: ChipKind::BLUETOOTH_BEACON.into(),
+                chip: Some(ChipKindProto::BleBeacon(BluetoothBeaconProto {
+                    bt: MessageField::some(Chip_Bluetooth::new()),
+                    address: address.clone(),
+                    settings: MessageField::some(AdvertiseSettingsProto::default()),
+                    adv_data: MessageField::some(AdvertiseDataProto::default()),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+
+        let request =
+            frontend::PatchDeviceRequest { device, ..Default::default() }.write_to_bytes().unwrap();
+
+        test_command(
+            format!(
+                "netsim-cli beacon patch ble {} {} --address {}",
+                device_name, chip_name, address
+            )
+            .as_str(),
+            GrpcMethod::PatchDevice,
+            request,
+        )
+    }
+
+    #[test]
+    fn test_beacon_negative_timeout_fails() {
         let command = String::from("netsim-cli beacon create ble --timeout -1234");
         assert!(NetsimArgs::try_parse_from(command.split_whitespace()).is_err());
     }

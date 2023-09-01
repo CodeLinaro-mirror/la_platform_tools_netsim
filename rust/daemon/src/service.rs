@@ -16,7 +16,7 @@ use crate::bluetooth as bluetooth_facade;
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures;
 use crate::captures::captures_handler::clear_pcap_files;
-use crate::config::{get_dev, set_dev};
+use crate::config::{get_dev, set_dev, set_disable_address_reuse, set_pcap};
 use crate::devices::devices_handler::is_shutdown_time;
 use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
 use crate::ffi::ffi_util::get_netsim_ini_file_path_cxx;
@@ -38,6 +38,8 @@ pub struct ServiceParams {
     fd_startup_str: String,
     no_cli_ui: bool,
     no_web_ui: bool,
+    pcap: bool,
+    disable_address_reuse: bool,
     hci_port: u16,
     instance_num: u16,
     dev: bool,
@@ -45,16 +47,29 @@ pub struct ServiceParams {
 }
 
 impl ServiceParams {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         fd_startup_str: String,
         no_cli_ui: bool,
         no_web_ui: bool,
+        pcap: bool,
+        disable_address_reuse: bool,
         hci_port: u16,
         instance_num: u16,
         dev: bool,
         vsock: u16,
     ) -> Self {
-        ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev, vsock }
+        ServiceParams {
+            fd_startup_str,
+            no_cli_ui,
+            no_web_ui,
+            pcap,
+            disable_address_reuse,
+            hci_port,
+            instance_num,
+            dev,
+            vsock,
+        }
     }
 }
 
@@ -77,7 +92,9 @@ impl Service {
         if clear_pcap_files() {
             info!("netsim generated pcap files in temp directory has been removed.");
         }
+        set_pcap(self.service_params.pcap);
         set_dev(self.service_params.dev);
+        set_disable_address_reuse(self.service_params.disable_address_reuse);
 
         // Start all the subscribers for events
         let events_rx = resource::clone_events().lock().unwrap().subscribe();

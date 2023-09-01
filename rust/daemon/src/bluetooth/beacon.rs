@@ -59,7 +59,6 @@ pub struct BeaconChip {
     device_name: String,
     chip_id: ChipIdentifier,
     address: Address,
-    address_str: String,
     advertise_settings: AdvertiseSettings,
     advertise_data: AdvertiseData,
     scan_response_data: AdvertiseData,
@@ -76,8 +75,7 @@ impl BeaconChip {
         Ok(BeaconChip {
             chip_id,
             device_name: device_name.clone(),
-            address_str: address.clone(),
-            address: parse_addr(&address)?,
+            address: str_to_addr(&address)?,
             advertise_settings: AdvertiseSettings::builder().build(),
             advertise_data: AdvertiseData::builder(device_name.clone(), TxPowerLevel::default())
                 .build()
@@ -113,11 +111,17 @@ impl BeaconChip {
             &beacon_proto.scan_response,
         )?;
 
+        let address = if beacon_proto.address == String::default() {
+            // Safe to unwrap here because chip_id is a u32 which is less than 6 bytes
+            u64::from(chip_id).try_into().unwrap()
+        } else {
+            str_to_addr(&beacon_proto.address)?
+        };
+
         Ok(BeaconChip {
             device_name,
             chip_id,
-            address_str: beacon_proto.address.clone(),
-            address: parse_addr(&beacon_proto.address)?,
+            address,
             advertise_settings,
             advertise_data,
             scan_response_data,
@@ -204,13 +208,13 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
         let beacon = beacon.unwrap().lock().unwrap();
 
         if beacon.advertise_settings.scannable
-            && destination_address == beacon.address_str
+            && destination_address == addr_to_str(beacon.address)
             && packet_type == u8::from(PacketType::LeScan)
         {
             let packet = LeScanResponseBuilder {
                 advertising_address_type: AddressType::Public,
                 source_address: beacon.address,
-                destination_address: parse_addr(&source_address).unwrap(),
+                destination_address: beacon.address,
                 scan_response_data: beacon.scan_response_data.to_bytes(),
             }
             .build()
@@ -280,6 +284,7 @@ pub fn bluetooth_beacon_remove(
 }
 
 pub fn bluetooth_beacon_patch(
+    facade_id: FacadeIdentifier,
     chip_id: ChipIdentifier,
     patch: &BluetoothBeaconProto,
 ) -> Result<(), String> {
@@ -291,8 +296,12 @@ pub fn bluetooth_beacon_patch(
         .unwrap();
 
     if patch.address != String::default() {
-        beacon.address_str = patch.address.clone();
-        beacon.address = parse_addr(&beacon.address_str)?;
+        beacon.address = str_to_addr(&patch.address)?;
+        #[cfg(not(test))]
+        ffi_bluetooth::bluetooth_set_rust_device_address(
+            facade_id,
+            u64::from(beacon.address).to_le_bytes()[..6].try_into().unwrap(),
+        );
     }
 
     if let Some(patch_settings) = patch.settings.as_ref() {
@@ -347,17 +356,27 @@ pub fn bluetooth_beacon_get(chip_id: ChipIdentifier) -> Result<BluetoothBeaconPr
         .unwrap();
 
     Ok(BluetoothBeaconProto {
-        address: beacon.address_str.clone(),
+        address: addr_to_str(beacon.address),
         settings: MessageField::some((&beacon.advertise_settings).try_into()?),
         adv_data: MessageField::some((&beacon.advertise_data).into()),
         ..Default::default()
     })
 }
 
-fn parse_addr(addr: &str) -> Result<Address, String> {
+fn addr_to_str(addr: Address) -> String {
+    let bytes = u64::from(addr).to_le_bytes();
+    bytes[..5]
+        .iter()
+        .rfold(format!("{:02x}", bytes[5]), |addr, byte| addr + &format!(":{:02x}", byte))
+}
+
+fn str_to_addr(addr: &str) -> Result<Address, String> {
     if addr == String::default() {
         Ok(*EMPTY_ADDRESS)
     } else {
+        if addr.len() != 17 {
+            return Err(String::from("failed to parse address: address was not the right length"));
+        }
         let addr = addr.replace(':', "");
         u64::from_str_radix(&addr, 16)
             .map_err(|_| String::from("failed to parse address: invalid hex"))?
@@ -444,6 +463,7 @@ pub mod tests {
         let tx_power = TxPowerProto::TxPowerLevel(AdvertiseTxPowerProto::MEDIUM.into());
         let scannable = true;
         let patch_result = bluetooth_beacon_patch(
+            0,
             id,
             &BluetoothBeaconProto {
                 settings: MessageField::some(AdvertiseSettingsProto {
@@ -478,7 +498,7 @@ pub mod tests {
 
         let id = new_test_beacon_with_settings(settings.clone());
 
-        let patch_result = bluetooth_beacon_patch(id, &BluetoothBeaconProto::default());
+        let patch_result = bluetooth_beacon_patch(0, id, &BluetoothBeaconProto::default());
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
 
         let beacon_proto = bluetooth_beacon_get(id);
@@ -491,32 +511,56 @@ pub mod tests {
     }
 
     #[test]
-    fn test_parse_addr_succeeds() {
-        let addr = parse_addr("be:ac:12:34:00:0f");
+    fn test_str_to_addr_succeeds() {
+        let addr = str_to_addr("be:ac:12:34:00:0f");
         assert_eq!(Address::try_from(0xbe_ac_12_34_00_0f).unwrap(), addr.unwrap());
     }
 
     #[test]
-    fn test_parse_empty_addr_succeeds() {
-        let addr = parse_addr("00:00:00:00:00:00");
+    fn test_empty_str_to_addr_succeeds() {
+        let addr = str_to_addr("00:00:00:00:00:00");
         assert_eq!(Address::try_from(0).unwrap(), addr.unwrap());
     }
 
     #[test]
-    fn test_parse_addr_fails() {
-        let addr = parse_addr("hi mom!");
+    fn test_str_to_addr_fails() {
+        let addr = str_to_addr("hi mom!");
         assert!(addr.is_err());
     }
 
     #[test]
-    fn test_parse_invalid_addr_fails() {
-        let addr = parse_addr("56:78:9a:bc:de:fg");
+    fn test_invalid_str_to_addr_fails() {
+        let addr = str_to_addr("56:78:9a:bc:de:fg");
         assert!(addr.is_err());
     }
 
     #[test]
-    fn test_parse_long_addr_fails() {
-        let addr = parse_addr("55:55:55:55:55:55:55:55");
+    fn test_long_str_to_addr_fails() {
+        let addr = str_to_addr("55:55:55:55:55:55:55:55");
         assert!(addr.is_err());
+    }
+
+    #[test]
+    fn test_short_str_to_addr_fails() {
+        let addr = str_to_addr("ab:cd");
+        assert!(addr.is_err());
+    }
+
+    #[test]
+    fn test_addr_to_str_succeeds() {
+        let addr: u64 = 0xbe_ac_12_34_00_0f;
+        assert_eq!("be:ac:12:34:00:0f", addr_to_str(addr.try_into().unwrap()))
+    }
+
+    #[test]
+    fn test_empty_addr_to_str_succeeds() {
+        let addr: u64 = 0;
+        assert_eq!("00:00:00:00:00:00", addr_to_str(addr.try_into().unwrap()))
+    }
+
+    #[test]
+    fn test_small_addr_to_str_succeeds() {
+        let addr: u64 = 123;
+        assert_eq!("00:00:00:00:00:7b", addr_to_str(addr.try_into().unwrap()))
     }
 }
