@@ -26,10 +26,8 @@
 #include "grpcpp/channel.h"
 #include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
-
 #include "netsim/packet_streamer.pb.h"
 #include "rust/cxx.h"
-
 #include "util/log.h"
 
 namespace netsim {
@@ -38,13 +36,13 @@ namespace client {
 
 uint32_t StreamPackets(std::string server);
 
-typedef void (*read_callback)(uint32_t, const rust::Slice<::std::uint8_t const> proto_bytes);
+typedef void (*read_callback)(
+    uint32_t, const rust::Slice<::std::uint8_t const> proto_bytes);
 
 bool ReadPacketResponseLoop(uint32_t stream_id, read_callback read_fn);
 
-bool WritePacketRequest(
-    uint32_t stream_id,
-    const rust::Slice<::std::uint8_t const> proto_bytes);
+bool WritePacketRequest(uint32_t stream_id,
+                        const rust::Slice<::std::uint8_t const> proto_bytes);
 
 }  // namespace client
 }  // namespace backend

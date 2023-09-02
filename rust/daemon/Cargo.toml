@@ -31,3 +31,4 @@ cxx-build = "1.0.92"
 [features]
 local_ssl = []
 default = ["local_ssl"]
+cuttlefish = []

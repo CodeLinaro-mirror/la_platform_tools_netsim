@@ -15,6 +15,7 @@
 use clap::builder::{PossibleValue, TypedValueParser};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use frontend_client_cxx::ffi::{FrontendClient, GrpcMethod};
+use hex::{decode as hex_to_bytes, FromHexError};
 use log::error;
 use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::common::ChipKind;
@@ -38,6 +39,7 @@ use netsim_proto::model::{
 use protobuf::{Message, MessageField};
 use std::fmt;
 use std::iter;
+use std::str::FromStr;
 
 pub type BinaryProtobuf = Vec<u8>;
 
@@ -170,6 +172,9 @@ impl Command {
                                         address: args.address.clone().unwrap_or_default(),
                                         settings: MessageField::some((&args.settings).into()),
                                         adv_data: MessageField::some((&args.advertise_data).into()),
+                                        scan_response: MessageField::some(
+                                            (&args.scan_response_data).into(),
+                                        ),
                                         ..Default::default()
                                     },
                                 )),
@@ -194,6 +199,9 @@ impl Command {
                                     address: args.address.clone().unwrap_or_default(),
                                     settings: MessageField::some((&args.settings).into()),
                                     adv_data: MessageField::some((&args.advertise_data).into()),
+                                    scan_response: MessageField::some(
+                                        (&args.scan_response_data).into(),
+                                    ),
                                     ..Default::default()
                                 })),
                                 ..Default::default()
@@ -373,13 +381,15 @@ pub struct BeaconCreateBle {
     pub device_name: Option<String>,
     /// Name of the beacon chip to create within the new device. May only be specified if device_name is specified
     pub chip_name: Option<String>,
-    /// Bluetooth address of the beacon. Must be a 6-byte hex string with each byte separated by a colon. Will be generated if not provided
+    /// Bluetooth address of the beacon. Must be a 6-byte hexadecimal string with each byte separated by a colon. Will be generated if not provided
     #[arg(long)]
     pub address: Option<String>,
     #[command(flatten)]
     pub settings: BeaconBleSettings,
     #[command(flatten)]
     pub advertise_data: BeaconBleAdvertiseData,
+    #[command(flatten)]
+    pub scan_response_data: BeaconBleScanResponseData,
 }
 
 #[derive(Debug, Subcommand)]
@@ -394,13 +404,15 @@ pub struct BeaconPatchBle {
     pub device_name: String,
     /// Name of the beacon chip to modify
     pub chip_name: String,
-    /// Bluetooth address of the beacon. Must be a 6-byte hex string with each byte separated by a colon
+    /// Bluetooth address of the beacon. Must be a 6-byte hexadecimal string with each byte separated by a colon
     #[arg(long)]
     pub address: Option<String>,
     #[command(flatten)]
     pub settings: BeaconBleSettings,
     #[command(flatten)]
     pub advertise_data: BeaconBleAdvertiseData,
+    #[command(flatten)]
+    pub scan_response_data: BeaconBleScanResponseData,
 }
 
 #[derive(Debug, Args)]
@@ -416,12 +428,41 @@ pub struct BeaconBleAdvertiseData {
     /// Whether the device name should be included in the advertise packet
     #[arg(long, required = false)]
     pub include_device_name: bool,
-    /// Whether the transmission power level should be included in the advertise packet.
+    /// Whether the transmission power level should be included in the advertise packet
     #[arg(long, required = false)]
     pub include_tx_power_level: bool,
-    /// Manufacturer specific data.
+    /// Manufacturer-specific data given as bytes in hexadecimal
     #[arg(long)]
-    pub manufacturer_data: Option<String>,
+    pub manufacturer_data: Option<ParsableBytes>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParsableBytes(Vec<u8>);
+
+impl ParsableBytes {
+    fn unwrap(self) -> Vec<u8> {
+        self.0
+    }
+}
+
+impl FromStr for ParsableBytes {
+    type Err = FromHexError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        hex_to_bytes(s.strip_prefix("0x").unwrap_or(s)).map(ParsableBytes)
+    }
+}
+
+#[derive(Debug, Args)]
+pub struct BeaconBleScanResponseData {
+    /// Whether the device name should be included in the scan response packet
+    #[arg(long, required = false)]
+    pub scan_response_include_device_name: bool,
+    /// Whether the transmission power level should be included in the scan response packet
+    #[arg(long, required = false)]
+    pub scan_response_include_tx_power_level: bool,
+    /// Manufacturer-specific data to include in the scan response packet given as bytes in hexadecimal
+    #[arg(long, value_name = "MANUFACTURER_DATA")]
+    pub scan_response_manufacturer_data: Option<ParsableBytes>,
 }
 
 #[derive(Debug, Args)]
@@ -632,9 +673,61 @@ impl From<&BeaconBleAdvertiseData> for AdvertiseDataProto {
             manufacturer_data: value
                 .manufacturer_data
                 .clone()
-                .map(String::into_bytes)
+                .map(ParsableBytes::unwrap)
                 .unwrap_or_default(),
             ..Default::default()
         }
+    }
+}
+
+impl From<&BeaconBleScanResponseData> for AdvertiseDataProto {
+    fn from(value: &BeaconBleScanResponseData) -> Self {
+        AdvertiseDataProto {
+            include_device_name: value.scan_response_include_device_name,
+            include_tx_power_level: value.scan_response_include_tx_power_level,
+            manufacturer_data: value
+                .scan_response_manufacturer_data
+                .clone()
+                .map(ParsableBytes::unwrap)
+                .unwrap_or_default(),
+            ..Default::default()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hex_parser_succeeds() {
+        let hex = ParsableBytes::from_str("beef1234");
+        assert!(hex.is_ok(), "{}", hex.unwrap_err());
+        let hex = hex.unwrap().unwrap();
+
+        assert_eq!(vec![0xbeu8, 0xef, 0x12, 0x34], hex);
+    }
+
+    #[test]
+    fn test_hex_parser_prefix_succeeds() {
+        let hex = ParsableBytes::from_str("0xabcd");
+        assert!(hex.is_ok(), "{}", hex.unwrap_err());
+        let hex = hex.unwrap().unwrap();
+
+        assert_eq!(vec![0xabu8, 0xcd], hex);
+    }
+
+    #[test]
+    fn test_hex_parser_empty_str_succeeds() {
+        let hex = ParsableBytes::from_str("");
+        assert!(hex.is_ok(), "{}", hex.unwrap_err());
+        let hex = hex.unwrap().unwrap();
+
+        assert_eq!(Vec::<u8>::new(), hex);
+    }
+
+    #[test]
+    fn test_hex_parser_bad_digit_fails() {
+        assert!(ParsableBytes::from_str("0xabcdefg").is_err());
     }
 }

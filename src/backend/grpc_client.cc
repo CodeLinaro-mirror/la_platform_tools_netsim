@@ -12,26 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "backend/grpc_client.h"
+
 #include <google/protobuf/util/json_util.h>
 #include <stdlib.h>
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
-#include <mutex>
-
-#include "backend/grpc_client.h"
 
 #include "grpcpp/server_context.h"
 #include "grpcpp/support/status.h"
-
 #include "netsim-daemon/src/ffi.rs.h"
-#include "rust/cxx.h"
-
 #include "netsim/packet_streamer.grpc.pb.h"
 #include "netsim/packet_streamer.pb.h"
-
+#include "rust/cxx.h"
 #include "util/log.h"
 
 // Backend Packet Streamer Client
@@ -42,8 +39,8 @@ namespace client {
 
 const std::chrono::duration kConnectionDeadline = std::chrono::seconds(5);
 
-using Stream =
-    ::grpc::ClientReaderWriter<netsim::packet::PacketRequest, netsim::packet::PacketResponse>;
+using Stream = ::grpc::ClientReaderWriter<netsim::packet::PacketRequest,
+                                          netsim::packet::PacketResponse>;
 
 std::mutex mutex_;
 uint32_t stream_id_max_ = 0;
@@ -111,10 +108,8 @@ bool ReadPacketResponseLoop(uint32_t stream_id, read_callback read_fn) {
 
 // Write a packet to the stream identified by stream_id
 
-bool WritePacketRequest(
-    uint32_t stream_id,
-    const rust::Slice<::std::uint8_t const> proto_bytes) {
-
+bool WritePacketRequest(uint32_t stream_id,
+                        const rust::Slice<::std::uint8_t const> proto_bytes) {
   netsim::packet::PacketRequest request;
   if (!request.ParseFromArray(proto_bytes.data(), proto_bytes.size())) {
     BtsLogWarn("grpc_client: write failed stream_id %d", stream_id);

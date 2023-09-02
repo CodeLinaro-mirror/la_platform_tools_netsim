@@ -40,6 +40,10 @@ pub struct NetsimdArgs {
     #[arg(long, alias = "hci_port")]
     pub hci_port: Option<u32>,
 
+    /// Netsimd primary instance to connect to
+    #[arg(short, long, visible_alias = "rootcanal_instance_num")]
+    pub primary_instance: Option<u16>,
+
     /// Netsimd instance number
     #[arg(short, long, visible_alias = "instance_num")]
     pub instance: Option<u16>,

@@ -6,9 +6,9 @@ file(REMOVE ${CMAKE_CURRENT_LIST_DIR}/Cargo.lock)
 # This will automatically register all the tests as well.
 corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
 corrosion_set_env_vars(netsim-common CARGO_HOME=${Rust_CARGO_HOME})
-corrosion_set_env_vars(netsim-daemon
-    LINK_LAYER_PACKETS_PREBUILT=${RootCanalGeneratedPackets_rs}
-    CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(
+  netsim-daemon LINK_LAYER_PACKETS_PREBUILT=${RootCanalGeneratedPackets_rs}
+  CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(netsim-cli CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(netsim-proto CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(frontend-client-cxx CARGO_HOME=${Rust_CARGO_HOME})

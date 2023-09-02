@@ -338,6 +338,7 @@ rust_defaults {
     srcs: ["rust/cli/src/lib.rs"],
     rustlibs: [
         "libclap",
+        "libhex",
         "libnetsim_proto",
         "libfrontend_client_cxx",
         "libnetsim_common",
