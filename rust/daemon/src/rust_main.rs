@@ -64,19 +64,20 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
         ffi_util::redirect_std_stream(&netsimd_temp_dir);
     }
 
-    match args.primary_instance {
-        Some(primary_instance) => run_netsimd_forwarder(args, primary_instance),
+    match args.connector_instance {
+        Some(connector_instance) => run_netsimd_connector(args, connector_instance),
         None => run_netsimd_primary(args),
     }
 }
 
-fn run_netsimd_forwarder(args: NetsimdArgs, primary_instance: u16) {
+// Forwards packets to another netsim daemon.
+fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
     if args.fd_startup_str.is_none() {
         error!("Failed to start netsimd forwarder, missing `-s` arg");
         return;
     }
-    if !ffi_util::is_netsimd_alive(primary_instance) {
-        error!("Failed to start netsimd forwarder, no primary at {}", primary_instance);
+    if !ffi_util::is_netsimd_alive(instance) {
+        error!("Failed to start netsimd forwarder, no primary at {}", instance);
         return;
     }
     info!("Starting netsim daemon in forwarding mode");
