@@ -20,26 +20,18 @@
 
 #pragma once
 
-#include <memory>
-#include <utility>
-
-#include "grpcpp/channel.h"
-#include "grpcpp/create_channel.h"
-#include "grpcpp/security/credentials.h"
-#include "netsim/packet_streamer.pb.h"
 #include "rust/cxx.h"
-#include "util/log.h"
 
 namespace netsim {
 namespace backend {
 namespace client {
 
-uint32_t StreamPackets(std::string server);
+uint32_t StreamPackets(const rust::String &server);
 
-typedef void (*read_callback)(
-    uint32_t, const rust::Slice<::std::uint8_t const> proto_bytes);
+using ReadCallback = rust::Fn<void(
+    uint32_t, const rust::Slice<::std::uint8_t const> proto_bytes)>;
 
-bool ReadPacketResponseLoop(uint32_t stream_id, read_callback read_fn);
+bool ReadPacketResponseLoop(uint32_t stream_id, ReadCallback read_fn);
 
 bool WritePacketRequest(uint32_t stream_id,
                         const rust::Slice<::std::uint8_t const> proto_bytes);

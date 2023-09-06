@@ -80,6 +80,34 @@ pub mod ffi_transport {
             instance_num: u16,
             vsock: u16,
         ) -> UniquePtr<GrpcServer>;
+
+        // Grpc client.
+        // Expose functions in Cuttlefish only, because it's only used by CVDs and it's
+        // unable to pass function pointers on Windows.
+        #[cfg(feature = "cuttlefish")]
+        include!("backend/grpc_client.h");
+
+        #[allow(dead_code)]
+        #[rust_name = stream_packets]
+        #[namespace = "netsim::backend::client"]
+        #[cfg(feature = "cuttlefish")]
+        fn StreamPackets(server: &String) -> u32;
+
+        #[allow(dead_code)]
+        #[rust_name = read_packet_response_loop]
+        #[namespace = "netsim::backend::client"]
+        #[cfg(feature = "cuttlefish")]
+        fn ReadPacketResponseLoop(
+            stream_id: u32,
+            read_fn: fn(stream_id: u32, proto_bytes: &[u8]),
+        ) -> bool;
+
+        #[allow(dead_code)]
+        #[rust_name = write_packet_request]
+        #[cfg(feature = "cuttlefish")]
+        #[namespace = "netsim::backend::client"]
+        fn WritePacketRequest(stream_id: u32, proto_bytes: &[u8]) -> bool;
+
     }
 }
 
