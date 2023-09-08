@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Android Open Source Project
+ * Copyright 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,16 +15,15 @@
  */
 
 #pragma once
+// Crash report utility functions.
 
-#include <cstdint>
+#include <optional>
 #include <string>
-#include <vector>
 
 namespace netsim {
-namespace hci {
+/**
+ * Set up crash report for netsimd.
+ */
+void SetUpCrashReport();
 
-std::string HciEventToString(const std::vector<uint8_t> &data);
-std::string HciCommandToString(uint8_t x, uint8_t y);
-
-}  // namespace hci
 }  // namespace netsim

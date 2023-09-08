@@ -77,25 +77,69 @@ export interface Chip_BluetoothBeacon {
 }
 
 export interface Chip_BluetoothBeacon_AdvertiseSettings {
-  /** Transmission power in dBm. Must be within [-127, 127]. */
-  txPowerLevel: number;
-  /** Time interval between advertisements in ms. */
-  interval: number;
+  advertiseMode?:|Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode|
+      undefined;
+  /** Numeric time interval between advertisements in ms. */
+  milliseconds?: number|undefined;
+  txPowerLevel?:|Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower|
+      undefined;
+  /** Numeric transmission power in dBm. Must be within [-127, 127]. */
+  dbm?: number|undefined;
+  scannable: boolean;
+  timeout: number;
+}
+
+/**
+ * From
+ * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
+ */
+export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode {
+  /** LOW_POWER - 1 second advertise interval */
+  LOW_POWER = 'LOW_POWER',
+  /** BALANCED - 250 ms advertise interval */
+  BALANCED = 'BALANCED',
+  /** LOW_LATENCY - 100 ms advertise interval */
+  LOW_LATENCY = 'LOW_LATENCY',
+  UNRECOGNIZED = 'UNRECOGNIZED',
+}
+
+/**
+ * From
+ * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
+ */
+export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower {
+  /** ULTRA_LOW - -21 dBm */
+  ULTRA_LOW = 'ULTRA_LOW',
+  /** LOW - -15 dBm */
+  LOW = 'LOW',
+  /** MEDIUM - -7 dBm */
+  MEDIUM = 'MEDIUM',
+  /** HIGH - 1 dBm */
+  HIGH = 'HIGH',
+  UNRECOGNIZED = 'UNRECOGNIZED',
 }
 
 export interface Chip_BluetoothBeacon_AdvertiseData {
   /** Whether the device name should be included in advertise packet. */
   includeDeviceName: boolean;
   /**
-   * Whether the transmission power level should be included in the advertise
-   * packet.
+   * Whether the transmission power level should be included in the
+   * advertise packet.
    */
   includeTxPowerLevel: boolean;
-  /** Add manufacturer specific data. */
+  /** Manufacturer specific data. */
   manufacturerData: Uint8Array;
+  /** GATT services supported by the devices */
+  services: Chip_BluetoothBeacon_AdvertiseData_Service[];
+}
+
+export interface Chip_BluetoothBeacon_AdvertiseData_Service {
+  uuid: string;
+  data: Uint8Array;
 }
 
 export interface ChipCreate {
+  kind: ChipKind;
   name: string;
   manufacturer: string;
   productName: string;

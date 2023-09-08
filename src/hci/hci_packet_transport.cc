@@ -18,10 +18,9 @@
 #include <memory>
 #include <optional>
 
-#include "hci/hci_debug.h"
 #include "model/hci/hci_transport.h"
+#include "netsim-cxx/src/lib.rs.h"
 #include "netsim/hci_packet.pb.h"
-#include "packet_hub/packet_hub.h"
 #include "rust/cxx.h"
 #include "util/log.h"
 
@@ -54,7 +53,8 @@ void HciPacketTransport::Connect(rootcanal::PhyDevice::Identifier device_id) {
 }
 
 // Called by HCITransport (rootcanal)
-void HciPacketTransport::Send(rootcanal::PacketType packet_type, const std::vector<uint8_t>& data) {
+void HciPacketTransport::Send(rootcanal::PacketType packet_type,
+                              const std::vector<uint8_t> &data) {
   // The packet types have standard values, converting from
   // rootcanal::PacketType to HCIPacket_PacketType is safe.
   packet::HCIPacket_PacketType hci_packet_type =
@@ -63,10 +63,9 @@ void HciPacketTransport::Send(rootcanal::PacketType packet_type, const std::vect
     BtsLog("hci_packet_transport: response with no device.");
     return;
   }
-  // Send response to packet_hub.
-  auto shared_packet = std::make_shared<std::vector<uint8_t>>(data);
-  netsim::packet_hub::HandleBtResponse(mDeviceId.value(), hci_packet_type,
-                                       shared_packet);
+  // Send response to transport dispatcher.
+  netsim::transport::HandleResponse(common::ChipKind::BLUETOOTH,
+                                    mDeviceId.value(), data, hci_packet_type);
 }
 
 // Called by HCITransport (rootcanal)
@@ -84,17 +83,14 @@ void HciPacketTransport::Tick() {}
 void HciPacketTransport::Request(
     packet::HCIPacket_PacketType packet_type,
     const std::shared_ptr<std::vector<uint8_t>> &packet) {
-
   assert(mPacketCallback);
   // The packet types have standard values, converting from
   // HCIPacket_PacketType to rootcanal::PacketType is safe.
   rootcanal::PacketType rootcanal_packet_type =
       static_cast<rootcanal::PacketType>(packet_type);
-  if (packet_type == HCIPacket::COMMAND) {
-    auto cmd = HciCommandToString(packet->at(0), packet->at(1));
-  }
-  mAsyncManager->Synchronize(
-      [this, rootcanal_packet_type, packet]() { mPacketCallback(rootcanal_packet_type, packet); });
+  mAsyncManager->Synchronize([this, rootcanal_packet_type, packet]() {
+    mPacketCallback(rootcanal_packet_type, packet);
+  });
 }
 
 void HciPacketTransport::Add(
@@ -104,11 +100,21 @@ void HciPacketTransport::Add(
   device_to_transport_[device_id] = transport;
 }
 
+void HciPacketTransport::Remove(rootcanal::PhyDevice::Identifier device_id) {
+  BtsLog("hci_packet_transport remove from netsim");
+  if (device_to_transport_.find(device_id) != device_to_transport_.end() &&
+      device_to_transport_[device_id]) {
+    // Calls HciDevice::Close, will disconnect AclHandles with
+    // CONNECTION_TIMEOUT, and call TestModel::CloseCallback.
+    device_to_transport_[device_id]->mCloseCallback();
+  }
+}
+
+// Called by HciDevice::Close
 void HciPacketTransport::Close() {
   if (mDeviceId.has_value()) {
     device_to_transport_.erase(mDeviceId.value());
   }
-
   BtsLog("hci_packet_transport close from rootcanal");
   mDeviceId = std::nullopt;
 }

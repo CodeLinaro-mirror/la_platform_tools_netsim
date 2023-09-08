@@ -42,6 +42,16 @@ if(TARGET Rust::Rustc)
     DEPS frontend-client grpc++ netsim-cli-proto-lib netsim-cli-rust-lib
          protobuf::libprotobuf util-lib)
 
+    android_add_executable(
+        TARGET netsimd-rs LICENSE Apache-2.0 INSTALL . SRC rust/netsimd.cc
+        DEPS grpc++
+        libbt-rootcanal
+        netsim-cli-proto-lib
+        netsim-cxx
+        netsimd-lib
+        netsimd-proto-lib
+        packet-streamer-proto-lib)
+
   android_add_executable(
     TARGET netsimd
     LICENSE Apache-2.0 INSTALL .
@@ -56,11 +66,13 @@ if(TARGET Rust::Rustc)
   if(NOT DARWIN_AARCH64 AND NOT DARWIN_X86_64)
     # Prevent duplicate symbol for cxx Rust crate.
     target_link_libraries(netsimd PRIVATE -Wl,--allow-multiple-definition)
+    target_link_libraries(netsimd-rs PRIVATE -Wl,--allow-multiple-definition)
   endif()
 
   target_include_directories(netsimd PRIVATE src)
 
   android_target_dependency(netsimd linux TCMALLOC_OS_DEPENDENCIES)
+  android_target_dependency(netsimd-rs linux TCMALLOC_OS_DEPENDENCIES)
 
   target_compile_definitions(netsimd PUBLIC NETSIM_ANDROID_EMULATOR)
 
@@ -70,23 +82,29 @@ if(TARGET Rust::Rustc)
         src/util/string_utils_test.cc src/wifi/wifi_facade_test.cc
     DEPS android-emu-base-headers
          frontend-proto
+         backend-proto
          grpc++
          gtest
          gtest_main
          libbt-rootcanal
+         netsim-cli-proto-lib
          netsim-cxx
          netsimd-lib
          netsimd-proto-lib
          protobuf::libprotobuf
          util-lib)
 
-  add_dependencies(netsim-test netsimd)
   target_compile_definitions(netsim-test PUBLIC NETSIM_ANDROID_EMULATOR)
-
-  if(ANDROID_EMULATOR_BUILD)
-    add_dependencies(netsim-test emulator) # For PacketStreamerClientTest.
-  endif()
   target_include_directories(netsim-test PRIVATE src)
+
+  # Link NtDll to netsim executables.
+  if(WIN32)
+    target_link_libraries(netsim PRIVATE ntdll)
+    target_link_libraries(netsimd PRIVATE ntdll)
+    target_link_libraries(netsim-test PRIVATE ntdll)
+    android_license(TARGET "ntdll" LIBNAME None SPDX None LICENSE None
+                    LOCAL None)
+  endif()
 endif()
 
 if(NOT NETSIM_EXT)

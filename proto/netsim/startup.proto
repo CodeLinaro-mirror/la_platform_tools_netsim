@@ -65,4 +65,7 @@ message Chip {
   bool loopback = 7;         // optional for testing
   // optional for bluetooth chipsets
   rootcanal.configuration.Controller bt_properties = 8;
+  // address in format xx:xx:xx:xx:xx:xx
+  // optional for bluetooth chipsets
+  string address = 9;
 }

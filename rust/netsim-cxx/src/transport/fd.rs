@@ -22,6 +22,7 @@ use super::uci;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::ffi::handle_request_cxx;
 use frontend_proto::common::ChipKind;
+use frontend_proto::model::ChipCreate;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -55,6 +56,7 @@ impl fmt::Display for ChipKindEnum {
     }
 }
 
+// TODO use proto
 #[derive(Serialize, Deserialize, Debug)]
 struct Chip {
     kind: ChipKindEnum,
@@ -66,6 +68,7 @@ struct Chip {
     #[serde(rename = "fdOut")]
     fd_out: u32,
     loopback: Option<bool>,
+    address: Option<String>,
 }
 
 struct FdTransport {
@@ -73,7 +76,7 @@ struct FdTransport {
 }
 
 impl Response for FdTransport {
-    fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+    fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
         let mut buffer = Vec::<u8>::with_capacity(packet.len() + 1);
         buffer.push(packet_type);
         buffer.extend(packet);
@@ -179,13 +182,18 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
                         ChipKindEnum::UWB => ChipKind::UWB,
                         _ => ChipKind::UNSPECIFIED,
                     };
+                    let chip_create_proto = ChipCreate {
+                        kind: chip_kind.into(),
+                        address: chip.address.unwrap_or_default(),
+                        name: chip.id.unwrap_or_default(),
+                        manufacturer: chip.manufacturer.unwrap_or_default(),
+                        product_name: chip.product_name.unwrap_or_default(),
+                        ..Default::default()
+                    };
                     let result = match add_chip(
                         &chip.fd_in.to_string(),
                         &device.name.clone(),
-                        chip_kind,
-                        &chip.id.unwrap_or_default(),
-                        &chip.manufacturer.unwrap_or_default(),
-                        &chip.product_name.unwrap_or_default(),
+                        &chip_create_proto,
                     ) {
                         Ok(chip_result) => chip_result,
                         Err(err) => {

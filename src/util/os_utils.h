@@ -47,7 +47,17 @@ std::optional<std::string> GetServerAddress(uint16_t instance_num = 0);
 /**
  * Redirect stdout and stderr to file.
  */
-void RedirectStdStream(std::string netsim_temp_dir);
+void RedirectStdStream(const std::string &netsim_temp_dir);
+
+/**
+ * Get netsimd instance number.
+ */
+uint16_t GetInstance(uint16_t instance_flag);
+
+/**
+ * Get hci port number.
+ */
+uint32_t GetHciPort(uint32_t hci_port_flag, uint16_t instance);
 
 }  // namespace osutils
 }  // namespace netsim

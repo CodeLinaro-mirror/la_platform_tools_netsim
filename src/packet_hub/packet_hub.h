@@ -45,12 +45,5 @@ void HandleRequest(common::ChipKind kind, uint32_t facade_id,
 void HandleRequestCxx(uint32_t kind, uint32_t facade_id,
                       const rust::Vec<uint8_t> &packet, uint8_t packet_type);
 
-void HandleBtResponse(uint32_t facade_id,
-                      packet::HCIPacket_PacketType packet_type,
-                      const std::shared_ptr<std::vector<uint8_t>> &packet);
-
-void HandleWifiResponse(uint32_t facade_id,
-                        const std::shared_ptr<std::vector<uint8_t>> &packet);
-
 }  // namespace packet_hub
 }  // namespace netsim

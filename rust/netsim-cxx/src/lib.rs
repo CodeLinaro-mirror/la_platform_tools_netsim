@@ -16,6 +16,7 @@
 
 #![allow(dead_code)]
 
+mod args;
 mod bluetooth;
 pub mod captures;
 mod config;
@@ -24,6 +25,7 @@ mod events;
 mod http_server;
 mod ranging;
 mod resource;
+mod rust_main;
 mod service;
 mod transport;
 mod uwb;
@@ -52,8 +54,7 @@ use crate::captures::handlers::{
 };
 use crate::config::{get_dev, set_dev};
 use crate::devices::devices_handler::{
-    add_chip_cxx, get_distance_cxx, handle_device_cxx, is_shutdown_time_cxx, remove_chip_cxx,
-    AddChipResultCxx,
+    add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
 };
 use crate::ranging::*;
 use crate::service::{create_service, Service};
@@ -96,6 +97,7 @@ mod ffi {
             hci_port: u16,
             instance_num: u16,
             dev: bool,
+            vsock: u16,
         ) -> Box<Service>;
         #[cxx_name = "SetUp"]
         fn set_up(self: &Service);
@@ -156,6 +158,7 @@ mod ffi {
             device_guid: &str,
             device_name: &str,
             chip_kind: &CxxString,
+            chip_address: &str,
             chip_name: &str,
             chip_manufacturer: &str,
             chip_product_name: &str,
@@ -168,10 +171,6 @@ mod ffi {
         #[cxx_name = GetDistanceCxx]
         #[namespace = "netsim::device"]
         fn get_distance_cxx(a: u32, b: u32) -> f32;
-
-        #[cxx_name = IsShutdownTimeCxx]
-        #[namespace = "netsim::device"]
-        fn is_shutdown_time_cxx() -> bool;
 
         // Capture Resource
 
@@ -287,7 +286,7 @@ mod ffi {
 
         #[rust_name = handle_grpc_response]
         #[namespace = "netsim::backend"]
-        fn HandleResponseCxx(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
+        fn HandleResponseCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
 
         // Bluetooth facade.
         include!("hci/hci_packet_hub.h");
@@ -342,7 +341,7 @@ mod ffi {
 
         #[rust_name = bluetooth_add]
         #[namespace = "netsim::hci::facade"]
-        pub fn Add(_chip_id: u32) -> u32;
+        pub fn Add(_chip_id: u32, address: &CxxString) -> u32;
 
         /*
         From https://cxx.rs/binding/box.html#restrictions,
@@ -408,6 +407,53 @@ mod ffi {
         #[rust_name = wifi_stop]
         #[namespace = "netsim::wifi::facade"]
         pub fn Stop();
+
+        // Grpc server.
+        include!("core/server.h");
+
+        #[namespace = "netsim::server"]
+        type GrpcServer;
+        #[rust_name = shut_down]
+        #[namespace = "netsim::server"]
+        fn Shutdown(self: &GrpcServer);
+
+        #[rust_name = run_grpc_server_cxx]
+        #[namespace = "netsim::server"]
+        pub fn RunGrpcServerCxx(
+            netsim_grpc_port: u32,
+            no_cli_ui: bool,
+            instance_num: u16,
+            vsock: u16,
+        ) -> UniquePtr<GrpcServer>;
+
+        // OS utilities.
+        include!("util/os_utils.h");
+
+        #[rust_name = get_instance]
+        #[namespace = "netsim::osutils"]
+        pub fn GetInstance(instance_flag: u16) -> u16;
+
+        #[rust_name = get_hci_port]
+        #[namespace = "netsim::osutils"]
+        pub fn GetHciPort(hci_port_flag: u32, instance_flag: u16) -> u32;
+
+        #[rust_name = redirect_std_stream]
+        #[namespace = "netsim::osutils"]
+        pub fn RedirectStdStream(netsim_temp_dir: &CxxString);
+
+        // Crash report.
+        include!("util/crash_report.h");
+
+        #[rust_name = set_up_crash_report]
+        #[namespace = "netsim"]
+        pub fn SetUpCrashReport();
+
+        // Frontend client.
+        include!("frontend/frontend_client_stub.h");
+
+        #[rust_name = is_netsimd_alive]
+        #[namespace = "netsim::frontend"]
+        pub fn IsNetsimdAlive(instance_num: u16) -> bool;
 
     }
 }

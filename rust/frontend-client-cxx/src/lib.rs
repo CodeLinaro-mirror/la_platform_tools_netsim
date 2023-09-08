@@ -37,6 +37,7 @@ pub mod ffi {
     #[derive(Debug, PartialEq, Eq)]
     pub enum GrpcMethod {
         GetVersion,
+        CreateDevice,
         PatchDevice,
         ListDevice,
         Reset,
@@ -60,7 +61,11 @@ pub mod ffi {
 
         #[allow(dead_code)]
         #[rust_name = "new_frontend_client"]
-        pub fn NewFrontendClient(port: i32) -> UniquePtr<FrontendClient>;
+        pub fn NewFrontendClient(
+            port: i32,
+            instance_num: u16,
+            vsock: &CxxString,
+        ) -> UniquePtr<FrontendClient>;
 
         #[allow(dead_code)]
         #[rust_name = "get_capture"]
@@ -89,6 +94,12 @@ pub mod ffi {
         #[allow(dead_code)]
         #[rust_name = "byte_vec"]
         pub fn ByteVec(self: &ClientResult) -> &CxxVector<u8>;
+
+        include!("util/os_utils.h");
+
+        #[rust_name = get_instance_num]
+        #[namespace = "netsim::osutils"]
+        fn GetInstance(instance_flag: u16) -> u16;
 
     }
 }

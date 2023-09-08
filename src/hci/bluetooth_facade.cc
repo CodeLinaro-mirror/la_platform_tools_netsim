@@ -319,18 +319,17 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
 void Remove(uint32_t id) {
   BtsLog("Removing HCI chip %d.", id);
   id_to_chip_info_.erase(id);
-
-  // Use the `AsyncManager` to ensure that the `RemoveDevice` method is
-  // invoked atomically, preventing data races.
+  // Call the transport close callback. This invokes HciDevice::Close and
+  // TestModel close callback.
   mAsyncManager->ExecAsync(gSocketUserId, std::chrono::milliseconds(0), [id]() {
     // rootcanal will call HciPacketTransport::Close().
-    gTestModel->RemoveDevice(id);
+    HciPacketTransport::Remove(id);
   });
 }
 
 // Rename AddChip(model::Chip, device, transport)
 
-uint32_t Add(uint32_t simulation_device) {
+uint32_t Add(uint32_t simulation_device, const std::string &address_string) {
   auto transport = std::make_shared<HciPacketTransport>(mAsyncManager);
   auto hci_device = std::make_shared<rootcanal::HciDevice>(
       transport, *controller_properties_);
@@ -339,10 +338,16 @@ uint32_t Add(uint32_t simulation_device) {
   // invoked atomically, preventing data races.
   std::promise<uint32_t> facade_id_promise;
   auto facade_id_future = facade_id_promise.get_future();
+
+  std::optional<Address> address_option;
+  if (address_string != "") {
+    address_option = rootcanal::Address::FromString(address_string);
+  }
   mAsyncManager->ExecAsync(
       gSocketUserId, std::chrono::milliseconds(0),
-      [hci_device, &facade_id_promise]() {
-        facade_id_promise.set_value(gTestModel->AddHciConnection(hci_device));
+      [hci_device, &facade_id_promise, address_option]() {
+        facade_id_promise.set_value(
+            gTestModel->AddHciConnection(hci_device, address_option));
       });
   auto facade_id = facade_id_future.get();
 

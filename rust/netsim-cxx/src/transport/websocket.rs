@@ -16,11 +16,12 @@ use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, io::Cursor, net::TcpStream};
 
 use frontend_proto::common::ChipKind;
+use frontend_proto::model::ChipCreate;
 use http::Request;
 use log::{error, info, warn};
 use tungstenite::{protocol::Role, Message, WebSocket};
 
-use crate::http_server::{collect_query, server_response::ResponseWritable};
+use crate::http_server::server_response::ResponseWritable;
 use crate::{
     devices::devices_handler::{add_chip, remove_chip},
     ffi::handle_request_cxx,
@@ -40,36 +41,31 @@ fn generate_websocket_accept(websocket_key: String) -> String {
     data_encoding::BASE64.encode(&hashed)
 }
 
-/// Check if all required fields exist in queries and request headers
-fn has_required_websocket_fields(
-    queries: &HashMap<&str, &str>,
-    request: &Request<Vec<u8>>,
-) -> bool {
-    queries.contains_key("name")
-        && queries.contains_key("kind")
-        && request.headers().get("Sec-Websocket-Key").is_some()
-}
-
 /// Handler for websocket server connection
 pub fn handle_websocket(request: &Request<Vec<u8>>, param: &str, writer: ResponseWritable) {
-    match collect_query(param) {
-        Ok(queries) if has_required_websocket_fields(&queries, request) => {
-            let websocket_accept =
-                match request.headers().get("Sec-Websocket-Key").unwrap().to_str() {
-                    Ok(value) => generate_websocket_accept(value.to_string()),
-                    Err(err) => {
-                        warn!("{err:?}");
-                        return;
-                    }
-                };
-            writer.put_ok_switch_protocol(
-                "websocket",
-                vec![("Sec-WebSocket-Accept".to_string(), websocket_accept)],
-            )
-        }
-        Ok(_) => writer.put_error(404, "Missing query fields and/or Sec-Websocket-Key"),
-        Err(err) => writer.put_error(404, err),
+    if param != "bt" {
+        writer.put_error(404, "netsim websocket currently supports bt, uri=/v1/websocket/bt");
     }
+    let websocket_accept = match request.headers().get("Sec-Websocket-Key") {
+        Some(key) => match key.to_str() {
+            Ok(key_str) => generate_websocket_accept(key_str.to_string()),
+            Err(_) => {
+                writer.put_error(
+                    404,
+                    "The HeaderValue of Sec-Websocket-Key cannot be converted to str",
+                );
+                return;
+            }
+        },
+        None => {
+            writer.put_error(404, "Missing Sec-Websocket-Key in header");
+            return;
+        }
+    };
+    writer.put_ok_switch_protocol(
+        "websocket",
+        vec![("Sec-WebSocket-Accept".to_string(), websocket_accept)],
+    )
 }
 
 struct WebSocketTransport {
@@ -77,7 +73,7 @@ struct WebSocketTransport {
 }
 
 impl Response for WebSocketTransport {
-    fn response(&mut self, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+    fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
         let mut buffer = Vec::new();
         buffer.push(packet_type);
         buffer.extend(packet);
@@ -91,14 +87,21 @@ impl Response for WebSocketTransport {
 
 /// Run websocket transport for packet flow in netsim
 pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) {
+    let chip_create_proto = ChipCreate {
+        kind: ChipKind::BLUETOOTH.into(),
+        address: queries.get("address").unwrap_or(&"").to_string(),
+        name: format!("websocket-{}", stream.peer_addr().unwrap()),
+        manufacturer: "Google".to_string(),
+        product_name: "Google".to_string(),
+        ..Default::default()
+    };
     // Add Chip
     let result = match add_chip(
         &stream.peer_addr().unwrap().port().to_string(),
-        queries.get("name").unwrap(),
-        ChipKind::BLUETOOTH,
-        &format!("websocket-{}", stream.peer_addr().unwrap()),
-        "Google",
-        "Google",
+        queries
+            .get("name")
+            .unwrap_or(&format!("websocket-device-{}", stream.peer_addr().unwrap()).as_str()),
+        &chip_create_proto,
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {

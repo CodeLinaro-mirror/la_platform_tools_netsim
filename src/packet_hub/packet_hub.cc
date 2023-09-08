@@ -16,7 +16,6 @@
 
 #include "packet_hub/packet_hub.h"
 
-#include "backend/backend_packet_hub.h"
 #include "hci/hci_packet_hub.h"
 #include "netsim-cxx/src/lib.rs.h"
 #include "netsim/common.pb.h"
@@ -48,25 +47,6 @@ void HandleRequestCxx(uint32_t kind, uint32_t facade_id,
   std::vector<uint8_t> buffer(packet.begin(), packet.end());
   HandleRequest(static_cast<ChipKind>(kind), facade_id, buffer,
                 static_cast<packet::HCIPacket_PacketType>(packet_type));
-}
-
-// forward from facade to transport via packet_hub
-void HandleBtResponse(uint32_t facade_id,
-                      packet::HCIPacket_PacketType packet_type,
-                      const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::capture::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
-                                  packet_type);
-  netsim::transport::HandleResponse(ChipKind::BLUETOOTH, facade_id, *packet,
-                                    packet_type);
-}
-
-// forward from facade to transport via packet_hub
-void HandleWifiResponse(uint32_t facade_id,
-                        const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::capture::HandleResponse(ChipKind::WIFI, facade_id, *packet,
-                                  packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
-  netsim::transport::HandleResponse(ChipKind::WIFI, facade_id, *packet,
-                                    packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
 }
 
 }  // namespace packet_hub

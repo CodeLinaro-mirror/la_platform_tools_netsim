@@ -17,36 +17,15 @@
 # Setup repo directory.
 REPO=$(dirname "$0")/../../..
 
-# Get the boolean flag from the user
-while getopts "b" flag; do
-    case $flag in
-        b) npm_build="true";;
-        *) echo "'-b' flag allows npm build to occur"; exit 1;;
-    esac
-done
+# Head into netsim/ui directory
+cd $REPO/tools/netsim/ui
 
-# Checks if objs directory exists
-if [ ! -d "$REPO/tools/netsim/objs" ]; then
-    echo "Please run bash scripts/cmake_setup.sh && ninja -C objs first"
-    exit 1
-fi
+# Compile protobuf to TypeScript
+npm run tsproto
 
-# Refresh objs/netsim-ui directory
-if [ -d "$REPO/tools/netsim/objs/netsim-ui" ]; then
-    rm -r $REPO/tools/netsim/objs/netsim-ui
-fi
+# Compile TypeScript to JavaScript for static file deployment
+npm run build
 
-# Create directory for netsim-ui
-mkdir $REPO/tools/netsim/objs/netsim-ui
-
-# If npm build flag is set, perform npm build
-if [[ $npm_build == "true" ]]; then
-    cd $REPO/tools/netsim/ui
-    npm run tsproto
-    npm run build
-    cd ..
-    bash $REPO/tools/netsim/scripts/format_code.sh
-fi
-
-# Copy files from ui/dist into objs/netsim-ui
-cp -r $REPO/tools/netsim/ui/dist/* $REPO/tools/netsim/objs/netsim-ui/
+# Run format_code
+cd ..
+bash $REPO/tools/netsim/scripts/format_code.sh

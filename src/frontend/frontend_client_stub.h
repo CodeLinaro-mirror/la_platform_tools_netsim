@@ -27,5 +27,8 @@ namespace frontend {
 std::unique_ptr<frontend::FrontendService::Stub> NewFrontendClient(
     uint16_t instance_num);
 
+// Create a frontend grpc client to check if a netsimd is already running.
+bool IsNetsimdAlive(uint16_t instance_num);
+
 }  // namespace frontend
 }  // namespace netsim

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use cxx::let_cxx_string;
 use frontend_proto::model::chip::Bluetooth;
 use protobuf::Message;
 
@@ -38,8 +39,9 @@ pub fn bluetooth_get(facade_id: u32) -> Bluetooth {
 }
 
 // Returns facade_id
-pub fn bluetooth_add(device_id: u32) -> u32 {
-    crate::ffi::bluetooth_add(device_id)
+pub fn bluetooth_add(device_id: u32, address: &str) -> u32 {
+    let_cxx_string!(cxx_address = address);
+    crate::ffi::bluetooth_add(device_id, &cxx_address)
 }
 
 /// Starts the Bluetooth service.

@@ -102,6 +102,9 @@ export class DeviceMap extends LitElement implements Notifiable {
     this.isometric = !this.isometric;
   };
 
+  checkBle(device: Device):
+      boolean{return device.chips.at(0)?.bleBeacon !== undefined}
+
   render() {
     const rainbow = [
       'red',
@@ -124,6 +127,7 @@ export class DeviceMap extends LitElement implements Notifiable {
             (device, idx) => html`
               ${
                 true ?  // TODO manage device.visible in Web UI
+                    this.checkBle(device) ?
                     html`
                     <ns-device-dragzone
                       .action=${'move'}
@@ -133,7 +137,7 @@ export class DeviceMap extends LitElement implements Notifiable {
                       top: `${device.position.y * 100}px`,
                     })}
                     >
-                      <ns-cube-sprite
+                      <ns-pyramid-sprite
                         id=${device.name}
                         .color=${rainbow[idx % rainbow.length]}
                         .size=${'30px'}
@@ -153,9 +157,41 @@ export class DeviceMap extends LitElement implements Notifiable {
                         device.orientation.pitch}, roll: ${
                         device.orientation.roll}"
                         aria-live="polite"
-                      ></ns-cube-sprite>
+                      ></ns-pyramid-sprite>
                     </ns-device-dragzone>
                   ` :
+                    html`
+                  <ns-device-dragzone
+                    .action=${'move'}
+                    style=${styleMap({
+                      position: 'absolute',
+                      left: `${device.position.x * 100}px`,
+                      top: `${device.position.y * 100}px`,
+                    })}
+                  >
+                    <ns-cube-sprite
+                      id=${device.name}
+                      .color=${rainbow[idx % rainbow.length]}
+                      .size=${'30px'}
+                      .controls=${true}
+                      yaw=${device.orientation.yaw}
+                      pitch=${device.orientation.pitch}
+                      roll=${device.orientation.roll}
+                      posZ=${device.position.z * 100}
+                      role="widget"
+                      tabindex="1"
+                      aria-label="${device.name} on Device Map, Position: ${
+                        Math.round(device.position.x * 100)}, ${
+                        Math.round(device.position.y * 100)}, ${
+                        Math.round(
+                            device.position.z * 100)}, Orientation: yaw: ${
+                        device.orientation.yaw}, pitch: ${
+                        device.orientation.pitch}, roll: ${
+                        device.orientation.roll}"
+                      aria-live="polite"
+                    ></ns-cube-sprite>
+                  </ns-device-dragzone>
+                ` :
                     html``}
             `)}
         </div>

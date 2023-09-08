@@ -41,19 +41,22 @@ pub struct Chip {
     pub id: ChipIdentifier,
     pub facade_id: Option<FacadeIdentifier>,
     pub kind: ProtoChipKind,
+    pub address: String,
     pub name: String,
     // TODO: may not be necessary
     pub device_name: String,
     // These are patchable
-    manufacturer: String,
-    product_name: String,
+    pub manufacturer: String,
+    pub product_name: String,
 }
 
 impl Chip {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         id: ChipIdentifier,
         facade_id: Option<FacadeIdentifier>,
         kind: ProtoChipKind,
+        address: &str,
         name: &str,
         device_name: &str,
         manufacturer: &str,
@@ -63,6 +66,7 @@ impl Chip {
             id,
             facade_id,
             kind,
+            address: address.to_string(),
             name: name.to_string(),
             device_name: device_name.to_string(),
             manufacturer: manufacturer.to_string(),
@@ -158,16 +162,20 @@ impl Chip {
 /// Allocates a new chip with a facade_id.
 pub fn chip_new(
     chip_kind: ProtoChipKind,
-    chip_name: &str,
+    chip_address: &str,
+    chip_name: Option<&str>,
     device_name: &str,
     chip_manufacturer: &str,
     chip_product_name: &str,
 ) -> Result<Chip, String> {
+    let id = IDS.write().unwrap().next_id();
+
     Ok(Chip::new(
-        IDS.write().unwrap().next_id(),
+        id,
         None,
         chip_kind,
-        chip_name,
+        chip_address,
+        chip_name.unwrap_or(&format!("chip-{id}")),
         device_name,
         chip_manufacturer,
         chip_product_name,

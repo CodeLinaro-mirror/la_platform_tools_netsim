@@ -17,6 +17,7 @@
 mod args;
 mod browser;
 mod capture_handler;
+mod display;
 mod requests;
 mod response;
 
@@ -28,8 +29,10 @@ use std::path::PathBuf;
 use args::{BinaryProtobuf, GetCapture, NetsimArgs};
 use capture_handler::CaptureHandler;
 use clap::Parser;
-use cxx::UniquePtr;
-use frontend_client_cxx::ffi::{new_frontend_client, ClientResult, FrontendClient, GrpcMethod};
+use cxx::{let_cxx_string, UniquePtr};
+use frontend_client_cxx::ffi::{
+    get_instance_num, new_frontend_client, ClientResult, FrontendClient, GrpcMethod,
+};
 use frontend_client_cxx::ClientResponseReader;
 use netsim_common::util::netsim_logger;
 
@@ -136,14 +139,20 @@ pub extern "C" fn rust_main() {
 
     let mut args = NetsimArgs::parse();
     if matches!(args.command, args::Command::Gui) {
+        println!("Opening netsim web UI on default web browser");
         browser::open("http://localhost:7681/");
         return;
     } else if matches!(args.command, args::Command::Artifact) {
-        browser::open(netsim_common::system::netsimd_temp_dir());
+        let artifact_dir = netsim_common::system::netsimd_temp_dir();
+        println!("netsim artifact directory: {}", artifact_dir.display());
+        browser::open(artifact_dir);
         return;
     }
     let grpc_method = args.command.grpc_method();
-    let client = new_frontend_client(args.port.unwrap_or_default());
+    let instance_flag = args.instance.unwrap_or_default();
+    let_cxx_string!(vsock = &args.vsock.unwrap_or_default());
+    let client =
+        new_frontend_client(args.port.unwrap_or_default(), get_instance_num(instance_flag), &vsock);
     if client.is_null() {
         if args.port.is_some() {
             error!("Unable to create frontend client. Please ensure netsimd is running and listening on grpc port {}.", args.port.unwrap_or_default());

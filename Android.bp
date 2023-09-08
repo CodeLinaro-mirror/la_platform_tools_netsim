@@ -53,12 +53,17 @@ cc_defaults {
     generated_sources: [
         "FrontendStub_cc",
     ],
+    include_dirs: [
+        "bionic/libc/kernel/uapi/",
+        "bionic/libc/kernel/android/uapi/",
+    ],
 }
 
 rust_defaults {
     name: "libnetsim_cxx_defaults",
     features: ["cuttlefish"],
     rlibs: [
+        "libclap",
         "libcxx",
         "libdata_encoding",
         "libfrontend_proto",
@@ -130,10 +135,10 @@ cc_library_host_static {
         "src/frontend/frontend_server.cc",
         "src/backend/grpc_server.cc",
         "src/hci/bluetooth_facade.cc",
-        "src/hci/hci_debug.cc",
         "src/hci/hci_packet_transport.cc",
         "src/hci/rust_device.cc",
         "src/packet_hub/packet_hub.cc",
+        "src/util/crash_report.cc",
         "src/util/ini_file.cc",
         "src/util/log.cc",
         "src/util/os_utils.cc",
@@ -151,10 +156,13 @@ cc_library_host_static {
         "PacketStreamerStub_cc",
     ],
     shared_libs: [
+        "libbase",
         "libgrpc++",
         "libcrypto",
+        "libunwindstack",
     ],
     static_libs: [
+        "breakpad_client",
         "libc++fs",
         "libjsoncpp",
         "libprotobuf-cpp-full",
@@ -224,7 +232,49 @@ cc_binary_host {
     ],
     ldflags: ["-Wl,--allow-multiple-definition"],
     required: netsim_ui_modules,
+    strip: {
+        keep_symbols_and_debug_frame: true,
+    },
 }
+
+cc_binary_host {
+    name: "netsimd-rs",
+    defaults: ["netsim_defaults"],
+    srcs: [
+        "rust/netsimd.cc",
+    ],
+    generated_headers: [
+        "cxx-bridge-header",
+        "netsim_cxx_h",
+    ],
+    shared_libs: [
+        "libbase",
+        "libgrpc++",
+        "libcap",
+        "libcrypto",
+        "libssl",
+        "libunwindstack",
+    ],
+    static_libs: [
+        "breakpad_client",
+        "libc++fs",
+        "libprotobuf-cpp-full",
+        "libscriptedbeaconpayload-protos-lite",
+        "lib-netsimd-proto",
+        "lib-netsim",
+        "lib-netsim-frontend-proto",
+    ],
+    whole_static_libs: [
+        "libnetsim_cxx",
+        "libbt-rootcanal",
+    ],
+    ldflags: ["-Wl,--allow-multiple-definition"],
+    required: netsim_ui_modules,
+    strip: {
+        keep_symbols_and_debug_frame: true,
+    },
+}
+
 
 cc_test_host {
     name: "netsim-test",
@@ -243,8 +293,10 @@ cc_test_host {
         "libgrpc++",
         "libcrypto",
         "libbase",
+        "libunwindstack",
     ],
     static_libs: [
+        "breakpad_client",
         "libc++fs",
         "libjsoncpp",
         "libprotobuf-cpp-full",

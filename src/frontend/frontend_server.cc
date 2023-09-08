@@ -95,6 +95,21 @@ class FrontendServer final : public frontend::FrontendService::Service {
     return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
   }
 
+  grpc::Status CreateDevice(grpc::ServerContext *context,
+                            const frontend::CreateDeviceRequest *request,
+                            frontend::CreateDeviceResponse *response) {
+    CxxServerResponseWritable writer;
+    std::string request_json;
+    google::protobuf::util::MessageToJsonString(*request, &request_json);
+    auto device = request->device();
+    HandleDeviceCxx(writer, "POST", "", request_json);
+    if (writer.is_ok) {
+      google::protobuf::util::JsonStringToMessage(writer.body, response);
+      return grpc::Status::OK;
+    }
+    return grpc::Status(grpc::StatusCode::UNKNOWN, writer.err);
+  }
+
   grpc::Status PatchDevice(grpc::ServerContext *context,
                            const frontend::PatchDeviceRequest *request,
                            google::protobuf::Empty *response) {

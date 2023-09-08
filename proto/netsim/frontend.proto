@@ -40,6 +40,9 @@ service FrontendService {
   // Create a builtin device
   rpc CreateDevice(CreateDeviceRequest) returns (CreateDeviceResponse);
 
+  // Delete a builtin chip. Implicitly deletes devices which contain no chips.
+  rpc DeleteChip(DeleteChipRequest) returns (google.protobuf.Empty);
+
   // (deprecated with C++ controller) Patch a device
   rpc PatchDevice(PatchDeviceRequest) returns (google.protobuf.Empty);
 
@@ -94,6 +97,10 @@ message CreateDeviceRequest {
 
 message CreateDeviceResponse {
   netsim.model.Device device = 1;
+}
+
+message DeleteChipRequest {
+  uint32 id = 2;
 }
 
 message PatchDeviceRequest {

@@ -69,25 +69,71 @@ message Chip {
   message Bluetooth {
     Radio low_energy = 1;
     Radio classic = 2;
+    // BD_ADDR address
+    string address = 3;
   }
 
   message BluetoothBeacon {
     message AdvertiseSettings {
-      // Transmission power in dBm. Must be within [-127, 127].
-      int32 tx_power_level = 1;
-      // Time interval between advertisements in ms.
-      uint64 interval = 2;
+      // From
+      // packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
+      enum AdvertiseMode {
+        // 1 second advertise interval
+        LOW_POWER = 0;
+        // 250 ms advertise interval
+        BALANCED = 1;
+        // 100 ms advertise interval
+        LOW_LATENCY = 2;
+      }
+
+      // From
+      // packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
+      enum AdvertiseTxPower {
+        // -21 dBm
+        ULTRA_LOW = 0;
+        // -15 dBm
+        LOW = 1;
+        // -7 dBm
+        MEDIUM = 2;
+        // 1 dBm
+        HIGH = 3;
+      }
+
+      // Time interval between advertisments.
+      oneof interval {
+        AdvertiseMode advertise_mode = 1;
+        // Numeric time interval between advertisements in ms.
+        uint64 milliseconds = 2;
+      }
+
+      // Transmission power level.
+      oneof tx_power {
+        AdvertiseTxPower tx_power_level = 3;
+        // Numeric transmission power in dBm. Must be within [-127, 127].
+        int32 dbm = 4;
+      }
+
+      bool scannable = 5;
+      uint64 timeout = 6;
     }
 
     message AdvertiseData {
+      message Service {
+        string uuid = 1;
+        bytes data = 2;
+      }
+
       // Whether the device name should be included in advertise packet.
-      bool include_device_name = 2;
+      bool include_device_name = 1;
       // Whether the transmission power level should be included in the
       // advertise packet.
-      bool include_tx_power_level = 3;
-      // Add manufacturer specific data.
-      bytes manufacturer_data = 4;
+      bool include_tx_power_level = 2;
+      // Manufacturer specific data.
+      bytes manufacturer_data = 3;
+      // GATT services supported by the devices
+      repeated Service services = 4;
     }
+
     // TODO: Only include Radio low_energy.
     Bluetooth bt = 1;
     string address = 2;
@@ -110,11 +156,13 @@ message ChipCreate {
     Chip.BluetoothBeacon.AdvertiseData adv_data = 4;
   }
 
-  string name = 1;
-  string manufacturer = 2;
-  string product_name = 3;
+  netsim.common.ChipKind kind = 1;
+  string address = 2;
+  string name = 3;
+  string manufacturer = 4;
+  string product_name = 5;
   oneof chip {
-    BluetoothBeaconCreate ble_beacon = 4;
+    BluetoothBeaconCreate ble_beacon = 6;
   }
 }
 

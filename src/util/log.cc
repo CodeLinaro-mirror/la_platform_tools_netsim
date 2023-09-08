@@ -29,10 +29,40 @@ void BtsLogDefault(int priority, const char *file, int lineNumber,
   //"mm-dd_HH:MM:SS.sss\0" is 19 byte long
   char prefix[19];
   auto l = std::strftime(prefix, sizeof(prefix), "%m-%d %H:%M:%S",
-                         std::localtime(&now_t));
+                         std::gmtime(&now_t));
   snprintf(prefix + l, sizeof(prefix) - l, ".%03u",
            static_cast<unsigned int>(now_ms.time_since_epoch().count() % 1000));
-  fprintf(stderr, "netsimd D %s %s\n", prefix, buffer);
+
+  // Obtain the file name from given filepath
+  std::string file_path(file);
+  const char *separators = "/";
+#ifdef _WIN32
+  separators = "\\";
+#endif
+  size_t last_slash_pos = file_path.find_last_of(separators);
+  if (last_slash_pos != std::string::npos) {
+    file_path = file_path.substr(last_slash_pos + 1);
+  }
+
+  // Obtain the log level based on given priority
+  std::string level;
+  switch (priority) {
+    case 0:
+      level = "E";
+      break;
+    case 1:
+      level = "W";
+      break;
+    case 2:
+      level = "I";
+      break;
+    default:
+      level = "D";
+  }
+
+  fprintf(stderr, "netsimd %s %s %s:%d - %s\n", level.c_str(), prefix,
+          file_path.c_str(), lineNumber, buffer);
+  fflush(stderr);
 }
 
 static BtsLogFn logFunction = BtsLogDefault;

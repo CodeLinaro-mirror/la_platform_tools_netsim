@@ -20,7 +20,11 @@
 #include <string>
 namespace netsim {
 
-#define BtsLog(fmt, ...) __BtsLog(0, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define BtsLog(fmt, ...) __BtsLog(3, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define BtsLogInfo(fmt, ...) __BtsLog(2, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define BtsLogWarn(fmt, ...) __BtsLog(1, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define BtsLogError(fmt, ...) \
+  __BtsLog(0, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
 void __BtsLog(int priority, const char *file, int line, const char *fmt, ...);
 

@@ -26,12 +26,12 @@
 
 use crate::http_server::server_response::ResponseWritable;
 
-use http::Request;
+use http::{Request, Uri};
 
 type RequestHandler = Box<dyn Fn(&Request<Vec<u8>>, &str, ResponseWritable)>;
 
 pub struct Router {
-    routes: Vec<(String, RequestHandler)>,
+    routes: Vec<(Uri, RequestHandler)>,
 }
 
 impl Router {
@@ -39,13 +39,16 @@ impl Router {
         Router { routes: Vec::new() }
     }
 
-    pub fn add_route(&mut self, route: &str, handler: RequestHandler) {
-        self.routes.push((route.to_owned(), handler));
+    pub fn add_route(&mut self, route: Uri, handler: RequestHandler) {
+        self.routes.push((route, handler));
     }
 
     pub fn handle_request(&self, request: &Request<Vec<u8>>, writer: ResponseWritable) {
         for (route, handler) in &self.routes {
-            if let Some(param) = match_route(route, request.uri().to_string().as_str()) {
+            if let Some(param) = match_route(
+                route.path().to_string().as_str(),
+                request.uri().path().to_string().as_str(),
+            ) {
                 handler(request, param, writer);
                 return;
             }
@@ -63,28 +66,7 @@ impl Router {
 ///   uri: "/users/33/info"
 ///   result: Some("33")
 ///
-/// Query Example:
-///   pattern: "/users?"
-///   uri: "/users?name=hello&value=0"
-///   result: Some("name=hello&value=0")
-///
 fn match_route<'a>(route: &str, uri: &'a str) -> Option<&'a str> {
-    // check for query string in uri
-    if route.ends_with('?') {
-        let query_start = route.find('?').unwrap();
-        // check for multiple '?' in route
-        if query_start != route.len() - 1 {
-            return None;
-        }
-        // check for match of route like "/user?"
-        let prefix = &route[0..query_start];
-        if uri.starts_with(prefix) && query_start < uri.len() {
-            return Some(&uri[(query_start + 1)..]);
-        } else {
-            return None;
-        }
-    }
-
     let open = route.find('{');
     let close = route.find('}');
 
@@ -127,8 +109,8 @@ mod tests {
         writer.put_ok("application/json", body.as_str(), vec![]);
     }
 
-    fn handle_query(_request: &Request<Vec<u8>>, query: &str, writer: ResponseWritable) {
-        let body = format!("The query is '{query}'!");
+    fn handle_query(request: &Request<Vec<u8>>, _param: &str, writer: ResponseWritable) {
+        let body = format!("The query is '{}'!", request.uri().query().unwrap());
         writer.put_ok("text/plain", body.as_str(), vec![]);
     }
 
@@ -145,18 +127,13 @@ mod tests {
         assert_eq!(match_route("{id}/", "123|"), None);
         assert_eq!(match_route("/{id}/", "/123|"), None);
         assert_eq!(match_route("/{id}/", "|123/"), None);
-        assert_eq!(match_route("/user?", "/user?name=hello"), Some("name=hello"));
-        assert_eq!(match_route("/user?s", "/user?s=hello"), None);
-        assert_eq!(match_route("/user??", "/user??name=hello"), None);
-        assert_eq!(match_route("/user?", "/user?"), Some(""));
-        assert_eq!(match_route("/a?", "/b?name=hello"), None);
     }
 
     #[test]
     fn test_handle_request() {
         let mut router = Router::new();
-        router.add_route("/", Box::new(handle_index));
-        router.add_route("/user/{id}", Box::new(handle_user));
+        router.add_route(Uri::from_static("/"), Box::new(handle_index));
+        router.add_route(Uri::from_static("/user/{id}"), Box::new(handle_user));
         let request = Request::builder()
             .method("GET")
             .uri("/")
@@ -189,7 +166,7 @@ mod tests {
     #[test]
     fn test_mismatch_uri() {
         let mut router = Router::new();
-        router.add_route("/user/{id}", Box::new(handle_user));
+        router.add_route(Uri::from_static("/user/{id}"), Box::new(handle_user));
         let request = Request::builder()
             .method("GET")
             .uri("/player/1920")
@@ -208,7 +185,7 @@ mod tests {
     #[test]
     fn test_handle_query() {
         let mut router = Router::new();
-        router.add_route("/user?", Box::new(handle_query));
+        router.add_route(Uri::from_static("/user"), Box::new(handle_query));
         let request = Request::builder()
             .method("GET")
             .uri("/user?name=hello")

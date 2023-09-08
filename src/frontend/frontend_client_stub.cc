@@ -47,5 +47,9 @@ std::unique_ptr<frontend::FrontendService::Stub> NewFrontendClient(
   return frontend::FrontendService::NewStub(channel);
 }
 
+bool IsNetsimdAlive(uint16_t instance_num) {
+  return NewFrontendClient(instance_num) != nullptr;
+}
+
 }  // namespace frontend
 }  // namespace netsim

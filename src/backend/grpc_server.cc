@@ -80,6 +80,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     auto chip_name = request.initial_info().chip().id();
     auto manufacturer = request.initial_info().chip().manufacturer();
     auto product_name = request.initial_info().chip().product_name();
+    auto chip_address = request.initial_info().chip().address();
     // Add a new chip to the device
     std::string chip_kind_string;
     switch (chip_kind) {
@@ -96,9 +97,9 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         chip_kind_string = "UNSPECIFIED";
         break;
     }
-    auto result =
-        netsim::device::AddChipCxx(peer, device_name, chip_kind_string,
-                                   chip_name, manufacturer, product_name);
+    auto result = netsim::device::AddChipCxx(
+        peer, device_name, chip_kind_string, chip_address, chip_name,
+        manufacturer, product_name);
     if (result->IsError()) {
       return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
                             "AddChipCxx failed to add chip into netsim");
@@ -211,9 +212,10 @@ void HandleResponse(ChipKind kind, uint32_t facade_id,
 
 // for cxx
 void HandleResponseCxx(uint32_t kind, uint32_t facade_id,
-                       const std::vector<uint8_t> &packet,
+                       const rust::Vec<rust::u8> &packet,
                        /* optional */ uint8_t packet_type) {
-  HandleResponse(ChipKind(kind), facade_id, packet,
+  std::vector<uint8_t> vec(packet.begin(), packet.end());
+  HandleResponse(ChipKind(kind), facade_id, vec,
                  packet::HCIPacket_PacketType(packet_type));
 }
 

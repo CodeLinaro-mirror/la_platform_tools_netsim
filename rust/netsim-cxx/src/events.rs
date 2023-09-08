@@ -34,6 +34,10 @@ pub enum Event {
         id: DeviceIdentifier,
         name: String,
     },
+    DevicePatched {
+        id: DeviceIdentifier,
+        name: String,
+    },
     ChipAdded {
         chip_id: ChipIdentifier,
         chip_kind: ChipKind,
