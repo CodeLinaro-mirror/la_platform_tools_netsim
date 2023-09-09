@@ -13,13 +13,17 @@
 // limitations under the License.
 
 use clap::Parser;
-use log::{error, info, warn};
+use log::warn;
+#[cfg(feature = "cuttlefish")]
+use log::{error, info};
 
 use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
 use crate::ffi::ffi_util;
 use crate::service::{Service, ServiceParams};
+#[cfg(feature = "cuttlefish")]
+use netsim_common::util::os_utils::get_server_address;
 use std::ffi::{c_char, c_int};
 
 /// Wireless network simulator for android (and other) emulated devices.
@@ -65,22 +69,32 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
     }
 
     match args.connector_instance {
+        #[cfg(feature = "cuttlefish")]
         Some(connector_instance) => run_netsimd_connector(args, connector_instance),
-        None => run_netsimd_primary(args),
+        _ => run_netsimd_primary(args),
     }
 }
 
-// Forwards packets to another netsim daemon.
+/// Forwards packets to another netsim daemon.
+#[cfg(feature = "cuttlefish")]
 fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
-    if args.fd_startup_str.is_none() {
-        error!("Failed to start netsimd forwarder, missing `-s` arg");
-        return;
-    }
-    if !ffi_util::is_netsimd_alive(instance) {
-        error!("Failed to start netsimd forwarder, no primary at {}", instance);
-        return;
-    }
+    let fd_startup = match args.fd_startup_str {
+        None => {
+            error!("Failed to start netsimd forwarder, missing `-s` arg");
+            return;
+        }
+        Some(fd_startup) => fd_startup,
+    };
+
     info!("Starting netsim daemon in forwarding mode");
+    // TODO: Make this function returns Result to use `?` instead of unwrap().
+    let server = get_server_address(instance)
+        .map(|port| format!("localhost:{}", port))
+        .ok_or_else(|| warn!("Unable to find server address for instance {}", instance))
+        .unwrap();
+    crate::transport::fd::run_fd_connector(&fd_startup, server.as_str())
+        .map_err(|e| error!("Failed to run fd connector: {}", e))
+        .unwrap();
 }
 
 fn run_netsimd_primary(netsimd_args: NetsimdArgs) {

@@ -102,7 +102,7 @@ rust_test_host {
 genrule {
     name: "netsim_daemon_cc",
     tools: ["cxxbridge"],
-    cmd: "$(location cxxbridge) $(in) >> $(out)",
+    cmd: "$(location cxxbridge) $(in) --cfg feature=\\\"cuttlefish\\\" >> $(out)",
     srcs: ["rust/daemon/src/ffi.rs"],
     out: ["netsim-daemon/src/ffi.rs.cc"],
 }
@@ -110,7 +110,7 @@ genrule {
 genrule {
     name: "netsim_daemon_h",
     tools: ["cxxbridge"],
-    cmd: "$(location cxxbridge) $(in) --header >> $(out)",
+    cmd: "$(location cxxbridge) $(in) --cfg feature=\\\"cuttlefish\\\" --header >> $(out)",
     srcs: ["rust/daemon/src/ffi.rs"],
     out: ["netsim-daemon/src/ffi.rs.h"],
 }
