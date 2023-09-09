@@ -97,19 +97,11 @@ fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
         .unwrap();
 }
 
-fn run_netsimd_primary(netsimd_args: NetsimdArgs) {
-    let fd_startup_str = netsimd_args.fd_startup_str.unwrap_or_default();
-    let no_cli_ui = netsimd_args.no_cli_ui;
-    let no_web_ui = netsimd_args.no_web_ui;
-    let pcap = netsimd_args.pcap;
-    let disable_address_reuse = netsimd_args.disable_address_reuse;
-    let instance_num = ffi_util::get_instance(netsimd_args.instance.unwrap_or_default());
+fn run_netsimd_primary(args: NetsimdArgs) {
+    let fd_startup_str = args.fd_startup_str.unwrap_or_default();
+    let instance_num = ffi_util::get_instance(args.instance.unwrap_or_default());
     let hci_port: u16 =
-        ffi_util::get_hci_port(netsimd_args.hci_port.unwrap_or_default(), instance_num)
-            .try_into()
-            .unwrap();
-    let dev = netsimd_args.dev;
-    let vsock = netsimd_args.vsock.unwrap_or_default();
+        ffi_util::get_hci_port(args.hci_port.unwrap_or_default(), instance_num).try_into().unwrap();
 
     #[cfg(feature = "cuttlefish")]
     if fd_startup_str.is_empty() {
@@ -123,14 +115,14 @@ fn run_netsimd_primary(netsimd_args: NetsimdArgs) {
     }
     let service_params = ServiceParams::new(
         fd_startup_str,
-        no_cli_ui,
-        no_web_ui,
-        pcap,
-        disable_address_reuse,
+        args.no_cli_ui,
+        args.no_web_ui,
+        args.pcap,
+        args.disable_address_reuse,
         hci_port,
         instance_num,
-        dev,
-        vsock,
+        args.dev,
+        args.vsock.unwrap_or_default(),
     );
 
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain

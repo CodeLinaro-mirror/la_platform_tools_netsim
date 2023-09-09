@@ -59,4 +59,8 @@ pub struct NetsimdArgs {
     /// Set the vsock port number to be listened by the frontend grpc server
     #[arg(short, long)]
     pub vsock: Option<u16>,
+
+    // The name of a config file to load
+    #[arg(long)]
+    pub config: Option<String>,
 }

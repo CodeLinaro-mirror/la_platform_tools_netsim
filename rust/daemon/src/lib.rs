@@ -18,6 +18,7 @@ mod args;
 mod bluetooth;
 pub mod captures;
 mod config;
+mod config_file;
 mod devices;
 mod events;
 mod ffi;

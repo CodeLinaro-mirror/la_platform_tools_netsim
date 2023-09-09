@@ -16,6 +16,7 @@
 //! protobuf library for netsim
 
 pub mod common;
+pub mod config;
 pub mod configuration;
 pub mod frontend;
 pub mod hci_packet;
