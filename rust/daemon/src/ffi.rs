@@ -215,7 +215,7 @@ pub mod ffi_bluetooth {
 
         #[rust_name = bluetooth_start]
         #[namespace = "netsim::hci::facade"]
-        pub fn Start(instance_num: u16);
+        pub fn Start(proto_bytes: &[u8], instance_num: u16);
 
         #[rust_name = bluetooth_stop]
         #[namespace = "netsim::hci::facade"]
@@ -252,7 +252,7 @@ pub mod ffi_wifi {
         pub fn Add(_chip_id: u32) -> u32;
 
         #[rust_name = wifi_start]
-        pub fn Start();
+        pub fn Start(proto_bytes: &[u8]);
 
         #[rust_name = wifi_stop]
         pub fn Stop();

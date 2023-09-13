@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use crate::ffi::ffi_bluetooth;
+use ::protobuf::MessageField;
 use cxx::let_cxx_string;
+use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::model::chip::Bluetooth;
 use protobuf::Message;
 
@@ -46,8 +48,9 @@ pub fn bluetooth_add(device_id: u32, address: &str) -> u32 {
 }
 
 /// Starts the Bluetooth service.
-pub fn bluetooth_start(instance_num: u16) {
-    ffi_bluetooth::bluetooth_start(instance_num);
+pub fn bluetooth_start(config: &MessageField<BluetoothConfig>, instance_num: u16) {
+    let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
+    ffi_bluetooth::bluetooth_start(&proto_bytes, instance_num);
 }
 
 /// Stops the Bluetooth service.

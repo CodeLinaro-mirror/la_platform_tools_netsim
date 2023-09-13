@@ -33,6 +33,7 @@
 #include "model/setup/test_command_handler.h"
 #include "model/setup/test_model.h"
 #include "netsim-daemon/src/ffi.rs.h"
+#include "netsim/config.pb.h"
 #include "rust/cxx.h"
 #include "util/filesystem.h"
 #include "util/log.h"
@@ -186,11 +187,17 @@ void SetUpTestChannel(uint16_t instance_num) {
 }  // namespace
 
 // Initialize the rootcanal library.
-void Start(uint16_t instance_num) {
+void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
+           uint16_t instance_num) {
   if (gStarted) return;
 
   // output is to a file, so no color wanted
   rootcanal::log::SetLogColorEnable(false);
+
+  config::Bluetooth config;
+  config.ParseFromArray(proto_bytes.data(), proto_bytes.size());
+  controller_properties_ =
+      std::make_unique<rootcanal::ControllerProperties>(config.properties());
 
   // When emulators restore from a snapshot the PacketStreamer connection to
   // netsim is recreated with a new (uninitialized) Rootcanal device. However
@@ -199,7 +206,6 @@ void Start(uint16_t instance_num) {
   // before a HCI Reset. The flag below causes a hardware error event that
   // triggers the Reset from the Bluetooth Stack.
 
-  controller_properties_ = std::make_unique<rootcanal::ControllerProperties>();
   controller_properties_->quirks.hardware_error_before_reset = true;
 
   gAsyncManager = std::make_shared<rootcanal::AsyncManager>();
@@ -222,6 +228,7 @@ void Start(uint16_t instance_num) {
          rootcanal::Phy::Type /* phy_type */) { return nullptr; });
 
   // Disable Address Reuse if '--disable_address_reuse' flag is true
+  // TODO: once config files are active, use the value from config proto
   gTestModel->SetReuseDeviceAddresses(!netsim::GetDisableAddressReuse());
 
   // NOTE: 0:BR_EDR, 1:LOW_ENERGY. The order is used by bluetooth CTS.

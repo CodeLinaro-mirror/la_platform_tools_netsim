@@ -15,8 +15,10 @@
 use crate::bluetooth::{BeaconChip, BEACON_CHIPS};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
+use ::protobuf::MessageField;
 use lazy_static::lazy_static;
 use log::info;
+use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::model::chip::{Bluetooth, BluetoothBeacon};
 use netsim_proto::model::chip_create::Chip as Builtin;
 use netsim_proto::model::{ChipCreate, DeviceCreate};
@@ -69,7 +71,7 @@ pub fn bluetooth_add(device_id: u32, _address: &str) -> u32 {
 }
 
 /// Starts the Bluetooth service.
-pub fn bluetooth_start(_instance_num: u16) {
+pub fn bluetooth_start(_config: &MessageField<BluetoothConfig>, _instance_num: u16) {
     info!("bluetooth service started");
 }
 

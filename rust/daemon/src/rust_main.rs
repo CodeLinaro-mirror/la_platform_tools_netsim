@@ -14,9 +14,11 @@
 
 use clap::Parser;
 use log::warn;
-#[cfg(feature = "cuttlefish")]
 use log::{error, info};
 
+use crate::bluetooth as bluetooth_facade;
+use crate::config_file;
+use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
@@ -24,6 +26,7 @@ use crate::ffi::ffi_util;
 use crate::service::{Service, ServiceParams};
 #[cfg(feature = "cuttlefish")]
 use netsim_common::util::os_utils::get_server_address;
+use netsim_proto::config::Config;
 use std::ffi::{c_char, c_int};
 
 /// Wireless network simulator for android (and other) emulated devices.
@@ -113,6 +116,20 @@ fn run_netsimd_primary(args: NetsimdArgs) {
         warn!("Failed to start netsim daemon because a netsim daemon is already running");
         return;
     }
+
+    let mut config = Config::new();
+    if let Some(filename) = args.config {
+        match config_file::new_from_file(&filename) {
+            Ok(config_from_file) => {
+                info!("Using config in {}", config);
+                config = config_from_file;
+            }
+            Err(e) => {
+                error!("Skipping config in {}: {:?}", filename, e);
+            }
+        }
+    }
+
     let service_params = ServiceParams::new(
         fd_startup_str,
         args.no_cli_ui,
@@ -129,5 +146,9 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     // valid and open for as long as the program runs.
     let service = unsafe { Service::new(service_params) };
     service.set_up();
+
+    bluetooth_facade::bluetooth_start(&config.bluetooth, instance_num);
+    wifi_facade::wifi_start(&config.wifi);
+
     service.run();
 }
