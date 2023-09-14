@@ -54,7 +54,7 @@ std::shared_ptr<grpc::Channel> CreateGrpcChannel() {
   }
 
   if (endpoint.empty()) return nullptr;
-  BtsLog("Creating a Grpc channel to %s", endpoint.c_str());
+  BtsLogInfo("Creating a Grpc channel to %s", endpoint.c_str());
 
   std::vector<
       std::unique_ptr<grpc::experimental::ClientInterceptorFactoryInterface>>
@@ -84,7 +84,7 @@ std::unique_ptr<android::base::ObservableProcess> RunNetsimd(
 
   auto netsimd = cmd.asDeamon().execute();
   if (netsimd) {
-    BtsLog("Running netsimd as pid: %d.", netsimd->pid());
+    BtsLogInfo("Running netsimd as pid: %d.", netsimd->pid());
   }
 
   return netsimd;
@@ -109,15 +109,15 @@ std::shared_ptr<grpc::Channel> GetChannel(NetsimdOptions options) {
 
     if ((!netsimProc || !netsimProc->isAlive()) &&
         custom_packet_stream_endpoint.empty()) {
-      BtsLog("Starting netsim since %s",
-             netsimProc ? "the process died" : "it is not yet launched");
+      BtsLogInfo("Starting netsim since %s",
+                 netsimProc ? "the process died" : "it is not yet launched");
       netsimProc = RunNetsimd(options);
     }
-    BtsLog("Retry connecting to netsim in %d second.", second);
+    BtsLogInfo("Retry connecting to netsim in %d second.", second);
     std::this_thread::sleep_for(std::chrono::seconds(second));
   }
 
-  BtsLog("Unable to get a packet stream channel.");
+  BtsLogError("Unable to get a packet stream channel.");
   return nullptr;
 }
 

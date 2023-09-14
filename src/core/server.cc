@@ -17,16 +17,15 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "backend/grpc_server.h"
 #include "frontend/frontend_server.h"
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
-#include "netsim-cxx/src/lib.rs.h"
-#include "util/ini_file.h"
+#include "netsim-daemon/src/lib.rs.h"
 #include "util/log.h"
-#include "util/os_utils.h"
 #ifdef _WIN32
 #include <Windows.h>
 #else
@@ -43,9 +42,8 @@ namespace netsim::server {
 namespace {
 constexpr std::chrono::seconds InactivityCheckInterval(5);
 
-std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
-                                            bool no_cli_ui, int instance_num,
-                                            int vsock) {
+std::pair<std::unique_ptr<grpc::Server>, uint32_t> RunGrpcServer(
+    int netsim_grpc_port, bool no_cli_ui, int instance_num, int vsock) {
   grpc::ServerBuilder builder;
   int selected_port;
   builder.AddListeningPort("0.0.0.0:" + std::to_string(netsim_grpc_port),
@@ -59,7 +57,7 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
   if (vsock != 0) {
     std::string vsock_uri =
         "vsock:" + std::to_string(VMADDR_CID_ANY) + ":" + std::to_string(vsock);
-    BtsLog("vsock_uri: %s", vsock_uri.c_str());
+    BtsLogInfo("vsock_uri: %s", vsock_uri.c_str());
     builder.AddListeningPort(vsock_uri, grpc::InsecureServerCredentials());
   }
 #endif
@@ -69,20 +67,14 @@ std::unique_ptr<grpc::Server> RunGrpcServer(int netsim_grpc_port,
   builder.AddChannelArgument(GRPC_ARG_ALLOW_REUSEPORT, 0);
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
   if (server == nullptr) {
-    return nullptr;
+    return std::make_pair(nullptr, static_cast<uint32_t>(selected_port));
   }
 
-  BtsLog("Grpc server listening on localhost: %s",
-         std::to_string(selected_port).c_str());
+  BtsLogInfo("Grpc server listening on localhost: %s",
+             std::to_string(selected_port).c_str());
 
-  // Writes grpc port to ini file.
-  auto filepath = osutils::GetNetsimIniFilepath(instance_num);
-  IniFile iniFile(filepath);
-  iniFile.Read();
-  iniFile.Set("grpc.port", std::to_string(selected_port));
-  iniFile.Write();
-
-  return std::move(server);
+  return std::make_pair(std::move(server),
+                        static_cast<uint32_t>(selected_port));
 }
 }  // namespace
 
@@ -90,19 +82,10 @@ std::unique_ptr<GrpcServer> RunGrpcServerCxx(uint32_t netsim_grpc_port,
                                              bool no_cli_ui,
                                              uint16_t instance_num,
                                              uint16_t vsock) {
-  auto grpc_server =
+  auto [grpc_server, port] =
       RunGrpcServer(netsim_grpc_port, no_cli_ui, instance_num, vsock);
   if (grpc_server == nullptr) return nullptr;
-  return std::make_unique<GrpcServer>(std::move(grpc_server));
-}
-
-void Run(ServerParams params) {
-  auto rust_service = netsim::CreateService(
-      params.fd_startup_str, params.no_cli_ui, params.no_web_ui,
-      params.hci_port, params.instance_num, params.dev, params.vsock);
-  rust_service->SetUp();
-
-  rust_service->Run();
+  return std::make_unique<GrpcServer>(std::move(grpc_server), port);
 }
 
 }  // namespace netsim::server

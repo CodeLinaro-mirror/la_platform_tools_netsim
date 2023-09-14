@@ -78,24 +78,31 @@ message Chip {
       // From
       // packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
       enum AdvertiseMode {
-        // 1 second advertise interval
+        // Perform Bluetooth LE advertising in low power mode. This is the
+        // default and preferred advertising mode as it consumes the least power
         LOW_POWER = 0;
-        // 250 ms advertise interval
+        // Perform Bluetooth LE advertising in balanced power mode. This is
+        // balanced between advertising frequency and power consumption
         BALANCED = 1;
-        // 100 ms advertise interval
+        // Perform Bluetooth LE advertising in low latency, high power mode.
+        // This has the highest power consumption and should not be used for
+        // continuous background advertising
         LOW_LATENCY = 2;
       }
 
       // From
       // packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
       enum AdvertiseTxPower {
-        // -21 dBm
+        // Advertise using the lowest transmission (TX) power level. Low
+        // transmission power can be used to restrict the visibility range of
+        // advertising packets
         ULTRA_LOW = 0;
-        // -15 dBm
+        // Advertise using low TX power level. This is the default
         LOW = 1;
-        // -7 dBm
+        // Advertise using medium TX power level
         MEDIUM = 2;
-        // 1 dBm
+        // Advertise using high TX power level. This corresponds to largest
+        // visibility range of the advertising packet
         HIGH = 3;
       }
 
@@ -139,6 +146,7 @@ message Chip {
     string address = 2;
     AdvertiseSettings settings = 3;
     AdvertiseData adv_data = 4;
+    AdvertiseData scan_response = 5;
   }
 
   oneof chip {
@@ -154,6 +162,7 @@ message ChipCreate {
     string address = 1;
     Chip.BluetoothBeacon.AdvertiseSettings settings = 3;
     Chip.BluetoothBeacon.AdvertiseData adv_data = 4;
+    Chip.BluetoothBeacon.AdvertiseData scan_response = 5;
   }
 
   netsim.common.ChipKind kind = 1;

@@ -77,7 +77,7 @@ if(TARGET Rust::Rustc)
       ${CMAKE_BINARY_DIR}/cargo/build/${Rust_CARGO_TARGET_CACHED}/cxxbridge)
   set(common_header ${cxx_bridge_binary_folder}/rust/cxx.h)
   set(cxx_bridge_source_file "src/lib.rs")
-  set(crate_name "netsim-cxx")
+  set(crate_name "netsim-daemon")
   set(binding_header
       ${cxx_bridge_binary_folder}/${crate_name}/${cxx_bridge_source_file}.h)
   set(binding_source
@@ -110,10 +110,6 @@ if(TARGET Rust::Rustc)
         hci/hci_packet_transport.h
         hci/rust_device.cc
         hci/rust_device.h
-        packet_hub/packet_hub.cc
-        packet_hub/packet_hub.h
-        uwb/uwb_facade.cc
-        uwb/uwb_facade.h
         wifi/wifi_facade.cc
         wifi/wifi_facade.h
         wifi/wifi_packet_hub.h
@@ -122,14 +118,14 @@ if(TARGET Rust::Rustc)
          android-wifi-service
          grpc++
          libbt-rootcanal
-         netsim-cxx
+         netsim-daemon
          netsimd-proto-lib
          packet-streamer-proto-lib
          protobuf::libprotobuf
          util-lib)
   target_include_directories(
-    netsimd-lib PRIVATE . ${PROTOBUF_INCLUDE_DIR} ../rust/netsim-cxx
-                        ../rust/netsim-cxx/cxx
+    netsimd-lib PRIVATE . ${PROTOBUF_INCLUDE_DIR} ../rust/netsim-daemon
+                        ../rust/netsim-daemon/cxx
     PUBLIC ${cxx_bridge_binary_folder})
   target_compile_definitions(netsimd-lib PUBLIC NETSIM_ANDROID_EMULATOR)
 
