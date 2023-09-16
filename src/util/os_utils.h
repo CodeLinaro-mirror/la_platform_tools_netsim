@@ -41,11 +41,6 @@ std::string GetDiscoveryDirectory();
 std::string GetNetsimIniFilepath(uint16_t instance_num);
 
 /**
- * Return the path of netsim ini file (Rust).
- */
-std::unique_ptr<std::string> GetNetsimIniFilepathCxx(uint16_t instance_num);
-
-/**
  * Return the frontend grpc port.
  */
 std::optional<std::string> GetServerAddress(uint16_t instance_num = 0);

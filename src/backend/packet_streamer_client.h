@@ -53,6 +53,8 @@ struct NetsimdOptions {
 void SetPacketStreamEndpoint(const std::string &endpoint);
 
 std::shared_ptr<grpc::Channel> CreateChannel(NetsimdOptions);
+std::shared_ptr<grpc::Channel> CreateChannel(NetsimdOptions,
+                                             const std::string &netsim_args);
 
 // Deprecated.
 std::shared_ptr<grpc::Channel> CreateChannel(

@@ -20,6 +20,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::path::PathBuf;
 
 /// A simple class to process init file. Based on
 /// external/qemu/android/android-emu-base/android/base/files/IniFile.h
@@ -27,7 +28,7 @@ pub struct IniFile {
     /// The data stored in the ini file.
     data: HashMap<String, String>,
     /// The path to the ini file.
-    filepath: String,
+    filepath: PathBuf,
 }
 
 impl IniFile {
@@ -36,7 +37,7 @@ impl IniFile {
     /// # Arguments
     ///
     /// * `filepath` - The path to the ini file.
-    pub fn new(filepath: String) -> IniFile {
+    pub fn new(filepath: PathBuf) -> IniFile {
         IniFile { data: HashMap::new(), filepath }
     }
 
@@ -48,10 +49,6 @@ impl IniFile {
     /// `Ok` if the write was successful, `Error` otherwise.
     pub fn read(&mut self) -> Result<(), Box<dyn Error>> {
         self.data.clear();
-
-        if self.filepath.is_empty() {
-            return Err("Read called without a backing file!".into());
-        }
 
         let mut f = File::open(self.filepath.clone())?;
         let reader = BufReader::new(&mut f);
@@ -76,10 +73,6 @@ impl IniFile {
     ///
     /// `Ok` if the write was successful, `Error` otherwise.
     pub fn write(&self) -> Result<(), Box<dyn Error>> {
-        if self.filepath.is_empty() {
-            return Err("Write called without a backing file!".into());
-        }
-
         let mut f = File::create(self.filepath.clone())?;
         for (key, value) in &self.data {
             writeln!(&mut f, "{}={}", key, value)?;
@@ -131,22 +124,19 @@ mod tests {
     use std::env;
     use std::fs::File;
     use std::io::{Read, Write};
+    use std::path::PathBuf;
 
     use super::IniFile;
 
-    fn get_temp_ini_filepath(prefix: &str) -> String {
-        env::temp_dir()
-            .join(format!(
-                "{prefix}_{}.ini",
-                rand::thread_rng()
-                    .sample_iter(&Alphanumeric)
-                    .take(8)
-                    .map(char::from)
-                    .collect::<String>()
-            ))
-            .into_os_string()
-            .into_string()
-            .unwrap()
+    fn get_temp_ini_filepath(prefix: &str) -> PathBuf {
+        env::temp_dir().join(format!(
+            "{prefix}_{}.ini",
+            rand::thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(8)
+                .map(char::from)
+                .collect::<String>()
+        ))
     }
 
     // NOTE: ctest run a test at least twice tests in parallel, so we need to use unique temp file

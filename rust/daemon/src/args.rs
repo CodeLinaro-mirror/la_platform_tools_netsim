@@ -17,15 +17,15 @@ use clap::Parser;
 #[derive(Debug, Parser)]
 pub struct NetsimdArgs {
     /// File descriptor start up info proto
-    #[arg(short = 's', long)]
+    #[arg(short = 's', long, alias = "fd_startup_str")]
     pub fd_startup_str: Option<String>,
 
     /// Disable grpc server for CLI
-    #[arg(long)]
+    #[arg(long, alias = "no_cli_ui")]
     pub no_cli_ui: bool,
 
     /// Disable web server
-    #[arg(long)]
+    #[arg(long, alias = "no_web_ui")]
     pub no_web_ui: bool,
 
     /// Enable packet capture
@@ -33,7 +33,7 @@ pub struct NetsimdArgs {
     pub pcap: bool,
 
     /// Disable Address Reuse for test model
-    #[arg(long)]
+    #[arg(long, alias = "disable_address_reuse")]
     pub disable_address_reuse: bool,
 
     /// Set custom hci port
@@ -41,7 +41,7 @@ pub struct NetsimdArgs {
     pub hci_port: Option<u32>,
 
     /// Enables connector mode to forward packets to another instance.
-    #[arg(short, long, visible_alias = "connector_instance_num")]
+    #[arg(short, long, alias = "connector_instance", visible_alias = "connector_instance_num")]
     pub connector_instance: Option<u16>,
 
     /// Netsimd instance number

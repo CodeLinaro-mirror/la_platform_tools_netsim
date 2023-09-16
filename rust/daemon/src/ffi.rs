@@ -366,10 +366,6 @@ pub mod ffi_util {
         // OS utilities.
         include!("util/os_utils.h");
 
-        #[rust_name = get_netsim_ini_file_path_cxx]
-        #[namespace = "netsim::osutils"]
-        pub fn GetNetsimIniFilepathCxx(instance_num: u16) -> UniquePtr<CxxString>;
-
         #[rust_name = get_instance]
         #[namespace = "netsim::osutils"]
         pub fn GetInstance(instance_flag: u16) -> u16;

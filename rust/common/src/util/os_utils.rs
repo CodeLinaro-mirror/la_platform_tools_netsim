@@ -87,7 +87,7 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
         error!("Not a file: {filepath:?}");
         return None;
     }
-    let mut ini_file = IniFile::new(filepath.display().to_string());
+    let mut ini_file = IniFile::new(filepath);
     if let Err(err) = ini_file.read() {
         error!("Error reading ini file: {err:?}");
     }
