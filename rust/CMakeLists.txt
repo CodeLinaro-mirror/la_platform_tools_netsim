@@ -11,7 +11,6 @@ corrosion_set_env_vars(
   CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(netsim-cli CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(netsim-proto CARGO_HOME=${Rust_CARGO_HOME})
-corrosion_set_env_vars(frontend-client-cxx CARGO_HOME=${Rust_CARGO_HOME})
 
 add_dependencies(cargo-build_netsim-daemon pdl_gen-RootCanalGeneratedPackets_rs)
 
@@ -27,7 +26,6 @@ if(WIN32)
   # 4. This isn't needed in mac and Linux because corrosion doesn't pass
   #    -fno-exception flag.
   set(CXXFLAGS "${CMAKE_CXX_FLAGS} /DRUST_CXX_NO_EXCEPTIONS")
-  corrosion_set_env_vars(frontend-client-cxx CXXFLAGS=${CXXFLAGS})
   corrosion_set_env_vars(netsim-cli CXXFLAGS=${CXXFLAGS})
   corrosion_set_env_vars(netsim-daemon CXXFLAGS=${CXXFLAGS})
 endif()
@@ -35,7 +33,6 @@ endif()
 if(LINUX)
   # b/260271048
   set(RUSTFLAGS "-Clink-args=-Wl,-rpath,${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
-  corrosion_add_target_rustflags(frontend-client-cxx ${RUSTFLAGS})
   corrosion_add_target_rustflags(netsim-cli ${RUSTFLAGS})
   corrosion_add_target_rustflags(netsim-daemon ${RUSTFLAGS})
 endif()
@@ -62,13 +59,11 @@ android_license(TARGET "netsim-daemon" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
 android_license(TARGET "netsim-proto" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
-android_license(TARGET "frontend-client-cxx" LIBNAME None SPDX None LICENSE None
-                LOCAL None)
 
 add_library(netsim-cli-rust-lib INTERFACE)
 
 target_link_libraries(netsim-cli-rust-lib
-                      INTERFACE netsim-proto frontend-client-cxx netsim-cli)
+                      INTERFACE netsim-proto netsim-cli)
 
 android_license(TARGET netsim-cli-rust-lib LIBNAME None SPDX None LICENSE None
                 LOCAL None)

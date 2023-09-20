@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frontend_client_cxx::ClientResponseReadable;
+use crate::ffi::ClientResponseReadable;
 use log::error;
 use std::fs::File;
 /// Implements handler for pcap operations

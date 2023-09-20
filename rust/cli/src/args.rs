@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::ffi::frontend_client_ffi::{FrontendClient, GrpcMethod};
 use clap::builder::{PossibleValue, TypedValueParser};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use frontend_client_cxx::ffi::{FrontendClient, GrpcMethod};
 use hex::{decode as hex_to_bytes, FromHexError};
 use log::error;
 use netsim_common::util::time_display::TimeDisplay;
