@@ -219,6 +219,7 @@ cc_binary_host {
         "libcrypto",
         "libssl",
         "libunwindstack",
+        "libz", // TODO: Remove for native rust binary
     ],
     static_libs: [
         "breakpad_client",
@@ -258,6 +259,7 @@ cc_test_host {
         "libcrypto",
         "libbase",
         "libunwindstack",
+        "libz", // TODO: Remove for native rust binary
     ],
     static_libs: [
         "breakpad_client",
@@ -293,6 +295,7 @@ rust_defaults {
         "librand",
         "liblog_rust",
         "libenv_logger",
+        "libzip",
     ],
 }
 
