@@ -21,13 +21,15 @@ import "rootcanal/configuration.proto";
 message SlirpOptions {
   bool disabled = 1;
   // default is ipv4 = true, proto3 does not allow custom default values
-  bool not_ipv4 = 2;
+  // so this is set in code.
+  optional bool ipv4 = 2;
   bool restricted = 3;
   string vnet = 4;
   string vhost = 5;
   string vmask = 6;
   // default is ipv6 = true, proto3 does not allow custom default values
-  bool not_ipv6 = 7;
+  // so this is set in code.
+  optional bool ipv6 = 7;
   string vprefix6 = 8;
   uint32 vprefixLen = 9;
   string vhost6 = 10;
@@ -40,7 +42,7 @@ message SlirpOptions {
 };
 
 message HostapdOptions {
-  bool disabled = 1;
+  optional bool disabled = 1;
   string ssid = 2;
   string passwd = 3;
 }

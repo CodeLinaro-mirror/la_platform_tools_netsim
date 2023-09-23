@@ -31,8 +31,8 @@ pub struct SlirpOptions {
     // message fields
     // @@protoc_insertion_point(field:netsim.config.SlirpOptions.disabled)
     pub disabled: bool,
-    // @@protoc_insertion_point(field:netsim.config.SlirpOptions.not_ipv4)
-    pub not_ipv4: bool,
+    // @@protoc_insertion_point(field:netsim.config.SlirpOptions.ipv4)
+    pub ipv4: ::std::option::Option<bool>,
     // @@protoc_insertion_point(field:netsim.config.SlirpOptions.restricted)
     pub restricted: bool,
     // @@protoc_insertion_point(field:netsim.config.SlirpOptions.vnet)
@@ -41,8 +41,8 @@ pub struct SlirpOptions {
     pub vhost: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.config.SlirpOptions.vmask)
     pub vmask: ::std::string::String,
-    // @@protoc_insertion_point(field:netsim.config.SlirpOptions.not_ipv6)
-    pub not_ipv6: bool,
+    // @@protoc_insertion_point(field:netsim.config.SlirpOptions.ipv6)
+    pub ipv6: ::std::option::Option<bool>,
     // @@protoc_insertion_point(field:netsim.config.SlirpOptions.vprefix6)
     pub vprefix6: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.config.SlirpOptions.vprefixLen)
@@ -85,10 +85,10 @@ impl SlirpOptions {
             |m: &SlirpOptions| { &m.disabled },
             |m: &mut SlirpOptions| { &mut m.disabled },
         ));
-        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
-            "not_ipv4",
-            |m: &SlirpOptions| { &m.not_ipv4 },
-            |m: &mut SlirpOptions| { &mut m.not_ipv4 },
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "ipv4",
+            |m: &SlirpOptions| { &m.ipv4 },
+            |m: &mut SlirpOptions| { &mut m.ipv4 },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "restricted",
@@ -110,10 +110,10 @@ impl SlirpOptions {
             |m: &SlirpOptions| { &m.vmask },
             |m: &mut SlirpOptions| { &mut m.vmask },
         ));
-        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
-            "not_ipv6",
-            |m: &SlirpOptions| { &m.not_ipv6 },
-            |m: &mut SlirpOptions| { &mut m.not_ipv6 },
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "ipv6",
+            |m: &SlirpOptions| { &m.ipv6 },
+            |m: &mut SlirpOptions| { &mut m.ipv6 },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "vprefix6",
@@ -182,7 +182,7 @@ impl ::protobuf::Message for SlirpOptions {
                     self.disabled = is.read_bool()?;
                 },
                 16 => {
-                    self.not_ipv4 = is.read_bool()?;
+                    self.ipv4 = ::std::option::Option::Some(is.read_bool()?);
                 },
                 24 => {
                     self.restricted = is.read_bool()?;
@@ -197,7 +197,7 @@ impl ::protobuf::Message for SlirpOptions {
                     self.vmask = is.read_string()?;
                 },
                 56 => {
-                    self.not_ipv6 = is.read_bool()?;
+                    self.ipv6 = ::std::option::Option::Some(is.read_bool()?);
                 },
                 66 => {
                     self.vprefix6 = is.read_string()?;
@@ -241,7 +241,7 @@ impl ::protobuf::Message for SlirpOptions {
         if self.disabled != false {
             my_size += 1 + 1;
         }
-        if self.not_ipv4 != false {
+        if let Some(v) = self.ipv4 {
             my_size += 1 + 1;
         }
         if self.restricted != false {
@@ -256,7 +256,7 @@ impl ::protobuf::Message for SlirpOptions {
         if !self.vmask.is_empty() {
             my_size += ::protobuf::rt::string_size(6, &self.vmask);
         }
-        if self.not_ipv6 != false {
+        if let Some(v) = self.ipv6 {
             my_size += 1 + 1;
         }
         if !self.vprefix6.is_empty() {
@@ -295,8 +295,8 @@ impl ::protobuf::Message for SlirpOptions {
         if self.disabled != false {
             os.write_bool(1, self.disabled)?;
         }
-        if self.not_ipv4 != false {
-            os.write_bool(2, self.not_ipv4)?;
+        if let Some(v) = self.ipv4 {
+            os.write_bool(2, v)?;
         }
         if self.restricted != false {
             os.write_bool(3, self.restricted)?;
@@ -310,8 +310,8 @@ impl ::protobuf::Message for SlirpOptions {
         if !self.vmask.is_empty() {
             os.write_string(6, &self.vmask)?;
         }
-        if self.not_ipv6 != false {
-            os.write_bool(7, self.not_ipv6)?;
+        if let Some(v) = self.ipv6 {
+            os.write_bool(7, v)?;
         }
         if !self.vprefix6.is_empty() {
             os.write_string(8, &self.vprefix6)?;
@@ -358,12 +358,12 @@ impl ::protobuf::Message for SlirpOptions {
 
     fn clear(&mut self) {
         self.disabled = false;
-        self.not_ipv4 = false;
+        self.ipv4 = ::std::option::Option::None;
         self.restricted = false;
         self.vnet.clear();
         self.vhost.clear();
         self.vmask.clear();
-        self.not_ipv6 = false;
+        self.ipv6 = ::std::option::Option::None;
         self.vprefix6.clear();
         self.vprefixLen = 0;
         self.vhost6.clear();
@@ -379,12 +379,12 @@ impl ::protobuf::Message for SlirpOptions {
     fn default_instance() -> &'static SlirpOptions {
         static instance: SlirpOptions = SlirpOptions {
             disabled: false,
-            not_ipv4: false,
+            ipv4: ::std::option::Option::None,
             restricted: false,
             vnet: ::std::string::String::new(),
             vhost: ::std::string::String::new(),
             vmask: ::std::string::String::new(),
-            not_ipv6: false,
+            ipv6: ::std::option::Option::None,
             vprefix6: ::std::string::String::new(),
             vprefixLen: 0,
             vhost6: ::std::string::String::new(),
@@ -422,7 +422,7 @@ impl ::protobuf::reflect::ProtobufValue for SlirpOptions {
 pub struct HostapdOptions {
     // message fields
     // @@protoc_insertion_point(field:netsim.config.HostapdOptions.disabled)
-    pub disabled: bool,
+    pub disabled: ::std::option::Option<bool>,
     // @@protoc_insertion_point(field:netsim.config.HostapdOptions.ssid)
     pub ssid: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.config.HostapdOptions.passwd)
@@ -446,7 +446,7 @@ impl HostapdOptions {
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
         let mut fields = ::std::vec::Vec::with_capacity(3);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
-        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "disabled",
             |m: &HostapdOptions| { &m.disabled },
             |m: &mut HostapdOptions| { &mut m.disabled },
@@ -480,7 +480,7 @@ impl ::protobuf::Message for HostapdOptions {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 8 => {
-                    self.disabled = is.read_bool()?;
+                    self.disabled = ::std::option::Option::Some(is.read_bool()?);
                 },
                 18 => {
                     self.ssid = is.read_string()?;
@@ -500,7 +500,7 @@ impl ::protobuf::Message for HostapdOptions {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
-        if self.disabled != false {
+        if let Some(v) = self.disabled {
             my_size += 1 + 1;
         }
         if !self.ssid.is_empty() {
@@ -515,8 +515,8 @@ impl ::protobuf::Message for HostapdOptions {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
-        if self.disabled != false {
-            os.write_bool(1, self.disabled)?;
+        if let Some(v) = self.disabled {
+            os.write_bool(1, v)?;
         }
         if !self.ssid.is_empty() {
             os.write_string(2, &self.ssid)?;
@@ -541,7 +541,7 @@ impl ::protobuf::Message for HostapdOptions {
     }
 
     fn clear(&mut self) {
-        self.disabled = false;
+        self.disabled = ::std::option::Option::None;
         self.ssid.clear();
         self.passwd.clear();
         self.special_fields.clear();
@@ -549,7 +549,7 @@ impl ::protobuf::Message for HostapdOptions {
 
     fn default_instance() -> &'static HostapdOptions {
         static instance: HostapdOptions = HostapdOptions {
-            disabled: false,
+            disabled: ::std::option::Option::None,
             ssid: ::std::string::String::new(),
             passwd: ::std::string::String::new(),
             special_fields: ::protobuf::SpecialFields::new(),
@@ -1002,30 +1002,31 @@ impl ::protobuf::reflect::ProtobufValue for Config {
 
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x13netsim/config.proto\x12\rnetsim.config\x1a\x1drootcanal/configurat\
-    ion.proto\"\xac\x03\n\x0cSlirpOptions\x12\x1a\n\x08disabled\x18\x01\x20\
-    \x01(\x08R\x08disabled\x12\x19\n\x08not_ipv4\x18\x02\x20\x01(\x08R\x07no\
-    tIpv4\x12\x1e\n\nrestricted\x18\x03\x20\x01(\x08R\nrestricted\x12\x12\n\
-    \x04vnet\x18\x04\x20\x01(\tR\x04vnet\x12\x14\n\x05vhost\x18\x05\x20\x01(\
-    \tR\x05vhost\x12\x14\n\x05vmask\x18\x06\x20\x01(\tR\x05vmask\x12\x19\n\
-    \x08not_ipv6\x18\x07\x20\x01(\x08R\x07notIpv6\x12\x1a\n\x08vprefix6\x18\
-    \x08\x20\x01(\tR\x08vprefix6\x12\x1e\n\nvprefixLen\x18\t\x20\x01(\rR\nvp\
-    refixLen\x12\x16\n\x06vhost6\x18\n\x20\x01(\tR\x06vhost6\x12\x1c\n\tvhos\
-    tname\x18\x0b\x20\x01(\tR\tvhostname\x12\x18\n\x07tftpath\x18\x0c\x20\
-    \x01(\tR\x07tftpath\x12\x1a\n\x08bootfile\x18\r\x20\x01(\tR\x08bootfile\
-    \x12\x1c\n\tdhcpstart\x18\x0e\x20\x01(\tR\tdhcpstart\x12\x10\n\x03dns\
-    \x18\x0f\x20\x01(\tR\x03dns\x12\x12\n\x04dns6\x18\x10\x20\x01(\tR\x04dns\
-    6\"X\n\x0eHostapdOptions\x12\x1a\n\x08disabled\x18\x01\x20\x01(\x08R\x08\
-    disabled\x12\x12\n\x04ssid\x18\x02\x20\x01(\tR\x04ssid\x12\x16\n\x06pass\
-    wd\x18\x03\x20\x01(\tR\x06passwd\"\x90\x01\n\x04WiFi\x12@\n\rslirp_optio\
-    ns\x18\x01\x20\x01(\x0b2\x1b.netsim.config.SlirpOptionsR\x0cslirpOptions\
-    \x12F\n\x0fhostapd_options\x18\x02\x20\x01(\x0b2\x1d.netsim.config.Hosta\
-    pdOptionsR\x0ehostapdOptions\"\xa0\x01\n\tBluetooth\x12H\n\nproperties\
-    \x18\x01\x20\x01(\x0b2#.rootcanal.configuration.ControllerH\0R\nproperti\
-    es\x88\x01\x01\x12(\n\raddress_reuse\x18\x02\x20\x01(\x08H\x01R\x0caddre\
-    ssReuse\x88\x01\x01B\r\n\x0b_propertiesB\x10\n\x0e_address_reuse\"i\n\
-    \x06Config\x126\n\tbluetooth\x18\x01\x20\x01(\x0b2\x18.netsim.config.Blu\
-    etoothR\tbluetooth\x12'\n\x04wifi\x18\x02\x20\x01(\x0b2\x13.netsim.confi\
-    g.WiFiR\x04wifib\x06proto3\
+    ion.proto\"\xba\x03\n\x0cSlirpOptions\x12\x1a\n\x08disabled\x18\x01\x20\
+    \x01(\x08R\x08disabled\x12\x17\n\x04ipv4\x18\x02\x20\x01(\x08H\0R\x04ipv\
+    4\x88\x01\x01\x12\x1e\n\nrestricted\x18\x03\x20\x01(\x08R\nrestricted\
+    \x12\x12\n\x04vnet\x18\x04\x20\x01(\tR\x04vnet\x12\x14\n\x05vhost\x18\
+    \x05\x20\x01(\tR\x05vhost\x12\x14\n\x05vmask\x18\x06\x20\x01(\tR\x05vmas\
+    k\x12\x17\n\x04ipv6\x18\x07\x20\x01(\x08H\x01R\x04ipv6\x88\x01\x01\x12\
+    \x1a\n\x08vprefix6\x18\x08\x20\x01(\tR\x08vprefix6\x12\x1e\n\nvprefixLen\
+    \x18\t\x20\x01(\rR\nvprefixLen\x12\x16\n\x06vhost6\x18\n\x20\x01(\tR\x06\
+    vhost6\x12\x1c\n\tvhostname\x18\x0b\x20\x01(\tR\tvhostname\x12\x18\n\x07\
+    tftpath\x18\x0c\x20\x01(\tR\x07tftpath\x12\x1a\n\x08bootfile\x18\r\x20\
+    \x01(\tR\x08bootfile\x12\x1c\n\tdhcpstart\x18\x0e\x20\x01(\tR\tdhcpstart\
+    \x12\x10\n\x03dns\x18\x0f\x20\x01(\tR\x03dns\x12\x12\n\x04dns6\x18\x10\
+    \x20\x01(\tR\x04dns6B\x07\n\x05_ipv4B\x07\n\x05_ipv6\"j\n\x0eHostapdOpti\
+    ons\x12\x1f\n\x08disabled\x18\x01\x20\x01(\x08H\0R\x08disabled\x88\x01\
+    \x01\x12\x12\n\x04ssid\x18\x02\x20\x01(\tR\x04ssid\x12\x16\n\x06passwd\
+    \x18\x03\x20\x01(\tR\x06passwdB\x0b\n\t_disabled\"\x90\x01\n\x04WiFi\x12\
+    @\n\rslirp_options\x18\x01\x20\x01(\x0b2\x1b.netsim.config.SlirpOptionsR\
+    \x0cslirpOptions\x12F\n\x0fhostapd_options\x18\x02\x20\x01(\x0b2\x1d.net\
+    sim.config.HostapdOptionsR\x0ehostapdOptions\"\xa0\x01\n\tBluetooth\x12H\
+    \n\nproperties\x18\x01\x20\x01(\x0b2#.rootcanal.configuration.Controller\
+    H\0R\nproperties\x88\x01\x01\x12(\n\raddress_reuse\x18\x02\x20\x01(\x08H\
+    \x01R\x0caddressReuse\x88\x01\x01B\r\n\x0b_propertiesB\x10\n\x0e_address\
+    _reuse\"i\n\x06Config\x126\n\tbluetooth\x18\x01\x20\x01(\x0b2\x18.netsim\
+    .config.BluetoothR\tbluetooth\x12'\n\x04wifi\x18\x02\x20\x01(\x0b2\x13.n\
+    etsim.config.WiFiR\x04wifib\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

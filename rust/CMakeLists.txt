@@ -62,8 +62,7 @@ android_license(TARGET "netsim-proto" LIBNAME None SPDX None LICENSE None
 
 add_library(netsim-cli-rust-lib INTERFACE)
 
-target_link_libraries(netsim-cli-rust-lib
-                      INTERFACE netsim-proto netsim-cli)
+target_link_libraries(netsim-cli-rust-lib INTERFACE netsim-proto netsim-cli)
 
 android_license(TARGET netsim-cli-rust-lib LIBNAME None SPDX None LICENSE None
                 LOCAL None)
