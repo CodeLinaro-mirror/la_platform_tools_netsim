@@ -18,6 +18,7 @@ package netsim.model;
 
 import "netsim/common.proto";
 import "google/protobuf/timestamp.proto";
+import "rootcanal/configuration.proto";
 
 // A 3D position. A valid Position must have both x and y coordinates.
 // The position coordinates are in meters.
@@ -173,6 +174,8 @@ message ChipCreate {
   oneof chip {
     BluetoothBeaconCreate ble_beacon = 6;
   }
+  // optional rootcanal configuration for bluetooth chipsets.
+  rootcanal.configuration.Controller bt_properties = 7;
 }
 
 message Device {

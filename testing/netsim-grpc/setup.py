@@ -27,9 +27,36 @@ class ProtoBuild(build_py):
         aosp_dir = path.dirname(path.dirname(root_dir))
         proto_root_dir = path.join(root_dir, "proto")
         proto_dir = path.join(proto_root_dir, "netsim")
-        rootcanal_proto_dir = path.join(aosp_dir, "packages", "modules", "Bluetooth", "tools", "rootcanal", "proto")
+        rootcanal_proto_root_dir = path.join(aosp_dir, "packages", "modules", "Bluetooth", "tools", "rootcanal", "proto")
+        rootcanal_proto_dir = path.join(rootcanal_proto_root_dir, "rootcanal")
         out_dir = path.join(here, "src", "netsim_grpc", "proto")
 
+        # Rootcanal Protobufs
+        for proto_file in filter(
+            lambda x: x.endswith(".proto"), os.listdir(rootcanal_proto_dir)
+        ):
+            source = path.join(rootcanal_proto_dir, proto_file)
+            output = path.join(out_dir, "rootcanal", proto_file).replace(".proto", "_pb2.py")
+
+            if not path.exists(output) or (
+                path.getmtime(source) > path.getmtime(output)
+            ):
+                sys.stderr.write(f"Protobuf-compiling {source}\n")
+
+                subprocess.check_call(
+                    [
+                        sys.executable,
+                        "-m",
+                        "grpc_tools.protoc",
+                        f"-I{proto_root_dir}",
+                        f"-I{rootcanal_proto_root_dir}",
+                        f"--python_out={out_dir}",
+                        f"--grpc_python_out={out_dir}",
+                        source,
+                    ]
+                )
+
+        # Netsim Protobufs
         for proto_file in filter(
             lambda x: x.endswith(".proto"), os.listdir(proto_dir)
         ):
@@ -47,7 +74,7 @@ class ProtoBuild(build_py):
                         "-m",
                         "grpc_tools.protoc",
                         f"-I{proto_root_dir}",
-                        f"-I{rootcanal_proto_dir}",
+                        f"-I{rootcanal_proto_root_dir}",
                         f"--python_out={out_dir}",
                         f"--grpc_python_out={out_dir}",
                         source,

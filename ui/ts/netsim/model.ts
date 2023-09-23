@@ -1,4 +1,6 @@
 /* eslint-disable */
+import type {Controller} from '../rootcanal/configuration';
+
 import type {ChipKind} from './common';
 
 export const protobufPackage = 'netsim.model';
@@ -65,7 +67,9 @@ export interface Chip_Radio {
 /** Bluetooth has 2 radios */
 export interface Chip_Bluetooth {
   lowEnergy: Chip_Radio|undefined;
-  classic: Chip_Radio|undefined;
+  classic:|Chip_Radio|undefined;
+  /** BD_ADDR address */
+  address: string;
 }
 
 export interface Chip_BluetoothBeacon {
@@ -74,6 +78,7 @@ export interface Chip_BluetoothBeacon {
   address: string;
   settings: Chip_BluetoothBeacon_AdvertiseSettings|undefined;
   advData: Chip_BluetoothBeacon_AdvertiseData|undefined;
+  scanResponse: Chip_BluetoothBeacon_AdvertiseData|undefined;
 }
 
 export interface Chip_BluetoothBeacon_AdvertiseSettings {
@@ -94,11 +99,21 @@ export interface Chip_BluetoothBeacon_AdvertiseSettings {
  * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
  */
 export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode {
-  /** LOW_POWER - 1 second advertise interval */
+  /**
+   * LOW_POWER - Perform Bluetooth LE advertising in low power mode. This is the
+   * default and preferred advertising mode as it consumes the least power
+   */
   LOW_POWER = 'LOW_POWER',
-  /** BALANCED - 250 ms advertise interval */
+  /**
+   * BALANCED - Perform Bluetooth LE advertising in balanced power mode. This is
+   * balanced between advertising frequency and power consumption
+   */
   BALANCED = 'BALANCED',
-  /** LOW_LATENCY - 100 ms advertise interval */
+  /**
+   * LOW_LATENCY - Perform Bluetooth LE advertising in low latency, high power
+   * mode. This has the highest power consumption and should not be used for
+   * continuous background advertising
+   */
   LOW_LATENCY = 'LOW_LATENCY',
   UNRECOGNIZED = 'UNRECOGNIZED',
 }
@@ -108,13 +123,20 @@ export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode {
  * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
  */
 export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower {
-  /** ULTRA_LOW - -21 dBm */
+  /**
+   * ULTRA_LOW - Advertise using the lowest transmission (TX) power level. Low
+   * transmission power can be used to restrict the visibility range of
+   * advertising packets
+   */
   ULTRA_LOW = 'ULTRA_LOW',
-  /** LOW - -15 dBm */
+  /** LOW - Advertise using low TX power level. This is the default */
   LOW = 'LOW',
-  /** MEDIUM - -7 dBm */
+  /** MEDIUM - Advertise using medium TX power level */
   MEDIUM = 'MEDIUM',
-  /** HIGH - 1 dBm */
+  /**
+   * HIGH - Advertise using high TX power level. This corresponds to largest
+   * visibility range of the advertising packet
+   */
   HIGH = 'HIGH',
   UNRECOGNIZED = 'UNRECOGNIZED',
 }
@@ -140,16 +162,20 @@ export interface Chip_BluetoothBeacon_AdvertiseData_Service {
 
 export interface ChipCreate {
   kind: ChipKind;
+  address: string;
   name: string;
   manufacturer: string;
   productName: string;
-  bleBeacon?: ChipCreate_BluetoothBeaconCreate|undefined;
+  bleBeacon?:|ChipCreate_BluetoothBeaconCreate|undefined;
+  /** optional rootcanal configuration for bluetooth chipsets. */
+  btProperties: Controller|undefined;
 }
 
 export interface ChipCreate_BluetoothBeaconCreate {
   address: string;
   settings: Chip_BluetoothBeacon_AdvertiseSettings|undefined;
   advData: Chip_BluetoothBeacon_AdvertiseData|undefined;
+  scanResponse: Chip_BluetoothBeacon_AdvertiseData|undefined;
 }
 
 export interface Device {
