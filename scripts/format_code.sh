@@ -26,10 +26,11 @@ find $REPO/tools/netsim/proto \( -name '*.proto' \) \
   -exec clang-format -i {} \;
 
 # Format rust.
+RUSTFMT=$REPO/prebuilts/rust/$OS-x86/stable/rustfmt
 find $REPO/tools/netsim/rust \( \
   -path $REPO/tools/netsim/rust/target -prune -false \
   -o -name '*.rs' \) \
-  -exec $REPO/prebuilts/rust/$OS-x86/1.69.0/bin/rustfmt -v {} \;
+  -exec $RUSTFMT --files-with-diff {} \;
 
 # Format TypeScript.
 find $REPO/tools/netsim/ui/ts \( -name '*.ts' \) \

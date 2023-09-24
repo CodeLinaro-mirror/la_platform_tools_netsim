@@ -35,6 +35,7 @@ use netsim_proto::{
 };
 use protobuf::well_known_types::timestamp::Timestamp;
 
+use crate::config::get_pcap;
 use crate::events::Event;
 use crate::resource::clone_captures;
 
@@ -249,9 +250,9 @@ pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>) {
                 Ok(Event::ChipAdded { chip_id, chip_kind, facade_id, device_name, .. }) => {
                     let mut capture_info =
                         CaptureInfo::new(chip_kind, facade_id, chip_id, device_name.clone());
-                    // TODO(b/268271460): Add ability to set default capture state.
-                    // Currently, the default capture state is ON
-                    let _ = capture_info.start_capture();
+                    if get_pcap() {
+                        let _ = capture_info.start_capture();
+                    }
                     clone_captures().write().unwrap().insert(capture_info);
                     info!("Capture event: ChipAdded chip_id: {chip_id} device_name: {device_name} facade_id:{facade_id}");
                 }

@@ -71,8 +71,8 @@ impl AdvertiseData {
     }
 
     /// Gets the raw bytes to be sent in the advertise data field of a BLE advertise packet.
-    pub fn as_bytes(&self) -> &[u8] {
-        self.bytes.as_slice()
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.bytes.clone()
     }
 }
 

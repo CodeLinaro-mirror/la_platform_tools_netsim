@@ -76,7 +76,7 @@ if(TARGET Rust::Rustc)
   set(cxx_bridge_binary_folder
       ${CMAKE_BINARY_DIR}/cargo/build/${Rust_CARGO_TARGET_CACHED}/cxxbridge)
   set(common_header ${cxx_bridge_binary_folder}/rust/cxx.h)
-  set(cxx_bridge_source_file "src/lib.rs")
+  set(cxx_bridge_source_file "src/ffi.rs")
   set(crate_name "netsim-daemon")
   set(binding_header
       ${cxx_bridge_binary_folder}/${crate_name}/${cxx_bridge_source_file}.h)

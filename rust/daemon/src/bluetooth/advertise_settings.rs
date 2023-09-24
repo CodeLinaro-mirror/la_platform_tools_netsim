@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::packets::link_layer::LegacyAdvertisingType;
 use netsim_proto::model::chip::bluetooth_beacon::{
     advertise_settings::{
         AdvertiseMode as Mode, AdvertiseTxPower as Level, Interval as IntervalProto,
@@ -55,6 +56,15 @@ impl AdvertiseSettings {
     /// Returns a new advertise settings with fields from a protobuf.
     pub fn from_proto(proto: &AdvertiseSettingsProto) -> Result<Self, String> {
         proto.try_into()
+    }
+
+    /// Returns the PDU type of advertise packets with the provided settings
+    pub fn get_packet_type(&self) -> LegacyAdvertisingType {
+        if self.scannable {
+            LegacyAdvertisingType::AdvScanInd
+        } else {
+            LegacyAdvertisingType::AdvNonconnInd
+        }
     }
 }
 

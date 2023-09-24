@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use clap::Parser;
-use log::warn;
+use log::{error, info, warn};
 
 use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
-use crate::ffi;
+use crate::ffi::ffi_util;
 use crate::service::{Service, ServiceParams};
 use std::ffi::{c_char, c_int};
 
@@ -30,7 +30,7 @@ use std::ffi::{c_char, c_int};
 /// long as the program runs.
 #[no_mangle]
 pub unsafe extern "C" fn rust_main(argc: c_int, argv: *const *const c_char) {
-    ffi::set_up_crash_report();
+    ffi_util::set_up_crash_report();
     netsim_logger::init("netsimd");
     let netsimd_args = get_netsimd_args(argc, argv);
     run_netsimd_with_args(netsimd_args);
@@ -55,22 +55,45 @@ fn get_netsimd_args(argc: c_int, argv: *const *const c_char) -> NetsimdArgs {
     NetsimdArgs::parse()
 }
 
-fn run_netsimd_with_args(netsimd_args: NetsimdArgs) {
+fn run_netsimd_with_args(args: NetsimdArgs) {
     // Redirect stdout and stderr to files only if netsimd is not invoked
     // by Cuttlefish. Some Cuttlefish builds fail when writing logs to files.
     #[cfg(not(feature = "cuttlefish"))]
-    if !netsimd_args.logtostderr {
+    if !args.logtostderr {
         cxx::let_cxx_string!(netsimd_temp_dir = netsim_common::system::netsimd_temp_dir_string());
-        ffi::redirect_std_stream(&netsimd_temp_dir);
+        ffi_util::redirect_std_stream(&netsimd_temp_dir);
     }
 
+    match args.connector_instance {
+        Some(connector_instance) => run_netsimd_connector(args, connector_instance),
+        None => run_netsimd_primary(args),
+    }
+}
+
+// Forwards packets to another netsim daemon.
+fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
+    if args.fd_startup_str.is_none() {
+        error!("Failed to start netsimd forwarder, missing `-s` arg");
+        return;
+    }
+    if !ffi_util::is_netsimd_alive(instance) {
+        error!("Failed to start netsimd forwarder, no primary at {}", instance);
+        return;
+    }
+    info!("Starting netsim daemon in forwarding mode");
+}
+
+fn run_netsimd_primary(netsimd_args: NetsimdArgs) {
     let fd_startup_str = netsimd_args.fd_startup_str.unwrap_or_default();
     let no_cli_ui = netsimd_args.no_cli_ui;
     let no_web_ui = netsimd_args.no_web_ui;
-    let instance_num = ffi::get_instance(netsimd_args.instance.unwrap_or_default());
-    let hci_port: u16 = ffi::get_hci_port(netsimd_args.hci_port.unwrap_or_default(), instance_num)
-        .try_into()
-        .unwrap();
+    let pcap = netsimd_args.pcap;
+    let disable_address_reuse = netsimd_args.disable_address_reuse;
+    let instance_num = ffi_util::get_instance(netsimd_args.instance.unwrap_or_default());
+    let hci_port: u16 =
+        ffi_util::get_hci_port(netsimd_args.hci_port.unwrap_or_default(), instance_num)
+            .try_into()
+            .unwrap();
     let dev = netsimd_args.dev;
     let vsock = netsimd_args.vsock.unwrap_or_default();
 
@@ -80,7 +103,7 @@ fn run_netsimd_with_args(netsimd_args: NetsimdArgs) {
         return;
     }
 
-    if ffi::is_netsimd_alive(instance_num) {
+    if ffi_util::is_netsimd_alive(instance_num) {
         warn!("Failed to start netsim daemon because a netsim daemon is already running");
         return;
     }
@@ -88,6 +111,8 @@ fn run_netsimd_with_args(netsimd_args: NetsimdArgs) {
         fd_startup_str,
         no_cli_ui,
         no_web_ui,
+        pcap,
+        disable_address_reuse,
         hci_port,
         instance_num,
         dev,

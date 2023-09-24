@@ -14,30 +14,28 @@
  * limitations under the License.
  */
 
+// C++ Client implementation for PacketStreamer gRPC.
+//
+// This is used by netsimd for forwarding packet to another netsimd.
+
 #pragma once
 
-// Use gRPC HCI PacketType definitions so we don't expose Rootcanal's version
-// outside of the Bluetooth Facade.
-#include <cstdint>
-
-#include "netsim/common.pb.h"
-#include "netsim/hci_packet.pb.h"
 #include "rust/cxx.h"
 
 namespace netsim {
 namespace backend {
+namespace client {
 
-using netsim::common::ChipKind;
+uint32_t StreamPackets(const rust::String &server);
 
-/* Handle packet responses for the backend. */
+using ReadCallback = rust::Fn<void(
+    uint32_t, const rust::Slice<::std::uint8_t const> proto_bytes)>;
 
-void HandleResponse(ChipKind kind, uint32_t facade_id,
-                    const std::vector<uint8_t> &packet,
-                    /* optional */ packet::HCIPacket_PacketType packet_type);
+bool ReadPacketResponseLoop(uint32_t stream_id, ReadCallback read_fn);
 
-void HandleResponseCxx(uint32_t kind, uint32_t facade_id,
-                       const rust::Vec<rust::u8> &packet,
-                       /* optional */ uint8_t packet_type);
+bool WritePacketRequest(uint32_t stream_id,
+                        const rust::Slice<::std::uint8_t const> proto_bytes);
 
+}  // namespace client
 }  // namespace backend
 }  // namespace netsim

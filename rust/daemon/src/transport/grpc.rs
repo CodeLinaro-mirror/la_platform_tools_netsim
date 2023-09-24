@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use super::dispatcher::{register_transport, unregister_transport, Response};
-use crate::ffi::handle_grpc_response;
+use crate::ffi::ffi_transport::handle_grpc_response;
 
 /// Grpc transport.
 ///

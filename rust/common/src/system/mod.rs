@@ -25,6 +25,16 @@ use std::path::PathBuf;
 /// otherwise it is `$TMP/android-$USER/netsimd`
 ///
 pub fn netsimd_temp_dir() -> PathBuf {
+    let path = netsimd_temp_dir_pathbuf();
+    if !path.is_dir() {
+        std::fs::create_dir_all(&path).unwrap();
+    }
+    path
+}
+
+/// Helper function for netsimd_temp_dir() to allow Read Only
+/// Unit tests.
+fn netsimd_temp_dir_pathbuf() -> PathBuf {
     // allow Forge to override the system temp
     let mut path = match env::var("ANDROID_TMP") {
         Ok(var) => PathBuf::from(var),
@@ -43,9 +53,6 @@ pub fn netsimd_temp_dir() -> PathBuf {
     };
     // netsimd files are stored in their own directory
     path.push("netsimd");
-    if !path.is_dir() {
-        std::fs::create_dir_all(&path).unwrap();
-    }
     path
 }
 
@@ -57,7 +64,7 @@ pub fn netsimd_temp_dir_string() -> String {
 #[cfg(not(target_os = "windows"))]
 #[cfg(test)]
 mod tests {
-    use super::netsimd_temp_dir;
+    use super::netsimd_temp_dir_pathbuf;
     use std::env;
     use std::sync::Mutex;
 
@@ -68,9 +75,8 @@ mod tests {
         let _locked = ENV_MUTEX.lock();
         env::set_var("ANDROID_TMP", "/tmp/forge");
         env::set_var("USER", "ryle");
-        let tmp_dir = netsimd_temp_dir();
+        let tmp_dir = netsimd_temp_dir_pathbuf();
         assert_eq!(tmp_dir.to_str().unwrap(), "/tmp/forge/android-ryle/netsimd");
-        assert!(tmp_dir.is_dir());
     }
 
     #[test]
@@ -79,7 +85,7 @@ mod tests {
         let temp_dir = env::temp_dir();
         env::remove_var("ANDROID_TMP");
         env::set_var("USER", "ryle");
-        let netsimd_temp_dir = netsimd_temp_dir();
+        let netsimd_temp_dir = netsimd_temp_dir_pathbuf();
         assert_eq!(
             netsimd_temp_dir.to_str().unwrap(),
             temp_dir.join("android-ryle/netsimd").to_str().unwrap()

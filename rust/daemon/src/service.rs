@@ -15,14 +15,16 @@
 use crate::bluetooth as bluetooth_facade;
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures;
-use crate::captures::handlers::clear_pcap_files;
-use crate::config::{get_dev, set_dev};
+use crate::captures::captures_handler::clear_pcap_files;
+use crate::config::{get_dev, set_dev, set_disable_address_reuse, set_pcap};
 use crate::devices::devices_handler::is_shutdown_time;
-use crate::ffi::{get_netsim_ini_file_path_cxx, run_grpc_server_cxx};
+use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
+use crate::ffi::ffi_util::get_netsim_ini_file_path_cxx;
 use crate::http_server::server::run_http_server;
 use crate::resource;
 use crate::transport::socket::run_socket_transport;
 use crate::wifi as wifi_facade;
+use cxx::UniquePtr;
 use log::{error, info, warn};
 use netsim_common::util::ini_file::IniFile;
 use std::env;
@@ -36,6 +38,8 @@ pub struct ServiceParams {
     fd_startup_str: String,
     no_cli_ui: bool,
     no_web_ui: bool,
+    pcap: bool,
+    disable_address_reuse: bool,
     hci_port: u16,
     instance_num: u16,
     dev: bool,
@@ -43,16 +47,29 @@ pub struct ServiceParams {
 }
 
 impl ServiceParams {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         fd_startup_str: String,
         no_cli_ui: bool,
         no_web_ui: bool,
+        pcap: bool,
+        disable_address_reuse: bool,
         hci_port: u16,
         instance_num: u16,
         dev: bool,
         vsock: u16,
     ) -> Self {
-        ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev, vsock }
+        ServiceParams {
+            fd_startup_str,
+            no_cli_ui,
+            no_web_ui,
+            pcap,
+            disable_address_reuse,
+            hci_port,
+            instance_num,
+            dev,
+            vsock,
+        }
     }
 }
 
@@ -75,7 +92,9 @@ impl Service {
         if clear_pcap_files() {
             info!("netsim generated pcap files in temp directory has been removed.");
         }
+        set_pcap(self.service_params.pcap);
         set_dev(self.service_params.dev);
+        set_disable_address_reuse(self.service_params.disable_address_reuse);
 
         // Start all the subscribers for events
         let events_rx = resource::clone_events().lock().unwrap().subscribe();
@@ -85,10 +104,51 @@ impl Service {
         wifi_facade::wifi_start();
     }
 
-    /// Runs the netsimd services.
-    pub fn run(&self) {
-        // TODO: run grpc server.
+    /// Runs netsim gRPC server
+    fn run_grpc_server(&self) -> Option<UniquePtr<GrpcServer>> {
+        // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge jobs.
+        // If set, use the fixed port for grpc server.
+        let netsim_grpc_port =
+            env::var("NETSIM_GRPC_PORT").map(|val| val.parse::<u32>().unwrap_or(0)).unwrap_or(0);
+        let grpc_server = run_grpc_server_cxx(
+            netsim_grpc_port,
+            self.service_params.no_cli_ui,
+            self.service_params.instance_num,
+            self.service_params.vsock,
+        );
+        match grpc_server.is_null() {
+            true => None,
+            false => Some(grpc_server),
+        }
+    }
 
+    /// Runs netsim web server
+    fn run_web_server(&self) -> Option<u16> {
+        // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge jobs.
+        // If set, don't start http server.
+        let forge_job = env::var("NETSIM_GRPC_PORT").is_ok();
+        match !forge_job && !self.service_params.no_web_ui {
+            true => Some(run_http_server(self.service_params.instance_num)),
+            false => None,
+        }
+    }
+
+    /// Write ports to netsim.ini file
+    fn write_ports_to_ini(&self, grpc_port: u32, web_port: Option<u16>) {
+        let filepath = get_netsim_ini_file_path_cxx(self.service_params.instance_num);
+        let mut ini_file = IniFile::new(filepath.to_string());
+        if let Some(num) = web_port {
+            ini_file.insert("web.port", &num.to_string());
+        }
+        ini_file.insert("grpc.port", &grpc_port.to_string());
+        if let Err(err) = ini_file.write() {
+            error!("{err:?}");
+        }
+    }
+
+    /// Runs the netsimd services.
+    #[allow(unused_unsafe)]
+    pub fn run(&self) {
         if !self.service_params.fd_startup_str.is_empty() {
             // SAFETY: When the `Service` was constructed by `Service::new` the caller guaranteed
             // that the file descriptors in `service_params.fd_startup_str` would remain valid and
@@ -98,49 +158,33 @@ impl Service {
                 run_fd_transport(&self.service_params.fd_startup_str);
             }
         }
-        // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge jobs. If set:
-        // 1. Use the fixed port for grpc server.
-        // 2. Don't start http server.
-        let netsim_grpc_port =
-            env::var("NETSIM_GRPC_PORT").map(|val| val.parse::<u32>().unwrap_or(0)).unwrap_or(0);
-        let grpc_server = run_grpc_server_cxx(
-            netsim_grpc_port,
-            self.service_params.no_cli_ui,
-            self.service_params.instance_num,
-            self.service_params.vsock,
-        );
-        if grpc_server.is_null() {
-            error!("Failed to run netsimd because unable to start grpc server");
-            return;
-        }
 
-        let forge_job = netsim_grpc_port != 0;
+        // Run netsim gRPC server
+        let grpc_server = match self.run_grpc_server() {
+            Some(server) => server,
+            None => {
+                error!("Failed to run netsimd because unable to start grpc server");
+                return;
+            }
+        };
 
-        // forge and no_web_ui disables the web server
-        let mut web_port: Option<u16> = None;
-        if !forge_job && !self.service_params.no_web_ui {
-            web_port = Some(run_http_server(self.service_params.instance_num));
-        }
+        // Run frontend web server
+        let web_port = self.run_web_server();
 
-        // Write to netsim.ini file
-        let filepath = get_netsim_ini_file_path_cxx(self.service_params.instance_num);
-        let mut ini_file = IniFile::new(filepath.to_string());
-        if let Some(num) = web_port {
-            ini_file.insert("web.port", &num.to_string());
-        }
-        ini_file.insert("grpc.port", &grpc_server.get_grpc_port().to_string());
-        if let Err(err) = ini_file.write() {
-            error!("{err:?}");
-        }
+        // Write the port numbers to ini file
+        self.write_ports_to_ini(grpc_server.get_grpc_port(), web_port);
 
         // Run the socket server.
         run_socket_transport(self.service_params.hci_port);
 
+        // Create two beacon devices if in dev mode.
         if get_dev() {
             new_test_beacon(0);
             new_test_beacon(1);
         }
 
+        // Let service run until the shut down condition have been met.
+        // Condition: idle 15 seconds with no devices attached to netsim
         loop {
             std::thread::sleep(INACTIVITY_CHECK_INTERVAL);
             if is_shutdown_time() {
@@ -152,27 +196,7 @@ impl Service {
     }
 }
 
-// For cxx.
-/// # Safety
-///
-/// The file descriptors in `fd_startup_str` must be valid and open, and must remain so for as long
-/// as the returned `Service` exists.
-pub unsafe fn create_service(
-    fd_startup_str: String,
-    no_cli_ui: bool,
-    no_web_ui: bool,
-    hci_port: u16,
-    instance_num: u16,
-    dev: bool,
-    vsock: u16,
-) -> Box<Service> {
-    let service_params =
-        ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev, vsock };
-    // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
-    // valid and open for as long as the `Service` exists.
-    Box::new(unsafe { Service::new(service_params) })
-}
-
+/// Constructing test beacons for dev mode
 pub fn new_test_beacon(idx: u32) {
     use crate::devices::devices_handler::create_device;
     use netsim_proto::common::ChipKind;
@@ -189,13 +213,14 @@ pub fn new_test_beacon(idx: u32) {
     use protobuf_json_mapping::print_to_string;
 
     let beacon_proto = BluetoothBeaconCreateProto {
-        address: format!("00:00:00:00:00:{:x}", idx),
+        address: format!("be:ac:01:be:ef:{:02x}", idx),
         settings: MessageField::some(AdvertiseSettingsProto {
             interval: Some(
                 ble_advertise_settings::AdvertiseMode::new(Duration::from_millis(1280))
                     .try_into()
                     .unwrap(),
             ),
+            scannable: true,
             ..Default::default()
         }),
         adv_data: MessageField::some(AdvertiseDataProto {
@@ -208,14 +233,14 @@ pub fn new_test_beacon(idx: u32) {
     };
 
     let chip_proto = ChipCreateProto {
-        name: format!("test-beacon-chip-{idx}"),
+        name: format!("beacon-{idx}"),
         kind: ChipKind::BLUETOOTH_BEACON.into(),
         chip: Some(ChipProto::BleBeacon(beacon_proto)),
         ..Default::default()
     };
 
     let device_proto = DeviceCreateProto {
-        name: format!("test-beacon-device-{idx}"),
+        name: format!("device-{idx}"),
         chips: vec![chip_proto],
         ..Default::default()
     };

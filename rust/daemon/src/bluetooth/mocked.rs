@@ -78,13 +78,6 @@ pub fn bluetooth_stop() {
     info!("bluetooth service ended");
 }
 
-/// Refresh Resource for Rust tests
-pub fn refresh_resource() {
-    BEACON_CHIPS.write().unwrap().clear();
-    let mut id_factory = crate::bluetooth::mocked::IDS.write().unwrap();
-    *id_factory = crate::bluetooth::mocked::FacadeIds::new();
-}
-
 // Avoid crossing cxx boundary in tests
 pub fn bluetooth_beacon_add(
     device_id: DeviceIdentifier,

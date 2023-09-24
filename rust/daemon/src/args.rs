@@ -28,9 +28,21 @@ pub struct NetsimdArgs {
     #[arg(long)]
     pub no_web_ui: bool,
 
+    /// Enable packet capture
+    #[arg(long)]
+    pub pcap: bool,
+
+    /// Disable Address Reuse for test model
+    #[arg(long)]
+    pub disable_address_reuse: bool,
+
     /// Set custom hci port
     #[arg(long, alias = "hci_port")]
     pub hci_port: Option<u32>,
+
+    /// Enables connector mode to forward packets to another instance.
+    #[arg(short, long, visible_alias = "connector_instance_num")]
+    pub connector_instance: Option<u16>,
 
     /// Netsimd instance number
     #[arg(short, long, visible_alias = "instance_num")]

@@ -167,6 +167,7 @@ class SimulationState implements Observable {
         .then(response => response.json())
         .then(data => {
           this.simulationInfo.captures = data.captures;
+          this.notifyObservers();
         })
         .catch(error => {
           console.log('Cannot connect to netsim web server', error);

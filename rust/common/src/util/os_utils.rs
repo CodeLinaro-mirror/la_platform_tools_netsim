@@ -1,0 +1,200 @@
+//
+//  Copyright 2023 Google, Inc.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at:
+//
+//  http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+
+//! # os utility functions
+
+use std::path::PathBuf;
+
+use log::{error, warn};
+
+use super::ini_file::IniFile;
+
+const DEFAULT_INSTANCE: u16 = 0;
+const DEFAULT_HCI_PORT: u32 = 6402;
+
+struct DiscoveryDir {
+    root_env: &'static str,
+    subdir: &'static str,
+}
+
+#[cfg(target_os = "linux")]
+const DISCOVERY: DiscoveryDir = DiscoveryDir { root_env: "XDG_RUNTIME_DIR", subdir: "" };
+#[cfg(target_os = "macos")]
+const DISCOVERY: DiscoveryDir =
+    DiscoveryDir { root_env: "HOME", subdir: "Library/Caches/TemporaryItems" };
+#[cfg(target_os = "windows")]
+const DISCOVERY: DiscoveryDir = DiscoveryDir { root_env: "LOCALAPPDATA", subdir: "Temp" };
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+compile_error!("netsim only supports linux, Mac, and Windows");
+
+/// Get the environment variable of name and return default_value if it does not have name
+pub fn get_env(name: &'static str, default_value: &'static str) -> String {
+    match std::env::var(name) {
+        Ok(value) => value,
+        Err(_) => default_value.to_string(),
+    }
+}
+
+/// Get discovery directory for netsim
+pub fn get_discovery_directory() -> PathBuf {
+    // $TMPDIR is the temp directory on buildbots
+    if let Ok(test_env_p) = std::env::var("TMPDIR") {
+        return PathBuf::from(test_env_p);
+    }
+    let mut path = match std::env::var(DISCOVERY.root_env) {
+        Ok(env_p) => PathBuf::from(env_p),
+        Err(_) => {
+            warn!("No discovery env for {}, using /tmp", DISCOVERY.root_env);
+            PathBuf::from("/tmp")
+        }
+    };
+    path.push(DISCOVERY.subdir);
+    path
+}
+
+/// Get the filepath of netsim.ini under discovery directory
+pub fn get_netsim_ini_filepath(instance_num: u16) -> PathBuf {
+    let mut discovery_dir = get_discovery_directory();
+    let filename = if instance_num == 0 {
+        "netsim.ini".to_string()
+    } else {
+        format!("netsim_{instance_num}.ini")
+    };
+    discovery_dir.push(filename);
+    discovery_dir
+}
+
+/// Get the grpc server address for netsim
+pub fn get_server_address(instance_num: u16) -> Option<String> {
+    let filepath = get_netsim_ini_filepath(instance_num);
+    if !filepath.exists() {
+        error!("Unable to find netsim ini file: {filepath:?}");
+        return None;
+    }
+    if !filepath.is_file() {
+        error!("Not a file: {filepath:?}");
+        return None;
+    }
+    let mut ini_file = IniFile::new(filepath.display().to_string());
+    if let Err(err) = ini_file.read() {
+        error!("Error reading ini file: {err:?}");
+    }
+    ini_file.get("grpc.port").map(|s| s.to_string())
+}
+
+/// Get the number of netsim instances
+pub fn get_instance(instance_flag: u16) -> u16 {
+    // The following priorities are used to determine the instance number:
+    //
+    // 1. The environment variable `NETSIM_INSTANCE`.
+    // 2. The CLI flag `--instance`.
+    // 3. The default value `DEFAULT_INSTANCE`.
+    if let Ok(netsim_instance) = std::env::var("NETSIM_INSTANCE") {
+        netsim_instance.parse::<u16>().unwrap()
+    } else if instance_flag != 0 {
+        instance_flag
+    } else {
+        DEFAULT_INSTANCE
+    }
+}
+
+/// Get the hci porn number for netsim
+pub fn get_hci_port(hci_port_flag: u32, instance: u16) -> u32 {
+    // The following priorities are used to determine the HCI port number:
+    //
+    // 1. The CLI flag `-hci_port`.
+    // 2. The environment variable `NETSIM_HCI_PORT`.
+    // 3. The default value `DEFAULT_HCI_PORT`
+    if hci_port_flag != 0 {
+        hci_port_flag
+    } else if let Ok(netsim_hci_port) = std::env::var("NETSIM_HCI_PORT") {
+        netsim_hci_port.parse::<u32>().unwrap()
+    } else {
+        DEFAULT_HCI_PORT + (instance as u32)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_get_env() {
+        std::env::set_var("TEST_VARIABLE", "value");
+        let value = get_env("TEST_VARIABLE", "default");
+        assert_eq!(value, "value");
+        let default = get_env("NOT_VARIABLE", "default");
+        assert_eq!(default, "default");
+    }
+
+    #[test]
+    fn test_get_discovery_directory() {
+        // Remove all environment variable
+        std::env::remove_var(DISCOVERY.root_env);
+        std::env::remove_var("TMPDIR");
+
+        // Test with no environment variables
+        let actual = get_discovery_directory();
+        let mut expected = PathBuf::from("/tmp");
+        expected.push(DISCOVERY.subdir);
+        assert_eq!(actual, expected);
+
+        // Test with root_env variable
+        std::env::set_var(DISCOVERY.root_env, "/netsim-test");
+        let actual = get_discovery_directory();
+        let mut expected = PathBuf::from("/netsim-test");
+        expected.push(DISCOVERY.subdir);
+        assert_eq!(actual, expected);
+
+        // Test with TMPDIR variable
+        std::env::set_var("TMPDIR", "/tmpdir");
+        assert_eq!(get_discovery_directory(), PathBuf::from("/tmpdir"));
+
+        // Test netsim_ini_filepath
+        assert_eq!(get_netsim_ini_filepath(0), PathBuf::from("/tmpdir/netsim.ini"));
+        assert_eq!(get_netsim_ini_filepath(1), PathBuf::from("/tmpdir/netsim_1.ini"));
+    }
+
+    #[test]
+    fn test_get_instance() {
+        // Remove NETSIM_INSTANCE environment variable
+        std::env::remove_var("NETSIM_INSTANCE");
+        assert_eq!(get_instance(0), DEFAULT_INSTANCE);
+        assert_eq!(get_instance(1), 1);
+
+        // Set NETSIM_INSTANCE environment variable
+        std::env::set_var("NETSIM_INSTANCE", "100");
+        assert_eq!(get_instance(0), 100);
+        assert_eq!(get_instance(1), 100);
+    }
+
+    #[test]
+    fn test_get_hci_port() {
+        // Test if hci_port flag exists
+        assert_eq!(get_hci_port(1, u16::MAX), 1);
+        assert_eq!(get_hci_port(1, u16::MIN), 1);
+
+        // Remove NETSIM_HCI_PORT with hci_port_flag = 0
+        std::env::remove_var("NETSIM_HCI_PORT");
+        assert_eq!(get_hci_port(0, 0), DEFAULT_HCI_PORT);
+        assert_eq!(get_hci_port(0, 1), DEFAULT_HCI_PORT + 1);
+
+        // Set NETSIM_HCI_PORT
+        std::env::set_var("NETSIM_HCI_PORT", "100");
+        assert_eq!(get_hci_port(0, 0), 100);
+        assert_eq!(get_hci_port(0, u16::MAX), 100);
+    }
+}

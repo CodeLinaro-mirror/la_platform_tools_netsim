@@ -22,7 +22,7 @@ use std::thread;
 use netsim_proto::common::ChipKind;
 
 use crate::bluetooth::handle_bluetooth_request;
-use crate::captures::handlers as captures_handlers;
+use crate::captures::captures_handler as captures_handlers;
 use crate::util::int_to_chip_kind;
 use crate::wifi::handle_wifi_request;
 

@@ -24,7 +24,7 @@
 #include "grpcpp/security/server_credentials.h"
 #include "grpcpp/server.h"
 #include "grpcpp/server_builder.h"
-#include "netsim-daemon/src/lib.rs.h"
+#include "netsim-daemon/src/ffi.rs.h"
 #include "util/log.h"
 #ifdef _WIN32
 #include <Windows.h>

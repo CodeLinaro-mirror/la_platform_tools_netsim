@@ -9,7 +9,14 @@ doctest = false
 test = false
 
 [dependencies]
-clap = { version = "4.1.8", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
+hex = "0.4.3"
+clap = { version = "4.1.8", default-features = false, features = [
+    "derive",
+    "error-context",
+    "help",
+    "std",
+    "usage",
+] }
 netsim-proto = { path = "../proto" }
 netsim-common = { path = "../common" }
 frontend-client-cxx = { path = "../frontend-client-cxx" }

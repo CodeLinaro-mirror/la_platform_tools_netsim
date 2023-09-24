@@ -27,7 +27,7 @@ use http::{Request, Uri};
 use log::warn;
 
 use crate::{
-    captures::handlers::handle_capture,
+    captures::captures_handler::handle_capture,
     devices::devices_handler::handle_device,
     transport::websocket::{handle_websocket, run_websocket_transport},
     version::VERSION,
