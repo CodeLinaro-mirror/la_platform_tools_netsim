@@ -5,7 +5,9 @@ import type {ChipKind} from './common';
 
 export const protobufPackage = 'netsim.model';
 
+/** Radio Type used by netsim-grpc in testing module */
 export enum PhyKind {
+  /** NONE - Unknown Chip Kind */
   NONE = 'NONE',
   BLUETOOTH_CLASSIC = 'BLUETOOTH_CLASSIC',
   BLUETOOTH_LOW_ENERGY = 'BLUETOOTH_LOW_ENERGY',
@@ -15,10 +17,16 @@ export enum PhyKind {
   UNRECOGNIZED = 'UNRECOGNIZED',
 }
 
-/** An explicit valued boolean. */
+/**
+ * An explicit valued boolean.
+ * This is to avoid having default values.
+ */
 export enum State {
+  /** UNKNOWN - Default State */
   UNKNOWN = 'UNKNOWN',
+  /** ON - True state */
   ON = 'ON',
+  /** OFF - False state */
   OFF = 'OFF',
   UNRECOGNIZED = 'UNRECOGNIZED',
 }
@@ -28,19 +36,32 @@ export enum State {
  * The position coordinates are in meters.
  */
 export interface Position {
+  /** positional value of x axis */
   x: number;
+  /** positional value of y axis */
   y: number;
+  /** positional value of z axis */
   z: number;
 }
 
+/**
+ * A 3D orientation. A valid Orientation must have yaw, pitch, and roll.
+ * The orientation values are in degrees.
+ */
 export interface Orientation {
+  /** Rotational value around vertical axis. */
   yaw: number;
+  /** Rotational value around side-to-side axis */
   pitch: number;
+  /** Rotational value around front-to-back axis */
   roll: number;
 }
 
+/** Model of a Chip in netsim */
 export interface Chip {
+  /** Type of Radio (BT, WIFI, UWB) */
   kind: ChipKind;
+  /** Chip Identifier */
   id: number;
   /** optional like "rear-right" */
   name: string;
@@ -48,54 +69,77 @@ export interface Chip {
   manufacturer: string;
   /** optional like DW300 */
   productName: string;
-  /** dual mode. */
+  /** Dual mode of Bluetooth */
   bt?:|Chip_Bluetooth|undefined;
-  /** low energy for beacon. */
-  bleBeacon?: Chip_BluetoothBeacon|undefined;
-  uwb?: Chip_Radio|undefined;
+  /** Bluetooth Beacon Low Energy */
+  bleBeacon?:|Chip_BluetoothBeacon|undefined;
+  /** UWB */
+  uwb?:|Chip_Radio|undefined;
+  /** WIFI */
   wifi?: Chip_Radio|undefined;
 }
 
 /** Radio state associated with the Chip */
 export interface Chip_Radio {
+  /** Boolean state of Radio */
   state: State;
+  /** Maximum range of Radio */
   range: number;
+  /** Transmitted packet counts */
   txCount: number;
+  /** Received packet counts */
   rxCount: number;
 }
 
 /** Bluetooth has 2 radios */
 export interface Chip_Bluetooth {
-  lowEnergy: Chip_Radio|undefined;
+  /** BLE */
+  lowEnergy:|Chip_Radio|undefined;
+  /** Bluetooth Classic */
   classic:|Chip_Radio|undefined;
   /** BD_ADDR address */
   address: string;
 }
 
+/**
+ * BluetoothBeacon has numerous configurable fields.
+ * Address, AdvertiseSetting, AdvertiseData.
+ */
 export interface Chip_BluetoothBeacon {
-  /** TODO: Only include Radio low_energy. */
-  bt: Chip_Bluetooth|undefined;
+  /** Bluetooth Radio */
+  bt:|Chip_Bluetooth|undefined;
+  /** BD_ADDR address */
   address: string;
-  settings: Chip_BluetoothBeacon_AdvertiseSettings|undefined;
-  advData: Chip_BluetoothBeacon_AdvertiseData|undefined;
+  /** Settings on how beacon functions */
+  settings:|Chip_BluetoothBeacon_AdvertiseSettings|undefined;
+  /** Advertising Data */
+  advData:|Chip_BluetoothBeacon_AdvertiseData|undefined;
+  /** Scan Response Data */
   scanResponse: Chip_BluetoothBeacon_AdvertiseData|undefined;
 }
 
+/** Advertise Settigns dictate how the beacon functions on the netwwork. */
 export interface Chip_BluetoothBeacon_AdvertiseSettings {
+  /** How often the beacon sends an advertising packet */
   advertiseMode?:|Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode|
       undefined;
   /** Numeric time interval between advertisements in ms. */
-  milliseconds?: number|undefined;
+  milliseconds?:|number|undefined;
+  /** Amount of power to send transmission */
   txPowerLevel?:|Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower|
       undefined;
   /** Numeric transmission power in dBm. Must be within [-127, 127]. */
-  dbm?: number|undefined;
+  dbm?:|number|undefined;
+  /** Whether the beacon will respond to scan requests. */
   scannable: boolean;
+  /** Limit adveritising to a given amoutn of time. */
   timeout: number;
 }
 
 /**
- * From
+ * How often the beacon sends an advertising packet
+ *
+ * Referenced From
  * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
  */
 export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode {
@@ -119,7 +163,10 @@ export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode {
 }
 
 /**
- * From
+ * Amount of power to send transmissions. Correlates with signal strength and
+ * range. Inversely correlates with energy consumption.
+ *
+ * Referenced From
  * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
  */
 export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower {
@@ -141,6 +188,12 @@ export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower {
   UNRECOGNIZED = 'UNRECOGNIZED',
 }
 
+/**
+ * These parameters dictate which fields are included in advertisements or
+ * scan responses sent by the beacon. Beacons in Betosim will support a subset
+ * of the complete list of fields found in "Supplement to the Bluetooth Core
+ * Specification"
+ */
 export interface Chip_BluetoothBeacon_AdvertiseData {
   /** Whether the device name should be included in advertise packet. */
   includeDeviceName: boolean;
@@ -155,54 +208,94 @@ export interface Chip_BluetoothBeacon_AdvertiseData {
   services: Chip_BluetoothBeacon_AdvertiseData_Service[];
 }
 
+/** GATT service proto */
 export interface Chip_BluetoothBeacon_AdvertiseData_Service {
+  /** UUID of a Bluetooth GATT service for the beacon */
   uuid: string;
+  /** Bytes of data associated with a GATT service provided by the device */
   data: Uint8Array;
 }
 
+/**
+ * Protobuf for ChipCreate
+ *
+ * This is used specifically for CreateDevice
+ */
 export interface ChipCreate {
+  /** Type of Radio (BT, WIFI, UWB) */
   kind: ChipKind;
+  /** BD_ADDR address */
   address: string;
+  /** optional like "rear-right" */
   name: string;
+  /** optional like Quorvo */
   manufacturer: string;
+  /** optional like DW300 */
   productName: string;
+  /** BluetoothBeaconCreate protobuf */
   bleBeacon?:|ChipCreate_BluetoothBeaconCreate|undefined;
   /** optional rootcanal configuration for bluetooth chipsets. */
   btProperties: Controller|undefined;
 }
 
+/**
+ * Protobuf for BluetoothBeaconCreate
+ * Beacon specific information during creation
+ */
 export interface ChipCreate_BluetoothBeaconCreate {
+  /** BD_ADDR address */
   address: string;
-  settings: Chip_BluetoothBeacon_AdvertiseSettings|undefined;
-  advData: Chip_BluetoothBeacon_AdvertiseData|undefined;
+  /** Settings on how beacon functions */
+  settings:|Chip_BluetoothBeacon_AdvertiseSettings|undefined;
+  /** Advertising Data */
+  advData:|Chip_BluetoothBeacon_AdvertiseData|undefined;
+  /** Scan Response Data */
   scanResponse: Chip_BluetoothBeacon_AdvertiseData|undefined;
 }
 
+/** Device model for netsim */
 export interface Device {
+  /** Device Identifier */
   id: number;
-  /** settable at creation */
+  /** Device name. Settable at creation */
   name: string;
+  /** Visibility of device in the scene */
   visible: State;
-  position: Position|undefined;
+  /** Position of Device */
+  position:|Position|undefined;
+  /** Orientation of Device */
   orientation:|Orientation|undefined;
-  /** Device can have multiple chips of the same kind. */
+  /** Chips in Device. Device can have multiple chips of the same kind. */
   chips: Chip[];
 }
 
+/**
+ * Protobuf for DeviceCreate
+ *
+ * This is used specifically for CreateDevice
+ */
 export interface DeviceCreate {
+  /** Device name. */
   name: string;
-  position: Position|undefined;
-  orientation: Orientation|undefined;
+  /** Position of Device */
+  position:|Position|undefined;
+  /** Orientation of Device */
+  orientation:|Orientation|undefined;
+  /** Chips in Device */
   chips: ChipCreate[];
 }
 
+/** Scene model for netsim */
 export interface Scene {
+  /** List of devices in the scene. */
   devices: Device[];
 }
 
+/** Capture model for netsim */
 export interface Capture {
-  /** same as chip_id */
+  /** Capture Identifier (Same as Chip Identifier) */
   id: number;
+  /** Type of Radio (BT, WIFI, UWB) */
   chipKind: ChipKind;
   /** device AVD name */
   deviceName: string;
@@ -212,6 +305,14 @@ export interface Capture {
   size: number;
   /** number of records in current capture */
   records: number;
-  timestamp: Date|undefined;
+  /**
+   * Timestamp of the most recent start_capture
+   * When "state" is set "ON", timestamp is updated.
+   */
+  timestamp:|Date|undefined;
+  /**
+   * True if capture for the chip is attached to netsim.
+   * False if chip has been detached from netsim.
+   */
   valid: boolean;
 }
