@@ -23,6 +23,7 @@ mod requests;
 mod response;
 
 use log::error;
+use netsim_common::util::os_utils::get_instance;
 use netsim_proto::frontend::{DeleteChipRequest, ListDeviceResponse};
 use protobuf::Message;
 use std::env;
@@ -30,7 +31,7 @@ use std::fs::File;
 use std::path::PathBuf;
 
 use crate::ffi::frontend_client_ffi::{
-    get_instance_num, new_frontend_client, ClientResult, FrontendClient, GrpcMethod,
+    new_frontend_client, ClientResult, FrontendClient, GrpcMethod,
 };
 use crate::ffi::ClientResponseReader;
 use args::{BinaryProtobuf, GetCapture, NetsimArgs};
@@ -185,7 +186,7 @@ pub extern "C" fn rust_main() {
     let instance_flag = args.instance.unwrap_or_default();
     let_cxx_string!(vsock = &args.vsock.unwrap_or_default());
     let client =
-        new_frontend_client(args.port.unwrap_or_default(), get_instance_num(instance_flag), &vsock);
+        new_frontend_client(args.port.unwrap_or_default(), get_instance(instance_flag), &vsock);
     if client.is_null() {
         if args.port.is_some() {
             error!("Unable to create frontend client. Please ensure netsimd is running and listening on grpc port {}.", args.port.unwrap_or_default());

@@ -15,7 +15,7 @@
 use clap::Parser;
 use log::warn;
 use log::{error, info};
-use netsim_common::util::os_utils::remove_netsim_ini;
+use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_ini};
 use netsim_common::util::zip_artifact::zip_artifacts;
 
 use crate::bluetooth as bluetooth_facade;
@@ -29,6 +29,7 @@ use crate::service::{Service, ServiceParams};
 #[cfg(feature = "cuttlefish")]
 use netsim_common::util::os_utils::get_server_address;
 use netsim_proto::config::Config;
+use std::env;
 use std::ffi::{c_char, c_int};
 
 /// Wireless network simulator for android (and other) emulated devices.
@@ -47,21 +48,32 @@ pub unsafe extern "C" fn rust_main(argc: c_int, argv: *const *const c_char) {
 
 #[allow(unused)]
 fn get_netsimd_args(argc: c_int, argv: *const *const c_char) -> NetsimdArgs {
+    let env_args_or_err = env::var("NETSIM_ARGS");
+
     #[cfg(feature = "cuttlefish")]
     {
         // TODO: Use NetsimdArgs::parse() after netsimd binary is built with netsimd.rs.
         // In linux arm64 in aosp-main, it can't access CLI arguments by std::env::args() with netsimd.cc wrapper.
-        let argv: Vec<_> = (0..argc)
+        let mut argv: Vec<_> = (0..argc)
             .map(|i|
                 // SAFETY: argc and argv will remain valid as long as the program runs.
                 unsafe {
                     std::ffi::CStr::from_ptr(*argv.add(i as usize)).to_str().unwrap().to_owned()
                 })
             .collect();
+        if let Ok(env_args) = env_args_or_err {
+            env_args.split(' ').for_each(|arg| argv.push(arg.to_string()));
+        }
         NetsimdArgs::parse_from(argv)
     }
     #[cfg(not(feature = "cuttlefish"))]
-    NetsimdArgs::parse()
+    {
+        let mut argv = env::args().collect::<Vec<String>>();
+        if let Ok(env_args) = env_args_or_err {
+            env_args.split(' ').for_each(|arg| argv.push(arg.to_string()));
+        }
+        NetsimdArgs::parse_from(argv)
+    }
 }
 
 fn run_netsimd_with_args(args: NetsimdArgs) {
@@ -114,9 +126,9 @@ fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
 
 fn run_netsimd_primary(args: NetsimdArgs) {
     let fd_startup_str = args.fd_startup_str.unwrap_or_default();
-    let instance_num = ffi_util::get_instance(args.instance.unwrap_or_default());
+    let instance_num = get_instance(args.instance.unwrap_or_default());
     let hci_port: u16 =
-        ffi_util::get_hci_port(args.hci_port.unwrap_or_default(), instance_num).try_into().unwrap();
+        get_hci_port(args.hci_port.unwrap_or_default(), instance_num).try_into().unwrap();
 
     #[cfg(feature = "cuttlefish")]
     if fd_startup_str.is_empty() {

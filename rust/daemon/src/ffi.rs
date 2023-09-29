@@ -366,14 +366,6 @@ pub mod ffi_util {
         // OS utilities.
         include!("util/os_utils.h");
 
-        #[rust_name = get_instance]
-        #[namespace = "netsim::osutils"]
-        pub fn GetInstance(instance_flag: u16) -> u16;
-
-        #[rust_name = get_hci_port]
-        #[namespace = "netsim::osutils"]
-        pub fn GetHciPort(hci_port_flag: u32, instance_flag: u16) -> u32;
-
         #[rust_name = redirect_std_stream]
         #[namespace = "netsim::osutils"]
         #[cfg(not(feature = "cuttlefish"))]
