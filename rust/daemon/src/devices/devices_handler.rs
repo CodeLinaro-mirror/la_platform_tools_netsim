@@ -36,11 +36,12 @@ use crate::http_server::server_response::ResponseWritable;
 use crate::resource;
 use crate::resource::clone_devices;
 use crate::wifi as wifi_facade;
-use cxx::CxxString;
+use cxx::{CxxString, CxxVector};
 use http::Request;
 use http::Version;
 use log::{info, warn};
 use netsim_proto::common::ChipKind as ProtoChipKind;
+use netsim_proto::configuration::Controller;
 use netsim_proto::frontend::CreateDeviceRequest;
 use netsim_proto::frontend::CreateDeviceResponse;
 use netsim_proto::frontend::DeleteChipRequest;
@@ -50,6 +51,7 @@ use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
 use netsim_proto::model::ChipCreate;
 use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::model::Scene as ProtoScene;
+use protobuf::Message;
 use protobuf::MessageField;
 use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string;
@@ -136,9 +138,11 @@ pub fn add_chip(
         // id_tuple = (DeviceIdentifier, ChipIdentifier)
         Ok((device_id, chip_id)) => {
             let facade_id = match chip_kind {
-                ProtoChipKind::BLUETOOTH => {
-                    bluetooth_facade::bluetooth_add(device_id, &chip_create_proto.address)
-                }
+                ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(
+                    device_id,
+                    &chip_create_proto.address,
+                    &chip_create_proto.bt_properties,
+                ),
                 ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::bluetooth_beacon_add(
                     device_id,
                     String::from(device_name),
@@ -210,6 +214,7 @@ impl AddChipResultCxx {
 
 /// An AddChip function for Rust Device API.
 /// The backend gRPC code will be invoking this method.
+#[allow(clippy::too_many_arguments)]
 pub fn add_chip_cxx(
     device_guid: &str,
     device_name: &str,
@@ -218,6 +223,7 @@ pub fn add_chip_cxx(
     chip_name: &str,
     chip_manufacturer: &str,
     chip_product_name: &str,
+    bt_properties: &CxxVector<u8>,
 ) -> Box<AddChipResultCxx> {
     let chip_kind_proto = match chip_kind.to_string().as_str() {
         "BLUETOOTH" => ProtoChipKind::BLUETOOTH,
@@ -225,7 +231,7 @@ pub fn add_chip_cxx(
         "UWB" => ProtoChipKind::UWB,
         _ => ProtoChipKind::UNSPECIFIED,
     };
-    let chip_create_proto = ChipCreate {
+    let mut chip_create_proto = ChipCreate {
         kind: chip_kind_proto.into(),
         address: chip_address.to_string(),
         name: chip_name.to_string(),
@@ -233,6 +239,9 @@ pub fn add_chip_cxx(
         product_name: chip_product_name.to_string(),
         ..Default::default()
     };
+    if let Ok(bt_properties_proto) = Controller::parse_from_bytes(bt_properties.as_slice()) {
+        chip_create_proto.bt_properties = Some(bt_properties_proto).into();
+    }
     match add_chip(device_guid, device_name, &chip_create_proto) {
         Ok(result) => Box::new(AddChipResultCxx {
             device_id: result.device_id,

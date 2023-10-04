@@ -32,6 +32,7 @@
 #include "grpcpp/security/credentials.h"
 #include "util/log.h"
 #include "util/os_utils.h"
+#include "util/string_utils.h"
 
 using android::control::interceptor::MetricsInterceptorFactory;
 
@@ -73,12 +74,16 @@ bool GrpcChannelReady(const std::shared_ptr<grpc::Channel> &channel) {
 }
 
 std::unique_ptr<android::base::ObservableProcess> RunNetsimd(
-    NetsimdOptions options, std::string netsim_args) {
+    NetsimdOptions options) {
   auto exe = android::base::System::get()->findBundledExecutable("netsimd");
   std::vector<std::string> program_with_args{exe};
   if (options.no_cli_ui) program_with_args.push_back("--no-cli-ui");
   if (options.no_web_ui) program_with_args.push_back("--no-web-ui");
-  if (!netsim_args.empty()) program_with_args.push_back(netsim_args);
+  for (auto flag : stringutils::Split(options.netsim_args, " "))
+    program_with_args.push_back(std::string(flag));
+
+  BtsLogInfo("Netsimd launch command:");
+  for (auto arg : program_with_args) BtsLogInfo("%s", arg.c_str());
   auto cmd = android::base::Command::create(program_with_args);
 
   auto netsimd = cmd.asDeamon().execute();
@@ -95,8 +100,7 @@ void SetPacketStreamEndpoint(const std::string &endpoint) {
   if (endpoint != "default") custom_packet_stream_endpoint = endpoint;
 }
 
-std::shared_ptr<grpc::Channel> GetChannel(NetsimdOptions options,
-                                          std::string netsim_args) {
+std::shared_ptr<grpc::Channel> GetChannel(NetsimdOptions options) {
   std::lock_guard<std::mutex> lock(channel_mutex);
 
   // bool is_netsimd_started = false;
@@ -111,7 +115,7 @@ std::shared_ptr<grpc::Channel> GetChannel(NetsimdOptions options,
         custom_packet_stream_endpoint.empty()) {
       BtsLogInfo("Starting netsim since %s",
                  netsimProc ? "the process died" : "it is not yet launched");
-      netsimProc = RunNetsimd(options, netsim_args);
+      netsimProc = RunNetsimd(options);
     }
     BtsLogInfo("Retry connecting to netsim in %d second.", second);
     std::this_thread::sleep_for(std::chrono::seconds(second));
@@ -122,17 +126,12 @@ std::shared_ptr<grpc::Channel> GetChannel(NetsimdOptions options,
 }
 
 std::shared_ptr<grpc::Channel> CreateChannel(NetsimdOptions options) {
-  return GetChannel(options, "");
-}
-
-std::shared_ptr<grpc::Channel> CreateChannel(NetsimdOptions options,
-                                             std::string netsim_args) {
-  return GetChannel(options, netsim_args);
+  return GetChannel(options);
 }
 
 std::shared_ptr<grpc::Channel> CreateChannel(
     std::string _rootcanal_controller_properties_file) {
-  return GetChannel({}, "");
+  return GetChannel({});
 }
 
 }  // namespace netsim::packet

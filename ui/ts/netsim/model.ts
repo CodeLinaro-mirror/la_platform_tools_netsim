@@ -99,6 +99,8 @@ export interface Chip_Bluetooth {
   classic:|Chip_Radio|undefined;
   /** BD_ADDR address */
   address: string;
+  /** rootcanal Controller Properties */
+  btProperties: Controller|undefined;
 }
 
 /**
@@ -163,8 +165,8 @@ export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode {
 }
 
 /**
- * Amount of power to send transmissions. Correlates with signal strength and
- * range. Inversely correlates with energy consumption.
+ * Amount of power to send transmissions. Correlates with signal strength
+ * and range. Inversely correlates with energy consumption.
  *
  * Referenced From
  * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
@@ -190,9 +192,9 @@ export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower {
 
 /**
  * These parameters dictate which fields are included in advertisements or
- * scan responses sent by the beacon. Beacons in Betosim will support a subset
- * of the complete list of fields found in "Supplement to the Bluetooth Core
- * Specification"
+ * scan responses sent by the beacon. Beacons in Betosim will support a
+ * subset of the complete list of fields found in "Supplement to the
+ * Bluetooth Core Specification"
  */
 export interface Chip_BluetoothBeacon_AdvertiseData {
   /** Whether the device name should be included in advertise packet. */

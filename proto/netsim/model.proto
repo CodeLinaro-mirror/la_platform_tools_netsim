@@ -97,6 +97,8 @@ message Chip {
     Radio classic = 2;
     // BD_ADDR address
     string address = 3;
+    // rootcanal Controller Properties
+    rootcanal.configuration.Controller bt_properties = 4;
   }
 
   // BluetoothBeacon has numerous configurable fields.

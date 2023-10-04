@@ -182,7 +182,7 @@ pub mod ffi_bluetooth {
 
         #[rust_name = bluetooth_add]
         #[namespace = "netsim::hci::facade"]
-        pub fn Add(_chip_id: u32, address: &CxxString) -> u32;
+        pub fn Add(_chip_id: u32, address: &CxxString, controller_proto_bytes: &[u8]) -> u32;
 
         /*
         From https://cxx.rs/binding/box.html#restrictions,
@@ -276,6 +276,7 @@ pub mod ffi_devices {
         #[cxx_name = "IsError"]
         fn is_error(self: &AddChipResultCxx) -> bool;
 
+        #[allow(clippy::too_many_arguments)]
         #[cxx_name = AddChipCxx]
         fn add_chip_cxx(
             device_guid: &str,
@@ -285,6 +286,7 @@ pub mod ffi_devices {
             chip_name: &str,
             chip_manufacturer: &str,
             chip_product_name: &str,
+            bt_properties: &CxxVector<u8>,
         ) -> Box<AddChipResultCxx>;
 
         #[cxx_name = RemoveChipCxx]

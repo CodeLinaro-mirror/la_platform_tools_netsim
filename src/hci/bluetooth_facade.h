@@ -39,7 +39,8 @@ void Reset(uint32_t);
 void Remove(uint32_t);
 void Patch(uint32_t, const model::Chip::Bluetooth &);
 model::Chip::Bluetooth Get(uint32_t);
-uint32_t Add(uint32_t simulation_device, const std::string &);
+uint32_t Add(uint32_t simulation_device, const std::string &address_string,
+             const rust::Slice<::std::uint8_t const> controller_proto_bytes);
 
 rust::Box<AddRustDeviceResult> AddRustDevice(
     uint32_t simulation_device,
