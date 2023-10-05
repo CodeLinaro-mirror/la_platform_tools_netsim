@@ -60,9 +60,12 @@ use protobuf_json_mapping::PrintOptions;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::pin::Pin;
+use std::sync::mpsc::Receiver;
 use std::sync::RwLockWriteGuard;
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+// The amount of seconds netsimd will wait until the first device has attached.
+static IDLE_SECS_FOR_SHUTDOWN: u64 = 15;
 
 const INITIAL_DEVICE_ID: DeviceIdentifier = 1;
 const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
@@ -72,23 +75,16 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     _future_options: (),
 };
 
-static IDLE_SECS_FOR_SHUTDOWN: u64 = 15;
-
 /// The Device resource is a singleton that manages all devices.
 pub struct Devices {
     // BTreeMap allows ListDevice to output devices in order of identifiers.
     entries: BTreeMap<DeviceIdentifier, Device>,
     id_factory: IdFactory<DeviceIdentifier>,
-    pub idle_since: Option<Instant>,
 }
 
 impl Devices {
     pub fn new() -> Self {
-        Devices {
-            entries: BTreeMap::new(),
-            id_factory: IdFactory::new(INITIAL_DEVICE_ID, 1),
-            idle_since: Some(Instant::now()),
-        }
+        Devices { entries: BTreeMap::new(), id_factory: IdFactory::new(INITIAL_DEVICE_ID, 1) }
     }
 }
 
@@ -113,7 +109,6 @@ pub fn add_chip(
     let result = {
         let devices_arc = clone_devices();
         let mut devices = devices_arc.write().unwrap();
-        devices.idle_since = None;
         let (device_id, _) =
             get_or_create_device(&mut devices, Some(device_guid), Some(device_name));
 
@@ -291,10 +286,15 @@ fn remove_device(
     guard: &mut RwLockWriteGuard<Devices>,
     id: DeviceIdentifier,
 ) -> Result<(), String> {
+    let device_name =
+        guard.entries.get(&id).ok_or(format!("Error fetching device with {id}"))?.name.clone();
     guard.entries.remove(&id).ok_or(format!("Error removing device with id {id}"))?;
-    if guard.entries.is_empty() {
-        guard.idle_since = Some(Instant::now());
-    }
+    // Publish DeviceRemoved Event
+    resource::clone_events().lock().unwrap().publish(Event::DeviceRemoved {
+        id,
+        name: device_name,
+        remaining_devices: guard.entries.len(),
+    });
     Ok(())
 }
 
@@ -318,10 +318,10 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
         if is_empty {
             remove_device(&mut devices, device_id)?;
         }
-        Ok((_facade_id_option, _chip_kind))
+        Ok((_facade_id_option, _chip_kind, devices.entries.len()))
     };
     match result {
-        Ok((facade_id_option, chip_kind)) => {
+        Ok((facade_id_option, chip_kind, remaining_devices)) => {
             match facade_id_option {
                 Some(facade_id) => match chip_kind {
                     ProtoChipKind::BLUETOOTH => {
@@ -340,7 +340,10 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                 ))?,
             }
             info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
-            resource::clone_events().lock().unwrap().publish(Event::ChipRemoved { chip_id });
+            resource::clone_events()
+                .lock()
+                .unwrap()
+                .publish(Event::ChipRemoved { chip_id, remaining_devices });
             Ok(())
         }
         Err(err) => {
@@ -558,18 +561,6 @@ fn reset_all() -> Result<(), String> {
     Ok(())
 }
 
-/// Return true if netsimd is idle for a certain duration.
-pub fn is_shutdown_time() -> bool {
-    let devices_arc = clone_devices();
-    let devices = devices_arc.read().unwrap();
-    match devices.idle_since {
-        Some(idle_since) => {
-            IDLE_SECS_FOR_SHUTDOWN.checked_sub(idle_since.elapsed().as_secs()).is_none()
-        }
-        None => false,
-    }
-}
-
 fn handle_device_create(writer: ResponseWritable, create_json: &str) {
     let mut response = CreateDeviceResponse::new();
 
@@ -738,6 +729,68 @@ pub fn get_facade_id(chip_id: u32) -> Result<u32, String> {
         }
     }
     Err(format!("Cannot find facade_id for {chip_id}"))
+}
+
+/// return enum type for wait_devices
+#[derive(Debug, PartialEq)]
+enum DeviceWaitStatus {
+    LastDeviceRemoved,
+    DeviceAdded,
+    Timeout,
+    IgnoreEvent,
+}
+
+/// listening to events
+fn check_device_event(
+    events_rx: &Receiver<Event>,
+    timeout_time: Option<Instant>,
+) -> DeviceWaitStatus {
+    let wait_time = timeout_time.map_or(Duration::from_secs(u64::MAX), |t| t - Instant::now());
+    match events_rx.recv_timeout(wait_time) {
+        Ok(Event::ChipRemoved { remaining_devices: 0, .. }) => DeviceWaitStatus::LastDeviceRemoved,
+        // DeviceAdded (event from CreateDevice)
+        // ChipAdded (event from add_chip or add_chip_cxx)
+        Ok(Event::DeviceAdded { .. }) | Ok(Event::ChipAdded { .. }) => {
+            DeviceWaitStatus::DeviceAdded
+        }
+        Err(_) => DeviceWaitStatus::Timeout,
+        _ => DeviceWaitStatus::IgnoreEvent,
+    }
+}
+
+/// wait loop logic for devices
+/// the function will publish a ShutDown event when
+/// 1. Initial timeout before first device is added
+/// 2. Last Chip Removed from netsimd
+pub fn wait_devices(events_rx: Receiver<Event>) {
+    // TODO (b/303281633): Add unit tests for wait_devices
+    let _ =
+        std::thread::Builder::new().name("device_event_subscriber".to_string()).spawn(move || {
+            let mut timeout_time =
+                Some(Instant::now() + Duration::from_secs(IDLE_SECS_FOR_SHUTDOWN));
+            loop {
+                match check_device_event(&events_rx, timeout_time) {
+                    DeviceWaitStatus::LastDeviceRemoved => {
+                        resource::clone_events().lock().unwrap().publish(Event::ShutDown {
+                            reason: "last device disconnected".to_string(),
+                        });
+                        return;
+                    }
+                    DeviceWaitStatus::DeviceAdded => {
+                        timeout_time = None;
+                    }
+                    DeviceWaitStatus::Timeout => {
+                        resource::clone_events().lock().unwrap().publish(Event::ShutDown {
+                            reason: format!(
+                                "no devices connected within {IDLE_SECS_FOR_SHUTDOWN}s"
+                            ),
+                        });
+                        return;
+                    }
+                    DeviceWaitStatus::IgnoreEvent => continue,
+                }
+            }
+        });
 }
 
 #[cfg(test)]
@@ -1420,5 +1473,60 @@ mod tests {
 
         let delete_result = delete_chip(&print_to_string(&delete_request).unwrap());
         assert!(delete_result.is_err());
+    }
+
+    #[test]
+    fn test_wait_devices_initial_timeout() {
+        logger_setup();
+
+        let events = crate::events::Events::new();
+        let events_rx = events.lock().unwrap().subscribe();
+        assert_eq!(
+            check_device_event(&events_rx, Some(std::time::Instant::now())),
+            DeviceWaitStatus::Timeout
+        );
+    }
+
+    #[test]
+    fn test_wait_devices_last_device_removed() {
+        logger_setup();
+
+        let events = crate::events::Events::new();
+        let events_rx = events.lock().unwrap().subscribe();
+        events.lock().unwrap().publish(Event::ChipRemoved { chip_id: 0, remaining_devices: 0 });
+        assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::LastDeviceRemoved);
+    }
+
+    #[test]
+    fn test_wait_devices_device_chip_added() {
+        logger_setup();
+
+        let events = crate::events::Events::new();
+        let events_rx = events.lock().unwrap().subscribe();
+        events.lock().unwrap().publish(Event::DeviceAdded { id: 0, name: "".to_string() });
+        assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::DeviceAdded);
+        events.lock().unwrap().publish(Event::ChipAdded {
+            chip_id: 0,
+            chip_kind: ProtoChipKind::BLUETOOTH,
+            facade_id: 0,
+            device_name: "".to_string(),
+        });
+        assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::DeviceAdded);
+    }
+
+    #[test]
+    fn test_wait_devices_ignore_event() {
+        logger_setup();
+
+        let events = crate::events::Events::new();
+        let events_rx = events.lock().unwrap().subscribe();
+        events.lock().unwrap().publish(Event::DevicePatched { id: 0, name: "".to_string() });
+        assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
+        events.lock().unwrap().publish(Event::DeviceRemoved {
+            id: 0,
+            name: "".to_string(),
+            remaining_devices: 1,
+        });
+        assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
     }
 }

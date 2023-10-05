@@ -13,13 +13,10 @@
 // limitations under the License.
 
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
-use crate::captures;
 use crate::captures::captures_handler::clear_pcap_files;
 use crate::config::{get_dev, set_dev, set_disable_address_reuse, set_pcap};
-use crate::devices::devices_handler::is_shutdown_time;
 use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
 use crate::http_server::server::run_http_server;
-use crate::resource;
 use crate::transport::socket::run_socket_transport;
 use cxx::UniquePtr;
 use log::{error, info, warn};
@@ -29,8 +26,6 @@ use std::env;
 use std::time::Duration;
 
 /// Module to control startup, run, and cleanup netsimd services.
-
-const INACTIVITY_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 pub struct ServiceParams {
     fd_startup_str: String,
@@ -74,6 +69,8 @@ impl ServiceParams {
 pub struct Service {
     // netsimd states, like device resource.
     service_params: ServiceParams,
+    // grpc server
+    grpc_server: UniquePtr<GrpcServer>,
 }
 
 impl Service {
@@ -82,7 +79,7 @@ impl Service {
     /// The file descriptors in `service_params.fd_startup_str` must be valid and open, and must
     /// remain so for as long as the `Service` exists.
     pub unsafe fn new(service_params: ServiceParams) -> Service {
-        Service { service_params }
+        Service { service_params, grpc_server: UniquePtr::null() }
     }
 
     /// Sets up the states for netsimd.
@@ -93,10 +90,6 @@ impl Service {
         set_pcap(self.service_params.pcap);
         set_dev(self.service_params.dev);
         set_disable_address_reuse(self.service_params.disable_address_reuse);
-
-        // Start all the subscribers for events
-        let events_rx = resource::clone_events().lock().unwrap().subscribe();
-        captures::capture::spawn_capture_event_subscriber(events_rx);
     }
 
     /// Runs netsim gRPC server
@@ -143,7 +136,7 @@ impl Service {
 
     /// Runs the netsimd services.
     #[allow(unused_unsafe)]
-    pub fn run(&self) {
+    pub fn run(&mut self) {
         if !self.service_params.fd_startup_str.is_empty() {
             // SAFETY: When the `Service` was constructed by `Service::new` the caller guaranteed
             // that the file descriptors in `service_params.fd_startup_str` would remain valid and
@@ -155,7 +148,7 @@ impl Service {
         }
 
         // Run netsim gRPC server
-        let grpc_server = match self.run_grpc_server() {
+        self.grpc_server = match self.run_grpc_server() {
             Some(server) => server,
             None => {
                 error!("Failed to run netsimd because unable to start grpc server");
@@ -167,7 +160,7 @@ impl Service {
         let web_port = self.run_web_server();
 
         // Write the port numbers to ini file
-        self.write_ports_to_ini(grpc_server.get_grpc_port(), web_port);
+        self.write_ports_to_ini(self.grpc_server.get_grpc_port(), web_port);
 
         // Run the socket server.
         run_socket_transport(self.service_params.hci_port);
@@ -177,16 +170,13 @@ impl Service {
             new_test_beacon(0);
             new_test_beacon(1);
         }
+    }
 
-        // Let service run until the shut down condition have been met.
-        // Condition: idle 15 seconds with no devices attached to netsim
-        loop {
-            std::thread::sleep(INACTIVITY_CHECK_INTERVAL);
-            if is_shutdown_time() {
-                grpc_server.shut_down();
-                info!("Netsim has been shutdown due to inactivity.");
-                break;
-            }
+    /// Shut down the netsimd services
+    pub fn shut_down(&self) {
+        // TODO: shutdown other services in Rust
+        if !self.grpc_server.is_null() {
+            self.grpc_server.shut_down();
         }
     }
 }

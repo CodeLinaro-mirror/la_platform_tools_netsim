@@ -19,7 +19,11 @@ use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_in
 use netsim_common::util::zip_artifact::zip_artifacts;
 
 use crate::bluetooth as bluetooth_facade;
+use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
+use crate::devices::devices_handler::wait_devices;
+use crate::events::Event;
+use crate::resource;
 use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
@@ -31,6 +35,7 @@ use netsim_common::util::os_utils::get_server_address;
 use netsim_proto::config::Config;
 use std::env;
 use std::ffi::{c_char, c_int};
+use std::sync::mpsc::Receiver;
 
 /// Wireless network simulator for android (and other) emulated devices.
 ///
@@ -124,6 +129,17 @@ fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
         .unwrap();
 }
 
+// loop until ShutDown event is received, then log and return.
+fn main_loop(events_rx: Receiver<Event>) {
+    loop {
+        // events_rx.recv() will wait until the event is received.
+        if let Ok(Event::ShutDown { reason }) = events_rx.recv() {
+            info!("Netsim is shutdown: {reason}");
+            return;
+        }
+    }
+}
+
 fn run_netsimd_primary(args: NetsimdArgs) {
     let fd_startup_str = args.fd_startup_str.unwrap_or_default();
     let instance_num = get_instance(args.instance.unwrap_or_default());
@@ -168,13 +184,30 @@ fn run_netsimd_primary(args: NetsimdArgs) {
 
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
     // valid and open for as long as the program runs.
-    let service = unsafe { Service::new(service_params) };
+    let mut service = unsafe { Service::new(service_params) };
     service.set_up();
 
+    // Create all Event Receivers
+    let capture_events_rx = resource::clone_events().lock().unwrap().subscribe();
+    let device_events_rx = resource::clone_events().lock().unwrap().subscribe();
+    let main_events_rx = resource::clone_events().lock().unwrap().subscribe();
+
+    // Pass all event receivers to each modules
+    spawn_capture_event_subscriber(capture_events_rx);
+    wait_devices(device_events_rx);
+
+    // Start radio facades
     bluetooth_facade::bluetooth_start(&config.bluetooth, instance_num);
     wifi_facade::wifi_start(&config.wifi);
 
+    // Run all netsimd services (grpc, socket, web)
     service.run();
+
+    // Runs a synchronous main loop
+    main_loop(main_events_rx);
+
+    // Gracefully shutdown netsimd services
+    service.shut_down();
 
     // Once service.run is complete, delete the netsim ini file
     // and zip all artifacts
