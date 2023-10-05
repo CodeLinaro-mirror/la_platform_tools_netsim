@@ -88,11 +88,6 @@ std::string GetNetsimIniFilepath(uint16_t instance_num) {
   return discovery_dir;
 }
 
-std::unique_ptr<std::string> GetNetsimIniFilepathCxx(uint16_t instance_num) {
-  auto discovery_dir = GetNetsimIniFilepath(instance_num);
-  return std::make_unique<std::string>(discovery_dir);
-}
-
 std::optional<std::string> GetServerAddress(uint16_t instance_num) {
   auto filepath = GetNetsimIniFilepath(instance_num);
   if (!netsim::filesystem::exists(filepath)) {

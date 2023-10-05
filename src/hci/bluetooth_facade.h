@@ -50,7 +50,8 @@ void SetRustDeviceAddress(
     std::array<uint8_t, rootcanal::Address::kLength> address);
 void RemoveRustDevice(uint32_t facade_id);
 
-void Start(uint16_t instance_num);
+void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
+           uint16_t instance_num);
 void Stop();
 
 // Cxx functions for rust ffi.

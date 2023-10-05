@@ -39,6 +39,7 @@ fn main() {
         proto_dir.join("netsim/model.proto"),
         proto_dir.join("netsim/frontend.proto"),
         proto_dir.join("netsim/common.proto"),
+        proto_dir.join("netsim/config.proto"),
     ];
     let proto_include_dirs = [proto_dir.clone(), rootcanal_dir.clone()];
     let proto_out_dir = proto_root.join("rust/proto/src");

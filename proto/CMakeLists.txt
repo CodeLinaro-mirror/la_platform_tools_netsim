@@ -25,8 +25,8 @@ protobuf_generate_grpc_cpp(
 # For netsimd (netsimd-proto-lib)
 protobuf_generate_grpc_cpp(
   SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}
-  SOURCES netsim/common.proto netsim/hci_packet.proto netsim/model.proto
-          netsim/startup.proto
+  SOURCES netsim/common.proto netsim/config.proto netsim/hci_packet.proto
+          netsim/model.proto netsim/startup.proto
   INCLUDES ${ROOTCANAL_PROTO_DIR}
   OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
   GENERATED NETSIM_PROTO_SRC)

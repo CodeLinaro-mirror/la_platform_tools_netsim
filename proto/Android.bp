@@ -81,6 +81,7 @@ cc_library {
     ],
     srcs: [
         "netsim/common.proto",
+        "netsim/config.proto",
         "netsim/frontend.proto",
         "netsim/hci_packet.proto",
         "netsim/model.proto",
@@ -104,6 +105,7 @@ cc_library {
     },
     srcs: [
         "netsim/common.proto",
+        "netsim/config.proto",
         "netsim/frontend.proto",
         "netsim/hci_packet.proto",
         "netsim/model.proto",

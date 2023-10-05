@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use crate::ffi::ffi_wifi;
+use ::protobuf::MessageField;
+use netsim_proto::config::WiFi;
 use netsim_proto::model::chip::Radio;
 use protobuf::Message;
 
@@ -44,8 +46,9 @@ pub fn wifi_add(device_id: u32) -> u32 {
 }
 
 /// Starts the WiFi service.
-pub fn wifi_start() {
-    ffi_wifi::wifi_start();
+pub fn wifi_start(config: &MessageField<WiFi>) {
+    let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
+    ffi_wifi::wifi_start(&proto_bytes);
 }
 
 /// Stops the WiFi service.

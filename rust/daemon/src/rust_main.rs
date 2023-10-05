@@ -13,13 +13,20 @@
 // limitations under the License.
 
 use clap::Parser;
-use log::{error, info, warn};
+use log::warn;
+use log::{error, info};
 
+use crate::bluetooth as bluetooth_facade;
+use crate::config_file;
+use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
 use crate::ffi::ffi_util;
 use crate::service::{Service, ServiceParams};
+#[cfg(feature = "cuttlefish")]
+use netsim_common::util::os_utils::get_server_address;
+use netsim_proto::config::Config;
 use std::ffi::{c_char, c_int};
 
 /// Wireless network simulator for android (and other) emulated devices.
@@ -65,37 +72,39 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
     }
 
     match args.connector_instance {
+        #[cfg(feature = "cuttlefish")]
         Some(connector_instance) => run_netsimd_connector(args, connector_instance),
-        None => run_netsimd_primary(args),
+        _ => run_netsimd_primary(args),
     }
 }
 
-// Forwards packets to another netsim daemon.
+/// Forwards packets to another netsim daemon.
+#[cfg(feature = "cuttlefish")]
 fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
-    if args.fd_startup_str.is_none() {
-        error!("Failed to start netsimd forwarder, missing `-s` arg");
-        return;
-    }
-    if !ffi_util::is_netsimd_alive(instance) {
-        error!("Failed to start netsimd forwarder, no primary at {}", instance);
-        return;
-    }
+    let fd_startup = match args.fd_startup_str {
+        None => {
+            error!("Failed to start netsimd forwarder, missing `-s` arg");
+            return;
+        }
+        Some(fd_startup) => fd_startup,
+    };
+
     info!("Starting netsim daemon in forwarding mode");
+    // TODO: Make this function returns Result to use `?` instead of unwrap().
+    let server = get_server_address(instance)
+        .map(|port| format!("localhost:{}", port))
+        .ok_or_else(|| warn!("Unable to find server address for instance {}", instance))
+        .unwrap();
+    crate::transport::fd::run_fd_connector(&fd_startup, server.as_str())
+        .map_err(|e| error!("Failed to run fd connector: {}", e))
+        .unwrap();
 }
 
-fn run_netsimd_primary(netsimd_args: NetsimdArgs) {
-    let fd_startup_str = netsimd_args.fd_startup_str.unwrap_or_default();
-    let no_cli_ui = netsimd_args.no_cli_ui;
-    let no_web_ui = netsimd_args.no_web_ui;
-    let pcap = netsimd_args.pcap;
-    let disable_address_reuse = netsimd_args.disable_address_reuse;
-    let instance_num = ffi_util::get_instance(netsimd_args.instance.unwrap_or_default());
+fn run_netsimd_primary(args: NetsimdArgs) {
+    let fd_startup_str = args.fd_startup_str.unwrap_or_default();
+    let instance_num = ffi_util::get_instance(args.instance.unwrap_or_default());
     let hci_port: u16 =
-        ffi_util::get_hci_port(netsimd_args.hci_port.unwrap_or_default(), instance_num)
-            .try_into()
-            .unwrap();
-    let dev = netsimd_args.dev;
-    let vsock = netsimd_args.vsock.unwrap_or_default();
+        ffi_util::get_hci_port(args.hci_port.unwrap_or_default(), instance_num).try_into().unwrap();
 
     #[cfg(feature = "cuttlefish")]
     if fd_startup_str.is_empty() {
@@ -107,21 +116,39 @@ fn run_netsimd_primary(netsimd_args: NetsimdArgs) {
         warn!("Failed to start netsim daemon because a netsim daemon is already running");
         return;
     }
+
+    let mut config = Config::new();
+    if let Some(filename) = args.config {
+        match config_file::new_from_file(&filename) {
+            Ok(config_from_file) => {
+                info!("Using config in {}", config);
+                config = config_from_file;
+            }
+            Err(e) => {
+                error!("Skipping config in {}: {:?}", filename, e);
+            }
+        }
+    }
+
     let service_params = ServiceParams::new(
         fd_startup_str,
-        no_cli_ui,
-        no_web_ui,
-        pcap,
-        disable_address_reuse,
+        args.no_cli_ui,
+        args.no_web_ui,
+        args.pcap,
+        args.disable_address_reuse,
         hci_port,
         instance_num,
-        dev,
-        vsock,
+        args.dev,
+        args.vsock.unwrap_or_default(),
     );
 
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
     // valid and open for as long as the program runs.
     let service = unsafe { Service::new(service_params) };
     service.set_up();
+
+    bluetooth_facade::bluetooth_start(&config.bluetooth, instance_num);
+    wifi_facade::wifi_start(&config.wifi);
+
     service.run();
 }

@@ -247,17 +247,20 @@ fn handle_packet(
         .map(|arc_capture| arc_capture.lock().unwrap())
     {
         if let Some(ref mut file) = capture.file {
+            let timestamp =
+                SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+            let mut packet_buf = packet.clone();
             if int_to_chip_kind(kind) == ChipKind::BLUETOOTH {
-                let timestamp =
-                    SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
-                match append_record(timestamp, file, direction, packet_type, packet.as_slice()) {
-                    Ok(size) => {
-                        capture.size += size;
-                        capture.records += 1;
-                    }
-                    Err(err) => {
-                        warn!("{err:?}");
-                    }
+                packet_buf = vec![packet_type as u8];
+                packet_buf.extend(packet);
+            };
+            match append_record(timestamp, file, direction, packet_buf.as_slice()) {
+                Ok(size) => {
+                    capture.size += size;
+                    capture.records += 1;
+                }
+                Err(err) => {
+                    warn!("{err:?}");
                 }
             }
         }

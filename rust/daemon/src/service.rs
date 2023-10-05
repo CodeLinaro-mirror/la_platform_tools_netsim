@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::bluetooth as bluetooth_facade;
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures;
 use crate::captures::captures_handler::clear_pcap_files;
 use crate::config::{get_dev, set_dev, set_disable_address_reuse, set_pcap};
 use crate::devices::devices_handler::is_shutdown_time;
 use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
-use crate::ffi::ffi_util::get_netsim_ini_file_path_cxx;
 use crate::http_server::server::run_http_server;
 use crate::resource;
 use crate::transport::socket::run_socket_transport;
-use crate::wifi as wifi_facade;
 use cxx::UniquePtr;
 use log::{error, info, warn};
 use netsim_common::util::ini_file::IniFile;
+use netsim_common::util::os_utils::get_netsim_ini_filepath;
 use std::env;
 use std::time::Duration;
 
@@ -99,9 +97,6 @@ impl Service {
         // Start all the subscribers for events
         let events_rx = resource::clone_events().lock().unwrap().subscribe();
         captures::capture::spawn_capture_event_subscriber(events_rx);
-
-        bluetooth_facade::bluetooth_start(self.service_params.instance_num);
-        wifi_facade::wifi_start();
     }
 
     /// Runs netsim gRPC server
@@ -135,8 +130,8 @@ impl Service {
 
     /// Write ports to netsim.ini file
     fn write_ports_to_ini(&self, grpc_port: u32, web_port: Option<u16>) {
-        let filepath = get_netsim_ini_file_path_cxx(self.service_params.instance_num);
-        let mut ini_file = IniFile::new(filepath.to_string());
+        let filepath = get_netsim_ini_filepath(self.service_params.instance_num);
+        let mut ini_file = IniFile::new(filepath);
         if let Some(num) = web_port {
             ini_file.insert("web.port", &num.to_string());
         }
