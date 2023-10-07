@@ -126,7 +126,7 @@ using ::android::net::PosixAsyncSocketServer;
 
 void SetUpTestChannel(uint16_t instance_num) {
   gTestSocketServer = std::make_shared<PosixAsyncSocketServer>(
-      kDefaultTestPort + instance_num, gAsyncManager.get());
+      kDefaultTestPort + instance_num - 1, gAsyncManager.get());
 
   gTestChannel = std::make_unique<rootcanal::TestCommandHandler>(*gTestModel);
 

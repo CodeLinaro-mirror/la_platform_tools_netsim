@@ -183,10 +183,9 @@ pub extern "C" fn rust_main() {
         return;
     }
     let grpc_method = args.command.grpc_method();
-    let instance_flag = args.instance.unwrap_or_default();
     let_cxx_string!(vsock = &args.vsock.unwrap_or_default());
     let client =
-        new_frontend_client(args.port.unwrap_or_default(), get_instance(instance_flag), &vsock);
+        new_frontend_client(args.port.unwrap_or_default(), get_instance(args.instance), &vsock);
     if client.is_null() {
         if args.port.is_some() {
             error!("Unable to create frontend client. Please ensure netsimd is running and listening on grpc port {}.", args.port.unwrap_or_default());
