@@ -15,6 +15,7 @@
 use clap::Parser;
 use log::warn;
 use log::{error, info};
+use netsim_common::system::netsimd_temp_dir;
 use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_ini};
 use netsim_common::util::zip_artifact::zip_artifacts;
 
@@ -82,6 +83,10 @@ fn get_netsimd_args(argc: c_int, argv: *const *const c_char) -> NetsimdArgs {
 }
 
 fn run_netsimd_with_args(args: NetsimdArgs) {
+    // Log where netsim artifacts are located
+    #[cfg(feature = "cuttlefish")]
+    info!("netsim artifacts path: {}", netsimd_temp_dir().display());
+
     // Redirect stdout and stderr to files only if netsimd is not invoked
     // by Cuttlefish. Some Cuttlefish builds fail when writing logs to files.
     #[cfg(not(feature = "cuttlefish"))]
