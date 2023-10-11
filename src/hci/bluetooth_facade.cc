@@ -366,6 +366,15 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string,
                                 controller_proto_bytes.size());
     BtsLogInfo("device_id: %d has rootcanal Controller configuration: %s",
                simulation_device, custom_proto.ShortDebugString().c_str());
+
+    // When emulators restore from a snapshot the PacketStreamer connection to
+    // netsim is recreated with a new (uninitialized) Rootcanal device. However
+    // the Android Bluetooth Stack does not re-initialize the controller. Our
+    // solution is for Rootcanal to recognize that it is receiving HCI commands
+    // before a HCI Reset. The flag below causes a hardware error event that
+    // triggers the Reset from the Bluetooth Stack.
+    custom_proto.mutable_quirks()->set_hardware_error_before_reset(true);
+
     controller_proto =
         std::make_shared<rootcanal::configuration::Controller>(custom_proto);
   }

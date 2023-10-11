@@ -64,8 +64,7 @@ class FrontendClient {
       ClientResponseReader const &client_reader) const = 0;
 };
 
-std::unique_ptr<FrontendClient> NewFrontendClient(
-    int32_t grpc_port, uint16_t instance_num, const std::string &vsock_addr);
+std::unique_ptr<FrontendClient> NewFrontendClient(const std::string &server);
 
 }  // namespace frontend
 }  // namespace netsim
