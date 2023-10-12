@@ -14,7 +14,7 @@
 
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
-use crate::config::{get_dev, set_dev, set_disable_address_reuse, set_pcap};
+use crate::config::{get_dev, set_dev, set_pcap};
 use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
 use crate::http_server::server::run_http_server;
 use crate::transport::socket::run_socket_transport;
@@ -32,7 +32,6 @@ pub struct ServiceParams {
     no_cli_ui: bool,
     no_web_ui: bool,
     pcap: bool,
-    disable_address_reuse: bool,
     hci_port: u16,
     instance_num: u16,
     dev: bool,
@@ -46,7 +45,6 @@ impl ServiceParams {
         no_cli_ui: bool,
         no_web_ui: bool,
         pcap: bool,
-        disable_address_reuse: bool,
         hci_port: u16,
         instance_num: u16,
         dev: bool,
@@ -57,7 +55,6 @@ impl ServiceParams {
             no_cli_ui,
             no_web_ui,
             pcap,
-            disable_address_reuse,
             hci_port,
             instance_num,
             dev,
@@ -89,7 +86,6 @@ impl Service {
         }
         set_pcap(self.service_params.pcap);
         set_dev(self.service_params.dev);
-        set_disable_address_reuse(self.service_params.disable_address_reuse);
     }
 
     /// Runs netsim gRPC server
@@ -101,7 +97,6 @@ impl Service {
         let grpc_server = run_grpc_server_cxx(
             netsim_grpc_port,
             self.service_params.no_cli_ui,
-            self.service_params.instance_num,
             self.service_params.vsock,
         );
         match grpc_server.is_null() {

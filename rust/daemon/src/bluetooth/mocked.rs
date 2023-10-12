@@ -76,7 +76,11 @@ pub fn bluetooth_add(
 }
 
 /// Starts the Bluetooth service.
-pub fn bluetooth_start(_config: &MessageField<BluetoothConfig>, _instance_num: u16) {
+pub fn bluetooth_start(
+    _config: &MessageField<BluetoothConfig>,
+    _instance_num: u16,
+    _disable_address_reuse: bool,
+) {
     info!("bluetooth service started");
 }
 

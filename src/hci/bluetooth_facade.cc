@@ -188,7 +188,7 @@ void SetUpTestChannel(uint16_t instance_num) {
 
 // Initialize the rootcanal library.
 void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
-           uint16_t instance_num) {
+           uint16_t instance_num, bool disable_address_reuse) {
   if (gStarted) return;
 
   // output is to a file, so no color wanted
@@ -229,7 +229,7 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
 
   // Disable Address Reuse if '--disable_address_reuse' flag is true
   // TODO: once config files are active, use the value from config proto
-  gTestModel->SetReuseDeviceAddresses(!netsim::GetDisableAddressReuse());
+  gTestModel->SetReuseDeviceAddresses(!disable_address_reuse);
 
   // NOTE: 0:BR_EDR, 1:LOW_ENERGY. The order is used by bluetooth CTS.
   phy_classic_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::BR_EDR);

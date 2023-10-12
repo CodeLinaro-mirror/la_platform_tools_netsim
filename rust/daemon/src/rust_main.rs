@@ -15,6 +15,7 @@
 use clap::Parser;
 use log::warn;
 use log::{error, info};
+#[cfg(feature = "cuttlefish")]
 use netsim_common::system::netsimd_temp_dir;
 use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_ini};
 use netsim_common::util::zip_artifact::zip_artifacts;
@@ -180,7 +181,6 @@ fn run_netsimd_primary(args: NetsimdArgs) {
         args.no_cli_ui,
         args.no_web_ui,
         args.pcap,
-        args.disable_address_reuse,
         hci_port,
         instance_num,
         args.dev,
@@ -202,7 +202,7 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     wait_devices(device_events_rx);
 
     // Start radio facades
-    bluetooth_facade::bluetooth_start(&config.bluetooth, instance_num);
+    bluetooth_facade::bluetooth_start(&config.bluetooth, instance_num, args.disable_address_reuse);
     wifi_facade::wifi_start(&config.wifi);
 
     // Run all netsimd services (grpc, socket, web)
