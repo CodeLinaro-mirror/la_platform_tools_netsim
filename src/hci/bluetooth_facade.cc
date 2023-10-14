@@ -168,10 +168,6 @@ void SetUpTestChannel(uint16_t instance_num) {
         return false;
       });
 
-  gTestChannel->AddDevice({"beacon", "be:ac:01:55:00:01", "1000"});
-  gTestChannel->AddDeviceToPhy({"0", "1"});
-  gTestChannel->AddDevice({"beacon", "be:ac:01:55:00:02", "1000"});
-  gTestChannel->AddDeviceToPhy({"1", "1"});
   gTestChannel->SetTimerPeriod({"5"});
   gTestChannel->StartTimer({});
 

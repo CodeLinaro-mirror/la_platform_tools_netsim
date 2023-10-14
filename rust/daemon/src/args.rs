@@ -63,4 +63,8 @@ pub struct NetsimdArgs {
     // The name of a config file to load
     #[arg(long)]
     pub config: Option<String>,
+
+    // Start with test beacons
+    #[arg(long, alias = "test_beacons")]
+    pub test_beacons: Option<bool>,
 }

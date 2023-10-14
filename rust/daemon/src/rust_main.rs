@@ -31,7 +31,7 @@ use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
 use crate::ffi::ffi_util;
-use crate::service::{Service, ServiceParams};
+use crate::service::{new_test_beacon, Service, ServiceParams};
 #[cfg(feature = "cuttlefish")]
 use netsim_common::util::os_utils::get_server_address;
 use netsim_proto::config::Config;
@@ -204,6 +204,17 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     // Start radio facades
     bluetooth_facade::bluetooth_start(&config.bluetooth, instance_num, args.disable_address_reuse);
     wifi_facade::wifi_start(&config.wifi);
+
+    // Maybe create test beacons, default true for cuttlefish
+    // TODO: remove default for cuttlefish by adding flag to tests
+    if match args.test_beacons {
+        Some(true) => true,
+        Some(false) => false,
+        None => cfg!(feature = "cuttlefish"),
+    } {
+        new_test_beacon(1, 1000);
+        new_test_beacon(2, 1000);
+    }
 
     // Run all netsimd services (grpc, socket, web)
     service.run();
