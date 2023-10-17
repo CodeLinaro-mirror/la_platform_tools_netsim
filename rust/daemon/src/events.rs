@@ -16,11 +16,23 @@
 
 use netsim_proto::common::ChipKind;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
 
 use crate::devices::chip::ChipIdentifier;
 use crate::devices::chip::FacadeIdentifier;
 use crate::devices::device::DeviceIdentifier;
+
+use lazy_static::lazy_static;
+use std::sync::{Arc, Mutex};
+
+// Publish the event to all subscribers
+pub fn publish(event: Event) {
+    get_events().lock().unwrap().publish(event);
+}
+
+// Subscribe to events over the receiver
+pub fn subscribe() -> Receiver<Event> {
+    get_events().lock().unwrap().subscribe()
+}
 
 /// Event messages shared across various components in a loosely
 /// coupled manner.
@@ -54,6 +66,14 @@ pub enum Event {
     },
 }
 
+lazy_static! {
+    static ref EVENTS: Arc<Mutex<Events>> = Events::new();
+}
+
+fn get_events() -> Arc<Mutex<Events>> {
+    Arc::clone(&EVENTS)
+}
+
 /// A multi-producer, multi-consumer broadcast queue based on
 /// `std::sync::mpsc`.
 ///
@@ -71,21 +91,21 @@ pub struct Events {
 impl Events {
     // Events is always owned by multiple publishers and subscribers
     // across threads so return an Arc type.
-    pub fn new() -> Arc<Mutex<Events>> {
+    fn new() -> Arc<Mutex<Events>> {
         Arc::new(Mutex::new(Self { subscribers: Vec::new() }))
     }
 
     // Creates a new asynchronous channel, returning the receiver
     // half. All `Event` messages sent through `publish` will become
     // available on the receiver in the same order as it was sent.
-    pub fn subscribe(&mut self) -> Receiver<Event> {
+    fn subscribe(&mut self) -> Receiver<Event> {
         let (tx, rx) = channel::<Event>();
         self.subscribers.push(tx);
         rx
     }
 
     // Attempts to send an Event on the events channel.
-    pub fn publish(&mut self, msg: Event) {
+    fn publish(&mut self, msg: Event) {
         if self.subscribers.is_empty() {
             log::warn!("No Subscribers to the event: {msg:?}");
         } else {
@@ -93,6 +113,24 @@ impl Events {
             // error and be removed by retain.
             self.subscribers.retain(|subscriber| subscriber.send(msg.clone()).is_ok())
         }
+    }
+}
+
+// Test public functions to allow testing with local Events struct.
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    pub fn new() -> Arc<Mutex<Events>> {
+        Events::new()
+    }
+
+    pub fn publish(s: &mut Arc<Mutex<Events>>, msg: Event) {
+        s.lock().unwrap().publish(msg);
+    }
+
+    pub fn subscribe(s: &mut Arc<Mutex<Events>>) -> Receiver<Event> {
+        s.lock().unwrap().subscribe()
     }
 }
 

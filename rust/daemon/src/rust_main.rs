@@ -24,8 +24,8 @@ use crate::bluetooth as bluetooth_facade;
 use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
 use crate::devices::devices_handler::wait_devices;
+use crate::events;
 use crate::events::Event;
-use crate::resource;
 use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
@@ -193,9 +193,9 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     service.set_up();
 
     // Create all Event Receivers
-    let capture_events_rx = resource::clone_events().lock().unwrap().subscribe();
-    let device_events_rx = resource::clone_events().lock().unwrap().subscribe();
-    let main_events_rx = resource::clone_events().lock().unwrap().subscribe();
+    let capture_events_rx = events::subscribe();
+    let device_events_rx = events::subscribe();
+    let main_events_rx = events::subscribe();
 
     // Pass all event receivers to each modules
     spawn_capture_event_subscriber(capture_events_rx);
