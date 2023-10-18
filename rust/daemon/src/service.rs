@@ -22,6 +22,7 @@ use cxx::UniquePtr;
 use log::{error, info, warn};
 use netsim_common::util::ini_file::IniFile;
 use netsim_common::util::os_utils::get_netsim_ini_filepath;
+use netsim_common::util::zip_artifact::remove_zip_files;
 use std::env;
 use std::time::Duration;
 
@@ -81,9 +82,17 @@ impl Service {
 
     /// Sets up the states for netsimd.
     pub fn set_up(&self) {
+        // Clear all zip files
+        match remove_zip_files() {
+            Ok(()) => info!("netsim generated zip files in temp directory has been removed."),
+            Err(err) => error!("{err:?}"),
+        }
+
+        // Clear all pcap files
         if clear_pcap_files() {
             info!("netsim generated pcap files in temp directory has been removed.");
         }
+
         set_pcap(self.service_params.pcap);
         set_dev(self.service_params.dev);
     }

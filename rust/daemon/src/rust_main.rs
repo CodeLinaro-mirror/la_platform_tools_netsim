@@ -139,6 +139,7 @@ fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
 fn main_loop(events_rx: Receiver<Event>) {
     loop {
         // events_rx.recv() will wait until the event is received.
+        // TODO(b/305536480): Remove built-in devices during shutdown.
         if let Ok(Event::ShutDown { reason }) = events_rx.recv() {
             info!("Netsim is shutdown: {reason}");
             return;

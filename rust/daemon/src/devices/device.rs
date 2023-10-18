@@ -37,9 +37,10 @@ pub struct Device {
     pub position: ProtoPosition,
     pub orientation: ProtoOrientation,
     pub chips: BTreeMap<ChipIdentifier, Chip>,
+    pub builtin: bool,
 }
 impl Device {
-    pub fn new(id: DeviceIdentifier, guid: String, name: String) -> Self {
+    pub fn new(id: DeviceIdentifier, guid: String, name: String, builtin: bool) -> Self {
         Device {
             id,
             guid,
@@ -48,6 +49,7 @@ impl Device {
             position: ProtoPosition::new(),
             orientation: ProtoOrientation::new(),
             chips: BTreeMap::new(),
+            builtin,
         }
     }
 }
@@ -232,7 +234,7 @@ mod tests {
     static TEST_CHIP_NAME_2: &str = "test-bt-chip-2";
 
     fn create_test_device() -> Result<Device, String> {
-        let mut device = Device::new(0, "0".to_string(), TEST_DEVICE_NAME.to_string());
+        let mut device = Device::new(0, "0".to_string(), TEST_DEVICE_NAME.to_string(), false);
         device.add_chip(
             ProtoChipKind::BLUETOOTH,
             "",

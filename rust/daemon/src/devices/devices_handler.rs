@@ -119,8 +119,12 @@ pub fn add_chip(
     let result = {
         let devices_arc = get_devices();
         let mut devices = devices_arc.write().unwrap();
-        let (device_id, _) =
-            get_or_create_device(&mut devices, Some(device_guid), Some(device_name));
+        let (device_id, _) = get_or_create_device(
+            &mut devices,
+            Some(device_guid),
+            Some(device_name),
+            chip_kind == ProtoChipKind::BLUETOOTH_BEACON,
+        );
 
         let chip_name = (chip_create_proto.name != String::default())
             .then_some(chip_create_proto.name.as_str());
@@ -179,6 +183,7 @@ pub fn add_chip(
                 chip_kind,
                 facade_id,
                 device_name: device_name.to_string(),
+                builtin: chip_kind == ProtoChipKind::BLUETOOTH_BEACON,
             });
             Ok(AddChipResult { device_id, chip_id, facade_id })
         }
@@ -269,10 +274,14 @@ fn get_or_create_device(
     devices: &mut Devices,
     guid: Option<&str>,
     name: Option<&str>,
+    builtin: bool,
 ) -> (DeviceIdentifier, String) {
     // Check if a device with the same guid already exists and if so, return it
     if let Some(guid) = guid {
         if let Some(existing_device) = devices.entries.values().find(|d| d.guid == *guid) {
+            if existing_device.builtin != builtin {
+                warn!("builtin mismatch for device {} during add_chip", existing_device.name);
+            }
             return (existing_device.id, existing_device.name.clone());
         }
     }
@@ -283,7 +292,7 @@ fn get_or_create_device(
     let name = name.unwrap_or(&default);
     devices.entries.insert(
         new_id,
-        Device::new(new_id, String::from(guid.unwrap_or(&default)), String::from(name)),
+        Device::new(new_id, String::from(guid.unwrap_or(&default)), String::from(name), builtin),
     );
 
     (new_id, String::from(name))
@@ -296,15 +305,7 @@ fn remove_device(
     guard: &mut RwLockWriteGuard<Devices>,
     id: DeviceIdentifier,
 ) -> Result<(), String> {
-    let device_name =
-        guard.entries.get(&id).ok_or(format!("Error fetching device with {id}"))?.name.clone();
     guard.entries.remove(&id).ok_or(format!("Error removing device with id {id}"))?;
-    // Publish DeviceRemoved Event
-    events::publish(Event::DeviceRemoved {
-        id,
-        name: device_name,
-        remaining_devices: guard.entries.len(),
-    });
     Ok(())
 }
 
@@ -328,10 +329,14 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
         if is_empty {
             remove_device(&mut devices, device_id)?;
         }
-        Ok((_facade_id_option, _chip_kind, devices.entries.len()))
+        Ok((
+            _facade_id_option,
+            _chip_kind,
+            devices.entries.values().filter(|device| !device.builtin).count(),
+        ))
     };
     match result {
-        Ok((facade_id_option, chip_kind, remaining_devices)) => {
+        Ok((facade_id_option, chip_kind, remaining_nonbuiltin_devices)) => {
             match facade_id_option {
                 Some(facade_id) => match chip_kind {
                     ProtoChipKind::BLUETOOTH => {
@@ -350,7 +355,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                 ))?,
             }
             info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
-            events::publish(Event::ChipRemoved { chip_id, remaining_devices });
+            events::publish(Event::ChipRemoved { chip_id, remaining_nonbuiltin_devices });
             Ok(())
         }
         Err(err) => {
@@ -421,7 +426,8 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
     })?;
 
     let device_name = (new_device.name != String::default()).then_some(new_device.name.as_str());
-    let (device_id, device_name) = get_or_create_device(&mut devices, device_name, device_name);
+    let (device_id, device_name) =
+        get_or_create_device(&mut devices, device_name, device_name, true);
 
     // Release devices lock so that add_chip can take it.
     drop(devices);
@@ -430,7 +436,7 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
         .iter()
         .try_for_each(|chip| add_chip(&device_name, &device_name, chip).map(|_| ()))?;
 
-    events::publish(Event::DeviceAdded { id: device_id, name: device_name });
+    events::publish(Event::DeviceAdded { id: device_id, name: device_name, builtin: true });
 
     Ok(device_id)
 }
@@ -744,12 +750,13 @@ fn check_device_event(
 ) -> DeviceWaitStatus {
     let wait_time = timeout_time.map_or(Duration::from_secs(u64::MAX), |t| t - Instant::now());
     match events_rx.recv_timeout(wait_time) {
-        Ok(Event::ChipRemoved { remaining_devices: 0, .. }) => DeviceWaitStatus::LastDeviceRemoved,
+        Ok(Event::ChipRemoved { remaining_nonbuiltin_devices: 0, .. }) => {
+            DeviceWaitStatus::LastDeviceRemoved
+        }
         // DeviceAdded (event from CreateDevice)
         // ChipAdded (event from add_chip or add_chip_cxx)
-        Ok(Event::DeviceAdded { .. }) | Ok(Event::ChipAdded { .. }) => {
-            DeviceWaitStatus::DeviceAdded
-        }
+        Ok(Event::DeviceAdded { builtin: false, .. })
+        | Ok(Event::ChipAdded { builtin: false, .. }) => DeviceWaitStatus::DeviceAdded,
         Err(_) => DeviceWaitStatus::Timeout,
         _ => DeviceWaitStatus::IgnoreEvent,
     }
@@ -844,6 +851,7 @@ mod tests {
                 &mut devices,
                 Some(&self.device_guid),
                 Some(&self.device_name),
+                false,
             )
             .0
         }
@@ -1490,7 +1498,10 @@ mod tests {
 
         let mut events = events::test::new();
         let events_rx = events::test::subscribe(&mut events);
-        events::test::publish(&mut events, Event::ChipRemoved { chip_id: 0, remaining_devices: 0 });
+        events::test::publish(
+            &mut events,
+            Event::ChipRemoved { chip_id: 0, remaining_nonbuiltin_devices: 0 },
+        );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::LastDeviceRemoved);
     }
 
@@ -1500,7 +1511,10 @@ mod tests {
 
         let mut events = events::test::new();
         let events_rx = events::test::subscribe(&mut events);
-        events::test::publish(&mut events, Event::DeviceAdded { id: 0, name: "".to_string() });
+        events::test::publish(
+            &mut events,
+            Event::DeviceAdded { id: 0, name: "".to_string(), builtin: false },
+        );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::DeviceAdded);
         events::test::publish(
             &mut events,
@@ -1509,6 +1523,7 @@ mod tests {
                 chip_kind: ProtoChipKind::BLUETOOTH,
                 facade_id: 0,
                 device_name: "".to_string(),
+                builtin: false,
             },
         );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::DeviceAdded);
@@ -1524,7 +1539,26 @@ mod tests {
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
         events::test::publish(
             &mut events,
-            Event::DeviceRemoved { id: 0, name: "".to_string(), remaining_devices: 1 },
+            Event::ChipRemoved { chip_id: 0, remaining_nonbuiltin_devices: 1 },
+        );
+        assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
+    }
+
+    #[test]
+    fn test_wait_devices_ignore_beacon() {
+        logger_setup();
+
+        let mut events = events::test::new();
+        let events_rx = events::test::subscribe(&mut events);
+        events::test::publish(
+            &mut events,
+            Event::ChipAdded {
+                chip_id: 0,
+                chip_kind: ProtoChipKind::BLUETOOTH_BEACON,
+                facade_id: 0,
+                device_name: "".to_string(),
+                builtin: true,
+            },
         );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
     }
