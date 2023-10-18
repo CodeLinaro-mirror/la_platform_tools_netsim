@@ -15,9 +15,9 @@
 
 //! # os utility functions
 
-use std::path::PathBuf;
+use std::{fs::remove_file, path::PathBuf};
 
-use log::{error, warn};
+use log::{error, info, warn};
 
 use super::ini_file::IniFile;
 
@@ -76,6 +76,14 @@ pub fn get_netsim_ini_filepath(instance_num: u16) -> PathBuf {
     discovery_dir
 }
 
+/// Remove the ini file
+pub fn remove_netsim_ini(instance_num: u16) {
+    match remove_file(get_netsim_ini_filepath(instance_num)) {
+        Ok(_) => info!("Removed netsim ini file"),
+        Err(e) => error!("Failed to remove netsim ini file: {e:?}"),
+    }
+}
+
 /// Get the grpc server address for netsim
 pub fn get_server_address(instance_num: u16) -> Option<String> {
     let filepath = get_netsim_ini_filepath(instance_num);
@@ -91,7 +99,13 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
     if let Err(err) = ini_file.read() {
         error!("Error reading ini file: {err:?}");
     }
-    ini_file.get("grpc.port").map(|s| s.to_string())
+    ini_file.get("grpc.port").map(|s| {
+        if s.contains(':') {
+            s.to_string()
+        } else {
+            format!("localhost:{}", s)
+        }
+    })
 }
 
 /// Get the number of netsim instances

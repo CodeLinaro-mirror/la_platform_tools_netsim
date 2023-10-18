@@ -32,7 +32,7 @@ pub trait ClientResponseReadable {
 #[cxx::bridge(namespace = "netsim::frontend")]
 #[allow(missing_docs)]
 #[allow(unsafe_op_in_unsafe_fn)]
-pub mod ffi {
+pub mod frontend_client_ffi {
     // Shared enum GrpcMethod
     #[derive(Debug, PartialEq, Eq)]
     pub enum GrpcMethod {

@@ -17,6 +17,7 @@
 mod args;
 mod browser;
 mod display;
+mod ffi;
 mod file_handler;
 mod requests;
 mod response;
@@ -28,14 +29,14 @@ use std::env;
 use std::fs::File;
 use std::path::PathBuf;
 
+use crate::ffi::frontend_client_ffi::{
+    get_instance_num, new_frontend_client, ClientResult, FrontendClient, GrpcMethod,
+};
+use crate::ffi::ClientResponseReader;
 use args::{BinaryProtobuf, GetCapture, NetsimArgs};
 use clap::Parser;
 use cxx::{let_cxx_string, UniquePtr};
 use file_handler::FileHandler;
-use frontend_client_cxx::ffi::{
-    get_instance_num, new_frontend_client, ClientResult, FrontendClient, GrpcMethod,
-};
-use frontend_client_cxx::ClientResponseReader;
 use netsim_common::util::netsim_logger;
 
 // helper function to process streaming Grpc request

@@ -15,6 +15,8 @@
 use clap::Parser;
 use log::warn;
 use log::{error, info};
+use netsim_common::util::os_utils::remove_netsim_ini;
+use netsim_common::util::zip_artifact::zip_artifacts;
 
 use crate::bluetooth as bluetooth_facade;
 use crate::config_file;
@@ -81,20 +83,30 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
 /// Forwards packets to another netsim daemon.
 #[cfg(feature = "cuttlefish")]
 fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
-    let fd_startup = match args.fd_startup_str {
-        None => {
-            error!("Failed to start netsimd forwarder, missing `-s` arg");
-            return;
-        }
-        Some(fd_startup) => fd_startup,
-    };
+    if args.fd_startup_str.is_none() {
+        error!("Failed to start netsimd forwarder, missing `-s` arg");
+        return;
+    }
+    let fd_startup = args.fd_startup_str.unwrap();
 
-    info!("Starting netsim daemon in forwarding mode");
+    let mut server: Option<String> = None;
+    // Attempts multiple time for fetching netsim.ini
+    for second in [1, 2, 4, 8, 0] {
+        server = get_server_address(instance);
+        if server.is_some() {
+            break;
+        } else {
+            warn!("Unable to find ini file for instance {}, retrying", instance);
+            std::thread::sleep(std::time::Duration::from_secs(second));
+        }
+    }
+    if server.is_none() {
+        error!("Failed to run netsimd connector");
+        return;
+    }
+    let server = server.unwrap();
     // TODO: Make this function returns Result to use `?` instead of unwrap().
-    let server = get_server_address(instance)
-        .map(|port| format!("localhost:{}", port))
-        .ok_or_else(|| warn!("Unable to find server address for instance {}", instance))
-        .unwrap();
+    info!("Starting in Connector mode to {}", server.as_str());
     crate::transport::fd::run_fd_connector(&fd_startup, server.as_str())
         .map_err(|e| error!("Failed to run fd connector: {}", e))
         .unwrap();
@@ -151,4 +163,11 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     wifi_facade::wifi_start(&config.wifi);
 
     service.run();
+
+    // Once service.run is complete, delete the netsim ini file
+    // and zip all artifacts
+    remove_netsim_ini(instance_num);
+    if let Err(err) = zip_artifacts() {
+        error!("Failed to zip artifacts: {err:?}");
+    }
 }

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::args::{self, Beacon, Command};
-use frontend_client_cxx::ffi::GrpcMethod;
+use crate::ffi::frontend_client_ffi::GrpcMethod;
 
 impl args::Command {
     /// Return the respective GrpcMethod for the command

@@ -156,12 +156,14 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes) {
 
   android::qemu2::SlirpOptions slirpOpts = {
       .disabled = config.slirp_options().disabled(),
-      .ipv4 = !config.slirp_options().not_ipv4(),
+      .ipv4 = (config.slirp_options().has_ipv4() ? config.slirp_options().ipv4()
+                                                 : true),
       .restricted = config.slirp_options().restricted(),
       .vnet = config.slirp_options().vnet(),
       .vhost = config.slirp_options().vhost(),
       .vmask = config.slirp_options().vmask(),
-      .ipv6 = !config.slirp_options().not_ipv6(),
+      .ipv6 = (config.slirp_options().has_ipv6() ? config.slirp_options().ipv6()
+                                                 : true),
       .vprefix6 = config.slirp_options().vprefix6(),
       .vprefixLen = (uint8_t)config.slirp_options().vprefixlen(),
       .vhost6 = config.slirp_options().vhost6(),
