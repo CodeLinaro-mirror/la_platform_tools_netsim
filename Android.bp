@@ -66,6 +66,7 @@ rust_defaults {
         "libbytes",
         "libclap",
         "libcxx",
+	"libanyhow",
         "libdata_encoding",
         "libnetsim_proto",
         "libhttp",

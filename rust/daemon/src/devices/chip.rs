@@ -21,10 +21,14 @@ use crate::bluetooth as bluetooth_facade;
 use crate::devices::id_factory::IdFactory;
 use crate::wifi as wifi_facade;
 use lazy_static::lazy_static;
+use log::info;
+use log::warn;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::EnumOrUnknown;
 use std::sync::RwLock;
+use std::time::Instant;
 
 pub type ChipIdentifier = u32;
 pub type FacadeIdentifier = u32;
@@ -48,6 +52,7 @@ pub struct Chip {
     // These are patchable
     pub manufacturer: String,
     pub product_name: String,
+    pub start: Instant,
 }
 
 impl Chip {
@@ -71,7 +76,57 @@ impl Chip {
             device_name: device_name.to_string(),
             manufacturer: manufacturer.to_string(),
             product_name: product_name.to_string(),
+            start: Instant::now(),
         }
+    }
+
+    // Get the stats protobuf for a chip controller instance.
+    //
+    // This currently wraps the chip "get" facade method because the
+    // counts are phy level. We need a vec since Bluetooth reports
+    // stats for BLE and CLASSIC.
+    pub fn get_stats(&self) -> Vec<ProtoRadioStats> {
+        let mut vec = Vec::<ProtoRadioStats>::new();
+        let mut stats = ProtoRadioStats::new();
+        stats.set_duration_secs(self.start.elapsed().as_secs());
+        if let Some(facade_id) = self.facade_id {
+            match self.kind {
+                ProtoChipKind::BLUETOOTH => {
+                    let bt = bluetooth_facade::bluetooth_get(facade_id);
+                    stats.set_kind(netsim_radio_stats::Kind::BT_LE);
+                    stats.set_tx_count(bt.low_energy.tx_count);
+                    stats.set_rx_count(bt.low_energy.rx_count);
+                    vec.push(stats);
+                    stats = ProtoRadioStats::new();
+                    stats.set_duration_secs(self.start.elapsed().as_secs());
+                    stats.set_kind(netsim_radio_stats::Kind::BT_CLASSIC);
+                    stats.set_tx_count(bt.classic.tx_count);
+                    stats.set_rx_count(bt.classic.rx_count);
+                }
+                ProtoChipKind::BLUETOOTH_BEACON => {
+                    stats.set_kind(netsim_radio_stats::Kind::BT_LE_BEACON);
+                    if let Ok(beacon) = bluetooth_facade::bluetooth_beacon_get(self.id, facade_id) {
+                        stats.set_tx_count(beacon.bt.low_energy.tx_count);
+                        stats.set_rx_count(beacon.bt.low_energy.rx_count);
+                    } else {
+                        warn!("Unknown beacon");
+                    }
+                }
+                ProtoChipKind::WIFI => {
+                    stats.set_kind(netsim_radio_stats::Kind::WIFI);
+                    let wifi = wifi_facade::wifi_get(facade_id);
+                    stats.set_tx_count(wifi.tx_count);
+                    stats.set_rx_count(wifi.rx_count);
+                }
+                _ => {
+                    info!("Unhandled chip in get_stats {:?}", self.kind);
+                }
+            }
+        } else {
+            warn!("No facade id in get_stats");
+        }
+        vec.push(stats);
+        vec
     }
 
     /// Create the model protobuf
@@ -86,8 +141,8 @@ impl Chip {
             (Ok(ProtoChipKind::BLUETOOTH), Some(facade_id)) => {
                 chip.set_bt(bluetooth_facade::bluetooth_get(facade_id));
             }
-            (Ok(ProtoChipKind::BLUETOOTH_BEACON), Some(_)) => {
-                chip.set_ble_beacon(bluetooth_facade::bluetooth_beacon_get(self.id)?);
+            (Ok(ProtoChipKind::BLUETOOTH_BEACON), Some(facade_id)) => {
+                chip.set_ble_beacon(bluetooth_facade::bluetooth_beacon_get(self.id, facade_id)?);
             }
             (Ok(ProtoChipKind::WIFI), Some(facade_id)) => {
                 chip.set_wifi(wifi_facade::wifi_get(facade_id));

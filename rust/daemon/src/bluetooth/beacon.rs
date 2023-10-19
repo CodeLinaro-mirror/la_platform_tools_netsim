@@ -20,6 +20,7 @@ use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
 use super::packets::link_layer::{
     Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, Packet, PacketType,
 };
+use crate::bluetooth::bluetooth_get;
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::{devices_handler::add_chip, id_factory::IdFactory};
@@ -347,15 +348,18 @@ pub fn bluetooth_beacon_patch(
     Ok(())
 }
 
-pub fn bluetooth_beacon_get(chip_id: ChipIdentifier) -> Result<BluetoothBeaconProto, String> {
+pub fn bluetooth_beacon_get(
+    chip_id: ChipIdentifier,
+    facade_id: FacadeIdentifier,
+) -> Result<BluetoothBeaconProto, String> {
     let guard = BEACON_CHIPS.read().unwrap();
     let beacon = guard
         .get(&chip_id)
         .ok_or(format!("could not get bluetooth beacon with chip id {chip_id}"))?
         .lock()
         .unwrap();
-
     Ok(BluetoothBeaconProto {
+        bt: Some(bluetooth_get(facade_id)).into(),
         address: addr_to_str(beacon.address),
         settings: MessageField::some((&beacon.advertise_settings).try_into()?),
         adv_data: MessageField::some((&beacon.advertise_data).into()),
@@ -439,7 +443,7 @@ pub mod tests {
 
         let id = new_test_beacon_with_settings(settings);
 
-        let beacon = bluetooth_beacon_get(id);
+        let beacon = bluetooth_beacon_get(id, 0);
         assert!(beacon.is_ok(), "{}", beacon.unwrap_err());
         let beacon = beacon.unwrap();
 
@@ -479,7 +483,7 @@ pub mod tests {
         );
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
 
-        let beacon_proto = bluetooth_beacon_get(id);
+        let beacon_proto = bluetooth_beacon_get(id, 0);
         assert!(beacon_proto.is_ok(), "{}", beacon_proto.unwrap_err());
         let beacon_proto = beacon_proto.unwrap();
         let interval_after_patch =
@@ -501,7 +505,7 @@ pub mod tests {
         let patch_result = bluetooth_beacon_patch(0, id, &BluetoothBeaconProto::default());
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
 
-        let beacon_proto = bluetooth_beacon_get(id);
+        let beacon_proto = bluetooth_beacon_get(id, 0);
         assert!(beacon_proto.is_ok(), "{}", beacon_proto.unwrap_err());
         let beacon_proto = beacon_proto.unwrap();
 

@@ -20,6 +20,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::devices::chip::ChipIdentifier;
 use crate::devices::chip::FacadeIdentifier;
 use crate::devices::device::DeviceIdentifier;
+use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
@@ -43,6 +44,11 @@ pub enum Event {
         name: String,
         builtin: bool,
     },
+    DeviceRemoved {
+        id: DeviceIdentifier,
+        name: String,
+        builtin: bool,
+    },
     DevicePatched {
         id: DeviceIdentifier,
         name: String,
@@ -56,7 +62,9 @@ pub enum Event {
     },
     ChipRemoved {
         chip_id: ChipIdentifier,
+        device_name: String,
         remaining_nonbuiltin_devices: usize,
+        radio_stats: Vec<ProtoRadioStats>,
     },
     ShutDown {
         reason: String,

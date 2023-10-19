@@ -26,6 +26,7 @@ use crate::config_file;
 use crate::devices::devices_handler::wait_devices;
 use crate::events;
 use crate::events::Event;
+use crate::session::Session;
 use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
@@ -197,6 +198,11 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     let capture_events_rx = events::subscribe();
     let device_events_rx = events::subscribe();
     let main_events_rx = events::subscribe();
+    let session_events_rx = events::subscribe();
+
+    // Start Session Event listener
+    let mut session = Session::new();
+    session.start(session_events_rx);
 
     // Pass all event receivers to each modules
     spawn_capture_event_subscriber(capture_events_rx);
@@ -226,9 +232,13 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     // Gracefully shutdown netsimd services
     service.shut_down();
 
-    // Once service.run is complete, delete the netsim ini file
-    // and zip all artifacts
+    // Once shutdown is complete, delete the netsim ini file
     remove_netsim_ini(instance_num);
+
+    // write out session stats
+    let _ = session.stop();
+
+    // zip all artifacts
     if let Err(err) = zip_artifacts() {
         error!("Failed to zip artifacts: {err:?}");
     }

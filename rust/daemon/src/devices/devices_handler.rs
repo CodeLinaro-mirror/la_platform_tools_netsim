@@ -23,7 +23,6 @@
 // -- vending device identifiers
 
 use super::chip::ChipIdentifier;
-use super::chip::FacadeIdentifier;
 use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
 use crate::bluetooth as bluetooth_facade;
@@ -287,15 +286,16 @@ fn get_or_create_device(
     }
 
     // A new device needs to be created and inserted
-    let new_id = devices.id_factory.next_id();
-    let default = format!("device-{}", new_id);
+    let id = devices.id_factory.next_id();
+    let default = format!("device-{}", id);
     let name = name.unwrap_or(&default);
     devices.entries.insert(
-        new_id,
-        Device::new(new_id, String::from(guid.unwrap_or(&default)), String::from(name), builtin),
+        id,
+        Device::new(id, String::from(guid.unwrap_or(&default)), String::from(name), builtin),
     );
+    events::publish(Event::DeviceAdded { id, name: name.to_string(), builtin });
 
-    (new_id, String::from(name))
+    (id, String::from(name))
 }
 
 /// Remove a device from the simulation.
@@ -305,7 +305,12 @@ fn remove_device(
     guard: &mut RwLockWriteGuard<Devices>,
     id: DeviceIdentifier,
 ) -> Result<(), String> {
+    let device = guard.entries.get(&id).ok_or(format!("Error fetching device with {id}"))?;
+    let name = device.name.clone();
+    let builtin = device.builtin;
     guard.entries.remove(&id).ok_or(format!("Error removing device with id {id}"))?;
+    // Publish DeviceRemoved Event
+    events::publish(Event::DeviceRemoved { id, name, builtin });
     Ok(())
 }
 
@@ -314,15 +319,16 @@ fn remove_device(
 /// Called when the packet transport for the chip shuts down.
 pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(), String> {
     let result = {
-        let mut _facade_id_option: Option<FacadeIdentifier> = None;
-        let mut _chip_kind = ProtoChipKind::UNSPECIFIED;
         let devices_arc = get_devices();
         let mut devices = devices_arc.write().unwrap();
-        let is_empty = match devices.entries.entry(device_id) {
+        let (is_empty, (facade_id_option, device_name, chip_kind, radio_stats)) = match devices
+            .entries
+            .entry(device_id)
+        {
             Entry::Occupied(mut entry) => {
                 let device = entry.get_mut();
-                (_facade_id_option, _chip_kind) = device.remove_chip(chip_id)?;
-                device.chips.is_empty()
+                let remove_result = device.remove_chip(chip_id)?;
+                (device.chips.is_empty(), remove_result)
             }
             Entry::Vacant(_) => return Err(format!("RemoveChip device id {device_id} not found")),
         };
@@ -330,13 +336,21 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
             remove_device(&mut devices, device_id)?;
         }
         Ok((
-            _facade_id_option,
-            _chip_kind,
+            facade_id_option,
+            device_name,
+            chip_kind,
             devices.entries.values().filter(|device| !device.builtin).count(),
+            radio_stats,
         ))
     };
     match result {
-        Ok((facade_id_option, chip_kind, remaining_nonbuiltin_devices)) => {
+        Ok((
+            facade_id_option,
+            device_name,
+            chip_kind,
+            remaining_nonbuiltin_devices,
+            radio_stats,
+        )) => {
             match facade_id_option {
                 Some(facade_id) => match chip_kind {
                     ProtoChipKind::BLUETOOTH => {
@@ -355,7 +369,12 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                 ))?,
             }
             info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
-            events::publish(Event::ChipRemoved { chip_id, remaining_nonbuiltin_devices });
+            events::publish(Event::ChipRemoved {
+                chip_id,
+                device_name,
+                remaining_nonbuiltin_devices,
+                radio_stats,
+            });
             Ok(())
         }
         Err(err) => {
@@ -435,8 +454,6 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
         .chips
         .iter()
         .try_for_each(|chip| add_chip(&device_name, &device_name, chip).map(|_| ()))?;
-
-    events::publish(Event::DeviceAdded { id: device_id, name: device_name, builtin: true });
 
     Ok(device_id)
 }
@@ -1500,7 +1517,12 @@ mod tests {
         let events_rx = events::test::subscribe(&mut events);
         events::test::publish(
             &mut events,
-            Event::ChipRemoved { chip_id: 0, remaining_nonbuiltin_devices: 0 },
+            Event::ChipRemoved {
+                chip_id: 0,
+                device_name: "".to_string(),
+                remaining_nonbuiltin_devices: 0,
+                radio_stats: Vec::new(),
+            },
         );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::LastDeviceRemoved);
     }
@@ -1539,7 +1561,12 @@ mod tests {
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
         events::test::publish(
             &mut events,
-            Event::ChipRemoved { chip_id: 0, remaining_nonbuiltin_devices: 1 },
+            Event::ChipRemoved {
+                chip_id: 0,
+                device_name: "".to_string(),
+                remaining_nonbuiltin_devices: 1,
+                radio_stats: Vec::new(),
+            },
         );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
     }

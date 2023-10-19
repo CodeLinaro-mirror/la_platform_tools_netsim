@@ -218,14 +218,14 @@ pub fn new_test_beacon(idx: u32, interval: u64) {
     };
 
     let chip_proto = ChipCreateProto {
-        name: "gDevice-beacon".into(),
+        name: format!("gDevice-bt-beacon-chip-{idx}"),
         kind: ChipKind::BLUETOOTH_BEACON.into(),
         chip: Some(ChipProto::BleBeacon(beacon_proto)),
         ..Default::default()
     };
 
     let device_proto = DeviceCreateProto {
-        name: "gDdevice-beacon".into(),
+        name: format!("gDevice-beacon-{idx}"),
         chips: vec![chip_proto],
         ..Default::default()
     };
