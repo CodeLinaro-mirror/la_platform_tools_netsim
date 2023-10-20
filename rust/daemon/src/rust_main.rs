@@ -27,6 +27,7 @@ use crate::devices::devices_handler::wait_devices;
 use crate::events;
 use crate::events::Event;
 use crate::session::Session;
+use crate::version::get_version;
 use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
@@ -89,9 +90,6 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
     #[cfg(feature = "cuttlefish")]
     info!("netsim artifacts path: {}", netsimd_temp_dir().display());
 
-    // Redirect stdout and stderr to files only if netsimd is not invoked
-    // by Cuttlefish. Some Cuttlefish builds fail when writing logs to files.
-    #[cfg(not(feature = "cuttlefish"))]
     if !args.logtostderr {
         cxx::let_cxx_string!(netsimd_temp_dir = netsim_common::system::netsimd_temp_dir_string());
         ffi_util::redirect_std_stream(&netsimd_temp_dir);
@@ -149,6 +147,8 @@ fn main_loop(events_rx: Receiver<Event>) {
 }
 
 fn run_netsimd_primary(args: NetsimdArgs) {
+    info!("Netsim Version: {}", get_version());
+
     let fd_startup_str = args.fd_startup_str.unwrap_or_default();
     let instance_num = get_instance(args.instance);
     let hci_port: u16 =
