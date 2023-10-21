@@ -321,7 +321,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
     let result = {
         let devices_arc = get_devices();
         let mut devices = devices_arc.write().unwrap();
-        let (is_empty, (facade_id_option, device_name, chip_kind, radio_stats)) = match devices
+        let (is_empty, (facade_id_option, _device_name, chip_kind, radio_stats)) = match devices
             .entries
             .entry(device_id)
         {
@@ -337,20 +337,14 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
         }
         Ok((
             facade_id_option,
-            device_name,
+            device_id,
             chip_kind,
             devices.entries.values().filter(|device| !device.builtin).count(),
             radio_stats,
         ))
     };
     match result {
-        Ok((
-            facade_id_option,
-            device_name,
-            chip_kind,
-            remaining_nonbuiltin_devices,
-            radio_stats,
-        )) => {
+        Ok((facade_id_option, device_id, chip_kind, remaining_nonbuiltin_devices, radio_stats)) => {
             match facade_id_option {
                 Some(facade_id) => match chip_kind {
                     ProtoChipKind::BLUETOOTH => {
@@ -371,7 +365,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
             info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
             events::publish(Event::ChipRemoved {
                 chip_id,
-                device_name,
+                device_id,
                 remaining_nonbuiltin_devices,
                 radio_stats,
             });
@@ -1519,7 +1513,7 @@ mod tests {
             &mut events,
             Event::ChipRemoved {
                 chip_id: 0,
-                device_name: "".to_string(),
+                device_id: 0,
                 remaining_nonbuiltin_devices: 0,
                 radio_stats: Vec::new(),
             },
@@ -1563,7 +1557,7 @@ mod tests {
             &mut events,
             Event::ChipRemoved {
                 chip_id: 0,
-                device_name: "".to_string(),
+                device_id: 0,
                 remaining_nonbuiltin_devices: 1,
                 radio_stats: Vec::new(),
             },

@@ -62,7 +62,7 @@ pub enum Event {
     },
     ChipRemoved {
         chip_id: ChipIdentifier,
-        device_name: String,
+        device_id: DeviceIdentifier,
         remaining_nonbuiltin_devices: usize,
         radio_stats: Vec<ProtoRadioStats>,
     },

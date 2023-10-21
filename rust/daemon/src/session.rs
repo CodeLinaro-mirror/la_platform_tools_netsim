@@ -93,13 +93,13 @@ impl Session {
                                         .set_peak_concurrent_devices(current_device_count);
                                 }
                             }
-                            Event::ChipRemoved { radio_stats, device_name, .. } => {
+                            Event::ChipRemoved { radio_stats, device_id, .. } => {
                                 // Update the radio stats proto when a
                                 // chip is removed.  In the case of
                                 // bluetooth there will be 2 radios,
                                 // otherwise 1
                                 for mut r in radio_stats {
-                                    r.set_device_name(device_name.clone());
+                                    r.set_device_id(device_id);
                                     lock.stats_proto.radio_stats.push(r);
                                 }
                             }

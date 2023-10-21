@@ -29,8 +29,8 @@ const _PROTOBUF_VERSION_CHECK: () = ::protobuf::VERSION_3_2_0;
 // @@protoc_insertion_point(message:netsim.stats.NetsimRadioStats)
 pub struct NetsimRadioStats {
     // message fields
-    // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.device_name)
-    pub device_name: ::std::option::Option<::std::string::String>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.device_id)
+    pub device_id: ::std::option::Option<u32>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.kind)
     pub kind: ::std::option::Option<::protobuf::EnumOrUnknown<netsim_radio_stats::Kind>>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.duration_secs)
@@ -59,40 +59,23 @@ impl NetsimRadioStats {
         ::std::default::Default::default()
     }
 
-    // optional string device_name = 1;
+    // optional uint32 device_id = 1;
 
-    pub fn device_name(&self) -> &str {
-        match self.device_name.as_ref() {
-            Some(v) => v,
-            None => "",
-        }
+    pub fn device_id(&self) -> u32 {
+        self.device_id.unwrap_or(0)
     }
 
-    pub fn clear_device_name(&mut self) {
-        self.device_name = ::std::option::Option::None;
+    pub fn clear_device_id(&mut self) {
+        self.device_id = ::std::option::Option::None;
     }
 
-    pub fn has_device_name(&self) -> bool {
-        self.device_name.is_some()
+    pub fn has_device_id(&self) -> bool {
+        self.device_id.is_some()
     }
 
     // Param is passed by value, moved
-    pub fn set_device_name(&mut self, v: ::std::string::String) {
-        self.device_name = ::std::option::Option::Some(v);
-    }
-
-    // Mutable pointer to the field.
-    // If field is not initialized, it is initialized with default value first.
-    pub fn mut_device_name(&mut self) -> &mut ::std::string::String {
-        if self.device_name.is_none() {
-            self.device_name = ::std::option::Option::Some(::std::string::String::new());
-        }
-        self.device_name.as_mut().unwrap()
-    }
-
-    // Take field
-    pub fn take_device_name(&mut self) -> ::std::string::String {
-        self.device_name.take().unwrap_or_else(|| ::std::string::String::new())
+    pub fn set_device_id(&mut self, v: u32) {
+        self.device_id = ::std::option::Option::Some(v);
     }
 
     // optional .netsim.stats.NetsimRadioStats.Kind kind = 2;
@@ -216,9 +199,9 @@ impl NetsimRadioStats {
         let mut fields = ::std::vec::Vec::with_capacity(7);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
-            "device_name",
-            |m: &NetsimRadioStats| { &m.device_name },
-            |m: &mut NetsimRadioStats| { &mut m.device_name },
+            "device_id",
+            |m: &NetsimRadioStats| { &m.device_id },
+            |m: &mut NetsimRadioStats| { &mut m.device_id },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "kind",
@@ -268,8 +251,8 @@ impl ::protobuf::Message for NetsimRadioStats {
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
-                10 => {
-                    self.device_name = ::std::option::Option::Some(is.read_string()?);
+                8 => {
+                    self.device_id = ::std::option::Option::Some(is.read_uint32()?);
                 },
                 16 => {
                     self.kind = ::std::option::Option::Some(is.read_enum_or_unknown()?);
@@ -301,8 +284,8 @@ impl ::protobuf::Message for NetsimRadioStats {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
-        if let Some(v) = self.device_name.as_ref() {
-            my_size += ::protobuf::rt::string_size(1, &v);
+        if let Some(v) = self.device_id {
+            my_size += ::protobuf::rt::uint32_size(1, v);
         }
         if let Some(v) = self.kind {
             my_size += ::protobuf::rt::int32_size(2, v.value());
@@ -328,8 +311,8 @@ impl ::protobuf::Message for NetsimRadioStats {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
-        if let Some(v) = self.device_name.as_ref() {
-            os.write_string(1, v)?;
+        if let Some(v) = self.device_id {
+            os.write_uint32(1, v)?;
         }
         if let Some(v) = self.kind {
             os.write_enum(2, ::protobuf::EnumOrUnknown::value(&v))?;
@@ -366,7 +349,7 @@ impl ::protobuf::Message for NetsimRadioStats {
     }
 
     fn clear(&mut self) {
-        self.device_name = ::std::option::Option::None;
+        self.device_id = ::std::option::Option::None;
         self.kind = ::std::option::Option::None;
         self.duration_secs = ::std::option::Option::None;
         self.tx_count = ::std::option::Option::None;
@@ -378,7 +361,7 @@ impl ::protobuf::Message for NetsimRadioStats {
 
     fn default_instance() -> &'static NetsimRadioStats {
         static instance: NetsimRadioStats = NetsimRadioStats {
-            device_name: ::std::option::Option::None,
+            device_id: ::std::option::Option::None,
             kind: ::std::option::Option::None,
             duration_secs: ::std::option::Option::None,
             tx_count: ::std::option::Option::None,
@@ -720,21 +703,21 @@ impl ::protobuf::reflect::ProtobufValue for NetsimStats {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x12netsim/stats.proto\x12\x0cnetsim.stats\"\xdf\x02\n\x10NetsimRadioS\
-    tats\x12\x1f\n\x0bdevice_name\x18\x01\x20\x01(\tR\ndeviceName\x127\n\x04\
-    kind\x18\x02\x20\x01(\x0e2#.netsim.stats.NetsimRadioStats.KindR\x04kind\
-    \x12#\n\rduration_secs\x18\x03\x20\x01(\x04R\x0cdurationSecs\x12\x19\n\
-    \x08tx_count\x18\x04\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_count\x18\
-    \x05\x20\x01(\x05R\x07rxCount\x12\x19\n\x08tx_bytes\x18\x06\x20\x01(\x05\
-    R\x07txBytes\x12\x19\n\x08rx_bytes\x18\x07\x20\x01(\x05R\x07rxBytes\"`\n\
-    \x04Kind\x12\x0f\n\x0bUNSPECIFIED\x10\0\x12\t\n\x05BT_LE\x10\x01\x12\x0e\
-    \n\nBT_CLASSIC\x10\x02\x12\x10\n\x0cBT_LE_BEACON\x10\x03\x12\x08\n\x04WI\
-    FI\x10\x04\x12\x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\x10\x06\"\xce\x01\n\
-    \x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\x01(\x04R\x0cdurationS\
-    ecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\
-    \x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\x15peakConcurrentDevic\
-    es\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRa\
-    dioStatsR\nradioStats\
+    \n\x12netsim/stats.proto\x12\x0cnetsim.stats\"\xdb\x02\n\x10NetsimRadioS\
+    tats\x12\x1b\n\tdevice_id\x18\x01\x20\x01(\rR\x08deviceId\x127\n\x04kind\
+    \x18\x02\x20\x01(\x0e2#.netsim.stats.NetsimRadioStats.KindR\x04kind\x12#\
+    \n\rduration_secs\x18\x03\x20\x01(\x04R\x0cdurationSecs\x12\x19\n\x08tx_\
+    count\x18\x04\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_count\x18\x05\x20\
+    \x01(\x05R\x07rxCount\x12\x19\n\x08tx_bytes\x18\x06\x20\x01(\x05R\x07txB\
+    ytes\x12\x19\n\x08rx_bytes\x18\x07\x20\x01(\x05R\x07rxBytes\"`\n\x04Kind\
+    \x12\x0f\n\x0bUNSPECIFIED\x10\0\x12\t\n\x05BT_LE\x10\x01\x12\x0e\n\nBT_C\
+    LASSIC\x10\x02\x12\x10\n\x0cBT_LE_BEACON\x10\x03\x12\x08\n\x04WIFI\x10\
+    \x04\x12\x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\x10\x06\"\xce\x01\n\x0bNe\
+    tsimStats\x12#\n\rduration_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\
+    \x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17p\
+    eak_concurrent_devices\x18\x03\x20\x01(\x05R\x15peakConcurrentDevices\
+    \x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRadi\
+    oStatsR\nradioStats\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

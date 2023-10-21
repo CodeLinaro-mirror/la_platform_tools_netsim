@@ -15,6 +15,7 @@
 #include "wifi/wifi_facade.h"
 
 #include <memory>
+#include <optional>
 
 #include "netsim-daemon/src/ffi.rs.h"
 #include "netsim/config.pb.h"
@@ -48,6 +49,15 @@ std::shared_ptr<android::qemu2::WifiService> wifi_service;
 
 bool ChangedState(model::State a, model::State b) {
   return (b != model::State::UNKNOWN && a != b);
+}
+
+std::optional<model::State> GetState(uint32_t id) {
+  if (auto it = id_to_chip_info_.find(id); it != id_to_chip_info_.end()) {
+    auto &model = it->second->model;
+    return model->state();
+  }
+  BtsLogWarn("Failed to get WiFi state with unknown facade %d", id);
+  return std::nullopt;
 }
 
 void IncrTx(uint32_t id) {
@@ -136,8 +146,13 @@ uint32_t Add(uint32_t simulation_device) {
 size_t HandleWifiCallback(const uint8_t *buf, size_t size) {
   //  Broadcast the response to all WiFi chips.
   std::vector<uint8_t> packet(buf, buf + size);
-  for (auto [chip_id, _] : id_to_chip_info_) {
-    transport::HandleResponse(common::ChipKind::WIFI, chip_id, packet,
+  for (auto [facade_id, _] : id_to_chip_info_) {
+    if (auto state = GetState(facade_id);
+        !state || state == model::State::OFF) {
+      continue;
+    }
+    netsim::wifi::IncrRx(facade_id);
+    transport::HandleResponse(common::ChipKind::WIFI, facade_id, packet,
                               packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
   }
   return size;
@@ -196,9 +211,11 @@ void Stop() {
 
 void HandleWifiRequest(uint32_t facade_id,
                        const std::shared_ptr<std::vector<uint8_t>> &packet) {
-  netsim::wifi::IncrTx(facade_id);
-
 #ifdef NETSIM_ANDROID_EMULATOR
+  if (auto state = GetState(facade_id); !state || state == model::State::OFF) {
+    return;
+  }
+  netsim::wifi::IncrTx(facade_id);
   // Send the packet to the WiFi service.
   struct iovec iov[1];
   iov[0].iov_base = packet->data();

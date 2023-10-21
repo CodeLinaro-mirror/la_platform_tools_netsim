@@ -29,7 +29,7 @@ message NetsimRadioStats {
     UWB = 5;
     NFC = 6;
   }
-  optional string device_name = 1;
+  optional uint32 device_id = 1;
   optional Kind kind = 2;
   // The duration of the controller connection
   optional uint64 duration_secs = 3;
