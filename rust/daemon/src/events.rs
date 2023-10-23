@@ -33,6 +33,7 @@ pub enum Event {
     DeviceRemoved {
         id: DeviceIdentifier,
         name: String,
+        remaining_devices: usize,
     },
     DevicePatched {
         id: DeviceIdentifier,
@@ -46,6 +47,10 @@ pub enum Event {
     },
     ChipRemoved {
         chip_id: ChipIdentifier,
+        remaining_devices: usize,
+    },
+    ShutDown {
+        reason: String,
     },
 }
 

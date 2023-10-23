@@ -26,6 +26,8 @@ use zip::{result::ZipResult, write::FileOptions, ZipWriter};
 
 use crate::system::netsimd_temp_dir;
 
+use super::time_display::file_current_time;
+
 /// Recurse all files in root and put it in Vec<PathBuf>
 fn recurse_files(root: &PathBuf) -> Result<Vec<PathBuf>> {
     let mut result = Vec::new();
@@ -53,7 +55,7 @@ pub fn zip_artifacts() -> ZipResult<()> {
     let files = recurse_files(&root)?;
 
     // Define PathBuf for zip file
-    let zip_file = root.join("netsim_artifacts.zip");
+    let zip_file = root.join(&format!("netsim_artifacts_{}.zip", file_current_time()));
 
     // Create a new ZipWriter
     let mut zip_writer = ZipWriter::new(File::create(&zip_file)?);
@@ -61,13 +63,15 @@ pub fn zip_artifacts() -> ZipResult<()> {
 
     // Put each artifact files into zip file
     for file in files {
-        // Avoid self zipping
-        if file == zip_file {
-            continue;
-        }
         let filename = match file.file_name() {
             Some(os_name) => match os_name.to_str() {
-                Some(str_name) => str_name,
+                Some(str_name) => {
+                    // Avoid zip files
+                    if str_name.starts_with("netsim_artifacts") {
+                        continue;
+                    }
+                    str_name
+                }
                 None => {
                     warn!("Cannot convert {os_name:?} to str");
                     continue;
@@ -86,8 +90,11 @@ pub fn zip_artifacts() -> ZipResult<()> {
         zip_writer.write_all(&buffer)?;
         buffer.clear();
 
-        // Remove the file once written
-        remove_file(file)?;
+        // Remove the file once written except for log files
+        // To preserve the logs after zip, we must keep the log files available.
+        if filename != "netsim_stderr.log" && filename != "netsim_stdout.log" {
+            remove_file(file)?;
+        }
     }
 
     // Finish writing zip file

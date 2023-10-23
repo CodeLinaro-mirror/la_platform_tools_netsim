@@ -123,44 +123,5 @@ void RedirectStdStream(const std::string &netsim_temp_dir_const) {
   std::freopen((netsim_temp_dir + "netsim_stderr.log").c_str(), "w", stderr);
 }
 
-uint16_t GetInstance(uint16_t instance_flag) {
-  // The following priorities are used to determine the instance number:
-  //
-  // 1. The environment variable `NETSIM_INSTANCE`.
-  // 2. The CLI flag `--instance`.
-  // 3. The default value `DEFAULT_INSTANCE`.
-  uint16_t instance = 0;
-  if (auto netsim_instance = netsim::osutils::GetEnv("NETSIM_INSTANCE", "");
-      netsim_instance != "") {
-    char *ptr;
-    instance = strtol(netsim_instance.c_str(), &ptr, 10);
-  } else if (instance_flag != 0) {
-    instance = instance_flag;
-  } else {
-    instance = DEFAULT_INSTANCE;
-  }
-  return instance;
-}
-
-uint32_t GetHciPort(uint32_t hci_port_flag, uint16_t instance) {
-  // The following priorities are used to determine the HCI port number:
-  //
-  // 1. The CLI flag `-hci_port`.
-  // 2. The environment variable `NETSIM_HCI_PORT`.
-  // 3. The default value `DEFAULT_HCI_PORT`.
-  uint32_t hci_port = 0;
-  if (hci_port_flag != 0) {
-    hci_port = hci_port_flag;
-  } else if (auto netsim_hci_port =
-                 netsim::osutils::GetEnv("NETSIM_HCI_PORT", "0");
-             netsim_hci_port != "0") {
-    char *ptr;
-    hci_port = strtol(netsim_hci_port.c_str(), &ptr, 10);
-  } else {
-    hci_port = DEFAULT_HCI_PORT + instance;
-  }
-  return hci_port;
-}
-
 }  // namespace osutils
 }  // namespace netsim

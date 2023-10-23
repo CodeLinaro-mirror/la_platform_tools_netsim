@@ -124,7 +124,7 @@ pub fn get_instance(instance_flag: u16) -> u16 {
     }
 }
 
-/// Get the hci porn number for netsim
+/// Get the hci port number for netsim
 pub fn get_hci_port(hci_port_flag: u32, instance: u16) -> u32 {
     // The following priorities are used to determine the HCI port number:
     //

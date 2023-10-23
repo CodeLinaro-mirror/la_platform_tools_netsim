@@ -44,6 +44,8 @@ message PacketRequest {
   oneof request_type {
     // This message should be sent on the first request to the network
     // simulator. Specifies the device name and chip type for the packet stream.
+    // If bt_properties is provided, it will override the default
+    // configuration.
     netsim.startup.ChipInfo initial_info = 1;
     // The streamed data for an attached hci radio chip
     HCIPacket hci_packet = 2;

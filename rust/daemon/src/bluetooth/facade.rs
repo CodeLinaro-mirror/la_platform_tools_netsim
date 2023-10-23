@@ -16,6 +16,7 @@ use crate::ffi::ffi_bluetooth;
 use ::protobuf::MessageField;
 use cxx::let_cxx_string;
 use netsim_proto::config::Bluetooth as BluetoothConfig;
+use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::Bluetooth;
 use protobuf::Message;
 
@@ -42,9 +43,14 @@ pub fn bluetooth_get(facade_id: u32) -> Bluetooth {
 }
 
 // Returns facade_id
-pub fn bluetooth_add(device_id: u32, address: &str) -> u32 {
+pub fn bluetooth_add(
+    device_id: u32,
+    address: &str,
+    bt_properties: &MessageField<RootcanalController>,
+) -> u32 {
     let_cxx_string!(cxx_address = address);
-    ffi_bluetooth::bluetooth_add(device_id, &cxx_address)
+    let proto_bytes = bt_properties.as_ref().unwrap_or_default().write_to_bytes().unwrap();
+    ffi_bluetooth::bluetooth_add(device_id, &cxx_address, &proto_bytes)
 }
 
 /// Starts the Bluetooth service.

@@ -96,11 +96,5 @@ pub mod frontend_client_ffi {
         #[rust_name = "byte_vec"]
         pub fn ByteVec(self: &ClientResult) -> &CxxVector<u8>;
 
-        include!("util/os_utils.h");
-
-        #[rust_name = get_instance_num]
-        #[namespace = "netsim::osutils"]
-        fn GetInstance(instance_flag: u16) -> u16;
-
     }
 }

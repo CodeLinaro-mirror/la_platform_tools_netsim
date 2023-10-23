@@ -104,7 +104,7 @@ bool gStarted = false;
 std::shared_ptr<rootcanal::AsyncManager> gAsyncManager;
 rootcanal::AsyncUserId gSocketUserId{};
 std::shared_ptr<SimTestModel> gTestModel;
-std::unique_ptr<rootcanal::ControllerProperties> controller_properties_;
+std::shared_ptr<rootcanal::configuration::Controller> controller_proto_;
 
 #ifndef NETSIM_ANDROID_EMULATOR
 // test port
@@ -196,8 +196,8 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
 
   config::Bluetooth config;
   config.ParseFromArray(proto_bytes.data(), proto_bytes.size());
-  controller_properties_ =
-      std::make_unique<rootcanal::ControllerProperties>(config.properties());
+  controller_proto_ = std::make_shared<rootcanal::configuration::Controller>(
+      config.properties());
 
   // When emulators restore from a snapshot the PacketStreamer connection to
   // netsim is recreated with a new (uninitialized) Rootcanal device. However
@@ -206,7 +206,7 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
   // before a HCI Reset. The flag below causes a hardware error event that
   // triggers the Reset from the Bluetooth Stack.
 
-  controller_properties_->quirks.hardware_error_before_reset = true;
+  controller_proto_->mutable_quirks()->set_hardware_error_before_reset(true);
 
   gAsyncManager = std::make_shared<rootcanal::AsyncManager>();
   // Get a user ID for tasks scheduled within the test environment.
@@ -271,10 +271,20 @@ class ChipInfo {
   int classic_tx_count = 0;
   int le_rx_count = 0;
   int classic_rx_count = 0;
+  std::shared_ptr<rootcanal::configuration::Controller> controller_proto;
+  std::unique_ptr<rootcanal::ControllerProperties> controller_properties;
 
   ChipInfo(uint32_t simulation_device,
            std::shared_ptr<model::Chip::Bluetooth> model)
       : simulation_device(simulation_device), model(model) {}
+  ChipInfo(
+      uint32_t simulation_device, std::shared_ptr<model::Chip::Bluetooth> model,
+      std::shared_ptr<rootcanal::configuration::Controller> controller_proto,
+      std::unique_ptr<rootcanal::ControllerProperties> controller_properties)
+      : simulation_device(simulation_device),
+        model(model),
+        controller_proto(std::move(controller_proto)),
+        controller_properties(std::move(controller_properties)) {}
 };
 
 std::unordered_map<uint32_t, std::shared_ptr<ChipInfo>> id_to_chip_info_;
@@ -288,6 +298,7 @@ model::Chip::Bluetooth Get(uint32_t id) {
     model.mutable_classic()->set_rx_count(chip_info->classic_rx_count);
     model.mutable_low_energy()->set_tx_count(chip_info->le_tx_count);
     model.mutable_low_energy()->set_rx_count(chip_info->le_rx_count);
+    model.mutable_bt_properties()->CopyFrom(*chip_info->controller_proto);
   }
   return model;
 }
@@ -342,10 +353,27 @@ void Remove(uint32_t id) {
 
 // Rename AddChip(model::Chip, device, transport)
 
-uint32_t Add(uint32_t simulation_device, const std::string &address_string) {
+uint32_t Add(uint32_t simulation_device, const std::string &address_string,
+             const rust::Slice<::std::uint8_t const> controller_proto_bytes) {
   auto transport = std::make_shared<HciPacketTransport>(gAsyncManager);
-  auto hci_device = std::make_shared<rootcanal::HciDevice>(
-      transport, *controller_properties_);
+
+  std::shared_ptr<rootcanal::configuration::Controller> controller_proto =
+      controller_proto_;
+  // If the Bluetooth Controller protobuf is provided, we use the provided
+  if (controller_proto_bytes.size() != 0) {
+    rootcanal::configuration::Controller custom_proto;
+    custom_proto.ParseFromArray(controller_proto_bytes.data(),
+                                controller_proto_bytes.size());
+    BtsLogInfo("device_id: %d has rootcanal Controller configuration: %s",
+               simulation_device, custom_proto.ShortDebugString().c_str());
+    controller_proto =
+        std::make_shared<rootcanal::configuration::Controller>(custom_proto);
+  }
+  std::unique_ptr<rootcanal::ControllerProperties> controller_properties =
+      std::make_unique<rootcanal::ControllerProperties>(*controller_proto);
+
+  auto hci_device =
+      std::make_shared<rootcanal::HciDevice>(transport, *controller_properties);
 
   // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
   // invoked atomically, preventing data races.
@@ -373,7 +401,9 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string) {
   model->mutable_low_energy()->set_state(model::State::ON);
 
   id_to_chip_info_.emplace(
-      facade_id, std::make_shared<ChipInfo>(simulation_device, model));
+      facade_id,
+      std::make_shared<ChipInfo>(simulation_device, model, controller_proto,
+                                 std::move(controller_properties)));
   return facade_id;
 }
 

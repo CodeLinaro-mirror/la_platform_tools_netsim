@@ -95,11 +95,20 @@ impl TimeDisplay {
     }
 }
 
+// Get TimeDisplay of current_time
+fn get_current_time() -> TimeDisplay {
+    let since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+    TimeDisplay::new(since_epoch.as_secs() as i64, since_epoch.subsec_nanos())
+}
+
 /// Return the timestamp of the current time for logs
 pub fn log_current_time() -> String {
-    let since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
-    let time_display = TimeDisplay::new(since_epoch.as_secs() as i64, since_epoch.subsec_nanos());
-    time_display.utc_display_log()
+    get_current_time().utc_display_log()
+}
+
+/// Return the timestamp of the current time for files
+pub fn file_current_time() -> String {
+    get_current_time().utc_display()
 }
 
 #[cfg(test)]

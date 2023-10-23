@@ -80,6 +80,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     auto manufacturer = request.initial_info().chip().manufacturer();
     auto product_name = request.initial_info().chip().product_name();
     auto chip_address = request.initial_info().chip().address();
+    auto bt_properties = request.initial_info().chip().bt_properties();
     // Add a new chip to the device
     std::string chip_kind_string;
     switch (chip_kind) {
@@ -96,9 +97,16 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         chip_kind_string = "UNSPECIFIED";
         break;
     }
+
+    std::vector<unsigned char> message_vec(bt_properties.ByteSizeLong());
+    if (!bt_properties.SerializeToArray(message_vec.data(),
+                                        message_vec.size())) {
+      BtsLogError("Failed to serialize bt_properties to bytes");
+    }
+
     auto result = netsim::device::AddChipCxx(
         peer, device_name, chip_kind_string, chip_address, chip_name,
-        manufacturer, product_name);
+        manufacturer, product_name, message_vec);
     if (result->IsError()) {
       return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
                             "AddChipCxx failed to add chip into netsim");
