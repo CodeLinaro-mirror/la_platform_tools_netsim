@@ -102,33 +102,33 @@ rust_test_host {
 genrule {
     name: "netsim_daemon_cc",
     tools: ["cxxbridge"],
-    cmd: "$(location cxxbridge) $(in) >> $(out)",
-    srcs: ["rust/daemon/src/lib.rs"],
-    out: ["netsim-daemon/src/lib.rs.cc"],
+    cmd: "$(location cxxbridge) $(in) --cfg feature=\\\"cuttlefish\\\" >> $(out)",
+    srcs: ["rust/daemon/src/ffi.rs"],
+    out: ["netsim-daemon/src/ffi.rs.cc"],
 }
 
 genrule {
     name: "netsim_daemon_h",
     tools: ["cxxbridge"],
-    cmd: "$(location cxxbridge) $(in) --header >> $(out)",
-    srcs: ["rust/daemon/src/lib.rs"],
-    out: ["netsim-daemon/src/lib.rs.h"],
+    cmd: "$(location cxxbridge) $(in) --cfg feature=\\\"cuttlefish\\\" --header >> $(out)",
+    srcs: ["rust/daemon/src/ffi.rs"],
+    out: ["netsim-daemon/src/ffi.rs.h"],
 }
 
 genrule {
-    name: "netsim_frontend_client_cxx_cc",
+    name: "netsim_cli_cc",
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) >> $(out)",
-    srcs: ["rust/frontend-client-cxx/src/lib.rs"],
-    out: ["frontend-client-cxx/src/lib.rs.cc"],
+    srcs: ["rust/cli/src/ffi.rs"],
+    out: ["netsim-cli/src/ffi.rs.cc"],
 }
 
 genrule {
-    name: "netsim_frontend_client_cxx_h",
+    name: "netsim_cli_h",
     tools: ["cxxbridge"],
     cmd: "$(location cxxbridge) $(in) --header >> $(out)",
-    srcs: ["rust/frontend-client-cxx/src/lib.rs"],
-    out: ["frontend-client-cxx/src/lib.rs.h"],
+    srcs: ["rust/cli/src/ffi.rs"],
+    out: ["netsim-cli/src/ffi.rs.h"],
 }
 
 cc_library_host_static {
@@ -139,6 +139,7 @@ cc_library_host_static {
         "src/frontend/frontend_client_stub.cc",
         "src/frontend/frontend_server.cc",
         "src/backend/grpc_server.cc",
+        "src/backend/grpc_client.cc",
         "src/hci/bluetooth_facade.cc",
         "src/hci/hci_packet_transport.cc",
         "src/hci/rust_device.cc",
@@ -218,6 +219,7 @@ cc_binary_host {
         "libcrypto",
         "libssl",
         "libunwindstack",
+        "libz", // TODO: Remove for native rust binary
     ],
     static_libs: [
         "breakpad_client",
@@ -257,6 +259,7 @@ cc_test_host {
         "libcrypto",
         "libbase",
         "libunwindstack",
+        "libz", // TODO: Remove for native rust binary
     ],
     static_libs: [
         "breakpad_client",
@@ -292,6 +295,7 @@ rust_defaults {
         "librand",
         "liblog_rust",
         "libenv_logger",
+        "libzip",
     ],
 }
 
@@ -319,17 +323,10 @@ cc_library_host_static {
     ],
     generated_headers: [
         "cxx-bridge-header",
-        "netsim_frontend_client_cxx_h",
+        "netsim_cli_h",
     ],
-    generated_sources: ["netsim_frontend_client_cxx_cc"],
+    generated_sources: ["netsim_cli_cc"],
     static_libs: ["lib-netsim-frontend-proto"],
-}
-
-rust_library_host {
-    name: "libfrontend_client_cxx",
-    crate_name: "frontend_client_cxx",
-    srcs: ["rust/frontend-client-cxx/src/lib.rs"],
-    rustlibs: ["libcxx"],
 }
 
 rust_defaults {
@@ -337,8 +334,8 @@ rust_defaults {
     srcs: ["rust/cli/src/lib.rs"],
     rustlibs: [
         "libclap",
+        "libhex",
         "libnetsim_proto",
-        "libfrontend_client_cxx",
         "libnetsim_common",
         "libprotobuf",
         "libcxx",

@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use ::protobuf::MessageField;
 use lazy_static::lazy_static;
 use log::info;
+use netsim_proto::config::WiFi;
 use netsim_proto::model::chip::Radio;
 use std::sync::RwLock;
 
@@ -62,7 +64,7 @@ pub fn wifi_add(device_id: u32) -> u32 {
 }
 
 /// Starts the WiFi service.
-pub fn wifi_start() {
+pub fn wifi_start(config: &MessageField<WiFi>) {
     info!("wifi service started");
 }
 

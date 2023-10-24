@@ -35,7 +35,7 @@ void Patch(uint32_t, const model::Chip::Radio &);
 model::Chip::Radio Get(uint32_t);
 uint32_t Add(uint32_t simulation_device);
 
-void Start();
+void Start(const rust::Slice<::std::uint8_t const> proto_bytes);
 void Stop();
 
 // Cxx functions for rust ffi.

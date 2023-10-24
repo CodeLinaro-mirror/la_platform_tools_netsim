@@ -15,8 +15,11 @@
 use crate::bluetooth::{BeaconChip, BEACON_CHIPS};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
+use ::protobuf::MessageField;
 use lazy_static::lazy_static;
 use log::info;
+use netsim_proto::config::Bluetooth as BluetoothConfig;
+use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::{Bluetooth, BluetoothBeacon};
 use netsim_proto::model::chip_create::Chip as Builtin;
 use netsim_proto::model::{ChipCreate, DeviceCreate};
@@ -60,7 +63,11 @@ pub fn bluetooth_get(facade_id: u32) -> Bluetooth {
 }
 
 // Returns facade_id
-pub fn bluetooth_add(device_id: u32, _address: &str) -> u32 {
+pub fn bluetooth_add(
+    device_id: u32,
+    _address: &str,
+    _bt_properties: &MessageField<RootcanalController>,
+) -> u32 {
     info!("hci_add({device_id})");
     let mut resource = IDS.write().unwrap();
     let facade_id = resource.current_id;
@@ -69,20 +76,13 @@ pub fn bluetooth_add(device_id: u32, _address: &str) -> u32 {
 }
 
 /// Starts the Bluetooth service.
-pub fn bluetooth_start(_instance_num: u16) {
+pub fn bluetooth_start(_config: &MessageField<BluetoothConfig>, _instance_num: u16) {
     info!("bluetooth service started");
 }
 
 /// Stops the Bluetooth service.
 pub fn bluetooth_stop() {
     info!("bluetooth service ended");
-}
-
-/// Refresh Resource for Rust tests
-pub fn refresh_resource() {
-    BEACON_CHIPS.write().unwrap().clear();
-    let mut id_factory = crate::bluetooth::mocked::IDS.write().unwrap();
-    *id_factory = crate::bluetooth::mocked::FacadeIds::new();
 }
 
 // Avoid crossing cxx boundary in tests

@@ -17,20 +17,32 @@ use clap::Parser;
 #[derive(Debug, Parser)]
 pub struct NetsimdArgs {
     /// File descriptor start up info proto
-    #[arg(short = 's', long)]
+    #[arg(short = 's', long, alias = "fd_startup_str")]
     pub fd_startup_str: Option<String>,
 
     /// Disable grpc server for CLI
-    #[arg(long)]
+    #[arg(long, alias = "no_cli_ui")]
     pub no_cli_ui: bool,
 
     /// Disable web server
-    #[arg(long)]
+    #[arg(long, alias = "no_web_ui")]
     pub no_web_ui: bool,
+
+    /// Enable packet capture
+    #[arg(long)]
+    pub pcap: bool,
+
+    /// Disable Address Reuse for test model
+    #[arg(long, alias = "disable_address_reuse")]
+    pub disable_address_reuse: bool,
 
     /// Set custom hci port
     #[arg(long, alias = "hci_port")]
     pub hci_port: Option<u32>,
+
+    /// Enables connector mode to forward packets to another instance.
+    #[arg(short, long, alias = "connector_instance", visible_alias = "connector_instance_num")]
+    pub connector_instance: Option<u16>,
 
     /// Netsimd instance number
     #[arg(short, long, visible_alias = "instance_num")]
@@ -47,4 +59,8 @@ pub struct NetsimdArgs {
     /// Set the vsock port number to be listened by the frontend grpc server
     #[arg(short, long)]
     pub vsock: Option<u16>,
+
+    // The name of a config file to load
+    #[arg(long)]
+    pub config: Option<String>,
 }

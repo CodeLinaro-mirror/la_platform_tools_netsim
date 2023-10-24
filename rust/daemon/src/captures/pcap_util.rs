@@ -38,11 +38,18 @@ pub enum PacketDirection {
     ControllerToHost = 1,
 }
 
+/// Supported LinkTypes for packet capture
+/// https://www.tcpdump.org/linktypes.html
+pub enum LinkType {
+    /// Radiotap link-layer information followed by an 802.11 header.
+    Ieee802_11RadioTap = 127,
+    /// Bluetooth HCI UART transport layer
+    BluetoothHciH4WithPhdr = 201,
+}
+
 /// Returns the file size after writing the header of the
 /// pcap file.
-pub fn write_pcap_header<W: Write>(output: &mut W) -> Result<usize> {
-    let linktype: u32 = 201; // LINKTYPE_BLUETOOTH_HCI_H4_WITH_PHDR
-
+pub fn write_pcap_header<W: Write>(link_type: LinkType, output: &mut W) -> Result<usize> {
     // https://tools.ietf.org/id/draft-gharris-opsawg-pcap-00.html#name-file-header
     let header: Vec<u8> = be_vec![
         0xa1b2c3d4u32, // magic number
@@ -51,7 +58,7 @@ pub fn write_pcap_header<W: Write>(output: &mut W) -> Result<usize> {
         0u32,          // reserved 1
         0u32,          // reserved 2
         u32::MAX,      // snaplen
-        linktype
+        link_type as u32
     ];
 
     output.write_all(&header)?;
@@ -63,11 +70,10 @@ pub fn append_record<W: Write>(
     timestamp: Duration,
     output: &mut W,
     packet_direction: PacketDirection,
-    packet_type: u32,
     packet: &[u8],
 ) -> Result<usize> {
     // Record (direciton, type, packet)
-    let record: Vec<u8> = be_vec![packet_direction as u32, packet_type as u8];
+    let record: Vec<u8> = be_vec![packet_direction as u32];
 
     // https://tools.ietf.org/id/draft-gharris-opsawg-pcap-00.html#name-packet-record
     let length = record.len() + packet.len();
@@ -100,21 +106,19 @@ mod tests {
     /// Packet 2: HCI_CMD from Host to Controller (Rcvd LE Set Advertise Enable) [250 milisecs later]
     fn test_pcap_file() {
         let mut actual = Vec::<u8>::new();
-        write_pcap_header(&mut actual).unwrap();
+        write_pcap_header(LinkType::BluetoothHciH4WithPhdr, &mut actual).unwrap();
         append_record(
             Duration::from_secs(0),
             &mut actual,
             PacketDirection::HostToController,
-            4u32,
-            &[14, 4, 1, 10, 32, 0],
+            &[4, 14, 4, 1, 10, 32, 0],
         )
         .unwrap();
         append_record(
             Duration::from_millis(250),
             &mut actual,
             PacketDirection::ControllerToHost,
-            1u32,
-            &[10, 32, 1, 0],
+            &[1, 10, 32, 1, 0],
         )
         .unwrap();
         assert_eq!(actual, EXPECTED);

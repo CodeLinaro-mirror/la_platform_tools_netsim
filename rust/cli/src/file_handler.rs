@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frontend_client_cxx::ClientResponseReadable;
+use crate::ffi::ClientResponseReadable;
 use log::error;
 use std::fs::File;
 /// Implements handler for pcap operations
 use std::io::Write;
 use std::path::PathBuf;
 
-pub struct CaptureHandler {
+pub struct FileHandler {
     pub file: File,
     pub path: PathBuf,
 }
 
-impl ClientResponseReadable for CaptureHandler {
+impl ClientResponseReadable for FileHandler {
     // function to handle writing each chunk to file
     fn handle_chunk(&self, chunk: &[u8]) {
         (&self.file)

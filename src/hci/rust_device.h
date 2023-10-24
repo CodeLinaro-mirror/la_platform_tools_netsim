@@ -33,6 +33,7 @@ class RustDevice : public rootcanal::Device {
              const std::string &type, const std::string &address)
       : callbacks_(std::move(callbacks)), TYPE(type) {
     rootcanal::Address::FromString(address, address_);
+    this->SetAddress(address_);
   }
 
   void Tick() override;
@@ -54,21 +55,10 @@ class RustBluetoothChip {
   RustBluetoothChip(std::shared_ptr<RustDevice> rust_device)
       : rust_device(std::move(rust_device)) {}
 
-  void SendLinkLayerPacket(const rust::Slice<const uint8_t> packet,
-                           uint8_t type, int8_t tx_power) const;
+  void SendLinkLayerLePacket(const rust::Slice<const uint8_t> packet,
+                             int8_t tx_power) const;
 
  private:
   std::shared_ptr<RustDevice> rust_device;
 };
-
-// Helper function to generate advertising packet in Rust.
-// TODO: Remove after importing Rust PDL library for hci.
-rust::Vec<uint8_t> GenerateAdvertisingPacket(
-    const rust::String &address, const rust::Slice<const uint8_t> packet);
-
-// Helper function to generate scan response packet in Rust.
-rust::Vec<uint8_t> GenerateScanResponsePacket(
-    const rust::String &source_address, const rust::String &destination_address,
-    const rust::Slice<const uint8_t> packet);
-
 }  // namespace netsim::hci::facade

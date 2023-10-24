@@ -17,20 +17,17 @@
 
 #include <google/protobuf/util/json_util.h>
 #include <grpcpp/support/status.h>
-#include <stdlib.h>
 
 #include <chrono>
 #include <cstdint>
-#include <iterator>
 #include <memory>
-#include <optional>
 #include <string>
 
-#include "frontend-client-cxx/src/lib.rs.h"
 #include "google/protobuf/empty.pb.h"
 #include "grpcpp/create_channel.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/support/status_code_enum.h"
+#include "netsim-cli/src/ffi.rs.h"
 #include "netsim/frontend.grpc.pb.h"
 #include "netsim/frontend.pb.h"
 #include "netsim/model.pb.h"

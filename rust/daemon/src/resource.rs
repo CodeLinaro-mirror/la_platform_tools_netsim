@@ -44,6 +44,7 @@ impl Resource {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_version_resource(self) -> String {
         self.version
     }

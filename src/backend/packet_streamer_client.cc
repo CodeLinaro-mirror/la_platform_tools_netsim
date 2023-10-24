@@ -15,8 +15,6 @@
 #include "backend/packet_streamer_client.h"
 
 #include <chrono>
-#include <cstddef>
-#include <iostream>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -34,6 +32,7 @@
 #include "grpcpp/security/credentials.h"
 #include "util/log.h"
 #include "util/os_utils.h"
+#include "util/string_utils.h"
 
 using android::control::interceptor::MetricsInterceptorFactory;
 
@@ -78,8 +77,13 @@ std::unique_ptr<android::base::ObservableProcess> RunNetsimd(
     NetsimdOptions options) {
   auto exe = android::base::System::get()->findBundledExecutable("netsimd");
   std::vector<std::string> program_with_args{exe};
-  if (options.no_cli_ui) program_with_args.push_back("--no_cli_ui");
-  if (options.no_web_ui) program_with_args.push_back("--no_web_ui");
+  if (options.no_cli_ui) program_with_args.push_back("--no-cli-ui");
+  if (options.no_web_ui) program_with_args.push_back("--no-web-ui");
+  for (auto flag : stringutils::Split(options.netsim_args, " "))
+    program_with_args.push_back(std::string(flag));
+
+  BtsLogInfo("Netsimd launch command:");
+  for (auto arg : program_with_args) BtsLogInfo("%s", arg.c_str());
   auto cmd = android::base::Command::create(program_with_args);
 
   auto netsimd = cmd.asDeamon().execute();

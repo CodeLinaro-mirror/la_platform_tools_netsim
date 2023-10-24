@@ -14,13 +14,28 @@
 
 use clap::Parser;
 use log::warn;
+use log::{error, info};
+use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_ini};
+use netsim_common::util::zip_artifact::zip_artifacts;
 
+use crate::bluetooth as bluetooth_facade;
+use crate::captures::capture::spawn_capture_event_subscriber;
+use crate::config_file;
+use crate::devices::devices_handler::wait_devices;
+use crate::events::Event;
+use crate::resource;
+use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
-use crate::ffi;
+use crate::ffi::ffi_util;
 use crate::service::{Service, ServiceParams};
+#[cfg(feature = "cuttlefish")]
+use netsim_common::util::os_utils::get_server_address;
+use netsim_proto::config::Config;
+use std::env;
 use std::ffi::{c_char, c_int};
+use std::sync::mpsc::Receiver;
 
 /// Wireless network simulator for android (and other) emulated devices.
 ///
@@ -30,7 +45,7 @@ use std::ffi::{c_char, c_int};
 /// long as the program runs.
 #[no_mangle]
 pub unsafe extern "C" fn rust_main(argc: c_int, argv: *const *const c_char) {
-    ffi::set_up_crash_report();
+    ffi_util::set_up_crash_report();
     netsim_logger::init("netsimd");
     let netsimd_args = get_netsimd_args(argc, argv);
     run_netsimd_with_args(netsimd_args);
@@ -38,41 +53,98 @@ pub unsafe extern "C" fn rust_main(argc: c_int, argv: *const *const c_char) {
 
 #[allow(unused)]
 fn get_netsimd_args(argc: c_int, argv: *const *const c_char) -> NetsimdArgs {
+    let env_args_or_err = env::var("NETSIM_ARGS");
+
     #[cfg(feature = "cuttlefish")]
     {
         // TODO: Use NetsimdArgs::parse() after netsimd binary is built with netsimd.rs.
         // In linux arm64 in aosp-main, it can't access CLI arguments by std::env::args() with netsimd.cc wrapper.
-        let argv: Vec<_> = (0..argc)
+        let mut argv: Vec<_> = (0..argc)
             .map(|i|
                 // SAFETY: argc and argv will remain valid as long as the program runs.
                 unsafe {
                     std::ffi::CStr::from_ptr(*argv.add(i as usize)).to_str().unwrap().to_owned()
                 })
             .collect();
+        if let Ok(env_args) = env_args_or_err {
+            env_args.split(' ').for_each(|arg| argv.push(arg.to_string()));
+        }
         NetsimdArgs::parse_from(argv)
     }
     #[cfg(not(feature = "cuttlefish"))]
-    NetsimdArgs::parse()
+    {
+        let mut argv = env::args().collect::<Vec<String>>();
+        if let Ok(env_args) = env_args_or_err {
+            env_args.split(' ').for_each(|arg| argv.push(arg.to_string()));
+        }
+        NetsimdArgs::parse_from(argv)
+    }
 }
 
-fn run_netsimd_with_args(netsimd_args: NetsimdArgs) {
+fn run_netsimd_with_args(args: NetsimdArgs) {
     // Redirect stdout and stderr to files only if netsimd is not invoked
     // by Cuttlefish. Some Cuttlefish builds fail when writing logs to files.
     #[cfg(not(feature = "cuttlefish"))]
-    if !netsimd_args.logtostderr {
+    if !args.logtostderr {
         cxx::let_cxx_string!(netsimd_temp_dir = netsim_common::system::netsimd_temp_dir_string());
-        ffi::redirect_std_stream(&netsimd_temp_dir);
+        ffi_util::redirect_std_stream(&netsimd_temp_dir);
     }
 
-    let fd_startup_str = netsimd_args.fd_startup_str.unwrap_or_default();
-    let no_cli_ui = netsimd_args.no_cli_ui;
-    let no_web_ui = netsimd_args.no_web_ui;
-    let instance_num = ffi::get_instance(netsimd_args.instance.unwrap_or_default());
-    let hci_port: u16 = ffi::get_hci_port(netsimd_args.hci_port.unwrap_or_default(), instance_num)
-        .try_into()
+    match args.connector_instance {
+        #[cfg(feature = "cuttlefish")]
+        Some(connector_instance) => run_netsimd_connector(args, connector_instance),
+        _ => run_netsimd_primary(args),
+    }
+}
+
+/// Forwards packets to another netsim daemon.
+#[cfg(feature = "cuttlefish")]
+fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
+    if args.fd_startup_str.is_none() {
+        error!("Failed to start netsimd forwarder, missing `-s` arg");
+        return;
+    }
+    let fd_startup = args.fd_startup_str.unwrap();
+
+    let mut server: Option<String> = None;
+    // Attempts multiple time for fetching netsim.ini
+    for second in [1, 2, 4, 8, 0] {
+        server = get_server_address(instance);
+        if server.is_some() {
+            break;
+        } else {
+            warn!("Unable to find ini file for instance {}, retrying", instance);
+            std::thread::sleep(std::time::Duration::from_secs(second));
+        }
+    }
+    if server.is_none() {
+        error!("Failed to run netsimd connector");
+        return;
+    }
+    let server = server.unwrap();
+    // TODO: Make this function returns Result to use `?` instead of unwrap().
+    info!("Starting in Connector mode to {}", server.as_str());
+    crate::transport::fd::run_fd_connector(&fd_startup, server.as_str())
+        .map_err(|e| error!("Failed to run fd connector: {}", e))
         .unwrap();
-    let dev = netsimd_args.dev;
-    let vsock = netsimd_args.vsock.unwrap_or_default();
+}
+
+// loop until ShutDown event is received, then log and return.
+fn main_loop(events_rx: Receiver<Event>) {
+    loop {
+        // events_rx.recv() will wait until the event is received.
+        if let Ok(Event::ShutDown { reason }) = events_rx.recv() {
+            info!("Netsim is shutdown: {reason}");
+            return;
+        }
+    }
+}
+
+fn run_netsimd_primary(args: NetsimdArgs) {
+    let fd_startup_str = args.fd_startup_str.unwrap_or_default();
+    let instance_num = get_instance(args.instance.unwrap_or_default());
+    let hci_port: u16 =
+        get_hci_port(args.hci_port.unwrap_or_default(), instance_num).try_into().unwrap();
 
     #[cfg(feature = "cuttlefish")]
     if fd_startup_str.is_empty() {
@@ -80,23 +152,67 @@ fn run_netsimd_with_args(netsimd_args: NetsimdArgs) {
         return;
     }
 
-    if ffi::is_netsimd_alive(instance_num) {
+    if ffi_util::is_netsimd_alive(instance_num) {
         warn!("Failed to start netsim daemon because a netsim daemon is already running");
         return;
     }
+
+    let mut config = Config::new();
+    if let Some(filename) = args.config {
+        match config_file::new_from_file(&filename) {
+            Ok(config_from_file) => {
+                info!("Using config in {}", config);
+                config = config_from_file;
+            }
+            Err(e) => {
+                error!("Skipping config in {}: {:?}", filename, e);
+            }
+        }
+    }
+
     let service_params = ServiceParams::new(
         fd_startup_str,
-        no_cli_ui,
-        no_web_ui,
+        args.no_cli_ui,
+        args.no_web_ui,
+        args.pcap,
+        args.disable_address_reuse,
         hci_port,
         instance_num,
-        dev,
-        vsock,
+        args.dev,
+        args.vsock.unwrap_or_default(),
     );
 
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
     // valid and open for as long as the program runs.
-    let service = unsafe { Service::new(service_params) };
+    let mut service = unsafe { Service::new(service_params) };
     service.set_up();
+
+    // Create all Event Receivers
+    let capture_events_rx = resource::clone_events().lock().unwrap().subscribe();
+    let device_events_rx = resource::clone_events().lock().unwrap().subscribe();
+    let main_events_rx = resource::clone_events().lock().unwrap().subscribe();
+
+    // Pass all event receivers to each modules
+    spawn_capture_event_subscriber(capture_events_rx);
+    wait_devices(device_events_rx);
+
+    // Start radio facades
+    bluetooth_facade::bluetooth_start(&config.bluetooth, instance_num);
+    wifi_facade::wifi_start(&config.wifi);
+
+    // Run all netsimd services (grpc, socket, web)
     service.run();
+
+    // Runs a synchronous main loop
+    main_loop(main_events_rx);
+
+    // Gracefully shutdown netsimd services
+    service.shut_down();
+
+    // Once service.run is complete, delete the netsim ini file
+    // and zip all artifacts
+    remove_netsim_ini(instance_num);
+    if let Err(err) = zip_artifacts() {
+        error!("Failed to zip artifacts: {err:?}");
+    }
 }

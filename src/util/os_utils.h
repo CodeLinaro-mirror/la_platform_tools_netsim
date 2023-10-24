@@ -41,11 +41,6 @@ std::string GetDiscoveryDirectory();
 std::string GetNetsimIniFilepath(uint16_t instance_num);
 
 /**
- * Return the path of netsim ini file (Rust).
- */
-std::unique_ptr<std::string> GetNetsimIniFilepathCxx(uint16_t instance_num);
-
-/**
  * Return the frontend grpc port.
  */
 std::optional<std::string> GetServerAddress(uint16_t instance_num = 0);
@@ -54,16 +49,6 @@ std::optional<std::string> GetServerAddress(uint16_t instance_num = 0);
  * Redirect stdout and stderr to file.
  */
 void RedirectStdStream(const std::string &netsim_temp_dir);
-
-/**
- * Get netsimd instance number.
- */
-uint16_t GetInstance(uint16_t instance_flag);
-
-/**
- * Get hci port number.
- */
-uint32_t GetHciPort(uint32_t hci_port_flag, uint16_t instance);
 
 }  // namespace osutils
 }  // namespace netsim

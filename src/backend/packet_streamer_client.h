@@ -24,7 +24,9 @@ namespace netsim::packet {
 
 // Example:
 
-auto channel = CreateChannel({.no_cli_ui=false, .no_web_ui=true});
+auto channel = CreateChannel({.no_cli_ui = false,
+                              .no_web_ui = true,
+                              .netsim_args = "--dev --hci-port 12345"});
 std::unique_ptr<PacketStreamer::Stub> stub = PacketStreamer::NewStub(channel);
 
 ::grpc::ClientContext context;
@@ -47,6 +49,7 @@ using Stream = std::unique_ptr<
 struct NetsimdOptions {
   bool no_cli_ui;
   bool no_web_ui;
+  std::string netsim_args;
 };
 
 // Configure the endpoint for a server other than the local netsimd server.

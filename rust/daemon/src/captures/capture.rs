@@ -21,20 +21,22 @@
 use std::collections::btree_map::{Iter, Values};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{File, OpenOptions};
-use std::io::Result;
+use std::io::{Error, ErrorKind, Result};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::pcap_util::write_pcap_header;
+use super::pcap_util::{write_pcap_header, LinkType};
 use log::info;
+
 use netsim_proto::{
     common::ChipKind,
     model::{Capture as ProtoCapture, State},
 };
 use protobuf::well_known_types::timestamp::Timestamp;
 
+use crate::config::get_pcap;
 use crate::events::Event;
 use crate::resource::clone_captures;
 
@@ -116,7 +118,12 @@ impl CaptureInfo {
         std::fs::create_dir_all(&filename)?;
         filename.push(format!("{:?}-{:}-{:?}.pcap", self.id, self.device_name, self.chip_kind));
         let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(filename)?;
-        let size = write_pcap_header(&mut file)?;
+        let link_type = match self.chip_kind {
+            ChipKind::BLUETOOTH => LinkType::BluetoothHciH4WithPhdr,
+            ChipKind::WIFI => LinkType::Ieee802_11RadioTap,
+            _ => return Err(Error::new(ErrorKind::Other, "Unsupported link type")),
+        };
+        let size = write_pcap_header(link_type, &mut file)?;
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
         self.size = size;
         self.records = 0;
@@ -249,13 +256,13 @@ pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>) {
                 Ok(Event::ChipAdded { chip_id, chip_kind, facade_id, device_name, .. }) => {
                     let mut capture_info =
                         CaptureInfo::new(chip_kind, facade_id, chip_id, device_name.clone());
-                    // TODO(b/268271460): Add ability to set default capture state.
-                    // Currently, the default capture state is ON
-                    let _ = capture_info.start_capture();
+                    if get_pcap() {
+                        let _ = capture_info.start_capture();
+                    }
                     clone_captures().write().unwrap().insert(capture_info);
                     info!("Capture event: ChipAdded chip_id: {chip_id} device_name: {device_name} facade_id:{facade_id}");
                 }
-                Ok(Event::ChipRemoved { chip_id }) => {
+                Ok(Event::ChipRemoved { chip_id, .. }) => {
                     clone_captures().write().unwrap().remove(&chip_id);
                     info!("Capture event: ChipRemoved chip_id: {chip_id}");
                 }

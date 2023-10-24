@@ -17,10 +17,13 @@ use super::advertise_settings::{
     AdvertiseMode, AdvertiseSettings, AdvertiseSettingsBuilder, TxPowerLevel,
 };
 use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
+use super::packets::link_layer::{
+    Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, Packet, PacketType,
+};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::{devices_handler::add_chip, id_factory::IdFactory};
-use crate::ffi;
+use crate::ffi::ffi_bluetooth;
 use cxx::{let_cxx_string, UniquePtr};
 use lazy_static::lazy_static;
 use log::{error, info, warn};
@@ -40,13 +43,11 @@ use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, ptr::null};
 
-// PhyType::LOW_ENERGY defined in packages/modules/Bluetooth/tools/rootcanal/include/phy.h
-static PHY_TYPE_LE: u8 = 0;
-
 lazy_static! {
+    static ref EMPTY_ADDRESS: Address = Address::try_from(0u64).unwrap();
     // A singleton that contains a hash map from chip id to RustBluetoothChip.
     // It's used by `BeaconChip` to access `RustBluetoothChip` to call send_link_layer_packet().
-    static ref BT_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi::RustBluetoothChip>>>> =
+    static ref BT_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi_bluetooth::RustBluetoothChip>>>> =
         RwLock::new(HashMap::new());
     // Used to find beacon chip based on it's id from static methods.
     pub(crate) static ref BEACON_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<BeaconChip>>> =
@@ -57,26 +58,34 @@ lazy_static! {
 pub struct BeaconChip {
     device_name: String,
     chip_id: ChipIdentifier,
-    address: String,
+    address: Address,
     advertise_settings: AdvertiseSettings,
     advertise_data: AdvertiseData,
+    scan_response_data: AdvertiseData,
     advertise_last: Option<Instant>,
     advertise_start: Option<Instant>,
 }
 
 impl BeaconChip {
-    pub fn new(device_name: String, chip_id: ChipIdentifier, address: String) -> Self {
-        BeaconChip {
+    pub fn new(
+        device_name: String,
+        chip_id: ChipIdentifier,
+        address: String,
+    ) -> Result<Self, String> {
+        Ok(BeaconChip {
             chip_id,
             device_name: device_name.clone(),
-            address,
+            address: str_to_addr(&address)?,
             advertise_settings: AdvertiseSettings::builder().build(),
-            advertise_data: AdvertiseData::builder(device_name, TxPowerLevel::default())
+            advertise_data: AdvertiseData::builder(device_name.clone(), TxPowerLevel::default())
+                .build()
+                .unwrap(),
+            scan_response_data: AdvertiseData::builder(device_name, TxPowerLevel::default())
                 .build()
                 .unwrap(),
             advertise_last: None,
             advertise_start: None,
-        }
+        })
     }
 
     pub fn from_proto(
@@ -96,26 +105,39 @@ impl BeaconChip {
                 .unwrap_or_default(),
             &beacon_proto.adv_data,
         )?;
+        let scan_response_data = AdvertiseData::from_proto(
+            device_name.clone(),
+            advertise_settings.tx_power_level,
+            &beacon_proto.scan_response,
+        )?;
+
+        let address = if beacon_proto.address == String::default() {
+            // Safe to unwrap here because chip_id is a u32 which is less than 6 bytes
+            u64::from(chip_id).try_into().unwrap()
+        } else {
+            str_to_addr(&beacon_proto.address)?
+        };
 
         Ok(BeaconChip {
             device_name,
             chip_id,
-            address: beacon_proto.address.clone(),
+            address,
             advertise_settings,
             advertise_data,
+            scan_response_data,
             advertise_last: None,
             advertise_start: None,
         })
     }
 
-    pub fn send_link_layer_packet(&self, packet: &[u8], packet_type: u8, tx_power: i8) {
+    pub fn send_link_layer_le_packet(&self, packet: &[u8], tx_power: i8) {
         let binding = BT_CHIPS.read().unwrap();
         if let Some(rust_bluetooth_chip) = binding.get(&self.chip_id) {
-            rust_bluetooth_chip.lock().unwrap().pin_mut().send_link_layer_packet(
-                packet,
-                packet_type,
-                tx_power,
-            );
+            rust_bluetooth_chip
+                .lock()
+                .unwrap()
+                .pin_mut()
+                .send_link_layer_le_packet(packet, tx_power);
         } else {
             warn!("Failed to get RustBluetoothChip for unknown chip id: {}", self.chip_id);
         };
@@ -155,13 +177,19 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
         }
 
         beacon.advertise_last = Some(Instant::now());
-        let packet =
-            ffi::generate_advertising_packet(&beacon.address, beacon.advertise_data.as_bytes());
-        beacon.send_link_layer_packet(
-            &packet,
-            PHY_TYPE_LE,
-            beacon.advertise_settings.tx_power_level.dbm,
-        );
+
+        let packet = LeLegacyAdvertisingPduBuilder {
+            advertising_type: beacon.advertise_settings.get_packet_type(),
+            advertising_data: beacon.advertise_data.to_bytes(),
+            advertising_address_type: AddressType::Public,
+            target_address_type: AddressType::Public,
+            source_address: beacon.address,
+            destination_address: *EMPTY_ADDRESS,
+        }
+        .build()
+        .to_vec();
+
+        beacon.send_link_layer_le_packet(&packet, beacon.advertise_settings.tx_power_level.dbm);
     }
 
     fn receive_link_layer_packet(
@@ -172,20 +200,28 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
         packet: &[u8],
     ) {
         let guard = BEACON_CHIPS.read().unwrap();
-        let mut beacon = guard.get(&self.chip_id);
+        let beacon = guard.get(&self.chip_id);
         if beacon.is_none() {
             error!("could not find bluetooth beacon with chip id {}", self.chip_id);
             return;
         }
-        let mut beacon = beacon.unwrap().lock().unwrap();
+        let beacon = beacon.unwrap().lock().unwrap();
 
-        if !beacon.advertise_settings.scannable {
-            return;
+        if beacon.advertise_settings.scannable
+            && destination_address == addr_to_str(beacon.address)
+            && packet_type == u8::from(PacketType::LeScan)
+        {
+            let packet = LeScanResponseBuilder {
+                advertising_address_type: AddressType::Public,
+                source_address: beacon.address,
+                destination_address: beacon.address,
+                scan_response_data: beacon.scan_response_data.to_bytes(),
+            }
+            .build()
+            .to_vec();
+
+            beacon.send_link_layer_le_packet(&packet, beacon.advertise_settings.tx_power_level.dbm);
         }
-
-        // TODO(jmes): Implement by following the example of Beacon::ReceiveLinkLayerPacket()
-        //             in packages/modules/Bluetooth/tools/rootcanal/model/devices/beacon.cc.
-        warn!("scan response is not yet implemented");
     }
 }
 
@@ -242,12 +278,13 @@ pub fn bluetooth_beacon_remove(
     if removed_beacon.is_none() || removed_radio.is_none() {
         Err(format!("failed to delete ble beacon chip: chip with id {chip_id} does not exist"))
     } else {
-        ffi::bluetooth_remove_rust_device(facade_id);
+        ffi_bluetooth::bluetooth_remove_rust_device(facade_id);
         Ok(())
     }
 }
 
 pub fn bluetooth_beacon_patch(
+    facade_id: FacadeIdentifier,
     chip_id: ChipIdentifier,
     patch: &BluetoothBeaconProto,
 ) -> Result<(), String> {
@@ -259,7 +296,12 @@ pub fn bluetooth_beacon_patch(
         .unwrap();
 
     if patch.address != String::default() {
-        beacon.address = patch.address.clone();
+        beacon.address = str_to_addr(&patch.address)?;
+        #[cfg(not(test))]
+        ffi_bluetooth::bluetooth_set_rust_device_address(
+            facade_id,
+            u64::from(beacon.address).to_le_bytes()[..6].try_into().unwrap(),
+        );
     }
 
     if let Some(patch_settings) = patch.settings.as_ref() {
@@ -314,11 +356,35 @@ pub fn bluetooth_beacon_get(chip_id: ChipIdentifier) -> Result<BluetoothBeaconPr
         .unwrap();
 
     Ok(BluetoothBeaconProto {
-        address: beacon.address.clone(),
+        address: addr_to_str(beacon.address),
         settings: MessageField::some((&beacon.advertise_settings).try_into()?),
         adv_data: MessageField::some((&beacon.advertise_data).into()),
         ..Default::default()
     })
+}
+
+fn addr_to_str(addr: Address) -> String {
+    let bytes = u64::from(addr).to_le_bytes();
+    bytes[..5]
+        .iter()
+        .rfold(format!("{:02x}", bytes[5]), |addr, byte| addr + &format!(":{:02x}", byte))
+}
+
+fn str_to_addr(addr: &str) -> Result<Address, String> {
+    if addr == String::default() {
+        Ok(*EMPTY_ADDRESS)
+    } else {
+        if addr.len() != 17 {
+            return Err(String::from("failed to parse address: address was not the right length"));
+        }
+        let addr = addr.replace(':', "");
+        u64::from_str_radix(&addr, 16)
+            .map_err(|_| String::from("failed to parse address: invalid hex"))?
+            .try_into()
+            .map_err(|_| {
+                String::from("failed to parse address: address must be smaller than 6 bytes")
+            })
+    }
 }
 
 #[cfg(test)]
@@ -331,7 +397,7 @@ pub mod tests {
     };
 
     use super::*;
-    use crate::bluetooth::{bluetooth_beacon_add, refresh_resource};
+    use crate::bluetooth::bluetooth_beacon_add;
 
     lazy_static! {
         static ref TEST_GUID_GENERATOR: Mutex<IdFactory<u32>> = Mutex::new(IdFactory::new(0, 1));
@@ -397,6 +463,7 @@ pub mod tests {
         let tx_power = TxPowerProto::TxPowerLevel(AdvertiseTxPowerProto::MEDIUM.into());
         let scannable = true;
         let patch_result = bluetooth_beacon_patch(
+            0,
             id,
             &BluetoothBeaconProto {
                 settings: MessageField::some(AdvertiseSettingsProto {
@@ -431,7 +498,7 @@ pub mod tests {
 
         let id = new_test_beacon_with_settings(settings.clone());
 
-        let patch_result = bluetooth_beacon_patch(id, &BluetoothBeaconProto::default());
+        let patch_result = bluetooth_beacon_patch(0, id, &BluetoothBeaconProto::default());
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
 
         let beacon_proto = bluetooth_beacon_get(id);
@@ -441,5 +508,59 @@ pub mod tests {
         let settings_after_patch = beacon_proto.settings.unwrap();
         assert_eq!(settings.timeout, settings_after_patch.timeout);
         assert_eq!(settings.scannable, settings_after_patch.scannable);
+    }
+
+    #[test]
+    fn test_str_to_addr_succeeds() {
+        let addr = str_to_addr("be:ac:12:34:00:0f");
+        assert_eq!(Address::try_from(0xbe_ac_12_34_00_0f).unwrap(), addr.unwrap());
+    }
+
+    #[test]
+    fn test_empty_str_to_addr_succeeds() {
+        let addr = str_to_addr("00:00:00:00:00:00");
+        assert_eq!(Address::try_from(0).unwrap(), addr.unwrap());
+    }
+
+    #[test]
+    fn test_str_to_addr_fails() {
+        let addr = str_to_addr("hi mom!");
+        assert!(addr.is_err());
+    }
+
+    #[test]
+    fn test_invalid_str_to_addr_fails() {
+        let addr = str_to_addr("56:78:9a:bc:de:fg");
+        assert!(addr.is_err());
+    }
+
+    #[test]
+    fn test_long_str_to_addr_fails() {
+        let addr = str_to_addr("55:55:55:55:55:55:55:55");
+        assert!(addr.is_err());
+    }
+
+    #[test]
+    fn test_short_str_to_addr_fails() {
+        let addr = str_to_addr("ab:cd");
+        assert!(addr.is_err());
+    }
+
+    #[test]
+    fn test_addr_to_str_succeeds() {
+        let addr: u64 = 0xbe_ac_12_34_00_0f;
+        assert_eq!("be:ac:12:34:00:0f", addr_to_str(addr.try_into().unwrap()))
+    }
+
+    #[test]
+    fn test_empty_addr_to_str_succeeds() {
+        let addr: u64 = 0;
+        assert_eq!("00:00:00:00:00:00", addr_to_str(addr.try_into().unwrap()))
+    }
+
+    #[test]
+    fn test_small_addr_to_str_succeeds() {
+        let addr: u64 = 123;
+        assert_eq!("00:00:00:00:00:7b", addr_to_str(addr.try_into().unwrap()))
     }
 }

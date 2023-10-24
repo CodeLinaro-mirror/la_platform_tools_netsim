@@ -16,7 +16,7 @@
 
 #include <cstdint>
 
-#include "netsim-daemon/src/lib.rs.h"
+#include "netsim-daemon/src/ffi.rs.h"
 #include "packets/link_layer_packets.h"
 #include "phy.h"
 #include "rust/cxx.h"
@@ -36,51 +36,10 @@ void RustDevice::ReceiveLinkLayerPacket(
       static_cast<int8_t>(packet.GetType()), slice);
 }
 
-void RustBluetoothChip::SendLinkLayerPacket(
-    const rust::Slice<const uint8_t> packet, uint8_t type,
-    int8_t tx_power) const {
+void RustBluetoothChip::SendLinkLayerLePacket(
+    const rust::Slice<const uint8_t> packet, int8_t tx_power) const {
   std::vector<uint8_t> buffer(packet.begin(), packet.end());
-  rust_device->SendLinkLayerPacket(buffer, rootcanal::Phy::Type(type),
+  rust_device->SendLinkLayerPacket(buffer, rootcanal::Phy::Type::LOW_ENERGY,
                                    tx_power);
 }
-
-rust::Vec<uint8_t> GenerateAdvertisingPacket(
-    const rust::String &address, const rust::Slice<const uint8_t> packet) {
-  std::vector<uint8_t> buffer(packet.begin(), packet.end());
-  rootcanal::Address rootcanal_address;
-  rootcanal::Address::FromString(std::string(address), rootcanal_address);
-  auto builder = ::model::packets::LeLegacyAdvertisingPduBuilder::Create(
-      rootcanal_address, rootcanal::Address::kEmpty,
-      ::model::packets::AddressType::PUBLIC,
-      ::model::packets::AddressType::PUBLIC,
-      ::model::packets::LegacyAdvertisingType::ADV_NONCONN_IND, buffer);
-  auto cxx_packet = builder->SerializeToBytes();
-  auto packet_rust = rust::Vec<uint8_t>();
-  std::copy(cxx_packet.begin(), cxx_packet.end(),
-            std::back_inserter(packet_rust));
-  return packet_rust;
-}
-
-rust::Vec<uint8_t> GenerateScanResponsePacket(
-    const rust::String &source_address, const rust::String &destination_address,
-    const rust::Slice<const uint8_t> packet) {
-  std::vector<uint8_t> packet_cxx(packet.begin(), packet.end());
-  rootcanal::Address rootcanal_source_address;
-  rootcanal::Address rootcanal_destination_address;
-  rootcanal::Address::FromString(std::string(source_address),
-                                 rootcanal_source_address);
-  rootcanal::Address::FromString(std::string(destination_address),
-                                 rootcanal_destination_address);
-
-  auto builder = ::model::packets::LeScanResponseBuilder::Create(
-      rootcanal_destination_address, rootcanal_source_address,
-      ::model::packets::AddressType::PUBLIC, packet_cxx);
-
-  auto cxx_packet = builder->SerializeToBytes();
-  auto packet_rust = rust::Vec<uint8_t>();
-  std::copy(cxx_packet.begin(), cxx_packet.end(),
-            std::back_inserter(packet_rust));
-  return packet_rust;
-}
-
 }  // namespace netsim::hci::facade

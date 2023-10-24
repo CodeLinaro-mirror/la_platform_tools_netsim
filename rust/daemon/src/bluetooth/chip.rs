@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::ffi::RustBluetoothChip;
+use crate::ffi::ffi_bluetooth::RustBluetoothChip;
 use cxx::{let_cxx_string, UniquePtr};
 
 /// Rust bluetooth chip trait.
@@ -51,7 +51,7 @@ pub fn rust_bluetooth_add(
 ) -> Box<AddRustDeviceResult> {
     let_cxx_string!(cxx_string_type = string_type);
     let_cxx_string!(cxx_address = address);
-    crate::ffi::bluetooth_add_rust_device(
+    crate::ffi::ffi_bluetooth::bluetooth_add_rust_device(
         device_id,
         Box::new(callbacks),
         &cxx_string_type,

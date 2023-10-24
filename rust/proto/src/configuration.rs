@@ -572,6 +572,8 @@ pub struct VendorFeatures {
     // message fields
     // @@protoc_insertion_point(field:rootcanal.configuration.VendorFeatures.csr)
     pub csr: ::std::option::Option<bool>,
+    // @@protoc_insertion_point(field:rootcanal.configuration.VendorFeatures.android)
+    pub android: ::std::option::Option<bool>,
     // special fields
     // @@protoc_insertion_point(special_field:rootcanal.configuration.VendorFeatures.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -607,13 +609,37 @@ impl VendorFeatures {
         self.csr = ::std::option::Option::Some(v);
     }
 
+    // optional bool android = 2;
+
+    pub fn android(&self) -> bool {
+        self.android.unwrap_or(false)
+    }
+
+    pub fn clear_android(&mut self) {
+        self.android = ::std::option::Option::None;
+    }
+
+    pub fn has_android(&self) -> bool {
+        self.android.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_android(&mut self, v: bool) {
+        self.android = ::std::option::Option::Some(v);
+    }
+
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut fields = ::std::vec::Vec::with_capacity(2);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "csr",
             |m: &VendorFeatures| { &m.csr },
             |m: &mut VendorFeatures| { &mut m.csr },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "android",
+            |m: &VendorFeatures| { &m.android },
+            |m: &mut VendorFeatures| { &mut m.android },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<VendorFeatures>(
             "VendorFeatures",
@@ -636,6 +662,9 @@ impl ::protobuf::Message for VendorFeatures {
                 8 => {
                     self.csr = ::std::option::Option::Some(is.read_bool()?);
                 },
+                16 => {
+                    self.android = ::std::option::Option::Some(is.read_bool()?);
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -651,6 +680,9 @@ impl ::protobuf::Message for VendorFeatures {
         if let Some(v) = self.csr {
             my_size += 1 + 1;
         }
+        if let Some(v) = self.android {
+            my_size += 1 + 1;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -659,6 +691,9 @@ impl ::protobuf::Message for VendorFeatures {
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         if let Some(v) = self.csr {
             os.write_bool(1, v)?;
+        }
+        if let Some(v) = self.android {
+            os.write_bool(2, v)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -678,12 +713,14 @@ impl ::protobuf::Message for VendorFeatures {
 
     fn clear(&mut self) {
         self.csr = ::std::option::Option::None;
+        self.android = ::std::option::Option::None;
         self.special_fields.clear();
     }
 
     fn default_instance() -> &'static VendorFeatures {
         static instance: VendorFeatures = VendorFeatures {
             csr: ::std::option::Option::None,
+            android: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -1311,20 +1348,21 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     _acl_data_before_connection_complete\x18\x01\x20\x01(\x08R#sendAclDataBe\
     foreConnectionComplete\x12;\n\x1ahas_default_random_address\x18\x02\x20\
     \x01(\x08R\x17hasDefaultRandomAddress\x12=\n\x1bhardware_error_before_re\
-    set\x18\x03\x20\x01(\x08R\x18hardwareErrorBeforeReset\"\"\n\x0eVendorFea\
-    tures\x12\x10\n\x03csr\x18\x01\x20\x01(\x08R\x03csr\"\xb4\x02\n\nControl\
-    ler\x12A\n\x06preset\x18\x01\x20\x01(\x0e2).rootcanal.configuration.Cont\
-    rollerPresetR\x06preset\x12G\n\x08features\x18\x02\x20\x01(\x0b2+.rootca\
-    nal.configuration.ControllerFeaturesR\x08features\x12A\n\x06quirks\x18\
-    \x03\x20\x01(\x0b2).rootcanal.configuration.ControllerQuirksR\x06quirks\
-    \x12\x16\n\x06strict\x18\x04\x20\x01(\x08R\x06strict\x12?\n\x06vendor\
-    \x18\x05\x20\x01(\x0b2'.rootcanal.configuration.VendorFeaturesR\x06vendo\
-    r\"q\n\tTcpServer\x12\x19\n\x08tcp_port\x18\x01\x20\x02(\x05R\x07tcpPort\
-    \x12I\n\rconfiguration\x18\x02\x20\x01(\x0b2#.rootcanal.configuration.Co\
-    ntrollerR\rconfiguration\"R\n\rConfiguration\x12A\n\ntcp_server\x18\x01\
-    \x20\x03(\x0b2\".rootcanal.configuration.TcpServerR\ttcpServer*H\n\x10Co\
-    ntrollerPreset\x12\x0b\n\x07DEFAULT\x10\0\x12\x0f\n\x0bLAIRD_BL654\x10\
-    \x01\x12\x16\n\x12CSR_RCK_PTS_DONGLE\x10\x02B\x02H\x02\
+    set\x18\x03\x20\x01(\x08R\x18hardwareErrorBeforeReset\"<\n\x0eVendorFeat\
+    ures\x12\x10\n\x03csr\x18\x01\x20\x01(\x08R\x03csr\x12\x18\n\x07android\
+    \x18\x02\x20\x01(\x08R\x07android\"\xb4\x02\n\nController\x12A\n\x06pres\
+    et\x18\x01\x20\x01(\x0e2).rootcanal.configuration.ControllerPresetR\x06p\
+    reset\x12G\n\x08features\x18\x02\x20\x01(\x0b2+.rootcanal.configuration.\
+    ControllerFeaturesR\x08features\x12A\n\x06quirks\x18\x03\x20\x01(\x0b2).\
+    rootcanal.configuration.ControllerQuirksR\x06quirks\x12\x16\n\x06strict\
+    \x18\x04\x20\x01(\x08R\x06strict\x12?\n\x06vendor\x18\x05\x20\x01(\x0b2'\
+    .rootcanal.configuration.VendorFeaturesR\x06vendor\"q\n\tTcpServer\x12\
+    \x19\n\x08tcp_port\x18\x01\x20\x02(\x05R\x07tcpPort\x12I\n\rconfiguratio\
+    n\x18\x02\x20\x01(\x0b2#.rootcanal.configuration.ControllerR\rconfigurat\
+    ion\"R\n\rConfiguration\x12A\n\ntcp_server\x18\x01\x20\x03(\x0b2\".rootc\
+    anal.configuration.TcpServerR\ttcpServer*H\n\x10ControllerPreset\x12\x0b\
+    \n\x07DEFAULT\x10\0\x12\x0f\n\x0bLAIRD_BL654\x10\x01\x12\x16\n\x12CSR_RC\
+    K_PTS_DONGLE\x10\x02B\x02H\x02\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

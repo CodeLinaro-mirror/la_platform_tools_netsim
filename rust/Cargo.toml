@@ -13,9 +13,8 @@
 # limitations under the License.
 
 [workspace]
-
+edition = "2021"
 members = [
-    "frontend-client-cxx",
     "proto",
     "cli",
     "common",
