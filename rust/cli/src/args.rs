@@ -21,15 +21,15 @@ use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::common::ChipKind;
 use netsim_proto::frontend;
 use netsim_proto::frontend::patch_capture_request::PatchCapture as PatchCaptureProto;
-use netsim_proto::model::chip::bluetooth_beacon::advertise_settings::{
+use netsim_proto::model::chip::ble_beacon::advertise_settings::{
     AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
     Interval as IntervalProto, Tx_power as TxPowerProto,
 };
-use netsim_proto::model::chip::bluetooth_beacon::{
+use netsim_proto::model::chip::ble_beacon::{
     AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
 };
 use netsim_proto::model::chip::{
-    Bluetooth as Chip_Bluetooth, BluetoothBeacon as Chip_Ble_Beacon, Chip as Chip_Type,
+    BleBeacon as Chip_Ble_Beacon, Bluetooth as Chip_Bluetooth, Chip as Chip_Type,
     Radio as Chip_Radio,
 };
 use netsim_proto::model::{
@@ -168,7 +168,7 @@ impl Command {
                                 name: args.chip_name.clone().unwrap_or_default(),
                                 kind: ChipKind::BLUETOOTH_BEACON.into(),
                                 chip: Some(chip_create::Chip::BleBeacon(
-                                    chip_create::BluetoothBeaconCreate {
+                                    chip_create::BleBeaconCreate {
                                         address: args.address.clone().unwrap_or_default(),
                                         settings: MessageField::some((&args.settings).into()),
                                         adv_data: MessageField::some((&args.advertise_data).into()),

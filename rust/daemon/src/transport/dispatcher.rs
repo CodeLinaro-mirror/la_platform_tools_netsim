@@ -72,7 +72,7 @@ pub fn register_transport(kind: u32, facade_id: u32, mut responder: Box<dyn Resp
         }
         Err(_) => panic!("register_transport: poisoned lock"),
     }
-    let _ = thread::Builder::new().name("transport writer {key}".to_string()).spawn(move || {
+    let _ = thread::Builder::new().name("transport_writer_{key}".to_string()).spawn(move || {
         info!("register_transport: started thread chip_kind/facade_id: {key}");
         loop {
             match rx.recv() {

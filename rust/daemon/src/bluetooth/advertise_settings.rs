@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use super::packets::link_layer::LegacyAdvertisingType;
-use netsim_proto::model::chip::bluetooth_beacon::{
+use netsim_proto::model::chip::ble_beacon::{
     advertise_settings::{
         AdvertiseMode as Mode, AdvertiseTxPower as Level, Interval as IntervalProto,
         Tx_power as TxPowerProto,

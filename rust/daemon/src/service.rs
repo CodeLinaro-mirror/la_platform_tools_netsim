@@ -184,18 +184,18 @@ pub fn new_test_beacon(idx: u32, interval: u64) {
     use crate::devices::devices_handler::create_device;
     use netsim_proto::common::ChipKind;
     use netsim_proto::frontend::CreateDeviceRequest;
-    use netsim_proto::model::chip::bluetooth_beacon::{
+    use netsim_proto::model::chip::ble_beacon::{
         AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
     };
     use netsim_proto::model::chip_create::{
-        BluetoothBeaconCreate as BluetoothBeaconCreateProto, Chip as ChipProto,
+        BleBeaconCreate as BleBeaconCreateProto, Chip as ChipProto,
     };
     use netsim_proto::model::ChipCreate as ChipCreateProto;
     use netsim_proto::model::DeviceCreate as DeviceCreateProto;
     use protobuf::MessageField;
     use protobuf_json_mapping::print_to_string;
 
-    let beacon_proto = BluetoothBeaconCreateProto {
+    let beacon_proto = BleBeaconCreateProto {
         address: format!("be:ac:01:be:ef:{:02x}", idx),
         settings: MessageField::some(AdvertiseSettingsProto {
             interval: Some(

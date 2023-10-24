@@ -151,7 +151,7 @@ pub fn add_chip(
                     &chip_create_proto.address,
                     &chip_create_proto.bt_properties,
                 ),
-                ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::bluetooth_beacon_add(
+                ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::ble_beacon_add(
                     device_id,
                     String::from(device_name),
                     chip_id,
@@ -354,7 +354,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                         wifi_facade::wifi_remove(facade_id);
                     }
                     ProtoChipKind::BLUETOOTH_BEACON => {
-                        bluetooth_facade::bluetooth_beacon_remove(device_id, chip_id, facade_id)?;
+                        bluetooth_facade::ble_beacon_remove(device_id, chip_id, facade_id)?;
                     }
                     _ => Err(format!("Unknown chip kind: {:?}", chip_kind))?,
                 },
@@ -1252,16 +1252,16 @@ mod tests {
     }
 
     use netsim_proto::model::chip::{
-        bluetooth_beacon::AdvertiseData, bluetooth_beacon::AdvertiseSettings, BluetoothBeacon, Chip,
+        ble_beacon::AdvertiseData, ble_beacon::AdvertiseSettings, BleBeacon, Chip,
     };
-    use netsim_proto::model::chip_create::{BluetoothBeaconCreate, Chip as BuiltChipProto};
+    use netsim_proto::model::chip_create::{BleBeaconCreate, Chip as BuiltChipProto};
     use netsim_proto::model::Chip as ChipProto;
     use netsim_proto::model::ChipCreate;
     use netsim_proto::model::Device as DeviceProto;
     use protobuf::{EnumOrUnknown, MessageField};
 
     fn get_test_create_device_request(device_name: Option<String>) -> CreateDeviceRequest {
-        let beacon_proto = BluetoothBeaconCreate {
+        let beacon_proto = BleBeaconCreate {
             settings: MessageField::some(AdvertiseSettings { ..Default::default() }),
             adv_data: MessageField::some(AdvertiseData { ..Default::default() }),
             ..Default::default()
@@ -1425,7 +1425,7 @@ mod tests {
             chips: vec![ChipProto {
                 name: request.device.chips[0].name.clone(),
                 kind: EnumOrUnknown::new(ProtoChipKind::BLUETOOTH_BEACON),
-                chip: Some(Chip::BleBeacon(BluetoothBeacon {
+                chip: Some(Chip::BleBeacon(BleBeacon {
                     bt: MessageField::some(Default::default()),
                     ..Default::default()
                 })),

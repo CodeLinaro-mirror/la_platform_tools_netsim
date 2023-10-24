@@ -105,7 +105,7 @@ impl Chip {
                 }
                 ProtoChipKind::BLUETOOTH_BEACON => {
                     stats.set_kind(netsim_radio_stats::Kind::BT_LE_BEACON);
-                    if let Ok(beacon) = bluetooth_facade::bluetooth_beacon_get(self.id, facade_id) {
+                    if let Ok(beacon) = bluetooth_facade::ble_beacon_get(self.id, facade_id) {
                         stats.set_tx_count(beacon.bt.low_energy.tx_count);
                         stats.set_rx_count(beacon.bt.low_energy.rx_count);
                     } else {
@@ -142,7 +142,7 @@ impl Chip {
                 chip.set_bt(bluetooth_facade::bluetooth_get(facade_id));
             }
             (Ok(ProtoChipKind::BLUETOOTH_BEACON), Some(facade_id)) => {
-                chip.set_ble_beacon(bluetooth_facade::bluetooth_beacon_get(self.id, facade_id)?);
+                chip.set_ble_beacon(bluetooth_facade::ble_beacon_get(self.id, facade_id)?);
             }
             (Ok(ProtoChipKind::WIFI), Some(facade_id)) => {
                 chip.set_wifi(wifi_facade::wifi_get(facade_id));
@@ -179,11 +179,7 @@ impl Chip {
                     && patch.has_ble_beacon()
                     && patch.ble_beacon().bt.is_some()
                 {
-                    bluetooth_facade::bluetooth_beacon_patch(
-                        facade_id,
-                        self.id,
-                        patch.ble_beacon(),
-                    )?;
+                    bluetooth_facade::ble_beacon_patch(facade_id, self.id, patch.ble_beacon())?;
                     Ok(())
                 } else if self.kind == ProtoChipKind::WIFI && patch.has_wifi() {
                     wifi_facade::wifi_patch(facade_id, patch.wifi());
