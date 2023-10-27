@@ -79,10 +79,8 @@ std::pair<std::unique_ptr<grpc::Server>, uint32_t> RunGrpcServer(
 }  // namespace
 
 std::unique_ptr<GrpcServer> RunGrpcServerCxx(uint32_t netsim_grpc_port,
-                                             bool no_cli_ui,
-                                             uint16_t vsock) {
-  auto [grpc_server, port] =
-      RunGrpcServer(netsim_grpc_port, no_cli_ui, vsock);
+                                             bool no_cli_ui, uint16_t vsock) {
+  auto [grpc_server, port] = RunGrpcServer(netsim_grpc_port, no_cli_ui, vsock);
   if (grpc_server == nullptr) return nullptr;
   return std::make_unique<GrpcServer>(std::move(grpc_server), port);
 }

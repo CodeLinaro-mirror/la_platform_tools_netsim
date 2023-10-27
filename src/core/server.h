@@ -38,7 +38,6 @@ class GrpcServer {
 
 // Run grpc server.
 std::unique_ptr<GrpcServer> RunGrpcServerCxx(uint32_t netsim_grpc_port,
-                                             bool no_cli_ui,
-                                             uint16_t vsock);
+                                             bool no_cli_ui, uint16_t vsock);
 
 }  // namespace netsim::server

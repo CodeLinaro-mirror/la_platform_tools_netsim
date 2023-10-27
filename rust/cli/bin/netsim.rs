@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Version library.
+//! Command Line Interface for Netsim
+extern crate netsim_cli;
 
-pub const VERSION: &str = "0.1.3";
-
-pub fn get_version() -> String {
-    VERSION.to_owned()
+fn main() {
+    netsim_cli::rust_main();
 }
