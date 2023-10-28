@@ -38,14 +38,6 @@ const DISCOVERY: DiscoveryDir = DiscoveryDir { root_env: "LOCALAPPDATA", subdir:
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 compile_error!("netsim only supports linux, Mac, and Windows");
 
-/// Get the environment variable of name and return default_value if it does not have name
-pub fn get_env(name: &'static str, default_value: &'static str) -> String {
-    match std::env::var(name) {
-        Ok(value) => value,
-        Err(_) => default_value.to_string(),
-    }
-}
-
 /// Get discovery directory for netsim
 pub fn get_discovery_directory() -> PathBuf {
     // $TMPDIR is the temp directory on buildbots
@@ -146,15 +138,6 @@ pub fn get_hci_port(hci_port_flag: u32, instance: u16) -> u32 {
 mod tests {
 
     use super::*;
-
-    #[test]
-    fn test_get_env() {
-        std::env::set_var("TEST_VARIABLE", "value");
-        let value = get_env("TEST_VARIABLE", "default");
-        assert_eq!(value, "value");
-        let default = get_env("NOT_VARIABLE", "default");
-        assert_eq!(default, "default");
-    }
 
     #[test]
     fn test_get_discovery_directory() {

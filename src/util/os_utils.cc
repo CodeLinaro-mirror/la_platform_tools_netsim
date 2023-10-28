@@ -54,14 +54,6 @@ DiscoveryDir discovery {
 
 }  // namespace
 
-std::string GetEnv(const std::string &name, const std::string &default_value) {
-  auto val = std::getenv(name.c_str());
-  if (!val) {
-    return default_value;
-  }
-  return val;
-}
-
 std::string GetDiscoveryDirectory() {
   // $TMPDIR is the temp directory on buildbots.
   const char *test_env_p = std::getenv("TMPDIR");
@@ -101,15 +93,6 @@ std::optional<std::string> GetServerAddress(uint16_t instance_num) {
   IniFile iniFile(filepath);
   iniFile.Read();
   return iniFile.Get("grpc.port");
-}
-
-bool is_stderr_open() {
-  // TODO: Use `is_terminal` method in `IsTerminal` trait in Rust.
-#if defined(_WIN32)
-  return GetStdHandle(STD_ERROR_HANDLE) != INVALID_HANDLE_VALUE;
-#else
-  return fcntl(STDERR_FILENO, F_GETFD) != -1;
-#endif
 }
 
 void RedirectStdStream(const std::string &netsim_temp_dir_const) {
