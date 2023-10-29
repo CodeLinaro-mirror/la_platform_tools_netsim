@@ -43,7 +43,7 @@ namespace {
 constexpr std::chrono::seconds InactivityCheckInterval(5);
 
 std::pair<std::unique_ptr<grpc::Server>, uint32_t> RunGrpcServer(
-    int netsim_grpc_port, bool no_cli_ui, int instance_num, int vsock) {
+    int netsim_grpc_port, bool no_cli_ui, int vsock) {
   grpc::ServerBuilder builder;
   int selected_port;
   builder.AddListeningPort("0.0.0.0:" + std::to_string(netsim_grpc_port),
@@ -80,10 +80,9 @@ std::pair<std::unique_ptr<grpc::Server>, uint32_t> RunGrpcServer(
 
 std::unique_ptr<GrpcServer> RunGrpcServerCxx(uint32_t netsim_grpc_port,
                                              bool no_cli_ui,
-                                             uint16_t instance_num,
                                              uint16_t vsock) {
   auto [grpc_server, port] =
-      RunGrpcServer(netsim_grpc_port, no_cli_ui, instance_num, vsock);
+      RunGrpcServer(netsim_grpc_port, no_cli_ui, vsock);
   if (grpc_server == nullptr) return nullptr;
   return std::make_unique<GrpcServer>(std::move(grpc_server), port);
 }

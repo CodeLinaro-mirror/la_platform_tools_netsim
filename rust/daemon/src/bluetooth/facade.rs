@@ -54,9 +54,13 @@ pub fn bluetooth_add(
 }
 
 /// Starts the Bluetooth service.
-pub fn bluetooth_start(config: &MessageField<BluetoothConfig>, instance_num: u16) {
+pub fn bluetooth_start(
+    config: &MessageField<BluetoothConfig>,
+    instance_num: u16,
+    disable_address_reuse: bool,
+) {
     let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
-    ffi_bluetooth::bluetooth_start(&proto_bytes, instance_num);
+    ffi_bluetooth::bluetooth_start(&proto_bytes, instance_num, disable_address_reuse);
 }
 
 /// Stops the Bluetooth service.

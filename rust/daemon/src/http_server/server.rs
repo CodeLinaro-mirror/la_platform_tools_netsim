@@ -25,7 +25,7 @@ const DEFAULT_HTTP_PORT: u16 = 7681;
 /// Start the HTTP Server.
 
 pub fn run_http_server(instance_num: u16) -> u16 {
-    let http_port = DEFAULT_HTTP_PORT + instance_num;
+    let http_port = DEFAULT_HTTP_PORT + instance_num - 1;
     let _ = thread::Builder::new().name("http_server".to_string()).spawn(move || {
         let listener = match TcpListener::bind(format!("127.0.0.1:{}", http_port)) {
             Ok(listener) => listener,

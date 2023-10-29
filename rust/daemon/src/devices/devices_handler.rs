@@ -34,11 +34,11 @@ use crate::ffi::ffi_response_writable::CxxServerResponseWriter;
 use crate::ffi::CxxServerResponseWriterWrapper;
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource;
-use crate::resource::clone_devices;
 use crate::wifi as wifi_facade;
 use cxx::{CxxString, CxxVector};
 use http::Request;
 use http::Version;
+use lazy_static::lazy_static;
 use log::{info, warn};
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::configuration::Controller;
@@ -61,6 +61,8 @@ use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::RwLockWriteGuard;
 use std::time::{Duration, Instant};
 
@@ -75,15 +77,23 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     _future_options: (),
 };
 
+lazy_static! {
+    static ref DEVICES: Arc<RwLock<Devices>> = Arc::new(RwLock::new(Devices::new()));
+}
+
+fn get_devices() -> Arc<RwLock<Devices>> {
+    Arc::clone(&DEVICES)
+}
+
 /// The Device resource is a singleton that manages all devices.
-pub struct Devices {
+struct Devices {
     // BTreeMap allows ListDevice to output devices in order of identifiers.
     entries: BTreeMap<DeviceIdentifier, Device>,
     id_factory: IdFactory<DeviceIdentifier>,
 }
 
 impl Devices {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Devices { entries: BTreeMap::new(), id_factory: IdFactory::new(INITIAL_DEVICE_ID, 1) }
     }
 }
@@ -107,7 +117,7 @@ pub fn add_chip(
 ) -> Result<AddChipResult, String> {
     let chip_kind = chip_create_proto.kind.enum_value_or(ProtoChipKind::UNSPECIFIED);
     let result = {
-        let devices_arc = clone_devices();
+        let devices_arc = get_devices();
         let mut devices = devices_arc.write().unwrap();
         let (device_id, _) =
             get_or_create_device(&mut devices, Some(device_guid), Some(device_name));
@@ -149,7 +159,7 @@ pub fn add_chip(
             };
             // Add the facade_id into the resources
             {
-                clone_devices()
+                get_devices()
                     .write()
                     .unwrap()
                     .entries
@@ -305,7 +315,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
     let result = {
         let mut _facade_id_option: Option<FacadeIdentifier> = None;
         let mut _chip_kind = ProtoChipKind::UNSPECIFIED;
-        let devices_arc = clone_devices();
+        let devices_arc = get_devices();
         let mut devices = devices_arc.write().unwrap();
         let is_empty = match devices.entries.entry(device_id) {
             Entry::Occupied(mut entry) => {
@@ -363,7 +373,7 @@ pub fn delete_chip(delete_json: &str) -> Result<(), String> {
     };
 
     let device_id = {
-        let devices_arc = clone_devices();
+        let devices_arc = get_devices();
         let devices = devices_arc.read().unwrap();
         devices
             .entries
@@ -395,7 +405,7 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
     }
 
     let new_device = create_device_request.device;
-    let devices_arc = clone_devices();
+    let devices_arc = get_devices();
     let mut devices = devices_arc.write().unwrap();
     // Check if specified device name is already mapped.
     if new_device.name != String::default()
@@ -436,7 +446,7 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
 fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result<(), String> {
     let mut patch_device_request = PatchDeviceRequest::new();
     if merge_from_str(&mut patch_device_request, patch_json).is_ok() {
-        let devices_arc = clone_devices();
+        let devices_arc = get_devices();
         let mut devices = devices_arc.write().unwrap();
         let proto_device = patch_device_request.device;
         match id_option {
@@ -508,7 +518,7 @@ fn distance(a: &ProtoPosition, b: &ProtoPosition) -> f32 {
 
 #[allow(dead_code)]
 fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32, String> {
-    let devices_arc = clone_devices();
+    let devices_arc = get_devices();
     let devices = devices_arc.read().unwrap();
     let a = devices
         .entries
@@ -536,10 +546,10 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
 }
 
 #[allow(dead_code)]
-pub fn get_devices() -> Result<ProtoScene, String> {
+pub fn get_devices_proto() -> Result<ProtoScene, String> {
     let mut scene = ProtoScene::new();
     // iterate over the devices and add each to the scene
-    let devices_arc = clone_devices();
+    let devices_arc = get_devices();
     let devices = devices_arc.read().unwrap();
     for device in devices.entries.values() {
         scene.devices.push(device.get()?);
@@ -548,7 +558,7 @@ pub fn get_devices() -> Result<ProtoScene, String> {
 }
 
 fn reset_all() -> Result<(), String> {
-    let devices_arc = clone_devices();
+    let devices_arc = get_devices();
     let mut devices = devices_arc.write().unwrap();
     for device in devices.entries.values_mut() {
         device.reset()?;
@@ -567,7 +577,7 @@ fn handle_device_create(writer: ResponseWritable, create_json: &str) {
     let mut collate_results = || {
         let id = create_device(create_json)?;
 
-        let devices_arc = clone_devices();
+        let devices_arc = get_devices();
         let devices = devices_arc.read().unwrap();
         let device_proto = devices.entries.get(&id).ok_or("failed to create device")?.get()?;
         response.device = MessageField::some(device_proto);
@@ -597,7 +607,7 @@ fn handle_chip_delete(writer: ResponseWritable, delete_json: &str) {
 
 /// Performs ListDevices to get the list of Devices and write to writer.
 fn handle_device_list(writer: ResponseWritable) {
-    let devices_arc = clone_devices();
+    let devices_arc = get_devices();
     let devices = devices_arc.read().unwrap();
     // Instantiate ListDeviceResponse and add Devices
     let mut response = ListDeviceResponse::new();
@@ -717,7 +727,7 @@ pub fn handle_device_cxx(
 /// Get Facade ID from given chip_id
 #[allow(dead_code)]
 pub fn get_facade_id(chip_id: u32) -> Result<u32, String> {
-    let devices_arc = clone_devices();
+    let devices_arc = get_devices();
     let devices = devices_arc.read().unwrap();
     for device in devices.entries.values() {
         for (id, chip) in &device.chips {
@@ -841,7 +851,7 @@ mod tests {
         }
 
         fn get_or_create_device(&self) -> DeviceIdentifier {
-            let devices_arc = clone_devices();
+            let devices_arc = get_devices();
             let mut devices = devices_arc.write().unwrap();
             super::get_or_create_device(
                 &mut devices,
@@ -895,7 +905,7 @@ mod tests {
     }
 
     fn reset(id: DeviceIdentifier) -> Result<(), String> {
-        let devices_arc = clone_devices();
+        let devices_arc = get_devices();
         let mut devices = devices_arc.write().unwrap();
         match devices.entries.get_mut(&id) {
             Some(device) => device.reset(),
@@ -921,7 +931,7 @@ mod tests {
         // Adding a chip
         let chip_params = test_chip_1_bt();
         let chip_result = chip_params.add_chip().unwrap();
-        match clone_devices().read().unwrap().entries.get(&chip_result.device_id) {
+        match get_devices().read().unwrap().entries.get(&chip_result.device_id) {
             Some(device) => {
                 let chip = device.chips.get(&chip_result.chip_id).unwrap();
                 assert_eq!(chip_params.chip_kind, chip.kind);
@@ -975,7 +985,7 @@ mod tests {
         patch_device_request.device = Some(proto_device.clone()).into();
         let patch_json = print_to_string(&patch_device_request).unwrap();
         patch_device(Some(chip_result.device_id), patch_json.as_str()).unwrap();
-        match clone_devices().read().unwrap().entries.get(&chip_result.device_id) {
+        match get_devices().read().unwrap().entries.get(&chip_result.device_id) {
             Some(device) => {
                 assert_eq!(device.position.x, request_position.x);
                 assert_eq!(device.position.y, request_position.y);
@@ -1066,7 +1076,7 @@ mod tests {
         let bt_chip_result = bt_chip_params.add_chip().unwrap();
         let wifi_chip_result = wifi_chip_params.add_chip().unwrap();
         assert_eq!(bt_chip_result.device_id, wifi_chip_result.device_id);
-        let binding = clone_devices();
+        let binding = get_devices();
         let binding = binding.read().unwrap();
         let device = binding.entries.get(&bt_chip_result.device_id).unwrap();
         assert_eq!(device.id, bt_chip_result.device_id);
@@ -1106,7 +1116,7 @@ mod tests {
             print_to_string(&patch_device_request).unwrap().as_str(),
         )
         .unwrap();
-        match clone_devices().read().unwrap().entries.get(&chip_result.device_id) {
+        match get_devices().read().unwrap().entries.get(&chip_result.device_id) {
             Some(device) => {
                 assert_eq!(device.position.x, 10.0);
                 assert_eq!(device.orientation.yaw, 1.0);
@@ -1115,7 +1125,7 @@ mod tests {
             None => unreachable!(),
         }
         reset(chip_result.device_id).unwrap();
-        match clone_devices().read().unwrap().entries.get(&chip_result.device_id) {
+        match get_devices().read().unwrap().entries.get(&chip_result.device_id) {
             Some(device) => {
                 assert_eq!(device.position.x, 0.0);
                 assert_eq!(device.position.y, 0.0);
@@ -1144,7 +1154,7 @@ mod tests {
 
         // Remove a bt chip of first device
         remove_chip(bt_chip_result.device_id, bt_chip_result.chip_id).unwrap();
-        match clone_devices().read().unwrap().entries.get(&bt_chip_result.device_id) {
+        match get_devices().read().unwrap().entries.get(&bt_chip_result.device_id) {
             Some(device) => {
                 assert_eq!(device.chips.len(), 1);
                 assert_eq!(
@@ -1157,11 +1167,11 @@ mod tests {
 
         // Remove a wifi chip of first device
         remove_chip(wifi_chip_result.device_id, wifi_chip_result.chip_id).unwrap();
-        assert!(clone_devices().read().unwrap().entries.get(&wifi_chip_result.device_id).is_none());
+        assert!(get_devices().read().unwrap().entries.get(&wifi_chip_result.device_id).is_none());
 
         // Remove a bt chip of second device
         remove_chip(bt_chip_2_result.device_id, bt_chip_2_result.chip_id).unwrap();
-        assert!(clone_devices().read().unwrap().entries.get(&bt_chip_2_result.device_id).is_none());
+        assert!(get_devices().read().unwrap().entries.get(&bt_chip_2_result.device_id).is_none());
     }
 
     #[test]
@@ -1184,7 +1194,7 @@ mod tests {
             Ok(_) => unreachable!(),
             Err(err) => assert_eq!(err, "RemoveChip device id 9999 not found"),
         }
-        assert!(clone_devices().read().unwrap().entries.get(&bt_chip_result.device_id).is_some());
+        assert!(get_devices().read().unwrap().entries.get(&bt_chip_result.device_id).is_some());
     }
 
     #[test]
@@ -1268,7 +1278,7 @@ mod tests {
     }
 
     fn get_device_proto(id: DeviceIdentifier) -> DeviceProto {
-        let devices = clone_devices();
+        let devices = get_devices();
         let devices_guard = devices.read().unwrap();
         let device =
             devices_guard.entries.get(&id).expect("could not find test bluetooth beacon device");
@@ -1392,7 +1402,7 @@ mod tests {
         assert!(id.is_ok(), "{}", id.unwrap_err());
         let id = id.unwrap();
 
-        let devices = clone_devices();
+        let devices = get_devices();
         let mut devices_guard = devices.write().unwrap();
         let device = devices_guard
             .entries
@@ -1436,7 +1446,7 @@ mod tests {
 
         let device_id = device_id.unwrap();
         let chip_id = {
-            let devices = clone_devices();
+            let devices = get_devices();
             let devices_guard = devices.read().unwrap();
             let device = devices_guard.entries.get(&device_id).unwrap();
             device.chips.first_key_value().map(|(id, _)| *id).unwrap()
@@ -1446,7 +1456,7 @@ mod tests {
         let delete_result = delete_chip(&print_to_string(&delete_request).unwrap());
         assert!(delete_result.is_ok(), "{}", delete_result.unwrap_err());
 
-        let devices = clone_devices();
+        let devices = get_devices();
         let devices_guard = devices.read().unwrap();
         assert!(devices_guard.entries.get(&device_id).is_none())
     }
@@ -1461,7 +1471,7 @@ mod tests {
 
         let device_id = device_id.unwrap();
         let chip_id = {
-            let devices = clone_devices();
+            let devices = get_devices();
             let devices_guard = devices.read().unwrap();
             let device = devices_guard.entries.get(&device_id).unwrap();
             device.chips.first_key_value().map(|(id, _)| *id).unwrap()
