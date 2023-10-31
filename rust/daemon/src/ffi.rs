@@ -26,8 +26,6 @@ use cxx::let_cxx_string;
 use crate::transport::dispatcher::{handle_request_cxx, handle_response};
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 
-use crate::config::get_disable_address_reuse;
-
 use crate::captures::captures_handler::handle_capture_cxx;
 use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
@@ -77,7 +75,6 @@ pub mod ffi_transport {
         pub fn RunGrpcServerCxx(
             netsim_grpc_port: u32,
             no_cli_ui: bool,
-            instance_num: u16,
             vsock: u16,
         ) -> UniquePtr<GrpcServer>;
 
@@ -215,7 +212,7 @@ pub mod ffi_bluetooth {
 
         #[rust_name = bluetooth_start]
         #[namespace = "netsim::hci::facade"]
-        pub fn Start(proto_bytes: &[u8], instance_num: u16);
+        pub fn Start(proto_bytes: &[u8], instance_num: u16, disable_address_reuse: bool);
 
         #[rust_name = bluetooth_stop]
         #[namespace = "netsim::hci::facade"]
@@ -354,12 +351,6 @@ pub mod ffi_util {
 
         #[cxx_name = "GetVersion"]
         fn get_version() -> String;
-
-        // Disable Address Reuse Flag
-
-        #[cxx_name = "GetDisableAddressReuse"]
-        fn get_disable_address_reuse() -> bool;
-
     }
 
     #[allow(dead_code)]

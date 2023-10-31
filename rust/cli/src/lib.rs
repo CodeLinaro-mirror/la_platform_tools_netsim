@@ -23,7 +23,7 @@ mod requests;
 mod response;
 
 use log::error;
-use netsim_common::util::os_utils::get_instance;
+use netsim_common::util::os_utils::{get_instance, get_server_address};
 use netsim_proto::frontend::{DeleteChipRequest, ListDeviceResponse};
 use protobuf::Message;
 use std::env;
@@ -183,13 +183,16 @@ pub extern "C" fn rust_main() {
         return;
     }
     let grpc_method = args.command.grpc_method();
-    let instance_flag = args.instance.unwrap_or_default();
-    let_cxx_string!(vsock = &args.vsock.unwrap_or_default());
-    let client =
-        new_frontend_client(args.port.unwrap_or_default(), get_instance(instance_flag), &vsock);
+    let server = match (args.vsock, args.port) {
+        (Some(vsock), _) => format!("vsock:{vsock}"),
+        (_, Some(port)) => format!("localhost:{port}"),
+        _ => get_server_address(get_instance(args.instance)).unwrap_or_default(),
+    };
+    let_cxx_string!(server = server);
+    let client = new_frontend_client(&server);
     if client.is_null() {
-        if args.port.is_some() {
-            error!("Unable to create frontend client. Please ensure netsimd is running and listening on grpc port {}.", args.port.unwrap_or_default());
+        if !server.is_empty() {
+            error!("Unable to create frontend client. Please ensure netsimd is running and listening on {server:?}.");
         } else {
             error!("Unable to create frontend client. Please ensure netsimd is running.");
         }

@@ -126,7 +126,7 @@ using ::android::net::PosixAsyncSocketServer;
 
 void SetUpTestChannel(uint16_t instance_num) {
   gTestSocketServer = std::make_shared<PosixAsyncSocketServer>(
-      kDefaultTestPort + instance_num, gAsyncManager.get());
+      kDefaultTestPort + instance_num - 1, gAsyncManager.get());
 
   gTestChannel = std::make_unique<rootcanal::TestCommandHandler>(*gTestModel);
 
@@ -168,10 +168,6 @@ void SetUpTestChannel(uint16_t instance_num) {
         return false;
       });
 
-  gTestChannel->AddDevice({"beacon", "be:ac:01:55:00:01", "1000"});
-  gTestChannel->AddDeviceToPhy({"0", "1"});
-  gTestChannel->AddDevice({"beacon", "be:ac:01:55:00:02", "1000"});
-  gTestChannel->AddDeviceToPhy({"1", "1"});
   gTestChannel->SetTimerPeriod({"5"});
   gTestChannel->StartTimer({});
 
@@ -188,7 +184,7 @@ void SetUpTestChannel(uint16_t instance_num) {
 
 // Initialize the rootcanal library.
 void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
-           uint16_t instance_num) {
+           uint16_t instance_num, bool disable_address_reuse) {
   if (gStarted) return;
 
   // output is to a file, so no color wanted
@@ -229,7 +225,7 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
 
   // Disable Address Reuse if '--disable_address_reuse' flag is true
   // TODO: once config files are active, use the value from config proto
-  gTestModel->SetReuseDeviceAddresses(!netsim::GetDisableAddressReuse());
+  gTestModel->SetReuseDeviceAddresses(!disable_address_reuse);
 
   // NOTE: 0:BR_EDR, 1:LOW_ENERGY. The order is used by bluetooth CTS.
   phy_classic_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::BR_EDR);
@@ -366,6 +362,15 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string,
                                 controller_proto_bytes.size());
     BtsLogInfo("device_id: %d has rootcanal Controller configuration: %s",
                simulation_device, custom_proto.ShortDebugString().c_str());
+
+    // When emulators restore from a snapshot the PacketStreamer connection to
+    // netsim is recreated with a new (uninitialized) Rootcanal device. However
+    // the Android Bluetooth Stack does not re-initialize the controller. Our
+    // solution is for Rootcanal to recognize that it is receiving HCI commands
+    // before a HCI Reset. The flag below causes a hardware error event that
+    // triggers the Reset from the Bluetooth Stack.
+    custom_proto.mutable_quirks()->set_hardware_error_before_reset(true);
+
     controller_proto =
         std::make_shared<rootcanal::configuration::Controller>(custom_proto);
   }

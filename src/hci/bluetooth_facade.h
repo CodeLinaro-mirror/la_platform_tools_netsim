@@ -52,7 +52,7 @@ void SetRustDeviceAddress(
 void RemoveRustDevice(uint32_t facade_id);
 
 void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
-           uint16_t instance_num);
+           uint16_t instance_num, bool disable_address_reuse);
 void Stop();
 
 // Cxx functions for rust ffi.

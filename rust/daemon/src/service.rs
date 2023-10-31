@@ -14,7 +14,7 @@
 
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
-use crate::config::{get_dev, set_dev, set_disable_address_reuse, set_pcap};
+use crate::config::{set_dev, set_pcap};
 use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
 use crate::http_server::server::run_http_server;
 use crate::transport::socket::run_socket_transport;
@@ -32,7 +32,6 @@ pub struct ServiceParams {
     no_cli_ui: bool,
     no_web_ui: bool,
     pcap: bool,
-    disable_address_reuse: bool,
     hci_port: u16,
     instance_num: u16,
     dev: bool,
@@ -46,7 +45,6 @@ impl ServiceParams {
         no_cli_ui: bool,
         no_web_ui: bool,
         pcap: bool,
-        disable_address_reuse: bool,
         hci_port: u16,
         instance_num: u16,
         dev: bool,
@@ -57,7 +55,6 @@ impl ServiceParams {
             no_cli_ui,
             no_web_ui,
             pcap,
-            disable_address_reuse,
             hci_port,
             instance_num,
             dev,
@@ -89,7 +86,6 @@ impl Service {
         }
         set_pcap(self.service_params.pcap);
         set_dev(self.service_params.dev);
-        set_disable_address_reuse(self.service_params.disable_address_reuse);
     }
 
     /// Runs netsim gRPC server
@@ -101,7 +97,6 @@ impl Service {
         let grpc_server = run_grpc_server_cxx(
             netsim_grpc_port,
             self.service_params.no_cli_ui,
-            self.service_params.instance_num,
             self.service_params.vsock,
         );
         match grpc_server.is_null() {
@@ -164,12 +159,6 @@ impl Service {
 
         // Run the socket server.
         run_socket_transport(self.service_params.hci_port);
-
-        // Create two beacon devices if in dev mode.
-        if get_dev() {
-            new_test_beacon(0);
-            new_test_beacon(1);
-        }
     }
 
     /// Shut down the netsimd services
@@ -182,7 +171,7 @@ impl Service {
 }
 
 /// Constructing test beacons for dev mode
-pub fn new_test_beacon(idx: u32) {
+pub fn new_test_beacon(idx: u32, interval: u64) {
     use crate::devices::devices_handler::create_device;
     use netsim_proto::common::ChipKind;
     use netsim_proto::frontend::CreateDeviceRequest;
@@ -201,7 +190,7 @@ pub fn new_test_beacon(idx: u32) {
         address: format!("be:ac:01:be:ef:{:02x}", idx),
         settings: MessageField::some(AdvertiseSettingsProto {
             interval: Some(
-                ble_advertise_settings::AdvertiseMode::new(Duration::from_millis(1280))
+                ble_advertise_settings::AdvertiseMode::new(Duration::from_millis(interval))
                     .try_into()
                     .unwrap(),
             ),
@@ -210,7 +199,9 @@ pub fn new_test_beacon(idx: u32) {
         }),
         adv_data: MessageField::some(AdvertiseDataProto {
             include_device_name: true,
-            include_tx_power_level: true,
+            ..Default::default()
+        }),
+        scan_response: MessageField::some(AdvertiseDataProto {
             manufacturer_data: vec![1u8, 2, 3, 4],
             ..Default::default()
         }),
@@ -218,14 +209,14 @@ pub fn new_test_beacon(idx: u32) {
     };
 
     let chip_proto = ChipCreateProto {
-        name: format!("beacon-{idx}"),
+        name: "gDevice-beacon".into(),
         kind: ChipKind::BLUETOOTH_BEACON.into(),
         chip: Some(ChipProto::BleBeacon(beacon_proto)),
         ..Default::default()
     };
 
     let device_proto = DeviceCreateProto {
-        name: format!("device-{idx}"),
+        name: "gDdevice-beacon".into(),
         chips: vec![chip_proto],
         ..Default::default()
     };

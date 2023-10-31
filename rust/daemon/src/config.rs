@@ -18,7 +18,6 @@ use std::sync::{Once, RwLock};
 
 static SET_DEV_CALLED: Once = Once::new();
 static SET_PCAP_CALLED: Once = Once::new();
-static SET_DISABLE_ADDRESS_REUSE_CALLED: Once = Once::new();
 
 lazy_static! {
     static ref CONFIG: RwLock<Config> = RwLock::new(Config::new());
@@ -27,12 +26,11 @@ lazy_static! {
 struct Config {
     pub dev: Option<bool>,
     pub pcap: Option<bool>,
-    pub disable_address_reuse: Option<bool>,
 }
 
 impl Config {
     pub fn new() -> Self {
-        Self { dev: None, pcap: None, disable_address_reuse: None }
+        Self { dev: None, pcap: None }
     }
 }
 
@@ -61,20 +59,6 @@ pub fn set_pcap(flag: bool) {
     SET_PCAP_CALLED.call_once(|| {
         let mut config = CONFIG.write().unwrap();
         config.pcap = Some(flag);
-    });
-}
-
-/// Get the flag of disable_address_reuse
-pub fn get_disable_address_reuse() -> bool {
-    let config = CONFIG.read().unwrap();
-    config.disable_address_reuse.unwrap_or(false)
-}
-
-/// Set the flag of disable_address_reuse
-pub fn set_disable_address_reuse(flag: bool) {
-    SET_DISABLE_ADDRESS_REUSE_CALLED.call_once(|| {
-        let mut config = CONFIG.write().unwrap();
-        config.disable_address_reuse = Some(flag);
     });
 }
 
@@ -108,19 +92,5 @@ mod tests {
         // Check if set_pcap can only be called once
         set_pcap(false);
         assert!(get_pcap());
-    }
-
-    #[test]
-    fn test_disable_address_reuse() {
-        // Check if default disable_address_reuse boolean is false
-        assert!(!get_disable_address_reuse());
-
-        // Check if set_disable_address_reuse changes the flag to true
-        set_disable_address_reuse(true);
-        assert!(get_disable_address_reuse());
-
-        // Check if set_disable_address_reuse can only be called once
-        set_disable_address_reuse(false);
-        assert!(get_disable_address_reuse());
     }
 }

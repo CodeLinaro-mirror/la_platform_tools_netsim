@@ -21,7 +21,6 @@ use log::{error, info, warn};
 
 use super::ini_file::IniFile;
 
-const DEFAULT_INSTANCE: u16 = 0;
 const DEFAULT_HCI_PORT: u32 = 6402;
 
 struct DiscoveryDir {
@@ -67,7 +66,7 @@ pub fn get_discovery_directory() -> PathBuf {
 /// Get the filepath of netsim.ini under discovery directory
 pub fn get_netsim_ini_filepath(instance_num: u16) -> PathBuf {
     let mut discovery_dir = get_discovery_directory();
-    let filename = if instance_num == 0 {
+    let filename = if instance_num == 1 {
         "netsim.ini".to_string()
     } else {
         format!("netsim_{instance_num}.ini")
@@ -108,19 +107,22 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
     })
 }
 
-/// Get the number of netsim instances
-pub fn get_instance(instance_flag: u16) -> u16 {
-    // The following priorities are used to determine the instance number:
-    //
-    // 1. The environment variable `NETSIM_INSTANCE`.
-    // 2. The CLI flag `--instance`.
-    // 3. The default value `DEFAULT_INSTANCE`.
-    if let Ok(netsim_instance) = std::env::var("NETSIM_INSTANCE") {
-        netsim_instance.parse::<u16>().unwrap()
-    } else if instance_flag != 0 {
-        instance_flag
-    } else {
-        DEFAULT_INSTANCE
+const DEFAULT_INSTANCE: u16 = 1;
+
+/// Get the netsim instance number which is always > 0
+///
+/// The following priorities are used to determine the instance number:
+///
+/// 1. The environment variable `NETSIM_INSTANCE`.
+/// 2. The CLI flag `--instance`.
+/// 3. The default value `DEFAULT_INSTANCE`.
+pub fn get_instance(instance_flag: Option<u16>) -> u16 {
+    let instance_env: Option<u16> =
+        std::env::var("NETSIM_INSTANCE").ok().and_then(|i| i.parse().ok());
+    match (instance_env, instance_flag) {
+        (Some(i), _) if i > 0 => i,
+        (_, Some(i)) if i > 0 => i,
+        (_, _) => DEFAULT_INSTANCE,
     }
 }
 
@@ -178,21 +180,22 @@ mod tests {
         assert_eq!(get_discovery_directory(), PathBuf::from("/tmpdir"));
 
         // Test netsim_ini_filepath
-        assert_eq!(get_netsim_ini_filepath(0), PathBuf::from("/tmpdir/netsim.ini"));
-        assert_eq!(get_netsim_ini_filepath(1), PathBuf::from("/tmpdir/netsim_1.ini"));
+        assert_eq!(get_netsim_ini_filepath(1), PathBuf::from("/tmpdir/netsim.ini"));
+        assert_eq!(get_netsim_ini_filepath(2), PathBuf::from("/tmpdir/netsim_2.ini"));
     }
 
     #[test]
     fn test_get_instance() {
         // Remove NETSIM_INSTANCE environment variable
         std::env::remove_var("NETSIM_INSTANCE");
-        assert_eq!(get_instance(0), DEFAULT_INSTANCE);
-        assert_eq!(get_instance(1), 1);
+        assert_eq!(get_instance(None), DEFAULT_INSTANCE);
+        assert_eq!(get_instance(Some(0)), DEFAULT_INSTANCE);
+        assert_eq!(get_instance(Some(1)), 1);
 
         // Set NETSIM_INSTANCE environment variable
         std::env::set_var("NETSIM_INSTANCE", "100");
-        assert_eq!(get_instance(0), 100);
-        assert_eq!(get_instance(1), 100);
+        assert_eq!(get_instance(Some(0)), 100);
+        assert_eq!(get_instance(Some(1)), 100);
     }
 
     #[test]
