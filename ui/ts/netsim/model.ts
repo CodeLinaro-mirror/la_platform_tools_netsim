@@ -72,7 +72,7 @@ export interface Chip {
   /** Dual mode of Bluetooth */
   bt?:|Chip_Bluetooth|undefined;
   /** Bluetooth Beacon Low Energy */
-  bleBeacon?:|Chip_BluetoothBeacon|undefined;
+  bleBeacon?:|Chip_BleBeacon|undefined;
   /** UWB */
   uwb?:|Chip_Radio|undefined;
   /** WIFI */
@@ -104,32 +104,30 @@ export interface Chip_Bluetooth {
 }
 
 /**
- * BluetoothBeacon has numerous configurable fields.
+ * BleBeacon has numerous configurable fields.
  * Address, AdvertiseSetting, AdvertiseData.
  */
-export interface Chip_BluetoothBeacon {
+export interface Chip_BleBeacon {
   /** Bluetooth Radio */
   bt:|Chip_Bluetooth|undefined;
   /** BD_ADDR address */
   address: string;
   /** Settings on how beacon functions */
-  settings:|Chip_BluetoothBeacon_AdvertiseSettings|undefined;
+  settings:|Chip_BleBeacon_AdvertiseSettings|undefined;
   /** Advertising Data */
-  advData:|Chip_BluetoothBeacon_AdvertiseData|undefined;
+  advData:|Chip_BleBeacon_AdvertiseData|undefined;
   /** Scan Response Data */
-  scanResponse: Chip_BluetoothBeacon_AdvertiseData|undefined;
+  scanResponse: Chip_BleBeacon_AdvertiseData|undefined;
 }
 
 /** Advertise Settigns dictate how the beacon functions on the netwwork. */
-export interface Chip_BluetoothBeacon_AdvertiseSettings {
+export interface Chip_BleBeacon_AdvertiseSettings {
   /** How often the beacon sends an advertising packet */
-  advertiseMode?:|Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode|
-      undefined;
+  advertiseMode?:|Chip_BleBeacon_AdvertiseSettings_AdvertiseMode|undefined;
   /** Numeric time interval between advertisements in ms. */
   milliseconds?:|number|undefined;
   /** Amount of power to send transmission */
-  txPowerLevel?:|Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower|
-      undefined;
+  txPowerLevel?:|Chip_BleBeacon_AdvertiseSettings_AdvertiseTxPower|undefined;
   /** Numeric transmission power in dBm. Must be within [-127, 127]. */
   dbm?:|number|undefined;
   /** Whether the beacon will respond to scan requests. */
@@ -144,7 +142,7 @@ export interface Chip_BluetoothBeacon_AdvertiseSettings {
  * Referenced From
  * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#151
  */
-export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode {
+export enum Chip_BleBeacon_AdvertiseSettings_AdvertiseMode {
   /**
    * LOW_POWER - Perform Bluetooth LE advertising in low power mode. This is the
    * default and preferred advertising mode as it consumes the least power
@@ -171,7 +169,7 @@ export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseMode {
  * Referenced From
  * packages/modules/Bluetooth/framework/java/android/bluetooth/le/BluetoothLeAdvertiser.java#159
  */
-export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower {
+export enum Chip_BleBeacon_AdvertiseSettings_AdvertiseTxPower {
   /**
    * ULTRA_LOW - Advertise using the lowest transmission (TX) power level. Low
    * transmission power can be used to restrict the visibility range of
@@ -196,7 +194,7 @@ export enum Chip_BluetoothBeacon_AdvertiseSettings_AdvertiseTxPower {
  * subset of the complete list of fields found in "Supplement to the
  * Bluetooth Core Specification"
  */
-export interface Chip_BluetoothBeacon_AdvertiseData {
+export interface Chip_BleBeacon_AdvertiseData {
   /** Whether the device name should be included in advertise packet. */
   includeDeviceName: boolean;
   /**
@@ -207,11 +205,11 @@ export interface Chip_BluetoothBeacon_AdvertiseData {
   /** Manufacturer specific data. */
   manufacturerData: Uint8Array;
   /** GATT services supported by the devices */
-  services: Chip_BluetoothBeacon_AdvertiseData_Service[];
+  services: Chip_BleBeacon_AdvertiseData_Service[];
 }
 
 /** GATT service proto */
-export interface Chip_BluetoothBeacon_AdvertiseData_Service {
+export interface Chip_BleBeacon_AdvertiseData_Service {
   /** UUID of a Bluetooth GATT service for the beacon */
   uuid: string;
   /** Bytes of data associated with a GATT service provided by the device */
@@ -234,25 +232,25 @@ export interface ChipCreate {
   manufacturer: string;
   /** optional like DW300 */
   productName: string;
-  /** BluetoothBeaconCreate protobuf */
-  bleBeacon?:|ChipCreate_BluetoothBeaconCreate|undefined;
+  /** BleBeaconCreate protobuf */
+  bleBeacon?:|ChipCreate_BleBeaconCreate|undefined;
   /** optional rootcanal configuration for bluetooth chipsets. */
   btProperties: Controller|undefined;
 }
 
 /**
- * Protobuf for BluetoothBeaconCreate
+ * Protobuf for BleBeaconCreate
  * Beacon specific information during creation
  */
-export interface ChipCreate_BluetoothBeaconCreate {
+export interface ChipCreate_BleBeaconCreate {
   /** BD_ADDR address */
   address: string;
   /** Settings on how beacon functions */
-  settings:|Chip_BluetoothBeacon_AdvertiseSettings|undefined;
+  settings:|Chip_BleBeacon_AdvertiseSettings|undefined;
   /** Advertising Data */
-  advData:|Chip_BluetoothBeacon_AdvertiseData|undefined;
+  advData:|Chip_BleBeacon_AdvertiseData|undefined;
   /** Scan Response Data */
-  scanResponse: Chip_BluetoothBeacon_AdvertiseData|undefined;
+  scanResponse: Chip_BleBeacon_AdvertiseData|undefined;
 }
 
 /** Device model for netsim */

@@ -644,6 +644,8 @@ pub struct ListDeviceResponse {
     // message fields
     // @@protoc_insertion_point(field:netsim.frontend.ListDeviceResponse.devices)
     pub devices: ::std::vec::Vec<super::model::Device>,
+    // @@protoc_insertion_point(field:netsim.frontend.ListDeviceResponse.last_modified)
+    pub last_modified: ::protobuf::MessageField<::protobuf::well_known_types::timestamp::Timestamp>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.frontend.ListDeviceResponse.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -661,12 +663,17 @@ impl ListDeviceResponse {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut fields = ::std::vec::Vec::with_capacity(2);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
             "devices",
             |m: &ListDeviceResponse| { &m.devices },
             |m: &mut ListDeviceResponse| { &mut m.devices },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, ::protobuf::well_known_types::timestamp::Timestamp>(
+            "last_modified",
+            |m: &ListDeviceResponse| { &m.last_modified },
+            |m: &mut ListDeviceResponse| { &mut m.last_modified },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<ListDeviceResponse>(
             "ListDeviceResponse",
@@ -689,6 +696,9 @@ impl ::protobuf::Message for ListDeviceResponse {
                 10 => {
                     self.devices.push(is.read_message()?);
                 },
+                18 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.last_modified)?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -705,6 +715,10 @@ impl ::protobuf::Message for ListDeviceResponse {
             let len = value.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         };
+        if let Some(v) = self.last_modified.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -714,6 +728,9 @@ impl ::protobuf::Message for ListDeviceResponse {
         for v in &self.devices {
             ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
         };
+        if let Some(v) = self.last_modified.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -732,12 +749,14 @@ impl ::protobuf::Message for ListDeviceResponse {
 
     fn clear(&mut self) {
         self.devices.clear();
+        self.last_modified.clear();
         self.special_fields.clear();
     }
 
     fn default_instance() -> &'static ListDeviceResponse {
         static instance: ListDeviceResponse = ListDeviceResponse {
             devices: ::std::vec::Vec::new(),
+            last_modified: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -1396,35 +1415,36 @@ impl ::protobuf::reflect::ProtobufValue for GetCaptureResponse {
 
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x15netsim/frontend.proto\x12\x0fnetsim.frontend\x1a\x1bgoogle/protobu\
-    f/empty.proto\x1a\x12netsim/model.proto\"+\n\x0fVersionResponse\x12\x18\
-    \n\x07version\x18\x01\x20\x01(\tR\x07version\"I\n\x13CreateDeviceRequest\
-    \x122\n\x06device\x18\x01\x20\x01(\x0b2\x1a.netsim.model.DeviceCreateR\
-    \x06device\"D\n\x14CreateDeviceResponse\x12,\n\x06device\x18\x01\x20\x01\
-    (\x0b2\x14.netsim.model.DeviceR\x06device\"#\n\x11DeleteChipRequest\x12\
-    \x0e\n\x02id\x18\x02\x20\x01(\rR\x02id\"B\n\x12PatchDeviceRequest\x12,\n\
-    \x06device\x18\x02\x20\x01(\x0b2\x14.netsim.model.DeviceR\x06device\"D\n\
-    \x12ListDeviceResponse\x12.\n\x07devices\x18\x01\x20\x03(\x0b2\x14.netsi\
-    m.model.DeviceR\x07devices\"\xa9\x01\n\x13PatchCaptureRequest\x12\x0e\n\
-    \x02id\x18\x01\x20\x01(\rR\x02id\x12G\n\x05patch\x18\x02\x20\x01(\x0b21.\
-    netsim.frontend.PatchCaptureRequest.PatchCaptureR\x05patch\x1a9\n\x0cPat\
-    chCapture\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model.StateR\
-    \x05state\"H\n\x13ListCaptureResponse\x121\n\x08captures\x18\x01\x20\x03\
-    (\x0b2\x15.netsim.model.CaptureR\x08captures\"#\n\x11GetCaptureRequest\
-    \x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\";\n\x12GetCaptureResponse\
-    \x12%\n\x0ecapture_stream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xc4\x05\
-    \n\x0fFrontendService\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\
-    \x1a\x20.netsim.frontend.VersionResponse\x12[\n\x0cCreateDevice\x12$.net\
-    sim.frontend.CreateDeviceRequest\x1a%.netsim.frontend.CreateDeviceRespon\
-    se\x12H\n\nDeleteChip\x12\".netsim.frontend.DeleteChipRequest\x1a\x16.go\
-    ogle.protobuf.Empty\x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDevi\
-    ceRequest\x1a\x16.google.protobuf.Empty\x127\n\x05Reset\x12\x16.google.p\
-    rotobuf.Empty\x1a\x16.google.protobuf.Empty\x12I\n\nListDevice\x12\x16.g\
-    oogle.protobuf.Empty\x1a#.netsim.frontend.ListDeviceResponse\x12L\n\x0cP\
-    atchCapture\x12$.netsim.frontend.PatchCaptureRequest\x1a\x16.google.prot\
-    obuf.Empty\x12K\n\x0bListCapture\x12\x16.google.protobuf.Empty\x1a$.nets\
-    im.frontend.ListCaptureResponse\x12W\n\nGetCapture\x12\".netsim.frontend\
-    .GetCaptureRequest\x1a#.netsim.frontend.GetCaptureResponse0\x01b\x06prot\
-    o3\
+    f/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x12netsim/model\
+    .proto\"+\n\x0fVersionResponse\x12\x18\n\x07version\x18\x01\x20\x01(\tR\
+    \x07version\"I\n\x13CreateDeviceRequest\x122\n\x06device\x18\x01\x20\x01\
+    (\x0b2\x1a.netsim.model.DeviceCreateR\x06device\"D\n\x14CreateDeviceResp\
+    onse\x12,\n\x06device\x18\x01\x20\x01(\x0b2\x14.netsim.model.DeviceR\x06\
+    device\"#\n\x11DeleteChipRequest\x12\x0e\n\x02id\x18\x02\x20\x01(\rR\x02\
+    id\"B\n\x12PatchDeviceRequest\x12,\n\x06device\x18\x02\x20\x01(\x0b2\x14\
+    .netsim.model.DeviceR\x06device\"\x85\x01\n\x12ListDeviceResponse\x12.\n\
+    \x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.model.DeviceR\x07devices\
+    \x12?\n\rlast_modified\x18\x02\x20\x01(\x0b2\x1a.google.protobuf.Timesta\
+    mpR\x0clastModified\"\xa9\x01\n\x13PatchCaptureRequest\x12\x0e\n\x02id\
+    \x18\x01\x20\x01(\rR\x02id\x12G\n\x05patch\x18\x02\x20\x01(\x0b21.netsim\
+    .frontend.PatchCaptureRequest.PatchCaptureR\x05patch\x1a9\n\x0cPatchCapt\
+    ure\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model.StateR\x05sta\
+    te\"H\n\x13ListCaptureResponse\x121\n\x08captures\x18\x01\x20\x03(\x0b2\
+    \x15.netsim.model.CaptureR\x08captures\"#\n\x11GetCaptureRequest\x12\x0e\
+    \n\x02id\x18\x01\x20\x01(\rR\x02id\";\n\x12GetCaptureResponse\x12%\n\x0e\
+    capture_stream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xc4\x05\n\x0fFronte\
+    ndService\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsi\
+    m.frontend.VersionResponse\x12[\n\x0cCreateDevice\x12$.netsim.frontend.C\
+    reateDeviceRequest\x1a%.netsim.frontend.CreateDeviceResponse\x12H\n\nDel\
+    eteChip\x12\".netsim.frontend.DeleteChipRequest\x1a\x16.google.protobuf.\
+    Empty\x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\
+    \x16.google.protobuf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\
+    \x1a\x16.google.protobuf.Empty\x12I\n\nListDevice\x12\x16.google.protobu\
+    f.Empty\x1a#.netsim.frontend.ListDeviceResponse\x12L\n\x0cPatchCapture\
+    \x12$.netsim.frontend.PatchCaptureRequest\x1a\x16.google.protobuf.Empty\
+    \x12K\n\x0bListCapture\x12\x16.google.protobuf.Empty\x1a$.netsim.fronten\
+    d.ListCaptureResponse\x12W\n\nGetCapture\x12\".netsim.frontend.GetCaptur\
+    eRequest\x1a#.netsim.frontend.GetCaptureResponse0\x01b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -1441,8 +1461,9 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
     static file_descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::FileDescriptor> = ::protobuf::rt::Lazy::new();
     file_descriptor.get(|| {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
-            let mut deps = ::std::vec::Vec::with_capacity(2);
+            let mut deps = ::std::vec::Vec::with_capacity(3);
             deps.push(::protobuf::well_known_types::empty::file_descriptor().clone());
+            deps.push(::protobuf::well_known_types::timestamp::file_descriptor().clone());
             deps.push(super::model::file_descriptor().clone());
             let mut messages = ::std::vec::Vec::with_capacity(11);
             messages.push(VersionResponse::generated_message_descriptor_data());
