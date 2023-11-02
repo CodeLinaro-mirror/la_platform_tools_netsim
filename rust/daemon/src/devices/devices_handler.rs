@@ -173,9 +173,6 @@ pub fn add_chip(
                     .ok_or(format!("Chip not found for device_id: {device_id}, chip_id:{chip_id}"))?
                     .facade_id = Some(facade_id);
             }
-            info!(
-                "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, device_id: {device_id}, chip_id: {chip_id}, facade_id: {facade_id}",
-            );
             // Update Capture resource
             events::publish(Event::ChipAdded {
                 chip_id,

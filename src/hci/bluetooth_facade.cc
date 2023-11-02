@@ -73,9 +73,24 @@ class SimPhyLayer : public PhyLayer {
     return SimComputeRssi(sender_id, receiver_id, tx_power);
   }
 
+  // Check if the device is present in the phy_devices
+  static bool Contains(
+      PhyDevice::Identifier device_id,
+      const std::list<std::shared_ptr<rootcanal::PhyDevice>> &phy_devices) {
+    return std::any_of(phy_devices.begin(), phy_devices.end(),
+                        [device_id](const auto &device) {
+                          return device->id == device_id;
+                        });
+  }
+
   // Overrides Send in PhyLayerFactory to add Rx/Tx statistics.
   void Send(std::vector<uint8_t> const &packet, int8_t tx_power,
             PhyDevice::Identifier sender_id) override {
+    // Skip if the sender's phy is in the "down" state. Prevents all outgoing
+    // messages including advertisements occurring when the radio is down.
+    if (!Contains(sender_id, phy_devices_)) {
+      return;
+    }
     IncrTx(sender_id, type);
     for (const auto &device : phy_devices_) {
       if (sender_id != device->id) {
@@ -302,8 +317,8 @@ model::Chip::Bluetooth Get(uint32_t id) {
 }
 
 void Reset(uint32_t id) {
-  if (id_to_chip_info_.find(id) != id_to_chip_info_.end()) {
-    auto chip_info = id_to_chip_info_[id];
+  if (auto it = id_to_chip_info_.find(id); it != id_to_chip_info_.end()) {
+    auto chip_info = it->second;
     chip_info->le_tx_count = 0;
     chip_info->le_rx_count = 0;
     chip_info->classic_tx_count = 0;
@@ -321,20 +336,19 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
     return;
   }
   auto model = id_to_chip_info_[id]->model;
-  auto device_index = id_to_chip_info_[id]->simulation_device;
   // Low_energy radio state
   auto request_state = request.low_energy().state();
   auto *le = model->mutable_low_energy();
   if (ChangedState(le->state(), request_state)) {
     le->set_state(request_state);
-    PatchPhy(device_index, request_state == model::State::ON, true);
+    PatchPhy(id, request_state == model::State::ON, true);
   }
   // Classic radio state
   request_state = request.classic().state();
   auto *classic = model->mutable_classic();
   if (ChangedState(classic->state(), request_state)) {
     classic->set_state(request_state);
-    PatchPhy(device_index, request_state == model::State::ON, false);
+    PatchPhy(id, request_state == model::State::ON, false);
   }
 }
 
@@ -449,8 +463,8 @@ void SetRustDeviceAddress(
 }
 
 void IncrTx(uint32_t id, rootcanal::Phy::Type phy_type) {
-  if (id_to_chip_info_.find(id) != id_to_chip_info_.end()) {
-    auto chip_info = id_to_chip_info_[id];
+  if (auto it = id_to_chip_info_.find(id); it != id_to_chip_info_.end()) {
+    auto chip_info = it->second;
     if (phy_type == rootcanal::Phy::Type::LOW_ENERGY) {
       chip_info->le_tx_count++;
     } else {
@@ -460,8 +474,8 @@ void IncrTx(uint32_t id, rootcanal::Phy::Type phy_type) {
 }
 
 void IncrRx(uint32_t id, rootcanal::Phy::Type phy_type) {
-  if (id_to_chip_info_.find(id) != id_to_chip_info_.end()) {
-    auto chip_info = id_to_chip_info_[id];
+  if (auto it = id_to_chip_info_.find(id); it != id_to_chip_info_.end()) {
+    auto chip_info = it->second;
     if (phy_type == rootcanal::Phy::Type::LOW_ENERGY) {
       chip_info->le_rx_count++;
     } else {
