@@ -18,7 +18,7 @@ use super::advertise_settings::{
 };
 use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
 use super::packets::link_layer::{
-    Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, Packet, PacketType,
+    Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, PacketType,
 };
 use crate::bluetooth::bluetooth_get;
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
@@ -37,6 +37,7 @@ use netsim_proto::model::chip_create::{
     BleBeaconCreate as BleBeaconCreateProto, Chip as BuiltinProto,
 };
 use netsim_proto::model::{ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto};
+use pdl_runtime::Packet;
 use protobuf::MessageField;
 use std::alloc::System;
 use std::sync::{Mutex, RwLock};

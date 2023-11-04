@@ -21,10 +21,10 @@ message NetsimRadioStats {
   // The kind of radio
   enum Kind {
     UNSPECIFIED = 0;
-    BT_LE = 1;
-    BT_CLASSIC = 2;
-    // BT LE radio used by built-in beacons
-    BT_LE_BEACON = 3;
+    BLUETOOTH_LOW_ENERGY = 1;
+    BLUETOOTH_CLASSIC = 2;
+    // built-in BLE beacon
+    BLE_BEACON = 3;
     WIFI = 4;
     UWB = 5;
     NFC = 6;

@@ -93,18 +93,18 @@ impl Chip {
             match self.kind {
                 ProtoChipKind::BLUETOOTH => {
                     let bt = bluetooth_facade::bluetooth_get(facade_id);
-                    stats.set_kind(netsim_radio_stats::Kind::BT_LE);
+                    stats.set_kind(netsim_radio_stats::Kind::BLUETOOTH_LOW_ENERGY);
                     stats.set_tx_count(bt.low_energy.tx_count);
                     stats.set_rx_count(bt.low_energy.rx_count);
                     vec.push(stats);
                     stats = ProtoRadioStats::new();
                     stats.set_duration_secs(self.start.elapsed().as_secs());
-                    stats.set_kind(netsim_radio_stats::Kind::BT_CLASSIC);
+                    stats.set_kind(netsim_radio_stats::Kind::BLUETOOTH_CLASSIC);
                     stats.set_tx_count(bt.classic.tx_count);
                     stats.set_rx_count(bt.classic.rx_count);
                 }
                 ProtoChipKind::BLUETOOTH_BEACON => {
-                    stats.set_kind(netsim_radio_stats::Kind::BT_LE_BEACON);
+                    stats.set_kind(netsim_radio_stats::Kind::BLE_BEACON);
                     if let Ok(beacon) = bluetooth_facade::ble_beacon_get(self.id, facade_id) {
                         stats.set_tx_count(beacon.bt.low_energy.tx_count);
                         stats.set_rx_count(beacon.bt.low_energy.rx_count);

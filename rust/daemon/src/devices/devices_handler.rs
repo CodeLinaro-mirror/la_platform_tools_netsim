@@ -46,10 +46,12 @@ use netsim_proto::frontend::CreateDeviceResponse;
 use netsim_proto::frontend::DeleteChipRequest;
 use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
+use netsim_proto::frontend::SubscribeDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
 use netsim_proto::model::ChipCreate;
 use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::model::Scene as ProtoScene;
+use protobuf::well_known_types::timestamp::Timestamp;
 use protobuf::Message;
 use protobuf::MessageField;
 use protobuf_json_mapping::merge_from_str;
@@ -63,7 +65,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::RwLockWriteGuard;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 // The amount of seconds netsimd will wait until the first device has attached.
 static IDLE_SECS_FOR_SHUTDOWN: u64 = 15;
@@ -89,11 +91,18 @@ struct Devices {
     // BTreeMap allows ListDevice to output devices in order of identifiers.
     entries: BTreeMap<DeviceIdentifier, Device>,
     id_factory: IdFactory<DeviceIdentifier>,
+    last_modified: Duration,
 }
 
 impl Devices {
     fn new() -> Self {
-        Devices { entries: BTreeMap::new(), id_factory: IdFactory::new(INITIAL_DEVICE_ID, 1) }
+        Devices {
+            entries: BTreeMap::new(),
+            id_factory: IdFactory::new(INITIAL_DEVICE_ID, 1),
+            last_modified: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards"),
+        }
     }
 }
 
@@ -160,11 +169,13 @@ pub fn add_chip(
                 ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id),
                 _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
             };
-            // Add the facade_id into the resources
+            // Lock Device Resource
             {
-                get_devices()
-                    .write()
-                    .unwrap()
+                let devices_arc = get_devices();
+                let mut devices = devices_arc.write().unwrap();
+
+                // Add the facade_id into the resources
+                devices
                     .entries
                     .get_mut(&device_id)
                     .ok_or(format!("Device not found for device_id: {device_id}"))?
@@ -172,6 +183,10 @@ pub fn add_chip(
                     .get_mut(&chip_id)
                     .ok_or(format!("Chip not found for device_id: {device_id}, chip_id:{chip_id}"))?
                     .facade_id = Some(facade_id);
+
+                // Update last modified timestamp for devices
+                devices.last_modified =
+                    SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
             }
             // Update Capture resource
             events::publish(Event::ChipAdded {
@@ -290,6 +305,9 @@ fn get_or_create_device(
         id,
         Device::new(id, String::from(guid.unwrap_or(&default)), String::from(name), builtin),
     );
+    // Update last modified timestamp for devices
+    devices.last_modified =
+        SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
     events::publish(Event::DeviceAdded { id, name: name.to_string(), builtin });
 
     (id, String::from(name))
@@ -306,6 +324,9 @@ fn remove_device(
     let name = device.name.clone();
     let builtin = device.builtin;
     guard.entries.remove(&id).ok_or(format!("Error removing device with id {id}"))?;
+    // Update last modified timestamp for devices
+    guard.last_modified =
+        SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
     // Publish DeviceRemoved Event
     events::publish(Event::DeviceRemoved { id, name, builtin });
     Ok(())
@@ -360,6 +381,11 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                 ))?,
             }
             info!("Removed Chip: device_id: {device_id}, chip_id: {chip_id}");
+            {
+                // Update last modified timestamp for devices
+                get_devices().write().unwrap().last_modified =
+                    SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+            }
             events::publish(Event::ChipRemoved {
                 chip_id,
                 device_id,
@@ -461,9 +487,15 @@ fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result
             Some(id) => match devices.entries.get_mut(&id) {
                 Some(device) => {
                     let result = device.patch(&proto_device);
+                    let name = device.name.clone();
                     if result.is_ok() {
+                        // Update last modified timestamp for devices
+                        devices.last_modified = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .expect("Time went backwards");
+
                         // Publish Device Patched event
-                        events::publish(Event::DevicePatched { id, name: device.name.clone() });
+                        events::publish(Event::DevicePatched { id, name });
                     }
                     result
                 }
@@ -476,12 +508,16 @@ fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result
                     if device.name.contains(&proto_device.name) {
                         if device.name == proto_device.name {
                             let result = device.patch(&proto_device);
+                            let id = device.id;
+                            let name = device.name.clone();
                             if result.is_ok() {
+                                // Update last modified timestamp for devices
+                                devices.last_modified = SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .expect("Time went backwards");
+
                                 // Publish Device Patched event
-                                events::publish(Event::DevicePatched {
-                                    id: device.id,
-                                    name: device.name.clone(),
-                                });
+                                events::publish(Event::DevicePatched { id, name });
                             }
                             return result;
                         }
@@ -498,12 +534,16 @@ fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result
                 match target {
                     Some(device) => {
                         let result = device.patch(&proto_device);
+                        let id = device.id;
+                        let name = device.name.clone();
                         if result.is_ok() {
+                            // Update last modified timestamp for devices
+                            devices.last_modified = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .expect("Time went backwards");
+
                             // Publish Device Patched event
-                            events::publish(Event::DevicePatched {
-                                id: device.id,
-                                name: device.name.clone(),
-                            });
+                            events::publish(Event::DevicePatched { id, name });
                         }
                         result
                     }
@@ -564,11 +604,14 @@ pub fn get_devices_proto() -> Result<ProtoScene, String> {
 fn reset_all() -> Result<(), String> {
     let devices_arc = get_devices();
     let mut devices = devices_arc.write().unwrap();
+    // Perform reset for all devices
     for device in devices.entries.values_mut() {
         device.reset()?;
-        // Publish Device Patched event
-        events::publish(Event::DevicePatched { id: device.id, name: device.name.clone() });
     }
+    // Update last modified timestamp for devices
+    devices.last_modified =
+        SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+    events::publish(Event::DeviceReset);
     Ok(())
 }
 
@@ -618,6 +661,14 @@ fn handle_device_list(writer: ResponseWritable) {
         }
     }
 
+    // Add Last Modified Timestamp into ListDeviceResponse
+    response.last_modified = Some(Timestamp {
+        seconds: devices.last_modified.as_secs() as i64,
+        nanos: devices.last_modified.subsec_nanos() as i32,
+        ..Default::default()
+    })
+    .into();
+
     // Perform protobuf-json-mapping with the given protobuf
     if let Ok(json_response) = print_to_string_with_options(&response, &JSON_PRINT_OPTION) {
         writer.put_ok("text/json", &json_response, vec![])
@@ -635,7 +686,21 @@ fn handle_device_reset(writer: ResponseWritable) {
 }
 
 /// Performs SubscribeDevice
-fn handle_device_subscribe(writer: ResponseWritable) {
+fn handle_device_subscribe(writer: ResponseWritable, subscribe_json: &str) {
+    // Check if the provided last_modified timestamp is prior to the current last_modified
+    let mut subscribe_device_request = SubscribeDeviceRequest::new();
+    if merge_from_str(&mut subscribe_device_request, subscribe_json).is_ok() {
+        let timestamp_proto = subscribe_device_request.last_modified;
+        let provided_last_modified =
+            Duration::new(timestamp_proto.seconds as u64, timestamp_proto.nanos as u32);
+        let current_last_modified = { get_devices().read().unwrap().last_modified };
+        if provided_last_modified < current_last_modified {
+            info!("Immediate return for SubscribeDevice");
+            handle_device_list(writer);
+            return;
+        }
+    }
+
     let event_rx = events::subscribe();
     // Timeout after 15 seconds with no event received
     match event_rx.recv_timeout(Duration::from_secs(15)) {
@@ -643,7 +708,8 @@ fn handle_device_subscribe(writer: ResponseWritable) {
         | Ok(Event::DeviceRemoved { .. })
         | Ok(Event::ChipAdded { .. })
         | Ok(Event::ChipRemoved { .. })
-        | Ok(Event::DevicePatched { .. }) => handle_device_list(writer),
+        | Ok(Event::DevicePatched { .. })
+        | Ok(Event::DeviceReset) => handle_device_list(writer),
         Err(err) => writer.put_error(404, format!("{err:?}").as_str()),
         _ => writer.put_error(404, "disconnecting due to unrelated event"),
     }
@@ -662,7 +728,9 @@ pub fn handle_device(request: &Request<Vec<u8>>, param: &str, writer: ResponseWr
                 handle_device_reset(writer);
             }
             "SUBSCRIBE" => {
-                handle_device_subscribe(writer);
+                let body = request.body();
+                let subscribe_json = String::from_utf8(body.to_vec()).unwrap();
+                handle_device_subscribe(writer, subscribe_json.as_str());
             }
             "PATCH" => {
                 let body = request.body();
