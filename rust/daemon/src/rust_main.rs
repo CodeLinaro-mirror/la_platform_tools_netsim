@@ -15,7 +15,6 @@
 use clap::Parser;
 use log::warn;
 use log::{error, info};
-#[cfg(feature = "cuttlefish")]
 use netsim_common::system::netsimd_temp_dir;
 use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_ini};
 use netsim_common::util::zip_artifact::zip_artifacts;
@@ -24,8 +23,10 @@ use crate::bluetooth as bluetooth_facade;
 use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
 use crate::devices::devices_handler::wait_devices;
+use crate::events;
 use crate::events::Event;
-use crate::resource;
+use crate::session::Session;
+use crate::version::get_version;
 use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
@@ -85,12 +86,11 @@ fn get_netsimd_args(argc: c_int, argv: *const *const c_char) -> NetsimdArgs {
 
 fn run_netsimd_with_args(args: NetsimdArgs) {
     // Log where netsim artifacts are located
-    #[cfg(feature = "cuttlefish")]
     info!("netsim artifacts path: {}", netsimd_temp_dir().display());
 
-    // Redirect stdout and stderr to files only if netsimd is not invoked
-    // by Cuttlefish. Some Cuttlefish builds fail when writing logs to files.
-    #[cfg(not(feature = "cuttlefish"))]
+    // Log all args
+    info!("{:#?}", args);
+
     if !args.logtostderr {
         cxx::let_cxx_string!(netsimd_temp_dir = netsim_common::system::netsimd_temp_dir_string());
         ffi_util::redirect_std_stream(&netsimd_temp_dir);
@@ -139,6 +139,7 @@ fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
 fn main_loop(events_rx: Receiver<Event>) {
     loop {
         // events_rx.recv() will wait until the event is received.
+        // TODO(b/305536480): Remove built-in devices during shutdown.
         if let Ok(Event::ShutDown { reason }) = events_rx.recv() {
             info!("Netsim is shutdown: {reason}");
             return;
@@ -147,6 +148,8 @@ fn main_loop(events_rx: Receiver<Event>) {
 }
 
 fn run_netsimd_primary(args: NetsimdArgs) {
+    info!("Netsim Version: {}", get_version());
+
     let fd_startup_str = args.fd_startup_str.unwrap_or_default();
     let instance_num = get_instance(args.instance);
     let hci_port: u16 =
@@ -193,9 +196,14 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     service.set_up();
 
     // Create all Event Receivers
-    let capture_events_rx = resource::clone_events().lock().unwrap().subscribe();
-    let device_events_rx = resource::clone_events().lock().unwrap().subscribe();
-    let main_events_rx = resource::clone_events().lock().unwrap().subscribe();
+    let capture_events_rx = events::subscribe();
+    let device_events_rx = events::subscribe();
+    let main_events_rx = events::subscribe();
+    let session_events_rx = events::subscribe();
+
+    // Start Session Event listener
+    let mut session = Session::new();
+    session.start(session_events_rx);
 
     // Pass all event receivers to each modules
     spawn_capture_event_subscriber(capture_events_rx);
@@ -225,9 +233,13 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     // Gracefully shutdown netsimd services
     service.shut_down();
 
-    // Once service.run is complete, delete the netsim ini file
-    // and zip all artifacts
+    // Once shutdown is complete, delete the netsim ini file
     remove_netsim_ini(instance_num);
+
+    // write out session stats
+    let _ = session.stop();
+
+    // zip all artifacts
     if let Err(err) = zip_artifacts() {
         error!("Failed to zip artifacts: {err:?}");
     }

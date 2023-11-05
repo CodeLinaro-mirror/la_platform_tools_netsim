@@ -27,6 +27,7 @@ mod ranging;
 mod resource;
 mod rust_main;
 mod service;
+mod session;
 mod transport;
 mod util;
 mod uwb;

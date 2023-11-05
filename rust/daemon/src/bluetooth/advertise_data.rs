@@ -15,8 +15,8 @@
 //! Builder for Advertising Data
 
 use netsim_proto::model::{
-    chip::bluetooth_beacon::AdvertiseData as AdvertiseDataProto,
-    chip_create::BluetoothBeaconCreate as BluetoothBeaconCreateProto,
+    chip::ble_beacon::AdvertiseData as AdvertiseDataProto,
+    chip_create::BleBeaconCreate as BleBeaconCreateProto,
 };
 use std::convert::TryInto;
 
@@ -195,7 +195,7 @@ impl AdvertiseDataBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use netsim_proto::model::chip::bluetooth_beacon::AdvertiseSettings as AdvertiseSettingsProto;
+    use netsim_proto::model::chip::ble_beacon::AdvertiseSettings as AdvertiseSettingsProto;
     use protobuf::MessageField;
 
     const HEADER_LEN: usize = 2;

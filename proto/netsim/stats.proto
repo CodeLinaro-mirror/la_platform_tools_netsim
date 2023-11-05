@@ -29,15 +29,16 @@ message NetsimRadioStats {
     UWB = 5;
     NFC = 6;
   }
-  optional Kind kind = 1;
+  optional uint32 device_id = 1;
+  optional Kind kind = 2;
   // The duration of the controller connection
-  optional uint64 duration_secs = 2;
+  optional uint64 duration_secs = 3;
   // TX/RX messages for phy layer
-  optional int32 tx_count = 3;
-  optional int32 rx_count = 4;
+  optional int32 tx_count = 4;
+  optional int32 rx_count = 5;
   // TX/RX bytes for HostController
-  optional int32 tx_bytes = 5;
-  optional int32 rx_bytes = 6;
+  optional int32 tx_bytes = 6;
+  optional int32 rx_bytes = 7;
 }
 
 // Statistics for a netsim session.

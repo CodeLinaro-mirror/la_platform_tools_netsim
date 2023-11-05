@@ -361,7 +361,6 @@ pub mod ffi_util {
 
         #[rust_name = redirect_std_stream]
         #[namespace = "netsim::osutils"]
-        #[cfg(not(feature = "cuttlefish"))]
         pub fn RedirectStdStream(netsim_temp_dir: &CxxString);
 
         // Crash report.

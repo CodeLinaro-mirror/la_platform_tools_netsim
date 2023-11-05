@@ -23,3 +23,4 @@ pub mod hci_packet;
 pub mod model;
 pub mod packet_streamer;
 pub mod startup;
+pub mod stats;

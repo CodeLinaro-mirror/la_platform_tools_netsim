@@ -50,19 +50,19 @@ mod tests {
     use args::{BinaryProtobuf, NetsimArgs};
     use clap::Parser;
     use netsim_proto::frontend::{CreateDeviceRequest, PatchDeviceRequest};
-    use netsim_proto::model::chip::bluetooth_beacon::AdvertiseData as AdvertiseDataProto;
+    use netsim_proto::model::chip::ble_beacon::AdvertiseData as AdvertiseDataProto;
     use netsim_proto::model::chip::{
-        bluetooth_beacon::{
+        ble_beacon::{
             advertise_settings::{
                 AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
                 Interval as IntervalProto, Tx_power as TxPowerProto,
             },
             AdvertiseSettings as AdvertiseSettingsProto,
         },
-        BluetoothBeacon as BluetoothBeaconProto, Chip as ChipKindProto,
+        BleBeacon as BleBeaconProto, Chip as ChipKindProto,
     };
     use netsim_proto::model::chip_create::{
-        BluetoothBeaconCreate as BluetoothBeaconCreateProto, Chip as ChipKindCreateProto,
+        BleBeaconCreate as BleBeaconCreateProto, Chip as ChipKindCreateProto,
     };
     use netsim_proto::model::{
         Chip as ChipProto, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
@@ -291,7 +291,7 @@ mod tests {
             chips: vec![ChipCreateProto {
                 name: String::from(chip_name),
                 kind: ChipKind::BLUETOOTH_BEACON.into(),
-                chip: Some(ChipKindCreateProto::BleBeacon(BluetoothBeaconCreateProto {
+                chip: Some(ChipKindCreateProto::BleBeacon(BleBeaconCreateProto {
                     settings: MessageField::some(settings),
                     adv_data: MessageField::some(adv_data),
                     scan_response: MessageField::some(scan_response),
@@ -317,7 +317,7 @@ mod tests {
             chips: vec![ChipProto {
                 name: String::from(chip_name),
                 kind: ChipKind::BLUETOOTH_BEACON.into(),
-                chip: Some(ChipKindProto::BleBeacon(BluetoothBeaconProto {
+                chip: Some(ChipKindProto::BleBeacon(BleBeaconProto {
                     bt: MessageField::some(Chip_Bluetooth::new()),
                     settings: MessageField::some(settings),
                     adv_data: MessageField::some(adv_data),
@@ -558,7 +558,7 @@ mod tests {
         let device = MessageField::some(DeviceCreateProto {
             chips: vec![ChipCreateProto {
                 kind: ChipKind::BLUETOOTH_BEACON.into(),
-                chip: Some(ChipKindCreateProto::BleBeacon(BluetoothBeaconCreateProto {
+                chip: Some(ChipKindCreateProto::BleBeacon(BleBeaconCreateProto {
                     address: address.clone(),
                     settings: MessageField::some(AdvertiseSettingsProto::default()),
                     adv_data: MessageField::some(AdvertiseDataProto::default()),
@@ -592,7 +592,7 @@ mod tests {
             chips: vec![ChipProto {
                 name: chip_name.clone(),
                 kind: ChipKind::BLUETOOTH_BEACON.into(),
-                chip: Some(ChipKindProto::BleBeacon(BluetoothBeaconProto {
+                chip: Some(ChipKindProto::BleBeacon(BleBeaconProto {
                     bt: MessageField::some(Chip_Bluetooth::new()),
                     address: address.clone(),
                     settings: MessageField::some(AdvertiseSettingsProto::default()),
