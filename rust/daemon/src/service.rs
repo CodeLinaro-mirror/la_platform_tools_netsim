@@ -22,6 +22,7 @@ use cxx::UniquePtr;
 use log::{error, info, warn};
 use netsim_common::util::ini_file::IniFile;
 use netsim_common::util::os_utils::get_netsim_ini_filepath;
+use netsim_common::util::zip_artifact::remove_zip_files;
 use std::env;
 use std::time::Duration;
 
@@ -81,9 +82,17 @@ impl Service {
 
     /// Sets up the states for netsimd.
     pub fn set_up(&self) {
+        // Clear all zip files
+        match remove_zip_files() {
+            Ok(()) => info!("netsim generated zip files in temp directory has been removed."),
+            Err(err) => error!("{err:?}"),
+        }
+
+        // Clear all pcap files
         if clear_pcap_files() {
             info!("netsim generated pcap files in temp directory has been removed.");
         }
+
         set_pcap(self.service_params.pcap);
         set_dev(self.service_params.dev);
     }
@@ -175,18 +184,18 @@ pub fn new_test_beacon(idx: u32, interval: u64) {
     use crate::devices::devices_handler::create_device;
     use netsim_proto::common::ChipKind;
     use netsim_proto::frontend::CreateDeviceRequest;
-    use netsim_proto::model::chip::bluetooth_beacon::{
+    use netsim_proto::model::chip::ble_beacon::{
         AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
     };
     use netsim_proto::model::chip_create::{
-        BluetoothBeaconCreate as BluetoothBeaconCreateProto, Chip as ChipProto,
+        BleBeaconCreate as BleBeaconCreateProto, Chip as ChipProto,
     };
     use netsim_proto::model::ChipCreate as ChipCreateProto;
     use netsim_proto::model::DeviceCreate as DeviceCreateProto;
     use protobuf::MessageField;
     use protobuf_json_mapping::print_to_string;
 
-    let beacon_proto = BluetoothBeaconCreateProto {
+    let beacon_proto = BleBeaconCreateProto {
         address: format!("be:ac:01:be:ef:{:02x}", idx),
         settings: MessageField::some(AdvertiseSettingsProto {
             interval: Some(
@@ -209,14 +218,14 @@ pub fn new_test_beacon(idx: u32, interval: u64) {
     };
 
     let chip_proto = ChipCreateProto {
-        name: "gDevice-beacon".into(),
+        name: format!("gDevice-bt-beacon-chip-{idx}"),
         kind: ChipKind::BLUETOOTH_BEACON.into(),
         chip: Some(ChipProto::BleBeacon(beacon_proto)),
         ..Default::default()
     };
 
     let device_proto = DeviceCreateProto {
-        name: "gDdevice-beacon".into(),
+        name: format!("gDevice-beacon-{idx}"),
         chips: vec![chip_proto],
         ..Default::default()
     };

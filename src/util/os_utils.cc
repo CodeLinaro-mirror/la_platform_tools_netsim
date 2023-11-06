@@ -117,8 +117,6 @@ void RedirectStdStream(const std::string &netsim_temp_dir_const) {
   // Check if directory has a trailing slash.
   if (netsim_temp_dir.back() != netsim::filesystem::slash.back())
     netsim_temp_dir.append(netsim::filesystem::slash);
-  if (is_stderr_open())
-    BtsLogInfo("Redirecting logs to %s", netsim_temp_dir.c_str());
   std::freopen((netsim_temp_dir + "netsim_stdout.log").c_str(), "w", stdout);
   std::freopen((netsim_temp_dir + "netsim_stderr.log").c_str(), "w", stderr);
 }

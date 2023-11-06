@@ -25,6 +25,7 @@ use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::model::Orientation as ProtoOrientation;
 use netsim_proto::model::Position as ProtoPosition;
+use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use std::collections::BTreeMap;
 
 pub type DeviceIdentifier = u32;
@@ -37,9 +38,10 @@ pub struct Device {
     pub position: ProtoPosition,
     pub orientation: ProtoOrientation,
     pub chips: BTreeMap<ChipIdentifier, Chip>,
+    pub builtin: bool,
 }
 impl Device {
-    pub fn new(id: DeviceIdentifier, guid: String, name: String) -> Self {
+    pub fn new(id: DeviceIdentifier, guid: String, name: String, builtin: bool) -> Self {
         Device {
             id,
             guid,
@@ -48,6 +50,7 @@ impl Device {
             position: ProtoPosition::new(),
             orientation: ProtoOrientation::new(),
             chips: BTreeMap::new(),
+            builtin,
         }
     }
 }
@@ -164,16 +167,17 @@ impl Device {
     pub fn remove_chip(
         &mut self,
         chip_id: ChipIdentifier,
-    ) -> Result<(Option<FacadeIdentifier>, ProtoChipKind), String> {
-        let (facade_id, kind) = {
+    ) -> Result<(Option<FacadeIdentifier>, String, ProtoChipKind, Vec<ProtoRadioStats>), String>
+    {
+        let (facade_id, device_name, kind, radio_stats) = {
             if let Some(chip) = self.chips.get_mut(&chip_id) {
-                (chip.facade_id, chip.kind)
+                (chip.facade_id, self.name.clone(), chip.kind, chip.get_stats())
             } else {
                 return Err(format!("RemoveChip chip id {chip_id} not found"));
             }
         };
         match self.chips.remove(&chip_id) {
-            Some(_) => Ok((facade_id, kind)),
+            Some(_) => Ok((facade_id, device_name, kind, radio_stats)),
             None => Err(format!("Key {chip_id} not found in Hashmap")),
         }
     }
@@ -232,7 +236,7 @@ mod tests {
     static TEST_CHIP_NAME_2: &str = "test-bt-chip-2";
 
     fn create_test_device() -> Result<Device, String> {
-        let mut device = Device::new(0, "0".to_string(), TEST_DEVICE_NAME.to_string());
+        let mut device = Device::new(0, "0".to_string(), TEST_DEVICE_NAME.to_string(), false);
         device.add_chip(
             ProtoChipKind::BLUETOOTH,
             "",

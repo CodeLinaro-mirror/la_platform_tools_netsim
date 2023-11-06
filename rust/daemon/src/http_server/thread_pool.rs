@@ -81,20 +81,22 @@ struct Worker {
 
 impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        let thread = thread::spawn(move || loop {
-            let message = receiver.lock().unwrap().recv();
+        let thread = thread::Builder::new()
+            .name("http_pool_{id}".to_string())
+            .spawn(move || loop {
+                let message = receiver.lock().unwrap().recv();
 
-            match message {
-                Ok(job) => {
-                    job();
+                match message {
+                    Ok(job) => {
+                        job();
+                    }
+                    Err(_) => {
+                        error!("Worker {id} disconnected; shutting down.");
+                        break;
+                    }
                 }
-                Err(_) => {
-                    error!("Worker {id} disconnected; shutting down.");
-                    break;
-                }
-            }
-        });
-
+            })
+            .expect("http_pool_{id} spawn failed");
         Worker { id, thread: Some(thread) }
     }
 }

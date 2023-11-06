@@ -15,8 +15,8 @@
 use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::model::{
     self,
-    chip::bluetooth_beacon::advertise_settings,
-    chip::bluetooth_beacon::{AdvertiseData, AdvertiseSettings},
+    chip::ble_beacon::advertise_settings,
+    chip::ble_beacon::{AdvertiseData, AdvertiseSettings},
 };
 use protobuf::MessageField;
 use std::fmt;
@@ -172,7 +172,7 @@ impl fmt::Display for Displayer<&model::Chip> {
     }
 }
 
-impl fmt::Display for Displayer<&model::chip::BluetoothBeacon> {
+impl fmt::Display for Displayer<&model::chip::BleBeacon> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let address_width = 16;
@@ -231,7 +231,7 @@ impl fmt::Display for Displayer<&model::Position> {
     }
 }
 
-impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseSettings> {
+impl fmt::Display for Displayer<&model::chip::ble_beacon::AdvertiseSettings> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 25;
@@ -260,7 +260,7 @@ impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseSetting
     }
 }
 
-impl fmt::Display for Displayer<&model::chip::bluetooth_beacon::AdvertiseData> {
+impl fmt::Display for Displayer<&model::chip::ble_beacon::AdvertiseData> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 25;

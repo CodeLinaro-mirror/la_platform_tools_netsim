@@ -85,7 +85,7 @@ if(TARGET Rust::Rustc)
 
   # Make sure we have the cxx files generated before we build them.
   add_custom_command(OUTPUT ${common_header} ${binding_header} ${binding_source}
-                     COMMAND DEPENDS ${crate_name}-static)
+                     COMMAND DEPENDS cargo-build_${crate_name})
 
   android_add_library(
     TARGET netsimd-lib
@@ -118,15 +118,15 @@ if(TARGET Rust::Rustc)
          android-wifi-service
          grpc++
          libbt-rootcanal
-         netsim-daemon
          netsimd-proto-lib
          packet-streamer-proto-lib
          protobuf::libprotobuf
          util-lib)
   target_include_directories(
-    netsimd-lib PRIVATE . ${PROTOBUF_INCLUDE_DIR} ../rust/netsim-daemon
-                        ../rust/netsim-daemon/cxx
-    PUBLIC ${cxx_bridge_binary_folder})
+    netsimd-lib PRIVATE . ${PROTOBUF_INCLUDE_DIR}
+    PUBLIC
+     ${cxx_bridge_binary_folder})
   target_compile_definitions(netsimd-lib PUBLIC NETSIM_ANDROID_EMULATOR)
-
+  # Make sure we have the cxx files generated before we build them.
+  add_dependencies(netsimd-lib cargo-build_netsim-daemon)
 endif()

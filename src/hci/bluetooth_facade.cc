@@ -294,7 +294,9 @@ model::Chip::Bluetooth Get(uint32_t id) {
     model.mutable_classic()->set_rx_count(chip_info->classic_rx_count);
     model.mutable_low_energy()->set_tx_count(chip_info->le_tx_count);
     model.mutable_low_energy()->set_rx_count(chip_info->le_rx_count);
-    model.mutable_bt_properties()->CopyFrom(*chip_info->controller_proto);
+    if (chip_info->controller_proto) {
+      model.mutable_bt_properties()->CopyFrom(*chip_info->controller_proto);
+    }
   }
   return model;
 }

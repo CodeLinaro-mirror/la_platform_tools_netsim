@@ -101,9 +101,9 @@ message Chip {
     rootcanal.configuration.Controller bt_properties = 4;
   }
 
-  // BluetoothBeacon has numerous configurable fields.
+  // BleBeacon has numerous configurable fields.
   // Address, AdvertiseSetting, AdvertiseData.
-  message BluetoothBeacon {
+  message BleBeacon {
     // Advertise Settigns dictate how the beacon functions on the netwwork.
     message AdvertiseSettings {
       // How often the beacon sends an advertising packet
@@ -201,7 +201,7 @@ message Chip {
     // Dual mode of Bluetooth
     Bluetooth bt = 6;
     // Bluetooth Beacon Low Energy
-    BluetoothBeacon ble_beacon = 9;
+    BleBeacon ble_beacon = 9;
     // UWB
     Radio uwb = 7;
     // WIFI
@@ -213,17 +213,17 @@ message Chip {
 //
 // This is used specifically for CreateDevice
 message ChipCreate {
-  // Protobuf for BluetoothBeaconCreate
+  // Protobuf for BleBeaconCreate
   // Beacon specific information during creation
-  message BluetoothBeaconCreate {
+  message BleBeaconCreate {
     // BD_ADDR address
     string address = 1;
     // Settings on how beacon functions
-    Chip.BluetoothBeacon.AdvertiseSettings settings = 3;
+    Chip.BleBeacon.AdvertiseSettings settings = 3;
     // Advertising Data
-    Chip.BluetoothBeacon.AdvertiseData adv_data = 4;
+    Chip.BleBeacon.AdvertiseData adv_data = 4;
     // Scan Response Data
-    Chip.BluetoothBeacon.AdvertiseData scan_response = 5;
+    Chip.BleBeacon.AdvertiseData scan_response = 5;
   }
 
   // Type of Radio (BT, WIFI, UWB)
@@ -237,8 +237,8 @@ message ChipCreate {
   // optional like DW300
   string product_name = 5;
   oneof chip {
-    // BluetoothBeaconCreate protobuf
-    BluetoothBeaconCreate ble_beacon = 6;
+    // BleBeaconCreate protobuf
+    BleBeaconCreate ble_beacon = 6;
   }
   // optional rootcanal configuration for bluetooth chipsets.
   rootcanal.configuration.Controller bt_properties = 7;

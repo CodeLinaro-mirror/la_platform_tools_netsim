@@ -20,6 +20,7 @@ use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
 use super::packets::link_layer::{
     Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, Packet, PacketType,
 };
+use crate::bluetooth::bluetooth_get;
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::{devices_handler::add_chip, id_factory::IdFactory};
@@ -29,12 +30,11 @@ use lazy_static::lazy_static;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
 use netsim_proto::model::chip::{
-    bluetooth_beacon::AdvertiseData as AdvertiseDataProto,
-    bluetooth_beacon::AdvertiseSettings as AdvertiseSettingsProto,
-    BluetoothBeacon as BluetoothBeaconProto,
+    ble_beacon::AdvertiseData as AdvertiseDataProto,
+    ble_beacon::AdvertiseSettings as AdvertiseSettingsProto, BleBeacon as BleBeaconProto,
 };
 use netsim_proto::model::chip_create::{
-    BluetoothBeaconCreate as BluetoothBeaconCreateProto, Chip as BuiltinProto,
+    BleBeaconCreate as BleBeaconCreateProto, Chip as BuiltinProto,
 };
 use netsim_proto::model::{ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto};
 use protobuf::MessageField;
@@ -91,7 +91,7 @@ impl BeaconChip {
     pub fn from_proto(
         device_name: String,
         chip_id: ChipIdentifier,
-        beacon_proto: &BluetoothBeaconCreateProto,
+        beacon_proto: &BleBeaconCreateProto,
     ) -> Result<Self, String> {
         let advertise_settings = AdvertiseSettings::from_proto(&beacon_proto.settings)?;
         let advertise_data = AdvertiseData::from_proto(
@@ -231,7 +231,7 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
 ///
 /// Similar to `bluetooth_add()`.
 #[cfg(not(test))]
-pub fn bluetooth_beacon_add(
+pub fn ble_beacon_add(
     device_id: DeviceIdentifier,
     device_name: String,
     chip_id: ChipIdentifier,
@@ -268,7 +268,7 @@ pub fn bluetooth_beacon_add(
 }
 
 #[cfg(not(test))]
-pub fn bluetooth_beacon_remove(
+pub fn ble_beacon_remove(
     device_id: DeviceIdentifier,
     chip_id: ChipIdentifier,
     facade_id: FacadeIdentifier,
@@ -283,10 +283,10 @@ pub fn bluetooth_beacon_remove(
     }
 }
 
-pub fn bluetooth_beacon_patch(
+pub fn ble_beacon_patch(
     facade_id: FacadeIdentifier,
     chip_id: ChipIdentifier,
-    patch: &BluetoothBeaconProto,
+    patch: &BleBeaconProto,
 ) -> Result<(), String> {
     let mut guard = BEACON_CHIPS.write().unwrap();
     let mut beacon = guard
@@ -347,15 +347,18 @@ pub fn bluetooth_beacon_patch(
     Ok(())
 }
 
-pub fn bluetooth_beacon_get(chip_id: ChipIdentifier) -> Result<BluetoothBeaconProto, String> {
+pub fn ble_beacon_get(
+    chip_id: ChipIdentifier,
+    facade_id: FacadeIdentifier,
+) -> Result<BleBeaconProto, String> {
     let guard = BEACON_CHIPS.read().unwrap();
     let beacon = guard
         .get(&chip_id)
         .ok_or(format!("could not get bluetooth beacon with chip id {chip_id}"))?
         .lock()
         .unwrap();
-
-    Ok(BluetoothBeaconProto {
+    Ok(BleBeaconProto {
+        bt: Some(bluetooth_get(facade_id)).into(),
         address: addr_to_str(beacon.address),
         settings: MessageField::some((&beacon.advertise_settings).try_into()?),
         adv_data: MessageField::some((&beacon.advertise_data).into()),
@@ -391,13 +394,13 @@ fn str_to_addr(addr: &str) -> Result<Address, String> {
 pub mod tests {
     use std::thread;
 
-    use netsim_proto::model::chip::bluetooth_beacon::{
+    use netsim_proto::model::chip::ble_beacon::{
         advertise_settings::{AdvertiseTxPower as AdvertiseTxPowerProto, Tx_power as TxPowerProto},
         AdvertiseData as AdvertiseDataProto,
     };
 
     use super::*;
-    use crate::bluetooth::bluetooth_beacon_add;
+    use crate::bluetooth::ble_beacon_add;
 
     lazy_static! {
         static ref TEST_GUID_GENERATOR: Mutex<IdFactory<u32>> = Mutex::new(IdFactory::new(0, 1));
@@ -406,13 +409,13 @@ pub mod tests {
     fn new_test_beacon_with_settings(settings: AdvertiseSettingsProto) -> DeviceIdentifier {
         let id = TEST_GUID_GENERATOR.lock().unwrap().next_id();
 
-        let add_result = bluetooth_beacon_add(
+        let add_result = ble_beacon_add(
             0,
             format!("test-device-{:?}", thread::current().id()),
             id,
             &ChipCreateProto {
                 name: format!("test-beacon-chip-{:?}", thread::current().id()),
-                chip: Some(BuiltinProto::BleBeacon(BluetoothBeaconCreateProto {
+                chip: Some(BuiltinProto::BleBeacon(BleBeaconCreateProto {
                     address: String::from("00:00:00:00:00:00"),
                     settings: MessageField::some(settings),
                     ..Default::default()
@@ -439,7 +442,7 @@ pub mod tests {
 
         let id = new_test_beacon_with_settings(settings);
 
-        let beacon = bluetooth_beacon_get(id);
+        let beacon = ble_beacon_get(id, 0);
         assert!(beacon.is_ok(), "{}", beacon.unwrap_err());
         let beacon = beacon.unwrap();
 
@@ -462,10 +465,10 @@ pub mod tests {
         let interval = Duration::from_millis(33);
         let tx_power = TxPowerProto::TxPowerLevel(AdvertiseTxPowerProto::MEDIUM.into());
         let scannable = true;
-        let patch_result = bluetooth_beacon_patch(
+        let patch_result = ble_beacon_patch(
             0,
             id,
-            &BluetoothBeaconProto {
+            &BleBeaconProto {
                 settings: MessageField::some(AdvertiseSettingsProto {
                     interval: Some(
                         AdvertiseMode::new(Duration::from_millis(33)).try_into().unwrap(),
@@ -479,7 +482,7 @@ pub mod tests {
         );
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
 
-        let beacon_proto = bluetooth_beacon_get(id);
+        let beacon_proto = ble_beacon_get(id, 0);
         assert!(beacon_proto.is_ok(), "{}", beacon_proto.unwrap_err());
         let beacon_proto = beacon_proto.unwrap();
         let interval_after_patch =
@@ -498,10 +501,10 @@ pub mod tests {
 
         let id = new_test_beacon_with_settings(settings.clone());
 
-        let patch_result = bluetooth_beacon_patch(0, id, &BluetoothBeaconProto::default());
+        let patch_result = ble_beacon_patch(0, id, &BleBeaconProto::default());
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
 
-        let beacon_proto = bluetooth_beacon_get(id);
+        let beacon_proto = ble_beacon_get(id, 0);
         assert!(beacon_proto.is_ok(), "{}", beacon_proto.unwrap_err());
         let beacon_proto = beacon_proto.unwrap();
 

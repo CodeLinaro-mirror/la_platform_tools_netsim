@@ -422,12 +422,12 @@ impl Chip {
         }
     }
 
-    // .netsim.model.Chip.BluetoothBeacon ble_beacon = 9;
+    // .netsim.model.Chip.BleBeacon ble_beacon = 9;
 
-    pub fn ble_beacon(&self) -> &chip::BluetoothBeacon {
+    pub fn ble_beacon(&self) -> &chip::BleBeacon {
         match self.chip {
             ::std::option::Option::Some(chip::Chip::BleBeacon(ref v)) => v,
-            _ => <chip::BluetoothBeacon as ::protobuf::Message>::default_instance(),
+            _ => <chip::BleBeacon as ::protobuf::Message>::default_instance(),
         }
     }
 
@@ -443,15 +443,15 @@ impl Chip {
     }
 
     // Param is passed by value, moved
-    pub fn set_ble_beacon(&mut self, v: chip::BluetoothBeacon) {
+    pub fn set_ble_beacon(&mut self, v: chip::BleBeacon) {
         self.chip = ::std::option::Option::Some(chip::Chip::BleBeacon(v))
     }
 
     // Mutable pointer to the field.
-    pub fn mut_ble_beacon(&mut self) -> &mut chip::BluetoothBeacon {
+    pub fn mut_ble_beacon(&mut self) -> &mut chip::BleBeacon {
         if let ::std::option::Option::Some(chip::Chip::BleBeacon(_)) = self.chip {
         } else {
-            self.chip = ::std::option::Option::Some(chip::Chip::BleBeacon(chip::BluetoothBeacon::new()));
+            self.chip = ::std::option::Option::Some(chip::Chip::BleBeacon(chip::BleBeacon::new()));
         }
         match self.chip {
             ::std::option::Option::Some(chip::Chip::BleBeacon(ref mut v)) => v,
@@ -460,14 +460,14 @@ impl Chip {
     }
 
     // Take field
-    pub fn take_ble_beacon(&mut self) -> chip::BluetoothBeacon {
+    pub fn take_ble_beacon(&mut self) -> chip::BleBeacon {
         if self.has_ble_beacon() {
             match self.chip.take() {
                 ::std::option::Option::Some(chip::Chip::BleBeacon(v)) => v,
                 _ => panic!(),
             }
         } else {
-            chip::BluetoothBeacon::new()
+            chip::BleBeacon::new()
         }
     }
 
@@ -604,7 +604,7 @@ impl Chip {
             Chip::mut_bt,
             Chip::set_bt,
         ));
-        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, chip::BluetoothBeacon>(
+        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, chip::BleBeacon>(
             "ble_beacon",
             Chip::has_ble_beacon,
             Chip::ble_beacon,
@@ -825,7 +825,7 @@ pub mod chip {
         // @@protoc_insertion_point(oneof_field:netsim.model.Chip.bt)
         Bt(Bluetooth),
         // @@protoc_insertion_point(oneof_field:netsim.model.Chip.ble_beacon)
-        BleBeacon(BluetoothBeacon),
+        BleBeacon(BleBeacon),
         // @@protoc_insertion_point(oneof_field:netsim.model.Chip.uwb)
         Uwb(Radio),
         // @@protoc_insertion_point(oneof_field:netsim.model.Chip.wifi)
@@ -1203,32 +1203,32 @@ pub mod chip {
     }
 
     #[derive(PartialEq,Clone,Default,Debug)]
-    // @@protoc_insertion_point(message:netsim.model.Chip.BluetoothBeacon)
-    pub struct BluetoothBeacon {
+    // @@protoc_insertion_point(message:netsim.model.Chip.BleBeacon)
+    pub struct BleBeacon {
         // message fields
-        // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.bt)
+        // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.bt)
         pub bt: ::protobuf::MessageField<Bluetooth>,
-        // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.address)
+        // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.address)
         pub address: ::std::string::String,
-        // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.settings)
-        pub settings: ::protobuf::MessageField<bluetooth_beacon::AdvertiseSettings>,
-        // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.adv_data)
-        pub adv_data: ::protobuf::MessageField<bluetooth_beacon::AdvertiseData>,
-        // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.scan_response)
-        pub scan_response: ::protobuf::MessageField<bluetooth_beacon::AdvertiseData>,
+        // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.settings)
+        pub settings: ::protobuf::MessageField<ble_beacon::AdvertiseSettings>,
+        // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.adv_data)
+        pub adv_data: ::protobuf::MessageField<ble_beacon::AdvertiseData>,
+        // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.scan_response)
+        pub scan_response: ::protobuf::MessageField<ble_beacon::AdvertiseData>,
         // special fields
-        // @@protoc_insertion_point(special_field:netsim.model.Chip.BluetoothBeacon.special_fields)
+        // @@protoc_insertion_point(special_field:netsim.model.Chip.BleBeacon.special_fields)
         pub special_fields: ::protobuf::SpecialFields,
     }
 
-    impl<'a> ::std::default::Default for &'a BluetoothBeacon {
-        fn default() -> &'a BluetoothBeacon {
-            <BluetoothBeacon as ::protobuf::Message>::default_instance()
+    impl<'a> ::std::default::Default for &'a BleBeacon {
+        fn default() -> &'a BleBeacon {
+            <BleBeacon as ::protobuf::Message>::default_instance()
         }
     }
 
-    impl BluetoothBeacon {
-        pub fn new() -> BluetoothBeacon {
+    impl BleBeacon {
+        pub fn new() -> BleBeacon {
             ::std::default::Default::default()
         }
 
@@ -1237,39 +1237,39 @@ pub mod chip {
             let mut oneofs = ::std::vec::Vec::with_capacity(0);
             fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, Bluetooth>(
                 "bt",
-                |m: &BluetoothBeacon| { &m.bt },
-                |m: &mut BluetoothBeacon| { &mut m.bt },
+                |m: &BleBeacon| { &m.bt },
+                |m: &mut BleBeacon| { &mut m.bt },
             ));
             fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
                 "address",
-                |m: &BluetoothBeacon| { &m.address },
-                |m: &mut BluetoothBeacon| { &mut m.address },
+                |m: &BleBeacon| { &m.address },
+                |m: &mut BleBeacon| { &mut m.address },
             ));
-            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, bluetooth_beacon::AdvertiseSettings>(
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, ble_beacon::AdvertiseSettings>(
                 "settings",
-                |m: &BluetoothBeacon| { &m.settings },
-                |m: &mut BluetoothBeacon| { &mut m.settings },
+                |m: &BleBeacon| { &m.settings },
+                |m: &mut BleBeacon| { &mut m.settings },
             ));
-            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, bluetooth_beacon::AdvertiseData>(
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, ble_beacon::AdvertiseData>(
                 "adv_data",
-                |m: &BluetoothBeacon| { &m.adv_data },
-                |m: &mut BluetoothBeacon| { &mut m.adv_data },
+                |m: &BleBeacon| { &m.adv_data },
+                |m: &mut BleBeacon| { &mut m.adv_data },
             ));
-            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, bluetooth_beacon::AdvertiseData>(
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, ble_beacon::AdvertiseData>(
                 "scan_response",
-                |m: &BluetoothBeacon| { &m.scan_response },
-                |m: &mut BluetoothBeacon| { &mut m.scan_response },
+                |m: &BleBeacon| { &m.scan_response },
+                |m: &mut BleBeacon| { &mut m.scan_response },
             ));
-            ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<BluetoothBeacon>(
-                "Chip.BluetoothBeacon",
+            ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<BleBeacon>(
+                "Chip.BleBeacon",
                 fields,
                 oneofs,
             )
         }
     }
 
-    impl ::protobuf::Message for BluetoothBeacon {
-        const NAME: &'static str = "BluetoothBeacon";
+    impl ::protobuf::Message for BleBeacon {
+        const NAME: &'static str = "BleBeacon";
 
         fn is_initialized(&self) -> bool {
             true
@@ -1357,8 +1357,8 @@ pub mod chip {
             &mut self.special_fields
         }
 
-        fn new() -> BluetoothBeacon {
-            BluetoothBeacon::new()
+        fn new() -> BleBeacon {
+            BleBeacon::new()
         }
 
         fn clear(&mut self) {
@@ -1370,8 +1370,8 @@ pub mod chip {
             self.special_fields.clear();
         }
 
-        fn default_instance() -> &'static BluetoothBeacon {
-            static instance: BluetoothBeacon = BluetoothBeacon {
+        fn default_instance() -> &'static BleBeacon {
+            static instance: BleBeacon = BleBeacon {
                 bt: ::protobuf::MessageField::none(),
                 address: ::std::string::String::new(),
                 settings: ::protobuf::MessageField::none(),
@@ -1383,38 +1383,38 @@ pub mod chip {
         }
     }
 
-    impl ::protobuf::MessageFull for BluetoothBeacon {
+    impl ::protobuf::MessageFull for BleBeacon {
         fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
             static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-            descriptor.get(|| super::file_descriptor().message_by_package_relative_name("Chip.BluetoothBeacon").unwrap()).clone()
+            descriptor.get(|| super::file_descriptor().message_by_package_relative_name("Chip.BleBeacon").unwrap()).clone()
         }
     }
 
-    impl ::std::fmt::Display for BluetoothBeacon {
+    impl ::std::fmt::Display for BleBeacon {
         fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
             ::protobuf::text_format::fmt(self, f)
         }
     }
 
-    impl ::protobuf::reflect::ProtobufValue for BluetoothBeacon {
+    impl ::protobuf::reflect::ProtobufValue for BleBeacon {
         type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
     }
 
-    /// Nested message and enums of message `BluetoothBeacon`
-    pub mod bluetooth_beacon {
+    /// Nested message and enums of message `BleBeacon`
+    pub mod ble_beacon {
         #[derive(PartialEq,Clone,Default,Debug)]
-        // @@protoc_insertion_point(message:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings)
+        // @@protoc_insertion_point(message:netsim.model.Chip.BleBeacon.AdvertiseSettings)
         pub struct AdvertiseSettings {
             // message fields
-            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.scannable)
+            // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.AdvertiseSettings.scannable)
             pub scannable: bool,
-            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.timeout)
+            // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.AdvertiseSettings.timeout)
             pub timeout: u64,
             // message oneof groups
             pub interval: ::std::option::Option<advertise_settings::Interval>,
             pub tx_power: ::std::option::Option<advertise_settings::Tx_power>,
             // special fields
-            // @@protoc_insertion_point(special_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.special_fields)
+            // @@protoc_insertion_point(special_field:netsim.model.Chip.BleBeacon.AdvertiseSettings.special_fields)
             pub special_fields: ::protobuf::SpecialFields,
         }
 
@@ -1429,7 +1429,7 @@ pub mod chip {
                 ::std::default::Default::default()
             }
 
-            // .netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode advertise_mode = 1;
+            // .netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseMode advertise_mode = 1;
 
             pub fn advertise_mode(&self) -> advertise_settings::AdvertiseMode {
                 match self.interval {
@@ -1479,7 +1479,7 @@ pub mod chip {
                 self.interval = ::std::option::Option::Some(advertise_settings::Interval::Milliseconds(v))
             }
 
-            // .netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower tx_power_level = 3;
+            // .netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseTxPower tx_power_level = 3;
 
             pub fn tx_power_level(&self) -> advertise_settings::AdvertiseTxPower {
                 match self.tx_power {
@@ -1579,7 +1579,7 @@ pub mod chip {
                 oneofs.push(advertise_settings::Interval::generated_oneof_descriptor_data());
                 oneofs.push(advertise_settings::Tx_power::generated_oneof_descriptor_data());
                 ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<AdvertiseSettings>(
-                    "Chip.BluetoothBeacon.AdvertiseSettings",
+                    "Chip.BleBeacon.AdvertiseSettings",
                     fields,
                     oneofs,
                 )
@@ -1725,7 +1725,7 @@ pub mod chip {
         impl ::protobuf::MessageFull for AdvertiseSettings {
             fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
                 static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-                descriptor.get(|| super::super::file_descriptor().message_by_package_relative_name("Chip.BluetoothBeacon.AdvertiseSettings").unwrap()).clone()
+                descriptor.get(|| super::super::file_descriptor().message_by_package_relative_name("Chip.BleBeacon.AdvertiseSettings").unwrap()).clone()
             }
         }
 
@@ -1744,11 +1744,11 @@ pub mod chip {
 
             #[derive(Clone,PartialEq,Debug)]
             #[non_exhaustive]
-            // @@protoc_insertion_point(oneof:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.interval)
+            // @@protoc_insertion_point(oneof:netsim.model.Chip.BleBeacon.AdvertiseSettings.interval)
             pub enum Interval {
-                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.advertise_mode)
+                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BleBeacon.AdvertiseSettings.advertise_mode)
                 AdvertiseMode(::protobuf::EnumOrUnknown<AdvertiseMode>),
-                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.milliseconds)
+                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BleBeacon.AdvertiseSettings.milliseconds)
                 Milliseconds(u64),
             }
 
@@ -1770,11 +1770,11 @@ pub mod chip {
 
             #[derive(Clone,PartialEq,Debug)]
             #[non_exhaustive]
-            // @@protoc_insertion_point(oneof:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.tx_power)
+            // @@protoc_insertion_point(oneof:netsim.model.Chip.BleBeacon.AdvertiseSettings.tx_power)
             pub enum Tx_power {
-                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.tx_power_level)
+                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BleBeacon.AdvertiseSettings.tx_power_level)
                 TxPowerLevel(::protobuf::EnumOrUnknown<AdvertiseTxPower>),
-                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.dbm)
+                // @@protoc_insertion_point(oneof_field:netsim.model.Chip.BleBeacon.AdvertiseSettings.dbm)
                 Dbm(i32),
             }
 
@@ -1794,13 +1794,13 @@ pub mod chip {
                 }
             }
             #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-            // @@protoc_insertion_point(enum:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode)
+            // @@protoc_insertion_point(enum:netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseMode)
             pub enum AdvertiseMode {
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode.LOW_POWER)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseMode.LOW_POWER)
                 LOW_POWER = 0,
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode.BALANCED)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseMode.BALANCED)
                 BALANCED = 1,
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode.LOW_LATENCY)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseMode.LOW_LATENCY)
                 LOW_LATENCY = 2,
             }
 
@@ -1830,7 +1830,7 @@ pub mod chip {
             impl ::protobuf::EnumFull for AdvertiseMode {
                 fn enum_descriptor() -> ::protobuf::reflect::EnumDescriptor {
                     static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::EnumDescriptor> = ::protobuf::rt::Lazy::new();
-                    descriptor.get(|| super::super::super::file_descriptor().enum_by_package_relative_name("Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode").unwrap()).clone()
+                    descriptor.get(|| super::super::super::file_descriptor().enum_by_package_relative_name("Chip.BleBeacon.AdvertiseSettings.AdvertiseMode").unwrap()).clone()
                 }
 
                 fn descriptor(&self) -> ::protobuf::reflect::EnumValueDescriptor {
@@ -1847,20 +1847,20 @@ pub mod chip {
 
             impl AdvertiseMode {
                 pub(in super::super::super) fn generated_enum_descriptor_data() -> ::protobuf::reflect::GeneratedEnumDescriptorData {
-                    ::protobuf::reflect::GeneratedEnumDescriptorData::new::<AdvertiseMode>("Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode")
+                    ::protobuf::reflect::GeneratedEnumDescriptorData::new::<AdvertiseMode>("Chip.BleBeacon.AdvertiseSettings.AdvertiseMode")
                 }
             }
 
             #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-            // @@protoc_insertion_point(enum:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower)
+            // @@protoc_insertion_point(enum:netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseTxPower)
             pub enum AdvertiseTxPower {
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower.ULTRA_LOW)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseTxPower.ULTRA_LOW)
                 ULTRA_LOW = 0,
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower.LOW)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseTxPower.LOW)
                 LOW = 1,
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower.MEDIUM)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseTxPower.MEDIUM)
                 MEDIUM = 2,
-                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower.HIGH)
+                // @@protoc_insertion_point(enum_value:netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseTxPower.HIGH)
                 HIGH = 3,
             }
 
@@ -1892,7 +1892,7 @@ pub mod chip {
             impl ::protobuf::EnumFull for AdvertiseTxPower {
                 fn enum_descriptor() -> ::protobuf::reflect::EnumDescriptor {
                     static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::EnumDescriptor> = ::protobuf::rt::Lazy::new();
-                    descriptor.get(|| super::super::super::file_descriptor().enum_by_package_relative_name("Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower").unwrap()).clone()
+                    descriptor.get(|| super::super::super::file_descriptor().enum_by_package_relative_name("Chip.BleBeacon.AdvertiseSettings.AdvertiseTxPower").unwrap()).clone()
                 }
 
                 fn descriptor(&self) -> ::protobuf::reflect::EnumValueDescriptor {
@@ -1909,25 +1909,25 @@ pub mod chip {
 
             impl AdvertiseTxPower {
                 pub(in super::super::super) fn generated_enum_descriptor_data() -> ::protobuf::reflect::GeneratedEnumDescriptorData {
-                    ::protobuf::reflect::GeneratedEnumDescriptorData::new::<AdvertiseTxPower>("Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPower")
+                    ::protobuf::reflect::GeneratedEnumDescriptorData::new::<AdvertiseTxPower>("Chip.BleBeacon.AdvertiseSettings.AdvertiseTxPower")
                 }
             }
         }
 
         #[derive(PartialEq,Clone,Default,Debug)]
-        // @@protoc_insertion_point(message:netsim.model.Chip.BluetoothBeacon.AdvertiseData)
+        // @@protoc_insertion_point(message:netsim.model.Chip.BleBeacon.AdvertiseData)
         pub struct AdvertiseData {
             // message fields
-            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.include_device_name)
+            // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.AdvertiseData.include_device_name)
             pub include_device_name: bool,
-            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.include_tx_power_level)
+            // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.AdvertiseData.include_tx_power_level)
             pub include_tx_power_level: bool,
-            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.manufacturer_data)
+            // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.AdvertiseData.manufacturer_data)
             pub manufacturer_data: ::std::vec::Vec<u8>,
-            // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.services)
+            // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.AdvertiseData.services)
             pub services: ::std::vec::Vec<advertise_data::Service>,
             // special fields
-            // @@protoc_insertion_point(special_field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.special_fields)
+            // @@protoc_insertion_point(special_field:netsim.model.Chip.BleBeacon.AdvertiseData.special_fields)
             pub special_fields: ::protobuf::SpecialFields,
         }
 
@@ -1966,7 +1966,7 @@ pub mod chip {
                     |m: &mut AdvertiseData| { &mut m.services },
                 ));
                 ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<AdvertiseData>(
-                    "Chip.BluetoothBeacon.AdvertiseData",
+                    "Chip.BleBeacon.AdvertiseData",
                     fields,
                     oneofs,
                 )
@@ -2077,7 +2077,7 @@ pub mod chip {
         impl ::protobuf::MessageFull for AdvertiseData {
             fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
                 static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-                descriptor.get(|| super::super::file_descriptor().message_by_package_relative_name("Chip.BluetoothBeacon.AdvertiseData").unwrap()).clone()
+                descriptor.get(|| super::super::file_descriptor().message_by_package_relative_name("Chip.BleBeacon.AdvertiseData").unwrap()).clone()
             }
         }
 
@@ -2094,15 +2094,15 @@ pub mod chip {
         /// Nested message and enums of message `AdvertiseData`
         pub mod advertise_data {
             #[derive(PartialEq,Clone,Default,Debug)]
-            // @@protoc_insertion_point(message:netsim.model.Chip.BluetoothBeacon.AdvertiseData.Service)
+            // @@protoc_insertion_point(message:netsim.model.Chip.BleBeacon.AdvertiseData.Service)
             pub struct Service {
                 // message fields
-                // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.Service.uuid)
+                // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.AdvertiseData.Service.uuid)
                 pub uuid: ::std::string::String,
-                // @@protoc_insertion_point(field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.Service.data)
+                // @@protoc_insertion_point(field:netsim.model.Chip.BleBeacon.AdvertiseData.Service.data)
                 pub data: ::std::vec::Vec<u8>,
                 // special fields
-                // @@protoc_insertion_point(special_field:netsim.model.Chip.BluetoothBeacon.AdvertiseData.Service.special_fields)
+                // @@protoc_insertion_point(special_field:netsim.model.Chip.BleBeacon.AdvertiseData.Service.special_fields)
                 pub special_fields: ::protobuf::SpecialFields,
             }
 
@@ -2131,7 +2131,7 @@ pub mod chip {
                         |m: &mut Service| { &mut m.data },
                     ));
                     ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Service>(
-                        "Chip.BluetoothBeacon.AdvertiseData.Service",
+                        "Chip.BleBeacon.AdvertiseData.Service",
                         fields,
                         oneofs,
                     )
@@ -2219,7 +2219,7 @@ pub mod chip {
             impl ::protobuf::MessageFull for Service {
                 fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
                     static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-                    descriptor.get(|| super::super::super::file_descriptor().message_by_package_relative_name("Chip.BluetoothBeacon.AdvertiseData.Service").unwrap()).clone()
+                    descriptor.get(|| super::super::super::file_descriptor().message_by_package_relative_name("Chip.BleBeacon.AdvertiseData.Service").unwrap()).clone()
                 }
             }
 
@@ -2270,12 +2270,12 @@ impl ChipCreate {
         ::std::default::Default::default()
     }
 
-    // .netsim.model.ChipCreate.BluetoothBeaconCreate ble_beacon = 6;
+    // .netsim.model.ChipCreate.BleBeaconCreate ble_beacon = 6;
 
-    pub fn ble_beacon(&self) -> &chip_create::BluetoothBeaconCreate {
+    pub fn ble_beacon(&self) -> &chip_create::BleBeaconCreate {
         match self.chip {
             ::std::option::Option::Some(chip_create::Chip::BleBeacon(ref v)) => v,
-            _ => <chip_create::BluetoothBeaconCreate as ::protobuf::Message>::default_instance(),
+            _ => <chip_create::BleBeaconCreate as ::protobuf::Message>::default_instance(),
         }
     }
 
@@ -2291,15 +2291,15 @@ impl ChipCreate {
     }
 
     // Param is passed by value, moved
-    pub fn set_ble_beacon(&mut self, v: chip_create::BluetoothBeaconCreate) {
+    pub fn set_ble_beacon(&mut self, v: chip_create::BleBeaconCreate) {
         self.chip = ::std::option::Option::Some(chip_create::Chip::BleBeacon(v))
     }
 
     // Mutable pointer to the field.
-    pub fn mut_ble_beacon(&mut self) -> &mut chip_create::BluetoothBeaconCreate {
+    pub fn mut_ble_beacon(&mut self) -> &mut chip_create::BleBeaconCreate {
         if let ::std::option::Option::Some(chip_create::Chip::BleBeacon(_)) = self.chip {
         } else {
-            self.chip = ::std::option::Option::Some(chip_create::Chip::BleBeacon(chip_create::BluetoothBeaconCreate::new()));
+            self.chip = ::std::option::Option::Some(chip_create::Chip::BleBeacon(chip_create::BleBeaconCreate::new()));
         }
         match self.chip {
             ::std::option::Option::Some(chip_create::Chip::BleBeacon(ref mut v)) => v,
@@ -2308,14 +2308,14 @@ impl ChipCreate {
     }
 
     // Take field
-    pub fn take_ble_beacon(&mut self) -> chip_create::BluetoothBeaconCreate {
+    pub fn take_ble_beacon(&mut self) -> chip_create::BleBeaconCreate {
         if self.has_ble_beacon() {
             match self.chip.take() {
                 ::std::option::Option::Some(chip_create::Chip::BleBeacon(v)) => v,
                 _ => panic!(),
             }
         } else {
-            chip_create::BluetoothBeaconCreate::new()
+            chip_create::BleBeaconCreate::new()
         }
     }
 
@@ -2347,7 +2347,7 @@ impl ChipCreate {
             |m: &ChipCreate| { &m.product_name },
             |m: &mut ChipCreate| { &mut m.product_name },
         ));
-        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, chip_create::BluetoothBeaconCreate>(
+        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, chip_create::BleBeaconCreate>(
             "ble_beacon",
             ChipCreate::has_ble_beacon,
             ChipCreate::ble_beacon,
@@ -2536,7 +2536,7 @@ pub mod chip_create {
     // @@protoc_insertion_point(oneof:netsim.model.ChipCreate.chip)
     pub enum Chip {
         // @@protoc_insertion_point(oneof_field:netsim.model.ChipCreate.ble_beacon)
-        BleBeacon(BluetoothBeaconCreate),
+        BleBeacon(BleBeaconCreate),
     }
 
     impl ::protobuf::Oneof for Chip {
@@ -2555,30 +2555,30 @@ pub mod chip_create {
         }
     }
     #[derive(PartialEq,Clone,Default,Debug)]
-    // @@protoc_insertion_point(message:netsim.model.ChipCreate.BluetoothBeaconCreate)
-    pub struct BluetoothBeaconCreate {
+    // @@protoc_insertion_point(message:netsim.model.ChipCreate.BleBeaconCreate)
+    pub struct BleBeaconCreate {
         // message fields
-        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BluetoothBeaconCreate.address)
+        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BleBeaconCreate.address)
         pub address: ::std::string::String,
-        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BluetoothBeaconCreate.settings)
-        pub settings: ::protobuf::MessageField<super::chip::bluetooth_beacon::AdvertiseSettings>,
-        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BluetoothBeaconCreate.adv_data)
-        pub adv_data: ::protobuf::MessageField<super::chip::bluetooth_beacon::AdvertiseData>,
-        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BluetoothBeaconCreate.scan_response)
-        pub scan_response: ::protobuf::MessageField<super::chip::bluetooth_beacon::AdvertiseData>,
+        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BleBeaconCreate.settings)
+        pub settings: ::protobuf::MessageField<super::chip::ble_beacon::AdvertiseSettings>,
+        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BleBeaconCreate.adv_data)
+        pub adv_data: ::protobuf::MessageField<super::chip::ble_beacon::AdvertiseData>,
+        // @@protoc_insertion_point(field:netsim.model.ChipCreate.BleBeaconCreate.scan_response)
+        pub scan_response: ::protobuf::MessageField<super::chip::ble_beacon::AdvertiseData>,
         // special fields
-        // @@protoc_insertion_point(special_field:netsim.model.ChipCreate.BluetoothBeaconCreate.special_fields)
+        // @@protoc_insertion_point(special_field:netsim.model.ChipCreate.BleBeaconCreate.special_fields)
         pub special_fields: ::protobuf::SpecialFields,
     }
 
-    impl<'a> ::std::default::Default for &'a BluetoothBeaconCreate {
-        fn default() -> &'a BluetoothBeaconCreate {
-            <BluetoothBeaconCreate as ::protobuf::Message>::default_instance()
+    impl<'a> ::std::default::Default for &'a BleBeaconCreate {
+        fn default() -> &'a BleBeaconCreate {
+            <BleBeaconCreate as ::protobuf::Message>::default_instance()
         }
     }
 
-    impl BluetoothBeaconCreate {
-        pub fn new() -> BluetoothBeaconCreate {
+    impl BleBeaconCreate {
+        pub fn new() -> BleBeaconCreate {
             ::std::default::Default::default()
         }
 
@@ -2587,34 +2587,34 @@ pub mod chip_create {
             let mut oneofs = ::std::vec::Vec::with_capacity(0);
             fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
                 "address",
-                |m: &BluetoothBeaconCreate| { &m.address },
-                |m: &mut BluetoothBeaconCreate| { &mut m.address },
+                |m: &BleBeaconCreate| { &m.address },
+                |m: &mut BleBeaconCreate| { &mut m.address },
             ));
-            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::chip::bluetooth_beacon::AdvertiseSettings>(
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::chip::ble_beacon::AdvertiseSettings>(
                 "settings",
-                |m: &BluetoothBeaconCreate| { &m.settings },
-                |m: &mut BluetoothBeaconCreate| { &mut m.settings },
+                |m: &BleBeaconCreate| { &m.settings },
+                |m: &mut BleBeaconCreate| { &mut m.settings },
             ));
-            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::chip::bluetooth_beacon::AdvertiseData>(
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::chip::ble_beacon::AdvertiseData>(
                 "adv_data",
-                |m: &BluetoothBeaconCreate| { &m.adv_data },
-                |m: &mut BluetoothBeaconCreate| { &mut m.adv_data },
+                |m: &BleBeaconCreate| { &m.adv_data },
+                |m: &mut BleBeaconCreate| { &mut m.adv_data },
             ));
-            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::chip::bluetooth_beacon::AdvertiseData>(
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::chip::ble_beacon::AdvertiseData>(
                 "scan_response",
-                |m: &BluetoothBeaconCreate| { &m.scan_response },
-                |m: &mut BluetoothBeaconCreate| { &mut m.scan_response },
+                |m: &BleBeaconCreate| { &m.scan_response },
+                |m: &mut BleBeaconCreate| { &mut m.scan_response },
             ));
-            ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<BluetoothBeaconCreate>(
-                "ChipCreate.BluetoothBeaconCreate",
+            ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<BleBeaconCreate>(
+                "ChipCreate.BleBeaconCreate",
                 fields,
                 oneofs,
             )
         }
     }
 
-    impl ::protobuf::Message for BluetoothBeaconCreate {
-        const NAME: &'static str = "BluetoothBeaconCreate";
+    impl ::protobuf::Message for BleBeaconCreate {
+        const NAME: &'static str = "BleBeaconCreate";
 
         fn is_initialized(&self) -> bool {
             true
@@ -2692,8 +2692,8 @@ pub mod chip_create {
             &mut self.special_fields
         }
 
-        fn new() -> BluetoothBeaconCreate {
-            BluetoothBeaconCreate::new()
+        fn new() -> BleBeaconCreate {
+            BleBeaconCreate::new()
         }
 
         fn clear(&mut self) {
@@ -2704,8 +2704,8 @@ pub mod chip_create {
             self.special_fields.clear();
         }
 
-        fn default_instance() -> &'static BluetoothBeaconCreate {
-            static instance: BluetoothBeaconCreate = BluetoothBeaconCreate {
+        fn default_instance() -> &'static BleBeaconCreate {
+            static instance: BleBeaconCreate = BleBeaconCreate {
                 address: ::std::string::String::new(),
                 settings: ::protobuf::MessageField::none(),
                 adv_data: ::protobuf::MessageField::none(),
@@ -2716,20 +2716,20 @@ pub mod chip_create {
         }
     }
 
-    impl ::protobuf::MessageFull for BluetoothBeaconCreate {
+    impl ::protobuf::MessageFull for BleBeaconCreate {
         fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
             static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-            descriptor.get(|| super::file_descriptor().message_by_package_relative_name("ChipCreate.BluetoothBeaconCreate").unwrap()).clone()
+            descriptor.get(|| super::file_descriptor().message_by_package_relative_name("ChipCreate.BleBeaconCreate").unwrap()).clone()
         }
     }
 
-    impl ::std::fmt::Display for BluetoothBeaconCreate {
+    impl ::std::fmt::Display for BleBeaconCreate {
         fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
             ::protobuf::text_format::fmt(self, f)
         }
     }
 
-    impl ::protobuf::reflect::ProtobufValue for BluetoothBeaconCreate {
+    impl ::protobuf::reflect::ProtobufValue for BleBeaconCreate {
         type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
     }
 }
@@ -3635,62 +3635,61 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x01y\x18\x02\x20\x01(\x02R\x01y\x12\x0c\n\x01z\x18\x03\x20\x01(\x02R\
     \x01z\"I\n\x0bOrientation\x12\x10\n\x03yaw\x18\x01\x20\x01(\x02R\x03yaw\
     \x12\x14\n\x05pitch\x18\x02\x20\x01(\x02R\x05pitch\x12\x12\n\x04roll\x18\
-    \x03\x20\x01(\x02R\x04roll\"\xd4\x0e\n\x04Chip\x12+\n\x04kind\x18\x01\
+    \x03\x20\x01(\x02R\x04roll\"\xa4\x0e\n\x04Chip\x12+\n\x04kind\x18\x01\
     \x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x0e\n\x02id\x18\
     \x02\x20\x01(\rR\x02id\x12\x12\n\x04name\x18\x03\x20\x01(\tR\x04name\x12\
     \"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cprodu\
     ct_name\x18\x05\x20\x01(\tR\x0bproductName\x12.\n\x02bt\x18\x06\x20\x01(\
-    \x0b2\x1c.netsim.model.Chip.BluetoothH\0R\x02bt\x12C\n\nble_beacon\x18\t\
-    \x20\x01(\x0b2\".netsim.model.Chip.BluetoothBeaconH\0R\tbleBeacon\x12,\n\
-    \x03uwb\x18\x07\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x03uwb\x12\
-    .\n\x04wifi\x18\x08\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x04wif\
-    i\x1a~\n\x05Radio\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model\
-    .StateR\x05state\x12\x14\n\x05range\x18\x02\x20\x01(\x02R\x05range\x12\
+    \x0b2\x1c.netsim.model.Chip.BluetoothH\0R\x02bt\x12=\n\nble_beacon\x18\t\
+    \x20\x01(\x0b2\x1c.netsim.model.Chip.BleBeaconH\0R\tbleBeacon\x12,\n\x03\
+    uwb\x18\x07\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x03uwb\x12.\n\
+    \x04wifi\x18\x08\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x04wifi\
+    \x1a~\n\x05Radio\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model.\
+    StateR\x05state\x12\x14\n\x05range\x18\x02\x20\x01(\x02R\x05range\x12\
     \x19\n\x08tx_count\x18\x03\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_coun\
     t\x18\x04\x20\x01(\x05R\x07rxCount\x1a\xdc\x01\n\tBluetooth\x127\n\nlow_\
     energy\x18\x01\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\tlowEnergy\x12\
     2\n\x07classic\x18\x02\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\x07cla\
     ssic\x12\x18\n\x07address\x18\x03\x20\x01(\tR\x07address\x12H\n\rbt_prop\
     erties\x18\x04\x20\x01(\x0b2#.rootcanal.configuration.ControllerR\x0cbtP\
-    roperties\x1a\xf9\x08\n\x0fBluetoothBeacon\x12,\n\x02bt\x18\x01\x20\x01(\
-    \x0b2\x1c.netsim.model.Chip.BluetoothR\x02bt\x12\x18\n\x07address\x18\
-    \x02\x20\x01(\tR\x07address\x12P\n\x08settings\x18\x03\x20\x01(\x0b24.ne\
-    tsim.model.Chip.BluetoothBeacon.AdvertiseSettingsR\x08settings\x12K\n\
-    \x08adv_data\x18\x04\x20\x01(\x0b20.netsim.model.Chip.BluetoothBeacon.Ad\
-    vertiseDataR\x07advData\x12U\n\rscan_response\x18\x05\x20\x01(\x0b20.net\
-    sim.model.Chip.BluetoothBeacon.AdvertiseDataR\x0cscanResponse\x1a\xfa\
-    \x03\n\x11AdvertiseSettings\x12k\n\x0eadvertise_mode\x18\x01\x20\x01(\
-    \x0e2B.netsim.model.Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseMode\
-    H\0R\radvertiseMode\x12$\n\x0cmilliseconds\x18\x02\x20\x01(\x04H\0R\x0cm\
-    illiseconds\x12m\n\x0etx_power_level\x18\x03\x20\x01(\x0e2E.netsim.model\
-    .Chip.BluetoothBeacon.AdvertiseSettings.AdvertiseTxPowerH\x01R\x0ctxPowe\
-    rLevel\x12\x12\n\x03dbm\x18\x04\x20\x01(\x05H\x01R\x03dbm\x12\x1c\n\tsca\
-    nnable\x18\x05\x20\x01(\x08R\tscannable\x12\x18\n\x07timeout\x18\x06\x20\
-    \x01(\x04R\x07timeout\"=\n\rAdvertiseMode\x12\r\n\tLOW_POWER\x10\0\x12\
-    \x0c\n\x08BALANCED\x10\x01\x12\x0f\n\x0bLOW_LATENCY\x10\x02\"@\n\x10Adve\
-    rtiseTxPower\x12\r\n\tULTRA_LOW\x10\0\x12\x07\n\x03LOW\x10\x01\x12\n\n\
-    \x06MEDIUM\x10\x02\x12\x08\n\x04HIGH\x10\x03B\n\n\x08intervalB\n\n\x08tx\
-    _power\x1a\xaa\x02\n\rAdvertiseData\x12.\n\x13include_device_name\x18\
-    \x01\x20\x01(\x08R\x11includeDeviceName\x123\n\x16include_tx_power_level\
-    \x18\x02\x20\x01(\x08R\x13includeTxPowerLevel\x12+\n\x11manufacturer_dat\
-    a\x18\x03\x20\x01(\x0cR\x10manufacturerData\x12T\n\x08services\x18\x04\
-    \x20\x03(\x0b28.netsim.model.Chip.BluetoothBeacon.AdvertiseData.ServiceR\
-    \x08services\x1a1\n\x07Service\x12\x12\n\x04uuid\x18\x01\x20\x01(\tR\x04\
-    uuid\x12\x12\n\x04data\x18\x02\x20\x01(\x0cR\x04dataB\x06\n\x04chip\"\
-    \xfb\x04\n\nChipCreate\x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.c\
-    ommon.ChipKindR\x04kind\x12\x18\n\x07address\x18\x02\x20\x01(\tR\x07addr\
-    ess\x12\x12\n\x04name\x18\x03\x20\x01(\tR\x04name\x12\"\n\x0cmanufacture\
-    r\x18\x04\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cproduct_name\x18\x05\x20\
-    \x01(\tR\x0bproductName\x12O\n\nble_beacon\x18\x06\x20\x01(\x0b2..netsim\
-    .model.ChipCreate.BluetoothBeaconCreateH\0R\tbleBeacon\x12H\n\rbt_proper\
-    ties\x18\x07\x20\x01(\x0b2#.rootcanal.configuration.ControllerR\x0cbtPro\
-    perties\x1a\xa7\x02\n\x15BluetoothBeaconCreate\x12\x18\n\x07address\x18\
-    \x01\x20\x01(\tR\x07address\x12P\n\x08settings\x18\x03\x20\x01(\x0b24.ne\
-    tsim.model.Chip.BluetoothBeacon.AdvertiseSettingsR\x08settings\x12K\n\
-    \x08adv_data\x18\x04\x20\x01(\x0b20.netsim.model.Chip.BluetoothBeacon.Ad\
-    vertiseDataR\x07advData\x12U\n\rscan_response\x18\x05\x20\x01(\x0b20.net\
-    sim.model.Chip.BluetoothBeacon.AdvertiseDataR\x0cscanResponseB\x06\n\x04\
-    chip\"\xf6\x01\n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x12\
+    roperties\x1a\xcf\x08\n\tBleBeacon\x12,\n\x02bt\x18\x01\x20\x01(\x0b2\
+    \x1c.netsim.model.Chip.BluetoothR\x02bt\x12\x18\n\x07address\x18\x02\x20\
+    \x01(\tR\x07address\x12J\n\x08settings\x18\x03\x20\x01(\x0b2..netsim.mod\
+    el.Chip.BleBeacon.AdvertiseSettingsR\x08settings\x12E\n\x08adv_data\x18\
+    \x04\x20\x01(\x0b2*.netsim.model.Chip.BleBeacon.AdvertiseDataR\x07advDat\
+    a\x12O\n\rscan_response\x18\x05\x20\x01(\x0b2*.netsim.model.Chip.BleBeac\
+    on.AdvertiseDataR\x0cscanResponse\x1a\xee\x03\n\x11AdvertiseSettings\x12\
+    e\n\x0eadvertise_mode\x18\x01\x20\x01(\x0e2<.netsim.model.Chip.BleBeacon\
+    .AdvertiseSettings.AdvertiseModeH\0R\radvertiseMode\x12$\n\x0cmillisecon\
+    ds\x18\x02\x20\x01(\x04H\0R\x0cmilliseconds\x12g\n\x0etx_power_level\x18\
+    \x03\x20\x01(\x0e2?.netsim.model.Chip.BleBeacon.AdvertiseSettings.Advert\
+    iseTxPowerH\x01R\x0ctxPowerLevel\x12\x12\n\x03dbm\x18\x04\x20\x01(\x05H\
+    \x01R\x03dbm\x12\x1c\n\tscannable\x18\x05\x20\x01(\x08R\tscannable\x12\
+    \x18\n\x07timeout\x18\x06\x20\x01(\x04R\x07timeout\"=\n\rAdvertiseMode\
+    \x12\r\n\tLOW_POWER\x10\0\x12\x0c\n\x08BALANCED\x10\x01\x12\x0f\n\x0bLOW\
+    _LATENCY\x10\x02\"@\n\x10AdvertiseTxPower\x12\r\n\tULTRA_LOW\x10\0\x12\
+    \x07\n\x03LOW\x10\x01\x12\n\n\x06MEDIUM\x10\x02\x12\x08\n\x04HIGH\x10\
+    \x03B\n\n\x08intervalB\n\n\x08tx_power\x1a\xa4\x02\n\rAdvertiseData\x12.\
+    \n\x13include_device_name\x18\x01\x20\x01(\x08R\x11includeDeviceName\x12\
+    3\n\x16include_tx_power_level\x18\x02\x20\x01(\x08R\x13includeTxPowerLev\
+    el\x12+\n\x11manufacturer_data\x18\x03\x20\x01(\x0cR\x10manufacturerData\
+    \x12N\n\x08services\x18\x04\x20\x03(\x0b22.netsim.model.Chip.BleBeacon.A\
+    dvertiseData.ServiceR\x08services\x1a1\n\x07Service\x12\x12\n\x04uuid\
+    \x18\x01\x20\x01(\tR\x04uuid\x12\x12\n\x04data\x18\x02\x20\x01(\x0cR\x04\
+    dataB\x06\n\x04chip\"\xdd\x04\n\nChipCreate\x12+\n\x04kind\x18\x01\x20\
+    \x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x18\n\x07address\x18\
+    \x02\x20\x01(\tR\x07address\x12\x12\n\x04name\x18\x03\x20\x01(\tR\x04nam\
+    e\x12\"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\x0cmanufacturer\x12!\n\x0c\
+    product_name\x18\x05\x20\x01(\tR\x0bproductName\x12I\n\nble_beacon\x18\
+    \x06\x20\x01(\x0b2(.netsim.model.ChipCreate.BleBeaconCreateH\0R\tbleBeac\
+    on\x12H\n\rbt_properties\x18\x07\x20\x01(\x0b2#.rootcanal.configuration.\
+    ControllerR\x0cbtProperties\x1a\x8f\x02\n\x0fBleBeaconCreate\x12\x18\n\
+    \x07address\x18\x01\x20\x01(\tR\x07address\x12J\n\x08settings\x18\x03\
+    \x20\x01(\x0b2..netsim.model.Chip.BleBeacon.AdvertiseSettingsR\x08settin\
+    gs\x12E\n\x08adv_data\x18\x04\x20\x01(\x0b2*.netsim.model.Chip.BleBeacon\
+    .AdvertiseDataR\x07advData\x12O\n\rscan_response\x18\x05\x20\x01(\x0b2*.\
+    netsim.model.Chip.BleBeacon.AdvertiseDataR\x0cscanResponseB\x06\n\x04chi\
+    p\"\xf6\x01\n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x12\
     \x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x12-\n\x07visible\x18\x03\x20\
     \x01(\x0e2\x13.netsim.model.StateR\x07visible\x122\n\x08position\x18\x04\
     \x20\x01(\x0b2\x16.netsim.model.PositionR\x08position\x12;\n\x0borientat\
@@ -3745,16 +3744,16 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(Capture::generated_message_descriptor_data());
             messages.push(chip::Radio::generated_message_descriptor_data());
             messages.push(chip::Bluetooth::generated_message_descriptor_data());
-            messages.push(chip::BluetoothBeacon::generated_message_descriptor_data());
-            messages.push(chip::bluetooth_beacon::AdvertiseSettings::generated_message_descriptor_data());
-            messages.push(chip::bluetooth_beacon::AdvertiseData::generated_message_descriptor_data());
-            messages.push(chip::bluetooth_beacon::advertise_data::Service::generated_message_descriptor_data());
-            messages.push(chip_create::BluetoothBeaconCreate::generated_message_descriptor_data());
+            messages.push(chip::BleBeacon::generated_message_descriptor_data());
+            messages.push(chip::ble_beacon::AdvertiseSettings::generated_message_descriptor_data());
+            messages.push(chip::ble_beacon::AdvertiseData::generated_message_descriptor_data());
+            messages.push(chip::ble_beacon::advertise_data::Service::generated_message_descriptor_data());
+            messages.push(chip_create::BleBeaconCreate::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(4);
             enums.push(PhyKind::generated_enum_descriptor_data());
             enums.push(State::generated_enum_descriptor_data());
-            enums.push(chip::bluetooth_beacon::advertise_settings::AdvertiseMode::generated_enum_descriptor_data());
-            enums.push(chip::bluetooth_beacon::advertise_settings::AdvertiseTxPower::generated_enum_descriptor_data());
+            enums.push(chip::ble_beacon::advertise_settings::AdvertiseMode::generated_enum_descriptor_data());
+            enums.push(chip::ble_beacon::advertise_settings::AdvertiseTxPower::generated_enum_descriptor_data());
             ::protobuf::reflect::GeneratedFileDescriptor::new_generated(
                 file_descriptor_proto(),
                 deps,

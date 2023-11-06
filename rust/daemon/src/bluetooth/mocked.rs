@@ -20,7 +20,7 @@ use lazy_static::lazy_static;
 use log::info;
 use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::configuration::Controller as RootcanalController;
-use netsim_proto::model::chip::{Bluetooth, BluetoothBeacon};
+use netsim_proto::model::chip::{BleBeacon, Bluetooth};
 use netsim_proto::model::chip_create::Chip as Builtin;
 use netsim_proto::model::{ChipCreate, DeviceCreate};
 use std::sync::Mutex;
@@ -90,7 +90,7 @@ pub fn bluetooth_stop() {
 }
 
 // Avoid crossing cxx boundary in tests
-pub fn bluetooth_beacon_add(
+pub fn ble_beacon_add(
     device_id: DeviceIdentifier,
     device_name: String,
     chip_id: ChipIdentifier,
@@ -115,7 +115,7 @@ pub fn bluetooth_beacon_add(
     Ok(facade_id)
 }
 
-pub fn bluetooth_beacon_remove(
+pub fn ble_beacon_remove(
     device_id: DeviceIdentifier,
     chip_id: ChipIdentifier,
     facade_id: FacadeIdentifier,
