@@ -21,6 +21,7 @@ use netsim_proto::common::ChipKind;
 use netsim_proto::model::ChipCreate;
 use tungstenite::{protocol::Role, Message, WebSocket};
 
+use crate::devices::chip;
 use crate::http_server::server_response::ResponseWritable;
 use crate::{
     devices::devices_handler::{add_chip, remove_chip},
@@ -89,13 +90,13 @@ impl Response for WebSocketTransport {
 
 /// Run websocket transport for packet flow in netsim
 pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) {
-    let chip_create_proto = ChipCreate {
-        kind: ChipKind::BLUETOOTH.into(),
+    let chip_create_params = chip::CreateParams {
+        kind: ChipKind::BLUETOOTH,
         address: queries.get("address").unwrap_or(&"").to_string(),
-        name: format!("websocket-{}", stream.peer_addr().unwrap()),
+        name: Some(format!("websocket-{}", stream.peer_addr().unwrap())),
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
-        ..Default::default()
+        bt_properties: None,
     };
     // Add Chip
     let result = match add_chip(
@@ -103,7 +104,8 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
         queries
             .get("name")
             .unwrap_or(&format!("websocket-device-{}", stream.peer_addr().unwrap()).as_str()),
-        &chip_create_proto,
+        &chip_create_params,
+        &ChipCreate::new(),
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {

@@ -22,6 +22,7 @@
 // -- inactivity instant
 // -- vending device identifiers
 
+use super::chip;
 use super::chip::ChipIdentifier;
 use super::device::DeviceIdentifier;
 use super::id_factory::IdFactory;
@@ -48,7 +49,7 @@ use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
 use netsim_proto::frontend::SubscribeDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
-use netsim_proto::model::ChipCreate;
+use netsim_proto::model::ChipCreate as ProtoChipCreate;
 use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::model::Scene as ProtoScene;
 use protobuf::well_known_types::timestamp::Timestamp;
@@ -121,9 +122,10 @@ fn notify_all() {
 pub fn add_chip(
     device_guid: &str,
     device_name: &str,
-    chip_create_proto: &ChipCreate,
+    chip_create_params: &chip::CreateParams,
+    chip_create_proto: &ProtoChipCreate,
 ) -> Result<AddChipResult, String> {
-    let chip_kind = chip_create_proto.kind.enum_value_or(ProtoChipKind::UNSPECIFIED);
+    let chip_kind = chip_create_params.kind;
     let result = {
         let devices_arc = get_devices();
         let mut devices = devices_arc.write().unwrap();
@@ -133,21 +135,12 @@ pub fn add_chip(
             Some(device_name),
             chip_kind == ProtoChipKind::BLUETOOTH_BEACON,
         );
-
-        let chip_name = (chip_create_proto.name != String::default())
-            .then_some(chip_create_proto.name.as_str());
         // This is infrequent, so we can afford to do another lookup for the device.
         devices
             .entries
             .get_mut(&device_id)
             .ok_or(format!("Device not found for device_id: {device_id}"))?
-            .add_chip(
-                chip_kind,
-                &chip_create_proto.address,
-                chip_name,
-                &chip_create_proto.manufacturer,
-                &chip_create_proto.product_name,
-            )
+            .add_chip(chip_create_params)
     };
 
     // Device resource is no longer locked
@@ -157,8 +150,8 @@ pub fn add_chip(
             let facade_id = match chip_kind {
                 ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(
                     device_id,
-                    &chip_create_proto.address,
-                    &chip_create_proto.bt_properties,
+                    &chip_create_params.address,
+                    &chip_create_params.bt_properties.clone().into(),
                 ),
                 ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::ble_beacon_add(
                     device_id,
@@ -246,24 +239,24 @@ pub fn add_chip_cxx(
     chip_product_name: &str,
     bt_properties: &CxxVector<u8>,
 ) -> Box<AddChipResultCxx> {
-    let chip_kind_proto = match chip_kind.to_string().as_str() {
+    let chip_kind_enum = match chip_kind.to_string().as_str() {
         "BLUETOOTH" => ProtoChipKind::BLUETOOTH,
         "WIFI" => ProtoChipKind::WIFI,
         "UWB" => ProtoChipKind::UWB,
         _ => ProtoChipKind::UNSPECIFIED,
     };
-    let mut chip_create_proto = ChipCreate {
-        kind: chip_kind_proto.into(),
+    let mut chip_create_params = chip::CreateParams {
+        kind: chip_kind_enum,
         address: chip_address.to_string(),
-        name: chip_name.to_string(),
+        name: if chip_name.is_empty() { None } else { Some(chip_name.to_string()) },
         manufacturer: chip_manufacturer.to_string(),
         product_name: chip_product_name.to_string(),
-        ..Default::default()
+        bt_properties: None,
     };
     if let Ok(bt_properties_proto) = Controller::parse_from_bytes(bt_properties.as_slice()) {
-        chip_create_proto.bt_properties = Some(bt_properties_proto).into();
+        chip_create_params.bt_properties = Some(bt_properties_proto);
     }
-    match add_chip(device_guid, device_name, &chip_create_proto) {
+    match add_chip(device_guid, device_name, &chip_create_params, &ProtoChipCreate::new()) {
         Ok(result) => Box::new(AddChipResultCxx {
             device_id: result.device_id,
             chip_id: result.chip_id,
@@ -467,10 +460,20 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
 
     // Release devices lock so that add_chip can take it.
     drop(devices);
-    new_device
-        .chips
-        .iter()
-        .try_for_each(|chip| add_chip(&device_name, &device_name, chip).map(|_| ()))?;
+    new_device.chips.iter().try_for_each(|chip| {
+        {
+            let chip_create_params = chip::CreateParams {
+                kind: chip.kind.enum_value_or_default(),
+                address: chip.address.clone(),
+                name: if chip.name.is_empty() { None } else { Some(chip.name.to_string()) },
+                manufacturer: chip.manufacturer.clone(),
+                product_name: chip.product_name.clone(),
+                bt_properties: chip.bt_properties.as_ref().cloned(),
+            };
+            add_chip(&device_name, &device_name, &chip_create_params, chip)
+        }
+        .map(|_| ())
+    })?;
 
     Ok(device_id)
 }
@@ -914,14 +917,20 @@ mod tests {
 
     impl TestChipParameters {
         fn add_chip(&self) -> Result<AddChipResult, String> {
-            let chip_create_proto = ChipCreate {
-                kind: self.chip_kind.into(),
-                name: self.chip_name.to_string(),
-                manufacturer: self.chip_manufacturer.to_string(),
-                product_name: self.chip_product_name.to_string(),
-                ..Default::default()
+            let chip_create_params = chip::CreateParams {
+                kind: self.chip_kind,
+                address: "".to_string(),
+                name: Some(self.chip_name.clone()),
+                manufacturer: self.chip_manufacturer.clone(),
+                product_name: self.chip_product_name.clone(),
+                bt_properties: None,
             };
-            super::add_chip(&self.device_guid, &self.device_name, &chip_create_proto)
+            super::add_chip(
+                &self.device_guid,
+                &self.device_name,
+                &chip_create_params,
+                &ProtoChipCreate::new(),
+            )
         }
 
         fn get_or_create_device(&self) -> DeviceIdentifier {
@@ -1325,7 +1334,6 @@ mod tests {
     };
     use netsim_proto::model::chip_create::{BleBeaconCreate, Chip as BuiltChipProto};
     use netsim_proto::model::Chip as ChipProto;
-    use netsim_proto::model::ChipCreate;
     use netsim_proto::model::Device as DeviceProto;
     use protobuf::{EnumOrUnknown, MessageField};
 
@@ -1336,7 +1344,7 @@ mod tests {
             ..Default::default()
         };
 
-        let chip_proto = ChipCreate {
+        let chip_proto = ProtoChipCreate {
             name: String::from("test-beacon-chip"),
             kind: ProtoChipKind::BLUETOOTH_BEACON.into(),
             chip: Some(BuiltChipProto::BleBeacon(beacon_proto)),
@@ -1402,7 +1410,7 @@ mod tests {
 
         let request = CreateDeviceRequest {
             device: MessageField::some(ProtoDeviceCreate {
-                chips: vec![ChipCreate::default()],
+                chips: vec![ProtoChipCreate::default()],
                 ..Default::default()
             }),
             ..Default::default()
