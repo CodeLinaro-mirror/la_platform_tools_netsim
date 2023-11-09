@@ -235,9 +235,6 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     // Gracefully shutdown netsimd services
     service.shut_down();
 
-    // Once shutdown is complete, delete the netsim ini file
-    remove_netsim_ini(instance_num);
-
     // write out session stats
     let _ = session.stop();
 
@@ -245,4 +242,7 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     if let Err(err) = zip_artifacts() {
         error!("Failed to zip artifacts: {err:?}");
     }
+
+    // Once shutdown is complete, delete the netsim ini file
+    remove_netsim_ini(instance_num);
 }

@@ -116,7 +116,6 @@ pub fn ble_beacon_add(
 }
 
 pub fn ble_beacon_remove(
-    device_id: DeviceIdentifier,
     chip_id: ChipIdentifier,
     facade_id: FacadeIdentifier,
 ) -> Result<(), String> {

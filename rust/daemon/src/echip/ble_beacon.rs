@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch, ble_beacon_remove};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::DeviceIdentifier;
 use crate::echip::EmulatedChip;
+use crate::ffi::ffi_bluetooth;
 
+use log::error;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::ChipCreate as ChipCreateProto;
@@ -33,23 +36,31 @@ pub struct CreateParams {
 /// BleBeacon struct will keep track of facade_id
 pub struct BleBeacon {
     facade_id: FacadeIdentifier,
+    chip_id: ChipIdentifier,
 }
 
 impl EmulatedChip for BleBeacon {
     fn handle_request(&self, packet: &[u8]) {
-        todo!();
+        ffi_bluetooth::handle_bt_request(self.facade_id, packet[0], &packet[1..].to_vec())
     }
 
     fn reset(&self) {
-        todo!();
+        ffi_bluetooth::bluetooth_reset(self.facade_id);
     }
 
     fn get(&self) -> ProtoChip {
-        todo!();
+        let mut chip_proto = ProtoChip::new();
+        match ble_beacon_get(self.chip_id, self.facade_id) {
+            Ok(beacon_proto) => chip_proto.mut_ble_beacon().clone_from(&beacon_proto),
+            Err(err) => error!("{err:?}"),
+        }
+        chip_proto
     }
 
     fn patch(&self, chip: ProtoChip) {
-        todo!();
+        if let Err(err) = ble_beacon_patch(self.facade_id, self.chip_id, chip.ble_beacon()) {
+            error!("{err:?}");
+        }
     }
 
     fn get_kind(&self) -> ProtoChipKind {
@@ -62,11 +73,19 @@ impl Drop for BleBeacon {
     /// be made on this emulated chip. This is called when the packet stream from
     /// the virtual device closes.
     fn drop(&mut self) {
-        todo!();
+        if let Err(err) = ble_beacon_remove(self.chip_id, self.facade_id) {
+            error!("{err:?}");
+        }
     }
 }
 
 /// Create a new Emulated BleBeacon Chip
 pub fn new(params: CreateParams) -> Rc<dyn EmulatedChip> {
-    todo!();
+    match ble_beacon_add(params.device_id, params.device_name, params.chip_id, &params.chip_proto) {
+        Ok(facade_id) => Rc::new(BleBeacon { facade_id, chip_id: params.chip_id }),
+        Err(err) => {
+            error!("{err:?}");
+            Rc::new(BleBeacon { facade_id: u32::MAX, chip_id: u32::MAX })
+        }
+    }
 }

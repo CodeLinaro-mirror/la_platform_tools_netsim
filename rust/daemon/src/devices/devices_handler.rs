@@ -365,7 +365,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                         wifi_facade::wifi_remove(facade_id);
                     }
                     ProtoChipKind::BLUETOOTH_BEACON => {
-                        bluetooth_facade::ble_beacon_remove(device_id, chip_id, facade_id)?;
+                        bluetooth_facade::ble_beacon_remove(chip_id, facade_id)?;
                     }
                     _ => Err(format!("Unknown chip kind: {:?}", chip_kind))?,
                 },
