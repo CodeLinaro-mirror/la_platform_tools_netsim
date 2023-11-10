@@ -14,7 +14,10 @@
 
 use crate::devices::chip::FacadeIdentifier;
 use crate::ffi::ffi_wifi;
-use crate::{devices::device::DeviceIdentifier, echip::EmulatedChip};
+use crate::{
+    devices::device::DeviceIdentifier,
+    echip::{EmulatedChip, SharedEmulatedChip},
+};
 
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
@@ -22,12 +25,10 @@ use netsim_proto::model::chip::Radio;
 use netsim_proto::model::Chip as ProtoChip;
 use protobuf::{Message, MessageField};
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Parameters for creating Wifi chips
-pub struct CreateParams {
-    device_id: DeviceIdentifier,
-}
+pub struct CreateParams {}
 
 /// Wifi struct will keep track of facade_id
 pub struct Wifi {
@@ -51,13 +52,17 @@ impl EmulatedChip for Wifi {
         chip_proto
     }
 
-    fn patch(&self, chip: ProtoChip) {
+    fn patch(&self, chip: &ProtoChip) {
         let radio_bytes = chip.wifi().write_to_bytes().unwrap();
         ffi_wifi::wifi_patch_cxx(self.facade_id, &radio_bytes);
     }
 
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::WIFI
+    }
+
+    fn get_facade_id(&self) -> FacadeIdentifier {
+        self.facade_id
     }
 }
 
@@ -71,10 +76,10 @@ impl Drop for Wifi {
 }
 
 /// Create a new Emulated Wifi Chip
-pub fn new(params: CreateParams) -> Rc<dyn EmulatedChip> {
-    let facade_id = ffi_wifi::wifi_add(params.device_id);
+pub fn new(_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
+    let facade_id = ffi_wifi::wifi_add(device_id);
     let echip = Wifi { facade_id };
-    Rc::new(echip)
+    Arc::new(Box::new(echip))
 }
 
 /// Starts the WiFi service.

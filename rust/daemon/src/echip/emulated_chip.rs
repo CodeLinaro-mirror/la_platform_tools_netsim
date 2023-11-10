@@ -15,15 +15,17 @@
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 
-use crate::echip::{ble_beacon, bluetooth, mocked, wifi};
-
-use std::rc::Rc;
+use crate::{
+    devices::{chip::FacadeIdentifier, device::DeviceIdentifier},
+    echip::{ble_beacon, bluetooth, mocked, wifi, SharedEmulatedChip},
+};
 
 /// Parameter for each constructor of Emulated Chips
 pub enum CreateParam {
     BleBeacon(ble_beacon::CreateParams),
     Bluetooth(bluetooth::CreateParams),
     Wifi(wifi::CreateParams),
+    Uwb,
     Mock(mocked::CreateParams),
 }
 
@@ -52,20 +54,25 @@ pub trait EmulatedChip {
     /// Patch the state of the emulated chip. For example enable/disable the
     /// chip's host-to-controller packet processing. This is part of the
     /// Frontend API
-    fn patch(&self, chip: ProtoChip);
+    fn patch(&self, chip: &ProtoChip);
 
     /// Returns the kind of the emulated chip.
     fn get_kind(&self) -> ProtoChipKind;
+
+    // TODO: Remove this method and get rid of facade_id in devices crate.
+    /// Returns Facade Identifier.
+    fn get_facade_id(&self) -> FacadeIdentifier;
 }
 
 /// This is called when the transport module receives a new packet stream
 /// connection from a virtual device.
-pub fn new(create_param: CreateParam) -> Rc<dyn EmulatedChip> {
+pub fn new(create_param: &CreateParam, device_id: DeviceIdentifier) -> SharedEmulatedChip {
     match create_param {
-        CreateParam::BleBeacon(params) => ble_beacon::new(params),
-        CreateParam::Bluetooth(params) => bluetooth::new(params),
-        CreateParam::Wifi(params) => wifi::new(params),
-        CreateParam::Mock(params) => mocked::new(params),
+        CreateParam::BleBeacon(params) => ble_beacon::new(params, device_id),
+        CreateParam::Bluetooth(params) => bluetooth::new(params, device_id),
+        CreateParam::Wifi(params) => wifi::new(params, device_id),
+        CreateParam::Mock(params) => mocked::new(params, device_id),
+        CreateParam::Uwb => todo!(),
     }
 }
 
@@ -77,7 +84,8 @@ mod tests {
     #[test]
     fn test_echip_new() {
         let mock_param = CreateParam::Mock(mocked::CreateParams {});
-        let echip = new(mock_param);
+        let mock_device_id = 0;
+        let echip = new(&mock_param, mock_device_id);
         assert_eq!(echip.get_kind(), ProtoChipKind::UNSPECIFIED);
         assert_eq!(echip.get(), ProtoChip::new());
     }

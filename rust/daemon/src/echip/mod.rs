@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod ble_beacon;
-mod bluetooth;
-mod emulated_chip;
-mod mocked;
-mod wifi;
+pub mod ble_beacon;
+pub mod bluetooth;
+pub mod emulated_chip;
+pub mod mocked;
+pub mod wifi;
 
-use crate::echip::emulated_chip::EmulatedChip;
+pub use crate::echip::emulated_chip::new;
+pub use crate::echip::emulated_chip::CreateParam;
+pub use crate::echip::emulated_chip::EmulatedChip;
+use std::sync::Arc;
+
+pub type SharedEmulatedChip = Arc<Box<dyn EmulatedChip + Send + Sync>>;

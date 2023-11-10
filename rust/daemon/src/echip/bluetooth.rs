@@ -14,7 +14,10 @@
 
 use crate::devices::chip::FacadeIdentifier;
 use crate::ffi::ffi_bluetooth;
-use crate::{devices::device::DeviceIdentifier, echip::EmulatedChip};
+use crate::{
+    devices::device::DeviceIdentifier,
+    echip::{EmulatedChip, SharedEmulatedChip},
+};
 
 use cxx::let_cxx_string;
 use netsim_proto::common::ChipKind as ProtoChipKind;
@@ -24,13 +27,12 @@ use netsim_proto::model::chip::Bluetooth as ProtoBluetooth;
 use netsim_proto::model::Chip as ProtoChip;
 use protobuf::{Message, MessageField};
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Parameters for creating Bluetooth chips
 pub struct CreateParams {
-    device_id: DeviceIdentifier,
-    address: String,
-    bt_properties: MessageField<RootcanalController>,
+    pub address: String,
+    pub bt_properties: Option<MessageField<RootcanalController>>,
 }
 
 /// Bluetooth struct will keep track of facade_id
@@ -55,13 +57,17 @@ impl EmulatedChip for Bluetooth {
         chip_proto
     }
 
-    fn patch(&self, chip: ProtoChip) {
+    fn patch(&self, chip: &ProtoChip) {
         let bluetooth_bytes = chip.bt().write_to_bytes().unwrap();
         ffi_bluetooth::bluetooth_patch_cxx(self.facade_id, &bluetooth_bytes);
     }
 
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::BLUETOOTH
+    }
+
+    fn get_facade_id(&self) -> FacadeIdentifier {
+        self.facade_id
     }
 }
 
@@ -75,14 +81,15 @@ impl Drop for Bluetooth {
 }
 
 /// Create a new Emulated Bluetooth Chip
-pub fn new(create_params: CreateParams) -> Rc<dyn EmulatedChip> {
-    let_cxx_string!(cxx_address = create_params.address);
-    let proto_bytes =
-        create_params.bt_properties.as_ref().unwrap_or_default().write_to_bytes().unwrap();
-    let facade_id =
-        ffi_bluetooth::bluetooth_add(create_params.device_id, &cxx_address, &proto_bytes);
+pub fn new(create_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
+    let_cxx_string!(cxx_address = create_params.address.clone());
+    let proto_bytes = match &create_params.bt_properties {
+        Some(properties) => properties.write_to_bytes().unwrap(),
+        None => Vec::new(),
+    };
+    let facade_id = ffi_bluetooth::bluetooth_add(device_id, &cxx_address, &proto_bytes);
     let echip = Bluetooth { facade_id };
-    Rc::new(echip)
+    Arc::new(Box::new(echip))
 }
 
 /// Starts the Bluetooth service.

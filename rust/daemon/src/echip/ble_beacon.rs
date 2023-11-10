@@ -15,7 +15,7 @@
 use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch, ble_beacon_remove};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::DeviceIdentifier;
-use crate::echip::EmulatedChip;
+use crate::echip::{EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_bluetooth;
 
 use log::error;
@@ -23,14 +23,13 @@ use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::ChipCreate as ChipCreateProto;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Parameters for creating BleBeacon chips
 pub struct CreateParams {
-    device_id: DeviceIdentifier,
-    device_name: String,
-    chip_id: ChipIdentifier,
-    chip_proto: ChipCreateProto,
+    pub device_name: String,
+    pub chip_id: ChipIdentifier,
+    pub chip_proto: ChipCreateProto,
 }
 
 /// BleBeacon struct will keep track of facade_id
@@ -57,7 +56,7 @@ impl EmulatedChip for BleBeacon {
         chip_proto
     }
 
-    fn patch(&self, chip: ProtoChip) {
+    fn patch(&self, chip: &ProtoChip) {
         if let Err(err) = ble_beacon_patch(self.facade_id, self.chip_id, chip.ble_beacon()) {
             error!("{err:?}");
         }
@@ -65,6 +64,10 @@ impl EmulatedChip for BleBeacon {
 
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::BLUETOOTH_BEACON
+    }
+
+    fn get_facade_id(&self) -> FacadeIdentifier {
+        self.facade_id
     }
 }
 
@@ -80,12 +83,13 @@ impl Drop for BleBeacon {
 }
 
 /// Create a new Emulated BleBeacon Chip
-pub fn new(params: CreateParams) -> Rc<dyn EmulatedChip> {
-    match ble_beacon_add(params.device_id, params.device_name, params.chip_id, &params.chip_proto) {
-        Ok(facade_id) => Rc::new(BleBeacon { facade_id, chip_id: params.chip_id }),
+pub fn new(params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
+    match ble_beacon_add(device_id, params.device_name.clone(), params.chip_id, &params.chip_proto)
+    {
+        Ok(facade_id) => Arc::new(Box::new(BleBeacon { facade_id, chip_id: params.chip_id })),
         Err(err) => {
             error!("{err:?}");
-            Rc::new(BleBeacon { facade_id: u32::MAX, chip_id: u32::MAX })
+            Arc::new(Box::new(BleBeacon { facade_id: u32::MAX, chip_id: u32::MAX }))
         }
     }
 }
