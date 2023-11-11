@@ -85,6 +85,12 @@ fn get_netsimd_args(argc: c_int, argv: *const *const c_char) -> NetsimdArgs {
 }
 
 fn run_netsimd_with_args(args: NetsimdArgs) {
+    // Log version and terminate netsimd
+    if args.version {
+        println!("Netsimd Version: {}", get_version());
+        return;
+    }
+
     // Log where netsim artifacts are located
     info!("netsim artifacts path: {}", netsimd_temp_dir().display());
 
