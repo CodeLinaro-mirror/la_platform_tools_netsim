@@ -326,8 +326,13 @@ cc_library_host_static {
         "cxx-bridge-header",
         "netsim_cli_h",
     ],
+    shared_libs: ["libgrpc++"],
     generated_sources: ["netsim_cli_cc"],
-    static_libs: ["lib-netsim-frontend-proto"],
+    static_libs: [
+        "libc++fs",
+        "libprotobuf-cpp-full",
+        "lib-netsim-frontend-proto",
+    ],
 }
 
 rust_defaults {
@@ -356,8 +361,45 @@ rust_test_host {
     test_suites: ["general_tests"],
 }
 
-cc_binary_host {
+rust_defaults {
+    name: "netsim_cli_defaults",
+    rustlibs: [
+        "libclap",
+        "libcxx",
+        "libhex",
+        "liblog_rust",
+        "libnetsim_common",
+        "libnetsim_proto",
+        "libprotobuf",
+    ],
+    shared_libs: ["libgrpc++"],
+    static_libs: [
+        "lib-netsim-frontend-client",
+        "lib-netsim-frontend-proto",
+        "libc++fs",
+        "libprotobuf-cpp-full",
+    ],
+}
+
+rust_library_host {
+    name: "libnetsim_cli_rs",
+    crate_name: "netsim_cli",
+    defaults: ["netsim_cli_defaults"],
+    srcs: ["rust/cli/src/lib.rs"],
+}
+
+rust_binary_host {
     name: "netsim",
+    srcs: ["rust/cli/bin/netsim.rs"],
+    defaults: ["netsim_cli_defaults"],
+    rustlibs: [
+        "libnetsim_cli_rs",
+    ],
+}
+
+// TODO: Remove the target in the following change.
+cc_binary_host {
+    name: "netsim-cc",
     defaults: ["netsim_defaults"],
     srcs: ["rust/netsim.cc"],
     generated_headers: ["cxx-bridge-header"],

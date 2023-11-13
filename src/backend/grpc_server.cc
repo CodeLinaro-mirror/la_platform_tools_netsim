@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -52,6 +53,8 @@ std::unordered_map<std::string, Stream *> facade_to_stream;
 std::string ChipFacade(ChipKind chip_kind, uint32_t facade_id) {
   return std::to_string(chip_kind) + "/" + std::to_string(facade_id);
 }
+// Libslirp is not thread safe. Use a lock to prevent concurrent access to libslirp.
+std::mutex gSlirpMutex;
 
 // Service handles the gRPC StreamPackets requests.
 
@@ -177,14 +180,21 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
           continue;
         }
         auto packet = ToSharedVec(request.mutable_packet());
-        transport::HandleRequestCxx(chip_kind, facade_id, *packet,
-                                    packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+        {
+          std::lock_guard<std::mutex> guard(gSlirpMutex);
+          transport::HandleRequestCxx(
+              chip_kind, facade_id, *packet,
+              packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+        }
 #ifdef NETSIM_ANDROID_EMULATOR
         // main_loop_wait is a non-blocking call where fds maintained by the
         // WiFi service (slirp) are polled and serviced for I/O. When any fd
         // become ready for I/O, slirp_pollfds_poll() will be invoked to read
         // from the open sockets therefore incoming packets are serviced.
-        android::qemu2::libslirp_main_loop_wait(true);
+        {
+          std::lock_guard<std::mutex> guard(gSlirpMutex);
+          android::qemu2::libslirp_main_loop_wait(true);
+        }
 #endif
       } else {
         // TODO: add UWB here
