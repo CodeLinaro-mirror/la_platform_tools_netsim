@@ -1,0 +1,17 @@
+// PDL grammar file for ieee80211 packet format.
+//
+// This only includes definitions necessary for the mac80211_hwsim
+// use case.
+
+
+big_endian_packets
+
+packet Ieee80211Hdr {
+    frame_control: 16,
+    duration_id: 16,
+    addr1 : 8[6],
+    addr2 : 8[6],
+    addr3 : 8[6],
+    seq_ctrl : 16,
+    addr4 : 8[6],
+}

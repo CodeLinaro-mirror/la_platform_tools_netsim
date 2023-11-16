@@ -29,6 +29,7 @@ use super::id_factory::IdFactory;
 use crate::bluetooth as bluetooth_facade;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
+use crate::echip;
 use crate::events;
 use crate::events::Event;
 use crate::ffi::ffi_response_writable::CxxServerResponseWriter;
@@ -49,7 +50,6 @@ use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
 use netsim_proto::frontend::SubscribeDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
-use netsim_proto::model::ChipCreate as ProtoChipCreate;
 use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::model::Scene as ProtoScene;
 use protobuf::well_known_types::timestamp::Timestamp;
@@ -107,11 +107,6 @@ impl Devices {
     }
 }
 
-#[allow(dead_code)]
-fn notify_all() {
-    // TODO
-}
-
 /// Returns a Result<AddChipResult, String> after adding chip to resource.
 /// add_chip is called by the transport layer when a new chip is attached.
 ///
@@ -123,7 +118,7 @@ pub fn add_chip(
     device_guid: &str,
     device_name: &str,
     chip_create_params: &chip::CreateParams,
-    chip_create_proto: &ProtoChipCreate,
+    echip_create_params: &echip::CreateParam,
 ) -> Result<AddChipResult, String> {
     let chip_kind = chip_create_params.kind;
     let result = {
@@ -147,21 +142,8 @@ pub fn add_chip(
     match result {
         // id_tuple = (DeviceIdentifier, ChipIdentifier)
         Ok((device_id, chip_id)) => {
-            let facade_id = match chip_kind {
-                ProtoChipKind::BLUETOOTH => bluetooth_facade::bluetooth_add(
-                    device_id,
-                    &chip_create_params.address,
-                    &chip_create_params.bt_properties.clone().into(),
-                ),
-                ProtoChipKind::BLUETOOTH_BEACON => bluetooth_facade::ble_beacon_add(
-                    device_id,
-                    String::from(device_name),
-                    chip_id,
-                    chip_create_proto,
-                )?,
-                ProtoChipKind::WIFI => wifi_facade::wifi_add(device_id),
-                _ => return Err(format!("Unknown chip kind: {:?}", chip_kind)),
-            };
+            let emulated_chip = echip::new(echip_create_params, device_id, chip_id);
+            let facade_id = emulated_chip.get_facade_id();
             // Lock Device Resource
             {
                 let devices_arc = get_devices();
@@ -175,7 +157,7 @@ pub fn add_chip(
                     .chips
                     .get_mut(&chip_id)
                     .ok_or(format!("Chip not found for device_id: {device_id}, chip_id:{chip_id}"))?
-                    .facade_id = Some(facade_id);
+                    .emulated_chip = Some(emulated_chip);
 
                 // Update last modified timestamp for devices
                 devices.last_modified =
@@ -239,24 +221,65 @@ pub fn add_chip_cxx(
     chip_product_name: &str,
     bt_properties: &CxxVector<u8>,
 ) -> Box<AddChipResultCxx> {
-    let chip_kind_enum = match chip_kind.to_string().as_str() {
-        "BLUETOOTH" => ProtoChipKind::BLUETOOTH,
-        "WIFI" => ProtoChipKind::WIFI,
-        "UWB" => ProtoChipKind::UWB,
-        _ => ProtoChipKind::UNSPECIFIED,
+    let bt_properties_proto = Controller::parse_from_bytes(bt_properties.as_slice());
+    #[cfg(not(test))]
+    let (chip_kind_enum, echip_create_param) = match chip_kind.to_string().as_str() {
+        "BLUETOOTH" => (
+            ProtoChipKind::BLUETOOTH,
+            echip::CreateParam::Bluetooth(echip::bluetooth::CreateParams {
+                address: chip_address.to_string(),
+                bt_properties: bt_properties_proto
+                    .as_ref()
+                    .map_or(None, |p| Some(MessageField::some(p.clone()))),
+            }),
+        ),
+        "WIFI" => (ProtoChipKind::WIFI, echip::CreateParam::Wifi(echip::wifi::CreateParams {})),
+        "UWB" => (ProtoChipKind::UWB, echip::CreateParam::Uwb),
+        _ => {
+            return Box::new(AddChipResultCxx {
+                device_id: u32::MAX,
+                chip_id: u32::MAX,
+                facade_id: u32::MAX,
+                is_error: true,
+            })
+        }
     };
-    let mut chip_create_params = chip::CreateParams {
+    #[cfg(test)]
+    let (chip_kind_enum, echip_create_param) = match chip_kind.to_string().as_str() {
+        "BLUETOOTH" => (
+            ProtoChipKind::BLUETOOTH,
+            echip::CreateParam::Mock(echip::mocked::CreateParams {
+                chip_kind: ProtoChipKind::BLUETOOTH,
+            }),
+        ),
+        "WIFI" => (
+            ProtoChipKind::WIFI,
+            echip::CreateParam::Mock(echip::mocked::CreateParams {
+                chip_kind: ProtoChipKind::WIFI,
+            }),
+        ),
+        "UWB" => (
+            ProtoChipKind::UWB,
+            echip::CreateParam::Mock(echip::mocked::CreateParams { chip_kind: ProtoChipKind::UWB }),
+        ),
+        _ => {
+            return Box::new(AddChipResultCxx {
+                device_id: u32::MAX,
+                chip_id: u32::MAX,
+                facade_id: u32::MAX,
+                is_error: true,
+            })
+        }
+    };
+    let chip_create_params = chip::CreateParams {
         kind: chip_kind_enum,
         address: chip_address.to_string(),
         name: if chip_name.is_empty() { None } else { Some(chip_name.to_string()) },
         manufacturer: chip_manufacturer.to_string(),
         product_name: chip_product_name.to_string(),
-        bt_properties: None,
+        bt_properties: bt_properties_proto.ok(),
     };
-    if let Ok(bt_properties_proto) = Controller::parse_from_bytes(bt_properties.as_slice()) {
-        chip_create_params.bt_properties = Some(bt_properties_proto);
-    }
-    match add_chip(device_guid, device_name, &chip_create_params, &ProtoChipCreate::new()) {
+    match add_chip(device_guid, device_name, &chip_create_params, &echip_create_param) {
         Ok(result) => Box::new(AddChipResultCxx {
             device_id: result.device_id,
             chip_id: result.chip_id,
@@ -470,7 +493,12 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
                 product_name: chip.product_name.clone(),
                 bt_properties: chip.bt_properties.as_ref().cloned(),
             };
-            add_chip(&device_name, &device_name, &chip_create_params, chip)
+            let echip_create_params =
+                echip::CreateParam::BleBeacon(echip::ble_beacon::CreateParams {
+                    device_name: device_name.clone(),
+                    chip_proto: chip.clone(),
+                });
+            add_chip(&device_name, &device_name, &chip_create_params, &echip_create_params)
         }
         .map(|_| ())
     })?;
@@ -808,7 +836,7 @@ pub fn get_facade_id(chip_id: u32) -> Result<u32, String> {
     for device in devices.entries.values() {
         for (id, chip) in &device.chips {
             if *id == chip_id {
-                return chip.facade_id.ok_or(format!(
+                return chip.emulated_chip.as_ref().map(|c| c.get_facade_id()).ok_or(format!(
                     "Facade Id hasn't been added yet to frontend resource for chip_id: {chip_id}"
                 ));
             }
@@ -925,11 +953,13 @@ mod tests {
                 product_name: self.chip_product_name.clone(),
                 bt_properties: None,
             };
+            let echip_create_params =
+                echip::CreateParam::Mock(echip::mocked::CreateParams { chip_kind: self.chip_kind });
             super::add_chip(
                 &self.device_guid,
                 &self.device_name,
                 &chip_create_params,
-                &ProtoChipCreate::new(),
+                &echip_create_params,
             )
         }
 
@@ -1334,6 +1364,7 @@ mod tests {
     };
     use netsim_proto::model::chip_create::{BleBeaconCreate, Chip as BuiltChipProto};
     use netsim_proto::model::Chip as ChipProto;
+    use netsim_proto::model::ChipCreate as ProtoChipCreate;
     use netsim_proto::model::Device as DeviceProto;
     use protobuf::{EnumOrUnknown, MessageField};
 

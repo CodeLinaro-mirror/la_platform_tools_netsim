@@ -12,19 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// [cfg(test)] gets compiled during local Rust unit tests
-// [cfg(not(test))] avoids getting compiled during local Rust unit tests
+/// FrameInfo stores mac80211 hwsim attributes once parsed
 
-#![allow(unused)]
-
-#[cfg(not(test))]
-mod facade;
-#[cfg(not(test))]
-pub(crate) use self::facade::*;
-
-#[cfg(test)]
-mod mocked;
-#[cfg(test)]
-pub(crate) use self::mocked::*;
-pub(crate) mod medium;
-pub(crate) mod packets;
+pub struct FrameInfo {
+    cookie: u64,
+    flags: u32,
+    channel: u32,
+    // tx_rates
+    transmitter: [u8; 6],
+}

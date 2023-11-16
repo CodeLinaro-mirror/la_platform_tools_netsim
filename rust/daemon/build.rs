@@ -20,11 +20,17 @@ fn main() {
     let _build = cxx_build::bridge("src/ffi.rs");
     println!("cargo:rerun-if-changed=src/ffi.rs");
 
-    let link_layer_prebuilt = env::var("LINK_LAYER_PACKETS_PREBUILT").unwrap();
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap_or("link_layer_packets.rs".to_owned()));
-    std::fs::copy(
-        link_layer_prebuilt.as_str(),
-        out_dir.join("link_layer_packets.rs").as_os_str().to_str().unwrap(),
-    )
-    .unwrap();
+    let prebuilts: [[&str; 2]; 4] = [
+        ["LINK_LAYER_PACKETS_PREBUILT", "link_layer_packets.rs"],
+        ["MAC80211_HWSIM_PACKETS_PREBUILT", "mac80211_hwsim_packets.rs"],
+        ["IEEE80211_PACKETS_PREBUILT", "ieee80211_packets.rs"],
+        ["NETLINK_PACKETS_PREBUILT", "netlink_packets.rs"],
+    ];
+
+    for [var, name] in prebuilts {
+        let prebuilt = env::var(var).unwrap();
+        println!("cargo:rerun-if-changed={}", prebuilt);
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        std::fs::copy(prebuilt.as_str(), out_dir.join(name).as_os_str().to_str().unwrap()).unwrap();
+    }
 }

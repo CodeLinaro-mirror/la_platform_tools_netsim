@@ -171,7 +171,12 @@ impl Device {
     {
         let (facade_id, device_name, kind, radio_stats) = {
             if let Some(chip) = self.chips.get_mut(&chip_id) {
-                (chip.facade_id, self.name.clone(), chip.kind, chip.get_stats())
+                (
+                    chip.emulated_chip.as_ref().map(|c| c.get_facade_id()),
+                    self.name.clone(),
+                    chip.kind,
+                    chip.get_stats(),
+                )
             } else {
                 return Err(format!("RemoveChip chip id {chip_id} not found"));
             }

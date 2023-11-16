@@ -19,6 +19,7 @@
 ///
 use crate::bluetooth as bluetooth_facade;
 use crate::devices::id_factory::IdFactory;
+use crate::echip::SharedEmulatedChip;
 use crate::wifi as wifi_facade;
 use lazy_static::lazy_static;
 use log::info;
@@ -51,9 +52,11 @@ pub struct CreateParams {
     pub bt_properties: Option<ProtoController>, // TODO: move to echip CreateParams
 }
 
+/// Chip contains the common information for each Chip/Controller.
+/// Radio-specific information is contained in the emulated_chip.
 pub struct Chip {
     pub id: ChipIdentifier,
-    pub facade_id: Option<FacadeIdentifier>,
+    pub emulated_chip: Option<SharedEmulatedChip>,
     pub kind: ProtoChipKind,
     pub address: String,
     pub name: String,
@@ -66,10 +69,15 @@ pub struct Chip {
 }
 
 impl Chip {
+    // Use an Option here so that the Chip can be created and
+    // inserted into the Device prior to creation of the echip.
+    // Any Chip with an emulated_chip == None is temporary.
+    // Creating the echip first required holding a Chip+Device lock through
+    // initialization which caused a deadlock under certain (rare) conditions.
     fn new(id: ChipIdentifier, device_name: &str, create_params: &CreateParams) -> Self {
         Self {
             id,
-            facade_id: None,
+            emulated_chip: None,
             kind: create_params.kind,
             address: create_params.address.clone(),
             name: create_params.name.clone().unwrap_or(format!("chip-{id}")),
@@ -89,7 +97,8 @@ impl Chip {
         let mut vec = Vec::<ProtoRadioStats>::new();
         let mut stats = ProtoRadioStats::new();
         stats.set_duration_secs(self.start.elapsed().as_secs());
-        if let Some(facade_id) = self.facade_id {
+        // TODO(b/309805437): Implement EmulatedChip.get_stats and replace this block
+        if let Some(facade_id) = self.emulated_chip.as_ref().map(|c| c.get_facade_id()) {
             match self.kind {
                 ProtoChipKind::BLUETOOTH => {
                     let bt = bluetooth_facade::bluetooth_get(facade_id);
@@ -131,33 +140,17 @@ impl Chip {
 
     /// Create the model protobuf
     pub fn get(&self) -> Result<ProtoChip, String> {
-        let mut chip = ProtoChip::new();
-        chip.kind = EnumOrUnknown::new(self.kind);
-        chip.id = self.id;
-        chip.name = self.name.clone();
-        chip.manufacturer = self.manufacturer.clone();
-        chip.product_name = self.product_name.clone();
-        match (chip.kind.enum_value(), self.facade_id) {
-            (Ok(ProtoChipKind::BLUETOOTH), Some(facade_id)) => {
-                chip.set_bt(bluetooth_facade::bluetooth_get(facade_id));
-            }
-            (Ok(ProtoChipKind::BLUETOOTH_BEACON), Some(facade_id)) => {
-                chip.set_ble_beacon(bluetooth_facade::ble_beacon_get(self.id, facade_id)?);
-            }
-            (Ok(ProtoChipKind::WIFI), Some(facade_id)) => {
-                chip.set_wifi(wifi_facade::wifi_get(facade_id));
-            }
-            (_, None) => {
-                return Err(format!(
-                    "Facade Id hasn't been added yet to frontend resource for chip_id: {}",
-                    self.id
-                ));
-            }
-            _ => {
-                return Err(format!("Unknown chip kind: {:?}", chip.kind));
-            }
-        }
-        Ok(chip)
+        let mut proto_chip = self
+            .emulated_chip
+            .as_ref()
+            .map(|c| c.get())
+            .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))?;
+        proto_chip.kind = EnumOrUnknown::new(self.kind);
+        proto_chip.id = self.id;
+        proto_chip.name = self.name.clone();
+        proto_chip.manufacturer = self.manufacturer.clone();
+        proto_chip.product_name = self.product_name.clone();
+        Ok(proto_chip)
     }
 
     /// Patch processing for the chip. Validate and move state from the patch
@@ -169,48 +162,17 @@ impl Chip {
         if !patch.product_name.is_empty() {
             self.product_name = patch.product_name.clone();
         }
-        match self.facade_id {
-            Some(facade_id) => {
-                // Check both ChipKind and RadioKind fields, they should be consistent
-                if self.kind == ProtoChipKind::BLUETOOTH && patch.has_bt() {
-                    bluetooth_facade::bluetooth_patch(facade_id, patch.bt());
-                    Ok(())
-                } else if self.kind == ProtoChipKind::BLUETOOTH_BEACON
-                    && patch.has_ble_beacon()
-                    && patch.ble_beacon().bt.is_some()
-                {
-                    bluetooth_facade::ble_beacon_patch(facade_id, self.id, patch.ble_beacon())?;
-                    Ok(())
-                } else if self.kind == ProtoChipKind::WIFI && patch.has_wifi() {
-                    wifi_facade::wifi_patch(facade_id, patch.wifi());
-                    Ok(())
-                } else {
-                    Err(format!("Unknown chip kind or missing radio: {:?}", self.kind))
-                }
-            }
-            None => Err(format!(
-                "Facade Id hasn't been added yet to frontend resource for chip_id: {}",
-                self.id
-            )),
-        }
+        self.emulated_chip
+            .as_ref()
+            .map(|c| c.patch(patch))
+            .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))
     }
 
     pub fn reset(&mut self) -> Result<(), String> {
-        match (self.kind, self.facade_id) {
-            (ProtoChipKind::BLUETOOTH, Some(facade_id)) => {
-                bluetooth_facade::bluetooth_reset(facade_id);
-                Ok(())
-            }
-            (ProtoChipKind::WIFI, Some(facade_id)) => {
-                wifi_facade::wifi_reset(facade_id);
-                Ok(())
-            }
-            (_, None) => Err(format!(
-                "Facade Id hasn't been added yet to frontend resource for chip_id: {}",
-                self.id
-            )),
-            _ => Err(format!("Unknown chip kind: {:?}", self.kind)),
-        }
+        self.emulated_chip
+            .as_ref()
+            .map(|c| c.reset())
+            .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))
     }
 }
 

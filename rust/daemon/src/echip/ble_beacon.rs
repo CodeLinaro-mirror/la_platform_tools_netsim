@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch, ble_beacon_remove};
+use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::DeviceIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
-use crate::ffi::ffi_bluetooth;
 
 use log::error;
 use netsim_proto::common::ChipKind as ProtoChipKind;
@@ -25,10 +24,12 @@ use netsim_proto::model::ChipCreate as ChipCreateProto;
 
 use std::sync::Arc;
 
+#[cfg(not(test))]
+use crate::ffi::ffi_bluetooth;
+
 /// Parameters for creating BleBeacon chips
 pub struct CreateParams {
     pub device_name: String,
-    pub chip_id: ChipIdentifier,
     pub chip_proto: ChipCreateProto,
 }
 
@@ -40,11 +41,17 @@ pub struct BleBeacon {
 
 impl EmulatedChip for BleBeacon {
     fn handle_request(&self, packet: &[u8]) {
-        ffi_bluetooth::handle_bt_request(self.facade_id, packet[0], &packet[1..].to_vec())
+        #[cfg(not(test))]
+        ffi_bluetooth::handle_bt_request(self.facade_id, packet[0], &packet[1..].to_vec());
+        #[cfg(test)]
+        log::info!("BleBeacon::handle_request({packet:?})");
     }
 
     fn reset(&self) {
+        #[cfg(not(test))]
         ffi_bluetooth::bluetooth_reset(self.facade_id);
+        #[cfg(test)]
+        log::info!("BleBeacon::reset()");
     }
 
     fn get(&self) -> ProtoChip {
@@ -71,22 +78,14 @@ impl EmulatedChip for BleBeacon {
     }
 }
 
-impl Drop for BleBeacon {
-    /// At drop, Remove the emulated chip from the virtual device. No further calls will
-    /// be made on this emulated chip. This is called when the packet stream from
-    /// the virtual device closes.
-    fn drop(&mut self) {
-        if let Err(err) = ble_beacon_remove(self.chip_id, self.facade_id) {
-            error!("{err:?}");
-        }
-    }
-}
-
 /// Create a new Emulated BleBeacon Chip
-pub fn new(params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
-    match ble_beacon_add(device_id, params.device_name.clone(), params.chip_id, &params.chip_proto)
-    {
-        Ok(facade_id) => Arc::new(Box::new(BleBeacon { facade_id, chip_id: params.chip_id })),
+pub fn new(
+    params: &CreateParams,
+    device_id: DeviceIdentifier,
+    chip_id: ChipIdentifier,
+) -> SharedEmulatedChip {
+    match ble_beacon_add(device_id, params.device_name.clone(), chip_id, &params.chip_proto) {
+        Ok(facade_id) => Arc::new(Box::new(BleBeacon { facade_id, chip_id })),
         Err(err) => {
             error!("{err:?}");
             Arc::new(Box::new(BleBeacon { facade_id: u32::MAX, chip_id: u32::MAX }))
