@@ -25,7 +25,6 @@ use protobuf::Message;
 
 pub fn handle_wifi_request(facade_id: u32, packet: &Vec<u8>) {
     if crate::config::get_dev() {
-        info!("handle_wifi_request: packet {:?}", packet);
         medium::parse_hwsim_cmd_frame(packet.as_slice());
     }
     ffi_wifi::handle_wifi_request(facade_id, packet);

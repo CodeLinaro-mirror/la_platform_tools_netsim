@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::packets::mac80211_hwsim::{HwsimAttr, HwsimMsg, HwsimMsgHdr};
+use super::packets::mac80211_hwsim::{HwsimAttr, HwsimCmd, HwsimMsg, HwsimMsgHdr};
 use super::packets::netlink::{NlAttrHdr, NlMsgHdr};
+use crate::wifi::frame;
 use log::{info, warn};
 
 const NLA_ALIGNTO: usize = 4;
@@ -24,25 +25,15 @@ fn nla_align(len: usize) -> usize {
 
 pub fn parse_hwsim_cmd_frame(packet: &[u8]) {
     match HwsimMsg::parse(packet) {
-        Ok(hwsim_msg) => {
-            info!(
-                "HwsimkMsg len={} cmd={:?}",
-                hwsim_msg.nl_hdr.nlmsg_len as usize
-                    - std::mem::size_of::<NlMsgHdr>()
-                    - std::mem::size_of::<HwsimMsgHdr>(),
-                hwsim_msg.hwsim_hdr.hwsim_cmd
-            );
-            let mut index: usize = 0;
-            let attributes = hwsim_msg.attributes;
-            while (index < attributes.len()) {
-                // Parse a generic netlink attribute to get the size
-                let nla = NlAttrHdr::parse(&attributes[index..index + 4]).unwrap();
-                let nla_len = nla.nla_len as usize;
-                let hwsim_attr = HwsimAttr::parse(&attributes[index..index + nla_len]);
-                info!("Attribute {:?}", hwsim_attr);
-                index += nla_align(nla_len);
+        Ok(hwsim_msg) => match (hwsim_msg.hwsim_hdr.hwsim_cmd) {
+            HwsimCmd::Frame => {
+                let frame = frame::Frame::new(&hwsim_msg.attributes);
+                info!("Frame {:?}", frame);
             }
-        }
+            _ => {
+                info!("Unknown HwsimkMsg cmd={:?}", hwsim_msg.hwsim_hdr.hwsim_cmd);
+            }
+        },
         Err(e) => {
             warn!("Unable to parse netlink message! {:?}", e);
         }

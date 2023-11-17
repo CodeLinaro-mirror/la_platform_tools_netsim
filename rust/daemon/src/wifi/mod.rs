@@ -26,5 +26,6 @@ pub(crate) use self::facade::*;
 mod mocked;
 #[cfg(test)]
 pub(crate) use self::mocked::*;
+pub(crate) mod frame;
 pub(crate) mod medium;
 pub(crate) mod packets;

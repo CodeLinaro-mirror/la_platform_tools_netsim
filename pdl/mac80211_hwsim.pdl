@@ -30,9 +30,14 @@ struct NlMsgHdr {
  *	frames by any mac80211_hwsim radio device.
  * @HWSIM_CMD_FRAME: send/receive a broadcasted frame from/to kernel/user
  *	space, uses:
- *	%HWSIM_ATTR_ADDR_TRANSMITTER, %HWSIM_ATTR_ADDR_RECEIVER,
- *	%HWSIM_ATTR_FRAME, %HWSIM_ATTR_FLAGS, %HWSIM_ATTR_RX_RATE,
- *	%HWSIM_ATTR_SIGNAL, %HWSIM_ATTR_COOKIE, %HWSIM_ATTR_FREQ (optional)
+ *	%HWSIM_ATTR_ADDR_TRANSMITTER,
+ *      %HWSIM_ATTR_ADDR_RECEIVER,
+ *	%HWSIM_ATTR_FRAME,
+ *      %HWSIM_ATTR_FLAGS,
+ *      %HWSIM_ATTR_RX_RATE,
+ *	%HWSIM_ATTR_SIGNAL,
+ *      %HWSIM_ATTR_COOKIE,
+ *      %HWSIM_ATTR_FREQ (optional)
  * @HWSIM_CMD_TX_INFO_FRAME: Transmission info report from user space to
  *	kernel, uses:
  *	%HWSIM_ATTR_ADDR_TRANSMITTER, %HWSIM_ATTR_FLAGS,
@@ -172,64 +177,63 @@ packet HwsimAttrFrame : HwsimAttr(nla_type = FRAME) {
 }
 
 // ATTR_FLAGS
-packet HwsimFlagsAttr : HwsimAttr(nla_type = FLAGS) {
-  flags : 32,
+packet HwsimAttrFlags : HwsimAttr(nla_type = FLAGS) {
+    flags : 32,
 }
 
 // ATTR_RX_RATE
-packet HwsimRxRateAttr : HwsimAttr(nla_type = RX_RATE) {
-  rate_idx : 32,
+packet HwsimAttrRxRate : HwsimAttr(nla_type = RX_RATE) {
+    rx_rate_idx : 32,
 }
 
 // ATTR_SIGNAL
-packet HwsimSignalAttr : HwsimAttr(nla_type = SIGNAL) {
-  signal : 32,
+packet HwsimAttrSignal : HwsimAttr(nla_type = SIGNAL) {
+    signal : 32,
 }
 
 // ATTR_FREQ
-packet HwsimFreqAttr : HwsimAttr(nla_type = FREQ) {
-  freq : 32,
+packet HwsimAttrFreq : HwsimAttr(nla_type = FREQ) {
+    freq : 32,
 }
 
 // ATTR_COOKIE
-packet HwsimCookieAttr : HwsimAttr(nla_type = COOKIE) {
-  cookie : 64,
+packet HwsimAttrCookie : HwsimAttr(nla_type = COOKIE) {
+    cookie : 64,
 }
 
-struct HwsimTxRate {
-	 idx : 8,
-	count: 8,
+struct TxRate {
+    idx : 8,
+    count: 8,
 }
 
 // ATTR_TX_INFO
-packet HwsimTxInfoAttr : HwsimAttr(nla_type = TX_INFO) {
-  tx_rates : HwsimTxRate[],
+packet HwsimAttrTxInfo : HwsimAttr(nla_type = TX_INFO) {
+    tx_rates : TxRate[],
 }
 
 enum HwsimTxRateFlags : 16 {
-	MAC80211_HWSIM_TX_RC_USE_RTS_CTS		= 0x01,
-	MAC80211_HWSIM_TX_RC_USE_CTS_PROTECT		= 0x02,
-	MAC80211_HWSIM_TX_RC_USE_SHORT_PREAMBLE	= 0x04,
-
-	/* rate index is an HT/VHT MCS instead of an index */
-	MAC80211_HWSIM_TX_RC_MCS			= 0x08,
-	MAC80211_HWSIM_TX_RC_GREEN_FIELD		= 0x0f,
-	MAC80211_HWSIM_TX_RC_40_MHZ_WIDTH		= 0x10,
-	MAC80211_HWSIM_TX_RC_DUP_DATA		= 0x20,
-	MAC80211_HWSIM_TX_RC_SHORT_GI		= 0x40,
-	MAC80211_HWSIM_TX_RC_VHT_MCS			= 0x80,
-	MAC80211_HWSIM_TX_RC_80_MHZ_WIDTH		= 0xf0,
-	MAC80211_HWSIM_TX_RC_160_MHZ_WIDTH		= 0x100,
+    MAC80211_HWSIM_TX_RC_USE_RTS_CTS = 0x01,
+    MAC80211_HWSIM_TX_RC_USE_CTS_PROTECT = 0x02,
+    MAC80211_HWSIM_TX_RC_USE_SHORT_PREAMBLE = 0x04,
+    /* rate index is an HT/VHT MCS instead of an index */
+    MAC80211_HWSIM_TX_RC_MCS = 0x08,
+    MAC80211_HWSIM_TX_RC_GREEN_FIELD = 0x0f,
+    MAC80211_HWSIM_TX_RC_40_MHZ_WIDTH = 0x10,
+    MAC80211_HWSIM_TX_RC_DUP_DATA = 0x20,
+    MAC80211_HWSIM_TX_RC_SHORT_GI = 0x40,
+    MAC80211_HWSIM_TX_RC_VHT_MCS = 0x80,
+    MAC80211_HWSIM_TX_RC_80_MHZ_WIDTH = 0xf0,
+    MAC80211_HWSIM_TX_RC_160_MHZ_WIDTH = 0x100,
 }
 
-struct HwsimTxRateFlag {
-	idx : 8,
-	flags : 16, //HwsimTxRateFlags,
+struct TxRateFlag {
+    idx : 8,
+    flags : 16, // HwsimTxRateFlags,
 }
 
 // ATTR_TX_INFO_FLAGS
-packet HwsimTxInfoFlagsAttr : HwsimAttr(nla_type = TX_INFO_FLAGS) {
-  tx_rates : HwsimTxRateFlag[],
+packet HwsimAttrTxInfoFlags : HwsimAttr(nla_type = TX_INFO_FLAGS) {
+    tx_rate_flags : TxRateFlag[],
 }
 
 struct HwsimMsgHdr {
