@@ -271,6 +271,7 @@ async function subscribeCaptures() {
   const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
   while (true) {
     await simulationState.invokeListCaptures();
+    await simulationState.invokeGetDevice();
     await delay(1000);
   }
 }
