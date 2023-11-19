@@ -52,6 +52,7 @@ use netsim_proto::frontend::SubscribeDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
 use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::model::Scene as ProtoScene;
+use netsim_proto::stats::NetsimRadioStats;
 use protobuf::well_known_types::timestamp::Timestamp;
 use protobuf::Message;
 use protobuf::MessageField;
@@ -906,6 +907,23 @@ pub fn wait_devices(events_rx: Receiver<Event>) {
                 }
             }
         });
+}
+
+/// Return vector containing current radio chip stats from all devices
+pub fn get_radio_stats() -> Vec<NetsimRadioStats> {
+    let mut result: Vec<NetsimRadioStats> = Vec::new();
+    // TODO: b/309805437 - optimize logic using get_stats for EmulatedChip
+    let binding = get_devices();
+    let devices = &binding.read().unwrap().entries;
+    for (device_id, device) in devices {
+        for chip in device.chips.values() {
+            for mut radio_stats in chip.get_stats() {
+                radio_stats.set_device_id(*device_id);
+                result.push(radio_stats);
+            }
+        }
+    }
+    result
 }
 
 #[cfg(test)]

@@ -480,6 +480,8 @@ pub struct NetsimStats {
     pub peak_concurrent_devices: ::std::option::Option<i32>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimStats.radio_stats)
     pub radio_stats: ::std::vec::Vec<NetsimRadioStats>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimStats.version)
+    pub version: ::std::option::Option<::std::string::String>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.NetsimStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -553,8 +555,44 @@ impl NetsimStats {
         self.peak_concurrent_devices = ::std::option::Option::Some(v);
     }
 
+    // optional string version = 5;
+
+    pub fn version(&self) -> &str {
+        match self.version.as_ref() {
+            Some(v) => v,
+            None => "",
+        }
+    }
+
+    pub fn clear_version(&mut self) {
+        self.version = ::std::option::Option::None;
+    }
+
+    pub fn has_version(&self) -> bool {
+        self.version.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_version(&mut self, v: ::std::string::String) {
+        self.version = ::std::option::Option::Some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_version(&mut self) -> &mut ::std::string::String {
+        if self.version.is_none() {
+            self.version = ::std::option::Option::Some(::std::string::String::new());
+        }
+        self.version.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_version(&mut self) -> ::std::string::String {
+        self.version.take().unwrap_or_else(|| ::std::string::String::new())
+    }
+
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(4);
+        let mut fields = ::std::vec::Vec::with_capacity(5);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "duration_secs",
@@ -575,6 +613,11 @@ impl NetsimStats {
             "radio_stats",
             |m: &NetsimStats| { &m.radio_stats },
             |m: &mut NetsimStats| { &mut m.radio_stats },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "version",
+            |m: &NetsimStats| { &m.version },
+            |m: &mut NetsimStats| { &mut m.version },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NetsimStats>(
             "NetsimStats",
@@ -606,6 +649,9 @@ impl ::protobuf::Message for NetsimStats {
                 34 => {
                     self.radio_stats.push(is.read_message()?);
                 },
+                42 => {
+                    self.version = ::std::option::Option::Some(is.read_string()?);
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -631,6 +677,9 @@ impl ::protobuf::Message for NetsimStats {
             let len = value.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         };
+        if let Some(v) = self.version.as_ref() {
+            my_size += ::protobuf::rt::string_size(5, &v);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -649,6 +698,9 @@ impl ::protobuf::Message for NetsimStats {
         for v in &self.radio_stats {
             ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
         };
+        if let Some(v) = self.version.as_ref() {
+            os.write_string(5, v)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -670,6 +722,7 @@ impl ::protobuf::Message for NetsimStats {
         self.device_count = ::std::option::Option::None;
         self.peak_concurrent_devices = ::std::option::Option::None;
         self.radio_stats.clear();
+        self.version = ::std::option::Option::None;
         self.special_fields.clear();
     }
 
@@ -679,6 +732,7 @@ impl ::protobuf::Message for NetsimStats {
             device_count: ::std::option::Option::None,
             peak_concurrent_devices: ::std::option::Option::None,
             radio_stats: ::std::vec::Vec::new(),
+            version: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -713,11 +767,12 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x12\x0f\n\x0bUNSPECIFIED\x10\0\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\
     \x01\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x02\x12\x0e\n\nBLE_BEACON\x10\
     \x03\x12\x08\n\x04WIFI\x10\x04\x12\x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\
-    \x10\x06\"\xce\x01\n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\
+    \x10\x06\"\xe8\x01\n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\
     \x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\
     \x0bdeviceCount\x126\n\x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\
     \x15peakConcurrentDevices\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\
-    \x1e.netsim.stats.NetsimRadioStatsR\nradioStats\
+    \x1e.netsim.stats.NetsimRadioStatsR\nradioStats\x12\x18\n\x07version\x18\
+    \x05\x20\x01(\tR\x07version\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

@@ -14,8 +14,11 @@
 
 //! A module to collect and write session stats
 
+use crate::devices::devices_handler::get_radio_stats;
 use crate::events::Event;
+use crate::version::get_version;
 use anyhow::Context;
+use log::error;
 use log::info;
 use netsim_common::system::netsimd_temp_dir;
 use netsim_proto::stats::NetsimStats;
@@ -25,8 +28,11 @@ use std::io::Write;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::sync::RwLockWriteGuard;
 use std::thread::{Builder, JoinHandle};
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+const WRITE_INTERVAL: Duration = Duration::from_secs(10);
 
 pub struct Session {
     // Handle for the session monitor thread
@@ -47,39 +53,47 @@ impl Session {
         Session {
             handle: None,
             info: Arc::new(RwLock::new(SessionInfo {
-                stats_proto: NetsimStats::new(),
+                stats_proto: NetsimStats { version: Some(get_version()), ..Default::default() },
                 current_device_count: 0,
                 session_start: Instant::now(),
             })),
         }
     }
 
+    // Start the netsim states session.
+    //
+    // Starts the session monitor thread to handle events and
+    // write session stats to json file on event and periodically.
     pub fn start(&mut self, events_rx: Receiver<Event>) -> &mut Self {
         let info = self.info.clone();
+        // Start up session monitor thread
         self.handle = Some(
             Builder::new()
                 .name("session_monitor".to_string())
                 .spawn(move || {
+                    let mut next_instant = Instant::now() + WRITE_INTERVAL;
                     loop {
-                        let event = match events_rx.recv() {
-                            Ok(event) => event,
-                            Err(_) => return "event receiver unexpectedly closed".to_string(),
-                        };
                         // Hold the write lock for the duration of this loop iteration
                         let mut lock = info.write().expect("Could not acquire session lock");
-                        match event {
-                            Event::ShutDown { reason } => {
+                        let mut write_stats = true;
+                        let this_instant = Instant::now();
+                        let timeout = if next_instant > this_instant {
+                            next_instant - this_instant
+                        } else {
+                            Duration::ZERO
+                        };
+                        match events_rx.recv_timeout(timeout) {
+                            Ok(Event::ShutDown { reason }) => {
                                 // Shutting down, save the session duration and exit
-                                let duration_secs = lock.session_start.elapsed().as_secs();
-                                lock.stats_proto.set_duration_secs(duration_secs);
+                                update_session_duration(&mut lock);
                                 return reason;
                             }
 
-                            Event::DeviceRemoved { .. } => {
+                            Ok(Event::DeviceRemoved { .. }) => {
                                 lock.current_device_count -= 1;
                             }
 
-                            Event::DeviceAdded { .. } => {
+                            Ok(Event::DeviceAdded { .. }) => {
                                 // update the current_device_count and peak device usage
                                 lock.current_device_count += 1;
                                 let current_device_count = lock.current_device_count;
@@ -93,7 +107,8 @@ impl Session {
                                         .set_peak_concurrent_devices(current_device_count);
                                 }
                             }
-                            Event::ChipRemoved { radio_stats, device_id, .. } => {
+
+                            Ok(Event::ChipRemoved { radio_stats, device_id, .. }) => {
                                 // Update the radio stats proto when a
                                 // chip is removed.  In the case of
                                 // bluetooth there will be 2 radios,
@@ -103,9 +118,22 @@ impl Session {
                                     lock.stats_proto.radio_stats.push(r);
                                 }
                             }
+
                             _ => {
-                                // other events are ignored
+                                // other events are ignored, check to perform periodic write
+                                if next_instant > Instant::now() {
+                                    write_stats = false
+                                }
                             }
+                        }
+                        // End of event match - write current stats to json
+                        if write_stats {
+                            update_session_duration(&mut lock);
+                            let current_stats = get_current_stats(lock.stats_proto.clone());
+                            if let Err(err) = write_stats_to_json(current_stats) {
+                                error!("Failed to write stats to json: {err:?}");
+                            }
+                            next_instant = Instant::now() + WRITE_INTERVAL;
                         }
                     }
                 })
@@ -114,7 +142,7 @@ impl Session {
         self
     }
 
-    // Writes the session stats file.
+    // Stop the netsim stats session.
     //
     // Waits for the session monitor thread to finish and writes
     // the session proto to a json file. Consumes the session.
@@ -124,14 +152,30 @@ impl Session {
         }
         // Synchronize on session monitor thread
         self.handle.take().map(JoinHandle::join);
-        let filename = netsimd_temp_dir().join("session_stats.json");
-        info!("session stats to {}", filename.display());
-        // session monitor thread is now shutdown...  write out the protobuf
-        let mut file = File::create(filename)?;
         let lock = self.info.read().expect("Could not acquire session lock");
-        let json = print_to_string(&lock.stats_proto)?;
-        file.write(json.as_bytes()).context("Unable to write json session stats")?;
-        file.flush()?;
+        write_stats_to_json(lock.stats_proto.clone())?;
         Ok(())
     }
+}
+
+/// Update session duration
+fn update_session_duration(session_lock: &mut RwLockWriteGuard<'_, SessionInfo>) {
+    let duration_secs = session_lock.session_start.elapsed().as_secs();
+    session_lock.stats_proto.set_duration_secs(duration_secs);
+}
+
+/// Construct current radio stats
+fn get_current_stats(mut current_stats: NetsimStats) -> NetsimStats {
+    current_stats.radio_stats.extend(get_radio_stats());
+    current_stats
+}
+
+/// Write netsim stats to json file
+fn write_stats_to_json(stats_proto: NetsimStats) -> anyhow::Result<()> {
+    let filename = netsimd_temp_dir().join("session_stats.json");
+    let mut file = File::create(filename)?;
+    let json = print_to_string(&stats_proto)?;
+    file.write(json.as_bytes()).context("Unable to write json session stats")?;
+    file.flush()?;
+    Ok(())
 }

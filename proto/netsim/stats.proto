@@ -51,4 +51,6 @@ message NetsimStats {
   optional int32 peak_concurrent_devices = 3;
   // Individual chip statistics
   repeated NetsimRadioStats radio_stats = 4;
+  // The version of netsim daemon
+  optional string version = 5;
 }
