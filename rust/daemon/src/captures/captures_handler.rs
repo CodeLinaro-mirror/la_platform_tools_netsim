@@ -45,6 +45,8 @@ use crate::http_server::server_response::ResponseWritable;
 use crate::resource::clone_captures;
 use crate::util::int_to_chip_kind;
 
+use anyhow::anyhow;
+
 use super::capture::CaptureInfo;
 use super::pcap_util::{append_record, PacketDirection};
 use super::PCAP_MIME_TYPE;
@@ -70,53 +72,50 @@ fn get_file(id: ChipIdentifier, device_name: String, chip_kind: ChipKind) -> Res
 // GET /captures/id/{id} --> Get Capture information
 // GET /captures/contents/{id} --> Download Pcap file
 /// Performs GetCapture to download pcap file and write to writer.
-pub fn handle_capture_get(writer: ResponseWritable, id: ChipIdentifier) {
+fn handle_capture_get(writer: ResponseWritable, id: ChipIdentifier) -> anyhow::Result<()> {
     let captures_arc = clone_captures();
     let mut captures = captures_arc.write().unwrap();
-    if let Some(capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
-        if capture.size == 0 {
-            writer.put_error(
-                404,
-                &format!(
-                    "Capture file not found for {:?}-{}-{:?}",
-                    id, capture.device_name, capture.chip_kind
-                ),
-            );
-        } else if let Ok(mut file) = get_file(id, capture.device_name.clone(), capture.chip_kind) {
-            let mut buffer = [0u8; CHUNK_LEN];
-            let time_display = TimeDisplay::new(capture.seconds, capture.nanos as u32);
-            let header_value = format!(
-                "attachment; filename=\"{:?}-{:}-{:?}-{}.pcap\"",
-                id,
-                capture.device_name.clone(),
-                capture.chip_kind,
-                time_display.utc_display()
-            );
-            writer.put_ok_with_length(
-                PCAP_MIME_TYPE,
-                capture.size,
-                vec![("Content-Disposition".to_string(), header_value)],
-            );
-            loop {
-                match file.read(&mut buffer) {
-                    Ok(0) => break,
-                    Ok(length) => writer.put_chunk(&buffer[..length]),
-                    Err(_) => {
-                        writer.put_error(404, "Error reading pcap file");
-                        break;
-                    }
-                }
-            }
-        } else {
-            writer.put_error(404, "Cannot open Capture file");
+    let capture = captures
+        .get(id)
+        .ok_or(anyhow!("Cannot access Capture Resource"))?
+        .lock()
+        .map_err(|_| anyhow!("Failed to lock Capture"))?;
+
+    if capture.size == 0 {
+        return Err(anyhow!(
+            "Capture file not found for {:?}-{}-{:?}",
+            id,
+            capture.device_name,
+            capture.chip_kind
+        ));
+    }
+    let mut file = get_file(id, capture.device_name.clone(), capture.chip_kind)?;
+    let mut buffer = [0u8; CHUNK_LEN];
+    let time_display = TimeDisplay::new(capture.seconds, capture.nanos as u32);
+    let header_value = format!(
+        "attachment; filename=\"{:?}-{:}-{:?}-{}.pcap\"",
+        id,
+        capture.device_name.clone(),
+        capture.chip_kind,
+        time_display.utc_display()
+    );
+    writer.put_ok_with_length(
+        PCAP_MIME_TYPE,
+        capture.size,
+        vec![("Content-Disposition".to_string(), header_value)],
+    );
+    loop {
+        let length = file.read(&mut buffer)?;
+        if length == 0 {
+            break;
         }
-    } else {
-        writer.put_error(404, "Cannot access Capture Resource")
-    };
+        writer.put_chunk(&buffer[..length]);
+    }
+    Ok(())
 }
 
 /// Performs ListCapture to get the list of CaptureInfos and write to writer.
-pub fn handle_capture_list(writer: ResponseWritable) {
+fn handle_capture_list(writer: ResponseWritable) -> anyhow::Result<()> {
     let captures_arc = clone_captures();
     let captures = captures_arc.write().unwrap();
     // Instantiate ListCaptureResponse and add Captures
@@ -126,78 +125,71 @@ pub fn handle_capture_list(writer: ResponseWritable) {
     }
 
     // Perform protobuf-json-mapping with the given protobuf
-    if let Ok(json_response) = print_to_string_with_options(&response, &JSON_PRINT_OPTION) {
-        writer.put_ok("text/json", &json_response, vec![])
-    } else {
-        writer.put_error(404, "proto to JSON mapping failure")
-    }
+    let json_response = print_to_string_with_options(&response, &JSON_PRINT_OPTION)
+        .map_err(|e| anyhow!("proto to JSON mapping failure: {}", e))?;
+    writer.put_ok("text/json", &json_response, vec![]);
+    Ok(())
 }
 
 /// Performs PatchCapture to patch a CaptureInfo with id.
 /// Writes the result of PatchCapture to writer.
-pub fn handle_capture_patch(writer: ResponseWritable, id: ChipIdentifier, state: bool) {
+fn handle_capture_patch(
+    writer: ResponseWritable,
+    id: ChipIdentifier,
+    state: bool,
+) -> anyhow::Result<()> {
     let captures_arc = clone_captures();
     let mut captures = captures_arc.write().unwrap();
     if let Some(mut capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
-        match state {
-            true => {
-                if let Err(err) = capture.start_capture() {
-                    writer.put_error(404, err.to_string().as_str());
-                    return;
-                }
-            }
-            false => capture.stop_capture(),
-        }
-
-        // Perform protobuf-json-mapping with the given protobuf
-        if let Ok(json_response) =
-            print_to_string_with_options(&capture.get_capture_proto(), &JSON_PRINT_OPTION)
-        {
-            writer.put_ok("text/json", &json_response, vec![]);
+        if state {
+            capture.start_capture()?;
         } else {
-            writer.put_error(404, "proto to JSON mapping failure");
+            capture.stop_capture();
         }
-    };
+        // Perform protobuf-json-mapping with the given protobuf
+        let json_response =
+            print_to_string_with_options(&capture.get_capture_proto(), &JSON_PRINT_OPTION)
+                .map_err(|e| anyhow!("proto to JSON mapping failure: {}", e))?;
+        writer.put_ok("text/json", &json_response, vec![]);
+    }
+    Ok(())
 }
 
 /// The Rust capture handler used directly by Http frontend or handle_capture_cxx for LIST, GET, and PATCH
 pub fn handle_capture(request: &Request<Vec<u8>>, param: &str, writer: ResponseWritable) {
+    if let Err(e) = handle_capture_internal(request, param, writer) {
+        writer.put_error(404, &e.to_string());
+    }
+}
+
+fn get_id(param: &str) -> anyhow::Result<u32> {
+    param.parse::<u32>().map_err(|_| anyhow!("Capture ID must be u32, found {}", param))
+}
+
+fn handle_capture_internal(
+    request: &Request<Vec<u8>>,
+    param: &str,
+    writer: ResponseWritable,
+) -> anyhow::Result<()> {
     if request.uri() == "/v1/captures" {
         match request.method().as_str() {
-            "GET" => {
-                handle_capture_list(writer);
-            }
-            _ => writer.put_error(404, "Not found."),
+            "GET" => handle_capture_list(writer),
+            _ => Err(anyhow!("Not found.")),
         }
     } else {
         match request.method().as_str() {
-            "GET" => {
-                let id = match param.parse::<u32>() {
-                    Ok(num) => num,
-                    Err(_) => {
-                        writer.put_error(404, "Incorrect ID type for capture, ID should be u32.");
-                        return;
-                    }
-                };
-                handle_capture_get(writer, id);
-            }
+            "GET" => handle_capture_get(writer, get_id(param)?),
             "PATCH" => {
-                let id = match param.parse::<u32>() {
-                    Ok(num) => num,
-                    Err(_) => {
-                        writer.put_error(404, "Incorrect ID type for capture, ID should be u32.");
-                        return;
-                    }
-                };
+                let id = get_id(param)?;
                 let body = request.body();
                 let state = String::from_utf8(body.to_vec()).unwrap();
                 match state.as_str() {
                     "1" => handle_capture_patch(writer, id, true),
                     "2" => handle_capture_patch(writer, id, false),
-                    _ => writer.put_error(404, "Incorrect state for PatchCapture"),
+                    _ => Err(anyhow!("Incorrect state for PatchCapture")),
                 }
             }
-            _ => writer.put_error(404, "Not found."),
+            _ => Err(anyhow!("Not found.")),
         }
     }
 }

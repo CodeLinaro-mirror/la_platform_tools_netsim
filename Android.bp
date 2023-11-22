@@ -85,9 +85,9 @@ rust_defaults {
     ],
     srcs: [
         "rust/daemon/src/lib.rs",
-	":netsim_netlink_rust_gen",
-	":netsim_mac80211_hwsim_rust_gen",
-	":netsim_ieee80211_rust_gen",
+        ":netsim_netlink_rust_gen",
+        ":netsim_mac80211_hwsim_rust_gen",
+        ":netsim_ieee80211_rust_gen",
         ":rootcanal_link_layer_packets_rust_gen",
     ],
 }
@@ -156,7 +156,6 @@ genrule {
     srcs: ["pdl/ieee80211.pdl"],
     out: ["ieee80211_packets.rs"],
 }
-
 
 cc_library_host_static {
     name: "lib-netsim",
