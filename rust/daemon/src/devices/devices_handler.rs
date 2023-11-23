@@ -173,9 +173,6 @@ pub fn add_chip(
                     .ok_or(format!("Chip not found for device_id: {device_id}, chip_id:{chip_id}"))?
                     .facade_id = Some(facade_id);
             }
-            info!(
-                "Added Chip: device_name: {device_name}, chip_kind: {chip_kind:?}, device_id: {device_id}, chip_id: {chip_id}, facade_id: {facade_id}",
-            );
             // Update Capture resource
             events::publish(Event::ChipAdded {
                 chip_id,
@@ -616,7 +613,9 @@ fn handle_device_list(writer: ResponseWritable) {
     // Instantiate ListDeviceResponse and add Devices
     let mut response = ListDeviceResponse::new();
     for device in devices.entries.values() {
-        response.devices.push(device.get().unwrap());
+        if let Ok(device_proto) = device.get() {
+            response.devices.push(device_proto);
+        }
     }
 
     // Perform protobuf-json-mapping with the given protobuf
@@ -640,7 +639,9 @@ fn handle_device_subscribe(writer: ResponseWritable) {
     let event_rx = events::subscribe();
     // Timeout after 15 seconds with no event received
     match event_rx.recv_timeout(Duration::from_secs(15)) {
-        Ok(Event::ChipAdded { .. })
+        Ok(Event::DeviceAdded { .. })
+        | Ok(Event::DeviceRemoved { .. })
+        | Ok(Event::ChipAdded { .. })
         | Ok(Event::ChipRemoved { .. })
         | Ok(Event::DevicePatched { .. }) => handle_device_list(writer),
         Err(err) => writer.put_error(404, format!("{err:?}").as_str()),
