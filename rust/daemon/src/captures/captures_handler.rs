@@ -44,11 +44,12 @@ use crate::ffi::CxxServerResponseWriterWrapper;
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource::clone_captures;
 use crate::util::int_to_chip_kind;
+use crate::wifi::radiotap;
 
 use anyhow::anyhow;
 
 use super::capture::CaptureInfo;
-use super::pcap_util::{append_record, PacketDirection};
+use super::pcap_util::{append_record, wrap_bt_packet, PacketDirection};
 use super::PCAP_MIME_TYPE;
 
 const CHUNK_LEN: usize = 1024;
@@ -226,7 +227,7 @@ pub fn handle_capture_cxx(
 fn handle_packet(
     kind: u32,
     facade_id: u32,
-    packet: &Vec<u8>,
+    packet: &[u8],
     packet_type: u32,
     direction: PacketDirection,
 ) {
@@ -241,12 +242,21 @@ fn handle_packet(
         if let Some(ref mut file) = capture.file {
             let timestamp =
                 SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
-            let mut packet_buf = packet.clone();
-            if int_to_chip_kind(kind) == ChipKind::BLUETOOTH {
-                packet_buf = vec![packet_type as u8];
-                packet_buf.extend(packet);
+            let packet_buf = match int_to_chip_kind(kind) {
+                ChipKind::BLUETOOTH => wrap_bt_packet(direction, packet_type, packet),
+                ChipKind::WIFI => match radiotap::into_pcap(packet) {
+                    Ok(buffer) => buffer,
+                    Err(e) => {
+                        warn!("Invalid WiFi pcacket for capture {:?}", e);
+                        return;
+                    }
+                },
+                _ => {
+                    warn!("Unknown capture type");
+                    return;
+                }
             };
-            match append_record(timestamp, file, direction, packet_buf.as_slice()) {
+            match append_record(timestamp, file, packet_buf.as_slice()) {
                 Ok(size) => {
                     capture.size += size;
                     capture.records += 1;
@@ -260,12 +270,12 @@ fn handle_packet(
 }
 
 /// Method for dispatcher to invoke (Host to Controller Packet Flow)
-pub fn handle_packet_request(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u32) {
+pub fn handle_packet_request(kind: u32, facade_id: u32, packet: &[u8], packet_type: u32) {
     handle_packet(kind, facade_id, packet, packet_type, PacketDirection::HostToController)
 }
 
 /// Method for dispatcher to invoke (Controller to Host Packet Flow)
-pub fn handle_packet_response(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u32) {
+pub fn handle_packet_response(kind: u32, facade_id: u32, packet: &[u8], packet_type: u32) {
     handle_packet(kind, facade_id, packet, packet_type, PacketDirection::ControllerToHost)
 }
 

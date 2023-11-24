@@ -120,7 +120,7 @@ impl CaptureInfo {
         let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(filename)?;
         let link_type = match self.chip_kind {
             ChipKind::BLUETOOTH => LinkType::BluetoothHciH4WithPhdr,
-            ChipKind::WIFI => LinkType::Ieee802_11RadioTap,
+            ChipKind::WIFI => LinkType::Ieee80211RadioTap,
             _ => return Err(Error::new(ErrorKind::Other, "Unsupported link type")),
         };
         let size = write_pcap_header(link_type, &mut file)?;

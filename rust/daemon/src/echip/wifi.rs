@@ -14,11 +14,11 @@
 
 use crate::devices::chip::FacadeIdentifier;
 use crate::ffi::ffi_wifi;
+use crate::wifi::medium;
 use crate::{
     devices::device::DeviceIdentifier,
     echip::{EmulatedChip, SharedEmulatedChip},
 };
-
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::chip::Radio;
@@ -37,6 +37,9 @@ pub struct Wifi {
 
 impl EmulatedChip for Wifi {
     fn handle_request(&self, packet: &[u8]) {
+        if crate::config::get_dev() {
+            let _ = medium::parse_hwsim_cmd(packet);
+        }
         ffi_wifi::handle_wifi_request(self.facade_id, &packet.to_vec());
     }
 
@@ -75,6 +78,9 @@ pub fn new(_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulate
 
 /// Starts the WiFi service.
 pub fn wifi_start(config: &MessageField<WiFiConfig>) {
+    if crate::config::get_dev() {
+        medium::test_parse_hwsim_cmd();
+    }
     let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
     ffi_wifi::wifi_start(&proto_bytes);
 }
