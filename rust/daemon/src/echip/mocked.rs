@@ -42,6 +42,8 @@ impl EmulatedChip for Mock {
 
     fn patch(&self, chip: &ProtoChip) {}
 
+    fn remove(&self) {}
+
     fn get_kind(&self) -> ProtoChipKind {
         self.chip_kind
     }

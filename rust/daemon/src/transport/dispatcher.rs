@@ -14,17 +14,16 @@
 
 use lazy_static::lazy_static;
 use log::{error, info, warn};
+use netsim_proto::hci_packet::hcipacket::PacketType;
+use protobuf::Enum;
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use netsim_proto::common::ChipKind;
-
-use crate::bluetooth::handle_bluetooth_request;
 use crate::captures::captures_handler as captures_handlers;
-use crate::util::int_to_chip_kind;
-use crate::wifi::handle_wifi_request;
+use crate::devices::chip::ChipIdentifier;
+use crate::echip;
 
 /// The Dispatcher module routes packets from a chip controller instance to
 /// different transport managers. Currently transport managers include
@@ -116,26 +115,39 @@ pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, p
 }
 
 /// Handle requests from transports.
-pub fn handle_request(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8) {
+pub fn handle_request(
+    kind: u32,
+    facade_id: u32,
+    chip_id: ChipIdentifier,
+    packet: &mut Vec<u8>,
+    packet_type: u8,
+) {
     captures_handlers::handle_packet_request(kind, facade_id, packet, packet_type.into());
 
-    match int_to_chip_kind(kind) {
-        ChipKind::BLUETOOTH => {
-            handle_bluetooth_request(facade_id, packet_type, packet);
-        }
-        ChipKind::WIFI => {
-            handle_wifi_request(facade_id, packet);
-        }
-        chip_kind => {
-            warn!("Unable to handle request from chip_kind: {:?}", chip_kind);
-        }
+    // Prepend packet_type to packet if specified
+    if PacketType::HCI_PACKET_UNSPECIFIED.value()
+        != <u8 as std::convert::Into<i32>>::into(packet_type)
+    {
+        packet.insert(0, packet_type);
     }
+
+    // Perform handle_request
+    match echip::get(chip_id) {
+        Some(emulated_chip) => emulated_chip.handle_request(packet),
+        None => warn!("SharedEmulatedChip doesn't exist for {chip_id}"),
+    };
 }
 
 /// Handle requests from transports in C++.
-pub fn handle_request_cxx(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
-    let packet_vec = packet.as_slice().to_vec();
-    handle_request(kind, facade_id, &packet_vec, packet_type);
+pub fn handle_request_cxx(
+    kind: u32,
+    facade_id: u32,
+    chip_id: u32,
+    packet: &cxx::CxxVector<u8>,
+    packet_type: u8,
+) {
+    let mut packet_vec = packet.as_slice().to_vec();
+    handle_request(kind, facade_id, chip_id, &mut packet_vec, packet_type);
 }
 
 #[cfg(test)]

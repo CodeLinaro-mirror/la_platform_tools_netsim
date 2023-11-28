@@ -151,9 +151,15 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
         if packet_msg.is_binary() {
             let mut cursor = Cursor::new(packet_msg.into_data());
             match h4::read_h4_packet(&mut cursor) {
-                Ok(packet) => {
+                Ok(mut packet) => {
                     let kind = ChipKind::BLUETOOTH as u32;
-                    handle_request(kind, result.facade_id, &packet.payload, packet.h4_type);
+                    handle_request(
+                        kind,
+                        result.facade_id,
+                        result.chip_id,
+                        &mut packet.payload,
+                        packet.h4_type,
+                    );
                 }
                 Err(error) => {
                     error!(

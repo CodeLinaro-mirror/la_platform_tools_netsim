@@ -62,6 +62,10 @@ impl EmulatedChip for Bluetooth {
         ffi_bluetooth::bluetooth_patch_cxx(self.facade_id, &bluetooth_bytes);
     }
 
+    fn remove(&self) {
+        ffi_bluetooth::bluetooth_remove(self.facade_id);
+    }
+
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::BLUETOOTH
     }

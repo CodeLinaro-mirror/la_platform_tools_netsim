@@ -60,6 +60,10 @@ impl EmulatedChip for Wifi {
         ffi_wifi::wifi_patch_cxx(self.facade_id, &radio_bytes);
     }
 
+    fn remove(&self) {
+        ffi_wifi::wifi_remove(self.facade_id);
+    }
+
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::WIFI
     }

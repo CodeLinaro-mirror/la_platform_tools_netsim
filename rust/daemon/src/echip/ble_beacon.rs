@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch};
+use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch, ble_beacon_remove};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::DeviceIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
@@ -65,6 +65,12 @@ impl EmulatedChip for BleBeacon {
 
     fn patch(&self, chip: &ProtoChip) {
         if let Err(err) = ble_beacon_patch(self.facade_id, self.chip_id, chip.ble_beacon()) {
+            error!("{err:?}");
+        }
+    }
+
+    fn remove(&self) {
+        if let Err(err) = ble_beacon_remove(self.chip_id, self.facade_id) {
             error!("{err:?}");
         }
     }

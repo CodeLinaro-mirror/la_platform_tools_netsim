@@ -126,7 +126,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     // connect packet responses from chip facade to the peer
     facade_to_stream[ChipFacade(chip_kind, facade_id)] = stream;
     netsim::transport::RegisterGrpcTransport(chip_kind, facade_id);
-    this->ProcessRequests(stream, device_id, chip_kind, facade_id);
+    this->ProcessRequests(stream, chip_id, chip_kind, facade_id);
 
     // no longer able to send responses to peer
     netsim::transport::UnregisterGrpcTransport(chip_kind, facade_id);
@@ -155,7 +155,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
 
   // Process requests in a loop forwarding packets to the packet_hub and
   // returning when the channel is closed.
-  void ProcessRequests(Stream *stream, uint32_t device_id,
+  void ProcessRequests(Stream *stream, uint32_t chip_id,
                        common::ChipKind chip_kind, uint32_t facade_id) {
     packet::PacketRequest request;
     while (true) {
@@ -173,7 +173,8 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         auto packet_type = request.hci_packet().packet_type();
         auto packet =
             ToSharedVec(request.mutable_hci_packet()->mutable_packet());
-        transport::HandleRequestCxx(chip_kind, facade_id, *packet, packet_type);
+        transport::HandleRequestCxx(chip_kind, facade_id, chip_id, *packet,
+                                    packet_type);
       } else if (chip_kind == common::ChipKind::WIFI) {
         if (!request.has_packet()) {
           BtsLogWarn("grpc_server: unknown packet type from facade_id: %d",
@@ -184,7 +185,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         {
           std::lock_guard<std::mutex> guard(gSlirpMutex);
           transport::HandleRequestCxx(
-              chip_kind, facade_id, *packet,
+              chip_kind, facade_id, chip_id, *packet,
               packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
         }
 #ifdef NETSIM_ANDROID_EMULATOR
