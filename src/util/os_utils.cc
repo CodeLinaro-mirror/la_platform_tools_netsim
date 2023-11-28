@@ -73,7 +73,7 @@ std::string GetNetsimIniFilepath(uint16_t instance_num) {
   // Check if directory has a trailing slash.
   if (discovery_dir.back() != netsim::filesystem::slash.back())
     discovery_dir.append(netsim::filesystem::slash);
-  auto filename = (instance_num == 0)
+  auto filename = (instance_num == 1)
                       ? "netsim.ini"
                       : "netsim_" + std::to_string(instance_num) + ".ini";
   discovery_dir.append(filename);

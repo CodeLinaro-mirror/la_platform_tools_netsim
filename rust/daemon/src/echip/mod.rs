@@ -12,32 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Netsim daemon libraries.
+pub mod ble_beacon;
+pub mod bluetooth;
+pub mod emulated_chip;
+pub mod mocked;
+pub mod wifi;
 
-mod args;
-mod bluetooth;
-pub mod captures;
-mod config;
-mod config_file;
-mod devices;
-mod events;
-mod ffi;
-mod http_server;
-mod ranging;
-mod resource;
-mod rust_main;
-mod service;
-mod session;
-mod transport;
-mod util;
-mod uwb;
-mod version;
-mod wifi;
+pub use crate::echip::emulated_chip::new;
+pub use crate::echip::emulated_chip::CreateParam;
+pub use crate::echip::emulated_chip::EmulatedChip;
+use std::sync::Arc;
 
-// TODO(b/307145892): EmulatedChip Trait is actively being implemented.
-#[allow(dead_code, unused_variables)]
-mod echip;
-
-// This feature is enabled only for CMake builds
-#[cfg(feature = "local_ssl")]
-mod openssl;
+pub type SharedEmulatedChip = Arc<Box<dyn EmulatedChip + Send + Sync>>;

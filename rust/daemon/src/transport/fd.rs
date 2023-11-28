@@ -19,6 +19,7 @@ use super::dispatcher::{handle_request, register_transport, unregister_transport
 use super::h4;
 use super::h4::PacketError;
 use super::uci;
+use crate::devices::chip;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::ffi::ffi_transport;
 use lazy_static::lazy_static;
@@ -189,18 +190,19 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
                         ChipKindEnum::UWB => ChipKind::UWB,
                         _ => ChipKind::UNSPECIFIED,
                     };
-                    let chip_create_proto = ChipCreate {
-                        kind: chip_kind.into(),
+                    let chip_create_params = chip::CreateParams {
+                        kind: chip_kind,
                         address: chip.address.unwrap_or_default(),
-                        name: chip.id.unwrap_or_default(),
+                        name: Some(chip.id.unwrap_or_default()),
                         manufacturer: chip.manufacturer.unwrap_or_default(),
                         product_name: chip.product_name.unwrap_or_default(),
-                        ..Default::default()
+                        bt_properties: None,
                     };
                     let result = match add_chip(
                         &chip.fd_in.to_string(),
                         &device.name.clone(),
-                        &chip_create_proto,
+                        &chip_create_params,
+                        &ChipCreate::new(),
                     ) {
                         Ok(chip_result) => chip_result,
                         Err(err) => {

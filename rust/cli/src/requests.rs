@@ -40,6 +40,9 @@ impl args::Command {
                 Beacon::Patch(_) => GrpcMethod::PatchDevice,
                 Beacon::Remove(_) => GrpcMethod::DeleteChip,
             },
+            Command::Bumble => {
+                panic!("No GrpcMethod for Bumble Command.");
+            }
         }
     }
 }

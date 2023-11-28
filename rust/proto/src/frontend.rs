@@ -781,6 +781,408 @@ impl ::protobuf::reflect::ProtobufValue for ListDeviceResponse {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.frontend.SubscribeDeviceRequest)
+pub struct SubscribeDeviceRequest {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.frontend.SubscribeDeviceRequest.last_modified)
+    pub last_modified: ::protobuf::MessageField<::protobuf::well_known_types::timestamp::Timestamp>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.frontend.SubscribeDeviceRequest.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a SubscribeDeviceRequest {
+    fn default() -> &'a SubscribeDeviceRequest {
+        <SubscribeDeviceRequest as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl SubscribeDeviceRequest {
+    pub fn new() -> SubscribeDeviceRequest {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, ::protobuf::well_known_types::timestamp::Timestamp>(
+            "last_modified",
+            |m: &SubscribeDeviceRequest| { &m.last_modified },
+            |m: &mut SubscribeDeviceRequest| { &mut m.last_modified },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<SubscribeDeviceRequest>(
+            "SubscribeDeviceRequest",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for SubscribeDeviceRequest {
+    const NAME: &'static str = "SubscribeDeviceRequest";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.last_modified)?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.last_modified.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.last_modified.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> SubscribeDeviceRequest {
+        SubscribeDeviceRequest::new()
+    }
+
+    fn clear(&mut self) {
+        self.last_modified.clear();
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static SubscribeDeviceRequest {
+        static instance: SubscribeDeviceRequest = SubscribeDeviceRequest {
+            last_modified: ::protobuf::MessageField::none(),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for SubscribeDeviceRequest {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("SubscribeDeviceRequest").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for SubscribeDeviceRequest {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for SubscribeDeviceRequest {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.frontend.SubscribeDeviceResponse)
+pub struct SubscribeDeviceResponse {
+    // message oneof groups
+    pub response: ::std::option::Option<subscribe_device_response::Response>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.frontend.SubscribeDeviceResponse.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a SubscribeDeviceResponse {
+    fn default() -> &'a SubscribeDeviceResponse {
+        <SubscribeDeviceResponse as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl SubscribeDeviceResponse {
+    pub fn new() -> SubscribeDeviceResponse {
+        ::std::default::Default::default()
+    }
+
+    // .netsim.frontend.ListDeviceResponse list_device_response = 1;
+
+    pub fn list_device_response(&self) -> &ListDeviceResponse {
+        match self.response {
+            ::std::option::Option::Some(subscribe_device_response::Response::ListDeviceResponse(ref v)) => v,
+            _ => <ListDeviceResponse as ::protobuf::Message>::default_instance(),
+        }
+    }
+
+    pub fn clear_list_device_response(&mut self) {
+        self.response = ::std::option::Option::None;
+    }
+
+    pub fn has_list_device_response(&self) -> bool {
+        match self.response {
+            ::std::option::Option::Some(subscribe_device_response::Response::ListDeviceResponse(..)) => true,
+            _ => false,
+        }
+    }
+
+    // Param is passed by value, moved
+    pub fn set_list_device_response(&mut self, v: ListDeviceResponse) {
+        self.response = ::std::option::Option::Some(subscribe_device_response::Response::ListDeviceResponse(v))
+    }
+
+    // Mutable pointer to the field.
+    pub fn mut_list_device_response(&mut self) -> &mut ListDeviceResponse {
+        if let ::std::option::Option::Some(subscribe_device_response::Response::ListDeviceResponse(_)) = self.response {
+        } else {
+            self.response = ::std::option::Option::Some(subscribe_device_response::Response::ListDeviceResponse(ListDeviceResponse::new()));
+        }
+        match self.response {
+            ::std::option::Option::Some(subscribe_device_response::Response::ListDeviceResponse(ref mut v)) => v,
+            _ => panic!(),
+        }
+    }
+
+    // Take field
+    pub fn take_list_device_response(&mut self) -> ListDeviceResponse {
+        if self.has_list_device_response() {
+            match self.response.take() {
+                ::std::option::Option::Some(subscribe_device_response::Response::ListDeviceResponse(v)) => v,
+                _ => panic!(),
+            }
+        } else {
+            ListDeviceResponse::new()
+        }
+    }
+
+    // .google.protobuf.Empty empty_response = 2;
+
+    pub fn empty_response(&self) -> &::protobuf::well_known_types::empty::Empty {
+        match self.response {
+            ::std::option::Option::Some(subscribe_device_response::Response::EmptyResponse(ref v)) => v,
+            _ => <::protobuf::well_known_types::empty::Empty as ::protobuf::Message>::default_instance(),
+        }
+    }
+
+    pub fn clear_empty_response(&mut self) {
+        self.response = ::std::option::Option::None;
+    }
+
+    pub fn has_empty_response(&self) -> bool {
+        match self.response {
+            ::std::option::Option::Some(subscribe_device_response::Response::EmptyResponse(..)) => true,
+            _ => false,
+        }
+    }
+
+    // Param is passed by value, moved
+    pub fn set_empty_response(&mut self, v: ::protobuf::well_known_types::empty::Empty) {
+        self.response = ::std::option::Option::Some(subscribe_device_response::Response::EmptyResponse(v))
+    }
+
+    // Mutable pointer to the field.
+    pub fn mut_empty_response(&mut self) -> &mut ::protobuf::well_known_types::empty::Empty {
+        if let ::std::option::Option::Some(subscribe_device_response::Response::EmptyResponse(_)) = self.response {
+        } else {
+            self.response = ::std::option::Option::Some(subscribe_device_response::Response::EmptyResponse(::protobuf::well_known_types::empty::Empty::new()));
+        }
+        match self.response {
+            ::std::option::Option::Some(subscribe_device_response::Response::EmptyResponse(ref mut v)) => v,
+            _ => panic!(),
+        }
+    }
+
+    // Take field
+    pub fn take_empty_response(&mut self) -> ::protobuf::well_known_types::empty::Empty {
+        if self.has_empty_response() {
+            match self.response.take() {
+                ::std::option::Option::Some(subscribe_device_response::Response::EmptyResponse(v)) => v,
+                _ => panic!(),
+            }
+        } else {
+            ::protobuf::well_known_types::empty::Empty::new()
+        }
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(2);
+        let mut oneofs = ::std::vec::Vec::with_capacity(1);
+        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, ListDeviceResponse>(
+            "list_device_response",
+            SubscribeDeviceResponse::has_list_device_response,
+            SubscribeDeviceResponse::list_device_response,
+            SubscribeDeviceResponse::mut_list_device_response,
+            SubscribeDeviceResponse::set_list_device_response,
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_oneof_message_has_get_mut_set_accessor::<_, ::protobuf::well_known_types::empty::Empty>(
+            "empty_response",
+            SubscribeDeviceResponse::has_empty_response,
+            SubscribeDeviceResponse::empty_response,
+            SubscribeDeviceResponse::mut_empty_response,
+            SubscribeDeviceResponse::set_empty_response,
+        ));
+        oneofs.push(subscribe_device_response::Response::generated_oneof_descriptor_data());
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<SubscribeDeviceResponse>(
+            "SubscribeDeviceResponse",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for SubscribeDeviceResponse {
+    const NAME: &'static str = "SubscribeDeviceResponse";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    self.response = ::std::option::Option::Some(subscribe_device_response::Response::ListDeviceResponse(is.read_message()?));
+                },
+                18 => {
+                    self.response = ::std::option::Option::Some(subscribe_device_response::Response::EmptyResponse(is.read_message()?));
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let ::std::option::Option::Some(ref v) = self.response {
+            match v {
+                &subscribe_device_response::Response::ListDeviceResponse(ref v) => {
+                    let len = v.compute_size();
+                    my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+                },
+                &subscribe_device_response::Response::EmptyResponse(ref v) => {
+                    let len = v.compute_size();
+                    my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+                },
+            };
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let ::std::option::Option::Some(ref v) = self.response {
+            match v {
+                &subscribe_device_response::Response::ListDeviceResponse(ref v) => {
+                    ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
+                },
+                &subscribe_device_response::Response::EmptyResponse(ref v) => {
+                    ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
+                },
+            };
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> SubscribeDeviceResponse {
+        SubscribeDeviceResponse::new()
+    }
+
+    fn clear(&mut self) {
+        self.response = ::std::option::Option::None;
+        self.response = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static SubscribeDeviceResponse {
+        static instance: SubscribeDeviceResponse = SubscribeDeviceResponse {
+            response: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for SubscribeDeviceResponse {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("SubscribeDeviceResponse").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for SubscribeDeviceResponse {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for SubscribeDeviceResponse {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+/// Nested message and enums of message `SubscribeDeviceResponse`
+pub mod subscribe_device_response {
+
+    #[derive(Clone,PartialEq,Debug)]
+    #[non_exhaustive]
+    // @@protoc_insertion_point(oneof:netsim.frontend.SubscribeDeviceResponse.response)
+    pub enum Response {
+        // @@protoc_insertion_point(oneof_field:netsim.frontend.SubscribeDeviceResponse.list_device_response)
+        ListDeviceResponse(super::ListDeviceResponse),
+        // @@protoc_insertion_point(oneof_field:netsim.frontend.SubscribeDeviceResponse.empty_response)
+        EmptyResponse(::protobuf::well_known_types::empty::Empty),
+    }
+
+    impl ::protobuf::Oneof for Response {
+    }
+
+    impl ::protobuf::OneofFull for Response {
+        fn descriptor() -> ::protobuf::reflect::OneofDescriptor {
+            static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::OneofDescriptor> = ::protobuf::rt::Lazy::new();
+            descriptor.get(|| <super::SubscribeDeviceResponse as ::protobuf::MessageFull>::descriptor().oneof_by_name("response").unwrap()).clone()
+        }
+    }
+
+    impl Response {
+        pub(in super) fn generated_oneof_descriptor_data() -> ::protobuf::reflect::GeneratedOneofDescriptorData {
+            ::protobuf::reflect::GeneratedOneofDescriptorData::new::<Response>("response")
+        }
+    }
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
 // @@protoc_insertion_point(message:netsim.frontend.PatchCaptureRequest)
 pub struct PatchCaptureRequest {
     // message fields
@@ -1425,26 +1827,34 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     .netsim.model.DeviceR\x06device\"\x85\x01\n\x12ListDeviceResponse\x12.\n\
     \x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.model.DeviceR\x07devices\
     \x12?\n\rlast_modified\x18\x02\x20\x01(\x0b2\x1a.google.protobuf.Timesta\
-    mpR\x0clastModified\"\xa9\x01\n\x13PatchCaptureRequest\x12\x0e\n\x02id\
-    \x18\x01\x20\x01(\rR\x02id\x12G\n\x05patch\x18\x02\x20\x01(\x0b21.netsim\
-    .frontend.PatchCaptureRequest.PatchCaptureR\x05patch\x1a9\n\x0cPatchCapt\
-    ure\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model.StateR\x05sta\
-    te\"H\n\x13ListCaptureResponse\x121\n\x08captures\x18\x01\x20\x03(\x0b2\
-    \x15.netsim.model.CaptureR\x08captures\"#\n\x11GetCaptureRequest\x12\x0e\
-    \n\x02id\x18\x01\x20\x01(\rR\x02id\";\n\x12GetCaptureResponse\x12%\n\x0e\
-    capture_stream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xc4\x05\n\x0fFronte\
-    ndService\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsi\
-    m.frontend.VersionResponse\x12[\n\x0cCreateDevice\x12$.netsim.frontend.C\
-    reateDeviceRequest\x1a%.netsim.frontend.CreateDeviceResponse\x12H\n\nDel\
-    eteChip\x12\".netsim.frontend.DeleteChipRequest\x1a\x16.google.protobuf.\
-    Empty\x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\
-    \x16.google.protobuf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\
-    \x1a\x16.google.protobuf.Empty\x12I\n\nListDevice\x12\x16.google.protobu\
-    f.Empty\x1a#.netsim.frontend.ListDeviceResponse\x12L\n\x0cPatchCapture\
-    \x12$.netsim.frontend.PatchCaptureRequest\x1a\x16.google.protobuf.Empty\
-    \x12K\n\x0bListCapture\x12\x16.google.protobuf.Empty\x1a$.netsim.fronten\
-    d.ListCaptureResponse\x12W\n\nGetCapture\x12\".netsim.frontend.GetCaptur\
-    eRequest\x1a#.netsim.frontend.GetCaptureResponse0\x01b\x06proto3\
+    mpR\x0clastModified\"p\n\x16SubscribeDeviceRequest\x12D\n\rlast_modified\
+    \x18\x01\x20\x01(\x0b2\x1a.google.protobuf.TimestampH\0R\x0clastModified\
+    \x88\x01\x01B\x10\n\x0e_last_modified\"\xbf\x01\n\x17SubscribeDeviceResp\
+    onse\x12W\n\x14list_device_response\x18\x01\x20\x01(\x0b2#.netsim.fronte\
+    nd.ListDeviceResponseH\0R\x12listDeviceResponse\x12?\n\x0eempty_response\
+    \x18\x02\x20\x01(\x0b2\x16.google.protobuf.EmptyH\0R\remptyResponseB\n\n\
+    \x08response\"\xa9\x01\n\x13PatchCaptureRequest\x12\x0e\n\x02id\x18\x01\
+    \x20\x01(\rR\x02id\x12G\n\x05patch\x18\x02\x20\x01(\x0b21.netsim.fronten\
+    d.PatchCaptureRequest.PatchCaptureR\x05patch\x1a9\n\x0cPatchCapture\x12)\
+    \n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model.StateR\x05state\"H\n\
+    \x13ListCaptureResponse\x121\n\x08captures\x18\x01\x20\x03(\x0b2\x15.net\
+    sim.model.CaptureR\x08captures\"#\n\x11GetCaptureRequest\x12\x0e\n\x02id\
+    \x18\x01\x20\x01(\rR\x02id\";\n\x12GetCaptureResponse\x12%\n\x0ecapture_\
+    stream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xaa\x06\n\x0fFrontendServic\
+    e\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.fronte\
+    nd.VersionResponse\x12[\n\x0cCreateDevice\x12$.netsim.frontend.CreateDev\
+    iceRequest\x1a%.netsim.frontend.CreateDeviceResponse\x12H\n\nDeleteChip\
+    \x12\".netsim.frontend.DeleteChipRequest\x1a\x16.google.protobuf.Empty\
+    \x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.g\
+    oogle.protobuf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\
+    \x16.google.protobuf.Empty\x12I\n\nListDevice\x12\x16.google.protobuf.Em\
+    pty\x1a#.netsim.frontend.ListDeviceResponse\x12d\n\x0fSubscribeDevice\
+    \x12'.netsim.frontend.SubscribeDeviceRequest\x1a(.netsim.frontend.Subscr\
+    ibeDeviceResponse\x12L\n\x0cPatchCapture\x12$.netsim.frontend.PatchCaptu\
+    reRequest\x1a\x16.google.protobuf.Empty\x12K\n\x0bListCapture\x12\x16.go\
+    ogle.protobuf.Empty\x1a$.netsim.frontend.ListCaptureResponse\x12W\n\nGet\
+    Capture\x12\".netsim.frontend.GetCaptureRequest\x1a#.netsim.frontend.Get\
+    CaptureResponse0\x01b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -1465,13 +1875,15 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             deps.push(::protobuf::well_known_types::empty::file_descriptor().clone());
             deps.push(::protobuf::well_known_types::timestamp::file_descriptor().clone());
             deps.push(super::model::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(11);
+            let mut messages = ::std::vec::Vec::with_capacity(13);
             messages.push(VersionResponse::generated_message_descriptor_data());
             messages.push(CreateDeviceRequest::generated_message_descriptor_data());
             messages.push(CreateDeviceResponse::generated_message_descriptor_data());
             messages.push(DeleteChipRequest::generated_message_descriptor_data());
             messages.push(PatchDeviceRequest::generated_message_descriptor_data());
             messages.push(ListDeviceResponse::generated_message_descriptor_data());
+            messages.push(SubscribeDeviceRequest::generated_message_descriptor_data());
+            messages.push(SubscribeDeviceResponse::generated_message_descriptor_data());
             messages.push(PatchCaptureRequest::generated_message_descriptor_data());
             messages.push(ListCaptureResponse::generated_message_descriptor_data());
             messages.push(GetCaptureRequest::generated_message_descriptor_data());

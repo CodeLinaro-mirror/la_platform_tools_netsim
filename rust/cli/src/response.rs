@@ -171,6 +171,9 @@ impl args::Command {
                     }
                 }
             },
+            Command::Bumble => {
+                unimplemented!("No Grpc Response for Bumble Command.");
+            }
         }
     }
 

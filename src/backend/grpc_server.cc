@@ -53,7 +53,8 @@ std::unordered_map<std::string, Stream *> facade_to_stream;
 std::string ChipFacade(ChipKind chip_kind, uint32_t facade_id) {
   return std::to_string(chip_kind) + "/" + std::to_string(facade_id);
 }
-// Libslirp is not thread safe. Use a lock to prevent concurrent access to libslirp.
+// Libslirp is not thread safe. Use a lock to prevent concurrent access to
+// libslirp.
 std::mutex gSlirpMutex;
 
 // Service handles the gRPC StreamPackets requests.

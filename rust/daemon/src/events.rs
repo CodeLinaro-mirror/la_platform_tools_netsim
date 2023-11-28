@@ -53,6 +53,7 @@ pub enum Event {
         id: DeviceIdentifier,
         name: String,
     },
+    DeviceReset,
     ChipAdded {
         chip_id: ChipIdentifier,
         chip_kind: ChipKind,

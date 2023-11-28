@@ -24,6 +24,7 @@ use lazy_static::lazy_static;
 use log::info;
 use log::warn;
 use netsim_proto::common::ChipKind as ProtoChipKind;
+use netsim_proto::configuration::Controller as ProtoController;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::EnumOrUnknown;
@@ -41,6 +42,15 @@ lazy_static! {
         RwLock::new(IdFactory::new(INITIAL_CHIP_ID, 1));
 }
 
+pub struct CreateParams {
+    pub kind: ProtoChipKind,
+    pub address: String,
+    pub name: Option<String>,
+    pub manufacturer: String,
+    pub product_name: String,
+    pub bt_properties: Option<ProtoController>, // TODO: move to echip CreateParams
+}
+
 pub struct Chip {
     pub id: ChipIdentifier,
     pub facade_id: Option<FacadeIdentifier>,
@@ -56,26 +66,16 @@ pub struct Chip {
 }
 
 impl Chip {
-    #[allow(clippy::too_many_arguments)]
-    fn new(
-        id: ChipIdentifier,
-        facade_id: Option<FacadeIdentifier>,
-        kind: ProtoChipKind,
-        address: &str,
-        name: &str,
-        device_name: &str,
-        manufacturer: &str,
-        product_name: &str,
-    ) -> Self {
+    fn new(id: ChipIdentifier, device_name: &str, create_params: &CreateParams) -> Self {
         Self {
             id,
-            facade_id,
-            kind,
-            address: address.to_string(),
-            name: name.to_string(),
+            facade_id: None,
+            kind: create_params.kind,
+            address: create_params.address.clone(),
+            name: create_params.name.clone().unwrap_or(format!("chip-{id}")),
             device_name: device_name.to_string(),
-            manufacturer: manufacturer.to_string(),
-            product_name: product_name.to_string(),
+            manufacturer: create_params.manufacturer.clone(),
+            product_name: create_params.product_name.clone(),
             start: Instant::now(),
         }
     }
@@ -93,18 +93,18 @@ impl Chip {
             match self.kind {
                 ProtoChipKind::BLUETOOTH => {
                     let bt = bluetooth_facade::bluetooth_get(facade_id);
-                    stats.set_kind(netsim_radio_stats::Kind::BT_LE);
+                    stats.set_kind(netsim_radio_stats::Kind::BLUETOOTH_LOW_ENERGY);
                     stats.set_tx_count(bt.low_energy.tx_count);
                     stats.set_rx_count(bt.low_energy.rx_count);
                     vec.push(stats);
                     stats = ProtoRadioStats::new();
                     stats.set_duration_secs(self.start.elapsed().as_secs());
-                    stats.set_kind(netsim_radio_stats::Kind::BT_CLASSIC);
+                    stats.set_kind(netsim_radio_stats::Kind::BLUETOOTH_CLASSIC);
                     stats.set_tx_count(bt.classic.tx_count);
                     stats.set_rx_count(bt.classic.rx_count);
                 }
                 ProtoChipKind::BLUETOOTH_BEACON => {
-                    stats.set_kind(netsim_radio_stats::Kind::BT_LE_BEACON);
+                    stats.set_kind(netsim_radio_stats::Kind::BLE_BEACON);
                     if let Ok(beacon) = bluetooth_facade::ble_beacon_get(self.id, facade_id) {
                         stats.set_tx_count(beacon.bt.low_energy.tx_count);
                         stats.set_rx_count(beacon.bt.low_energy.rx_count);
@@ -215,24 +215,7 @@ impl Chip {
 }
 
 /// Allocates a new chip with a facade_id.
-pub fn chip_new(
-    chip_kind: ProtoChipKind,
-    chip_address: &str,
-    chip_name: Option<&str>,
-    device_name: &str,
-    chip_manufacturer: &str,
-    chip_product_name: &str,
-) -> Result<Chip, String> {
+pub fn chip_new(device_name: &str, create_params: &CreateParams) -> Result<Chip, String> {
     let id = IDS.write().unwrap().next_id();
-
-    Ok(Chip::new(
-        id,
-        None,
-        chip_kind,
-        chip_address,
-        chip_name.unwrap_or(&format!("chip-{id}")),
-        device_name,
-        chip_manufacturer,
-        chip_product_name,
-    ))
+    Ok(Chip::new(id, device_name, create_params))
 }
