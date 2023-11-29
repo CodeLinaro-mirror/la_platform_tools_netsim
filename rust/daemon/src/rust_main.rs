@@ -223,10 +223,11 @@ fn run_netsimd_primary(args: NetsimdArgs) {
 
     // Maybe create test beacons, default true for cuttlefish
     // TODO: remove default for cuttlefish by adding flag to tests
-    if match args.test_beacons {
-        Some(true) => true,
-        Some(false) => false,
-        None => cfg!(feature = "cuttlefish"),
+    if match (args.test_beacons, args.no_test_beacons) {
+        (true, false) => true,
+        (false, true) => false,
+        (false, false) => cfg!(feature = "cuttlefish"),
+        (true, true) => panic!("unexpected flag combination"),
     } {
         new_test_beacon(1, 1000);
         new_test_beacon(2, 1000);
@@ -236,7 +237,7 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     service.run();
 
     // Runs a synchronous main loop
-    main_loop(main_events_rx, args.no_shutdown.unwrap_or(false));
+    main_loop(main_events_rx, args.no_shutdown);
 
     // Gracefully shutdown netsimd services
     service.shut_down();

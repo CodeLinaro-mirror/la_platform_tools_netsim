@@ -23,6 +23,7 @@ use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::chip::Radio;
 use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
 
 use std::sync::Arc;
@@ -62,6 +63,18 @@ impl EmulatedChip for Wifi {
 
     fn remove(&self) {
         ffi_wifi::wifi_remove(self.facade_id);
+    }
+
+    fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
+        let mut stats_proto = ProtoRadioStats::new();
+        stats_proto.set_duration_secs(duration_secs);
+        stats_proto.set_kind(netsim_radio_stats::Kind::WIFI);
+        let chip_proto = self.get();
+        if chip_proto.has_wifi() {
+            stats_proto.set_tx_count(chip_proto.wifi().tx_count);
+            stats_proto.set_rx_count(chip_proto.wifi().rx_count);
+        }
+        vec![stats_proto]
     }
 
     fn get_kind(&self) -> ProtoChipKind {

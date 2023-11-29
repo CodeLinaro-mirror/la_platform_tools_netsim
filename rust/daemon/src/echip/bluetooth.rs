@@ -25,6 +25,7 @@ use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::Bluetooth as ProtoBluetooth;
 use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
 
 use std::sync::Arc;
@@ -64,6 +65,27 @@ impl EmulatedChip for Bluetooth {
 
     fn remove(&self) {
         ffi_bluetooth::bluetooth_remove(self.facade_id);
+    }
+
+    fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
+        // Construct NetsimRadioStats for BLE and Classic.
+        let mut ble_stats_proto = ProtoRadioStats::new();
+        ble_stats_proto.set_duration_secs(duration_secs);
+        let mut classic_stats_proto = ble_stats_proto.clone();
+
+        // Obtain the Chip Information with get()
+        let chip_proto = self.get();
+        if chip_proto.has_bt() {
+            // Setting values for BLE Radio Stats
+            ble_stats_proto.set_kind(netsim_radio_stats::Kind::BLUETOOTH_LOW_ENERGY);
+            ble_stats_proto.set_tx_count(chip_proto.bt().low_energy.tx_count);
+            ble_stats_proto.set_rx_count(chip_proto.bt().low_energy.rx_count);
+            // Setting values for Classic Radio Stats
+            classic_stats_proto.set_kind(netsim_radio_stats::Kind::BLUETOOTH_CLASSIC);
+            classic_stats_proto.set_tx_count(chip_proto.bt().classic.tx_count);
+            classic_stats_proto.set_rx_count(chip_proto.bt().classic.rx_count);
+        }
+        vec![ble_stats_proto, classic_stats_proto]
     }
 
     fn get_kind(&self) -> ProtoChipKind {

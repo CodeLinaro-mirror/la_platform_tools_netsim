@@ -22,6 +22,7 @@ use lazy_static::lazy_static;
 use log::error;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
 use crate::{
     devices::{
@@ -85,6 +86,10 @@ pub trait EmulatedChip {
     /// be made on this emulated chip. This is called when the packet stream from
     /// the virtual device closes.
     fn remove(&self);
+
+    /// Return the NetsimRadioStats protobuf from the emulated chip. This is
+    /// part of NetsimStats protobuf.
+    fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats>;
 
     /// Returns the kind of the emulated chip.
     fn get_kind(&self) -> ProtoChipKind;

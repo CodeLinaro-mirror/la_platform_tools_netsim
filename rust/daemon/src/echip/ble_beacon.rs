@@ -21,6 +21,7 @@ use log::error;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::ChipCreate as ChipCreateProto;
+use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 
 use std::sync::Arc;
 
@@ -73,6 +74,18 @@ impl EmulatedChip for BleBeacon {
         if let Err(err) = ble_beacon_remove(self.chip_id, self.facade_id) {
             error!("{err:?}");
         }
+    }
+
+    fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
+        let mut stats_proto = ProtoRadioStats::new();
+        stats_proto.set_duration_secs(duration_secs);
+        stats_proto.set_kind(netsim_radio_stats::Kind::BLE_BEACON);
+        let chip_proto = self.get();
+        if chip_proto.has_ble_beacon() {
+            stats_proto.set_tx_count(chip_proto.ble_beacon().bt.low_energy.tx_count);
+            stats_proto.set_rx_count(chip_proto.ble_beacon().bt.low_energy.rx_count);
+        }
+        vec![stats_proto]
     }
 
     fn get_kind(&self) -> ProtoChipKind {

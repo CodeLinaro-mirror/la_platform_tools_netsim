@@ -18,6 +18,7 @@ use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
 use std::sync::Arc;
 
@@ -43,6 +44,10 @@ impl EmulatedChip for Mock {
     fn patch(&self, chip: &ProtoChip) {}
 
     fn remove(&self) {}
+
+    fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
+        vec![ProtoRadioStats::new()]
+    }
 
     fn get_kind(&self) -> ProtoChipKind {
         self.chip_kind
