@@ -84,7 +84,7 @@ impl Worker {
         let thread = thread::Builder::new()
             .name("http_pool_{id}".to_string())
             .spawn(move || loop {
-                let message = receiver.lock().unwrap().recv();
+                let message = receiver.lock().expect("Failed to acquire lock on receiver").recv();
 
                 match message {
                     Ok(job) => {

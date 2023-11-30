@@ -220,11 +220,10 @@ impl Captures {
     /// When Capture is removed, remove from each map and also invoke closing of files.
     pub fn remove(&mut self, key: &ChipIdentifier) {
         if let Some(arc_capture) = self.chip_id_to_capture.get(key) {
-            if let Ok(mut capture) = arc_capture.lock() {
-                // Valid is marked false when chip is disconnected from netsim
-                capture.valid = false;
-                capture.stop_capture();
-            }
+            let mut capture = arc_capture.lock().expect("Failed to acquire lock on CaptureInfo");
+            // Valid is marked false when chip is disconnected from netsim
+            capture.valid = false;
+            capture.stop_capture();
         } else {
             info!("key does not exist in Captures");
         }

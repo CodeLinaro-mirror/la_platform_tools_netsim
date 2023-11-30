@@ -91,7 +91,7 @@ pub fn register_transport(kind: u32, facade_id: u32, mut responder: Box<dyn Resp
 pub fn unregister_transport(kind: u32, facade_id: u32) {
     let key = get_key(kind, facade_id);
     // Shuts down the responder thread, because sender is dropped.
-    SENDERS.lock().unwrap().remove(&key);
+    SENDERS.lock().expect("unregister_transport: poisoned lock").remove(&key);
 }
 
 // Handle response from facades.
@@ -103,7 +103,7 @@ pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, p
     captures_handlers::handle_packet_response(kind, facade_id, &packet_vec, packet_type.into());
 
     let key = get_key(kind, facade_id);
-    let mut binding = SENDERS.lock().unwrap();
+    let mut binding = SENDERS.lock().expect("Failed to acquire lock on SENDERS");
     if let Some(responder) = binding.get(&key) {
         if responder.send(ResponsePacket { packet: packet_vec, packet_type }).is_err() {
             warn!("handle_response: send failed for chip_kind/facade_id: {key}");

@@ -19,7 +19,6 @@ use std::{
 
 use lazy_static::lazy_static;
 
-use log::error;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
@@ -102,25 +101,13 @@ pub trait EmulatedChip {
 /// Lookup for SharedEmulatedChip with chip_id
 /// Returns None if chip_id is non-existent key.
 pub fn get(chip_id: ChipIdentifier) -> Option<SharedEmulatedChip> {
-    match ECHIPS.lock() {
-        Ok(echip) => echip.get(&chip_id).cloned(),
-        Err(err) => {
-            error!("{err:?}");
-            None
-        }
-    }
+    ECHIPS.lock().expect("Failed to acquire lock on ECHIPS").get(&chip_id).cloned()
 }
 
 /// Remove and return SharedEmulatedchip from ECHIPS.
 /// Returns None if chip_id is non-existent key.
 pub fn remove(chip_id: ChipIdentifier) -> Option<SharedEmulatedChip> {
-    let echip = match ECHIPS.lock() {
-        Ok(mut echip) => echip.remove(&chip_id),
-        Err(err) => {
-            error!("{err:?}");
-            None
-        }
-    };
+    let echip = ECHIPS.lock().expect("Failed to acquire lock on ECHIPS").remove(&chip_id);
     if echip.is_some() {
         echip.clone().unwrap().remove();
     }
@@ -147,7 +134,7 @@ pub fn new(
     };
 
     // Insert into ECHIPS Map
-    ECHIPS.lock().unwrap().insert(chip_id, shared_echip.clone());
+    ECHIPS.lock().expect("Failed to acquire lock on ECHIPS").insert(chip_id, shared_echip.clone());
     shared_echip
 }
 

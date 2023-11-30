@@ -122,7 +122,9 @@ fn handle_capture_list(writer: ResponseWritable) -> anyhow::Result<()> {
     // Instantiate ListCaptureResponse and add Captures
     let mut response = ListCaptureResponse::new();
     for capture in captures.values() {
-        response.captures.push(capture.lock().unwrap().get_capture_proto());
+        response.captures.push(
+            capture.lock().expect("Failed to acquire lock on CaptureInfo").get_capture_proto(),
+        );
     }
 
     // Perform protobuf-json-mapping with the given protobuf
@@ -141,7 +143,10 @@ fn handle_capture_patch(
 ) -> anyhow::Result<()> {
     let captures_arc = clone_captures();
     let mut captures = captures_arc.write().unwrap();
-    if let Some(mut capture) = captures.get(id).map(|arc_capture| arc_capture.lock().unwrap()) {
+    if let Some(mut capture) = captures
+        .get(id)
+        .map(|arc_capture| arc_capture.lock().expect("Failed to acquire lock on CaptureInfo"))
+    {
         if state {
             capture.start_capture()?;
         } else {
@@ -237,7 +242,7 @@ fn handle_packet(
     if let Some(mut capture) = captures
         .facade_key_to_capture
         .get(&facade_key)
-        .map(|arc_capture| arc_capture.lock().unwrap())
+        .map(|arc_capture| arc_capture.lock().expect("Failed to acquire lock on CaptureInfo"))
     {
         if let Some(ref mut file) = capture.file {
             let timestamp =

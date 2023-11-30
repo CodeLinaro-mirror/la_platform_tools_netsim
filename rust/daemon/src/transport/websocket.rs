@@ -80,8 +80,11 @@ impl Response for WebSocketTransport {
         let mut buffer = Vec::new();
         buffer.push(packet_type);
         buffer.extend(packet);
-        if let Err(err) =
-            self.websocket_writer.lock().unwrap().write_message(Message::Binary(buffer))
+        if let Err(err) = self
+            .websocket_writer
+            .lock()
+            .expect("Failed to acquire lock on WebSocket")
+            .write_message(Message::Binary(buffer))
         {
             error!("{err}");
         };
@@ -173,7 +176,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
         } else if packet_msg.is_ping() {
             if let Err(err) = websocket_writer
                 .lock()
-                .unwrap()
+                .expect("Failed to acquire lock on WebSocket")
                 .write_message(Message::Pong(packet_msg.into_data()))
             {
                 error!("{err}");
@@ -182,7 +185,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
             if let Message::Close(close_frame) = packet_msg {
                 if let Err(err) = websocket_writer
                     .lock()
-                    .unwrap()
+                    .expect("Failed to acquire lock on WebSocket")
                     .close(close_frame)
                     .map_err(|_| "Failed to close Websocket")
                 {

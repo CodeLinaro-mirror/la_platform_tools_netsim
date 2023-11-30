@@ -136,7 +136,7 @@ impl BeaconChip {
         if let Some(rust_bluetooth_chip) = binding.get(&self.chip_id) {
             rust_bluetooth_chip
                 .lock()
-                .unwrap()
+                .expect("Failed to acquire lock on RustBluetoothChip")
                 .pin_mut()
                 .send_link_layer_le_packet(packet, tx_power);
         } else {
@@ -159,7 +159,7 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
             error!("could not find bluetooth beacon with chip id {}", self.chip_id);
             return;
         }
-        let mut beacon = beacon.unwrap().lock().unwrap();
+        let mut beacon = beacon.unwrap().lock().expect("Failed to acquire lock on BeaconChip");
 
         if let (Some(start), Some(timeout)) =
             (beacon.advertise_start, beacon.advertise_settings.timeout)
@@ -206,7 +206,7 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
             error!("could not find bluetooth beacon with chip id {}", self.chip_id);
             return;
         }
-        let beacon = beacon.unwrap().lock().unwrap();
+        let beacon = beacon.unwrap().lock().expect("Failed to acquire lock on BeaconChip");
 
         if beacon.advertise_settings.scannable
             && destination_address == addr_to_str(beacon.address)
@@ -356,7 +356,7 @@ pub fn ble_beacon_get(
         .get(&chip_id)
         .ok_or(format!("could not get bluetooth beacon with chip id {chip_id}"))?
         .lock()
-        .unwrap();
+        .expect("Failed to acquire lock on BeaconChip");
     Ok(BleBeaconProto {
         bt: Some(bluetooth_get(facade_id)).into(),
         address: addr_to_str(beacon.address),
