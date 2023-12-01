@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::devices::chip::FacadeIdentifier;
 use crate::devices::device::DeviceIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
@@ -21,10 +22,14 @@ use netsim_proto::model::Chip as ProtoChip;
 use std::sync::Arc;
 
 /// Parameters for creating Mocked chips
-pub struct CreateParams {}
+pub struct CreateParams {
+    pub chip_kind: ProtoChipKind,
+}
 
 /// Mock struct is remained empty.
-pub struct Mock {}
+pub struct Mock {
+    chip_kind: ProtoChipKind,
+}
 
 impl EmulatedChip for Mock {
     fn handle_request(&self, packet: &[u8]) {}
@@ -38,15 +43,15 @@ impl EmulatedChip for Mock {
     fn patch(&self, chip: &ProtoChip) {}
 
     fn get_kind(&self) -> ProtoChipKind {
-        ProtoChipKind::UNSPECIFIED
+        self.chip_kind
     }
 
-    fn get_facade_id(&self) -> crate::devices::chip::FacadeIdentifier {
-        todo!();
+    fn get_facade_id(&self) -> FacadeIdentifier {
+        FacadeIdentifier::MIN
     }
 }
 
 /// Create a new MockedChip
 pub fn new(create_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
-    Arc::new(Box::new(Mock {}))
+    Arc::new(Box::new(Mock { chip_kind: create_params.chip_kind }))
 }

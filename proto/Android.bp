@@ -37,6 +37,7 @@ genrule_defaults {
     srcs: [
         ":libprotobuf-internal-protos",
         ":netsim-protos",
+        ":rootcanal-protos",
     ],
 }
 

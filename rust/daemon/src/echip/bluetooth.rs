@@ -71,15 +71,6 @@ impl EmulatedChip for Bluetooth {
     }
 }
 
-impl Drop for Bluetooth {
-    /// At drop, Remove the emulated chip from the virtual device. No further calls will
-    /// be made on this emulated chip. This is called when the packet stream from
-    /// the virtual device closes.
-    fn drop(&mut self) {
-        ffi_bluetooth::bluetooth_remove(self.facade_id);
-    }
-}
-
 /// Create a new Emulated Bluetooth Chip
 pub fn new(create_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
     let_cxx_string!(cxx_address = create_params.address.clone());
