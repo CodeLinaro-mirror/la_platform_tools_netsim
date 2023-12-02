@@ -28,7 +28,9 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+static ECHIP_BT_MUTEX: Mutex<()> = Mutex::new(());
 
 /// Parameters for creating Bluetooth chips
 pub struct CreateParams {
@@ -64,6 +66,8 @@ impl EmulatedChip for Bluetooth {
     }
 
     fn remove(&self) {
+        // Lock to protect id_to_chip_info_ table in C++
+        let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
         ffi_bluetooth::bluetooth_remove(self.facade_id);
     }
 
@@ -99,6 +103,8 @@ impl EmulatedChip for Bluetooth {
 
 /// Create a new Emulated Bluetooth Chip
 pub fn new(create_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
+    // Lock to protect id_to_chip_info_ table in C++
+    let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
     let_cxx_string!(cxx_address = create_params.address.clone());
     let proto_bytes = match &create_params.bt_properties {
         Some(properties) => properties.write_to_bytes().unwrap(),
