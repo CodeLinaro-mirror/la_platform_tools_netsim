@@ -18,9 +18,9 @@ pub mod emulated_chip;
 pub mod mocked;
 pub mod wifi;
 
-pub use crate::echip::emulated_chip::new;
 pub use crate::echip::emulated_chip::CreateParam;
 pub use crate::echip::emulated_chip::EmulatedChip;
+pub use crate::echip::emulated_chip::{get, new, remove};
 use std::sync::Arc;
 
 pub type SharedEmulatedChip = Arc<Box<dyn EmulatedChip + Send + Sync>>;

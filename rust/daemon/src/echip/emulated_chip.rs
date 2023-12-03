@@ -12,8 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
+
+use lazy_static::lazy_static;
+
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
 use crate::{
     devices::{
@@ -25,6 +33,13 @@ use crate::{
 
 #[cfg(not(test))]
 use crate::echip::{bluetooth, wifi};
+
+// ECHIPS is a singleton that contains a hash map from
+// ChipIdentifier to SharedEmulatedChip
+lazy_static! {
+    static ref ECHIPS: Arc<Mutex<BTreeMap<ChipIdentifier, SharedEmulatedChip>>> =
+        Arc::new(Mutex::new(BTreeMap::new()));
+}
 
 /// Parameter for each constructor of Emulated Chips
 #[allow(clippy::large_enum_variant)]
@@ -66,12 +81,37 @@ pub trait EmulatedChip {
     /// Frontend API
     fn patch(&self, chip: &ProtoChip);
 
+    /// Remove the emulated chip from the emulated chip library. No further calls will
+    /// be made on this emulated chip. This is called when the packet stream from
+    /// the virtual device closes.
+    fn remove(&self);
+
+    /// Return the NetsimRadioStats protobuf from the emulated chip. This is
+    /// part of NetsimStats protobuf.
+    fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats>;
+
     /// Returns the kind of the emulated chip.
     fn get_kind(&self) -> ProtoChipKind;
 
     // TODO: Remove this method and get rid of facade_id in devices crate.
     /// Returns Facade Identifier.
     fn get_facade_id(&self) -> FacadeIdentifier;
+}
+
+/// Lookup for SharedEmulatedChip with chip_id
+/// Returns None if chip_id is non-existent key.
+pub fn get(chip_id: ChipIdentifier) -> Option<SharedEmulatedChip> {
+    ECHIPS.lock().expect("Failed to acquire lock on ECHIPS").get(&chip_id).cloned()
+}
+
+/// Remove and return SharedEmulatedchip from ECHIPS.
+/// Returns None if chip_id is non-existent key.
+pub fn remove(chip_id: ChipIdentifier) -> Option<SharedEmulatedChip> {
+    let echip = ECHIPS.lock().expect("Failed to acquire lock on ECHIPS").remove(&chip_id);
+    if echip.is_some() {
+        echip.clone().unwrap().remove();
+    }
+    echip
 }
 
 /// This is called when the transport module receives a new packet stream
@@ -81,7 +121,8 @@ pub fn new(
     device_id: DeviceIdentifier,
     chip_id: ChipIdentifier,
 ) -> SharedEmulatedChip {
-    match create_param {
+    // Based on create_param, construct SharedEmulatedChip.
+    let shared_echip = match create_param {
         CreateParam::BleBeacon(params) => ble_beacon::new(params, device_id, chip_id),
         #[cfg(not(test))]
         CreateParam::Bluetooth(params) => bluetooth::new(params, device_id),
@@ -90,7 +131,11 @@ pub fn new(
         #[cfg(not(test))]
         CreateParam::Uwb => todo!(),
         CreateParam::Mock(params) => mocked::new(params, device_id),
-    }
+    };
+
+    // Insert into ECHIPS Map
+    ECHIPS.lock().expect("Failed to acquire lock on ECHIPS").insert(chip_id, shared_echip.clone());
+    shared_echip
 }
 
 // TODO(b/309529194):

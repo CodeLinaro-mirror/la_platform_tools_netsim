@@ -38,7 +38,13 @@ use crate::version::*;
 pub mod ffi_transport {
     extern "Rust" {
         #[cxx_name = HandleRequestCxx]
-        fn handle_request_cxx(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
+        fn handle_request_cxx(
+            kind: u32,
+            facade_id: u32,
+            chip_id: u32,
+            packet: &CxxVector<u8>,
+            packet_type: u8,
+        );
 
         #[cxx_name = HandleResponse]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);

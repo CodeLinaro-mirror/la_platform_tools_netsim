@@ -25,7 +25,7 @@ use protobuf::Message;
 
 pub fn handle_wifi_request(facade_id: u32, packet: &Vec<u8>) {
     if crate::config::get_dev() {
-        medium::parse_hwsim_cmd_frame(packet.as_slice());
+        medium::parse_hwsim_cmd(packet.as_slice());
     }
     ffi_wifi::handle_wifi_request(facade_id, packet);
 }
@@ -56,7 +56,7 @@ pub fn wifi_add(device_id: u32) -> u32 {
 /// Starts the WiFi service.
 pub fn wifi_start(config: &MessageField<WiFi>) {
     if crate::config::get_dev() {
-        medium::test_parse_hwsim_cmd_frame();
+        medium::test_parse_hwsim_cmd();
     }
     let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
     ffi_wifi::wifi_start(&proto_bytes);

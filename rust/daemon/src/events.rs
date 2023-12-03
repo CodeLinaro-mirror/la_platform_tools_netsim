@@ -27,12 +27,12 @@ use std::sync::{Arc, Mutex};
 
 // Publish the event to all subscribers
 pub fn publish(event: Event) {
-    get_events().lock().unwrap().publish(event);
+    get_events().lock().expect("Failed to acquire lock on events").publish(event);
 }
 
 // Subscribe to events over the receiver
 pub fn subscribe() -> Receiver<Event> {
-    get_events().lock().unwrap().subscribe()
+    get_events().lock().expect("Failed to acquire locks on events").subscribe()
 }
 
 /// Event messages shared across various components in a loosely

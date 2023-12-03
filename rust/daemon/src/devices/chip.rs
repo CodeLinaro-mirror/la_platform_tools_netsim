@@ -17,17 +17,14 @@
 ///
 /// The chip facade is a library that implements the controller protocol.
 ///
-use crate::bluetooth as bluetooth_facade;
 use crate::devices::id_factory::IdFactory;
 use crate::echip::SharedEmulatedChip;
-use crate::wifi as wifi_facade;
 use lazy_static::lazy_static;
-use log::info;
 use log::warn;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::configuration::Controller as ProtoController;
 use netsim_proto::model::Chip as ProtoChip;
-use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
+use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use protobuf::EnumOrUnknown;
 use std::sync::RwLock;
 use std::time::Instant;
@@ -94,48 +91,13 @@ impl Chip {
     // counts are phy level. We need a vec since Bluetooth reports
     // stats for BLE and CLASSIC.
     pub fn get_stats(&self) -> Vec<ProtoRadioStats> {
-        let mut vec = Vec::<ProtoRadioStats>::new();
-        let mut stats = ProtoRadioStats::new();
-        stats.set_duration_secs(self.start.elapsed().as_secs());
-        // TODO(b/309805437): Implement EmulatedChip.get_stats and replace this block
-        if let Some(facade_id) = self.emulated_chip.as_ref().map(|c| c.get_facade_id()) {
-            match self.kind {
-                ProtoChipKind::BLUETOOTH => {
-                    let bt = bluetooth_facade::bluetooth_get(facade_id);
-                    stats.set_kind(netsim_radio_stats::Kind::BLUETOOTH_LOW_ENERGY);
-                    stats.set_tx_count(bt.low_energy.tx_count);
-                    stats.set_rx_count(bt.low_energy.rx_count);
-                    vec.push(stats);
-                    stats = ProtoRadioStats::new();
-                    stats.set_duration_secs(self.start.elapsed().as_secs());
-                    stats.set_kind(netsim_radio_stats::Kind::BLUETOOTH_CLASSIC);
-                    stats.set_tx_count(bt.classic.tx_count);
-                    stats.set_rx_count(bt.classic.rx_count);
-                }
-                ProtoChipKind::BLUETOOTH_BEACON => {
-                    stats.set_kind(netsim_radio_stats::Kind::BLE_BEACON);
-                    if let Ok(beacon) = bluetooth_facade::ble_beacon_get(self.id, facade_id) {
-                        stats.set_tx_count(beacon.bt.low_energy.tx_count);
-                        stats.set_rx_count(beacon.bt.low_energy.rx_count);
-                    } else {
-                        warn!("Unknown beacon");
-                    }
-                }
-                ProtoChipKind::WIFI => {
-                    stats.set_kind(netsim_radio_stats::Kind::WIFI);
-                    let wifi = wifi_facade::wifi_get(facade_id);
-                    stats.set_tx_count(wifi.tx_count);
-                    stats.set_rx_count(wifi.rx_count);
-                }
-                _ => {
-                    info!("Unhandled chip in get_stats {:?}", self.kind);
-                }
+        match &self.emulated_chip {
+            Some(emulated_chip) => emulated_chip.get_stats(self.start.elapsed().as_secs()),
+            None => {
+                warn!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id);
+                Vec::<ProtoRadioStats>::new()
             }
-        } else {
-            warn!("No facade id in get_stats");
         }
-        vec.push(stats);
-        vec
     }
 
     /// Create the model protobuf
