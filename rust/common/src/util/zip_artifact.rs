@@ -87,10 +87,10 @@ pub fn zip_artifacts() -> ZipResult<()> {
     let files = recurse_files(&root)?;
 
     // Define PathBuf for zip file
-    let zip_file = root.join(&format!("netsim_artifacts_{}.zip", file_current_time()));
+    let zip_file = root.join(format!("netsim_artifacts_{}.zip", file_current_time()));
 
     // Create a new ZipWriter
-    let mut zip_writer = ZipWriter::new(File::create(&zip_file)?);
+    let mut zip_writer = ZipWriter::new(File::create(zip_file)?);
     let mut buffer = Vec::new();
 
     // Put each artifact files into zip file
