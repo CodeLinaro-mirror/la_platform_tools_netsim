@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::dispatcher::{register_transport, unregister_transport, Response};
+use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::ffi::ffi_transport::handle_grpc_response;
 
 /// Grpc transport.

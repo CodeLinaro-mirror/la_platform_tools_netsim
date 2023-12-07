@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::dispatcher::{handle_request, register_transport, unregister_transport, Response};
 use super::h4::PacketError;
 use crate::devices::chip::{self, ChipIdentifier};
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::echip;
+use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::transport::h4;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
@@ -141,7 +141,13 @@ fn reader(
             match h4::read_h4_packet(&mut tcp_rx) {
                 Ok(mut packet) => {
                     let kind: u32 = kind as u32;
-                    handle_request(kind, facade_id, chip_id, &mut packet.payload, packet.h4_type);
+                    echip::handle_request(
+                        kind,
+                        facade_id,
+                        chip_id,
+                        &mut packet.payload,
+                        packet.h4_type,
+                    );
                 }
                 Err(PacketError::IoError(e)) if e.kind() == ErrorKind::UnexpectedEof => {
                     info!("End socket reader connection with {}.", &tcp_rx.peer_addr().unwrap());

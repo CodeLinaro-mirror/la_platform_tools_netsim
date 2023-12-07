@@ -45,6 +45,8 @@ pub struct Bluetooth {
 
 impl EmulatedChip for Bluetooth {
     fn handle_request(&self, packet: &[u8]) {
+        // Lock to protect device_to_transport_ table in C++
+        let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
         ffi_bluetooth::handle_bt_request(self.facade_id, packet[0], &packet[1..].to_vec())
     }
 

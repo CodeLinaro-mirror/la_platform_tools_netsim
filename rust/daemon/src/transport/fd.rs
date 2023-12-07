@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::dispatcher::{handle_request, register_transport, unregister_transport, Response};
 /// request packets flow into netsim
 /// response packets flow out of netsim
 /// packet transports read requests and write response packets over gRPC or Fds.
@@ -22,6 +21,7 @@ use super::uci;
 use crate::devices::chip;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::echip;
+use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::ffi::ffi_transport;
 use lazy_static::lazy_static;
 use log::{error, info, warn};
@@ -122,12 +122,12 @@ unsafe fn fd_reader(
                             break;
                         }
                         Ok(uci::Packet { mut payload }) => {
-                            handle_request(kind as u32, facade_id, chip_id, &mut payload, 0);
+                            echip::handle_request(kind as u32, facade_id, chip_id, &mut payload, 0);
                         }
                     },
                     ChipKindEnum::BLUETOOTH => match h4::read_h4_packet(&mut rx) {
                         Ok(h4::Packet { h4_type, mut payload }) => {
-                            handle_request(kind as u32, facade_id, chip_id, &mut payload, h4_type);
+                            echip::handle_request(kind as u32, facade_id, chip_id, &mut payload, h4_type);
                         }
                         Err(PacketError::IoError(e))
                             if e.kind() == ErrorKind::UnexpectedEof =>
