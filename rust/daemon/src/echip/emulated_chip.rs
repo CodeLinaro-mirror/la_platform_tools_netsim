@@ -93,7 +93,7 @@ pub trait EmulatedChip {
     /// Returns the kind of the emulated chip.
     fn get_kind(&self) -> ProtoChipKind;
 
-    // TODO: Remove this method and get rid of facade_id in devices crate.
+    // TODO(b/311480905): Remove this method and get rid of facade_id in devices crate.
     /// Returns Facade Identifier.
     fn get_facade_id(&self) -> FacadeIdentifier;
 }
@@ -125,9 +125,9 @@ pub fn new(
     let shared_echip = match create_param {
         CreateParam::BleBeacon(params) => ble_beacon::new(params, device_id, chip_id),
         #[cfg(not(test))]
-        CreateParam::Bluetooth(params) => bluetooth::new(params, device_id),
+        CreateParam::Bluetooth(params) => bluetooth::new(params, device_id, chip_id),
         #[cfg(not(test))]
-        CreateParam::Wifi(params) => wifi::new(params, device_id),
+        CreateParam::Wifi(params) => wifi::new(params, device_id, chip_id),
         #[cfg(not(test))]
         CreateParam::Uwb => todo!(),
         CreateParam::Mock(params) => mocked::new(params, device_id),

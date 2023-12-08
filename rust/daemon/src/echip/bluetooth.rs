@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::devices::chip::FacadeIdentifier;
+use crate::devices::chip::ChipIdentifier;
 use crate::ffi::ffi_bluetooth;
 use crate::{
     devices::device::DeviceIdentifier,
@@ -32,30 +32,32 @@ use std::sync::{Arc, Mutex};
 
 static ECHIP_BT_MUTEX: Mutex<()> = Mutex::new(());
 
+pub type RootcanalIdentifier = u32;
+
 /// Parameters for creating Bluetooth chips
 pub struct CreateParams {
     pub address: String,
     pub bt_properties: Option<MessageField<RootcanalController>>,
 }
 
-/// Bluetooth struct will keep track of facade_id
+/// Bluetooth struct will keep track of rootcanal_id
 pub struct Bluetooth {
-    facade_id: FacadeIdentifier,
+    rootcanal_id: RootcanalIdentifier,
 }
 
 impl EmulatedChip for Bluetooth {
     fn handle_request(&self, packet: &[u8]) {
         // Lock to protect device_to_transport_ table in C++
         let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
-        ffi_bluetooth::handle_bt_request(self.facade_id, packet[0], &packet[1..].to_vec())
+        ffi_bluetooth::handle_bt_request(self.rootcanal_id, packet[0], &packet[1..].to_vec())
     }
 
     fn reset(&self) {
-        ffi_bluetooth::bluetooth_reset(self.facade_id);
+        ffi_bluetooth::bluetooth_reset(self.rootcanal_id);
     }
 
     fn get(&self) -> ProtoChip {
-        let bluetooth_bytes = ffi_bluetooth::bluetooth_get_cxx(self.facade_id);
+        let bluetooth_bytes = ffi_bluetooth::bluetooth_get_cxx(self.rootcanal_id);
         let bt_proto = ProtoBluetooth::parse_from_bytes(&bluetooth_bytes).unwrap();
         let mut chip_proto = ProtoChip::new();
         chip_proto.mut_bt().clone_from(&bt_proto);
@@ -64,13 +66,13 @@ impl EmulatedChip for Bluetooth {
 
     fn patch(&self, chip: &ProtoChip) {
         let bluetooth_bytes = chip.bt().write_to_bytes().unwrap();
-        ffi_bluetooth::bluetooth_patch_cxx(self.facade_id, &bluetooth_bytes);
+        ffi_bluetooth::bluetooth_patch_cxx(self.rootcanal_id, &bluetooth_bytes);
     }
 
     fn remove(&self) {
         // Lock to protect id_to_chip_info_ table in C++
         let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
-        ffi_bluetooth::bluetooth_remove(self.facade_id);
+        ffi_bluetooth::bluetooth_remove(self.rootcanal_id);
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
@@ -98,13 +100,17 @@ impl EmulatedChip for Bluetooth {
         ProtoChipKind::BLUETOOTH
     }
 
-    fn get_facade_id(&self) -> FacadeIdentifier {
-        self.facade_id
+    fn get_facade_id(&self) -> RootcanalIdentifier {
+        self.rootcanal_id
     }
 }
 
 /// Create a new Emulated Bluetooth Chip
-pub fn new(create_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
+pub fn new(
+    create_params: &CreateParams,
+    device_id: DeviceIdentifier,
+    chip_id: ChipIdentifier,
+) -> SharedEmulatedChip {
     // Lock to protect id_to_chip_info_ table in C++
     let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
     let_cxx_string!(cxx_address = create_params.address.clone());
@@ -112,8 +118,8 @@ pub fn new(create_params: &CreateParams, device_id: DeviceIdentifier) -> SharedE
         Some(properties) => properties.write_to_bytes().unwrap(),
         None => Vec::new(),
     };
-    let facade_id = ffi_bluetooth::bluetooth_add(device_id, &cxx_address, &proto_bytes);
-    let echip = Bluetooth { facade_id };
+    let rootcanal_id = ffi_bluetooth::bluetooth_add(device_id, chip_id, &cxx_address, &proto_bytes);
+    let echip = Bluetooth { rootcanal_id };
     Arc::new(Box::new(echip))
 }
 

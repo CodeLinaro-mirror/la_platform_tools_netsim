@@ -53,36 +53,27 @@ struct ResponsePacket {
 // (kind,facade_id) to responder queue.
 
 lazy_static! {
-    static ref SENDERS: Arc<Mutex<HashMap<String, Sender<ResponsePacket>>>> =
+    static ref SENDERS: Arc<Mutex<HashMap<ChipIdentifier, Sender<ResponsePacket>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 }
 
-fn get_key(kind: u32, facade_id: u32) -> String {
-    format!("{}/{}", kind, facade_id)
-}
-
 /// Register a chip controller instance to a transport manager.
-pub fn register_transport(kind: u32, facade_id: u32, mut responder: Box<dyn Response + Send>) {
-    let key = get_key(kind, facade_id);
+pub fn register_transport(chip_id: ChipIdentifier, mut responder: Box<dyn Response + Send>) {
     let (tx, rx) = channel::<ResponsePacket>();
-    match SENDERS.lock() {
-        Ok(mut map) => {
-            if map.contains_key(&key) {
-                error!("register_transport: key already present for chip_kind/facade_id: {key}");
-            }
-            map.insert(key.clone(), tx);
-        }
-        Err(_) => panic!("register_transport: poisoned lock"),
+    let mut map = SENDERS.lock().expect("register_transport: poisoned lock");
+    if map.contains_key(&chip_id) {
+        error!("register_transport: key already present for chip_id: {chip_id}");
     }
-    let _ = thread::Builder::new().name("transport_writer_{key}".to_string()).spawn(move || {
-        info!("register_transport: started thread chip_kind/facade_id: {key}");
+    map.insert(chip_id, tx);
+    let _ = thread::Builder::new().name(format!("transport_writer_{chip_id}")).spawn(move || {
+        info!("register_transport: started thread chip_id: {chip_id}");
         loop {
             match rx.recv() {
                 Ok(ResponsePacket { packet, packet_type }) => {
                     responder.response(packet, packet_type);
                 }
                 Err(_) => {
-                    info!("register_transport: finished thread chip_kind/facade_id: {key}");
+                    info!("register_transport: finished thread chip_id: {chip_id}");
                     break;
                 }
             }
@@ -91,45 +82,37 @@ pub fn register_transport(kind: u32, facade_id: u32, mut responder: Box<dyn Resp
 }
 
 /// Unregister a chip controller instance.
-pub fn unregister_transport(kind: u32, facade_id: u32) {
-    let key = get_key(kind, facade_id);
+pub fn unregister_transport(chip_id: ChipIdentifier) {
     // Shuts down the responder thread, because sender is dropped.
-    SENDERS.lock().expect("unregister_transport: poisoned lock").remove(&key);
+    SENDERS.lock().expect("unregister_transport: poisoned lock").remove(&chip_id);
 }
 
 // Handle response from facades.
 //
 // Queue the response packet to be handled by the responder thread.
 //
-pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+pub fn handle_response(chip_id: ChipIdentifier, packet: &cxx::CxxVector<u8>, packet_type: u8) {
     // TODO(b/314840701):
     // 1. Per EChip Struct should contain private field of channel & facade_id
     // 2. Lookup from ECHIPS with given chip_id
     // 3. Call echips.handle_response
     let packet_vec = packet.as_slice().to_vec();
-    captures_handler::handle_packet_response(kind, facade_id, &packet_vec, packet_type.into());
+    captures_handler::handle_packet_response(chip_id, &packet_vec, packet_type.into());
 
-    let key = get_key(kind, facade_id);
     let mut binding = SENDERS.lock().expect("Failed to acquire lock on SENDERS");
-    if let Some(responder) = binding.get(&key) {
+    if let Some(responder) = binding.get(&chip_id) {
         if responder.send(ResponsePacket { packet: packet_vec, packet_type }).is_err() {
-            warn!("handle_response: send failed for chip_kind/facade_id: {key}");
-            binding.remove(&key);
+            warn!("handle_response: send failed for chip_id: {chip_id}");
+            binding.remove(&chip_id);
         }
     } else {
-        warn!("handle_response: unknown chip_kind: {kind} facade_id: {facade_id}");
+        warn!("handle_response: unknown chip_id: {chip_id}");
     };
 }
 
 /// Handle requests from transports.
-pub fn handle_request(
-    kind: u32,
-    facade_id: u32,
-    chip_id: ChipIdentifier,
-    packet: &mut Vec<u8>,
-    packet_type: u8,
-) {
-    captures_handler::handle_packet_request(kind, facade_id, packet, packet_type.into());
+pub fn handle_request(chip_id: ChipIdentifier, packet: &mut Vec<u8>, packet_type: u8) {
+    captures_handler::handle_packet_request(chip_id, packet, packet_type.into());
 
     // Prepend packet_type to packet if specified
     if PacketType::HCI_PACKET_UNSPECIFIED.value()
@@ -146,27 +129,14 @@ pub fn handle_request(
 }
 
 /// Handle requests from transports in C++.
-pub fn handle_request_cxx(
-    kind: u32,
-    facade_id: u32,
-    chip_id: u32,
-    packet: &cxx::CxxVector<u8>,
-    packet_type: u8,
-) {
+pub fn handle_request_cxx(chip_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
     let mut packet_vec = packet.as_slice().to_vec();
-    handle_request(kind, facade_id, chip_id, &mut packet_vec, packet_type);
+    handle_request(chip_id, &mut packet_vec, packet_type);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_get_key() {
-        assert_eq!("0/0", get_key(0, 0));
-        assert_eq!("42/21", get_key(42, 21));
-        assert_eq!("666/1234", get_key(666, 1234));
-    }
 
     struct TestTransport {}
     impl Response for TestTransport {
@@ -176,20 +146,19 @@ mod tests {
     #[test]
     fn test_register_transport() {
         let val: Box<dyn Response + Send> = Box::new(TestTransport {});
-        register_transport(0, 0, val);
-        let key = get_key(0, 0);
+        register_transport(0, val);
         {
             let binding = SENDERS.lock().unwrap();
-            assert!(binding.contains_key(&key));
+            assert!(binding.contains_key(&0));
         }
 
-        SENDERS.lock().unwrap().remove(&key);
+        SENDERS.lock().unwrap().remove(&0);
     }
 
     #[test]
     fn test_unregister_transport() {
-        register_transport(0, 1, Box::new(TestTransport {}));
-        unregister_transport(0, 1);
-        assert!(SENDERS.lock().unwrap().get(&get_key(0, 1)).is_none());
+        register_transport(1, Box::new(TestTransport {}));
+        unregister_transport(1);
+        assert!(SENDERS.lock().unwrap().get(&1).is_none());
     }
 }

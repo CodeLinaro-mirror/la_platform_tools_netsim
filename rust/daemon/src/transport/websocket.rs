@@ -131,8 +131,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
 
     // Sending cloned websocket into packet dispatcher
     register_transport(
-        ChipKind::BLUETOOTH as u32,
-        result.facade_id,
+        result.chip_id,
         Box::new(WebSocketTransport { websocket_writer: websocket_writer.clone() }),
     );
 
@@ -150,14 +149,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
             let mut cursor = Cursor::new(packet_msg.into_data());
             match h4::read_h4_packet(&mut cursor) {
                 Ok(mut packet) => {
-                    let kind = ChipKind::BLUETOOTH as u32;
-                    echip::handle_request(
-                        kind,
-                        result.facade_id,
-                        result.chip_id,
-                        &mut packet.payload,
-                        packet.h4_type,
-                    );
+                    echip::handle_request(result.chip_id, &mut packet.payload, packet.h4_type);
                 }
                 Err(error) => {
                     error!(
@@ -194,7 +186,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
     // unregister before remove_chip because facade may re-use facade_id
     // on an intertwining create_chip and the unregister here might remove
     // the recently added chip creating a disconnected transport.
-    unregister_transport(ChipKind::BLUETOOTH as u32, result.facade_id);
+    unregister_transport(result.chip_id);
 
     if let Err(err) = remove_chip(result.device_id, result.chip_id) {
         warn!("{err}");

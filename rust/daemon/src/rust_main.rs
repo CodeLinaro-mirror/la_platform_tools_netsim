@@ -15,7 +15,7 @@
 use clap::Parser;
 use log::warn;
 use log::{error, info};
-use netsim_common::system::netsimd_temp_dir;
+use netsim_common::system::netsimd_temp_dir_string;
 use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_ini};
 use netsim_common::util::zip_artifact::zip_artifacts;
 
@@ -91,14 +91,17 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
     }
 
     // Log where netsim artifacts are located
-    info!("netsim artifacts path: {}", netsimd_temp_dir().display());
+    info!("netsim artifacts path: {}", netsimd_temp_dir_string());
 
     // Log all args
     info!("{:#?}", args);
 
     if !args.logtostderr {
-        cxx::let_cxx_string!(netsimd_temp_dir = netsim_common::system::netsimd_temp_dir_string());
+        cxx::let_cxx_string!(netsimd_temp_dir = netsimd_temp_dir_string());
         ffi_util::redirect_std_stream(&netsimd_temp_dir);
+        // Duplicating the previous two logs to be included in netsim_stderr.log
+        info!("netsim artifacts path: {}", netsimd_temp_dir_string());
+        info!("{:#?}", args);
     }
 
     match args.connector_instance {

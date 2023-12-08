@@ -331,7 +331,7 @@ void Reset(uint32_t id) {
 
 void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
   if (id_to_chip_info_.find(id) == id_to_chip_info_.end()) {
-    BtsLogWarn("Patch an unknown facade_id: %d", id);
+    BtsLogWarn("Patch an unknown rootcanal_id: %d", id);
     return;
   }
   auto model = id_to_chip_info_[id]->model;
@@ -352,7 +352,7 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
 }
 
 void Remove(uint32_t id) {
-  BtsLogInfo("Removing HCI chip facade_id: %d.", id);
+  BtsLogInfo("Removing HCI chip rootcanal_id: %d.", id);
   id_to_chip_info_.erase(id);
   // Call the transport close callback. This invokes HciDevice::Close and
   // TestModel close callback.
@@ -364,9 +364,10 @@ void Remove(uint32_t id) {
 
 // Rename AddChip(model::Chip, device, transport)
 
-uint32_t Add(uint32_t simulation_device, const std::string &address_string,
+uint32_t Add(uint32_t simulation_device, uint32_t chip_id,
+             const std::string &address_string,
              const rust::Slice<::std::uint8_t const> controller_proto_bytes) {
-  auto transport = std::make_shared<HciPacketTransport>(gAsyncManager);
+  auto transport = std::make_shared<HciPacketTransport>(chip_id, gAsyncManager);
 
   std::shared_ptr<rootcanal::configuration::Controller> controller_proto =
       controller_proto_;
@@ -397,8 +398,8 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string,
 
   // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
   // invoked atomically, preventing data races.
-  std::promise<uint32_t> facade_id_promise;
-  auto facade_id_future = facade_id_promise.get_future();
+  std::promise<uint32_t> rootcanal_id_promise;
+  auto rootcanal_id_future = rootcanal_id_promise.get_future();
 
   std::optional<Address> address_option;
   if (address_string != "") {
@@ -406,14 +407,14 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string,
   }
   gAsyncManager->ExecAsync(
       gSocketUserId, std::chrono::milliseconds(0),
-      [hci_device, &facade_id_promise, address_option]() {
-        facade_id_promise.set_value(
+      [hci_device, &rootcanal_id_promise, address_option]() {
+        rootcanal_id_promise.set_value(
             gTestModel->AddHciConnection(hci_device, address_option));
       });
-  auto facade_id = facade_id_future.get();
+  auto rootcanal_id = rootcanal_id_future.get();
 
-  HciPacketTransport::Add(facade_id, transport);
-  BtsLogInfo("Creating HCI facade_id: %d for device_id: %d", facade_id,
+  HciPacketTransport::Add(rootcanal_id, transport);
+  BtsLogInfo("Creating HCI rootcanal_id: %d for device_id: %d", rootcanal_id,
              simulation_device);
 
   auto model = std::make_shared<model::Chip::Bluetooth>();
@@ -421,14 +422,14 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string,
   model->mutable_low_energy()->set_state(model::State::ON);
 
   id_to_chip_info_.emplace(
-      facade_id,
+      rootcanal_id,
       std::make_shared<ChipInfo>(simulation_device, model, controller_proto,
                                  std::move(controller_properties)));
-  return facade_id;
+  return rootcanal_id;
 }
 
-void RemoveRustDevice(uint32_t facade_id) {
-  gTestModel->RemoveDevice(facade_id);
+void RemoveRustDevice(uint32_t rootcanal_id) {
+  gTestModel->RemoveDevice(rootcanal_id);
 }
 
 rust::Box<AddRustDeviceResult> AddRustDevice(
@@ -441,24 +442,24 @@ rust::Box<AddRustDeviceResult> AddRustDevice(
   // TODO: Use the `AsyncManager` to ensure that the `AddDevice` and
   // `AddDeviceToPhy` methods are invoked atomically, preventing data races.
   // For unknown reason, use `AsyncManager` hangs.
-  auto facade_id = gTestModel->AddDevice(rust_device);
-  gTestModel->AddDeviceToPhy(facade_id, phy_low_energy_index_);
+  auto rootcanal_id = gTestModel->AddDevice(rust_device);
+  gTestModel->AddDeviceToPhy(rootcanal_id, phy_low_energy_index_);
 
   auto model = std::make_shared<model::Chip::Bluetooth>();
   // Only enable ble for beacon.
   model->mutable_low_energy()->set_state(model::State::ON);
   id_to_chip_info_.emplace(
-      facade_id, std::make_shared<ChipInfo>(simulation_device, model));
+      rootcanal_id, std::make_shared<ChipInfo>(simulation_device, model));
   return CreateAddRustDeviceResult(
-      facade_id, std::make_unique<RustBluetoothChip>(rust_device));
+      rootcanal_id, std::make_unique<RustBluetoothChip>(rust_device));
 }
 
 void SetRustDeviceAddress(
-    uint32_t facade_id,
+    uint32_t rootcanal_id,
     std::array<uint8_t, rootcanal::Address::kLength> address) {
   uint8_t addr[rootcanal::Address::kLength];
   std::memcpy(addr, address.data(), rootcanal::Address::kLength);
-  gTestModel->SetDeviceAddress(facade_id, rootcanal::Address(addr));
+  gTestModel->SetDeviceAddress(rootcanal_id, rootcanal::Address(addr));
 }
 
 void IncrTx(uint32_t id, rootcanal::Phy::Type phy_type) {

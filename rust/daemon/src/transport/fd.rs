@@ -122,12 +122,12 @@ unsafe fn fd_reader(
                             break;
                         }
                         Ok(uci::Packet { mut payload }) => {
-                            echip::handle_request(kind as u32, facade_id, chip_id, &mut payload, 0);
+                            echip::handle_request(chip_id, &mut payload, 0);
                         }
                     },
                     ChipKindEnum::BLUETOOTH => match h4::read_h4_packet(&mut rx) {
                         Ok(h4::Packet { h4_type, mut payload }) => {
-                            echip::handle_request(kind as u32, facade_id, chip_id, &mut payload, h4_type);
+                            echip::handle_request(chip_id, &mut payload, h4_type);
                         }
                         Err(PacketError::IoError(e))
                             if e.kind() == ErrorKind::UnexpectedEof =>
@@ -150,7 +150,7 @@ unsafe fn fd_reader(
             // unregister before remove_chip because facade may re-use facade_id
             // on an intertwining create_chip and the unregister here might remove
             // the recently added chip creating a disconnected transport.
-            unregister_transport(kind as u32, facade_id);
+            unregister_transport(chip_id);
 
             if let Err(err) = remove_chip(device_id, chip_id) {
                 warn!("{err}");
@@ -253,11 +253,7 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
                     // and open.
                     let file_in = unsafe { File::from_raw_fd(chip.fd_in as i32) };
 
-                    register_transport(
-                        chip.kind as u32,
-                        result.facade_id,
-                        Box::new(FdTransport { file: file_in }),
-                    );
+                    register_transport(result.chip_id, Box::new(FdTransport { file: file_in }));
                     // TODO: switch to runtime.spawn once FIFOs are available in Tokio
                     // SAFETY: Our caller promises that the file descriptors in the JSON are valid
                     // and open.

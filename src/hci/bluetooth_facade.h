@@ -39,7 +39,8 @@ void Reset(uint32_t);
 void Remove(uint32_t);
 void Patch(uint32_t, const model::Chip::Bluetooth &);
 model::Chip::Bluetooth Get(uint32_t);
-uint32_t Add(uint32_t simulation_device, const std::string &address_string,
+uint32_t Add(uint32_t simulation_device, uint32_t chip_id,
+             const std::string &address_string,
              const rust::Slice<::std::uint8_t const> controller_proto_bytes);
 
 rust::Box<AddRustDeviceResult> AddRustDevice(
@@ -47,9 +48,9 @@ rust::Box<AddRustDeviceResult> AddRustDevice(
     rust::Box<DynRustBluetoothChipCallbacks> callbacks, const std::string &type,
     const std::string &address);
 void SetRustDeviceAddress(
-    uint32_t facade_id,
+    uint32_t rootcanal_id,
     std::array<uint8_t, rootcanal::Address::kLength> address);
-void RemoveRustDevice(uint32_t facade_id);
+void RemoveRustDevice(uint32_t rootcanal_id);
 
 void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
            uint16_t instance_num, bool disable_address_reuse);

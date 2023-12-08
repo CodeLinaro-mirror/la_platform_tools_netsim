@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::devices::chip::FacadeIdentifier;
+use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::ffi::ffi_wifi;
 use crate::wifi::medium;
 use crate::{
@@ -33,7 +33,7 @@ pub struct CreateParams {}
 
 /// Wifi struct will keep track of facade_id
 pub struct Wifi {
-    facade_id: FacadeIdentifier,
+    chip_id: ChipIdentifier,
 }
 
 impl EmulatedChip for Wifi {
@@ -41,15 +41,15 @@ impl EmulatedChip for Wifi {
         if crate::config::get_dev() {
             let _ = medium::parse_hwsim_cmd(packet);
         }
-        ffi_wifi::handle_wifi_request(self.facade_id, &packet.to_vec());
+        ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
     }
 
     fn reset(&self) {
-        ffi_wifi::wifi_reset(self.facade_id);
+        ffi_wifi::wifi_reset(self.chip_id);
     }
 
     fn get(&self) -> ProtoChip {
-        let radio_bytes = ffi_wifi::wifi_get_cxx(self.facade_id);
+        let radio_bytes = ffi_wifi::wifi_get_cxx(self.chip_id);
         let wifi_proto = Radio::parse_from_bytes(&radio_bytes).unwrap();
         let mut chip_proto = ProtoChip::new();
         chip_proto.mut_wifi().clone_from(&wifi_proto);
@@ -58,11 +58,11 @@ impl EmulatedChip for Wifi {
 
     fn patch(&self, chip: &ProtoChip) {
         let radio_bytes = chip.wifi().write_to_bytes().unwrap();
-        ffi_wifi::wifi_patch_cxx(self.facade_id, &radio_bytes);
+        ffi_wifi::wifi_patch_cxx(self.chip_id, &radio_bytes);
     }
 
     fn remove(&self) {
-        ffi_wifi::wifi_remove(self.facade_id);
+        ffi_wifi::wifi_remove(self.chip_id);
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
@@ -82,14 +82,18 @@ impl EmulatedChip for Wifi {
     }
 
     fn get_facade_id(&self) -> FacadeIdentifier {
-        self.facade_id
+        self.chip_id
     }
 }
 
 /// Create a new Emulated Wifi Chip
-pub fn new(_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
-    let facade_id = ffi_wifi::wifi_add(device_id);
-    let echip = Wifi { facade_id };
+pub fn new(
+    _params: &CreateParams,
+    _device_id: DeviceIdentifier,
+    chip_id: ChipIdentifier,
+) -> SharedEmulatedChip {
+    ffi_wifi::wifi_add(chip_id);
+    let echip = Wifi { chip_id };
     Arc::new(Box::new(echip))
 }
 

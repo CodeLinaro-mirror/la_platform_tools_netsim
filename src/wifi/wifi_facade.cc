@@ -28,17 +28,13 @@
 
 namespace netsim::wifi {
 namespace {
-// To detect bugs of misuse of chip_id more efficiently.
-const int kGlobalChipStartIndex = 2000;
 
 class ChipInfo {
  public:
-  uint32_t simulation_device;
   std::shared_ptr<model::Chip::Radio> model;
 
-  ChipInfo(uint32_t simulation_device,
-           std::shared_ptr<model::Chip::Radio> model)
-      : simulation_device(simulation_device), model(std::move(model)) {}
+  ChipInfo(std::shared_ptr<model::Chip::Radio> model)
+      : model(std::move(model)) {}
 };
 
 std::unordered_map<uint32_t, std::shared_ptr<ChipInfo>> id_to_chip_info_;
@@ -56,7 +52,7 @@ std::optional<model::State> GetState(uint32_t id) {
     auto &model = it->second->model;
     return model->state();
   }
-  BtsLogWarn("Failed to get WiFi state with unknown facade %d", id);
+  BtsLogWarn("Failed to get WiFi state with unknown chip_id %d", id);
   return std::nullopt;
 }
 
@@ -96,7 +92,7 @@ void Patch(uint32_t id, const model::Chip::Radio &request) {
   BtsLog("wifi::facade::Patch(%d)", id);
   auto it = id_to_chip_info_.find(id);
   if (it == id_to_chip_info_.end()) {
-    BtsLogWarn("Patch an unknown facade_id: %d", id);
+    BtsLogWarn("Patch an unknown chip_id: %d", id);
     return;
   }
   auto &model = it->second->model;
@@ -131,28 +127,24 @@ rust::Vec<uint8_t> GetCxx(uint32_t id) {
   return proto_rust_bytes;
 }
 
-uint32_t Add(uint32_t simulation_device) {
-  BtsLog("wifi::facade::Add(%d)", simulation_device);
-  static uint32_t global_chip_id = kGlobalChipStartIndex;
+void Add(uint32_t chip_id) {
+  BtsLog("wifi::facade::Add(%d)", chip_id);
 
   auto model = std::make_shared<model::Chip::Radio>();
   model->set_state(model::State::ON);
-  id_to_chip_info_.emplace(
-      global_chip_id, std::make_shared<ChipInfo>(simulation_device, model));
-
-  return global_chip_id++;
+  id_to_chip_info_.emplace(chip_id, std::make_shared<ChipInfo>(model));
 }
 
 size_t HandleWifiCallback(const uint8_t *buf, size_t size) {
   //  Broadcast the response to all WiFi chips.
   std::vector<uint8_t> packet(buf, buf + size);
-  for (auto [facade_id, _] : id_to_chip_info_) {
-    if (auto state = GetState(facade_id);
+  for (auto [chip_id, chip_info] : id_to_chip_info_) {
+    if (auto state = chip_info->model->state();
         !state || state == model::State::OFF) {
       continue;
     }
-    netsim::wifi::IncrRx(facade_id);
-    echip::HandleResponse(common::ChipKind::WIFI, facade_id, packet,
+    netsim::wifi::IncrRx(chip_id);
+    echip::HandleResponse(chip_id, packet,
                           packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
   }
   return size;
@@ -209,13 +201,13 @@ void Stop() {
 
 }  // namespace facade
 
-void HandleWifiRequest(uint32_t facade_id,
+void HandleWifiRequest(uint32_t chip_id,
                        const std::shared_ptr<std::vector<uint8_t>> &packet) {
 #ifdef NETSIM_ANDROID_EMULATOR
-  if (auto state = GetState(facade_id); !state || state == model::State::OFF) {
+  if (auto state = GetState(chip_id); !state || state == model::State::OFF) {
     return;
   }
-  netsim::wifi::IncrTx(facade_id);
+  netsim::wifi::IncrTx(chip_id);
   // Send the packet to the WiFi service.
   struct iovec iov[1];
   iov[0].iov_base = packet->data();
@@ -224,11 +216,10 @@ void HandleWifiRequest(uint32_t facade_id,
 #endif
 }
 
-void HandleWifiRequestCxx(uint32_t facade_id,
-                          const rust::Vec<uint8_t> &packet) {
+void HandleWifiRequestCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet) {
   std::vector<uint8_t> buffer(packet.begin(), packet.end());
   auto packet_ptr = std::make_shared<std::vector<uint8_t>>(buffer);
-  HandleWifiRequest(facade_id, packet_ptr);
+  HandleWifiRequest(chip_id, packet_ptr);
 }
 
 }  // namespace netsim::wifi

@@ -20,51 +20,52 @@
 
 namespace netsim::wifi::facade {
 
-class WiFiFacadeTest : public ::testing::Test {
-  void TearDown() { netsim::wifi::facade::Remove(SIMULATION_DEVICE); }
-
- protected:
-  const int SIMULATION_DEVICE = 123;
-};
+class WiFiFacadeTest : public ::testing::Test {};
 
 TEST_F(WiFiFacadeTest, AddAndGetTest) {
-  auto facade_id = Add(SIMULATION_DEVICE);
+  Add(123);
 
-  auto radio = Get(facade_id);
+  auto radio = Get(123);
   EXPECT_EQ(model::State::ON, radio.state());
   EXPECT_EQ(0, radio.tx_count());
   EXPECT_EQ(0, radio.rx_count());
+
+  Remove(123);
 }
 
 TEST_F(WiFiFacadeTest, RemoveTest) {
-  auto facade_id = Add(SIMULATION_DEVICE);
+  Add(234);
 
-  Remove(facade_id);
+  Remove(234);
 
-  auto radio = Get(facade_id);
+  auto radio = Get(234);
   EXPECT_EQ(model::State::UNKNOWN, radio.state());
 }
 
 TEST_F(WiFiFacadeTest, PatchTest) {
-  auto facade_id = Add(SIMULATION_DEVICE);
+  Add(345);
 
   model::Chip::Radio request;
   request.set_state(model::State::OFF);
-  Patch(facade_id, request);
+  Patch(345, request);
 
-  auto radio = Get(facade_id);
+  auto radio = Get(345);
   EXPECT_EQ(model::State::OFF, radio.state());
+
+  Remove(345);
 }
 
 TEST_F(WiFiFacadeTest, ResetTest) {
-  auto facade_id = Add(SIMULATION_DEVICE);
+  Add(456);
 
-  Reset(facade_id);
+  Reset(456);
 
-  auto radio = Get(facade_id);
+  auto radio = Get(456);
   EXPECT_EQ(model::State::ON, radio.state());
   EXPECT_EQ(0, radio.tx_count());
   EXPECT_EQ(0, radio.rx_count());
+
+  Remove(456);
 }
 
 }  // namespace netsim::wifi::facade

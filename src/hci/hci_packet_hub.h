@@ -31,11 +31,11 @@ namespace hci {
 /* Handle packet requests for the Bluetooth Facade which may come over
    different transports including gRPC. */
 
-void handle_bt_request(uint32_t facade_id,
+void handle_bt_request(uint32_t rootcanal_id,
                        packet::HCIPacket_PacketType packet_type,
                        const std::shared_ptr<std::vector<uint8_t>> &packet);
 
-void HandleBtRequestCxx(uint32_t facade_id, uint8_t packet_type,
+void HandleBtRequestCxx(uint32_t rootcanal_id, uint8_t packet_type,
                         const rust::Vec<uint8_t> &packet);
 
 }  // namespace hci

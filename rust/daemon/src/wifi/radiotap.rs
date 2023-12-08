@@ -40,12 +40,11 @@ struct ChannelInfo {
     flags: u16,
 }
 
-pub fn into_pcap(packet: &[u8]) -> anyhow::Result<Vec<u8>> {
-    let cmd = medium::parse_hwsim_cmd(packet)?;
-    match cmd {
-        // Only from kernel frames get logged
-        HwsimCmdEnum::Frame(frame) => frame_into_pcap(*frame),
-        _ => Err(anyhow!("Skipping pcap for HwsimCmd {:?}", cmd)),
+pub fn into_pcap(packet: &[u8]) -> Option<Vec<u8>> {
+    if let Ok(HwsimCmdEnum::Frame(frame)) = medium::parse_hwsim_cmd(packet) {
+        frame_into_pcap(*frame).ok()
+    } else {
+        None
     }
 }
 

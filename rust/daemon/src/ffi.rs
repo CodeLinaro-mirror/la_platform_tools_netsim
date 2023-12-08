@@ -38,16 +38,10 @@ use crate::version::*;
 pub mod ffi_echip {
     extern "Rust" {
         #[cxx_name = HandleRequestCxx]
-        fn handle_request_cxx(
-            kind: u32,
-            facade_id: u32,
-            chip_id: u32,
-            packet: &CxxVector<u8>,
-            packet_type: u8,
-        );
+        fn handle_request_cxx(chip_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
         #[cxx_name = HandleResponse]
-        fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
+        fn handle_response(chip_id: u32, packet: &CxxVector<u8>, packet_type: u8);
     }
 }
 
@@ -56,10 +50,10 @@ pub mod ffi_echip {
 pub mod ffi_transport {
     extern "Rust" {
         #[cxx_name = RegisterGrpcTransport]
-        fn register_grpc_transport(kind: u32, facade_id: u32);
+        fn register_grpc_transport(chip_id: u32);
 
         #[cxx_name = UnregisterGrpcTransport]
-        fn unregister_grpc_transport(kind: u32, facade_id: u32);
+        fn unregister_grpc_transport(chip_id: u32);
     }
 
     unsafe extern "C++" {
@@ -68,7 +62,7 @@ pub mod ffi_transport {
 
         #[rust_name = handle_grpc_response]
         #[namespace = "netsim::backend"]
-        fn HandleResponseCxx(kind: u32, facade_id: u32, packet: &Vec<u8>, packet_type: u8);
+        fn HandleResponseCxx(chip_id: u32, packet: &Vec<u8>, packet_type: u8);
 
         include!("core/server.h");
 
@@ -160,7 +154,7 @@ pub mod ffi_bluetooth {
 
         #[rust_name = handle_bt_request]
         #[namespace = "netsim::hci"]
-        fn HandleBtRequestCxx(facade_id: u32, packet_type: u8, packet: &Vec<u8>);
+        fn HandleBtRequestCxx(rootcanal_id: u32, packet_type: u8, packet: &Vec<u8>);
 
         // Rust Bluetooth device.
         include!("hci/rust_device.h");
@@ -175,23 +169,28 @@ pub mod ffi_bluetooth {
 
         #[rust_name = bluetooth_patch_cxx]
         #[namespace = "netsim::hci::facade"]
-        pub fn PatchCxx(facade_id: u32, proto_bytes: &[u8]);
+        pub fn PatchCxx(rootcanal_id: u32, proto_bytes: &[u8]);
 
         #[rust_name = bluetooth_get_cxx]
         #[namespace = "netsim::hci::facade"]
-        pub fn GetCxx(facade_id: u32) -> Vec<u8>;
+        pub fn GetCxx(rootcanal_id: u32) -> Vec<u8>;
 
         #[rust_name = bluetooth_reset]
         #[namespace = "netsim::hci::facade"]
-        pub fn Reset(facade_id: u32);
+        pub fn Reset(rootcanal_id: u32);
 
         #[rust_name = bluetooth_remove]
         #[namespace = "netsim::hci::facade"]
-        pub fn Remove(facade_id: u32);
+        pub fn Remove(rootcanal_id: u32);
 
         #[rust_name = bluetooth_add]
         #[namespace = "netsim::hci::facade"]
-        pub fn Add(_chip_id: u32, address: &CxxString, controller_proto_bytes: &[u8]) -> u32;
+        pub fn Add(
+            device_id: u32,
+            chip_id: u32,
+            address: &CxxString,
+            controller_proto_bytes: &[u8],
+        ) -> u32;
 
         /*
         From https://cxx.rs/binding/box.html#restrictions,
@@ -216,11 +215,11 @@ pub mod ffi_bluetooth {
         /// The provided address must be 6 bytes in length
         #[rust_name = bluetooth_set_rust_device_address]
         #[namespace = "netsim::hci::facade"]
-        pub fn SetRustDeviceAddress(facade_id: u32, address: [u8; 6]);
+        pub fn SetRustDeviceAddress(rootcanal_id: u32, address: [u8; 6]);
 
         #[rust_name = bluetooth_remove_rust_device]
         #[namespace = "netsim::hci::facade"]
-        pub fn RemoveRustDevice(facade_id: u32);
+        pub fn RemoveRustDevice(rootcanal_id: u32);
 
         #[rust_name = bluetooth_start]
         #[namespace = "netsim::hci::facade"]
@@ -241,24 +240,24 @@ pub mod ffi_wifi {
 
         #[rust_name = handle_wifi_request]
         #[namespace = "netsim::wifi"]
-        fn HandleWifiRequestCxx(facade_id: u32, packet: &Vec<u8>);
+        fn HandleWifiRequestCxx(chip_id: u32, packet: &Vec<u8>);
 
         include!("wifi/wifi_facade.h");
 
         #[rust_name = wifi_patch_cxx]
-        pub fn PatchCxx(facade_id: u32, proto_bytes: &[u8]);
+        pub fn PatchCxx(chip_id: u32, proto_bytes: &[u8]);
 
         #[rust_name = wifi_get_cxx]
-        pub fn GetCxx(facade_id: u32) -> Vec<u8>;
+        pub fn GetCxx(chip_id: u32) -> Vec<u8>;
 
         #[rust_name = wifi_reset]
-        pub fn Reset(facade_id: u32);
+        pub fn Reset(chip_id: u32);
 
         #[rust_name = wifi_remove]
-        pub fn Remove(facade_id: u32);
+        pub fn Remove(chip_id: u32);
 
         #[rust_name = wifi_add]
-        pub fn Add(_chip_id: u32) -> u32;
+        pub fn Add(chip_id: u32);
 
         #[rust_name = wifi_start]
         pub fn Start(proto_bytes: &[u8]);
