@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
+use crate::devices::chip::ChipIdentifier;
 use crate::ffi::ffi_wifi;
 use crate::wifi::medium;
 use crate::{
     devices::device::DeviceIdentifier,
     echip::{EmulatedChip, SharedEmulatedChip},
 };
+use log::info;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::chip::Radio;
@@ -31,7 +32,7 @@ use std::sync::Arc;
 /// Parameters for creating Wifi chips
 pub struct CreateParams {}
 
-/// Wifi struct will keep track of facade_id
+/// Wifi struct will keep track of chip_id
 pub struct Wifi {
     chip_id: ChipIdentifier,
 }
@@ -80,10 +81,6 @@ impl EmulatedChip for Wifi {
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::WIFI
     }
-
-    fn get_facade_id(&self) -> FacadeIdentifier {
-        self.chip_id
-    }
 }
 
 /// Create a new Emulated Wifi Chip
@@ -93,6 +90,7 @@ pub fn new(
     chip_id: ChipIdentifier,
 ) -> SharedEmulatedChip {
     ffi_wifi::wifi_add(chip_id);
+    info!("WiFi EmulatedChip created chip_id: {chip_id}");
     let echip = Wifi { chip_id };
     Arc::new(Box::new(echip))
 }

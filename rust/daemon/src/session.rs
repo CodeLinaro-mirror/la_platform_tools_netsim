@@ -119,10 +119,14 @@ impl Session {
                                 }
                             }
 
+                            Ok(Event::ChipAdded { .. }) => {
+                                // No session stat update required when Chip is added but do proceed to write stats
+                            }
+
                             _ => {
                                 // other events are ignored, check to perform periodic write
                                 if next_instant > Instant::now() {
-                                    write_stats = false
+                                    write_stats = false;
                                 }
                             }
                         }

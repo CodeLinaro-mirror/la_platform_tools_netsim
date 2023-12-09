@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::devices::chip::FacadeIdentifier;
 use crate::devices::device::DeviceIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
@@ -51,10 +50,6 @@ impl EmulatedChip for Mock {
 
     fn get_kind(&self) -> ProtoChipKind {
         self.chip_kind
-    }
-
-    fn get_facade_id(&self) -> FacadeIdentifier {
-        FacadeIdentifier::MIN
     }
 }
 

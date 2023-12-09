@@ -142,13 +142,12 @@ pub fn add_chip(
         // id_tuple = (DeviceIdentifier, ChipIdentifier)
         Ok((device_id, chip_id)) => {
             let emulated_chip = echip::new(echip_create_params, device_id, chip_id);
-            let facade_id = emulated_chip.get_facade_id();
             // Lock Device Resource
             {
                 let devices_arc = get_devices();
                 let mut devices = devices_arc.write().unwrap();
 
-                // Add the facade_id into the resources
+                // Add the emulated_chip into the resources
                 devices
                     .entries
                     .get_mut(&device_id)
@@ -166,11 +165,10 @@ pub fn add_chip(
             events::publish(Event::ChipAdded {
                 chip_id,
                 chip_kind,
-                facade_id,
                 device_name: device_name.to_string(),
                 builtin: chip_kind == ProtoChipKind::BLUETOOTH_BEACON,
             });
-            Ok(AddChipResult { device_id, chip_id, facade_id })
+            Ok(AddChipResult { device_id, chip_id })
         }
         Err(err) => {
             warn!(
@@ -185,7 +183,6 @@ pub fn add_chip(
 pub struct AddChipResultCxx {
     device_id: u32,
     chip_id: u32,
-    facade_id: u32,
     is_error: bool,
 }
 
@@ -196,10 +193,6 @@ impl AddChipResultCxx {
 
     pub fn get_chip_id(&self) -> u32 {
         self.chip_id
-    }
-
-    pub fn get_facade_id(&self) -> u32 {
-        self.facade_id
     }
 
     pub fn is_error(&self) -> bool {
@@ -238,7 +231,6 @@ pub fn add_chip_cxx(
             return Box::new(AddChipResultCxx {
                 device_id: u32::MAX,
                 chip_id: u32::MAX,
-                facade_id: u32::MAX,
                 is_error: true,
             })
         }
@@ -265,7 +257,6 @@ pub fn add_chip_cxx(
             return Box::new(AddChipResultCxx {
                 device_id: u32::MAX,
                 chip_id: u32::MAX,
-                facade_id: u32::MAX,
                 is_error: true,
             })
         }
@@ -282,15 +273,11 @@ pub fn add_chip_cxx(
         Ok(result) => Box::new(AddChipResultCxx {
             device_id: result.device_id,
             chip_id: result.chip_id,
-            facade_id: result.facade_id,
             is_error: false,
         }),
-        Err(_) => Box::new(AddChipResultCxx {
-            device_id: u32::MAX,
-            chip_id: u32::MAX,
-            facade_id: u32::MAX,
-            is_error: true,
-        }),
+        Err(_) => {
+            Box::new(AddChipResultCxx { device_id: u32::MAX, chip_id: u32::MAX, is_error: true })
+        }
     }
 }
 
@@ -1587,7 +1574,6 @@ mod tests {
             Event::ChipAdded {
                 chip_id: 0,
                 chip_kind: ProtoChipKind::BLUETOOTH,
-                facade_id: 0,
                 device_name: "".to_string(),
                 builtin: false,
             },
@@ -1626,7 +1612,6 @@ mod tests {
             Event::ChipAdded {
                 chip_id: 0,
                 chip_kind: ProtoChipKind::BLUETOOTH_BEACON,
-                facade_id: 0,
                 device_name: "".to_string(),
                 builtin: true,
             },

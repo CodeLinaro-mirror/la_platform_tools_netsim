@@ -17,7 +17,7 @@ use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::DeviceIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
-use log::error;
+use log::{error, info};
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::ChipCreate as ChipCreateProto;
@@ -91,10 +91,6 @@ impl EmulatedChip for BleBeacon {
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::BLUETOOTH_BEACON
     }
-
-    fn get_facade_id(&self) -> FacadeIdentifier {
-        self.facade_id
-    }
 }
 
 /// Create a new Emulated BleBeacon Chip
@@ -104,7 +100,10 @@ pub fn new(
     chip_id: ChipIdentifier,
 ) -> SharedEmulatedChip {
     match ble_beacon_add(device_id, params.device_name.clone(), chip_id, &params.chip_proto) {
-        Ok(facade_id) => Arc::new(Box::new(BleBeacon { facade_id, chip_id })),
+        Ok(facade_id) => {
+            info!("BleBeacon EmulatedChip created with facade_id: {facade_id} chip_id: {chip_id}");
+            Arc::new(Box::new(BleBeacon { facade_id, chip_id }))
+        }
         Err(err) => {
             error!("{err:?}");
             Arc::new(Box::new(BleBeacon { facade_id: u32::MAX, chip_id: u32::MAX }))

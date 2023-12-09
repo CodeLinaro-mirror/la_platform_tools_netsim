@@ -53,10 +53,6 @@ cc_defaults {
     generated_sources: [
         "FrontendStub_cc",
     ],
-    include_dirs: [
-        "bionic/libc/kernel/uapi/",
-        "bionic/libc/kernel/android/uapi/",
-    ],
 }
 
 rust_defaults {

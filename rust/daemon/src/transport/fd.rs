@@ -102,7 +102,6 @@ impl Response for FdTransport {
 unsafe fn fd_reader(
     fd_rx: i32,
     kind: ChipKindEnum,
-    facade_id: u32,
     device_id: u32,
     chip_id: u32,
 ) -> JoinHandle<()> {
@@ -112,7 +111,7 @@ unsafe fn fd_reader(
             // SAFETY: The caller promises that `fd_rx` is valid and open.
             let mut rx = unsafe { File::from_raw_fd(fd_rx) };
 
-            info!("Handling fd={} for kind: {:?} facade_id: {:?}", fd_rx, kind, facade_id);
+            info!("Handling fd={} for kind: {:?} chip_id: {:?}", fd_rx, kind, chip_id);
 
             loop {
                 match kind {
@@ -258,13 +257,7 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
                     // SAFETY: Our caller promises that the file descriptors in the JSON are valid
                     // and open.
                     handles.push(unsafe {
-                        fd_reader(
-                            chip.fd_out as i32,
-                            chip.kind,
-                            result.facade_id,
-                            result.device_id,
-                            result.chip_id,
-                        )
+                        fd_reader(chip.fd_out as i32, chip.kind, result.device_id, result.chip_id)
                     });
                 }
             }

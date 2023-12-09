@@ -279,8 +279,6 @@ pub mod ffi_devices {
         fn get_device_id(self: &AddChipResultCxx) -> u32;
         #[cxx_name = "GetChipId"]
         fn get_chip_id(self: &AddChipResultCxx) -> u32;
-        #[cxx_name = "GetFacadeId"]
-        fn get_facade_id(self: &AddChipResultCxx) -> u32;
         #[cxx_name = "IsError"]
         fn is_error(self: &AddChipResultCxx) -> bool;
 

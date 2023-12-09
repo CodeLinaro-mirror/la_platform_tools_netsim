@@ -20,6 +20,7 @@ use crate::{
 };
 
 use cxx::let_cxx_string;
+use log::info;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::configuration::Controller as RootcanalController;
@@ -99,10 +100,6 @@ impl EmulatedChip for Bluetooth {
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::BLUETOOTH
     }
-
-    fn get_facade_id(&self) -> RootcanalIdentifier {
-        self.rootcanal_id
-    }
 }
 
 /// Create a new Emulated Bluetooth Chip
@@ -119,6 +116,7 @@ pub fn new(
         None => Vec::new(),
     };
     let rootcanal_id = ffi_bluetooth::bluetooth_add(device_id, chip_id, &cxx_address, &proto_bytes);
+    info!("Bluetooth EmulatedChip created with rootcanal_id: {rootcanal_id} chip_id: {chip_id}");
     let echip = Bluetooth { rootcanal_id };
     Arc::new(Box::new(echip))
 }

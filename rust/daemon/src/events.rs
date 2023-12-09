@@ -18,7 +18,6 @@ use netsim_proto::common::ChipKind;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::devices::chip::ChipIdentifier;
-use crate::devices::chip::FacadeIdentifier;
 use crate::devices::device::DeviceIdentifier;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
@@ -57,7 +56,6 @@ pub enum Event {
     ChipAdded {
         chip_id: ChipIdentifier,
         chip_kind: ChipKind,
-        facade_id: FacadeIdentifier,
         device_name: String,
         builtin: bool,
     },

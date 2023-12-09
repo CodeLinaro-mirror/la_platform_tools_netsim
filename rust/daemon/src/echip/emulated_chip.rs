@@ -24,10 +24,7 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
 use crate::{
-    devices::{
-        chip::{ChipIdentifier, FacadeIdentifier},
-        device::DeviceIdentifier,
-    },
+    devices::{chip::ChipIdentifier, device::DeviceIdentifier},
     echip::{ble_beacon, mocked, SharedEmulatedChip},
 };
 
@@ -92,10 +89,6 @@ pub trait EmulatedChip {
 
     /// Returns the kind of the emulated chip.
     fn get_kind(&self) -> ProtoChipKind;
-
-    // TODO(b/311480905): Remove this method and get rid of facade_id in devices crate.
-    /// Returns Facade Identifier.
-    fn get_facade_id(&self) -> FacadeIdentifier;
 }
 
 /// Lookup for SharedEmulatedChip with chip_id

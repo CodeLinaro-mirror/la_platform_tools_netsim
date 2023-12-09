@@ -20,7 +20,6 @@ use protobuf::Message;
 use crate::devices::chip;
 use crate::devices::chip::Chip;
 use crate::devices::chip::ChipIdentifier;
-use crate::devices::chip::FacadeIdentifier;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::model::Orientation as ProtoOrientation;
@@ -59,7 +58,6 @@ impl Device {
 pub struct AddChipResult {
     pub device_id: DeviceIdentifier,
     pub chip_id: ChipIdentifier,
-    pub facade_id: FacadeIdentifier,
 }
 
 impl Device {

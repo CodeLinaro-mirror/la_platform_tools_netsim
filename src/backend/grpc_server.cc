@@ -47,7 +47,7 @@ using Stream =
 
 using netsim::startup::Chip;
 
-// Mapping from <chip kind, facade id> to streams.
+// Mapping from chip_id to streams.
 std::unordered_map<uint32_t, Stream *> chip_id_to_stream;
 
 // Libslirp is not thread safe. Use a lock to prevent concurrent access to
@@ -114,13 +114,12 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     }
     uint32_t device_id = result->GetDeviceId();
     uint32_t chip_id = result->GetChipId();
-    uint32_t rootcanal_id = result->GetFacadeId();
 
     BtsLogInfo(
-        "grpc_server: adding chip - chip_id: %d, rootcanal_id: %d, "
+        "grpc_server: adding chip - chip_id: %d, "
         "device_name: "
         "%s",
-        chip_id, rootcanal_id, device_name.c_str());
+        chip_id, device_name.c_str());
     // connect packet responses from chip facade to the peer
     chip_id_to_stream[chip_id] = stream;
     netsim::transport::RegisterGrpcTransport(chip_id);
@@ -134,10 +133,10 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
     netsim::device::RemoveChipCxx(device_id, chip_id);
 
     BtsLogInfo(
-        "grpc_server: removing chip - chip_id: %d, rootcanal_id: %d, "
+        "grpc_server: removing chip - chip_id: %d, "
         "device_name: "
         "%s",
-        chip_id, rootcanal_id, device_name.c_str());
+        chip_id, device_name.c_str());
 
     return ::grpc::Status::OK;
   }
