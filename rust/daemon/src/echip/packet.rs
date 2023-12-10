@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::{
     mpsc::{channel, Sender},
-    Arc, Mutex,
+    Arc, Mutex, MutexGuard,
 };
 use std::thread;
 
@@ -50,21 +50,27 @@ struct ResponsePacket {
 }
 
 // SENDERS is a singleton that contains a hash map from
-// (kind,facade_id) to responder queue.
+// chip_id to responder queue.
+
+type SenderMap = HashMap<ChipIdentifier, Sender<ResponsePacket>>;
+struct SharedSenders(Arc<Mutex<SenderMap>>);
+
+impl SharedSenders {
+    fn lock(&self) -> MutexGuard<SenderMap> {
+        self.0.lock().expect("Poisoned Shared Senders lock")
+    }
+}
 
 lazy_static! {
-    static ref SENDERS: Arc<Mutex<HashMap<ChipIdentifier, Sender<ResponsePacket>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    static ref SENDERS: SharedSenders = SharedSenders(Arc::new(Mutex::new(HashMap::new())));
 }
 
 /// Register a chip controller instance to a transport manager.
 pub fn register_transport(chip_id: ChipIdentifier, mut responder: Box<dyn Response + Send>) {
     let (tx, rx) = channel::<ResponsePacket>();
-    let mut map = SENDERS.lock().expect("register_transport: poisoned lock");
-    if map.contains_key(&chip_id) {
+    if SENDERS.lock().insert(chip_id, tx).is_some() {
         error!("register_transport: key already present for chip_id: {chip_id}");
     }
-    map.insert(chip_id, tx);
     let _ = thread::Builder::new().name(format!("transport_writer_{chip_id}")).spawn(move || {
         info!("register_transport: started thread chip_id: {chip_id}");
         loop {
@@ -84,7 +90,7 @@ pub fn register_transport(chip_id: ChipIdentifier, mut responder: Box<dyn Respon
 /// Unregister a chip controller instance.
 pub fn unregister_transport(chip_id: ChipIdentifier) {
     // Shuts down the responder thread, because sender is dropped.
-    SENDERS.lock().expect("unregister_transport: poisoned lock").remove(&chip_id);
+    SENDERS.lock().remove(&chip_id);
 }
 
 // Handle response from facades.
@@ -99,7 +105,7 @@ pub fn handle_response(chip_id: ChipIdentifier, packet: &cxx::CxxVector<u8>, pac
     let packet_vec = packet.as_slice().to_vec();
     captures_handler::handle_packet_response(chip_id, &packet_vec, packet_type.into());
 
-    let mut binding = SENDERS.lock().expect("Failed to acquire lock on SENDERS");
+    let mut binding = SENDERS.lock();
     if let Some(responder) = binding.get(&chip_id) {
         if responder.send(ResponsePacket { packet: packet_vec, packet_type }).is_err() {
             warn!("handle_response: send failed for chip_id: {chip_id}");
@@ -148,17 +154,17 @@ mod tests {
         let val: Box<dyn Response + Send> = Box::new(TestTransport {});
         register_transport(0, val);
         {
-            let binding = SENDERS.lock().unwrap();
+            let binding = SENDERS.lock();
             assert!(binding.contains_key(&0));
         }
 
-        SENDERS.lock().unwrap().remove(&0);
+        SENDERS.lock().remove(&0);
     }
 
     #[test]
     fn test_unregister_transport() {
         register_transport(1, Box::new(TestTransport {}));
         unregister_transport(1);
-        assert!(SENDERS.lock().unwrap().get(&1).is_none());
+        assert!(SENDERS.lock().get(&1).is_none());
     }
 }
