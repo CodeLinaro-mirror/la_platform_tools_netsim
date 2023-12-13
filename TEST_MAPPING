@@ -1,0 +1,15 @@
+{
+  // only change to presubmit after collecting stats first in post, per
+  // go/test-mapping-slo-guide?cl=589966747#how-to-add-a-test-as-part-of-the-test-mapping-presubmit
+  "postsubmit": [
+    {
+      "name": "CtsBluetoothTestCases",
+      "options": [
+        {
+          // TODO(b/303306195): Exclude a flaky test the other team is already working on from our check
+          "exclude-filter": "android.bluetooth.cts.LeL2capSocketTest#openInsecureLeL2capServerSocketRepeatedly"
+        }
+      ]
+    }
+  ]
+}

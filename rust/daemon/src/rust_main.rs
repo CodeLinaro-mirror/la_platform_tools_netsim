@@ -21,10 +21,10 @@ use netsim_common::util::zip_artifact::zip_artifacts;
 
 use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
-use crate::devices::devices_handler::wait_devices;
+use crate::devices::devices_handler::spawn_shutdown_publisher;
 use crate::echip;
 use crate::events;
-use crate::events::Event;
+use crate::events::{Event, ShutDown};
 use crate::session::Session;
 use crate::version::get_version;
 use netsim_common::util::netsim_logger;
@@ -144,15 +144,13 @@ fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
 }
 
 // loop until ShutDown event is received, then log and return.
-fn main_loop(events_rx: Receiver<Event>, no_shutdown_flag: bool) {
+fn main_loop(events_rx: Receiver<Event>) {
     loop {
         // events_rx.recv() will wait until the event is received.
         // TODO(b/305536480): Remove built-in devices during shutdown.
-        if let Ok(Event::ShutDown { reason }) = events_rx.recv() {
+        if let Ok(Event::ShutDown(ShutDown { reason })) = events_rx.recv() {
             info!("Netsim is shutdown: {reason}");
-            if !no_shutdown_flag {
-                return;
-            }
+            return;
         }
     }
 }
@@ -217,7 +215,10 @@ fn run_netsimd_primary(args: NetsimdArgs) {
 
     // Pass all event receivers to each modules
     spawn_capture_event_subscriber(capture_events_rx);
-    wait_devices(device_events_rx);
+
+    if !args.no_shutdown {
+        spawn_shutdown_publisher(device_events_rx);
+    }
 
     // Start radio facades
     echip::bluetooth::bluetooth_start(&config.bluetooth, instance_num, args.disable_address_reuse);
@@ -239,7 +240,7 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     service.run();
 
     // Runs a synchronous main loop
-    main_loop(main_events_rx, args.no_shutdown);
+    main_loop(main_events_rx);
 
     // Gracefully shutdown netsimd services
     service.shut_down();

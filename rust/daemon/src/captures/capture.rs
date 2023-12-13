@@ -37,7 +37,7 @@ use netsim_proto::{
 use protobuf::well_known_types::timestamp::Timestamp;
 
 use crate::config::get_pcap;
-use crate::events::Event;
+use crate::events::{ChipAdded, ChipRemoved, Event};
 use crate::resource::clone_captures;
 
 use crate::devices::chip::ChipIdentifier;
@@ -220,7 +220,7 @@ pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>) {
     let _ =
         thread::Builder::new().name("capture_event_subscriber".to_string()).spawn(move || loop {
             match event_rx.recv() {
-                Ok(Event::ChipAdded { chip_id, chip_kind, device_name, .. }) => {
+                Ok(Event::ChipAdded(ChipAdded { chip_id, chip_kind, device_name, .. })) => {
                     let mut capture_info =
                         CaptureInfo::new(chip_kind, chip_id, device_name.clone());
                     if get_pcap() {
@@ -229,7 +229,7 @@ pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>) {
                     clone_captures().write().unwrap().insert(capture_info);
                     info!("Capture event: ChipAdded chip_id: {chip_id} device_name: {device_name}");
                 }
-                Ok(Event::ChipRemoved { chip_id, .. }) => {
+                Ok(Event::ChipRemoved(ChipRemoved { chip_id, .. })) => {
                     clone_captures().write().unwrap().remove(&chip_id);
                     info!("Capture event: ChipRemoved chip_id: {chip_id}");
                 }

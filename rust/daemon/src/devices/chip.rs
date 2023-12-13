@@ -92,7 +92,7 @@ impl Chip {
     // stats for BLE and CLASSIC.
     pub fn get_stats(&self) -> Vec<ProtoRadioStats> {
         match &self.emulated_chip {
-            Some(emulated_chip) => emulated_chip.get_stats(self.start.elapsed().as_secs()),
+            Some(emulated_chip) => emulated_chip.lock().get_stats(self.start.elapsed().as_secs()),
             None => {
                 warn!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id);
                 Vec::<ProtoRadioStats>::new()
@@ -105,7 +105,7 @@ impl Chip {
         let mut proto_chip = self
             .emulated_chip
             .as_ref()
-            .map(|c| c.get())
+            .map(|c| c.lock().get())
             .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))?;
         proto_chip.kind = EnumOrUnknown::new(self.kind);
         proto_chip.id = self.id;
@@ -126,14 +126,14 @@ impl Chip {
         }
         self.emulated_chip
             .as_ref()
-            .map(|c| c.patch(patch))
+            .map(|c| c.lock().patch(patch))
             .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))
     }
 
     pub fn reset(&mut self) -> Result<(), String> {
         self.emulated_chip
             .as_ref()
-            .map(|c| c.reset())
+            .map(|c| c.lock().reset())
             .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))
     }
 }

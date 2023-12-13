@@ -23,7 +23,7 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::ChipCreate as ChipCreateProto;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[cfg(not(test))]
 use crate::ffi::ffi_bluetooth;
@@ -48,7 +48,7 @@ impl EmulatedChip for BleBeacon {
         log::info!("BleBeacon::handle_request({packet:?})");
     }
 
-    fn reset(&self) {
+    fn reset(&mut self) {
         #[cfg(not(test))]
         ffi_bluetooth::bluetooth_reset(self.facade_id);
         #[cfg(test)]
@@ -64,13 +64,13 @@ impl EmulatedChip for BleBeacon {
         chip_proto
     }
 
-    fn patch(&self, chip: &ProtoChip) {
+    fn patch(&mut self, chip: &ProtoChip) {
         if let Err(err) = ble_beacon_patch(self.facade_id, self.chip_id, chip.ble_beacon()) {
             error!("{err:?}");
         }
     }
 
-    fn remove(&self) {
+    fn remove(&mut self) {
         if let Err(err) = ble_beacon_remove(self.chip_id, self.facade_id) {
             error!("{err:?}");
         }
@@ -102,11 +102,14 @@ pub fn new(
     match ble_beacon_add(device_id, params.device_name.clone(), chip_id, &params.chip_proto) {
         Ok(facade_id) => {
             info!("BleBeacon EmulatedChip created with facade_id: {facade_id} chip_id: {chip_id}");
-            Arc::new(Box::new(BleBeacon { facade_id, chip_id }))
+            SharedEmulatedChip(Arc::new(Mutex::new(Box::new(BleBeacon { facade_id, chip_id }))))
         }
         Err(err) => {
             error!("{err:?}");
-            Arc::new(Box::new(BleBeacon { facade_id: u32::MAX, chip_id: u32::MAX }))
+            SharedEmulatedChip(Arc::new(Mutex::new(Box::new(BleBeacon {
+                facade_id: u32::MAX,
+                chip_id: u32::MAX,
+            }))))
         }
     }
 }

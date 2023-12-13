@@ -27,7 +27,7 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Parameters for creating Wifi chips
 pub struct CreateParams {}
@@ -45,7 +45,7 @@ impl EmulatedChip for Wifi {
         ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
     }
 
-    fn reset(&self) {
+    fn reset(&mut self) {
         ffi_wifi::wifi_reset(self.chip_id);
     }
 
@@ -57,12 +57,12 @@ impl EmulatedChip for Wifi {
         chip_proto
     }
 
-    fn patch(&self, chip: &ProtoChip) {
+    fn patch(&mut self, chip: &ProtoChip) {
         let radio_bytes = chip.wifi().write_to_bytes().unwrap();
         ffi_wifi::wifi_patch_cxx(self.chip_id, &radio_bytes);
     }
 
-    fn remove(&self) {
+    fn remove(&mut self) {
         ffi_wifi::wifi_remove(self.chip_id);
     }
 
@@ -92,7 +92,7 @@ pub fn new(
     ffi_wifi::wifi_add(chip_id);
     info!("WiFi EmulatedChip created chip_id: {chip_id}");
     let echip = Wifi { chip_id };
-    Arc::new(Box::new(echip))
+    SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))
 }
 
 /// Starts the WiFi service.

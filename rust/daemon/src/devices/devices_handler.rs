@@ -30,7 +30,9 @@ use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
 use crate::echip;
 use crate::events;
-use crate::events::Event;
+use crate::events::{
+    ChipAdded, ChipRemoved, DeviceAdded, DevicePatched, DeviceRemoved, Event, Events, ShutDown,
+};
 use crate::ffi::ffi_response_writable::CxxServerResponseWriter;
 use crate::ffi::CxxServerResponseWriterWrapper;
 use crate::http_server::server_response::ResponseWritable;
@@ -63,6 +65,7 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::RwLockWriteGuard;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -162,12 +165,12 @@ pub fn add_chip(
                     SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
             }
             // Update Capture resource
-            events::publish(Event::ChipAdded {
+            events::publish(Event::ChipAdded(ChipAdded {
                 chip_id,
                 chip_kind,
                 device_name: device_name.to_string(),
                 builtin: chip_kind == ProtoChipKind::BLUETOOTH_BEACON,
-            });
+            }));
             Ok(AddChipResult { device_id, chip_id })
         }
         Err(err) => {
@@ -310,7 +313,7 @@ fn get_or_create_device(
     // Update last modified timestamp for devices
     devices.last_modified =
         SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
-    events::publish(Event::DeviceAdded { id, name: name.to_string(), builtin });
+    events::publish(Event::DeviceAdded(DeviceAdded { id, name: name.to_string(), builtin }));
 
     (id, String::from(name))
 }
@@ -330,7 +333,7 @@ fn remove_device(
     guard.last_modified =
         SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
     // Publish DeviceRemoved Event
-    events::publish(Event::DeviceRemoved { id, name, builtin });
+    events::publish(Event::DeviceRemoved(DeviceRemoved { id, name, builtin }));
     Ok(())
 }
 
@@ -369,12 +372,12 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
                 get_devices().write().unwrap().last_modified =
                     SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
             }
-            events::publish(Event::ChipRemoved {
+            events::publish(Event::ChipRemoved(ChipRemoved {
                 chip_id,
                 device_id,
                 remaining_nonbuiltin_devices,
                 radio_stats,
-            });
+            }));
             Ok(())
         }
         Err(err) => {
@@ -493,7 +496,7 @@ fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result
                             .expect("Time went backwards");
 
                         // Publish Device Patched event
-                        events::publish(Event::DevicePatched { id, name });
+                        events::publish(Event::DevicePatched(DevicePatched { id, name }));
                     }
                     result
                 }
@@ -515,7 +518,7 @@ fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result
                                     .expect("Time went backwards");
 
                                 // Publish Device Patched event
-                                events::publish(Event::DevicePatched { id, name });
+                                events::publish(Event::DevicePatched(DevicePatched { id, name }));
                             }
                             return result;
                         }
@@ -541,7 +544,7 @@ fn patch_device(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result
                                 .expect("Time went backwards");
 
                             // Publish Device Patched event
-                            events::publish(Event::DevicePatched { id, name });
+                            events::publish(Event::DevicePatched(DevicePatched { id, name }));
                         }
                         result
                     }
@@ -702,11 +705,11 @@ fn handle_device_subscribe(writer: ResponseWritable, subscribe_json: &str) {
     let event_rx = events::subscribe();
     // Timeout after 15 seconds with no event received
     match event_rx.recv_timeout(Duration::from_secs(15)) {
-        Ok(Event::DeviceAdded { .. })
-        | Ok(Event::DeviceRemoved { .. })
-        | Ok(Event::ChipAdded { .. })
-        | Ok(Event::ChipRemoved { .. })
-        | Ok(Event::DevicePatched { .. })
+        Ok(Event::DeviceAdded(_))
+        | Ok(Event::DeviceRemoved(_))
+        | Ok(Event::ChipAdded(_))
+        | Ok(Event::ChipRemoved(_))
+        | Ok(Event::DevicePatched(_))
         | Ok(Event::DeviceReset) => handle_device_list(writer),
         Err(err) => writer.put_error(404, format!("{err:?}").as_str()),
         _ => writer.put_error(404, "disconnecting due to unrelated event"),
@@ -795,7 +798,7 @@ pub fn handle_device_cxx(
     )
 }
 
-/// return enum type for wait_devices
+/// return enum type for check_device_event
 #[derive(Debug, PartialEq)]
 enum DeviceWaitStatus {
     LastDeviceRemoved,
@@ -811,13 +814,13 @@ fn check_device_event(
 ) -> DeviceWaitStatus {
     let wait_time = timeout_time.map_or(Duration::from_secs(u64::MAX), |t| t - Instant::now());
     match events_rx.recv_timeout(wait_time) {
-        Ok(Event::ChipRemoved { remaining_nonbuiltin_devices: 0, .. }) => {
+        Ok(Event::ChipRemoved(ChipRemoved { remaining_nonbuiltin_devices: 0, .. })) => {
             DeviceWaitStatus::LastDeviceRemoved
         }
         // DeviceAdded (event from CreateDevice)
         // ChipAdded (event from add_chip or add_chip_cxx)
-        Ok(Event::DeviceAdded { builtin: false, .. })
-        | Ok(Event::ChipAdded { builtin: false, .. }) => DeviceWaitStatus::DeviceAdded,
+        Ok(Event::DeviceAdded(DeviceAdded { builtin: false, .. }))
+        | Ok(Event::ChipAdded(ChipAdded { builtin: false, .. })) => DeviceWaitStatus::DeviceAdded,
         Err(_) => DeviceWaitStatus::Timeout,
         _ => DeviceWaitStatus::IgnoreEvent,
     }
@@ -827,29 +830,40 @@ fn check_device_event(
 /// the function will publish a ShutDown event when
 /// 1. Initial timeout before first device is added
 /// 2. Last Chip Removed from netsimd
-pub fn wait_devices(events_rx: Receiver<Event>) {
-    // TODO (b/303281633): Add unit tests for wait_devices
+/// this function should NOT be invoked if running in no-shutdown mode
+pub fn spawn_shutdown_publisher(events_rx: Receiver<Event>) {
+    spawn_shutdown_publisher_with_timeout(events_rx, IDLE_SECS_FOR_SHUTDOWN, events::get_events());
+}
+
+// separate function for testability
+fn spawn_shutdown_publisher_with_timeout(
+    events_rx: Receiver<Event>,
+    timeout_duration_s: u64,
+    events_tx: Arc<Mutex<Events>>,
+) {
     let _ =
         std::thread::Builder::new().name("device_event_subscriber".to_string()).spawn(move || {
-            let mut timeout_time =
-                Some(Instant::now() + Duration::from_secs(IDLE_SECS_FOR_SHUTDOWN));
+            let publish_event =
+                |e: Event| events_tx.lock().expect("Failed to acquire lock on events").publish(e);
+
+            let mut timeout_time = Some(Instant::now() + Duration::from_secs(timeout_duration_s));
             loop {
                 match check_device_event(&events_rx, timeout_time) {
                     DeviceWaitStatus::LastDeviceRemoved => {
-                        events::publish(Event::ShutDown {
+                        publish_event(Event::ShutDown(ShutDown {
                             reason: "last device disconnected".to_string(),
-                        });
+                        }));
                         return;
                     }
                     DeviceWaitStatus::DeviceAdded => {
                         timeout_time = None;
                     }
                     DeviceWaitStatus::Timeout => {
-                        events::publish(Event::ShutDown {
+                        publish_event(Event::ShutDown(ShutDown {
                             reason: format!(
                                 "no devices connected within {IDLE_SECS_FOR_SHUTDOWN}s"
                             ),
-                        });
+                        }));
                         return;
                     }
                     DeviceWaitStatus::IgnoreEvent => continue,
@@ -992,6 +1006,148 @@ mod tests {
             Some(device) => device.reset(),
             None => Err(format!("No such device with id {id}")),
         }
+    }
+
+    fn spawn_shutdown_publisher_test_setup(timeout: u64) -> (Arc<Mutex<Events>>, Receiver<Event>) {
+        let mut events = events::test::new();
+        let events_rx = events::test::subscribe(&mut events);
+        spawn_shutdown_publisher_with_timeout(events_rx, timeout, events.clone());
+
+        let events_rx2 = events::test::subscribe(&mut events);
+
+        (events, events_rx2)
+    }
+
+    #[test]
+    fn test_spawn_shutdown_publisher_last_chip_removed() {
+        let (mut events, events_rx) = spawn_shutdown_publisher_test_setup(IDLE_SECS_FOR_SHUTDOWN);
+
+        events::test::publish(
+            &mut events,
+            Event::ChipRemoved(ChipRemoved {
+                remaining_nonbuiltin_devices: 0,
+                ..Default::default()
+            }),
+        );
+
+        // receive our own ChipRemoved
+        assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(ChipRemoved { .. }))));
+        // receive the ShutDown emitted by the function under test
+        assert!(matches!(events_rx.recv(), Ok(Event::ShutDown(ShutDown { .. }))));
+    }
+
+    #[test]
+    fn test_spawn_shutdown_publisher_chip_removed_which_is_not_last_chip() {
+        let (mut events, events_rx) = spawn_shutdown_publisher_test_setup(IDLE_SECS_FOR_SHUTDOWN);
+        events::test::publish(
+            &mut events,
+            Event::ChipRemoved(ChipRemoved {
+                chip_id: 1,
+                remaining_nonbuiltin_devices: 1,
+                ..Default::default()
+            }),
+        );
+
+        // give other thread time to generate a ShutDown if it was going to
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        // only the 2nd ChipRemoved should generate a ShutDown as it is marked the last one
+        events::test::publish(
+            &mut events,
+            Event::ChipRemoved(ChipRemoved {
+                chip_id: 0,
+                remaining_nonbuiltin_devices: 0,
+                ..Default::default()
+            }),
+        );
+
+        // receive our own ChipRemoved
+        assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(ChipRemoved { .. }))));
+        // receive our own ChipRemoved (with no shutdown)
+        assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(ChipRemoved { .. }))));
+        // only then receive the ShutDown emitted by the function under test
+        assert!(matches!(events_rx.recv(), Ok(Event::ShutDown(ShutDown { .. }))));
+    }
+
+    #[test]
+    fn test_spawn_shutdown_publisher_last_chip_removed_with_duplicate_event() {
+        let (mut events, events_rx) = spawn_shutdown_publisher_test_setup(IDLE_SECS_FOR_SHUTDOWN);
+        events::test::publish(
+            &mut events,
+            Event::ChipRemoved(ChipRemoved {
+                chip_id: 0,
+                remaining_nonbuiltin_devices: 0,
+                ..Default::default()
+            }),
+        );
+
+        // give other thread time to generate a ShutDown if it was going to
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        // this is a duplicate event and we already sent that all chips were removed
+        // this is for strict comparison with test_spawn_shutdown_publisher_chip_removed_which_is_not_last_chip
+        // to validate that if the first event has remaining_nonbuiltin_devices 0
+        // we would receive ChipRemoved, ShutDown, ChipRemoved
+        // but if first ChipRemoved has remaining_nonbuiltin_devices,
+        // we instead receive ChipRemoved, ChipRemoved, ShutDown
+        events::test::publish(
+            &mut events,
+            Event::ChipRemoved(ChipRemoved {
+                chip_id: 0,
+                remaining_nonbuiltin_devices: 0,
+                ..Default::default()
+            }),
+        );
+
+        // receive our own ChipRemoved
+        assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(_))));
+        // receive the ShutDown emitted by the function under test
+        assert!(matches!(events_rx.recv(), Ok(Event::ShutDown(_))));
+        // receive our own erroneous ChipRemoved which occurs after we said all chips were removed
+        // this is just for strict comparison with test_spawn_shutdown_publisher_chip_removed_which_is_not_last_chip
+        assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(_))));
+        // should timeout now (no further events as we expect shutdown publisher thread to have stopped)
+        assert!(events_rx.recv_timeout(Duration::from_secs(2)).is_err());
+    }
+
+    #[test]
+    fn test_spawn_shutdown_publisher_timeout() {
+        let (_, events_rx) = spawn_shutdown_publisher_test_setup(1u64);
+
+        // receive the ShutDown emitted by the function under test
+        assert!(matches!(events_rx.recv_timeout(Duration::from_secs(2)), Ok(Event::ShutDown(_))));
+    }
+
+    #[test]
+    fn test_spawn_shutdown_publisher_timeout_is_canceled_if_a_chip_is_added() {
+        let (mut events, events_rx) = spawn_shutdown_publisher_test_setup(1u64);
+
+        events::test::publish(
+            &mut events,
+            Event::ChipAdded(ChipAdded {
+                chip_id: 0,
+                chip_kind: ProtoChipKind::BLUETOOTH,
+                ..Default::default()
+            }),
+        );
+        assert!(matches!(events_rx.recv(), Ok(Event::ChipAdded(_))));
+
+        // should NO longer receive the ShutDown emitted by the function under test
+        // based on timeout removed when chip added
+        assert!(events_rx.recv_timeout(Duration::from_secs(2)).is_err());
+
+        events::test::publish(
+            &mut events,
+            Event::ChipRemoved(ChipRemoved {
+                chip_id: 0,
+                remaining_nonbuiltin_devices: 0,
+                ..Default::default()
+            }),
+        );
+        // receive our own ChipRemoved
+        assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(_))));
+        // receive the ShutDown emitted by the function under test
+        assert!(matches!(events_rx.recv(), Ok(Event::ShutDown(_))));
     }
 
     #[test]
@@ -1529,7 +1685,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wait_devices_initial_timeout() {
+    fn test_check_device_event_initial_timeout() {
         logger_setup();
 
         let mut events = events::test::new();
@@ -1541,80 +1697,69 @@ mod tests {
     }
 
     #[test]
-    fn test_wait_devices_last_device_removed() {
+    fn test_check_device_event_last_device_removed() {
         logger_setup();
 
         let mut events = events::test::new();
         let events_rx = events::test::subscribe(&mut events);
         events::test::publish(
             &mut events,
-            Event::ChipRemoved {
-                chip_id: 0,
-                device_id: 0,
+            Event::ChipRemoved(ChipRemoved {
                 remaining_nonbuiltin_devices: 0,
-                radio_stats: Vec::new(),
-            },
+                ..Default::default()
+            }),
         );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::LastDeviceRemoved);
     }
 
     #[test]
-    fn test_wait_devices_device_chip_added() {
+    fn test_check_device_event_device_chip_added() {
         logger_setup();
 
         let mut events = events::test::new();
         let events_rx = events::test::subscribe(&mut events);
         events::test::publish(
             &mut events,
-            Event::DeviceAdded { id: 0, name: "".to_string(), builtin: false },
+            Event::DeviceAdded(DeviceAdded { id: 0, name: "".to_string(), builtin: false }),
         );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::DeviceAdded);
         events::test::publish(
             &mut events,
-            Event::ChipAdded {
-                chip_id: 0,
-                chip_kind: ProtoChipKind::BLUETOOTH,
-                device_name: "".to_string(),
-                builtin: false,
-            },
+            Event::ChipAdded(ChipAdded { builtin: false, ..Default::default() }),
         );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::DeviceAdded);
     }
 
     #[test]
-    fn test_wait_devices_ignore_event() {
+    fn test_check_device_event_ignore_event() {
         logger_setup();
 
         let mut events = events::test::new();
         let events_rx = events::test::subscribe(&mut events);
-        events::test::publish(&mut events, Event::DevicePatched { id: 0, name: "".to_string() });
+        events::test::publish(
+            &mut events,
+            Event::DevicePatched(DevicePatched { id: 0, name: "".to_string() }),
+        );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
         events::test::publish(
             &mut events,
-            Event::ChipRemoved {
-                chip_id: 0,
-                device_id: 0,
+            Event::ChipRemoved(ChipRemoved {
                 remaining_nonbuiltin_devices: 1,
-                radio_stats: Vec::new(),
-            },
+                ..Default::default()
+            }),
         );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
     }
 
     #[test]
-    fn test_wait_devices_ignore_beacon() {
+    fn test_check_device_event_ignore_chip_added_for_builtin() {
         logger_setup();
 
         let mut events = events::test::new();
         let events_rx = events::test::subscribe(&mut events);
         events::test::publish(
             &mut events,
-            Event::ChipAdded {
-                chip_id: 0,
-                chip_kind: ProtoChipKind::BLUETOOTH_BEACON,
-                device_name: "".to_string(),
-                builtin: true,
-            },
+            Event::ChipAdded(ChipAdded { builtin: true, ..Default::default() }),
         );
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
     }

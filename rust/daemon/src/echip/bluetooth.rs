@@ -53,7 +53,7 @@ impl EmulatedChip for Bluetooth {
         ffi_bluetooth::handle_bt_request(self.rootcanal_id, packet[0], &packet[1..].to_vec())
     }
 
-    fn reset(&self) {
+    fn reset(&mut self) {
         ffi_bluetooth::bluetooth_reset(self.rootcanal_id);
     }
 
@@ -65,12 +65,12 @@ impl EmulatedChip for Bluetooth {
         chip_proto
     }
 
-    fn patch(&self, chip: &ProtoChip) {
+    fn patch(&mut self, chip: &ProtoChip) {
         let bluetooth_bytes = chip.bt().write_to_bytes().unwrap();
         ffi_bluetooth::bluetooth_patch_cxx(self.rootcanal_id, &bluetooth_bytes);
     }
 
-    fn remove(&self) {
+    fn remove(&mut self) {
         // Lock to protect id_to_chip_info_ table in C++
         let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
         ffi_bluetooth::bluetooth_remove(self.rootcanal_id);
@@ -118,7 +118,7 @@ pub fn new(
     let rootcanal_id = ffi_bluetooth::bluetooth_add(device_id, chip_id, &cxx_address, &proto_bytes);
     info!("Bluetooth EmulatedChip created with rootcanal_id: {rootcanal_id} chip_id: {chip_id}");
     let echip = Bluetooth { rootcanal_id };
-    Arc::new(Box::new(echip))
+    SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))
 }
 
 /// Starts the Bluetooth service.

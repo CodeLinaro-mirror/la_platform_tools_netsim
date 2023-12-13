@@ -15,7 +15,7 @@
 //! A module to collect and write session stats
 
 use crate::devices::devices_handler::get_radio_stats;
-use crate::events::Event;
+use crate::events::{ChipRemoved, Event, ShutDown};
 use crate::version::get_version;
 use anyhow::Context;
 use log::error;
@@ -83,17 +83,17 @@ impl Session {
                             Duration::ZERO
                         };
                         match events_rx.recv_timeout(timeout) {
-                            Ok(Event::ShutDown { reason }) => {
+                            Ok(Event::ShutDown(ShutDown { reason })) => {
                                 // Shutting down, save the session duration and exit
                                 update_session_duration(&mut lock);
                                 return reason;
                             }
 
-                            Ok(Event::DeviceRemoved { .. }) => {
+                            Ok(Event::DeviceRemoved(_)) => {
                                 lock.current_device_count -= 1;
                             }
 
-                            Ok(Event::DeviceAdded { .. }) => {
+                            Ok(Event::DeviceAdded(_)) => {
                                 // update the current_device_count and peak device usage
                                 lock.current_device_count += 1;
                                 let current_device_count = lock.current_device_count;
@@ -108,7 +108,9 @@ impl Session {
                                 }
                             }
 
-                            Ok(Event::ChipRemoved { radio_stats, device_id, .. }) => {
+                            Ok(Event::ChipRemoved(ChipRemoved {
+                                radio_stats, device_id, ..
+                            })) => {
                                 // Update the radio stats proto when a
                                 // chip is removed.  In the case of
                                 // bluetooth there will be 2 radios,
@@ -119,10 +121,9 @@ impl Session {
                                 }
                             }
 
-                            Ok(Event::ChipAdded { .. }) => {
+                            Ok(Event::ChipAdded(_)) => {
                                 // No session stat update required when Chip is added but do proceed to write stats
                             }
-
                             _ => {
                                 // other events are ignored, check to perform periodic write
                                 if next_instant > Instant::now() {
