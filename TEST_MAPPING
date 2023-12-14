@@ -10,6 +10,9 @@
           "exclude-filter": "android.bluetooth.cts.LeL2capSocketTest#openInsecureLeL2capServerSocketRepeatedly"
         }
       ]
+    },
+    {
+      "name": "net_test_bluetooth"
     }
   ]
 }

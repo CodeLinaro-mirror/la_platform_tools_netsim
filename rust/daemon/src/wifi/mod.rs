@@ -18,6 +18,7 @@
 #![allow(unused)]
 
 pub(crate) mod frame;
+pub(crate) mod ieee80211;
 pub(crate) mod medium;
 pub(crate) mod packets;
 pub(crate) mod radiotap;

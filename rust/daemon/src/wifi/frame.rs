@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::ieee80211::Ieee80211;
 use super::packets::mac80211_hwsim::HwsimAttrChild::*;
 use super::packets::mac80211_hwsim::{HwsimAttr, HwsimMsg, HwsimMsgHdr, TxRate, TxRateFlag};
 use super::packets::netlink::{NlAttrHdr, NlMsgHdr};
-use crate::wifi::packets::ieee80211::Ieee80211;
 use anyhow::{anyhow, Context};
 use log::{info, warn};
 use std::mem;
