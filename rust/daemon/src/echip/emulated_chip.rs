@@ -24,7 +24,7 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
 use crate::{
-    devices::{chip::ChipIdentifier, device::DeviceIdentifier},
+    devices::chip::ChipIdentifier,
     echip::{ble_beacon, mocked},
 };
 
@@ -116,21 +116,17 @@ pub fn remove(chip_id: ChipIdentifier) -> Option<SharedEmulatedChip> {
 
 /// This is called when the transport module receives a new packet stream
 /// connection from a virtual device.
-pub fn new(
-    create_param: &CreateParam,
-    device_id: DeviceIdentifier,
-    chip_id: ChipIdentifier,
-) -> SharedEmulatedChip {
+pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> SharedEmulatedChip {
     // Based on create_param, construct SharedEmulatedChip.
     let shared_echip = match create_param {
-        CreateParam::BleBeacon(params) => ble_beacon::new(params, device_id, chip_id),
+        CreateParam::BleBeacon(params) => ble_beacon::new(params, chip_id),
         #[cfg(not(test))]
-        CreateParam::Bluetooth(params) => bluetooth::new(params, device_id, chip_id),
+        CreateParam::Bluetooth(params) => bluetooth::new(params, chip_id),
         #[cfg(not(test))]
-        CreateParam::Wifi(params) => wifi::new(params, device_id, chip_id),
+        CreateParam::Wifi(params) => wifi::new(params, chip_id),
         #[cfg(not(test))]
         CreateParam::Uwb => todo!(),
-        CreateParam::Mock(params) => mocked::new(params, device_id),
+        CreateParam::Mock(params) => mocked::new(params, chip_id),
     };
 
     // Insert into ECHIPS Map
@@ -150,9 +146,8 @@ mod tests {
     fn test_echip_new() {
         let mock_param =
             CreateParam::Mock(mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED });
-        let mock_device_id = 0;
         let mock_chip_id = 0;
-        let echip = new(&mock_param, mock_device_id, mock_chip_id);
+        let echip = new(&mock_param, mock_chip_id);
         assert_eq!(echip.lock().get_kind(), ProtoChipKind::UNSPECIFIED);
         assert_eq!(echip.lock().get(), ProtoChip::new());
     }

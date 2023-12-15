@@ -13,12 +13,9 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
+use crate::echip::{EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_wifi;
 use crate::wifi::medium;
-use crate::{
-    devices::device::DeviceIdentifier,
-    echip::{EmulatedChip, SharedEmulatedChip},
-};
 use log::info;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
@@ -84,11 +81,7 @@ impl EmulatedChip for Wifi {
 }
 
 /// Create a new Emulated Wifi Chip
-pub fn new(
-    _params: &CreateParams,
-    _device_id: DeviceIdentifier,
-    chip_id: ChipIdentifier,
-) -> SharedEmulatedChip {
+pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
     ffi_wifi::wifi_add(chip_id);
     info!("WiFi EmulatedChip created chip_id: {chip_id}");
     let echip = Wifi { chip_id };

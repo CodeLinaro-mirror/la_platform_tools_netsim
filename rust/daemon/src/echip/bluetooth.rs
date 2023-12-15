@@ -13,11 +13,8 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
+use crate::echip::{EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_bluetooth;
-use crate::{
-    devices::device::DeviceIdentifier,
-    echip::{EmulatedChip, SharedEmulatedChip},
-};
 
 use cxx::let_cxx_string;
 use log::info;
@@ -103,11 +100,7 @@ impl EmulatedChip for Bluetooth {
 }
 
 /// Create a new Emulated Bluetooth Chip
-pub fn new(
-    create_params: &CreateParams,
-    device_id: DeviceIdentifier,
-    chip_id: ChipIdentifier,
-) -> SharedEmulatedChip {
+pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
     // Lock to protect id_to_chip_info_ table in C++
     let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
     let_cxx_string!(cxx_address = create_params.address.clone());
@@ -115,20 +108,16 @@ pub fn new(
         Some(properties) => properties.write_to_bytes().unwrap(),
         None => Vec::new(),
     };
-    let rootcanal_id = ffi_bluetooth::bluetooth_add(device_id, chip_id, &cxx_address, &proto_bytes);
+    let rootcanal_id = ffi_bluetooth::bluetooth_add(chip_id, &cxx_address, &proto_bytes);
     info!("Bluetooth EmulatedChip created with rootcanal_id: {rootcanal_id} chip_id: {chip_id}");
     let echip = Bluetooth { rootcanal_id };
     SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))
 }
 
 /// Starts the Bluetooth service.
-pub fn bluetooth_start(
-    config: &MessageField<BluetoothConfig>,
-    instance_num: u16,
-    disable_address_reuse: bool,
-) {
+pub fn bluetooth_start(config: &MessageField<BluetoothConfig>, instance_num: u16) {
     let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
-    ffi_bluetooth::bluetooth_start(&proto_bytes, instance_num, disable_address_reuse);
+    ffi_bluetooth::bluetooth_start(&proto_bytes, instance_num);
 }
 
 /// Stops the Bluetooth service.

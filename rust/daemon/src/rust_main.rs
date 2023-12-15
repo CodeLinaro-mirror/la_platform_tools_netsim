@@ -191,7 +191,7 @@ fn run_netsimd_primary(args: NetsimdArgs) {
         fd_startup_str,
         args.no_cli_ui,
         args.no_web_ui,
-        args.pcap,
+        config.capture.enabled == Some(true) || args.pcap,
         hci_port,
         instance_num,
         args.dev,
@@ -220,18 +220,27 @@ fn run_netsimd_primary(args: NetsimdArgs) {
         spawn_shutdown_publisher(device_events_rx);
     }
 
+    // Command line over-rides config file
+    if args.disable_address_reuse {
+        if let Some(v) = config.bluetooth.as_mut().unwrap().disable_address_reuse.as_mut() {
+            *v = true;
+        }
+    }
+
     // Start radio facades
-    echip::bluetooth::bluetooth_start(&config.bluetooth, instance_num, args.disable_address_reuse);
+    echip::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
     echip::wifi::wifi_start(&config.wifi);
 
     // Maybe create test beacons, default true for cuttlefish
     // TODO: remove default for cuttlefish by adding flag to tests
-    if match (args.test_beacons, args.no_test_beacons) {
-        (true, false) => true,
-        (false, true) => false,
-        (false, false) => cfg!(feature = "cuttlefish"),
-        (true, true) => panic!("unexpected flag combination"),
-    } {
+    if config.bluetooth.test_beacons == Some(true)
+        || match (args.test_beacons, args.no_test_beacons) {
+            (true, false) => true,
+            (false, true) => false,
+            (false, false) => cfg!(feature = "cuttlefish"),
+            (true, true) => panic!("unexpected flag combination"),
+        }
+    {
         new_test_beacon(1, 1000);
         new_test_beacon(2, 1000);
     }

@@ -14,7 +14,6 @@
 
 use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch, ble_beacon_remove};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
-use crate::devices::device::DeviceIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
 use log::{error, info};
@@ -94,12 +93,8 @@ impl EmulatedChip for BleBeacon {
 }
 
 /// Create a new Emulated BleBeacon Chip
-pub fn new(
-    params: &CreateParams,
-    device_id: DeviceIdentifier,
-    chip_id: ChipIdentifier,
-) -> SharedEmulatedChip {
-    match ble_beacon_add(device_id, params.device_name.clone(), chip_id, &params.chip_proto) {
+pub fn new(params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
+    match ble_beacon_add(params.device_name.clone(), chip_id, &params.chip_proto) {
         Ok(facade_id) => {
             info!("BleBeacon EmulatedChip created with facade_id: {facade_id} chip_id: {chip_id}");
             SharedEmulatedChip(Arc::new(Mutex::new(Box::new(BleBeacon { facade_id, chip_id }))))

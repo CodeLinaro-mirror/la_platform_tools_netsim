@@ -144,7 +144,7 @@ pub fn add_chip(
     match result {
         // id_tuple = (DeviceIdentifier, ChipIdentifier)
         Ok((device_id, chip_id)) => {
-            let emulated_chip = echip::new(echip_create_params, device_id, chip_id);
+            let emulated_chip = echip::new(echip_create_params, chip_id);
             // Lock Device Resource
             {
                 let devices_arc = get_devices();
@@ -562,17 +562,23 @@ fn distance(a: &ProtoPosition, b: &ProtoPosition) -> f32 {
 }
 
 #[allow(dead_code)]
-fn get_distance(id: DeviceIdentifier, other_id: DeviceIdentifier) -> Result<f32, String> {
+fn get_distance(id: ChipIdentifier, other_id: ChipIdentifier) -> Result<f32, String> {
+    let device_id = crate::devices::chip::get(id)
+        .or(Err(format!("No such device with chip_id {id}")))?
+        .device_id;
+    let other_device_id = crate::devices::chip::get(other_id)
+        .or(Err(format!("No such device with chip_id {other_id}")))?
+        .device_id;
     let devices_arc = get_devices();
     let devices = devices_arc.read().unwrap();
     let a = devices
         .entries
-        .get(&id)
+        .get(&device_id)
         .map(|device_ref| device_ref.position.clone())
         .ok_or(format!("No such device with id {id}"))?;
     let b = devices
         .entries
-        .get(&other_id)
+        .get(&other_device_id)
         .map(|device_ref| device_ref.position.clone())
         .ok_or(format!("No such device with id {other_id}"))?;
     Ok(distance(&a, &b))
@@ -1432,6 +1438,42 @@ mod tests {
             Err(err) => assert_eq!(err, "RemoveChip device id 9999 not found"),
         }
         assert!(get_devices().read().unwrap().entries.get(&bt_chip_result.device_id).is_some());
+    }
+
+    #[test]
+    fn test_get_distance() {
+        // Initializing Logger
+        logger_setup();
+
+        // Add 2 chips of different devices
+        let bt_chip_params = test_chip_1_bt();
+        let bt_chip_2_params = test_chip_2_bt();
+        let bt_chip_result = bt_chip_params.add_chip().unwrap();
+        let bt_chip_2_result = bt_chip_2_params.add_chip().unwrap();
+
+        // Patch the first chip
+        let mut patch_device_request = PatchDeviceRequest::new();
+        let mut proto_device = ProtoDevice::new();
+        let request_position = new_position(1.0, 1.0, 1.0);
+        proto_device.name = bt_chip_params.device_name;
+        proto_device.position = Some(request_position.clone()).into();
+        patch_device_request.device = Some(proto_device.clone()).into();
+        let patch_json = print_to_string(&patch_device_request).unwrap();
+        patch_device(Some(bt_chip_result.device_id), patch_json.as_str()).unwrap();
+
+        // Patch the second chip
+        let mut patch_device_request = PatchDeviceRequest::new();
+        let mut proto_device = ProtoDevice::new();
+        let request_position = new_position(1.0, 4.0, 5.0);
+        proto_device.name = bt_chip_2_params.device_name;
+        proto_device.position = Some(request_position.clone()).into();
+        patch_device_request.device = Some(proto_device.clone()).into();
+        let patch_json = print_to_string(&patch_device_request).unwrap();
+        patch_device(Some(bt_chip_2_result.device_id), patch_json.as_str()).unwrap();
+
+        // Verify the get_distance performs the correct computation of
+        // sqrt((1-1)**2 + (4-1)**2 + (5-1)**2)
+        assert_eq!(Ok(5.0), get_distance(bt_chip_result.chip_id, bt_chip_2_result.chip_id))
     }
 
     #[allow(dead_code)]

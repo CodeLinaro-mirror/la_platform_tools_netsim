@@ -185,12 +185,7 @@ pub mod ffi_bluetooth {
 
         #[rust_name = bluetooth_add]
         #[namespace = "netsim::hci::facade"]
-        pub fn Add(
-            device_id: u32,
-            chip_id: u32,
-            address: &CxxString,
-            controller_proto_bytes: &[u8],
-        ) -> u32;
+        pub fn Add(chip_id: u32, address: &CxxString, controller_proto_bytes: &[u8]) -> u32;
 
         /*
         From https://cxx.rs/binding/box.html#restrictions,
@@ -206,7 +201,7 @@ pub mod ffi_bluetooth {
         #[rust_name = bluetooth_add_rust_device]
         #[namespace = "netsim::hci::facade"]
         pub fn AddRustDevice(
-            device_id: u32,
+            chip_id: u32,
             callbacks: Box<DynRustBluetoothChipCallbacks>,
             string_type: &CxxString,
             address: &CxxString,
@@ -223,7 +218,7 @@ pub mod ffi_bluetooth {
 
         #[rust_name = bluetooth_start]
         #[namespace = "netsim::hci::facade"]
-        pub fn Start(proto_bytes: &[u8], instance_num: u16, disable_address_reuse: bool);
+        pub fn Start(proto_bytes: &[u8], instance_num: u16);
 
         #[rust_name = bluetooth_stop]
         #[namespace = "netsim::hci::facade"]

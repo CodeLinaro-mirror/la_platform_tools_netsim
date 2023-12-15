@@ -186,7 +186,7 @@ impl Device {
             }
         }
 
-        let chip = chip::chip_new(&self.name, chip_create_params)?;
+        let chip = chip::new(self.id, &self.name, chip_create_params)?;
         let chip_id = chip.id;
         self.chips.insert(chip_id, chip);
 
