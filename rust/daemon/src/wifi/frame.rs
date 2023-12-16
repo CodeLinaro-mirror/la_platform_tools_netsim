@@ -58,14 +58,14 @@ struct FrameBuilder {
 
 #[derive(Debug)]
 pub struct Frame {
-    transmitter: [u8; 6],
+    transmitter: Option<[u8; 6]>,
     receiver: Option<[u8; 6]>,
     pub data: Vec<u8>,
     pub ieee80211_hdr: Option<Ieee80211>,
-    pub flags: u32,
+    pub flags: Option<u32>,
     rx_rate_idx: Option<u32>,
     pub signal: Option<u32>,
-    cookie: u64,
+    cookie: Option<u64>,
     pub freq: Option<u32>,
     tx_rates: Option<Vec<TxRate>>,
     tx_rate_flags: Option<Vec<TxRateFlag>>,
@@ -130,10 +130,10 @@ impl FrameBuilder {
         let data = self.data.ok_or(anymsg("frame"))?;
         let ieee80211_hdr = Ieee80211::parse(&data).ok();
         Ok(Frame {
-            transmitter: self.transmitter.ok_or(anymsg("transmitter"))?,
+            transmitter: self.transmitter,
             receiver: self.receiver,
-            cookie: self.cookie.ok_or(anymsg("cookie"))?,
-            flags: self.flags.ok_or(anymsg("flags"))?,
+            cookie: self.cookie,
+            flags: self.flags,
             rx_rate_idx: self.rx_rate_idx,
             signal: self.signal,
             data,

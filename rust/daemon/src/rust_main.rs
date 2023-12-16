@@ -34,7 +34,7 @@ use crate::ffi::ffi_util;
 use crate::service::{new_test_beacon, Service, ServiceParams};
 #[cfg(feature = "cuttlefish")]
 use netsim_common::util::os_utils::get_server_address;
-use netsim_proto::config::Config;
+use netsim_proto::config::{Bluetooth as BluetoothConfig, Config};
 use std::env;
 use std::ffi::{c_char, c_int};
 use std::sync::mpsc::Receiver;
@@ -222,8 +222,15 @@ fn run_netsimd_primary(args: NetsimdArgs) {
 
     // Command line over-rides config file
     if args.disable_address_reuse {
-        if let Some(v) = config.bluetooth.as_mut().unwrap().disable_address_reuse.as_mut() {
-            *v = true;
+        match config.bluetooth.as_mut() {
+            Some(bt_config) => {
+                bt_config.disable_address_reuse = Some(true);
+            }
+            None => {
+                let mut bt_config = BluetoothConfig::new();
+                bt_config.disable_address_reuse = Some(true);
+                config.bluetooth = Some(bt_config).into();
+            }
         }
     }
 
