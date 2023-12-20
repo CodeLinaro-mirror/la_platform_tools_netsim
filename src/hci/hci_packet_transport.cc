@@ -64,8 +64,8 @@ void HciPacketTransport::Send(rootcanal::PacketType packet_type,
     return;
   }
   // Send response to transport dispatcher.
-  netsim::transport::HandleResponse(common::ChipKind::BLUETOOTH,
-                                    mDeviceId.value(), data, hci_packet_type);
+  netsim::echip::HandleResponse(common::ChipKind::BLUETOOTH, mDeviceId.value(),
+                                data, hci_packet_type);
 }
 
 // Called by HCITransport (rootcanal)

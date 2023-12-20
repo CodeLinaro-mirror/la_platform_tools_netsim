@@ -808,23 +808,6 @@ pub fn handle_device_cxx(
     )
 }
 
-/// Get Facade ID from given chip_id
-#[allow(dead_code)]
-pub fn get_facade_id(chip_id: u32) -> Result<u32, String> {
-    let devices_arc = get_devices();
-    let devices = devices_arc.read().unwrap();
-    for device in devices.entries.values() {
-        for (id, chip) in &device.chips {
-            if *id == chip_id {
-                return chip.emulated_chip.as_ref().map(|c| c.get_facade_id()).ok_or(format!(
-                    "Facade Id hasn't been added yet to frontend resource for chip_id: {chip_id}"
-                ));
-            }
-        }
-    }
-    Err(format!("Cannot find facade_id for {chip_id}"))
-}
-
 /// return enum type for wait_devices
 #[derive(Debug, PartialEq)]
 enum DeviceWaitStatus {
@@ -1306,44 +1289,6 @@ mod tests {
             Err(err) => assert_eq!(err, "RemoveChip device id 9999 not found"),
         }
         assert!(get_devices().read().unwrap().entries.get(&bt_chip_result.device_id).is_some());
-    }
-
-    #[test]
-    fn test_get_facade_id() {
-        // Initializing Logger
-        logger_setup();
-
-        // Add bt, wifi chips of the same device and bt chip of second device
-        let bt_chip_params = test_chip_1_bt();
-        let bt_chip_result = bt_chip_params.add_chip().unwrap();
-        let wifi_chip_params = test_chip_1_wifi();
-        let wifi_chip_result = wifi_chip_params.add_chip().unwrap();
-        let bt_chip_2_params = test_chip_2_bt();
-        let bt_chip_2_result = bt_chip_2_params.add_chip().unwrap();
-
-        // Invoke get_facade_id from first bt chip
-        match get_facade_id(bt_chip_result.chip_id) {
-            Ok(facade_id) => assert_eq!(facade_id, bt_chip_result.facade_id),
-            Err(err) => {
-                unreachable!("{err}");
-            }
-        }
-
-        // Invoke get_facade_id from first wifi chip
-        match get_facade_id(wifi_chip_result.chip_id) {
-            Ok(facade_id) => assert_eq!(facade_id, wifi_chip_result.facade_id),
-            Err(err) => {
-                unreachable!("{err}");
-            }
-        }
-
-        // Invoke get_facade_id from second bt chip
-        match get_facade_id(bt_chip_2_result.chip_id) {
-            Ok(facade_id) => assert_eq!(facade_id, bt_chip_2_result.facade_id),
-            Err(err) => {
-                unreachable!("{err}");
-            }
-        }
     }
 
     #[allow(dead_code)]

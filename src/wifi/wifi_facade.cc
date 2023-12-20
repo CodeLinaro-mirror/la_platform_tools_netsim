@@ -152,8 +152,8 @@ size_t HandleWifiCallback(const uint8_t *buf, size_t size) {
       continue;
     }
     netsim::wifi::IncrRx(facade_id);
-    transport::HandleResponse(common::ChipKind::WIFI, facade_id, packet,
-                              packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+    echip::HandleResponse(common::ChipKind::WIFI, facade_id, packet,
+                          packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
   }
   return size;
 }

@@ -19,15 +19,14 @@ use netsim_common::system::netsimd_temp_dir;
 use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_ini};
 use netsim_common::util::zip_artifact::zip_artifacts;
 
-use crate::bluetooth as bluetooth_facade;
 use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
 use crate::devices::devices_handler::wait_devices;
+use crate::echip;
 use crate::events;
 use crate::events::Event;
 use crate::session::Session;
 use crate::version::get_version;
-use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
@@ -218,8 +217,8 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     wait_devices(device_events_rx);
 
     // Start radio facades
-    bluetooth_facade::bluetooth_start(&config.bluetooth, instance_num, args.disable_address_reuse);
-    wifi_facade::wifi_start(&config.wifi);
+    echip::bluetooth::bluetooth_start(&config.bluetooth, instance_num, args.disable_address_reuse);
+    echip::wifi::wifi_start(&config.wifi);
 
     // Maybe create test beacons, default true for cuttlefish
     // TODO: remove default for cuttlefish by adding flag to tests

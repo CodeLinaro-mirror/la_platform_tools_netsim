@@ -173,8 +173,8 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         auto packet_type = request.hci_packet().packet_type();
         auto packet =
             ToSharedVec(request.mutable_hci_packet()->mutable_packet());
-        transport::HandleRequestCxx(chip_kind, facade_id, chip_id, *packet,
-                                    packet_type);
+        echip::HandleRequestCxx(chip_kind, facade_id, chip_id, *packet,
+                                packet_type);
       } else if (chip_kind == common::ChipKind::WIFI) {
         if (!request.has_packet()) {
           BtsLogWarn("grpc_server: unknown packet type from facade_id: %d",
@@ -184,9 +184,8 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         auto packet = ToSharedVec(request.mutable_packet());
         {
           std::lock_guard<std::mutex> guard(gSlirpMutex);
-          transport::HandleRequestCxx(
-              chip_kind, facade_id, chip_id, *packet,
-              packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+          echip::HandleRequestCxx(chip_kind, facade_id, chip_id, *packet,
+                                  packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
         }
 #ifdef NETSIM_ANDROID_EMULATOR
         // main_loop_wait is a non-blocking call where fds maintained by the
