@@ -12,12 +12,108 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// FrameInfo stores mac80211 hwsim attributes once parsed
+//! ieee80211 frames
 
-pub struct FrameInfo {
-    cookie: u64,
-    flags: u32,
-    channel: u32,
-    // tx_rates
-    transmitter: [u8; 6],
+#![allow(clippy::all)]
+#![allow(missing_docs)]
+include!(concat!(env!("OUT_DIR"), "/ieee80211_packets.rs"));
+
+/// A Ieee80211 MAC address
+
+impl fmt::Display for MacAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = u64::to_le_bytes(self.0);
+        write!(
+            f,
+            "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            bytes[5], bytes[4], bytes[3], bytes[2], bytes[1], bytes[0],
+        )
+    }
+}
+
+impl From<&[u8; 6]> for MacAddress {
+    fn from(bytes: &[u8; 6]) -> Self {
+        Self(u64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], 0, 0]))
+    }
+}
+
+impl From<MacAddress> for [u8; 6] {
+    fn from(MacAddress(addr): MacAddress) -> Self {
+        let bytes = u64::to_le_bytes(addr);
+        bytes[0..6].try_into().unwrap()
+    }
+}
+
+impl Ieee80211 {
+    // Frame has addr4 field
+    pub fn has_a4(&self) -> bool {
+        self.ieee80211.to_ds == 1 || self.ieee80211.from_ds == 1
+    }
+
+    // Frame type is management
+    pub fn is_mgmt(&self) -> bool {
+        self.ieee80211.ftype == FrameType::Mgmt
+    }
+
+    // Frame type is data
+    pub fn is_data(&self) -> bool {
+        self.ieee80211.ftype == FrameType::Data
+    }
+
+    // Frame is probe request
+    pub fn is_probe_req(&self) -> bool {
+        self.ieee80211.ftype == FrameType::Ctl
+            && self.ieee80211.stype == (ManagementSubType::ProbeReq as u8)
+    }
+
+    pub fn get_source(&self) -> MacAddress {
+        match self.specialize() {
+            Ieee80211Child::Ieee80211ToAp(hdr) => hdr.get_source(),
+            Ieee80211Child::Ieee80211FromAp(hdr) => hdr.get_source(),
+            Ieee80211Child::Ieee80211Ibss(hdr) => hdr.get_source(),
+            Ieee80211Child::Ieee80211Wds(hdr) => hdr.get_source(),
+            _ => panic!("unexpected specialized header"),
+        }
+    }
+}
+
+fn parse_mac_address(s: &str) -> Option<MacAddress> {
+    let parts: Vec<&str> = s.split(':').collect();
+    if parts.len() != 6 {
+        return None;
+    }
+    let mut bytes = [0u8; 6];
+    for (i, part) in parts.iter().enumerate() {
+        match u8::from_str_radix(part, 16) {
+            Ok(n) => bytes[i] = n,
+            Err(e) => return None,
+        }
+    }
+    Some(MacAddress::from(&bytes))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // These tests use the packets available here
+    // https://community.cisco.com/t5/wireless-mobility-knowledge-base/802-11-frames-a-starter-guide-to-learn-wireless-sniffer-traces/ta-p/3110019
+
+    #[test]
+    fn test_frame_qos() {
+        let frame: Vec<u8> = vec![
+            0x88, 0x02, 0x2c, 0x00, 0x00, 0x13, 0xe8, 0xeb, 0xd6, 0x03, 0x00, 0x0b, 0x85, 0x71,
+            0x20, 0xce, 0x00, 0x0b, 0x85, 0x71, 0x20, 0xce, 0x00, 0x26, 0x00, 0x00,
+        ];
+        let hdr = Ieee80211::parse(&frame).unwrap();
+        assert!(hdr.is_data());
+        assert_eq!(hdr.get_stype(), DataSubType::Qos as u8);
+        assert_eq!(hdr.get_from_ds(), 1);
+        assert_eq!(hdr.get_to_ds(), 0);
+        assert_eq!(hdr.get_duration_id(), 44);
+        // Source address: Cisco_71:20:ce (00:0b:85:71:20:ce)
+        let a = format!("{}", hdr.get_source());
+        let b = format!("{}", parse_mac_address("00:0b:85:71:20:ce").unwrap());
+        assert_eq!(a, b);
+    }
 }

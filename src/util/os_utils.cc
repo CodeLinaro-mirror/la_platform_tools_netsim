@@ -83,7 +83,7 @@ std::string GetNetsimIniFilepath(uint16_t instance_num) {
 std::optional<std::string> GetServerAddress(uint16_t instance_num) {
   auto filepath = GetNetsimIniFilepath(instance_num);
   if (!netsim::filesystem::exists(filepath)) {
-    BtsLogError("Unable to find netsim ini file: %s", filepath.c_str());
+    BtsLogWarn("Unable to find netsim ini file: %s", filepath.c_str());
     return std::nullopt;
   }
   if (!netsim::filesystem::is_regular_file(filepath)) {

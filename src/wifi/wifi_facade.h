@@ -33,7 +33,7 @@ void Reset(uint32_t);
 void Remove(uint32_t);
 void Patch(uint32_t, const model::Chip::Radio &);
 model::Chip::Radio Get(uint32_t);
-uint32_t Add(uint32_t simulation_device);
+void Add(uint32_t chip_id);
 
 void Start(const rust::Slice<::std::uint8_t const> proto_bytes);
 void Stop();

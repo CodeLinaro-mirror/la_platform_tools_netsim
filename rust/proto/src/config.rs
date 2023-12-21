@@ -723,8 +723,10 @@ pub struct Bluetooth {
     // message fields
     // @@protoc_insertion_point(field:netsim.config.Bluetooth.properties)
     pub properties: ::protobuf::MessageField<super::configuration::Controller>,
-    // @@protoc_insertion_point(field:netsim.config.Bluetooth.address_reuse)
-    pub address_reuse: ::std::option::Option<bool>,
+    // @@protoc_insertion_point(field:netsim.config.Bluetooth.disable_address_reuse)
+    pub disable_address_reuse: ::std::option::Option<bool>,
+    // @@protoc_insertion_point(field:netsim.config.Bluetooth.test_beacons)
+    pub test_beacons: ::std::option::Option<bool>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.config.Bluetooth.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -742,7 +744,7 @@ impl Bluetooth {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(2);
+        let mut fields = ::std::vec::Vec::with_capacity(3);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::configuration::Controller>(
             "properties",
@@ -750,9 +752,14 @@ impl Bluetooth {
             |m: &mut Bluetooth| { &mut m.properties },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
-            "address_reuse",
-            |m: &Bluetooth| { &m.address_reuse },
-            |m: &mut Bluetooth| { &mut m.address_reuse },
+            "disable_address_reuse",
+            |m: &Bluetooth| { &m.disable_address_reuse },
+            |m: &mut Bluetooth| { &mut m.disable_address_reuse },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "test_beacons",
+            |m: &Bluetooth| { &m.test_beacons },
+            |m: &mut Bluetooth| { &mut m.test_beacons },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Bluetooth>(
             "Bluetooth",
@@ -776,7 +783,10 @@ impl ::protobuf::Message for Bluetooth {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.properties)?;
                 },
                 16 => {
-                    self.address_reuse = ::std::option::Option::Some(is.read_bool()?);
+                    self.disable_address_reuse = ::std::option::Option::Some(is.read_bool()?);
+                },
+                24 => {
+                    self.test_beacons = ::std::option::Option::Some(is.read_bool()?);
                 },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
@@ -794,7 +804,10 @@ impl ::protobuf::Message for Bluetooth {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         }
-        if let Some(v) = self.address_reuse {
+        if let Some(v) = self.disable_address_reuse {
+            my_size += 1 + 1;
+        }
+        if let Some(v) = self.test_beacons {
             my_size += 1 + 1;
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
@@ -806,8 +819,11 @@ impl ::protobuf::Message for Bluetooth {
         if let Some(v) = self.properties.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
         }
-        if let Some(v) = self.address_reuse {
+        if let Some(v) = self.disable_address_reuse {
             os.write_bool(2, v)?;
+        }
+        if let Some(v) = self.test_beacons {
+            os.write_bool(3, v)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -827,14 +843,16 @@ impl ::protobuf::Message for Bluetooth {
 
     fn clear(&mut self) {
         self.properties.clear();
-        self.address_reuse = ::std::option::Option::None;
+        self.disable_address_reuse = ::std::option::Option::None;
+        self.test_beacons = ::std::option::Option::None;
         self.special_fields.clear();
     }
 
     fn default_instance() -> &'static Bluetooth {
         static instance: Bluetooth = Bluetooth {
             properties: ::protobuf::MessageField::none(),
-            address_reuse: ::std::option::Option::None,
+            disable_address_reuse: ::std::option::Option::None,
+            test_beacons: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -859,6 +877,128 @@ impl ::protobuf::reflect::ProtobufValue for Bluetooth {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.config.Capture)
+pub struct Capture {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.config.Capture.enabled)
+    pub enabled: ::std::option::Option<bool>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.config.Capture.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a Capture {
+    fn default() -> &'a Capture {
+        <Capture as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl Capture {
+    pub fn new() -> Capture {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "enabled",
+            |m: &Capture| { &m.enabled },
+            |m: &mut Capture| { &mut m.enabled },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Capture>(
+            "Capture",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for Capture {
+    const NAME: &'static str = "Capture";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.enabled = ::std::option::Option::Some(is.read_bool()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.enabled {
+            my_size += 1 + 1;
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.enabled {
+            os.write_bool(1, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> Capture {
+        Capture::new()
+    }
+
+    fn clear(&mut self) {
+        self.enabled = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static Capture {
+        static instance: Capture = Capture {
+            enabled: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for Capture {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("Capture").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for Capture {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for Capture {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
 // @@protoc_insertion_point(message:netsim.config.Config)
 pub struct Config {
     // message fields
@@ -866,6 +1006,8 @@ pub struct Config {
     pub bluetooth: ::protobuf::MessageField<Bluetooth>,
     // @@protoc_insertion_point(field:netsim.config.Config.wifi)
     pub wifi: ::protobuf::MessageField<WiFi>,
+    // @@protoc_insertion_point(field:netsim.config.Config.capture)
+    pub capture: ::protobuf::MessageField<Capture>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.config.Config.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -883,7 +1025,7 @@ impl Config {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(2);
+        let mut fields = ::std::vec::Vec::with_capacity(3);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, Bluetooth>(
             "bluetooth",
@@ -894,6 +1036,11 @@ impl Config {
             "wifi",
             |m: &Config| { &m.wifi },
             |m: &mut Config| { &mut m.wifi },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, Capture>(
+            "capture",
+            |m: &Config| { &m.capture },
+            |m: &mut Config| { &mut m.capture },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Config>(
             "Config",
@@ -919,6 +1066,9 @@ impl ::protobuf::Message for Config {
                 18 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.wifi)?;
                 },
+                26 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.capture)?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -939,6 +1089,10 @@ impl ::protobuf::Message for Config {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         }
+        if let Some(v) = self.capture.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -950,6 +1104,9 @@ impl ::protobuf::Message for Config {
         }
         if let Some(v) = self.wifi.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
+        }
+        if let Some(v) = self.capture.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -970,6 +1127,7 @@ impl ::protobuf::Message for Config {
     fn clear(&mut self) {
         self.bluetooth.clear();
         self.wifi.clear();
+        self.capture.clear();
         self.special_fields.clear();
     }
 
@@ -977,6 +1135,7 @@ impl ::protobuf::Message for Config {
         static instance: Config = Config {
             bluetooth: ::protobuf::MessageField::none(),
             wifi: ::protobuf::MessageField::none(),
+            capture: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -1020,13 +1179,17 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x18\x03\x20\x01(\tR\x06passwdB\x0b\n\t_disabled\"\x90\x01\n\x04WiFi\x12\
     @\n\rslirp_options\x18\x01\x20\x01(\x0b2\x1b.netsim.config.SlirpOptionsR\
     \x0cslirpOptions\x12F\n\x0fhostapd_options\x18\x02\x20\x01(\x0b2\x1d.net\
-    sim.config.HostapdOptionsR\x0ehostapdOptions\"\xa0\x01\n\tBluetooth\x12H\
+    sim.config.HostapdOptionsR\x0ehostapdOptions\"\xf0\x01\n\tBluetooth\x12H\
     \n\nproperties\x18\x01\x20\x01(\x0b2#.rootcanal.configuration.Controller\
-    H\0R\nproperties\x88\x01\x01\x12(\n\raddress_reuse\x18\x02\x20\x01(\x08H\
-    \x01R\x0caddressReuse\x88\x01\x01B\r\n\x0b_propertiesB\x10\n\x0e_address\
-    _reuse\"i\n\x06Config\x126\n\tbluetooth\x18\x01\x20\x01(\x0b2\x18.netsim\
-    .config.BluetoothR\tbluetooth\x12'\n\x04wifi\x18\x02\x20\x01(\x0b2\x13.n\
-    etsim.config.WiFiR\x04wifib\x06proto3\
+    H\0R\nproperties\x88\x01\x01\x127\n\x15disable_address_reuse\x18\x02\x20\
+    \x01(\x08H\x01R\x13disableAddressReuse\x88\x01\x01\x12&\n\x0ctest_beacon\
+    s\x18\x03\x20\x01(\x08H\x02R\x0btestBeacons\x88\x01\x01B\r\n\x0b_propert\
+    iesB\x18\n\x16_disable_address_reuseB\x0f\n\r_test_beacons\"4\n\x07Captu\
+    re\x12\x1d\n\x07enabled\x18\x01\x20\x01(\x08H\0R\x07enabled\x88\x01\x01B\
+    \n\n\x08_enabled\"\x9b\x01\n\x06Config\x126\n\tbluetooth\x18\x01\x20\x01\
+    (\x0b2\x18.netsim.config.BluetoothR\tbluetooth\x12'\n\x04wifi\x18\x02\
+    \x20\x01(\x0b2\x13.netsim.config.WiFiR\x04wifi\x120\n\x07capture\x18\x03\
+    \x20\x01(\x0b2\x16.netsim.config.CaptureR\x07captureb\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -1045,11 +1208,12 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
             let mut deps = ::std::vec::Vec::with_capacity(1);
             deps.push(super::configuration::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(5);
+            let mut messages = ::std::vec::Vec::with_capacity(6);
             messages.push(SlirpOptions::generated_message_descriptor_data());
             messages.push(HostapdOptions::generated_message_descriptor_data());
             messages.push(WiFi::generated_message_descriptor_data());
             messages.push(Bluetooth::generated_message_descriptor_data());
+            messages.push(Capture::generated_message_descriptor_data());
             messages.push(Config::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(0);
             ::protobuf::reflect::GeneratedFileDescriptor::new_generated(

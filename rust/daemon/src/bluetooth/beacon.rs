@@ -234,7 +234,6 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
 /// Similar to `bluetooth_add()`.
 #[cfg(not(test))]
 pub fn ble_beacon_add(
-    device_id: DeviceIdentifier,
     device_name: String,
     chip_id: ChipIdentifier,
     chip_proto: &ChipCreateProto,
@@ -253,17 +252,14 @@ pub fn ble_beacon_add(
 
     let callbacks: Box<dyn RustBluetoothChipCallbacks> = Box::new(BeaconChipCallbacks { chip_id });
     let add_rust_device_result = rust_bluetooth_add(
-        device_id,
+        chip_id,
         callbacks,
         String::from("beacon"),
         beacon_proto.address.clone(),
     );
     let rust_chip = add_rust_device_result.rust_chip;
     let facade_id = add_rust_device_result.facade_id;
-    info!(
-        "Creating HCI facade_id: {} for device_id: {} chip_id: {}",
-        facade_id, device_id, chip_id
-    );
+    info!("Creating HCI facade_id: {} for chip_id: {}", facade_id, chip_id);
     BT_CHIPS.write().unwrap().insert(chip_id, Mutex::new(rust_chip));
 
     Ok(facade_id)
@@ -408,6 +404,7 @@ pub mod tests {
     };
 
     use super::*;
+    // using ble_beacon_add from mocked.rs
     use crate::bluetooth::ble_beacon_add;
 
     lazy_static! {
@@ -418,7 +415,6 @@ pub mod tests {
         let id = TEST_GUID_GENERATOR.lock().unwrap().next_id();
 
         let add_result = ble_beacon_add(
-            0,
             format!("test-device-{:?}", thread::current().id()),
             id,
             &ChipCreateProto {
