@@ -20,15 +20,16 @@ use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
 use super::packets::link_layer::{
     Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, PacketType,
 };
-use crate::bluetooth::bluetooth_get;
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::{devices_handler::add_chip, id_factory::IdFactory};
+use crate::echip;
 use crate::ffi::ffi_bluetooth;
 use cxx::{let_cxx_string, UniquePtr};
 use lazy_static::lazy_static;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
+use netsim_proto::model::chip::Bluetooth;
 use netsim_proto::model::chip::{
     ble_beacon::AdvertiseData as AdvertiseDataProto,
     ble_beacon::AdvertiseSettings as AdvertiseSettingsProto, BleBeacon as BleBeaconProto,
@@ -38,7 +39,7 @@ use netsim_proto::model::chip_create::{
 };
 use netsim_proto::model::{ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto};
 use pdl_runtime::Packet;
-use protobuf::MessageField;
+use protobuf::{Message, MessageField};
 use std::alloc::System;
 use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -349,7 +350,7 @@ pub fn ble_beacon_patch(
 
 pub fn ble_beacon_get(
     chip_id: ChipIdentifier,
-    facade_id: FacadeIdentifier,
+    _facade_id: FacadeIdentifier,
 ) -> Result<BleBeaconProto, String> {
     let guard = BEACON_CHIPS.read().unwrap();
     let beacon = guard
@@ -357,8 +358,15 @@ pub fn ble_beacon_get(
         .ok_or(format!("could not get bluetooth beacon with chip id {chip_id}"))?
         .lock()
         .expect("Failed to acquire lock on BeaconChip");
+    #[cfg(not(test))]
+    let bt = {
+        let bluetooth_bytes = ffi_bluetooth::bluetooth_get_cxx(_facade_id);
+        Some(Bluetooth::parse_from_bytes(&bluetooth_bytes).unwrap())
+    };
+    #[cfg(test)]
+    let bt = Some(netsim_proto::model::chip::Bluetooth::new());
     Ok(BleBeaconProto {
-        bt: Some(bluetooth_get(facade_id)).into(),
+        bt: bt.into(),
         address: addr_to_str(beacon.address),
         settings: MessageField::some((&beacon.advertise_settings).try_into()?),
         adv_data: MessageField::some((&beacon.advertise_data).into()),

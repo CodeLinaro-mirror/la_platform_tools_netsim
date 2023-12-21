@@ -23,7 +23,7 @@ use crate::http_server::server_response::ServerResponseWritable;
 use crate::http_server::server_response::StrHeaders;
 use cxx::let_cxx_string;
 
-use crate::transport::dispatcher::{handle_request_cxx, handle_response};
+use crate::echip::{handle_request_cxx, handle_response};
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 
 use crate::captures::captures_handler::handle_capture_cxx;
@@ -34,8 +34,8 @@ use crate::ranging::*;
 use crate::version::*;
 
 #[allow(unsafe_op_in_unsafe_fn)]
-#[cxx::bridge(namespace = "netsim::transport")]
-pub mod ffi_transport {
+#[cxx::bridge(namespace = "netsim::echip")]
+pub mod ffi_echip {
     extern "Rust" {
         #[cxx_name = HandleRequestCxx]
         fn handle_request_cxx(
@@ -48,7 +48,13 @@ pub mod ffi_transport {
 
         #[cxx_name = HandleResponse]
         fn handle_response(kind: u32, facade_id: u32, packet: &CxxVector<u8>, packet_type: u8);
+    }
+}
 
+#[allow(unsafe_op_in_unsafe_fn)]
+#[cxx::bridge(namespace = "netsim::transport")]
+pub mod ffi_transport {
+    extern "Rust" {
         #[cxx_name = RegisterGrpcTransport]
         fn register_grpc_transport(kind: u32, facade_id: u32);
 

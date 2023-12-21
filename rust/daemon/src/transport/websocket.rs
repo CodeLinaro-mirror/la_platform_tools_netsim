@@ -21,17 +21,12 @@ use netsim_proto::common::ChipKind;
 use tungstenite::{protocol::Role, Message, WebSocket};
 
 use crate::devices::chip;
+use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::echip;
+use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::http_server::server_response::ResponseWritable;
-use crate::{
-    devices::devices_handler::{add_chip, remove_chip},
-    transport::{
-        dispatcher::{handle_request, unregister_transport},
-        h4,
-    },
-};
 
-use super::dispatcher::{register_transport, Response};
+use super::h4;
 
 // This feature is enabled only for CMake builds
 #[cfg(feature = "local_ssl")]
@@ -156,7 +151,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
             match h4::read_h4_packet(&mut cursor) {
                 Ok(mut packet) => {
                     let kind = ChipKind::BLUETOOTH as u32;
-                    handle_request(
+                    echip::handle_request(
                         kind,
                         result.facade_id,
                         result.chip_id,

@@ -12,20 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::{
+    mpsc::{channel, Sender},
+    Arc, Mutex,
+};
+use std::thread;
+
+use crate::captures::captures_handler;
+use crate::devices::chip::ChipIdentifier;
+use crate::echip::get;
+
 use lazy_static::lazy_static;
 use log::{error, info, warn};
 use netsim_proto::hci_packet::hcipacket::PacketType;
 use protobuf::Enum;
-use std::collections::HashMap;
-use std::sync::mpsc::{channel, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread;
 
-use crate::captures::captures_handler as captures_handlers;
-use crate::devices::chip::ChipIdentifier;
-use crate::echip;
-
-/// The Dispatcher module routes packets from a chip controller instance to
+/// The Packet module routes packets from a chip controller instance to
 /// different transport managers. Currently transport managers include
 ///
 /// - GRPC is a PacketStreamer
@@ -99,8 +102,12 @@ pub fn unregister_transport(kind: u32, facade_id: u32) {
 // Queue the response packet to be handled by the responder thread.
 //
 pub fn handle_response(kind: u32, facade_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+    // TODO(b/314840701):
+    // 1. Per EChip Struct should contain private field of channel & facade_id
+    // 2. Lookup from ECHIPS with given chip_id
+    // 3. Call echips.handle_response
     let packet_vec = packet.as_slice().to_vec();
-    captures_handlers::handle_packet_response(kind, facade_id, &packet_vec, packet_type.into());
+    captures_handler::handle_packet_response(kind, facade_id, &packet_vec, packet_type.into());
 
     let key = get_key(kind, facade_id);
     let mut binding = SENDERS.lock().expect("Failed to acquire lock on SENDERS");
@@ -122,7 +129,7 @@ pub fn handle_request(
     packet: &mut Vec<u8>,
     packet_type: u8,
 ) {
-    captures_handlers::handle_packet_request(kind, facade_id, packet, packet_type.into());
+    captures_handler::handle_packet_request(kind, facade_id, packet, packet_type.into());
 
     // Prepend packet_type to packet if specified
     if PacketType::HCI_PACKET_UNSPECIFIED.value()
@@ -132,7 +139,7 @@ pub fn handle_request(
     }
 
     // Perform handle_request
-    match echip::get(chip_id) {
+    match get(chip_id) {
         Some(emulated_chip) => emulated_chip.handle_request(packet),
         None => warn!("SharedEmulatedChip doesn't exist for {chip_id}"),
     };

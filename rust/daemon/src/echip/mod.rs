@@ -16,11 +16,13 @@ pub mod ble_beacon;
 pub mod bluetooth;
 pub mod emulated_chip;
 pub mod mocked;
+pub mod packet;
 pub mod wifi;
 
 pub use crate::echip::emulated_chip::CreateParam;
 pub use crate::echip::emulated_chip::EmulatedChip;
 pub use crate::echip::emulated_chip::{get, new, remove};
+pub use crate::echip::packet::{handle_request, handle_request_cxx, handle_response};
 use std::sync::Arc;
 
 pub type SharedEmulatedChip = Arc<Box<dyn EmulatedChip + Send + Sync>>;
