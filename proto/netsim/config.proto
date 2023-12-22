@@ -54,11 +54,19 @@ message WiFi {
 
 message Bluetooth {
   optional rootcanal.configuration.Controller properties = 1;
-  optional bool address_reuse = 2;
+  // default is False
+  optional bool disable_address_reuse = 2;
+  // default is False
+  optional bool test_beacons = 3;
+}
+
+message Capture {
+  optional bool enabled = 1;
 }
 
 message Config {
   // Major sections
   Bluetooth bluetooth = 1;
   WiFi wifi = 2;
+  Capture capture = 3;
 }

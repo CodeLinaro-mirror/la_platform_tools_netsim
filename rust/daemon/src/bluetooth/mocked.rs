@@ -43,7 +43,6 @@ impl FacadeIds {
 
 // Avoid crossing cxx boundary in tests
 pub fn ble_beacon_add(
-    device_id: DeviceIdentifier,
     device_name: String,
     chip_id: ChipIdentifier,
     chip_proto: &ChipCreate,

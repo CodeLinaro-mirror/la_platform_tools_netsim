@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::devices::chip::FacadeIdentifier;
-use crate::devices::device::DeviceIdentifier;
+use crate::devices::chip::ChipIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
-use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
+use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
+use protobuf::EnumOrUnknown;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Parameters for creating Mocked chips
 pub struct CreateParams {
@@ -35,30 +35,36 @@ pub struct Mock {
 impl EmulatedChip for Mock {
     fn handle_request(&self, packet: &[u8]) {}
 
-    fn reset(&self) {}
+    fn reset(&mut self) {}
 
     fn get(&self) -> ProtoChip {
-        ProtoChip::new()
+        let mut proto_chip = ProtoChip::new();
+        proto_chip.kind = EnumOrUnknown::new(self.chip_kind);
+        proto_chip
     }
 
-    fn patch(&self, chip: &ProtoChip) {}
+    fn patch(&mut self, chip: &ProtoChip) {}
 
-    fn remove(&self) {}
+    fn remove(&mut self) {}
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
-        vec![ProtoRadioStats::new()]
+        let mut stats = ProtoRadioStats::new();
+        stats.kind = Some(EnumOrUnknown::new(match self.chip_kind {
+            ProtoChipKind::UNSPECIFIED => netsim_radio_stats::Kind::UNSPECIFIED,
+            ProtoChipKind::BLUETOOTH => netsim_radio_stats::Kind::BLUETOOTH_LOW_ENERGY,
+            ProtoChipKind::WIFI => netsim_radio_stats::Kind::WIFI,
+            ProtoChipKind::UWB => netsim_radio_stats::Kind::UWB,
+            ProtoChipKind::BLUETOOTH_BEACON => netsim_radio_stats::Kind::BLE_BEACON,
+        }));
+        vec![stats]
     }
 
     fn get_kind(&self) -> ProtoChipKind {
         self.chip_kind
     }
-
-    fn get_facade_id(&self) -> FacadeIdentifier {
-        FacadeIdentifier::MIN
-    }
 }
 
 /// Create a new MockedChip
-pub fn new(create_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
-    Arc::new(Box::new(Mock { chip_kind: create_params.chip_kind }))
+pub fn new(create_params: &CreateParams, _chip_id: ChipIdentifier) -> SharedEmulatedChip {
+    SharedEmulatedChip(Arc::new(Mutex::new(Box::new(Mock { chip_kind: create_params.chip_kind }))))
 }

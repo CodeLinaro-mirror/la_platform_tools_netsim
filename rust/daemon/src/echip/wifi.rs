@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::devices::chip::FacadeIdentifier;
+use crate::devices::chip::ChipIdentifier;
+use crate::echip::{EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_wifi;
 use crate::wifi::medium;
-use crate::{
-    devices::device::DeviceIdentifier,
-    echip::{EmulatedChip, SharedEmulatedChip},
-};
+use log::info;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::chip::Radio;
@@ -26,14 +24,14 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Parameters for creating Wifi chips
 pub struct CreateParams {}
 
-/// Wifi struct will keep track of facade_id
+/// Wifi struct will keep track of chip_id
 pub struct Wifi {
-    facade_id: FacadeIdentifier,
+    chip_id: ChipIdentifier,
 }
 
 impl EmulatedChip for Wifi {
@@ -41,28 +39,28 @@ impl EmulatedChip for Wifi {
         if crate::config::get_dev() {
             let _ = medium::parse_hwsim_cmd(packet);
         }
-        ffi_wifi::handle_wifi_request(self.facade_id, &packet.to_vec());
+        ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
     }
 
-    fn reset(&self) {
-        ffi_wifi::wifi_reset(self.facade_id);
+    fn reset(&mut self) {
+        ffi_wifi::wifi_reset(self.chip_id);
     }
 
     fn get(&self) -> ProtoChip {
-        let radio_bytes = ffi_wifi::wifi_get_cxx(self.facade_id);
+        let radio_bytes = ffi_wifi::wifi_get_cxx(self.chip_id);
         let wifi_proto = Radio::parse_from_bytes(&radio_bytes).unwrap();
         let mut chip_proto = ProtoChip::new();
         chip_proto.mut_wifi().clone_from(&wifi_proto);
         chip_proto
     }
 
-    fn patch(&self, chip: &ProtoChip) {
+    fn patch(&mut self, chip: &ProtoChip) {
         let radio_bytes = chip.wifi().write_to_bytes().unwrap();
-        ffi_wifi::wifi_patch_cxx(self.facade_id, &radio_bytes);
+        ffi_wifi::wifi_patch_cxx(self.chip_id, &radio_bytes);
     }
 
-    fn remove(&self) {
-        ffi_wifi::wifi_remove(self.facade_id);
+    fn remove(&mut self) {
+        ffi_wifi::wifi_remove(self.chip_id);
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
@@ -80,17 +78,14 @@ impl EmulatedChip for Wifi {
     fn get_kind(&self) -> ProtoChipKind {
         ProtoChipKind::WIFI
     }
-
-    fn get_facade_id(&self) -> FacadeIdentifier {
-        self.facade_id
-    }
 }
 
 /// Create a new Emulated Wifi Chip
-pub fn new(_params: &CreateParams, device_id: DeviceIdentifier) -> SharedEmulatedChip {
-    let facade_id = ffi_wifi::wifi_add(device_id);
-    let echip = Wifi { facade_id };
-    Arc::new(Box::new(echip))
+pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
+    ffi_wifi::wifi_add(chip_id);
+    info!("WiFi EmulatedChip created chip_id: {chip_id}");
+    let echip = Wifi { chip_id };
+    SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))
 }
 
 /// Starts the WiFi service.

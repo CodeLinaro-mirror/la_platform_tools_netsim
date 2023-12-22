@@ -198,7 +198,7 @@ void SetUpTestChannel(uint16_t instance_num) {
 
 // Initialize the rootcanal library.
 void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
-           uint16_t instance_num, bool disable_address_reuse) {
+           uint16_t instance_num) {
   if (gStarted) return;
 
   // output is to a file, so no color wanted
@@ -238,8 +238,10 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
          rootcanal::Phy::Type /* phy_type */) { return nullptr; });
 
   // Disable Address Reuse if '--disable_address_reuse' flag is true
-  // TODO: once config files are active, use the value from config proto
-  gTestModel->SetReuseDeviceAddresses(!disable_address_reuse);
+  // Enable Address Reuse if 'address_reuse' is true
+  if (config.has_disable_address_reuse()) {
+    gTestModel->SetReuseDeviceAddresses(!config.disable_address_reuse());
+  }
 
   // NOTE: 0:BR_EDR, 1:LOW_ENERGY. The order is used by bluetooth CTS.
   phy_classic_index_ = gTestModel->AddPhy(rootcanal::Phy::Type::BR_EDR);
@@ -275,7 +277,7 @@ void PatchPhy(int device_id, bool isAddToPhy, bool isLowEnergy) {
 
 class ChipInfo {
  public:
-  uint32_t simulation_device;
+  uint32_t chip_id;
   std::shared_ptr<model::Chip::Bluetooth> model;
   int le_tx_count = 0;
   int classic_tx_count = 0;
@@ -284,14 +286,13 @@ class ChipInfo {
   std::shared_ptr<rootcanal::configuration::Controller> controller_proto;
   std::unique_ptr<rootcanal::ControllerProperties> controller_properties;
 
-  ChipInfo(uint32_t simulation_device,
-           std::shared_ptr<model::Chip::Bluetooth> model)
-      : simulation_device(simulation_device), model(model) {}
+  ChipInfo(uint32_t chip_id, std::shared_ptr<model::Chip::Bluetooth> model)
+      : chip_id(chip_id), model(model) {}
   ChipInfo(
-      uint32_t simulation_device, std::shared_ptr<model::Chip::Bluetooth> model,
+      uint32_t chip_id, std::shared_ptr<model::Chip::Bluetooth> model,
       std::shared_ptr<rootcanal::configuration::Controller> controller_proto,
       std::unique_ptr<rootcanal::ControllerProperties> controller_properties)
-      : simulation_device(simulation_device),
+      : chip_id(chip_id),
         model(model),
         controller_proto(std::move(controller_proto)),
         controller_properties(std::move(controller_properties)) {}
@@ -331,7 +332,7 @@ void Reset(uint32_t id) {
 
 void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
   if (id_to_chip_info_.find(id) == id_to_chip_info_.end()) {
-    BtsLogWarn("Patch an unknown facade_id: %d", id);
+    BtsLogWarn("Patch an unknown rootcanal_id: %d", id);
     return;
   }
   auto model = id_to_chip_info_[id]->model;
@@ -352,7 +353,7 @@ void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
 }
 
 void Remove(uint32_t id) {
-  BtsLogInfo("Removing HCI chip facade_id: %d.", id);
+  BtsLogInfo("Removing HCI chip rootcanal_id: %d.", id);
   id_to_chip_info_.erase(id);
   // Call the transport close callback. This invokes HciDevice::Close and
   // TestModel close callback.
@@ -364,9 +365,9 @@ void Remove(uint32_t id) {
 
 // Rename AddChip(model::Chip, device, transport)
 
-uint32_t Add(uint32_t simulation_device, const std::string &address_string,
+uint32_t Add(uint32_t chip_id, const std::string &address_string,
              const rust::Slice<::std::uint8_t const> controller_proto_bytes) {
-  auto transport = std::make_shared<HciPacketTransport>(gAsyncManager);
+  auto transport = std::make_shared<HciPacketTransport>(chip_id, gAsyncManager);
 
   std::shared_ptr<rootcanal::configuration::Controller> controller_proto =
       controller_proto_;
@@ -375,8 +376,8 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string,
     rootcanal::configuration::Controller custom_proto;
     custom_proto.ParseFromArray(controller_proto_bytes.data(),
                                 controller_proto_bytes.size());
-    BtsLogInfo("device_id: %d has rootcanal Controller configuration: %s",
-               simulation_device, custom_proto.ShortDebugString().c_str());
+    BtsLogInfo("chip_id: %d has rootcanal Controller configuration: %s",
+               chip_id, custom_proto.ShortDebugString().c_str());
 
     // When emulators restore from a snapshot the PacketStreamer connection to
     // netsim is recreated with a new (uninitialized) Rootcanal device. However
@@ -397,8 +398,8 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string,
 
   // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
   // invoked atomically, preventing data races.
-  std::promise<uint32_t> facade_id_promise;
-  auto facade_id_future = facade_id_promise.get_future();
+  std::promise<uint32_t> rootcanal_id_promise;
+  auto rootcanal_id_future = rootcanal_id_promise.get_future();
 
   std::optional<Address> address_option;
   if (address_string != "") {
@@ -406,59 +407,57 @@ uint32_t Add(uint32_t simulation_device, const std::string &address_string,
   }
   gAsyncManager->ExecAsync(
       gSocketUserId, std::chrono::milliseconds(0),
-      [hci_device, &facade_id_promise, address_option]() {
-        facade_id_promise.set_value(
+      [hci_device, &rootcanal_id_promise, address_option]() {
+        rootcanal_id_promise.set_value(
             gTestModel->AddHciConnection(hci_device, address_option));
       });
-  auto facade_id = facade_id_future.get();
+  auto rootcanal_id = rootcanal_id_future.get();
 
-  HciPacketTransport::Add(facade_id, transport);
-  BtsLogInfo("Creating HCI facade_id: %d for device_id: %d", facade_id,
-             simulation_device);
+  HciPacketTransport::Add(rootcanal_id, transport);
+  BtsLogInfo("Creating HCI rootcanal_id: %d for chip_id: %d", rootcanal_id,
+             chip_id);
 
   auto model = std::make_shared<model::Chip::Bluetooth>();
   model->mutable_classic()->set_state(model::State::ON);
   model->mutable_low_energy()->set_state(model::State::ON);
 
-  id_to_chip_info_.emplace(
-      facade_id,
-      std::make_shared<ChipInfo>(simulation_device, model, controller_proto,
-                                 std::move(controller_properties)));
-  return facade_id;
+  id_to_chip_info_.emplace(rootcanal_id, std::make_shared<ChipInfo>(
+                                             chip_id, model, controller_proto,
+                                             std::move(controller_properties)));
+  return rootcanal_id;
 }
 
-void RemoveRustDevice(uint32_t facade_id) {
-  gTestModel->RemoveDevice(facade_id);
+void RemoveRustDevice(uint32_t rootcanal_id) {
+  gTestModel->RemoveDevice(rootcanal_id);
 }
 
 rust::Box<AddRustDeviceResult> AddRustDevice(
-    uint32_t simulation_device,
-    rust::Box<DynRustBluetoothChipCallbacks> callbacks, const std::string &type,
-    const std::string &address) {
+    uint32_t chip_id, rust::Box<DynRustBluetoothChipCallbacks> callbacks,
+    const std::string &type, const std::string &address) {
   auto rust_device =
       std::make_shared<RustDevice>(std::move(callbacks), type, address);
 
   // TODO: Use the `AsyncManager` to ensure that the `AddDevice` and
   // `AddDeviceToPhy` methods are invoked atomically, preventing data races.
   // For unknown reason, use `AsyncManager` hangs.
-  auto facade_id = gTestModel->AddDevice(rust_device);
-  gTestModel->AddDeviceToPhy(facade_id, phy_low_energy_index_);
+  auto rootcanal_id = gTestModel->AddDevice(rust_device);
+  gTestModel->AddDeviceToPhy(rootcanal_id, phy_low_energy_index_);
 
   auto model = std::make_shared<model::Chip::Bluetooth>();
   // Only enable ble for beacon.
   model->mutable_low_energy()->set_state(model::State::ON);
-  id_to_chip_info_.emplace(
-      facade_id, std::make_shared<ChipInfo>(simulation_device, model));
+  id_to_chip_info_.emplace(rootcanal_id,
+                           std::make_shared<ChipInfo>(chip_id, model));
   return CreateAddRustDeviceResult(
-      facade_id, std::make_unique<RustBluetoothChip>(rust_device));
+      rootcanal_id, std::make_unique<RustBluetoothChip>(rust_device));
 }
 
 void SetRustDeviceAddress(
-    uint32_t facade_id,
+    uint32_t rootcanal_id,
     std::array<uint8_t, rootcanal::Address::kLength> address) {
   uint8_t addr[rootcanal::Address::kLength];
   std::memcpy(addr, address.data(), rootcanal::Address::kLength);
-  gTestModel->SetDeviceAddress(facade_id, rootcanal::Address(addr));
+  gTestModel->SetDeviceAddress(rootcanal_id, rootcanal::Address(addr));
 }
 
 void IncrTx(uint32_t id, rootcanal::Phy::Type phy_type) {
@@ -495,8 +494,8 @@ int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power) {
 #endif
     return tx_power;
   }
-  auto a = id_to_chip_info_[send_id]->simulation_device;
-  auto b = id_to_chip_info_[recv_id]->simulation_device;
+  auto a = id_to_chip_info_[send_id]->chip_id;
+  auto b = id_to_chip_info_[recv_id]->chip_id;
   auto distance = netsim::device::GetDistanceCxx(a, b);
   return netsim::DistanceToRssi(tx_power, distance);
 }

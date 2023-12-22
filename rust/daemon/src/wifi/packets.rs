@@ -27,11 +27,3 @@ pub mod mac80211_hwsim {
 
     include!(concat!(env!("OUT_DIR"), "/mac80211_hwsim_packets.rs"));
 }
-
-pub mod ieee80211 {
-    #![allow(clippy::all)]
-    #![allow(unused)]
-    #![allow(missing_docs)]
-
-    include!(concat!(env!("OUT_DIR"), "/ieee80211_packets.rs"));
-}

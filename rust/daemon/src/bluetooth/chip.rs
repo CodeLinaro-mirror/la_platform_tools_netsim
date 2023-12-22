@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::ffi::ffi_bluetooth::RustBluetoothChip;
+use crate::{devices::chip::ChipIdentifier, ffi::ffi_bluetooth::RustBluetoothChip};
 use cxx::{let_cxx_string, UniquePtr};
 
 /// Rust bluetooth chip trait.
@@ -44,7 +44,7 @@ pub fn create_add_rust_device_result(
 
 /// Add a bluetooth chip by an object implements RustBluetoothChipCallbacks trait.
 pub fn rust_bluetooth_add(
-    device_id: u32,
+    chip_id: ChipIdentifier,
     callbacks: Box<dyn RustBluetoothChipCallbacks>,
     string_type: String,
     address: String,
@@ -52,7 +52,7 @@ pub fn rust_bluetooth_add(
     let_cxx_string!(cxx_string_type = string_type);
     let_cxx_string!(cxx_address = address);
     crate::ffi::ffi_bluetooth::bluetooth_add_rust_device(
-        device_id,
+        chip_id,
         Box::new(callbacks),
         &cxx_string_type,
         &cxx_address,

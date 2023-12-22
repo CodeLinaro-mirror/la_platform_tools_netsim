@@ -109,18 +109,14 @@ fn handle_hci_client(stream: TcpStream) {
         }
     };
     let tcp_rx = stream.try_clone().unwrap();
-    register_transport(
-        ChipKind::BLUETOOTH as u32,
-        result.facade_id,
-        Box::new(SocketTransport { stream }),
-    );
+    register_transport(result.chip_id, Box::new(SocketTransport { stream }));
 
-    let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.facade_id, result.chip_id);
+    let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.chip_id);
 
     // unregister before remove_chip because facade may re-use facade_id
     // on an intertwining create_chip and the unregister here might remove
     // the recently added chip creating a disconnected transport.
-    unregister_transport(ChipKind::BLUETOOTH as u32, result.facade_id);
+    unregister_transport(result.chip_id);
 
     if let Err(err) = remove_chip(result.device_id, result.chip_id) {
         warn!("{err}");
@@ -130,24 +126,12 @@ fn handle_hci_client(stream: TcpStream) {
 
 /// read from the socket and pass to the packet hub.
 ///
-fn reader(
-    mut tcp_rx: TcpStream,
-    kind: ChipKind,
-    facade_id: u32,
-    chip_id: ChipIdentifier,
-) -> std::io::Result<()> {
+fn reader(mut tcp_rx: TcpStream, kind: ChipKind, chip_id: ChipIdentifier) -> std::io::Result<()> {
     loop {
         if let ChipKind::BLUETOOTH = kind {
             match h4::read_h4_packet(&mut tcp_rx) {
                 Ok(mut packet) => {
-                    let kind: u32 = kind as u32;
-                    echip::handle_request(
-                        kind,
-                        facade_id,
-                        chip_id,
-                        &mut packet.payload,
-                        packet.h4_type,
-                    );
+                    echip::handle_request(chip_id, &mut packet.payload, packet.h4_type);
                 }
                 Err(PacketError::IoError(e)) if e.kind() == ErrorKind::UnexpectedEof => {
                     info!("End socket reader connection with {}.", &tcp_rx.peer_addr().unwrap());

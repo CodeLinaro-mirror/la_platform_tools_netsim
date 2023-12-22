@@ -36,7 +36,7 @@ using rootcanal::PacketCallback;
  */
 class HciPacketTransport : public rootcanal::HciTransport {
  public:
-  HciPacketTransport(std::shared_ptr<rootcanal::AsyncManager>);
+  HciPacketTransport(uint32_t, std::shared_ptr<rootcanal::AsyncManager>);
   ~HciPacketTransport() = default;
 
   static void Add(rootcanal::PhyDevice::Identifier id,
@@ -49,7 +49,7 @@ class HciPacketTransport : public rootcanal::HciTransport {
    *
    * Moves HCI packets between packet_hub and rootcanal HciTransport
    */
-  void Connect(rootcanal::PhyDevice::Identifier device_id);
+  void Connect(rootcanal::PhyDevice::Identifier rootcanal_id);
 
   void Send(rootcanal::PacketType packet_type,
             const std::vector<uint8_t> &packet) override;
@@ -68,7 +68,8 @@ class HciPacketTransport : public rootcanal::HciTransport {
   rootcanal::PacketCallback mPacketCallback;
   rootcanal::CloseCallback mCloseCallback;
   // Device ID is the same as Chip Id externally.
-  std::optional<rootcanal::PhyDevice::Identifier> mDeviceId;
+  std::optional<rootcanal::PhyDevice::Identifier> rootcanalId;
+  uint32_t netsimChipId;
   std::shared_ptr<rootcanal::AsyncManager> mAsyncManager;
 };
 
