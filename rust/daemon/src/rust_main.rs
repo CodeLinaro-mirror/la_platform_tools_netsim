@@ -165,8 +165,7 @@ fn run_netsimd_primary(args: NetsimdArgs) {
 
     #[cfg(feature = "cuttlefish")]
     if fd_startup_str.is_empty() {
-        warn!("Failed to start netsim daemon because fd startup flag `-s` is empty");
-        return;
+        warn!("Warning: netsimd startup flag -s is empty, waiting for gRPC connections.");
     }
 
     if ffi_util::is_netsimd_alive(instance_num) {

@@ -46,16 +46,21 @@ struct SessionInfo {
     stats_proto: NetsimStats,
     current_device_count: i32,
     session_start: Instant,
+    write_json: bool,
 }
 
 impl Session {
     pub fn new() -> Self {
+        Self::new_internal(true)
+    }
+    fn new_internal(write_json: bool) -> Self {
         Session {
             handle: None,
             info: Arc::new(RwLock::new(SessionInfo {
                 stats_proto: NetsimStats { version: Some(get_version()), ..Default::default() },
                 current_device_count: 0,
                 session_start: Instant::now(),
+                write_json,
             })),
         }
     }
@@ -65,7 +70,8 @@ impl Session {
     // Starts the session monitor thread to handle events and
     // write session stats to json file on event and periodically.
     pub fn start(&mut self, events_rx: Receiver<Event>) -> &mut Self {
-        let info = self.info.clone();
+        let info = Arc::clone(&self.info);
+
         // Start up session monitor thread
         self.handle = Some(
             Builder::new()
@@ -73,8 +79,6 @@ impl Session {
                 .spawn(move || {
                     let mut next_instant = Instant::now() + WRITE_INTERVAL;
                     loop {
-                        // Hold the write lock for the duration of this loop iteration
-                        let mut lock = info.write().expect("Could not acquire session lock");
                         let mut write_stats = true;
                         let this_instant = Instant::now();
                         let timeout = if next_instant > this_instant {
@@ -82,7 +86,11 @@ impl Session {
                         } else {
                             Duration::ZERO
                         };
-                        match events_rx.recv_timeout(timeout) {
+                        let next_event = events_rx.recv_timeout(timeout);
+
+                        // Hold the write lock for the duration of this loop iteration
+                        let mut lock = info.write().expect("Could not acquire session lock");
+                        match next_event {
                             Ok(Event::ShutDown(ShutDown { reason })) => {
                                 // Shutting down, save the session duration and exit
                                 update_session_duration(&mut lock);
@@ -134,9 +142,11 @@ impl Session {
                         // End of event match - write current stats to json
                         if write_stats {
                             update_session_duration(&mut lock);
-                            let current_stats = get_current_stats(lock.stats_proto.clone());
-                            if let Err(err) = write_stats_to_json(current_stats) {
-                                error!("Failed to write stats to json: {err:?}");
+                            if lock.write_json {
+                                let current_stats = get_current_stats(lock.stats_proto.clone());
+                                if let Err(err) = write_stats_to_json(current_stats) {
+                                    error!("Failed to write stats to json: {err:?}");
+                                }
                             }
                             next_instant = Instant::now() + WRITE_INTERVAL;
                         }
@@ -155,10 +165,14 @@ impl Session {
         if !self.handle.as_ref().expect("no session monitor").is_finished() {
             info!("session monitor active, waiting...");
         }
+
         // Synchronize on session monitor thread
         self.handle.take().map(JoinHandle::join);
+
         let lock = self.info.read().expect("Could not acquire session lock");
-        write_stats_to_json(lock.stats_proto.clone())?;
+        if lock.write_json {
+            write_stats_to_json(lock.stats_proto.clone())?;
+        }
         Ok(())
     }
 }
@@ -183,4 +197,221 @@ fn write_stats_to_json(stats_proto: NetsimStats) -> anyhow::Result<()> {
     file.write(json.as_bytes()).context("Unable to write json session stats")?;
     file.flush()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::events;
+    use crate::events::{
+        ChipAdded, ChipRemoved, DeviceAdded, DeviceRemoved, Event, Events, ShutDown,
+    };
+    use netsim_proto::stats::NetsimRadioStats;
+    use std::sync::Mutex;
+
+    #[test]
+    fn test_new() {
+        let session: Session = Session::new();
+        assert!(session.handle.is_none());
+        let lock = session.info.read().expect("Could not acquire session lock");
+        assert_eq!(lock.current_device_count, 0);
+        assert!(matches!(
+            lock.stats_proto,
+            NetsimStats { version: Some(_), duration_secs: None, .. }
+        ));
+        assert_eq!(lock.stats_proto.version.clone().unwrap(), get_version().clone());
+        assert_eq!(lock.stats_proto.radio_stats.len(), 0);
+    }
+
+    fn setup_session_start_test() -> (Session, Arc<Mutex<Events>>) {
+        let mut session = Session::new_internal(false);
+        let mut events = events::test::new();
+        let events_rx = events::test::subscribe(&mut events);
+        session.start(events_rx);
+        (session, events)
+    }
+
+    fn get_stats_proto(session: &Session) -> NetsimStats {
+        session.info.read().expect("Could not acquire session lock").stats_proto.clone()
+    }
+
+    #[test]
+    fn test_start_and_shutdown() {
+        let (mut session, mut events) = setup_session_start_test();
+
+        // we want to be able to check the session time gets incremented
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        // publish the shutdown afterwards to cause the separate thread to stop
+        events::test::publish(
+            &mut events,
+            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
+        );
+
+        // join the handle
+        session.handle.take().map(JoinHandle::join);
+
+        let stats_proto = get_stats_proto(&session);
+
+        // check device counts are missing if no device add/remove events occurred
+        assert!(stats_proto.device_count.is_none());
+
+        assert!(stats_proto.peak_concurrent_devices.is_none());
+
+        // check the session time is > 0
+        assert!(stats_proto.duration_secs.unwrap() > 0u64);
+    }
+
+    #[test]
+    fn test_start_and_stop() {
+        let (session, mut events) = setup_session_start_test();
+
+        // we want to be able to check the session time gets incremented
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        // publish the shutdown which is required when using `session.stop()`
+        events::test::publish(
+            &mut events,
+            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
+        );
+
+        // should not panic or deadlock
+        session.stop().unwrap();
+    }
+
+    #[test]
+    fn test_start_and_device_add() {
+        let (mut session, mut events) = setup_session_start_test();
+
+        // we want to be able to check the session time gets incremented
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        events::test::publish(
+            &mut events,
+            Event::DeviceAdded(DeviceAdded { builtin: false, ..Default::default() }),
+        );
+
+        // publish the shutdown afterwards to cause the separate thread to stop
+        events::test::publish(
+            &mut events,
+            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
+        );
+
+        // join the handle
+        session.handle.take().map(JoinHandle::join);
+
+        // check device counts were incremented
+        assert_eq!(
+            session.info.read().expect("Could not acquire session lock").current_device_count,
+            1i32
+        );
+        let stats_proto = get_stats_proto(&session);
+
+        assert_eq!(stats_proto.device_count.unwrap(), 1i32);
+        assert_eq!(stats_proto.peak_concurrent_devices.unwrap(), 1i32);
+        // check the session time is > 0
+        assert!(stats_proto.duration_secs.unwrap() > 0u64);
+    }
+
+    #[test]
+    fn test_start_and_device_add_and_remove() {
+        let (mut session, mut events) = setup_session_start_test();
+
+        // we want to be able to check the session time gets incremented
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        events::test::publish(
+            &mut events,
+            Event::DeviceAdded(DeviceAdded { builtin: false, id: 1, ..Default::default() }),
+        );
+
+        events::test::publish(
+            &mut events,
+            Event::DeviceRemoved(DeviceRemoved { builtin: false, id: 1, ..Default::default() }),
+        );
+
+        events::test::publish(
+            &mut events,
+            Event::DeviceAdded(DeviceAdded { builtin: false, id: 2, ..Default::default() }),
+        );
+
+        events::test::publish(
+            &mut events,
+            Event::DeviceRemoved(DeviceRemoved { builtin: false, id: 2, ..Default::default() }),
+        );
+
+        // publish the shutdown afterwards to cause the separate thread to stop
+        events::test::publish(
+            &mut events,
+            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
+        );
+
+        // join the handle
+        session.handle.take().map(JoinHandle::join);
+
+        // check the different device counts were incremented as expected
+        assert_eq!(
+            session.info.read().expect("Could not acquire session lock").current_device_count,
+            0i32
+        );
+        let stats_proto = get_stats_proto(&session);
+        assert_eq!(stats_proto.device_count.unwrap(), 2i32);
+        assert_eq!(stats_proto.peak_concurrent_devices.unwrap(), 1i32);
+
+        // check the session time is > 0
+        assert!(stats_proto.duration_secs.unwrap() > 0u64);
+    }
+
+    #[test]
+    fn test_start_and_chip_add_and_remove() {
+        let (mut session, mut events) = setup_session_start_test();
+
+        // we want to be able to check the session time gets incremented
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        events::test::publish(
+            &mut events,
+            Event::ChipAdded(ChipAdded { builtin: false, chip_id: 0, ..Default::default() }),
+        );
+
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
+        // no radio stats until after we remove the chip
+        assert_eq!(get_stats_proto(&session).radio_stats.len(), 0usize);
+
+        events::test::publish(
+            &mut events,
+            Event::ChipRemoved(ChipRemoved {
+                chip_id: 0,
+                radio_stats: vec![NetsimRadioStats { ..Default::default() }],
+                ..Default::default()
+            }),
+        );
+
+        // publish the shutdown afterwards to cause the separate thread to stop
+        events::test::publish(
+            &mut events,
+            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
+        );
+
+        // join the handle
+        session.handle.take().map(JoinHandle::join);
+
+        // check devices were not incremented (here we only added and removed the chip)
+        assert_eq!(
+            session.info.read().expect("Could not acquire session lock").current_device_count,
+            0i32
+        );
+
+        let stats_proto = get_stats_proto(&session);
+        assert_eq!(stats_proto.radio_stats.len(), 1usize);
+
+        // these will still be none since no device level events were processed
+        assert!(stats_proto.device_count.is_none());
+
+        assert!(stats_proto.peak_concurrent_devices.is_none());
+
+        // check the session time is > 0
+        assert!(stats_proto.duration_secs.unwrap() > 0u64);
+    }
 }

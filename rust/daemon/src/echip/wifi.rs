@@ -16,7 +16,7 @@ use crate::devices::chip::ChipIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_wifi;
 use crate::wifi::medium;
-use log::info;
+use log::{info, warn};
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::chip::Radio;
@@ -36,6 +36,9 @@ pub struct Wifi {
 
 impl EmulatedChip for Wifi {
     fn handle_request(&self, packet: &[u8]) {
+        if let Err(e) = medium::process(self.chip_id, packet) {
+            warn!("Error medium::process {}", e);
+        }
         if crate::config::get_dev() {
             let _ = medium::parse_hwsim_cmd(packet);
         }
