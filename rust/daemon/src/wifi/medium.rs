@@ -14,15 +14,11 @@
 
 use super::packets::mac80211_hwsim::{HwsimAttr, HwsimCmd, HwsimMsg, HwsimMsgHdr};
 use super::packets::netlink::{NlAttrHdr, NlMsgHdr};
+use crate::devices::chip::ChipIdentifier;
 use crate::wifi::frame::Frame;
+use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::{anyhow, Context};
-use log::{info, warn};
-
-const NLA_ALIGNTO: usize = 4;
-
-fn nla_align(len: usize) -> usize {
-    len.wrapping_add(NLA_ALIGNTO - 1) & !(NLA_ALIGNTO - 1)
-}
+use log::{debug, info, warn};
 
 #[derive(Debug)]
 pub enum HwsimCmdEnum {
@@ -37,16 +33,59 @@ pub enum HwsimCmdEnum {
     DelMacAddr,
 }
 
-pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
-    match HwsimMsg::parse(packet) {
-        Ok(hwsim_msg) => match (hwsim_msg.hwsim_hdr.hwsim_cmd) {
-            HwsimCmd::Frame => {
-                let frame = Frame::new(&hwsim_msg.attributes)?;
-                Ok(HwsimCmdEnum::Frame(Box::new(frame)))
+/// Process commands from the kernel's mac80211_hwsim subsystem.
+///
+/// This is the processing that will be implemented:
+///
+/// * The source MacAddress in 802.11 frames is re-mapped to a globally
+/// unique MacAddress because resumed Emulator AVDs appear with the
+/// same address.
+///
+/// * 802.11 multicast frames are re-broadcast to connected stations.
+///
+pub fn process(chip_id: ChipIdentifier, packet: &[u8]) -> anyhow::Result<()> {
+    let hwsim_msg = HwsimMsg::parse(packet)?;
+    match (hwsim_msg.hwsim_hdr.hwsim_cmd) {
+        HwsimCmd::Frame => {
+            let frame = Frame::parse(&hwsim_msg)?;
+            info!(
+                "Frame chip {}, addr {}, flags {}, cookie {:?}, ieee80211 {}",
+                chip_id, frame.transmitter, frame.flags, frame.cookie, frame.ieee80211
+            );
+        }
+        HwsimCmd::AddMacAddr => {
+            let attr_set = HwsimAttrSet::parse(&hwsim_msg.attributes)?;
+            if let (Some(addr), Some(hwaddr)) = (attr_set.transmitter, attr_set.receiver) {
+                info!("ADD_MAC_ADDR transmitter {:?} receiver {:?}", hwaddr, addr);
+            } else {
+                warn!("ADD_MAC_ADDR missing transmitter or receiver");
             }
-            _ => Err(anyhow!("Unknown HwsimkMsg cmd={:?}", hwsim_msg.hwsim_hdr.hwsim_cmd)),
-        },
-        Err(e) => Err(anyhow!("Unable to parse netlink message! {:?}", e)),
+        }
+        HwsimCmd::DelMacAddr => {
+            let attr_set = HwsimAttrSet::parse(&hwsim_msg.attributes)?;
+            if let (Some(addr), Some(hwaddr)) = (attr_set.transmitter, attr_set.receiver) {
+                info!("DEL_MAC_ADDR transmitter {:?} receiver {:?}", hwaddr, addr);
+            } else {
+                warn!("DEL_MAC_ADDR missing transmitter or receiver");
+            }
+        }
+        _ => {
+            info!("Another command found {:?}", hwsim_msg);
+        }
+    }
+    Ok(())
+}
+
+// TODO: move code below here into test module usable from CMake
+
+pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
+    let hwsim_msg = HwsimMsg::parse(packet)?;
+    match (hwsim_msg.hwsim_hdr.hwsim_cmd) {
+        HwsimCmd::Frame => {
+            let frame = Frame::parse(&hwsim_msg)?;
+            Ok(HwsimCmdEnum::Frame(Box::new(frame)))
+        }
+        _ => Err(anyhow!("Unknown HwsimMsg cmd={:?}", hwsim_msg.hwsim_hdr.hwsim_cmd)),
     }
 }
 
@@ -72,7 +111,7 @@ pub fn test_parse_hwsim_cmd() {
         16, 255, 255, 57, 216, 0, 0, 8, 0, 5, 0, 1, 0, 0, 0, 8, 0, 6, 0, 206, 255, 255, 255, 8, 0,
         19, 0, 143, 9, 0, 0,
     ];
-    assert!(parse_hwsim_cmd(&packet2).is_ok());
+    assert!(parse_hwsim_cmd(&packet2).is_err());
 
     // missing cookie attribute
     let packet3: Vec<u8> = vec![
@@ -93,7 +132,7 @@ pub fn test_parse_hwsim_cmd() {
         0, 0, 2, 90, 3, 36, 1, 0, 0, 0, 0, 8, 0, 5, 0, 1, 0, 0, 0, 8, 0, 6, 0, 206, 255, 255, 255,
         8, 0, 19, 0, 143, 9, 0, 0,
     ];
-    assert!(parse_hwsim_cmd(&packet3).is_ok());
+    assert!(parse_hwsim_cmd(&packet3).is_err());
 
     // HwsimkMsg cmd=TxInfoFrame packet
     let packet3: Vec<u8> = vec![

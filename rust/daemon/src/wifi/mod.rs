@@ -18,6 +18,7 @@
 #![allow(unused)]
 
 pub(crate) mod frame;
+pub(crate) mod hwsim_attr_set;
 pub(crate) mod ieee80211;
 pub(crate) mod medium;
 pub(crate) mod packets;

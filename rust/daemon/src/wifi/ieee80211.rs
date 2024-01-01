@@ -25,8 +25,20 @@ impl fmt::Display for MacAddress {
         let bytes = u64::to_le_bytes(self.0);
         write!(
             f,
-            "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-            bytes[5], bytes[4], bytes[3], bytes[2], bytes[1], bytes[0],
+            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5],
+        )
+    }
+}
+
+impl fmt::Display for Ieee80211 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{ds: {}, src: {}, dst: {}}}",
+            self.get_ds(),
+            self.get_source(),
+            self.get_destination()
         )
     }
 }
@@ -66,12 +78,33 @@ impl Ieee80211 {
             && self.ieee80211.stype == (ManagementSubType::ProbeReq as u8)
     }
 
+    pub fn get_ds(&self) -> String {
+        match self.specialize() {
+            Ieee80211Child::Ieee80211ToAp(hdr) => "ToAp",
+            Ieee80211Child::Ieee80211FromAp(hdr) => "FromAp",
+            Ieee80211Child::Ieee80211Ibss(hdr) => "Ibss",
+            Ieee80211Child::Ieee80211Wds(hdr) => "Wds",
+            _ => panic!("unexpected specialized header"),
+        }
+        .to_string()
+    }
+
     pub fn get_source(&self) -> MacAddress {
         match self.specialize() {
             Ieee80211Child::Ieee80211ToAp(hdr) => hdr.get_source(),
             Ieee80211Child::Ieee80211FromAp(hdr) => hdr.get_source(),
             Ieee80211Child::Ieee80211Ibss(hdr) => hdr.get_source(),
             Ieee80211Child::Ieee80211Wds(hdr) => hdr.get_source(),
+            _ => panic!("unexpected specialized header"),
+        }
+    }
+
+    pub fn get_destination(&self) -> MacAddress {
+        match self.specialize() {
+            Ieee80211Child::Ieee80211ToAp(hdr) => hdr.get_destination(),
+            Ieee80211Child::Ieee80211FromAp(hdr) => hdr.get_destination(),
+            Ieee80211Child::Ieee80211Ibss(hdr) => hdr.get_destination(),
+            Ieee80211Child::Ieee80211Wds(hdr) => hdr.get_destination(),
             _ => panic!("unexpected specialized header"),
         }
     }
