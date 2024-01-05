@@ -39,9 +39,6 @@ impl EmulatedChip for Wifi {
         if let Err(e) = medium::process(self.chip_id, packet) {
             warn!("Error medium::process {}", e);
         }
-        if crate::config::get_dev() {
-            let _ = medium::parse_hwsim_cmd(packet);
-        }
         ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
     }
 
@@ -93,9 +90,6 @@ pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChi
 
 /// Starts the WiFi service.
 pub fn wifi_start(config: &MessageField<WiFiConfig>) {
-    if crate::config::get_dev() {
-        medium::test_parse_hwsim_cmd();
-    }
     let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
     ffi_wifi::wifi_start(&proto_bytes);
 }
