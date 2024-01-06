@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::packets::mac80211_hwsim::{HwsimAttr, HwsimCmd, HwsimMsg, HwsimMsgHdr};
-use super::packets::netlink::{NlAttrHdr, NlMsgHdr};
+use super::ieee80211::MacAddress;
+use super::packets::mac80211_hwsim::{HwsimAttr, HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
+use super::packets::netlink::NlAttrHdr;
 use crate::devices::chip::ChipIdentifier;
 use crate::wifi::frame::Frame;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
+use crate::wifi::packets::mac80211_hwsim::HwsimMsgBuilder;
 use anyhow::{anyhow, Context};
 use log::{debug, info, warn};
+use pdl_runtime::Packet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub enum HwsimCmdEnum {
@@ -33,6 +37,33 @@ pub enum HwsimCmdEnum {
     DelMacAddr,
 }
 
+struct Station {
+    client_id: u32,
+    addr: MacAddress, // virtual interface mac address
+}
+
+pub struct Medium {
+    callback: HwsimCmdCallback,
+    stations: HashMap<MacAddress, Station>,
+}
+
+type HwsimCmdCallback = fn(u32, &[u8]);
+
+impl Medium {
+    pub fn new(callback: HwsimCmdCallback) -> Medium {
+        Self { callback, stations: HashMap::new() }
+    }
+    fn get_station_by_addr(&self, addr: MacAddress) -> Option<&Station> {
+        self.stations.get(&addr)
+    }
+}
+
+impl Station {
+    fn new(client_id: u32, addr: MacAddress) -> Self {
+        Self { client_id, addr }
+    }
+}
+
 /// Process commands from the kernel's mac80211_hwsim subsystem.
 ///
 /// This is the processing that will be implemented:
@@ -41,39 +72,114 @@ pub enum HwsimCmdEnum {
 /// unique MacAddress because resumed Emulator AVDs appear with the
 /// same address.
 ///
+/// * 802.11 frames sent between stations
+///
 /// * 802.11 multicast frames are re-broadcast to connected stations.
 ///
-pub fn process(chip_id: ChipIdentifier, packet: &[u8]) -> anyhow::Result<()> {
-    let hwsim_msg = HwsimMsg::parse(packet)?;
-    match (hwsim_msg.get_hwsim_hdr().hwsim_cmd) {
-        HwsimCmd::Frame => {
-            let frame = Frame::parse(&hwsim_msg)?;
-            info!(
-                "Frame chip {}, addr {}, flags {}, cookie {:?}, ieee80211 {}",
-                chip_id, frame.transmitter, frame.flags, frame.cookie, frame.ieee80211
-            );
-        }
-        HwsimCmd::AddMacAddr => {
-            let attr_set = HwsimAttrSet::parse(hwsim_msg.get_attributes())?;
-            if let (Some(addr), Some(hwaddr)) = (attr_set.transmitter, attr_set.receiver) {
-                info!("ADD_MAC_ADDR transmitter {:?} receiver {:?}", hwaddr, addr);
-            } else {
-                warn!("ADD_MAC_ADDR missing transmitter or receiver");
+
+impl Medium {
+    pub fn process(&mut self, client_id: u32, packet: &[u8]) -> bool {
+        match self.process_internal(client_id, packet) {
+            Ok(b) => b,
+            Err(e) => {
+                warn!("error processing wifi {e}");
+                // continue processing hwsim cmd on error
+                false
             }
-        }
-        HwsimCmd::DelMacAddr => {
-            let attr_set = HwsimAttrSet::parse(hwsim_msg.get_attributes())?;
-            if let (Some(addr), Some(hwaddr)) = (attr_set.transmitter, attr_set.receiver) {
-                info!("DEL_MAC_ADDR transmitter {:?} receiver {:?}", hwaddr, addr);
-            } else {
-                warn!("DEL_MAC_ADDR missing transmitter or receiver");
-            }
-        }
-        _ => {
-            info!("Another command found {:?}", hwsim_msg);
         }
     }
-    Ok(())
+
+    fn process_internal(&mut self, client_id: u32, packet: &[u8]) -> anyhow::Result<bool> {
+        let hwsim_msg = HwsimMsg::parse(packet)?;
+        match (hwsim_msg.get_hwsim_hdr().hwsim_cmd) {
+            HwsimCmd::Frame => {
+                let frame = Frame::parse(&hwsim_msg)?;
+                info!(
+                    "Frame chip {}, addr {}, flags {}, cookie {:?}, ieee80211 {}",
+                    client_id, frame.transmitter, frame.flags, frame.cookie, frame.ieee80211
+                );
+                let addr = frame.transmitter;
+                // Creates Stations on the fly when there is no config file
+                let _ = self.stations.entry(addr).or_insert_with(|| Station::new(client_id, addr));
+                let sender = self.stations.get(&addr).unwrap();
+                self.queue_frame(sender, frame)
+            }
+            HwsimCmd::AddMacAddr => {
+                let attr_set = HwsimAttrSet::parse(hwsim_msg.get_attributes())?;
+                if let (Some(addr), Some(hwaddr)) = (attr_set.transmitter, attr_set.receiver) {
+                    info!("ADD_MAC_ADDR transmitter {:?} receiver {:?}", hwaddr, addr);
+                } else {
+                    warn!("ADD_MAC_ADDR missing transmitter or receiver");
+                }
+                Ok(false)
+            }
+            HwsimCmd::DelMacAddr => {
+                let attr_set = HwsimAttrSet::parse(hwsim_msg.get_attributes())?;
+                if let (Some(addr), Some(hwaddr)) = (attr_set.transmitter, attr_set.receiver) {
+                    info!("DEL_MAC_ADDR transmitter {:?} receiver {:?}", hwaddr, addr);
+                } else {
+                    warn!("DEL_MAC_ADDR missing transmitter or receiver");
+                }
+                Ok(false)
+            }
+            _ => {
+                info!("Another command found {:?}", hwsim_msg);
+                Ok(false)
+            }
+        }
+    }
+
+    fn queue_frame(&self, station: &Station, frame: Frame) -> anyhow::Result<bool> {
+        let destination = frame.ieee80211.get_destination();
+        if let Some(station) = self.stations.get(&destination) {
+            info!("Frame deliver from {} to {}", station.addr, destination);
+            // rewrite packet to destination client: ToAP -> FromAP
+            Ok(true)
+        } else if destination.is_multicast() {
+            info!("Frame multicast {}", frame.ieee80211);
+            Ok(true)
+        } else {
+            // pass to libslirp
+            Ok(false)
+        }
+    }
+}
+
+fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
+    let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes()).context("HwsimAttrSet").unwrap();
+
+    let hwsim_hdr = hwsim_msg.get_hwsim_hdr();
+    let nl_hdr = hwsim_msg.get_nl_hdr();
+    let mut new_attr_builder = HwsimAttrSet::builder();
+    const SIGNAL: u32 = 4294967246;
+
+    new_attr_builder
+        .transmitter(&attrs.transmitter.context("transmitter")?.into())
+        .flags(attrs.flags.context("flags")?)
+        .cookie(attrs.cookie.context("cookie")?)
+        .signal(attrs.signal.unwrap_or(SIGNAL))
+        .tx_info(attrs.tx_info.context("tx_info")?.as_slice());
+
+    let new_attr = new_attr_builder.build().unwrap();
+    let nlmsg_len =
+        nl_hdr.nlmsg_len + new_attr.attributes.len() as u32 - attrs.attributes.len() as u32;
+    let new_hwsim_msg = HwsimMsgBuilder {
+        attributes: new_attr.attributes,
+        hwsim_hdr: HwsimMsgHdr {
+            hwsim_cmd: HwsimCmd::TxInfoFrame,
+            hwsim_version: hwsim_hdr.hwsim_version,
+            reserved: hwsim_hdr.reserved,
+        },
+        nl_hdr: NlMsgHdr {
+            nlmsg_len,
+            nlmsg_type: nl_hdr.nlmsg_type,
+            nlmsg_flags: nl_hdr.nlmsg_flags,
+            nlmsg_seq: 0,
+            nlmsg_pid: 0,
+        },
+    }
+    .build();
+    Ok(new_hwsim_msg)
 }
 
 // It's usd by radiotap.rs for packet capture.
@@ -121,5 +227,23 @@ mod tests {
         let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
         let non_mdns_frame = Frame::parse(&hwsim_msg).unwrap();
         assert!(!non_mdns_frame.ieee80211.get_destination().is_multicast());
+    }
+
+    #[test]
+    fn test_build_tx_info_reconstruct() {
+        let packet: Vec<u8> = include!("test_packets/hwsim_cmd_tx_info.csv");
+        let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
+        assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::TxInfoFrame);
+
+        let new_hwsim_msg = build_tx_info(&hwsim_msg).unwrap();
+        assert_eq!(hwsim_msg, new_hwsim_msg);
+    }
+
+    #[test]
+    fn test_build_tx_info() {
+        let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
+        let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
+        let hwsim_msg_tx_info = build_tx_info(&hwsim_msg).unwrap();
+        assert_eq!(hwsim_msg_tx_info.get_hwsim_hdr().hwsim_cmd, HwsimCmd::TxInfoFrame);
     }
 }

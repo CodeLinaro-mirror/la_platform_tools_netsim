@@ -100,7 +100,7 @@ impl HwsimAttrSetBuilder {
         self.attributes.extend(vec);
     }
 
-    fn transmitter(&mut self, transmitter: &[u8; 6]) -> &mut Self {
+    pub fn transmitter(&mut self, transmitter: &[u8; 6]) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrAddrTransmitterBuilder {
                 address: *transmitter,
@@ -113,7 +113,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn receiver(&mut self, receiver: &[u8; 6]) -> &mut Self {
+    pub fn receiver(&mut self, receiver: &[u8; 6]) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrAddrReceiverBuilder { address: *receiver, nla_m: 0, nla_o: 0 }
                 .build(),
@@ -122,7 +122,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn frame(&mut self, frame: &[u8]) -> &mut Self {
+    pub fn frame(&mut self, frame: &[u8]) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrFrameBuilder { data: (*frame).to_vec(), nla_m: 0, nla_o: 0 }
                 .build(),
@@ -131,7 +131,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn flags(&mut self, flags: u32) -> &mut Self {
+    pub fn flags(&mut self, flags: u32) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrFlagsBuilder { flags, nla_m: 0, nla_o: 0 }.build(),
         );
@@ -139,7 +139,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn rx_rate(&mut self, rx_rate_idx: u32) -> &mut Self {
+    pub fn rx_rate(&mut self, rx_rate_idx: u32) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrRxRateBuilder { rx_rate_idx, nla_m: 0, nla_o: 0 }.build(),
         );
@@ -147,7 +147,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn signal(&mut self, signal: u32) -> &mut Self {
+    pub fn signal(&mut self, signal: u32) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrSignalBuilder { signal, nla_m: 0, nla_o: 0 }.build(),
         );
@@ -155,7 +155,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn cookie(&mut self, cookie: u64) -> &mut Self {
+    pub fn cookie(&mut self, cookie: u64) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrCookieBuilder { cookie, nla_m: 0, nla_o: 0 }.build(),
         );
@@ -163,7 +163,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn freq(&mut self, freq: u32) -> &mut Self {
+    pub fn freq(&mut self, freq: u32) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrFreqBuilder { freq, nla_m: 0, nla_o: 0 }.build(),
         );
@@ -171,7 +171,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn tx_info(&mut self, tx_info: &[TxRate]) -> &mut Self {
+    pub fn tx_info(&mut self, tx_info: &[TxRate]) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrTxInfoBuilder {
                 tx_rates: (*tx_info).to_vec(),
@@ -184,7 +184,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn tx_info_flags(&mut self, tx_rate_flags: &[TxRateFlag]) -> &mut Self {
+    pub fn tx_info_flags(&mut self, tx_rate_flags: &[TxRateFlag]) -> &mut Self {
         self.extend_attributes(
             mac80211_hwsim::HwsimAttrTxInfoFlagsBuilder {
                 tx_rate_flags: (*tx_rate_flags).to_vec(),
@@ -197,7 +197,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    fn build(mut self) -> anyhow::Result<HwsimAttrSet> {
+    pub fn build(mut self) -> anyhow::Result<HwsimAttrSet> {
         Ok(HwsimAttrSet {
             transmitter: self.transmitter,
             receiver: self.receiver,
