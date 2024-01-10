@@ -242,7 +242,7 @@ struct HwsimMsgHdr {
     reserved: 16,
 }
 
-struct HwsimMsg {
+packet HwsimMsg {
     nl_hdr: NlMsgHdr,
     hwsim_hdr: HwsimMsgHdr,
     // user header
