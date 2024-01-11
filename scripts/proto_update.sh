@@ -40,13 +40,6 @@ export CARGO_HOME=$REPO/objs/rust/.cargo
 cd $REPO
 cargo build --manifest-path $CARGO
 
-# run protoc command to generate grpc proto rust files
-# Possibly need to install compilers:
-# $ cargo install protobuf-codegen
-# $ cargo install grpcio-compiler
-# TODO: Need to add required crate mappings to work in emu-master-dev
-# protoc --rust_out=./rust/proto/src --grpc_out=./rust/proto/src --plugin=protoc-gen-grpc=`which grpc_rust_plugin` -I./proto -I../../external/protobuf/src -I../../packages/modules/Bluetooth/tools/rootcanal/proto ./proto/netsim/frontend.proto
-
 # Undo changed to Cargo.toml
 git checkout $CARGO
 
