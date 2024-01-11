@@ -20,6 +20,7 @@ include!(concat!(env!("OUT_DIR"), "/ieee80211_packets.rs"));
 
 /// A Ieee80211 MAC address
 
+// TODO: Add unit tests.
 impl fmt::Display for MacAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bytes = u64::to_le_bytes(self.0);
@@ -53,6 +54,13 @@ impl From<MacAddress> for [u8; 6] {
     fn from(MacAddress(addr): MacAddress) -> Self {
         let bytes = u64::to_le_bytes(addr);
         bytes[0..6].try_into().unwrap()
+    }
+}
+
+impl MacAddress {
+    pub fn is_multicast(&self) -> bool {
+        let addr = u64::to_le_bytes(self.0);
+        addr[0] == 0x1
     }
 }
 
@@ -99,6 +107,9 @@ impl Ieee80211 {
         }
     }
 
+    /// Ieee80211 packets have 3-4 addresses in different positions based
+    /// on the FromDS and ToDS flags. This function gets the destination
+    /// address depending on the FromDS+ToDS packet subtypes.
     pub fn get_destination(&self) -> MacAddress {
         match self.specialize() {
             Ieee80211Child::Ieee80211ToAp(hdr) => hdr.get_destination(),
@@ -148,5 +159,15 @@ mod tests {
         let a = format!("{}", hdr.get_source());
         let b = format!("{}", parse_mac_address("00:0b:85:71:20:ce").unwrap());
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_is_multicast() {
+        // Multicast MAC address: 01:00:5E:00:00:FB
+        let mdns_mac_address = parse_mac_address("01:00:5e:00:00:fb").unwrap();
+        assert!(mdns_mac_address.is_multicast());
+        // Source address: Cisco_71:20:ce (00:0b:85:71:20:ce)
+        let non_mdns_mac_address = parse_mac_address("00:0b:85:71:20:ce").unwrap();
+        assert!(!non_mdns_mac_address.is_multicast());
     }
 }
