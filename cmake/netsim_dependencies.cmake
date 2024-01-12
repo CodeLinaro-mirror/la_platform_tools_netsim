@@ -1,5 +1,5 @@
 set(BLUETOOTH_EMULATION True)
-get_filename_component(AOSP "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(AOSP ${CMAKE_CURRENT_LIST_DIR}/../../..)
 set(EXTERNAL ${AOSP}/external)
 set(EXTERNAL_QEMU ${EXTERNAL}/qemu)
 set(ANDROID_QEMU2_TOP_DIR ${EXTERNAL_QEMU})
