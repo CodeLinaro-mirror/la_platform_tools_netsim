@@ -20,6 +20,12 @@ include!(concat!(env!("OUT_DIR"), "/ieee80211_packets.rs"));
 
 /// A Ieee80211 MAC address
 
+impl MacAddress {
+    pub fn to_vec(&self) -> [u8; 6] {
+        u64::to_le_bytes(self.0)[0..6].try_into().expect("slice with incorrect length")
+    }
+}
+
 // TODO: Add unit tests.
 impl fmt::Display for MacAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -139,6 +145,14 @@ fn parse_mac_address(s: &str) -> Option<MacAddress> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_mad_address_to_vec() {
+        let mac_address: MacAddress = parse_mac_address("00:0b:85:71:20:ce").unwrap();
+        let mac_address_bytes = mac_address.to_vec();
+        let reconstructed_mac_address = MacAddress::from(&mac_address_bytes);
+        assert_eq!(mac_address, reconstructed_mac_address);
+    }
 
     // These tests use the packets available here
     // https://community.cisco.com/t5/wireless-mobility-knowledge-base/802-11-frames-a-starter-guide-to-learn-wireless-sniffer-traces/ta-p/3110019

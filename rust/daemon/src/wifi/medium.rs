@@ -94,11 +94,17 @@ impl Medium {
         match (hwsim_msg.get_hwsim_hdr().hwsim_cmd) {
             HwsimCmd::Frame => {
                 let frame = Frame::parse(&hwsim_msg)?;
+                // Incoming packet must contain transmitter, flag, cookie, and tx_info fields.
+                if frame.tx_info.is_none() {
+                    return Err(anyhow!("Missing tx_info for incoming packet"));
+                }
+                let addr = frame.transmitter.context("transmitter")?;
+                let flags = frame.flags.context("flags")?;
+                let cookie = frame.cookie.context("cookie")?;
                 info!(
-                    "Frame chip {}, addr {}, flags {}, cookie {:?}, ieee80211 {}",
-                    client_id, frame.transmitter, frame.flags, frame.cookie, frame.ieee80211
+                    "Frame chip {}, addr {}, flags {}, cookie {}, ieee80211 {}",
+                    client_id, addr, flags, cookie, frame.ieee80211
                 );
-                let addr = frame.transmitter;
                 // Creates Stations on the fly when there is no config file
                 let _ = self.stations.entry(addr).or_insert_with(|| Station::new(client_id, addr));
                 let sender = self.stations.get(&addr).unwrap();
@@ -137,6 +143,8 @@ impl Medium {
             Ok(true)
         } else if destination.is_multicast() {
             info!("Frame multicast {}", frame.ieee80211);
+            let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().to_vec();
+            (self.callback)(station.client_id, &hwsim_msg_tx_info);
             Ok(true)
         } else {
             // pass to libslirp
@@ -187,7 +195,7 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
     Ok(new_hwsim_msg)
 }
 
-// It's usd by radiotap.rs for packet capture.
+// It's used by radiotap.rs for packet capture.
 pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
     let hwsim_msg = HwsimMsg::parse(packet)?;
     match (hwsim_msg.get_hwsim_hdr().hwsim_cmd) {
@@ -195,6 +203,7 @@ pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
             let frame = Frame::parse(&hwsim_msg)?;
             Ok(HwsimCmdEnum::Frame(Box::new(frame)))
         }
+        HwsimCmd::TxInfoFrame => Ok(HwsimCmdEnum::TxInfoFrame),
         _ => Err(anyhow!("Unknown HwsimMsg cmd={:?}", hwsim_msg.get_hwsim_hdr().hwsim_cmd)),
     }
 }
@@ -208,17 +217,20 @@ mod tests {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
         assert!(parse_hwsim_cmd(&packet).is_ok());
 
-        // missing transmitter attribute
-        let packet2: Vec<u8> = include!("test_packets/hwsim_cmd_frame2.csv");
-        assert!(parse_hwsim_cmd(&packet2).is_err());
+        let tx_info_packet: Vec<u8> = include!("test_packets/hwsim_cmd_tx_info.csv");
+        assert!(parse_hwsim_cmd(&tx_info_packet).is_ok());
+    }
 
-        // missing cookie attribute
-        let packet3: Vec<u8> = include!("test_packets/hwsim_cmd_frame_no_cookie.csv");
-        assert!(parse_hwsim_cmd(&packet3).is_err());
+    #[test]
+    fn test_netlink_attr_response_packet() {
+        // Response packet may not contain transmitter, flags, tx_info, or cookie fields.
+        let response_packet: Vec<u8> =
+            include!("test_packets/hwsim_cmd_frame_response_no_transmitter_flags_tx_info.csv");
+        assert!(parse_hwsim_cmd(&response_packet).is_ok());
 
-        // HwsimkMsg cmd=TxInfoFrame packet
-        let packet3: Vec<u8> = include!("test_packets/hwsim_cmd_tx_info.csv");
-        assert!(parse_hwsim_cmd(&packet3).is_err());
+        let response_packet2: Vec<u8> =
+            include!("test_packets/hwsim_cmd_frame_response_no_cookie.csv");
+        assert!(parse_hwsim_cmd(&response_packet2).is_ok());
     }
 
     #[test]
