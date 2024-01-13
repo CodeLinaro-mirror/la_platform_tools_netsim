@@ -39,8 +39,6 @@ endif()
 
 if(WINDOWS_MSVC_X86_64)
   # Set of msvc compat layer libraries.
-  add_subdirectory(${EXTERNAL_QEMU}/android/third_party/nasm nasm)
-  add_subdirectory(${EXTERNAL_QEMU}/android/msvc-posix-compat msvc-posix-compat)
   add_subdirectory(${EXTERNAL_QEMU}/android/third_party/mman-win32 mman-win32)
   add_subdirectory(${EXTERNAL_QEMU}/android/third_party/regex-win32 regex-win32)
   add_subdirectory(${EXTERNAL_QEMU}/android/third_party/dirent-win32
