@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
-use crate::echip::{EmulatedChip, SharedEmulatedChip};
+use crate::echip::{packet::hwsim_cmd_response, EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_wifi;
-use crate::wifi::medium;
-use log::{info, warn};
+use crate::wifi::medium::Medium;
+use lazy_static::lazy_static;
+use log::info;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::chip::Radio;
@@ -34,15 +35,16 @@ pub struct Wifi {
     chip_id: ChipIdentifier,
 }
 
+// Allocator for chip identifiers.
+lazy_static! {
+    static ref MEDIUM: Mutex<Medium> = Mutex::new(Medium::new(hwsim_cmd_response));
+}
+
 impl EmulatedChip for Wifi {
     fn handle_request(&self, packet: &[u8]) {
-        if let Err(e) = medium::process(self.chip_id, packet) {
-            warn!("Error medium::process {}", e);
+        if !MEDIUM.lock().expect("Lock failed").process(self.chip_id, packet) {
+            ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
         }
-        if crate::config::get_dev() {
-            let _ = medium::parse_hwsim_cmd(packet);
-        }
-        ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
     }
 
     fn reset(&mut self) {
@@ -93,9 +95,6 @@ pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChi
 
 /// Starts the WiFi service.
 pub fn wifi_start(config: &MessageField<WiFiConfig>) {
-    if crate::config::get_dev() {
-        medium::test_parse_hwsim_cmd();
-    }
     let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
     ffi_wifi::wifi_start(&proto_bytes);
 }

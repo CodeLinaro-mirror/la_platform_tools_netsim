@@ -85,7 +85,8 @@ def main():
         args.out_dir = os.path.join(AOSP_ROOT, args.out_dir)
 
     out = Path(args.out_dir)
-    shutil.rmtree(out)
+    if out.exists():
+      shutil.rmtree(out)
     out.mkdir(exist_ok=True, parents=True)
 
 
@@ -119,8 +120,8 @@ def main():
 
     with ServerConfig(presubmit, args) as cfg:
         # Turn on sccache?
-        if cfg.sccache:
-            launcher.append(f"-DOPTION_CCACHE=${cfg.sccache}")
+        #if cfg.sccache:
+        #    launcher.append(f"-DOPTION_CCACHE=${cfg.sccache}")
 
         # Configure
         run(launcher, cfg.get_env(), "bld")
