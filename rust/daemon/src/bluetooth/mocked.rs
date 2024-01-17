@@ -41,57 +41,8 @@ impl FacadeIds {
     }
 }
 
-pub fn handle_bluetooth_request(facade_id: u32, packet_type: u8, packet: &Vec<u8>) {
-    info!("hci_reset({facade_id}, {packet_type}, {packet:?})");
-}
-
-pub fn bluetooth_reset(facade_id: u32) {
-    info!("hci_reset({facade_id})");
-}
-
-pub fn bluetooth_remove(facade_id: u32) {
-    info!("hci_remove({facade_id})");
-}
-
-pub fn bluetooth_patch(facade_id: u32, bluetooth: &Bluetooth) {
-    info!("hci_patch({facade_id}, {bluetooth:?})");
-}
-
-pub fn bluetooth_get(facade_id: u32) -> Bluetooth {
-    info!("hci_get({facade_id})");
-    Bluetooth::new()
-}
-
-// Returns facade_id
-pub fn bluetooth_add(
-    device_id: u32,
-    _address: &str,
-    _bt_properties: &MessageField<RootcanalController>,
-) -> u32 {
-    info!("hci_add({device_id})");
-    let mut resource = IDS.write().unwrap();
-    let facade_id = resource.current_id;
-    resource.current_id += 1;
-    facade_id
-}
-
-/// Starts the Bluetooth service.
-pub fn bluetooth_start(
-    _config: &MessageField<BluetoothConfig>,
-    _instance_num: u16,
-    _disable_address_reuse: bool,
-) {
-    info!("bluetooth service started");
-}
-
-/// Stops the Bluetooth service.
-pub fn bluetooth_stop() {
-    info!("bluetooth service ended");
-}
-
 // Avoid crossing cxx boundary in tests
 pub fn ble_beacon_add(
-    device_id: DeviceIdentifier,
     device_name: String,
     chip_id: ChipIdentifier,
     chip_proto: &ChipCreate,
@@ -112,14 +63,15 @@ pub fn ble_beacon_add(
     let facade_id = resource.current_id;
     resource.current_id += 1;
 
+    info!("ble_beacon_add successful with chip_id: {chip_id}");
     Ok(facade_id)
 }
 
 pub fn ble_beacon_remove(
-    device_id: DeviceIdentifier,
     chip_id: ChipIdentifier,
     facade_id: FacadeIdentifier,
 ) -> Result<(), String> {
+    info!("{:?}", BEACON_CHIPS.read().unwrap().keys());
     if BEACON_CHIPS.write().unwrap().remove(&chip_id).is_none() {
         Err(format!("failed to delete ble beacon chip: chip with id {chip_id} does not exist"))
     } else {

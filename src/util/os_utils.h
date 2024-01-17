@@ -37,7 +37,7 @@ std::string GetNetsimIniFilepath(uint16_t instance_num);
 /**
  * Return the frontend grpc port.
  */
-std::optional<std::string> GetServerAddress(uint16_t instance_num = 0);
+std::optional<std::string> GetServerAddress(uint16_t instance_num = 1);
 
 /**
  * Redirect stdout and stderr to file.

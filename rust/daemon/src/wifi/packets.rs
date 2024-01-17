@@ -1,10 +1,10 @@
-// Copyright 2023 Google LLC
+// Copyright 2023 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use netsim_proto::common::ChipKind;
+pub mod netlink {
+    #![allow(clippy::all)]
+    #![allow(unused)]
+    #![allow(missing_docs)]
 
-/// Helper function for translating u32 representation of ChipKind
-pub(crate) fn int_to_chip_kind(kind: u32) -> ChipKind {
-    match kind {
-        1 => ChipKind::BLUETOOTH,
-        2 => ChipKind::WIFI,
-        3 => ChipKind::UWB,
-        _ => ChipKind::UNSPECIFIED,
-    }
+    include!(concat!(env!("OUT_DIR"), "/netlink_packets.rs"));
+}
+
+pub mod mac80211_hwsim {
+    #![allow(clippy::all)]
+    #![allow(unused)]
+    #![allow(missing_docs)]
+
+    include!(concat!(env!("OUT_DIR"), "/mac80211_hwsim_packets.rs"));
 }

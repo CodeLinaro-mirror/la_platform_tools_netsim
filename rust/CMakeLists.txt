@@ -7,12 +7,23 @@ file(REMOVE ${CMAKE_CURRENT_LIST_DIR}/Cargo.lock)
 corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
 corrosion_set_env_vars(netsim-common CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(
-  netsim-daemon LINK_LAYER_PACKETS_PREBUILT=${RootCanalGeneratedPackets_rs}
+  netsim-daemon
+  LINK_LAYER_PACKETS_PREBUILT=${RootCanalGeneratedPackets_rs}
+  NETLINK_PACKETS_PREBUILT=${NetlinkPackets_rs}
+  MAC80211_HWSIM_PACKETS_PREBUILT=${Mac80211HwsimPackets_rs}
+  IEEE80211_PACKETS_PREBUILT=${Ieee80211Packets_rs}
   CARGO_HOME=${Rust_CARGO_HOME})
+
 corrosion_set_env_vars(netsim-cli CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(netsim-proto CARGO_HOME=${Rust_CARGO_HOME})
 
-add_dependencies(cargo-build_netsim-daemon pdl_gen-RootCanalGeneratedPackets_rs)
+add_custom_target(
+  netsim_rust_packets
+  DEPENDS pdl_gen-RootCanalGeneratedPackets_rs pdl_gen-NetlinkPackets_rs
+          pdl_gen-Ieee80211Packets_rs pdl_gen-Mac80211HwsimPackets_rs)
+
+# Make sure we have the rust packets generated before we build them.
+add_dependencies(cargo-build_netsim-daemon netsim_rust_packets)
 
 # cxx crates
 if(WIN32)

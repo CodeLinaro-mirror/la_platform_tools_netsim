@@ -15,19 +15,18 @@
 use clap::Parser;
 use log::warn;
 use log::{error, info};
-use netsim_common::system::netsimd_temp_dir;
+use netsim_common::system::netsimd_temp_dir_string;
 use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_ini};
 use netsim_common::util::zip_artifact::zip_artifacts;
 
-use crate::bluetooth as bluetooth_facade;
 use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
-use crate::devices::devices_handler::wait_devices;
+use crate::devices::devices_handler::spawn_shutdown_publisher;
+use crate::echip;
 use crate::events;
-use crate::events::Event;
+use crate::events::{Event, ShutDown};
 use crate::session::Session;
 use crate::version::get_version;
-use crate::wifi as wifi_facade;
 use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
@@ -35,7 +34,7 @@ use crate::ffi::ffi_util;
 use crate::service::{new_test_beacon, Service, ServiceParams};
 #[cfg(feature = "cuttlefish")]
 use netsim_common::util::os_utils::get_server_address;
-use netsim_proto::config::Config;
+use netsim_proto::config::{Bluetooth as BluetoothConfig, Config};
 use std::env;
 use std::ffi::{c_char, c_int};
 use std::sync::mpsc::Receiver;
@@ -85,15 +84,24 @@ fn get_netsimd_args(argc: c_int, argv: *const *const c_char) -> NetsimdArgs {
 }
 
 fn run_netsimd_with_args(args: NetsimdArgs) {
+    // Log version and terminate netsimd
+    if args.version {
+        println!("Netsimd Version: {}", get_version());
+        return;
+    }
+
     // Log where netsim artifacts are located
-    info!("netsim artifacts path: {}", netsimd_temp_dir().display());
+    info!("netsim artifacts path: {}", netsimd_temp_dir_string());
 
     // Log all args
     info!("{:#?}", args);
 
     if !args.logtostderr {
-        cxx::let_cxx_string!(netsimd_temp_dir = netsim_common::system::netsimd_temp_dir_string());
+        cxx::let_cxx_string!(netsimd_temp_dir = netsimd_temp_dir_string());
         ffi_util::redirect_std_stream(&netsimd_temp_dir);
+        // Duplicating the previous two logs to be included in netsim_stderr.log
+        info!("netsim artifacts path: {}", netsimd_temp_dir_string());
+        info!("{:#?}", args);
     }
 
     match args.connector_instance {
@@ -140,7 +148,7 @@ fn main_loop(events_rx: Receiver<Event>) {
     loop {
         // events_rx.recv() will wait until the event is received.
         // TODO(b/305536480): Remove built-in devices during shutdown.
-        if let Ok(Event::ShutDown { reason }) = events_rx.recv() {
+        if let Ok(Event::ShutDown(ShutDown { reason })) = events_rx.recv() {
             info!("Netsim is shutdown: {reason}");
             return;
         }
@@ -183,7 +191,7 @@ fn run_netsimd_primary(args: NetsimdArgs) {
         fd_startup_str,
         args.no_cli_ui,
         args.no_web_ui,
-        args.pcap,
+        config.capture.enabled == Some(true) || args.pcap,
         hci_port,
         instance_num,
         args.dev,
@@ -207,19 +215,39 @@ fn run_netsimd_primary(args: NetsimdArgs) {
 
     // Pass all event receivers to each modules
     spawn_capture_event_subscriber(capture_events_rx);
-    wait_devices(device_events_rx);
+
+    if !args.no_shutdown {
+        spawn_shutdown_publisher(device_events_rx);
+    }
+
+    // Command line over-rides config file
+    if args.disable_address_reuse {
+        match config.bluetooth.as_mut() {
+            Some(bt_config) => {
+                bt_config.disable_address_reuse = Some(true);
+            }
+            None => {
+                let mut bt_config = BluetoothConfig::new();
+                bt_config.disable_address_reuse = Some(true);
+                config.bluetooth = Some(bt_config).into();
+            }
+        }
+    }
 
     // Start radio facades
-    bluetooth_facade::bluetooth_start(&config.bluetooth, instance_num, args.disable_address_reuse);
-    wifi_facade::wifi_start(&config.wifi);
+    echip::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
+    echip::wifi::wifi_start(&config.wifi);
 
     // Maybe create test beacons, default true for cuttlefish
     // TODO: remove default for cuttlefish by adding flag to tests
-    if match args.test_beacons {
-        Some(true) => true,
-        Some(false) => false,
-        None => cfg!(feature = "cuttlefish"),
-    } {
+    if config.bluetooth.test_beacons == Some(true)
+        || match (args.test_beacons, args.no_test_beacons) {
+            (true, false) => true,
+            (false, true) => false,
+            (false, false) => cfg!(feature = "cuttlefish"),
+            (true, true) => panic!("unexpected flag combination"),
+        }
+    {
         new_test_beacon(1, 1000);
         new_test_beacon(2, 1000);
     }
@@ -233,9 +261,6 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     // Gracefully shutdown netsimd services
     service.shut_down();
 
-    // Once shutdown is complete, delete the netsim ini file
-    remove_netsim_ini(instance_num);
-
     // write out session stats
     let _ = session.stop();
 
@@ -243,4 +268,7 @@ fn run_netsimd_primary(args: NetsimdArgs) {
     if let Err(err) = zip_artifacts() {
         error!("Failed to zip artifacts: {err:?}");
     }
+
+    // Once shutdown is complete, delete the netsim ini file
+    remove_netsim_ini(instance_num);
 }

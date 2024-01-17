@@ -123,6 +123,7 @@ export interface SimulationInfo {
   captures: Capture[];
   selectedId: string;
   dimension: {x: number; y: number; z: number};
+  lastModified: string;
 }
 
 interface Observable {
@@ -138,6 +139,7 @@ class SimulationState implements Observable {
     captures: [],
     selectedId: '',
     dimension: {x: 10, y: 10, z: 0},
+    lastModified: '',
   };
 
   constructor() {
@@ -153,6 +155,7 @@ class SimulationState implements Observable {
         .then(response => response.json())
         .then(data => {
           this.fetchDevice(data.devices);
+          this.updateLastModified(data.lastModified);
         })
         .catch(error => {
           // eslint-disable-next-line
@@ -180,6 +183,14 @@ class SimulationState implements Observable {
       this.simulationInfo.devices = devices.map(device => new Device(device));
     }
     this.notifyObservers();
+  }
+
+  getLastModified() {
+    return this.simulationInfo.lastModified;
+  }
+
+  updateLastModified(timestamp: string) {
+    this.simulationInfo.lastModified = timestamp;
   }
 
   patchSelected(id: string) {
@@ -260,6 +271,7 @@ async function subscribeCaptures() {
   const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
   while (true) {
     await simulationState.invokeListCaptures();
+    await simulationState.invokeGetDevice();
     await delay(1000);
   }
 }
@@ -267,12 +279,21 @@ async function subscribeCaptures() {
 async function subscribeDevices() {
   await simulationState.invokeGetDevice();
   while (true) {
+    const jsonBody = JSON.stringify({
+      lastModified: simulationState.getLastModified(),
+    });
     await fetch(DEVICES_URL, {
       method: 'SUBSCRIBE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': jsonBody.length.toString(),
+      },
+      body: jsonBody,
     })
         .then(response => response.json())
         .then(data => {
           simulationState.fetchDevice(data.devices);
+          simulationState.updateLastModified(data.lastModified);
         })
         .catch(error => {
           // eslint-disable-next-line

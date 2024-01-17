@@ -27,6 +27,7 @@ if(NOT ANDROID_EMULATOR_BUILD)
 endif()
 
 if(TARGET Rust::Rustc)
+  add_subdirectory(pdl)
   add_subdirectory(rust)
 else()
   message(WARNING "Only building client side dependencies.")

@@ -17,13 +17,9 @@
 
 #![allow(unused)]
 mod beacon;
-#[cfg(not(test))]
-mod facade;
 #[cfg(test)]
 mod mocked;
 pub(crate) use self::beacon::*;
-#[cfg(not(test))]
-pub(crate) use self::facade::*;
 #[cfg(test)]
 pub(crate) use self::mocked::*;
 pub(crate) mod advertise_data;

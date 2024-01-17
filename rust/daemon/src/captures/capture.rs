@@ -19,7 +19,7 @@
 //! ChipIdentifier and <FacadeIdentifier, Kind> to CaptureInfo.
 
 use std::collections::btree_map::{Iter, Values};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, ErrorKind, Result};
 use std::sync::mpsc::Receiver;
@@ -37,15 +37,13 @@ use netsim_proto::{
 use protobuf::well_known_types::timestamp::Timestamp;
 
 use crate::config::get_pcap;
-use crate::events::Event;
+use crate::events::{ChipAdded, ChipRemoved, Event};
 use crate::resource::clone_captures;
 
 use crate::devices::chip::ChipIdentifier;
-use crate::devices::chip::FacadeIdentifier;
 
 /// Internal Capture struct
 pub struct CaptureInfo {
-    facade_id: FacadeIdentifier,
     /// Some(File) if the file is opened and capture is actively happening.
     /// None if the file is not opened.
     pub file: Option<File>,
@@ -71,11 +69,7 @@ pub struct CaptureInfo {
 /// and owning device name.
 ///
 /// Information for any recent or ongoing captures is also stored in the ProtoCapture.
-/// facade_key_to_capture allows for fast lookups when handle_request, handle_response
-/// is invoked from packet_hub.
 pub struct Captures {
-    /// A mapping of (chip kind, facade id) to CaptureInfo.
-    pub facade_key_to_capture: HashMap<(ChipKind, FacadeIdentifier), Arc<Mutex<CaptureInfo>>>,
     /// A mapping of chip id to CaptureInfo.
     ///
     /// BTreeMap is used for chip_id_to_capture, so that the CaptureInfo can always be
@@ -85,14 +79,8 @@ pub struct Captures {
 
 impl CaptureInfo {
     /// Create an instance of CaptureInfo
-    pub fn new(
-        chip_kind: ChipKind,
-        facade_id: FacadeIdentifier,
-        chip_id: ChipIdentifier,
-        device_name: String,
-    ) -> Self {
+    pub fn new(chip_kind: ChipKind, chip_id: ChipIdentifier, device_name: String) -> Self {
         CaptureInfo {
-            facade_id,
             id: chip_id,
             chip_kind,
             device_name,
@@ -120,7 +108,7 @@ impl CaptureInfo {
         let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(filename)?;
         let link_type = match self.chip_kind {
             ChipKind::BLUETOOTH => LinkType::BluetoothHciH4WithPhdr,
-            ChipKind::WIFI => LinkType::Ieee802_11RadioTap,
+            ChipKind::WIFI => LinkType::Ieee80211RadioTap,
             _ => return Err(Error::new(ErrorKind::Other, "Unsupported link type")),
         };
         let size = write_pcap_header(link_type, &mut file)?;
@@ -139,20 +127,6 @@ impl CaptureInfo {
     /// So it can be downloaded easily when GetCapture is invoked.
     pub fn stop_capture(&mut self) {
         self.file = None;
-    }
-
-    /// A static helper function that returns facade_key from chip kind and facade id.
-    ///
-    /// This key will be used for facade_key_to_capture.
-    pub fn new_facade_key(
-        kind: ChipKind,
-        facade_id: FacadeIdentifier,
-    ) -> (ChipKind, FacadeIdentifier) {
-        (kind, facade_id)
-    }
-
-    fn get_facade_key(&self) -> (ChipKind, FacadeIdentifier) {
-        CaptureInfo::new_facade_key(self.chip_kind, self.facade_id)
     }
 
     /// Returns a Capture protobuf from CaptureInfo
@@ -179,11 +153,7 @@ impl CaptureInfo {
 impl Captures {
     /// Create an instance of Captures, which includes 2 empty hashmaps
     pub fn new() -> Self {
-        Captures {
-            facade_key_to_capture:
-                HashMap::<(ChipKind, FacadeIdentifier), Arc<Mutex<CaptureInfo>>>::new(),
-            chip_id_to_capture: BTreeMap::<ChipIdentifier, Arc<Mutex<CaptureInfo>>>::new(),
-        }
+        Captures { chip_id_to_capture: BTreeMap::<ChipIdentifier, Arc<Mutex<CaptureInfo>>>::new() }
     }
 
     /// Returns true if key exists in Captures.chip_id_to_capture
@@ -199,10 +169,8 @@ impl Captures {
     /// Inserts the given CatpureInfo into Captures hashmaps
     pub fn insert(&mut self, capture: CaptureInfo) {
         let chip_id = capture.id;
-        let facade_key = capture.get_facade_key();
         let arc_capture = Arc::new(Mutex::new(capture));
         self.chip_id_to_capture.insert(chip_id, arc_capture.clone());
-        self.facade_key_to_capture.insert(facade_key, arc_capture);
     }
 
     /// Returns true if chip_id_to_capture is empty
@@ -220,11 +188,10 @@ impl Captures {
     /// When Capture is removed, remove from each map and also invoke closing of files.
     pub fn remove(&mut self, key: &ChipIdentifier) {
         if let Some(arc_capture) = self.chip_id_to_capture.get(key) {
-            if let Ok(mut capture) = arc_capture.lock() {
-                // Valid is marked false when chip is disconnected from netsim
-                capture.valid = false;
-                capture.stop_capture();
-            }
+            let mut capture = arc_capture.lock().expect("Failed to acquire lock on CaptureInfo");
+            // Valid is marked false when chip is disconnected from netsim
+            capture.valid = false;
+            capture.stop_capture();
         } else {
             info!("key does not exist in Captures");
         }
@@ -250,24 +217,23 @@ impl Default for Captures {
 /// and ChipRemoved events and updates the collection of CaptureInfo.
 ///
 pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>) {
-    let _ = thread::Builder::new().name("capture_event_subscriber".to_string()).spawn(move || {
-        loop {
+    let _ =
+        thread::Builder::new().name("capture_event_subscriber".to_string()).spawn(move || loop {
             match event_rx.recv() {
-                Ok(Event::ChipAdded { chip_id, chip_kind, facade_id, device_name, .. }) => {
+                Ok(Event::ChipAdded(ChipAdded { chip_id, chip_kind, device_name, .. })) => {
                     let mut capture_info =
-                        CaptureInfo::new(chip_kind, facade_id, chip_id, device_name.clone());
+                        CaptureInfo::new(chip_kind, chip_id, device_name.clone());
                     if get_pcap() {
                         let _ = capture_info.start_capture();
                     }
                     clone_captures().write().unwrap().insert(capture_info);
-                    info!("Capture event: ChipAdded chip_id: {chip_id} device_name: {device_name} facade_id:{facade_id}");
+                    info!("Capture event: ChipAdded chip_id: {chip_id} device_name: {device_name}");
                 }
-                Ok(Event::ChipRemoved { chip_id, .. }) => {
+                Ok(Event::ChipRemoved(ChipRemoved { chip_id, .. })) => {
                     clone_captures().write().unwrap().remove(&chip_id);
                     info!("Capture event: ChipRemoved chip_id: {chip_id}");
                 }
                 _ => {}
             }
-        }
-    });
+        });
 }

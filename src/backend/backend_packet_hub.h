@@ -31,12 +31,10 @@ using netsim::common::ChipKind;
 
 /* Handle packet responses for the backend. */
 
-void HandleResponse(ChipKind kind, uint32_t facade_id,
-                    const std::vector<uint8_t> &packet,
+void HandleResponse(uint32_t chip_id, const std::vector<uint8_t> &packet,
                     /* optional */ packet::HCIPacket_PacketType packet_type);
 
-void HandleResponseCxx(uint32_t kind, uint32_t facade_id,
-                       const rust::Vec<rust::u8> &packet,
+void HandleResponseCxx(uint32_t chip_id, const rust::Vec<rust::u8> &packet,
                        /* optional */ uint8_t packet_type);
 
 }  // namespace backend

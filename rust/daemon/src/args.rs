@@ -60,11 +60,24 @@ pub struct NetsimdArgs {
     #[arg(short, long)]
     pub vsock: Option<u16>,
 
-    // The name of a config file to load
+    /// The name of a config file to load
     #[arg(long)]
     pub config: Option<String>,
 
-    // Start with test beacons
-    #[arg(long, alias = "test_beacons")]
-    pub test_beacons: Option<bool>,
+    /// Start with test beacons
+    #[arg(long, alias = "test_beacons", overrides_with("no_test_beacons"))]
+    pub test_beacons: bool,
+
+    /// Do not start with test beacons
+    #[arg(long, alias = "no_test_beacons", overrides_with("test_beacons"))]
+    pub no_test_beacons: bool,
+
+    /// Disable netsimd from shutting down automatically.
+    /// WARNING: This flag is for development purpose. netsimd will not shutdown without SIGKILL.
+    #[arg(long, alias = "no_shutdown")]
+    pub no_shutdown: bool,
+
+    /// Print Netsimd version information
+    #[arg(long)]
+    pub version: bool,
 }

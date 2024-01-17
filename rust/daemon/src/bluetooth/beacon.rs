@@ -18,17 +18,18 @@ use super::advertise_settings::{
 };
 use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
 use super::packets::link_layer::{
-    Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, Packet, PacketType,
+    Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, PacketType,
 };
-use crate::bluetooth::bluetooth_get;
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::{devices_handler::add_chip, id_factory::IdFactory};
+use crate::echip;
 use crate::ffi::ffi_bluetooth;
 use cxx::{let_cxx_string, UniquePtr};
 use lazy_static::lazy_static;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
+use netsim_proto::model::chip::Bluetooth;
 use netsim_proto::model::chip::{
     ble_beacon::AdvertiseData as AdvertiseDataProto,
     ble_beacon::AdvertiseSettings as AdvertiseSettingsProto, BleBeacon as BleBeaconProto,
@@ -37,7 +38,8 @@ use netsim_proto::model::chip_create::{
     BleBeaconCreate as BleBeaconCreateProto, Chip as BuiltinProto,
 };
 use netsim_proto::model::{ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto};
-use protobuf::MessageField;
+use pdl_runtime::Packet;
+use protobuf::{Message, MessageField};
 use std::alloc::System;
 use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -135,7 +137,7 @@ impl BeaconChip {
         if let Some(rust_bluetooth_chip) = binding.get(&self.chip_id) {
             rust_bluetooth_chip
                 .lock()
-                .unwrap()
+                .expect("Failed to acquire lock on RustBluetoothChip")
                 .pin_mut()
                 .send_link_layer_le_packet(packet, tx_power);
         } else {
@@ -158,7 +160,7 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
             error!("could not find bluetooth beacon with chip id {}", self.chip_id);
             return;
         }
-        let mut beacon = beacon.unwrap().lock().unwrap();
+        let mut beacon = beacon.unwrap().lock().expect("Failed to acquire lock on BeaconChip");
 
         if let (Some(start), Some(timeout)) =
             (beacon.advertise_start, beacon.advertise_settings.timeout)
@@ -205,7 +207,7 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
             error!("could not find bluetooth beacon with chip id {}", self.chip_id);
             return;
         }
-        let beacon = beacon.unwrap().lock().unwrap();
+        let beacon = beacon.unwrap().lock().expect("Failed to acquire lock on BeaconChip");
 
         if beacon.advertise_settings.scannable
             && destination_address == addr_to_str(beacon.address)
@@ -232,7 +234,6 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
 /// Similar to `bluetooth_add()`.
 #[cfg(not(test))]
 pub fn ble_beacon_add(
-    device_id: DeviceIdentifier,
     device_name: String,
     chip_id: ChipIdentifier,
     chip_proto: &ChipCreateProto,
@@ -251,17 +252,14 @@ pub fn ble_beacon_add(
 
     let callbacks: Box<dyn RustBluetoothChipCallbacks> = Box::new(BeaconChipCallbacks { chip_id });
     let add_rust_device_result = rust_bluetooth_add(
-        device_id,
+        chip_id,
         callbacks,
         String::from("beacon"),
         beacon_proto.address.clone(),
     );
     let rust_chip = add_rust_device_result.rust_chip;
     let facade_id = add_rust_device_result.facade_id;
-    info!(
-        "Creating HCI facade_id: {} for device_id: {} chip_id: {}",
-        facade_id, device_id, chip_id
-    );
+    info!("Creating HCI facade_id: {} for chip_id: {}", facade_id, chip_id);
     BT_CHIPS.write().unwrap().insert(chip_id, Mutex::new(rust_chip));
 
     Ok(facade_id)
@@ -269,7 +267,6 @@ pub fn ble_beacon_add(
 
 #[cfg(not(test))]
 pub fn ble_beacon_remove(
-    device_id: DeviceIdentifier,
     chip_id: ChipIdentifier,
     facade_id: FacadeIdentifier,
 ) -> Result<(), String> {
@@ -349,16 +346,23 @@ pub fn ble_beacon_patch(
 
 pub fn ble_beacon_get(
     chip_id: ChipIdentifier,
-    facade_id: FacadeIdentifier,
+    _facade_id: FacadeIdentifier,
 ) -> Result<BleBeaconProto, String> {
     let guard = BEACON_CHIPS.read().unwrap();
     let beacon = guard
         .get(&chip_id)
         .ok_or(format!("could not get bluetooth beacon with chip id {chip_id}"))?
         .lock()
-        .unwrap();
+        .expect("Failed to acquire lock on BeaconChip");
+    #[cfg(not(test))]
+    let bt = {
+        let bluetooth_bytes = ffi_bluetooth::bluetooth_get_cxx(_facade_id);
+        Some(Bluetooth::parse_from_bytes(&bluetooth_bytes).unwrap())
+    };
+    #[cfg(test)]
+    let bt = Some(netsim_proto::model::chip::Bluetooth::new());
     Ok(BleBeaconProto {
-        bt: Some(bluetooth_get(facade_id)).into(),
+        bt: bt.into(),
         address: addr_to_str(beacon.address),
         settings: MessageField::some((&beacon.advertise_settings).try_into()?),
         adv_data: MessageField::some((&beacon.advertise_data).into()),
@@ -400,6 +404,7 @@ pub mod tests {
     };
 
     use super::*;
+    // using ble_beacon_add from mocked.rs
     use crate::bluetooth::ble_beacon_add;
 
     lazy_static! {
@@ -410,7 +415,6 @@ pub mod tests {
         let id = TEST_GUID_GENERATOR.lock().unwrap().next_id();
 
         let add_result = ble_beacon_add(
-            0,
             format!("test-device-{:?}", thread::current().id()),
             id,
             &ChipCreateProto {

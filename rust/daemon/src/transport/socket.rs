@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::dispatcher::{handle_request, register_transport, unregister_transport, Response};
 use super::h4::PacketError;
+use crate::devices::chip::{self, ChipIdentifier};
 use crate::devices::devices_handler::{add_chip, remove_chip};
+use crate::echip;
+use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::transport::h4;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
-use netsim_proto::model::ChipCreate;
 use std::io::{ErrorKind, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::thread;
@@ -79,18 +80,27 @@ fn accept_incoming(hci_port: u16) -> std::io::Result<()> {
 
 fn handle_hci_client(stream: TcpStream) {
     // ...
-    let chip_create_proto = ChipCreate {
-        kind: ChipKind::BLUETOOTH.into(),
+    let chip_create_params = chip::CreateParams {
+        kind: ChipKind::BLUETOOTH,
         address: String::new(),
-        name: format!("socket-{}", stream.peer_addr().unwrap()),
+        name: Some(format!("socket-{}", stream.peer_addr().unwrap())),
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
-        ..Default::default()
+        bt_properties: None,
     };
+    #[cfg(not(test))]
+    let echip_create_params = echip::CreateParam::Bluetooth(echip::bluetooth::CreateParams {
+        address: String::new(),
+        bt_properties: None,
+    });
+    #[cfg(test)]
+    let echip_create_params =
+        echip::CreateParam::Mock(echip::mocked::CreateParams { chip_kind: ChipKind::BLUETOOTH });
     let result = match add_chip(
         &stream.peer_addr().unwrap().port().to_string(),
         &format!("socket-{}", stream.peer_addr().unwrap()),
-        &chip_create_proto,
+        &chip_create_params,
+        &echip_create_params,
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {
@@ -99,18 +109,14 @@ fn handle_hci_client(stream: TcpStream) {
         }
     };
     let tcp_rx = stream.try_clone().unwrap();
-    register_transport(
-        ChipKind::BLUETOOTH as u32,
-        result.facade_id,
-        Box::new(SocketTransport { stream }),
-    );
+    register_transport(result.chip_id, Box::new(SocketTransport { stream }));
 
-    let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.facade_id);
+    let _ = reader(tcp_rx, ChipKind::BLUETOOTH, result.chip_id);
 
     // unregister before remove_chip because facade may re-use facade_id
     // on an intertwining create_chip and the unregister here might remove
     // the recently added chip creating a disconnected transport.
-    unregister_transport(ChipKind::BLUETOOTH as u32, result.facade_id);
+    unregister_transport(result.chip_id);
 
     if let Err(err) = remove_chip(result.device_id, result.chip_id) {
         warn!("{err}");
@@ -120,13 +126,12 @@ fn handle_hci_client(stream: TcpStream) {
 
 /// read from the socket and pass to the packet hub.
 ///
-fn reader(mut tcp_rx: TcpStream, kind: ChipKind, facade_id: u32) -> std::io::Result<()> {
+fn reader(mut tcp_rx: TcpStream, kind: ChipKind, chip_id: ChipIdentifier) -> std::io::Result<()> {
     loop {
         if let ChipKind::BLUETOOTH = kind {
             match h4::read_h4_packet(&mut tcp_rx) {
-                Ok(packet) => {
-                    let kind: u32 = kind as u32;
-                    handle_request(kind, facade_id, &packet.payload, packet.h4_type);
+                Ok(mut packet) => {
+                    echip::handle_request(chip_id, &mut packet.payload, packet.h4_type);
                 }
                 Err(PacketError::IoError(e)) if e.kind() == ErrorKind::UnexpectedEof => {
                     info!("End socket reader connection with {}.", &tcp_rx.peer_addr().unwrap());

@@ -22,6 +22,7 @@ use std::{
     io::{Result, Write},
     time::Duration,
 };
+
 macro_rules! be_vec {
     ( $( $x:expr ),* ) => {
          Vec::<u8>::new().iter().copied()
@@ -41,8 +42,9 @@ pub enum PacketDirection {
 /// Supported LinkTypes for packet capture
 /// https://www.tcpdump.org/linktypes.html
 pub enum LinkType {
-    /// Radiotap link-layer information followed by an 802.11 header.
-    Ieee802_11RadioTap = 127,
+    /// Radiotap link-layer information followed by an 802.11
+    /// header. Radiotap is used with mac80211_hwsim networking.
+    Ieee80211RadioTap = 127,
     /// Bluetooth HCI UART transport layer
     BluetoothHciH4WithPhdr = 201,
 }
@@ -65,18 +67,29 @@ pub fn write_pcap_header<W: Write>(link_type: LinkType, output: &mut W) -> Resul
     Ok(header.len())
 }
 
+/// The BluetoothHciH4WithPhdr frame contains a 4-byte direction
+/// field, followed by an HCI packet indicator byte, followed by an
+/// HCI packet of the specified packet type.
+pub fn wrap_bt_packet(
+    packet_direction: PacketDirection,
+    packet_type: u32,
+    packet: &[u8],
+) -> Vec<u8> {
+    let header: Vec<u8> = be_vec![packet_direction as u32, packet_type as u8];
+    let mut bytes = Vec::<u8>::with_capacity(header.len() + packet.len());
+    bytes.extend(&header);
+    bytes.extend(packet);
+    bytes
+}
+
 /// Returns the file size after appending a single packet record.
 pub fn append_record<W: Write>(
     timestamp: Duration,
     output: &mut W,
-    packet_direction: PacketDirection,
     packet: &[u8],
 ) -> Result<usize> {
-    // Record (direciton, type, packet)
-    let record: Vec<u8> = be_vec![packet_direction as u32];
-
     // https://tools.ietf.org/id/draft-gharris-opsawg-pcap-00.html#name-packet-record
-    let length = record.len() + packet.len();
+    let length = packet.len();
     let header: Vec<u8> = be_vec![
         timestamp.as_secs() as u32, // seconds
         timestamp.subsec_micros(),  // microseconds
@@ -85,7 +98,6 @@ pub fn append_record<W: Write>(
     ];
     let mut bytes = Vec::<u8>::with_capacity(header.len() + length);
     bytes.extend(&header);
-    bytes.extend(&record);
     bytes.extend(packet);
     output.write_all(&bytes)?;
     output.flush()?;
@@ -107,18 +119,18 @@ mod tests {
     fn test_pcap_file() {
         let mut actual = Vec::<u8>::new();
         write_pcap_header(LinkType::BluetoothHciH4WithPhdr, &mut actual).unwrap();
-        append_record(
+        let _ = append_record(
             Duration::from_secs(0),
             &mut actual,
-            PacketDirection::HostToController,
-            &[4, 14, 4, 1, 10, 32, 0],
+            // H4_EVT_TYPE = 4
+            &wrap_bt_packet(PacketDirection::HostToController, 4, &[14, 4, 1, 10, 32, 0]),
         )
         .unwrap();
-        append_record(
+        let _ = append_record(
             Duration::from_millis(250),
             &mut actual,
-            PacketDirection::ControllerToHost,
-            &[1, 10, 32, 1, 0],
+            // H4_CMD_TYPE = 1
+            &wrap_bt_packet(PacketDirection::ControllerToHost, 1, &[10, 32, 1, 0]),
         )
         .unwrap();
         assert_eq!(actual, EXPECTED);

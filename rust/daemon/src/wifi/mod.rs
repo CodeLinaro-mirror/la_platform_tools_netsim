@@ -17,12 +17,8 @@
 
 #![allow(unused)]
 
-#[cfg(not(test))]
-mod facade;
-#[cfg(not(test))]
-pub(crate) use self::facade::*;
-
-#[cfg(test)]
-mod mocked;
-#[cfg(test)]
-pub(crate) use self::mocked::*;
+pub(crate) mod frame;
+pub(crate) mod ieee80211;
+pub(crate) mod medium;
+pub(crate) mod packets;
+pub(crate) mod radiotap;

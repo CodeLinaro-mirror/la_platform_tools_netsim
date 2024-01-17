@@ -4,7 +4,7 @@ import {live} from 'lit/directives/live.js';
 import {styleMap} from 'lit/directives/style-map.js';
 
 import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
-import {Chip, Chip_Bluetooth, Chip_BluetoothBeacon, Chip_Radio, State,} from './netsim/model.js';
+import {Chip, Chip_BleBeacon, Chip_Bluetooth, Chip_Radio, State,} from './netsim/model.js';
 
 enum ChipKind {
   UNSPECIFIED = 'UNSPECIFIED',
@@ -342,7 +342,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
     });
   }
 
-  private handleGetBleBeacon(ble_beacon: Chip_BluetoothBeacon) {
+  private handleGetBleBeacon(ble_beacon: Chip_BleBeacon) {
     const handleGetSettings = () => {
       if (!ble_beacon.settings) {
         return html``;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::dispatcher::{register_transport, unregister_transport, Response};
+use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::ffi::ffi_transport::handle_grpc_response;
 
 /// Grpc transport.
@@ -21,22 +21,21 @@ use crate::ffi::ffi_transport::handle_grpc_response;
 /// provides a higher-level API that is easier to use from Rust.
 
 struct GrpcTransport {
-    kind: u32,
-    facade_id: u32,
+    chip_id: u32,
 }
 
 impl Response for GrpcTransport {
     fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
-        handle_grpc_response(self.kind, self.facade_id, &packet, packet_type)
+        handle_grpc_response(self.chip_id, &packet, packet_type)
     }
 }
 
 // for grpc server in C++
-pub fn register_grpc_transport(kind: u32, facade_id: u32) {
-    register_transport(kind, facade_id, Box::new(GrpcTransport { kind, facade_id }));
+pub fn register_grpc_transport(chip_id: u32) {
+    register_transport(chip_id, Box::new(GrpcTransport { chip_id }));
 }
 
 // for grpc server in C++
-pub fn unregister_grpc_transport(kind: u32, facade_id: u32) {
-    unregister_transport(kind, facade_id);
+pub fn unregister_grpc_transport(chip_id: u32) {
+    unregister_transport(chip_id);
 }
