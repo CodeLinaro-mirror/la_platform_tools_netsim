@@ -118,9 +118,11 @@ pub fn handle_response(chip_id: ChipIdentifier, packet: &cxx::CxxVector<u8>, pac
 
 // Send HwsimCmd packets to guest OS.
 pub fn hwsim_cmd_response(client_id: u32, packet: &[u8]) {
+    let packet_type = PacketType::HCI_PACKET_UNSPECIFIED.value() as u8;
+    captures_handler::handle_packet_response(client_id, packet, packet_type.into());
+
     let mut senders = SENDERS.lock();
     if let Some(responder) = senders.get(&client_id) {
-        let packet_type = PacketType::HCI_PACKET_UNSPECIFIED.value() as u8;
         if responder.send(ResponsePacket { packet: packet.to_owned(), packet_type }).is_err() {
             warn!("send failed for client: {client_id}");
             senders.remove(&client_id); // Remove from the map using the value itself

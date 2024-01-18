@@ -125,6 +125,37 @@ impl Ieee80211 {
             _ => panic!("unexpected specialized header"),
         }
     }
+
+    /// Covert Ieee80211ToAp to Ieee80211FromAp packet.
+    pub fn into_from_ap(&self) -> Ieee80211FromAp {
+        let frame_payload: Ieee80211Child = self.specialize();
+        return match frame_payload {
+            Ieee80211Child::Ieee80211ToAp(frame_to_ap) => {
+                // Flip from_ap and to_ap bits.
+                // TODO: Investigate if there is a way to copy frame_control flags at once.
+                // The header struct only has 7 fields, not 15. Most fields come from le16 frame_control.
+                Ieee80211FromApBuilder {
+                    duration_id: frame_to_ap.get_duration_id(),
+                    ftype: frame_to_ap.get_ftype(),
+                    more_data: frame_to_ap.get_more_data(),
+                    more_frags: frame_to_ap.get_more_frags(),
+                    order: frame_to_ap.get_order(),
+                    pm: frame_to_ap.get_pm(),
+                    protected: frame_to_ap.get_protected(),
+                    retry: frame_to_ap.get_retry(),
+                    stype: frame_to_ap.get_stype(),
+                    version: frame_to_ap.get_version(),
+                    bssid: frame_to_ap.get_bssid(),
+                    source: frame_to_ap.get_source(),
+                    destination: frame_to_ap.get_destination(),
+                    seq_ctrl: frame_to_ap.get_seq_ctrl(),
+                    payload: frame_to_ap.get_payload().to_vec(),
+                }
+                .build()
+            }
+            _ => panic!("Invalid Ieee80211Child packet"),
+        };
+    }
 }
 
 fn parse_mac_address(s: &str) -> Option<MacAddress> {
