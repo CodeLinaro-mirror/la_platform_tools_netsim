@@ -141,29 +141,45 @@ impl Medium {
         }
     }
 
+    /// Create tx info frame to station to ack HwsimMsg.
+    fn send_tx_info_frame(&self, station: &Station, frame: &Frame) {
+        let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().to_vec();
+        (self.callback)(station.client_id, &hwsim_msg_tx_info);
+    }
+
+    /// Create from_ap packet and forward it to destination station.
+    fn send_from_ap_packet(&self, station: &Station, dest_station: &Station, frame: &Frame) {
+        if let Some(from_ap_packet) = create_from_ap_packet(frame, &dest_station.addr) {
+            (self.callback)(dest_station.client_id, &from_ap_packet);
+            log_from_ap_packet(&from_ap_packet, station, dest_station);
+        }
+    }
+
+    /// Create from_ap packet and forward it to other stations.
+    fn send_from_ap_packet_to_stations(&self, station: &Station, frame: &Frame) {
+        for (mac_address, dest_station) in &self.stations {
+            if station.client_id != dest_station.client_id {
+                self.send_from_ap_packet(station, dest_station, frame);
+            }
+        }
+    }
+
     fn queue_frame(&self, station: &Station, frame: Frame) -> anyhow::Result<bool> {
         let destination = frame.ieee80211.get_destination();
-        if let Some(station) = self.stations.get(&destination) {
-            info!("Frame deliver from {} to {}", station.addr, destination);
-            // rewrite packet to destination client: ToAP -> FromAP
+        if let Some(dest_station) = self.stations.get(&destination) {
+            info!("Frame deliver from {} to {}", station.addr, dest_station.addr);
+            self.send_tx_info_frame(station, &frame);
+            self.send_from_ap_packet(station, dest_station, &frame);
             Ok(true)
         } else if destination.is_multicast() {
             info!("Frame multicast {}", frame.ieee80211);
-            let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().to_vec();
-            (self.callback)(station.client_id, &hwsim_msg_tx_info);
-
-            // Create mdns from_ap packet and forward it to other stations.
-            for (mac_address, dest_station) in &self.stations {
-                if station.client_id != dest_station.client_id {
-                    if let Some(mdns_from_ap) =
-                        create_mdns_from_ap_packet(&frame, &dest_station.addr)
-                    {
-                        (self.callback)(dest_station.client_id, &mdns_from_ap);
-                        log_mdns_from_ap_packet(&mdns_from_ap, station, dest_station);
-                    }
-                }
-            }
+            self.send_tx_info_frame(station, &frame);
+            self.send_from_ap_packet_to_stations(station, &frame);
             Ok(true)
+        } else if destination.is_broadcast() {
+            info!("Frame broadcast {}", frame.ieee80211);
+            self.send_from_ap_packet_to_stations(station, &frame);
+            Ok(false)
         } else {
             // pass to libslirp
             Ok(false)
@@ -171,15 +187,11 @@ impl Medium {
     }
 }
 
-fn log_mdns_from_ap_packet(
-    hwsim_msg_from_ap_bytes: &[u8],
-    source: &Station,
-    destination: &Station,
-) {
+fn log_from_ap_packet(hwsim_msg_from_ap_bytes: &[u8], source: &Station, destination: &Station) {
     let hwsim_msg = HwsimMsg::parse(hwsim_msg_from_ap_bytes).unwrap();
     let frame = Frame::parse(&hwsim_msg).unwrap();
     info!(
-        "Sent mdns from_ap packet from client {} to client {}. flags {:?}, ieee80211 {}",
+        "Sent from_ap packet from client {} to {}. flags {:?}, ieee80211 {}",
         source.client_id, destination.client_id, frame.flags, frame.ieee80211,
     );
 }
@@ -224,14 +236,13 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
     Ok(new_hwsim_msg)
 }
 
-fn create_mdns_from_ap_attributes(
+fn create_from_ap_attributes(
     attributes: &[u8],
     receiver: &MacAddress,
+    attrs: &HwsimAttrSet,
 ) -> anyhow::Result<Vec<u8>> {
-    let attr_set = HwsimAttrSet::parse(attributes)?;
-
-    let ieee80211_frame = Ieee80211::parse(&attr_set.frame.clone().context("frame")?)?;
-    let new_frame = ieee80211_frame.into_from_ap().to_vec();
+    let ieee80211_frame = Ieee80211::parse(&attrs.frame.clone().context("frame")?)?;
+    let new_frame = ieee80211_frame.into_from_ap()?.to_vec();
 
     let mut builder = HwsimAttrSet::builder();
 
@@ -239,25 +250,26 @@ fn create_mdns_from_ap_attributes(
     builder.receiver(&receiver.to_vec());
     builder.frame(&new_frame);
     // NOTE: Incoming mdns packets don't have rx_rate and signal.
-    builder.rx_rate(attr_set.rx_rate_idx.unwrap_or(RX_RATE));
-    builder.signal(attr_set.signal.unwrap_or(SIGNAL));
+    builder.rx_rate(attrs.rx_rate_idx.unwrap_or(RX_RATE));
+    builder.signal(attrs.signal.unwrap_or(SIGNAL));
 
-    attr_set.flags.map(|v| builder.flags(v));
-    attr_set.freq.map(|v| builder.freq(v));
-    attr_set.tx_info.map(|v| builder.tx_info(&v));
-    attr_set.tx_info_flags.map(|v| builder.tx_info_flags(&v));
+    attrs.flags.map(|v| builder.flags(v));
+    attrs.freq.map(|v| builder.freq(v));
+    attrs.tx_info.as_ref().map(|v| builder.tx_info(v));
+    attrs.tx_info_flags.as_ref().map(|v| builder.tx_info_flags(v));
 
     Ok(builder.build()?.attributes)
 }
 
-fn create_mdns_from_ap_packet(frame: &Frame, receiver: &MacAddress) -> Option<Vec<u8>> {
+fn create_from_ap_packet(frame: &Frame, receiver: &MacAddress) -> Option<Vec<u8>> {
     let hwsim_msg = &frame.hwsim_msg;
     assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
-    let attributes_result = create_mdns_from_ap_attributes(hwsim_msg.get_attributes(), receiver);
+    let attributes_result =
+        create_from_ap_attributes(hwsim_msg.get_attributes(), receiver, &frame.attrs);
     let attributes = match attributes_result {
         Ok(attributes) => attributes,
         Err(e) => {
-            warn!("Failed to create mdns from_ap attributes. E: {}", e);
+            warn!("Failed to create from_ap attributes. E: {}", e);
             return None;
         }
     };

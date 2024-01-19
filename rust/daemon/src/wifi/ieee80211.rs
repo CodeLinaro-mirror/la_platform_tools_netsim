@@ -18,6 +18,8 @@
 #![allow(missing_docs)]
 include!(concat!(env!("OUT_DIR"), "/ieee80211_packets.rs"));
 
+use anyhow::anyhow;
+
 /// A Ieee80211 MAC address
 
 impl MacAddress {
@@ -67,6 +69,11 @@ impl MacAddress {
     pub fn is_multicast(&self) -> bool {
         let addr = u64::to_le_bytes(self.0);
         addr[0] == 0x1
+    }
+
+    pub fn is_broadcast(&self) -> bool {
+        let addr = u64::to_le_bytes(self.0);
+        addr[0] == 0xff
     }
 }
 
@@ -127,14 +134,14 @@ impl Ieee80211 {
     }
 
     /// Covert Ieee80211ToAp to Ieee80211FromAp packet.
-    pub fn into_from_ap(&self) -> Ieee80211FromAp {
+    pub fn into_from_ap(&self) -> anyhow::Result<Ieee80211FromAp> {
         let frame_payload: Ieee80211Child = self.specialize();
         return match frame_payload {
             Ieee80211Child::Ieee80211ToAp(frame_to_ap) => {
                 // Flip from_ap and to_ap bits.
                 // TODO: Investigate if there is a way to copy frame_control flags at once.
                 // The header struct only has 7 fields, not 15. Most fields come from le16 frame_control.
-                Ieee80211FromApBuilder {
+                Ok(Ieee80211FromApBuilder {
                     duration_id: frame_to_ap.get_duration_id(),
                     ftype: frame_to_ap.get_ftype(),
                     more_data: frame_to_ap.get_more_data(),
@@ -151,9 +158,13 @@ impl Ieee80211 {
                     seq_ctrl: frame_to_ap.get_seq_ctrl(),
                     payload: frame_to_ap.get_payload().to_vec(),
                 }
-                .build()
+                .build())
             }
-            _ => panic!("Invalid Ieee80211Child packet"),
+            _ => Err(anyhow!(
+                "Invalid Ieee80211Child packet. from_ds: {}, to_ds: {}",
+                self.get_from_ds(),
+                self.get_to_ds()
+            )),
         };
     }
 }
