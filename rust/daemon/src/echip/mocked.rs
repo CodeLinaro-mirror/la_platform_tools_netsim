@@ -33,7 +33,7 @@ pub struct Mock {
 }
 
 impl EmulatedChip for Mock {
-    fn handle_request(&self, packet: &[u8]) {}
+    fn handle_request(&self, _packet: &[u8]) {}
 
     fn reset(&mut self) {}
 
@@ -43,11 +43,11 @@ impl EmulatedChip for Mock {
         proto_chip
     }
 
-    fn patch(&mut self, chip: &ProtoChip) {}
+    fn patch(&mut self, _chip: &ProtoChip) {}
 
     fn remove(&mut self) {}
 
-    fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
+    fn get_stats(&self, _duration_secs: u64) -> Vec<ProtoRadioStats> {
         let mut stats = ProtoRadioStats::new();
         stats.kind = Some(EnumOrUnknown::new(match self.chip_kind {
             ProtoChipKind::UNSPECIFIED => netsim_radio_stats::Kind::UNSPECIFIED,

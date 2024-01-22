@@ -38,6 +38,7 @@ PYTHON_EXE = sys.executable or "python3"
 TARGET_MAP = {
     "windows": "windows_msvc-x86_64",
     "windows_x64": "windows_msvc-x86_64",
+    "windows_x86_64": "windows_msvc-x86_64",
     "linux": "linux-x86_64",
     "linux_x64": "linux-x86_64",
     "linux_x86_64": "linux-x86_64",

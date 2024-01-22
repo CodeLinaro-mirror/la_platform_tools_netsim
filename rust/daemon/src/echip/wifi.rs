@@ -28,6 +28,8 @@ use protobuf::{Message, MessageField};
 use std::sync::{Arc, Mutex};
 
 /// Parameters for creating Wifi chips
+/// allow(dead_code) due to not being used in unit tests
+#[allow(dead_code)]
 pub struct CreateParams {}
 
 /// Wifi struct will keep track of chip_id
@@ -86,6 +88,8 @@ impl EmulatedChip for Wifi {
 }
 
 /// Create a new Emulated Wifi Chip
+/// allow(dead_code) due to not being used in unit tests
+#[allow(dead_code)]
 pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
     ffi_wifi::wifi_add(chip_id);
     info!("WiFi EmulatedChip created chip_id: {chip_id}");

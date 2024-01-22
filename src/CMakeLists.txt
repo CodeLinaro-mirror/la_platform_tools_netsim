@@ -11,23 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-android_add_library(
-  TARGET util-lib
-  LICENSE Apache-2.0
-  SRC util/crash_report.cc
-      util/crash_report.h
-      util/filesystem.h
-      util/ini_file.cc
-      util/ini_file.h
-      util/log.cc
-      util/log.h
-      util/os_utils.cc
-      util/os_utils.h
-      util/string_utils.cc
-      util/string_utils.h)
-target_include_directories(util-lib PRIVATE .)
-target_compile_definitions(util-lib PUBLIC NETSIM_ANDROID_EMULATOR)
+add_subdirectory(util)
+if(NOT NETSIM_EXT)
+  add_subdirectory(backend)
+endif()
 
 if(TARGET Rust::Rustc)
   set(cxx_bridge_binary_folder
@@ -52,27 +39,7 @@ if(TARGET Rust::Rustc)
     DEPS grpc++ netsim-cli-proto-lib protobuf::libprotobuf util-lib)
   target_include_directories(frontend-client PRIVATE .
                              PUBLIC ${cxx_bridge_binary_folder})
-endif()
 
-if(NOT NETSIM_EXT)
-  android_add_library(
-    TARGET packet-streamer-client-lib
-    LICENSE Apache-2.0
-    SRC backend/packet_streamer_client.cc backend/packet_streamer_client.h
-    DEPS android-emu-base
-         android-emu-base-headers
-         android-emu-base-process
-         android-emu-metrics
-         android-grpc-interceptors
-         grpc++
-         packet-streamer-proto-lib
-         protobuf::libprotobuf
-         util-lib)
-  target_include_directories(packet-streamer-client-lib
-                             PUBLIC ${CMAKE_CURRENT_LIST_DIR})
-endif()
-
-if(TARGET Rust::Rustc)
   set(cxx_bridge_binary_folder
       ${CMAKE_BINARY_DIR}/cargo/build/${Rust_CARGO_TARGET_CACHED}/cxxbridge)
   set(common_header ${cxx_bridge_binary_folder}/rust/cxx.h)

@@ -8,7 +8,7 @@ crate-type = ["staticlib", "lib"]
 doctest = false
 
 [dependencies]
-chrono = { version = "0.4.19", default-features = false }
+chrono = { version = "0.4.19", default-features = false, features = ["clock"] }
 env_logger = { version = "0.10.0", default-features = false }
 log = "0.4.17"
 rand = "0.8.5"
