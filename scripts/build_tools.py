@@ -113,10 +113,6 @@ def main():
     # Make sure the dist directory exists.
     dist = Path(args.dist_dir).absolute()
     dist.mkdir(exist_ok=True, parents=True)
-    if presubmit:
-        logging.info("Not uploading symbols for presubmit builds.")
-    else:
-        cmd = cmd + ["--crash", "prod"]
 
     with ServerConfig(presubmit, args) as cfg:
         # Turn on sccache?

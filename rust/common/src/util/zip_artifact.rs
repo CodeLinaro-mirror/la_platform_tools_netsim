@@ -26,7 +26,7 @@ use zip::{result::ZipResult, write::FileOptions, ZipWriter};
 
 use crate::system::netsimd_temp_dir;
 
-use super::time_display::file_current_time;
+use super::time_display::{file_current_time, TimeZone};
 
 /// Recurse all files in root and put it in Vec<PathBuf>
 fn recurse_files(root: &PathBuf) -> Result<Vec<PathBuf>> {
@@ -87,7 +87,8 @@ pub fn zip_artifacts() -> ZipResult<()> {
     let files = recurse_files(&root)?;
 
     // Define PathBuf for zip file
-    let zip_file = root.join(format!("netsim_artifacts_{}.zip", file_current_time()));
+    let zip_file =
+        root.join(format!("netsim_artifacts_{}.zip", file_current_time(TimeZone::Local)));
 
     // Create a new ZipWriter
     let mut zip_writer = ZipWriter::new(File::create(zip_file)?);

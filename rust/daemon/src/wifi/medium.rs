@@ -94,11 +94,17 @@ impl Medium {
         match (hwsim_msg.get_hwsim_hdr().hwsim_cmd) {
             HwsimCmd::Frame => {
                 let frame = Frame::parse(&hwsim_msg)?;
+                // Incoming packet must contain transmitter, flag, cookie, and tx_info fields.
+                if frame.tx_info.is_none() {
+                    return Err(anyhow!("Missing tx_info for incoming packet"));
+                }
+                let addr = frame.transmitter.context("transmitter")?;
+                let flags = frame.flags.context("flags")?;
+                let cookie = frame.cookie.context("cookie")?;
                 info!(
-                    "Frame chip {}, addr {}, flags {}, cookie {:?}, ieee80211 {}",
-                    client_id, frame.transmitter, frame.flags, frame.cookie, frame.ieee80211
+                    "Frame chip {}, addr {}, flags {}, cookie {}, ieee80211 {}",
+                    client_id, addr, flags, cookie, frame.ieee80211
                 );
-                let addr = frame.transmitter;
                 // Creates Stations on the fly when there is no config file
                 let _ = self.stations.entry(addr).or_insert_with(|| Station::new(client_id, addr));
                 let sender = self.stations.get(&addr).unwrap();
@@ -137,6 +143,8 @@ impl Medium {
             Ok(true)
         } else if destination.is_multicast() {
             info!("Frame multicast {}", frame.ieee80211);
+            let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().to_vec();
+            (self.callback)(station.client_id, &hwsim_msg_tx_info);
             Ok(true)
         } else {
             // pass to libslirp
@@ -145,6 +153,9 @@ impl Medium {
     }
 }
 
+/// Build TxInfoFrame HwsimMsg from CmdFrame HwsimMsg.
+///
+/// Reference to ackLocalFrame() in external/qemu/android-qemu2-glue/emulation/VirtioWifiForwarder.cpp
 fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
     let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes()).context("HwsimAttrSet").unwrap();
 
@@ -152,10 +163,12 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
     let nl_hdr = hwsim_msg.get_nl_hdr();
     let mut new_attr_builder = HwsimAttrSet::builder();
     const SIGNAL: u32 = 4294967246;
+    const HWSIM_TX_STAT_ACK: u32 = 1 << 2;
+    const NLMSG_MIN_TYPE: u16 = 0x10;
 
     new_attr_builder
         .transmitter(&attrs.transmitter.context("transmitter")?.into())
-        .flags(attrs.flags.context("flags")?)
+        .flags(attrs.flags.context("flags")? | HWSIM_TX_STAT_ACK)
         .cookie(attrs.cookie.context("cookie")?)
         .signal(attrs.signal.unwrap_or(SIGNAL))
         .tx_info(attrs.tx_info.context("tx_info")?.as_slice());
@@ -167,12 +180,12 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
         attributes: new_attr.attributes,
         hwsim_hdr: HwsimMsgHdr {
             hwsim_cmd: HwsimCmd::TxInfoFrame,
-            hwsim_version: hwsim_hdr.hwsim_version,
+            hwsim_version: 0,
             reserved: hwsim_hdr.reserved,
         },
         nl_hdr: NlMsgHdr {
             nlmsg_len,
-            nlmsg_type: nl_hdr.nlmsg_type,
+            nlmsg_type: NLMSG_MIN_TYPE,
             nlmsg_flags: nl_hdr.nlmsg_flags,
             nlmsg_seq: 0,
             nlmsg_pid: 0,
@@ -182,7 +195,7 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
     Ok(new_hwsim_msg)
 }
 
-// It's usd by radiotap.rs for packet capture.
+// It's used by radiotap.rs for packet capture.
 pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
     let hwsim_msg = HwsimMsg::parse(packet)?;
     match (hwsim_msg.get_hwsim_hdr().hwsim_cmd) {
@@ -190,6 +203,7 @@ pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
             let frame = Frame::parse(&hwsim_msg)?;
             Ok(HwsimCmdEnum::Frame(Box::new(frame)))
         }
+        HwsimCmd::TxInfoFrame => Ok(HwsimCmdEnum::TxInfoFrame),
         _ => Err(anyhow!("Unknown HwsimMsg cmd={:?}", hwsim_msg.get_hwsim_hdr().hwsim_cmd)),
     }
 }
@@ -203,17 +217,20 @@ mod tests {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
         assert!(parse_hwsim_cmd(&packet).is_ok());
 
-        // missing transmitter attribute
-        let packet2: Vec<u8> = include!("test_packets/hwsim_cmd_frame2.csv");
-        assert!(parse_hwsim_cmd(&packet2).is_err());
+        let tx_info_packet: Vec<u8> = include!("test_packets/hwsim_cmd_tx_info.csv");
+        assert!(parse_hwsim_cmd(&tx_info_packet).is_ok());
+    }
 
-        // missing cookie attribute
-        let packet3: Vec<u8> = include!("test_packets/hwsim_cmd_frame_no_cookie.csv");
-        assert!(parse_hwsim_cmd(&packet3).is_err());
+    #[test]
+    fn test_netlink_attr_response_packet() {
+        // Response packet may not contain transmitter, flags, tx_info, or cookie fields.
+        let response_packet: Vec<u8> =
+            include!("test_packets/hwsim_cmd_frame_response_no_transmitter_flags_tx_info.csv");
+        assert!(parse_hwsim_cmd(&response_packet).is_ok());
 
-        // HwsimkMsg cmd=TxInfoFrame packet
-        let packet3: Vec<u8> = include!("test_packets/hwsim_cmd_tx_info.csv");
-        assert!(parse_hwsim_cmd(&packet3).is_err());
+        let response_packet2: Vec<u8> =
+            include!("test_packets/hwsim_cmd_frame_response_no_cookie.csv");
+        assert!(parse_hwsim_cmd(&response_packet2).is_ok());
     }
 
     #[test]
@@ -245,5 +262,42 @@ mod tests {
         let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
         let hwsim_msg_tx_info = build_tx_info(&hwsim_msg).unwrap();
         assert_eq!(hwsim_msg_tx_info.get_hwsim_hdr().hwsim_cmd, HwsimCmd::TxInfoFrame);
+    }
+
+    fn build_tx_info_and_compare(frame_bytes: &[u8], tx_info_expected_bytes: &[u8]) {
+        let frame = HwsimMsg::parse(frame_bytes).unwrap();
+        let tx_info = build_tx_info(&frame).unwrap();
+
+        let tx_info_expected = HwsimMsg::parse(tx_info_expected_bytes).unwrap();
+
+        assert_eq!(tx_info.get_hwsim_hdr(), tx_info_expected.get_hwsim_hdr());
+        assert_eq!(tx_info.get_nl_hdr(), tx_info_expected.get_nl_hdr());
+
+        let attrs = HwsimAttrSet::parse(tx_info.get_attributes()).context("HwsimAttrSet").unwrap();
+        let attrs_expected =
+            HwsimAttrSet::parse(tx_info_expected.get_attributes()).context("HwsimAttrSet").unwrap();
+
+        // NOTE: TX info is different and the counts are all zeros in the TX info packet generated by WifiService.
+        // TODO: Confirm if the behavior is intended in WifiService.
+        assert_eq!(attrs.transmitter, attrs_expected.transmitter);
+        assert_eq!(attrs.flags, attrs_expected.flags);
+        assert_eq!(attrs.cookie, attrs_expected.cookie);
+        assert_eq!(attrs.signal, attrs_expected.signal);
+    }
+
+    #[test]
+    fn test_build_tx_info_and_compare() {
+        let frame_bytes: Vec<u8> = include!("test_packets/hwsim_cmd_frame_request.csv");
+        let tx_info_expected_bytes: Vec<u8> =
+            include!("test_packets/hwsim_cmd_tx_info_response.csv");
+        build_tx_info_and_compare(&frame_bytes, &tx_info_expected_bytes);
+    }
+
+    #[test]
+    fn test_build_tx_info_and_compare_mdns() {
+        let frame_bytes: Vec<u8> = include!("test_packets/hwsim_cmd_frame_request_mdns.csv");
+        let tx_info_expected_bytes: Vec<u8> =
+            include!("test_packets/hwsim_cmd_tx_info_response_mdns.csv");
+        build_tx_info_and_compare(&frame_bytes, &tx_info_expected_bytes);
     }
 }

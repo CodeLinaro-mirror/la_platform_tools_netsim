@@ -19,6 +19,32 @@ include(android)
 include(prebuilts)
 prebuilt(Threads)
 
+if(DARWIN_AARCH64 AND NOT Rust_COMPILER)
+  message(
+    STATUS
+      "On Apple sillicon attempting to use platform toolchain if available.")
+  list(APPEND CMAKE_MODULE_PATH
+       "${EXTERNAL_QEMU}/android/build/cmake/corrosion/cmake/")
+  find_package(Rust REQUIRED)
+  if(TARGET Rust::Rustc)
+    set(OPTION_ENABLE_SYSTEM_RUST TRUE)
+  else()
+    message(STATUS "Unable to derive local toolchain")
+    message(
+      FATAL_ERROR
+        "If you are a developer you can install rust with `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`"
+    )
+  endif()
+endif()
+
+if(WINDOWS_MSVC_X86_64)
+  # Set of msvc compat layer libraries.
+  add_subdirectory(${EXTERNAL_QEMU}/android/third_party/mman-win32 mman-win32)
+  add_subdirectory(${EXTERNAL_QEMU}/android/third_party/regex-win32 regex-win32)
+  add_subdirectory(${EXTERNAL_QEMU}/android/third_party/dirent-win32
+                   dirent-win32)
+endif()
+
 if(Rust_COMPILER OR OPTION_ENABLE_SYSTEM_RUST)
   if(OPTION_ENABLE_SYSTEM_RUST)
     message(STATUS "Attempting to use the system rust compiler")

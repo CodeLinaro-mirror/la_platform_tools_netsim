@@ -48,14 +48,13 @@ impl SharedEmulatedChip {
 }
 
 /// Parameter for each constructor of Emulated Chips
-#[allow(clippy::large_enum_variant)]
+#[allow(clippy::large_enum_variant, dead_code)]
 pub enum CreateParam {
     BleBeacon(ble_beacon::CreateParams),
     #[cfg(not(test))]
     Bluetooth(bluetooth::CreateParams),
     #[cfg(not(test))]
     Wifi(wifi::CreateParams),
-    #[cfg(not(test))]
     Uwb,
     Mock(mocked::CreateParams),
 }
@@ -124,7 +123,6 @@ pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> SharedEmulate
         CreateParam::Bluetooth(params) => bluetooth::new(params, chip_id),
         #[cfg(not(test))]
         CreateParam::Wifi(params) => wifi::new(params, chip_id),
-        #[cfg(not(test))]
         CreateParam::Uwb => todo!(),
         CreateParam::Mock(params) => mocked::new(params, chip_id),
     };

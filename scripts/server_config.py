@@ -18,50 +18,16 @@
 import itertools
 import logging
 import os
+from pathlib import Path
 import platform
 import socket
 from distutils.spawn import find_executable
+from environment import get_default_environment
 from utils import AOSP_ROOT, run
-
-try:
-    import _winreg as winreg
-except:
-    # Winreg is a windows only thing..
-    pass
-
-
-def disable_debug_policy():
-    try:
-        with winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            r"SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting",
-        ) as registry_key:
-            winreg.SetValue(registry_key, "DontShowUI", 1)
-    except:
-        logging.error("Failed to retrieve, set status.")
-
-    # Next clear out the just in time debuggers.
-    todelete = [
-        (r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\AeDebug", "Debugger"),
-        (
-            r"SOFTWARE\Wow6432Node\Microsoft\Windows NT\CurrentVersion\AeDebug",
-            "Debugger",
-        ),
-    ]
-    for current_key, entry in todelete:
-        try:
-            # See https://docs.microsoft.com/en-us/visualstudio/debugger/debug-using-the-just-in-time-debugger?view=vs-2019#disable-just-in-time-debugging-from-the-windows-registry)
-            with winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE, current_key, 0, winreg.KEY_ALL_ACCESS
-            ) as open_key:
-                winreg.DeleteValue(open_key, entry)
-        except:
-            pass
 
 
 # A class that is responsible for configuring the server when running the build.
 class ServerConfig(object):
-
     REDIS_SCCACHE_IP = "34.145.83.254"
     REDIS_PORT = 443
 
@@ -70,6 +36,7 @@ class ServerConfig(object):
         try:
             # TODO(jansene): Remove once windows buildbots are using PY3
             import urllib.request
+
             with urllib.request.urlopen("http://metadata.google.internal") as r:
                 return r.getheader("Metadata-Flavor") == "Google"
         except:
@@ -90,26 +57,24 @@ class ServerConfig(object):
     def __init__(self, presubmit, args):
         self.args = args
         self.presubmit = presubmit
-        self.env = os.environ.copy()
+        self.env = get_default_environment(AOSP_ROOT)
         self.target = platform.system().lower()
-        search_dir = os.path.join(
+        search_dir = Path(
             AOSP_ROOT,
             "prebuilts",
             "android-emulator-build",
             "common",
             "sccache",
-            "{}-x86_64".format(self.target),
-        )
-        self.sccache = find_executable("sccache", search_dir)
+            f"{self.target}-x86_64",
+        ).absolute()
+        self.sccache = find_executable("sccache", str(search_dir))
 
     def get_env(self):
         return self.env
 
     def __enter__(self):
-        """Configure cache, report statistics and disable crash UI."""
-        # On windows we do not want debug ui to be activated.
-        if self.target == "windows":
-            disable_debug_policy()
+        """Configure cache, report statistics and setup vscode"""
+        # Let's make sure we have ninja on the path.
 
         if self.__in_gce():
             # Use a bucket in gce. Make sure the default service account has R/W

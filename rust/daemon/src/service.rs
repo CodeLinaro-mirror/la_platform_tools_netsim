@@ -15,6 +15,7 @@
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
 use crate::config::{set_dev, set_pcap};
+use crate::echip;
 use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
 use crate::http_server::server::run_http_server;
 use crate::transport::socket::run_socket_transport;
@@ -176,6 +177,8 @@ impl Service {
         if !self.grpc_server.is_null() {
             self.grpc_server.shut_down();
         }
+        echip::bluetooth::bluetooth_stop();
+        echip::wifi::wifi_stop();
     }
 }
 
