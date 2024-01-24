@@ -191,7 +191,7 @@ fn get_current_stats(mut current_stats: NetsimStats) -> NetsimStats {
 
 /// Write netsim stats to json file
 fn write_stats_to_json(stats_proto: NetsimStats) -> anyhow::Result<()> {
-    let filename = netsimd_temp_dir().join("session_stats.json");
+    let filename = netsimd_temp_dir().join("netsim_session_stats.json");
     let mut file = File::create(filename)?;
     let json = print_to_string(&stats_proto)?;
     file.write(json.as_bytes()).context("Unable to write json session stats")?;

@@ -95,7 +95,7 @@ pub fn zip_artifacts() -> ZipResult<()> {
     let mut buffer = Vec::new();
 
     // Put each artifact files into zip file
-    let excluded_files = ["netsim_stderr.log", "netsim_stdout.log", "session_stats.json"];
+    let excluded_files = ["netsim_stderr.log", "netsim_stdout.log", "netsim_session_stats.json"];
     for file in files {
         let filename = match file.file_name() {
             Some(os_name) => match os_name.to_str() {

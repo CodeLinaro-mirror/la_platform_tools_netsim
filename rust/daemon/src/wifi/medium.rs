@@ -12,17 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::ieee80211::MacAddress;
-use super::packets::mac80211_hwsim::{HwsimAttr, HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
+use super::ieee80211::{Ieee80211, Ieee80211Child, Ieee80211FromApBuilder, MacAddress};
+use super::packets::mac80211_hwsim::{
+    HwsimAttr, HwsimCmd, HwsimMsg, HwsimMsgBuilder, HwsimMsgHdr, NlMsgHdr,
+};
 use super::packets::netlink::NlAttrHdr;
 use crate::devices::chip::ChipIdentifier;
 use crate::wifi::frame::Frame;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
-use crate::wifi::packets::mac80211_hwsim::HwsimMsgBuilder;
 use anyhow::{anyhow, Context};
 use log::{debug, info, warn};
 use pdl_runtime::Packet;
 use std::collections::{HashMap, HashSet};
+
+const NLMSG_MIN_TYPE: u16 = 0x10;
+// Default values for mac80211_hwsim.
+const RX_RATE: u32 = 0;
+const SIGNAL: u32 = 4294967246; // -50
 
 #[derive(Debug)]
 pub enum HwsimCmdEnum {
@@ -135,22 +141,59 @@ impl Medium {
         }
     }
 
+    /// Create tx info frame to station to ack HwsimMsg.
+    fn send_tx_info_frame(&self, station: &Station, frame: &Frame) {
+        let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().to_vec();
+        (self.callback)(station.client_id, &hwsim_msg_tx_info);
+    }
+
+    /// Create from_ap packet and forward it to destination station.
+    fn send_from_ap_packet(&self, station: &Station, dest_station: &Station, frame: &Frame) {
+        if let Some(from_ap_packet) = create_from_ap_packet(frame, &dest_station.addr) {
+            (self.callback)(dest_station.client_id, &from_ap_packet);
+            log_from_ap_packet(&from_ap_packet, station, dest_station);
+        }
+    }
+
+    /// Create from_ap packet and forward it to other stations.
+    fn send_from_ap_packet_to_stations(&self, station: &Station, frame: &Frame) {
+        for (mac_address, dest_station) in &self.stations {
+            if station.client_id != dest_station.client_id {
+                self.send_from_ap_packet(station, dest_station, frame);
+            }
+        }
+    }
+
     fn queue_frame(&self, station: &Station, frame: Frame) -> anyhow::Result<bool> {
         let destination = frame.ieee80211.get_destination();
-        if let Some(station) = self.stations.get(&destination) {
-            info!("Frame deliver from {} to {}", station.addr, destination);
-            // rewrite packet to destination client: ToAP -> FromAP
+        if let Some(dest_station) = self.stations.get(&destination) {
+            info!("Frame deliver from {} to {}", station.addr, dest_station.addr);
+            self.send_tx_info_frame(station, &frame);
+            self.send_from_ap_packet(station, dest_station, &frame);
             Ok(true)
         } else if destination.is_multicast() {
             info!("Frame multicast {}", frame.ieee80211);
-            let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().to_vec();
-            (self.callback)(station.client_id, &hwsim_msg_tx_info);
+            self.send_tx_info_frame(station, &frame);
+            self.send_from_ap_packet_to_stations(station, &frame);
             Ok(true)
+        } else if destination.is_broadcast() {
+            info!("Frame broadcast {}", frame.ieee80211);
+            self.send_from_ap_packet_to_stations(station, &frame);
+            Ok(false)
         } else {
             // pass to libslirp
             Ok(false)
         }
     }
+}
+
+fn log_from_ap_packet(hwsim_msg_from_ap_bytes: &[u8], source: &Station, destination: &Station) {
+    let hwsim_msg = HwsimMsg::parse(hwsim_msg_from_ap_bytes).unwrap();
+    let frame = Frame::parse(&hwsim_msg).unwrap();
+    info!(
+        "Sent from_ap packet from client {} to {}. flags {:?}, ieee80211 {}",
+        source.client_id, destination.client_id, frame.flags, frame.ieee80211,
+    );
 }
 
 /// Build TxInfoFrame HwsimMsg from CmdFrame HwsimMsg.
@@ -162,9 +205,7 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
     let hwsim_hdr = hwsim_msg.get_hwsim_hdr();
     let nl_hdr = hwsim_msg.get_nl_hdr();
     let mut new_attr_builder = HwsimAttrSet::builder();
-    const SIGNAL: u32 = 4294967246;
     const HWSIM_TX_STAT_ACK: u32 = 1 << 2;
-    const NLMSG_MIN_TYPE: u16 = 0x10;
 
     new_attr_builder
         .transmitter(&attrs.transmitter.context("transmitter")?.into())
@@ -193,6 +234,61 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
     }
     .build();
     Ok(new_hwsim_msg)
+}
+
+fn create_from_ap_attributes(
+    attributes: &[u8],
+    receiver: &MacAddress,
+    attrs: &HwsimAttrSet,
+) -> anyhow::Result<Vec<u8>> {
+    let ieee80211_frame = Ieee80211::parse(&attrs.frame.clone().context("frame")?)?;
+    let new_frame = ieee80211_frame.into_from_ap()?.to_vec();
+
+    let mut builder = HwsimAttrSet::builder();
+
+    // Attributes required by mac80211_hwsim.
+    builder.receiver(&receiver.to_vec());
+    builder.frame(&new_frame);
+    // NOTE: Incoming mdns packets don't have rx_rate and signal.
+    builder.rx_rate(attrs.rx_rate_idx.unwrap_or(RX_RATE));
+    builder.signal(attrs.signal.unwrap_or(SIGNAL));
+
+    attrs.flags.map(|v| builder.flags(v));
+    attrs.freq.map(|v| builder.freq(v));
+    attrs.tx_info.as_ref().map(|v| builder.tx_info(v));
+    attrs.tx_info_flags.as_ref().map(|v| builder.tx_info_flags(v));
+
+    Ok(builder.build()?.attributes)
+}
+
+fn create_from_ap_packet(frame: &Frame, receiver: &MacAddress) -> Option<Vec<u8>> {
+    let hwsim_msg = &frame.hwsim_msg;
+    assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
+    let attributes_result =
+        create_from_ap_attributes(hwsim_msg.get_attributes(), receiver, &frame.attrs);
+    let attributes = match attributes_result {
+        Ok(attributes) => attributes,
+        Err(e) => {
+            warn!("Failed to create from_ap attributes. E: {}", e);
+            return None;
+        }
+    };
+
+    let nlmsg_len = hwsim_msg.get_nl_hdr().nlmsg_len + attributes.len() as u32
+        - hwsim_msg.get_attributes().len() as u32;
+    let new_hwsim_msg = HwsimMsgBuilder {
+        nl_hdr: NlMsgHdr {
+            nlmsg_len,
+            nlmsg_type: NLMSG_MIN_TYPE,
+            nlmsg_flags: hwsim_msg.get_nl_hdr().nlmsg_flags,
+            nlmsg_seq: 0,
+            nlmsg_pid: 0,
+        },
+        hwsim_hdr: hwsim_msg.get_hwsim_hdr().clone(),
+        attributes,
+    }
+    .build();
+    Some(new_hwsim_msg.to_vec())
 }
 
 // It's used by radiotap.rs for packet capture.
