@@ -41,6 +41,7 @@ pub struct Frame {
     pub data: Vec<u8>,
     pub ieee80211: Ieee80211,
     pub hwsim_msg: HwsimMsg,
+    pub attrs: HwsimAttrSet,
 }
 
 impl Frame {
@@ -67,6 +68,7 @@ impl Frame {
             data: frame,
             ieee80211,
             hwsim_msg: msg.clone(),
+            attrs,
         })
     }
 }
