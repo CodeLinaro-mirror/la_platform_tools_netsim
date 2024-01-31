@@ -98,7 +98,7 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
 
     if !args.logtostderr {
         cxx::let_cxx_string!(netsimd_temp_dir = netsimd_temp_dir_string());
-        ffi_util::redirect_std_stream(&netsimd_temp_dir);
+        ffi_util::redirect_std_stream(&netsimd_temp_dir, get_instance(args.instance));
         // Duplicating the previous two logs to be included in netsim_stderr.log
         info!("netsim artifacts path: {}", netsimd_temp_dir_string());
         info!("{:#?}", args);

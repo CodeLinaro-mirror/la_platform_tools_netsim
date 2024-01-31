@@ -365,7 +365,7 @@ pub mod ffi_util {
 
         #[rust_name = redirect_std_stream]
         #[namespace = "netsim::osutils"]
-        pub fn RedirectStdStream(netsim_temp_dir: &CxxString);
+        pub fn RedirectStdStream(netsim_temp_dir: &CxxString, instance_num: u16);
 
         // Crash report.
         include!("util/crash_report.h");
