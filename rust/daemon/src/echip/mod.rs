@@ -19,6 +19,10 @@ pub mod mocked;
 pub mod packet;
 pub mod wifi;
 
+// TODO: Remove the allow block once it's stitched with pica library
+#[allow(dead_code, unused_variables)]
+mod uwb;
+
 pub use crate::echip::emulated_chip::CreateParam;
 pub use crate::echip::emulated_chip::EmulatedChip;
 pub use crate::echip::emulated_chip::SharedEmulatedChip;
