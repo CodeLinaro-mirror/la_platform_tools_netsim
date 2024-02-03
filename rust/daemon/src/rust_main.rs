@@ -16,7 +16,9 @@ use clap::Parser;
 use log::warn;
 use log::{error, info};
 use netsim_common::system::netsimd_temp_dir_string;
-use netsim_common::util::os_utils::{get_hci_port, get_instance, remove_netsim_ini};
+use netsim_common::util::os_utils::{
+    get_hci_port, get_instance, get_instance_name, remove_netsim_ini,
+};
 use netsim_common::util::zip_artifact::zip_artifacts;
 
 use crate::captures::capture::spawn_capture_event_subscriber;
@@ -98,7 +100,10 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
 
     if !args.logtostderr {
         cxx::let_cxx_string!(netsimd_temp_dir = netsimd_temp_dir_string());
-        ffi_util::redirect_std_stream(&netsimd_temp_dir, get_instance(args.instance));
+        cxx::let_cxx_string!(
+            netsimd_instance_name = get_instance_name(args.instance, args.connector_instance)
+        );
+        ffi_util::redirect_std_stream(&netsimd_temp_dir, &netsimd_instance_name);
         // Duplicating the previous two logs to be included in netsim_stderr.log
         info!("netsim artifacts path: {}", netsimd_temp_dir_string());
         info!("{:#?}", args);
