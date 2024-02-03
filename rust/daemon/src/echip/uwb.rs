@@ -19,6 +19,10 @@ use crate::devices::chip::ChipIdentifier;
 
 use super::{EmulatedChip, SharedEmulatedChip};
 
+#[cfg(feature = "cuttlefish")]
+#[allow(unused_imports)]
+use pica::Pica;
+
 type PicaIdentifier = u32;
 
 /// Parameters for creating UWB chips
