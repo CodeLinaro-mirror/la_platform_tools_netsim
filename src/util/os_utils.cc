@@ -40,13 +40,13 @@ struct DiscoveryDir {
   const char *subdir;
 };
 
-DiscoveryDir discovery {
+DiscoveryDir discovery{
 #if defined(_WIN32)
-  "LOCALAPPDATA", "Temp"
+    "LOCALAPPDATA", "Temp"
 #elif defined(__linux__)
-  "XDG_RUNTIME_DIR", ""
+    "XDG_RUNTIME_DIR", ""
 #elif defined(__APPLE__)
-  "HOME", "Library/Caches/TemporaryItems"
+    "HOME", "Library/Caches/TemporaryItems"
 #else
 #error This platform is not supported.
 #endif
@@ -95,13 +95,18 @@ std::optional<std::string> GetServerAddress(uint16_t instance_num) {
   return iniFile.Get("grpc.port");
 }
 
-void RedirectStdStream(const std::string &netsim_temp_dir_const) {
+void RedirectStdStream(const std::string &netsim_temp_dir_const,
+                       const std::string &instance_name) {
   auto netsim_temp_dir = netsim_temp_dir_const;
   // Check if directory has a trailing slash.
   if (netsim_temp_dir.back() != netsim::filesystem::slash.back())
     netsim_temp_dir.append(netsim::filesystem::slash);
-  std::freopen((netsim_temp_dir + "netsim_stdout.log").c_str(), "w", stdout);
-  std::freopen((netsim_temp_dir + "netsim_stderr.log").c_str(), "w", stderr);
+  std::freopen(
+      (netsim_temp_dir + "netsim_" + instance_name + "stdout.log").c_str(), "w",
+      stdout);
+  std::freopen(
+      (netsim_temp_dir + "netsim_" + instance_name + "stderr.log").c_str(), "w",
+      stderr);
 }
 
 }  // namespace osutils

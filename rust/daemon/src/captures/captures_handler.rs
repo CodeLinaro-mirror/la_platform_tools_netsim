@@ -62,7 +62,7 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
 fn get_file(id: ChipIdentifier, device_name: String, chip_kind: ChipKind) -> Result<File> {
     let mut filename = netsim_common::system::netsimd_temp_dir();
     filename.push("pcaps");
-    filename.push(format!("{:?}-{:}-{:?}.pcap", id, device_name, chip_kind));
+    filename.push(format!("netsim-{:?}-{:}-{:?}.pcap", id, device_name, chip_kind));
     File::open(filename)
 }
 
@@ -92,7 +92,7 @@ fn handle_capture_get(writer: ResponseWritable, id: ChipIdentifier) -> anyhow::R
     let mut buffer = [0u8; CHUNK_LEN];
     let time_display = TimeDisplay::new(capture.seconds, capture.nanos as u32);
     let header_value = format!(
-        "attachment; filename=\"{:?}-{:}-{:?}-{}.pcap\"",
+        "attachment; filename=\"netsim-{:?}-{:}-{:?}-{}.pcap\"",
         id,
         capture.device_name.clone(),
         capture.chip_kind,

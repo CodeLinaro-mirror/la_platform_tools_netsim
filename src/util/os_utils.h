@@ -42,7 +42,8 @@ std::optional<std::string> GetServerAddress(uint16_t instance_num = 1);
 /**
  * Redirect stdout and stderr to file.
  */
-void RedirectStdStream(const std::string &netsim_temp_dir);
+void RedirectStdStream(const std::string &netsim_temp_dir,
+                       const std::string &instance_name);
 
 }  // namespace osutils
 }  // namespace netsim

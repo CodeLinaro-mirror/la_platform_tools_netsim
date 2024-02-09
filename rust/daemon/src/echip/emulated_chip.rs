@@ -19,7 +19,6 @@ use std::{
 
 use lazy_static::lazy_static;
 
-use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
@@ -94,9 +93,6 @@ pub trait EmulatedChip {
     /// Return the NetsimRadioStats protobuf from the emulated chip. This is
     /// part of NetsimStats protobuf.
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats>;
-
-    /// Returns the kind of the emulated chip.
-    fn get_kind(&self) -> ProtoChipKind;
 }
 
 /// Lookup for SharedEmulatedChip with chip_id
@@ -139,6 +135,7 @@ pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> SharedEmulate
 mod tests {
 
     use super::*;
+    use netsim_proto::common::ChipKind as ProtoChipKind;
 
     #[test]
     fn test_echip_new() {
@@ -146,7 +143,6 @@ mod tests {
             CreateParam::Mock(mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED });
         let mock_chip_id = 0;
         let echip = new(&mock_param, mock_chip_id);
-        assert_eq!(echip.lock().get_kind(), ProtoChipKind::UNSPECIFIED);
         assert_eq!(echip.lock().get(), ProtoChip::new());
     }
 }

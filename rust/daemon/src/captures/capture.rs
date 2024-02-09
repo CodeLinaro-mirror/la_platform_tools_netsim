@@ -96,7 +96,7 @@ impl CaptureInfo {
     /// Creates a pcap file with headers and store it under temp directory.
     ///
     /// The lifecycle of the file is NOT tied to the lifecycle of the struct
-    /// Format: /tmp/netsimd/$USER/pcaps/{chip_id}-{device_name}-{chip_kind}.pcap
+    /// Format: /tmp/netsimd/$USER/pcaps/netsim-{chip_id}-{device_name}-{chip_kind}.pcap
     pub fn start_capture(&mut self) -> Result<()> {
         if self.file.is_some() {
             return Ok(());
@@ -104,7 +104,8 @@ impl CaptureInfo {
         let mut filename = netsim_common::system::netsimd_temp_dir();
         filename.push("pcaps");
         std::fs::create_dir_all(&filename)?;
-        filename.push(format!("{:?}-{:}-{:?}.pcap", self.id, self.device_name, self.chip_kind));
+        filename
+            .push(format!("netsim-{:?}-{:}-{:?}.pcap", self.id, self.device_name, self.chip_kind));
         let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(filename)?;
         let link_type = match self.chip_kind {
             ChipKind::BLUETOOTH => LinkType::BluetoothHciH4WithPhdr,
