@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
-use crate::echip::{EmulatedChip, SharedEmulatedChip};
+use crate::echip::{packet::hwsim_cmd_response, EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_wifi;
-use crate::wifi::medium;
+use crate::wifi::medium::Medium;
+use lazy_static::lazy_static;
 use log::info;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
@@ -27,6 +28,8 @@ use protobuf::{Message, MessageField};
 use std::sync::{Arc, Mutex};
 
 /// Parameters for creating Wifi chips
+/// allow(dead_code) due to not being used in unit tests
+#[allow(dead_code)]
 pub struct CreateParams {}
 
 /// Wifi struct will keep track of chip_id
@@ -34,12 +37,16 @@ pub struct Wifi {
     chip_id: ChipIdentifier,
 }
 
+// Allocator for chip identifiers.
+lazy_static! {
+    static ref MEDIUM: Mutex<Medium> = Mutex::new(Medium::new(hwsim_cmd_response));
+}
+
 impl EmulatedChip for Wifi {
     fn handle_request(&self, packet: &[u8]) {
-        if crate::config::get_dev() {
-            let _ = medium::parse_hwsim_cmd(packet);
+        if !MEDIUM.lock().expect("Lock failed").process(self.chip_id, packet) {
+            ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
         }
-        ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
     }
 
     fn reset(&mut self) {
@@ -81,6 +88,8 @@ impl EmulatedChip for Wifi {
 }
 
 /// Create a new Emulated Wifi Chip
+/// allow(dead_code) due to not being used in unit tests
+#[allow(dead_code)]
 pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
     ffi_wifi::wifi_add(chip_id);
     info!("WiFi EmulatedChip created chip_id: {chip_id}");
@@ -90,9 +99,6 @@ pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChi
 
 /// Starts the WiFi service.
 pub fn wifi_start(config: &MessageField<WiFiConfig>) {
-    if crate::config::get_dev() {
-        medium::test_parse_hwsim_cmd();
-    }
     let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
     ffi_wifi::wifi_start(&proto_bytes);
 }

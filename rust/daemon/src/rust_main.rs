@@ -34,7 +34,7 @@ use crate::ffi::ffi_util;
 use crate::service::{new_test_beacon, Service, ServiceParams};
 #[cfg(feature = "cuttlefish")]
 use netsim_common::util::os_utils::get_server_address;
-use netsim_proto::config::{Bluetooth as BluetoothConfig, Config};
+use netsim_proto::config::{Bluetooth as BluetoothConfig, Capture, Config};
 use std::env;
 use std::ffi::{c_char, c_int};
 use std::sync::mpsc::Receiver;
@@ -155,18 +155,63 @@ fn main_loop(events_rx: Receiver<Event>) {
     }
 }
 
-fn run_netsimd_primary(args: NetsimdArgs) {
+// Disambiguate config and command line args and store merged setting in config
+fn disambiguate_args(args: &mut NetsimdArgs, config: &mut Config) {
+    // Command line override config file arguments
+
+    // Currently capture cannot be specified off explicitly with command line.
+    // Enable capture if enabled by command line arg
+    if args.pcap {
+        match config.capture.as_mut() {
+            Some(capture) => {
+                capture.enabled = Some(true);
+            }
+            None => {
+                let mut capture = Capture::new();
+                capture.enabled = Some(true);
+                config.capture = Some(capture).into();
+            }
+        }
+    }
+
+    // Ensure Bluetooth config is initialized
+    let bt_config = match config.bluetooth.as_mut() {
+        Some(existing_bt_config) => existing_bt_config,
+        None => {
+            config.bluetooth = Some(BluetoothConfig::new()).into();
+            config.bluetooth.as_mut().unwrap()
+        }
+    };
+
+    // Set disable_address_reuse as needed
+    if args.disable_address_reuse {
+        bt_config.disable_address_reuse = Some(true);
+    }
+
+    // Determine test beacons configuration, default true for cuttlefish
+    // TODO: remove default for cuttlefish by adding flag to tests
+    bt_config.test_beacons = match (args.test_beacons, args.no_test_beacons) {
+        (true, false) => Some(true),
+        (false, true) => Some(false),
+        (false, false) => match bt_config.test_beacons {
+            Some(test_beacons) => Some(test_beacons),
+            None => Some(cfg!(feature = "cuttlefish")),
+        },
+        (true, true) => panic!("unexpected flag combination"),
+    };
+}
+
+fn run_netsimd_primary(mut args: NetsimdArgs) {
     info!("Netsim Version: {}", get_version());
 
-    let fd_startup_str = args.fd_startup_str.unwrap_or_default();
+    let fd_startup_str = args.fd_startup_str.clone().unwrap_or_default();
     let instance_num = get_instance(args.instance);
     let hci_port: u16 =
         get_hci_port(args.hci_port.unwrap_or_default(), instance_num - 1).try_into().unwrap();
 
     #[cfg(feature = "cuttlefish")]
     if fd_startup_str.is_empty() {
-        warn!("Failed to start netsim daemon because fd startup flag `-s` is empty");
-        return;
+        warn!("Warning: netsimd startup flag -s is empty, waiting for gRPC connections.");
     }
 
     if ffi_util::is_netsimd_alive(instance_num) {
@@ -174,11 +219,11 @@ fn run_netsimd_primary(args: NetsimdArgs) {
         return;
     }
 
+    // Load config file
     let mut config = Config::new();
-    if let Some(filename) = args.config {
-        match config_file::new_from_file(&filename) {
+    if let Some(ref filename) = args.config {
+        match config_file::new_from_file(filename) {
             Ok(config_from_file) => {
-                info!("Using config in {}", config);
                 config = config_from_file;
             }
             Err(e) => {
@@ -186,12 +231,17 @@ fn run_netsimd_primary(args: NetsimdArgs) {
             }
         }
     }
+    // Disambiguate conflicts between cmdline args and config file
+    disambiguate_args(&mut args, &mut config);
+
+    // Print config file settings
+    info!("{:#?}", config);
 
     let service_params = ServiceParams::new(
         fd_startup_str,
         args.no_cli_ui,
         args.no_web_ui,
-        config.capture.enabled == Some(true) || args.pcap,
+        config.capture.enabled.unwrap_or_default(),
         hci_port,
         instance_num,
         args.dev,
@@ -220,34 +270,12 @@ fn run_netsimd_primary(args: NetsimdArgs) {
         spawn_shutdown_publisher(device_events_rx);
     }
 
-    // Command line over-rides config file
-    if args.disable_address_reuse {
-        match config.bluetooth.as_mut() {
-            Some(bt_config) => {
-                bt_config.disable_address_reuse = Some(true);
-            }
-            None => {
-                let mut bt_config = BluetoothConfig::new();
-                bt_config.disable_address_reuse = Some(true);
-                config.bluetooth = Some(bt_config).into();
-            }
-        }
-    }
-
     // Start radio facades
     echip::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
     echip::wifi::wifi_start(&config.wifi);
 
-    // Maybe create test beacons, default true for cuttlefish
-    // TODO: remove default for cuttlefish by adding flag to tests
-    if config.bluetooth.test_beacons == Some(true)
-        || match (args.test_beacons, args.no_test_beacons) {
-            (true, false) => true,
-            (false, true) => false,
-            (false, false) => cfg!(feature = "cuttlefish"),
-            (true, true) => panic!("unexpected flag combination"),
-        }
-    {
+    // Create test beacons if required
+    if config.bluetooth.test_beacons == Some(true) {
         new_test_beacon(1, 1000);
         new_test_beacon(2, 1000);
     }

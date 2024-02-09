@@ -22,6 +22,7 @@ use crate::wifi::frame::Frame;
 use crate::wifi::medium;
 use crate::wifi::medium::HwsimCmdEnum;
 use anyhow::{anyhow, Context};
+use log::info;
 use std::mem;
 
 #[repr(C, packed)]
@@ -41,10 +42,13 @@ struct ChannelInfo {
 }
 
 pub fn into_pcap(packet: &[u8]) -> Option<Vec<u8>> {
-    if let Ok(HwsimCmdEnum::Frame(frame)) = medium::parse_hwsim_cmd(packet) {
-        frame_into_pcap(*frame).ok()
-    } else {
-        None
+    match medium::parse_hwsim_cmd(packet) {
+        Ok(HwsimCmdEnum::Frame(frame)) => frame_into_pcap(*frame).ok(),
+        Ok(_) => None,
+        Err(e) => {
+            info!("Failed to convert packet to pcap format. Err: {}. Packet: {:?}", e, &packet);
+            None
+        }
     }
 }
 

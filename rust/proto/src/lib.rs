@@ -14,11 +14,16 @@
 //  limitations under the License.
 
 //! protobuf library for netsim
+#[cfg(feature = "cuttlefish")]
+use protobuf::well_known_types::empty;
 
 pub mod common;
 pub mod config;
 pub mod configuration;
 pub mod frontend;
+// TODO: Remove feature check once crate dependency is resolved
+#[cfg(feature = "cuttlefish")]
+pub mod frontend_grpc;
 pub mod hci_packet;
 pub mod model;
 pub mod packet_streamer;
