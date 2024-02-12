@@ -261,7 +261,7 @@ impl Command {
                     );
                     let file_extension = "pcap";
                     cmd.filenames.push(format!(
-                        "{:?}-{}-{}-{}.{}",
+                        "netsim-{:?}-{}-{}-{}.{}",
                         capture.id,
                         capture.device_name.to_owned().replace(' ', "_"),
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),

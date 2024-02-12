@@ -18,7 +18,6 @@ use crate::ffi::ffi_wifi;
 use crate::wifi::medium::Medium;
 use lazy_static::lazy_static;
 use log::info;
-use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::chip::Radio;
 use netsim_proto::model::Chip as ProtoChip;
@@ -80,10 +79,6 @@ impl EmulatedChip for Wifi {
             stats_proto.set_rx_count(chip_proto.wifi().rx_count);
         }
         vec![stats_proto]
-    }
-
-    fn get_kind(&self) -> ProtoChipKind {
-        ProtoChipKind::WIFI
     }
 }
 

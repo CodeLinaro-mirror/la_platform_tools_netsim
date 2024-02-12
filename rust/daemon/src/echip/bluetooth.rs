@@ -18,7 +18,6 @@ use crate::ffi::ffi_bluetooth;
 
 use cxx::let_cxx_string;
 use log::info;
-use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::Bluetooth as ProtoBluetooth;
@@ -94,10 +93,6 @@ impl EmulatedChip for Bluetooth {
             classic_stats_proto.set_rx_count(chip_proto.bt().classic.rx_count);
         }
         vec![ble_stats_proto, classic_stats_proto]
-    }
-
-    fn get_kind(&self) -> ProtoChipKind {
-        ProtoChipKind::BLUETOOTH
     }
 }
 

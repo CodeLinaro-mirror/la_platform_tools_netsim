@@ -68,6 +68,7 @@ rust_defaults {
         "libhttp",
         "libnetsim_common",
         "libpdl_runtime",
+        "libpica",
         "libprotobuf",
         "libprotobuf_json_mapping",
         "libregex",

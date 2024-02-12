@@ -134,6 +134,20 @@ pub fn get_hci_port(hci_port_flag: u32, instance: u16) -> u32 {
     }
 }
 
+/// Get the netsim instance name used for log filename creation
+pub fn get_instance_name(instance_num: Option<u16>, connector_instance: Option<u16>) -> String {
+    let mut instance_name = String::new();
+    let instance = get_instance(instance_num);
+    if instance > 1 {
+        instance_name.push_str(&format!("{instance}_"));
+    }
+    // Note: This does not differentiate multiple connectors to the same instance.
+    if connector_instance.is_some() {
+        instance_name.push_str("connector_");
+    }
+    instance_name
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -168,17 +182,30 @@ mod tests {
     }
 
     #[test]
-    fn test_get_instance() {
+    fn test_get_instance_and_instance_name() {
+        // Set NETSIM_INSTANCE environment variable
+        std::env::set_var("NETSIM_INSTANCE", "100");
+        assert_eq!(get_instance(Some(0)), 100);
+        assert_eq!(get_instance(Some(1)), 100);
+
         // Remove NETSIM_INSTANCE environment variable
         std::env::remove_var("NETSIM_INSTANCE");
         assert_eq!(get_instance(None), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(0)), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(1)), 1);
 
-        // Set NETSIM_INSTANCE environment variable
-        std::env::set_var("NETSIM_INSTANCE", "100");
-        assert_eq!(get_instance(Some(0)), 100);
-        assert_eq!(get_instance(Some(1)), 100);
+        // Default cases - instance name should be empty string
+        assert_eq!(get_instance_name(None, None), "");
+        assert_eq!(get_instance_name(Some(1), None), "");
+
+        // Default instance but connector set - Expect instance name to be "connector_"
+        assert_eq!(get_instance_name(None, Some(3)), "connector_");
+        assert_eq!(get_instance_name(Some(1), Some(1)), "connector_");
+        assert_eq!(get_instance_name(Some(1), Some(2)), "connector_");
+
+        // Both instance and connector set - Expect instance name to be "<instance>_connector_"
+        assert_eq!(get_instance_name(Some(2), Some(1)), "2_connector_");
+        assert_eq!(get_instance_name(Some(3), Some(3)), "3_connector_");
     }
 
     #[test]

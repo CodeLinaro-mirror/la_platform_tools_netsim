@@ -29,7 +29,7 @@ use crate::system::netsimd_temp_dir;
 use super::time_display::{file_current_time, TimeZone};
 
 /// Recurse all files in root and put it in Vec<PathBuf>
-fn recurse_files(root: &PathBuf) -> Result<Vec<PathBuf>> {
+fn recurse_files(root: &PathBuf) -> Result<Vec<(PathBuf, String)>> {
     let mut result = Vec::new();
     // Read all entries in the given root directory
     let entries = read_dir(root)?;
@@ -42,7 +42,16 @@ fn recurse_files(root: &PathBuf) -> Result<Vec<PathBuf>> {
             result.append(&mut subdir);
         }
         if meta.is_file() {
-            result.push(entry.path());
+            if let Some(filename) = entry
+                .path()
+                .file_name()
+                .and_then(|os_name| os_name.to_str())
+                .map(|str_name| str_name.to_string())
+            {
+                result.push((entry.path(), filename));
+            } else {
+                warn!("Unable to fetch filename for file: {:?}", entry.path());
+            }
         }
     }
     Ok(result)
@@ -95,40 +104,26 @@ pub fn zip_artifacts() -> ZipResult<()> {
     let mut buffer = Vec::new();
 
     // Put each artifact files into zip file
-    let excluded_files = ["netsim_stderr.log", "netsim_stdout.log", "netsim_session_stats.json"];
-    for file in files {
-        let filename = match file.file_name() {
-            Some(os_name) => match os_name.to_str() {
-                Some(str_name) => {
-                    // Avoid zip files
-                    if str_name.starts_with("netsim_artifacts") {
-                        continue;
-                    }
-                    str_name
-                }
-                None => {
-                    warn!("Cannot convert {os_name:?} to str");
-                    continue;
-                }
-            },
-            None => {
-                warn!("Invalid file path for fetching file name {file:?}");
-                continue;
-            }
-        };
+    for (file, filename) in files {
+        // Avoid zip files
+        if filename.starts_with("netsim_artifacts") {
+            continue;
+        }
 
         // Write to zip file
-        zip_writer.start_file(filename, FileOptions::default())?;
+        zip_writer.start_file(&filename, FileOptions::default())?;
         let mut f = File::open(&file)?;
         f.read_to_end(&mut buffer)?;
         zip_writer.write_all(&buffer)?;
         buffer.clear();
 
-        // Remove the file once written except for log files
-        // To preserve the logs after zip, we must keep the log files available.
-        if !excluded_files.contains(&filename) {
-            remove_file(file)?;
+        // Remove the file once written except for netsim log and json files
+        if filename.starts_with("netsim_")
+            && (filename.ends_with(".log") || filename.ends_with(".json"))
+        {
+            continue;
         }
+        remove_file(file)?;
     }
 
     // Finish writing zip file
@@ -170,8 +165,8 @@ mod tests {
         assert!(files_result.is_ok());
         let files = files_result.unwrap();
         assert_eq!(files.len(), 2);
-        assert!(files.contains(&file));
-        assert!(files.contains(&nested_file));
+        assert!(files.contains(&(file, "hello.txt".to_string())));
+        assert!(files.contains(&(nested_file, "world.txt".to_string())));
     }
 
     #[test]

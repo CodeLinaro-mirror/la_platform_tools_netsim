@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use super::ieee80211::MacAddress;
+use super::packets::ieee80211::MacAddress;
 use super::packets::mac80211_hwsim::{
     self, HwsimAttr, HwsimAttrChild::*, HwsimCmd, HwsimMsg, HwsimMsgHdr, TxRate, TxRateFlag,
 };
