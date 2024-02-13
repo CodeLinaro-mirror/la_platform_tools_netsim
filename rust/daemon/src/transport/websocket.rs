@@ -79,7 +79,7 @@ impl Response for WebSocketTransport {
             .websocket_writer
             .lock()
             .expect("Failed to acquire lock on WebSocket")
-            .write_message(Message::Binary(buffer))
+            .send(Message::Binary(buffer))
         {
             error!("{err}");
         };
@@ -138,7 +138,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
     // Running Websocket server
     loop {
         let packet_msg =
-            match websocket_reader.read_message().map_err(|_| "Failed to read Websocket message") {
+            match websocket_reader.read().map_err(|_| "Failed to read Websocket message") {
                 Ok(message) => message,
                 Err(err) => {
                     error!("{err}");
@@ -164,7 +164,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
             if let Err(err) = websocket_writer
                 .lock()
                 .expect("Failed to acquire lock on WebSocket")
-                .write_message(Message::Pong(packet_msg.into_data()))
+                .send(Message::Pong(packet_msg.into_data()))
             {
                 error!("{err}");
             }
