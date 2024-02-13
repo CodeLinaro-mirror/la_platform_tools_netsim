@@ -229,7 +229,10 @@ pub fn add_chip_cxx(
             }),
         ),
         "WIFI" => (ProtoChipKind::WIFI, echip::CreateParam::Wifi(echip::wifi::CreateParams {})),
-        "UWB" => (ProtoChipKind::UWB, echip::CreateParam::Uwb),
+        "UWB" => (
+            ProtoChipKind::UWB,
+            echip::CreateParam::Uwb(echip::uwb::CreateParams { address: chip_address.to_string() }),
+        ),
         _ => {
             return Box::new(AddChipResultCxx {
                 device_id: u32::MAX,
