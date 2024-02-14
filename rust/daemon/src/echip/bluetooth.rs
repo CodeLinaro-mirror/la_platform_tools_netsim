@@ -21,9 +21,12 @@ use log::info;
 use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::Bluetooth as ProtoBluetooth;
+use netsim_proto::model::chip::Radio as ProtoRadio;
 use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::model::State as ProtoState;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
-use protobuf::{Message, MessageField};
+
+use protobuf::{EnumOrUnknown, Message, MessageField};
 
 use std::sync::{Arc, Mutex};
 
@@ -42,6 +45,29 @@ pub struct CreateParams {
 /// Bluetooth struct will keep track of rootcanal_id
 pub struct Bluetooth {
     rootcanal_id: RootcanalIdentifier,
+    low_energy_enabled: ProtoState,
+    classic_enabled: ProtoState,
+}
+
+fn patch_state(
+    enabled: &mut ProtoState,
+    state: EnumOrUnknown<ProtoState>,
+    id: RootcanalIdentifier,
+    is_low_energy: bool,
+) {
+    match (state.enum_value().ok(), &enabled) {
+        (Some(ProtoState::ON), ProtoState::OFF) => {
+            let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to lock ECHIP_BT_MUTEX");
+            *enabled = ProtoState::ON;
+            ffi_bluetooth::add_device_to_phy(id, is_low_energy);
+        }
+        (Some(ProtoState::OFF), ProtoState::ON) => {
+            let _unused = ECHIP_BT_MUTEX.lock().expect("Failed to lock ECHIP_BT_MUTEX");
+            *enabled = ProtoState::OFF;
+            ffi_bluetooth::remove_device_from_phy(id, is_low_energy)
+        }
+        _ => {}
+    }
 }
 
 impl EmulatedChip for Bluetooth {
@@ -53,19 +79,43 @@ impl EmulatedChip for Bluetooth {
 
     fn reset(&mut self) {
         ffi_bluetooth::bluetooth_reset(self.rootcanal_id);
+        self.low_energy_enabled = ProtoState::ON;
+        self.classic_enabled = ProtoState::ON;
     }
 
     fn get(&self) -> ProtoChip {
         let bluetooth_bytes = ffi_bluetooth::bluetooth_get_cxx(self.rootcanal_id);
         let bt_proto = ProtoBluetooth::parse_from_bytes(&bluetooth_bytes).unwrap();
         let mut chip_proto = ProtoChip::new();
-        chip_proto.mut_bt().clone_from(&bt_proto);
+        chip_proto.set_bt(ProtoBluetooth {
+            low_energy: Some(ProtoRadio {
+                state: EnumOrUnknown::new(self.low_energy_enabled),
+                tx_count: bt_proto.low_energy.tx_count,
+                rx_count: bt_proto.low_energy.rx_count,
+                ..Default::default()
+            })
+            .into(),
+            classic: Some(ProtoRadio {
+                state: EnumOrUnknown::new(self.classic_enabled),
+                tx_count: bt_proto.classic.tx_count,
+                rx_count: bt_proto.classic.rx_count,
+                ..Default::default()
+            })
+            .into(),
+            address: bt_proto.address,
+            bt_properties: bt_proto.bt_properties,
+            ..Default::default()
+        });
         chip_proto
     }
 
     fn patch(&mut self, chip: &ProtoChip) {
-        let bluetooth_bytes = chip.bt().write_to_bytes().unwrap();
-        ffi_bluetooth::bluetooth_patch_cxx(self.rootcanal_id, &bluetooth_bytes);
+        if !chip.has_bt() {
+            return;
+        }
+        let id = self.rootcanal_id;
+        patch_state(&mut self.low_energy_enabled, chip.bt().low_energy.state, id, true);
+        patch_state(&mut self.classic_enabled, chip.bt().classic.state, id, false);
     }
 
     fn remove(&mut self) {
@@ -109,7 +159,11 @@ pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmula
     };
     let rootcanal_id = ffi_bluetooth::bluetooth_add(chip_id, &cxx_address, &proto_bytes);
     info!("Bluetooth EmulatedChip created with rootcanal_id: {rootcanal_id} chip_id: {chip_id}");
-    let echip = Bluetooth { rootcanal_id };
+    let echip = Bluetooth {
+        rootcanal_id,
+        low_energy_enabled: ProtoState::ON,
+        classic_enabled: ProtoState::ON,
+    };
     SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))
 }
 

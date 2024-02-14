@@ -42,7 +42,7 @@ lazy_static! {
 
 impl SharedEmulatedChip {
     pub fn lock(&self) -> MutexGuard<Box<dyn EmulatedChip + Send + Sync>> {
-        self.0.lock().expect("Poisoned Shared Emulated lock")
+        self.0.lock().expect("Poisoned Shared Emulated Chip lock")
     }
 }
 

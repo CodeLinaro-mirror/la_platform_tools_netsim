@@ -130,10 +130,6 @@ constexpr int kDefaultTestPort = 7500;
 #endif
 
 namespace {
-bool ChangedState(model::State a, model::State b) {
-  return (b != model::State::UNKNOWN && a != b);
-}
-
 #ifndef NETSIM_ANDROID_EMULATOR
 
 using ::android::net::PosixAsyncSocketServer;
@@ -266,13 +262,14 @@ void Stop() {
   gStarted = false;
 }
 
-void PatchPhy(int device_id, bool isAddToPhy, bool isLowEnergy) {
+void AddDeviceToPhy(uint32_t rootcanal_id, bool isLowEnergy) {
   auto phy_index = (isLowEnergy) ? phy_low_energy_index_ : phy_classic_index_;
-  if (isAddToPhy) {
-    gTestModel->AddDeviceToPhy(device_id, phy_index);
-  } else {
-    gTestModel->RemoveDeviceFromPhy(device_id, phy_index);
-  }
+  gTestModel->AddDeviceToPhy(rootcanal_id, phy_index);
+}
+
+void RemoveDeviceFromPhy(uint32_t rootcanal_id, bool isLowEnergy) {
+  auto phy_index = (isLowEnergy) ? phy_low_energy_index_ : phy_classic_index_;
+  gTestModel->RemoveDeviceFromPhy(rootcanal_id, phy_index);
 }
 
 class ChipInfo {
@@ -324,32 +321,12 @@ void Reset(uint32_t id) {
     chip_info->classic_tx_count = 0;
     chip_info->classic_rx_count = 0;
   }
-  model::Chip::Bluetooth model;
-  model.mutable_classic()->set_state(model::State::ON);
-  model.mutable_low_energy()->set_state(model::State::ON);
-  Patch(id, model);
-}
-
-void Patch(uint32_t id, const model::Chip::Bluetooth &request) {
-  if (id_to_chip_info_.find(id) == id_to_chip_info_.end()) {
-    BtsLogWarn("Patch an unknown rootcanal_id: %d", id);
-    return;
-  }
-  auto model = id_to_chip_info_[id]->model;
-  // Low_energy radio state
-  auto request_state = request.low_energy().state();
-  auto *le = model->mutable_low_energy();
-  if (ChangedState(le->state(), request_state)) {
-    le->set_state(request_state);
-    PatchPhy(id, request_state == model::State::ON, true);
-  }
-  // Classic radio state
-  request_state = request.classic().state();
-  auto *classic = model->mutable_classic();
-  if (ChangedState(classic->state(), request_state)) {
-    classic->set_state(request_state);
-    PatchPhy(id, request_state == model::State::ON, false);
-  }
+  // First remove LOW_ENERGY and BR_EDR Phy
+  RemoveDeviceFromPhy(id, true);
+  RemoveDeviceFromPhy(id, false);
+  // Add to LOW_ENERGY and BR_EDR Phy
+  AddDeviceToPhy(id, true);
+  AddDeviceToPhy(id, false);
 }
 
 void Remove(uint32_t id) {
@@ -498,13 +475,6 @@ int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power) {
   auto b = id_to_chip_info_[recv_id]->chip_id;
   auto distance = netsim::device::GetDistanceCxx(a, b);
   return netsim::DistanceToRssi(tx_power, distance);
-}
-
-void PatchCxx(uint32_t id,
-              const rust::Slice<::std::uint8_t const> proto_bytes) {
-  model::Chip::Bluetooth bluetooth;
-  bluetooth.ParseFromArray(proto_bytes.data(), proto_bytes.size());
-  Patch(id, bluetooth);
 }
 
 rust::Vec<::std::uint8_t> GetCxx(uint32_t id) {

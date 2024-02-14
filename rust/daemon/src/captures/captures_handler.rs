@@ -47,7 +47,7 @@ use crate::wifi::radiotap;
 
 use anyhow::anyhow;
 
-use super::pcap_util::{append_record, wrap_bt_packet, PacketDirection};
+use super::pcap_util::{append_record, append_record_pcapng, wrap_bt_packet, PacketDirection};
 use super::PCAP_MIME_TYPE;
 
 const CHUNK_LEN: usize = 1024;
@@ -61,8 +61,12 @@ const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
 /// Helper function for getting file name from the given fields.
 fn get_file(id: ChipIdentifier, device_name: String, chip_kind: ChipKind) -> Result<File> {
     let mut filename = netsim_common::system::netsimd_temp_dir();
+    let extension = match chip_kind {
+        ChipKind::UWB => "pcapng",
+        _ => "pcap",
+    };
     filename.push("pcaps");
-    filename.push(format!("netsim-{:?}-{:}-{:?}.pcap", id, device_name, chip_kind));
+    filename.push(format!("netsim-{:?}-{:}-{:?}.{}", id, device_name, chip_kind, extension));
     File::open(filename)
 }
 
@@ -92,11 +96,12 @@ fn handle_capture_get(writer: ResponseWritable, id: ChipIdentifier) -> anyhow::R
     let mut buffer = [0u8; CHUNK_LEN];
     let time_display = TimeDisplay::new(capture.seconds, capture.nanos as u32);
     let header_value = format!(
-        "attachment; filename=\"netsim-{:?}-{:}-{:?}-{}.pcap\"",
+        "attachment; filename=\"netsim-{:?}-{:}-{:?}-{}.{}\"",
         id,
         capture.device_name.clone(),
         capture.chip_kind,
-        time_display.utc_display()
+        time_display.utc_display(),
+        capture.extension
     );
     writer.put_ok_with_length(
         PCAP_MIME_TYPE,
@@ -250,6 +255,16 @@ fn handle_packet(
                     Some(buffer) => buffer,
                     None => return,
                 },
+                ChipKind::UWB => {
+                    match append_record_pcapng(timestamp, file, packet) {
+                        Ok(size) => {
+                            capture.size += size;
+                            capture.records += 1;
+                        }
+                        Err(err) => warn!("{err:?}"),
+                    }
+                    return;
+                }
                 _ => {
                     warn!("Unknown capture type");
                     return;

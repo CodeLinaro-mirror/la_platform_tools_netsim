@@ -167,10 +167,6 @@ pub mod ffi_bluetooth {
 
         include!("hci/bluetooth_facade.h");
 
-        #[rust_name = bluetooth_patch_cxx]
-        #[namespace = "netsim::hci::facade"]
-        pub fn PatchCxx(rootcanal_id: u32, proto_bytes: &[u8]);
-
         #[rust_name = bluetooth_get_cxx]
         #[namespace = "netsim::hci::facade"]
         pub fn GetCxx(rootcanal_id: u32) -> Vec<u8>;
@@ -223,6 +219,14 @@ pub mod ffi_bluetooth {
         #[rust_name = bluetooth_stop]
         #[namespace = "netsim::hci::facade"]
         pub fn Stop();
+
+        #[rust_name = add_device_to_phy]
+        #[namespace = "netsim::hci::facade"]
+        pub fn AddDeviceToPhy(rootcanal_id: u32, is_low_energy: bool);
+
+        #[rust_name = remove_device_from_phy]
+        #[namespace = "netsim::hci::facade"]
+        pub fn RemoveDeviceFromPhy(rootcanal_id: u32, is_low_energy: bool);
     }
 }
 
