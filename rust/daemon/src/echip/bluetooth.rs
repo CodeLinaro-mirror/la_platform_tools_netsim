@@ -16,23 +16,35 @@ use crate::devices::chip::ChipIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_bluetooth;
 
-use cxx::let_cxx_string;
-use log::info;
+use cxx::{let_cxx_string, CxxString, CxxVector};
+use lazy_static::lazy_static;
+use log::{error, info};
 use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::Bluetooth as ProtoBluetooth;
 use netsim_proto::model::chip::Radio as ProtoRadio;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::State as ProtoState;
-use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
+use netsim_proto::stats::invalid_packet::Reason as InvalidPacketReason;
+use netsim_proto::stats::{netsim_radio_stats, InvalidPacket, NetsimRadioStats as ProtoRadioStats};
 
-use protobuf::{EnumOrUnknown, Message, MessageField};
+use protobuf::{Enum, EnumOrUnknown, Message, MessageField};
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 static ECHIP_BT_MUTEX: Mutex<()> = Mutex::new(());
 
 pub type RootcanalIdentifier = u32;
+
+// BLUETOOTH_ECHIPS is a singleton that contains a hash map from
+// RootcanalIdentifier to SharedEmulatedChip
+// This singleton is only used when Rootcanal reports invalid
+// packets by rootcanal_id and we add those to Bluetooth struct.
+lazy_static! {
+    static ref BLUETOOTH_ECHIPS: Arc<Mutex<BTreeMap<RootcanalIdentifier, SharedEmulatedChip>>> =
+        Arc::new(Mutex::new(BTreeMap::new()));
+}
 
 /// Parameters for creating Bluetooth chips
 /// allow(dead_code) due to not being used in unit tests
@@ -47,6 +59,7 @@ pub struct Bluetooth {
     rootcanal_id: RootcanalIdentifier,
     low_energy_enabled: ProtoState,
     classic_enabled: ProtoState,
+    invalid_packets: Vec<InvalidPacket>,
 }
 
 fn patch_state(
@@ -128,6 +141,9 @@ impl EmulatedChip for Bluetooth {
         // Construct NetsimRadioStats for BLE and Classic.
         let mut ble_stats_proto = ProtoRadioStats::new();
         ble_stats_proto.set_duration_secs(duration_secs);
+        for invalid_packet in &self.invalid_packets {
+            ble_stats_proto.invalid_packets.push(invalid_packet.clone());
+        }
         let mut classic_stats_proto = ble_stats_proto.clone();
 
         // Obtain the Chip Information with get()
@@ -143,6 +159,24 @@ impl EmulatedChip for Bluetooth {
             classic_stats_proto.set_rx_count(chip_proto.bt().classic.rx_count);
         }
         vec![ble_stats_proto, classic_stats_proto]
+    }
+
+    fn report_invalid_packet(
+        &mut self,
+        reason: InvalidPacketReason,
+        description: String,
+        packet: Vec<u8>,
+    ) {
+        // Remove the earliest reported packet if length greater than 5
+        if self.invalid_packets.len() >= 5 {
+            self.invalid_packets.remove(0);
+        }
+        // append error packet
+        let mut invalid_packet = InvalidPacket::new();
+        invalid_packet.set_reason(reason);
+        invalid_packet.set_description(description);
+        invalid_packet.set_packet(packet);
+        self.invalid_packets.push(invalid_packet);
     }
 }
 
@@ -163,8 +197,11 @@ pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmula
         rootcanal_id,
         low_energy_enabled: ProtoState::ON,
         classic_enabled: ProtoState::ON,
+        invalid_packets: Vec::new(),
     };
-    SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))
+    let shared_echip = SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))));
+    BLUETOOTH_ECHIPS.lock().unwrap().insert(rootcanal_id, shared_echip.clone());
+    shared_echip
 }
 
 /// Starts the Bluetooth service.
@@ -176,4 +213,22 @@ pub fn bluetooth_start(config: &MessageField<BluetoothConfig>, instance_num: u16
 /// Stops the Bluetooth service.
 pub fn bluetooth_stop() {
     ffi_bluetooth::bluetooth_stop();
+}
+
+/// (Called by C++) Report Invalid Packet
+pub fn report_invalid_packet_cxx(
+    rootcanal_id: RootcanalIdentifier,
+    reason: i32,
+    description: &CxxString,
+    packet: &CxxVector<u8>,
+) {
+    let reason_enum = InvalidPacketReason::from_i32(reason).unwrap_or(InvalidPacketReason::UNKNOWN);
+    match BLUETOOTH_ECHIPS.lock().unwrap().get(&rootcanal_id) {
+        Some(echip) => echip.lock().report_invalid_packet(
+            reason_enum,
+            description.to_string(),
+            packet.as_slice().to_vec(),
+        ),
+        None => error!("Bluetooth EmulatedChip not created for rootcanal_id: {rootcanal_id}"),
+    }
 }

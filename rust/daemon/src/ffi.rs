@@ -23,7 +23,7 @@ use crate::http_server::server_response::ServerResponseWritable;
 use crate::http_server::server_response::StrHeaders;
 use cxx::let_cxx_string;
 
-use crate::echip::{handle_request_cxx, handle_response};
+use crate::echip::{bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response};
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 
 use crate::captures::captures_handler::handle_capture_cxx;
@@ -145,6 +145,16 @@ pub mod ffi_bluetooth {
             facade_id: u32,
             rust_chip: UniquePtr<RustBluetoothChip>,
         ) -> Box<AddRustDeviceResult>;
+
+        // Rust Invalid Packet Report
+        #[cxx_name = "ReportInvalidPacket"]
+        #[namespace = "netsim::hci::facade"]
+        fn report_invalid_packet_cxx(
+            rootcanal_id: u32,
+            reason: i32,
+            description: &CxxString,
+            packet: &CxxVector<u8>,
+        );
     }
 
     #[allow(dead_code)]

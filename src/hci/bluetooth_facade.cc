@@ -200,6 +200,9 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
   // output is to a file, so no color wanted
   rootcanal::log::SetLogColorEnable(false);
 
+  // TODO(b/323226412): Pass netsim::hci::facade::ReportInvalidPacket signature
+  // into rootcanal
+
   config::Bluetooth config;
   config.ParseFromArray(proto_bytes.data(), proto_bytes.size());
   controller_proto_ = std::make_shared<rootcanal::configuration::Controller>(

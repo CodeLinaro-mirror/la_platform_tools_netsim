@@ -26,6 +26,323 @@
 const _PROTOBUF_VERSION_CHECK: () = ::protobuf::VERSION_3_2_0;
 
 #[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.stats.InvalidPacket)
+pub struct InvalidPacket {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.stats.InvalidPacket.reason)
+    pub reason: ::std::option::Option<::protobuf::EnumOrUnknown<invalid_packet::Reason>>,
+    // @@protoc_insertion_point(field:netsim.stats.InvalidPacket.description)
+    pub description: ::std::option::Option<::std::string::String>,
+    // @@protoc_insertion_point(field:netsim.stats.InvalidPacket.packet)
+    pub packet: ::std::option::Option<::std::vec::Vec<u8>>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.stats.InvalidPacket.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a InvalidPacket {
+    fn default() -> &'a InvalidPacket {
+        <InvalidPacket as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl InvalidPacket {
+    pub fn new() -> InvalidPacket {
+        ::std::default::Default::default()
+    }
+
+    // optional .netsim.stats.InvalidPacket.Reason reason = 1;
+
+    pub fn reason(&self) -> invalid_packet::Reason {
+        match self.reason {
+            Some(e) => e.enum_value_or(invalid_packet::Reason::UNKNOWN),
+            None => invalid_packet::Reason::UNKNOWN,
+        }
+    }
+
+    pub fn clear_reason(&mut self) {
+        self.reason = ::std::option::Option::None;
+    }
+
+    pub fn has_reason(&self) -> bool {
+        self.reason.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_reason(&mut self, v: invalid_packet::Reason) {
+        self.reason = ::std::option::Option::Some(::protobuf::EnumOrUnknown::new(v));
+    }
+
+    // optional string description = 2;
+
+    pub fn description(&self) -> &str {
+        match self.description.as_ref() {
+            Some(v) => v,
+            None => "",
+        }
+    }
+
+    pub fn clear_description(&mut self) {
+        self.description = ::std::option::Option::None;
+    }
+
+    pub fn has_description(&self) -> bool {
+        self.description.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_description(&mut self, v: ::std::string::String) {
+        self.description = ::std::option::Option::Some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_description(&mut self) -> &mut ::std::string::String {
+        if self.description.is_none() {
+            self.description = ::std::option::Option::Some(::std::string::String::new());
+        }
+        self.description.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_description(&mut self) -> ::std::string::String {
+        self.description.take().unwrap_or_else(|| ::std::string::String::new())
+    }
+
+    // optional bytes packet = 3;
+
+    pub fn packet(&self) -> &[u8] {
+        match self.packet.as_ref() {
+            Some(v) => v,
+            None => &[],
+        }
+    }
+
+    pub fn clear_packet(&mut self) {
+        self.packet = ::std::option::Option::None;
+    }
+
+    pub fn has_packet(&self) -> bool {
+        self.packet.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_packet(&mut self, v: ::std::vec::Vec<u8>) {
+        self.packet = ::std::option::Option::Some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_packet(&mut self) -> &mut ::std::vec::Vec<u8> {
+        if self.packet.is_none() {
+            self.packet = ::std::option::Option::Some(::std::vec::Vec::new());
+        }
+        self.packet.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_packet(&mut self) -> ::std::vec::Vec<u8> {
+        self.packet.take().unwrap_or_else(|| ::std::vec::Vec::new())
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(3);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "reason",
+            |m: &InvalidPacket| { &m.reason },
+            |m: &mut InvalidPacket| { &mut m.reason },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "description",
+            |m: &InvalidPacket| { &m.description },
+            |m: &mut InvalidPacket| { &mut m.description },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "packet",
+            |m: &InvalidPacket| { &m.packet },
+            |m: &mut InvalidPacket| { &mut m.packet },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<InvalidPacket>(
+            "InvalidPacket",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for InvalidPacket {
+    const NAME: &'static str = "InvalidPacket";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.reason = ::std::option::Option::Some(is.read_enum_or_unknown()?);
+                },
+                18 => {
+                    self.description = ::std::option::Option::Some(is.read_string()?);
+                },
+                26 => {
+                    self.packet = ::std::option::Option::Some(is.read_bytes()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.reason {
+            my_size += ::protobuf::rt::int32_size(1, v.value());
+        }
+        if let Some(v) = self.description.as_ref() {
+            my_size += ::protobuf::rt::string_size(2, &v);
+        }
+        if let Some(v) = self.packet.as_ref() {
+            my_size += ::protobuf::rt::bytes_size(3, &v);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.reason {
+            os.write_enum(1, ::protobuf::EnumOrUnknown::value(&v))?;
+        }
+        if let Some(v) = self.description.as_ref() {
+            os.write_string(2, v)?;
+        }
+        if let Some(v) = self.packet.as_ref() {
+            os.write_bytes(3, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> InvalidPacket {
+        InvalidPacket::new()
+    }
+
+    fn clear(&mut self) {
+        self.reason = ::std::option::Option::None;
+        self.description = ::std::option::Option::None;
+        self.packet = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static InvalidPacket {
+        static instance: InvalidPacket = InvalidPacket {
+            reason: ::std::option::Option::None,
+            description: ::std::option::Option::None,
+            packet: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for InvalidPacket {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("InvalidPacket").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for InvalidPacket {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for InvalidPacket {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+/// Nested message and enums of message `InvalidPacket`
+pub mod invalid_packet {
+    #[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
+    // @@protoc_insertion_point(enum:netsim.stats.InvalidPacket.Reason)
+    pub enum Reason {
+        // @@protoc_insertion_point(enum_value:netsim.stats.InvalidPacket.Reason.UNKNOWN)
+        UNKNOWN = 0,
+        // @@protoc_insertion_point(enum_value:netsim.stats.InvalidPacket.Reason.PARSE_ERROR)
+        PARSE_ERROR = 1,
+        // @@protoc_insertion_point(enum_value:netsim.stats.InvalidPacket.Reason.UNSUPPORTED)
+        UNSUPPORTED = 2,
+        // @@protoc_insertion_point(enum_value:netsim.stats.InvalidPacket.Reason.OTHERS)
+        OTHERS = 3,
+    }
+
+    impl ::protobuf::Enum for Reason {
+        const NAME: &'static str = "Reason";
+
+        fn value(&self) -> i32 {
+            *self as i32
+        }
+
+        fn from_i32(value: i32) -> ::std::option::Option<Reason> {
+            match value {
+                0 => ::std::option::Option::Some(Reason::UNKNOWN),
+                1 => ::std::option::Option::Some(Reason::PARSE_ERROR),
+                2 => ::std::option::Option::Some(Reason::UNSUPPORTED),
+                3 => ::std::option::Option::Some(Reason::OTHERS),
+                _ => ::std::option::Option::None
+            }
+        }
+
+        const VALUES: &'static [Reason] = &[
+            Reason::UNKNOWN,
+            Reason::PARSE_ERROR,
+            Reason::UNSUPPORTED,
+            Reason::OTHERS,
+        ];
+    }
+
+    impl ::protobuf::EnumFull for Reason {
+        fn enum_descriptor() -> ::protobuf::reflect::EnumDescriptor {
+            static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::EnumDescriptor> = ::protobuf::rt::Lazy::new();
+            descriptor.get(|| super::file_descriptor().enum_by_package_relative_name("InvalidPacket.Reason").unwrap()).clone()
+        }
+
+        fn descriptor(&self) -> ::protobuf::reflect::EnumValueDescriptor {
+            let index = *self as usize;
+            Self::enum_descriptor().value_by_index(index)
+        }
+    }
+
+    impl ::std::default::Default for Reason {
+        fn default() -> Self {
+            Reason::UNKNOWN
+        }
+    }
+
+    impl Reason {
+        pub(in super) fn generated_enum_descriptor_data() -> ::protobuf::reflect::GeneratedEnumDescriptorData {
+            ::protobuf::reflect::GeneratedEnumDescriptorData::new::<Reason>("InvalidPacket.Reason")
+        }
+    }
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
 // @@protoc_insertion_point(message:netsim.stats.NetsimRadioStats)
 pub struct NetsimRadioStats {
     // message fields
@@ -43,6 +360,8 @@ pub struct NetsimRadioStats {
     pub tx_bytes: ::std::option::Option<i32>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.rx_bytes)
     pub rx_bytes: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimRadioStats.invalid_packets)
+    pub invalid_packets: ::std::vec::Vec<InvalidPacket>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.NetsimRadioStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -196,7 +515,7 @@ impl NetsimRadioStats {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(7);
+        let mut fields = ::std::vec::Vec::with_capacity(8);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "device_id",
@@ -232,6 +551,11 @@ impl NetsimRadioStats {
             "rx_bytes",
             |m: &NetsimRadioStats| { &m.rx_bytes },
             |m: &mut NetsimRadioStats| { &mut m.rx_bytes },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
+            "invalid_packets",
+            |m: &NetsimRadioStats| { &m.invalid_packets },
+            |m: &mut NetsimRadioStats| { &mut m.invalid_packets },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NetsimRadioStats>(
             "NetsimRadioStats",
@@ -272,6 +596,9 @@ impl ::protobuf::Message for NetsimRadioStats {
                 56 => {
                     self.rx_bytes = ::std::option::Option::Some(is.read_int32()?);
                 },
+                66 => {
+                    self.invalid_packets.push(is.read_message()?);
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -305,6 +632,10 @@ impl ::protobuf::Message for NetsimRadioStats {
         if let Some(v) = self.rx_bytes {
             my_size += ::protobuf::rt::int32_size(7, v);
         }
+        for value in &self.invalid_packets {
+            let len = value.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        };
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -332,6 +663,9 @@ impl ::protobuf::Message for NetsimRadioStats {
         if let Some(v) = self.rx_bytes {
             os.write_int32(7, v)?;
         }
+        for v in &self.invalid_packets {
+            ::protobuf::rt::write_message_field_with_cached_size(8, v, os)?;
+        };
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -356,6 +690,7 @@ impl ::protobuf::Message for NetsimRadioStats {
         self.rx_count = ::std::option::Option::None;
         self.tx_bytes = ::std::option::Option::None;
         self.rx_bytes = ::std::option::Option::None;
+        self.invalid_packets.clear();
         self.special_fields.clear();
     }
 
@@ -368,6 +703,7 @@ impl ::protobuf::Message for NetsimRadioStats {
             rx_count: ::std::option::Option::None,
             tx_bytes: ::std::option::Option::None,
             rx_bytes: ::std::option::Option::None,
+            invalid_packets: ::std::vec::Vec::new(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -757,22 +1093,28 @@ impl ::protobuf::reflect::ProtobufValue for NetsimStats {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x12netsim/stats.proto\x12\x0cnetsim.stats\"\xef\x02\n\x10NetsimRadioS\
-    tats\x12\x1b\n\tdevice_id\x18\x01\x20\x01(\rR\x08deviceId\x127\n\x04kind\
-    \x18\x02\x20\x01(\x0e2#.netsim.stats.NetsimRadioStats.KindR\x04kind\x12#\
-    \n\rduration_secs\x18\x03\x20\x01(\x04R\x0cdurationSecs\x12\x19\n\x08tx_\
-    count\x18\x04\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_count\x18\x05\x20\
-    \x01(\x05R\x07rxCount\x12\x19\n\x08tx_bytes\x18\x06\x20\x01(\x05R\x07txB\
-    ytes\x12\x19\n\x08rx_bytes\x18\x07\x20\x01(\x05R\x07rxBytes\"t\n\x04Kind\
-    \x12\x0f\n\x0bUNSPECIFIED\x10\0\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\
-    \x01\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x02\x12\x0e\n\nBLE_BEACON\x10\
-    \x03\x12\x08\n\x04WIFI\x10\x04\x12\x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\
-    \x10\x06\"\xe8\x01\n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\
-    \x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\
-    \x0bdeviceCount\x126\n\x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\
-    \x15peakConcurrentDevices\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\
-    \x1e.netsim.stats.NetsimRadioStatsR\nradioStats\x12\x18\n\x07version\x18\
-    \x05\x20\x01(\tR\x07version\
+    \n\x12netsim/stats.proto\x12\x0cnetsim.stats\"\xca\x01\n\rInvalidPacket\
+    \x12:\n\x06reason\x18\x01\x20\x01(\x0e2\".netsim.stats.InvalidPacket.Rea\
+    sonR\x06reason\x12\x20\n\x0bdescription\x18\x02\x20\x01(\tR\x0bdescripti\
+    on\x12\x16\n\x06packet\x18\x03\x20\x01(\x0cR\x06packet\"C\n\x06Reason\
+    \x12\x0b\n\x07UNKNOWN\x10\0\x12\x0f\n\x0bPARSE_ERROR\x10\x01\x12\x0f\n\
+    \x0bUNSUPPORTED\x10\x02\x12\n\n\x06OTHERS\x10\x03\"\xb5\x03\n\x10NetsimR\
+    adioStats\x12\x1b\n\tdevice_id\x18\x01\x20\x01(\rR\x08deviceId\x127\n\
+    \x04kind\x18\x02\x20\x01(\x0e2#.netsim.stats.NetsimRadioStats.KindR\x04k\
+    ind\x12#\n\rduration_secs\x18\x03\x20\x01(\x04R\x0cdurationSecs\x12\x19\
+    \n\x08tx_count\x18\x04\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_count\
+    \x18\x05\x20\x01(\x05R\x07rxCount\x12\x19\n\x08tx_bytes\x18\x06\x20\x01(\
+    \x05R\x07txBytes\x12\x19\n\x08rx_bytes\x18\x07\x20\x01(\x05R\x07rxBytes\
+    \x12D\n\x0finvalid_packets\x18\x08\x20\x03(\x0b2\x1b.netsim.stats.Invali\
+    dPacketR\x0einvalidPackets\"t\n\x04Kind\x12\x0f\n\x0bUNSPECIFIED\x10\0\
+    \x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x01\x12\x15\n\x11BLUETOOTH_CLASSI\
+    C\x10\x02\x12\x0e\n\nBLE_BEACON\x10\x03\x12\x08\n\x04WIFI\x10\x04\x12\
+    \x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\x10\x06\"\xe8\x01\n\x0bNetsimStat\
+    s\x12#\n\rduration_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0c\
+    device_count\x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurr\
+    ent_devices\x18\x03\x20\x01(\x05R\x15peakConcurrentDevices\x12?\n\x0brad\
+    io_stats\x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRadioStatsR\nradio\
+    Stats\x12\x18\n\x07version\x18\x05\x20\x01(\tR\x07version\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -790,10 +1132,12 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
     file_descriptor.get(|| {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
             let mut deps = ::std::vec::Vec::with_capacity(0);
-            let mut messages = ::std::vec::Vec::with_capacity(2);
+            let mut messages = ::std::vec::Vec::with_capacity(3);
+            messages.push(InvalidPacket::generated_message_descriptor_data());
             messages.push(NetsimRadioStats::generated_message_descriptor_data());
             messages.push(NetsimStats::generated_message_descriptor_data());
-            let mut enums = ::std::vec::Vec::with_capacity(1);
+            let mut enums = ::std::vec::Vec::with_capacity(2);
+            enums.push(invalid_packet::Reason::generated_enum_descriptor_data());
             enums.push(netsim_radio_stats::Kind::generated_enum_descriptor_data());
             ::protobuf::reflect::GeneratedFileDescriptor::new_generated(
                 file_descriptor_proto(),
