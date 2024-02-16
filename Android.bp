@@ -64,6 +64,7 @@ rust_defaults {
         "libcxx",
         "libanyhow",
         "libdata_encoding",
+        "libglam",
         "libnetsim_proto",
         "libhttp",
         "libnetsim_common",
@@ -80,6 +81,7 @@ rust_defaults {
         "liblog_rust",
         "libopenssl",
     ],
+    static_libs: ["libgrpc_wrap"],
     srcs: [
         "rust/daemon/src/lib.rs",
         ":netsim_netlink_rust_gen",
@@ -252,6 +254,8 @@ cc_binary_host {
         "lib-netsimd-proto",
         "lib-netsim",
         "lib-netsim-frontend-proto",
+        "libgrpc_wrap",
+        "librootcanal_rs",
     ],
     whole_static_libs: [
         "libnetsim_daemon",
@@ -282,17 +286,20 @@ cc_test_host {
         "libcrypto",
         "libbase",
         "libunwindstack",
+        "libssl",
         "libz", // TODO: Remove for native rust binary
     ],
     static_libs: [
         "breakpad_client",
         "libc++fs",
+        "libgrpc_wrap",
         "libjsoncpp",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite", // TODO: Remove this after using pdl library.
         "lib-netsim-frontend-proto",
         "lib-netsim",
         "lib-netsimd-proto",
+        "librootcanal_rs",
     ],
     whole_static_libs: [
         "libnetsim_daemon",
