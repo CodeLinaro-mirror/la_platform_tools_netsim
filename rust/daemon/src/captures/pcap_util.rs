@@ -31,6 +31,14 @@ macro_rules! be_vec {
        };
     }
 
+macro_rules! le_vec {
+    ( $( $x:expr ),* ) => {
+            Vec::<u8>::new().iter().copied()
+            $( .chain($x.to_le_bytes()) )*
+            .collect()
+        };
+    }
+
 /// The indication of packet direction for HCI packets.
 pub enum PacketDirection {
     /// Host To Controller as u32 value
@@ -47,6 +55,8 @@ pub enum LinkType {
     Ieee80211RadioTap = 127,
     /// Bluetooth HCI UART transport layer
     BluetoothHciH4WithPhdr = 201,
+    /// Ultra-wideband controller interface protocol
+    FiraUci = 299,
 }
 
 /// Returns the file size after writing the header of the
@@ -61,6 +71,32 @@ pub fn write_pcap_header<W: Write>(link_type: LinkType, output: &mut W) -> Resul
         0u32,          // reserved 2
         u32::MAX,      // snaplen
         link_type as u32
+    ];
+
+    output.write_all(&header)?;
+    Ok(header.len())
+}
+
+/// Returns the file size after writing header of the
+/// pcapng file
+pub fn write_pcapng_header<W: Write>(link_type: LinkType, output: &mut W) -> Result<usize> {
+    let header: Vec<u8> = le_vec![
+        // PCAPng files must start with a Section Header Block
+        0x0A0D0D0A_u32,         // Block Type
+        28_u32,                 // Block Total Length
+        0x1A2B3C4D_u32,         // Byte-Order Magic
+        1_u16,                  // Major Version
+        0_u16,                  // Minor Version
+        0xFFFFFFFFFFFFFFFF_u64, // Section Length (not specified)
+        28_u32,                 // Block Total Length
+        // Write the Interface Description Block used for all
+        // UCI records.
+        0x00000001_u32,   // Block Type
+        20_u32,           // Block Total Length
+        link_type as u16, // LinkType
+        0_u16,            // Reserved
+        0_u32,            // SnapLen (no limit)
+        20_u32            // Block Total Length
     ];
 
     output.write_all(&header)?;
@@ -104,13 +140,40 @@ pub fn append_record<W: Write>(
     Ok(header.len() + length)
 }
 
+/// Returns the file size after appending a single packet record for pcapng.
+pub fn append_record_pcapng<W: Write>(
+    timestamp: Duration,
+    output: &mut W,
+    packet: &[u8],
+) -> Result<usize> {
+    let packet_data_padding: usize = 4 - packet.len() % 4;
+    let block_total_length: u32 = (packet.len() + packet_data_padding + 32) as u32;
+    // Wrap the packet inside an Enhanced Packet Block.
+    let header: Vec<u8> = le_vec![
+        0x00000006_u32,             // Block Type
+        block_total_length,         // Block Total Length
+        0_u32,                      // Interface ID
+        timestamp.as_secs() as u32, // seconds
+        timestamp.subsec_micros(),  // microseconds
+        packet.len() as u32,        // Captured Packet Length
+        packet.len() as u32         // Original Packet Length
+    ];
+    output.write_all(&header)?;
+    output.write_all(packet)?;
+    output.write_all(&vec![0; packet_data_padding])?;
+    output.write_all(&block_total_length.to_le_bytes())?;
+    output.flush()?;
+    Ok(block_total_length as usize)
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
     use super::*;
 
-    static EXPECTED: &[u8; 76] = include_bytes!("sample.pcap");
+    static EXPECTED_PCAP: &[u8; 76] = include_bytes!("sample.pcap");
+    static EXPECTED_PCAPNG: &[u8; 88] = include_bytes!("sample.pcapng");
 
     #[test]
     /// The test is done with the golden file sample.pcap with following packets:
@@ -133,6 +196,15 @@ mod tests {
             &wrap_bt_packet(PacketDirection::ControllerToHost, 1, &[10, 32, 1, 0]),
         )
         .unwrap();
-        assert_eq!(actual, EXPECTED);
+        assert_eq!(actual, EXPECTED_PCAP);
+    }
+
+    #[test]
+    fn test_pcapng_file() {
+        let mut actual = Vec::<u8>::new();
+        write_pcapng_header(LinkType::FiraUci, &mut actual).unwrap();
+        // Appending a UCI packet: Core Get Device Info Cmd
+        let _ = append_record_pcapng(Duration::new(0, 0), &mut actual, &[32, 2, 0, 0]).unwrap();
+        assert_eq!(actual, EXPECTED_PCAPNG);
     }
 }

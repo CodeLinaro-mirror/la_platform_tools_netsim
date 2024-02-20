@@ -195,7 +195,7 @@ mod tests {
         assert!(files_result.is_ok());
         let files = files_result.unwrap();
         assert_eq!(files.len(), 3);
-        assert_eq!(files.get(0).unwrap(), &zip_file_2);
+        assert_eq!(files.first().unwrap(), &zip_file_2);
         assert_eq!(files.get(1).unwrap(), &zip_file_3);
         assert_eq!(files.get(2).unwrap(), &zip_file_1);
     }

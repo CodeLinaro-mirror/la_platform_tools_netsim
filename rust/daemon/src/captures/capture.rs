@@ -27,8 +27,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::pcap_util::{write_pcap_header, LinkType};
-use log::info;
+use super::pcap_util::{write_pcap_header, write_pcapng_header, LinkType};
+use log::{info, warn};
 
 use netsim_proto::{
     common::ChipKind,
@@ -63,6 +63,8 @@ pub struct CaptureInfo {
     pub nanos: i32,
     /// Boolean status of whether the device is connected to netsim
     pub valid: bool,
+    /// Extension (pcap or pcapng)
+    pub extension: String,
 }
 
 /// Captures contains a recent copy of all chips and their ChipKind, chip_id,
@@ -80,6 +82,10 @@ pub struct Captures {
 impl CaptureInfo {
     /// Create an instance of CaptureInfo
     pub fn new(chip_kind: ChipKind, chip_id: ChipIdentifier, device_name: String) -> Self {
+        let extension = match chip_kind {
+            ChipKind::UWB => "pcapng".to_string(),
+            _ => "pcap".to_string(),
+        };
         CaptureInfo {
             id: chip_id,
             chip_kind,
@@ -90,13 +96,14 @@ impl CaptureInfo {
             nanos: 0,
             valid: true,
             file: None,
+            extension,
         }
     }
 
     /// Creates a pcap file with headers and store it under temp directory.
     ///
     /// The lifecycle of the file is NOT tied to the lifecycle of the struct
-    /// Format: /tmp/netsimd/$USER/pcaps/netsim-{chip_id}-{device_name}-{chip_kind}.pcap
+    /// Format: /tmp/netsimd/$USER/pcaps/netsim-{chip_id}-{device_name}-{chip_kind}.{extension}
     pub fn start_capture(&mut self) -> Result<()> {
         if self.file.is_some() {
             return Ok(());
@@ -104,15 +111,23 @@ impl CaptureInfo {
         let mut filename = netsim_common::system::netsimd_temp_dir();
         filename.push("pcaps");
         std::fs::create_dir_all(&filename)?;
-        filename
-            .push(format!("netsim-{:?}-{:}-{:?}.pcap", self.id, self.device_name, self.chip_kind));
+        filename.push(format!(
+            "netsim-{:?}-{:}-{:?}.{}",
+            self.id, self.device_name, self.chip_kind, self.extension
+        ));
         let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(filename)?;
         let link_type = match self.chip_kind {
             ChipKind::BLUETOOTH => LinkType::BluetoothHciH4WithPhdr,
+            ChipKind::BLUETOOTH_BEACON => LinkType::BluetoothHciH4WithPhdr,
             ChipKind::WIFI => LinkType::Ieee80211RadioTap,
+            ChipKind::UWB => LinkType::FiraUci,
             _ => return Err(Error::new(ErrorKind::Other, "Unsupported link type")),
         };
-        let size = write_pcap_header(link_type, &mut file)?;
+        let size = match self.extension.as_str() {
+            "pcap" => write_pcap_header(link_type, &mut file)?,
+            "pcapng" => write_pcapng_header(link_type, &mut file)?,
+            _ => return Err(Error::new(ErrorKind::Other, "Incorrect Extension for file")),
+        };
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
         self.size = size;
         self.records = 0;
@@ -225,7 +240,9 @@ pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>) {
                     let mut capture_info =
                         CaptureInfo::new(chip_kind, chip_id, device_name.clone());
                     if get_pcap() {
-                        let _ = capture_info.start_capture();
+                        if let Err(err) = capture_info.start_capture() {
+                            warn!("{err:?}");
+                        }
                     }
                     clone_captures().write().unwrap().insert(capture_info);
                     info!("Capture event: ChipAdded chip_id: {chip_id} device_name: {device_name}");

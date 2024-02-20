@@ -37,7 +37,6 @@ struct AddRustDeviceResult;
 
 void Reset(uint32_t);
 void Remove(uint32_t);
-void Patch(uint32_t, const model::Chip::Bluetooth &);
 model::Chip::Bluetooth Get(uint32_t);
 uint32_t Add(uint32_t chip_id, const std::string &address_string,
              const rust::Slice<::std::uint8_t const> controller_proto_bytes);
@@ -54,8 +53,10 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
            uint16_t instance_num);
 void Stop();
 
+void AddDeviceToPhy(uint32_t rootcanal_id, bool isLowEnergy);
+void RemoveDeviceFromPhy(uint32_t rootcanal_id, bool isLowEnergy);
+
 // Cxx functions for rust ffi.
-void PatchCxx(uint32_t id, const rust::Slice<::std::uint8_t const> proto_bytes);
 rust::Vec<::std::uint8_t> GetCxx(uint32_t id);
 
 }  // namespace netsim::hci::facade

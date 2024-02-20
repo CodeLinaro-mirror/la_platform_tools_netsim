@@ -19,8 +19,10 @@ use std::{
 
 use lazy_static::lazy_static;
 
-use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
+use netsim_proto::{
+    model::Chip as ProtoChip, stats::invalid_packet::Reason as InvalidPacketReason,
+};
 
 use crate::{
     devices::chip::ChipIdentifier,
@@ -42,7 +44,7 @@ lazy_static! {
 
 impl SharedEmulatedChip {
     pub fn lock(&self) -> MutexGuard<Box<dyn EmulatedChip + Send + Sync>> {
-        self.0.lock().expect("Poisoned Shared Emulated lock")
+        self.0.lock().expect("Poisoned Shared Emulated Chip lock")
     }
 }
 
@@ -94,6 +96,15 @@ pub trait EmulatedChip {
     /// Return the NetsimRadioStats protobuf from the emulated chip. This is
     /// part of NetsimStats protobuf.
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats>;
+
+    /// Optional method: Add error_packet bytes into NetsimRadioStats
+    fn report_invalid_packet(
+        &mut self,
+        _reason: InvalidPacketReason,
+        _description: String,
+        _packet: Vec<u8>,
+    ) {
+    }
 }
 
 /// Lookup for SharedEmulatedChip with chip_id
