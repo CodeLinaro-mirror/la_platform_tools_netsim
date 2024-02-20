@@ -83,6 +83,10 @@ impl Ieee80211 {
         self.ieee80211.to_ds == 1 || self.ieee80211.from_ds == 1
     }
 
+    pub fn is_to_ap(&self) -> bool {
+        self.ieee80211.to_ds == 1 && self.ieee80211.from_ds == 0
+    }
+
     // Frame type is management
     pub fn is_mgmt(&self) -> bool {
         self.ieee80211.ftype == FrameType::Mgmt
@@ -129,6 +133,16 @@ impl Ieee80211 {
             Ieee80211Child::Ieee80211FromAp(hdr) => hdr.get_destination(),
             Ieee80211Child::Ieee80211Ibss(hdr) => hdr.get_destination(),
             Ieee80211Child::Ieee80211Wds(hdr) => hdr.get_destination(),
+            _ => panic!("unexpected specialized header"),
+        }
+    }
+
+    pub fn get_bssid(&self) -> Option<MacAddress> {
+        match self.specialize() {
+            Ieee80211Child::Ieee80211ToAp(hdr) => Some(hdr.get_bssid()),
+            Ieee80211Child::Ieee80211FromAp(hdr) => Some(hdr.get_bssid()),
+            Ieee80211Child::Ieee80211Ibss(hdr) => Some(hdr.get_bssid()),
+            Ieee80211Child::Ieee80211Wds(hdr) => None,
             _ => panic!("unexpected specialized header"),
         }
     }

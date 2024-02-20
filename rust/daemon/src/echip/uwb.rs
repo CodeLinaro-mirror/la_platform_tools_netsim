@@ -105,7 +105,7 @@ mod tests {
     fn test_get_stats() {
         let shared_echip = new_uwb_shared_echip();
         let radio_stat_vec = shared_echip.lock().get_stats(0);
-        let radio_stat = radio_stat_vec.get(0).unwrap();
+        let radio_stat = radio_stat_vec.first().unwrap();
         assert_eq!(radio_stat.kind(), netsim_radio_stats::Kind::UWB);
         assert_eq!(radio_stat.duration_secs(), 0);
     }
