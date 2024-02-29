@@ -1,18 +1,18 @@
 """Network simulator Python gRPC client."""
+
 import logging
 import os
 import platform
 from typing import Dict, Optional
 
-import grpc
-
-from netsim_grpc.proto.netsim import (
-  common_pb2 as common,
-  model_pb2 as model,
-  frontend_pb2 as frontend,
-  frontend_pb2_grpc as frontend_grpc
-)
 from google.protobuf import empty_pb2
+import grpc
+from netsim_grpc.proto.netsim import (
+    common_pb2 as common,
+    frontend_pb2_grpc as frontend_grpc,
+    frontend_pb2 as frontend,
+    model_pb2 as model,
+)
 
 _Empty = empty_pb2.Empty
 _Channel = grpc.Channel
@@ -34,9 +34,7 @@ class NetsimClient(object):
       local_creds: Use local credentials for gRPC channel.
     """
     self._server_addr = _get_grpc_server_addr()
-    self._channel = _create_frontend_grpc_channel(
-        self._server_addr
-    )
+    self._channel = _create_frontend_grpc_channel(self._server_addr)
     self._stub = frontend_grpc.FrontendServiceStub(self._channel)
 
   def get_version(self) -> str:
@@ -147,7 +145,7 @@ class NetsimClient(object):
 
   def close(self) -> None:
     """Close the netsim client connection."""
-    if hasattr(self, "_channel"):
+    if hasattr(self, '_channel'):
       self._channel.close()
 
   def __del__(self) -> None:
@@ -163,18 +161,20 @@ def _get_grpc_server_addr() -> str:
   ):
     file_path = os.path.join(os.environ['TMPDIR'], NETSIM_INI)
   # XDG_RUNTIME_DIR for Linux local discovery env
-  elif platform.system() == "Linux" and 'XDG_RUNTIME_DIR' in os.environ:
+  elif platform.system() == 'Linux' and 'XDG_RUNTIME_DIR' in os.environ:
     file_path = os.path.join(os.environ['XDG_RUNTIME_DIR'], NETSIM_INI)
   # HOME for Mac local discovery
-  elif platform.system() == "Darwin" and 'HOME' in os.environ:
-    file_path = os.path.join(os.environ['HOME'], "Library/Caches/TemporaryItems", NETSIM_INI)
+  elif platform.system() == 'Darwin' and 'HOME' in os.environ:
+    file_path = os.path.join(
+        os.environ['HOME'], 'Library/Caches/TemporaryItems', NETSIM_INI
+    )
   # LOCALAPPDATA for Windows local discovery
-  elif platform.system() == "Windows" and 'LOCALAPPDATA' in os.environ:
-    file_path = os.path.join(os.environ['LOCALAPPDATA'], "Temp", NETSIM_INI)
+  elif platform.system() == 'Windows' and 'LOCALAPPDATA' in os.environ:
+    file_path = os.path.join(os.environ['LOCALAPPDATA'], 'Temp', NETSIM_INI)
   else:
     logging.warning(
-        'TMPDIR, XDG_RUNTIME_DIR, HOME, or LOCALAPPDATA environment variable not set.'
-        'Using /tmp. Is netsimd running?'
+        'TMPDIR, XDG_RUNTIME_DIR, HOME, or LOCALAPPDATA environment variable'
+        ' not set.Using /tmp. Is netsimd running?'
     )
   if not os.path.exists(file_path):
     raise SetupError(
