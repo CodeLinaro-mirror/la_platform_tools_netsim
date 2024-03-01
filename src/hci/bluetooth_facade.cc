@@ -200,9 +200,6 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
   // output is to a file, so no color wanted
   rootcanal::log::SetLogColorEnable(false);
 
-  // TODO(b/323226412): Pass netsim::hci::facade::ReportInvalidPacket signature
-  // into rootcanal
-
   config::Bluetooth config;
   config.ParseFromArray(proto_bytes.data(), proto_bytes.size());
   controller_proto_ = std::make_shared<rootcanal::configuration::Controller>(
@@ -375,6 +372,14 @@ uint32_t Add(uint32_t chip_id, const std::string &address_string,
 
   auto hci_device =
       std::make_shared<rootcanal::HciDevice>(transport, *controller_properties);
+
+  // Pass netsim::hci::facade::ReportInvalidPacket signature into hci_device
+  hci_device->RegisterInvalidPacketHandler(
+      [](uint32_t rootcanal_id, rootcanal::InvalidPacketReason reason,
+         std::string description, const std::vector<uint8_t> &packet) {
+        netsim::hci::facade::ReportInvalidPacket(
+            rootcanal_id, static_cast<int32_t>(reason), description, packet);
+      });
 
   // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
   // invoked atomically, preventing data races.
