@@ -183,7 +183,7 @@ impl Ieee80211 {
     }
 }
 
-fn parse_mac_address(s: &str) -> Option<MacAddress> {
+pub fn parse_mac_address(s: &str) -> Option<MacAddress> {
     let parts: Vec<&str> = s.split(':').collect();
     if parts.len() != 6 {
         return None;

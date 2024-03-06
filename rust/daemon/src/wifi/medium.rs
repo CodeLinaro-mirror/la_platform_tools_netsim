@@ -68,6 +68,11 @@ impl Medium {
     pub fn new(callback: HwsimCmdCallback) -> Medium {
         Self { callback, stations: HashMap::new(), ap_simulation: true }
     }
+
+    pub fn remove_station(&mut self, client_id: u32) {
+        self.stations.retain(|_, s| s.client_id != client_id);
+    }
+
     fn get_station_by_addr(&self, addr: MacAddress) -> Option<&Station> {
         self.stations.get(&addr)
     }
@@ -340,6 +345,30 @@ pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wifi::packets::ieee80211::parse_mac_address;
+    #[test]
+    fn test_remove_station() {
+        let test_client_id: u32 = 1234;
+        let other_client_id: u32 = 5678;
+        let test_addr: MacAddress = parse_mac_address("00:0b:85:71:20:ce").unwrap();
+        let other_addr: MacAddress = parse_mac_address("00:0b:85:71:20:cf").unwrap();
+
+        // Create a test Medium object
+        let callback: HwsimCmdCallback = |_, _| {};
+        let mut medium = Medium {
+            callback,
+            stations: HashMap::from([
+                (test_addr, Station { client_id: test_client_id, addr: test_addr }),
+                (other_addr, Station { client_id: other_client_id, addr: other_addr }),
+            ]),
+            ap_simulation: true,
+        };
+
+        medium.remove_station(test_client_id);
+
+        assert!(!medium.stations.contains_key(&test_addr));
+        assert!(medium.stations.contains_key(&other_addr));
+    }
 
     #[test]
     fn test_netlink_attr() {

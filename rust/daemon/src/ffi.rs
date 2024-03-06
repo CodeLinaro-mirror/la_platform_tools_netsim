@@ -374,13 +374,6 @@ pub mod ffi_util {
     #[allow(dead_code)]
     unsafe extern "C++" {
 
-        // OS utilities.
-        include!("util/os_utils.h");
-
-        #[rust_name = redirect_std_stream]
-        #[namespace = "netsim::osutils"]
-        pub fn RedirectStdStream(netsim_temp_dir: &CxxString, instance_name: &CxxString);
-
         // Crash report.
         include!("util/crash_report.h");
 

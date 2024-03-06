@@ -323,8 +323,10 @@ rust_defaults {
     name: "libnetsim_common_defaults",
     srcs: ["rust/common/src/lib.rs"],
     rustlibs: [
+        "libanyhow",
         "libchrono",
         "librand",
+        "liblibc",
         "liblog_rust",
         "libenv_logger",
         "libzip",

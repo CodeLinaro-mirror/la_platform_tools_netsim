@@ -15,9 +15,18 @@
 
 //! # os utility functions
 
+use std::ffi::CString;
+use std::io::IsTerminal;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::os::fd::AsRawFd;
+#[cfg(target_os = "windows")]
+use std::os::windows::io::AsRawHandle;
+
 use std::{fs::remove_file, path::PathBuf};
 
 use log::{error, info, warn};
+
+use crate::system::netsimd_temp_dir;
 
 use super::ini_file::IniFile;
 
@@ -146,6 +155,71 @@ pub fn get_instance_name(instance_num: Option<u16>, connector_instance: Option<u
         instance_name.push_str("connector_");
     }
     instance_name
+}
+
+/// Redirect Standard Stream
+pub fn redirect_std_stream(instance_name: &str) -> anyhow::Result<()> {
+    // Construct File Paths
+    let netsim_temp_dir = netsimd_temp_dir();
+    let stdout_filename = netsim_temp_dir
+        .join(format!("netsim_{instance_name}stdout.log"))
+        .into_os_string()
+        .into_string()
+        .map_err(|err| anyhow::anyhow!("{err:?}"))?;
+    let stderr_filename = netsim_temp_dir
+        .join(format!("netsim_{instance_name}stderr.log"))
+        .into_os_string()
+        .into_string()
+        .map_err(|err| anyhow::anyhow!("{err:?}"))?;
+
+    // CStrings
+    let stdout_filename_c = CString::new(stdout_filename)?;
+    let stderr_filename_c = CString::new(stderr_filename)?;
+    let mode_c = CString::new("w")?;
+
+    // Check if stdout refers to terminal.
+    if std::io::stdout().is_terminal() {
+        // Obtain the raw file descriptors for stdout.
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        let stdout_fd = std::io::stdout().as_raw_fd();
+        #[cfg(target_os = "windows")]
+        // SAFETY: This operation allows opening a runtime file descriptor in Windows.
+        // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
+        let stdout_fd = unsafe {
+            libc::open_osfhandle(std::io::stdout().as_raw_handle() as isize, libc::O_RDWR)
+        };
+
+        // SAFETY: These operations allow redirection of stdout stream to a file if terminal.
+        // Convert the raw file descriptors to FILE pointers using libc::fdopen.
+        // This is necessary because freopen expects a FILE* as its last argument, not a raw file descriptor.
+        // Use freopen to redirect stdout and stderr to the specified files.
+        unsafe {
+            let stdout_file = libc::fdopen(stdout_fd, mode_c.as_ptr());
+            libc::freopen(stdout_filename_c.as_ptr(), mode_c.as_ptr(), stdout_file);
+        }
+    }
+
+    // Check if stderr refers to terminal.
+    if std::io::stderr().is_terminal() {
+        // Obtain the raw file descriptors for stderr.
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        let stderr_fd = std::io::stderr().as_raw_fd();
+        #[cfg(target_os = "windows")]
+        // SAFETY: This operation allows opening a runtime file descriptor in Windows.
+        // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
+        let stderr_fd = unsafe {
+            libc::open_osfhandle(std::io::stderr().as_raw_handle() as isize, libc::O_RDWR)
+        };
+
+        // SAFETY: These operations allow redirection of stderr stream to a file if terminal.
+        // Same logic as unsafe block above for stdout stream redirection.
+        unsafe {
+            let stderr_file = libc::fdopen(stderr_fd, mode_c.as_ptr());
+            libc::freopen(stderr_filename_c.as_ptr(), mode_c.as_ptr(), stderr_file);
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

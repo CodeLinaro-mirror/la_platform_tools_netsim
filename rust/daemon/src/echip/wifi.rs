@@ -67,6 +67,7 @@ impl EmulatedChip for Wifi {
 
     fn remove(&mut self) {
         ffi_wifi::wifi_remove(self.chip_id);
+        MEDIUM.lock().expect("Lock failed").remove_station(self.chip_id);
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
