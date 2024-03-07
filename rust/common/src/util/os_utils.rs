@@ -16,7 +16,6 @@
 //! # os utility functions
 
 use std::ffi::CString;
-use std::io::IsTerminal;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::os::fd::AsRawFd;
 #[cfg(target_os = "windows")]
@@ -177,46 +176,33 @@ pub fn redirect_std_stream(instance_name: &str) -> anyhow::Result<()> {
     let stderr_filename_c = CString::new(stderr_filename)?;
     let mode_c = CString::new("w")?;
 
-    // Check if stdout refers to terminal.
-    if std::io::stdout().is_terminal() {
-        // Obtain the raw file descriptors for stdout.
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        let stdout_fd = std::io::stdout().as_raw_fd();
-        #[cfg(target_os = "windows")]
-        // SAFETY: This operation allows opening a runtime file descriptor in Windows.
-        // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
-        let stdout_fd = unsafe {
-            libc::open_osfhandle(std::io::stdout().as_raw_handle() as isize, libc::O_RDWR)
-        };
+    // Obtain the raw file descriptors for stdout.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    let stdout_fd = std::io::stdout().as_raw_fd();
+    #[cfg(target_os = "windows")]
+    // SAFETY: This operation allows opening a runtime file descriptor in Windows.
+    // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
+    let stdout_fd =
+        unsafe { libc::open_osfhandle(std::io::stdout().as_raw_handle() as isize, libc::O_RDWR) };
 
-        // SAFETY: These operations allow redirection of stdout stream to a file if terminal.
-        // Convert the raw file descriptors to FILE pointers using libc::fdopen.
-        // This is necessary because freopen expects a FILE* as its last argument, not a raw file descriptor.
-        // Use freopen to redirect stdout and stderr to the specified files.
-        unsafe {
-            let stdout_file = libc::fdopen(stdout_fd, mode_c.as_ptr());
-            libc::freopen(stdout_filename_c.as_ptr(), mode_c.as_ptr(), stdout_file);
-        }
-    }
+    // Obtain the raw file descriptors for stderr.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    let stderr_fd = std::io::stderr().as_raw_fd();
+    #[cfg(target_os = "windows")]
+    // SAFETY: This operation allows opening a runtime file descriptor in Windows.
+    // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
+    let stderr_fd =
+        unsafe { libc::open_osfhandle(std::io::stderr().as_raw_handle() as isize, libc::O_RDWR) };
 
-    // Check if stderr refers to terminal.
-    if std::io::stderr().is_terminal() {
-        // Obtain the raw file descriptors for stderr.
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        let stderr_fd = std::io::stderr().as_raw_fd();
-        #[cfg(target_os = "windows")]
-        // SAFETY: This operation allows opening a runtime file descriptor in Windows.
-        // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
-        let stderr_fd = unsafe {
-            libc::open_osfhandle(std::io::stderr().as_raw_handle() as isize, libc::O_RDWR)
-        };
-
-        // SAFETY: These operations allow redirection of stderr stream to a file if terminal.
-        // Same logic as unsafe block above for stdout stream redirection.
-        unsafe {
-            let stderr_file = libc::fdopen(stderr_fd, mode_c.as_ptr());
-            libc::freopen(stderr_filename_c.as_ptr(), mode_c.as_ptr(), stderr_file);
-        }
+    // SAFETY: These operations allow redirection of stdout and stderr stream to a file if terminal.
+    // Convert the raw file descriptors to FILE pointers using libc::fdopen.
+    // This is necessary because freopen expects a FILE* as its last argument, not a raw file descriptor.
+    // Use freopen to redirect stdout and stderr to the specified files.
+    unsafe {
+        let stdout_file = libc::fdopen(stdout_fd, mode_c.as_ptr());
+        let stderr_file = libc::fdopen(stderr_fd, mode_c.as_ptr());
+        libc::freopen(stdout_filename_c.as_ptr(), mode_c.as_ptr(), stdout_file);
+        libc::freopen(stderr_filename_c.as_ptr(), mode_c.as_ptr(), stderr_file);
     }
 
     Ok(())

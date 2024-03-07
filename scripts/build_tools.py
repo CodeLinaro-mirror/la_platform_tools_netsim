@@ -88,6 +88,15 @@ def main():
 
   out = Path(args.out_dir)
   if out.exists():
+    # Here is a temporary check on whether build_chaining has successfully worked.
+    if platform.system().lower() == "linux":
+      run(
+          ["ls", "-R"],
+          [],
+          "build_chaining_check",
+          throw_on_failure=False,
+          cwd=out,
+      )
     shutil.rmtree(out)
   out.mkdir(exist_ok=True, parents=True)
 
@@ -131,14 +140,6 @@ def main():
     )
 
     # TODO: install_emulator with the provided emulator prebuilt
-    # Here is a temporary check on whether build_chaining has successfully worked.
-    if target == "linux":
-      run(
-          ["find", "/buildbot", "-name", "sdk-repo-linux-emulator*.zip"],
-          cfg.get_env(),
-          "build_chaining_check",
-          throw_on_failure=False
-      )
 
     # Zip results..
     zip_fname = (
