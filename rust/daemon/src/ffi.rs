@@ -23,14 +23,14 @@ use crate::http_server::server_response::ServerResponseWritable;
 use crate::http_server::server_response::StrHeaders;
 use cxx::let_cxx_string;
 
-use crate::echip::{bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response};
-use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
-
 use crate::captures::captures_handler::handle_capture_cxx;
 use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
 };
+use crate::echip::wifi::handle_wifi_response;
+use crate::echip::{bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response};
 use crate::ranging::*;
+use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 use crate::version::*;
 
 #[allow(unsafe_op_in_unsafe_fn)]
@@ -253,27 +253,18 @@ pub mod ffi_wifi {
 
         include!("wifi/wifi_facade.h");
 
-        #[rust_name = wifi_patch_cxx]
-        pub fn PatchCxx(chip_id: u32, proto_bytes: &[u8]);
-
-        #[rust_name = wifi_get_cxx]
-        pub fn GetCxx(chip_id: u32) -> Vec<u8>;
-
-        #[rust_name = wifi_reset]
-        pub fn Reset(chip_id: u32);
-
-        #[rust_name = wifi_remove]
-        pub fn Remove(chip_id: u32);
-
-        #[rust_name = wifi_add]
-        pub fn Add(chip_id: u32);
-
         #[rust_name = wifi_start]
         pub fn Start(proto_bytes: &[u8]);
 
         #[rust_name = wifi_stop]
         pub fn Stop();
 
+    }
+
+    #[allow(unsafe_op_in_unsafe_fn)]
+    extern "Rust" {
+        #[cxx_name = HandleWiFiResponse]
+        fn handle_wifi_response(packet: &[u8]);
     }
 }
 

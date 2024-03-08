@@ -1,9 +1,9 @@
 """BLE GATT connection test."""
 
+import ble_utils
 from mobly import base_test
 from mobly import test_runner
 from mobly.controllers import android_device
-import ble_utils
 
 
 class BleBasicTest(base_test.BaseTestClass):
@@ -12,8 +12,8 @@ class BleBasicTest(base_test.BaseTestClass):
   def setup_class(self):
     self.ads = self.register_controller(android_device, min_number=2)
     for device in self.ads:
-        device.load_snippet('mbs', android_device.MBS_PACKAGE)
-        device.mbs.btEnable()
+      device.load_snippet('mbs', android_device.MBS_PACKAGE)
+      device.mbs.btEnable()
     self.initiator, self.receiver = self.ads[:2]
     # The initiator device scans BLE devices and behaves as a GATT client.
     self.initiator.debug_tag = 'initiator'
@@ -43,5 +43,6 @@ class BleBasicTest(base_test.BaseTestClass):
     ble_utils.Disconnect(self.initiator, self.receiver)
     ble_utils.StopDiscover(self.initiator, self.receiver)
 
+
 if __name__ == '__main__':
-    test_runner.main()
+  test_runner.main()

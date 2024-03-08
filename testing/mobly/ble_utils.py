@@ -219,8 +219,7 @@ def Discover(
 
 
 def StartScanning(
-    scanner: android_device.AndroidDevice,
-    scan_duration: int
+    scanner: android_device.AndroidDevice, scan_duration: int
 ) -> list[dict[str, Any]]:
   """Logic for BLE scanning for advertisers.
 
@@ -307,9 +306,7 @@ def StopDiscover(
   """
   scanner.mbs.bleStopScan(scanner.scan_callback.callback_id)
   scanner.log.info('BLE scanning stopped')
-  advertiser.mbs.bleStopAdvertising(
-      advertiser.advertise_callback.callback_id
-  )
+  advertiser.mbs.bleStopAdvertising(advertiser.advertise_callback.callback_id)
   advertiser.log.info('BLE advertising stopped')
 
 
@@ -358,9 +355,7 @@ def Connect(
   ]:
     asserts.assert_true(uuid in uuids, 'Failed to find uuid %s.' % uuid)
   server.log.info('BLE server started')
-  client.client_callback = client.mbs.bleConnectGatt(
-      client.connect_to_address
-  )
+  client.client_callback = client.mbs.bleConnectGatt(client.connect_to_address)
   start_client_result = client.client_callback.waitAndGet(
       'onConnectionStateChange', CONNECTION_TIMEOUT
   )

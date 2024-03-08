@@ -56,9 +56,29 @@ struct Station {
     addr: MacAddress, // virtual interface mac address in HWSIM_ATTR_ADDR_TRANSMITTER
 }
 
+impl Station {
+    fn new(client_id: u32, addr: MacAddress) -> Self {
+        Self { client_id, addr }
+    }
+}
+
+#[derive(Clone)]
+pub struct Client {
+    pub enabled: bool,
+    pub tx_count: u32,
+    pub rx_count: u32,
+}
+
+impl Client {
+    fn new() -> Self {
+        Self { enabled: true, tx_count: 0, rx_count: 0 }
+    }
+}
+
 pub struct Medium {
     callback: HwsimCmdCallback,
     stations: HashMap<MacAddress, Station>, // Ieee80211 source address
+    clients: HashMap<u32, Client>,
     ap_simulation: bool, // Simulate the re-transmission of frames sent to hostapd
 }
 
@@ -66,38 +86,50 @@ type HwsimCmdCallback = fn(u32, &[u8]);
 
 impl Medium {
     pub fn new(callback: HwsimCmdCallback) -> Medium {
-        Self { callback, stations: HashMap::new(), ap_simulation: true }
+        Self { callback, stations: HashMap::new(), clients: HashMap::new(), ap_simulation: true }
     }
 
-    pub fn remove_station(&mut self, client_id: u32) {
+    pub fn add(&mut self, client_id: u32) {
+        let _ = self.clients.entry(client_id).or_insert_with(|| {
+            info!("Insert client {}", client_id);
+            Client::new()
+        });
+    }
+
+    pub fn remove(&mut self, client_id: u32) {
         self.stations.retain(|_, s| s.client_id != client_id);
+        self.clients.remove(&client_id);
+    }
+
+    pub fn reset(&mut self, client_id: u32) {
+        self.clients.get_mut(&client_id).map(|s| {
+            s.enabled = true;
+            s.tx_count = 0;
+            s.rx_count = 0;
+            s
+        });
+    }
+
+    pub fn get(&self, client_id: u32) -> Option<Client> {
+        self.clients.get(&client_id).map(|c| c.to_owned())
     }
 
     fn get_station_by_addr(&self, addr: MacAddress) -> Option<&Station> {
         self.stations.get(&addr)
     }
-}
 
-impl Station {
-    fn new(client_id: u32, addr: MacAddress) -> Self {
-        Self { client_id, addr }
-    }
-}
-
-/// Process commands from the kernel's mac80211_hwsim subsystem.
-///
-/// This is the processing that will be implemented:
-///
-/// * The source MacAddress in 802.11 frames is re-mapped to a globally
-/// unique MacAddress because resumed Emulator AVDs appear with the
-/// same address.
-///
-/// * 802.11 frames sent between stations
-///
-/// * 802.11 multicast frames are re-broadcast to connected stations.
-///
-
-impl Medium {
+    /// Process commands from the kernel's mac80211_hwsim subsystem.
+    ///
+    /// This is the processing that will be implemented:
+    ///
+    /// * The source MacAddress in 802.11 frames is re-mapped to a globally
+    /// unique MacAddress because resumed Emulator AVDs appear with the
+    /// same address.
+    ///
+    /// * 802.11 frames sent between stations
+    ///
+    /// * 802.11 multicast frames are re-broadcast to connected stations.
+    ///
     pub fn process(&mut self, client_id: u32, packet: &[u8]) -> bool {
         match self.process_internal(client_id, packet) {
             Ok(b) => b,
@@ -138,8 +170,11 @@ impl Medium {
                     );
                     Station::new(client_id, addr)
                 });
-                let sender = self.stations.get(&source_addr).unwrap();
-                self.queue_frame(sender, frame)
+                if !self.clients.contains_key(&client_id) {
+                    warn!("Client {} is missing", client_id);
+                    self.add(client_id);
+                }
+                self.queue_frame(frame)
             }
             HwsimCmd::AddMacAddr => {
                 let attr_set = HwsimAttrSet::parse(hwsim_msg.get_attributes())?;
@@ -166,51 +201,103 @@ impl Medium {
         }
     }
 
+    /// Handle Wi-Fi MwsimMsg from libslirp and hostapd.
+    /// Send it to clients.
+    pub fn process_response(&mut self, packet: &[u8]) {
+        let client_ids: Vec<u32> = self.clients.keys().map(|v| v.to_owned()).collect();
+
+        for client_id in client_ids {
+            match self.enabled(client_id) {
+                Ok(true) => {
+                    self.incr_rx(client_id);
+                    (self.callback)(client_id, packet);
+                }
+                Ok(false) => {}
+                Err(e) => warn!("{}", e),
+            }
+        }
+    }
+
+    pub fn set_enabled(&mut self, client_id: u32, enabled: bool) {
+        if let Some(client) = self.clients.get_mut(&client_id) {
+            client.enabled = enabled;
+        }
+    }
+
+    fn enabled(&self, client_id: u32) -> anyhow::Result<bool> {
+        Ok(self.clients.get(&client_id).context(format!("client {client_id} is missing"))?.enabled)
+    }
+
     /// Create tx info frame to station to ack HwsimMsg.
-    fn send_tx_info_frame(&self, station: &Station, frame: &Frame) {
+    fn send_tx_info_frame(&self, frame: &Frame) {
+        let client_id = self.stations.get(&frame.ieee80211.get_source()).unwrap().client_id;
         let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().to_vec();
-        (self.callback)(station.client_id, &hwsim_msg_tx_info);
+        (self.callback)(client_id, &hwsim_msg_tx_info);
+    }
+
+    fn get_client_id(&self, addr: &MacAddress) -> anyhow::Result<u32> {
+        Ok(self.stations.get(addr).context(format!("source: {}", addr))?.client_id)
+    }
+
+    fn incr_tx(&mut self, client_id: u32) -> anyhow::Result<()> {
+        self.clients.get_mut(&client_id).context("incr_tx")?.tx_count += 1;
+        Ok(())
+    }
+
+    fn incr_rx(&mut self, client_id: u32) -> anyhow::Result<()> {
+        self.clients.get_mut(&client_id).context("incr_rx")?.rx_count += 1;
+        Ok(())
     }
 
     // Send an 802.11 frame to a station after wrapping in HwsimMsg.
     // The HwsimMsg is processed by mac80211_hwsim framework in the guest OS.
     //
     // Simulates transmission through hostapd.
-    fn send_frame(&self, station: &Station, dest_station: &Station, frame: &Frame) {
-        if let Some(packet) = self.create_hwsim_msg(frame, &dest_station.addr) {
-            (self.callback)(dest_station.client_id, &packet.clone().to_vec());
-            log_hwsim_msg(&packet, station, dest_station);
+    fn send_frame(&mut self, frame: &Frame, destination: &MacAddress) -> anyhow::Result<()> {
+        let source = frame.ieee80211.get_source();
+        let client_id = self.get_client_id(&source)?;
+        let dest_client_id = self.get_client_id(destination)?;
+        let hwsim_addr = self.stations.get(destination).context("hwsim_addr")?.addr;
+        if self.enabled(client_id)? && self.enabled(dest_client_id)? {
+            if let Some(packet) = self.create_hwsim_msg(frame, &hwsim_addr) {
+                self.incr_tx(client_id)?;
+                self.incr_rx(dest_client_id)?;
+                (self.callback)(dest_client_id, &packet.clone().to_vec());
+                log_hwsim_msg(&packet, client_id, dest_client_id);
+            }
         }
+        Ok(())
     }
 
     // Broadcast an 802.11 frame to all stations.
     // Delivers to each station once using Hwsim's TRANSMITTER address
     /// TODO: Compare with the implementations in mac80211_hwsim.c and wmediumd.c.
-    fn broadcast_frame(&self, station: &Station, frame: &Frame) {
-        let mut sent_addrs: HashSet<MacAddress> = HashSet::new();
-        for dest_station in self.stations.values() {
-            if station.addr != dest_station.addr && !sent_addrs.contains(&dest_station.addr) {
-                sent_addrs.insert(dest_station.addr);
-                self.send_frame(station, dest_station, frame);
-            }
+    fn broadcast_frame(&mut self, frame: &Frame) -> anyhow::Result<()> {
+        let source = frame.ieee80211.get_source();
+        let destinations: HashSet<MacAddress> =
+            self.stations.keys().map(|s| s.to_owned()).collect();
+        for destination in destinations {
+            self.send_frame(frame, &destination)?;
         }
+        Ok(())
     }
 
-    fn queue_frame(&self, station: &Station, frame: Frame) -> anyhow::Result<bool> {
+    fn queue_frame(&mut self, frame: Frame) -> anyhow::Result<bool> {
+        let source = frame.ieee80211.get_source();
         let destination = frame.ieee80211.get_destination();
-        if let Some(dest_station) = self.stations.get(&destination) {
-            info!("Frame deliver from {} to {}", station.addr, dest_station.addr);
-            self.send_tx_info_frame(station, &frame);
-            self.send_frame(station, dest_station, &frame);
+        if self.stations.contains_key(&destination) {
+            info!("Frame deliver from {} to {}", source, destination);
+            self.send_tx_info_frame(&frame);
+            self.send_frame(&frame, &destination)?;
             Ok(true)
         } else if destination.is_multicast() {
             info!("Frame multicast {}", frame.ieee80211);
-            self.send_tx_info_frame(station, &frame);
-            self.broadcast_frame(station, &frame);
+            self.send_tx_info_frame(&frame);
+            self.broadcast_frame(&frame)?;
             Ok(true)
         } else if destination.is_broadcast() {
             info!("Frame broadcast {}", frame.ieee80211);
-            self.broadcast_frame(station, &frame);
+            self.broadcast_frame(&frame)?;
             // Stations send Probe Request management frame to the broadcast address to scan network actively.
             // Pass to WiFiService so hostapd will send Probe Response for AndroidWiFi.
             // TODO: Only pass necessary packets to hostapd.
@@ -281,11 +368,11 @@ impl Medium {
     }
 }
 
-fn log_hwsim_msg(hwsim_msg: &HwsimMsg, source: &Station, destination: &Station) {
+fn log_hwsim_msg(hwsim_msg: &HwsimMsg, client_id: u32, dest_client_id: u32) {
     let frame = Frame::parse(hwsim_msg).unwrap();
     info!(
         "Sent hwsim_msg from client {} to {}. flags {:?}, ieee80211 {}",
-        source.client_id, destination.client_id, frame.flags, frame.ieee80211,
+        client_id, dest_client_id, frame.flags, frame.ieee80211,
     );
 }
 
@@ -347,7 +434,7 @@ mod tests {
     use super::*;
     use crate::wifi::packets::ieee80211::parse_mac_address;
     #[test]
-    fn test_remove_station() {
+    fn test_remove() {
         let test_client_id: u32 = 1234;
         let other_client_id: u32 = 5678;
         let test_addr: MacAddress = parse_mac_address("00:0b:85:71:20:ce").unwrap();
@@ -361,13 +448,19 @@ mod tests {
                 (test_addr, Station { client_id: test_client_id, addr: test_addr }),
                 (other_addr, Station { client_id: other_client_id, addr: other_addr }),
             ]),
+            clients: HashMap::from([
+                (test_client_id, Client::new()),
+                (other_client_id, Client::new()),
+            ]),
             ap_simulation: true,
         };
 
-        medium.remove_station(test_client_id);
+        medium.remove(test_client_id);
 
         assert!(!medium.stations.contains_key(&test_addr));
         assert!(medium.stations.contains_key(&other_addr));
+        assert!(!medium.clients.contains_key(&test_client_id));
+        assert!(medium.clients.contains_key(&other_client_id));
     }
 
     #[test]
