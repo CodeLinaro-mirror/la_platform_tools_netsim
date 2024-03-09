@@ -73,6 +73,9 @@ def main():
   parser.add_argument(
       "--with_debug", action="store_true", help="Build debug instead of release"
   )
+  parser.add_argument(
+      "--buildbot", action="store_true", help="Invoked by Android buildbots"
+  )
 
   args = parser.parse_args()
 
