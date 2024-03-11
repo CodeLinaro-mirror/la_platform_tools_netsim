@@ -53,12 +53,13 @@ pub enum HwsimCmdEnum {
 
 struct Station {
     client_id: u32,
-    addr: MacAddress, // virtual interface mac address in HWSIM_ATTR_ADDR_TRANSMITTER
+    // Hwsim virtual address from HWSIM_ATTR_ADDR_TRANSMITTER
+    receiver: MacAddress,
 }
 
 impl Station {
-    fn new(client_id: u32, addr: MacAddress) -> Self {
-        Self { client_id, addr }
+    fn new(client_id: u32, receiver: MacAddress) -> Self {
+        Self { client_id, receiver }
     }
 }
 
@@ -78,6 +79,7 @@ impl Client {
 pub struct Medium {
     callback: HwsimCmdCallback,
     stations: HashMap<MacAddress, Station>, // Ieee80211 source address
+    receivers: HashMap<MacAddress, u32>,
     clients: HashMap<u32, Client>,
     ap_simulation: bool, // Simulate the re-transmission of frames sent to hostapd
 }
@@ -86,7 +88,13 @@ type HwsimCmdCallback = fn(u32, &[u8]);
 
 impl Medium {
     pub fn new(callback: HwsimCmdCallback) -> Medium {
-        Self { callback, stations: HashMap::new(), clients: HashMap::new(), ap_simulation: true }
+        Self {
+            callback,
+            stations: HashMap::new(),
+            clients: HashMap::new(),
+            receivers: HashMap::new(),
+            ap_simulation: true,
+        }
     }
 
     pub fn add(&mut self, client_id: u32) {
@@ -99,6 +107,7 @@ impl Medium {
     pub fn remove(&mut self, client_id: u32) {
         self.stations.retain(|_, s| s.client_id != client_id);
         self.clients.remove(&client_id);
+        self.receivers.retain(|_, &mut v| v != client_id);
     }
 
     pub fn reset(&mut self, client_id: u32) {
@@ -150,12 +159,13 @@ impl Medium {
                 if frame.tx_info.is_none() {
                     return Err(anyhow!("Missing tx_info for incoming packet"));
                 }
-                let addr = frame.transmitter.context("transmitter")?;
+                // Use as receiver for outgoing HwsimMsg.
+                let receiver = frame.transmitter.context("transmitter")?;
                 let flags = frame.flags.context("flags")?;
                 let cookie = frame.cookie.context("cookie")?;
                 info!(
-                    "Frame chip {}, addr {}, flags {}, cookie {}, ieee80211 {}",
-                    client_id, addr, flags, cookie, frame.ieee80211
+                    "Frame chip {}, transmitter {}, flags {}, cookie {}, ieee80211 {}",
+                    client_id, receiver, flags, cookie, frame.ieee80211
                 );
                 let source_addr = frame.ieee80211.get_source();
                 // Creates Stations on the fly when there is no config file.
@@ -166,10 +176,11 @@ impl Medium {
                     info!(
                         "Insert station with client id {}, HWSIM_ATTR_ADDR_TRANSMITTER {}, \
                         Ieee80211 source: {}",
-                        client_id, addr, source_addr
+                        client_id, receiver, source_addr
                     );
-                    Station::new(client_id, addr)
+                    Station::new(client_id, receiver)
                 });
+                self.receivers.entry(receiver).or_insert(client_id);
                 if !self.clients.contains_key(&client_id) {
                     warn!("Client {} is missing", client_id);
                     self.add(client_id);
@@ -204,18 +215,29 @@ impl Medium {
     /// Handle Wi-Fi MwsimMsg from libslirp and hostapd.
     /// Send it to clients.
     pub fn process_response(&mut self, packet: &[u8]) {
-        let client_ids: Vec<u32> = self.clients.keys().map(|v| v.to_owned()).collect();
-
-        for client_id in client_ids {
-            match self.enabled(client_id) {
-                Ok(true) => {
-                    self.incr_rx(client_id);
-                    (self.callback)(client_id, packet);
-                }
-                Ok(false) => {}
-                Err(e) => warn!("{}", e),
-            }
+        if let Err(e) = self.send_response(packet) {
+            warn!("{}", e);
         }
+    }
+
+    /// Determine the client id based on the Hwsim attr address and send to client.
+    fn send_response(&mut self, packet: &[u8]) -> anyhow::Result<()> {
+        let hwsim_msg = HwsimMsg::parse(packet)?;
+        let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes()).context("HwsimAttrSet")?;
+        let hwsim_cmd = hwsim_msg.get_hwsim_hdr().hwsim_cmd;
+        let hwsim_addr = match (hwsim_cmd) {
+            HwsimCmd::Frame => attrs.receiver.context("missing receiver")?,
+            HwsimCmd::TxInfoFrame => attrs.transmitter.context("missing transmitter")?,
+            _ => return Err(anyhow!("Invalid HwsimMsg cmd={:?}", hwsim_cmd)),
+        };
+
+        let client_id = self.receivers.get(&hwsim_addr).context("no receiver")?.to_owned();
+
+        if self.enabled(client_id)? {
+            self.incr_rx(client_id)?;
+            (self.callback)(client_id, packet);
+        }
+        Ok(())
     }
 
     pub fn set_enabled(&mut self, client_id: u32, enabled: bool) {
@@ -257,7 +279,7 @@ impl Medium {
         let source = frame.ieee80211.get_source();
         let client_id = self.get_client_id(&source)?;
         let dest_client_id = self.get_client_id(destination)?;
-        let hwsim_addr = self.stations.get(destination).context("hwsim_addr")?.addr;
+        let hwsim_addr = self.stations.get(destination).context("hwsim_addr")?.receiver;
         if self.enabled(client_id)? && self.enabled(dest_client_id)? {
             if let Some(packet) = self.create_hwsim_msg(frame, &hwsim_addr) {
                 self.incr_tx(client_id)?;
@@ -445,9 +467,10 @@ mod tests {
         let mut medium = Medium {
             callback,
             stations: HashMap::from([
-                (test_addr, Station { client_id: test_client_id, addr: test_addr }),
-                (other_addr, Station { client_id: other_client_id, addr: other_addr }),
+                (test_addr, Station { client_id: test_client_id, receiver: test_addr }),
+                (other_addr, Station { client_id: other_client_id, receiver: other_addr }),
             ]),
+            receivers: HashMap::from([(test_addr, test_client_id), (other_addr, other_client_id)]),
             clients: HashMap::from([
                 (test_client_id, Client::new()),
                 (other_client_id, Client::new()),
@@ -461,6 +484,8 @@ mod tests {
         assert!(medium.stations.contains_key(&other_addr));
         assert!(!medium.clients.contains_key(&test_client_id));
         assert!(medium.clients.contains_key(&other_client_id));
+        assert!(!medium.receivers.contains_key(&test_addr));
+        assert!(medium.receivers.contains_key(&other_addr));
     }
 
     #[test]

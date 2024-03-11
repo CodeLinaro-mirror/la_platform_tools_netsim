@@ -147,6 +147,22 @@ impl Ieee80211 {
         }
     }
 
+    pub fn with_address(
+        &self,
+        source: Option<MacAddress>,
+        destination: Option<MacAddress>,
+    ) -> Ieee80211 {
+        match self.specialize() {
+            Ieee80211Child::Ieee80211ToAp(frame) => frame.with_address(source, destination).into(),
+            Ieee80211Child::Ieee80211FromAp(frame) => {
+                frame.with_address(source, destination).into()
+            }
+            Ieee80211Child::Ieee80211Ibss(frame) => frame.with_address(source, destination).into(),
+            Ieee80211Child::Ieee80211Wds(frame) => frame.with_address(source, destination).into(),
+            _ => panic!("Unknown Ieee80211Child type"),
+        }
+    }
+
     /// Covert Ieee80211ToAp to Ieee80211FromAp packet.
     pub fn into_from_ap(&self) -> anyhow::Result<Ieee80211FromAp> {
         let frame_payload: Ieee80211Child = self.specialize();
@@ -180,6 +196,115 @@ impl Ieee80211 {
                 self.get_to_ds()
             )),
         };
+    }
+}
+
+impl Ieee80211FromAp {
+    pub fn with_address(
+        &self,
+        source: Option<MacAddress>,
+        destination: Option<MacAddress>,
+    ) -> Ieee80211FromAp {
+        Ieee80211FromApBuilder {
+            duration_id: self.get_duration_id(),
+            ftype: self.get_ftype(),
+            more_data: self.get_more_data(),
+            more_frags: self.get_more_frags(),
+            order: self.get_order(),
+            pm: self.get_pm(),
+            protected: self.get_protected(),
+            retry: self.get_retry(),
+            stype: self.get_stype(),
+            version: self.get_version(),
+            bssid: self.get_bssid(),
+            source: source.unwrap_or(self.get_source()),
+            destination: destination.unwrap_or(self.get_destination()),
+            seq_ctrl: self.get_seq_ctrl(),
+            payload: self.get_payload().to_vec(),
+        }
+        .build()
+    }
+}
+
+impl Ieee80211ToAp {
+    pub fn with_address(
+        &self,
+        source: Option<MacAddress>,
+        destination: Option<MacAddress>,
+    ) -> Ieee80211ToAp {
+        Ieee80211ToApBuilder {
+            duration_id: self.get_duration_id(),
+            ftype: self.get_ftype(),
+            more_data: self.get_more_data(),
+            more_frags: self.get_more_frags(),
+            order: self.get_order(),
+            pm: self.get_pm(),
+            protected: self.get_protected(),
+            retry: self.get_retry(),
+            stype: self.get_stype(),
+            version: self.get_version(),
+            bssid: self.get_bssid(),
+            source: source.unwrap_or(self.get_source()),
+            destination: destination.unwrap_or(self.get_destination()),
+            seq_ctrl: self.get_seq_ctrl(),
+            payload: self.get_payload().to_vec(),
+        }
+        .build()
+    }
+}
+
+impl Ieee80211Ibss {
+    pub fn with_address(
+        &self,
+        source: Option<MacAddress>,
+        destination: Option<MacAddress>,
+    ) -> Ieee80211Ibss {
+        Ieee80211IbssBuilder {
+            duration_id: self.get_duration_id(),
+            ftype: self.get_ftype(),
+            more_data: self.get_more_data(),
+            more_frags: self.get_more_frags(),
+            order: self.get_order(),
+            pm: self.get_pm(),
+            protected: self.get_protected(),
+            retry: self.get_retry(),
+            stype: self.get_stype(),
+            version: self.get_version(),
+            bssid: self.get_bssid(),
+            source: source.unwrap_or(self.get_source()),
+            destination: destination.unwrap_or(self.get_destination()),
+            seq_ctrl: self.get_seq_ctrl(),
+            payload: self.get_payload().to_vec(),
+        }
+        .build()
+    }
+}
+
+impl Ieee80211Wds {
+    pub fn with_address(
+        &self,
+        source: Option<MacAddress>,
+        destination: Option<MacAddress>,
+    ) -> Ieee80211Wds {
+        Ieee80211WdsBuilder {
+            duration_id: self.get_duration_id(),
+            ftype: self.get_ftype(),
+            more_data: self.get_more_data(),
+            more_frags: self.get_more_frags(),
+            order: self.get_order(),
+            pm: self.get_pm(),
+            protected: self.get_protected(),
+            retry: self.get_retry(),
+            stype: self.get_stype(),
+            version: self.get_version(),
+            source: source.unwrap_or(self.get_source()),
+            destination: destination.unwrap_or(self.get_destination()),
+            transmitter: self.get_transmitter(),
+            receiver: self.get_receiver(),
+            seq_ctrl: self.get_seq_ctrl(),
+            payload: self.get_payload().to_vec(),
+        }
+        .build()
     }
 }
 
@@ -239,5 +364,121 @@ mod tests {
         // Source address: Cisco_71:20:ce (00:0b:85:71:20:ce)
         let non_mdns_mac_address = parse_mac_address("00:0b:85:71:20:ce").unwrap();
         assert!(!non_mdns_mac_address.is_multicast());
+    }
+
+    fn create_test_from_ap_ieee80211(
+        source: MacAddress,
+        destination: MacAddress,
+        bssid: MacAddress,
+    ) -> Ieee80211 {
+        Ieee80211FromApBuilder {
+            duration_id: 0,
+            ftype: FrameType::Mgmt,
+            more_data: 0,
+            more_frags: 0,
+            order: 0,
+            pm: 0,
+            protected: 0,
+            retry: 0,
+            stype: 0,
+            version: 0,
+            bssid,
+            source,
+            destination,
+            seq_ctrl: 0,
+            payload: Vec::new(),
+        }
+        .build()
+        .into()
+    }
+
+    fn create_test_ibss_ieee80211(
+        source: MacAddress,
+        destination: MacAddress,
+        bssid: MacAddress,
+    ) -> Ieee80211 {
+        Ieee80211IbssBuilder {
+            duration_id: 0,
+            ftype: FrameType::Mgmt,
+            more_data: 0,
+            more_frags: 0,
+            order: 0,
+            pm: 0,
+            protected: 0,
+            retry: 0,
+            stype: 0,
+            version: 0,
+            bssid,
+            source,
+            destination,
+            seq_ctrl: 0,
+            payload: Vec::new(),
+        }
+        .build()
+        .into()
+    }
+
+    fn create_test_to_ap_ieee80211(
+        source: MacAddress,
+        destination: MacAddress,
+        bssid: MacAddress,
+    ) -> Ieee80211 {
+        Ieee80211ToApBuilder {
+            duration_id: 0,
+            ftype: FrameType::Mgmt,
+            more_data: 0,
+            more_frags: 0,
+            order: 0,
+            pm: 0,
+            protected: 0,
+            retry: 0,
+            stype: 0,
+            version: 0,
+            bssid,
+            source,
+            destination,
+            seq_ctrl: 0,
+            payload: Vec::new(),
+        }
+        .build()
+        .into()
+    }
+
+    fn test_with_address(
+        create_test_ieee80211: fn(MacAddress, MacAddress, MacAddress) -> Ieee80211,
+    ) {
+        let source = parse_mac_address("01:02:03:00:00:01").unwrap();
+        let destination = parse_mac_address("01:02:03:00:00:02").unwrap();
+        let bssid = parse_mac_address("00:13:10:85:fe:01").unwrap();
+        let ieee80211 = create_test_ieee80211(source, destination, bssid);
+
+        let new_source = parse_mac_address("01:02:03:00:00:03").unwrap();
+        let new_destination = parse_mac_address("01:02:03:00:00:04").unwrap();
+
+        let new_ieee80211 = ieee80211.with_address(Some(new_source), Some(new_destination));
+        assert!(new_ieee80211.get_source() == new_source);
+        assert!(new_ieee80211.get_destination() == new_destination);
+
+        let new_ieee80211 = ieee80211.with_address(Some(new_source), None);
+        assert!(new_ieee80211.get_source() == new_source);
+        assert!(new_ieee80211.get_destination() == destination);
+
+        let new_ieee80211 = ieee80211.with_address(None, Some(new_destination));
+        assert!(new_ieee80211.get_source() == source);
+        assert!(new_ieee80211.get_destination() == new_destination);
+    }
+
+    #[test]
+    fn test_with_address_from_ap() {
+        test_with_address(create_test_from_ap_ieee80211);
+    }
+
+    #[test]
+    fn test_with_address_to_ap() {
+        test_with_address(create_test_to_ap_ieee80211);
+    }
+    #[test]
+    fn test_with_address_ibss() {
+        test_with_address(create_test_ibss_ieee80211);
     }
 }
