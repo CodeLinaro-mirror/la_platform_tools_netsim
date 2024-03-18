@@ -58,10 +58,6 @@ impl EmulatedChip for Mock {
         }));
         vec![stats]
     }
-
-    fn get_kind(&self) -> ProtoChipKind {
-        self.chip_kind
-    }
 }
 
 /// Create a new MockedChip

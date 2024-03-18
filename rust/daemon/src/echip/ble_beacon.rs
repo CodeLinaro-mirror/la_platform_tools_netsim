@@ -17,7 +17,6 @@ use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
 use log::{error, info};
-use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::ChipCreate as ChipCreateProto;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
@@ -85,10 +84,6 @@ impl EmulatedChip for BleBeacon {
             stats_proto.set_rx_count(chip_proto.ble_beacon().bt.low_energy.rx_count);
         }
         vec![stats_proto]
-    }
-
-    fn get_kind(&self) -> ProtoChipKind {
-        ProtoChipKind::BLUETOOTH_BEACON
     }
 }
 

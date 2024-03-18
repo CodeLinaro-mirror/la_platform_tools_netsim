@@ -16,6 +16,19 @@ syntax = "proto2";
 
 package netsim.stats;
 
+// Message for Invalid Packet
+message InvalidPacket {
+  enum Reason {
+    UNKNOWN = 0;
+    PARSE_ERROR = 1;
+    UNSUPPORTED = 2;
+    OTHERS = 3;
+  }
+  optional Reason reason = 1;
+  optional string description = 2;
+  optional bytes packet = 3;
+}
+
 // Radio statistics for a netsim session.
 message NetsimRadioStats {
   // The kind of radio
@@ -39,6 +52,8 @@ message NetsimRadioStats {
   // TX/RX bytes for HostController
   optional int32 tx_bytes = 6;
   optional int32 rx_bytes = 7;
+  // Recent Invalid Packets
+  repeated InvalidPacket invalid_packets = 8;
 }
 
 // Statistics for a netsim session.

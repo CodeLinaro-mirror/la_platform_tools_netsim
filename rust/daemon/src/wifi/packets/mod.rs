@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod ieee80211;
+
 pub mod netlink {
     #![allow(clippy::all)]
     #![allow(unused)]

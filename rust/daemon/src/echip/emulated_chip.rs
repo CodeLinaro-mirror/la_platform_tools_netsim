@@ -19,9 +19,10 @@ use std::{
 
 use lazy_static::lazy_static;
 
-use netsim_proto::common::ChipKind as ProtoChipKind;
-use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
+use netsim_proto::{
+    model::Chip as ProtoChip, stats::invalid_packet::Reason as InvalidPacketReason,
+};
 
 use crate::{
     devices::chip::ChipIdentifier,
@@ -32,7 +33,7 @@ use crate::{
 pub struct SharedEmulatedChip(pub Arc<Mutex<Box<dyn EmulatedChip + Send + Sync>>>);
 
 #[cfg(not(test))]
-use crate::echip::{bluetooth, wifi};
+use crate::echip::{bluetooth, uwb, wifi};
 
 // ECHIPS is a singleton that contains a hash map from
 // ChipIdentifier to SharedEmulatedChip
@@ -43,7 +44,7 @@ lazy_static! {
 
 impl SharedEmulatedChip {
     pub fn lock(&self) -> MutexGuard<Box<dyn EmulatedChip + Send + Sync>> {
-        self.0.lock().expect("Poisoned Shared Emulated lock")
+        self.0.lock().expect("Poisoned Shared Emulated Chip lock")
     }
 }
 
@@ -55,7 +56,8 @@ pub enum CreateParam {
     Bluetooth(bluetooth::CreateParams),
     #[cfg(not(test))]
     Wifi(wifi::CreateParams),
-    Uwb,
+    #[cfg(not(test))]
+    Uwb(uwb::CreateParams),
     Mock(mocked::CreateParams),
 }
 
@@ -95,8 +97,14 @@ pub trait EmulatedChip {
     /// part of NetsimStats protobuf.
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats>;
 
-    /// Returns the kind of the emulated chip.
-    fn get_kind(&self) -> ProtoChipKind;
+    /// Optional method: Add error_packet bytes into NetsimRadioStats
+    fn report_invalid_packet(
+        &mut self,
+        _reason: InvalidPacketReason,
+        _description: String,
+        _packet: Vec<u8>,
+    ) {
+    }
 }
 
 /// Lookup for SharedEmulatedChip with chip_id
@@ -123,7 +131,8 @@ pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> SharedEmulate
         CreateParam::Bluetooth(params) => bluetooth::new(params, chip_id),
         #[cfg(not(test))]
         CreateParam::Wifi(params) => wifi::new(params, chip_id),
-        CreateParam::Uwb => todo!(),
+        #[cfg(not(test))]
+        CreateParam::Uwb(params) => uwb::new(params, chip_id),
         CreateParam::Mock(params) => mocked::new(params, chip_id),
     };
 
@@ -139,6 +148,7 @@ pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> SharedEmulate
 mod tests {
 
     use super::*;
+    use netsim_proto::common::ChipKind as ProtoChipKind;
 
     #[test]
     fn test_echip_new() {
@@ -146,7 +156,6 @@ mod tests {
             CreateParam::Mock(mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED });
         let mock_chip_id = 0;
         let echip = new(&mock_param, mock_chip_id);
-        assert_eq!(echip.lock().get_kind(), ProtoChipKind::UNSPECIFIED);
         assert_eq!(echip.lock().get(), ProtoChip::new());
     }
 }

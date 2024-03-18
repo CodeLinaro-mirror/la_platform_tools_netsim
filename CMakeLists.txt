@@ -36,7 +36,6 @@ endif()
 
 add_subdirectory(proto)
 add_subdirectory(src)
-add_subdirectory(ui)
 
 if(TARGET Rust::Rustc)
   android_add_executable(
@@ -101,3 +100,5 @@ if(NOT NETSIM_EXT)
     DEPS grpc++ packet-streamer-client-lib packet-streamer-proto-lib
          protobuf::libprotobuf)
 endif()
+
+add_subdirectory(ui)

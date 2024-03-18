@@ -181,61 +181,45 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
         .spawn(move || {
             let chip_count = startup_info.devices.iter().map(|d| d.chips.len()).sum();
             let mut handles = Vec::with_capacity(chip_count);
-            for device in startup_info.devices {
-                for chip in device.chips {
+            for (device_guid, device) in startup_info.devices.iter().enumerate() {
+                for chip in &device.chips {
+                    let chip_kind = match chip.kind {
+                        ChipKindEnum::BLUETOOTH => ChipKind::BLUETOOTH,
+                        ChipKindEnum::WIFI => ChipKind::WIFI,
+                        ChipKindEnum::UWB => ChipKind::UWB,
+                        _ => ChipKind::UNSPECIFIED,
+                    };
+                    // TODO(b/323899010): Avoid having cfg(test) in mainline code
                     #[cfg(not(test))]
-                    let (chip_kind, echip_create_param) = match chip.kind {
-                        ChipKindEnum::BLUETOOTH => (
-                            ChipKind::BLUETOOTH,
+                    let echip_create_param = match chip_kind {
+                        ChipKind::BLUETOOTH => {
                             echip::CreateParam::Bluetooth(echip::bluetooth::CreateParams {
                                 address: chip.address.clone().unwrap_or_default(),
                                 bt_properties: None,
-                            }),
-                        ),
-                        ChipKindEnum::WIFI => {
-                            (ChipKind::WIFI, echip::CreateParam::Wifi(echip::wifi::CreateParams {}))
+                            })
                         }
-                        ChipKindEnum::UWB => (ChipKind::UWB, echip::CreateParam::Uwb),
+                        ChipKind::WIFI => echip::CreateParam::Wifi(echip::wifi::CreateParams {}),
+                        ChipKind::UWB => echip::CreateParam::Uwb(echip::uwb::CreateParams {
+                            address: chip.address.clone().unwrap_or_default(),
+                        }),
                         _ => {
                             warn!("The provided chip kind is unsupported: {:?}", chip.kind);
                             return;
                         }
                     };
                     #[cfg(test)]
-                    let (chip_kind, echip_create_param) = match chip.kind {
-                        ChipKindEnum::BLUETOOTH => (
-                            ChipKind::BLUETOOTH,
-                            echip::CreateParam::Mock(echip::mocked::CreateParams {
-                                chip_kind: ChipKind::BLUETOOTH,
-                            }),
-                        ),
-                        ChipKindEnum::WIFI => (
-                            ChipKind::WIFI,
-                            echip::CreateParam::Mock(echip::mocked::CreateParams {
-                                chip_kind: ChipKind::WIFI,
-                            }),
-                        ),
-                        ChipKindEnum::UWB => (
-                            ChipKind::UWB,
-                            echip::CreateParam::Mock(echip::mocked::CreateParams {
-                                chip_kind: ChipKind::UWB,
-                            }),
-                        ),
-                        _ => {
-                            warn!("The provided chip kind is unsupported: {:?}", chip.kind);
-                            return;
-                        }
-                    };
+                    let echip_create_param =
+                        echip::CreateParam::Mock(echip::mocked::CreateParams { chip_kind });
                     let chip_create_params = chip::CreateParams {
                         kind: chip_kind,
-                        address: chip.address.unwrap_or_default(),
-                        name: Some(chip.id.unwrap_or_default()),
-                        manufacturer: chip.manufacturer.unwrap_or_default(),
-                        product_name: chip.product_name.unwrap_or_default(),
+                        address: chip.address.clone().unwrap_or_default(),
+                        name: Some(chip.id.clone().unwrap_or_default()),
+                        manufacturer: chip.manufacturer.clone().unwrap_or_default(),
+                        product_name: chip.product_name.clone().unwrap_or_default(),
                         bt_properties: None,
                     };
                     let result = match add_chip(
-                        &chip.fd_in.to_string(),
+                        &format!("fd-device-{}", device_guid),
                         &device.name.clone(),
                         &chip_create_params,
                         &echip_create_param,
