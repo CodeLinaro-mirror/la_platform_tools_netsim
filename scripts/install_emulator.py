@@ -199,7 +199,7 @@ class InstallEmulatorManager:
           dirs_exist_ok=True,
       )
 
-  def process(self):
+  def process(self) -> bool:
     """Process the emulator installation
 
     The process will terminate if sub-function calls returns
@@ -208,11 +208,11 @@ class InstallEmulatorManager:
     # Obtain OS name of the artifact
     os_name_artifact = self.__os_name_fetch()
     if not os_name_artifact:
-      return
+      return False
 
     # Invalid Case checks
     if not self.__prerequisites():
-      return
+      return False
 
     # Artifact fetching for local case
     if not self.build_bot:
@@ -234,7 +234,7 @@ class InstallEmulatorManager:
 
     # Unzipping emulator artifacts and remove zip files
     if not self.__unzip_emulator_artifacts(os_name_artifact):
-      return
+      return False
 
     # Copy artifacts after removing downloaded netsim artifacts
     self.__copy_artifacts()
@@ -244,6 +244,7 @@ class InstallEmulatorManager:
       shutil.rmtree(EMULATOR_ARTIFACT_PATH, ignore_errors=True)
 
     logging.info("Emulator installation completed!")
+    return True
 
 
 def main():

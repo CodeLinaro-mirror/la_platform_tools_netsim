@@ -39,7 +39,6 @@ if(NOT ANDROID_EMULATOR_BUILD)
       ${CMAKE_CURRENT_LIST_DIR}/dist/js/device-map.js>netsim-ui/js/device-map.js;
       ${CMAKE_CURRENT_LIST_DIR}/dist/js/device-observer.js>netsim-ui/js/device-observer.js;
       ${CMAKE_CURRENT_LIST_DIR}/dist/js/license-info.js>netsim-ui/js/license-info.js;
-      ${CMAKE_CURRENT_LIST_DIR}/dist/js/netsim/model.js>netsim-ui/js/netsim/model.js;
       ${CMAKE_CURRENT_LIST_DIR}/dist/js/navigation-bar.js>netsim-ui/js/navigation-bar.js;
       ${CMAKE_CURRENT_LIST_DIR}/dist/js/netsim-app.js>netsim-ui/js/netsim-app.js;
       ${CMAKE_CURRENT_LIST_DIR}/dist/js/packet-info.js>netsim-ui/js/packet-info.js;

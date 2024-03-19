@@ -904,7 +904,6 @@ mod tests {
     use netsim_common::util::netsim_logger::init_for_test;
     use netsim_proto::model::{
         Device as ProtoDevice, DeviceCreate as ProtoDeviceCreate, Orientation as ProtoOrientation,
-        State,
     };
     use protobuf_json_mapping::print_to_string;
     use std::{sync::Once, thread};
@@ -1225,7 +1224,7 @@ mod tests {
         let request_position = new_position(1.1, 2.2, 3.3);
         let request_orientation = new_orientation(4.4, 5.5, 6.6);
         proto_device.name = chip_params.device_name;
-        proto_device.visible = State::OFF.into();
+        proto_device.visible = Some(false);
         proto_device.position = Some(request_position.clone()).into();
         proto_device.orientation = Some(request_orientation.clone()).into();
         patch_device_request.device = Some(proto_device.clone()).into();
@@ -1239,7 +1238,7 @@ mod tests {
                 assert_eq!(device.orientation.yaw, request_orientation.yaw);
                 assert_eq!(device.orientation.pitch, request_orientation.pitch);
                 assert_eq!(device.orientation.roll, request_orientation.roll);
-                assert_eq!(device.visible, State::OFF);
+                assert_eq!(device.visible, Some(false));
             }
             None => unreachable!(),
         }
@@ -1353,7 +1352,7 @@ mod tests {
         let request_position = new_position(10.0, 20.0, 30.0);
         let request_orientation = new_orientation(1.0, 2.0, 3.0);
         proto_device.name = chip_params.device_name;
-        proto_device.visible = State::OFF.into();
+        proto_device.visible = Some(false);
         proto_device.position = Some(request_position).into();
         proto_device.orientation = Some(request_orientation).into();
         patch_device_request.device = Some(proto_device).into();
@@ -1366,7 +1365,7 @@ mod tests {
             Some(device) => {
                 assert_eq!(device.position.x, 10.0);
                 assert_eq!(device.orientation.yaw, 1.0);
-                assert_eq!(device.visible, State::OFF);
+                assert_eq!(device.visible, Some(false));
             }
             None => unreachable!(),
         }
@@ -1379,7 +1378,7 @@ mod tests {
                 assert_eq!(device.orientation.yaw, 0.0);
                 assert_eq!(device.orientation.pitch, 0.0);
                 assert_eq!(device.orientation.roll, 0.0);
-                assert_eq!(device.visible, State::ON);
+                assert_eq!(device.visible, Some(true));
             }
             None => unreachable!(),
         }

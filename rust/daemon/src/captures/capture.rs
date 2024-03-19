@@ -30,10 +30,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::pcap_util::{write_pcap_header, write_pcapng_header, LinkType};
 use log::{info, warn};
 
-use netsim_proto::{
-    common::ChipKind,
-    model::{Capture as ProtoCapture, State},
-};
+use netsim_proto::{common::ChipKind, model::Capture as ProtoCapture};
 use protobuf::well_known_types::timestamp::Timestamp;
 
 use crate::config::get_pcap;
@@ -153,10 +150,7 @@ impl CaptureInfo {
             id: self.id,
             chip_kind: self.chip_kind.into(),
             device_name: self.device_name.clone(),
-            state: match self.file.is_some() {
-                true => State::ON.into(),
-                false => State::OFF.into(),
-            },
+            state: Some(self.file.is_some()),
             size: self.size as i32,
             records: self.records,
             timestamp: Some(timestamp).into(),

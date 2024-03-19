@@ -26,6 +26,7 @@ import sys
 import zipfile
 
 from install_emulator import InstallEmulatorManager
+from run_pytest import RunPytestManager
 from server_config import ServerConfig
 from utils import (
     AOSP_ROOT,
@@ -174,20 +175,22 @@ def main():
 
     logging.info("Build completed!")
 
-    # Install Emulator artifacts
+    # Install Emulator artifacts and Run PyTests
     try:
       install_emulator_manager = InstallEmulatorManager(True, args.out_dir)
-      install_emulator_manager.process()
+      if install_emulator_manager.process():
+        run_pytest_manager = RunPytestManager(True)
+        run_pytest_manager.process()
     except Exception as e:
       if presubmit:
         raise e
       else:
         logging.warn(
-            f"An error ocurred when processing InstallEmulatorManager: {e}"
+            "An error occurred when installing emulator artifacts and running"
+            f" Pytests: {e}"
         )
 
-    # TODO(b/328281760): Run E2E integration tests in external/adt-infra
-    logging.info("TODO(b/328281760): Enable E2E PyTests")
+    logging.info("Test completed!")
 
 
 if __name__ == "__main__":

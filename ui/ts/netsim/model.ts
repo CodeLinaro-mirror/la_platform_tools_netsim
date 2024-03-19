@@ -18,20 +18,6 @@ export enum PhyKind {
 }
 
 /**
- * An explicit valued boolean.
- * This is to avoid having default values.
- */
-export enum State {
-  /** UNKNOWN - Default State */
-  UNKNOWN = 'UNKNOWN',
-  /** ON - True state */
-  ON = 'ON',
-  /** OFF - False state */
-  OFF = 'OFF',
-  UNRECOGNIZED = 'UNRECOGNIZED',
-}
-
-/**
  * A 3D position. A valid Position must have both x and y coordinates.
  * The position coordinates are in meters.
  */
@@ -82,7 +68,7 @@ export interface Chip {
 /** Radio state associated with the Chip */
 export interface Chip_Radio {
   /** Boolean state of Radio */
-  state: State;
+  state?:|boolean|undefined;
   /** Maximum range of Radio */
   range: number;
   /** Transmitted packet counts */
@@ -260,7 +246,7 @@ export interface Device {
   /** Device name. Settable at creation */
   name: string;
   /** Visibility of device in the scene */
-  visible: State;
+  visible?:|boolean|undefined;
   /** Position of Device */
   position:|Position|undefined;
   /** Orientation of Device */
@@ -300,7 +286,7 @@ export interface Capture {
   /** device AVD name */
   deviceName: string;
   /** capture state */
-  state: State;
+  state?:|boolean|undefined;
   /** size of current capture */
   size: number;
   /** number of records in current capture */

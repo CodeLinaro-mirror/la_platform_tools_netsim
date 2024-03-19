@@ -119,7 +119,6 @@ class NetsimClient(object):
       state: Set radio state UP if True, DOWN if False.
     """
     chip = model.Chip()
-    state = model.State.ON if state else model.State.OFF
 
     if radio == model.PhyKind.WIFI:
       chip.wifi.state = state

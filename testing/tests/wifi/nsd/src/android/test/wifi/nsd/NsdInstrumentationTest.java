@@ -20,6 +20,7 @@ import android.content.Context;
 import android.util.Log;
 import androidx.test.filters.SmallTest;
 import androidx.test.platform.app.InstrumentationRegistry;
+import java.io.IOException;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,19 +30,20 @@ import org.junit.runners.JUnit4;
 public class NsdInstrumentationTest {
   private static final String TAG = NsdInstrumentationTest.class.getSimpleName();
   private static int deviceIdx;
+  private static String testId;
   private static Context appContext;
 
   @BeforeClass
   public static void setup() {
-    deviceIdx =
-        Integer.valueOf((String) InstrumentationRegistry.getArguments().getString("position"));
+    deviceIdx = Integer.valueOf(InstrumentationRegistry.getArguments().getString("position"));
+    testId = InstrumentationRegistry.getArguments().getString("test_id");
     appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
   }
 
   @Test
   @SmallTest
-  public void testNsd() throws InterruptedException {
-    NsdHelper nsdHelper = new NsdHelper(appContext);
+  public void testNsd() throws InterruptedException, IOException {
+    NsdHelper nsdHelper = new NsdHelper(appContext, testId);
 
     long startTime = System.currentTimeMillis();
 
