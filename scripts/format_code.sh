@@ -36,6 +36,13 @@ find $REPO/tools/netsim/rust \( \
 find $REPO/tools/netsim/ui/ts \( -name '*.ts' \) \
   -exec clang-format -i {} \;
 
+# Format Java (go/google-java-format).
+find $REPO/tools/netsim \( -name '*.java' \) \
+  -exec google-java-format -i {} \;
+
+# Format Python (go/pyformat).
+pyformat --in_place --recursive $REPO/tools/netsim
+
 # Run cmake-format.
 find $REPO/tools/netsim \( -name 'CMakeLists.txt' \) \
   -exec cmake-format -i {} \;

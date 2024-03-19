@@ -281,7 +281,7 @@ impl Command {
 
     fn get_filtered_captures(
         client: &cxx::UniquePtr<FrontendClient>,
-        patterns: &Vec<String>,
+        patterns: &[String],
     ) -> Vec<model::Capture> {
         // Get list of captures
         let result = client.send_grpc(&GrpcMethod::ListCapture, &Vec::new());

@@ -14,7 +14,6 @@
 
 mod http_handlers;
 pub(crate) mod http_request;
-mod http_response;
 mod http_router;
 pub(crate) mod server;
 pub(crate) mod server_response;
