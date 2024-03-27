@@ -56,11 +56,6 @@ fn netsimd_temp_dir_pathbuf() -> PathBuf {
     path
 }
 
-/// For C++.
-pub fn netsimd_temp_dir_string() -> String {
-    netsimd_temp_dir().into_os_string().into_string().unwrap()
-}
-
 #[cfg(not(target_os = "windows"))]
 #[cfg(test)]
 mod tests {

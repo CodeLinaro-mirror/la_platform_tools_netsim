@@ -95,19 +95,5 @@ std::optional<std::string> GetServerAddress(uint16_t instance_num) {
   return iniFile.Get("grpc.port");
 }
 
-void RedirectStdStream(const std::string &netsim_temp_dir_const,
-                       const std::string &instance_name) {
-  auto netsim_temp_dir = netsim_temp_dir_const;
-  // Check if directory has a trailing slash.
-  if (netsim_temp_dir.back() != netsim::filesystem::slash.back())
-    netsim_temp_dir.append(netsim::filesystem::slash);
-  std::freopen(
-      (netsim_temp_dir + "netsim_" + instance_name + "stdout.log").c_str(), "w",
-      stdout);
-  std::freopen(
-      (netsim_temp_dir + "netsim_" + instance_name + "stderr.log").c_str(), "w",
-      stderr);
-}
-
 }  // namespace osutils
 }  // namespace netsim

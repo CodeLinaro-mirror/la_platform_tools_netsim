@@ -73,6 +73,9 @@ def main():
   parser.add_argument(
       "--with_debug", action="store_true", help="Build debug instead of release"
   )
+  parser.add_argument(
+      "--buildbot", action="store_true", help="Invoked by Android buildbots"
+  )
 
   args = parser.parse_args()
 
@@ -88,6 +91,15 @@ def main():
 
   out = Path(args.out_dir)
   if out.exists():
+    # Here is a temporary check on whether build_chaining has successfully worked.
+    if platform.system().lower() == "linux":
+      run(
+          ["ls", "-R"],
+          [],
+          "build_chaining_check",
+          throw_on_failure=False,
+          cwd=out,
+      )
     shutil.rmtree(out)
   out.mkdir(exist_ok=True, parents=True)
 
@@ -130,7 +142,7 @@ def main():
         "bld",
     )
 
-    # Run tests?
+    # TODO: install_emulator with the provided emulator prebuilt
 
     # Zip results..
     zip_fname = (
