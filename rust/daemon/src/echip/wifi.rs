@@ -19,8 +19,8 @@ use crate::wifi::medium::Medium;
 use lazy_static::lazy_static;
 use log::info;
 use netsim_proto::config::WiFi as WiFiConfig;
-use netsim_proto::model::chip::Radio;
 use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::model::State;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
 
@@ -49,24 +49,31 @@ impl EmulatedChip for Wifi {
     }
 
     fn reset(&mut self) {
-        ffi_wifi::wifi_reset(self.chip_id);
+        MEDIUM.lock().expect("Lock failed").reset(self.chip_id);
     }
 
     fn get(&self) -> ProtoChip {
-        let radio_bytes = ffi_wifi::wifi_get_cxx(self.chip_id);
-        let wifi_proto = Radio::parse_from_bytes(&radio_bytes).unwrap();
         let mut chip_proto = ProtoChip::new();
-        chip_proto.mut_wifi().clone_from(&wifi_proto);
+        if let Some(client) = MEDIUM.lock().expect("Lock failed").get(self.chip_id) {
+            chip_proto.mut_wifi().state =
+                if client.enabled { State::ON.into() } else { State::OFF.into() };
+            chip_proto.mut_wifi().tx_count = client.tx_count as i32;
+            chip_proto.mut_wifi().rx_count = client.rx_count as i32;
+        }
         chip_proto
     }
 
-    fn patch(&mut self, chip: &ProtoChip) {
-        let radio_bytes = chip.wifi().write_to_bytes().unwrap();
-        ffi_wifi::wifi_patch_cxx(self.chip_id, &radio_bytes);
+    fn patch(&mut self, patch: &ProtoChip) {
+        if patch.wifi().state != State::UNKNOWN.into() {
+            MEDIUM
+                .lock()
+                .expect("Lock failed")
+                .set_enabled(self.chip_id, patch.wifi().state == State::ON.into());
+        }
     }
 
     fn remove(&mut self) {
-        ffi_wifi::wifi_remove(self.chip_id);
+        MEDIUM.lock().expect("Lock failed").remove(self.chip_id);
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
@@ -82,11 +89,15 @@ impl EmulatedChip for Wifi {
     }
 }
 
+pub fn handle_wifi_response(packet: &[u8]) {
+    MEDIUM.lock().expect("Lock failed").process_response(packet);
+}
+
 /// Create a new Emulated Wifi Chip
 /// allow(dead_code) due to not being used in unit tests
 #[allow(dead_code)]
 pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
-    ffi_wifi::wifi_add(chip_id);
+    MEDIUM.lock().expect("Lock failed").add(chip_id);
     info!("WiFi EmulatedChip created chip_id: {chip_id}");
     let echip = Wifi { chip_id };
     SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))

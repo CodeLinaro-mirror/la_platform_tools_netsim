@@ -65,7 +65,7 @@ if(TARGET Rust::Rustc)
   android_add_test(
     TARGET netsim-test LICENSE Apache-2.0
     SRC src/util/ini_file_test.cc src/util/os_utils_test.cc
-        src/util/string_utils_test.cc src/wifi/wifi_facade_test.cc
+        src/util/string_utils_test.cc
     DEPS android-emu-base-headers
          grpc++
          gtest
