@@ -1,4 +1,4 @@
-import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,LitElement as i,html as o}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as a,customElement as n}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as r}from"./device-observer.js";import{State as d}from"./netsim/model.js";let s=class extends i{constructor(){super(...arguments),this.captureData=[],this.deviceData=[]}connectedCallback(){super.connectedCallback(),r.registerObserver(this)}disconnectedCallback(){r.removeObserver(this),super.disconnectedCallback()}onNotify(t){this.captureData=t.captures,this.deviceData=t.devices,this.requestUpdate()}toggleCapture(t){let e=t.id.toString(),i=t.state===d.OFF?"1":"2";r.patchCapture(e,i)}handleGetChips(t){var e,i,a,n,r,d,s,l;let c=o``,p=o``,b=o``;if("chips"in t&&t.chips)for(const h of t.chips){if("bt"in h&&h.bt){let t=o``,r=o``;"lowEnergy"in h.bt&&h.bt.lowEnergy&&(t=o`
+import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,LitElement as i,html as o}from"https://cdn.jsdelivr.net/gh/lit/dist@2/core/lit-core.min.js";import{property as a,customElement as n}from"https://cdn.skypack.dev/pin/lit@v2.5.0-jYRq0AKQogjUdUh7SCAE/mode=imports/optimized/lit/decorators.js";import{simulationState as r}from"./device-observer.js";let d=class extends i{constructor(){super(...arguments),this.captureData=[],this.deviceData=[]}connectedCallback(){super.connectedCallback(),r.registerObserver(this)}disconnectedCallback(){r.removeObserver(this),super.disconnectedCallback()}onNotify(t){this.captureData=t.captures,this.deviceData=t.devices,this.requestUpdate()}toggleCapture(t){let e=t.id.toString(),i=t.state?"0":"1";r.patchCapture(e,i)}handleGetChips(t){var e,i,a,n,r,d,s,l;let c=o``,p=o``,b=o``;if("chips"in t&&t.chips)for(const h of t.chips){if("bt"in h&&h.bt){let t=o``,r=o``;"lowEnergy"in h.bt&&h.bt.lowEnergy&&(t=o`
               <tr>
                 <td>BLE</td>
                 <td>${null!==(e=h.bt.lowEnergy.rxCount)&&void 0!==e?e:0}</td>
@@ -36,7 +36,7 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
         <input
                 type="checkbox"
                 class="switch_1"
-                .checked=${t.state===d.ON}
+                .checked=${t.state}
                 @click=${()=>{this.toggleCapture(t)}}
               />
         </td>
@@ -78,7 +78,7 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
           ${this.captureData.map((t=>this.handleListCaptures(t)))}
         </table>
       </div>
-    `}};s.styles=e`
+    `}};d.styles=e`
     :host {
       display: flex;
       justify-content: center;
@@ -205,4 +205,4 @@ import{__decorate as t}from"../node_modules/tslib/tslib.es6.js";import{css as e,
       background-color: #45a049;
       transition: 0.5s;
     }
-  `,t([a()],s.prototype,"captureData",void 0),t([a()],s.prototype,"deviceData",void 0),s=t([n("ns-packet-info")],s);export{s as PacketInformation};
+  `,t([a()],d.prototype,"captureData",void 0),t([a()],d.prototype,"deviceData",void 0),d=t([n("ns-packet-info")],d);export{d as PacketInformation};

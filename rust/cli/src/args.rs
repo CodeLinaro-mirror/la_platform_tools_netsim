@@ -34,7 +34,7 @@ use netsim_proto::model::chip::{
 };
 use netsim_proto::model::{
     self, chip_create, Chip, ChipCreate as ChipCreateProto, Device,
-    DeviceCreate as DeviceCreateProto, Position, State,
+    DeviceCreate as DeviceCreateProto, Position,
 };
 use protobuf::{Message, MessageField};
 use std::fmt;
@@ -98,8 +98,8 @@ impl Command {
             Command::Radio(cmd) => {
                 let mut chip = Chip { ..Default::default() };
                 let chip_state = match cmd.status {
-                    UpDownStatus::Up => State::ON,
-                    UpDownStatus::Down => State::OFF,
+                    UpDownStatus::Up => true,
+                    UpDownStatus::Down => false,
                 };
                 if cmd.radio_type == RadioType::Wifi {
                     let mut wifi_chip = Chip_Radio::new();
@@ -237,8 +237,8 @@ impl Command {
                     let mut result = frontend::PatchCaptureRequest::new();
                     result.id = capture.id;
                     let capture_state = match cmd.state {
-                        OnOffState::On => State::ON,
-                        OnOffState::Off => State::OFF,
+                        OnOffState::On => true,
+                        OnOffState::Off => false,
                     };
                     let mut patch_capture = PatchCaptureProto::new();
                     patch_capture.state = capture_state.into();

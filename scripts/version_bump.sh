@@ -24,13 +24,14 @@
 SCRIPT=$(dirname $(readlink -f "$0"))
 export CARGO=$SCRIPT/../rust/daemon/Cargo.toml
 export CARGO_CLI=$SCRIPT/../rust/cli/Cargo.toml
+export CARGO_COMMON=$SCRIPT/../rust/common/Cargo.toml
 export VERSION=$SCRIPT/../rust/daemon/src/version.rs
 python <<EOF
 import re
 import os
 
 m = None
-for cargo in [os.environ["CARGO_CLI"], os.environ["CARGO"]]:
+for cargo in [os.environ["CARGO_COMMON"], os.environ["CARGO_CLI"], os.environ["CARGO"]]:
     with open(cargo, "r+") as f:
 
         version = re.compile(r'^version\s=\s"(\d+)\.(\d+)\.(\d+)"$')

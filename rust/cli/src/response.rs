@@ -20,7 +20,7 @@ use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::{
     common::ChipKind,
     frontend::{CreateDeviceResponse, ListCaptureResponse, ListDeviceResponse, VersionResponse},
-    model::{self, State},
+    model,
 };
 use protobuf::Message;
 
@@ -177,12 +177,8 @@ impl args::Command {
         }
     }
 
-    fn capture_state_to_string(state: State) -> String {
-        match state {
-            State::ON => "on".to_string(),
-            State::OFF => "off".to_string(),
-            _ => "unknown".to_string(),
-        }
+    fn capture_state_to_string(state: Option<bool>) -> String {
+        state.map(|value| if value { "on" } else { "off" }).unwrap_or("unknown").to_string()
     }
 
     fn on_off_state_to_string(state: OnOffState) -> String {
@@ -286,7 +282,7 @@ impl args::Command {
                         capture.id.to_string(),
                         capture.device_name,
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
-                        if capture.valid {Self::capture_state_to_string(capture.state.enum_value_or_default())} else {"detached".to_string()},
+                        if capture.valid {Self::capture_state_to_string(capture.state)} else {"detached".to_string()},
                         TimeDisplay::new(
                             capture.timestamp.get_or_default().seconds,
                             capture.timestamp.get_or_default().nanos as u32,
@@ -299,7 +295,7 @@ impl args::Command {
                         "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:records_width$} |",
                         capture.device_name,
                         Self::chip_kind_to_string(capture.chip_kind.enum_value_or_default()),
-                        if capture.valid {Self::capture_state_to_string(capture.state.enum_value_or_default())} else {"detached".to_string()},
+                        if capture.valid {Self::capture_state_to_string(capture.state)} else {"detached".to_string()},
                         capture.records,
                     )
                 }

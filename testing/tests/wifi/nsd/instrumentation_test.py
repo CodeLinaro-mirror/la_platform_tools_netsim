@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import uuid
 from mobly import base_test
 from mobly import test_runner
 from mobly import utils
@@ -25,9 +26,11 @@ class MultiDeviceInstrumentationTest(base_test.BaseTestClass):
     self.devices = self.register_controller(android_device)
 
   def test_in_parallel(self):
+    test_id = str(uuid.uuid1())[:8]
+
     def run_instrument_cmd(device_idx, device):
       result = device.adb.shell((
-          f'am instrument -w -e position {device_idx} '
+          f'am instrument -w -e position {device_idx} -e test_id {test_id} '
           + 'android.test.wifi.nsd/androidx.test.runner.AndroidJUnitRunner'
       ))
       assert_not_in('FAIL', result.decode(), f'Failed in device {device_idx}')
