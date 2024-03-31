@@ -38,10 +38,13 @@ find $REPO/tools/netsim/ui/ts \( -name '*.ts' \) \
 
 # Format Java (go/google-java-format).
 find $REPO/tools/netsim \( -name '*.java' \) \
+  -exec google-java-format --dry-run {} \;
+find $REPO/tools/netsim \( -name '*.java' \) \
   -exec google-java-format -i {} \;
 
 # Format Python (go/pyformat).
-pyformat --in_place --recursive $REPO/tools/netsim
+pyformat --in_place --alsologtostderr --noshowprefixforinfo \
+  --recursive $REPO/tools/netsim
 
 # Run cmake-format.
 find $REPO/tools/netsim \( -name 'CMakeLists.txt' \) \

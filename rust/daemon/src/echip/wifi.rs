@@ -20,7 +20,6 @@ use lazy_static::lazy_static;
 use log::info;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::Chip as ProtoChip;
-use netsim_proto::model::State;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
 
@@ -55,8 +54,7 @@ impl EmulatedChip for Wifi {
     fn get(&self) -> ProtoChip {
         let mut chip_proto = ProtoChip::new();
         if let Some(client) = MEDIUM.lock().expect("Lock failed").get(self.chip_id) {
-            chip_proto.mut_wifi().state =
-                if client.enabled { State::ON.into() } else { State::OFF.into() };
+            chip_proto.mut_wifi().state = Some(client.enabled);
             chip_proto.mut_wifi().tx_count = client.tx_count as i32;
             chip_proto.mut_wifi().rx_count = client.rx_count as i32;
         }
@@ -64,11 +62,11 @@ impl EmulatedChip for Wifi {
     }
 
     fn patch(&mut self, patch: &ProtoChip) {
-        if patch.wifi().state != State::UNKNOWN.into() {
+        if patch.wifi().state.is_some() {
             MEDIUM
                 .lock()
                 .expect("Lock failed")
-                .set_enabled(self.chip_id, patch.wifi().state == State::ON.into());
+                .set_enabled(self.chip_id, patch.wifi().state.unwrap());
         }
     }
 

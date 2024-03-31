@@ -121,13 +121,6 @@ prebuilt_root_host {
     filename_from_src: true,
 }
 
-prebuilt_root_host {
-    name: "netsim_ui_js_model.js",
-    src: "dist/js/netsim/model.js",
-    sub_dir: "bin/netsim-ui/js/netsim",
-    filename_from_src: true,
-}
-
 // Node Modules
 prebuilt_root_host {
     name: "netsim_ui_tslib",

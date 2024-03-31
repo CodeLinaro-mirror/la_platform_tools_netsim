@@ -155,9 +155,13 @@ impl Medium {
         match (hwsim_msg.get_hwsim_hdr().hwsim_cmd) {
             HwsimCmd::Frame => {
                 let frame = Frame::parse(&hwsim_msg)?;
-                // Incoming packet must contain transmitter, flag, cookie, and tx_info fields.
-                if frame.tx_info.is_none() {
-                    return Err(anyhow!("Missing tx_info for incoming packet"));
+                // Incoming frame must contain transmitter, flag, cookie, and tx_info fields.
+                if frame.transmitter.is_none()
+                    || frame.flags.is_none()
+                    || frame.cookie.is_none()
+                    || frame.tx_info.is_none()
+                {
+                    return Err(anyhow!("Missing Hwsim attributes for incoming packet"));
                 }
                 // Use as receiver for outgoing HwsimMsg.
                 let receiver = frame.transmitter.context("transmitter")?;

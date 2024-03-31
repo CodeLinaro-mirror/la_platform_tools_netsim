@@ -14,7 +14,6 @@
 
 // Device.rs
 
-use netsim_proto::model::State;
 use protobuf::Message;
 
 use crate::devices::chip;
@@ -33,7 +32,7 @@ pub struct Device {
     pub id: DeviceIdentifier,
     pub guid: String,
     pub name: String,
-    pub visible: State,
+    pub visible: Option<bool>,
     pub position: ProtoPosition,
     pub orientation: ProtoOrientation,
     pub chips: BTreeMap<ChipIdentifier, Chip>,
@@ -45,7 +44,7 @@ impl Device {
             id,
             guid,
             name,
-            visible: State::ON,
+            visible: Some(true),
             position: ProtoPosition::new(),
             orientation: ProtoOrientation::new(),
             chips: BTreeMap::new(),
@@ -65,7 +64,7 @@ impl Device {
         let mut device = ProtoDevice::new();
         device.id = self.id;
         device.name = self.name.clone();
-        device.visible = self.visible.into();
+        device.visible = self.visible;
         device.position = protobuf::MessageField::from(Some(self.position.clone()));
         device.orientation = protobuf::MessageField::from(Some(self.orientation.clone()));
         for chip in self.chips.values() {
@@ -76,9 +75,8 @@ impl Device {
 
     /// Patch a device and its chips.
     pub fn patch(&mut self, patch: &ProtoDevice) -> Result<(), String> {
-        let patch_visible = patch.visible.enum_value_or_default();
-        if patch_visible != State::UNKNOWN {
-            self.visible = patch_visible;
+        if patch.visible.is_some() {
+            self.visible = Some(patch.visible.unwrap());
         }
         if patch.position.is_some() {
             self.position.clone_from(&patch.position);
@@ -195,7 +193,7 @@ impl Device {
 
     /// Reset a device to its default state.
     pub fn reset(&mut self) -> Result<(), String> {
-        self.visible = State::ON;
+        self.visible = Some(true);
         self.position.clear();
         self.orientation.clear();
         for chip in self.chips.values_mut() {

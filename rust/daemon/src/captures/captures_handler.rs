@@ -193,8 +193,8 @@ fn handle_capture_internal(
                 let body = request.body();
                 let state = String::from_utf8(body.to_vec()).unwrap();
                 match state.as_str() {
+                    "0" => handle_capture_patch(writer, id, false),
                     "1" => handle_capture_patch(writer, id, true),
-                    "2" => handle_capture_patch(writer, id, false),
                     _ => Err(anyhow!("Incorrect state for PatchCapture")),
                 }
             }
