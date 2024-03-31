@@ -4,7 +4,7 @@ import {live} from 'lit/directives/live.js';
 import {styleMap} from 'lit/directives/style-map.js';
 
 import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
-import {Chip, Chip_BleBeacon, Chip_Bluetooth, Chip_Radio, State,} from './netsim/model.js';
+import {Chip, Chip_BleBeacon, Chip_Bluetooth, Chip_Radio,} from './netsim/model.js';
 
 enum ChipKind {
   UNSPECIFIED = 'UNSPECIFIED',
@@ -419,7 +419,7 @@ export class DeviceInformation extends LitElement implements Notifiable {
       <input
         id=${id}
         type="checkbox"
-        .checked=${live(radio.state === State.ON)}
+        .checked=${live(radio.state)}
         @click=${() => {
       // eslint-disable-next-line
       this.selectedDevice?.toggleChipState(radio);
@@ -434,10 +434,10 @@ export class DeviceInformation extends LitElement implements Notifiable {
     let lowEnergyCheckbox = undefined;
     let classicCheckbox = undefined;
 
-    if (bt.lowEnergy && bt.lowEnergy.state) {
+    if ('lowEnergy' in bt && bt.lowEnergy) {
       lowEnergyCheckbox = this.getRadioCheckbox(bt.lowEnergy, 'lowEnergy');
     }
-    if (bt.classic && bt.classic) {
+    if ('classic' in bt && bt.classic) {
       classicCheckbox = this.getRadioCheckbox(bt.classic, 'classic');
     }
 

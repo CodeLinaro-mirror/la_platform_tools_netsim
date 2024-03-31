@@ -18,6 +18,7 @@ import logging
 import os
 from pathlib import Path
 import platform
+import shutil
 import socket
 import subprocess
 import sys
@@ -34,6 +35,7 @@ from threading import Thread, currentThread
 
 AOSP_ROOT = Path(__file__).absolute().parents[3]
 TOOLS = Path(AOSP_ROOT, "tools")
+EMULATOR_ARTIFACT_PATH = Path(AOSP_ROOT, "tools", "netsim", "emulator_tmp")
 PYTHON_EXE = sys.executable or "python3"
 TARGET_MAP = {
     "windows": "windows_msvc-x86_64",
@@ -56,6 +58,20 @@ AVAILABLE = {
     "linux-aarch64": "toolchain-linux-aarch64.cmake",
     "darwin-aarch64": "toolchain-darwin-aarch64.cmake",
 }
+
+
+def create_emulator_artifact_path():
+  """Refresh or construct EMULATOR_ARTIFACT_PATH"""
+  if EMULATOR_ARTIFACT_PATH.exists():
+    shutil.rmtree(EMULATOR_ARTIFACT_PATH)
+  EMULATOR_ARTIFACT_PATH.mkdir(exist_ok=True, parents=True)
+
+
+def binary_extension(filename):
+  """Appends exe extension in case of Windows"""
+  if platform.system() == "Windows":
+    return filename + ".exe"
+  return filename
 
 
 def platform_to_cmake_target(target):
