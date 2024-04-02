@@ -14,14 +14,16 @@
 
 use std::fmt;
 
-use super::packets::ieee80211::MacAddress;
+use super::packets::ieee80211::{parse_mac_address, MacAddress};
 use super::packets::mac80211_hwsim::{
     self, HwsimAttr, HwsimAttrChild::*, HwsimCmd, HwsimMsg, HwsimMsgHdr, TxRate, TxRateFlag,
 };
 use super::packets::netlink::{NlAttrHdr, NlMsgHdr};
+use anyhow::Error;
 use anyhow::{anyhow, Context};
 use log::{info, warn};
 use pdl_runtime::Packet;
+use std::option::Option;
 
 /// Parse or Build the Hwsim attributes into a set.
 ///
@@ -90,6 +92,8 @@ pub struct HwsimAttrSet {
 /// Used during `parse` or to create new HwsimCmd packets containing
 /// an attributes vector.
 ///
+/// The attributes field will contain the raw bytes in NLA format
+/// in the order of method calls.
 impl HwsimAttrSetBuilder {
     // Add packet to the attributes vec and pad for proper NLA
     // alignment. This provides for to_bytes for a HwsimMsg for
@@ -254,6 +258,15 @@ impl HwsimAttrSet {
 
     /// Parse and validates the attributes from a HwsimMsg command.
     pub fn parse(attributes: &[u8]) -> anyhow::Result<HwsimAttrSet> {
+        Self::parse_with_frame_transmitter(attributes, Option::None, Option::None)
+    }
+    /// Parse and validates the attributes from a HwsimMsg command.
+    /// Update frame and transmitter if provided.
+    pub fn parse_with_frame_transmitter(
+        attributes: &[u8],
+        frame: Option<&[u8]>,
+        transmitter: Option<&[u8; 6]>,
+    ) -> anyhow::Result<HwsimAttrSet> {
         let mut index: usize = 0;
         let mut builder = HwsimAttrSet::builder();
         while (index < attributes.len()) {
@@ -264,9 +277,11 @@ impl HwsimAttrSet {
             // attributes to allow padding per attribute.
             let hwsim_attr = HwsimAttr::parse(&attributes[index..index + nla_len])?;
             match hwsim_attr.specialize() {
-                HwsimAttrAddrTransmitter(child) => builder.transmitter(child.get_address()),
+                HwsimAttrAddrTransmitter(child) => {
+                    builder.transmitter(transmitter.unwrap_or(child.get_address()))
+                }
                 HwsimAttrAddrReceiver(child) => builder.receiver(child.get_address()),
-                HwsimAttrFrame(child) => builder.frame(child.get_data()),
+                HwsimAttrFrame(child) => builder.frame(frame.unwrap_or(child.get_data())),
                 HwsimAttrFlags(child) => builder.flags(child.get_flags()),
                 HwsimAttrRxRate(child) => builder.rx_rate(child.get_rx_rate_idx()),
                 HwsimAttrSignal(child) => builder.signal(child.get_signal()),
@@ -325,6 +340,42 @@ mod tests {
         assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
         let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes()).unwrap();
         assert_eq!(&attrs.attributes, hwsim_msg.get_attributes());
+    }
+
+    /// Validate changing frame and transmitter during the parse.
+    /// 1. Check if reinserting the same values results in identical bytes.
+    /// 2. Insert modified values, parse to bytes, and parse back again to check
+    ///    if the round trip values are identical.
+    #[test]
+    fn test_attr_set_parse_with_frame_transmitter() -> Result<(), Error> {
+        let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
+        let hwsim_msg = HwsimMsg::parse(&packet)?;
+        assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
+        let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes())?;
+        let transmitter: [u8; 6] = attrs.transmitter.context("transmitter")?.into();
+        let mod_attrs = HwsimAttrSet::parse_with_frame_transmitter(
+            hwsim_msg.get_attributes(),
+            attrs.frame.as_deref(),
+            Some(&transmitter),
+        )?;
+
+        assert_eq!(attrs.attributes, mod_attrs.attributes);
+
+        // Change frame and transmitter.
+        let mod_frame = Some(vec![0, 1, 2, 3]);
+        let mod_transmitter: Option<[u8; 6]> =
+            Some(parse_mac_address("00:0b:85:71:20:ce").context("transmitter")?.into());
+
+        let mod_attrs = HwsimAttrSet::parse_with_frame_transmitter(
+            &attrs.attributes,
+            mod_frame.as_deref(),
+            mod_transmitter.as_ref(),
+        )?;
+
+        let parsed_attrs = HwsimAttrSet::parse(&mod_attrs.attributes)?;
+        assert_eq!(parsed_attrs.transmitter, mod_transmitter.map(|t| MacAddress::from(&t)));
+        assert_eq!(parsed_attrs.frame, mod_frame);
+        Ok(())
     }
 
     #[test]
