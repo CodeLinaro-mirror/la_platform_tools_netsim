@@ -1,4 +1,4 @@
-import {Capture, Chip, Chip_Radio, Device as ProtoDevice, State,} from './netsim/model.js';
+import {Capture, Chip, Chip_Radio, Device as ProtoDevice,} from './netsim/model.js';
 
 // URL for netsim
 const DEVICES_URL = './v1/devices';
@@ -90,20 +90,20 @@ export class Device {
   }
 
   get visible(): boolean {
-    return this.device.visible === State.ON ? true : false;
+    return Boolean(this.device.visible);
   }
 
   set visible(value: boolean) {
-    this.device.visible = value ? State.ON : State.OFF;
+    this.device.visible = value;
   }
 
   toggleChipState(radio: Chip_Radio) {
-    radio.state = radio.state === State.ON ? State.OFF : State.ON;
+    radio.state = !radio.state;
   }
 
   toggleCapture(device: Device, chip: Chip) {
     if ('capture' in chip && chip.capture) {
-      chip.capture = chip.capture === State.ON ? State.OFF : State.ON;
+      chip.capture = !chip.capture;
       simulationState.patchDevice({
         device: {
           name: device.name,

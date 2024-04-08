@@ -46,8 +46,6 @@ namespace rootcanal::log {
 void SetLogColorEnable(bool);
 }
 
-using netsim::model::State;
-
 namespace netsim::hci::facade {
 
 int8_t SimComputeRssi(int send_id, int recv_id, int8_t tx_power);
@@ -199,9 +197,6 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes,
 
   // output is to a file, so no color wanted
   rootcanal::log::SetLogColorEnable(false);
-
-  // TODO(b/323226412): Pass netsim::hci::facade::ReportInvalidPacket signature
-  // into rootcanal
 
   config::Bluetooth config;
   config.ParseFromArray(proto_bytes.data(), proto_bytes.size());
@@ -376,6 +371,14 @@ uint32_t Add(uint32_t chip_id, const std::string &address_string,
   auto hci_device =
       std::make_shared<rootcanal::HciDevice>(transport, *controller_properties);
 
+  // Pass netsim::hci::facade::ReportInvalidPacket signature into hci_device
+  hci_device->RegisterInvalidPacketHandler(
+      [](uint32_t rootcanal_id, rootcanal::InvalidPacketReason reason,
+         std::string description, const std::vector<uint8_t> &packet) {
+        netsim::hci::facade::ReportInvalidPacket(
+            rootcanal_id, static_cast<int32_t>(reason), description, packet);
+      });
+
   // Use the `AsyncManager` to ensure that the `AddHciConnection` method is
   // invoked atomically, preventing data races.
   std::promise<uint32_t> rootcanal_id_promise;
@@ -398,8 +401,8 @@ uint32_t Add(uint32_t chip_id, const std::string &address_string,
              chip_id);
 
   auto model = std::make_shared<model::Chip::Bluetooth>();
-  model->mutable_classic()->set_state(model::State::ON);
-  model->mutable_low_energy()->set_state(model::State::ON);
+  model->mutable_classic()->set_state(true);
+  model->mutable_low_energy()->set_state(true);
 
   id_to_chip_info_.emplace(rootcanal_id, std::make_shared<ChipInfo>(
                                              chip_id, model, controller_proto,
@@ -425,7 +428,7 @@ rust::Box<AddRustDeviceResult> AddRustDevice(
 
   auto model = std::make_shared<model::Chip::Bluetooth>();
   // Only enable ble for beacon.
-  model->mutable_low_energy()->set_state(model::State::ON);
+  model->mutable_low_energy()->set_state(true);
   id_to_chip_info_.emplace(rootcanal_id,
                            std::make_shared<ChipInfo>(chip_id, model));
   return CreateAddRustDeviceResult(

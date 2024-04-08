@@ -93,7 +93,7 @@ impl fmt::Display for Displayer<&model::Chip> {
                 let radio = ble_beacon.bt.low_energy.as_ref().unwrap_or_default();
                 let beacon_width = 16 + width;
 
-                if self.verbose || radio.state.enum_value_or_default() == model::State::OFF {
+                if self.verbose || !radio.state.unwrap_or_default() {
                     writeln!(f)?;
                     write!(
                         f,
@@ -111,7 +111,7 @@ impl fmt::Display for Displayer<&model::Chip> {
             }
             Some(model::chip::Chip::Bt(bt)) => {
                 if let Some(ble) = bt.low_energy.as_ref() {
-                    if self.verbose || ble.state.enum_value_or_default() == model::State::OFF {
+                    if self.verbose || !ble.state.unwrap_or_default() {
                         writeln!(f)?;
                         write!(
                             f,
@@ -124,7 +124,7 @@ impl fmt::Display for Displayer<&model::Chip> {
                 };
 
                 if let Some(classic) = bt.classic.as_ref() {
-                    if self.verbose || classic.state.enum_value_or_default() == model::State::OFF {
+                    if self.verbose || !classic.state.unwrap_or_default() {
                         writeln!(f)?;
                         write!(
                             f,
@@ -137,7 +137,7 @@ impl fmt::Display for Displayer<&model::Chip> {
                 };
             }
             Some(model::chip::Chip::Wifi(wifi)) => {
-                if self.verbose || wifi.state.enum_value_or_default() == model::State::OFF {
+                if self.verbose || !wifi.state.unwrap_or_default() {
                     writeln!(f)?;
                     write!(
                         f,
@@ -149,7 +149,7 @@ impl fmt::Display for Displayer<&model::Chip> {
                 }
             }
             Some(model::chip::Chip::Uwb(uwb)) => {
-                if self.verbose || uwb.state.enum_value_or_default() == model::State::OFF {
+                if self.verbose || !uwb.state.unwrap_or_default() {
                     writeln!(f)?;
                     write!(
                         f,
@@ -336,12 +336,7 @@ impl fmt::Display for Displayer<&model::chip::Radio> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let count_width = 9;
-        write!(
-            f,
-            "{:indent$}{}",
-            "",
-            Displayer::new(&self.value.state.enum_value_or_default(), self.verbose),
-        )?;
+        write!(f, "{:indent$}{}", "", Displayer::new(&self.value.state, self.verbose),)?;
 
         if self.verbose {
             write!(
@@ -355,7 +350,7 @@ impl fmt::Display for Displayer<&model::chip::Radio> {
     }
 }
 
-impl fmt::Display for Displayer<&model::State> {
+impl fmt::Display for Displayer<&Option<bool>> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let width = 9;
@@ -365,9 +360,9 @@ impl fmt::Display for Displayer<&model::State> {
             "{:indent$}{:width$}",
             "",
             match self.value {
-                model::State::ON => "up",
-                model::State::OFF => "down",
-                _ => "unknown",
+                Some(true) => "up",
+                Some(false) => "down",
+                None => "unknown",
             }
         )
     }

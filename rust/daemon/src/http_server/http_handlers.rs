@@ -179,7 +179,7 @@ pub fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>
         router.handle_request(&request, &mut response_writer);
         if let Some(response) = response_writer.get_response() {
             // Status code of 101 represents switching of protocols from HTTP to Websocket
-            if response.status_code == 101 {
+            if response.status().as_u16() == 101 {
                 match collect_query(request.uri().query().unwrap_or("")) {
                     Ok(queries) => run_websocket_transport(stream, queries),
                     Err(err) => warn!("{err}"),

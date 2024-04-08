@@ -2,7 +2,7 @@ import {css, html, LitElement} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
 
 import {Device, Notifiable, SimulationInfo, simulationState,} from './device-observer.js';
-import {Capture, State} from './netsim/model.js';
+import {Capture} from './netsim/model.js';
 
 @customElement('ns-packet-info')
 export class PacketInformation extends LitElement implements Notifiable {
@@ -163,7 +163,7 @@ export class PacketInformation extends LitElement implements Notifiable {
 
   toggleCapture(capture: Capture) {
     let id = capture.id.toString();
-    let state = capture.state === State.OFF ? '1' : '2';
+    let state = capture.state ? '0' : '1';
     simulationState.patchCapture(id, state);
   }
 
@@ -234,7 +234,7 @@ export class PacketInformation extends LitElement implements Notifiable {
         <input
                 type="checkbox"
                 class="switch_1"
-                .checked=${capture.state === State.ON}
+                .checked=${capture.state}
                 @click=${() => {
       this.toggleCapture(capture);
     }}

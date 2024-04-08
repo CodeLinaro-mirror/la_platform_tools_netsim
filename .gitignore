@@ -9,3 +9,6 @@ objs
 # rust
 **/target
 **/Cargo.lock
+# Android test
+**/.idea
+**/out

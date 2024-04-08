@@ -218,7 +218,6 @@ netsim_ui_modules = [
     "netsim_ui_js_netsim-app.js",
     "netsim_ui_js_packet-info.js",
     "netsim_ui_js_pyramid-sprite.js",
-    "netsim_ui_js_model.js",
     "netsim_ui_tslib",
     "netsim_ui_assets_grid-background.svg",
     "netsim_ui_assets_hexagonal-background.png",
@@ -275,7 +274,6 @@ cc_test_host {
         "src/util/ini_file_test.cc",
         "src/util/os_utils_test.cc",
         "src/util/string_utils_test.cc",
-        "src/wifi/wifi_facade_test.cc",
     ],
     generated_headers: [
         "cxx-bridge-header",
@@ -323,8 +321,10 @@ rust_defaults {
     name: "libnetsim_common_defaults",
     srcs: ["rust/common/src/lib.rs"],
     rustlibs: [
+        "libanyhow",
         "libchrono",
         "librand",
+        "liblibc",
         "liblog_rust",
         "libenv_logger",
         "libzip",

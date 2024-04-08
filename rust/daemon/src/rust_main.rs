@@ -15,9 +15,9 @@
 use clap::Parser;
 use log::warn;
 use log::{error, info};
-use netsim_common::system::netsimd_temp_dir_string;
+use netsim_common::system::netsimd_temp_dir;
 use netsim_common::util::os_utils::{
-    get_hci_port, get_instance, get_instance_name, remove_netsim_ini,
+    get_hci_port, get_instance, get_instance_name, redirect_std_stream, remove_netsim_ini,
 };
 use netsim_common::util::zip_artifact::zip_artifacts;
 
@@ -49,6 +49,8 @@ use std::sync::mpsc::Receiver;
 /// long as the program runs.
 #[no_mangle]
 pub unsafe extern "C" fn rust_main(argc: c_int, argv: *const *const c_char) {
+    // enable Rust backtrace by setting env RUST_BACKTRACE=full
+    env::set_var("RUST_BACKTRACE", "full");
     ffi_util::set_up_crash_report();
     netsim_logger::init("netsimd");
     let netsimd_args = get_netsimd_args(argc, argv);
@@ -93,19 +95,19 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
     }
 
     // Log where netsim artifacts are located
-    info!("netsim artifacts path: {}", netsimd_temp_dir_string());
+    info!("netsim artifacts path: {:?}", netsimd_temp_dir());
 
     // Log all args
     info!("{:#?}", args);
 
     if !args.logtostderr {
-        cxx::let_cxx_string!(netsimd_temp_dir = netsimd_temp_dir_string());
-        cxx::let_cxx_string!(
-            netsimd_instance_name = get_instance_name(args.instance, args.connector_instance)
-        );
-        ffi_util::redirect_std_stream(&netsimd_temp_dir, &netsimd_instance_name);
+        if let Err(err) =
+            redirect_std_stream(&get_instance_name(args.instance, args.connector_instance))
+        {
+            error!("{err:?}");
+        }
         // Duplicating the previous two logs to be included in netsim_stderr.log
-        info!("netsim artifacts path: {}", netsimd_temp_dir_string());
+        info!("netsim artifacts path: {:?}", netsimd_temp_dir());
         info!("{:#?}", args);
     }
 

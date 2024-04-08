@@ -852,7 +852,7 @@ pub mod chip {
     pub struct Radio {
         // message fields
         // @@protoc_insertion_point(field:netsim.model.Chip.Radio.state)
-        pub state: ::protobuf::EnumOrUnknown<super::State>,
+        pub state: ::std::option::Option<bool>,
         // @@protoc_insertion_point(field:netsim.model.Chip.Radio.range)
         pub range: f32,
         // @@protoc_insertion_point(field:netsim.model.Chip.Radio.tx_count)
@@ -878,7 +878,7 @@ pub mod chip {
         pub(in super) fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
             let mut fields = ::std::vec::Vec::with_capacity(4);
             let mut oneofs = ::std::vec::Vec::with_capacity(0);
-            fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
                 "state",
                 |m: &Radio| { &m.state },
                 |m: &mut Radio| { &mut m.state },
@@ -917,7 +917,7 @@ pub mod chip {
             while let Some(tag) = is.read_raw_tag_or_eof()? {
                 match tag {
                     8 => {
-                        self.state = is.read_enum_or_unknown()?;
+                        self.state = ::std::option::Option::Some(is.read_bool()?);
                     },
                     21 => {
                         self.range = is.read_float()?;
@@ -940,8 +940,8 @@ pub mod chip {
         #[allow(unused_variables)]
         fn compute_size(&self) -> u64 {
             let mut my_size = 0;
-            if self.state != ::protobuf::EnumOrUnknown::new(super::State::UNKNOWN) {
-                my_size += ::protobuf::rt::int32_size(1, self.state.value());
+            if let Some(v) = self.state {
+                my_size += 1 + 1;
             }
             if self.range != 0. {
                 my_size += 1 + 4;
@@ -958,8 +958,8 @@ pub mod chip {
         }
 
         fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
-            if self.state != ::protobuf::EnumOrUnknown::new(super::State::UNKNOWN) {
-                os.write_enum(1, ::protobuf::EnumOrUnknown::value(&self.state))?;
+            if let Some(v) = self.state {
+                os.write_bool(1, v)?;
             }
             if self.range != 0. {
                 os.write_float(2, self.range)?;
@@ -987,7 +987,7 @@ pub mod chip {
         }
 
         fn clear(&mut self) {
-            self.state = ::protobuf::EnumOrUnknown::new(super::State::UNKNOWN);
+            self.state = ::std::option::Option::None;
             self.range = 0.;
             self.tx_count = 0;
             self.rx_count = 0;
@@ -996,7 +996,7 @@ pub mod chip {
 
         fn default_instance() -> &'static Radio {
             static instance: Radio = Radio {
-                state: ::protobuf::EnumOrUnknown::from_i32(0),
+                state: ::std::option::Option::None,
                 range: 0.,
                 tx_count: 0,
                 rx_count: 0,
@@ -2743,7 +2743,7 @@ pub struct Device {
     // @@protoc_insertion_point(field:netsim.model.Device.name)
     pub name: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.model.Device.visible)
-    pub visible: ::protobuf::EnumOrUnknown<State>,
+    pub visible: ::std::option::Option<bool>,
     // @@protoc_insertion_point(field:netsim.model.Device.position)
     pub position: ::protobuf::MessageField<Position>,
     // @@protoc_insertion_point(field:netsim.model.Device.orientation)
@@ -2779,7 +2779,7 @@ impl Device {
             |m: &Device| { &m.name },
             |m: &mut Device| { &mut m.name },
         ));
-        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "visible",
             |m: &Device| { &m.visible },
             |m: &mut Device| { &mut m.visible },
@@ -2824,7 +2824,7 @@ impl ::protobuf::Message for Device {
                     self.name = is.read_string()?;
                 },
                 24 => {
-                    self.visible = is.read_enum_or_unknown()?;
+                    self.visible = ::std::option::Option::Some(is.read_bool()?);
                 },
                 34 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.position)?;
@@ -2853,8 +2853,8 @@ impl ::protobuf::Message for Device {
         if !self.name.is_empty() {
             my_size += ::protobuf::rt::string_size(2, &self.name);
         }
-        if self.visible != ::protobuf::EnumOrUnknown::new(State::UNKNOWN) {
-            my_size += ::protobuf::rt::int32_size(3, self.visible.value());
+        if let Some(v) = self.visible {
+            my_size += 1 + 1;
         }
         if let Some(v) = self.position.as_ref() {
             let len = v.compute_size();
@@ -2880,8 +2880,8 @@ impl ::protobuf::Message for Device {
         if !self.name.is_empty() {
             os.write_string(2, &self.name)?;
         }
-        if self.visible != ::protobuf::EnumOrUnknown::new(State::UNKNOWN) {
-            os.write_enum(3, ::protobuf::EnumOrUnknown::value(&self.visible))?;
+        if let Some(v) = self.visible {
+            os.write_bool(3, v)?;
         }
         if let Some(v) = self.position.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
@@ -2911,7 +2911,7 @@ impl ::protobuf::Message for Device {
     fn clear(&mut self) {
         self.id = 0;
         self.name.clear();
-        self.visible = ::protobuf::EnumOrUnknown::new(State::UNKNOWN);
+        self.visible = ::std::option::Option::None;
         self.position.clear();
         self.orientation.clear();
         self.chips.clear();
@@ -2922,7 +2922,7 @@ impl ::protobuf::Message for Device {
         static instance: Device = Device {
             id: 0,
             name: ::std::string::String::new(),
-            visible: ::protobuf::EnumOrUnknown::from_i32(0),
+            visible: ::std::option::Option::None,
             position: ::protobuf::MessageField::none(),
             orientation: ::protobuf::MessageField::none(),
             chips: ::std::vec::Vec::new(),
@@ -3262,7 +3262,7 @@ pub struct Capture {
     // @@protoc_insertion_point(field:netsim.model.Capture.device_name)
     pub device_name: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.model.Capture.state)
-    pub state: ::protobuf::EnumOrUnknown<State>,
+    pub state: ::std::option::Option<bool>,
     // @@protoc_insertion_point(field:netsim.model.Capture.size)
     pub size: i32,
     // @@protoc_insertion_point(field:netsim.model.Capture.records)
@@ -3305,7 +3305,7 @@ impl Capture {
             |m: &Capture| { &m.device_name },
             |m: &mut Capture| { &mut m.device_name },
         ));
-        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "state",
             |m: &Capture| { &m.state },
             |m: &mut Capture| { &mut m.state },
@@ -3358,7 +3358,7 @@ impl ::protobuf::Message for Capture {
                     self.device_name = is.read_string()?;
                 },
                 32 => {
-                    self.state = is.read_enum_or_unknown()?;
+                    self.state = ::std::option::Option::Some(is.read_bool()?);
                 },
                 40 => {
                     self.size = is.read_int32()?;
@@ -3393,8 +3393,8 @@ impl ::protobuf::Message for Capture {
         if !self.device_name.is_empty() {
             my_size += ::protobuf::rt::string_size(3, &self.device_name);
         }
-        if self.state != ::protobuf::EnumOrUnknown::new(State::UNKNOWN) {
-            my_size += ::protobuf::rt::int32_size(4, self.state.value());
+        if let Some(v) = self.state {
+            my_size += 1 + 1;
         }
         if self.size != 0 {
             my_size += ::protobuf::rt::int32_size(5, self.size);
@@ -3424,8 +3424,8 @@ impl ::protobuf::Message for Capture {
         if !self.device_name.is_empty() {
             os.write_string(3, &self.device_name)?;
         }
-        if self.state != ::protobuf::EnumOrUnknown::new(State::UNKNOWN) {
-            os.write_enum(4, ::protobuf::EnumOrUnknown::value(&self.state))?;
+        if let Some(v) = self.state {
+            os.write_bool(4, v)?;
         }
         if self.size != 0 {
             os.write_int32(5, self.size)?;
@@ -3459,7 +3459,7 @@ impl ::protobuf::Message for Capture {
         self.id = 0;
         self.chip_kind = ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED);
         self.device_name.clear();
-        self.state = ::protobuf::EnumOrUnknown::new(State::UNKNOWN);
+        self.state = ::std::option::Option::None;
         self.size = 0;
         self.records = 0;
         self.timestamp.clear();
@@ -3472,7 +3472,7 @@ impl ::protobuf::Message for Capture {
             id: 0,
             chip_kind: ::protobuf::EnumOrUnknown::from_i32(0),
             device_name: ::std::string::String::new(),
-            state: ::protobuf::EnumOrUnknown::from_i32(0),
+            state: ::std::option::Option::None,
             size: 0,
             records: 0,
             timestamp: ::protobuf::MessageField::none(),
@@ -3570,64 +3570,6 @@ impl PhyKind {
     }
 }
 
-#[derive(Clone,Copy,PartialEq,Eq,Debug,Hash)]
-// @@protoc_insertion_point(enum:netsim.model.State)
-pub enum State {
-    // @@protoc_insertion_point(enum_value:netsim.model.State.UNKNOWN)
-    UNKNOWN = 0,
-    // @@protoc_insertion_point(enum_value:netsim.model.State.ON)
-    ON = 1,
-    // @@protoc_insertion_point(enum_value:netsim.model.State.OFF)
-    OFF = 2,
-}
-
-impl ::protobuf::Enum for State {
-    const NAME: &'static str = "State";
-
-    fn value(&self) -> i32 {
-        *self as i32
-    }
-
-    fn from_i32(value: i32) -> ::std::option::Option<State> {
-        match value {
-            0 => ::std::option::Option::Some(State::UNKNOWN),
-            1 => ::std::option::Option::Some(State::ON),
-            2 => ::std::option::Option::Some(State::OFF),
-            _ => ::std::option::Option::None
-        }
-    }
-
-    const VALUES: &'static [State] = &[
-        State::UNKNOWN,
-        State::ON,
-        State::OFF,
-    ];
-}
-
-impl ::protobuf::EnumFull for State {
-    fn enum_descriptor() -> ::protobuf::reflect::EnumDescriptor {
-        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::EnumDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().enum_by_package_relative_name("State").unwrap()).clone()
-    }
-
-    fn descriptor(&self) -> ::protobuf::reflect::EnumValueDescriptor {
-        let index = *self as usize;
-        Self::enum_descriptor().value_by_index(index)
-    }
-}
-
-impl ::std::default::Default for State {
-    fn default() -> Self {
-        State::UNKNOWN
-    }
-}
-
-impl State {
-    fn generated_enum_descriptor_data() -> ::protobuf::reflect::GeneratedEnumDescriptorData {
-        ::protobuf::reflect::GeneratedEnumDescriptorData::new::<State>("State")
-    }
-}
-
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x12netsim/model.proto\x12\x0cnetsim.model\x1a\x13netsim/common.proto\
     \x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1drootcanal/configuration.p\
@@ -3635,7 +3577,7 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x01y\x18\x02\x20\x01(\x02R\x01y\x12\x0c\n\x01z\x18\x03\x20\x01(\x02R\
     \x01z\"I\n\x0bOrientation\x12\x10\n\x03yaw\x18\x01\x20\x01(\x02R\x03yaw\
     \x12\x14\n\x05pitch\x18\x02\x20\x01(\x02R\x05pitch\x12\x12\n\x04roll\x18\
-    \x03\x20\x01(\x02R\x04roll\"\xa4\x0e\n\x04Chip\x12+\n\x04kind\x18\x01\
+    \x03\x20\x01(\x02R\x04roll\"\x9e\x0e\n\x04Chip\x12+\n\x04kind\x18\x01\
     \x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x0e\n\x02id\x18\
     \x02\x20\x01(\rR\x02id\x12\x12\n\x04name\x18\x03\x20\x01(\tR\x04name\x12\
     \"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cprodu\
@@ -3644,75 +3586,74 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x20\x01(\x0b2\x1c.netsim.model.Chip.BleBeaconH\0R\tbleBeacon\x12,\n\x03\
     uwb\x18\x07\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x03uwb\x12.\n\
     \x04wifi\x18\x08\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x04wifi\
-    \x1a~\n\x05Radio\x12)\n\x05state\x18\x01\x20\x01(\x0e2\x13.netsim.model.\
-    StateR\x05state\x12\x14\n\x05range\x18\x02\x20\x01(\x02R\x05range\x12\
-    \x19\n\x08tx_count\x18\x03\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_coun\
-    t\x18\x04\x20\x01(\x05R\x07rxCount\x1a\xdc\x01\n\tBluetooth\x127\n\nlow_\
-    energy\x18\x01\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\tlowEnergy\x12\
-    2\n\x07classic\x18\x02\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\x07cla\
-    ssic\x12\x18\n\x07address\x18\x03\x20\x01(\tR\x07address\x12H\n\rbt_prop\
-    erties\x18\x04\x20\x01(\x0b2#.rootcanal.configuration.ControllerR\x0cbtP\
-    roperties\x1a\xcf\x08\n\tBleBeacon\x12,\n\x02bt\x18\x01\x20\x01(\x0b2\
-    \x1c.netsim.model.Chip.BluetoothR\x02bt\x12\x18\n\x07address\x18\x02\x20\
-    \x01(\tR\x07address\x12J\n\x08settings\x18\x03\x20\x01(\x0b2..netsim.mod\
-    el.Chip.BleBeacon.AdvertiseSettingsR\x08settings\x12E\n\x08adv_data\x18\
-    \x04\x20\x01(\x0b2*.netsim.model.Chip.BleBeacon.AdvertiseDataR\x07advDat\
-    a\x12O\n\rscan_response\x18\x05\x20\x01(\x0b2*.netsim.model.Chip.BleBeac\
-    on.AdvertiseDataR\x0cscanResponse\x1a\xee\x03\n\x11AdvertiseSettings\x12\
-    e\n\x0eadvertise_mode\x18\x01\x20\x01(\x0e2<.netsim.model.Chip.BleBeacon\
-    .AdvertiseSettings.AdvertiseModeH\0R\radvertiseMode\x12$\n\x0cmillisecon\
-    ds\x18\x02\x20\x01(\x04H\0R\x0cmilliseconds\x12g\n\x0etx_power_level\x18\
-    \x03\x20\x01(\x0e2?.netsim.model.Chip.BleBeacon.AdvertiseSettings.Advert\
-    iseTxPowerH\x01R\x0ctxPowerLevel\x12\x12\n\x03dbm\x18\x04\x20\x01(\x05H\
-    \x01R\x03dbm\x12\x1c\n\tscannable\x18\x05\x20\x01(\x08R\tscannable\x12\
-    \x18\n\x07timeout\x18\x06\x20\x01(\x04R\x07timeout\"=\n\rAdvertiseMode\
-    \x12\r\n\tLOW_POWER\x10\0\x12\x0c\n\x08BALANCED\x10\x01\x12\x0f\n\x0bLOW\
-    _LATENCY\x10\x02\"@\n\x10AdvertiseTxPower\x12\r\n\tULTRA_LOW\x10\0\x12\
-    \x07\n\x03LOW\x10\x01\x12\n\n\x06MEDIUM\x10\x02\x12\x08\n\x04HIGH\x10\
-    \x03B\n\n\x08intervalB\n\n\x08tx_power\x1a\xa4\x02\n\rAdvertiseData\x12.\
-    \n\x13include_device_name\x18\x01\x20\x01(\x08R\x11includeDeviceName\x12\
-    3\n\x16include_tx_power_level\x18\x02\x20\x01(\x08R\x13includeTxPowerLev\
-    el\x12+\n\x11manufacturer_data\x18\x03\x20\x01(\x0cR\x10manufacturerData\
-    \x12N\n\x08services\x18\x04\x20\x03(\x0b22.netsim.model.Chip.BleBeacon.A\
-    dvertiseData.ServiceR\x08services\x1a1\n\x07Service\x12\x12\n\x04uuid\
-    \x18\x01\x20\x01(\tR\x04uuid\x12\x12\n\x04data\x18\x02\x20\x01(\x0cR\x04\
-    dataB\x06\n\x04chip\"\xdd\x04\n\nChipCreate\x12+\n\x04kind\x18\x01\x20\
-    \x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x18\n\x07address\x18\
-    \x02\x20\x01(\tR\x07address\x12\x12\n\x04name\x18\x03\x20\x01(\tR\x04nam\
-    e\x12\"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\x0cmanufacturer\x12!\n\x0c\
-    product_name\x18\x05\x20\x01(\tR\x0bproductName\x12I\n\nble_beacon\x18\
-    \x06\x20\x01(\x0b2(.netsim.model.ChipCreate.BleBeaconCreateH\0R\tbleBeac\
-    on\x12H\n\rbt_properties\x18\x07\x20\x01(\x0b2#.rootcanal.configuration.\
-    ControllerR\x0cbtProperties\x1a\x8f\x02\n\x0fBleBeaconCreate\x12\x18\n\
-    \x07address\x18\x01\x20\x01(\tR\x07address\x12J\n\x08settings\x18\x03\
-    \x20\x01(\x0b2..netsim.model.Chip.BleBeacon.AdvertiseSettingsR\x08settin\
-    gs\x12E\n\x08adv_data\x18\x04\x20\x01(\x0b2*.netsim.model.Chip.BleBeacon\
-    .AdvertiseDataR\x07advData\x12O\n\rscan_response\x18\x05\x20\x01(\x0b2*.\
-    netsim.model.Chip.BleBeacon.AdvertiseDataR\x0cscanResponseB\x06\n\x04chi\
-    p\"\xf6\x01\n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x12\
-    \x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x12-\n\x07visible\x18\x03\x20\
-    \x01(\x0e2\x13.netsim.model.StateR\x07visible\x122\n\x08position\x18\x04\
+    \x1ax\n\x05Radio\x12\x19\n\x05state\x18\x01\x20\x01(\x08H\0R\x05state\
+    \x88\x01\x01\x12\x14\n\x05range\x18\x02\x20\x01(\x02R\x05range\x12\x19\n\
+    \x08tx_count\x18\x03\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_count\x18\
+    \x04\x20\x01(\x05R\x07rxCountB\x08\n\x06_state\x1a\xdc\x01\n\tBluetooth\
+    \x127\n\nlow_energy\x18\x01\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\t\
+    lowEnergy\x122\n\x07classic\x18\x02\x20\x01(\x0b2\x18.netsim.model.Chip.\
+    RadioR\x07classic\x12\x18\n\x07address\x18\x03\x20\x01(\tR\x07address\
+    \x12H\n\rbt_properties\x18\x04\x20\x01(\x0b2#.rootcanal.configuration.Co\
+    ntrollerR\x0cbtProperties\x1a\xcf\x08\n\tBleBeacon\x12,\n\x02bt\x18\x01\
+    \x20\x01(\x0b2\x1c.netsim.model.Chip.BluetoothR\x02bt\x12\x18\n\x07addre\
+    ss\x18\x02\x20\x01(\tR\x07address\x12J\n\x08settings\x18\x03\x20\x01(\
+    \x0b2..netsim.model.Chip.BleBeacon.AdvertiseSettingsR\x08settings\x12E\n\
+    \x08adv_data\x18\x04\x20\x01(\x0b2*.netsim.model.Chip.BleBeacon.Advertis\
+    eDataR\x07advData\x12O\n\rscan_response\x18\x05\x20\x01(\x0b2*.netsim.mo\
+    del.Chip.BleBeacon.AdvertiseDataR\x0cscanResponse\x1a\xee\x03\n\x11Adver\
+    tiseSettings\x12e\n\x0eadvertise_mode\x18\x01\x20\x01(\x0e2<.netsim.mode\
+    l.Chip.BleBeacon.AdvertiseSettings.AdvertiseModeH\0R\radvertiseMode\x12$\
+    \n\x0cmilliseconds\x18\x02\x20\x01(\x04H\0R\x0cmilliseconds\x12g\n\x0etx\
+    _power_level\x18\x03\x20\x01(\x0e2?.netsim.model.Chip.BleBeacon.Advertis\
+    eSettings.AdvertiseTxPowerH\x01R\x0ctxPowerLevel\x12\x12\n\x03dbm\x18\
+    \x04\x20\x01(\x05H\x01R\x03dbm\x12\x1c\n\tscannable\x18\x05\x20\x01(\x08\
+    R\tscannable\x12\x18\n\x07timeout\x18\x06\x20\x01(\x04R\x07timeout\"=\n\
+    \rAdvertiseMode\x12\r\n\tLOW_POWER\x10\0\x12\x0c\n\x08BALANCED\x10\x01\
+    \x12\x0f\n\x0bLOW_LATENCY\x10\x02\"@\n\x10AdvertiseTxPower\x12\r\n\tULTR\
+    A_LOW\x10\0\x12\x07\n\x03LOW\x10\x01\x12\n\n\x06MEDIUM\x10\x02\x12\x08\n\
+    \x04HIGH\x10\x03B\n\n\x08intervalB\n\n\x08tx_power\x1a\xa4\x02\n\rAdvert\
+    iseData\x12.\n\x13include_device_name\x18\x01\x20\x01(\x08R\x11includeDe\
+    viceName\x123\n\x16include_tx_power_level\x18\x02\x20\x01(\x08R\x13inclu\
+    deTxPowerLevel\x12+\n\x11manufacturer_data\x18\x03\x20\x01(\x0cR\x10manu\
+    facturerData\x12N\n\x08services\x18\x04\x20\x03(\x0b22.netsim.model.Chip\
+    .BleBeacon.AdvertiseData.ServiceR\x08services\x1a1\n\x07Service\x12\x12\
+    \n\x04uuid\x18\x01\x20\x01(\tR\x04uuid\x12\x12\n\x04data\x18\x02\x20\x01\
+    (\x0cR\x04dataB\x06\n\x04chip\"\xdd\x04\n\nChipCreate\x12+\n\x04kind\x18\
+    \x01\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x18\n\x07addr\
+    ess\x18\x02\x20\x01(\tR\x07address\x12\x12\n\x04name\x18\x03\x20\x01(\tR\
+    \x04name\x12\"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\x0cmanufacturer\x12\
+    !\n\x0cproduct_name\x18\x05\x20\x01(\tR\x0bproductName\x12I\n\nble_beaco\
+    n\x18\x06\x20\x01(\x0b2(.netsim.model.ChipCreate.BleBeaconCreateH\0R\tbl\
+    eBeacon\x12H\n\rbt_properties\x18\x07\x20\x01(\x0b2#.rootcanal.configura\
+    tion.ControllerR\x0cbtProperties\x1a\x8f\x02\n\x0fBleBeaconCreate\x12\
+    \x18\n\x07address\x18\x01\x20\x01(\tR\x07address\x12J\n\x08settings\x18\
+    \x03\x20\x01(\x0b2..netsim.model.Chip.BleBeacon.AdvertiseSettingsR\x08se\
+    ttings\x12E\n\x08adv_data\x18\x04\x20\x01(\x0b2*.netsim.model.Chip.BleBe\
+    acon.AdvertiseDataR\x07advData\x12O\n\rscan_response\x18\x05\x20\x01(\
+    \x0b2*.netsim.model.Chip.BleBeacon.AdvertiseDataR\x0cscanResponseB\x06\n\
+    \x04chip\"\xf2\x01\n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\
+    \x12\x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x12\x1d\n\x07visible\x18\
+    \x03\x20\x01(\x08H\0R\x07visible\x88\x01\x01\x122\n\x08position\x18\x04\
     \x20\x01(\x0b2\x16.netsim.model.PositionR\x08position\x12;\n\x0borientat\
     ion\x18\x05\x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borientation\
-    \x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chips\"\
-    \xc3\x01\n\x0cDeviceCreate\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04name\
-    \x122\n\x08position\x18\x02\x20\x01(\x0b2\x16.netsim.model.PositionR\x08\
-    position\x12;\n\x0borientation\x18\x03\x20\x01(\x0b2\x19.netsim.model.Or\
-    ientationR\x0borientation\x12.\n\x05chips\x18\x04\x20\x03(\x0b2\x18.nets\
-    im.model.ChipCreateR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\
-    \x20\x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"\x99\x02\n\x07Captur\
-    e\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x124\n\tchip_kind\x18\x02\
-    \x20\x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x1f\n\x0bdevi\
-    ce_name\x18\x03\x20\x01(\tR\ndeviceName\x12)\n\x05state\x18\x04\x20\x01(\
-    \x0e2\x13.netsim.model.StateR\x05state\x12\x12\n\x04size\x18\x05\x20\x01\
-    (\x05R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\x07records\x12\
-    8\n\ttimestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttim\
-    estamp\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05valid*e\n\x07PhyKind\
-    \x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\
-    \n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\
-    \x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05*%\n\x05State\x12\x0b\n\x07\
-    UNKNOWN\x10\0\x12\x06\n\x02ON\x10\x01\x12\x07\n\x03OFF\x10\x02b\x06proto\
-    3\
+    \x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chipsB\
+    \n\n\x08_visible\"\xc3\x01\n\x0cDeviceCreate\x12\x12\n\x04name\x18\x01\
+    \x20\x01(\tR\x04name\x122\n\x08position\x18\x02\x20\x01(\x0b2\x16.netsim\
+    .model.PositionR\x08position\x12;\n\x0borientation\x18\x03\x20\x01(\x0b2\
+    \x19.netsim.model.OrientationR\x0borientation\x12.\n\x05chips\x18\x04\
+    \x20\x03(\x0b2\x18.netsim.model.ChipCreateR\x05chips\"7\n\x05Scene\x12.\
+    \n\x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.model.DeviceR\x07devices\
+    \"\x93\x02\n\x07Capture\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x124\n\
+    \tchip_kind\x18\x02\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKin\
+    d\x12\x1f\n\x0bdevice_name\x18\x03\x20\x01(\tR\ndeviceName\x12\x19\n\x05\
+    state\x18\x04\x20\x01(\x08H\0R\x05state\x88\x01\x01\x12\x12\n\x04size\
+    \x18\x05\x20\x01(\x05R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05\
+    R\x07records\x128\n\ttimestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf\
+    .TimestampR\ttimestamp\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05valid\
+    B\x08\n\x06_state*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BL\
+    UETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\
+    \x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\
+    \x10\x05b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -3749,9 +3690,8 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(chip::ble_beacon::AdvertiseData::generated_message_descriptor_data());
             messages.push(chip::ble_beacon::advertise_data::Service::generated_message_descriptor_data());
             messages.push(chip_create::BleBeaconCreate::generated_message_descriptor_data());
-            let mut enums = ::std::vec::Vec::with_capacity(4);
+            let mut enums = ::std::vec::Vec::with_capacity(3);
             enums.push(PhyKind::generated_enum_descriptor_data());
-            enums.push(State::generated_enum_descriptor_data());
             enums.push(chip::ble_beacon::advertise_settings::AdvertiseMode::generated_enum_descriptor_data());
             enums.push(chip::ble_beacon::advertise_settings::AdvertiseTxPower::generated_enum_descriptor_data());
             ::protobuf::reflect::GeneratedFileDescriptor::new_generated(
