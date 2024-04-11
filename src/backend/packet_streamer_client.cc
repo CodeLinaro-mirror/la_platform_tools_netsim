@@ -79,6 +79,9 @@ std::unique_ptr<android::base::ObservableProcess> RunNetsimd(
   std::vector<std::string> program_with_args{exe};
   if (options.no_cli_ui) program_with_args.push_back("--no-cli-ui");
   if (options.no_web_ui) program_with_args.push_back("--no-web-ui");
+  if (!options.host_dns.empty()) {
+    program_with_args.push_back("--host-dns=" + options.host_dns);
+  }
   for (auto flag : stringutils::Split(options.netsim_args, " "))
     program_with_args.push_back(std::string(flag));
 

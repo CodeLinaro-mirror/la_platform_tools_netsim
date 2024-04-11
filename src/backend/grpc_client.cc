@@ -48,6 +48,7 @@ uint32_t stream_id_max_ = 0;
 
 // Active StreamPacket calls
 std::unordered_map<uint32_t, std::unique_ptr<Stream>> streams_;
+std::unordered_map<uint32_t, grpc::ClientContext> contexts_;
 
 // Single connection to a server with multiple StreamPackets calls
 std::string server_;
@@ -77,8 +78,9 @@ uint32_t StreamPackets(const rust::String &server_rust) {
     BtsLog("grpc_client: multiple servers not supported");
     return -1;
   }
-  auto stream = stub_->StreamPackets(&context_);
-  streams_[++stream_id_max_] = std::move(stream);
+  // Each active gRPC call needs its own context
+  auto stream = stub_->StreamPackets(&contexts_[++stream_id_max_]);
+  streams_[stream_id_max_] = std::move(stream);
   BtsLog("Created packet streamer client to %s", server_.c_str());
   return stream_id_max_;
 }

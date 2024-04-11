@@ -12,21 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use netsim_proto::model::chip::Radio;
+use futures::{channel::mpsc::UnboundedSender, sink::SinkExt};
+use lazy_static::lazy_static;
+use pica::{Handle, Pica};
+
+use netsim_proto::model::chip::Radio as ProtoRadio;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 
-use std::sync::{Arc, Mutex};
-
 use crate::devices::chip::ChipIdentifier;
+use crate::echip::packet::handle_response_rust;
+use crate::uwb::ranging_estimator::{SharedState, UwbRangingEstimator};
+
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use super::{EmulatedChip, SharedEmulatedChip};
 
-#[cfg(feature = "cuttlefish")]
-#[allow(unused_imports)]
-use pica::Pica;
-
-type PicaIdentifier = u32;
+// TODO(b/331267949): Construct Manager struct for each echip module
+lazy_static! {
+    static ref PICA_HANDLE_TO_STATE: SharedState = SharedState::new();
+    static ref PICA: Arc<Mutex<Pica>> = Arc::new(Mutex::new(Pica::new(
+        Box::new(UwbRangingEstimator::new(PICA_HANDLE_TO_STATE.clone())),
+        None
+    )));
+    static ref PICA_RUNTIME: Arc<tokio::runtime::Runtime> =
+        Arc::new(tokio::runtime::Runtime::new().unwrap());
+}
 
 /// Parameters for creating UWB chips
 pub struct CreateParams {
@@ -35,48 +47,97 @@ pub struct CreateParams {
 
 /// UWB struct will keep track of pica_id
 pub struct Uwb {
-    pica_id: PicaIdentifier,
+    chip_id: ChipIdentifier,
+    pica_id: Handle,
+    uci_stream_writer: UnboundedSender<Vec<u8>>,
+    state: bool,
+    tx_count: i32,
+    rx_count: i32, // TODO(b/330788870): Increment rx_count after handle_response_rust
 }
 
 impl EmulatedChip for Uwb {
     fn handle_request(&self, packet: &[u8]) {
-        log::info!("{packet:?}");
+        // TODO(b/330788870): Increment tx_count
+        self.uci_stream_writer
+            .unbounded_send(packet.into())
+            .expect("UciStream Receiver Disconnected");
     }
 
     fn reset(&mut self) {
-        // TODO(b/321790942): Reset chip state in pica
-        log::info!("Reset Uwb Chip for pica_id: {}", self.pica_id)
+        self.state = true;
+        self.tx_count = 0;
+        self.rx_count = 0;
     }
 
     fn get(&self) -> ProtoChip {
         let mut chip_proto = ProtoChip::new();
-        // TODO(b/321790942): Get the chip state from pica
-        let uwb_proto = Radio::new();
+        let uwb_proto = ProtoRadio {
+            state: Some(self.state),
+            tx_count: self.tx_count,
+            rx_count: self.rx_count,
+            ..Default::default()
+        };
         chip_proto.mut_uwb().clone_from(&uwb_proto);
         chip_proto
     }
 
-    fn patch(&mut self, chip: &ProtoChip) {
-        // TODO(b/321790942): Patch the chip state through pica
-        log::info!("Patch Uwb Chip for pica_id: {}", self.pica_id);
+    fn patch(&mut self, _chip: &ProtoChip) {
+        // TODO(b/330789027): Patch the state of UWB chip
+        log::info!("Patch Uwb Chip for chip_id: {}", self.chip_id);
     }
 
     fn remove(&mut self) {
-        // TODO(b/321790942): Remove the chip information from pica
-        log::info!("Remove Uwb Chip for pica_id: {}", self.pica_id);
+        PICA_HANDLE_TO_STATE.remove(&self.pica_id);
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
         let mut stats_proto = ProtoRadioStats::new();
         stats_proto.set_duration_secs(duration_secs);
         stats_proto.set_kind(netsim_radio_stats::Kind::UWB);
+        let chip_proto = self.get();
+        if chip_proto.has_uwb() {
+            stats_proto.set_tx_count(chip_proto.uwb().tx_count);
+            stats_proto.set_rx_count(chip_proto.uwb().rx_count);
+        }
         vec![stats_proto]
     }
 }
 
-pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
-    // TODO(b/321790942): Add the device into pica and obtain the pica identifier
-    let echip = Uwb { pica_id: chip_id };
+pub fn uwb_start() {
+    // TODO: Provide TcpStream as UWB connector
+    let _ = thread::Builder::new().name("pica_service".to_string()).spawn(move || {
+        log::info!("PICA STARTED");
+        let _guard = PICA_RUNTIME.enter();
+        futures::executor::block_on(pica::run(&PICA))
+    });
+}
+
+pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
+    let (uci_stream_sender, uci_stream_receiver) = futures::channel::mpsc::unbounded();
+    let (uci_sink_sender, uci_sink_receiver) = futures::channel::mpsc::unbounded();
+    let _guard = PICA_RUNTIME.enter();
+    let pica_id = PICA
+        .lock()
+        .unwrap()
+        .add_device(Box::pin(uci_stream_receiver), Box::pin(uci_sink_sender.sink_err_into()))
+        .unwrap();
+    PICA_HANDLE_TO_STATE.insert(pica_id, chip_id);
+    let echip = Uwb {
+        chip_id,
+        pica_id,
+        uci_stream_writer: uci_stream_sender,
+        state: true,
+        tx_count: 0,
+        rx_count: 0,
+    };
+
+    // Thread for obtaining packet from pica and invoking handle_response_rust
+    let _ =
+        thread::Builder::new().name(format!("uwb_packet_response_{chip_id}")).spawn(move || {
+            for packet in futures::executor::block_on_stream(uci_sink_receiver) {
+                handle_response_rust(chip_id, packet.into());
+            }
+        });
     SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))
 }
 
@@ -95,10 +156,16 @@ mod tests {
         assert!(shared_echip.lock().get().has_uwb());
     }
 
-    #[ignore = "TODO: Check if reset properly sets the state to true"]
     #[test]
     fn test_uwb_reset() {
-        todo!()
+        // TODO(b/330789027): Patch the state of UWB echip before reset
+        let shared_echip = new_uwb_shared_echip();
+        shared_echip.lock().reset();
+        let binding = shared_echip.lock().get();
+        let radio = binding.uwb();
+        assert_eq!(radio.rx_count, 0);
+        assert_eq!(radio.tx_count, 0);
+        assert_eq!(radio.state, Some(true));
     }
 
     #[test]

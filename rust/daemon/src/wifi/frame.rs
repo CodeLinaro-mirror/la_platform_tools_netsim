@@ -13,12 +13,9 @@
 // limitations under the License.
 
 use super::packets::ieee80211::{Ieee80211, MacAddress};
-use super::packets::mac80211_hwsim::{
-    HwsimAttr, HwsimCmd, HwsimMsg, HwsimMsgHdr, TxRate, TxRateFlag,
-};
+use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, TxRate};
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
-use anyhow::{anyhow, Context};
-use log::{info, warn};
+use anyhow::Context;
 
 /// Parser for the hwsim Frame command (HWSIM_CMD_FRAME).
 ///
@@ -50,7 +47,7 @@ impl Frame {
     // found.
     pub fn parse(msg: &HwsimMsg) -> anyhow::Result<Frame> {
         // Only expected to be called with HwsimCmd::Frame
-        if (msg.get_hwsim_hdr().hwsim_cmd != HwsimCmd::Frame) {
+        if msg.get_hwsim_hdr().hwsim_cmd != HwsimCmd::Frame {
             panic!("Invalid hwsim_cmd");
         }
         let attrs = HwsimAttrSet::parse(msg.get_attributes()).context("HwsimAttrSet")?;

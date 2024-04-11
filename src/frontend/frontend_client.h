@@ -33,7 +33,7 @@ class ClientResult {
  public:
   ClientResult(bool is_ok, const std::string &err,
                const std::vector<unsigned char> &byte_vec)
-      : is_ok_(is_ok), err_(err), byte_vec_(byte_vec){};
+      : is_ok_(is_ok), err_(err), byte_vec_(byte_vec) {};
 
   bool IsOk() const { return is_ok_; };
   rust::String Err() const { return err_; };
@@ -47,7 +47,7 @@ class ClientResult {
 
 class FrontendClient {
  public:
-  virtual ~FrontendClient(){};
+  virtual ~FrontendClient() {};
   virtual std::unique_ptr<ClientResult> SendGrpc(
       frontend::GrpcMethod const &grpc_method,
       rust::Vec<rust::u8> const &request_byte_vec) const = 0;
