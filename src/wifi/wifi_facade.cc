@@ -20,6 +20,7 @@
 #include "netsim/config.pb.h"
 #include "rust/cxx.h"
 #include "util/log.h"
+#include "util/string_utils.h"
 #ifdef NETSIM_ANDROID_EMULATOR
 #include "android-qemu2-glue/emulation/WifiService.h"
 #endif
@@ -55,6 +56,7 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes) {
       .ssid = config.hostapd_options().ssid(),
       .passwd = config.hostapd_options().passwd()};
 
+  auto host_dns = stringutils::Split(config.slirp_options().host_dns(), ",");
   android::qemu2::SlirpOptions slirpOpts = {
       .disabled = config.slirp_options().disabled(),
       .ipv4 = (config.slirp_options().has_ipv4() ? config.slirp_options().ipv4()
@@ -74,8 +76,12 @@ void Start(const rust::Slice<::std::uint8_t const> proto_bytes) {
       .dhcpstart = config.slirp_options().dhcpstart(),
       .dns = config.slirp_options().dns(),
       .dns6 = config.slirp_options().dns6(),
+      .host_dns = host_dns,
   };
-
+  if (!config.slirp_options().host_dns().empty()) {
+    BtsLogInfo("Host DNS server: %s",
+               config.slirp_options().host_dns().c_str());
+  }
   auto builder = android::qemu2::WifiService::Builder()
                      .withHostapd(hostapd)
                      .withSlirp(slirpOpts)

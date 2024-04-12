@@ -23,7 +23,7 @@ android_test {
         "src/**/NsdHelper.java",
     ],
     sdk_version: "current",
-    min_sdk_version: "31",
+    min_sdk_version: "34",
     static_libs: [
         "androidx.test.runner",
     ],

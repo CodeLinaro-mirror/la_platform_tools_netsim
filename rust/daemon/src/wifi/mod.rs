@@ -15,8 +15,6 @@
 // [cfg(test)] gets compiled during local Rust unit tests
 // [cfg(not(test))] avoids getting compiled during local Rust unit tests
 
-#![allow(unused)]
-
 pub(crate) mod frame;
 pub(crate) mod hwsim_attr_set;
 pub(crate) mod medium;

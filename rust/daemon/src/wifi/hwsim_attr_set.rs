@@ -14,14 +14,10 @@
 
 use std::fmt;
 
-use super::packets::ieee80211::{parse_mac_address, MacAddress};
-use super::packets::mac80211_hwsim::{
-    self, HwsimAttr, HwsimAttrChild::*, HwsimCmd, HwsimMsg, HwsimMsgHdr, TxRate, TxRateFlag,
-};
-use super::packets::netlink::{NlAttrHdr, NlMsgHdr};
-use anyhow::Error;
-use anyhow::{anyhow, Context};
-use log::{info, warn};
+use super::packets::ieee80211::MacAddress;
+use super::packets::mac80211_hwsim::{self, HwsimAttr, HwsimAttrChild::*, TxRate, TxRateFlag};
+use super::packets::netlink::NlAttrHdr;
+use anyhow::anyhow;
 use pdl_runtime::Packet;
 use std::option::Option;
 
@@ -203,7 +199,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    pub fn build(mut self) -> anyhow::Result<HwsimAttrSet> {
+    pub fn build(self) -> anyhow::Result<HwsimAttrSet> {
         Ok(HwsimAttrSet {
             transmitter: self.transmitter,
             receiver: self.receiver,
@@ -222,7 +218,7 @@ impl HwsimAttrSetBuilder {
 
 impl fmt::Display for HwsimAttrSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{ ");
+        write!(f, "{{ ")?;
         self.transmitter.map(|v| write!(f, "transmitter: {}, ", v));
         self.receiver.map(|v| write!(f, "receiver: {}, ", v));
         self.cookie.map(|v| write!(f, "cookie: {}, ", v));
@@ -233,7 +229,7 @@ impl fmt::Display for HwsimAttrSet {
         self.freq.map(|v| write!(f, "freq: {}, ", v));
         self.tx_info.as_ref().map(|v| write!(f, "tx_info: {:?}, ", &v));
         self.tx_info_flags.as_ref().map(|v| write!(f, "tx_info_flags: {:?}, ", &v));
-        write!(f, "}}");
+        write!(f, "}}")?;
         Ok(())
     }
 }
@@ -269,7 +265,7 @@ impl HwsimAttrSet {
     ) -> anyhow::Result<HwsimAttrSet> {
         let mut index: usize = 0;
         let mut builder = HwsimAttrSet::builder();
-        while (index < attributes.len()) {
+        while index < attributes.len() {
             // Parse a generic netlink attribute to get the size
             let nla_hdr = NlAttrHdr::parse(&attributes[index..index + 4]).unwrap();
             let nla_len = nla_hdr.nla_len as usize;
@@ -308,6 +304,10 @@ impl HwsimAttrSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wifi::packets::ieee80211::parse_mac_address;
+    use crate::wifi::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg};
+    use anyhow::Context;
+    use anyhow::Error;
 
     // Validate `HwsimAttrSet` attribute parsing from byte vector.
     #[test]

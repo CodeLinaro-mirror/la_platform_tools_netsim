@@ -14,8 +14,10 @@
 
 //! ieee80211 frames
 
+// TODO: only allow the warnings for the included code
 #![allow(clippy::all)]
 #![allow(missing_docs)]
+#![allow(unused)]
 include!(concat!(env!("OUT_DIR"), "/ieee80211_packets.rs"));
 
 use anyhow::anyhow;
@@ -68,7 +70,7 @@ impl From<MacAddress> for [u8; 6] {
 impl MacAddress {
     pub fn is_multicast(&self) -> bool {
         let addr = u64::to_le_bytes(self.0);
-        addr[0] == 0x1
+        (addr[0] & 0x1) == 1
     }
 
     pub fn is_broadcast(&self) -> bool {
@@ -361,6 +363,9 @@ mod tests {
         // Multicast MAC address: 01:00:5E:00:00:FB
         let mdns_mac_address = parse_mac_address("01:00:5e:00:00:fb").unwrap();
         assert!(mdns_mac_address.is_multicast());
+        // Broadcast MAC address: ff:ff:ff:ff:ff:ff
+        let broadcast_mac_address = parse_mac_address("ff:ff:ff:ff:ff:ff").unwrap();
+        assert!(broadcast_mac_address.is_multicast());
         // Source address: Cisco_71:20:ce (00:0b:85:71:20:ce)
         let non_mdns_mac_address = parse_mac_address("00:0b:85:71:20:ce").unwrap();
         assert!(!non_mdns_mac_address.is_multicast());

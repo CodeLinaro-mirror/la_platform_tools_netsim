@@ -35,6 +35,7 @@ std::string_view RTrim(const std::string_view);
 std::string_view Trim(const std::string_view);
 std::vector<std::string_view> Split(const std::string_view,
                                     const std::string_view &);
+std::vector<std::string> Split(const std::string, const std::string &);
 inline std::string AsString(std::string_view v) { return {v.data(), v.size()}; }
 
 }  // namespace stringutils

@@ -39,6 +39,7 @@ message SlirpOptions {
   string dhcpstart = 14;
   string dns = 15;
   string dns6 = 16;
+  string host_dns = 17;
 };
 
 message HostapdOptions {

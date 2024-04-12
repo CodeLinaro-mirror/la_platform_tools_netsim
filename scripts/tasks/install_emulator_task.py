@@ -14,28 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This python script allows the installation of emulator artifacts
-# fetched from the latest build in emu-master-dev.
-#
-# To run the script locally:
-#
-# 1. Build netsim with scripts/cmake_setup.py && ninja -C objs
-# 2. Run scripts/install_emulator.py
-#
-# This will put all the emulator artifacts into your objs directory
-#
-# For the case in buildbots, the artifacts are provided through build
-# chaining. The built_tools.py will invoke the following function:
-#
-# install_emulator(build_bot: bool, out_dir: str)
-#
-# Once the function has returned, the artifacts, including ToT
-# netsim artifacts, will be stored in EMULATOR_ARITFACT_PATH.
-# This path will be used for e2e integration tests.
-#
-# TODO: Add a flag --objs to copy emulator binaries into netsim-dev repo
-
-import argparse
 import glob
 import logging
 import os
@@ -46,19 +24,31 @@ import shutil
 import zipfile
 
 from environment import get_default_environment
+from tasks.task import Task
 from utils import (
     AOSP_ROOT,
     EMULATOR_ARTIFACT_PATH,
     binary_extension,
-    config_logging,
-    create_emulator_artifact_path,
-    log_system_info,
     run,
 )
 
 OBJS_DIR = AOSP_ROOT / "tools" / "netsim" / "objs"
 PLATFORM_SYSTEM = platform.system()
 PLATFORM_MACHINE = platform.machine()
+
+
+class InstallEmulatorTask(Task):
+
+  def __init__(self, args):
+    super().__init__("InstallEmulator")
+    self.buildbot = args.buildbot
+    self.out_dir = args.out_dir
+
+  def do_run(self):
+    install_emulator_manager = InstallEmulatorManager(
+        self.buildbot, self.out_dir
+    )
+    return install_emulator_manager.process()
 
 
 class InstallEmulatorManager:
@@ -70,20 +60,19 @@ class InstallEmulatorManager:
   both local and pre/post submit.
 
   Attributes:
-    build_bot: A boolean indicating if it's being invoked with Android Build
-      Bots
+    buildbot: A boolean indicating if it's being invoked with Android Build Bots
     out_dir: A str or None representing the directory of out/. This is priamrily
       used for Android Build Bots.
   """
 
-  def __init__(self, build_bot, out_dir):
+  def __init__(self, buildbot, out_dir):
     """Initializes the instances based on environment
 
     Args:
-      build_bot: Defines if it's being invoked with Build Bots
+      buildbot: Defines if it's being invoked with Build Bots
       out_dir: Defines the out directory of the build environment
     """
-    self.build_bot = build_bot
+    self.buildbot = buildbot
     self.out_dir = out_dir
 
   def __os_name_fetch(self):
@@ -103,7 +92,7 @@ class InstallEmulatorManager:
 
   def __prerequisites(self) -> bool:
     """Prerequisite checks for invalid cases"""
-    if self.build_bot:
+    if self.buildbot:
       # out_dir is not provided
       if not self.out_dir:
         logging.info("Error: please specify '--out_dir' when using buildbots")
@@ -113,7 +102,7 @@ class InstallEmulatorManager:
         logging.info(f"Error: {self.out_dir} does not exist")
         return False
     else:
-      # Without build_bots, this scripts is only runnable on Linux
+      # Without buildbots, this scripts is only runnable on Linux
       # TODO: support local builds for Mac and Windows
       if PLATFORM_SYSTEM != "Linux":
         logging.info("The local case only works for Linux")
@@ -125,8 +114,8 @@ class InstallEmulatorManager:
           and (OBJS_DIR / binary_extension("netsimd")).exists()
       ):
         logging.info(
-            "Please run 'scripts/cmake_setup.py && ninja -C objs'"
-            "before running this script"
+            "Please run 'scripts/build_tools.sh --Compile' "
+            "before running InstallEmulator"
         )
         return False
     return True
@@ -169,7 +158,7 @@ class InstallEmulatorManager:
     """Copy artifacts into desired location
 
     In the local case, the emulator artifacts get copied into objs/
-    In the build_bot case, the netsim artifacts get copied into
+    In the buildbot case, the netsim artifacts get copied into
       EMULATOR_ARTIFACT_PATH
 
     Note that the downloaded netsim artifacts are removed before copying.
@@ -184,7 +173,7 @@ class InstallEmulatorManager:
       else:
         os.remove(file)
     # Copy artifacts
-    if self.build_bot:
+    if self.buildbot:
       shutil.copytree(
           Path(self.out_dir) / "distribution" / "emulator",
           emulator_filepath,
@@ -215,7 +204,7 @@ class InstallEmulatorManager:
       return False
 
     # Artifact fetching for local case
-    if not self.build_bot:
+    if not self.buildbot:
       # Simulating the shell command
       run(
           [
@@ -240,35 +229,8 @@ class InstallEmulatorManager:
     self.__copy_artifacts()
 
     # Remove the EMULATOR_ARTIFACT_PATH in local case
-    if not self.build_bot:
+    if not self.buildbot:
       shutil.rmtree(EMULATOR_ARTIFACT_PATH, ignore_errors=True)
 
     logging.info("Emulator installation completed!")
     return True
-
-
-def main():
-  # log and EMULATOR_ARTIFACT_PATH setup
-  config_logging()
-  log_system_info()
-  create_emulator_artifact_path()
-
-  # Argument parsing
-  parser = argparse.ArgumentParser(description="Emulator installation script")
-  parser.add_argument(
-      "--build_bot",
-      action="store_true",
-      help="Checking the usage of build bots",
-  )
-  parser.add_argument("--out_dir", type=str, help="The output directory")
-  args = parser.parse_args()
-
-  # Install Emulator
-  install_emulator_manager = InstallEmulatorManager(
-      args.build_bot, args.out_dir
-  )
-  install_emulator_manager.process()
-
-
-if __name__ == "__main__":
-  main()
