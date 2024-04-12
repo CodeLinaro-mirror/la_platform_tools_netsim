@@ -64,6 +64,10 @@ pub struct NetsimdArgs {
     #[arg(long)]
     pub config: Option<String>,
 
+    /// Comma separated list of host DNS servers
+    #[arg(long)]
+    pub host_dns: Option<String>,
+
     /// Start with test beacons
     #[arg(long, alias = "test_beacons", overrides_with("no_test_beacons"))]
     pub test_beacons: bool,

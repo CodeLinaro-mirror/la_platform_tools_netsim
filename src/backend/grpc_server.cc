@@ -194,8 +194,16 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
           android::qemu2::libslirp_main_loop_wait(true);
         }
 #endif
+      } else if (chip_kind == common::ChipKind::UWB) {
+        if (!request.has_packet()) {
+          BtsLogWarn("grpc_server: unknown packet from chip_id: %d", chip_id);
+          continue;
+        }
+        auto packet = ToSharedVec(request.mutable_packet());
+        echip::HandleRequestCxx(chip_id, *packet,
+                                packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+
       } else {
-        // TODO: add UWB here
         BtsLogWarn("grpc_server: unknown chip_kind");
       }
     }

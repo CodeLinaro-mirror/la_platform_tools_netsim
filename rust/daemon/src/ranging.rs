@@ -90,9 +90,11 @@ pub struct Pose {
 
 impl Pose {
     #[allow(unused)]
-    fn new(x: f32, y: f32, z: f32, yaw: f32, pitch: f32, roll: f32) -> Self {
+    pub fn new(x: f32, y: f32, z: f32, yaw: f32, pitch: f32, roll: f32) -> Self {
         Pose {
-            position: Vec3::new(x, y, z),
+            // Converts x, y, z from meters to centimeters
+            position: Vec3::new(x * 100., y * 100., z * 100.),
+            // Converts roll, pitch, yaw from degrees to radians
             orientation: Quat::from_euler(
                 EulerRot::ZXY,
                 roll.to_radians(),
@@ -106,10 +108,7 @@ impl Pose {
 /// UWB Ranging Model for computing range, azimuth, and elevation
 /// The raning model brought from https://github.com/google/pica
 #[allow(unused)]
-pub fn compute_range_azimuth_elevation(
-    a: &Pose,
-    b: &Pose,
-) -> std::result::Result<(u16, i16, i8), String> {
+pub fn compute_range_azimuth_elevation(a: &Pose, b: &Pose) -> anyhow::Result<(u16, i16, i8)> {
     let delta = b.position - a.position;
     let distance = delta.length();
     let direction = a.orientation.mul_vec3(delta);
@@ -117,10 +116,10 @@ pub fn compute_range_azimuth_elevation(
     let elevation = elevation(direction).to_degrees().round();
 
     if !(-180. ..=180.).contains(&azimuth) {
-        return Err(format!("azimuth is not between -180 and 180. value: {azimuth}"));
+        return Err(anyhow::anyhow!("azimuth is not between -180 and 180. value: {azimuth}"));
     }
     if !(-90. ..=90.).contains(&elevation) {
-        return Err(format!("elevation is not between -90 and 90. value: {elevation}"));
+        return Err(anyhow::anyhow!("elevation is not between -90 and 90. value: {elevation}"));
     }
     Ok((f32::min(distance, u16::MAX as f32) as u16, azimuth as i16, elevation as i8))
 }
@@ -163,22 +162,22 @@ mod tests {
         {
             let b_pose = Pose::new(10.0, 0.0, 0.0, 0.0, 0.0, 0.0);
             let (range, _, _) = compute_range_azimuth_elevation(&a_pose, &b_pose).unwrap();
-            assert_eq!(range, 10);
+            assert_eq!(range, 1000);
         }
         {
             let b_pose = Pose::new(-10.0, 0.0, 0.0, 0.0, 0.0, 0.0);
             let (range, _, _) = compute_range_azimuth_elevation(&a_pose, &b_pose).unwrap();
-            assert_eq!(range, 10);
+            assert_eq!(range, 1000);
         }
         {
             let b_pose = Pose::new(10.0, 10.0, 0.0, 0.0, 0.0, 0.0);
             let (range, _, _) = compute_range_azimuth_elevation(&a_pose, &b_pose).unwrap();
-            assert_eq!(range, f32::sqrt(10. * 10. + 10. * 10.).round() as u16);
+            assert_eq!(range, f32::sqrt(2000000.).round() as u16);
         }
         {
             let b_pose = Pose::new(-10.0, -10.0, -10.0, 0.0, 0.0, 0.0);
             let (range, _, _) = compute_range_azimuth_elevation(&a_pose, &b_pose).unwrap();
-            assert_eq!(range, f32::sqrt(10. * 10. + 10. * 10. + 10. * 10.).round() as u16);
+            assert_eq!(range, f32::sqrt(3000000.).round() as u16);
         }
     }
 

@@ -32,6 +32,7 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /** Helper class for NsdManager. */
@@ -133,13 +134,13 @@ public final class NsdHelper {
   public void discoverTest() throws InterruptedException, IOException {
     DiscoveryListener listener = discoverServices();
     await(listener.serviceFound);
-    ResolveListener resolveListener = resolveServices(listener.service);
-    await(resolveListener.serviceResolved);
+    ServiceInfoCallback callback = resolveServices(listener.service);
+    await(callback.serviceResolved);
     CountDownLatch discoveryStopped = stopDiscovery(listener);
     await(discoveryStopped);
 
     // Set up connection.
-    NsdServiceInfo service = resolveListener.service;
+    NsdServiceInfo service = callback.service;
     Socket clientSocket = new Socket(service.getHost(), service.getPort());
 
     // Send ping message.
@@ -208,29 +209,26 @@ public final class NsdHelper {
     return discoveryListener;
   }
 
-  private ResolveListener resolveServices(NsdServiceInfo service) {
-    ResolveListener listener = new ResolveListener(serviceName);
+  private ServiceInfoCallback resolveServices(NsdServiceInfo service) {
+    ServiceInfoCallback callback = new ServiceInfoCallback(serviceName);
+    nsdManager.registerServiceInfoCallback(service, Executors.newSingleThreadExecutor(), callback);
 
-    // TODO: Deprecated as of API level 34. For API levels 34 and above, use
-    // registerServiceInfoCallback().
-    nsdManager.resolveService(service, listener);
-
-    return listener;
+    return callback;
   }
 
-  private static class ResolveListener implements NsdManager.ResolveListener {
+  private static class ServiceInfoCallback implements NsdManager.ServiceInfoCallback {
     CountDownLatch serviceResolved;
     NsdServiceInfo service;
 
     private String serviceName;
 
-    ResolveListener(String serviceName) {
+    ServiceInfoCallback(String serviceName) {
       serviceResolved = new CountDownLatch(1);
       this.serviceName = serviceName;
     }
 
     @Override
-    public void onServiceResolved(NsdServiceInfo serviceInfo) {
+    public void onServiceUpdated(NsdServiceInfo serviceInfo) {
       if (serviceInfo.getServiceName().equals(serviceName)) {
         service = serviceInfo;
         serviceResolved.countDown();
@@ -238,9 +236,15 @@ public final class NsdHelper {
     }
 
     @Override
-    public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
-      fail("Resolve failed");
+    public void onServiceInfoCallbackRegistrationFailed(int errorCode) {
+      fail("Callback registration failed");
     }
+
+    @Override
+    public void onServiceInfoCallbackUnregistered() {}
+
+    @Override
+    public void onServiceLost() {}
   }
 
   private CountDownLatch stopDiscovery(DiscoveryListener listener) {

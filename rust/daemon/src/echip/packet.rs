@@ -23,6 +23,7 @@ use crate::captures::captures_handler;
 use crate::devices::chip::ChipIdentifier;
 use crate::echip::get;
 
+use bytes::Bytes;
 use lazy_static::lazy_static;
 use log::{error, info, warn};
 use netsim_proto::hci_packet::hcipacket::PacketType;
@@ -114,6 +115,23 @@ pub fn handle_response(chip_id: ChipIdentifier, packet: &cxx::CxxVector<u8>, pac
     } else {
         warn!("handle_response: unknown chip_id: {chip_id}");
     };
+}
+
+// Handle response from rust libraries
+#[cfg(feature = "cuttlefish")]
+pub fn handle_response_rust(chip_id: ChipIdentifier, packet: Bytes) {
+    let packet_type = PacketType::HCI_PACKET_UNSPECIFIED.value() as u8;
+    captures_handler::handle_packet_response(chip_id, &packet, packet_type.into());
+
+    let mut binding = SENDERS.lock();
+    if let Some(responder) = binding.get(&chip_id) {
+        if responder.send(ResponsePacket { packet: packet.to_vec(), packet_type }).is_err() {
+            warn!("handle_response_rust: send failed for chip_id: {chip_id}");
+            binding.remove(&chip_id);
+        }
+    } else {
+        warn!("handle_response_rust: unknown chip_id: {chip_id}");
+    }
 }
 
 // Send HwsimCmd packets to guest OS.

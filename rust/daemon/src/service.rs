@@ -100,8 +100,7 @@ impl Service {
 
     /// Runs netsim gRPC server
     fn run_grpc_server(&self) -> Option<UniquePtr<GrpcServer>> {
-        // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge jobs.
-        // If set, use the fixed port for grpc server.
+        // If NETSIM_GRPC_PORT is set, use the fixed port for grpc server.
         let netsim_grpc_port =
             env::var("NETSIM_GRPC_PORT").map(|val| val.parse::<u32>().unwrap_or(0)).unwrap_or(0);
         let grpc_server = run_grpc_server_cxx(
@@ -117,10 +116,9 @@ impl Service {
 
     /// Runs netsim web server
     fn run_web_server(&self) -> Option<u16> {
-        // Environment variable "NETSIM_GRPC_PORT" is set in google3 forge jobs.
-        // If set, don't start http server.
-        let forge_job = env::var("NETSIM_GRPC_PORT").is_ok();
-        match !forge_job && !self.service_params.no_web_ui {
+        // If NETSIM_NO_WEB_SERVER is set, don't start http server.
+        let no_web_server = env::var("NETSIM_NO_WEB_SERVER").is_ok_and(|v| v == "1");
+        match !no_web_server && !self.service_params.no_web_ui {
             true => Some(run_http_server(self.service_params.instance_num)),
             false => None,
         }

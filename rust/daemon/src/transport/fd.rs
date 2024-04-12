@@ -26,7 +26,7 @@ use crate::ffi::ffi_transport;
 use lazy_static::lazy_static;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
-use netsim_proto::hci_packet::HCIPacket;
+use netsim_proto::hci_packet::{hcipacket::PacketType, HCIPacket};
 use netsim_proto::packet_streamer::PacketRequest;
 use netsim_proto::startup::{Chip as ChipProto, ChipInfo};
 use protobuf::{Enum, EnumOrUnknown, Message, MessageField};
@@ -85,8 +85,10 @@ struct FdTransport {
 
 impl Response for FdTransport {
     fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
-        let mut buffer = Vec::<u8>::with_capacity(packet.len() + 1);
-        buffer.push(packet_type);
+        let mut buffer = Vec::<u8>::new();
+        if packet_type != (PacketType::HCI_PACKET_UNSPECIFIED.value() as u8) {
+            buffer.push(packet_type);
+        }
         buffer.extend(packet);
         if let Err(e) = self.file.write_all(&buffer[..]) {
             error!("netsimd: error writing {}", e);
@@ -283,8 +285,11 @@ unsafe fn connector_fd_reader(fd_rx: i32, kind: ChipKindEnum, stream_id: u32) ->
                             );
                             break;
                         }
-                        Ok(uci::Packet { payload: _ }) => {
-                            // TODO: Compose PacketRequest.
+                        Ok(uci::Packet { payload }) => {
+                            let mut request = PacketRequest::new();
+                            request.set_packet(payload);
+                            let proto_bytes = request.write_to_bytes().unwrap();
+                            ffi_transport::write_packet_request(stream_id, &proto_bytes);
                         }
                     },
                     ChipKindEnum::BLUETOOTH => match h4::read_h4_packet(&mut rx) {
@@ -332,9 +337,13 @@ lazy_static! {
 fn connector_grpc_read_callback(stream_id: u32, proto_bytes: &[u8]) {
     let request = PacketRequest::parse_from_bytes(proto_bytes).unwrap();
 
-    let mut buffer = Vec::<u8>::with_capacity(request.hci_packet().packet.len() + 1);
-    buffer.push(request.hci_packet().packet_type.enum_value_or_default().value() as u8);
-    buffer.extend(&request.hci_packet().packet);
+    let mut buffer = Vec::<u8>::new();
+    if request.has_hci_packet() {
+        buffer.push(request.hci_packet().packet_type.enum_value_or_default().value() as u8);
+        buffer.extend(&request.hci_packet().packet);
+    } else if request.has_packet() {
+        buffer.extend(request.packet());
+    }
 
     if let Some(mut file_in) = CONNECTOR_FILES.read().unwrap().get(&stream_id) {
         if let Err(e) = file_in.write_all(&buffer[..]) {
@@ -361,7 +370,9 @@ fn connector_grpc_reader(chip_kind: u32, stream_id: u32, file_in: File) -> JoinH
                 }
                 binding.insert(stream_id, file_in);
             }
-            if chip_kind != ChipKindEnum::BLUETOOTH as u32 {
+            if (chip_kind != ChipKindEnum::BLUETOOTH as u32)
+                && (chip_kind != ChipKindEnum::UWB as u32)
+            {
                 warn!("Unable to register connector for chip type {}", chip_kind);
             }
             // Read packet from grpc and send to file_in.

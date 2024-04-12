@@ -31,7 +31,11 @@ use crate::{
 pub struct SharedEmulatedChip(pub Arc<Mutex<Box<dyn EmulatedChip + Send + Sync>>>);
 
 #[cfg(not(test))]
-use crate::echip::{bluetooth, uwb, wifi};
+use crate::echip::{bluetooth, wifi};
+
+// TODO(b/278268690): Add Pica Library to goldfish build
+#[cfg(feature = "cuttlefish")]
+use crate::echip::uwb;
 
 // ECHIPS is a singleton that contains a hash map from
 // ChipIdentifier to SharedEmulatedChip
@@ -54,7 +58,8 @@ pub enum CreateParam {
     Bluetooth(bluetooth::CreateParams),
     #[cfg(not(test))]
     Wifi(wifi::CreateParams),
-    #[cfg(not(test))]
+    // TODO(b/278268690): Add Pica Library to goldfish build
+    #[cfg(feature = "cuttlefish")]
     Uwb(uwb::CreateParams),
     Mock(mocked::CreateParams),
 }
@@ -120,7 +125,8 @@ pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> SharedEmulate
         CreateParam::Bluetooth(params) => bluetooth::new(params, chip_id),
         #[cfg(not(test))]
         CreateParam::Wifi(params) => wifi::new(params, chip_id),
-        #[cfg(not(test))]
+        // TODO(b/278268690): Add Pica Library to goldfish build
+        #[cfg(feature = "cuttlefish")]
         CreateParam::Uwb(params) => uwb::new(params, chip_id),
         CreateParam::Mock(params) => mocked::new(params, chip_id),
     };

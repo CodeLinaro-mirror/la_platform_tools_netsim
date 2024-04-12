@@ -1,4 +1,11 @@
 {
+  // only change to presubmit after collecting stats first in post, per
+  // go/test-mapping-slo-guide
+  "postsubmit": [
+    {
+      "name": "CtsUwbTestCases"
+    }
+  ],
   "presubmit": [
     {
       "name": "CtsBluetoothTestCases",

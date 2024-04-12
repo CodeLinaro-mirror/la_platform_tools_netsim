@@ -50,8 +50,8 @@ use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
 use netsim_proto::frontend::SubscribeDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
+use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::model::Position as ProtoPosition;
-use netsim_proto::model::Scene as ProtoScene;
 use netsim_proto::stats::NetsimRadioStats;
 use protobuf::well_known_types::timestamp::Timestamp;
 use protobuf::Message;
@@ -229,6 +229,8 @@ pub fn add_chip_cxx(
             }),
         ),
         "WIFI" => (ProtoChipKind::WIFI, echip::CreateParam::Wifi(echip::wifi::CreateParams {})),
+        // TODO(b/278268690): Add Pica Library to goldfish build
+        #[cfg(feature = "cuttlefish")]
         "UWB" => (
             ProtoChipKind::UWB,
             echip::CreateParam::Uwb(echip::uwb::CreateParams { address: chip_address.to_string() }),
@@ -599,16 +601,20 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
     }
 }
 
-#[allow(dead_code)]
-pub fn get_devices_proto() -> Result<ProtoScene, String> {
-    let mut scene = ProtoScene::new();
-    // iterate over the devices and add each to the scene
-    let devices_arc = get_devices();
-    let devices = devices_arc.read().unwrap();
-    for device in devices.entries.values() {
-        scene.devices.push(device.get()?);
-    }
-    Ok(scene)
+/// Function to obtain ProtoDevice given a ChipIdentifier
+#[cfg(feature = "cuttlefish")]
+pub fn get_device(chip_id: ChipIdentifier) -> anyhow::Result<ProtoDevice> {
+    let device_id = chip::get(chip_id).map_err(|e| anyhow::anyhow!("{e:?}"))?.device_id;
+    let device = {
+        let devices_arc = get_devices();
+        let devices = devices_arc.read().unwrap();
+        devices
+            .entries
+            .get(&device_id)
+            .ok_or(anyhow::anyhow!("Can't find device for device_id: {device_id}"))?
+            .get()
+    };
+    device.map_err(|e| anyhow::anyhow!("{e:?}"))
 }
 
 fn reset_all() -> Result<(), String> {

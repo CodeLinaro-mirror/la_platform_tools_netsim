@@ -17,16 +17,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use chrono::{DateTime, Datelike, Local, NaiveDateTime, TimeZone as _, Timelike, Utc};
-
-/// A enum for different time zones. This is used for displaying
-/// times in a desired time zone format.
-pub enum TimeZone {
-    /// Coordinated Universal Time zone
-    Utc,
-    /// Local Time zone
-    Local,
-}
+use chrono::{DateTime, Datelike, NaiveDateTime, Timelike, Utc};
 
 /// A simple class that contains information required to display time
 pub struct TimeDisplay {
@@ -55,26 +46,6 @@ impl TimeDisplay {
     pub fn utc_display(&self) -> String {
         if let Some(datetime) = NaiveDateTime::from_timestamp_opt(self.secs, self.nsecs) {
             let current_datetime = DateTime::<Utc>::from_utc(datetime, Utc);
-            return format!(
-                "{}-{:02}-{:02}-{:02}-{:02}-{:02}",
-                current_datetime.year(),
-                current_datetime.month(),
-                current_datetime.day(),
-                current_datetime.hour(),
-                current_datetime.minute(),
-                current_datetime.second()
-            );
-        }
-        "INVALID-TIMESTAMP".to_string()
-    }
-
-    /// Displays date & time in local with a format YYYY-MM-DD-HH:MM:SS
-    ///
-    /// # Returns
-    ///
-    /// `String` display of local time
-    pub fn local_time_display(&self) -> String {
-        if let Some(current_datetime) = Local.timestamp_opt(self.secs, self.nsecs).single() {
             return format!(
                 "{}-{:02}-{:02}-{:02}-{:02}-{:02}",
                 current_datetime.year(),
@@ -136,17 +107,12 @@ pub fn log_current_time() -> String {
 }
 
 /// Return the timestamp of the current time for files
-pub fn file_current_time(timezone: TimeZone) -> String {
-    match timezone {
-        TimeZone::Utc => get_current_time().utc_display(),
-        TimeZone::Local => get_current_time().local_time_display(),
-    }
+pub fn file_current_time() -> String {
+    get_current_time().utc_display()
 }
 
 #[cfg(test)]
 mod tests {
-
-    use chrono::Local;
 
     use super::TimeDisplay;
 
@@ -186,24 +152,5 @@ mod tests {
         let twok_time = TimeDisplay::new(946684900, 200);
         let utc_twok = twok_time.utc_display_log();
         assert_eq!(utc_twok, "01-01 00:01:40.200");
-    }
-
-    #[test]
-    fn test_local_time_display() {
-        // TODO: Need to have expected value based on the testing environment's
-        // local time zone. Currently the local_time_display is tested when local time
-        // zone is UTC.
-        if Local::now().offset().to_string() == "+00:00" {
-            let epoch_time = TimeDisplay::new(0, 0);
-            let local_time_epoch = epoch_time.local_time_display();
-            assert_eq!(local_time_epoch, "1970-01-01-00-00-00");
-            let twok_time = TimeDisplay::new(946684900, 0);
-            let local_time_twok = twok_time.local_time_display();
-            assert_eq!(local_time_twok, "2000-01-01-00-01-40");
-        }
-        let max_seconds = TimeDisplay::new(i64::MAX, 0);
-        assert_eq!("INVALID-TIMESTAMP", max_seconds.local_time_display());
-        let max_nanos = TimeDisplay::new(0, 2_000_000_000);
-        assert_eq!("INVALID-TIMESTAMP", max_nanos.local_time_display());
     }
 }

@@ -37,10 +37,11 @@ namespace {
 class CxxServerResponseWritable : public frontend::CxxServerResponseWriter {
  public:
   CxxServerResponseWritable()
-      : grpc_writer_(nullptr), err(""), is_ok(false), body(""), length(0){};
+      : grpc_writer_(nullptr), err(""), is_ok(false), body(""), length(0) {};
   CxxServerResponseWritable(
       grpc::ServerWriter<netsim::frontend::GetCaptureResponse> *grpc_writer)
-      : grpc_writer_(grpc_writer), err(""), is_ok(false), body(""), length(0){};
+      : grpc_writer_(grpc_writer), err(""), is_ok(false), body(""), length(0) {
+        };
 
   void put_error(unsigned int error_code,
                  const std::string &response) const override {

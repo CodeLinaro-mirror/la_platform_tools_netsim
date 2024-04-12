@@ -21,9 +21,7 @@
 use crate::wifi::frame::Frame;
 use crate::wifi::medium;
 use crate::wifi::medium::HwsimCmdEnum;
-use anyhow::{anyhow, Context};
 use log::info;
-use std::mem;
 
 #[repr(C, packed)]
 struct RadiotapHeader {
@@ -57,7 +55,7 @@ pub fn frame_into_pcap(frame: Frame) -> anyhow::Result<Vec<u8>> {
     // Channel and Signal.  In the future add more fields from the
     // Frame.
 
-    let mut radiotap_hdr: RadiotapHeader = RadiotapHeader {
+    let radiotap_hdr: RadiotapHeader = RadiotapHeader {
         version: 0,
         pad: 0,
         len: (std::mem::size_of::<RadiotapHeader>() as u16),
