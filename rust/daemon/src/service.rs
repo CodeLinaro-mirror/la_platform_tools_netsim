@@ -14,7 +14,7 @@
 
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
-use crate::config::{set_dev, set_pcap};
+use crate::config::{set_dev, set_disable_wifi_p2p, set_pcap};
 use crate::echip;
 use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
 use crate::http_server::server::run_http_server;
@@ -37,6 +37,7 @@ pub struct ServiceParams {
     hci_port: u16,
     instance_num: u16,
     dev: bool,
+    disable_wifi_p2p: bool,
     vsock: u16,
 }
 
@@ -50,6 +51,7 @@ impl ServiceParams {
         hci_port: u16,
         instance_num: u16,
         dev: bool,
+        disable_wifi_p2p: bool,
         vsock: u16,
     ) -> Self {
         ServiceParams {
@@ -60,6 +62,7 @@ impl ServiceParams {
             hci_port,
             instance_num,
             dev,
+            disable_wifi_p2p,
             vsock,
         }
     }
@@ -96,6 +99,7 @@ impl Service {
 
         set_pcap(self.service_params.pcap);
         set_dev(self.service_params.dev);
+        set_disable_wifi_p2p(self.service_params.disable_wifi_p2p);
     }
 
     /// Runs netsim gRPC server
