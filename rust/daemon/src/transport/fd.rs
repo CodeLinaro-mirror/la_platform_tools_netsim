@@ -176,76 +176,86 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
         }
         Ok(startup_info) => startup_info,
     };
+    // Vector for getting all fd_in, fd_out, chip_kind, device_id, chip_id information
+    // of adding all chips to frontend resource.
+    let mut fd_vec: Vec<(i32, i32, ChipKindEnum, u32, u32)> = Vec::new();
+    let chip_count = startup_info.devices.iter().map(|d| d.chips.len()).sum();
+    for (device_guid, device) in startup_info.devices.iter().enumerate() {
+        for chip in &device.chips {
+            let chip_kind = match chip.kind {
+                ChipKindEnum::BLUETOOTH => ChipKind::BLUETOOTH,
+                ChipKindEnum::WIFI => ChipKind::WIFI,
+                ChipKindEnum::UWB => ChipKind::UWB,
+                _ => ChipKind::UNSPECIFIED,
+            };
+            // TODO(b/323899010): Avoid having cfg(test) in mainline code
+            #[cfg(not(test))]
+            let echip_create_param = match chip_kind {
+                ChipKind::BLUETOOTH => {
+                    echip::CreateParam::Bluetooth(echip::bluetooth::CreateParams {
+                        address: chip.address.clone().unwrap_or_default(),
+                        bt_properties: None,
+                    })
+                }
+                ChipKind::WIFI => echip::CreateParam::Wifi(echip::wifi::CreateParams {}),
+                ChipKind::UWB => echip::CreateParam::Uwb(echip::uwb::CreateParams {
+                    address: chip.address.clone().unwrap_or_default(),
+                }),
+                _ => {
+                    warn!("The provided chip kind is unsupported: {:?}", chip.kind);
+                    return;
+                }
+            };
+            #[cfg(test)]
+            let echip_create_param =
+                echip::CreateParam::Mock(echip::mocked::CreateParams { chip_kind });
+            let chip_create_params = chip::CreateParams {
+                kind: chip_kind,
+                address: chip.address.clone().unwrap_or_default(),
+                name: Some(chip.id.clone().unwrap_or_default()),
+                manufacturer: chip.manufacturer.clone().unwrap_or_default(),
+                product_name: chip.product_name.clone().unwrap_or_default(),
+                bt_properties: None,
+            };
+            let result = match add_chip(
+                &format!("fd-device-{}", device_guid),
+                &device.name.clone(),
+                &chip_create_params,
+                &echip_create_param,
+            ) {
+                Ok(chip_result) => chip_result,
+                Err(err) => {
+                    warn!("{err}");
+                    return;
+                }
+            };
+            fd_vec.push((
+                chip.fd_in as i32,
+                chip.fd_out as i32,
+                chip.kind,
+                result.device_id,
+                result.chip_id,
+            ));
+        }
+    }
+
     // See https://tokio.rs/tokio/topics/bridging
     // This code is synchronous hosting asynchronous until main is converted to rust.
     thread::Builder::new()
         .name("fd_transport".to_string())
         .spawn(move || {
-            let chip_count = startup_info.devices.iter().map(|d| d.chips.len()).sum();
             let mut handles = Vec::with_capacity(chip_count);
-            for (device_guid, device) in startup_info.devices.iter().enumerate() {
-                for chip in &device.chips {
-                    let chip_kind = match chip.kind {
-                        ChipKindEnum::BLUETOOTH => ChipKind::BLUETOOTH,
-                        ChipKindEnum::WIFI => ChipKind::WIFI,
-                        ChipKindEnum::UWB => ChipKind::UWB,
-                        _ => ChipKind::UNSPECIFIED,
-                    };
-                    // TODO(b/323899010): Avoid having cfg(test) in mainline code
-                    #[cfg(not(test))]
-                    let echip_create_param = match chip_kind {
-                        ChipKind::BLUETOOTH => {
-                            echip::CreateParam::Bluetooth(echip::bluetooth::CreateParams {
-                                address: chip.address.clone().unwrap_or_default(),
-                                bt_properties: None,
-                            })
-                        }
-                        ChipKind::WIFI => echip::CreateParam::Wifi(echip::wifi::CreateParams {}),
-                        ChipKind::UWB => echip::CreateParam::Uwb(echip::uwb::CreateParams {
-                            address: chip.address.clone().unwrap_or_default(),
-                        }),
-                        _ => {
-                            warn!("The provided chip kind is unsupported: {:?}", chip.kind);
-                            return;
-                        }
-                    };
-                    #[cfg(test)]
-                    let echip_create_param =
-                        echip::CreateParam::Mock(echip::mocked::CreateParams { chip_kind });
-                    let chip_create_params = chip::CreateParams {
-                        kind: chip_kind,
-                        address: chip.address.clone().unwrap_or_default(),
-                        name: Some(chip.id.clone().unwrap_or_default()),
-                        manufacturer: chip.manufacturer.clone().unwrap_or_default(),
-                        product_name: chip.product_name.clone().unwrap_or_default(),
-                        bt_properties: None,
-                    };
-                    let result = match add_chip(
-                        &format!("fd-device-{}", device_guid),
-                        &device.name.clone(),
-                        &chip_create_params,
-                        &echip_create_param,
-                    ) {
-                        Ok(chip_result) => chip_result,
-                        Err(err) => {
-                            warn!("{err}");
-                            return;
-                        }
-                    };
+            for (fd_in, fd_out, kind, device_id, chip_id) in fd_vec {
+                // Cf writes to fd_out and reads from fd_in
+                // SAFETY: Our caller promises that the file descriptors in the JSON are valid
+                // and open.
+                let file_in = unsafe { File::from_raw_fd(fd_in) };
 
-                    // Cf writes to fd_out and reads from fd_in
-                    // SAFETY: Our caller promises that the file descriptors in the JSON are valid
-                    // and open.
-                    let file_in = unsafe { File::from_raw_fd(chip.fd_in as i32) };
-
-                    register_transport(result.chip_id, Box::new(FdTransport { file: file_in }));
-                    // TODO: switch to runtime.spawn once FIFOs are available in Tokio
-                    // SAFETY: Our caller promises that the file descriptors in the JSON are valid
-                    // and open.
-                    handles.push(unsafe {
-                        fd_reader(chip.fd_out as i32, chip.kind, result.device_id, result.chip_id)
-                    });
-                }
+                register_transport(chip_id, Box::new(FdTransport { file: file_in }));
+                // TODO: switch to runtime.spawn once FIFOs are available in Tokio
+                // SAFETY: Our caller promises that the file descriptors in the JSON are valid
+                // and open.
+                handles.push(unsafe { fd_reader(fd_out, kind, device_id, chip_id) });
             }
             // Wait for all of them to complete.
             for handle in handles {

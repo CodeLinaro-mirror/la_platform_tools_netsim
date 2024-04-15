@@ -257,6 +257,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
         hci_port,
         instance_num,
         args.dev,
+        args.disable_wifi_p2p,
         args.vsock.unwrap_or_default(),
     );
 
