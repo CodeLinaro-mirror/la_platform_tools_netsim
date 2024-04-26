@@ -16,14 +16,16 @@ use crate::devices::chip::ChipIdentifier;
 use crate::echip::{packet::hwsim_cmd_response, EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_wifi;
 use crate::wifi::medium::Medium;
+use bytes::Bytes;
 use lazy_static::lazy_static;
 use log::info;
 use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
-
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 
 /// Parameters for creating Wifi chips
 /// allow(dead_code) due to not being used in unit tests
@@ -35,28 +37,74 @@ pub struct Wifi {
     chip_id: ChipIdentifier,
 }
 
+pub struct WifiManager {
+    medium: Medium,
+    request_sender: std::sync::mpsc::Sender<(u32, Bytes)>,
+    response_sender: std::sync::mpsc::Sender<Bytes>,
+}
+
+impl WifiManager {
+    pub fn new() -> WifiManager {
+        let (request_sender, rx) = std::sync::mpsc::channel::<(u32, Bytes)>();
+
+        thread::spawn(move || {
+            const POLL_INTERVAL: Duration = Duration::from_micros(10);
+            let mut next_instant = Instant::now() + POLL_INTERVAL;
+
+            loop {
+                let this_instant = Instant::now();
+                let timeout = if next_instant > this_instant {
+                    next_instant - this_instant
+                } else {
+                    Duration::ZERO
+                };
+                match rx.recv_timeout(timeout) {
+                    Ok((chip_id, packet)) => {
+                        // When Wi-Fi P2P is disabled, send all packets to WifiService.
+                        if crate::config::get_disable_wifi_p2p()
+                            || !WIFI_MANAGER.medium.process(chip_id, &packet)
+                        {
+                            ffi_wifi::handle_wifi_request(chip_id, &packet.to_vec());
+                        }
+                    }
+                    _ => {
+                        ffi_wifi::libslirp_main_loop_wait();
+                        next_instant = Instant::now() + POLL_INTERVAL;
+                    }
+                };
+            }
+        });
+
+        let (response_sender, rx) = std::sync::mpsc::channel::<Bytes>();
+        thread::spawn(move || {
+            loop {
+                // rx.recv() should either returns packets or timeout after 1 second.
+                let packet = rx.recv().unwrap();
+                WIFI_MANAGER.medium.process_response(&packet);
+            }
+        });
+        WifiManager { medium: Medium::new(hwsim_cmd_response), request_sender, response_sender }
+    }
+}
+
 // Allocator for chip identifiers.
 lazy_static! {
-    static ref MEDIUM: Mutex<Medium> = Mutex::new(Medium::new(hwsim_cmd_response));
+    static ref WIFI_MANAGER: WifiManager = WifiManager::new();
 }
 
 impl EmulatedChip for Wifi {
     fn handle_request(&self, packet: &[u8]) {
-        // When Wi-Fi P2P is disabled, send all packets to WifiService.
-        if crate::config::get_disable_wifi_p2p()
-            || !MEDIUM.lock().expect("Lock failed").process(self.chip_id, packet)
-        {
-            ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
-        }
+        let bytes = Bytes::copy_from_slice(packet);
+        WIFI_MANAGER.request_sender.send((self.chip_id, bytes)).unwrap();
     }
 
     fn reset(&mut self) {
-        MEDIUM.lock().expect("Lock failed").reset(self.chip_id);
+        WIFI_MANAGER.medium.reset(self.chip_id);
     }
 
     fn get(&self) -> ProtoChip {
         let mut chip_proto = ProtoChip::new();
-        if let Some(client) = MEDIUM.lock().expect("Lock failed").get(self.chip_id) {
+        if let Some(client) = WIFI_MANAGER.medium.get(self.chip_id) {
             chip_proto.mut_wifi().state = Some(client.enabled);
             chip_proto.mut_wifi().tx_count = client.tx_count as i32;
             chip_proto.mut_wifi().rx_count = client.rx_count as i32;
@@ -66,15 +114,12 @@ impl EmulatedChip for Wifi {
 
     fn patch(&mut self, patch: &ProtoChip) {
         if patch.wifi().state.is_some() {
-            MEDIUM
-                .lock()
-                .expect("Lock failed")
-                .set_enabled(self.chip_id, patch.wifi().state.unwrap());
+            WIFI_MANAGER.medium.set_enabled(self.chip_id, patch.wifi().state.unwrap());
         }
     }
 
     fn remove(&mut self) {
-        MEDIUM.lock().expect("Lock failed").remove(self.chip_id);
+        WIFI_MANAGER.medium.remove(self.chip_id);
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
@@ -91,14 +136,15 @@ impl EmulatedChip for Wifi {
 }
 
 pub fn handle_wifi_response(packet: &[u8]) {
-    MEDIUM.lock().expect("Lock failed").process_response(packet);
+    let bytes = Bytes::copy_from_slice(packet);
+    WIFI_MANAGER.response_sender.send(bytes).unwrap();
 }
 
 /// Create a new Emulated Wifi Chip
 /// allow(dead_code) due to not being used in unit tests
 #[allow(dead_code)]
 pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
-    MEDIUM.lock().expect("Lock failed").add(chip_id);
+    WIFI_MANAGER.medium.add(chip_id);
     info!("WiFi EmulatedChip created chip_id: {chip_id}");
     let echip = Wifi { chip_id };
     SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))

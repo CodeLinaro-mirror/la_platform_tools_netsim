@@ -251,6 +251,9 @@ pub mod ffi_wifi {
         #[namespace = "netsim::wifi"]
         fn HandleWifiRequestCxx(chip_id: u32, packet: &Vec<u8>);
 
+        #[namespace = "netsim::wifi"]
+        pub fn libslirp_main_loop_wait();
+
         include!("wifi/wifi_facade.h");
 
         #[rust_name = wifi_start]
