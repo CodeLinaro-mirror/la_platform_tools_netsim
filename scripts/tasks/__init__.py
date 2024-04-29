@@ -29,6 +29,7 @@ TASK_LIST = [
     "Configure",
     "Compile",
     "CompileInstall",
+    "ZipArtifact",
     "InstallEmulator",
     "RunPyTest",
     "LocalRunAll",
