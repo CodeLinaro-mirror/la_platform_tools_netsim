@@ -52,6 +52,17 @@ std::vector<std::string_view> Split(const std::string_view s,
   return result;
 }
 
+std::vector<std::string> Split(const std::string s,
+                               const std::string &delimiters) {
+  std::vector<std::string> result;
+  size_t start, end = 0;
+  while ((start = s.find_first_not_of(delimiters, end)) != std::string::npos) {
+    end = s.find(delimiters, start);
+    result.emplace_back(s.substr(start, end - start));
+  }
+  return result;
+}
+
 std::string ToHexString(uint8_t x, uint8_t y) {
   return {'0',
           'x',

@@ -14,22 +14,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
 import logging
 import platform
 
 from environment import get_default_environment
+from tasks.task import Task
 from utils import (
     AOSP_ROOT,
     EMULATOR_ARTIFACT_PATH,
     binary_extension,
-    config_logging,
-    log_system_info,
     run,
 )
 
 PYTEST_DIR = AOSP_ROOT / "external" / "adt-infra" / "pytest" / "test_embedded"
 OBJS_DIR = AOSP_ROOT / "tools" / "netsim" / "objs"
+
+
+class RunPyTestTask(Task):
+
+  def __init__(self, args):
+    super().__init__("RunPyTest")
+    self.buildbot = args.buildbot
+
+  def do_run(self):
+    run_pytest_manager = RunPytestManager(self.buildbot)
+    return run_pytest_manager.process()
 
 
 class RunPytestManager:
@@ -55,7 +64,7 @@ class RunPytestManager:
     """
     self.dir = EMULATOR_ARTIFACT_PATH / "emulator" if buildbot else OBJS_DIR
 
-  def process(self):
+  def process(self) -> bool:
     """Process the emulator e2e pytests
 
     The process will check if the emulator installation occurred
@@ -63,8 +72,11 @@ class RunPytestManager:
     """
     emulator_bin = self.dir / binary_extension("emulator")
     if not (self.dir.exists() and emulator_bin.exists()):
-      logging.info("Please install emulator before running pytests")
-      return
+      logging.info(
+          "Please run 'scripts/build_tools.sh --InstallEmulator' "
+          "before running RunPyTest"
+      )
+      return False
     if platform.system() == "Windows":
       run_tests_script = PYTEST_DIR / "run_tests.cmd"
     else:
@@ -78,25 +90,4 @@ class RunPytestManager:
         "--failures_as_errors",
     ]
     run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
-
-
-def main():
-  config_logging()
-  log_system_info()
-
-  # Argument parsing
-  parser = argparse.ArgumentParser(description="Emulator installation script")
-  parser.add_argument(
-      "--buildbot",
-      action="store_true",
-      help="Checking the usage of build bots",
-  )
-  args = parser.parse_args()
-
-  # Running Pytests
-  run_pytest_manager = RunPytestManager(args.buildbot)
-  run_pytest_manager.process()
-
-
-if __name__ == "__main__":
-  main()
+    return True

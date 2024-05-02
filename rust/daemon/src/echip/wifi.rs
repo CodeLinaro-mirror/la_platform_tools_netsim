@@ -42,7 +42,10 @@ lazy_static! {
 
 impl EmulatedChip for Wifi {
     fn handle_request(&self, packet: &[u8]) {
-        if !MEDIUM.lock().expect("Lock failed").process(self.chip_id, packet) {
+        // When Wi-Fi P2P is disabled, send all packets to WifiService.
+        if crate::config::get_disable_wifi_p2p()
+            || !MEDIUM.lock().expect("Lock failed").process(self.chip_id, packet)
+        {
             ffi_wifi::handle_wifi_request(self.chip_id, &packet.to_vec());
         }
     }

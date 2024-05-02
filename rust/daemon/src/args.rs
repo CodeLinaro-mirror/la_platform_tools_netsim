@@ -56,6 +56,11 @@ pub struct NetsimdArgs {
     #[arg(short, long)]
     pub dev: bool,
 
+    /// Disable Wi-Fi peer-to-peer features.
+    /// WARNING: This flag is for development purpose.
+    #[arg(long)]
+    pub disable_wifi_p2p: bool,
+
     /// Set the vsock port number to be listened by the frontend grpc server
     #[arg(short, long)]
     pub vsock: Option<u16>,
@@ -63,6 +68,10 @@ pub struct NetsimdArgs {
     /// The name of a config file to load
     #[arg(long)]
     pub config: Option<String>,
+
+    /// Comma separated list of host DNS servers
+    #[arg(long)]
+    pub host_dns: Option<String>,
 
     /// Start with test beacons
     #[arg(long, alias = "test_beacons", overrides_with("no_test_beacons"))]

@@ -49,6 +49,7 @@ using Stream = std::unique_ptr<
 struct NetsimdOptions {
   bool no_cli_ui;
   bool no_web_ui;
+  std::string host_dns = "";
   std::string netsim_args;
 };
 

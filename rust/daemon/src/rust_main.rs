@@ -244,6 +244,11 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     // Print config file settings
     info!("{:#?}", config);
 
+    if let Some(host_dns) = args.host_dns {
+        config.wifi.mut_or_insert_default().slirp_options.mut_or_insert_default().host_dns =
+            host_dns;
+    }
+
     let service_params = ServiceParams::new(
         fd_startup_str,
         args.no_cli_ui,
@@ -252,6 +257,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
         hci_port,
         instance_num,
         args.dev,
+        args.disable_wifi_p2p,
         args.vsock.unwrap_or_default(),
     );
 
@@ -280,6 +286,9 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     // Start radio facades
     echip::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
     echip::wifi::wifi_start(&config.wifi);
+    // TODO(b/278268690): Add Pica Library to goldfish build
+    #[cfg(feature = "cuttlefish")]
+    echip::uwb::uwb_start();
 
     // Create test beacons if required
     if config.bluetooth.test_beacons == Some(true) {

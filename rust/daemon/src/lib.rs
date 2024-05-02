@@ -33,6 +33,10 @@ mod transport;
 mod version;
 mod wifi;
 
+// TODO(b/278268690): Add Pica Library to goldfish build
+#[cfg(feature = "cuttlefish")]
+mod uwb;
+
 // This feature is enabled only for CMake builds
 #[cfg(feature = "local_ssl")]
 mod openssl;
