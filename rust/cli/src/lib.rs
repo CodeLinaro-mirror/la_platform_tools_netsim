@@ -22,13 +22,13 @@ mod file_handler;
 mod requests;
 mod response;
 
-use log::error;
 use netsim_common::util::os_utils::{get_instance, get_server_address};
 use netsim_proto::frontend::{DeleteChipRequest, ListDeviceResponse};
 use protobuf::Message;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
+use tracing::error;
 
 use crate::ffi::frontend_client_ffi::{
     new_frontend_client, ClientResult, FrontendClient, GrpcMethod,

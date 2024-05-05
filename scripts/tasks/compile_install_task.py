@@ -15,6 +15,7 @@
 # limitations under the License.
 
 from pathlib import Path
+import platform
 
 from tasks.task import Task
 from utils import (CMAKE, run)
@@ -28,9 +29,14 @@ class CompileInstallTask(Task):
     self.env = env
 
   def do_run(self):
+    # Strip for non-Windows builds
+    target = "install"
+    if platform.system() != "Windows":
+      target += "/strip"
+
     # Build
     run(
-        [CMAKE, "--build", self.out, "--target", "install"],
+        [CMAKE, "--build", self.out, "--target", target],
         self.env,
         "bld",
     )

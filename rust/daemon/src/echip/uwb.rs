@@ -63,10 +63,11 @@ impl EmulatedChip for Uwb {
             .expect("UciStream Receiver Disconnected");
     }
 
-    fn reset(&mut self) {
-        self.state = true;
-        self.tx_count = 0;
-        self.rx_count = 0;
+    fn reset(&self) {
+        // TODO: Use AtomicBool, etc
+        // self.state = true;
+        // self.tx_count = 0;
+        // self.rx_count = 0;
     }
 
     fn get(&self) -> ProtoChip {
@@ -81,12 +82,12 @@ impl EmulatedChip for Uwb {
         chip_proto
     }
 
-    fn patch(&mut self, _chip: &ProtoChip) {
+    fn patch(&self, _chip: &ProtoChip) {
         // TODO(b/330789027): Patch the state of UWB chip
         log::info!("Patch Uwb Chip for chip_id: {}", self.chip_id);
     }
 
-    fn remove(&mut self) {
+    fn remove(&self) {
         PICA_HANDLE_TO_STATE.remove(&self.pica_id);
     }
 
@@ -138,7 +139,7 @@ pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmul
                 handle_response_rust(chip_id, packet.into());
             }
         });
-    SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))
+    Arc::new(Box::new(echip))
 }
 
 #[cfg(test)]
@@ -153,15 +154,15 @@ mod tests {
     #[test]
     fn test_uwb_get() {
         let shared_echip = new_uwb_shared_echip();
-        assert!(shared_echip.lock().get().has_uwb());
+        assert!(shared_echip.get().has_uwb());
     }
 
     #[test]
     fn test_uwb_reset() {
         // TODO(b/330789027): Patch the state of UWB echip before reset
         let shared_echip = new_uwb_shared_echip();
-        shared_echip.lock().reset();
-        let binding = shared_echip.lock().get();
+        shared_echip.reset();
+        let binding = shared_echip.get();
         let radio = binding.uwb();
         assert_eq!(radio.rx_count, 0);
         assert_eq!(radio.tx_count, 0);
@@ -171,7 +172,7 @@ mod tests {
     #[test]
     fn test_get_stats() {
         let shared_echip = new_uwb_shared_echip();
-        let radio_stat_vec = shared_echip.lock().get_stats(0);
+        let radio_stat_vec = shared_echip.get_stats(0);
         let radio_stat = radio_stat_vec.first().unwrap();
         assert_eq!(radio_stat.kind(), netsim_radio_stats::Kind::UWB);
         assert_eq!(radio_stat.duration_secs(), 0);

@@ -16,7 +16,6 @@ use crate::ffi::frontend_client_ffi::{FrontendClient, GrpcMethod};
 use clap::builder::{PossibleValue, TypedValueParser};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use hex::{decode as hex_to_bytes, FromHexError};
-use log::error;
 use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::common::ChipKind;
 use netsim_proto::frontend;
@@ -40,6 +39,7 @@ use protobuf::{Message, MessageField};
 use std::fmt;
 use std::iter;
 use std::str::FromStr;
+use tracing::error;
 
 pub type BinaryProtobuf = Vec<u8>;
 

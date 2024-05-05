@@ -20,7 +20,7 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::EnumOrUnknown;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// Parameters for creating Mocked chips
 pub struct CreateParams {
@@ -35,7 +35,7 @@ pub struct Mock {
 impl EmulatedChip for Mock {
     fn handle_request(&self, _packet: &[u8]) {}
 
-    fn reset(&mut self) {}
+    fn reset(&self) {}
 
     fn get(&self) -> ProtoChip {
         let mut proto_chip = ProtoChip::new();
@@ -43,9 +43,9 @@ impl EmulatedChip for Mock {
         proto_chip
     }
 
-    fn patch(&mut self, _chip: &ProtoChip) {}
+    fn patch(&self, _chip: &ProtoChip) {}
 
-    fn remove(&mut self) {}
+    fn remove(&self) {}
 
     fn get_stats(&self, _duration_secs: u64) -> Vec<ProtoRadioStats> {
         let mut stats = ProtoRadioStats::new();
@@ -62,5 +62,5 @@ impl EmulatedChip for Mock {
 
 /// Create a new MockedChip
 pub fn new(create_params: &CreateParams, _chip_id: ChipIdentifier) -> SharedEmulatedChip {
-    SharedEmulatedChip(Arc::new(Mutex::new(Box::new(Mock { chip_kind: create_params.chip_kind }))))
+    Arc::new(Box::new(Mock { chip_kind: create_params.chip_kind }))
 }
