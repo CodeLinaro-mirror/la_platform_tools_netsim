@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// A Chip is a generic emulated radio that connects to Chip Facade
-/// library.
+/// A `Chip` is a generic struct that wraps a radio specific
+/// EmulatedChip.` The Chip layer provides for common operations and
+/// data.
 ///
-/// The chip facade is a library that implements the controller protocol.
+/// The emulated chip facade is a library that implements the
+/// controller protocol.
 ///
-use crate::devices::id_factory::IdFactory;
 use crate::echip::SharedEmulatedChip;
 use lazy_static::lazy_static;
 use log::warn;
@@ -27,7 +28,8 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use protobuf::EnumOrUnknown;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, RwLock};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Mutex;
 use std::time::Instant;
 
 use super::device::DeviceIdentifier;
@@ -37,24 +39,13 @@ pub type FacadeIdentifier = u32;
 
 const INITIAL_CHIP_ID: ChipIdentifier = 1000;
 
-// ChipMap is a singleton that contains a hash map from
-// chip_id to Chip objects.
-type ChipMap = HashMap<ChipIdentifier, Chip>;
-
-#[derive(Clone)]
-struct SharedChips(Arc<Mutex<ChipMap>>);
-
-impl SharedChips {
-    fn lock(&self) -> MutexGuard<ChipMap> {
-        self.0.lock().expect("Poisoned Shared Chips lock")
-    }
+struct ChipManager {
+    ids: AtomicU32,
+    chips: Mutex<HashMap<ChipIdentifier, Chip>>,
 }
 
-// Allocator for chip identifiers.
 lazy_static! {
-    static ref IDS: RwLock<IdFactory<ChipIdentifier>> =
-        RwLock::new(IdFactory::new(INITIAL_CHIP_ID, 1));
-    static ref CHIPS: SharedChips = SharedChips(Arc::new(Mutex::new(HashMap::new())));
+    static ref CHIP_MANAGER: ChipManager = ChipManager::new(INITIAL_CHIP_ID);
 }
 
 pub struct CreateParams {
@@ -82,6 +73,16 @@ pub struct Chip {
     pub manufacturer: String,
     pub product_name: String,
     pub start: Instant,
+}
+
+impl ChipManager {
+    fn new(start: u32) -> Self {
+        ChipManager { ids: AtomicU32::new(start), chips: Mutex::new(HashMap::new()) }
+    }
+
+    fn next_id(&self) -> u32 {
+        self.ids.fetch_add(1, Ordering::SeqCst)
+    }
 }
 
 impl Chip {
@@ -117,7 +118,7 @@ impl Chip {
     // stats for BLE and CLASSIC.
     pub fn get_stats(&self) -> Vec<ProtoRadioStats> {
         match &self.emulated_chip {
-            Some(emulated_chip) => emulated_chip.lock().get_stats(self.start.elapsed().as_secs()),
+            Some(emulated_chip) => emulated_chip.get_stats(self.start.elapsed().as_secs()),
             None => {
                 warn!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id);
                 Vec::<ProtoRadioStats>::new()
@@ -130,7 +131,7 @@ impl Chip {
         let mut proto_chip = self
             .emulated_chip
             .as_ref()
-            .map(|c| c.lock().get())
+            .map(|c| c.get())
             .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))?;
         proto_chip.kind = EnumOrUnknown::new(self.kind);
         proto_chip.id = self.id;
@@ -151,30 +152,21 @@ impl Chip {
         }
         self.emulated_chip
             .as_ref()
-            .map(|c| c.lock().patch(patch))
+            .map(|c| c.patch(patch))
             .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))
     }
 
     pub fn reset(&mut self) -> Result<(), String> {
         self.emulated_chip
             .as_ref()
-            .map(|c| c.lock().reset())
+            .map(|c| c.reset())
             .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))
     }
 }
 
 /// Obtains a Chip with given chip_id
-pub fn get(chip_id: ChipIdentifier) -> Result<Chip, String> {
-    get_with_singleton(chip_id, CHIPS.clone())
-}
-
-/// Testable function for get()
-fn get_with_singleton(chip_id: ChipIdentifier, shared_chips: SharedChips) -> Result<Chip, String> {
-    Ok(shared_chips
-        .lock()
-        .get(&chip_id)
-        .ok_or(format!("CHIPS does not contains key {chip_id}"))?
-        .clone())
+pub fn get_chip(chip_id: ChipIdentifier) -> Result<Chip, String> {
+    CHIP_MANAGER.get_chip(chip_id)
 }
 
 /// Allocates a new chip.
@@ -183,21 +175,31 @@ pub fn new(
     device_name: &str,
     create_params: &CreateParams,
 ) -> Result<Chip, String> {
-    new_with_singleton(device_id, device_name, create_params, CHIPS.clone(), &IDS)
+    CHIP_MANAGER.new_chip(device_id, device_name, create_params)
 }
 
-/// Testable function for new()
-fn new_with_singleton(
-    device_id: DeviceIdentifier,
-    device_name: &str,
-    create_params: &CreateParams,
-    shared_chips: SharedChips,
-    id_factory: &RwLock<IdFactory<ChipIdentifier>>,
-) -> Result<Chip, String> {
-    let id = id_factory.write().unwrap().next_id();
-    let chip = Chip::new(id, device_id, device_name, create_params);
-    shared_chips.lock().insert(id, chip.clone());
-    Ok(chip)
+impl ChipManager {
+    fn new_chip(
+        &self,
+        device_id: DeviceIdentifier,
+        device_name: &str,
+        create_params: &CreateParams,
+    ) -> Result<Chip, String> {
+        let id = self.next_id();
+        let chip = Chip::new(id, device_id, device_name, create_params);
+        self.chips.lock().unwrap().insert(id, chip.clone());
+        Ok(chip)
+    }
+
+    fn get_chip(&self, chip_id: ChipIdentifier) -> Result<Chip, String> {
+        Ok(self
+            .chips
+            .lock()
+            .unwrap()
+            .get(&chip_id)
+            .ok_or(format!("CHIPS does not contains key {chip_id}"))?
+            .clone())
+    }
 }
 
 #[cfg(test)]
@@ -215,49 +217,39 @@ mod tests {
     const MANUFACTURER: &str = "manufacturer";
     const PRODUCT_NAME: &str = "product_name";
 
-    fn new_test_chip(
-        emulated_chip: Option<SharedEmulatedChip>,
-        shared_chips: SharedChips,
-        id_factory: &RwLock<IdFactory<ChipIdentifier>>,
-    ) -> Chip {
-        let create_params = CreateParams {
-            kind: CHIP_KIND,
-            address: ADDRESS.to_string(),
-            name: None,
-            manufacturer: MANUFACTURER.to_string(),
-            product_name: PRODUCT_NAME.to_string(),
-            bt_properties: None,
-        };
-        match new_with_singleton(
-            DEVICE_ID,
-            DEVICE_NAME,
-            &create_params,
-            shared_chips.clone(),
-            id_factory,
-        ) {
-            Ok(mut chip) => {
-                chip.emulated_chip = emulated_chip;
-                chip
-            }
-            Err(err) => {
-                unreachable!("{err:?}");
+    impl ChipManager {
+        fn new_test_chip(&self, emulated_chip: Option<SharedEmulatedChip>) -> Chip {
+            let create_params = CreateParams {
+                kind: CHIP_KIND,
+                address: ADDRESS.to_string(),
+                name: None,
+                manufacturer: MANUFACTURER.to_string(),
+                product_name: PRODUCT_NAME.to_string(),
+                bt_properties: None,
+            };
+            match self.new_chip(DEVICE_ID, DEVICE_NAME, &create_params) {
+                Ok(mut chip) => {
+                    chip.emulated_chip = emulated_chip;
+                    chip
+                }
+                Err(err) => {
+                    unreachable!("{err:?}");
+                }
             }
         }
     }
 
     #[test]
     fn test_new_and_get_with_singleton() {
-        // Construct a new Chip by calling new_test_chip, which calls new_with_singleton
-        let shared_chips = SharedChips(Arc::new(Mutex::new(HashMap::new())));
-        let id_factory = RwLock::new(IdFactory::new(INITIAL_CHIP_ID, 1));
-        let chip = new_test_chip(None, shared_chips.clone(), &id_factory);
+        let chip_manager = ChipManager::new(INITIAL_CHIP_ID);
+        let chip = chip_manager.new_test_chip(None);
 
-        // Check if the Chip has been successfully inserted in SharedChips
+        // Check if the Chip has been successfully inserted
         let chip_id = chip.id;
-        assert!(shared_chips.lock().contains_key(&chip_id));
+        assert!(chip_manager.chips.lock().unwrap().contains_key(&chip_id));
 
-        // Check if the get_with_singleton can successfully fetch the chip
-        let chip_result = get_with_singleton(chip_id, shared_chips.clone());
+        // Check if the chip_manager can successfully fetch the chip
+        let chip_result = chip_manager.get_chip(chip_id);
         assert!(chip_result.is_ok());
 
         // Check if the fields are correctly populated
@@ -277,13 +269,13 @@ mod tests {
         // When emulated_chip is constructed
         let mocked_echip =
             mocked::new(&mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED }, 0);
-        let shared_chips = SharedChips(Arc::new(Mutex::new(HashMap::new())));
-        let id_factory = RwLock::new(IdFactory::new(INITIAL_CHIP_ID, 1));
-        let chip = new_test_chip(Some(mocked_echip), shared_chips.clone(), &id_factory);
+        let chip_manager = ChipManager::new(INITIAL_CHIP_ID);
+
+        let chip = chip_manager.new_test_chip(Some(mocked_echip));
         assert_eq!(netsim_radio_stats::Kind::UNSPECIFIED, chip.get_stats().first().unwrap().kind());
 
         // When emulated_chip is not constructed
-        let chip = new_test_chip(None, shared_chips.clone(), &id_factory);
+        let chip = chip_manager.new_test_chip(None);
         assert_eq!(Vec::<ProtoRadioStats>::new(), chip.get_stats());
     }
 
@@ -291,15 +283,14 @@ mod tests {
     fn test_chip_get() {
         let mocked_echip =
             mocked::new(&mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED }, 0);
-        let shared_chips = SharedChips(Arc::new(Mutex::new(HashMap::new())));
-        let id_factory = RwLock::new(IdFactory::new(INITIAL_CHIP_ID, 1));
-        let chip = new_test_chip(Some(mocked_echip.clone()), shared_chips.clone(), &id_factory);
+        let chip_manager = ChipManager::new(INITIAL_CHIP_ID);
+        let chip = chip_manager.new_test_chip(Some(mocked_echip.clone()));
 
         // Obtain actual chip.get()
         let actual = chip.get().unwrap();
 
         // Construct expected ProtoChip
-        let mut expected = mocked_echip.lock().get();
+        let mut expected = mocked_echip.get();
         expected.kind = EnumOrUnknown::new(chip.kind);
         expected.id = chip.id;
         expected.name = chip.name.clone();
@@ -314,9 +305,8 @@ mod tests {
     fn test_chip_patch() {
         let mocked_echip =
             mocked::new(&mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED }, 0);
-        let shared_chips = SharedChips(Arc::new(Mutex::new(HashMap::new())));
-        let id_factory = RwLock::new(IdFactory::new(INITIAL_CHIP_ID, 1));
-        let mut chip = new_test_chip(Some(mocked_echip.clone()), shared_chips.clone(), &id_factory);
+        let chip_manager = ChipManager::new(INITIAL_CHIP_ID);
+        let mut chip = chip_manager.new_test_chip(Some(mocked_echip.clone()));
 
         // Construct the patch body for modifying manufacturer and product_name
         let mut patch_body = ProtoChip::new();

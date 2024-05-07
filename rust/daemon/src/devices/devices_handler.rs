@@ -568,10 +568,10 @@ fn distance(a: &ProtoPosition, b: &ProtoPosition) -> f32 {
 
 #[allow(dead_code)]
 fn get_distance(id: ChipIdentifier, other_id: ChipIdentifier) -> Result<f32, String> {
-    let device_id = crate::devices::chip::get(id)
+    let device_id = crate::devices::chip::get_chip(id)
         .or(Err(format!("No such device with chip_id {id}")))?
         .device_id;
-    let other_device_id = crate::devices::chip::get(other_id)
+    let other_device_id = crate::devices::chip::get_chip(other_id)
         .or(Err(format!("No such device with chip_id {other_id}")))?
         .device_id;
     let devices_arc = get_devices();
@@ -604,7 +604,7 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
 /// Function to obtain ProtoDevice given a ChipIdentifier
 #[cfg(feature = "cuttlefish")]
 pub fn get_device(chip_id: ChipIdentifier) -> anyhow::Result<ProtoDevice> {
-    let device_id = chip::get(chip_id).map_err(|e| anyhow::anyhow!("{e:?}"))?.device_id;
+    let device_id = chip::get_chip(chip_id).map_err(|e| anyhow::anyhow!("{e:?}"))?.device_id;
     let device = {
         let devices_arc = get_devices();
         let devices = devices_arc.read().unwrap();

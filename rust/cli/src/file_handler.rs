@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use crate::ffi::ClientResponseReadable;
-use log::error;
 use std::fs::File;
 /// Implements handler for pcap operations
 use std::io::Write;
 use std::path::PathBuf;
+use tracing::error;
 
 pub struct FileHandler {
     pub file: File,
