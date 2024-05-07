@@ -23,7 +23,7 @@ use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -98,7 +98,7 @@ impl EmulatedChip for Wifi {
         WIFI_MANAGER.request_sender.send((self.chip_id, bytes)).unwrap();
     }
 
-    fn reset(&mut self) {
+    fn reset(&self) {
         WIFI_MANAGER.medium.reset(self.chip_id);
     }
 
@@ -112,13 +112,13 @@ impl EmulatedChip for Wifi {
         chip_proto
     }
 
-    fn patch(&mut self, patch: &ProtoChip) {
+    fn patch(&self, patch: &ProtoChip) {
         if patch.wifi().state.is_some() {
             WIFI_MANAGER.medium.set_enabled(self.chip_id, patch.wifi().state.unwrap());
         }
     }
 
-    fn remove(&mut self) {
+    fn remove(&self) {
         WIFI_MANAGER.medium.remove(self.chip_id);
     }
 
@@ -147,7 +147,7 @@ pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChi
     WIFI_MANAGER.medium.add(chip_id);
     info!("WiFi EmulatedChip created chip_id: {chip_id}");
     let echip = Wifi { chip_id };
-    SharedEmulatedChip(Arc::new(Mutex::new(Box::new(echip))))
+    Arc::new(Box::new(echip))
 }
 
 /// Starts the WiFi service.

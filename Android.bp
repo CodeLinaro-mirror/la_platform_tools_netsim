@@ -374,10 +374,10 @@ rust_defaults {
         "libclap",
         "libcxx",
         "libhex",
-        "liblog_rust",
         "libnetsim_common",
         "libnetsim_proto",
         "libprotobuf",
+        "libtracing"
     ],
 }
 

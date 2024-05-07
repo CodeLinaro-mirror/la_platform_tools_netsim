@@ -22,6 +22,10 @@ from utils import (AOSP_ROOT, cmake_toolchain, run)
 
 
 class ConfigureTask(Task):
+  BUILDCONFIG = {
+      "debug": "-DCMAKE_BUILD_TYPE=Debug",
+      "release": "-DCMAKE_BUILD_TYPE=Release",
+  }
 
   def __init__(self, args, env):
     super().__init__("Configure")
@@ -31,6 +35,7 @@ class ConfigureTask(Task):
       self.target = args.target.lower()
     else:
       self.target = platform.system().lower()
+    self.build_config = self.BUILDCONFIG[args.config]
 
   def do_run(self):
     if self.out.exists():
@@ -50,6 +55,7 @@ class ConfigureTask(Task):
         cmake,
         f"-B{self.out}",
         "-G Ninja",
+        self.build_config,
         f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain(self.target)}",
         AOSP_ROOT / "tools" / "netsim",
     ]
