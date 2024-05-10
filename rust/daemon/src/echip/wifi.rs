@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
-use crate::echip::{packet::hwsim_cmd_response, EmulatedChip, SharedEmulatedChip};
+use crate::echip::{packet::handle_response, EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_wifi;
 use crate::wifi::medium::Medium;
 use bytes::Bytes;
@@ -23,6 +23,7 @@ use netsim_proto::config::WiFi as WiFiConfig;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -48,7 +49,7 @@ impl WifiManager {
         let (request_sender, rx) = std::sync::mpsc::channel::<(u32, Bytes)>();
 
         thread::spawn(move || {
-            const POLL_INTERVAL: Duration = Duration::from_micros(10);
+            const POLL_INTERVAL: Duration = Duration::from_millis(1);
             let mut next_instant = Instant::now() + POLL_INTERVAL;
 
             loop {
@@ -65,6 +66,7 @@ impl WifiManager {
                             || !WIFI_MANAGER.medium.process(chip_id, &packet)
                         {
                             ffi_wifi::handle_wifi_request(chip_id, &packet.to_vec());
+                            ffi_wifi::libslirp_main_loop_wait();
                         }
                     }
                     _ => {
@@ -76,14 +78,11 @@ impl WifiManager {
         });
 
         let (response_sender, rx) = std::sync::mpsc::channel::<Bytes>();
-        thread::spawn(move || {
-            loop {
-                // rx.recv() should either returns packets or timeout after 1 second.
-                let packet = rx.recv().unwrap();
-                WIFI_MANAGER.medium.process_response(&packet);
-            }
+        thread::spawn(move || loop {
+            let packet = rx.recv().unwrap();
+            WIFI_MANAGER.medium.process_response(&packet);
         });
-        WifiManager { medium: Medium::new(hwsim_cmd_response), request_sender, response_sender }
+        WifiManager { medium: Medium::new(handle_response), request_sender, response_sender }
     }
 }
 
@@ -93,9 +92,8 @@ lazy_static! {
 }
 
 impl EmulatedChip for Wifi {
-    fn handle_request(&self, packet: &[u8]) {
-        let bytes = Bytes::copy_from_slice(packet);
-        WIFI_MANAGER.request_sender.send((self.chip_id, bytes)).unwrap();
+    fn handle_request(&self, packet: Bytes) {
+        WIFI_MANAGER.request_sender.send((self.chip_id, packet)).unwrap();
     }
 
     fn reset(&self) {
@@ -105,9 +103,9 @@ impl EmulatedChip for Wifi {
     fn get(&self) -> ProtoChip {
         let mut chip_proto = ProtoChip::new();
         if let Some(client) = WIFI_MANAGER.medium.get(self.chip_id) {
-            chip_proto.mut_wifi().state = Some(client.enabled);
-            chip_proto.mut_wifi().tx_count = client.tx_count as i32;
-            chip_proto.mut_wifi().rx_count = client.rx_count as i32;
+            chip_proto.mut_wifi().state = Some(client.enabled.load(Ordering::Relaxed));
+            chip_proto.mut_wifi().tx_count = client.tx_count.load(Ordering::Relaxed) as i32;
+            chip_proto.mut_wifi().rx_count = client.rx_count.load(Ordering::Relaxed) as i32;
         }
         chip_proto
     }

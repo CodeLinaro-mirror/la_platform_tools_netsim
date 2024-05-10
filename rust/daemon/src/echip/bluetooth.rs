@@ -16,6 +16,7 @@ use crate::devices::chip::ChipIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_bluetooth;
 
+use bytes::Bytes;
 use cxx::{let_cxx_string, CxxString, CxxVector};
 use lazy_static::lazy_static;
 use log::{error, info};
@@ -79,7 +80,7 @@ fn patch_state(
 }
 
 impl EmulatedChip for Bluetooth {
-    fn handle_request(&self, packet: &[u8]) {
+    fn handle_request(&self, packet: Bytes) {
         // Lock to protect device_to_transport_ table in C++
         let _guard = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
         ffi_bluetooth::handle_bt_request(self.rootcanal_id, packet[0], &packet[1..].to_vec())
@@ -198,6 +199,35 @@ pub fn bluetooth_stop() {
     ffi_bluetooth::bluetooth_stop();
 }
 
+/// Report Invalid Packet
+pub fn report_invalid_packet(
+    rootcanal_id: RootcanalIdentifier,
+    reason: InvalidPacketReason,
+    description: String,
+    packet: Vec<u8>,
+) {
+    // TODO(b/330726276): spawn task on tokio once context is provided from rust_main
+    let _ = std::thread::Builder::new().name("report_invalid_packet".to_string()).spawn(move || {
+        match BLUETOOTH_INVALID_PACKETS.lock().unwrap().get_mut(&rootcanal_id) {
+            Some(v) => {
+                // Remove the earliest reported packet if length greater than 5
+                if v.len() >= 5 {
+                    v.remove(0);
+                }
+                // append error packet
+                let mut invalid_packet = InvalidPacket::new();
+                invalid_packet.set_reason(reason);
+                invalid_packet.set_description(description.clone());
+                invalid_packet.set_packet(packet.clone());
+                v.push(invalid_packet);
+                // Log the report
+                info!("Invalid Packet for rootcanal_id: {rootcanal_id}, reason: {reason:?}, description: {description:?}, packet: {packet:?}");
+            }
+            None => error!("Bluetooth EmulatedChip not created for rootcanal_id: {rootcanal_id}"),
+        }
+    });
+}
+
 /// (Called by C++) Report Invalid Packet
 pub fn report_invalid_packet_cxx(
     rootcanal_id: RootcanalIdentifier,
@@ -205,23 +235,10 @@ pub fn report_invalid_packet_cxx(
     description: &CxxString,
     packet: &CxxVector<u8>,
 ) {
-    match BLUETOOTH_INVALID_PACKETS.lock().unwrap().get_mut(&rootcanal_id) {
-        Some(v) => {
-            // Remove the earliest reported packet if length greater than 5
-            if v.len() >= 5 {
-                v.remove(0);
-            }
-            // append error packet
-            let mut invalid_packet = InvalidPacket::new();
-            invalid_packet.set_reason(
-                InvalidPacketReason::from_i32(reason).unwrap_or(InvalidPacketReason::UNKNOWN),
-            );
-            invalid_packet.set_description(description.to_string());
-            invalid_packet.set_packet(packet.as_slice().to_vec());
-            v.push(invalid_packet);
-            // Log the report
-            info!("Reported Invalid Packet for Bluetooth EmulatedChip with rootcanal_id: {rootcanal_id}, reason:{reason}, description: {description:?}, packet: {packet:?}");
-        }
-        None => error!("Bluetooth EmulatedChip not created for rootcanal_id: {rootcanal_id}"),
-    }
+    report_invalid_packet(
+        rootcanal_id,
+        InvalidPacketReason::from_i32(reason).unwrap_or(InvalidPacketReason::UNKNOWN),
+        description.to_string(),
+        packet.as_slice().to_vec(),
+    );
 }

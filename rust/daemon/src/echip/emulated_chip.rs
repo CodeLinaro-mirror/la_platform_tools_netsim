@@ -17,6 +17,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use bytes::Bytes;
 use lazy_static::lazy_static;
 
 use netsim_proto::model::Chip as ProtoChip;
@@ -68,7 +69,7 @@ pub trait EmulatedChip {
     /// * Wi-Fi - packet is Radiotap format
     /// * UWB - packet is UCI format
     /// * NFC - packet is NCI format
-    fn handle_request(&self, packet: &[u8]);
+    fn handle_request(&self, packet: Bytes);
 
     /// Reset the internal state of the emulated chip for the virtual device.
     /// The transmitted and received packet count will be set to 0 and the chip

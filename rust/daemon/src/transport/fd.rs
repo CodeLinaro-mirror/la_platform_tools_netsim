@@ -23,6 +23,7 @@ use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::echip;
 use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::ffi::ffi_transport;
+use bytes::Bytes;
 use lazy_static::lazy_static;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
@@ -84,7 +85,7 @@ struct FdTransport {
 }
 
 impl Response for FdTransport {
-    fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
+    fn response(&mut self, packet: Bytes, packet_type: u8) {
         let mut buffer = Vec::<u8>::new();
         if packet_type != (PacketType::HCI_PACKET_UNSPECIFIED.value() as u8) {
             buffer.push(packet_type);
@@ -122,13 +123,13 @@ unsafe fn fd_reader(
                             error!("End reader connection with fd={}. Failed to reading uci control packet: {:?}", fd_rx, e);
                             break;
                         }
-                        Ok(uci::Packet { mut payload }) => {
-                            echip::handle_request(chip_id, &mut payload, 0);
+                        Ok(uci::Packet { payload }) => {
+                            echip::handle_request(chip_id, &payload, 0);
                         }
                     },
                     ChipKindEnum::BLUETOOTH => match h4::read_h4_packet(&mut rx) {
-                        Ok(h4::Packet { h4_type, mut payload }) => {
-                            echip::handle_request(chip_id, &mut payload, h4_type);
+                        Ok(h4::Packet { h4_type, payload }) => {
+                            echip::handle_request(chip_id, &payload, h4_type);
                         }
                         Err(PacketError::IoError(e))
                             if e.kind() == ErrorKind::UnexpectedEof =>
@@ -297,7 +298,7 @@ unsafe fn connector_fd_reader(fd_rx: i32, kind: ChipKindEnum, stream_id: u32) ->
                         }
                         Ok(uci::Packet { payload }) => {
                             let mut request = PacketRequest::new();
-                            request.set_packet(payload);
+                            request.set_packet(payload.to_vec());
                             let proto_bytes = request.write_to_bytes().unwrap();
                             ffi_transport::write_packet_request(stream_id, &proto_bytes);
                         }
@@ -307,7 +308,7 @@ unsafe fn connector_fd_reader(fd_rx: i32, kind: ChipKindEnum, stream_id: u32) ->
                             let mut request = PacketRequest::new();
                             let hci_packet = HCIPacket {
                                 packet_type: EnumOrUnknown::from_i32(h4_type as i32),
-                                packet: payload,
+                                packet: payload.to_vec(),
                                 ..Default::default()
                             };
                             request.set_hci_packet(hci_packet);

@@ -73,6 +73,7 @@ rust_defaults {
         "libpica",
         "libprotobuf",
         "libprotobuf_json_mapping",
+        "librand",
         "libregex",
         "libserde",
         "libserde_json",
@@ -377,7 +378,7 @@ rust_defaults {
         "libnetsim_common",
         "libnetsim_proto",
         "libprotobuf",
-        "libtracing"
+        "libtracing",
     ],
 }
 

@@ -20,7 +20,11 @@
 
 use env_logger::{Builder, Env};
 use log::{Level, Record};
-use std::{ffi::OsStr, io::Write, path::Path};
+use std::{
+    ffi::OsStr,
+    io::Write,
+    path::{Path, MAIN_SEPARATOR},
+};
 
 use crate::util::time_display::log_current_time;
 
@@ -61,10 +65,18 @@ pub fn init_for_test() {
 }
 
 /// Helper function for parsing the file name from given record file path
+/// This will provide the file information where the log function is called
 fn format_file<'a>(record: &'a Record<'a>) -> &'a str {
     match record.file() {
         Some(filepath) => {
-            Path::new(filepath).file_name().unwrap_or(OsStr::new("N/A")).to_str().unwrap()
+            let file = Path::new(filepath);
+            let netsim_path = format!("tools{MAIN_SEPARATOR}netsim");
+            // If file path includes tools/netsim, only print the file name
+            if file.to_str().is_some_and(|f| f.contains(&netsim_path)) {
+                return file.file_name().unwrap_or(OsStr::new("N/A")).to_str().unwrap();
+            }
+            // Print full path for all dependent crates
+            return file.to_str().unwrap();
         }
         None => "N/A",
     }

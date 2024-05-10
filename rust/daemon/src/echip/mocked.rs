@@ -15,6 +15,7 @@
 use crate::devices::chip::ChipIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
+use bytes::Bytes;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
@@ -33,7 +34,7 @@ pub struct Mock {
 }
 
 impl EmulatedChip for Mock {
-    fn handle_request(&self, _packet: &[u8]) {}
+    fn handle_request(&self, _packet: Bytes) {}
 
     fn reset(&self) {}
 
