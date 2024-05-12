@@ -16,6 +16,7 @@ use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch, ble_bea
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
+use bytes::Bytes;
 use log::{error, info};
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::ChipCreate as ChipCreateProto;
@@ -39,7 +40,7 @@ pub struct BleBeacon {
 }
 
 impl EmulatedChip for BleBeacon {
-    fn handle_request(&self, packet: &[u8]) {
+    fn handle_request(&self, packet: Bytes) {
         #[cfg(not(test))]
         ffi_bluetooth::handle_bt_request(self.facade_id, packet[0], &packet[1..].to_vec());
         #[cfg(test)]

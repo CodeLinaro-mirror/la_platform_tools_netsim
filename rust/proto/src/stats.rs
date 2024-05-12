@@ -290,6 +290,8 @@ pub mod invalid_packet {
         UNSUPPORTED = 2,
         // @@protoc_insertion_point(enum_value:netsim.stats.InvalidPacket.Reason.OTHERS)
         OTHERS = 3,
+        // @@protoc_insertion_point(enum_value:netsim.stats.InvalidPacket.Reason.DELAYED)
+        DELAYED = 4,
     }
 
     impl ::protobuf::Enum for Reason {
@@ -305,6 +307,7 @@ pub mod invalid_packet {
                 1 => ::std::option::Option::Some(Reason::PARSE_ERROR),
                 2 => ::std::option::Option::Some(Reason::UNSUPPORTED),
                 3 => ::std::option::Option::Some(Reason::OTHERS),
+                4 => ::std::option::Option::Some(Reason::DELAYED),
                 _ => ::std::option::Option::None
             }
         }
@@ -314,6 +317,7 @@ pub mod invalid_packet {
             Reason::PARSE_ERROR,
             Reason::UNSUPPORTED,
             Reason::OTHERS,
+            Reason::DELAYED,
         ];
     }
 
@@ -1093,28 +1097,29 @@ impl ::protobuf::reflect::ProtobufValue for NetsimStats {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x12netsim/stats.proto\x12\x0cnetsim.stats\"\xca\x01\n\rInvalidPacket\
+    \n\x12netsim/stats.proto\x12\x0cnetsim.stats\"\xd7\x01\n\rInvalidPacket\
     \x12:\n\x06reason\x18\x01\x20\x01(\x0e2\".netsim.stats.InvalidPacket.Rea\
     sonR\x06reason\x12\x20\n\x0bdescription\x18\x02\x20\x01(\tR\x0bdescripti\
-    on\x12\x16\n\x06packet\x18\x03\x20\x01(\x0cR\x06packet\"C\n\x06Reason\
+    on\x12\x16\n\x06packet\x18\x03\x20\x01(\x0cR\x06packet\"P\n\x06Reason\
     \x12\x0b\n\x07UNKNOWN\x10\0\x12\x0f\n\x0bPARSE_ERROR\x10\x01\x12\x0f\n\
-    \x0bUNSUPPORTED\x10\x02\x12\n\n\x06OTHERS\x10\x03\"\xb5\x03\n\x10NetsimR\
-    adioStats\x12\x1b\n\tdevice_id\x18\x01\x20\x01(\rR\x08deviceId\x127\n\
-    \x04kind\x18\x02\x20\x01(\x0e2#.netsim.stats.NetsimRadioStats.KindR\x04k\
-    ind\x12#\n\rduration_secs\x18\x03\x20\x01(\x04R\x0cdurationSecs\x12\x19\
-    \n\x08tx_count\x18\x04\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_count\
-    \x18\x05\x20\x01(\x05R\x07rxCount\x12\x19\n\x08tx_bytes\x18\x06\x20\x01(\
-    \x05R\x07txBytes\x12\x19\n\x08rx_bytes\x18\x07\x20\x01(\x05R\x07rxBytes\
-    \x12D\n\x0finvalid_packets\x18\x08\x20\x03(\x0b2\x1b.netsim.stats.Invali\
-    dPacketR\x0einvalidPackets\"t\n\x04Kind\x12\x0f\n\x0bUNSPECIFIED\x10\0\
-    \x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x01\x12\x15\n\x11BLUETOOTH_CLASSI\
-    C\x10\x02\x12\x0e\n\nBLE_BEACON\x10\x03\x12\x08\n\x04WIFI\x10\x04\x12\
-    \x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\x10\x06\"\xe8\x01\n\x0bNetsimStat\
-    s\x12#\n\rduration_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0c\
-    device_count\x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurr\
-    ent_devices\x18\x03\x20\x01(\x05R\x15peakConcurrentDevices\x12?\n\x0brad\
-    io_stats\x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRadioStatsR\nradio\
-    Stats\x12\x18\n\x07version\x18\x05\x20\x01(\tR\x07version\
+    \x0bUNSUPPORTED\x10\x02\x12\n\n\x06OTHERS\x10\x03\x12\x0b\n\x07DELAYED\
+    \x10\x04\"\xb5\x03\n\x10NetsimRadioStats\x12\x1b\n\tdevice_id\x18\x01\
+    \x20\x01(\rR\x08deviceId\x127\n\x04kind\x18\x02\x20\x01(\x0e2#.netsim.st\
+    ats.NetsimRadioStats.KindR\x04kind\x12#\n\rduration_secs\x18\x03\x20\x01\
+    (\x04R\x0cdurationSecs\x12\x19\n\x08tx_count\x18\x04\x20\x01(\x05R\x07tx\
+    Count\x12\x19\n\x08rx_count\x18\x05\x20\x01(\x05R\x07rxCount\x12\x19\n\
+    \x08tx_bytes\x18\x06\x20\x01(\x05R\x07txBytes\x12\x19\n\x08rx_bytes\x18\
+    \x07\x20\x01(\x05R\x07rxBytes\x12D\n\x0finvalid_packets\x18\x08\x20\x03(\
+    \x0b2\x1b.netsim.stats.InvalidPacketR\x0einvalidPackets\"t\n\x04Kind\x12\
+    \x0f\n\x0bUNSPECIFIED\x10\0\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x01\
+    \x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x02\x12\x0e\n\nBLE_BEACON\x10\x03\
+    \x12\x08\n\x04WIFI\x10\x04\x12\x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\x10\
+    \x06\"\xe8\x01\n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\x01(\
+    \x04R\x0cdurationSecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\x0bde\
+    viceCount\x126\n\x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\x15pea\
+    kConcurrentDevices\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\x1e.netsi\
+    m.stats.NetsimRadioStatsR\nradioStats\x12\x18\n\x07version\x18\x05\x20\
+    \x01(\tR\x07version\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

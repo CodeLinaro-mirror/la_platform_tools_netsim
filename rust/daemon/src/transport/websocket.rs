@@ -15,6 +15,7 @@
 use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, io::Cursor, net::TcpStream};
 
+use bytes::Bytes;
 use http::Request;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
@@ -71,7 +72,7 @@ struct WebSocketTransport {
 }
 
 impl Response for WebSocketTransport {
-    fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
+    fn response(&mut self, packet: Bytes, packet_type: u8) {
         let mut buffer = Vec::new();
         buffer.push(packet_type);
         buffer.extend(packet);
@@ -148,8 +149,8 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
         if packet_msg.is_binary() {
             let mut cursor = Cursor::new(packet_msg.into_data());
             match h4::read_h4_packet(&mut cursor) {
-                Ok(mut packet) => {
-                    echip::handle_request(result.chip_id, &mut packet.payload, packet.h4_type);
+                Ok(packet) => {
+                    echip::handle_request(result.chip_id, &packet.payload, packet.h4_type);
                 }
                 Err(error) => {
                     error!(

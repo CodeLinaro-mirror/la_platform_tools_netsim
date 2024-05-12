@@ -23,6 +23,7 @@ message InvalidPacket {
     PARSE_ERROR = 1;
     UNSUPPORTED = 2;
     OTHERS = 3;
+    DELAYED = 4;
   }
   optional Reason reason = 1;
   optional string description = 2;
