@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use futures::{channel::mpsc::UnboundedSender, sink::SinkExt};
+use bytes::Bytes;
+use futures::{channel::mpsc::UnboundedSender, sink::SinkExt, StreamExt};
 use lazy_static::lazy_static;
 use pica::{Handle, Pica};
 
@@ -21,7 +22,7 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 
 use crate::devices::chip::ChipIdentifier;
-use crate::echip::packet::handle_response_rust;
+use crate::echip::packet::handle_response;
 use crate::uwb::ranging_estimator::{SharedState, UwbRangingEstimator};
 
 use std::sync::{Arc, Mutex};
@@ -52,11 +53,11 @@ pub struct Uwb {
     uci_stream_writer: UnboundedSender<Vec<u8>>,
     state: bool,
     tx_count: i32,
-    rx_count: i32, // TODO(b/330788870): Increment rx_count after handle_response_rust
+    rx_count: i32, // TODO(b/330788870): Increment rx_count after handle_response
 }
 
 impl EmulatedChip for Uwb {
-    fn handle_request(&self, packet: &[u8]) {
+    fn handle_request(&self, packet: Bytes) {
         // TODO(b/330788870): Increment tx_count
         self.uci_stream_writer
             .unbounded_send(packet.into())
@@ -132,13 +133,13 @@ pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmul
         rx_count: 0,
     };
 
-    // Thread for obtaining packet from pica and invoking handle_response_rust
-    let _ =
-        thread::Builder::new().name(format!("uwb_packet_response_{chip_id}")).spawn(move || {
-            for packet in futures::executor::block_on_stream(uci_sink_receiver) {
-                handle_response_rust(chip_id, packet.into());
-            }
-        });
+    // Spawn a future for obtaining packet from pica and invoking handle_response_rust
+    PICA_RUNTIME.spawn(async move {
+        let mut uci_sink_receiver = uci_sink_receiver;
+        while let Some(packet) = uci_sink_receiver.next().await {
+            handle_response(chip_id, &Bytes::from(packet));
+        }
+    });
     Arc::new(Box::new(echip))
 }
 

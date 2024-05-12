@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bytes::Bytes;
 use log::{error, warn};
 use std::collections::VecDeque;
 use std::io::{Error, Read};
@@ -19,7 +20,7 @@ use std::io::{Error, Read};
 #[derive(Debug)]
 pub struct Packet {
     pub h4_type: u8,
-    pub payload: Vec<u8>,
+    pub payload: Bytes,
 }
 
 #[derive(Debug)]
@@ -99,7 +100,7 @@ pub fn read_h4_packet<R: Read>(reader: &mut R) -> Result<Packet, PacketError> {
         );
         return Err(PacketError::IoError(e));
     }
-    Ok(Packet { h4_type, payload: packet })
+    Ok(Packet { h4_type, payload: Bytes::from(packet) })
 }
 
 /// Skip all received bytes until the HCI Reset command is received.
@@ -131,7 +132,10 @@ fn h4_recovery<R: Read>(mut reader: R) -> Result<Packet, PacketError> {
         buffer.push_back(byte[0]);
         if buffer == reset_pattern {
             warn!("Received HCI Reset command, exiting recovery state");
-            return Ok(Packet { h4_type: RESET_COMMAND[0], payload: RESET_COMMAND[1..].to_vec() });
+            return Ok(Packet {
+                h4_type: RESET_COMMAND[0],
+                payload: Bytes::from(RESET_COMMAND[1..].to_vec()),
+            });
         }
     }
 }

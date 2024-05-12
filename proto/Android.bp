@@ -113,6 +113,7 @@ cc_library {
         "netsim/model.proto",
         "netsim/packet_streamer.proto",
         "netsim/startup.proto",
+        "netsim/stats.proto",
         ":rootcanal-protos",
     ],
 }

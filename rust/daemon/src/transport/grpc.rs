@@ -14,6 +14,7 @@
 
 use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::ffi::ffi_transport::handle_grpc_response;
+use bytes::Bytes;
 
 /// Grpc transport.
 ///
@@ -25,8 +26,8 @@ struct GrpcTransport {
 }
 
 impl Response for GrpcTransport {
-    fn response(&mut self, packet: Vec<u8>, packet_type: u8) {
-        handle_grpc_response(self.chip_id, &packet, packet_type)
+    fn response(&mut self, packet: Bytes, packet_type: u8) {
+        handle_grpc_response(self.chip_id, &packet.to_vec(), packet_type)
     }
 }
 

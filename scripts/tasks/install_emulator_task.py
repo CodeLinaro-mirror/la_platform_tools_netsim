@@ -191,6 +191,12 @@ class InstallEmulatorManager:
           symlinks=True,
           dirs_exist_ok=True,
       )
+      shutil.copytree(
+          emulator_filepath,
+          OBJS_DIR / "distribution" / "emulator",
+          symlinks=True,
+          dirs_exist_ok=True,
+      )
 
   def process(self) -> bool:
     """Process the emulator installation
