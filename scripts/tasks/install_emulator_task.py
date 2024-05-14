@@ -43,10 +43,12 @@ class InstallEmulatorTask(Task):
     super().__init__("InstallEmulator")
     self.buildbot = args.buildbot
     self.out_dir = args.out_dir
+    # Local fetching use only - default to emulator-linux_x64
+    self.target = args.emulator_target
 
   def do_run(self):
     install_emulator_manager = InstallEmulatorManager(
-        self.buildbot, self.out_dir
+        self.buildbot, self.out_dir, self.target
     )
     return install_emulator_manager.process()
 
@@ -65,15 +67,17 @@ class InstallEmulatorManager:
       used for Android Build Bots.
   """
 
-  def __init__(self, buildbot, out_dir):
+  def __init__(self, buildbot, out_dir, target):
     """Initializes the instances based on environment
 
     Args:
       buildbot: Defines if it's being invoked with Build Bots
       out_dir: Defines the out directory of the build environment
+      target: The emulator build target to install
     """
     self.buildbot = buildbot
     self.out_dir = out_dir
+    self.target = target
 
   def __os_name_fetch(self):
     """Obtains the os substring of the emulator artifact"""
@@ -211,7 +215,7 @@ class InstallEmulatorManager:
               "/google/data/ro/projects/android/fetch_artifact",
               "--latest",
               "--target",
-              "emulator-linux_x64",
+              self.target,
               "--branch",
               "aosp-emu-master-dev",
               "sdk-repo-linux-emulator-*.zip",

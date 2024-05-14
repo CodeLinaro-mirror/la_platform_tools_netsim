@@ -163,7 +163,7 @@ pub fn handle_request(chip_id: ChipIdentifier, packet: &mut Vec<u8>, packet_type
 
     // Perform handle_request
     match get(chip_id) {
-        Some(emulated_chip) => emulated_chip.lock().handle_request(packet),
+        Some(emulated_chip) => emulated_chip.handle_request(packet),
         None => warn!("SharedEmulatedChip doesn't exist for {chip_id}"),
     };
 }

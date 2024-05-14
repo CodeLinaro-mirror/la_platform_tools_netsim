@@ -243,8 +243,3 @@ endif()
 # Testing
 enable_testing()
 include(GoogleTest)
-
-# Stripping flags for non-debug builds
-if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s")
-endif()

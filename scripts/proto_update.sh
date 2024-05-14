@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Update the Rust protobufs on emu-master-dev branch
+# Update the Rust protobufs on netsim-dev branch
 #
-# scripts/cmake_setup.sh
+# scripts/build_tools.sh
 # ninja -C objs netsimd
 # repo start proto-update
 # scripts/proto_update.sh
@@ -31,6 +31,30 @@
 REPO=$(dirname $(readlink -f "$0"))/..
 CARGO=$REPO/rust/proto/Cargo.toml
 
+
+# run protoc command to generate grpc proto rust files
+# Can not generate files by proto/build.rs because protoc-grpcio doesn't support protobuf v3 yet.
+# https://github.com/mtp401/protoc-grpcio/issues/41
+
+# Install compilers since the crates are not in AOSP
+# TODO: Add required crate mappings to work in netsim-dev
+export CARGO_HOME=""
+# Specify versions to use the correct protobuf version.
+cargo install protobuf-codegen --version 3.2.0
+cargo install grpcio-compiler --version 0.13.0
+
+PROTOC_CMD="protoc --rust_out=./rust/proto/src --grpc_out=./rust/proto/src\
+ --plugin=protoc-gen-grpc=`which grpc_rust_plugin`\
+ -I./proto -I../../external/protobuf/src\
+ -I../../packages/modules/Bluetooth/tools/rootcanal/proto"
+$PROTOC_CMD ./proto/netsim/frontend.proto
+$PROTOC_CMD ./proto/netsim/packet_streamer.proto
+
+# Revert the generate proto files because they will be generatd by proto/build.rs.
+git checkout $REPO/rust/proto/src/packet_streamer.rs
+git checkout $REPO/rust/proto/src/frontend.rs
+rm $REPO/rust/proto/src/mod.rs
+
 # uncomment out lines
 sed -i 's/^##//g' $CARGO
 
@@ -39,13 +63,6 @@ export CARGO_HOME=$REPO/objs/rust/.cargo
 
 cd $REPO
 cargo build --manifest-path $CARGO
-
-# run protoc command to generate grpc proto rust files
-# Possibly need to install compilers:
-# $ cargo install protobuf-codegen
-# $ cargo install grpcio-compiler
-# TODO: Need to add required crate mappings to work in emu-master-dev
-# protoc --rust_out=./rust/proto/src --grpc_out=./rust/proto/src --plugin=protoc-gen-grpc=`which grpc_rust_plugin` -I./proto -I../../external/protobuf/src -I../../packages/modules/Bluetooth/tools/rootcanal/proto ./proto/netsim/frontend.proto
 
 # Undo changed to Cargo.toml
 git checkout $CARGO
@@ -57,6 +74,6 @@ OS=$(uname | tr '[:upper:]' '[:lower:]')
 RUSTFMT=`ls -d ../../prebuilts/rust/$OS-x86/*/bin/rustfmt | tail -1`
 
 # Format rust code
-find $REPO/rust/proto -name '*.rs' -exec $RUSTFMT -v {} \;
+find $REPO/rust/proto -name '*.rs' -exec $RUSTFMT --files-with-diff {} \;
 
 rm rust/Cargo.lock
