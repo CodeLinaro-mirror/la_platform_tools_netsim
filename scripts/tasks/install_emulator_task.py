@@ -45,10 +45,12 @@ class InstallEmulatorTask(Task):
     self.out_dir = args.out_dir
     # Local fetching use only - default to emulator-linux_x64
     self.target = args.emulator_target
+    # Local Emulator directory
+    self.local_emulator_dir = args.local_emulator_dir
 
   def do_run(self):
     install_emulator_manager = InstallEmulatorManager(
-        self.buildbot, self.out_dir, self.target
+        self.buildbot, self.out_dir, self.target, self.local_emulator_dir
     )
     return install_emulator_manager.process()
 
@@ -67,7 +69,7 @@ class InstallEmulatorManager:
       used for Android Build Bots.
   """
 
-  def __init__(self, buildbot, out_dir, target):
+  def __init__(self, buildbot, out_dir, target, local_emulator_dir):
     """Initializes the instances based on environment
 
     Args:
@@ -78,6 +80,7 @@ class InstallEmulatorManager:
     self.buildbot = buildbot
     self.out_dir = out_dir
     self.target = target
+    self.local_emulator_dir = local_emulator_dir
 
   def __os_name_fetch(self):
     """Obtains the os substring of the emulator artifact"""
@@ -158,7 +161,7 @@ class InstallEmulatorManager:
       os.remove(EMULATOR_ARTIFACT_PATH / file)
     return True
 
-  def __copy_artifacts(self):
+  def __copy_artifacts(self, emulator_filepath):
     """Copy artifacts into desired location
 
     In the local case, the emulator artifacts get copied into objs/
@@ -167,7 +170,6 @@ class InstallEmulatorManager:
 
     Note that the downloaded netsim artifacts are removed before copying.
     """
-    emulator_filepath = EMULATOR_ARTIFACT_PATH / "emulator"
     # Remove all downloaded netsim artifacts
     files = glob.glob(str(emulator_filepath / "netsim*"))
     for fname in files:
@@ -213,30 +215,34 @@ class InstallEmulatorManager:
     if not self.__prerequisites():
       return False
 
-    # Artifact fetching for local case
-    if not self.buildbot:
-      # Simulating the shell command
-      run(
-          [
-              "/google/data/ro/projects/android/fetch_artifact",
-              "--latest",
-              "--target",
-              self.target,
-              "--branch",
-              "aosp-emu-master-dev",
-              "sdk-repo-linux-emulator-*.zip",
-          ],
-          get_default_environment(AOSP_ROOT),
-          "install_emulator",
-          cwd=EMULATOR_ARTIFACT_PATH,
-      )
+    if self.local_emulator_dir:
+      # If local_emulator_dir is provided, copy the artifacts from this directory.
+      self.__copy_artifacts(Path(self.local_emulator_dir))
+    else:
+      # Artifact fetching for local case
+      if not self.buildbot:
+        # Simulating the shell command
+        run(
+            [
+                "/google/data/ro/projects/android/fetch_artifact",
+                "--latest",
+                "--target",
+                self.target,
+                "--branch",
+                "aosp-emu-master-dev",
+                "sdk-repo-linux-emulator-*.zip",
+            ],
+            get_default_environment(AOSP_ROOT),
+            "install_emulator",
+            cwd=EMULATOR_ARTIFACT_PATH,
+        )
 
-    # Unzipping emulator artifacts and remove zip files
-    if not self.__unzip_emulator_artifacts(os_name_artifact):
-      return False
+      # Unzipping emulator artifacts and remove zip files
+      if not self.__unzip_emulator_artifacts(os_name_artifact):
+        return False
 
-    # Copy artifacts after removing downloaded netsim artifacts
-    self.__copy_artifacts()
+      # Copy artifacts after removing downloaded netsim artifacts
+      self.__copy_artifacts(EMULATOR_ARTIFACT_PATH / "emulator")
 
     # Remove the EMULATOR_ARTIFACT_PATH in local case
     if not self.buildbot:

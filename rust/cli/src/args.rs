@@ -125,7 +125,7 @@ impl Command {
                 }
                 let mut result = frontend::PatchDeviceRequest::new();
                 let mut device = Device::new();
-                device.name = cmd.name.to_owned();
+                cmd.name.clone_into(&mut device.name);
                 device.chips.push(chip);
                 result.device = Some(device).into();
                 result.write_to_bytes().unwrap()
@@ -139,7 +139,7 @@ impl Command {
                     z: cmd.z.unwrap_or_default(),
                     ..Default::default()
                 };
-                device.name = cmd.name.to_owned();
+                cmd.name.clone_into(&mut device.name);
                 device.position = Some(position).into();
                 result.device = Some(device).into();
                 result.write_to_bytes().unwrap()

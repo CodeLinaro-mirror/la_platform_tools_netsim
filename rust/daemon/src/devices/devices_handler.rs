@@ -1418,11 +1418,11 @@ mod tests {
 
         // Remove a wifi chip of first device
         remove_chip(wifi_chip_result.device_id, wifi_chip_result.chip_id).unwrap();
-        assert!(get_devices().read().unwrap().entries.get(&wifi_chip_result.device_id).is_none());
+        assert!(!get_devices().read().unwrap().entries.contains_key(&wifi_chip_result.device_id));
 
         // Remove a bt chip of second device
         remove_chip(bt_chip_2_result.device_id, bt_chip_2_result.chip_id).unwrap();
-        assert!(get_devices().read().unwrap().entries.get(&bt_chip_2_result.device_id).is_none());
+        assert!(!get_devices().read().unwrap().entries.contains_key(&bt_chip_2_result.device_id));
     }
 
     #[test]
@@ -1445,7 +1445,7 @@ mod tests {
             Ok(_) => unreachable!(),
             Err(err) => assert_eq!(err, "RemoveChip device id 9999 not found"),
         }
-        assert!(get_devices().read().unwrap().entries.get(&bt_chip_result.device_id).is_some());
+        assert!(get_devices().read().unwrap().entries.contains_key(&bt_chip_result.device_id));
     }
 
     #[test]
@@ -1707,7 +1707,7 @@ mod tests {
 
         let devices = get_devices();
         let devices_guard = devices.read().unwrap();
-        assert!(devices_guard.entries.get(&device_id).is_none())
+        assert!(!devices_guard.entries.contains_key(&device_id))
     }
 
     #[test]
