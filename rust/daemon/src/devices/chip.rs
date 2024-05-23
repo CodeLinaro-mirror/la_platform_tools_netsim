@@ -135,9 +135,9 @@ impl Chip {
             .ok_or(format!("EmulatedChip hasn't been instantiated yet for chip_id {}", self.id))?;
         proto_chip.kind = EnumOrUnknown::new(self.kind);
         proto_chip.id = self.id;
-        proto_chip.name = self.name.clone();
-        proto_chip.manufacturer = self.manufacturer.clone();
-        proto_chip.product_name = self.product_name.clone();
+        proto_chip.name.clone_from(&self.name);
+        proto_chip.manufacturer.clone_from(&self.manufacturer);
+        proto_chip.product_name.clone_from(&self.product_name);
         Ok(proto_chip)
     }
 
@@ -145,10 +145,10 @@ impl Chip {
     /// into the chip changing the ChipFacade as needed.
     pub fn patch(&mut self, patch: &ProtoChip) -> Result<(), String> {
         if !patch.manufacturer.is_empty() {
-            self.manufacturer = patch.manufacturer.clone();
+            self.manufacturer.clone_from(&patch.manufacturer);
         }
         if !patch.product_name.is_empty() {
-            self.product_name = patch.product_name.clone();
+            self.product_name.clone_from(&patch.product_name);
         }
         self.emulated_chip
             .as_ref()
@@ -293,9 +293,9 @@ mod tests {
         let mut expected = mocked_echip.get();
         expected.kind = EnumOrUnknown::new(chip.kind);
         expected.id = chip.id;
-        expected.name = chip.name.clone();
-        expected.manufacturer = chip.manufacturer.clone();
-        expected.product_name = chip.product_name.clone();
+        expected.name.clone_from(&chip.name);
+        expected.manufacturer.clone_from(&chip.manufacturer);
+        expected.product_name.clone_from(&chip.product_name);
 
         // Compare
         assert_eq!(expected, actual);

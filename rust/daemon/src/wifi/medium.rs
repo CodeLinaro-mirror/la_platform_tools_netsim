@@ -386,19 +386,17 @@ impl Medium {
             let destination = self.get_station(&dest_addr)?;
             self.send_from_sta_frame(&frame, source, &destination)?;
             Ok(true)
-        } else if dest_addr.is_broadcast() {
-            debug!("Frame broadcast {}", frame.ieee80211);
-            self.broadcast_from_sta_frame(&frame, source)?;
-            // Stations send Probe Request management frame to the broadcast address to scan network actively.
-            // Pass to WiFiService so hostapd will send Probe Response for AndroidWiFi.
-            // TODO: Only pass necessary packets to hostapd.
-            self.incr_tx(source.client_id)?;
-            Ok(false)
         } else if dest_addr.is_multicast() {
             debug!("Frame multicast {}", frame.ieee80211);
             self.send_tx_info_frame(&frame)?;
             self.broadcast_from_sta_frame(&frame, source)?;
-            Ok(true)
+            // Forward multicast packets to WifiService:
+            // 1. Stations send probe Request management frame scan network actively,
+            //    so hostapd will send Probe Response for AndroidWiFi.
+            // 2. DNS packets.
+            // TODO: Only pass necessary packets to hostapd and libslirp. (e.g.: Don't forward mDNS packet.)
+            self.incr_tx(source.client_id)?;
+            Ok(false)
         } else {
             // pass to libslirp
             self.incr_tx(source.client_id)?;

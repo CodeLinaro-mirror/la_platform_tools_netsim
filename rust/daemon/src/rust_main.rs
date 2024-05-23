@@ -52,8 +52,8 @@ pub unsafe extern "C" fn rust_main(argc: c_int, argv: *const *const c_char) {
     // enable Rust backtrace by setting env RUST_BACKTRACE=full
     env::set_var("RUST_BACKTRACE", "full");
     ffi_util::set_up_crash_report();
-    netsim_logger::init("netsimd");
     let netsimd_args = get_netsimd_args(argc, argv);
+    netsim_logger::init("netsimd", netsimd_args.verbose);
     run_netsimd_with_args(netsimd_args);
 }
 
