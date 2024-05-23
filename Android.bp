@@ -79,6 +79,7 @@ rust_defaults {
         "libserde_json",
         "libthiserror",
         "libtokio",
+        "libtokio_stream",
         "libtungstenite",
         "liblazy_static",
         "liblog_rust",

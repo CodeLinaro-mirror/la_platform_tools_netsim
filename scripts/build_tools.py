@@ -106,6 +106,16 @@ def main():
           " emulator-linux_x64"
       ),
   )
+  parser.add_argument(
+      "--local_emulator_dir",
+      type=str,
+      default="",
+      help=(
+          "For providing an emulator build artifact in a directory."
+          " This will install the emulator from local_emulator_dir instead of"
+          " fetching the artifacts"
+      ),
+  )
 
   args = parser.parse_args()
 

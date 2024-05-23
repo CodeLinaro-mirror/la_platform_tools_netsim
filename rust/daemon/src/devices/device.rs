@@ -63,7 +63,7 @@ impl Device {
     pub fn get(&self) -> Result<ProtoDevice, String> {
         let mut device = ProtoDevice::new();
         device.id = self.id;
-        device.name = self.name.clone();
+        device.name.clone_from(&self.name);
         device.visible = self.visible;
         device.position = protobuf::MessageField::from(Some(self.position.clone()));
         device.orientation = protobuf::MessageField::from(Some(self.orientation.clone()));

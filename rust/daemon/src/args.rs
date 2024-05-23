@@ -86,6 +86,10 @@ pub struct NetsimdArgs {
     #[arg(long, alias = "no_shutdown")]
     pub no_shutdown: bool,
 
+    /// Entering Verbose mode
+    #[arg(short = 'v', long)]
+    pub verbose: bool,
+
     /// Print Netsimd version information
     #[arg(long)]
     pub version: bool,
