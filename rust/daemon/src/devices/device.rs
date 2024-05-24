@@ -19,23 +19,34 @@ use protobuf::Message;
 use crate::devices::chip;
 use crate::devices::chip::Chip;
 use crate::devices::chip::ChipIdentifier;
+use crate::echip::SharedEmulatedChip;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::model::Orientation as ProtoOrientation;
 use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use std::collections::BTreeMap;
+use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, RwLock};
 
-pub type DeviceIdentifier = u32;
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialOrd, PartialEq)]
+pub struct DeviceIdentifier(pub u32);
+
+impl fmt::Display for DeviceIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 pub struct Device {
     pub id: DeviceIdentifier,
     pub guid: String,
     pub name: String,
-    pub visible: Option<bool>,
-    pub position: ProtoPosition,
-    pub orientation: ProtoOrientation,
-    pub chips: BTreeMap<ChipIdentifier, Chip>,
+    pub visible: AtomicBool,
+    pub position: RwLock<ProtoPosition>,
+    pub orientation: RwLock<ProtoOrientation>,
+    pub chips: RwLock<BTreeMap<ChipIdentifier, Arc<Chip>>>,
     pub builtin: bool,
 }
 impl Device {
@@ -44,10 +55,10 @@ impl Device {
             id,
             guid,
             name,
-            visible: Some(true),
-            position: ProtoPosition::new(),
-            orientation: ProtoOrientation::new(),
-            chips: BTreeMap::new(),
+            visible: AtomicBool::new(true),
+            position: RwLock::new(ProtoPosition::new()),
+            orientation: RwLock::new(ProtoOrientation::new()),
+            chips: RwLock::new(BTreeMap::new()),
             builtin,
         }
     }
@@ -62,27 +73,28 @@ pub struct AddChipResult {
 impl Device {
     pub fn get(&self) -> Result<ProtoDevice, String> {
         let mut device = ProtoDevice::new();
-        device.id = self.id;
+        device.id = self.id.0;
         device.name.clone_from(&self.name);
-        device.visible = self.visible;
-        device.position = protobuf::MessageField::from(Some(self.position.clone()));
-        device.orientation = protobuf::MessageField::from(Some(self.orientation.clone()));
-        for chip in self.chips.values() {
+        device.visible = Some(self.visible.load(Ordering::SeqCst));
+        device.position = protobuf::MessageField::from(Some(self.position.read().unwrap().clone()));
+        device.orientation =
+            protobuf::MessageField::from(Some(self.orientation.read().unwrap().clone()));
+        for chip in self.chips.read().unwrap().values() {
             device.chips.push(chip.get()?);
         }
         Ok(device)
     }
 
     /// Patch a device and its chips.
-    pub fn patch(&mut self, patch: &ProtoDevice) -> Result<(), String> {
+    pub fn patch(&self, patch: &ProtoDevice) -> Result<(), String> {
         if patch.visible.is_some() {
-            self.visible = Some(patch.visible.unwrap());
+            self.visible.store(patch.visible.unwrap(), Ordering::SeqCst);
         }
         if patch.position.is_some() {
-            self.position.clone_from(&patch.position);
+            self.position.write().unwrap().clone_from(&patch.position);
         }
         if patch.orientation.is_some() {
-            self.orientation.clone_from(&patch.orientation);
+            self.orientation.write().unwrap().clone_from(&patch.orientation);
         }
         // iterate over patched ProtoChip entries and patch matching chip
         for patch_chip in patch.chips.iter() {
@@ -119,24 +131,24 @@ impl Device {
     }
 
     fn match_target_chip(
-        &mut self,
+        &self,
         patch_chip_kind: ProtoChipKind,
         patch_chip_name: &str,
-    ) -> Result<Option<&mut Chip>, String> {
+    ) -> Result<Option<Arc<Chip>>, String> {
         let mut multiple_matches = false;
-        let mut target: Option<&mut Chip> = None;
-        for chip in self.chips.values_mut() {
+        let mut target: Option<Arc<Chip>> = None;
+        for chip in self.chips.read().unwrap().values() {
             // Check for specified chip kind and matching chip name
             if chip.kind == patch_chip_kind && chip.name.contains(patch_chip_name) {
                 // Check for exact match
                 if chip.name == patch_chip_name {
                     multiple_matches = false;
-                    target = Some(chip);
+                    target = Some(Arc::clone(chip));
                     break;
                 }
                 // Check for ambiguous match
                 if target.is_none() {
-                    target = Some(chip);
+                    target = Some(Arc::clone(chip));
                 } else {
                     // Return if no chip name is supplied but multiple chips of specified kind exist
                     if patch_chip_name.is_empty() {
@@ -160,43 +172,46 @@ impl Device {
     }
 
     /// Remove a chip from a device.
-    pub fn remove_chip(&mut self, chip_id: ChipIdentifier) -> Result<Vec<ProtoRadioStats>, String> {
+    pub fn remove_chip(&self, chip_id: &ChipIdentifier) -> Result<Vec<ProtoRadioStats>, String> {
         let radio_stats = self
             .chips
-            .get_mut(&chip_id)
-            .ok_or(format!("RemoveChip chip id {chip_id} not found"))
-            .map(|c| c.get_stats())?;
-        match self.chips.remove(&chip_id) {
-            Some(_) => Ok(radio_stats),
-            None => Err(format!("Key {chip_id} not found in Hashmap")),
-        }
+            .read()
+            .unwrap()
+            .get(chip_id)
+            .ok_or(format!("RemoveChip chip id {chip_id} not found"))?
+            .get_stats();
+        // Chip and emulated chip will be dropped
+        self.chips.write().unwrap().remove(chip_id);
+        chip::remove_chip(chip_id);
+        Ok(radio_stats)
     }
 
     pub fn add_chip(
         &mut self,
         chip_create_params: &chip::CreateParams,
+        chip_id: ChipIdentifier,
+        emulated_chip: SharedEmulatedChip,
     ) -> Result<(DeviceIdentifier, ChipIdentifier), String> {
-        for chip in self.chips.values() {
+        for chip in self.chips.read().unwrap().values() {
             if chip.kind == chip_create_params.kind
                 && chip_create_params.name.clone().is_some_and(|name| name == chip.name)
             {
                 return Err(format!("Device::AddChip - duplicate at id {}, skipping.", chip.id));
             }
         }
+        let device_id = self.id;
+        let chip = chip::new(chip_id, device_id, &self.name, chip_create_params, emulated_chip)?;
+        self.chips.write().unwrap().insert(chip_id, chip);
 
-        let chip = chip::new(self.id, &self.name, chip_create_params)?;
-        let chip_id = chip.id;
-        self.chips.insert(chip_id, chip);
-
-        Ok((self.id, chip_id))
+        Ok((device_id, chip_id))
     }
 
     /// Reset a device to its default state.
-    pub fn reset(&mut self) -> Result<(), String> {
-        self.visible = Some(true);
-        self.position.clear();
-        self.orientation.clear();
-        for chip in self.chips.values_mut() {
+    pub fn reset(&self) -> Result<(), String> {
+        self.visible.store(true, Ordering::SeqCst);
+        self.position.write().unwrap().clear();
+        self.orientation.write().unwrap().clear();
+        for chip in self.chips.read().unwrap().values() {
             chip.reset()?;
         }
         Ok(())
@@ -206,36 +221,50 @@ impl Device {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::echip::mocked;
+    use std::sync::atomic::{AtomicU32, Ordering};
     static PATCH_CHIP_KIND: ProtoChipKind = ProtoChipKind::BLUETOOTH;
     static TEST_DEVICE_NAME: &str = "test_device";
     static TEST_CHIP_NAME_1: &str = "test-bt-chip-1";
     static TEST_CHIP_NAME_2: &str = "test-bt-chip-2";
+    static IDS: AtomicU32 = AtomicU32::new(1000);
 
     fn create_test_device() -> Result<Device, String> {
-        let mut device = Device::new(0, "0".to_string(), TEST_DEVICE_NAME.to_string(), false);
-        device.add_chip(&chip::CreateParams {
-            kind: ProtoChipKind::BLUETOOTH,
-            address: "".to_string(),
-            name: Some(TEST_CHIP_NAME_1.to_string()),
-            manufacturer: "test_manufacturer".to_string(),
-            product_name: "test_product_name".to_string(),
-            bt_properties: None,
-        })?;
-        device.add_chip(&chip::CreateParams {
-            kind: ProtoChipKind::BLUETOOTH,
-            address: "".to_string(),
-            name: Some(TEST_CHIP_NAME_2.to_string()),
-            manufacturer: "test_manufacturer".to_string(),
-            product_name: "test_product_name".to_string(),
-            bt_properties: None,
-        })?;
+        let mut device =
+            Device::new(DeviceIdentifier(0), "0".to_string(), TEST_DEVICE_NAME.to_string(), false);
+        let chip_id_1 = ChipIdentifier(IDS.fetch_add(1, Ordering::SeqCst));
+        let chip_id_2 = ChipIdentifier(IDS.fetch_add(1, Ordering::SeqCst));
+        device.add_chip(
+            &chip::CreateParams {
+                kind: ProtoChipKind::BLUETOOTH,
+                address: "".to_string(),
+                name: Some(TEST_CHIP_NAME_1.to_string()),
+                manufacturer: "test_manufacturer".to_string(),
+                product_name: "test_product_name".to_string(),
+                bt_properties: None,
+            },
+            chip_id_1,
+            mocked::new(&mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED }, chip_id_1),
+        )?;
+        device.add_chip(
+            &chip::CreateParams {
+                kind: ProtoChipKind::BLUETOOTH,
+                address: "".to_string(),
+                name: Some(TEST_CHIP_NAME_2.to_string()),
+                manufacturer: "test_manufacturer".to_string(),
+                product_name: "test_product_name".to_string(),
+                bt_properties: None,
+            },
+            chip_id_2,
+            mocked::new(&mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED }, chip_id_1),
+        )?;
         Ok(device)
     }
 
     #[ignore = "TODO: include thread_id in names and ids"]
     #[test]
     fn test_exact_target_match() {
-        let mut device = create_test_device().unwrap();
+        let device = create_test_device().unwrap();
         let result = device.match_target_chip(PATCH_CHIP_KIND, TEST_CHIP_NAME_1);
         assert!(result.is_ok());
         let target = result.unwrap();
@@ -247,7 +276,7 @@ mod tests {
     #[ignore = "TODO: include thread_id in names and ids"]
     #[test]
     fn test_substring_target_match() {
-        let mut device = create_test_device().unwrap();
+        let device = create_test_device().unwrap();
         let result = device.match_target_chip(PATCH_CHIP_KIND, "chip-1");
         assert!(result.is_ok());
         let target = result.unwrap();
@@ -259,7 +288,7 @@ mod tests {
     #[ignore = "TODO: include thread_id in names and ids"]
     #[test]
     fn test_ambiguous_target_match() {
-        let mut device = create_test_device().unwrap();
+        let device = create_test_device().unwrap();
         let result = device.match_target_chip(PATCH_CHIP_KIND, "chip");
         assert!(result.is_err());
         assert_eq!(
@@ -271,7 +300,7 @@ mod tests {
     #[ignore = "TODO: include thread_id in names and ids"]
     #[test]
     fn test_ambiguous_empty_target_match() {
-        let mut device = create_test_device().unwrap();
+        let device = create_test_device().unwrap();
         let result = device.match_target_chip(PATCH_CHIP_KIND, "");
         assert!(result.is_err());
         assert_eq!(
@@ -286,7 +315,7 @@ mod tests {
     #[ignore = "TODO: include thread_id in names and ids"]
     #[test]
     fn test_no_target_match() {
-        let mut device = create_test_device().unwrap();
+        let device = create_test_device().unwrap();
         let invalid_chip_name = "invalid-chip";
         let result = device.match_target_chip(PATCH_CHIP_KIND, invalid_chip_name);
         assert!(result.is_ok());

@@ -22,7 +22,7 @@ use super::packets::link_layer::{
 };
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
-use crate::devices::{devices_handler::add_chip, id_factory::IdFactory};
+use crate::devices::devices_handler::add_chip;
 use crate::echip;
 use crate::ffi::ffi_bluetooth;
 use cxx::{let_cxx_string, UniquePtr};
@@ -115,7 +115,7 @@ impl BeaconChip {
 
         let address = if beacon_proto.address == String::default() {
             // Safe to unwrap here because chip_id is a u32 which is less than 6 bytes
-            u64::from(chip_id).try_into().unwrap()
+            u64::from(chip_id.0).try_into().unwrap()
         } else {
             str_to_addr(&beacon_proto.address)?
         };
@@ -262,7 +262,7 @@ pub fn ble_beacon_add(
     info!("Creating HCI facade_id: {} for chip_id: {}", facade_id, chip_id);
     BT_CHIPS.write().unwrap().insert(chip_id, Mutex::new(rust_chip));
 
-    Ok(facade_id)
+    Ok(FacadeIdentifier(facade_id))
 }
 
 #[cfg(not(test))]
@@ -275,7 +275,7 @@ pub fn ble_beacon_remove(
     if removed_beacon.is_none() || removed_radio.is_none() {
         Err(format!("failed to delete ble beacon chip: chip with id {chip_id} does not exist"))
     } else {
-        ffi_bluetooth::bluetooth_remove_rust_device(facade_id);
+        ffi_bluetooth::bluetooth_remove_rust_device(facade_id.0);
         Ok(())
     }
 }
@@ -296,7 +296,7 @@ pub fn ble_beacon_patch(
         beacon.address = str_to_addr(&patch.address)?;
         #[cfg(not(test))]
         ffi_bluetooth::bluetooth_set_rust_device_address(
-            facade_id,
+            facade_id.0,
             u64::from(beacon.address).to_le_bytes()[..6].try_into().unwrap(),
         );
     }
@@ -356,7 +356,7 @@ pub fn ble_beacon_get(
         .expect("Failed to acquire lock on BeaconChip");
     #[cfg(not(test))]
     let bt = {
-        let bluetooth_bytes = ffi_bluetooth::bluetooth_get_cxx(_facade_id);
+        let bluetooth_bytes = ffi_bluetooth::bluetooth_get_cxx(_facade_id.0);
         Some(Bluetooth::parse_from_bytes(&bluetooth_bytes).unwrap())
     };
     #[cfg(test)]
@@ -396,6 +396,8 @@ fn str_to_addr(addr: &str) -> Result<Address, String> {
 
 #[cfg(test)]
 pub mod tests {
+    use std::ops::Add;
+    use std::sync::atomic::{AtomicU32, Ordering};
     use std::thread;
 
     use netsim_proto::model::chip::ble_beacon::{
@@ -408,11 +410,15 @@ pub mod tests {
     use crate::bluetooth::ble_beacon_add;
 
     lazy_static! {
-        static ref TEST_GUID_GENERATOR: Mutex<IdFactory<u32>> = Mutex::new(IdFactory::new(0, 1));
+        static ref TEST_GUID_GENERATOR: AtomicU32 = AtomicU32::new(0);
     }
 
-    fn new_test_beacon_with_settings(settings: AdvertiseSettingsProto) -> DeviceIdentifier {
-        let id = TEST_GUID_GENERATOR.lock().unwrap().next_id();
+    fn next_id() -> ChipIdentifier {
+        ChipIdentifier(TEST_GUID_GENERATOR.fetch_add(1, Ordering::SeqCst))
+    }
+
+    fn new_test_beacon_with_settings(settings: AdvertiseSettingsProto) -> ChipIdentifier {
+        let id = next_id();
 
         let add_result = ble_beacon_add(
             format!("test-device-{:?}", thread::current().id()),
@@ -446,7 +452,7 @@ pub mod tests {
 
         let id = new_test_beacon_with_settings(settings);
 
-        let beacon = ble_beacon_get(id, 0);
+        let beacon = ble_beacon_get(id, FacadeIdentifier(0));
         assert!(beacon.is_ok(), "{}", beacon.unwrap_err());
         let beacon = beacon.unwrap();
 
@@ -470,7 +476,7 @@ pub mod tests {
         let tx_power = TxPowerProto::TxPowerLevel(AdvertiseTxPowerProto::MEDIUM.into());
         let scannable = true;
         let patch_result = ble_beacon_patch(
-            0,
+            FacadeIdentifier(0),
             id,
             &BleBeaconProto {
                 settings: MessageField::some(AdvertiseSettingsProto {
@@ -486,7 +492,7 @@ pub mod tests {
         );
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
 
-        let beacon_proto = ble_beacon_get(id, 0);
+        let beacon_proto = ble_beacon_get(id, FacadeIdentifier(0));
         assert!(beacon_proto.is_ok(), "{}", beacon_proto.unwrap_err());
         let beacon_proto = beacon_proto.unwrap();
         let interval_after_patch =
@@ -505,10 +511,10 @@ pub mod tests {
 
         let id = new_test_beacon_with_settings(settings.clone());
 
-        let patch_result = ble_beacon_patch(0, id, &BleBeaconProto::default());
+        let patch_result = ble_beacon_patch(FacadeIdentifier(0), id, &BleBeaconProto::default());
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
 
-        let beacon_proto = ble_beacon_get(id, 0);
+        let beacon_proto = ble_beacon_get(id, FacadeIdentifier(0));
         assert!(beacon_proto.is_ok(), "{}", beacon_proto.unwrap_err());
         let beacon_proto = beacon_proto.unwrap();
 
