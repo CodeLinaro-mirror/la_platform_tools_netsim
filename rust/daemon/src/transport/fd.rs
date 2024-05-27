@@ -19,6 +19,8 @@ use super::h4;
 use super::h4::PacketError;
 use super::uci;
 use crate::devices::chip;
+use crate::devices::chip::ChipIdentifier;
+use crate::devices::device::DeviceIdentifier;
 use crate::devices::devices_handler::{add_chip, remove_chip};
 use crate::echip;
 use crate::echip::packet::{register_transport, unregister_transport, Response};
@@ -105,8 +107,8 @@ impl Response for FdTransport {
 unsafe fn fd_reader(
     fd_rx: i32,
     kind: ChipKindEnum,
-    device_id: u32,
-    chip_id: u32,
+    device_id: DeviceIdentifier,
+    chip_id: ChipIdentifier,
 ) -> JoinHandle<()> {
     thread::Builder::new()
         .name(format!("fd_reader_{}", fd_rx))
@@ -179,7 +181,7 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
     };
     // Vector for getting all fd_in, fd_out, chip_kind, device_id, chip_id information
     // of adding all chips to frontend resource.
-    let mut fd_vec: Vec<(i32, i32, ChipKindEnum, u32, u32)> = Vec::new();
+    let mut fd_vec: Vec<(i32, i32, ChipKindEnum, DeviceIdentifier, ChipIdentifier)> = Vec::new();
     let chip_count = startup_info.devices.iter().map(|d| d.chips.len()).sum();
     for (device_guid, device) in startup_info.devices.iter().enumerate() {
         for chip in &device.chips {

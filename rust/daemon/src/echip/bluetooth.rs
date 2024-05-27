@@ -79,8 +79,17 @@ fn patch_state(
     }
 }
 
+impl Drop for Bluetooth {
+    fn drop(&mut self) {
+        // Lock to protect id_to_chip_info_ table in C++
+        let _guard = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
+        ffi_bluetooth::bluetooth_remove(self.rootcanal_id);
+        BLUETOOTH_INVALID_PACKETS.lock().expect("invalid packets").remove(&self.rootcanal_id);
+    }
+}
+
 impl EmulatedChip for Bluetooth {
-    fn handle_request(&self, packet: Bytes) {
+    fn handle_request(&self, packet: &Bytes) {
         // Lock to protect device_to_transport_ table in C++
         let _guard = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
         ffi_bluetooth::handle_bt_request(self.rootcanal_id, packet[0], &packet[1..].to_vec())
@@ -128,13 +137,6 @@ impl EmulatedChip for Bluetooth {
         patch_state(&self.classic_enabled, chip.bt().classic.state, id, false);
     }
 
-    fn remove(&self) {
-        // Lock to protect id_to_chip_info_ table in C++
-        let _guard = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
-        ffi_bluetooth::bluetooth_remove(self.rootcanal_id);
-        BLUETOOTH_INVALID_PACKETS.lock().expect("invalid packets").remove(&self.rootcanal_id);
-    }
-
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
         // Construct NetsimRadioStats for BLE and Classic.
         let mut ble_stats_proto = ProtoRadioStats::new();
@@ -177,7 +179,7 @@ pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmula
         Some(properties) => properties.write_to_bytes().unwrap(),
         None => Vec::new(),
     };
-    let rootcanal_id = ffi_bluetooth::bluetooth_add(chip_id, &cxx_address, &proto_bytes);
+    let rootcanal_id = ffi_bluetooth::bluetooth_add(chip_id.0, &cxx_address, &proto_bytes);
     info!("Bluetooth EmulatedChip created with rootcanal_id: {rootcanal_id} chip_id: {chip_id}");
     let echip = Bluetooth {
         rootcanal_id,

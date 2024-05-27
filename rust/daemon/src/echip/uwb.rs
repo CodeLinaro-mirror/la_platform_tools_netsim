@@ -56,11 +56,17 @@ pub struct Uwb {
     rx_count: i32, // TODO(b/330788870): Increment rx_count after handle_response
 }
 
+impl Drop for Uwb {
+    fn drop(&mut self) {
+        PICA_HANDLE_TO_STATE.remove(&self.pica_id);
+    }
+}
+
 impl EmulatedChip for Uwb {
-    fn handle_request(&self, packet: Bytes) {
+    fn handle_request(&self, packet: &Bytes) {
         // TODO(b/330788870): Increment tx_count
         self.uci_stream_writer
-            .unbounded_send(packet.into())
+            .unbounded_send(packet.clone().into())
             .expect("UciStream Receiver Disconnected");
     }
 
@@ -86,10 +92,6 @@ impl EmulatedChip for Uwb {
     fn patch(&self, _chip: &ProtoChip) {
         // TODO(b/330789027): Patch the state of UWB chip
         log::info!("Patch Uwb Chip for chip_id: {}", self.chip_id);
-    }
-
-    fn remove(&self) {
-        PICA_HANDLE_TO_STATE.remove(&self.pica_id);
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
@@ -149,7 +151,7 @@ mod tests {
     use super::*;
 
     fn new_uwb_shared_echip() -> SharedEmulatedChip {
-        new(&CreateParams { address: "test".to_string() }, 0)
+        new(&CreateParams { address: "test".to_string() }, ChipIdentifier(0))
     }
 
     #[test]
