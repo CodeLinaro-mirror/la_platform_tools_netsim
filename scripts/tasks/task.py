@@ -33,6 +33,8 @@ class Task:
       logging.info("Running %s", self.name)
       if self.do_run():
         logging.info("%s completed!", self.name)
+      else:
+        logging.info("%s incomplete", self.name)
     else:
       logging.info("Skipping %s", self.name)
 

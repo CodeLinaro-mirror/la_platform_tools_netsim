@@ -23,22 +23,17 @@ use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::{BleBeacon, Bluetooth};
 use netsim_proto::model::chip_create::Chip as Builtin;
 use netsim_proto::model::{ChipCreate, DeviceCreate};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::sync::RwLock;
 use std::{collections::HashMap, ptr::null};
 
 lazy_static! {
-    static ref IDS: RwLock<FacadeIds> = RwLock::new(FacadeIds::new());
+    static ref IDS: AtomicU32 = AtomicU32::new(0);
 }
 
-struct FacadeIds {
-    pub current_id: u32,
-}
-
-impl FacadeIds {
-    fn new() -> Self {
-        FacadeIds { current_id: 0 }
-    }
+fn next_id() -> FacadeIdentifier {
+    FacadeIdentifier(IDS.fetch_add(1, Ordering::SeqCst))
 }
 
 // Avoid crossing cxx boundary in tests
@@ -59,9 +54,7 @@ pub fn ble_beacon_add(
         ));
     }
 
-    let mut resource = crate::bluetooth::mocked::IDS.write().unwrap();
-    let facade_id = resource.current_id;
-    resource.current_id += 1;
+    let facade_id = next_id();
 
     info!("ble_beacon_add successful with chip_id: {chip_id}");
     Ok(facade_id)

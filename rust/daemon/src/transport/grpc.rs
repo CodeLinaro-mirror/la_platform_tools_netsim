@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::devices::chip::ChipIdentifier;
 use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::ffi::ffi_transport::handle_grpc_response;
 use bytes::Bytes;
@@ -33,10 +34,10 @@ impl Response for GrpcTransport {
 
 // for grpc server in C++
 pub fn register_grpc_transport(chip_id: u32) {
-    register_transport(chip_id, Box::new(GrpcTransport { chip_id }));
+    register_transport(ChipIdentifier(chip_id), Box::new(GrpcTransport { chip_id }));
 }
 
 // for grpc server in C++
 pub fn unregister_grpc_transport(chip_id: u32) {
-    unregister_transport(chip_id);
+    unregister_transport(ChipIdentifier(chip_id));
 }

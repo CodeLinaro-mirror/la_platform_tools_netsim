@@ -18,8 +18,7 @@ use std::sync::RwLock;
 use std::thread;
 
 use crate::captures::captures_handler;
-use crate::devices::chip::ChipIdentifier;
-use crate::echip::get;
+use crate::devices::{chip, chip::ChipIdentifier};
 
 use bytes::Bytes;
 use lazy_static::lazy_static;
@@ -101,13 +100,14 @@ impl PacketManager {
 }
 
 /// Handle requests from gRPC transport in C++.
-pub fn handle_response_cxx(chip_id: ChipIdentifier, packet: &cxx::CxxVector<u8>, packet_type: u8) {
+pub fn handle_response_cxx(chip_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
     // TODO(b/314840701):
     // 1. Per EChip Struct should contain private field of channel & facade_id
     // 2. Lookup from ECHIPS with given chip_id
     // 3. Call echips.handle_response
     let packet = Bytes::from(packet.as_slice().to_vec());
-    captures_handler::handle_packet_response(chip_id, &packet, packet_type.into());
+    let chip_id = ChipIdentifier(chip_id);
+    captures_handler::handle_packet_response(&chip_id, &packet, packet_type.into());
 
     let result = if let Some(transport) = MANAGER.transports.read().unwrap().get(&chip_id) {
         transport.send(ResponsePacket { packet, packet_type })
@@ -125,7 +125,7 @@ pub fn handle_response_cxx(chip_id: ChipIdentifier, packet: &cxx::CxxVector<u8>,
 // Handle response from rust libraries
 pub fn handle_response(chip_id: ChipIdentifier, packet: &Bytes) {
     let packet_type = PacketType::HCI_PACKET_UNSPECIFIED.value() as u8;
-    captures_handler::handle_packet_response(chip_id, packet, packet_type.into());
+    captures_handler::handle_packet_response(&chip_id, packet, packet_type.into());
 
     let result = if let Some(transport) = MANAGER.transports.read().unwrap().get(&chip_id) {
         transport.send(ResponsePacket { packet: packet.clone(), packet_type })
@@ -142,7 +142,7 @@ pub fn handle_response(chip_id: ChipIdentifier, packet: &Bytes) {
 
 /// Handle requests from transports.
 pub fn handle_request(chip_id: ChipIdentifier, packet: &Bytes, packet_type: u8) {
-    captures_handler::handle_packet_request(chip_id, packet, packet_type.into());
+    captures_handler::handle_packet_request(&chip_id, packet, packet_type.into());
 
     let mut packet_vec = packet.to_vec();
     // Prepend packet_type to packet if specified
@@ -153,16 +153,16 @@ pub fn handle_request(chip_id: ChipIdentifier, packet: &Bytes, packet_type: u8) 
     }
 
     // Perform handle_request
-    match get(chip_id) {
-        Some(emulated_chip) => emulated_chip.handle_request(Bytes::from(packet_vec)),
-        None => warn!("SharedEmulatedChip doesn't exist for {chip_id}"),
-    };
+    match chip::get_chip(&chip_id) {
+        Some(c) => c.emulated_chip.handle_request(&Bytes::from(packet_vec)),
+        None => warn!("SharedEmulatedChip doesn't exist for chip_id: {chip_id}"),
+    }
 }
 
 /// Handle requests from gRPC transport in C++.
 pub fn handle_request_cxx(chip_id: u32, packet: &cxx::CxxVector<u8>, packet_type: u8) {
     let packet_bytes = Bytes::from(packet.as_slice().to_vec());
-    handle_request(chip_id, &packet_bytes, packet_type);
+    handle_request(ChipIdentifier(chip_id), &packet_bytes, packet_type);
 }
 
 #[cfg(test)]
@@ -178,17 +178,19 @@ mod tests {
     fn test_register_transport() {
         let val: Box<dyn Response + Send> = Box::new(TestTransport {});
         let manager = PacketManager::new();
-        manager.register_transport(0, val);
+        let chip_id = ChipIdentifier(0);
+        manager.register_transport(chip_id, val);
         {
-            assert!(manager.transports.read().unwrap().contains_key(&0));
+            assert!(manager.transports.read().unwrap().contains_key(&chip_id));
         }
     }
 
     #[test]
     fn test_unregister_transport() {
         let manager = PacketManager::new();
-        manager.register_transport(1, Box::new(TestTransport {}));
-        manager.unregister_transport(1);
-        assert!(manager.transports.read().unwrap().get(&1).is_none());
+        let chip_id = ChipIdentifier(1);
+        manager.register_transport(chip_id, Box::new(TestTransport {}));
+        manager.unregister_transport(chip_id);
+        assert!(manager.transports.read().unwrap().get(&chip_id).is_none());
     }
 }

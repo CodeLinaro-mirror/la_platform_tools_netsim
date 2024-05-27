@@ -52,7 +52,7 @@ pub fn rust_bluetooth_add(
     let_cxx_string!(cxx_string_type = string_type);
     let_cxx_string!(cxx_address = address);
     crate::ffi::ffi_bluetooth::bluetooth_add_rust_device(
-        chip_id,
+        chip_id.0,
         Box::new(callbacks),
         &cxx_string_type,
         &cxx_address,

@@ -167,17 +167,8 @@ def main():
   tasks.get("ZipArtifact").run()
 
   # Install Emulator artifacts and Run PyTests
-  try:
-    tasks.get("InstallEmulator").run()
-    tasks.get("RunPyTest").run()
-  except Exception as e:
-    if presubmit:
-      raise e
-    else:
-      logging.warn(
-          "An error occurred when installing emulator artifacts and running"
-          f" Pytests: {e}"
-      )
+  tasks.get("InstallEmulator").run()
+  tasks.get("RunPyTest").run()
 
 
 if __name__ == "__main__":

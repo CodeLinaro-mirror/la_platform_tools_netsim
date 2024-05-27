@@ -147,7 +147,7 @@ impl CaptureInfo {
         let timestamp =
             Timestamp { seconds: self.seconds, nanos: self.nanos, ..Default::default() };
         ProtoCapture {
-            id: self.id,
+            id: self.id.0,
             chip_kind: self.chip_kind.into(),
             device_name: self.device_name.clone(),
             state: Some(self.file.is_some()),

@@ -39,17 +39,25 @@ pub struct BleBeacon {
     chip_id: ChipIdentifier,
 }
 
+impl Drop for BleBeacon {
+    fn drop(&mut self) {
+        if let Err(err) = ble_beacon_remove(self.chip_id, self.facade_id) {
+            error!("{err:?}");
+        }
+    }
+}
+
 impl EmulatedChip for BleBeacon {
-    fn handle_request(&self, packet: Bytes) {
+    fn handle_request(&self, packet: &Bytes) {
         #[cfg(not(test))]
-        ffi_bluetooth::handle_bt_request(self.facade_id, packet[0], &packet[1..].to_vec());
+        ffi_bluetooth::handle_bt_request(self.facade_id.0, packet[0], &packet[1..].to_vec());
         #[cfg(test)]
         log::info!("BleBeacon::handle_request({packet:?})");
     }
 
     fn reset(&self) {
         #[cfg(not(test))]
-        ffi_bluetooth::bluetooth_reset(self.facade_id);
+        ffi_bluetooth::bluetooth_reset(self.facade_id.0);
         #[cfg(test)]
         log::info!("BleBeacon::reset()");
     }
@@ -65,12 +73,6 @@ impl EmulatedChip for BleBeacon {
 
     fn patch(&self, chip: &ProtoChip) {
         if let Err(err) = ble_beacon_patch(self.facade_id, self.chip_id, chip.ble_beacon()) {
-            error!("{err:?}");
-        }
-    }
-
-    fn remove(&self) {
-        if let Err(err) = ble_beacon_remove(self.chip_id, self.facade_id) {
             error!("{err:?}");
         }
     }
@@ -97,7 +99,10 @@ pub fn new(params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip
         }
         Err(err) => {
             error!("{err:?}");
-            Arc::new(Box::new(BleBeacon { facade_id: u32::MAX, chip_id: u32::MAX }))
+            Arc::new(Box::new(BleBeacon {
+                facade_id: FacadeIdentifier(u32::MAX),
+                chip_id: ChipIdentifier(u32::MAX),
+            }))
         }
     }
 }
