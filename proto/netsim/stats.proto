@@ -23,6 +23,7 @@ message InvalidPacket {
     PARSE_ERROR = 1;
     UNSUPPORTED = 2;
     OTHERS = 3;
+    DELAYED = 4;
   }
   optional Reason reason = 1;
   optional string description = 2;
@@ -56,6 +57,20 @@ message NetsimRadioStats {
   repeated InvalidPacket invalid_packets = 8;
 }
 
+// Frontend statistics for a netsim session representing count of API calls
+message NetsimFrontendStats {
+  optional uint32 get_version = 1;
+  optional uint32 create_device = 2;
+  optional uint32 delete_chip = 3;
+  optional uint32 patch_device = 4;
+  optional uint32 reset = 5;
+  optional uint32 list_device = 6;
+  optional uint32 subscribe_device = 7;
+  optional uint32 patch_capture = 8;
+  optional uint32 list_capture = 9;
+  optional uint32 get_capture = 10;
+}
+
 // Statistics for a netsim session.
 message NetsimStats {
   // The length of the session in seconds
@@ -68,4 +83,6 @@ message NetsimStats {
   repeated NetsimRadioStats radio_stats = 4;
   // The version of netsim daemon
   optional string version = 5;
+  // Frontend API statistics
+  optional NetsimFrontendStats frontend_stats = 6;
 }

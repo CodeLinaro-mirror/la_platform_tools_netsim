@@ -124,7 +124,7 @@ impl Session {
                                 // bluetooth there will be 2 radios,
                                 // otherwise 1
                                 for mut r in radio_stats {
-                                    r.set_device_id(device_id);
+                                    r.set_device_id(device_id.0);
                                     lock.stats_proto.radio_stats.push(r);
                                 }
                             }
@@ -202,6 +202,8 @@ fn write_stats_to_json(stats_proto: NetsimStats) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::devices::chip::ChipIdentifier;
+    use crate::devices::device::DeviceIdentifier;
     use crate::events;
     use crate::events::{
         ChipAdded, ChipRemoved, DeviceAdded, DeviceRemoved, Event, Events, ShutDown,
@@ -322,22 +324,38 @@ mod tests {
 
         events::test::publish(
             &mut events,
-            Event::DeviceAdded(DeviceAdded { builtin: false, id: 1, ..Default::default() }),
+            Event::DeviceAdded(DeviceAdded {
+                builtin: false,
+                id: DeviceIdentifier(1),
+                ..Default::default()
+            }),
         );
 
         events::test::publish(
             &mut events,
-            Event::DeviceRemoved(DeviceRemoved { builtin: false, id: 1, ..Default::default() }),
+            Event::DeviceRemoved(DeviceRemoved {
+                builtin: false,
+                id: DeviceIdentifier(1),
+                ..Default::default()
+            }),
         );
 
         events::test::publish(
             &mut events,
-            Event::DeviceAdded(DeviceAdded { builtin: false, id: 2, ..Default::default() }),
+            Event::DeviceAdded(DeviceAdded {
+                builtin: false,
+                id: DeviceIdentifier(2),
+                ..Default::default()
+            }),
         );
 
         events::test::publish(
             &mut events,
-            Event::DeviceRemoved(DeviceRemoved { builtin: false, id: 2, ..Default::default() }),
+            Event::DeviceRemoved(DeviceRemoved {
+                builtin: false,
+                id: DeviceIdentifier(2),
+                ..Default::default()
+            }),
         );
 
         // publish the shutdown afterwards to cause the separate thread to stop
@@ -371,7 +389,11 @@ mod tests {
 
         events::test::publish(
             &mut events,
-            Event::ChipAdded(ChipAdded { builtin: false, chip_id: 0, ..Default::default() }),
+            Event::ChipAdded(ChipAdded {
+                builtin: false,
+                chip_id: ChipIdentifier(0),
+                ..Default::default()
+            }),
         );
 
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -382,7 +404,7 @@ mod tests {
         events::test::publish(
             &mut events,
             Event::ChipRemoved(ChipRemoved {
-                chip_id: 0,
+                chip_id: ChipIdentifier(0),
                 radio_stats: vec![NetsimRadioStats { ..Default::default() }],
                 ..Default::default()
             }),

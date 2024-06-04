@@ -171,8 +171,11 @@ pub fn handle_capture(request: &Request<Vec<u8>>, param: &str, writer: ResponseW
     }
 }
 
-fn get_id(param: &str) -> anyhow::Result<u32> {
-    param.parse::<u32>().map_err(|_| anyhow!("Capture ID must be u32, found {}", param))
+fn get_id(param: &str) -> anyhow::Result<ChipIdentifier> {
+    param
+        .parse::<u32>()
+        .map_err(|_| anyhow!("Capture ID must be u32, found {}", param))
+        .map(ChipIdentifier)
 }
 
 fn handle_capture_internal(
@@ -233,7 +236,7 @@ pub fn handle_capture_cxx(
 
 /// A common code for handle_request and handle_response methods.
 fn handle_packet(
-    chip_id: ChipIdentifier,
+    chip_id: &ChipIdentifier,
     packet: &[u8],
     packet_type: u32,
     direction: PacketDirection,
@@ -242,7 +245,7 @@ fn handle_packet(
     let captures = captures_arc.write().unwrap();
     if let Some(mut capture) = captures
         .chip_id_to_capture
-        .get(&chip_id)
+        .get(chip_id)
         .map(|arc_capture| arc_capture.lock().expect("Failed to acquire lock on CaptureInfo"))
     {
         let chip_kind = capture.chip_kind;
@@ -284,12 +287,12 @@ fn handle_packet(
 }
 
 /// Method for dispatcher to invoke (Host to Controller Packet Flow)
-pub fn handle_packet_request(chip_id: u32, packet: &[u8], packet_type: u32) {
+pub fn handle_packet_request(chip_id: &ChipIdentifier, packet: &[u8], packet_type: u32) {
     handle_packet(chip_id, packet, packet_type, PacketDirection::HostToController)
 }
 
 /// Method for dispatcher to invoke (Controller to Host Packet Flow)
-pub fn handle_packet_response(chip_id: u32, packet: &[u8], packet_type: u32) {
+pub fn handle_packet_response(chip_id: &ChipIdentifier, packet: &[u8], packet_type: u32) {
     handle_packet(chip_id, packet, packet_type, PacketDirection::ControllerToHost)
 }
 

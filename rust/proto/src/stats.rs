@@ -290,6 +290,8 @@ pub mod invalid_packet {
         UNSUPPORTED = 2,
         // @@protoc_insertion_point(enum_value:netsim.stats.InvalidPacket.Reason.OTHERS)
         OTHERS = 3,
+        // @@protoc_insertion_point(enum_value:netsim.stats.InvalidPacket.Reason.DELAYED)
+        DELAYED = 4,
     }
 
     impl ::protobuf::Enum for Reason {
@@ -305,6 +307,7 @@ pub mod invalid_packet {
                 1 => ::std::option::Option::Some(Reason::PARSE_ERROR),
                 2 => ::std::option::Option::Some(Reason::UNSUPPORTED),
                 3 => ::std::option::Option::Some(Reason::OTHERS),
+                4 => ::std::option::Option::Some(Reason::DELAYED),
                 _ => ::std::option::Option::None
             }
         }
@@ -314,6 +317,7 @@ pub mod invalid_packet {
             Reason::PARSE_ERROR,
             Reason::UNSUPPORTED,
             Reason::OTHERS,
+            Reason::DELAYED,
         ];
     }
 
@@ -805,6 +809,480 @@ pub mod netsim_radio_stats {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.stats.NetsimFrontendStats)
+pub struct NetsimFrontendStats {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.get_version)
+    pub get_version: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.create_device)
+    pub create_device: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.delete_chip)
+    pub delete_chip: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.patch_device)
+    pub patch_device: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.reset)
+    pub reset: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.list_device)
+    pub list_device: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.subscribe_device)
+    pub subscribe_device: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.patch_capture)
+    pub patch_capture: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.list_capture)
+    pub list_capture: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimFrontendStats.get_capture)
+    pub get_capture: ::std::option::Option<u32>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.stats.NetsimFrontendStats.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a NetsimFrontendStats {
+    fn default() -> &'a NetsimFrontendStats {
+        <NetsimFrontendStats as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl NetsimFrontendStats {
+    pub fn new() -> NetsimFrontendStats {
+        ::std::default::Default::default()
+    }
+
+    // optional uint32 get_version = 1;
+
+    pub fn get_version(&self) -> u32 {
+        self.get_version.unwrap_or(0)
+    }
+
+    pub fn clear_get_version(&mut self) {
+        self.get_version = ::std::option::Option::None;
+    }
+
+    pub fn has_get_version(&self) -> bool {
+        self.get_version.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_get_version(&mut self, v: u32) {
+        self.get_version = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 create_device = 2;
+
+    pub fn create_device(&self) -> u32 {
+        self.create_device.unwrap_or(0)
+    }
+
+    pub fn clear_create_device(&mut self) {
+        self.create_device = ::std::option::Option::None;
+    }
+
+    pub fn has_create_device(&self) -> bool {
+        self.create_device.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_create_device(&mut self, v: u32) {
+        self.create_device = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 delete_chip = 3;
+
+    pub fn delete_chip(&self) -> u32 {
+        self.delete_chip.unwrap_or(0)
+    }
+
+    pub fn clear_delete_chip(&mut self) {
+        self.delete_chip = ::std::option::Option::None;
+    }
+
+    pub fn has_delete_chip(&self) -> bool {
+        self.delete_chip.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_delete_chip(&mut self, v: u32) {
+        self.delete_chip = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 patch_device = 4;
+
+    pub fn patch_device(&self) -> u32 {
+        self.patch_device.unwrap_or(0)
+    }
+
+    pub fn clear_patch_device(&mut self) {
+        self.patch_device = ::std::option::Option::None;
+    }
+
+    pub fn has_patch_device(&self) -> bool {
+        self.patch_device.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_patch_device(&mut self, v: u32) {
+        self.patch_device = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 reset = 5;
+
+    pub fn reset(&self) -> u32 {
+        self.reset.unwrap_or(0)
+    }
+
+    pub fn clear_reset(&mut self) {
+        self.reset = ::std::option::Option::None;
+    }
+
+    pub fn has_reset(&self) -> bool {
+        self.reset.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_reset(&mut self, v: u32) {
+        self.reset = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 list_device = 6;
+
+    pub fn list_device(&self) -> u32 {
+        self.list_device.unwrap_or(0)
+    }
+
+    pub fn clear_list_device(&mut self) {
+        self.list_device = ::std::option::Option::None;
+    }
+
+    pub fn has_list_device(&self) -> bool {
+        self.list_device.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_list_device(&mut self, v: u32) {
+        self.list_device = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 subscribe_device = 7;
+
+    pub fn subscribe_device(&self) -> u32 {
+        self.subscribe_device.unwrap_or(0)
+    }
+
+    pub fn clear_subscribe_device(&mut self) {
+        self.subscribe_device = ::std::option::Option::None;
+    }
+
+    pub fn has_subscribe_device(&self) -> bool {
+        self.subscribe_device.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_subscribe_device(&mut self, v: u32) {
+        self.subscribe_device = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 patch_capture = 8;
+
+    pub fn patch_capture(&self) -> u32 {
+        self.patch_capture.unwrap_or(0)
+    }
+
+    pub fn clear_patch_capture(&mut self) {
+        self.patch_capture = ::std::option::Option::None;
+    }
+
+    pub fn has_patch_capture(&self) -> bool {
+        self.patch_capture.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_patch_capture(&mut self, v: u32) {
+        self.patch_capture = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 list_capture = 9;
+
+    pub fn list_capture(&self) -> u32 {
+        self.list_capture.unwrap_or(0)
+    }
+
+    pub fn clear_list_capture(&mut self) {
+        self.list_capture = ::std::option::Option::None;
+    }
+
+    pub fn has_list_capture(&self) -> bool {
+        self.list_capture.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_list_capture(&mut self, v: u32) {
+        self.list_capture = ::std::option::Option::Some(v);
+    }
+
+    // optional uint32 get_capture = 10;
+
+    pub fn get_capture(&self) -> u32 {
+        self.get_capture.unwrap_or(0)
+    }
+
+    pub fn clear_get_capture(&mut self) {
+        self.get_capture = ::std::option::Option::None;
+    }
+
+    pub fn has_get_capture(&self) -> bool {
+        self.get_capture.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_get_capture(&mut self, v: u32) {
+        self.get_capture = ::std::option::Option::Some(v);
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(10);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "get_version",
+            |m: &NetsimFrontendStats| { &m.get_version },
+            |m: &mut NetsimFrontendStats| { &mut m.get_version },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "create_device",
+            |m: &NetsimFrontendStats| { &m.create_device },
+            |m: &mut NetsimFrontendStats| { &mut m.create_device },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "delete_chip",
+            |m: &NetsimFrontendStats| { &m.delete_chip },
+            |m: &mut NetsimFrontendStats| { &mut m.delete_chip },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "patch_device",
+            |m: &NetsimFrontendStats| { &m.patch_device },
+            |m: &mut NetsimFrontendStats| { &mut m.patch_device },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "reset",
+            |m: &NetsimFrontendStats| { &m.reset },
+            |m: &mut NetsimFrontendStats| { &mut m.reset },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "list_device",
+            |m: &NetsimFrontendStats| { &m.list_device },
+            |m: &mut NetsimFrontendStats| { &mut m.list_device },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "subscribe_device",
+            |m: &NetsimFrontendStats| { &m.subscribe_device },
+            |m: &mut NetsimFrontendStats| { &mut m.subscribe_device },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "patch_capture",
+            |m: &NetsimFrontendStats| { &m.patch_capture },
+            |m: &mut NetsimFrontendStats| { &mut m.patch_capture },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "list_capture",
+            |m: &NetsimFrontendStats| { &m.list_capture },
+            |m: &mut NetsimFrontendStats| { &mut m.list_capture },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "get_capture",
+            |m: &NetsimFrontendStats| { &m.get_capture },
+            |m: &mut NetsimFrontendStats| { &mut m.get_capture },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NetsimFrontendStats>(
+            "NetsimFrontendStats",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for NetsimFrontendStats {
+    const NAME: &'static str = "NetsimFrontendStats";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.get_version = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                16 => {
+                    self.create_device = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                24 => {
+                    self.delete_chip = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                32 => {
+                    self.patch_device = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                40 => {
+                    self.reset = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                48 => {
+                    self.list_device = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                56 => {
+                    self.subscribe_device = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                64 => {
+                    self.patch_capture = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                72 => {
+                    self.list_capture = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                80 => {
+                    self.get_capture = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.get_version {
+            my_size += ::protobuf::rt::uint32_size(1, v);
+        }
+        if let Some(v) = self.create_device {
+            my_size += ::protobuf::rt::uint32_size(2, v);
+        }
+        if let Some(v) = self.delete_chip {
+            my_size += ::protobuf::rt::uint32_size(3, v);
+        }
+        if let Some(v) = self.patch_device {
+            my_size += ::protobuf::rt::uint32_size(4, v);
+        }
+        if let Some(v) = self.reset {
+            my_size += ::protobuf::rt::uint32_size(5, v);
+        }
+        if let Some(v) = self.list_device {
+            my_size += ::protobuf::rt::uint32_size(6, v);
+        }
+        if let Some(v) = self.subscribe_device {
+            my_size += ::protobuf::rt::uint32_size(7, v);
+        }
+        if let Some(v) = self.patch_capture {
+            my_size += ::protobuf::rt::uint32_size(8, v);
+        }
+        if let Some(v) = self.list_capture {
+            my_size += ::protobuf::rt::uint32_size(9, v);
+        }
+        if let Some(v) = self.get_capture {
+            my_size += ::protobuf::rt::uint32_size(10, v);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.get_version {
+            os.write_uint32(1, v)?;
+        }
+        if let Some(v) = self.create_device {
+            os.write_uint32(2, v)?;
+        }
+        if let Some(v) = self.delete_chip {
+            os.write_uint32(3, v)?;
+        }
+        if let Some(v) = self.patch_device {
+            os.write_uint32(4, v)?;
+        }
+        if let Some(v) = self.reset {
+            os.write_uint32(5, v)?;
+        }
+        if let Some(v) = self.list_device {
+            os.write_uint32(6, v)?;
+        }
+        if let Some(v) = self.subscribe_device {
+            os.write_uint32(7, v)?;
+        }
+        if let Some(v) = self.patch_capture {
+            os.write_uint32(8, v)?;
+        }
+        if let Some(v) = self.list_capture {
+            os.write_uint32(9, v)?;
+        }
+        if let Some(v) = self.get_capture {
+            os.write_uint32(10, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> NetsimFrontendStats {
+        NetsimFrontendStats::new()
+    }
+
+    fn clear(&mut self) {
+        self.get_version = ::std::option::Option::None;
+        self.create_device = ::std::option::Option::None;
+        self.delete_chip = ::std::option::Option::None;
+        self.patch_device = ::std::option::Option::None;
+        self.reset = ::std::option::Option::None;
+        self.list_device = ::std::option::Option::None;
+        self.subscribe_device = ::std::option::Option::None;
+        self.patch_capture = ::std::option::Option::None;
+        self.list_capture = ::std::option::Option::None;
+        self.get_capture = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static NetsimFrontendStats {
+        static instance: NetsimFrontendStats = NetsimFrontendStats {
+            get_version: ::std::option::Option::None,
+            create_device: ::std::option::Option::None,
+            delete_chip: ::std::option::Option::None,
+            patch_device: ::std::option::Option::None,
+            reset: ::std::option::Option::None,
+            list_device: ::std::option::Option::None,
+            subscribe_device: ::std::option::Option::None,
+            patch_capture: ::std::option::Option::None,
+            list_capture: ::std::option::Option::None,
+            get_capture: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for NetsimFrontendStats {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("NetsimFrontendStats").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for NetsimFrontendStats {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for NetsimFrontendStats {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
 // @@protoc_insertion_point(message:netsim.stats.NetsimStats)
 pub struct NetsimStats {
     // message fields
@@ -818,6 +1296,8 @@ pub struct NetsimStats {
     pub radio_stats: ::std::vec::Vec<NetsimRadioStats>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimStats.version)
     pub version: ::std::option::Option<::std::string::String>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimStats.frontend_stats)
+    pub frontend_stats: ::protobuf::MessageField<NetsimFrontendStats>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.NetsimStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -928,7 +1408,7 @@ impl NetsimStats {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(5);
+        let mut fields = ::std::vec::Vec::with_capacity(6);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "duration_secs",
@@ -954,6 +1434,11 @@ impl NetsimStats {
             "version",
             |m: &NetsimStats| { &m.version },
             |m: &mut NetsimStats| { &mut m.version },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, NetsimFrontendStats>(
+            "frontend_stats",
+            |m: &NetsimStats| { &m.frontend_stats },
+            |m: &mut NetsimStats| { &mut m.frontend_stats },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NetsimStats>(
             "NetsimStats",
@@ -988,6 +1473,9 @@ impl ::protobuf::Message for NetsimStats {
                 42 => {
                     self.version = ::std::option::Option::Some(is.read_string()?);
                 },
+                50 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.frontend_stats)?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -1016,6 +1504,10 @@ impl ::protobuf::Message for NetsimStats {
         if let Some(v) = self.version.as_ref() {
             my_size += ::protobuf::rt::string_size(5, &v);
         }
+        if let Some(v) = self.frontend_stats.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -1036,6 +1528,9 @@ impl ::protobuf::Message for NetsimStats {
         };
         if let Some(v) = self.version.as_ref() {
             os.write_string(5, v)?;
+        }
+        if let Some(v) = self.frontend_stats.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(6, v, os)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -1059,6 +1554,7 @@ impl ::protobuf::Message for NetsimStats {
         self.peak_concurrent_devices = ::std::option::Option::None;
         self.radio_stats.clear();
         self.version = ::std::option::Option::None;
+        self.frontend_stats.clear();
         self.special_fields.clear();
     }
 
@@ -1069,6 +1565,7 @@ impl ::protobuf::Message for NetsimStats {
             peak_concurrent_devices: ::std::option::Option::None,
             radio_stats: ::std::vec::Vec::new(),
             version: ::std::option::Option::None,
+            frontend_stats: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -1093,28 +1590,39 @@ impl ::protobuf::reflect::ProtobufValue for NetsimStats {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x12netsim/stats.proto\x12\x0cnetsim.stats\"\xca\x01\n\rInvalidPacket\
+    \n\x12netsim/stats.proto\x12\x0cnetsim.stats\"\xd7\x01\n\rInvalidPacket\
     \x12:\n\x06reason\x18\x01\x20\x01(\x0e2\".netsim.stats.InvalidPacket.Rea\
     sonR\x06reason\x12\x20\n\x0bdescription\x18\x02\x20\x01(\tR\x0bdescripti\
-    on\x12\x16\n\x06packet\x18\x03\x20\x01(\x0cR\x06packet\"C\n\x06Reason\
+    on\x12\x16\n\x06packet\x18\x03\x20\x01(\x0cR\x06packet\"P\n\x06Reason\
     \x12\x0b\n\x07UNKNOWN\x10\0\x12\x0f\n\x0bPARSE_ERROR\x10\x01\x12\x0f\n\
-    \x0bUNSUPPORTED\x10\x02\x12\n\n\x06OTHERS\x10\x03\"\xb5\x03\n\x10NetsimR\
-    adioStats\x12\x1b\n\tdevice_id\x18\x01\x20\x01(\rR\x08deviceId\x127\n\
-    \x04kind\x18\x02\x20\x01(\x0e2#.netsim.stats.NetsimRadioStats.KindR\x04k\
-    ind\x12#\n\rduration_secs\x18\x03\x20\x01(\x04R\x0cdurationSecs\x12\x19\
-    \n\x08tx_count\x18\x04\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_count\
-    \x18\x05\x20\x01(\x05R\x07rxCount\x12\x19\n\x08tx_bytes\x18\x06\x20\x01(\
-    \x05R\x07txBytes\x12\x19\n\x08rx_bytes\x18\x07\x20\x01(\x05R\x07rxBytes\
-    \x12D\n\x0finvalid_packets\x18\x08\x20\x03(\x0b2\x1b.netsim.stats.Invali\
-    dPacketR\x0einvalidPackets\"t\n\x04Kind\x12\x0f\n\x0bUNSPECIFIED\x10\0\
-    \x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x01\x12\x15\n\x11BLUETOOTH_CLASSI\
-    C\x10\x02\x12\x0e\n\nBLE_BEACON\x10\x03\x12\x08\n\x04WIFI\x10\x04\x12\
-    \x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\x10\x06\"\xe8\x01\n\x0bNetsimStat\
-    s\x12#\n\rduration_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0c\
-    device_count\x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurr\
-    ent_devices\x18\x03\x20\x01(\x05R\x15peakConcurrentDevices\x12?\n\x0brad\
-    io_stats\x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRadioStatsR\nradio\
-    Stats\x12\x18\n\x07version\x18\x05\x20\x01(\tR\x07version\
+    \x0bUNSUPPORTED\x10\x02\x12\n\n\x06OTHERS\x10\x03\x12\x0b\n\x07DELAYED\
+    \x10\x04\"\xb5\x03\n\x10NetsimRadioStats\x12\x1b\n\tdevice_id\x18\x01\
+    \x20\x01(\rR\x08deviceId\x127\n\x04kind\x18\x02\x20\x01(\x0e2#.netsim.st\
+    ats.NetsimRadioStats.KindR\x04kind\x12#\n\rduration_secs\x18\x03\x20\x01\
+    (\x04R\x0cdurationSecs\x12\x19\n\x08tx_count\x18\x04\x20\x01(\x05R\x07tx\
+    Count\x12\x19\n\x08rx_count\x18\x05\x20\x01(\x05R\x07rxCount\x12\x19\n\
+    \x08tx_bytes\x18\x06\x20\x01(\x05R\x07txBytes\x12\x19\n\x08rx_bytes\x18\
+    \x07\x20\x01(\x05R\x07rxBytes\x12D\n\x0finvalid_packets\x18\x08\x20\x03(\
+    \x0b2\x1b.netsim.stats.InvalidPacketR\x0einvalidPackets\"t\n\x04Kind\x12\
+    \x0f\n\x0bUNSPECIFIED\x10\0\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x01\
+    \x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x02\x12\x0e\n\nBLE_BEACON\x10\x03\
+    \x12\x08\n\x04WIFI\x10\x04\x12\x07\n\x03UWB\x10\x05\x12\x07\n\x03NFC\x10\
+    \x06\"\xea\x02\n\x13NetsimFrontendStats\x12\x1f\n\x0bget_version\x18\x01\
+    \x20\x01(\rR\ngetVersion\x12#\n\rcreate_device\x18\x02\x20\x01(\rR\x0ccr\
+    eateDevice\x12\x1f\n\x0bdelete_chip\x18\x03\x20\x01(\rR\ndeleteChip\x12!\
+    \n\x0cpatch_device\x18\x04\x20\x01(\rR\x0bpatchDevice\x12\x14\n\x05reset\
+    \x18\x05\x20\x01(\rR\x05reset\x12\x1f\n\x0blist_device\x18\x06\x20\x01(\
+    \rR\nlistDevice\x12)\n\x10subscribe_device\x18\x07\x20\x01(\rR\x0fsubscr\
+    ibeDevice\x12#\n\rpatch_capture\x18\x08\x20\x01(\rR\x0cpatchCapture\x12!\
+    \n\x0clist_capture\x18\t\x20\x01(\rR\x0blistCapture\x12\x1f\n\x0bget_cap\
+    ture\x18\n\x20\x01(\rR\ngetCapture\"\xb2\x02\n\x0bNetsimStats\x12#\n\rdu\
+    ration_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice_count\
+    \x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurrent_devices\
+    \x18\x03\x20\x01(\x05R\x15peakConcurrentDevices\x12?\n\x0bradio_stats\
+    \x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRadioStatsR\nradioStats\
+    \x12\x18\n\x07version\x18\x05\x20\x01(\tR\x07version\x12H\n\x0efrontend_\
+    stats\x18\x06\x20\x01(\x0b2!.netsim.stats.NetsimFrontendStatsR\rfrontend\
+    Stats\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -1132,9 +1640,10 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
     file_descriptor.get(|| {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
             let mut deps = ::std::vec::Vec::with_capacity(0);
-            let mut messages = ::std::vec::Vec::with_capacity(3);
+            let mut messages = ::std::vec::Vec::with_capacity(4);
             messages.push(InvalidPacket::generated_message_descriptor_data());
             messages.push(NetsimRadioStats::generated_message_descriptor_data());
+            messages.push(NetsimFrontendStats::generated_message_descriptor_data());
             messages.push(NetsimStats::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(2);
             enums.push(invalid_packet::Reason::generated_enum_descriptor_data());

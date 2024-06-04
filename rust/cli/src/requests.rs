@@ -125,7 +125,7 @@ mod tests {
         }
         let mut result = frontend::PatchDeviceRequest::new();
         let mut device = Device::new();
-        device.name = name.to_owned();
+        name.clone_into(&mut device.name);
         device.chips.push(chip);
         result.device = Some(device).into();
         result.write_to_bytes().unwrap()
@@ -215,7 +215,7 @@ mod tests {
         let mut result = frontend::PatchDeviceRequest::new();
         let mut device = Device::new();
         let position = Position { x, y, z: z.unwrap_or_default(), ..Default::default() };
-        device.name = name.to_owned();
+        name.clone_into(&mut device.name);
         device.position = Some(position).into();
         result.device = Some(device).into();
         result.write_to_bytes().unwrap()

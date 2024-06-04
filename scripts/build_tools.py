@@ -106,6 +106,16 @@ def main():
           " emulator-linux_x64"
       ),
   )
+  parser.add_argument(
+      "--local_emulator_dir",
+      type=str,
+      default="",
+      help=(
+          "For providing an emulator build artifact in a directory."
+          " This will install the emulator from local_emulator_dir instead of"
+          " fetching the artifacts"
+      ),
+  )
 
   args = parser.parse_args()
 
@@ -157,17 +167,8 @@ def main():
   tasks.get("ZipArtifact").run()
 
   # Install Emulator artifacts and Run PyTests
-  try:
-    tasks.get("InstallEmulator").run()
-    tasks.get("RunPyTest").run()
-  except Exception as e:
-    if presubmit:
-      raise e
-    else:
-      logging.warn(
-          "An error occurred when installing emulator artifacts and running"
-          f" Pytests: {e}"
-      )
+  tasks.get("InstallEmulator").run()
+  tasks.get("RunPyTest").run()
 
 
 if __name__ == "__main__":

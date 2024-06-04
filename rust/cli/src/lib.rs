@@ -169,9 +169,8 @@ fn process_result(
 #[no_mangle]
 /// main Rust netsim CLI function to be called by C wrapper netsim.cc
 pub extern "C" fn rust_main() {
-    netsim_logger::init("netsim");
-
     let mut args = NetsimArgs::parse();
+    netsim_logger::init("netsim", args.verbose);
     if matches!(args.command, args::Command::Gui) {
         println!("Opening netsim web UI on default web browser");
         browser::open("http://localhost:7681/");

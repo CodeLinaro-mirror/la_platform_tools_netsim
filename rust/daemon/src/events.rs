@@ -172,14 +172,14 @@ mod tests {
         let rx = events_clone.lock().unwrap().subscribe();
         let handle = thread::spawn(move || match rx.recv() {
             Ok(Event::DeviceAdded(DeviceAdded { id, name, builtin: false })) => {
-                assert_eq!(id, 123);
+                assert_eq!(id.0, 123);
                 assert_eq!(name, "Device1");
             }
             _ => panic!("Unexpected event"),
         });
 
         events.lock().unwrap().publish(Event::DeviceAdded(DeviceAdded {
-            id: 123,
+            id: DeviceIdentifier(123),
             name: "Device1".into(),
             builtin: false,
         }));
@@ -199,7 +199,7 @@ mod tests {
             let rx = events_clone.lock().unwrap().subscribe();
             let handle = thread::spawn(move || match rx.recv() {
                 Ok(Event::DeviceAdded(DeviceAdded { id, name, builtin: false })) => {
-                    assert_eq!(id, 123);
+                    assert_eq!(id.0, 123);
                     assert_eq!(name, "Device1");
                 }
                 _ => panic!("Unexpected event"),
@@ -208,7 +208,7 @@ mod tests {
         }
 
         events.lock().unwrap().publish(Event::DeviceAdded(DeviceAdded {
-            id: 123,
+            id: DeviceIdentifier(123),
             name: "Device1".into(),
             builtin: false,
         }));
@@ -229,7 +229,7 @@ mod tests {
         assert_eq!(events.lock().unwrap().subscribers.len(), 1);
         std::mem::drop(rx);
         events.lock().unwrap().publish(Event::DeviceAdded(DeviceAdded {
-            id: 123,
+            id: DeviceIdentifier(123),
             name: "Device1".into(),
             builtin: false,
         }));

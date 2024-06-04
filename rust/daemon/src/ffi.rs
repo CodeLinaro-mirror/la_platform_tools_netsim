@@ -28,7 +28,7 @@ use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
 };
 use crate::echip::wifi::handle_wifi_response;
-use crate::echip::{bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response};
+use crate::echip::{bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response_cxx};
 use crate::ranging::*;
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 use crate::version::*;
@@ -41,7 +41,7 @@ pub mod ffi_echip {
         fn handle_request_cxx(chip_id: u32, packet: &CxxVector<u8>, packet_type: u8);
 
         #[cxx_name = HandleResponse]
-        fn handle_response(chip_id: u32, packet: &CxxVector<u8>, packet_type: u8);
+        fn handle_response_cxx(chip_id: u32, packet: &CxxVector<u8>, packet_type: u8);
     }
 }
 

@@ -12,4 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO(b/325298096): Use RangingDataSet in ranging_estimator
+#[allow(dead_code)]
+mod ranging_data;
 pub(crate) mod ranging_estimator;

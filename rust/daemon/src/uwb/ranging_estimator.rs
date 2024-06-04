@@ -37,7 +37,7 @@ impl SharedState {
     }
 
     pub fn get_chip_id(&self, pica_id: &Handle) -> anyhow::Result<ChipIdentifier> {
-        self.lock().get(pica_id).ok_or(anyhow::anyhow!("pica_id: {pica_id} not in State")).copied()
+        self.lock().get(pica_id).ok_or(anyhow::anyhow!("pica_id: {pica_id} not in State")).cloned()
     }
 
     pub fn insert(&self, pica_id: Handle, chip_id: ChipIdentifier) {
@@ -64,8 +64,8 @@ impl RangingEstimator for UwbRangingEstimator {
     fn estimate(&self, a: &Handle, b: &Handle) -> anyhow::Result<RangingMeasurement> {
         // Use the Handle to obtain the positions and orientation information in netsim
         // and perform compute_range_azimuth_elevation
-        let a_device = get_device(self.shared_state.get_chip_id(a)?)?;
-        let b_device = get_device(self.shared_state.get_chip_id(b)?)?;
+        let a_device = get_device(&self.shared_state.get_chip_id(a)?)?;
+        let b_device = get_device(&self.shared_state.get_chip_id(b)?)?;
         let (a_p, a_o) = (a_device.position, a_device.orientation);
         let (b_p, b_o) = (b_device.position, b_device.orientation);
         let a_pose = Pose::new(a_p.x, a_p.y, a_p.z, a_o.yaw, a_o.pitch, a_o.roll);

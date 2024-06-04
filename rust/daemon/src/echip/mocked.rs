@@ -15,6 +15,7 @@
 use crate::devices::chip::ChipIdentifier;
 use crate::echip::{EmulatedChip, SharedEmulatedChip};
 
+use bytes::Bytes;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
@@ -33,7 +34,7 @@ pub struct Mock {
 }
 
 impl EmulatedChip for Mock {
-    fn handle_request(&self, _packet: &[u8]) {}
+    fn handle_request(&self, _packet: &Bytes) {}
 
     fn reset(&self) {}
 
@@ -44,8 +45,6 @@ impl EmulatedChip for Mock {
     }
 
     fn patch(&self, _chip: &ProtoChip) {}
-
-    fn remove(&self) {}
 
     fn get_stats(&self, _duration_secs: u64) -> Vec<ProtoRadioStats> {
         let mut stats = ProtoRadioStats::new();
