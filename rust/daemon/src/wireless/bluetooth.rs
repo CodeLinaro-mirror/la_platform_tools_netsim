@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
-use crate::echip::{EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_bluetooth;
+use crate::wireless::{WirelessAdaptor, WirelessAdaptorImpl};
 
 use bytes::Bytes;
 use cxx::{let_cxx_string, CxxString, CxxVector};
@@ -34,7 +34,7 @@ use protobuf::{Enum, Message, MessageField};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-static ECHIP_BT_MUTEX: Mutex<()> = Mutex::new(());
+static WIRELESS_BT_MUTEX: Mutex<()> = Mutex::new(());
 
 pub type RootcanalIdentifier = u32;
 
@@ -69,7 +69,7 @@ fn patch_state(
     is_low_energy: bool,
 ) {
     if let Some(state) = state {
-        let _guard = ECHIP_BT_MUTEX.lock().expect("Failed to lock ECHIP_BT_MUTEX");
+        let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to lock WIRELESS_BT_MUTEX");
         let last_state: bool = enabled.swap(state, Ordering::SeqCst);
         match (last_state, state) {
             (false, true) => ffi_bluetooth::add_device_to_phy(id, is_low_energy),
@@ -82,21 +82,21 @@ fn patch_state(
 impl Drop for Bluetooth {
     fn drop(&mut self) {
         // Lock to protect id_to_chip_info_ table in C++
-        let _guard = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
+        let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
         ffi_bluetooth::bluetooth_remove(self.rootcanal_id);
         BLUETOOTH_INVALID_PACKETS.lock().expect("invalid packets").remove(&self.rootcanal_id);
     }
 }
 
-impl EmulatedChip for Bluetooth {
+impl WirelessAdaptor for Bluetooth {
     fn handle_request(&self, packet: &Bytes) {
         // Lock to protect device_to_transport_ table in C++
-        let _guard = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
+        let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
         ffi_bluetooth::handle_bt_request(self.rootcanal_id, packet[0], &packet[1..].to_vec())
     }
 
     fn reset(&self) {
-        let _guard = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
+        let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
         ffi_bluetooth::bluetooth_reset(self.rootcanal_id);
         self.low_energy_enabled.store(true, Ordering::SeqCst);
         self.classic_enabled.store(true, Ordering::SeqCst);
@@ -171,23 +171,23 @@ impl EmulatedChip for Bluetooth {
 /// Create a new Emulated Bluetooth Chip
 /// allow(dead_code) due to not being used in unit tests
 #[allow(dead_code)]
-pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
+pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
     // Lock to protect id_to_chip_info_ table in C++
-    let _guard = ECHIP_BT_MUTEX.lock().expect("Failed to acquire lock on ECHIP_BT_MUTEX");
+    let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
     let_cxx_string!(cxx_address = create_params.address.clone());
     let proto_bytes = match &create_params.bt_properties {
         Some(properties) => properties.write_to_bytes().unwrap(),
         None => Vec::new(),
     };
     let rootcanal_id = ffi_bluetooth::bluetooth_add(chip_id.0, &cxx_address, &proto_bytes);
-    info!("Bluetooth EmulatedChip created with rootcanal_id: {rootcanal_id} chip_id: {chip_id}");
-    let echip = Bluetooth {
+    info!("Bluetooth WirelessAdaptor created with rootcanal_id: {rootcanal_id} chip_id: {chip_id}");
+    let wireless_adaptor = Bluetooth {
         rootcanal_id,
         low_energy_enabled: AtomicBool::new(true),
         classic_enabled: AtomicBool::new(true),
     };
     BLUETOOTH_INVALID_PACKETS.lock().expect("invalid packets").insert(rootcanal_id, Vec::new());
-    Arc::new(Box::new(echip))
+    Box::new(wireless_adaptor)
 }
 
 /// Starts the Bluetooth service.
@@ -225,7 +225,7 @@ pub fn report_invalid_packet(
                 // Log the report
                 info!("Invalid Packet for rootcanal_id: {rootcanal_id}, reason: {reason:?}, description: {description:?}, packet: {packet:?}");
             }
-            None => error!("Bluetooth EmulatedChip not created for rootcanal_id: {rootcanal_id}"),
+            None => error!("Bluetooth WirelessAdaptor not created for rootcanal_id: {rootcanal_id}"),
         }
     });
 }

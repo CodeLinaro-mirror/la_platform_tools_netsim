@@ -23,8 +23,8 @@ use super::packets::link_layer::{
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::devices_handler::add_chip;
-use crate::echip;
 use crate::ffi::ffi_bluetooth;
+use crate::wireless;
 use cxx::{let_cxx_string, UniquePtr};
 use lazy_static::lazy_static;
 use log::{error, info, warn};

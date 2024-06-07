@@ -70,7 +70,7 @@ void HciPacketTransport::Send(rootcanal::PacketType packet_type,
     return;
   }
   // Send response to transport dispatcher.
-  netsim::echip::HandleResponse(netsimChipId, data, hci_packet_type);
+  netsim::wireless::HandleResponse(netsimChipId, data, hci_packet_type);
 }
 
 // Called by HCITransport (rootcanal)

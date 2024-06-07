@@ -19,7 +19,7 @@ use protobuf::Message;
 use crate::devices::chip;
 use crate::devices::chip::Chip;
 use crate::devices::chip::ChipIdentifier;
-use crate::echip::SharedEmulatedChip;
+use crate::wireless::WirelessAdaptorImpl;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::model::Orientation as ProtoOrientation;
@@ -190,7 +190,7 @@ impl Device {
         &mut self,
         chip_create_params: &chip::CreateParams,
         chip_id: ChipIdentifier,
-        emulated_chip: SharedEmulatedChip,
+        wireless_adaptor: WirelessAdaptorImpl,
     ) -> Result<(DeviceIdentifier, ChipIdentifier), String> {
         for chip in self.chips.read().unwrap().values() {
             if chip.kind == chip_create_params.kind
@@ -200,7 +200,7 @@ impl Device {
             }
         }
         let device_id = self.id;
-        let chip = chip::new(chip_id, device_id, &self.name, chip_create_params, emulated_chip)?;
+        let chip = chip::new(chip_id, device_id, &self.name, chip_create_params, wireless_adaptor)?;
         self.chips.write().unwrap().insert(chip_id, chip);
 
         Ok((device_id, chip_id))
@@ -221,7 +221,7 @@ impl Device {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::echip::mocked;
+    use crate::wireless::mocked;
     use std::sync::atomic::{AtomicU32, Ordering};
     static PATCH_CHIP_KIND: ProtoChipKind = ProtoChipKind::BLUETOOTH;
     static TEST_DEVICE_NAME: &str = "test_device";

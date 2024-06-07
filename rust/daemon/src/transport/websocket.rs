@@ -23,9 +23,9 @@ use tungstenite::{protocol::Role, Message, WebSocket};
 
 use crate::devices::chip;
 use crate::devices::devices_handler::{add_chip, remove_chip};
-use crate::echip;
-use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::http_server::server_response::ResponseWritable;
+use crate::wireless;
+use crate::wireless::packet::{register_transport, unregister_transport, Response};
 
 use super::h4;
 
@@ -98,13 +98,15 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
         bt_properties: None,
     };
     #[cfg(not(test))]
-    let echip_create_params = echip::CreateParam::Bluetooth(echip::bluetooth::CreateParams {
-        address: chip_create_params.address.clone(),
-        bt_properties: None,
-    });
+    let wireless_create_params =
+        wireless::CreateParam::Bluetooth(wireless::bluetooth::CreateParams {
+            address: chip_create_params.address.clone(),
+            bt_properties: None,
+        });
     #[cfg(test)]
-    let echip_create_params =
-        echip::CreateParam::Mock(echip::mocked::CreateParams { chip_kind: ChipKind::BLUETOOTH });
+    let wireless_create_params = wireless::CreateParam::Mock(wireless::mocked::CreateParams {
+        chip_kind: ChipKind::BLUETOOTH,
+    });
     // Add Chip
     let result = match add_chip(
         &stream.peer_addr().unwrap().port().to_string(),
@@ -112,7 +114,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
             .get("name")
             .unwrap_or(&format!("websocket-device-{}", stream.peer_addr().unwrap()).as_str()),
         &chip_create_params,
-        &echip_create_params,
+        &wireless_create_params,
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {
@@ -150,7 +152,7 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
             let mut cursor = Cursor::new(packet_msg.into_data());
             match h4::read_h4_packet(&mut cursor) {
                 Ok(packet) => {
-                    echip::handle_request(result.chip_id, &packet.payload, packet.h4_type);
+                    wireless::handle_request(result.chip_id, &packet.payload, packet.h4_type);
                 }
                 Err(error) => {
                     error!(

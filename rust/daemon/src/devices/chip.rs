@@ -13,13 +13,13 @@
 // limitations under the License.
 
 /// A `Chip` is a generic struct that wraps a radio specific
-/// EmulatedChip.` The Chip layer provides for common operations and
+/// WirelessAdaptor.` The Chip layer provides for common operations and
 /// data.
 ///
 /// The emulated chip facade is a library that implements the
 /// controller protocol.
 ///
-use crate::echip::SharedEmulatedChip;
+use crate::wireless::WirelessAdaptorImpl;
 use lazy_static::lazy_static;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::configuration::Controller as ProtoController;
@@ -68,15 +68,15 @@ pub struct CreateParams {
     pub name: Option<String>,
     pub manufacturer: String,
     pub product_name: String,
-    pub bt_properties: Option<ProtoController>, // TODO: move to echip CreateParams
+    pub bt_properties: Option<ProtoController>, // TODO: move to wireless_adaptor CreateParams
 }
 
 /// Chip contains the common information for each Chip/Controller.
-/// Radio-specific information is contained in the emulated_chip.
+/// Radio-specific information is contained in the wireless_adaptor.
 pub struct Chip {
     pub id: ChipIdentifier,
     pub device_id: DeviceIdentifier,
-    pub emulated_chip: SharedEmulatedChip, // TODO: Make this Box<dyn EmulatedChip>
+    pub wireless_adaptor: WirelessAdaptorImpl,
     pub kind: ProtoChipKind,
     pub address: String,
     pub name: String,
@@ -104,12 +104,12 @@ impl Chip {
         device_id: DeviceIdentifier,
         device_name: &str,
         create_params: &CreateParams,
-        emulated_chip: SharedEmulatedChip,
+        wireless_adaptor: WirelessAdaptorImpl,
     ) -> Self {
         Self {
             id,
             device_id,
-            emulated_chip,
+            wireless_adaptor,
             kind: create_params.kind,
             address: create_params.address.clone(),
             name: create_params.name.clone().unwrap_or(format!("chip-{}", id.0)),
@@ -126,17 +126,17 @@ impl Chip {
     // counts are phy level. We need a vec since Bluetooth reports
     // stats for BLE and CLASSIC.
     pub fn get_stats(&self) -> Vec<ProtoRadioStats> {
-        self.emulated_chip.get_stats(self.start.elapsed().as_secs())
+        self.wireless_adaptor.get_stats(self.start.elapsed().as_secs())
     }
 
     /// Create the model protobuf
     pub fn get(&self) -> Result<ProtoChip, String> {
-        let mut proto_chip = self.emulated_chip.get();
+        let mut proto_chip = self.wireless_adaptor.get();
         proto_chip.kind = EnumOrUnknown::new(self.kind);
         proto_chip.id = self.id.0;
         proto_chip.name.clone_from(&self.name);
-        proto_chip.manufacturer = self.manufacturer.read().unwrap().clone();
-        proto_chip.product_name = self.product_name.read().unwrap().clone();
+        proto_chip.manufacturer.clone_from(&self.manufacturer.read().unwrap());
+        proto_chip.product_name.clone_from(&self.product_name.read().unwrap());
         Ok(proto_chip)
     }
 
@@ -144,17 +144,17 @@ impl Chip {
     /// into the chip changing the ChipFacade as needed.
     pub fn patch(&self, patch: &ProtoChip) -> Result<(), String> {
         if !patch.manufacturer.is_empty() {
-            *self.manufacturer.write().unwrap() = patch.manufacturer.clone();
+            self.manufacturer.write().unwrap().clone_from(&patch.manufacturer);
         }
         if !patch.product_name.is_empty() {
-            *self.product_name.write().unwrap() = patch.product_name.clone();
+            self.product_name.write().unwrap().clone_from(&patch.product_name);
         }
-        self.emulated_chip.patch(patch);
+        self.wireless_adaptor.patch(patch);
         Ok(())
     }
 
     pub fn reset(&self) -> Result<(), String> {
-        self.emulated_chip.reset();
+        self.wireless_adaptor.reset();
         Ok(())
     }
 }
@@ -179,9 +179,9 @@ pub fn new(
     device_id: DeviceIdentifier,
     device_name: &str,
     create_params: &CreateParams,
-    emulated_chip: SharedEmulatedChip,
+    wireless_adaptor: WirelessAdaptorImpl,
 ) -> Result<Arc<Chip>, String> {
-    CHIP_MANAGER.new_chip(id, device_id, device_name, create_params, emulated_chip)
+    CHIP_MANAGER.new_chip(id, device_id, device_name, create_params, wireless_adaptor)
 }
 
 impl ChipManager {
@@ -191,9 +191,9 @@ impl ChipManager {
         device_id: DeviceIdentifier,
         device_name: &str,
         create_params: &CreateParams,
-        emulated_chip: SharedEmulatedChip,
+        wireless_adaptor: WirelessAdaptorImpl,
     ) -> Result<Arc<Chip>, String> {
-        let chip = Arc::new(Chip::new(id, device_id, device_name, create_params, emulated_chip));
+        let chip = Arc::new(Chip::new(id, device_id, device_name, create_params, wireless_adaptor));
         self.chips.write().unwrap().insert(id, Arc::clone(&chip));
         Ok(chip)
     }
@@ -211,7 +211,7 @@ impl ChipManager {
 mod tests {
     use netsim_proto::stats::netsim_radio_stats;
 
-    use crate::echip::mocked;
+    use crate::wireless::mocked;
 
     use super::*;
 
@@ -224,7 +224,7 @@ mod tests {
     const PRODUCT_NAME: &str = "product_name";
 
     impl ChipManager {
-        fn new_test_chip(&self, emulated_chip: Option<SharedEmulatedChip>) -> Arc<Chip> {
+        fn new_test_chip(&self, wireless_adaptor: WirelessAdaptorImpl) -> Arc<Chip> {
             let create_params = CreateParams {
                 kind: CHIP_KIND,
                 address: ADDRESS.to_string(),
@@ -233,24 +233,19 @@ mod tests {
                 product_name: PRODUCT_NAME.to_string(),
                 bt_properties: None,
             };
-            self.new_chip(
-                CHIP_ID,
-                DEVICE_ID,
-                DEVICE_NAME,
-                &create_params,
-                emulated_chip.unwrap_or(mocked::new(
-                    &mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED },
-                    ChipIdentifier(0),
-                )),
-            )
-            .unwrap()
+            self.new_chip(CHIP_ID, DEVICE_ID, DEVICE_NAME, &create_params, wireless_adaptor)
+                .unwrap()
         }
     }
 
     #[test]
     fn test_new_and_get_with_singleton() {
+        let mocked_adaptor = mocked::new(
+            &mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED },
+            ChipIdentifier(0),
+        );
         let chip_manager = ChipManager::new(INITIAL_CHIP_ID);
-        let chip = chip_manager.new_test_chip(None);
+        let chip = chip_manager.new_test_chip(mocked_adaptor);
 
         // Check if the Chip has been successfully inserted
         let chip_id = chip.id;
@@ -273,31 +268,31 @@ mod tests {
 
     #[test]
     fn test_chip_get_stats() {
-        // When emulated_chip is constructed
-        let mocked_echip = mocked::new(
+        // When wireless_adaptor is constructed
+        let mocked_adaptor = mocked::new(
             &mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED },
             ChipIdentifier(0),
         );
         let chip_manager = ChipManager::new(INITIAL_CHIP_ID);
 
-        let chip = chip_manager.new_test_chip(Some(mocked_echip));
+        let chip = chip_manager.new_test_chip(mocked_adaptor);
         assert_eq!(netsim_radio_stats::Kind::UNSPECIFIED, chip.get_stats().first().unwrap().kind());
     }
 
     #[test]
     fn test_chip_get() {
-        let mocked_echip = mocked::new(
+        let mocked_adaptor = mocked::new(
             &mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED },
             ChipIdentifier(0),
         );
         let chip_manager = ChipManager::new(INITIAL_CHIP_ID);
-        let chip = chip_manager.new_test_chip(Some(mocked_echip.clone()));
+        let chip = chip_manager.new_test_chip(mocked_adaptor);
 
         // Obtain actual chip.get()
         let actual = chip.get().unwrap();
 
         // Construct expected ProtoChip
-        let mut expected = mocked_echip.get();
+        let mut expected = chip.wireless_adaptor.get();
         expected.kind = EnumOrUnknown::new(chip.kind);
         expected.id = chip.id.0;
         expected.name.clone_from(&chip.name);
@@ -310,12 +305,12 @@ mod tests {
 
     #[test]
     fn test_chip_patch() {
-        let mocked_echip = mocked::new(
+        let mocked_adaptor = mocked::new(
             &mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED },
             ChipIdentifier(0),
         );
         let chip_manager = ChipManager::new(INITIAL_CHIP_ID);
-        let chip = chip_manager.new_test_chip(Some(mocked_echip.clone()));
+        let chip = chip_manager.new_test_chip(mocked_adaptor);
 
         // Construct the patch body for modifying manufacturer and product_name
         let mut patch_body = ProtoChip::new();
@@ -331,5 +326,5 @@ mod tests {
     }
 
     // TODO (b/309529194)
-    // Implement echip/mocked.rs to test emulated_chip level of patch and resets.
+    // Implement wireless/mocked.rs to test wireless_adaptor level of patch and resets.
 }
