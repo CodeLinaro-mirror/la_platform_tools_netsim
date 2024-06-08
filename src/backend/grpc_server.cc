@@ -167,7 +167,7 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         auto packet_type = request.hci_packet().packet_type();
         auto packet =
             ToSharedVec(request.mutable_hci_packet()->mutable_packet());
-        echip::HandleRequestCxx(chip_id, *packet, packet_type);
+        wireless::HandleRequestCxx(chip_id, *packet, packet_type);
       } else if (chip_kind == common::ChipKind::WIFI) {
         if (!request.has_packet()) {
           BtsLogWarn("grpc_server: unknown packet type from chip_id: %d",
@@ -177,8 +177,8 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
         auto packet = ToSharedVec(request.mutable_packet());
         {
           std::lock_guard<std::mutex> guard(gSlirpMutex);
-          echip::HandleRequestCxx(chip_id, *packet,
-                                  packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+          wireless::HandleRequestCxx(chip_id, *packet,
+                                     packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
         }
       } else if (chip_kind == common::ChipKind::UWB) {
         if (!request.has_packet()) {
@@ -186,8 +186,8 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
           continue;
         }
         auto packet = ToSharedVec(request.mutable_packet());
-        echip::HandleRequestCxx(chip_id, *packet,
-                                packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
+        wireless::HandleRequestCxx(chip_id, *packet,
+                                   packet::HCIPacket::HCI_PACKET_UNSPECIFIED);
 
       } else {
         BtsLogWarn("grpc_server: unknown chip_kind");

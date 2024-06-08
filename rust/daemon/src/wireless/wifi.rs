@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
-use crate::echip::{packet::handle_response, EmulatedChip, SharedEmulatedChip};
 use crate::ffi::ffi_wifi;
 use crate::wifi::medium::Medium;
+use crate::wireless::{packet::handle_response, WirelessAdaptor, WirelessAdaptorImpl};
 use bytes::Bytes;
 use lazy_static::lazy_static;
 use log::info;
@@ -24,7 +24,6 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -97,7 +96,7 @@ impl Drop for Wifi {
     }
 }
 
-impl EmulatedChip for Wifi {
+impl WirelessAdaptor for Wifi {
     fn handle_request(&self, packet: &Bytes) {
         WIFI_MANAGER.request_sender.send((self.chip_id.0, packet.clone())).unwrap();
     }
@@ -147,11 +146,11 @@ pub fn handle_wifi_response(packet: &[u8]) {
 /// Create a new Emulated Wifi Chip
 /// allow(dead_code) due to not being used in unit tests
 #[allow(dead_code)]
-pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
+pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
     WIFI_MANAGER.medium.add(chip_id.0);
-    info!("WiFi EmulatedChip created chip_id: {chip_id}");
-    let echip = Wifi { chip_id };
-    Arc::new(Box::new(echip))
+    info!("WiFi WirelessAdaptor created chip_id: {chip_id}");
+    let wifi = Wifi { chip_id };
+    Box::new(wifi)
 }
 
 /// Starts the WiFi service.

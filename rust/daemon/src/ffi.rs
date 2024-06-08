@@ -27,15 +27,17 @@ use crate::captures::captures_handler::handle_capture_cxx;
 use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
 };
-use crate::echip::wifi::handle_wifi_response;
-use crate::echip::{bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response_cxx};
 use crate::ranging::*;
 use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 use crate::version::*;
+use crate::wireless::wifi::handle_wifi_response;
+use crate::wireless::{
+    bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response_cxx,
+};
 
 #[allow(unsafe_op_in_unsafe_fn)]
-#[cxx::bridge(namespace = "netsim::echip")]
-pub mod ffi_echip {
+#[cxx::bridge(namespace = "netsim::wireless")]
+pub mod ffi_wireless {
     extern "Rust" {
         #[cxx_name = HandleRequestCxx]
         fn handle_request_cxx(chip_id: u32, packet: &CxxVector<u8>, packet_type: u8);

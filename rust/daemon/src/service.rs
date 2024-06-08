@@ -15,10 +15,10 @@
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
 use crate::config::{set_dev, set_disable_wifi_p2p, set_pcap};
-use crate::echip;
 use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
 use crate::http_server::server::run_http_server;
 use crate::transport::socket::run_socket_transport;
+use crate::wireless;
 use cxx::UniquePtr;
 use log::{error, info, warn};
 use netsim_common::util::ini_file::IniFile;
@@ -179,8 +179,8 @@ impl Service {
         if !self.grpc_server.is_null() {
             self.grpc_server.shut_down();
         }
-        echip::bluetooth::bluetooth_stop();
-        echip::wifi::wifi_stop();
+        wireless::bluetooth::bluetooth_stop();
+        wireless::wifi::wifi_stop();
     }
 }
 

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use bytes::Bytes;
 
 use netsim_proto::model::Chip as ProtoChip;
@@ -21,17 +19,13 @@ use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
 use crate::{
     devices::chip::ChipIdentifier,
-    echip::{ble_beacon, mocked},
+    wireless::{ble_beacon, mocked},
 };
 
-pub type SharedEmulatedChip = Arc<Box<dyn EmulatedChip + Send + Sync>>;
+pub type WirelessAdaptorImpl = Box<dyn WirelessAdaptor + Send + Sync>;
 
 #[cfg(not(test))]
-use crate::echip::{bluetooth, wifi};
-
-// TODO(b/278268690): Add Pica Library to goldfish build
-#[cfg(feature = "cuttlefish")]
-use crate::echip::uwb;
+use crate::wireless::{bluetooth, uwb, wifi};
 
 /// Parameter for each constructor of Emulated Chips
 #[allow(clippy::large_enum_variant, dead_code)]
@@ -41,16 +35,15 @@ pub enum CreateParam {
     Bluetooth(bluetooth::CreateParams),
     #[cfg(not(test))]
     Wifi(wifi::CreateParams),
-    // TODO(b/278268690): Add Pica Library to goldfish build
-    #[cfg(feature = "cuttlefish")]
+    #[cfg(not(test))]
     Uwb(uwb::CreateParams),
     Mock(mocked::CreateParams),
 }
 
 // TODO: Factory trait to include start, stop, and add
-/// EmulatedChip is a trait that provides interface between the generic Chip
+/// WirelessAdaptor is a trait that provides interface between the generic Chip
 /// and Radio specific library (rootcanal, libslirp, pica).
-pub trait EmulatedChip {
+pub trait WirelessAdaptor {
     /// This is the main entry for incoming host-to-controller packets
     /// from virtual devices called by the transport module. The format of the
     /// packet depends on the emulated chip kind:
@@ -81,28 +74,27 @@ pub trait EmulatedChip {
 
 /// This is called when the transport module receives a new packet stream
 /// connection from a virtual device.
-pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> SharedEmulatedChip {
-    // Based on create_param, construct SharedEmulatedChip.
+pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
+    // Based on create_param, construct WirelessAdaptor.
     match create_param {
         CreateParam::BleBeacon(params) => ble_beacon::new(params, chip_id),
         #[cfg(not(test))]
         CreateParam::Bluetooth(params) => bluetooth::new(params, chip_id),
         #[cfg(not(test))]
         CreateParam::Wifi(params) => wifi::new(params, chip_id),
-        // TODO(b/278268690): Add Pica Library to goldfish build
-        #[cfg(feature = "cuttlefish")]
+        #[cfg(not(test))]
         CreateParam::Uwb(params) => uwb::new(params, chip_id),
         CreateParam::Mock(params) => mocked::new(params, chip_id),
     }
 }
 
 // TODO(b/309529194):
-// 1. Create Mock echip, patch and get
-// 2. Create Mock echip, patch and reset
+// 1. Create Mock wireless adaptor, patch and get
+// 2. Create Mock wireless adptor, patch and reset
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_echip_new() {
+    fn test_wireless_adaptor_new() {
         // TODO
     }
 }
