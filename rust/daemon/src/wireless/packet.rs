@@ -104,7 +104,7 @@ pub fn handle_response_cxx(chip_id: u32, packet: &cxx::CxxVector<u8>, packet_typ
     // TODO(b/314840701):
     // 1. Per EChip Struct should contain private field of channel & facade_id
     // 2. Lookup from ECHIPS with given chip_id
-    // 3. Call echips.handle_response
+    // 3. Call adaptor.handle_response
     let packet = Bytes::from(packet.as_slice().to_vec());
     let chip_id = ChipIdentifier(chip_id);
     captures_handler::handle_packet_response(&chip_id, &packet, packet_type.into());
@@ -154,8 +154,8 @@ pub fn handle_request(chip_id: ChipIdentifier, packet: &Bytes, packet_type: u8) 
 
     // Perform handle_request
     match chip::get_chip(&chip_id) {
-        Some(c) => c.emulated_chip.handle_request(&Bytes::from(packet_vec)),
-        None => warn!("SharedEmulatedChip doesn't exist for chip_id: {chip_id}"),
+        Some(c) => c.wireless_adaptor.handle_request(&Bytes::from(packet_vec)),
+        None => warn!("SharedWirelessAdaptor doesn't exist for chip_id: {chip_id}"),
     }
 }
 

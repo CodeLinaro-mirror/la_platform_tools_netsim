@@ -17,7 +17,8 @@ pub mod fd;
 pub mod grpc;
 mod h4;
 pub mod socket;
-#[cfg(feature = "cuttlefish")]
+// TODO: UWB GF support, then remove the allow
+#[allow(dead_code)]
 mod uci;
 pub mod websocket;
 

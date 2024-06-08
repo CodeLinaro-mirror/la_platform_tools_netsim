@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
-use crate::echip::packet::{register_transport, unregister_transport, Response};
 use crate::ffi::ffi_transport::handle_grpc_response;
+use crate::wireless::packet::{register_transport, unregister_transport, Response};
 use bytes::Bytes;
 
 /// Grpc transport.

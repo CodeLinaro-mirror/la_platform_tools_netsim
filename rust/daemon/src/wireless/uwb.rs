@@ -22,15 +22,15 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 
 use crate::devices::chip::ChipIdentifier;
-use crate::echip::packet::handle_response;
 use crate::uwb::ranging_estimator::{SharedState, UwbRangingEstimator};
+use crate::wireless::packet::handle_response;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use super::{EmulatedChip, SharedEmulatedChip};
+use super::{WirelessAdaptor, WirelessAdaptorImpl};
 
-// TODO(b/331267949): Construct Manager struct for each echip module
+// TODO(b/331267949): Construct Manager struct for each wireless_adaptor module
 lazy_static! {
     static ref PICA_HANDLE_TO_STATE: SharedState = SharedState::new();
     static ref PICA: Arc<Mutex<Pica>> = Arc::new(Mutex::new(Pica::new(
@@ -62,7 +62,7 @@ impl Drop for Uwb {
     }
 }
 
-impl EmulatedChip for Uwb {
+impl WirelessAdaptor for Uwb {
     fn handle_request(&self, packet: &Bytes) {
         // TODO(b/330788870): Increment tx_count
         self.uci_stream_writer
@@ -116,7 +116,7 @@ pub fn uwb_start() {
     });
 }
 
-pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
+pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
     let (uci_stream_sender, uci_stream_receiver) = futures::channel::mpsc::unbounded();
     let (uci_sink_sender, uci_sink_receiver) = futures::channel::mpsc::unbounded();
     let _guard = PICA_RUNTIME.enter();
@@ -126,7 +126,7 @@ pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmul
         .add_device(Box::pin(uci_stream_receiver), Box::pin(uci_sink_sender.sink_err_into()))
         .unwrap();
     PICA_HANDLE_TO_STATE.insert(pica_id, chip_id);
-    let echip = Uwb {
+    let uwb = Uwb {
         chip_id,
         pica_id,
         uci_stream_writer: uci_stream_sender,
@@ -142,7 +142,7 @@ pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmul
             handle_response(chip_id, &Bytes::from(packet));
         }
     });
-    Arc::new(Box::new(echip))
+    Box::new(uwb)
 }
 
 #[cfg(test)]
@@ -150,22 +150,22 @@ mod tests {
 
     use super::*;
 
-    fn new_uwb_shared_echip() -> SharedEmulatedChip {
+    fn new_uwb_wireless_adaptor() -> WirelessAdaptorImpl {
         new(&CreateParams { address: "test".to_string() }, ChipIdentifier(0))
     }
 
     #[test]
     fn test_uwb_get() {
-        let shared_echip = new_uwb_shared_echip();
-        assert!(shared_echip.get().has_uwb());
+        let wireless_adaptor = new_uwb_wireless_adaptor();
+        assert!(wireless_adaptor.get().has_uwb());
     }
 
     #[test]
     fn test_uwb_reset() {
-        // TODO(b/330789027): Patch the state of UWB echip before reset
-        let shared_echip = new_uwb_shared_echip();
-        shared_echip.reset();
-        let binding = shared_echip.get();
+        // TODO(b/330789027): Patch the state of UWB wireless_adaptor before reset
+        let wireless_adaptor = new_uwb_wireless_adaptor();
+        wireless_adaptor.reset();
+        let binding = wireless_adaptor.get();
         let radio = binding.uwb();
         assert_eq!(radio.rx_count, 0);
         assert_eq!(radio.tx_count, 0);
@@ -174,8 +174,8 @@ mod tests {
 
     #[test]
     fn test_get_stats() {
-        let shared_echip = new_uwb_shared_echip();
-        let radio_stat_vec = shared_echip.get_stats(0);
+        let wireless_adaptor = new_uwb_wireless_adaptor();
+        let radio_stat_vec = wireless_adaptor.get_stats(0);
         let radio_stat = radio_stat_vec.first().unwrap();
         assert_eq!(radio_stat.kind(), netsim_radio_stats::Kind::UWB);
         assert_eq!(radio_stat.duration_secs(), 0);
