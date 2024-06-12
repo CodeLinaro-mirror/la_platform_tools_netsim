@@ -39,6 +39,7 @@ pub struct ServiceParams {
     dev: bool,
     disable_wifi_p2p: bool,
     vsock: u16,
+    rust_grpc: bool,
 }
 
 impl ServiceParams {
@@ -53,6 +54,7 @@ impl ServiceParams {
         dev: bool,
         disable_wifi_p2p: bool,
         vsock: u16,
+        rust_grpc: bool,
     ) -> Self {
         ServiceParams {
             fd_startup_str,
@@ -64,6 +66,7 @@ impl ServiceParams {
             dev,
             disable_wifi_p2p,
             vsock,
+            rust_grpc,
         }
     }
 }
@@ -73,6 +76,7 @@ pub struct Service {
     service_params: ServiceParams,
     // grpc server
     grpc_server: UniquePtr<GrpcServer>,
+    rust_grpc_server: Option<grpcio::Server>,
 }
 
 impl Service {
@@ -81,7 +85,7 @@ impl Service {
     /// The file descriptors in `service_params.fd_startup_str` must be valid and open, and must
     /// remain so for as long as the `Service` exists.
     pub unsafe fn new(service_params: ServiceParams) -> Service {
-        Service { service_params, grpc_server: UniquePtr::null() }
+        Service { service_params, grpc_server: UniquePtr::null(), rust_grpc_server: None }
     }
 
     /// Sets up the states for netsimd.
@@ -103,19 +107,30 @@ impl Service {
     }
 
     /// Runs netsim gRPC server
-    fn run_grpc_server(&self) -> Option<UniquePtr<GrpcServer>> {
+    fn run_grpc_server(&mut self) -> Option<u32> {
         // If NETSIM_GRPC_PORT is set, use the fixed port for grpc server.
-        let netsim_grpc_port =
+        let mut netsim_grpc_port =
             env::var("NETSIM_GRPC_PORT").map(|val| val.parse::<u32>().unwrap_or(0)).unwrap_or(0);
-        let grpc_server = run_grpc_server_cxx(
-            netsim_grpc_port,
-            self.service_params.no_cli_ui,
-            self.service_params.vsock,
-        );
-        match grpc_server.is_null() {
-            true => None,
-            false => Some(grpc_server),
+        if self.service_params.rust_grpc {
+            // Run netsim gRPC server
+            let (server, port) = crate::grpc_server::server::start(netsim_grpc_port);
+            self.rust_grpc_server = Some(server);
+            netsim_grpc_port = port.into();
+        } else {
+            let grpc_server = run_grpc_server_cxx(
+                netsim_grpc_port,
+                self.service_params.no_cli_ui,
+                self.service_params.vsock,
+            );
+            match grpc_server.is_null() {
+                true => return None,
+                false => {
+                    self.grpc_server = grpc_server;
+                    netsim_grpc_port = self.grpc_server.get_grpc_port();
+                }
+            }
         }
+        Some(netsim_grpc_port)
     }
 
     /// Runs netsim web server
@@ -154,9 +169,8 @@ impl Service {
             }
         }
 
-        // Run netsim gRPC server
-        self.grpc_server = match self.run_grpc_server() {
-            Some(server) => server,
+        let grpc_port = match self.run_grpc_server() {
+            Some(port) => port,
             None => {
                 error!("Failed to run netsimd because unable to start grpc server");
                 return;
@@ -167,18 +181,19 @@ impl Service {
         let web_port = self.run_web_server();
 
         // Write the port numbers to ini file
-        self.write_ports_to_ini(self.grpc_server.get_grpc_port(), web_port);
+        self.write_ports_to_ini(grpc_port, web_port);
 
         // Run the socket server.
         run_socket_transport(self.service_params.hci_port);
     }
 
     /// Shut down the netsimd services
-    pub fn shut_down(&self) {
+    pub fn shut_down(&mut self) {
         // TODO: shutdown other services in Rust
         if !self.grpc_server.is_null() {
             self.grpc_server.shut_down();
         }
+        self.rust_grpc_server.as_mut().map(|server| server.shutdown());
         wireless::bluetooth::bluetooth_stop();
         wireless::wifi::wifi_stop();
     }

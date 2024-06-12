@@ -259,6 +259,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
         args.dev,
         args.disable_wifi_p2p,
         args.vsock.unwrap_or_default(),
+        args.rust_grpc,
     );
 
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain

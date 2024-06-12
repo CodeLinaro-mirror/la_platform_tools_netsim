@@ -27,6 +27,7 @@
 // TODO(b/274506882): Implement gRPC status proto on error responses. Also write better
 // and more descriptive error messages with proper error codes.
 
+use bytes::Bytes;
 use http::{Request, Version};
 use log::warn;
 use netsim_common::util::time_display::TimeDisplay;
@@ -235,8 +236,8 @@ pub fn handle_capture_cxx(
 }
 
 /// A common code for handle_request and handle_response methods.
-fn handle_packet(
-    chip_id: &ChipIdentifier,
+pub(super) fn handle_packet(
+    chip_id: ChipIdentifier,
     packet: &[u8],
     packet_type: u32,
     direction: PacketDirection,
@@ -245,7 +246,7 @@ fn handle_packet(
     let captures = captures_arc.write().unwrap();
     if let Some(mut capture) = captures
         .chip_id_to_capture
-        .get(chip_id)
+        .get(&chip_id)
         .map(|arc_capture| arc_capture.lock().expect("Failed to acquire lock on CaptureInfo"))
     {
         let chip_kind = capture.chip_kind;
@@ -287,13 +288,23 @@ fn handle_packet(
 }
 
 /// Method for dispatcher to invoke (Host to Controller Packet Flow)
-pub fn handle_packet_request(chip_id: &ChipIdentifier, packet: &[u8], packet_type: u32) {
-    handle_packet(chip_id, packet, packet_type, PacketDirection::HostToController)
+pub fn host_to_controller(chip_id: ChipIdentifier, packet: &Bytes, packet_type: u32) {
+    clone_captures().read().unwrap().send(
+        chip_id,
+        packet,
+        packet_type,
+        PacketDirection::HostToController,
+    );
 }
 
 /// Method for dispatcher to invoke (Controller to Host Packet Flow)
-pub fn handle_packet_response(chip_id: &ChipIdentifier, packet: &[u8], packet_type: u32) {
-    handle_packet(chip_id, packet, packet_type, PacketDirection::ControllerToHost)
+pub fn controller_to_host(chip_id: ChipIdentifier, packet: &Bytes, packet_type: u32) {
+    clone_captures().read().unwrap().send(
+        chip_id,
+        packet,
+        packet_type,
+        PacketDirection::ControllerToHost,
+    );
 }
 
 /// Method for clearing pcap files in temp directory
