@@ -14,13 +14,12 @@
 
 use bytes::Bytes;
 
-use netsim_proto::model::Chip as ProtoChip;
-use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
-
 use crate::{
     devices::chip::ChipIdentifier,
     wireless::{ble_beacon, mocked},
 };
+use netsim_proto::model::Chip as ProtoChip;
+use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
 pub type WirelessAdaptorImpl = Box<dyn WirelessAdaptor + Send + Sync>;
 

@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,29 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Netsim daemon libraries.
-
-mod args;
-mod bluetooth;
-pub mod captures;
-mod config;
-mod config_file;
-mod devices;
-mod events;
-mod ffi;
-mod grpc_server;
-mod http_server;
-mod ranging;
-mod resource;
-mod rust_main;
-mod service;
-mod session;
-mod transport;
-mod uwb;
-mod version;
-mod wifi;
-mod wireless;
-
-// This feature is enabled only for CMake builds
-#[cfg(feature = "local_ssl")]
-mod openssl;
+mod backend;
+mod frontend;
+pub(crate) mod server;

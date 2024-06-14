@@ -1,11 +1,4 @@
 {
-  // only change to presubmit after collecting stats first in post, per
-  // go/test-mapping-slo-guide
-  "postsubmit": [
-    {
-      "name": "CtsUwbTestCases"
-    }
-  ],
   "presubmit": [
     {
       "name": "CtsBluetoothTestCases",
@@ -18,6 +11,11 @@
     },
     {
       "name": "net_test_bluetooth"
+    },
+    {
+      // CtsUwbTestCases: Single Device Cts tests for UWB
+      // Multi Device Cts tests are brought to presubmit with cl/618942497
+      "name": "CtsUwbTestCases"
     }
   ]
 }

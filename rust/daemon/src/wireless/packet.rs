@@ -17,7 +17,7 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::RwLock;
 use std::thread;
 
-use crate::captures::captures_handler;
+use crate::captures;
 use crate::devices::{chip, chip::ChipIdentifier};
 
 use bytes::Bytes;
@@ -107,7 +107,7 @@ pub fn handle_response_cxx(chip_id: u32, packet: &cxx::CxxVector<u8>, packet_typ
     // 3. Call adaptor.handle_response
     let packet = Bytes::from(packet.as_slice().to_vec());
     let chip_id = ChipIdentifier(chip_id);
-    captures_handler::handle_packet_response(&chip_id, &packet, packet_type.into());
+    captures::controller_to_host(chip_id, &packet, packet_type.into());
 
     let result = if let Some(transport) = MANAGER.transports.read().unwrap().get(&chip_id) {
         transport.send(ResponsePacket { packet, packet_type })
@@ -125,7 +125,7 @@ pub fn handle_response_cxx(chip_id: u32, packet: &cxx::CxxVector<u8>, packet_typ
 // Handle response from rust libraries
 pub fn handle_response(chip_id: ChipIdentifier, packet: &Bytes) {
     let packet_type = PacketType::HCI_PACKET_UNSPECIFIED.value() as u8;
-    captures_handler::handle_packet_response(&chip_id, packet, packet_type.into());
+    captures::controller_to_host(chip_id, packet, packet_type.into());
 
     let result = if let Some(transport) = MANAGER.transports.read().unwrap().get(&chip_id) {
         transport.send(ResponsePacket { packet: packet.clone(), packet_type })
@@ -142,7 +142,7 @@ pub fn handle_response(chip_id: ChipIdentifier, packet: &Bytes) {
 
 /// Handle requests from transports.
 pub fn handle_request(chip_id: ChipIdentifier, packet: &Bytes, packet_type: u8) {
-    captures_handler::handle_packet_request(&chip_id, packet, packet_type.into());
+    captures::host_to_controller(chip_id, packet, packet_type.into());
 
     let mut packet_vec = packet.to_vec();
     // Prepend packet_type to packet if specified

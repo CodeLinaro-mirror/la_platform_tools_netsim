@@ -12,10 +12,20 @@ corrosion_set_env_vars(
   NETLINK_PACKETS_PREBUILT=${NetlinkPackets_rs}
   MAC80211_HWSIM_PACKETS_PREBUILT=${Mac80211HwsimPackets_rs}
   IEEE80211_PACKETS_PREBUILT=${Ieee80211Packets_rs}
-  CARGO_HOME=${Rust_CARGO_HOME})
+  CARGO_HOME=${Rust_CARGO_HOME}
+  GRPCIO_SYS_GRPC_INCLUDE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../../external/grpc/include"
+)
 
-corrosion_set_env_vars(netsim-cli CARGO_HOME=${Rust_CARGO_HOME})
-corrosion_set_env_vars(netsim-proto CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(
+  netsim-cli
+  CARGO_HOME=${Rust_CARGO_HOME}
+  GRPCIO_SYS_GRPC_INCLUDE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../../external/grpc/include"
+)
+corrosion_set_env_vars(
+  netsim-proto
+  CARGO_HOME=${Rust_CARGO_HOME}
+  GRPCIO_SYS_GRPC_INCLUDE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../../external/grpc/include"
+)
 
 add_custom_target(
   netsim_rust_packets

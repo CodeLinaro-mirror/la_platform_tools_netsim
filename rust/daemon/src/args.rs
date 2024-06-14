@@ -61,6 +61,11 @@ pub struct NetsimdArgs {
     #[arg(long)]
     pub disable_wifi_p2p: bool,
 
+    /// Use Rust gRPC server.
+    /// WARNING: This flag is for development purpose.
+    #[arg(long)]
+    pub rust_grpc: bool,
+
     /// Set the vsock port number to be listened by the frontend grpc server
     #[arg(short, long)]
     pub vsock: Option<u16>,
