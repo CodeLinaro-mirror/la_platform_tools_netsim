@@ -189,7 +189,8 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
             destination_address: *EMPTY_ADDRESS,
         }
         .build()
-        .to_vec();
+        .encode_to_vec()
+        .unwrap();
 
         beacon.send_link_layer_le_packet(&packet, beacon.advertise_settings.tx_power_level.dbm);
     }
@@ -220,7 +221,8 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
                 scan_response_data: beacon.scan_response_data.to_bytes(),
             }
             .build()
-            .to_vec();
+            .encode_to_vec()
+            .unwrap();
 
             beacon.send_link_layer_le_packet(&packet, beacon.advertise_settings.tx_power_level.dbm);
         }

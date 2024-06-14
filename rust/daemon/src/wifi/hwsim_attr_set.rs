@@ -96,7 +96,7 @@ impl HwsimAttrSetBuilder {
     // packets constructed by the Builder.
 
     fn extend_attributes<P: Packet>(&mut self, packet: P) {
-        let mut vec: Vec<u8> = packet.to_vec();
+        let mut vec: Vec<u8> = packet.encode_to_vec().unwrap();
         let nla_padding = nla_align(vec.len()) - vec.len();
         vec.extend(vec![0; nla_padding]);
         self.attributes.extend(vec);

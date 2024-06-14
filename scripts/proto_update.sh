@@ -61,6 +61,9 @@ sed -i 's/^##//g' $CARGO
 # depends on emu-master-dev branch
 export CARGO_HOME=$REPO/objs/rust/.cargo
 
+# For grpcio-sys
+export GRPCIO_SYS_GRPC_INCLUDE_PATH="$REPO/../../external/grpc/include"
+
 cd $REPO
 cargo build --manifest-path $CARGO
 

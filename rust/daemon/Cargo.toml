@@ -1,6 +1,6 @@
 [package]
 name = "netsim-daemon"
-version = "0.3.11"
+version = "0.3.12"
 edition = "2021"
 build = "build.rs"
 
@@ -31,7 +31,11 @@ tungstenite = { version = ">=0.19.0", default-features = false }
 lazy_static = "1.4.0"
 log = "0.4.17"
 anyhow = "1"
-pdl-runtime = "0.2.2"
+pdl-runtime = "0.3.0"
+grpcio =  {version= "0.13.0", default-features = false, features = ["protobufv3-codec"]}
+futures-channel = { version = "0.3.30", features = ["sink"] }
+futures-executor = "0.3.30"
+futures-util = { version = "0.3.30", default-features = false, features = ["sink"] }
 
 [build-dependencies]
 cxx-build = "1.0.92"

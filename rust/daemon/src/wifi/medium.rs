@@ -274,7 +274,7 @@ impl Medium {
             let hwsim_msg = self
                 .create_hwsim_msg(frame, &destination.hwsim_addr)
                 .context("Create HwsimMsg from WifiService")?;
-            (self.callback)(destination.client_id, &hwsim_msg.to_vec().into());
+            (self.callback)(destination.client_id, &hwsim_msg.encode_to_vec()?.into());
         }
         self.incr_rx(destination.client_id)?;
         Ok(())
@@ -319,7 +319,7 @@ impl Medium {
     /// Create tx info frame to station to ack HwsimMsg.
     fn send_tx_info_frame(&self, frame: &Frame) -> anyhow::Result<()> {
         let client_id = self.get_station(&frame.ieee80211.get_source())?.client_id;
-        let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().to_vec();
+        let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().encode_to_vec()?;
         (self.callback)(client_id, &hwsim_msg_tx_info.into());
         Ok(())
     }
@@ -360,7 +360,7 @@ impl Medium {
             if let Some(packet) = self.create_hwsim_msg(frame, &destination.hwsim_addr) {
                 self.incr_tx(source.client_id)?;
                 self.incr_rx(destination.client_id)?;
-                (self.callback)(destination.client_id, &packet.into());
+                (self.callback)(destination.client_id, &packet.encode_to_vec()?.into());
                 log_hwsim_msg(frame, source.client_id, destination.client_id);
             }
         }
@@ -416,7 +416,7 @@ impl Medium {
             && frame.ieee80211.is_to_ap()
             && frame.ieee80211.get_bssid() == Some(self.hostapd_bssid)
         {
-            true => frame.ieee80211.into_from_ap()?.to_vec(),
+            true => frame.ieee80211.into_from_ap()?.encode_to_vec()?,
             false => attrs.frame.clone().unwrap(),
         };
 

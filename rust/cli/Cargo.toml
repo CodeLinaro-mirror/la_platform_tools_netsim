@@ -1,6 +1,6 @@
 [package]
 name = "netsim-cli"
-version = "0.3.11"
+version = "0.3.12"
 edition = "2021"
 build = "build.rs"
 
@@ -24,6 +24,7 @@ protobuf = "3.2.0"
 cxx = { version = ">=1.0.85", features = ["c++17"] }
 log = "0.4.17"
 tracing = "0.1"
+grpcio =  {version= "0.13.0", default-features = false, features = ["protobufv3-codec"]}
 
 [build-dependencies]
 cxx-build = "1.0.92"
