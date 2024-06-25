@@ -577,7 +577,7 @@ pub fn get_device(chip_id: &ChipIdentifier) -> anyhow::Result<netsim_proto::mode
         .map_err(|e| anyhow::anyhow!("{e:?}"))
 }
 
-fn reset_all() -> Result<(), String> {
+pub fn reset_all() -> Result<(), String> {
     let manager = get_manager();
     // Perform reset for all manager
     for device in manager.devices.read().unwrap().values() {
@@ -627,8 +627,7 @@ fn handle_chip_delete(writer: ResponseWritable, delete_json: &str) {
     }
 }
 
-/// Performs ListDevices to get the list of DeviceManager and write to writer.
-fn handle_device_list(writer: ResponseWritable) {
+pub fn list_device() -> anyhow::Result<ListDeviceResponse, String> {
     // Instantiate ListDeviceResponse and add DeviceManager
     let mut response = ListDeviceResponse::new();
     let manager = get_manager();
@@ -645,7 +644,12 @@ fn handle_device_list(writer: ResponseWritable) {
         ..Default::default()
     })
     .into();
+    Ok(response)
+}
 
+/// Performs ListDevices to get the list of DeviceManager and write to writer.
+fn handle_device_list(writer: ResponseWritable) {
+    let response = list_device().unwrap();
     // Perform protobuf-json-mapping with the given protobuf
     if let Ok(json_response) = print_to_string_with_options(&response, &JSON_PRINT_OPTION) {
         writer.put_ok("text/json", &json_response, vec![])

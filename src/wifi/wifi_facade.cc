@@ -122,4 +122,24 @@ void HandleWifiRequestCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet) {
 #endif
 }
 
+void HostapdSendCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet) {
+#ifdef NETSIM_ANDROID_EMULATOR
+  // Send the packet to Hostapd.
+  struct iovec iov[1];
+  iov[0].iov_base = (void *)packet.data();
+  iov[0].iov_len = packet.size();
+  wifi_service->hostapd_send(android::base::IOVector(iov, iov + 1));
+#endif
+}
+
+void LibslirpSendCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet) {
+#ifdef NETSIM_ANDROID_EMULATOR
+  // Send the packet to libslirp.
+  struct iovec iov[1];
+  iov[0].iov_base = (void *)packet.data();
+  iov[0].iov_len = packet.size();
+  wifi_service->libslirp_send(android::base::IOVector(iov, iov + 1));
+#endif
+}
+
 }  // namespace netsim::wifi

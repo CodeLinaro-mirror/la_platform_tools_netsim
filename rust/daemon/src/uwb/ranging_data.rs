@@ -16,11 +16,11 @@ use rand::{prelude::SliceRandom, rngs::ThreadRng, thread_rng};
 
 use std::collections::BTreeMap;
 
-type TrueDistance = f64; // meters
-type EstimatedDistance = f64; // meters
+type TrueDistance = f32; // meters
+type EstimatedDistance = f32; // meters
 
 /// The data is organized as a `BTreeMap` for efficient lookup and interpolation.
-struct RangingDataSet {
+pub struct RangingDataSet {
     /// Stores ranging data in the form of (true distance, [estimated distances]) pairs.
     /// The map keys are true distances in u16 centimeters.
     data: BTreeMap<u16, Vec<EstimatedDistance>>,
@@ -33,8 +33,14 @@ impl RangingDataSet {
     /// ranging sensor.
     pub fn new(ranging_data: Option<Vec<(TrueDistance, EstimatedDistance)>>) -> Self {
         // Use sample_ranging_data.csv if ranging_data is not provided.
-        let sample_ranging_data: Vec<(TrueDistance, EstimatedDistance)> =
+        #[allow(clippy::excessive_precision)]
+        let mut sample_ranging_data: Vec<(TrueDistance, EstimatedDistance)> =
             ranging_data.unwrap_or(include!("sample_ranging_data.csv"));
+        // Convert to centimeters as Pica uses centimeters for ranging units
+        sample_ranging_data = sample_ranging_data
+            .into_iter()
+            .map(|(true_dist, est_dist)| (true_dist * 100.0, est_dist * 100.0))
+            .collect::<Vec<(TrueDistance, EstimatedDistance)>>();
 
         // Process the sample_raning_data into BTreeMap
         let mut data: BTreeMap<u16, Vec<EstimatedDistance>> = BTreeMap::new();
@@ -84,9 +90,9 @@ impl RangingDataSet {
         let upper = self.data.range(&distance_u16..).next();
         match (lower, upper) {
             (Some((lower_key, lower_vals)), Some((upper_key, upper_vals))) => {
-                let x1 = *lower_key as f64 / 100.0;
+                let x1 = *lower_key as f32 / 100.0;
                 let y1 = *lower_vals.choose(&mut rng).unwrap();
-                let x2 = *upper_key as f64 / 100.0;
+                let x2 = *upper_key as f32 / 100.0;
                 let y2 = *upper_vals.choose(&mut rng).unwrap();
                 y1 + (distance - x1) * (y2 - y1) / (x2 - x1)
             }
@@ -108,10 +114,10 @@ mod tests {
     fn test_sample_ranging_data_set() {
         let ranging_data_set = sample_ranging_data_set();
         // Linear Interpolation
-        assert_eq!(ranging_data_set.sample(0.5, None), 0.55);
+        assert_eq!(ranging_data_set.sample(50., None), 55.);
         // Exact distance found in dataset
-        assert!([1.9, 2.1].contains(&ranging_data_set.sample(2.0, None)));
+        assert!([190., 210.].contains(&ranging_data_set.sample(200., None)));
         // Out of Range
-        assert_eq!(ranging_data_set.sample(3.0, None), 3.0);
+        assert_eq!(ranging_data_set.sample(300., None), 300.);
     }
 }
