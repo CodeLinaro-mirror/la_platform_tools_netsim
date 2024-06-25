@@ -159,7 +159,7 @@ genrule {
 
 genrule {
     name: "netsim_ieee80211_rust_gen",
-    defaults: ["pdl_rust_legacy_generator_defaults"],
+    defaults: ["pdl_rust_generator_defaults"],
     srcs: ["pdl/ieee80211.pdl"],
     out: ["ieee80211_packets.rs"],
 }

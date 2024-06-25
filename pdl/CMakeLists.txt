@@ -30,4 +30,4 @@ pdl_gen(
   OUTPUT
   ieee80211_packets.rs
   LANG
-  rust_legacy)
+  rust)

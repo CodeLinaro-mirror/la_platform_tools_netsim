@@ -16,6 +16,7 @@ use super::packets::ieee80211::{Ieee80211, MacAddress};
 use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, TxRate};
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::Context;
+use pdl_runtime::Packet;
 
 /// Parser for the hwsim Frame command (HWSIM_CMD_FRAME).
 ///
@@ -52,7 +53,7 @@ impl Frame {
         }
         let attrs = HwsimAttrSet::parse(msg.get_attributes()).context("HwsimAttrSet")?;
         let frame = attrs.frame.clone().context("Frame")?;
-        let ieee80211 = Ieee80211::parse(&frame).context("Ieee80211")?;
+        let ieee80211 = Ieee80211::decode_full(&frame).context("Ieee80211")?;
         // Required attributes are unwrapped and return an error if
         // they are not present.
         Ok(Frame {
