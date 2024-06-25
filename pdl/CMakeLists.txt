@@ -10,7 +10,7 @@ pdl_gen(
   OUTPUT
   netlink_packets.rs
   LANG
-  rust)
+  rust_legacy)
 
 pdl_gen(
   NAME
@@ -20,7 +20,7 @@ pdl_gen(
   OUTPUT
   mac80211_hwsim_packets.rs
   LANG
-  rust)
+  rust_legacy)
 
 pdl_gen(
   NAME
@@ -30,4 +30,4 @@ pdl_gen(
   OUTPUT
   ieee80211_packets.rs
   LANG
-  rust)
+  rust_legacy)
