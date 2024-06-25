@@ -145,14 +145,14 @@ genrule {
 
 genrule {
     name: "netsim_netlink_rust_gen",
-    defaults: ["pdl_rust_legacy_generator_defaults"],
+    defaults: ["pdl_rust_generator_defaults"],
     srcs: ["pdl/netlink.pdl"],
     out: ["netlink_packets.rs"],
 }
 
 genrule {
     name: "netsim_mac80211_hwsim_rust_gen",
-    defaults: ["pdl_rust_legacy_generator_defaults"],
+    defaults: ["pdl_rust_generator_defaults"],
     srcs: ["pdl/mac80211_hwsim.pdl"],
     out: ["mac80211_hwsim_packets.rs"],
 }

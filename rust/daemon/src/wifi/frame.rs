@@ -48,10 +48,10 @@ impl Frame {
     // found.
     pub fn parse(msg: &HwsimMsg) -> anyhow::Result<Frame> {
         // Only expected to be called with HwsimCmd::Frame
-        if msg.get_hwsim_hdr().hwsim_cmd != HwsimCmd::Frame {
+        if msg.hwsim_hdr.hwsim_cmd != HwsimCmd::Frame {
             panic!("Invalid hwsim_cmd");
         }
-        let attrs = HwsimAttrSet::parse(msg.get_attributes()).context("HwsimAttrSet")?;
+        let attrs = HwsimAttrSet::parse(&msg.attributes).context("HwsimAttrSet")?;
         let frame = attrs.frame.clone().context("Frame")?;
         let ieee80211 = Ieee80211::decode_full(&frame).context("Ieee80211")?;
         // Required attributes are unwrapped and return an error if
