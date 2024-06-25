@@ -12,64 +12,71 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::devices::devices_handler;
 use futures_util::{FutureExt as _, TryFutureExt as _};
-use grpcio::{RpcContext, UnarySink};
+use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
+use log::warn;
 use netsim_proto::frontend::VersionResponse;
 use netsim_proto::frontend_grpc::FrontendService;
+use protobuf::well_known_types::empty::Empty;
 
 #[derive(Clone)]
 pub struct FrontendClient;
 
 impl FrontendService for FrontendClient {
-    fn get_version(
-        &mut self,
-        ctx: RpcContext<'_>,
-        req: protobuf::well_known_types::empty::Empty,
-        sink: UnarySink<VersionResponse>,
-    ) {
-        let response = VersionResponse {
-            version: "netsim test server version 0.0.1".to_string(),
-            ..Default::default()
-        };
+    fn get_version(&mut self, ctx: RpcContext<'_>, req: Empty, sink: UnarySink<VersionResponse>) {
+        let response =
+            VersionResponse { version: crate::version::get_version(), ..Default::default() };
         let f = sink
             .success(response)
-            .map_err(move |e| eprintln!("failed to reply {:?}: {:?}", req, e))
+            .map_err(move |e| eprintln!("client error {:?}: {:?}", req, e))
             .map(|_| ());
         ctx.spawn(f)
     }
 
     fn list_device(
         &mut self,
-        _ctx: grpcio::RpcContext,
-        _req: protobuf::well_known_types::empty::Empty,
-        _sink: grpcio::UnarySink<netsim_proto::frontend::ListDeviceResponse>,
+        ctx: grpcio::RpcContext,
+        req: Empty,
+        sink: grpcio::UnarySink<netsim_proto::frontend::ListDeviceResponse>,
     ) {
-        todo!()
+        let response = match devices_handler::list_device() {
+            Ok(response) => sink.success(response),
+            Err(e) => {
+                warn!("failed to list device: {}", e);
+                sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e))
+            }
+        };
+
+        ctx.spawn(response.map_err(move |e| warn!("client error {:?}: {:?}", req, e)).map(|_| ()))
     }
 
     fn patch_device(
         &mut self,
         _ctx: grpcio::RpcContext,
         _req: netsim_proto::frontend::PatchDeviceRequest,
-        _sink: grpcio::UnarySink<protobuf::well_known_types::empty::Empty>,
+        _sink: grpcio::UnarySink<Empty>,
     ) {
         todo!()
     }
 
-    fn reset(
-        &mut self,
-        _ctx: grpcio::RpcContext,
-        _req: protobuf::well_known_types::empty::Empty,
-        _sink: grpcio::UnarySink<protobuf::well_known_types::empty::Empty>,
-    ) {
-        todo!()
+    fn reset(&mut self, ctx: grpcio::RpcContext, _req: Empty, sink: grpcio::UnarySink<Empty>) {
+        let response = match devices_handler::reset_all() {
+            Ok(_) => sink.success(Empty::new()),
+            Err(e) => {
+                warn!("failed to reset: {}", e);
+                sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e))
+            }
+        };
+
+        ctx.spawn(response.map_err(move |e| warn!("client error: {:?}", e)).map(|_| ()))
     }
 
     fn patch_capture(
         &mut self,
         _ctx: grpcio::RpcContext,
         _req: netsim_proto::frontend::PatchCaptureRequest,
-        _sink: grpcio::UnarySink<protobuf::well_known_types::empty::Empty>,
+        _sink: grpcio::UnarySink<Empty>,
     ) {
         todo!()
     }
@@ -77,7 +84,7 @@ impl FrontendService for FrontendClient {
     fn list_capture(
         &mut self,
         _ctx: grpcio::RpcContext,
-        _req: protobuf::well_known_types::empty::Empty,
+        _req: Empty,
         _sink: grpcio::UnarySink<netsim_proto::frontend::ListCaptureResponse>,
     ) {
         todo!()

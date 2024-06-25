@@ -17,7 +17,7 @@ use std::fmt;
 use super::packets::ieee80211::MacAddress;
 use super::packets::mac80211_hwsim::{self, HwsimAttr, HwsimAttrChild::*, TxRate, TxRateFlag};
 use super::packets::netlink::NlAttrHdr;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use pdl_runtime::Packet;
 use std::option::Option;
 
@@ -103,98 +103,81 @@ impl HwsimAttrSetBuilder {
     }
 
     pub fn transmitter(&mut self, transmitter: &[u8; 6]) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrAddrTransmitterBuilder {
-                address: *transmitter,
-                nla_m: 0,
-                nla_o: 0,
-            }
-            .build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrAddrTransmitter {
+            address: *transmitter,
+            nla_m: 0,
+            nla_o: 0,
+        });
         self.transmitter = Some(MacAddress::from(transmitter));
         self
     }
 
     pub fn receiver(&mut self, receiver: &[u8; 6]) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrAddrReceiverBuilder { address: *receiver, nla_m: 0, nla_o: 0 }
-                .build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrAddrReceiver {
+            address: *receiver,
+            nla_m: 0,
+            nla_o: 0,
+        });
         self.receiver = Some(MacAddress::from(receiver));
         self
     }
 
     pub fn frame(&mut self, frame: &[u8]) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrFrameBuilder { data: (*frame).to_vec(), nla_m: 0, nla_o: 0 }
-                .build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrFrame {
+            data: (*frame).to_vec(),
+            nla_m: 0,
+            nla_o: 0,
+        });
         self.frame = Some(frame.to_vec());
         self
     }
 
     pub fn flags(&mut self, flags: u32) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrFlagsBuilder { flags, nla_m: 0, nla_o: 0 }.build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrFlags { flags, nla_m: 0, nla_o: 0 });
         self.flags = Some(flags);
         self
     }
 
     pub fn rx_rate(&mut self, rx_rate_idx: u32) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrRxRateBuilder { rx_rate_idx, nla_m: 0, nla_o: 0 }.build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrRxRate { rx_rate_idx, nla_m: 0, nla_o: 0 });
         self.rx_rate_idx = Some(rx_rate_idx);
         self
     }
 
     pub fn signal(&mut self, signal: u32) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrSignalBuilder { signal, nla_m: 0, nla_o: 0 }.build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrSignal { signal, nla_m: 0, nla_o: 0 });
         self.signal = Some(signal);
         self
     }
 
     pub fn cookie(&mut self, cookie: u64) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrCookieBuilder { cookie, nla_m: 0, nla_o: 0 }.build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrCookie { cookie, nla_m: 0, nla_o: 0 });
         self.cookie = Some(cookie);
         self
     }
 
     pub fn freq(&mut self, freq: u32) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrFreqBuilder { freq, nla_m: 0, nla_o: 0 }.build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrFreq { freq, nla_m: 0, nla_o: 0 });
         self.freq = Some(freq);
         self
     }
 
     pub fn tx_info(&mut self, tx_info: &[TxRate]) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrTxInfoBuilder {
-                tx_rates: (*tx_info).to_vec(),
-                nla_m: 0,
-                nla_o: 0,
-            }
-            .build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrTxInfo {
+            tx_rates: (*tx_info).to_vec(),
+            nla_m: 0,
+            nla_o: 0,
+        });
         self.tx_info = Some(tx_info.to_vec());
         self
     }
 
     pub fn tx_info_flags(&mut self, tx_rate_flags: &[TxRateFlag]) -> &mut Self {
-        self.extend_attributes(
-            mac80211_hwsim::HwsimAttrTxInfoFlagsBuilder {
-                tx_rate_flags: (*tx_rate_flags).to_vec(),
-                nla_m: 0,
-                nla_o: 0,
-            }
-            .build(),
-        );
+        self.extend_attributes(mac80211_hwsim::HwsimAttrTxInfoFlags {
+            tx_rate_flags: (*tx_rate_flags).to_vec(),
+            nla_m: 0,
+            nla_o: 0,
+        });
         self.tx_info_flags = Some(tx_rate_flags.to_vec());
         self
     }
@@ -267,28 +250,29 @@ impl HwsimAttrSet {
         let mut builder = HwsimAttrSet::builder();
         while index < attributes.len() {
             // Parse a generic netlink attribute to get the size
-            let nla_hdr = NlAttrHdr::parse(&attributes[index..index + 4]).unwrap();
+            let nla_hdr =
+                NlAttrHdr::decode_full(&attributes[index..index + 4]).context("NlAttrHdr")?;
             let nla_len = nla_hdr.nla_len as usize;
             // Now parse a single attribute at a time from the
             // attributes to allow padding per attribute.
-            let hwsim_attr = HwsimAttr::parse(&attributes[index..index + nla_len])?;
-            match hwsim_attr.specialize() {
+            let hwsim_attr = HwsimAttr::decode_full(&attributes[index..index + nla_len])?;
+            match hwsim_attr.specialize().context("HwsimAttr")? {
                 HwsimAttrAddrTransmitter(child) => {
-                    builder.transmitter(transmitter.unwrap_or(child.get_address()))
+                    builder.transmitter(transmitter.unwrap_or(child.address()))
                 }
-                HwsimAttrAddrReceiver(child) => builder.receiver(child.get_address()),
-                HwsimAttrFrame(child) => builder.frame(frame.unwrap_or(child.get_data())),
-                HwsimAttrFlags(child) => builder.flags(child.get_flags()),
-                HwsimAttrRxRate(child) => builder.rx_rate(child.get_rx_rate_idx()),
-                HwsimAttrSignal(child) => builder.signal(child.get_signal()),
-                HwsimAttrCookie(child) => builder.cookie(child.get_cookie()),
-                HwsimAttrFreq(child) => builder.freq(child.get_freq()),
-                HwsimAttrTxInfo(child) => builder.tx_info(child.get_tx_rates()),
-                HwsimAttrTxInfoFlags(child) => builder.tx_info_flags(child.get_tx_rate_flags()),
+                HwsimAttrAddrReceiver(child) => builder.receiver(&child.address),
+                HwsimAttrFrame(child) => builder.frame(frame.unwrap_or(&child.data)),
+                HwsimAttrFlags(child) => builder.flags(child.flags),
+                HwsimAttrRxRate(child) => builder.rx_rate(child.rx_rate_idx),
+                HwsimAttrSignal(child) => builder.signal(child.signal),
+                HwsimAttrCookie(child) => builder.cookie(child.cookie),
+                HwsimAttrFreq(child) => builder.freq(child.freq),
+                HwsimAttrTxInfo(child) => builder.tx_info(&child.tx_rates),
+                HwsimAttrTxInfoFlags(child) => builder.tx_info_flags(&child.tx_rate_flags),
                 _ => {
                     return Err(anyhow!(
                         "Invalid attribute message: {:?}",
-                        hwsim_attr.get_nla_type() as u32
+                        hwsim_attr.nla_type as u32
                     ))
                 }
             };
@@ -313,9 +297,9 @@ mod tests {
     #[test]
     fn test_attr_set_parse() {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
-        let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
-        assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
-        let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes()).unwrap();
+        let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
+        assert_eq!(hwsim_msg.hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
+        let attrs = HwsimAttrSet::parse(hwsim_msg.attributes()).unwrap();
 
         // Validate each attribute parsed
         assert_eq!(attrs.transmitter, MacAddress::try_from(11670786u64).ok());
@@ -336,10 +320,10 @@ mod tests {
     #[test]
     fn test_attr_set_attributes() {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
-        let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
-        assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
-        let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes()).unwrap();
-        assert_eq!(&attrs.attributes, hwsim_msg.get_attributes());
+        let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
+        assert_eq!(hwsim_msg.hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
+        let attrs = HwsimAttrSet::parse(hwsim_msg.attributes()).unwrap();
+        assert_eq!(&attrs.attributes, hwsim_msg.attributes());
     }
 
     /// Validate changing frame and transmitter during the parse.
@@ -349,12 +333,12 @@ mod tests {
     #[test]
     fn test_attr_set_parse_with_frame_transmitter() -> Result<(), Error> {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
-        let hwsim_msg = HwsimMsg::parse(&packet)?;
-        assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
-        let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes())?;
+        let hwsim_msg = HwsimMsg::decode_full(&packet)?;
+        assert_eq!(hwsim_msg.hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
+        let attrs = HwsimAttrSet::parse(hwsim_msg.attributes())?;
         let transmitter: [u8; 6] = attrs.transmitter.context("transmitter")?.into();
         let mod_attrs = HwsimAttrSet::parse_with_frame_transmitter(
-            hwsim_msg.get_attributes(),
+            hwsim_msg.attributes(),
             attrs.frame.as_deref(),
             Some(&transmitter),
         )?;
@@ -381,8 +365,8 @@ mod tests {
     #[test]
     fn test_hwsim_attr_set_display() {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
-        let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
-        let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes()).unwrap();
+        let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
+        let attrs = HwsimAttrSet::parse(hwsim_msg.attributes()).unwrap();
 
         let fmt_attrs = format!("{}", attrs);
         assert!(fmt_attrs.contains("transmitter: 02:15:b2:00:00:00"));

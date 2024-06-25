@@ -18,6 +18,7 @@ use pica::{Handle, RangingEstimator, RangingMeasurement};
 
 use crate::devices::{chip::ChipIdentifier, devices_handler::get_device};
 use crate::ranging::{compute_range_azimuth_elevation, Pose};
+use crate::uwb::ranging_data::RangingDataSet;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -54,11 +55,12 @@ impl SharedState {
 // Netsim's UwbRangingEstimator
 pub struct UwbRangingEstimator {
     shared_state: SharedState,
+    data_set: RangingDataSet,
 }
 
 impl UwbRangingEstimator {
     pub fn new(shared_state: SharedState) -> Self {
-        UwbRangingEstimator { shared_state }
+        UwbRangingEstimator { shared_state, data_set: RangingDataSet::new(None) }
     }
 
     // Utility to convert the UWB Chip handle into the device and chip_id.
@@ -86,7 +88,11 @@ impl RangingEstimator for UwbRangingEstimator {
         let a_pose = Pose::new(a_p.x, a_p.y, a_p.z, a_o.yaw, a_o.pitch, a_o.roll);
         let b_pose = Pose::new(b_p.x, b_p.y, b_p.z, b_o.yaw, b_o.pitch, b_o.roll);
         compute_range_azimuth_elevation(&a_pose, &b_pose)
-            .map(|(range, azimuth, elevation)| RangingMeasurement { range, azimuth, elevation })
+            .map(|(range, azimuth, elevation)| RangingMeasurement {
+                range: self.data_set.sample(range, None).round() as u16,
+                azimuth,
+                elevation,
+            })
             .map_err(|e| error!("{e:?}"))
             .ok()
     }

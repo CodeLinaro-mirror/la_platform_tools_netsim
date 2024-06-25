@@ -145,21 +145,21 @@ genrule {
 
 genrule {
     name: "netsim_netlink_rust_gen",
-    defaults: ["pdl_rust_legacy_generator_defaults"],
+    defaults: ["pdl_rust_generator_defaults"],
     srcs: ["pdl/netlink.pdl"],
     out: ["netlink_packets.rs"],
 }
 
 genrule {
     name: "netsim_mac80211_hwsim_rust_gen",
-    defaults: ["pdl_rust_legacy_generator_defaults"],
+    defaults: ["pdl_rust_generator_defaults"],
     srcs: ["pdl/mac80211_hwsim.pdl"],
     out: ["mac80211_hwsim_packets.rs"],
 }
 
 genrule {
     name: "netsim_ieee80211_rust_gen",
-    defaults: ["pdl_rust_legacy_generator_defaults"],
+    defaults: ["pdl_rust_generator_defaults"],
     srcs: ["pdl/ieee80211.pdl"],
     out: ["ieee80211_packets.rs"],
 }
@@ -200,7 +200,6 @@ cc_library_host_static {
     ],
     static_libs: [
         "breakpad_client",
-        "libc++fs",
         "libjsoncpp",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite",
@@ -255,7 +254,6 @@ cc_binary_host {
     ],
     static_libs: [
         "breakpad_client",
-        "libc++fs",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite", // TODO: Remove this after using pdl library.
         "lib-netsimd-proto",
@@ -297,7 +295,6 @@ cc_test_host {
     ],
     static_libs: [
         "breakpad_client",
-        "libc++fs",
         "libgrpc_wrap",
         "libjsoncpp",
         "libprotobuf-cpp-full",
@@ -368,7 +365,6 @@ cc_library_host_static {
     shared_libs: ["libgrpc++"],
     generated_sources: ["netsim_cli_cc"],
     static_libs: [
-        "libc++fs",
         "libprotobuf-cpp-full",
         "lib-netsim-frontend-proto",
     ],
@@ -393,7 +389,6 @@ rust_defaults {
     static_libs: [
         "lib-netsim-frontend-client",
         "lib-netsim-frontend-proto",
-        "libc++fs",
         "libprotobuf-cpp-full",
     ],
 }
