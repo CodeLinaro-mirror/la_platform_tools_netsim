@@ -24,11 +24,11 @@ use netsim_common::util::zip_artifact::zip_artifacts;
 use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
 use crate::devices::devices_handler::spawn_shutdown_publisher;
-use crate::echip;
 use crate::events;
 use crate::events::{Event, ShutDown};
 use crate::session::Session;
 use crate::version::get_version;
+use crate::wireless;
 use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
@@ -259,6 +259,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
         args.dev,
         args.disable_wifi_p2p,
         args.vsock.unwrap_or_default(),
+        args.rust_grpc,
     );
 
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
@@ -284,11 +285,9 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     }
 
     // Start radio facades
-    echip::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
-    echip::wifi::wifi_start(&config.wifi);
-    // TODO(b/278268690): Add Pica Library to goldfish build
-    #[cfg(feature = "cuttlefish")]
-    echip::uwb::uwb_start();
+    wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
+    wireless::wifi::wifi_start(&config.wifi);
+    wireless::uwb::uwb_start();
 
     // Create test beacons if required
     if config.bluetooth.test_beacons == Some(true) {

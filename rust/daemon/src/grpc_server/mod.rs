@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "cuttlefish")]
-pub mod fd;
-pub mod grpc;
-mod h4;
-pub mod socket;
-// TODO: UWB GF support, then remove the allow
-#[allow(dead_code)]
-mod uci;
-pub mod websocket;
-
-// This provides no-op implementations of fd transport for non-unix systems.
-#[cfg(not(feature = "cuttlefish"))]
-pub mod fd {
-    #[allow(clippy::ptr_arg)]
-    pub fn run_fd_transport(_startup_json: &String) {}
-}
+mod backend;
+mod frontend;
+pub(crate) mod server;

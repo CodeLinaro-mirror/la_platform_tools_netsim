@@ -61,6 +61,11 @@ pub struct NetsimdArgs {
     #[arg(long)]
     pub disable_wifi_p2p: bool,
 
+    /// Use Rust gRPC server.
+    /// WARNING: This flag is for development purpose.
+    #[arg(long)]
+    pub rust_grpc: bool,
+
     /// Set the vsock port number to be listened by the frontend grpc server
     #[arg(short, long)]
     pub vsock: Option<u16>,
@@ -72,6 +77,15 @@ pub struct NetsimdArgs {
     /// Comma separated list of host DNS servers
     #[arg(long)]
     pub host_dns: Option<String>,
+
+    /// Redirect all TCP connections through the specified HTTP/HTTPS proxy.
+    /// Can be one of the following:
+    ///     http://<server>:<port>
+    ///     http://<username>:<password>@<server>:<port>
+    ///     (the 'http://' prefix can be omitted)
+    /// WARNING: This flag is still working in progress.
+    #[arg(long, verbatim_doc_comment)]
+    pub http_proxy: Option<String>,
 
     /// Start with test beacons
     #[arg(long, alias = "test_beacons", overrides_with("no_test_beacons"))]

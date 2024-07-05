@@ -1,6 +1,6 @@
 [package]
 name = "netsim-daemon"
-version = "0.3.9"
+version = "0.3.13"
 edition = "2021"
 build = "build.rs"
 
@@ -14,21 +14,28 @@ bytes = { version = ">=1.4.0"}
 clap = { version = "4.1.8", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
 cxx = { version = ">=1.0.85", features = ["c++17"] }
 data-encoding = "2.4.0"
-glam = ">=0.25.0"
+futures = "0.3.30"
+glam = { version = "0.25.0", features = ["libm"] }
 netsim-proto = { path = "../proto" }
 http = "0.2.9"
 netsim-common = { path = "../common" }
+pica = { version = "0.1.9", default-features = false }
 protobuf = "3.2.0"
 protobuf-json-mapping = "3.2.0"
+rand = "0.8.5"
 regex = "1.6.0"
-tokio = { verison = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt"] }
+tokio = { verison = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 thiserror = { version = ">=1.0.40"}
 tungstenite = { version = ">=0.19.0", default-features = false }
 lazy_static = "1.4.0"
 log = "0.4.17"
 anyhow = "1"
-pdl-runtime = "0.2.2"
+pdl-runtime = "0.3.0"
+grpcio =  {version= "0.13.0", default-features = false, features = ["protobufv3-codec"]}
+futures-channel = { version = "0.3.30", features = ["sink"] }
+futures-executor = "0.3.30"
+futures-util = { version = "0.3.30", default-features = false, features = ["sink"] }
 
 [build-dependencies]
 cxx-build = "1.0.92"

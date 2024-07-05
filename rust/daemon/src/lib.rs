@@ -20,9 +20,9 @@ pub mod captures;
 mod config;
 mod config_file;
 mod devices;
-mod echip;
 mod events;
 mod ffi;
+mod grpc_server;
 mod http_server;
 mod ranging;
 mod resource;
@@ -30,12 +30,10 @@ mod rust_main;
 mod service;
 mod session;
 mod transport;
+mod uwb;
 mod version;
 mod wifi;
-
-// TODO(b/278268690): Add Pica Library to goldfish build
-#[cfg(feature = "cuttlefish")]
-mod uwb;
+mod wireless;
 
 // This feature is enabled only for CMake builds
 #[cfg(feature = "local_ssl")]

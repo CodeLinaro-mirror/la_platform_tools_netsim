@@ -64,6 +64,17 @@ class RunPytestManager:
     """
     self.dir = EMULATOR_ARTIFACT_PATH / "emulator" if buildbot else OBJS_DIR
 
+  def _run_with_n_attempts(cmd, n):
+    for attempt in range(1, n + 1):
+      try:
+        run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
+        return
+      except Exception as e:
+        if attempt == n:
+          raise e
+        else:
+          logging.error(f"PyTest Attempt {attempt} Error: {e}")
+
   def process(self) -> bool:
     """Process the emulator e2e pytests
 
@@ -88,8 +99,12 @@ class RunPytestManager:
         "--test_config",
         PYTEST_DIR / "cfg" / "netsim_tests.json",
     ]
-    # TODO: Resolve Windows PyTest flakiness by increasing timeout threshold
+    # TODO: Resolve Windows PyTest failure
     if platform.system() != "Windows":
       cmd.append("--failures_as_errors")
-    run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
+    # Attempt rerunning test to resolve flakiness due to b/343503670
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+      RunPytestManager._run_with_n_attempts(cmd, 3)
+    else:
+      run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
     return True

@@ -27,7 +27,6 @@ use super::chip::ChipIdentifier;
 use super::device::DeviceIdentifier;
 use crate::devices::device::AddChipResult;
 use crate::devices::device::Device;
-use crate::echip;
 use crate::events;
 use crate::events::{
     ChipAdded, ChipRemoved, DeviceAdded, DevicePatched, DeviceRemoved, Event, Events, ShutDown,
@@ -35,6 +34,7 @@ use crate::events::{
 use crate::ffi::ffi_response_writable::CxxServerResponseWriter;
 use crate::ffi::CxxServerResponseWriterWrapper;
 use crate::http_server::server_response::ResponseWritable;
+use crate::wireless;
 use cxx::{CxxString, CxxVector};
 use http::Request;
 use http::Version;
@@ -163,7 +163,7 @@ pub fn add_chip(
     device_guid: &str,
     device_name: &str,
     chip_create_params: &chip::CreateParams,
-    echip_create_params: &echip::CreateParam,
+    wireless_create_params: &wireless::CreateParam,
 ) -> Result<AddChipResult, String> {
     let chip_kind = chip_create_params.kind;
     let manager = get_manager();
@@ -175,7 +175,7 @@ pub fn add_chip(
 
     // Create
     let chip_id = chip::next_id();
-    let emulated_chip = echip::new(echip_create_params, chip_id);
+    let wireless_adaptor = wireless::new(wireless_create_params, chip_id);
 
     // This is infrequent, so we can afford to do another lookup for the device.
     let _ = manager
@@ -184,7 +184,7 @@ pub fn add_chip(
         .unwrap()
         .get_mut(&device_id)
         .ok_or(format!("Device not found for device_id: {}", device_id))?
-        .add_chip(chip_create_params, chip_id, emulated_chip);
+        .add_chip(chip_create_params, chip_id, wireless_adaptor);
 
     // Update last modified timestamp for devices
     manager.update_timestamp();
@@ -235,22 +235,24 @@ pub fn add_chip_cxx(
 ) -> Box<AddChipResultCxx> {
     let bt_properties_proto = Controller::parse_from_bytes(bt_properties.as_slice());
     #[cfg(not(test))]
-    let (chip_kind_enum, echip_create_param) = match chip_kind.to_string().as_str() {
+    let (chip_kind_enum, wireless_create_param) = match chip_kind.to_string().as_str() {
         "BLUETOOTH" => (
             ProtoChipKind::BLUETOOTH,
-            echip::CreateParam::Bluetooth(echip::bluetooth::CreateParams {
+            wireless::CreateParam::Bluetooth(wireless::bluetooth::CreateParams {
                 address: chip_address.to_string(),
                 bt_properties: bt_properties_proto
                     .as_ref()
                     .map_or(None, |p| Some(MessageField::some(p.clone()))),
             }),
         ),
-        "WIFI" => (ProtoChipKind::WIFI, echip::CreateParam::Wifi(echip::wifi::CreateParams {})),
-        // TODO(b/278268690): Add Pica Library to goldfish build
-        #[cfg(feature = "cuttlefish")]
+        "WIFI" => {
+            (ProtoChipKind::WIFI, wireless::CreateParam::Wifi(wireless::wifi::CreateParams {}))
+        }
         "UWB" => (
             ProtoChipKind::UWB,
-            echip::CreateParam::Uwb(echip::uwb::CreateParams { address: chip_address.to_string() }),
+            wireless::CreateParam::Uwb(wireless::uwb::CreateParams {
+                address: chip_address.to_string(),
+            }),
         ),
         _ => {
             return Box::new(AddChipResultCxx {
@@ -261,22 +263,24 @@ pub fn add_chip_cxx(
         }
     };
     #[cfg(test)]
-    let (chip_kind_enum, echip_create_param) = match chip_kind.to_string().as_str() {
+    let (chip_kind_enum, wireless_create_param) = match chip_kind.to_string().as_str() {
         "BLUETOOTH" => (
             ProtoChipKind::BLUETOOTH,
-            echip::CreateParam::Mock(echip::mocked::CreateParams {
+            wireless::CreateParam::Mock(wireless::mocked::CreateParams {
                 chip_kind: ProtoChipKind::BLUETOOTH,
             }),
         ),
         "WIFI" => (
             ProtoChipKind::WIFI,
-            echip::CreateParam::Mock(echip::mocked::CreateParams {
+            wireless::CreateParam::Mock(wireless::mocked::CreateParams {
                 chip_kind: ProtoChipKind::WIFI,
             }),
         ),
         "UWB" => (
             ProtoChipKind::UWB,
-            echip::CreateParam::Mock(echip::mocked::CreateParams { chip_kind: ProtoChipKind::UWB }),
+            wireless::CreateParam::Mock(wireless::mocked::CreateParams {
+                chip_kind: ProtoChipKind::UWB,
+            }),
         ),
         _ => {
             return Box::new(AddChipResultCxx {
@@ -294,7 +298,7 @@ pub fn add_chip_cxx(
         product_name: chip_product_name.to_string(),
         bt_properties: bt_properties_proto.ok(),
     };
-    match add_chip(device_guid, device_name, &chip_create_params, &echip_create_param) {
+    match add_chip(device_guid, device_name, &chip_create_params, &wireless_create_param) {
         Ok(result) => Box::new(AddChipResultCxx {
             device_id: result.device_id.0,
             chip_id: result.chip_id.0,
@@ -427,12 +431,12 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
                 product_name: chip.product_name.clone(),
                 bt_properties: chip.bt_properties.as_ref().cloned(),
             };
-            let echip_create_params =
-                echip::CreateParam::BleBeacon(echip::ble_beacon::CreateParams {
+            let wireless_create_params =
+                wireless::CreateParam::BleBeacon(wireless::ble_beacon::CreateParams {
                     device_name: device_name.clone(),
                     chip_proto: chip.clone(),
                 });
-            add_chip(&device_name, &device_name, &chip_create_params, &echip_create_params)
+            add_chip(&device_name, &device_name, &chip_create_params, &wireless_create_params)
         }
         .map(|_| ())
     })?;
@@ -558,7 +562,6 @@ pub fn get_distance_cxx(a: u32, b: u32) -> f32 {
 }
 
 /// Function to obtain ProtoDevice given a ChipIdentifier
-#[cfg(feature = "cuttlefish")]
 pub fn get_device(chip_id: &ChipIdentifier) -> anyhow::Result<netsim_proto::model::Device> {
     let device_id = match chip::get_chip(chip_id) {
         Some(chip) => chip.device_id,
@@ -574,7 +577,7 @@ pub fn get_device(chip_id: &ChipIdentifier) -> anyhow::Result<netsim_proto::mode
         .map_err(|e| anyhow::anyhow!("{e:?}"))
 }
 
-fn reset_all() -> Result<(), String> {
+pub fn reset_all() -> Result<(), String> {
     let manager = get_manager();
     // Perform reset for all manager
     for device in manager.devices.read().unwrap().values() {
@@ -624,8 +627,7 @@ fn handle_chip_delete(writer: ResponseWritable, delete_json: &str) {
     }
 }
 
-/// Performs ListDevices to get the list of DeviceManager and write to writer.
-fn handle_device_list(writer: ResponseWritable) {
+pub fn list_device() -> anyhow::Result<ListDeviceResponse, String> {
     // Instantiate ListDeviceResponse and add DeviceManager
     let mut response = ListDeviceResponse::new();
     let manager = get_manager();
@@ -642,7 +644,12 @@ fn handle_device_list(writer: ResponseWritable) {
         ..Default::default()
     })
     .into();
+    Ok(response)
+}
 
+/// Performs ListDevices to get the list of DeviceManager and write to writer.
+fn handle_device_list(writer: ResponseWritable) {
+    let response = list_device().unwrap();
     // Perform protobuf-json-mapping with the given protobuf
     if let Ok(json_response) = print_to_string_with_options(&response, &JSON_PRINT_OPTION) {
         writer.put_ok("text/json", &json_response, vec![])
@@ -847,7 +854,7 @@ fn spawn_shutdown_publisher_with_timeout(
 /// Return vector containing current radio chip stats from all devices
 pub fn get_radio_stats() -> Vec<NetsimRadioStats> {
     let mut result: Vec<NetsimRadioStats> = Vec::new();
-    // TODO: b/309805437 - optimize logic using get_stats for EmulatedChip
+    // TODO: b/309805437 - optimize logic using get_stats for WirelessAdaptor
     for (device_id, device) in get_manager().devices.read().unwrap().iter() {
         for chip in device.chips.read().unwrap().values() {
             for mut radio_stats in chip.get_stats() {
@@ -903,13 +910,15 @@ mod tests {
                 product_name: self.chip_product_name.clone(),
                 bt_properties: None,
             };
-            let echip_create_params =
-                echip::CreateParam::Mock(echip::mocked::CreateParams { chip_kind: self.chip_kind });
+            let wireless_create_params =
+                wireless::CreateParam::Mock(wireless::mocked::CreateParams {
+                    chip_kind: self.chip_kind,
+                });
             super::add_chip(
                 &self.device_guid,
                 &self.device_name,
                 &chip_create_params,
-                &echip_create_params,
+                &wireless_create_params,
             )
         }
 

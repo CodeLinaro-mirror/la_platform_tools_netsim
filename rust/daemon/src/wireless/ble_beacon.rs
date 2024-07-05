@@ -14,15 +14,13 @@
 
 use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch, ble_beacon_remove};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
-use crate::echip::{EmulatedChip, SharedEmulatedChip};
+use crate::wireless::{WirelessAdaptor, WirelessAdaptorImpl};
 
 use bytes::Bytes;
 use log::{error, info};
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::ChipCreate as ChipCreateProto;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
-
-use std::sync::Arc;
 
 #[cfg(not(test))]
 use crate::ffi::ffi_bluetooth;
@@ -47,7 +45,7 @@ impl Drop for BleBeacon {
     }
 }
 
-impl EmulatedChip for BleBeacon {
+impl WirelessAdaptor for BleBeacon {
     fn handle_request(&self, packet: &Bytes) {
         #[cfg(not(test))]
         ffi_bluetooth::handle_bt_request(self.facade_id.0, packet[0], &packet[1..].to_vec());
@@ -91,18 +89,20 @@ impl EmulatedChip for BleBeacon {
 }
 
 /// Create a new Emulated BleBeacon Chip
-pub fn new(params: &CreateParams, chip_id: ChipIdentifier) -> SharedEmulatedChip {
+pub fn new(params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
     match ble_beacon_add(params.device_name.clone(), chip_id, &params.chip_proto) {
         Ok(facade_id) => {
-            info!("BleBeacon EmulatedChip created with facade_id: {facade_id} chip_id: {chip_id}");
-            Arc::new(Box::new(BleBeacon { facade_id, chip_id }))
+            info!(
+                "BleBeacon WirelessAdaptor created with facade_id: {facade_id} chip_id: {chip_id}"
+            );
+            Box::new(BleBeacon { facade_id, chip_id })
         }
         Err(err) => {
             error!("{err:?}");
-            Arc::new(Box::new(BleBeacon {
+            Box::new(BleBeacon {
                 facade_id: FacadeIdentifier(u32::MAX),
                 chip_id: ChipIdentifier(u32::MAX),
-            }))
+            })
         }
     }
 }

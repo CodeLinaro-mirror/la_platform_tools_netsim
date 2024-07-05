@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use super::packets::ieee80211::MacAddress;
-use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgBuilder, HwsimMsgHdr, NlMsgHdr};
+use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
 use crate::wifi::frame::Frame;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::{anyhow, Context};
@@ -162,11 +162,11 @@ impl Medium {
     }
 
     fn process_internal(&self, client_id: u32, packet: &Bytes) -> anyhow::Result<bool> {
-        let hwsim_msg = HwsimMsg::parse(packet)?;
+        let hwsim_msg = HwsimMsg::decode_full(packet)?;
 
         // The virtio handler only accepts HWSIM_CMD_FRAME, HWSIM_CMD_TX_INFO_FRAME and HWSIM_CMD_REPORT_PMSR
         // in https://source.corp.google.com/h/kernel/pub/scm/linux/kernel/git/torvalds/linux/+/master:drivers/net/wireless/virtual/mac80211_hwsim.c
-        match hwsim_msg.get_hwsim_hdr().hwsim_cmd {
+        match hwsim_msg.hwsim_hdr.hwsim_cmd {
             HwsimCmd::Frame => {
                 let frame = Frame::parse(&hwsim_msg)?;
                 // Incoming frame must contain transmitter, flag, cookie, and tx_info fields.
@@ -233,8 +233,8 @@ impl Medium {
             }
             return Ok(());
         }
-        let hwsim_msg = HwsimMsg::parse(packet)?;
-        let hwsim_cmd = hwsim_msg.get_hwsim_hdr().hwsim_cmd;
+        let hwsim_msg = HwsimMsg::decode_full(packet)?;
+        let hwsim_cmd = hwsim_msg.hwsim_hdr.hwsim_cmd;
         match hwsim_cmd {
             HwsimCmd::Frame => self.send_frame_response(packet, &hwsim_msg)?,
             // TODO: Handle sending TxInfo frame for WifiService so we don't have to
@@ -274,14 +274,14 @@ impl Medium {
             let hwsim_msg = self
                 .create_hwsim_msg(frame, &destination.hwsim_addr)
                 .context("Create HwsimMsg from WifiService")?;
-            (self.callback)(destination.client_id, &hwsim_msg.to_vec().into());
+            (self.callback)(destination.client_id, &hwsim_msg.encode_to_vec()?.into());
         }
         self.incr_rx(destination.client_id)?;
         Ok(())
     }
 
     fn send_tx_info_response(&self, packet: &Bytes, hwsim_msg: &HwsimMsg) -> anyhow::Result<()> {
-        let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes()).context("HwsimAttrSet")?;
+        let attrs = HwsimAttrSet::parse(&hwsim_msg.attributes).context("HwsimAttrSet")?;
         let hwsim_addr = attrs.transmitter.context("missing transmitter")?;
         let client_ids = self
             .stations()
@@ -319,7 +319,7 @@ impl Medium {
     /// Create tx info frame to station to ack HwsimMsg.
     fn send_tx_info_frame(&self, frame: &Frame) -> anyhow::Result<()> {
         let client_id = self.get_station(&frame.ieee80211.get_source())?.client_id;
-        let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().to_vec();
+        let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg).unwrap().encode_to_vec()?;
         (self.callback)(client_id, &hwsim_msg_tx_info.into());
         Ok(())
     }
@@ -360,7 +360,7 @@ impl Medium {
             if let Some(packet) = self.create_hwsim_msg(frame, &destination.hwsim_addr) {
                 self.incr_tx(source.client_id)?;
                 self.incr_rx(destination.client_id)?;
-                (self.callback)(destination.client_id, &packet.into());
+                (self.callback)(destination.client_id, &packet.encode_to_vec()?.into());
                 log_hwsim_msg(frame, source.client_id, destination.client_id);
             }
         }
@@ -416,7 +416,7 @@ impl Medium {
             && frame.ieee80211.is_to_ap()
             && frame.ieee80211.get_bssid() == Some(self.hostapd_bssid)
         {
-            true => frame.ieee80211.into_from_ap()?.to_vec(),
+            true => frame.ieee80211.into_from_ap()?.encode_to_vec()?,
             false => attrs.frame.clone().unwrap(),
         };
 
@@ -440,7 +440,7 @@ impl Medium {
     // Simulates transmission through hostapd.
     fn create_hwsim_msg(&self, frame: &Frame, dest_hwsim_addr: &MacAddress) -> Option<HwsimMsg> {
         let hwsim_msg = &frame.hwsim_msg;
-        assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
+        assert_eq!(hwsim_msg.hwsim_hdr.hwsim_cmd, HwsimCmd::Frame);
         let attributes_result = self.create_hwsim_attr(frame, dest_hwsim_addr);
         let attributes = match attributes_result {
             Ok(attributes) => attributes,
@@ -450,20 +450,19 @@ impl Medium {
             }
         };
 
-        let nlmsg_len = hwsim_msg.get_nl_hdr().nlmsg_len + attributes.len() as u32
-            - hwsim_msg.get_attributes().len() as u32;
-        let new_hwsim_msg = HwsimMsgBuilder {
+        let nlmsg_len = hwsim_msg.nl_hdr.nlmsg_len + attributes.len() as u32
+            - hwsim_msg.attributes.len() as u32;
+        let new_hwsim_msg = HwsimMsg {
             nl_hdr: NlMsgHdr {
                 nlmsg_len,
                 nlmsg_type: NLMSG_MIN_TYPE,
-                nlmsg_flags: hwsim_msg.get_nl_hdr().nlmsg_flags,
+                nlmsg_flags: hwsim_msg.nl_hdr.nlmsg_flags,
                 nlmsg_seq: 0,
                 nlmsg_pid: 0,
             },
-            hwsim_hdr: hwsim_msg.get_hwsim_hdr().clone(),
+            hwsim_hdr: hwsim_msg.hwsim_hdr.clone(),
             attributes,
-        }
-        .build();
+        };
         Some(new_hwsim_msg)
     }
 }
@@ -479,10 +478,10 @@ fn log_hwsim_msg(frame: &Frame, client_id: u32, dest_client_id: u32) {
 ///
 /// Reference to ackLocalFrame() in external/qemu/android-qemu2-glue/emulation/VirtioWifiForwarder.cpp
 fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
-    let attrs = HwsimAttrSet::parse(hwsim_msg.get_attributes()).context("HwsimAttrSet").unwrap();
+    let attrs = HwsimAttrSet::parse(&hwsim_msg.attributes).context("HwsimAttrSet").unwrap();
 
-    let hwsim_hdr = hwsim_msg.get_hwsim_hdr();
-    let nl_hdr = hwsim_msg.get_nl_hdr();
+    let hwsim_hdr = &hwsim_msg.hwsim_hdr;
+    let nl_hdr = &hwsim_msg.nl_hdr;
     let mut new_attr_builder = HwsimAttrSet::builder();
     const HWSIM_TX_STAT_ACK: u32 = 1 << 2;
 
@@ -496,7 +495,7 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
     let new_attr = new_attr_builder.build().unwrap();
     let nlmsg_len =
         nl_hdr.nlmsg_len + new_attr.attributes.len() as u32 - attrs.attributes.len() as u32;
-    let new_hwsim_msg = HwsimMsgBuilder {
+    let new_hwsim_msg = HwsimMsg {
         attributes: new_attr.attributes,
         hwsim_hdr: HwsimMsgHdr {
             hwsim_cmd: HwsimCmd::TxInfoFrame,
@@ -510,21 +509,20 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
             nlmsg_seq: 0,
             nlmsg_pid: 0,
         },
-    }
-    .build();
+    };
     Ok(new_hwsim_msg)
 }
 
 // It's used by radiotap.rs for packet capture.
 pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
-    let hwsim_msg = HwsimMsg::parse(packet)?;
-    match hwsim_msg.get_hwsim_hdr().hwsim_cmd {
+    let hwsim_msg = HwsimMsg::decode_full(packet)?;
+    match hwsim_msg.hwsim_hdr.hwsim_cmd {
         HwsimCmd::Frame => {
             let frame = Frame::parse(&hwsim_msg)?;
             Ok(HwsimCmdEnum::Frame(Box::new(frame)))
         }
         HwsimCmd::TxInfoFrame => Ok(HwsimCmdEnum::TxInfoFrame),
-        _ => Err(anyhow!("Unknown HwsimMsg cmd={:?}", hwsim_msg.get_hwsim_hdr().hwsim_cmd)),
+        _ => Err(anyhow!("Unknown HwsimMsg cmd={:?}", hwsim_msg.hwsim_hdr.hwsim_cmd)),
     }
 }
 
@@ -598,7 +596,7 @@ mod tests {
     #[test]
     fn test_is_mdns_packet() {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame_mdns.csv");
-        let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
+        let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
         let mdns_frame = Frame::parse(&hwsim_msg).unwrap();
         assert!(!mdns_frame.ieee80211.get_source().is_multicast());
         assert!(mdns_frame.ieee80211.get_destination().is_multicast());
@@ -607,8 +605,8 @@ mod tests {
     #[test]
     fn test_build_tx_info_reconstruct() {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_tx_info.csv");
-        let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
-        assert_eq!(hwsim_msg.get_hwsim_hdr().hwsim_cmd, HwsimCmd::TxInfoFrame);
+        let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
+        assert_eq!(hwsim_msg.hwsim_hdr().hwsim_cmd, HwsimCmd::TxInfoFrame);
 
         let new_hwsim_msg = build_tx_info(&hwsim_msg).unwrap();
         assert_eq!(hwsim_msg, new_hwsim_msg);
@@ -617,23 +615,23 @@ mod tests {
     #[test]
     fn test_build_tx_info() {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
-        let hwsim_msg = HwsimMsg::parse(&packet).unwrap();
+        let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
         let hwsim_msg_tx_info = build_tx_info(&hwsim_msg).unwrap();
-        assert_eq!(hwsim_msg_tx_info.get_hwsim_hdr().hwsim_cmd, HwsimCmd::TxInfoFrame);
+        assert_eq!(hwsim_msg_tx_info.hwsim_hdr().hwsim_cmd, HwsimCmd::TxInfoFrame);
     }
 
     fn build_tx_info_and_compare(frame_bytes: &Bytes, tx_info_expected_bytes: &Bytes) {
-        let frame = HwsimMsg::parse(frame_bytes).unwrap();
+        let frame = HwsimMsg::decode_full(frame_bytes).unwrap();
         let tx_info = build_tx_info(&frame).unwrap();
 
-        let tx_info_expected = HwsimMsg::parse(tx_info_expected_bytes).unwrap();
+        let tx_info_expected = HwsimMsg::decode_full(tx_info_expected_bytes).unwrap();
 
-        assert_eq!(tx_info.get_hwsim_hdr(), tx_info_expected.get_hwsim_hdr());
-        assert_eq!(tx_info.get_nl_hdr(), tx_info_expected.get_nl_hdr());
+        assert_eq!(tx_info.hwsim_hdr(), tx_info_expected.hwsim_hdr());
+        assert_eq!(tx_info.nl_hdr(), tx_info_expected.nl_hdr());
 
-        let attrs = HwsimAttrSet::parse(tx_info.get_attributes()).context("HwsimAttrSet").unwrap();
+        let attrs = HwsimAttrSet::parse(tx_info.attributes()).context("HwsimAttrSet").unwrap();
         let attrs_expected =
-            HwsimAttrSet::parse(tx_info_expected.get_attributes()).context("HwsimAttrSet").unwrap();
+            HwsimAttrSet::parse(tx_info_expected.attributes()).context("HwsimAttrSet").unwrap();
 
         // NOTE: TX info is different and the counts are all zeros in the TX info packet generated by WifiService.
         // TODO: Confirm if the behavior is intended in WifiService.

@@ -82,6 +82,9 @@ class WindowsEnvironment(BaseEnvironment):
         # Variables in windows are case insensitive, but not in python dict!
         self[key.upper()] = val
 
+    # Set PYTHONUTF8 to 1
+    self["PYTHONUTF8"] = "1"
+
     if not "VSINSTALLDIR" in self:
       raise VisualStudioMissingVarException(
           "Missing VSINSTALLDIR in environment"

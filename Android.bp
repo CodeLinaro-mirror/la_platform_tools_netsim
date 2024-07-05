@@ -65,7 +65,11 @@ rust_defaults {
         "libanyhow",
         "libdata_encoding",
         "libfutures",
+        "libfutures_channel",
+        "libfutures_executor",
+        "libfutures_util",
         "libglam",
+        "libgrpcio",
         "libnetsim_proto",
         "libhttp",
         "libnetsim_common",
@@ -196,7 +200,6 @@ cc_library_host_static {
     ],
     static_libs: [
         "breakpad_client",
-        "libc++fs",
         "libjsoncpp",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite",
@@ -251,7 +254,6 @@ cc_binary_host {
     ],
     static_libs: [
         "breakpad_client",
-        "libc++fs",
         "libprotobuf-cpp-full",
         "libscriptedbeaconpayload-protos-lite", // TODO: Remove this after using pdl library.
         "lib-netsimd-proto",
@@ -293,7 +295,6 @@ cc_test_host {
     ],
     static_libs: [
         "breakpad_client",
-        "libc++fs",
         "libgrpc_wrap",
         "libjsoncpp",
         "libprotobuf-cpp-full",
@@ -364,7 +365,6 @@ cc_library_host_static {
     shared_libs: ["libgrpc++"],
     generated_sources: ["netsim_cli_cc"],
     static_libs: [
-        "libc++fs",
         "libprotobuf-cpp-full",
         "lib-netsim-frontend-proto",
     ],
@@ -389,7 +389,6 @@ rust_defaults {
     static_libs: [
         "lib-netsim-frontend-client",
         "lib-netsim-frontend-proto",
-        "libc++fs",
         "libprotobuf-cpp-full",
     ],
 }

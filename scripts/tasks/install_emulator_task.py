@@ -111,8 +111,11 @@ class InstallEmulatorManager:
     else:
       # Without buildbots, this scripts is only runnable on Linux
       # TODO: support local builds for Mac and Windows
-      if PLATFORM_SYSTEM != "Linux":
-        logging.info("The local case only works for Linux")
+      if PLATFORM_SYSTEM != "Linux" and not self.local_emulator_dir:
+        logging.info(
+            "The local case only works for Linux if you don't have"
+            " --local_emulator_dir specified"
+        )
         return False
       # Check if the netsim has been built prior to install_emulator
       if not (

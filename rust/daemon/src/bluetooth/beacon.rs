@@ -23,8 +23,8 @@ use super::packets::link_layer::{
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::devices_handler::add_chip;
-use crate::echip;
 use crate::ffi::ffi_bluetooth;
+use crate::wireless;
 use cxx::{let_cxx_string, UniquePtr};
 use lazy_static::lazy_static;
 use log::{error, info, warn};
@@ -189,7 +189,8 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
             destination_address: *EMPTY_ADDRESS,
         }
         .build()
-        .to_vec();
+        .encode_to_vec()
+        .unwrap();
 
         beacon.send_link_layer_le_packet(&packet, beacon.advertise_settings.tx_power_level.dbm);
     }
@@ -220,7 +221,8 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
                 scan_response_data: beacon.scan_response_data.to_bytes(),
             }
             .build()
-            .to_vec();
+            .encode_to_vec()
+            .unwrap();
 
             beacon.send_link_layer_le_packet(&packet, beacon.advertise_settings.tx_power_level.dbm);
         }
