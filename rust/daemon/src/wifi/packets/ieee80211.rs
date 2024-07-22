@@ -74,8 +74,7 @@ impl MacAddress {
     }
 
     pub fn is_broadcast(&self) -> bool {
-        let addr = u64::to_le_bytes(self.0);
-        addr[0] == 0xff
+        self.0 == u64::MAX
     }
 }
 
@@ -319,6 +318,18 @@ mod tests {
         // Source address: Cisco_71:20:ce (00:0b:85:71:20:ce)
         let non_mdns_mac_address = parse_mac_address("00:0b:85:71:20:ce").unwrap();
         assert!(!non_mdns_mac_address.is_multicast());
+    }
+
+    fn test_is_broadcast() {
+        // Multicast MAC address: 01:00:5E:00:00:FB
+        let mdns_mac_address = parse_mac_address("01:00:5e:00:00:fb").unwrap();
+        assert!(!mdns_mac_address.is_broadcast());
+        // Broadcast MAC address: ff:ff:ff:ff:ff:ff
+        let broadcast_mac_address = parse_mac_address("ff:ff:ff:ff:ff:ff").unwrap();
+        assert!(broadcast_mac_address.is_broadcast());
+        // Source address: Cisco_71:20:ce (00:0b:85:71:20:ce)
+        let non_mdns_mac_address = parse_mac_address("00:0b:85:71:20:ce").unwrap();
+        assert!(!non_mdns_mac_address.is_broadcast());
     }
 
     fn create_test_from_ap_ieee80211(
