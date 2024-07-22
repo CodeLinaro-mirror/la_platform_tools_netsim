@@ -58,7 +58,6 @@ use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string;
 use protobuf_json_mapping::print_to_string_with_options;
 use protobuf_json_mapping::PrintOptions;
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -124,11 +123,12 @@ impl DeviceManager {
         name: Option<&str>,
         builtin: bool,
     ) -> (DeviceIdentifier, String) {
+        // Hold a lock while checking and updating devices.
+        let mut guard = self.devices.write().unwrap();
+
         // Check if a device with the same guid already exists and if so, return it
         if let Some(guid) = guid {
-            if let Some(existing_device) =
-                self.devices.read().unwrap().values().find(|d| d.guid == *guid)
-            {
+            if let Some(existing_device) = guard.values().find(|d| d.guid == *guid) {
                 if existing_device.builtin != builtin {
                     warn!("builtin mismatch for device {} during add_chip", existing_device.name);
                 }
@@ -140,10 +140,11 @@ impl DeviceManager {
         let id = self.next_id();
         let default = format!("device-{}", id);
         let name = name.unwrap_or(&default);
-        self.devices.write().unwrap().insert(
+        guard.insert(
             id,
             Device::new(id, String::from(guid.unwrap_or(&default)), String::from(name), builtin),
         );
+        drop(guard);
         // Update last modified timestamp for devices
         self.update_timestamp();
         events::publish(Event::DeviceAdded(DeviceAdded { id, name: name.to_string(), builtin }));
@@ -310,52 +311,36 @@ pub fn add_chip_cxx(
     }
 }
 
-/// Remove a device from the simulation.
-///
-/// Called when the last chip for the device is removed.
-fn remove_device(devices: Arc<DeviceManager>, id: &DeviceIdentifier) -> Result<(), String> {
-    match devices.devices.write().unwrap().remove(id) {
-        Some(device) => events::publish(Event::DeviceRemoved(DeviceRemoved {
-            id: device.id,
-            name: device.name,
-            builtin: device.builtin,
-        })),
-        None => return Err(format!("Device not found for device_id: {id}")),
-    }
-    // Update last modified timestamp for devices
-    devices.update_timestamp();
-    Ok(())
-}
-
 /// Remove a chip from a device.
 ///
 /// Called when the packet transport for the chip shuts down.
 pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(), String> {
     let manager = get_manager();
-    let (is_empty, radio_stats) = match manager.devices.write().unwrap().entry(device_id) {
-        Entry::Occupied(entry) => {
-            let device = entry.get();
-            let radio_stats = device.remove_chip(&chip_id)?;
-            (device.chips.read().unwrap().is_empty(), radio_stats)
-        }
-        Entry::Vacant(_) => return Err(format!("RemoveChip device id {} not found", device_id)),
-    };
-    if is_empty {
-        remove_device(manager.clone(), &device_id)?;
-    }
-    manager.update_timestamp();
+    let mut guard = manager.devices.write().unwrap();
+    let device =
+        guard.get(&device_id).ok_or(format!("RemoveChip device id {device_id} not found"))?;
+    let radio_stats = device.remove_chip(&chip_id)?;
+    let remaining_nonbuiltin_devices = guard.values().filter(|device| !device.builtin).count();
+
     events::publish(Event::ChipRemoved(ChipRemoved {
         chip_id,
         device_id,
-        remaining_nonbuiltin_devices: manager
-            .devices
-            .read()
-            .unwrap()
-            .values()
-            .filter(|device| !device.builtin)
-            .count(),
+        remaining_nonbuiltin_devices,
         radio_stats,
     }));
+
+    if device.chips.read().unwrap().is_empty() {
+        let device = guard
+            .remove(&device_id)
+            .ok_or(format!("RemoveChip device id {device_id} not found"))?;
+        events::publish(Event::DeviceRemoved(DeviceRemoved {
+            id: device.id,
+            name: device.name,
+            builtin: device.builtin,
+        }));
+    }
+
+    manager.update_timestamp();
     Ok(())
 }
 
