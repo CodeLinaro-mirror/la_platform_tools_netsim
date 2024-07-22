@@ -63,6 +63,8 @@ pub struct SlirpOptions {
     pub dns6: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.config.SlirpOptions.host_dns)
     pub host_dns: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.config.SlirpOptions.http_proxy)
+    pub http_proxy: ::std::string::String,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.config.SlirpOptions.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -80,7 +82,7 @@ impl SlirpOptions {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(17);
+        let mut fields = ::std::vec::Vec::with_capacity(18);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "disabled",
@@ -167,6 +169,11 @@ impl SlirpOptions {
             |m: &SlirpOptions| { &m.host_dns },
             |m: &mut SlirpOptions| { &mut m.host_dns },
         ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "http_proxy",
+            |m: &SlirpOptions| { &m.http_proxy },
+            |m: &mut SlirpOptions| { &mut m.http_proxy },
+        ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<SlirpOptions>(
             "SlirpOptions",
             fields,
@@ -236,6 +243,9 @@ impl ::protobuf::Message for SlirpOptions {
                 138 => {
                     self.host_dns = is.read_string()?;
                 },
+                146 => {
+                    self.http_proxy = is.read_string()?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -299,6 +309,9 @@ impl ::protobuf::Message for SlirpOptions {
         if !self.host_dns.is_empty() {
             my_size += ::protobuf::rt::string_size(17, &self.host_dns);
         }
+        if !self.http_proxy.is_empty() {
+            my_size += ::protobuf::rt::string_size(18, &self.http_proxy);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -356,6 +369,9 @@ impl ::protobuf::Message for SlirpOptions {
         if !self.host_dns.is_empty() {
             os.write_string(17, &self.host_dns)?;
         }
+        if !self.http_proxy.is_empty() {
+            os.write_string(18, &self.http_proxy)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -390,6 +406,7 @@ impl ::protobuf::Message for SlirpOptions {
         self.dns.clear();
         self.dns6.clear();
         self.host_dns.clear();
+        self.http_proxy.clear();
         self.special_fields.clear();
     }
 
@@ -412,6 +429,7 @@ impl ::protobuf::Message for SlirpOptions {
             dns: ::std::string::String::new(),
             dns6: ::std::string::String::new(),
             host_dns: ::std::string::String::new(),
+            http_proxy: ::std::string::String::new(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -1179,7 +1197,7 @@ impl ::protobuf::reflect::ProtobufValue for Config {
 
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x13netsim/config.proto\x12\rnetsim.config\x1a\x1drootcanal/configurat\
-    ion.proto\"\xd5\x03\n\x0cSlirpOptions\x12\x1a\n\x08disabled\x18\x01\x20\
+    ion.proto\"\xf4\x03\n\x0cSlirpOptions\x12\x1a\n\x08disabled\x18\x01\x20\
     \x01(\x08R\x08disabled\x12\x17\n\x04ipv4\x18\x02\x20\x01(\x08H\0R\x04ipv\
     4\x88\x01\x01\x12\x1e\n\nrestricted\x18\x03\x20\x01(\x08R\nrestricted\
     \x12\x12\n\x04vnet\x18\x04\x20\x01(\tR\x04vnet\x12\x14\n\x05vhost\x18\
@@ -1192,23 +1210,24 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x01(\tR\x08bootfile\x12\x1c\n\tdhcpstart\x18\x0e\x20\x01(\tR\tdhcpstart\
     \x12\x10\n\x03dns\x18\x0f\x20\x01(\tR\x03dns\x12\x12\n\x04dns6\x18\x10\
     \x20\x01(\tR\x04dns6\x12\x19\n\x08host_dns\x18\x11\x20\x01(\tR\x07hostDn\
-    sB\x07\n\x05_ipv4B\x07\n\x05_ipv6\"j\n\x0eHostapdOptions\x12\x1f\n\x08di\
-    sabled\x18\x01\x20\x01(\x08H\0R\x08disabled\x88\x01\x01\x12\x12\n\x04ssi\
-    d\x18\x02\x20\x01(\tR\x04ssid\x12\x16\n\x06passwd\x18\x03\x20\x01(\tR\
-    \x06passwdB\x0b\n\t_disabled\"\x90\x01\n\x04WiFi\x12@\n\rslirp_options\
-    \x18\x01\x20\x01(\x0b2\x1b.netsim.config.SlirpOptionsR\x0cslirpOptions\
-    \x12F\n\x0fhostapd_options\x18\x02\x20\x01(\x0b2\x1d.netsim.config.Hosta\
-    pdOptionsR\x0ehostapdOptions\"\xf0\x01\n\tBluetooth\x12H\n\nproperties\
-    \x18\x01\x20\x01(\x0b2#.rootcanal.configuration.ControllerH\0R\nproperti\
-    es\x88\x01\x01\x127\n\x15disable_address_reuse\x18\x02\x20\x01(\x08H\x01\
-    R\x13disableAddressReuse\x88\x01\x01\x12&\n\x0ctest_beacons\x18\x03\x20\
-    \x01(\x08H\x02R\x0btestBeacons\x88\x01\x01B\r\n\x0b_propertiesB\x18\n\
-    \x16_disable_address_reuseB\x0f\n\r_test_beacons\"4\n\x07Capture\x12\x1d\
-    \n\x07enabled\x18\x01\x20\x01(\x08H\0R\x07enabled\x88\x01\x01B\n\n\x08_e\
-    nabled\"\x9b\x01\n\x06Config\x126\n\tbluetooth\x18\x01\x20\x01(\x0b2\x18\
-    .netsim.config.BluetoothR\tbluetooth\x12'\n\x04wifi\x18\x02\x20\x01(\x0b\
-    2\x13.netsim.config.WiFiR\x04wifi\x120\n\x07capture\x18\x03\x20\x01(\x0b\
-    2\x16.netsim.config.CaptureR\x07captureb\x06proto3\
+    s\x12\x1d\n\nhttp_proxy\x18\x12\x20\x01(\tR\thttpProxyB\x07\n\x05_ipv4B\
+    \x07\n\x05_ipv6\"j\n\x0eHostapdOptions\x12\x1f\n\x08disabled\x18\x01\x20\
+    \x01(\x08H\0R\x08disabled\x88\x01\x01\x12\x12\n\x04ssid\x18\x02\x20\x01(\
+    \tR\x04ssid\x12\x16\n\x06passwd\x18\x03\x20\x01(\tR\x06passwdB\x0b\n\t_d\
+    isabled\"\x90\x01\n\x04WiFi\x12@\n\rslirp_options\x18\x01\x20\x01(\x0b2\
+    \x1b.netsim.config.SlirpOptionsR\x0cslirpOptions\x12F\n\x0fhostapd_optio\
+    ns\x18\x02\x20\x01(\x0b2\x1d.netsim.config.HostapdOptionsR\x0ehostapdOpt\
+    ions\"\xf0\x01\n\tBluetooth\x12H\n\nproperties\x18\x01\x20\x01(\x0b2#.ro\
+    otcanal.configuration.ControllerH\0R\nproperties\x88\x01\x01\x127\n\x15d\
+    isable_address_reuse\x18\x02\x20\x01(\x08H\x01R\x13disableAddressReuse\
+    \x88\x01\x01\x12&\n\x0ctest_beacons\x18\x03\x20\x01(\x08H\x02R\x0btestBe\
+    acons\x88\x01\x01B\r\n\x0b_propertiesB\x18\n\x16_disable_address_reuseB\
+    \x0f\n\r_test_beacons\"4\n\x07Capture\x12\x1d\n\x07enabled\x18\x01\x20\
+    \x01(\x08H\0R\x07enabled\x88\x01\x01B\n\n\x08_enabled\"\x9b\x01\n\x06Con\
+    fig\x126\n\tbluetooth\x18\x01\x20\x01(\x0b2\x18.netsim.config.BluetoothR\
+    \tbluetooth\x12'\n\x04wifi\x18\x02\x20\x01(\x0b2\x13.netsim.config.WiFiR\
+    \x04wifi\x120\n\x07capture\x18\x03\x20\x01(\x0b2\x16.netsim.config.Captu\
+    reR\x07captureb\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

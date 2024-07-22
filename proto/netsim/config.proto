@@ -40,6 +40,7 @@ message SlirpOptions {
   string dns = 15;
   string dns6 = 16;
   string host_dns = 17;
+  string http_proxy = 18;
 };
 
 message HostapdOptions {
