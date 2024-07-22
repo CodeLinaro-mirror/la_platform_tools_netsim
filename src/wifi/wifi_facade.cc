@@ -112,7 +112,7 @@ void libslirp_main_loop_wait() {
 #endif
 }
 
-void HandleWifiRequestCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet) {
+void HandleWifiRequestCxx(const rust::Vec<uint8_t> &packet) {
 #ifdef NETSIM_ANDROID_EMULATOR
   // Send the packet to the WiFi service.
   struct iovec iov[1];
@@ -122,7 +122,7 @@ void HandleWifiRequestCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet) {
 #endif
 }
 
-void HostapdSendCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet) {
+void HostapdSendCxx(const rust::Vec<uint8_t> &packet) {
 #ifdef NETSIM_ANDROID_EMULATOR
   // Send the packet to Hostapd.
   struct iovec iov[1];
@@ -132,7 +132,7 @@ void HostapdSendCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet) {
 #endif
 }
 
-void LibslirpSendCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet) {
+void LibslirpSendCxx(const rust::Vec<uint8_t> &packet) {
 #ifdef NETSIM_ANDROID_EMULATOR
   // Send the packet to libslirp.
   struct iovec iov[1];
