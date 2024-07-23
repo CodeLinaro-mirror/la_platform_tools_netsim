@@ -29,10 +29,10 @@ namespace netsim::wifi {
 
 void libslirp_main_loop_wait();
 
-void HandleWifiRequestCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet);
+void HandleWifiRequestCxx(const rust::Vec<uint8_t> &packet);
 
-void HostapdSendCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet);
+void HostapdSendCxx(const rust::Vec<uint8_t> &packet);
 
-void LibslirpSendCxx(uint32_t chip_id, const rust::Vec<uint8_t> &packet);
+void LibslirpSendCxx(const rust::Vec<uint8_t> &packet);
 
 }  // namespace netsim::wifi

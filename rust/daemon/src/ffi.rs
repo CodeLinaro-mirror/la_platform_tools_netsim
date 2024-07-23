@@ -251,15 +251,15 @@ pub mod ffi_wifi {
 
         #[rust_name = handle_wifi_request]
         #[namespace = "netsim::wifi"]
-        fn HandleWifiRequestCxx(chip_id: u32, packet: &Vec<u8>);
+        fn HandleWifiRequestCxx(packet: &Vec<u8>);
 
         #[rust_name = hostapd_send]
         #[namespace = "netsim::wifi"]
-        fn HostapdSendCxx(chip_id: u32, packet: &Vec<u8>);
+        fn HostapdSendCxx(packet: &Vec<u8>);
 
         #[rust_name = libslirp_send]
         #[namespace = "netsim::wifi"]
-        fn LibslirpSendCxx(chip_id: u32, packet: &Vec<u8>);
+        fn LibslirpSendCxx(packet: &Vec<u8>);
 
         #[namespace = "netsim::wifi"]
         pub fn libslirp_main_loop_wait();

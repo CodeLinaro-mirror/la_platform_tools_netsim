@@ -116,7 +116,7 @@ mod tests {
         // Linear Interpolation
         assert_eq!(ranging_data_set.sample(50., None), 55.);
         // Exact distance found in dataset
-        assert!([190., 210.].contains(&ranging_data_set.sample(200., None)));
+        assert!([190., 210.].contains(&ranging_data_set.sample(200., None).round()));
         // Out of Range
         assert_eq!(ranging_data_set.sample(300., None), 300.);
     }

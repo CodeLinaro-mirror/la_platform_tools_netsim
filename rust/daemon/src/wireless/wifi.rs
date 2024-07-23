@@ -65,7 +65,7 @@ impl WifiManager {
                             || !WIFI_MANAGER.medium.process(chip_id, &packet)
                         {
                             // TODO: Replace with libslirp_send() and hostapd_send()
-                            ffi_wifi::handle_wifi_request(chip_id, &packet.to_vec());
+                            ffi_wifi::handle_wifi_request(&packet.to_vec());
                             ffi_wifi::libslirp_main_loop_wait();
                         }
                     }
