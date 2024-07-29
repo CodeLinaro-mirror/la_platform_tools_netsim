@@ -320,14 +320,6 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
     let device =
         guard.get(&device_id).ok_or(format!("RemoveChip device id {device_id} not found"))?;
     let radio_stats = device.remove_chip(&chip_id)?;
-    let remaining_nonbuiltin_devices = guard.values().filter(|device| !device.builtin).count();
-
-    events::publish(Event::ChipRemoved(ChipRemoved {
-        chip_id,
-        device_id,
-        remaining_nonbuiltin_devices,
-        radio_stats,
-    }));
 
     if device.chips.read().unwrap().is_empty() {
         let device = guard
@@ -339,6 +331,14 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
             builtin: device.builtin,
         }));
     }
+
+    let remaining_nonbuiltin_devices = guard.values().filter(|device| !device.builtin).count();
+    events::publish(Event::ChipRemoved(ChipRemoved {
+        chip_id,
+        device_id,
+        remaining_nonbuiltin_devices,
+        radio_stats,
+    }));
 
     manager.update_timestamp();
     Ok(())
