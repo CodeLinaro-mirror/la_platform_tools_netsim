@@ -62,7 +62,9 @@ export interface Chip {
   /** UWB */
   uwb?:|Chip_Radio|undefined;
   /** WIFI */
-  wifi?: Chip_Radio|undefined;
+  wifi?:|Chip_Radio|undefined;
+  /** Offset of the chip position from center of device */
+  offset?: Position|undefined;
 }
 
 /** Radio state associated with the Chip */
