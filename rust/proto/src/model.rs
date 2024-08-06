@@ -355,6 +355,8 @@ pub struct Chip {
     pub manufacturer: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.model.Chip.product_name)
     pub product_name: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.model.Chip.offset)
+    pub offset: ::protobuf::MessageField<Position>,
     // message oneof groups
     pub chip: ::std::option::Option<chip::Chip>,
     // special fields
@@ -570,7 +572,7 @@ impl Chip {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(9);
+        let mut fields = ::std::vec::Vec::with_capacity(10);
         let mut oneofs = ::std::vec::Vec::with_capacity(1);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "kind",
@@ -625,6 +627,11 @@ impl Chip {
             Chip::mut_wifi,
             Chip::set_wifi,
         ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, Position>(
+            "offset",
+            |m: &Chip| { &m.offset },
+            |m: &mut Chip| { &mut m.offset },
+        ));
         oneofs.push(chip::Chip::generated_oneof_descriptor_data());
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Chip>(
             "Chip",
@@ -671,6 +678,9 @@ impl ::protobuf::Message for Chip {
                 66 => {
                     self.chip = ::std::option::Option::Some(chip::Chip::Wifi(is.read_message()?));
                 },
+                122 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.offset)?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -697,6 +707,10 @@ impl ::protobuf::Message for Chip {
         }
         if !self.product_name.is_empty() {
             my_size += ::protobuf::rt::string_size(5, &self.product_name);
+        }
+        if let Some(v) = self.offset.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         }
         if let ::std::option::Option::Some(ref v) = self.chip {
             match v {
@@ -738,6 +752,9 @@ impl ::protobuf::Message for Chip {
         }
         if !self.product_name.is_empty() {
             os.write_string(5, &self.product_name)?;
+        }
+        if let Some(v) = self.offset.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(15, v, os)?;
         }
         if let ::std::option::Option::Some(ref v) = self.chip {
             match v {
@@ -781,6 +798,7 @@ impl ::protobuf::Message for Chip {
         self.chip = ::std::option::Option::None;
         self.chip = ::std::option::Option::None;
         self.chip = ::std::option::Option::None;
+        self.offset.clear();
         self.special_fields.clear();
     }
 
@@ -791,6 +809,7 @@ impl ::protobuf::Message for Chip {
             name: ::std::string::String::new(),
             manufacturer: ::std::string::String::new(),
             product_name: ::std::string::String::new(),
+            offset: ::protobuf::MessageField::none(),
             chip: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
@@ -3577,7 +3596,7 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x01y\x18\x02\x20\x01(\x02R\x01y\x12\x0c\n\x01z\x18\x03\x20\x01(\x02R\
     \x01z\"I\n\x0bOrientation\x12\x10\n\x03yaw\x18\x01\x20\x01(\x02R\x03yaw\
     \x12\x14\n\x05pitch\x18\x02\x20\x01(\x02R\x05pitch\x12\x12\n\x04roll\x18\
-    \x03\x20\x01(\x02R\x04roll\"\x9e\x0e\n\x04Chip\x12+\n\x04kind\x18\x01\
+    \x03\x20\x01(\x02R\x04roll\"\xde\x0e\n\x04Chip\x12+\n\x04kind\x18\x01\
     \x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x0e\n\x02id\x18\
     \x02\x20\x01(\rR\x02id\x12\x12\n\x04name\x18\x03\x20\x01(\tR\x04name\x12\
     \"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cprodu\
@@ -3586,74 +3605,75 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x20\x01(\x0b2\x1c.netsim.model.Chip.BleBeaconH\0R\tbleBeacon\x12,\n\x03\
     uwb\x18\x07\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x03uwb\x12.\n\
     \x04wifi\x18\x08\x20\x01(\x0b2\x18.netsim.model.Chip.RadioH\0R\x04wifi\
-    \x1ax\n\x05Radio\x12\x19\n\x05state\x18\x01\x20\x01(\x08H\0R\x05state\
-    \x88\x01\x01\x12\x14\n\x05range\x18\x02\x20\x01(\x02R\x05range\x12\x19\n\
-    \x08tx_count\x18\x03\x20\x01(\x05R\x07txCount\x12\x19\n\x08rx_count\x18\
-    \x04\x20\x01(\x05R\x07rxCountB\x08\n\x06_state\x1a\xdc\x01\n\tBluetooth\
-    \x127\n\nlow_energy\x18\x01\x20\x01(\x0b2\x18.netsim.model.Chip.RadioR\t\
-    lowEnergy\x122\n\x07classic\x18\x02\x20\x01(\x0b2\x18.netsim.model.Chip.\
-    RadioR\x07classic\x12\x18\n\x07address\x18\x03\x20\x01(\tR\x07address\
-    \x12H\n\rbt_properties\x18\x04\x20\x01(\x0b2#.rootcanal.configuration.Co\
-    ntrollerR\x0cbtProperties\x1a\xcf\x08\n\tBleBeacon\x12,\n\x02bt\x18\x01\
-    \x20\x01(\x0b2\x1c.netsim.model.Chip.BluetoothR\x02bt\x12\x18\n\x07addre\
-    ss\x18\x02\x20\x01(\tR\x07address\x12J\n\x08settings\x18\x03\x20\x01(\
-    \x0b2..netsim.model.Chip.BleBeacon.AdvertiseSettingsR\x08settings\x12E\n\
-    \x08adv_data\x18\x04\x20\x01(\x0b2*.netsim.model.Chip.BleBeacon.Advertis\
-    eDataR\x07advData\x12O\n\rscan_response\x18\x05\x20\x01(\x0b2*.netsim.mo\
-    del.Chip.BleBeacon.AdvertiseDataR\x0cscanResponse\x1a\xee\x03\n\x11Adver\
-    tiseSettings\x12e\n\x0eadvertise_mode\x18\x01\x20\x01(\x0e2<.netsim.mode\
-    l.Chip.BleBeacon.AdvertiseSettings.AdvertiseModeH\0R\radvertiseMode\x12$\
-    \n\x0cmilliseconds\x18\x02\x20\x01(\x04H\0R\x0cmilliseconds\x12g\n\x0etx\
-    _power_level\x18\x03\x20\x01(\x0e2?.netsim.model.Chip.BleBeacon.Advertis\
-    eSettings.AdvertiseTxPowerH\x01R\x0ctxPowerLevel\x12\x12\n\x03dbm\x18\
-    \x04\x20\x01(\x05H\x01R\x03dbm\x12\x1c\n\tscannable\x18\x05\x20\x01(\x08\
-    R\tscannable\x12\x18\n\x07timeout\x18\x06\x20\x01(\x04R\x07timeout\"=\n\
-    \rAdvertiseMode\x12\r\n\tLOW_POWER\x10\0\x12\x0c\n\x08BALANCED\x10\x01\
-    \x12\x0f\n\x0bLOW_LATENCY\x10\x02\"@\n\x10AdvertiseTxPower\x12\r\n\tULTR\
-    A_LOW\x10\0\x12\x07\n\x03LOW\x10\x01\x12\n\n\x06MEDIUM\x10\x02\x12\x08\n\
-    \x04HIGH\x10\x03B\n\n\x08intervalB\n\n\x08tx_power\x1a\xa4\x02\n\rAdvert\
-    iseData\x12.\n\x13include_device_name\x18\x01\x20\x01(\x08R\x11includeDe\
-    viceName\x123\n\x16include_tx_power_level\x18\x02\x20\x01(\x08R\x13inclu\
-    deTxPowerLevel\x12+\n\x11manufacturer_data\x18\x03\x20\x01(\x0cR\x10manu\
-    facturerData\x12N\n\x08services\x18\x04\x20\x03(\x0b22.netsim.model.Chip\
-    .BleBeacon.AdvertiseData.ServiceR\x08services\x1a1\n\x07Service\x12\x12\
-    \n\x04uuid\x18\x01\x20\x01(\tR\x04uuid\x12\x12\n\x04data\x18\x02\x20\x01\
-    (\x0cR\x04dataB\x06\n\x04chip\"\xdd\x04\n\nChipCreate\x12+\n\x04kind\x18\
-    \x01\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x18\n\x07addr\
-    ess\x18\x02\x20\x01(\tR\x07address\x12\x12\n\x04name\x18\x03\x20\x01(\tR\
-    \x04name\x12\"\n\x0cmanufacturer\x18\x04\x20\x01(\tR\x0cmanufacturer\x12\
-    !\n\x0cproduct_name\x18\x05\x20\x01(\tR\x0bproductName\x12I\n\nble_beaco\
-    n\x18\x06\x20\x01(\x0b2(.netsim.model.ChipCreate.BleBeaconCreateH\0R\tbl\
-    eBeacon\x12H\n\rbt_properties\x18\x07\x20\x01(\x0b2#.rootcanal.configura\
-    tion.ControllerR\x0cbtProperties\x1a\x8f\x02\n\x0fBleBeaconCreate\x12\
-    \x18\n\x07address\x18\x01\x20\x01(\tR\x07address\x12J\n\x08settings\x18\
-    \x03\x20\x01(\x0b2..netsim.model.Chip.BleBeacon.AdvertiseSettingsR\x08se\
-    ttings\x12E\n\x08adv_data\x18\x04\x20\x01(\x0b2*.netsim.model.Chip.BleBe\
-    acon.AdvertiseDataR\x07advData\x12O\n\rscan_response\x18\x05\x20\x01(\
-    \x0b2*.netsim.model.Chip.BleBeacon.AdvertiseDataR\x0cscanResponseB\x06\n\
-    \x04chip\"\xf2\x01\n\x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\
-    \x12\x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x12\x1d\n\x07visible\x18\
-    \x03\x20\x01(\x08H\0R\x07visible\x88\x01\x01\x122\n\x08position\x18\x04\
-    \x20\x01(\x0b2\x16.netsim.model.PositionR\x08position\x12;\n\x0borientat\
-    ion\x18\x05\x20\x01(\x0b2\x19.netsim.model.OrientationR\x0borientation\
-    \x12(\n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chipsB\
-    \n\n\x08_visible\"\xc3\x01\n\x0cDeviceCreate\x12\x12\n\x04name\x18\x01\
-    \x20\x01(\tR\x04name\x122\n\x08position\x18\x02\x20\x01(\x0b2\x16.netsim\
-    .model.PositionR\x08position\x12;\n\x0borientation\x18\x03\x20\x01(\x0b2\
-    \x19.netsim.model.OrientationR\x0borientation\x12.\n\x05chips\x18\x04\
-    \x20\x03(\x0b2\x18.netsim.model.ChipCreateR\x05chips\"7\n\x05Scene\x12.\
-    \n\x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.model.DeviceR\x07devices\
-    \"\x93\x02\n\x07Capture\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x124\n\
-    \tchip_kind\x18\x02\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKin\
-    d\x12\x1f\n\x0bdevice_name\x18\x03\x20\x01(\tR\ndeviceName\x12\x19\n\x05\
-    state\x18\x04\x20\x01(\x08H\0R\x05state\x88\x01\x01\x12\x12\n\x04size\
-    \x18\x05\x20\x01(\x05R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05\
-    R\x07records\x128\n\ttimestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf\
-    .TimestampR\ttimestamp\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05valid\
-    B\x08\n\x06_state*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BL\
-    UETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\
-    \x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\
-    \x10\x05b\x06proto3\
+    \x123\n\x06offset\x18\x0f\x20\x01(\x0b2\x16.netsim.model.PositionH\x01R\
+    \x06offset\x88\x01\x01\x1ax\n\x05Radio\x12\x19\n\x05state\x18\x01\x20\
+    \x01(\x08H\0R\x05state\x88\x01\x01\x12\x14\n\x05range\x18\x02\x20\x01(\
+    \x02R\x05range\x12\x19\n\x08tx_count\x18\x03\x20\x01(\x05R\x07txCount\
+    \x12\x19\n\x08rx_count\x18\x04\x20\x01(\x05R\x07rxCountB\x08\n\x06_state\
+    \x1a\xdc\x01\n\tBluetooth\x127\n\nlow_energy\x18\x01\x20\x01(\x0b2\x18.n\
+    etsim.model.Chip.RadioR\tlowEnergy\x122\n\x07classic\x18\x02\x20\x01(\
+    \x0b2\x18.netsim.model.Chip.RadioR\x07classic\x12\x18\n\x07address\x18\
+    \x03\x20\x01(\tR\x07address\x12H\n\rbt_properties\x18\x04\x20\x01(\x0b2#\
+    .rootcanal.configuration.ControllerR\x0cbtProperties\x1a\xcf\x08\n\tBleB\
+    eacon\x12,\n\x02bt\x18\x01\x20\x01(\x0b2\x1c.netsim.model.Chip.Bluetooth\
+    R\x02bt\x12\x18\n\x07address\x18\x02\x20\x01(\tR\x07address\x12J\n\x08se\
+    ttings\x18\x03\x20\x01(\x0b2..netsim.model.Chip.BleBeacon.AdvertiseSetti\
+    ngsR\x08settings\x12E\n\x08adv_data\x18\x04\x20\x01(\x0b2*.netsim.model.\
+    Chip.BleBeacon.AdvertiseDataR\x07advData\x12O\n\rscan_response\x18\x05\
+    \x20\x01(\x0b2*.netsim.model.Chip.BleBeacon.AdvertiseDataR\x0cscanRespon\
+    se\x1a\xee\x03\n\x11AdvertiseSettings\x12e\n\x0eadvertise_mode\x18\x01\
+    \x20\x01(\x0e2<.netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseM\
+    odeH\0R\radvertiseMode\x12$\n\x0cmilliseconds\x18\x02\x20\x01(\x04H\0R\
+    \x0cmilliseconds\x12g\n\x0etx_power_level\x18\x03\x20\x01(\x0e2?.netsim.\
+    model.Chip.BleBeacon.AdvertiseSettings.AdvertiseTxPowerH\x01R\x0ctxPower\
+    Level\x12\x12\n\x03dbm\x18\x04\x20\x01(\x05H\x01R\x03dbm\x12\x1c\n\tscan\
+    nable\x18\x05\x20\x01(\x08R\tscannable\x12\x18\n\x07timeout\x18\x06\x20\
+    \x01(\x04R\x07timeout\"=\n\rAdvertiseMode\x12\r\n\tLOW_POWER\x10\0\x12\
+    \x0c\n\x08BALANCED\x10\x01\x12\x0f\n\x0bLOW_LATENCY\x10\x02\"@\n\x10Adve\
+    rtiseTxPower\x12\r\n\tULTRA_LOW\x10\0\x12\x07\n\x03LOW\x10\x01\x12\n\n\
+    \x06MEDIUM\x10\x02\x12\x08\n\x04HIGH\x10\x03B\n\n\x08intervalB\n\n\x08tx\
+    _power\x1a\xa4\x02\n\rAdvertiseData\x12.\n\x13include_device_name\x18\
+    \x01\x20\x01(\x08R\x11includeDeviceName\x123\n\x16include_tx_power_level\
+    \x18\x02\x20\x01(\x08R\x13includeTxPowerLevel\x12+\n\x11manufacturer_dat\
+    a\x18\x03\x20\x01(\x0cR\x10manufacturerData\x12N\n\x08services\x18\x04\
+    \x20\x03(\x0b22.netsim.model.Chip.BleBeacon.AdvertiseData.ServiceR\x08se\
+    rvices\x1a1\n\x07Service\x12\x12\n\x04uuid\x18\x01\x20\x01(\tR\x04uuid\
+    \x12\x12\n\x04data\x18\x02\x20\x01(\x0cR\x04dataB\x06\n\x04chipB\t\n\x07\
+    _offset\"\xdd\x04\n\nChipCreate\x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17\
+    .netsim.common.ChipKindR\x04kind\x12\x18\n\x07address\x18\x02\x20\x01(\t\
+    R\x07address\x12\x12\n\x04name\x18\x03\x20\x01(\tR\x04name\x12\"\n\x0cma\
+    nufacturer\x18\x04\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cproduct_name\
+    \x18\x05\x20\x01(\tR\x0bproductName\x12I\n\nble_beacon\x18\x06\x20\x01(\
+    \x0b2(.netsim.model.ChipCreate.BleBeaconCreateH\0R\tbleBeacon\x12H\n\rbt\
+    _properties\x18\x07\x20\x01(\x0b2#.rootcanal.configuration.ControllerR\
+    \x0cbtProperties\x1a\x8f\x02\n\x0fBleBeaconCreate\x12\x18\n\x07address\
+    \x18\x01\x20\x01(\tR\x07address\x12J\n\x08settings\x18\x03\x20\x01(\x0b2\
+    ..netsim.model.Chip.BleBeacon.AdvertiseSettingsR\x08settings\x12E\n\x08a\
+    dv_data\x18\x04\x20\x01(\x0b2*.netsim.model.Chip.BleBeacon.AdvertiseData\
+    R\x07advData\x12O\n\rscan_response\x18\x05\x20\x01(\x0b2*.netsim.model.C\
+    hip.BleBeacon.AdvertiseDataR\x0cscanResponseB\x06\n\x04chip\"\xf2\x01\n\
+    \x06Device\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x12\x12\n\x04name\
+    \x18\x02\x20\x01(\tR\x04name\x12\x1d\n\x07visible\x18\x03\x20\x01(\x08H\
+    \0R\x07visible\x88\x01\x01\x122\n\x08position\x18\x04\x20\x01(\x0b2\x16.\
+    netsim.model.PositionR\x08position\x12;\n\x0borientation\x18\x05\x20\x01\
+    (\x0b2\x19.netsim.model.OrientationR\x0borientation\x12(\n\x05chips\x18\
+    \x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chipsB\n\n\x08_visible\"\
+    \xc3\x01\n\x0cDeviceCreate\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04name\
+    \x122\n\x08position\x18\x02\x20\x01(\x0b2\x16.netsim.model.PositionR\x08\
+    position\x12;\n\x0borientation\x18\x03\x20\x01(\x0b2\x19.netsim.model.Or\
+    ientationR\x0borientation\x12.\n\x05chips\x18\x04\x20\x03(\x0b2\x18.nets\
+    im.model.ChipCreateR\x05chips\"7\n\x05Scene\x12.\n\x07devices\x18\x01\
+    \x20\x03(\x0b2\x14.netsim.model.DeviceR\x07devices\"\x93\x02\n\x07Captur\
+    e\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\x124\n\tchip_kind\x18\x02\
+    \x20\x01(\x0e2\x17.netsim.common.ChipKindR\x08chipKind\x12\x1f\n\x0bdevi\
+    ce_name\x18\x03\x20\x01(\tR\ndeviceName\x12\x19\n\x05state\x18\x04\x20\
+    \x01(\x08H\0R\x05state\x88\x01\x01\x12\x12\n\x04size\x18\x05\x20\x01(\
+    \x05R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\x07records\x128\
+    \n\ttimestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttime\
+    stamp\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05validB\x08\n\x06_state\
+    *e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\
+    \x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\
+    \x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\x08WIFI_RTT\x10\x05b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

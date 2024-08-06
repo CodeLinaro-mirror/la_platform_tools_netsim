@@ -87,6 +87,11 @@ pub struct NetsimdArgs {
     #[arg(long, verbatim_doc_comment)]
     pub http_proxy: Option<String>,
 
+    // Use TAP interface instead of libslirp for Wi-Fi
+    /// WARNING: This flag is still working in progress.
+    #[arg(long)]
+    pub wifi_tap: Option<String>,
+
     /// Start with test beacons
     #[arg(long, alias = "test_beacons", overrides_with("no_test_beacons"))]
     pub test_beacons: bool,
