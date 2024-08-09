@@ -14,6 +14,7 @@
 
 use super::packets::ieee80211::MacAddress;
 use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
+use crate::ffi::ffi_wifi::is_eapol;
 use crate::wifi::frame::Frame;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::{anyhow, Context};
@@ -23,10 +24,18 @@ use pdl_runtime::Packet;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
+
 const NLMSG_MIN_TYPE: u16 = 0x10;
 // Default values for mac80211_hwsim.
 const RX_RATE: u32 = 0;
 const SIGNAL: u32 = 4294967246; // -50
+
+pub struct Processor {
+    pub hostapd: bool,
+    pub network: bool,
+    pub wmedium: bool,
+    pub frame: Frame,
+}
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -141,6 +150,38 @@ impl Medium {
         self.stations.read().unwrap().get(addr).context("get station").cloned()
     }
 
+    fn upsert_station(&self, client_id: u32, frame: &Frame) -> anyhow::Result<()> {
+        let src_addr = frame.ieee80211.get_source();
+        let hwsim_addr = frame.transmitter.context("transmitter")?;
+        self.stations.write().unwrap().entry(src_addr).or_insert_with(|| {
+            info!(
+                "Insert station with client id {}, hwsimaddr: {}, \
+                Ieee80211 addr: {}",
+                client_id, hwsim_addr, src_addr
+            );
+            Arc::new(Station::new(client_id, src_addr, hwsim_addr))
+        });
+        if !self.contains_client(client_id) {
+            warn!("Client {} is missing", client_id);
+            self.add(client_id);
+        }
+        Ok(())
+    }
+
+    pub fn ack_frame(&self, client_id: u32, frame: &Frame) {
+        // Send Ack frame back to source
+        self.ack_frame_internal(client_id, frame).unwrap_or_else(move |e| {
+            // TODO: add this error to the netsim_session_stats
+            warn!("error ack frame {e}");
+        });
+    }
+
+    fn ack_frame_internal(&self, client_id: u32, frame: &Frame) -> anyhow::Result<()> {
+        self.send_tx_info_frame(frame)?;
+        self.incr_tx(client_id)?;
+        Ok(())
+    }
+
     /// Process commands from the kernel's mac80211_hwsim subsystem.
     ///
     /// This is the processing that will be implemented:
@@ -152,16 +193,53 @@ impl Medium {
     /// * 802.11 frames sent between stations
     ///
     /// * 802.11 multicast frames are re-broadcast to connected stations.
-    ///
-    pub fn process(&self, client_id: u32, packet: &Bytes) -> bool {
-        self.process_internal(client_id, packet).unwrap_or_else(move |e| {
-            // TODO: add this error to the netsim_session_stats
-            warn!("error processing wifi {e}");
-            false
-        })
+    pub fn get_processor(&self, client_id: u32, packet: &Bytes) -> Option<Processor> {
+        let frame = self
+            .validate(client_id, packet)
+            .map_err(|e| warn!("error validate for client {client_id}: {e}"))
+            .ok()?;
+
+        // Creates Stations on the fly when there is no config file.
+        // WiFi Direct will use a randomized mac address for probing
+        // new networks. This block associates the new mac with the station.
+        self.upsert_station(client_id, &frame)
+            .map_err(|e| warn!("error upsert station for client {client_id}: {e}"))
+            .ok()?;
+
+        let mut processor = Processor { hostapd: false, network: false, wmedium: false, frame };
+
+        let dest_addr = processor.frame.ieee80211.get_destination();
+        let frame = &processor.frame;
+        if self.contains_station(&dest_addr) {
+            processor.wmedium = true;
+            return Some(processor);
+        }
+        if dest_addr.is_multicast() {
+            processor.wmedium = true;
+        }
+
+        // Data frames
+        if frame.ieee80211.is_data() {
+            // EAPoL is used in Wi-Fi 4-way handshake.
+            // Need to decrypt frame to access LLC header.
+            // TODO: Implement this function in ieee80211.rs after Hostapd is in Rust.
+            if is_eapol(&frame.data) {
+                processor.hostapd = true;
+            } else if frame.ieee80211.is_to_ap() {
+                processor.network = true;
+            }
+        } else {
+            // Mgmt or Ctrl frames.
+            // TODO: Refactor this check after verifying all packets sent to hostapd are of ToAP type.
+            let addr1 = frame.ieee80211.get_addr1();
+            if addr1.is_multicast() || addr1.is_broadcast() || addr1 == self.hostapd_bssid {
+                processor.hostapd = true;
+            }
+        }
+        Some(processor)
     }
 
-    fn process_internal(&self, client_id: u32, packet: &Bytes) -> anyhow::Result<bool> {
+    fn validate(&self, client_id: u32, packet: &Bytes) -> anyhow::Result<Frame> {
         let hwsim_msg = HwsimMsg::decode_full(packet)?;
 
         // The virtio handler only accepts HWSIM_CMD_FRAME, HWSIM_CMD_TX_INFO_FRAME and HWSIM_CMD_REPORT_PMSR
@@ -185,34 +263,9 @@ impl Medium {
                     "Frame chip {}, transmitter {}, flags {}, cookie {}, ieee80211 {}",
                     client_id, hwsim_addr, flags, cookie, frame.ieee80211
                 );
-                let src_addr = frame.ieee80211.get_source();
-                // Creates Stations on the fly when there is no config file.
-                // WiFi Direct will use a randomized mac address for probing
-                // new networks. This block associates the new mac with the station.
-                let source = self
-                    .stations
-                    .write()
-                    .unwrap()
-                    .entry(src_addr)
-                    .or_insert_with(|| {
-                        info!(
-                            "Insert station with client id {}, hwsimaddr: {}, \
-                        Ieee80211 addr: {}",
-                            client_id, hwsim_addr, src_addr
-                        );
-                        Arc::new(Station::new(client_id, src_addr, hwsim_addr))
-                    })
-                    .clone();
-                if !self.contains_client(client_id) {
-                    warn!("Client {} is missing", client_id);
-                    self.add(client_id);
-                }
-                self.queue_frame(frame, &source)
+                Ok(frame)
             }
-            _ => {
-                info!("Another command found {:?}", hwsim_msg);
-                Ok(false)
-            }
+            _ => Err(anyhow!("Another command found {:?}", hwsim_msg)),
         }
     }
 
@@ -358,7 +411,6 @@ impl Medium {
     ) -> anyhow::Result<()> {
         if self.enabled(source.client_id)? && self.enabled(destination.client_id)? {
             if let Some(packet) = self.create_hwsim_msg(frame, &destination.hwsim_addr) {
-                self.incr_tx(source.client_id)?;
                 self.incr_rx(destination.client_id)?;
                 (self.callback)(destination.client_id, &packet.encode_to_vec()?.into());
                 log_hwsim_msg(frame, source.client_id, destination.client_id);
@@ -378,30 +430,28 @@ impl Medium {
         Ok(())
     }
 
-    fn queue_frame(&self, frame: Frame, source: &Station) -> anyhow::Result<bool> {
+    pub fn queue_frame(&self, frame: Frame) {
+        self.queue_frame_internal(frame).unwrap_or_else(move |e| {
+            // TODO: add this error to the netsim_session_stats
+            warn!("queue frame error {e}");
+        });
+    }
+
+    fn queue_frame_internal(&self, frame: Frame) -> anyhow::Result<()> {
+        let source = self.get_station(&frame.ieee80211.get_source())?;
         let dest_addr = frame.ieee80211.get_destination();
         if self.contains_station(&dest_addr) {
             debug!("Frame deliver from {} to {}", source.addr, dest_addr);
-            self.send_tx_info_frame(&frame)?;
             let destination = self.get_station(&dest_addr)?;
-            self.send_from_sta_frame(&frame, source, &destination)?;
-            Ok(true)
+            self.send_from_sta_frame(&frame, &source, &destination)?;
+            return Ok(());
         } else if dest_addr.is_multicast() {
             debug!("Frame multicast {}", frame.ieee80211);
-            self.send_tx_info_frame(&frame)?;
-            self.broadcast_from_sta_frame(&frame, source)?;
-            // Forward multicast packets to WifiService:
-            // 1. Stations send probe Request management frame scan network actively,
-            //    so hostapd will send Probe Response for AndroidWiFi.
-            // 2. DNS packets.
-            // TODO: Only pass necessary packets to hostapd and libslirp. (e.g.: Don't forward mDNS packet.)
-            self.incr_tx(source.client_id)?;
-            Ok(false)
-        } else {
-            // pass to libslirp
-            self.incr_tx(source.client_id)?;
-            Ok(false)
+            self.broadcast_from_sta_frame(&frame, &source)?;
+            return Ok(());
         }
+
+        Err(anyhow!("Dropped packet {}", &frame.ieee80211))
     }
 
     // Simulate transmission through hostapd by rewriting frames with 802.11 ToDS

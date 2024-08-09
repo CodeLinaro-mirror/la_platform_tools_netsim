@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import logging
-import os
 from pathlib import Path
 import platform
 
@@ -73,7 +72,7 @@ class RunPytestManager:
     # If pytest_input_dir is provided, set self.dir accordingly
     if pytest_input_dir:
       try:
-        self.dir = os.getcwd() / Path(pytest_input_dir)
+        self.dir = AOSP_ROOT / "tools" / "netsim" / Path(pytest_input_dir)
       except Exception as e:
         logging.error(f"Invalid pytest_input_dir value: {e}")
 
@@ -105,12 +104,16 @@ class RunPytestManager:
       run_tests_script = PYTEST_DIR / "run_tests.cmd"
     else:
       run_tests_script = PYTEST_DIR / "run_tests.sh"
+    if platform.system() == "Linux":
+      test_config = PYTEST_DIR / "cfg" / "netsim_linux_tests.json"
+    else:
+      test_config = PYTEST_DIR / "cfg" / "netsim_tests.json"
     cmd = [
         run_tests_script,
         "--emulator",
         emulator_bin,
         "--test_config",
-        PYTEST_DIR / "cfg" / "netsim_tests.json",
+        test_config,
     ]
     # TODO: Resolve Windows PyTest failure
     if platform.system() != "Windows":
