@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import logging
-import os
 from pathlib import Path
 import platform
 
@@ -73,7 +72,7 @@ class RunPytestManager:
     # If pytest_input_dir is provided, set self.dir accordingly
     if pytest_input_dir:
       try:
-        self.dir = os.getcwd() / Path(pytest_input_dir)
+        self.dir = AOSP_ROOT / "tools" / "netsim" / Path(pytest_input_dir)
       except Exception as e:
         logging.error(f"Invalid pytest_input_dir value: {e}")
 
