@@ -104,12 +104,16 @@ class RunPytestManager:
       run_tests_script = PYTEST_DIR / "run_tests.cmd"
     else:
       run_tests_script = PYTEST_DIR / "run_tests.sh"
+    if platform.system() == "Linux":
+      test_config = PYTEST_DIR / "cfg" / "netsim_linux_tests.json"
+    else:
+      test_config = PYTEST_DIR / "cfg" / "netsim_tests.json"
     cmd = [
         run_tests_script,
         "--emulator",
         emulator_bin,
         "--test_config",
-        PYTEST_DIR / "cfg" / "netsim_tests.json",
+        test_config,
     ]
     # TODO: Resolve Windows PyTest failure
     if platform.system() != "Windows":
