@@ -116,6 +116,16 @@ def main():
           " fetching the artifacts"
       ),
   )
+  parser.add_argument(
+      "--pytest_input_dir",
+      type=str,
+      default="",
+      help=(
+          "For providing netsim & emulator binaries and libraries for pytest."
+          " This will allow pytest to be run on directory path specified on"
+          " pytest_input_dir"
+      ),
+  )
 
   args = parser.parse_args()
 

@@ -266,7 +266,6 @@ cc_binary_host {
         "libnetsim_daemon",
         "libbt-rootcanal",
     ],
-    ldflags: ["-Wl,--allow-multiple-definition"],
     required: netsim_ui_modules,
     strip: {
         keep_symbols_and_debug_frame: true,
@@ -308,7 +307,6 @@ cc_test_host {
         "libnetsim_daemon",
         "libbt-rootcanal",
     ],
-    ldflags: ["-Wl,--allow-multiple-definition"],
 }
 
 rust_library_host {

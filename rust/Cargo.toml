@@ -19,4 +19,5 @@ members = [
     "cli",
     "common",
     "daemon",
+    "libslirp-rs",
 ]

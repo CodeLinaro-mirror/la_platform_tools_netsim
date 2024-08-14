@@ -82,6 +82,9 @@ std::unique_ptr<android::base::ObservableProcess> RunNetsimd(
   if (!options.host_dns.empty()) {
     program_with_args.push_back("--host-dns=" + options.host_dns);
   }
+  if (!options.http_proxy.empty()) {
+    program_with_args.push_back("--http-proxy=" + options.http_proxy);
+  }
   for (auto flag : stringutils::Split(options.netsim_args, " "))
     program_with_args.push_back(std::string(flag));
 

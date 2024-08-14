@@ -147,6 +147,16 @@ impl Ieee80211 {
         }
     }
 
+    pub fn get_addr1(&self) -> MacAddress {
+        match self.specialize().unwrap() {
+            Ieee80211Child::Ieee80211ToAp(hdr) => hdr.bssid,
+            Ieee80211Child::Ieee80211FromAp(hdr) => hdr.destination,
+            Ieee80211Child::Ieee80211Ibss(hdr) => hdr.destination,
+            Ieee80211Child::Ieee80211Wds(hdr) => hdr.receiver,
+            _ => panic!("unexpected specialized header"),
+        }
+    }
+
     pub fn with_address(
         &self,
         source: Option<MacAddress>,

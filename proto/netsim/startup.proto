@@ -17,6 +17,7 @@ syntax = "proto3";
 package netsim.startup;
 
 import "netsim/common.proto";
+import "netsim/model.proto";
 import "rootcanal/configuration.proto";
 
 /**
@@ -68,4 +69,6 @@ message Chip {
   // address in format xx:xx:xx:xx:xx:xx
   // optional for bluetooth chipsets
   string address = 9;
+  // Offset of the chip position from center of device
+  optional model.Position offset = 10;
 }

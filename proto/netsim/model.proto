@@ -195,7 +195,10 @@ message Chip {
     Radio uwb = 7;
     // WIFI
     Radio wifi = 8;
+    // Reserved fields 10 to 14
   }
+  // Offset of the chip position from center of device
+  optional Position offset = 15;
 }
 
 // Protobuf for ChipCreate
