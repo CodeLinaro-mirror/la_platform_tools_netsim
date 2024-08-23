@@ -103,12 +103,23 @@ void HciPacketTransport::Request(
         // If the elapsed time of the packet delivery is greater than 5ms,
         // report invalid packet with DELAYED reasoning.
         if (elapsedTime > 5) {
+          // Create a new vector to hold the combined data
+          std::vector<uint8_t> combinedPacket;
+
+          // Prepend rootcanal_packet_type
+          combinedPacket.push_back(static_cast<uint8_t>(rootcanal_packet_type));
+
+          // Append the original packet data
+          combinedPacket.insert(combinedPacket.end(), packet->begin(),
+                                packet->end());
+
+          // Report Invalid Packet
           netsim::hci::facade::ReportInvalidPacket(
               this->rootcanalId.value(),
               stats::InvalidPacket_Reason::InvalidPacket_Reason_DELAYED,
               "Delayed packet with " + std::to_string(elapsedTime) +
                   " milliseconds",
-              *packet);
+              combinedPacket);
         }
         mPacketCallback(rootcanal_packet_type, packet);
       });
