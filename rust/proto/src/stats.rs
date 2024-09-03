@@ -1283,6 +1283,417 @@ impl ::protobuf::reflect::ProtobufValue for NetsimFrontendStats {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.stats.NetsimDeviceStats)
+pub struct NetsimDeviceStats {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.device_id)
+    pub device_id: ::std::option::Option<u32>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.kind)
+    pub kind: ::std::option::Option<::std::string::String>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.version)
+    pub version: ::std::option::Option<::std::string::String>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.build_id)
+    pub build_id: ::std::option::Option<::std::string::String>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.variant)
+    pub variant: ::std::option::Option<::std::string::String>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.arch)
+    pub arch: ::std::option::Option<::std::string::String>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.stats.NetsimDeviceStats.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a NetsimDeviceStats {
+    fn default() -> &'a NetsimDeviceStats {
+        <NetsimDeviceStats as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl NetsimDeviceStats {
+    pub fn new() -> NetsimDeviceStats {
+        ::std::default::Default::default()
+    }
+
+    // optional uint32 device_id = 1;
+
+    pub fn device_id(&self) -> u32 {
+        self.device_id.unwrap_or(0)
+    }
+
+    pub fn clear_device_id(&mut self) {
+        self.device_id = ::std::option::Option::None;
+    }
+
+    pub fn has_device_id(&self) -> bool {
+        self.device_id.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_device_id(&mut self, v: u32) {
+        self.device_id = ::std::option::Option::Some(v);
+    }
+
+    // optional string kind = 2;
+
+    pub fn kind(&self) -> &str {
+        match self.kind.as_ref() {
+            Some(v) => v,
+            None => "",
+        }
+    }
+
+    pub fn clear_kind(&mut self) {
+        self.kind = ::std::option::Option::None;
+    }
+
+    pub fn has_kind(&self) -> bool {
+        self.kind.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_kind(&mut self, v: ::std::string::String) {
+        self.kind = ::std::option::Option::Some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_kind(&mut self) -> &mut ::std::string::String {
+        if self.kind.is_none() {
+            self.kind = ::std::option::Option::Some(::std::string::String::new());
+        }
+        self.kind.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_kind(&mut self) -> ::std::string::String {
+        self.kind.take().unwrap_or_else(|| ::std::string::String::new())
+    }
+
+    // optional string version = 3;
+
+    pub fn version(&self) -> &str {
+        match self.version.as_ref() {
+            Some(v) => v,
+            None => "",
+        }
+    }
+
+    pub fn clear_version(&mut self) {
+        self.version = ::std::option::Option::None;
+    }
+
+    pub fn has_version(&self) -> bool {
+        self.version.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_version(&mut self, v: ::std::string::String) {
+        self.version = ::std::option::Option::Some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_version(&mut self) -> &mut ::std::string::String {
+        if self.version.is_none() {
+            self.version = ::std::option::Option::Some(::std::string::String::new());
+        }
+        self.version.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_version(&mut self) -> ::std::string::String {
+        self.version.take().unwrap_or_else(|| ::std::string::String::new())
+    }
+
+    // optional string build_id = 4;
+
+    pub fn build_id(&self) -> &str {
+        match self.build_id.as_ref() {
+            Some(v) => v,
+            None => "",
+        }
+    }
+
+    pub fn clear_build_id(&mut self) {
+        self.build_id = ::std::option::Option::None;
+    }
+
+    pub fn has_build_id(&self) -> bool {
+        self.build_id.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_build_id(&mut self, v: ::std::string::String) {
+        self.build_id = ::std::option::Option::Some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_build_id(&mut self) -> &mut ::std::string::String {
+        if self.build_id.is_none() {
+            self.build_id = ::std::option::Option::Some(::std::string::String::new());
+        }
+        self.build_id.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_build_id(&mut self) -> ::std::string::String {
+        self.build_id.take().unwrap_or_else(|| ::std::string::String::new())
+    }
+
+    // optional string variant = 5;
+
+    pub fn variant(&self) -> &str {
+        match self.variant.as_ref() {
+            Some(v) => v,
+            None => "",
+        }
+    }
+
+    pub fn clear_variant(&mut self) {
+        self.variant = ::std::option::Option::None;
+    }
+
+    pub fn has_variant(&self) -> bool {
+        self.variant.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_variant(&mut self, v: ::std::string::String) {
+        self.variant = ::std::option::Option::Some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_variant(&mut self) -> &mut ::std::string::String {
+        if self.variant.is_none() {
+            self.variant = ::std::option::Option::Some(::std::string::String::new());
+        }
+        self.variant.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_variant(&mut self) -> ::std::string::String {
+        self.variant.take().unwrap_or_else(|| ::std::string::String::new())
+    }
+
+    // optional string arch = 6;
+
+    pub fn arch(&self) -> &str {
+        match self.arch.as_ref() {
+            Some(v) => v,
+            None => "",
+        }
+    }
+
+    pub fn clear_arch(&mut self) {
+        self.arch = ::std::option::Option::None;
+    }
+
+    pub fn has_arch(&self) -> bool {
+        self.arch.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_arch(&mut self, v: ::std::string::String) {
+        self.arch = ::std::option::Option::Some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_arch(&mut self) -> &mut ::std::string::String {
+        if self.arch.is_none() {
+            self.arch = ::std::option::Option::Some(::std::string::String::new());
+        }
+        self.arch.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_arch(&mut self) -> ::std::string::String {
+        self.arch.take().unwrap_or_else(|| ::std::string::String::new())
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(6);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "device_id",
+            |m: &NetsimDeviceStats| { &m.device_id },
+            |m: &mut NetsimDeviceStats| { &mut m.device_id },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "kind",
+            |m: &NetsimDeviceStats| { &m.kind },
+            |m: &mut NetsimDeviceStats| { &mut m.kind },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "version",
+            |m: &NetsimDeviceStats| { &m.version },
+            |m: &mut NetsimDeviceStats| { &mut m.version },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "build_id",
+            |m: &NetsimDeviceStats| { &m.build_id },
+            |m: &mut NetsimDeviceStats| { &mut m.build_id },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "variant",
+            |m: &NetsimDeviceStats| { &m.variant },
+            |m: &mut NetsimDeviceStats| { &mut m.variant },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "arch",
+            |m: &NetsimDeviceStats| { &m.arch },
+            |m: &mut NetsimDeviceStats| { &mut m.arch },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NetsimDeviceStats>(
+            "NetsimDeviceStats",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for NetsimDeviceStats {
+    const NAME: &'static str = "NetsimDeviceStats";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                8 => {
+                    self.device_id = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                18 => {
+                    self.kind = ::std::option::Option::Some(is.read_string()?);
+                },
+                26 => {
+                    self.version = ::std::option::Option::Some(is.read_string()?);
+                },
+                34 => {
+                    self.build_id = ::std::option::Option::Some(is.read_string()?);
+                },
+                42 => {
+                    self.variant = ::std::option::Option::Some(is.read_string()?);
+                },
+                50 => {
+                    self.arch = ::std::option::Option::Some(is.read_string()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.device_id {
+            my_size += ::protobuf::rt::uint32_size(1, v);
+        }
+        if let Some(v) = self.kind.as_ref() {
+            my_size += ::protobuf::rt::string_size(2, &v);
+        }
+        if let Some(v) = self.version.as_ref() {
+            my_size += ::protobuf::rt::string_size(3, &v);
+        }
+        if let Some(v) = self.build_id.as_ref() {
+            my_size += ::protobuf::rt::string_size(4, &v);
+        }
+        if let Some(v) = self.variant.as_ref() {
+            my_size += ::protobuf::rt::string_size(5, &v);
+        }
+        if let Some(v) = self.arch.as_ref() {
+            my_size += ::protobuf::rt::string_size(6, &v);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.device_id {
+            os.write_uint32(1, v)?;
+        }
+        if let Some(v) = self.kind.as_ref() {
+            os.write_string(2, v)?;
+        }
+        if let Some(v) = self.version.as_ref() {
+            os.write_string(3, v)?;
+        }
+        if let Some(v) = self.build_id.as_ref() {
+            os.write_string(4, v)?;
+        }
+        if let Some(v) = self.variant.as_ref() {
+            os.write_string(5, v)?;
+        }
+        if let Some(v) = self.arch.as_ref() {
+            os.write_string(6, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> NetsimDeviceStats {
+        NetsimDeviceStats::new()
+    }
+
+    fn clear(&mut self) {
+        self.device_id = ::std::option::Option::None;
+        self.kind = ::std::option::Option::None;
+        self.version = ::std::option::Option::None;
+        self.build_id = ::std::option::Option::None;
+        self.variant = ::std::option::Option::None;
+        self.arch = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static NetsimDeviceStats {
+        static instance: NetsimDeviceStats = NetsimDeviceStats {
+            device_id: ::std::option::Option::None,
+            kind: ::std::option::Option::None,
+            version: ::std::option::Option::None,
+            build_id: ::std::option::Option::None,
+            variant: ::std::option::Option::None,
+            arch: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for NetsimDeviceStats {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("NetsimDeviceStats").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for NetsimDeviceStats {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for NetsimDeviceStats {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
 // @@protoc_insertion_point(message:netsim.stats.NetsimStats)
 pub struct NetsimStats {
     // message fields
@@ -1298,6 +1709,8 @@ pub struct NetsimStats {
     pub version: ::std::option::Option<::std::string::String>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimStats.frontend_stats)
     pub frontend_stats: ::protobuf::MessageField<NetsimFrontendStats>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimStats.device_stats)
+    pub device_stats: ::std::vec::Vec<NetsimDeviceStats>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.NetsimStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -1408,7 +1821,7 @@ impl NetsimStats {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(6);
+        let mut fields = ::std::vec::Vec::with_capacity(7);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "duration_secs",
@@ -1439,6 +1852,11 @@ impl NetsimStats {
             "frontend_stats",
             |m: &NetsimStats| { &m.frontend_stats },
             |m: &mut NetsimStats| { &mut m.frontend_stats },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
+            "device_stats",
+            |m: &NetsimStats| { &m.device_stats },
+            |m: &mut NetsimStats| { &mut m.device_stats },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<NetsimStats>(
             "NetsimStats",
@@ -1476,6 +1894,9 @@ impl ::protobuf::Message for NetsimStats {
                 50 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.frontend_stats)?;
                 },
+                58 => {
+                    self.device_stats.push(is.read_message()?);
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -1508,6 +1929,10 @@ impl ::protobuf::Message for NetsimStats {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         }
+        for value in &self.device_stats {
+            let len = value.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        };
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -1532,6 +1957,9 @@ impl ::protobuf::Message for NetsimStats {
         if let Some(v) = self.frontend_stats.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(6, v, os)?;
         }
+        for v in &self.device_stats {
+            ::protobuf::rt::write_message_field_with_cached_size(7, v, os)?;
+        };
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -1555,6 +1983,7 @@ impl ::protobuf::Message for NetsimStats {
         self.radio_stats.clear();
         self.version = ::std::option::Option::None;
         self.frontend_stats.clear();
+        self.device_stats.clear();
         self.special_fields.clear();
     }
 
@@ -1566,6 +1995,7 @@ impl ::protobuf::Message for NetsimStats {
             radio_stats: ::std::vec::Vec::new(),
             version: ::std::option::Option::None,
             frontend_stats: ::protobuf::MessageField::none(),
+            device_stats: ::std::vec::Vec::new(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -1615,14 +2045,20 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \rR\nlistDevice\x12)\n\x10subscribe_device\x18\x07\x20\x01(\rR\x0fsubscr\
     ibeDevice\x12#\n\rpatch_capture\x18\x08\x20\x01(\rR\x0cpatchCapture\x12!\
     \n\x0clist_capture\x18\t\x20\x01(\rR\x0blistCapture\x12\x1f\n\x0bget_cap\
-    ture\x18\n\x20\x01(\rR\ngetCapture\"\xb2\x02\n\x0bNetsimStats\x12#\n\rdu\
-    ration_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice_count\
-    \x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurrent_devices\
-    \x18\x03\x20\x01(\x05R\x15peakConcurrentDevices\x12?\n\x0bradio_stats\
-    \x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRadioStatsR\nradioStats\
-    \x12\x18\n\x07version\x18\x05\x20\x01(\tR\x07version\x12H\n\x0efrontend_\
-    stats\x18\x06\x20\x01(\x0b2!.netsim.stats.NetsimFrontendStatsR\rfrontend\
-    Stats\
+    ture\x18\n\x20\x01(\rR\ngetCapture\"\xa7\x01\n\x11NetsimDeviceStats\x12\
+    \x1b\n\tdevice_id\x18\x01\x20\x01(\rR\x08deviceId\x12\x12\n\x04kind\x18\
+    \x02\x20\x01(\tR\x04kind\x12\x18\n\x07version\x18\x03\x20\x01(\tR\x07ver\
+    sion\x12\x19\n\x08build_id\x18\x04\x20\x01(\tR\x07buildId\x12\x18\n\x07v\
+    ariant\x18\x05\x20\x01(\tR\x07variant\x12\x12\n\x04arch\x18\x06\x20\x01(\
+    \tR\x04arch\"\xf6\x02\n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\
+    \x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\
+    \x0bdeviceCount\x126\n\x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\
+    \x15peakConcurrentDevices\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\
+    \x1e.netsim.stats.NetsimRadioStatsR\nradioStats\x12\x18\n\x07version\x18\
+    \x05\x20\x01(\tR\x07version\x12H\n\x0efrontend_stats\x18\x06\x20\x01(\
+    \x0b2!.netsim.stats.NetsimFrontendStatsR\rfrontendStats\x12B\n\x0cdevice\
+    _stats\x18\x07\x20\x03(\x0b2\x1f.netsim.stats.NetsimDeviceStatsR\x0bdevi\
+    ceStats\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -1640,10 +2076,11 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
     file_descriptor.get(|| {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
             let mut deps = ::std::vec::Vec::with_capacity(0);
-            let mut messages = ::std::vec::Vec::with_capacity(4);
+            let mut messages = ::std::vec::Vec::with_capacity(5);
             messages.push(InvalidPacket::generated_message_descriptor_data());
             messages.push(NetsimRadioStats::generated_message_descriptor_data());
             messages.push(NetsimFrontendStats::generated_message_descriptor_data());
+            messages.push(NetsimDeviceStats::generated_message_descriptor_data());
             messages.push(NetsimStats::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(2);
             enums.push(invalid_packet::Reason::generated_enum_descriptor_data());

@@ -158,6 +158,8 @@ pub mod startup_info {
         pub name: ::std::string::String,
         // @@protoc_insertion_point(field:netsim.startup.StartupInfo.Device.chips)
         pub chips: ::std::vec::Vec<super::Chip>,
+        // @@protoc_insertion_point(field:netsim.startup.StartupInfo.Device.device_info)
+        pub device_info: ::protobuf::MessageField<super::DeviceInfo>,
         // special fields
         // @@protoc_insertion_point(special_field:netsim.startup.StartupInfo.Device.special_fields)
         pub special_fields: ::protobuf::SpecialFields,
@@ -175,7 +177,7 @@ pub mod startup_info {
         }
 
         pub(in super) fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-            let mut fields = ::std::vec::Vec::with_capacity(2);
+            let mut fields = ::std::vec::Vec::with_capacity(3);
             let mut oneofs = ::std::vec::Vec::with_capacity(0);
             fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
                 "name",
@@ -186,6 +188,11 @@ pub mod startup_info {
                 "chips",
                 |m: &Device| { &m.chips },
                 |m: &mut Device| { &mut m.chips },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::DeviceInfo>(
+                "device_info",
+                |m: &Device| { &m.device_info },
+                |m: &mut Device| { &mut m.device_info },
             ));
             ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Device>(
                 "StartupInfo.Device",
@@ -211,6 +218,9 @@ pub mod startup_info {
                     18 => {
                         self.chips.push(is.read_message()?);
                     },
+                    26 => {
+                        ::protobuf::rt::read_singular_message_into_field(is, &mut self.device_info)?;
+                    },
                     tag => {
                         ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                     },
@@ -230,6 +240,10 @@ pub mod startup_info {
                 let len = value.compute_size();
                 my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
             };
+            if let Some(v) = self.device_info.as_ref() {
+                let len = v.compute_size();
+                my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+            }
             my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
             self.special_fields.cached_size().set(my_size as u32);
             my_size
@@ -242,6 +256,9 @@ pub mod startup_info {
             for v in &self.chips {
                 ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
             };
+            if let Some(v) = self.device_info.as_ref() {
+                ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
+            }
             os.write_unknown_fields(self.special_fields.unknown_fields())?;
             ::std::result::Result::Ok(())
         }
@@ -261,6 +278,7 @@ pub mod startup_info {
         fn clear(&mut self) {
             self.name.clear();
             self.chips.clear();
+            self.device_info.clear();
             self.special_fields.clear();
         }
 
@@ -268,6 +286,7 @@ pub mod startup_info {
             static instance: Device = Device {
                 name: ::std::string::String::new(),
                 chips: ::std::vec::Vec::new(),
+                device_info: ::protobuf::MessageField::none(),
                 special_fields: ::protobuf::SpecialFields::new(),
             };
             &instance
@@ -300,6 +319,8 @@ pub struct ChipInfo {
     pub name: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.startup.ChipInfo.chip)
     pub chip: ::protobuf::MessageField<Chip>,
+    // @@protoc_insertion_point(field:netsim.startup.ChipInfo.device_info)
+    pub device_info: ::protobuf::MessageField<DeviceInfo>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.startup.ChipInfo.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -317,7 +338,7 @@ impl ChipInfo {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(2);
+        let mut fields = ::std::vec::Vec::with_capacity(3);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "name",
@@ -328,6 +349,11 @@ impl ChipInfo {
             "chip",
             |m: &ChipInfo| { &m.chip },
             |m: &mut ChipInfo| { &mut m.chip },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, DeviceInfo>(
+            "device_info",
+            |m: &ChipInfo| { &m.device_info },
+            |m: &mut ChipInfo| { &mut m.device_info },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<ChipInfo>(
             "ChipInfo",
@@ -353,6 +379,9 @@ impl ::protobuf::Message for ChipInfo {
                 18 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.chip)?;
                 },
+                26 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.device_info)?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -372,6 +401,10 @@ impl ::protobuf::Message for ChipInfo {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         }
+        if let Some(v) = self.device_info.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -383,6 +416,9 @@ impl ::protobuf::Message for ChipInfo {
         }
         if let Some(v) = self.chip.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
+        }
+        if let Some(v) = self.device_info.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -403,6 +439,7 @@ impl ::protobuf::Message for ChipInfo {
     fn clear(&mut self) {
         self.name.clear();
         self.chip.clear();
+        self.device_info.clear();
         self.special_fields.clear();
     }
 
@@ -410,6 +447,7 @@ impl ::protobuf::Message for ChipInfo {
         static instance: ChipInfo = ChipInfo {
             name: ::std::string::String::new(),
             chip: ::protobuf::MessageField::none(),
+            device_info: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -430,6 +468,200 @@ impl ::std::fmt::Display for ChipInfo {
 }
 
 impl ::protobuf::reflect::ProtobufValue for ChipInfo {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+#[derive(PartialEq,Clone,Default,Debug)]
+// @@protoc_insertion_point(message:netsim.startup.DeviceInfo)
+pub struct DeviceInfo {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.kind)
+    pub kind: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.version)
+    pub version: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.build_id)
+    pub build_id: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.variant)
+    pub variant: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.arch)
+    pub arch: ::std::string::String,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.startup.DeviceInfo.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a DeviceInfo {
+    fn default() -> &'a DeviceInfo {
+        <DeviceInfo as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl DeviceInfo {
+    pub fn new() -> DeviceInfo {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(5);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "kind",
+            |m: &DeviceInfo| { &m.kind },
+            |m: &mut DeviceInfo| { &mut m.kind },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "version",
+            |m: &DeviceInfo| { &m.version },
+            |m: &mut DeviceInfo| { &mut m.version },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "build_id",
+            |m: &DeviceInfo| { &m.build_id },
+            |m: &mut DeviceInfo| { &mut m.build_id },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "variant",
+            |m: &DeviceInfo| { &m.variant },
+            |m: &mut DeviceInfo| { &mut m.variant },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "arch",
+            |m: &DeviceInfo| { &m.arch },
+            |m: &mut DeviceInfo| { &mut m.arch },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<DeviceInfo>(
+            "DeviceInfo",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for DeviceInfo {
+    const NAME: &'static str = "DeviceInfo";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    self.kind = is.read_string()?;
+                },
+                18 => {
+                    self.version = is.read_string()?;
+                },
+                26 => {
+                    self.build_id = is.read_string()?;
+                },
+                34 => {
+                    self.variant = is.read_string()?;
+                },
+                42 => {
+                    self.arch = is.read_string()?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if !self.kind.is_empty() {
+            my_size += ::protobuf::rt::string_size(1, &self.kind);
+        }
+        if !self.version.is_empty() {
+            my_size += ::protobuf::rt::string_size(2, &self.version);
+        }
+        if !self.build_id.is_empty() {
+            my_size += ::protobuf::rt::string_size(3, &self.build_id);
+        }
+        if !self.variant.is_empty() {
+            my_size += ::protobuf::rt::string_size(4, &self.variant);
+        }
+        if !self.arch.is_empty() {
+            my_size += ::protobuf::rt::string_size(5, &self.arch);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if !self.kind.is_empty() {
+            os.write_string(1, &self.kind)?;
+        }
+        if !self.version.is_empty() {
+            os.write_string(2, &self.version)?;
+        }
+        if !self.build_id.is_empty() {
+            os.write_string(3, &self.build_id)?;
+        }
+        if !self.variant.is_empty() {
+            os.write_string(4, &self.variant)?;
+        }
+        if !self.arch.is_empty() {
+            os.write_string(5, &self.arch)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> DeviceInfo {
+        DeviceInfo::new()
+    }
+
+    fn clear(&mut self) {
+        self.kind.clear();
+        self.version.clear();
+        self.build_id.clear();
+        self.variant.clear();
+        self.arch.clear();
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static DeviceInfo {
+        static instance: DeviceInfo = DeviceInfo {
+            kind: ::std::string::String::new(),
+            version: ::std::string::String::new(),
+            build_id: ::std::string::String::new(),
+            variant: ::std::string::String::new(),
+            arch: ::std::string::String::new(),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for DeviceInfo {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("DeviceInfo").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for DeviceInfo {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for DeviceInfo {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
@@ -721,22 +953,29 @@ impl ::protobuf::reflect::ProtobufValue for Chip {
 
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x14netsim/startup.proto\x12\x0enetsim.startup\x1a\x13netsim/common.pr\
-    oto\x1a\x12netsim/model.proto\x1a\x1drootcanal/configuration.proto\"\x95\
+    oto\x1a\x12netsim/model.proto\x1a\x1drootcanal/configuration.proto\"\xd3\
     \x01\n\x0bStartupInfo\x12<\n\x07devices\x18\x01\x20\x03(\x0b2\".netsim.s\
-    tartup.StartupInfo.DeviceR\x07devices\x1aH\n\x06Device\x12\x12\n\x04name\
-    \x18\x01\x20\x01(\tR\x04name\x12*\n\x05chips\x18\x02\x20\x03(\x0b2\x14.n\
-    etsim.startup.ChipR\x05chips\"H\n\x08ChipInfo\x12\x12\n\x04name\x18\x01\
-    \x20\x01(\tR\x04name\x12(\n\x04chip\x18\x02\x20\x01(\x0b2\x14.netsim.sta\
-    rtup.ChipR\x04chip\"\xf6\x02\n\x04Chip\x12+\n\x04kind\x18\x01\x20\x01(\
-    \x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x0e\n\x02id\x18\x02\x20\
-    \x01(\tR\x02id\x12\"\n\x0cmanufacturer\x18\x03\x20\x01(\tR\x0cmanufactur\
-    er\x12!\n\x0cproduct_name\x18\x04\x20\x01(\tR\x0bproductName\x12\x13\n\
-    \x05fd_in\x18\x05\x20\x01(\x05R\x04fdIn\x12\x15\n\x06fd_out\x18\x06\x20\
-    \x01(\x05R\x05fdOut\x12\x1a\n\x08loopback\x18\x07\x20\x01(\x08R\x08loopb\
-    ack\x12H\n\rbt_properties\x18\x08\x20\x01(\x0b2#.rootcanal.configuration\
-    .ControllerR\x0cbtProperties\x12\x18\n\x07address\x18\t\x20\x01(\tR\x07a\
-    ddress\x123\n\x06offset\x18\n\x20\x01(\x0b2\x16.netsim.model.PositionH\0\
-    R\x06offset\x88\x01\x01B\t\n\x07_offsetb\x06proto3\
+    tartup.StartupInfo.DeviceR\x07devices\x1a\x85\x01\n\x06Device\x12\x12\n\
+    \x04name\x18\x01\x20\x01(\tR\x04name\x12*\n\x05chips\x18\x02\x20\x03(\
+    \x0b2\x14.netsim.startup.ChipR\x05chips\x12;\n\x0bdevice_info\x18\x03\
+    \x20\x01(\x0b2\x1a.netsim.startup.DeviceInfoR\ndeviceInfo\"\x85\x01\n\
+    \x08ChipInfo\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04name\x12(\n\x04chi\
+    p\x18\x02\x20\x01(\x0b2\x14.netsim.startup.ChipR\x04chip\x12;\n\x0bdevic\
+    e_info\x18\x03\x20\x01(\x0b2\x1a.netsim.startup.DeviceInfoR\ndeviceInfo\
+    \"\x83\x01\n\nDeviceInfo\x12\x12\n\x04kind\x18\x01\x20\x01(\tR\x04kind\
+    \x12\x18\n\x07version\x18\x02\x20\x01(\tR\x07version\x12\x19\n\x08build_\
+    id\x18\x03\x20\x01(\tR\x07buildId\x12\x18\n\x07variant\x18\x04\x20\x01(\
+    \tR\x07variant\x12\x12\n\x04arch\x18\x05\x20\x01(\tR\x04arch\"\xf6\x02\n\
+    \x04Chip\x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.common.ChipKind\
+    R\x04kind\x12\x0e\n\x02id\x18\x02\x20\x01(\tR\x02id\x12\"\n\x0cmanufactu\
+    rer\x18\x03\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cproduct_name\x18\x04\
+    \x20\x01(\tR\x0bproductName\x12\x13\n\x05fd_in\x18\x05\x20\x01(\x05R\x04\
+    fdIn\x12\x15\n\x06fd_out\x18\x06\x20\x01(\x05R\x05fdOut\x12\x1a\n\x08loo\
+    pback\x18\x07\x20\x01(\x08R\x08loopback\x12H\n\rbt_properties\x18\x08\
+    \x20\x01(\x0b2#.rootcanal.configuration.ControllerR\x0cbtProperties\x12\
+    \x18\n\x07address\x18\t\x20\x01(\tR\x07address\x123\n\x06offset\x18\n\
+    \x20\x01(\x0b2\x16.netsim.model.PositionH\0R\x06offset\x88\x01\x01B\t\n\
+    \x07_offsetb\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -757,9 +996,10 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             deps.push(super::common::file_descriptor().clone());
             deps.push(super::model::file_descriptor().clone());
             deps.push(super::configuration::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(4);
+            let mut messages = ::std::vec::Vec::with_capacity(5);
             messages.push(StartupInfo::generated_message_descriptor_data());
             messages.push(ChipInfo::generated_message_descriptor_data());
+            messages.push(DeviceInfo::generated_message_descriptor_data());
             messages.push(Chip::generated_message_descriptor_data());
             messages.push(startup_info::Device::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(0);

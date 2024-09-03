@@ -71,6 +71,22 @@ message NetsimFrontendStats {
   optional uint32 get_capture = 10;
 }
 
+// Detailed stats of a device
+message NetsimDeviceStats {
+  // Netsim assigned unique device id
+  optional uint32 device_id = 1;
+  // Identifier for device kind e.g. Goldfish, Cuttlefish, Bumble, etc
+  optional string kind = 2;
+  // Version info as applicable e.g. Android version (API level), etc
+  optional string version = 3;
+  // Build ID e.g. TE1A.220922.034, UQ1A.231205.015, etc
+  optional string build_id = 4;
+  // Model/variant e.g. sdk_gphone_x86_64-userdebug, cf_x86_64_phone-user, etc
+  optional string variant = 5;
+  // CPU architecture e.g. x86_64, arm64-v8a, etc
+  optional string arch = 6;
+}
+
 // Statistics for a netsim session.
 message NetsimStats {
   // The length of the session in seconds
@@ -85,4 +101,6 @@ message NetsimStats {
   optional string version = 5;
   // Frontend API statistics
   optional NetsimFrontendStats frontend_stats = 6;
+  // Device statistics
+  repeated NetsimDeviceStats device_stats = 7;
 }
