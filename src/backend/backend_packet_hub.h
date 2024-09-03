@@ -34,8 +34,7 @@ using netsim::common::ChipKind;
 void HandleResponse(uint32_t chip_id, const std::vector<uint8_t> &packet,
                     /* optional */ packet::HCIPacket_PacketType packet_type);
 
-void HandleResponseCxx(uint32_t chip_id,
-                       const rust::Slice<uint8_t const> packet,
+void HandleResponseCxx(uint32_t chip_id, const rust::Vec<rust::u8> &packet,
                        /* optional */ uint8_t packet_type);
 
 }  // namespace backend

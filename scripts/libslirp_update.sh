@@ -39,7 +39,6 @@
 
 # Absolute path to tools/netsim using this scripts directory
 REPO_NETSIM=$(dirname $(readlink -f "$0"))/..
-echo "REPO_NETSIM: ${REPO_NETSIM}"
 CARGO_MANIFEST=$REPO_NETSIM/rust/libslirp-rs/Cargo.toml
 
 # Uncomment lines starting with `##`
@@ -61,7 +60,7 @@ export CARGO_HOME=$REPO_NETSIM/objs/rust/.cargo
 cd $REPO_NETSIM
 cargo build --manifest-path $CARGO_MANIFEST
 
-# Undo changed to Cargo.toml
+# Restore original Cargo.toml
 git checkout $CARGO_MANIFEST
 
 rm $REPO_NETSIM/rust/Cargo.lock

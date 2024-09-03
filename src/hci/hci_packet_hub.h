@@ -36,7 +36,7 @@ void handle_bt_request(uint32_t rootcanal_id,
                        const std::shared_ptr<std::vector<uint8_t>> &packet);
 
 void HandleBtRequestCxx(uint32_t rootcanal_id, uint8_t packet_type,
-                        const rust::Slice<uint8_t const> packet);
+                        const rust::Vec<uint8_t> &packet);
 
 }  // namespace hci
 }  // namespace netsim

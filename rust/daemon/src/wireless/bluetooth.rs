@@ -92,7 +92,7 @@ impl WirelessAdaptor for Bluetooth {
     fn handle_request(&self, packet: &Bytes) {
         // Lock to protect device_to_transport_ table in C++
         let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
-        ffi_bluetooth::handle_bt_request(self.rootcanal_id, packet[0], &packet[1..])
+        ffi_bluetooth::handle_bt_request(self.rootcanal_id, packet[0], &packet[1..].to_vec())
     }
 
     fn reset(&self) {

@@ -225,8 +225,7 @@ void HandleResponse(uint32_t chip_id, const std::vector<uint8_t> &packet,
 }
 
 // for cxx
-void HandleResponseCxx(uint32_t chip_id,
-                       const rust::Slice<uint8_t const> packet,
+void HandleResponseCxx(uint32_t chip_id, const rust::Vec<rust::u8> &packet,
                        /* optional */ uint8_t packet_type) {
   std::vector<uint8_t> vec(packet.begin(), packet.end());
   HandleResponse(chip_id, vec, packet::HCIPacket_PacketType(packet_type));
