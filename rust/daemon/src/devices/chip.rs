@@ -68,6 +68,7 @@ pub struct CreateParams {
     pub name: Option<String>,
     pub manufacturer: String,
     pub product_name: String,
+    #[allow(dead_code)]
     pub bt_properties: Option<ProtoController>, // TODO: move to wireless_adaptor CreateParams
 }
 
@@ -78,9 +79,11 @@ pub struct Chip {
     pub device_id: DeviceIdentifier,
     pub wireless_adaptor: WirelessAdaptorImpl,
     pub kind: ProtoChipKind,
+    #[allow(dead_code)]
     pub address: String,
     pub name: String,
     // TODO: may not be necessary
+    #[allow(dead_code)]
     pub device_name: String,
     // These are patchable
     pub manufacturer: RwLock<String>,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::libslirp_config;
+use crate::libslirp_config::SlirpConfigs;
 ///
 /// This crate is a wrapper for libslirp C library.
 ///
@@ -26,9 +27,11 @@ use crate::libslirp_config;
 ///
 use crate::libslirp_sys;
 use bytes::Bytes;
+use log::{debug, info, warn};
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::{mpsc, Mutex};
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // Uses a static to hold callback state instead of the libslirp's
 // opaque parameter to limit the number of unsafe regions.
@@ -88,7 +91,7 @@ impl LibSlirp {
         self.tx_cmds.send(SlirpCmd::Shutdown);
     }
 
-    pub fn input(self, bytes: Bytes) {
+    pub fn input(&self, bytes: Bytes) {
         self.tx_cmds.send(SlirpCmd::Input(bytes));
     }
 }
@@ -98,23 +101,22 @@ fn slirp_thread(
     rx: mpsc::Receiver<SlirpCmd>,
     tx_poll: mpsc::Sender<PollRequest>,
 ) {
-    let config = libslirp_config::SlirpConfigs::new(&config);
     let callbacks = libslirp_sys::SlirpCb {
         send_packet: Some(send_packet_cb),
         guest_error: Some(guest_error_cb),
-        clock_get_ns: None,
+        clock_get_ns: Some(clock_get_ns_cb),
         timer_new: None,
-        timer_free: None,
-        timer_mod: None,
-        register_poll_fd: None,
-        unregister_poll_fd: None,
-        notify: None,
-        init_completed: None,
+        timer_free: Some(timer_free_cb),
+        timer_mod: Some(timer_mod_cb),
+        register_poll_fd: Some(register_poll_fd_cb),
+        unregister_poll_fd: Some(unregister_poll_fd_cb),
+        notify: Some(notify_cb),
+        init_completed: Some(init_completed),
         remove: None,
-        timer_new_opaque: None,
+        timer_new_opaque: Some(timer_new_opaque_cb),
         try_connect: None,
     };
-
+    let configs = SlirpConfigs::new(&config);
     // Call libslrip "C" library to create a new instance of a slirp
     // protocol stack.
     //
@@ -128,7 +130,7 @@ fn slirp_thread(
     // functions. It is held by the "C" slirp library for the lifetime
     // of the slirp instance.
     let slirp = unsafe {
-        libslirp_sys::slirp_new(&config.c_slirp_config, &callbacks, std::ptr::null_mut())
+        libslirp_sys::slirp_new(&configs.c_slirp_config, &callbacks, std::ptr::null_mut())
     };
 
     unsafe { slirp_pollfds_fill(slirp, &tx_poll) };
@@ -203,7 +205,7 @@ unsafe fn slirp_pollfds_fill(slirp: *mut libslirp_sys::Slirp, tx: &mpsc::Sender<
         );
     }
     let poll_fds: Vec<PollFd> = CONTEXT.lock().unwrap().pollFds.drain(..).collect();
-    println!("got {} items", poll_fds.len());
+    debug!("got {} items", poll_fds.len());
     tx.send((poll_fds, timeout));
 }
 
@@ -373,7 +375,8 @@ unsafe extern "C" fn send_packet_cb(
 ) -> libslirp_sys::slirp_ssize_t {
     // SAFETY: The caller ensures that `buf` is contains `len` bytes of data.
     let c_slice = unsafe { std::slice::from_raw_parts(buf as *const u8, len) };
-    // Copies the contents of buf
+    // Bytes::from(slice: &'static [u8]) creates a Bytes object without copying the data.
+    // To own its data, copy &'static [u8] to Vec<u8> before converting to Bytes.
     CONTEXT
         .lock()
         .unwrap()
@@ -392,5 +395,56 @@ unsafe extern "C" fn send_packet_cb(
 unsafe extern "C" fn guest_error_cb(msg: *const c_char, _opaque: *mut c_void) {
     // SAFETY: The caller ensures that `msg` is a nul-terminated string.
     let msg = String::from_utf8_lossy(unsafe { CStr::from_ptr(msg) }.to_bytes());
-    eprintln!("error {msg}");
+    warn!("libslirp: {msg}");
+}
+
+extern "C" fn clock_get_ns_cb(_opaque: *mut std::os::raw::c_void) -> i64 {
+    // Get the elapsed time since the UNIX epoch
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as i64
+}
+
+extern "C" fn init_completed(_slirp: *mut libslirp_sys::Slirp, _opaque: *mut std::os::raw::c_void) {
+    info!("libslirp: initialization completed.");
+}
+
+extern "C" fn timer_new_opaque_cb(
+    _id: libslirp_sys::SlirpTimerId,
+    _cb_opaque: *mut ::std::os::raw::c_void,
+    _opaque: *mut ::std::os::raw::c_void,
+) -> *mut ::std::os::raw::c_void {
+    // TODO: Un-implemented because the function callback is only used by icmp.
+    std::ptr::null_mut()
+}
+
+extern "C" fn timer_free_cb(
+    _timer: *mut ::std::os::raw::c_void,
+    _opaque: *mut ::std::os::raw::c_void,
+) {
+    // TODO: Un-implemented because the function callback is only used by icmp.
+}
+
+extern "C" fn timer_mod_cb(
+    _timer: *mut ::std::os::raw::c_void,
+    _expire_time: i64,
+    _opaque: *mut ::std::os::raw::c_void,
+) {
+    // TODO: Un-implemented because the function callback is only used by icmp.
+}
+
+extern "C" fn register_poll_fd_cb(
+    _fd: ::std::os::raw::c_int,
+    _opaque: *mut ::std::os::raw::c_void,
+) {
+    //TODO: Need implementation for Windows
+}
+
+extern "C" fn unregister_poll_fd_cb(
+    _fd: ::std::os::raw::c_int,
+    _opaque: *mut ::std::os::raw::c_void,
+) {
+    //TODO: Need implementation for Windows
+}
+
+extern "C" fn notify_cb(_opaque: *mut ::std::os::raw::c_void) {
+    //TODO: Un-implemented
 }
