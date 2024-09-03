@@ -48,7 +48,7 @@ impl Drop for BleBeacon {
 impl WirelessAdaptor for BleBeacon {
     fn handle_request(&self, packet: &Bytes) {
         #[cfg(not(test))]
-        ffi_bluetooth::handle_bt_request(self.facade_id.0, packet[0], &packet[1..].to_vec());
+        ffi_bluetooth::handle_bt_request(self.facade_id.0, packet[0], &packet[1..]);
         #[cfg(test)]
         log::info!("BleBeacon::handle_request({packet:?})");
     }

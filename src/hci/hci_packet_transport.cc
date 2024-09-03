@@ -177,7 +177,7 @@ void handle_bt_request(uint32_t rootcanal_id,
 }
 
 void HandleBtRequestCxx(uint32_t rootcanal_id, uint8_t packet_type,
-                        const rust::Vec<uint8_t> &packet) {
+                        const rust::Slice<uint8_t const> packet) {
   std::vector<uint8_t> buffer(packet.begin(), packet.end());
   auto packet_ptr = std::make_shared<std::vector<uint8_t>>(buffer);
   handle_bt_request(rootcanal_id,

@@ -35,7 +35,7 @@ struct GrpcTransport {
 
 impl Response for GrpcTransport {
     fn response(&mut self, packet: Bytes, packet_type: u8) {
-        handle_grpc_response(self.chip_id, &packet.to_vec(), packet_type)
+        handle_grpc_response(self.chip_id, &packet, packet_type)
     }
 }
 

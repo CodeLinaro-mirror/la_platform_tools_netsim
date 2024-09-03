@@ -62,17 +62,17 @@ impl WifiManager {
                     Ok((chip_id, packet)) => {
                         // When Wi-Fi P2P is disabled, send all packets to WifiService.
                         if crate::config::get_disable_wifi_p2p() {
-                            ffi_wifi::handle_wifi_request(&packet.to_vec());
+                            ffi_wifi::handle_wifi_request(&packet);
                             ffi_wifi::libslirp_main_loop_wait();
                         } else if let Some(processor) =
                             WIFI_MANAGER.medium.get_processor(chip_id, &packet)
                         {
                             WIFI_MANAGER.medium.ack_frame(chip_id, &processor.frame);
                             if processor.hostapd {
-                                ffi_wifi::hostapd_send(&packet.to_vec());
+                                ffi_wifi::hostapd_send(&packet);
                             }
                             if processor.network {
-                                ffi_wifi::libslirp_send(&packet.to_vec());
+                                ffi_wifi::libslirp_send(&packet);
                                 ffi_wifi::libslirp_main_loop_wait();
                             }
                             if processor.wmedium {
