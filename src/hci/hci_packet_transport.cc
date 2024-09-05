@@ -100,9 +100,9 @@ void HciPacketTransport::Request(
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - beforeScheduleTime)
                 .count();
-        // If the elapsed time of the packet delivery is greater than 5ms,
+        // If the elapsed time of the packet delivery is greater than 100ms,
         // report invalid packet with DELAYED reasoning.
-        if (elapsedTime > 5) {
+        if (elapsedTime > 100) {
           // Create a new vector to hold the combined data
           std::vector<uint8_t> combinedPacket;
 

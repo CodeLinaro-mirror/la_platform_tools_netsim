@@ -45,25 +45,54 @@ import "rootcanal/configuration.proto";
 
 message StartupInfo {
   message Device {
-    string name = 1;          //  name of device
-    repeated Chip chips = 2;  // list of SoCs associated with device
+    // name of device
+    string name = 1;
+    // list of SoCs associated with device
+    repeated Chip chips = 2;
+    // additional device information
+    DeviceInfo device_info = 3;
   }
   repeated Device devices = 1;
 }
 
 message ChipInfo {
-  string name = 1;  // name of device
-  Chip chip = 2;    // single chip
+  // name of device
+  string name = 1;
+  // single chip
+  Chip chip = 2;
+  // additional device information
+  DeviceInfo device_info = 3;
+}
+
+// Detailed Device information of a device
+message DeviceInfo {
+  // Identifier for device kind e.g. Goldfish, Cuttlefish, Bumble, etc
+  string kind = 1;
+  // Version info as applicable e.g. Android version (API level), etc
+  string version = 2;
+  // Build ID e.g. TE1A.220922.034, UQ1A.231205.015, etc
+  string build_id = 3;
+  // Model/variant e.g. sdk_gphone_x86_64-userdebug, cf_x86_64_phone-user, etc
+  string variant = 4;
+  // CPU architecture e.g. x86_64, arm64-v8a, etc
+  string arch = 5;
 }
 
 message Chip {
-  common.ChipKind kind = 1;  // the kind of chip
-  string id = 2;             // optional like "rear-right"
-  string manufacturer = 3;   // optional like Quorvo
-  string product_name = 4;   // optional like DW300
-  int32 fd_in = 5;           // optional guest os input
-  int32 fd_out = 6;          // optional guest os output
-  bool loopback = 7;         // optional for testing
+  // the kind of chip
+  common.ChipKind kind = 1;
+  // optional like "rear-right"
+  string id = 2;
+  // optional like Quorvo
+  string manufacturer = 3;
+  // optional like DW300
+  string product_name = 4;
+  // optional guest os input
+  int32 fd_in = 5;
+  // optional guest os output
+  int32 fd_out = 6;
+  // optional for testing
+  bool loopback = 7;
   // optional for bluetooth chipsets
   rootcanal.configuration.Controller bt_properties = 8;
   // address in format xx:xx:xx:xx:xx:xx

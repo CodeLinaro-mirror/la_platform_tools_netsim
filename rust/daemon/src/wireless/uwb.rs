@@ -44,6 +44,7 @@ lazy_static! {
 
 /// Parameters for creating UWB chips
 pub struct CreateParams {
+    #[allow(dead_code)]
     pub address: String,
 }
 
