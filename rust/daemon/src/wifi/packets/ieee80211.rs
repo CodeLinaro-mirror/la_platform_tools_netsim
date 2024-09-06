@@ -289,7 +289,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_mad_address_to_vec() {
+    fn test_mac_address_to_vec() {
         let mac_address: MacAddress = parse_mac_address("00:0b:85:71:20:ce").unwrap();
         let mac_address_bytes = mac_address.to_vec();
         let reconstructed_mac_address = MacAddress::from(&mac_address_bytes);

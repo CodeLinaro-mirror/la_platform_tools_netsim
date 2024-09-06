@@ -14,11 +14,12 @@
 
 use crate::devices::chip::ChipIdentifier;
 use crate::ffi::ffi_wifi;
+use crate::wifi::libslirp;
 use crate::wifi::medium::Medium;
 use crate::wireless::{packet::handle_response, WirelessAdaptor, WirelessAdaptorImpl};
 use bytes::Bytes;
-use log::info;
-use netsim_proto::config::WiFi as WiFiConfig;
+use log::{info, warn};
+use netsim_proto::config::{SlirpOptions, WiFi as WiFiConfig};
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
@@ -41,14 +42,17 @@ pub struct WifiManager {
     medium: Medium,
     tx_request: mpsc::Sender<(u32, Bytes)>,
     tx_response: mpsc::Sender<Bytes>,
+    #[allow(dead_code)]
+    slirp: Option<libslirp::LibSlirp>,
 }
 
 impl WifiManager {
     pub fn new(
         tx_request: mpsc::Sender<(u32, Bytes)>,
         tx_response: mpsc::Sender<Bytes>,
+        slirp: Option<libslirp::LibSlirp>,
     ) -> WifiManager {
-        WifiManager { medium: Medium::new(medium_callback), tx_request, tx_response }
+        WifiManager { medium: Medium::new(medium_callback), tx_request, tx_response, slirp }
     }
 
     /// Starts two background threads:
@@ -64,6 +68,7 @@ impl WifiManager {
     }
 
     fn start_request_thread(&self, rx_request: mpsc::Receiver<(u32, Bytes)>) {
+        let rust_slirp = self.slirp.is_some();
         thread::spawn(move || {
             const POLL_INTERVAL: Duration = Duration::from_millis(1);
             let mut next_instant = Instant::now() + POLL_INTERVAL;
@@ -89,8 +94,12 @@ impl WifiManager {
                                 ffi_wifi::hostapd_send(&packet.to_vec());
                             }
                             if processor.network {
-                                ffi_wifi::libslirp_send(&packet.to_vec());
-                                ffi_wifi::libslirp_main_loop_wait();
+                                if rust_slirp {
+                                    // TODO: Convert Wi-Fi to ethernet and send to libslirp.
+                                } else {
+                                    ffi_wifi::libslirp_send(&packet.to_vec());
+                                    ffi_wifi::libslirp_main_loop_wait();
+                                }
                             }
                             if processor.wmedium {
                                 get_wifi_manager().medium.queue_frame(processor.frame);
@@ -98,7 +107,9 @@ impl WifiManager {
                         }
                     }
                     _ => {
-                        ffi_wifi::libslirp_main_loop_wait();
+                        if !rust_slirp {
+                            ffi_wifi::libslirp_main_loop_wait();
+                        }
                         next_instant = Instant::now() + POLL_INTERVAL;
                     }
                 };
@@ -185,14 +196,31 @@ pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorIm
 }
 
 /// Starts the WiFi service.
-pub fn wifi_start(config: &MessageField<WiFiConfig>) {
+pub fn wifi_start(config: &MessageField<WiFiConfig>, rust_slirp: bool) {
     let (tx_request, rx_request) = mpsc::channel::<(u32, Bytes)>();
     let (tx_response, rx_response) = mpsc::channel::<Bytes>();
 
-    let _ = WIFI_MANAGER.set(WifiManager::new(tx_request, tx_response));
+    let mut optional_slirp = None;
+    let mut wifi_config = config.clone().unwrap_or_default();
+    if rust_slirp {
+        let slirp_opt = wifi_config.slirp_options.as_ref().unwrap_or_default().clone();
+        let (slirp, _rx_slirp) = libslirp::slirp_run(slirp_opt)
+            .map_err(|e| warn!("Failed to run libslirp. {e}"))
+            .unwrap();
+        optional_slirp = Some(slirp);
+
+        // TODO: Start a thread to consume libslirp_receiver, convert ethernet to Wi-Fi packet, and send to network.
+
+        // Disable qemu slirp in WifiService
+        wifi_config.slirp_options =
+            MessageField::some(SlirpOptions { disabled: true, ..Default::default() });
+    }
+
+    let _ = WIFI_MANAGER.set(WifiManager::new(tx_request, tx_response, optional_slirp));
     get_wifi_manager().start(rx_request, rx_response);
 
-    let proto_bytes = config.as_ref().unwrap_or_default().write_to_bytes().unwrap();
+    // WifiService
+    let proto_bytes = wifi_config.write_to_bytes().unwrap();
     ffi_wifi::wifi_start(&proto_bytes);
 }
 

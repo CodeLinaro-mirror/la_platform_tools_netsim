@@ -17,6 +17,7 @@
 
 pub(crate) mod frame;
 pub(crate) mod hwsim_attr_set;
+pub(crate) mod libslirp;
 pub(crate) mod medium;
 pub(crate) mod packets;
 pub(crate) mod radiotap;
