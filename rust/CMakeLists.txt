@@ -7,6 +7,7 @@ file(REMOVE ${CMAKE_CURRENT_LIST_DIR}/Cargo.lock)
 corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
 corrosion_set_env_vars(netsim-common CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(libslirp-rs CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(hostapd-rs CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(
   netsim-daemon
   LINK_LAYER_PACKETS_PREBUILT=${RootCanalGeneratedPackets_rs}
