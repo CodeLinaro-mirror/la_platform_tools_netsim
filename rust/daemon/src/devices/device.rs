@@ -48,6 +48,7 @@ pub struct Device {
     pub orientation: RwLock<ProtoOrientation>,
     pub chips: RwLock<BTreeMap<ChipIdentifier, Arc<Chip>>>,
     pub builtin: bool,
+    #[allow(dead_code)]
     pub kind: String,
 }
 impl Device {

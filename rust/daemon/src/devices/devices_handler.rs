@@ -125,15 +125,16 @@ impl DeviceManager {
         kind: Option<&str>,
     ) -> (DeviceIdentifier, String) {
         // Hold a lock while checking and updating devices.
-        info!("Acquiring write lock on devices...");
+        info!("Acquiring write lock on devices");
         let mut guard = self.devices.write().unwrap();
-        info!("Write lock acquired.");
+        info!("Acquired write lock");
         // Check if a device with the same guid already exists and if so, return it
         if let Some(guid) = guid {
             if let Some(existing_device) = guard.values().find(|d| d.guid == *guid) {
                 if existing_device.builtin != builtin {
                     warn!("builtin mismatch for device {} during add_chip", existing_device.name);
                 }
+                info!("Releasing write lock");
                 return (existing_device.id, existing_device.name.clone());
             }
         }
@@ -144,7 +145,7 @@ impl DeviceManager {
         let kind = kind.unwrap_or("UNKNOWN");
         info!("Inserting new device {}", id);
         guard.insert(id, Device::new(id, guid.unwrap_or(&default), name, builtin, kind));
-        info!("Releasing write lock on devices");
+        info!("Releasing write lock");
         drop(guard);
         // Update last modified timestamp for devices
         self.update_timestamp();
@@ -191,6 +192,7 @@ pub fn add_chip(
     let wireless_adaptor = wireless::new(wireless_create_params, chip_id);
 
     // This is infrequent, so we can afford to do another lookup for the device.
+    info!("Acquiring write lock on devices");
     let _ = manager
         .devices
         .write()
@@ -198,6 +200,7 @@ pub fn add_chip(
         .get_mut(&device_id)
         .ok_or(format!("Device not found for device_id: {}", device_id))?
         .add_chip(chip_create_params, chip_id, wireless_adaptor);
+    info!("Released write lock");
 
     // Update last modified timestamp for devices
     manager.update_timestamp();
@@ -330,6 +333,7 @@ pub fn add_chip_cxx(
 /// Called when the packet transport for the chip shuts down.
 pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Result<(), String> {
     let manager = get_manager();
+    info!("Acquiring write lock on devices");
     let mut guard = manager.devices.write().unwrap();
     let device =
         guard.get(&device_id).ok_or(format!("RemoveChip device id {device_id} not found"))?;
@@ -347,6 +351,8 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
     }
 
     let remaining_nonbuiltin_devices = guard.values().filter(|device| !device.builtin).count();
+    info!("Releasing write lock on devices");
+    drop(guard);
     events::publish(Event::ChipRemoved(ChipRemoved {
         chip_id,
         device_id,
@@ -369,6 +375,7 @@ pub fn delete_chip(delete_json: &str) -> Result<(), String> {
 
     let chip_id = ChipIdentifier(request.id);
 
+    info!("Acquiring read lock on devices");
     let device_id = get_manager()
         .devices
         .read()
@@ -377,6 +384,7 @@ pub fn delete_chip(delete_json: &str) -> Result<(), String> {
         .find(|(_, device)| device.chips.read().unwrap().contains_key(&chip_id))
         .map(|(id, _)| *id)
         .ok_or(format!("failed to delete chip: could not find chip with id {}", request.id))?;
+    info!("Released read lock");
 
     remove_chip(device_id, chip_id)
 }
@@ -402,11 +410,14 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
     let new_device = create_device_request.device;
     let manager = get_manager();
     // Check if specified device name is already mapped.
+    info!("Acquiring read lock on devices");
     if new_device.name != String::default()
         && manager.devices.read().unwrap().values().any(|d| d.guid == new_device.name)
     {
+        info!("Released read lock");
         return Err(String::from("failed to create device: device already exists"));
     }
+    info!("Released read lock");
 
     if new_device.chips.is_empty() {
         return Err(String::from("failed to create device: device must contain at least 1 chip"));
@@ -540,6 +551,7 @@ fn get_distance(id: &ChipIdentifier, other_id: &ChipIdentifier) -> Result<f32, S
         .ok_or(format!("No such device with chip_id {other_id}"))?
         .device_id;
     let manager = get_manager();
+    info!("Acquiring read lock on devices");
     let a = manager
         .devices
         .read()
@@ -547,6 +559,8 @@ fn get_distance(id: &ChipIdentifier, other_id: &ChipIdentifier) -> Result<f32, S
         .get(&device_id)
         .map(|device_ref| device_ref.position.read().unwrap().clone())
         .ok_or(format!("No such device with id {id}"))?;
+    info!("Released read lock");
+    info!("Acquiring read lock on devices");
     let b = manager
         .devices
         .read()
@@ -554,6 +568,7 @@ fn get_distance(id: &ChipIdentifier, other_id: &ChipIdentifier) -> Result<f32, S
         .get(&other_device_id)
         .map(|device_ref| device_ref.position.read().unwrap().clone())
         .ok_or(format!("No such device with id {other_id}"))?;
+    info!("Released read lock");
     Ok(distance(&a, &b))
 }
 
@@ -575,22 +590,27 @@ pub fn get_device(chip_id: &ChipIdentifier) -> anyhow::Result<netsim_proto::mode
         Some(chip) => chip.device_id,
         None => return Err(anyhow::anyhow!("Can't find chip for chip_id: {chip_id}")),
     };
-    get_manager()
+    info!("Acquiring read lock on devices");
+    let res = get_manager()
         .devices
         .read()
         .unwrap()
         .get(&device_id)
         .ok_or(anyhow::anyhow!("Can't find device for device_id: {device_id}"))?
         .get()
-        .map_err(|e| anyhow::anyhow!("{e:?}"))
+        .map_err(|e| anyhow::anyhow!("{e:?}"));
+    info!("Released read lock");
+    res
 }
 
 pub fn reset_all() -> Result<(), String> {
     let manager = get_manager();
     // Perform reset for all manager
+    info!("Acquiring read lock on devices");
     for device in manager.devices.read().unwrap().values() {
         device.reset()?;
     }
+    info!("Released read lock");
     // Update last modified timestamp for manager
     manager.update_timestamp();
     events::publish(Event::DeviceReset);
@@ -603,6 +623,7 @@ fn handle_device_create(writer: ResponseWritable, create_json: &str) {
     let mut collate_results = || {
         let id = create_device(create_json)?;
 
+        info!("Acquiring read lock on devices");
         let device_proto = get_manager()
             .devices
             .read()
@@ -610,6 +631,7 @@ fn handle_device_create(writer: ResponseWritable, create_json: &str) {
             .get(&id)
             .ok_or("failed to create device")?
             .get()?;
+        info!("Released read lock");
         response.device = MessageField::some(device_proto);
         print_to_string(&response).map_err(|_| String::from("failed to convert device to json"))
     };
@@ -639,11 +661,14 @@ pub fn list_device() -> anyhow::Result<ListDeviceResponse, String> {
     // Instantiate ListDeviceResponse and add DeviceManager
     let mut response = ListDeviceResponse::new();
     let manager = get_manager();
+
+    info!("Acquiring read lock on devices");
     for device in manager.devices.read().unwrap().values() {
         if let Ok(device_proto) = device.get() {
             response.devices.push(device_proto);
         }
     }
+    info!("Released read lock");
 
     // Add Last Modified Timestamp into ListDeviceResponse
     response.last_modified = Some(Timestamp {
@@ -863,6 +888,7 @@ fn spawn_shutdown_publisher_with_timeout(
 pub fn get_radio_stats() -> Vec<NetsimRadioStats> {
     let mut result: Vec<NetsimRadioStats> = Vec::new();
     // TODO: b/309805437 - optimize logic using get_stats for WirelessAdaptor
+    info!("Acquiring write lock on devices");
     for (device_id, device) in get_manager().devices.read().unwrap().iter() {
         for chip in device.chips.read().unwrap().values() {
             for mut radio_stats in chip.get_stats() {
@@ -871,6 +897,7 @@ pub fn get_radio_stats() -> Vec<NetsimRadioStats> {
             }
         }
     }
+    info!("Released read lock");
     result
 }
 
@@ -991,11 +1018,14 @@ mod tests {
 
     fn reset(id: DeviceIdentifier) -> Result<(), String> {
         let manager = get_manager();
+        info!("Acquiring write lock on devices");
         let mut devices = manager.devices.write().unwrap();
-        match devices.get_mut(&id) {
+        let res = match devices.get_mut(&id) {
             Some(device) => device.reset(),
             None => Err(format!("No such device with id {id}")),
-        }
+        };
+        info!("Released write lock");
+        res
     }
 
     fn spawn_shutdown_publisher_test_setup(timeout: u64) -> (Arc<Mutex<Events>>, Receiver<Event>) {
