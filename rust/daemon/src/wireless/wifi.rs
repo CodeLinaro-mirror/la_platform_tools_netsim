@@ -129,16 +129,18 @@ impl WifiManager {
     }
 
     fn start_response_thread(&self, rx_response: mpsc::Receiver<Bytes>) {
-        thread::spawn(move || loop {
-            let packet = rx_response.recv().unwrap();
-            get_wifi_manager().medium.process_response(&packet);
+        thread::spawn(move || {
+            for packet in rx_response {
+                get_wifi_manager().medium.process_response(&packet);
+            }
         });
     }
 
     fn start_ieee8023_response_thread(&self, rx_ieee8023_response: mpsc::Receiver<Bytes>) {
-        thread::spawn(move || loop {
-            let packet = rx_ieee8023_response.recv().unwrap();
-            get_wifi_manager().medium.process_ieee8023_response(&packet);
+        thread::spawn(move || {
+            for packet in rx_ieee8023_response {
+                get_wifi_manager().medium.process_ieee8023_response(&packet);
+            }
         });
     }
 }
@@ -218,7 +220,6 @@ pub fn wifi_start(config: &MessageField<WiFiConfig>, rust_slirp: bool) {
     let (tx_request, rx_request) = mpsc::channel::<(u32, Bytes)>();
     let (tx_response, rx_response) = mpsc::channel::<Bytes>();
     let (tx_ieee8023_response, rx_ieee8023_response) = mpsc::channel::<Bytes>();
-
     let mut slirp = None;
     let mut wifi_config = config.clone().unwrap_or_default();
     if rust_slirp {

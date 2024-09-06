@@ -110,6 +110,7 @@ impl DeviceManager {
     }
 
     fn update_timestamp(&self) {
+        info!("Updated last modified timestamp for devices");
         *self.last_modified.write().unwrap() =
             SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
     }
@@ -124,8 +125,9 @@ impl DeviceManager {
         kind: Option<&str>,
     ) -> (DeviceIdentifier, String) {
         // Hold a lock while checking and updating devices.
+        info!("Acquiring write lock on devices...");
         let mut guard = self.devices.write().unwrap();
-
+        info!("Write lock acquired.");
         // Check if a device with the same guid already exists and if so, return it
         if let Some(guid) = guid {
             if let Some(existing_device) = guard.values().find(|d| d.guid == *guid) {
@@ -140,16 +142,20 @@ impl DeviceManager {
         let default = format!("device-{}", id);
         let name = name.unwrap_or(&default);
         let kind = kind.unwrap_or("UNKNOWN");
+        info!("Inserting new device {}", id);
         guard.insert(id, Device::new(id, guid.unwrap_or(&default), name, builtin, kind));
+        info!("Releasing write lock on devices");
         drop(guard);
         // Update last modified timestamp for devices
         self.update_timestamp();
-        events::publish(Event::DeviceAdded(DeviceAdded {
+        let event = Event::DeviceAdded(DeviceAdded {
             id,
             name: String::from(name),
             builtin,
             kind: String::from(kind),
-        }));
+        });
+        info!("Publishing DeviceAdded event: {:?}", event);
+        events::publish(event);
         (id, String::from(name))
     }
 }
@@ -167,8 +173,10 @@ pub fn add_chip(
     chip_create_params: &chip::CreateParams,
     wireless_create_params: &wireless::CreateParam,
 ) -> Result<AddChipResult, String> {
+    info!("Adding new chip for device {}", device_guid);
     let chip_kind = chip_create_params.kind;
     let manager = get_manager();
+    info!("Getting or creating device {}", device_guid);
     let (device_id, _) = manager.get_or_create_device(
         Some(device_guid),
         Some(device_name),
@@ -176,6 +184,7 @@ pub fn add_chip(
         // TODO: add device_kind arg to add_chip and pass to get_or_create_device
         None,
     );
+    info!("Device {} retrieved/created: with ID {}", device_guid, device_id);
 
     // Create
     let chip_id = chip::next_id();
@@ -194,12 +203,14 @@ pub fn add_chip(
     manager.update_timestamp();
 
     // Update Capture resource
-    events::publish(Event::ChipAdded(ChipAdded {
+    let event = Event::ChipAdded(ChipAdded {
         chip_id,
         chip_kind,
         device_name: device_name.to_string(),
         builtin: chip_kind == ProtoChipKind::BLUETOOTH_BEACON,
-    }));
+    });
+    info!("Publishing ChipAdded event: {:?}", event);
+    events::publish(event);
     Ok(AddChipResult { device_id, chip_id })
 }
 
