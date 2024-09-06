@@ -42,7 +42,6 @@ pub struct WifiManager {
     medium: Medium,
     tx_request: mpsc::Sender<(u32, Bytes)>,
     tx_response: mpsc::Sender<Bytes>,
-    #[allow(dead_code)]
     slirp: Option<libslirp::LibSlirp>,
 }
 
@@ -55,16 +54,19 @@ impl WifiManager {
         WifiManager { medium: Medium::new(medium_callback), tx_request, tx_response, slirp }
     }
 
-    /// Starts two background threads:
+    /// Starts background threads:
     /// * One to handle requests from medium.
     /// * One to handle responses from network.
+    /// * One to handle IEEE802.3 responses from network.
     pub fn start(
         &self,
         rx_request: mpsc::Receiver<(u32, Bytes)>,
         rx_response: mpsc::Receiver<Bytes>,
+        rx_ieee8023_response: mpsc::Receiver<Bytes>,
     ) {
         self.start_request_thread(rx_request);
         self.start_response_thread(rx_response);
+        self.start_ieee8023_response_thread(rx_ieee8023_response);
     }
 
     fn start_request_thread(&self, rx_request: mpsc::Receiver<(u32, Bytes)>) {
@@ -95,7 +97,16 @@ impl WifiManager {
                             }
                             if processor.network {
                                 if rust_slirp {
-                                    // TODO: Convert Wi-Fi to ethernet and send to libslirp.
+                                    match processor.frame.ieee80211.to_ieee8023() {
+                                        Ok(ethernet_frame) => get_wifi_manager()
+                                            .slirp
+                                            .as_ref()
+                                            .expect("slirp initialized")
+                                            .input(ethernet_frame.into()),
+                                        Err(err) => {
+                                            warn!("Failed to convert 802.11 to 802.3: {:?}", err)
+                                        }
+                                    }
                                 } else {
                                     ffi_wifi::libslirp_send(&packet.to_vec());
                                     ffi_wifi::libslirp_main_loop_wait();
@@ -121,6 +132,13 @@ impl WifiManager {
         thread::spawn(move || loop {
             let packet = rx_response.recv().unwrap();
             get_wifi_manager().medium.process_response(&packet);
+        });
+    }
+
+    fn start_ieee8023_response_thread(&self, rx_ieee8023_response: mpsc::Receiver<Bytes>) {
+        thread::spawn(move || loop {
+            let packet = rx_ieee8023_response.recv().unwrap();
+            get_wifi_manager().medium.process_ieee8023_response(&packet);
         });
     }
 }
@@ -199,25 +217,25 @@ pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorIm
 pub fn wifi_start(config: &MessageField<WiFiConfig>, rust_slirp: bool) {
     let (tx_request, rx_request) = mpsc::channel::<(u32, Bytes)>();
     let (tx_response, rx_response) = mpsc::channel::<Bytes>();
+    let (tx_ieee8023_response, rx_ieee8023_response) = mpsc::channel::<Bytes>();
 
-    let mut optional_slirp = None;
+    let mut slirp = None;
     let mut wifi_config = config.clone().unwrap_or_default();
     if rust_slirp {
         let slirp_opt = wifi_config.slirp_options.as_ref().unwrap_or_default().clone();
-        let (slirp, _rx_slirp) = libslirp::slirp_run(slirp_opt)
-            .map_err(|e| warn!("Failed to run libslirp. {e}"))
-            .unwrap();
-        optional_slirp = Some(slirp);
-
-        // TODO: Start a thread to consume libslirp_receiver, convert ethernet to Wi-Fi packet, and send to network.
+        slirp = Some(
+            libslirp::slirp_run(slirp_opt, tx_ieee8023_response)
+                .map_err(|e| warn!("Failed to run libslirp. {e}"))
+                .unwrap(),
+        );
 
         // Disable qemu slirp in WifiService
         wifi_config.slirp_options =
             MessageField::some(SlirpOptions { disabled: true, ..Default::default() });
     }
 
-    let _ = WIFI_MANAGER.set(WifiManager::new(tx_request, tx_response, optional_slirp));
-    get_wifi_manager().start(rx_request, rx_response);
+    let _ = WIFI_MANAGER.set(WifiManager::new(tx_request, tx_response, slirp));
+    get_wifi_manager().start(rx_request, rx_response, rx_ieee8023_response);
 
     // WifiService
     let proto_bytes = wifi_config.write_to_bytes().unwrap();

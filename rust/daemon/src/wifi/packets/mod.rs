@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod ieee80211;
+pub mod llc;
 
 pub mod netlink {
     #![allow(clippy::all)]

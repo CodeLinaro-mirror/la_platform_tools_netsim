@@ -48,18 +48,26 @@ pub struct Device {
     pub orientation: RwLock<ProtoOrientation>,
     pub chips: RwLock<BTreeMap<ChipIdentifier, Arc<Chip>>>,
     pub builtin: bool,
+    pub kind: String,
 }
 impl Device {
-    pub fn new(id: DeviceIdentifier, guid: String, name: String, builtin: bool) -> Self {
+    pub fn new(
+        id: DeviceIdentifier,
+        guid: impl Into<String>,
+        name: impl Into<String>,
+        builtin: bool,
+        kind: impl Into<String>,
+    ) -> Self {
         Device {
             id,
-            guid,
-            name,
+            guid: guid.into(),
+            name: name.into(),
             visible: AtomicBool::new(true),
             position: RwLock::new(ProtoPosition::new()),
             orientation: RwLock::new(ProtoOrientation::new()),
             chips: RwLock::new(BTreeMap::new()),
             builtin,
+            kind: kind.into(),
         }
     }
 }
@@ -231,7 +239,7 @@ mod tests {
 
     fn create_test_device() -> Result<Device, String> {
         let mut device =
-            Device::new(DeviceIdentifier(0), "0".to_string(), TEST_DEVICE_NAME.to_string(), false);
+            Device::new(DeviceIdentifier(0), "0", TEST_DEVICE_NAME, false, "TestDevice");
         let chip_id_1 = ChipIdentifier(IDS.fetch_add(1, Ordering::SeqCst));
         let chip_id_2 = ChipIdentifier(IDS.fetch_add(1, Ordering::SeqCst));
         device.add_chip(
