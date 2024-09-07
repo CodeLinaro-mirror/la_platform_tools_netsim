@@ -66,6 +66,11 @@ pub struct NetsimdArgs {
     #[arg(long)]
     pub rust_grpc: bool,
 
+    /// Use hostapd-rs and disable c++ hostapd.
+    /// WARNING: This flag is for development purpose.
+    #[arg(long)]
+    pub rust_hostapd: bool,
+
     /// Use libslirp-rs and disable qemu slirp.
     /// WARNING: This flag is for development purpose.
     #[arg(long)]

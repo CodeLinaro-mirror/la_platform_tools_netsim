@@ -14,12 +14,13 @@
 
 use crate::devices::chip::ChipIdentifier;
 use crate::ffi::ffi_wifi;
+use crate::wifi::hostapd;
 use crate::wifi::libslirp;
 use crate::wifi::medium::Medium;
 use crate::wireless::{packet::handle_response, WirelessAdaptor, WirelessAdaptorImpl};
 use bytes::Bytes;
 use log::{info, warn};
-use netsim_proto::config::{SlirpOptions, WiFi as WiFiConfig};
+use netsim_proto::config::{HostapdOptions, SlirpOptions, WiFi as WiFiConfig};
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::{Message, MessageField};
@@ -43,6 +44,7 @@ pub struct WifiManager {
     tx_request: mpsc::Sender<(u32, Bytes)>,
     tx_response: mpsc::Sender<Bytes>,
     slirp: Option<libslirp::LibSlirp>,
+    hostapd: Option<hostapd::Hostapd>,
 }
 
 impl WifiManager {
@@ -50,8 +52,15 @@ impl WifiManager {
         tx_request: mpsc::Sender<(u32, Bytes)>,
         tx_response: mpsc::Sender<Bytes>,
         slirp: Option<libslirp::LibSlirp>,
+        hostapd: Option<hostapd::Hostapd>,
     ) -> WifiManager {
-        WifiManager { medium: Medium::new(medium_callback), tx_request, tx_response, slirp }
+        WifiManager {
+            medium: Medium::new(medium_callback),
+            tx_request,
+            tx_response,
+            slirp,
+            hostapd,
+        }
     }
 
     /// Starts background threads:
@@ -71,6 +80,7 @@ impl WifiManager {
 
     fn start_request_thread(&self, rx_request: mpsc::Receiver<(u32, Bytes)>) {
         let rust_slirp = self.slirp.is_some();
+        let rust_hostapd = self.hostapd.is_some();
         thread::spawn(move || {
             const POLL_INTERVAL: Duration = Duration::from_millis(1);
             let mut next_instant = Instant::now() + POLL_INTERVAL;
@@ -93,7 +103,11 @@ impl WifiManager {
                         {
                             get_wifi_manager().medium.ack_frame(chip_id, &processor.frame);
                             if processor.hostapd {
-                                ffi_wifi::hostapd_send(&packet.to_vec());
+                                if rust_hostapd {
+                                    // TODO: Setup Rust hostapd send
+                                } else {
+                                    ffi_wifi::hostapd_send(&packet.to_vec());
+                                }
                             }
                             if processor.network {
                                 if rust_slirp {
@@ -216,7 +230,7 @@ pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorIm
 }
 
 /// Starts the WiFi service.
-pub fn wifi_start(config: &MessageField<WiFiConfig>, rust_slirp: bool) {
+pub fn wifi_start(config: &MessageField<WiFiConfig>, rust_slirp: bool, rust_hostapd: bool) {
     let (tx_request, rx_request) = mpsc::channel::<(u32, Bytes)>();
     let (tx_response, rx_response) = mpsc::channel::<Bytes>();
     let (tx_ieee8023_response, rx_ieee8023_response) = mpsc::channel::<Bytes>();
@@ -235,15 +249,30 @@ pub fn wifi_start(config: &MessageField<WiFiConfig>, rust_slirp: bool) {
             MessageField::some(SlirpOptions { disabled: true, ..Default::default() });
     }
 
-    let _ = WIFI_MANAGER.set(WifiManager::new(tx_request, tx_response, slirp));
-    get_wifi_manager().start(rx_request, rx_response, rx_ieee8023_response);
+    let mut hostapd = None;
+    if rust_hostapd {
+        let hostapd_opt = wifi_config.hostapd_options.as_ref().unwrap_or_default().clone();
+        let (hostapd_struct, _rx_hostapd) = hostapd::hostapd_run(hostapd_opt)
+            .map_err(|e| warn!("Failed to run hostapd. {e}"))
+            .unwrap();
+        hostapd = Some(hostapd_struct);
+
+        // Disable qemu hostapd in WifiService
+        wifi_config.hostapd_options =
+            MessageField::some(HostapdOptions { disabled: Some(true), ..Default::default() });
+    }
+
+    let _ = WIFI_MANAGER.set(WifiManager::new(tx_request, tx_response, slirp, hostapd));
 
     // WifiService
     let proto_bytes = wifi_config.write_to_bytes().unwrap();
     ffi_wifi::wifi_start(&proto_bytes);
+
+    get_wifi_manager().start(rx_request, rx_response, rx_ieee8023_response);
 }
 
 /// Stops the WiFi service.
 pub fn wifi_stop() {
+    // TODO: stop hostapd
     ffi_wifi::wifi_stop();
 }
