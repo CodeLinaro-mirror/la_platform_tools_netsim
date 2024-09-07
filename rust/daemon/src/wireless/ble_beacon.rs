@@ -14,6 +14,7 @@
 
 use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch, ble_beacon_remove};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
+use crate::info_linux_arm;
 use crate::wireless::{WirelessAdaptor, WirelessAdaptorImpl};
 
 use bytes::Bytes;
@@ -76,6 +77,7 @@ impl WirelessAdaptor for BleBeacon {
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
+        info_linux_arm!("ble_beacon get_stats");
         let mut stats_proto = ProtoRadioStats::new();
         stats_proto.set_duration_secs(duration_secs);
         stats_proto.set_kind(netsim_radio_stats::Kind::BLE_BEACON);

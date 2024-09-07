@@ -18,6 +18,7 @@ use crate::wifi::hostapd;
 use crate::wifi::libslirp;
 use crate::wifi::medium::Medium;
 use crate::wireless::{packet::handle_response, WirelessAdaptor, WirelessAdaptorImpl};
+use anyhow;
 use bytes::Bytes;
 use log::{info, warn};
 use netsim_proto::config::{HostapdOptions, SlirpOptions, WiFi as WiFiConfig};
@@ -72,16 +73,17 @@ impl WifiManager {
         rx_request: mpsc::Receiver<(u32, Bytes)>,
         rx_response: mpsc::Receiver<Bytes>,
         rx_ieee8023_response: mpsc::Receiver<Bytes>,
-    ) {
-        self.start_request_thread(rx_request);
-        self.start_response_thread(rx_response);
-        self.start_ieee8023_response_thread(rx_ieee8023_response);
+    ) -> anyhow::Result<()> {
+        let _ = self.start_request_thread(rx_request);
+        let _ = self.start_response_thread(rx_response);
+        let _ = self.start_ieee8023_response_thread(rx_ieee8023_response);
+        Ok(())
     }
 
-    fn start_request_thread(&self, rx_request: mpsc::Receiver<(u32, Bytes)>) {
+    fn start_request_thread(&self, rx_request: mpsc::Receiver<(u32, Bytes)>) -> anyhow::Result<()> {
         let rust_slirp = self.slirp.is_some();
         let rust_hostapd = self.hostapd.is_some();
-        thread::spawn(move || {
+        thread::Builder::new().name("Wi-Fi HwsimMsg request".to_string()).spawn(move || {
             const POLL_INTERVAL: Duration = Duration::from_millis(1);
             let mut next_instant = Instant::now() + POLL_INTERVAL;
 
@@ -139,23 +141,29 @@ impl WifiManager {
                     }
                 };
             }
-        });
+        })?;
+        Ok(())
     }
 
-    fn start_response_thread(&self, rx_response: mpsc::Receiver<Bytes>) {
-        thread::spawn(move || {
+    fn start_response_thread(&self, rx_response: mpsc::Receiver<Bytes>) -> anyhow::Result<()> {
+        thread::Builder::new().name("WifiService response".to_string()).spawn(move || {
             for packet in rx_response {
                 get_wifi_manager().medium.process_response(&packet);
             }
-        });
+        })?;
+        Ok(())
     }
 
-    fn start_ieee8023_response_thread(&self, rx_ieee8023_response: mpsc::Receiver<Bytes>) {
-        thread::spawn(move || {
+    fn start_ieee8023_response_thread(
+        &self,
+        rx_ieee8023_response: mpsc::Receiver<Bytes>,
+    ) -> anyhow::Result<()> {
+        thread::Builder::new().name("Wi-Fi IEEE802.3 response".to_string()).spawn(move || {
             for packet in rx_ieee8023_response {
                 get_wifi_manager().medium.process_ieee8023_response(&packet);
             }
-        });
+        })?;
+        Ok(())
     }
 }
 
@@ -268,7 +276,9 @@ pub fn wifi_start(config: &MessageField<WiFiConfig>, rust_slirp: bool, rust_host
     let proto_bytes = wifi_config.write_to_bytes().unwrap();
     ffi_wifi::wifi_start(&proto_bytes);
 
-    get_wifi_manager().start(rx_request, rx_response, rx_ieee8023_response);
+    if let Err(e) = get_wifi_manager().start(rx_request, rx_response, rx_ieee8023_response) {
+        warn!("Failed to start Wi-Fi manager: {}", e);
+    }
 }
 
 /// Stops the WiFi service.

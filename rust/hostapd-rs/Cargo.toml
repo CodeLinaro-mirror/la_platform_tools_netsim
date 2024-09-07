@@ -24,7 +24,10 @@ crate-type = ["staticlib","lib"]
 doctest = false
 
 [dependencies]
+anyhow = "1"
 bytes = { version = "1.4.0"}
+log = "0.4.17"
+netsim-common = { path = "../common" }
 
 [build-dependencies]
 ##bindgen = "0.69.4"

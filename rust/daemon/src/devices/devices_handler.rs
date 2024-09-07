@@ -902,16 +902,31 @@ fn spawn_shutdown_publisher_with_timeout(
 pub fn get_radio_stats() -> Vec<NetsimRadioStats> {
     let mut result: Vec<NetsimRadioStats> = Vec::new();
     // TODO: b/309805437 - optimize logic using get_stats for WirelessAdaptor
+    let manager = get_manager();
     info_linux_arm!("Acquiring read lock on devices");
-    for (device_id, device) in get_manager().devices.read().unwrap().iter() {
+    let guard = manager.devices.read().unwrap();
+    info_linux_arm!("Acquired read lock on devices");
+    for (device_id, device) in guard.iter() {
         for chip in device.chips.read().unwrap().values() {
+            info_linux_arm!(
+                "Getting stats of device {} on chip {} with kind {:?}",
+                device_id,
+                chip.id,
+                chip.kind
+            );
             for mut radio_stats in chip.get_stats() {
-                info_linux_arm!("Got status for device {} on chip {}", device_id, chip.id);
+                info_linux_arm!(
+                    "Got status for device {} on chip {} with kind {:?}",
+                    device_id,
+                    chip.id,
+                    chip.kind
+                );
                 radio_stats.set_device_id(device_id.0);
                 result.push(radio_stats);
             }
         }
     }
+    drop(guard);
     info_linux_arm!("Released read lock");
     result
 }
