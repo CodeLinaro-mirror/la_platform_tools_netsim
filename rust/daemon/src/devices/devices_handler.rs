@@ -565,7 +565,10 @@ fn get_distance(id: &ChipIdentifier, other_id: &ChipIdentifier) -> Result<f32, S
         .ok_or(format!("No such device with chip_id {other_id}"))?
         .device_id;
     let manager = get_manager();
-    info_linux_arm!("Acquiring read lock on devices");
+    info_linux_arm!(
+        "Acquiring read lock on devices. Try lock result: {}",
+        manager.devices.try_read().is_ok()
+    );
     let a = manager
         .devices
         .read()
@@ -574,7 +577,10 @@ fn get_distance(id: &ChipIdentifier, other_id: &ChipIdentifier) -> Result<f32, S
         .map(|device_ref| device_ref.position.read().unwrap().clone())
         .ok_or(format!("No such device with id {id}"))?;
     info_linux_arm!("Released read lock");
-    info_linux_arm!("Acquiring read lock on devices");
+    info_linux_arm!(
+        "Acquiring read lock on devices. Try lock result: {}",
+        manager.devices.try_read().is_ok()
+    );
     let b = manager
         .devices
         .read()
