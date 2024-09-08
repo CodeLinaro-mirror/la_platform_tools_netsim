@@ -14,7 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Build and update Rust bindings for libslirp-rs on netsim-dev branch
+# Build and update Rust bindings for libslirp-rs & hostapd-rs on netsim-dev branch
+
+# To update an individual library only, pass in "libslirp-rs" or "hostapd-rs" as argument.
 
 # The script is necessary because Clang binary, used for creating bindings,
 # isn't included in prebuilts for all platforms.
@@ -34,12 +36,18 @@
 # 3. Uncomment the lines starting with `##` in Cargo.toml.
 # 4. In rust/daemon/Cargo.toml, update `pica` version to "0.1.7"
 #    (version "0.1.9" is unavailable in crates.io).
-# 5. Navigate to the rust/libslirp-rs directory and run `cargo build`.
-# 6. Revert the change in Cargo.toml: `git checkout rust/libslirp-rs/Cargo.toml`
+# 5. Navigate to the rust/hostapd-rs directory and run `cargo build`.
+# 6. Revert the change in Cargo.toml: `git checkout rust/hostapd-rs/Cargo.toml`
+
+if [ $# -ne 1 ] || ([ "$1" != "libslirp-rs" ] && [ "$1" != "hostapd-rs" ]); then
+    echo "Must provide library name to update bindings i.e. libslirp-rs or hostapd-rs"
+    exit 1
+fi
 
 # Absolute path to tools/netsim using this scripts directory
 REPO_NETSIM=$(dirname $(readlink -f "$0"))/..
-CARGO_MANIFEST=$REPO_NETSIM/rust/libslirp-rs/Cargo.toml
+echo "REPO_NETSIM: ${REPO_NETSIM}"
+CARGO_MANIFEST=$REPO_NETSIM/rust/$1/Cargo.toml
 
 # Uncomment lines starting with `##`
 OS=$(uname | tr '[:upper:]' '[:lower:]')
@@ -60,7 +68,7 @@ export CARGO_HOME=$REPO_NETSIM/objs/rust/.cargo
 cd $REPO_NETSIM
 cargo build --manifest-path $CARGO_MANIFEST
 
-# Restore original Cargo.toml
+# Undo changed to Cargo.toml
 git checkout $CARGO_MANIFEST
 
 rm $REPO_NETSIM/rust/Cargo.lock

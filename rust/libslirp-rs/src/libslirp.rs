@@ -27,28 +27,61 @@ use crate::libslirp_config::SlirpConfigs;
 ///
 use crate::libslirp_sys;
 use bytes::Bytes;
+use core::sync::atomic::{AtomicUsize, Ordering};
+use lazy_static::lazy_static;
 use log::{debug, info, warn};
+use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::{mpsc, Mutex};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use std::time::Instant;
 
 // Uses a static to hold callback state instead of the libslirp's
 // opaque parameter to limit the number of unsafe regions.
 static CONTEXT: Mutex<CallbackContext> =
-    Mutex::new(CallbackContext { tx_bytes: None, pollFds: Vec::new() });
+    Mutex::new(CallbackContext { tx_bytes: None, tx_cmds: None, pollFds: Vec::new() });
+
+// Timers are managed across the ffi boundary using a unique usize ID
+// (TimerOpaque) and a hashmap rather than memory pointers to reduce
+// unsafe code.
+
+lazy_static! {
+    static ref TIMERS: Mutex<TimerManager> = Mutex::new(TimerManager {
+        clock: Instant::now(),
+        map: HashMap::new(),
+        timers: AtomicUsize::new(1),
+    });
+}
+
+type TimerOpaque = usize;
+
+struct TimerManager {
+    clock: Instant,
+    map: HashMap<TimerOpaque, Timer>,
+    timers: AtomicUsize,
+}
+
+#[derive(Clone)]
+struct Timer {
+    id: libslirp_sys::SlirpTimerId,
+    cb_opaque: usize,
+    expire_time: u64,
+}
 
 // The operations performed on the slirp thread
 
 enum SlirpCmd {
     Input(Bytes),
     PollResult(Vec<PollFd>, c_int),
+    TimerModified,
     Shutdown,
 }
 
 #[derive(Default)]
 struct CallbackContext {
     tx_bytes: Option<mpsc::Sender<Bytes>>,
+    tx_cmds: Option<mpsc::Sender<SlirpCmd>>,
     pollFds: Vec<PollFd>,
 }
 
@@ -59,6 +92,37 @@ type PollRequest = (Vec<PollFd>, u32);
 
 pub struct LibSlirp {
     tx_cmds: mpsc::Sender<SlirpCmd>,
+}
+
+impl TimerManager {
+    fn next_timer(&self) -> TimerOpaque {
+        self.timers.fetch_add(1, Ordering::SeqCst) as TimerOpaque
+    }
+
+    // Finds expired Timers, clears then clones them
+    fn collect_expired(&mut self) -> Vec<Timer> {
+        let now_ms = self.clock.elapsed().as_millis() as u64;
+        self.map
+            .iter_mut()
+            .filter(|(_, timer)| timer.expire_time < now_ms)
+            .map(|(_, &mut ref mut timer)| {
+                timer.expire_time = u64::MAX;
+                timer.clone()
+            })
+            .collect()
+    }
+
+    // Return the minimum duration until the next timer
+    fn min_duration(&self) -> Duration {
+        match self.map.iter().min_by_key(|(_, timer)| timer.expire_time) {
+            Some((_, &ref timer)) => {
+                let now_ms = self.clock.elapsed().as_millis() as u64;
+                // Duration is >= 0
+                Duration::from_millis(timer.expire_time.saturating_sub(now_ms))
+            }
+            None => Duration::from_millis(u64::MAX),
+        }
+    }
 }
 
 impl LibSlirp {
@@ -72,6 +136,8 @@ impl LibSlirp {
 
         let (tx_cmds, rx_cmds) = mpsc::channel::<SlirpCmd>();
         let (tx_poll, rx_poll) = mpsc::channel::<PollRequest>();
+
+        guard.tx_cmds = Some(tx_cmds.clone());
 
         // Create channels for polling thread and launch
         let tx_cmds_poll = tx_cmds.clone();
@@ -134,18 +200,35 @@ fn slirp_thread(
     };
 
     unsafe { slirp_pollfds_fill(slirp, &tx_poll) };
-    while let Ok(cmd) = rx.recv() {
+
+    let min_duration = TIMERS.lock().unwrap().min_duration();
+    while let cmd = rx.recv_timeout(min_duration) {
         match cmd {
-            SlirpCmd::PollResult(poll_fds, select_error) => {
+            Ok(SlirpCmd::PollResult(poll_fds, select_error)) => {
                 // SAFETY: we ensure that slirp is a valid state returned by `slirp_new()`
                 unsafe { slirp_pollfds_poll(slirp, select_error, poll_fds) };
                 unsafe { slirp_pollfds_fill(slirp, &tx_poll) };
             }
             // SAFETY: we ensure that slirp is a valid state returned by `slirp_new()`
-            SlirpCmd::Input(bytes) => unsafe { slirp_input(slirp, &bytes) },
+            Ok(SlirpCmd::Input(bytes)) => unsafe { slirp_input(slirp, &bytes) },
+
+            // A timer has been modified, new expired_time value
+            Ok(SlirpCmd::TimerModified) => continue,
 
             // Exit the while loop and shutdown
-            SlirpCmd::Shutdown => break,
+            Ok(SlirpCmd::Shutdown) => break,
+
+            // Timeout... process any timers
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+
+            // Error
+            _ => break,
+        }
+        // Callback any expired timers in the slirp thread...
+        for timer in TIMERS.lock().unwrap().collect_expired() {
+            unsafe {
+                libslirp_sys::slirp_handle_timer(slirp, timer.id, timer.cb_opaque as *mut c_void)
+            };
         }
     }
     // Shuts down the instance of a slirp stack and release slirp storage. No callbacks
@@ -398,37 +481,54 @@ unsafe extern "C" fn guest_error_cb(msg: *const c_char, _opaque: *mut c_void) {
     warn!("libslirp: {msg}");
 }
 
-extern "C" fn clock_get_ns_cb(_opaque: *mut std::os::raw::c_void) -> i64 {
-    // Get the elapsed time since the UNIX epoch
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as i64
+extern "C" fn clock_get_ns_cb(_opaque: *mut c_void) -> i64 {
+    TIMERS.lock().unwrap().clock.elapsed().as_nanos() as i64
 }
 
-extern "C" fn init_completed(_slirp: *mut libslirp_sys::Slirp, _opaque: *mut std::os::raw::c_void) {
+extern "C" fn init_completed(_slirp: *mut libslirp_sys::Slirp, _opaque: *mut c_void) {
     info!("libslirp: initialization completed.");
 }
 
+// Create a new timer
 extern "C" fn timer_new_opaque_cb(
-    _id: libslirp_sys::SlirpTimerId,
-    _cb_opaque: *mut ::std::os::raw::c_void,
-    _opaque: *mut ::std::os::raw::c_void,
-) -> *mut ::std::os::raw::c_void {
-    // TODO: Un-implemented because the function callback is only used by icmp.
-    std::ptr::null_mut()
+    id: libslirp_sys::SlirpTimerId,
+    cb_opaque: *mut c_void,
+    _opaque: *mut c_void,
+) -> *mut c_void {
+    let mut guard = TIMERS.lock().unwrap();
+    let timer = guard.next_timer();
+    debug!("timer_new_opaque {timer}");
+    guard.map.insert(timer, Timer { expire_time: u64::MAX, id, cb_opaque: cb_opaque as usize });
+    timer as *mut c_void
 }
 
 extern "C" fn timer_free_cb(
-    _timer: *mut ::std::os::raw::c_void,
+    timer: *mut ::std::os::raw::c_void,
     _opaque: *mut ::std::os::raw::c_void,
 ) {
-    // TODO: Un-implemented because the function callback is only used by icmp.
+    let timer = timer as TimerOpaque;
+    debug!("timer_free {timer}");
+    if TIMERS.lock().unwrap().map.remove(&timer).is_none() {
+        warn!("Unknown timer {timer}");
+    }
 }
 
 extern "C" fn timer_mod_cb(
-    _timer: *mut ::std::os::raw::c_void,
-    _expire_time: i64,
+    timer: *mut ::std::os::raw::c_void,
+    expire_time: i64,
     _opaque: *mut ::std::os::raw::c_void,
 ) {
-    // TODO: Un-implemented because the function callback is only used by icmp.
+    let timer_key = timer as TimerOpaque;
+    let now_ms = TIMERS.lock().unwrap().clock.elapsed().as_millis() as u64;
+    if let Some(&mut ref mut timer) = TIMERS.lock().unwrap().map.get_mut(&timer_key) {
+        // expire_time is > 0
+        timer.expire_time = std::cmp::max(expire_time, 0) as u64;
+        debug!("timer_mod {timer_key} expire_time: {}ms", timer.expire_time.saturating_sub(now_ms));
+    } else {
+        warn!("Unknown timer {timer_key}");
+    }
+    // Wake up slirp command thread to reset sleep duration
+    CONTEXT.lock().unwrap().tx_cmds.as_ref().map(|sender| sender.send(SlirpCmd::TimerModified));
 }
 
 extern "C" fn register_poll_fd_cb(

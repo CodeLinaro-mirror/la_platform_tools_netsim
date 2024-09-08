@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn test_from_proto_fails() {
         let proto = AdvertiseSettingsProto {
-            tx_power: Some(TxPowerProto::Dbm((std::i8::MAX as i32) + 1)),
+            tx_power: Some(TxPowerProto::Dbm((i8::MAX as i32) + 1)),
             ..Default::default()
         };
 

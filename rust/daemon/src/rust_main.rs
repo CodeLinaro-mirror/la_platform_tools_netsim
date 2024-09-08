@@ -286,7 +286,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
 
     // Start radio facades
     wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
-    wireless::wifi::wifi_start(&config.wifi);
+    wireless::wifi::wifi_start(&config.wifi, args.rust_slirp);
     wireless::uwb::uwb_start();
 
     // Create test beacons if required

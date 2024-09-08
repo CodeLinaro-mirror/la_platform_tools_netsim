@@ -269,6 +269,12 @@ impl Medium {
         }
     }
 
+    /// Handle Wi-Fi Ieee802.3 from network.
+    /// Convert to HwsimMsg and send to clients.
+    pub fn process_ieee8023_response(&self, _packet: &Bytes) {
+        todo!("Convert to HwsimMsg and send to clients.")
+    }
+
     /// Handle Wi-Fi MwsimMsg from libslirp and hostapd.
     /// Send it to clients.
     pub fn process_response(&self, packet: &Bytes) {

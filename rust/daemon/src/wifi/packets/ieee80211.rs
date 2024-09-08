@@ -20,6 +20,7 @@
 #![allow(unused)]
 include!(concat!(env!("OUT_DIR"), "/ieee80211_packets.rs"));
 
+use super::llc::LlcSnapHeader;
 use anyhow::anyhow;
 
 /// A Ieee80211 MAC address
@@ -157,6 +158,30 @@ impl Ieee80211 {
         }
     }
 
+    fn get_payload(&self) -> Vec<u8> {
+        match self.specialize().unwrap() {
+            Ieee80211Child::Ieee80211ToAp(hdr) => hdr.payload,
+            Ieee80211Child::Ieee80211FromAp(hdr) => hdr.payload,
+            Ieee80211Child::Ieee80211Ibss(hdr) => hdr.payload,
+            Ieee80211Child::Ieee80211Wds(hdr) => hdr.payload,
+            _ => panic!("unexpected specialized header"),
+        }
+    }
+
+    fn get_ethertype(&self) -> anyhow::Result<u16> {
+        if !self.is_data() {
+            return Err(anyhow!("Not an 802.2 LLC/SNAP frame"));
+        }
+
+        // Extract and validate LLC/SNAP header
+        let payload = self.get_payload();
+        if payload.len() < LlcSnapHeader::LEN {
+            return Err(anyhow!("Payload too short for LLC/SNAP header",));
+        }
+        let llc_snap_header = LlcSnapHeader::decode_full(&payload[..LlcSnapHeader::LEN])?;
+        Ok(llc_snap_header.ethertype().into())
+    }
+
     pub fn with_address(
         &self,
         source: Option<MacAddress>,
@@ -210,6 +235,28 @@ impl Ieee80211 {
                 self.to_ds
             )),
         }
+    }
+
+    // Convert to ieee802.3
+    pub fn to_ieee8023(&self) -> anyhow::Result<Vec<u8>> {
+        let ether_type = self.get_ethertype()?;
+
+        let dest_mac = self.get_destination().to_vec();
+        let src_mac = self.get_source().to_vec();
+        let payload = self.get_payload();
+
+        // Build 802.3 frame
+        let mut ethernet_frame = Vec::with_capacity(
+            dest_mac.len() + src_mac.len() + std::mem::size_of_val(&ether_type) + payload.len()
+                - LlcSnapHeader::LEN,
+        );
+        ethernet_frame.extend_from_slice(&dest_mac);
+        ethernet_frame.extend_from_slice(&src_mac);
+        // Add extracted EtherType
+        ethernet_frame.extend_from_slice(&ether_type.to_be_bytes());
+        // Actually data is after 802.2 LLC/SNAP header
+        ethernet_frame.extend_from_slice(&payload[LlcSnapHeader::LEN..]);
+        Ok(ethernet_frame)
     }
 }
 
@@ -287,9 +334,10 @@ pub fn parse_mac_address(s: &str) -> Option<MacAddress> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wifi::packets::llc::{LlcCtrl, LlcSap};
 
     #[test]
-    fn test_mad_address_to_vec() {
+    fn test_mac_address_to_vec() {
         let mac_address: MacAddress = parse_mac_address("00:0b:85:71:20:ce").unwrap();
         let mac_address_bytes = mac_address.to_vec();
         let reconstructed_mac_address = MacAddress::from(&mac_address_bytes);
@@ -456,5 +504,56 @@ mod tests {
     #[test]
     fn test_with_address_ibss() {
         test_with_address(create_test_ibss_ieee80211);
+    }
+
+    #[test]
+    fn test_to_ieee8023() {
+        let source = parse_mac_address("01:02:03:00:00:01").unwrap();
+        let destination = parse_mac_address("01:02:03:00:00:02").unwrap();
+        let bssid = parse_mac_address("00:13:10:85:fe:01").unwrap();
+
+        // Test Data (802.11 frame with LLC/SNAP)
+        let ieee80211: Ieee80211 = Ieee80211ToAp {
+            duration_id: 0,
+            ftype: FrameType::Data,
+            more_data: 0,
+            more_frags: 0,
+            order: 0,
+            pm: 0,
+            protected: 0,
+            retry: 0,
+            stype: 0,
+            version: 0,
+            bssid,
+            source,
+            destination,
+            seq_ctrl: 0,
+            payload: vec![
+                // LLC/SNAP Header
+                LlcSap::Snap as u8,
+                LlcSap::Snap as u8,
+                LlcCtrl::UiCmd as u8,
+                // OUI
+                0x00,
+                0x00,
+                0x00,
+                // EtherType
+                0x08,
+                0x00,
+            ],
+        }
+        .try_into()
+        .unwrap();
+
+        // Call the function under test
+        let result = ieee80211.to_ieee8023();
+        // Assert
+        assert!(result.is_ok());
+        let ethernet_frame = result.unwrap();
+
+        // Verify ethernet frame
+        assert_eq!(&ethernet_frame[0..6], destination.to_vec().as_slice()); // Destination MAC
+        assert_eq!(&ethernet_frame[6..12], source.to_vec().as_slice()); // Source MAC
+        assert_eq!(&ethernet_frame[12..14], [0x08, 0x00]); // EtherType
     }
 }
