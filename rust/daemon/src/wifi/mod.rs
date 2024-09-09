@@ -16,7 +16,9 @@
 // [cfg(not(test))] avoids getting compiled during local Rust unit tests
 
 pub(crate) mod frame;
+pub(crate) mod hostapd;
 pub(crate) mod hwsim_attr_set;
+pub(crate) mod libslirp;
 pub(crate) mod medium;
 pub(crate) mod packets;
 pub(crate) mod radiotap;

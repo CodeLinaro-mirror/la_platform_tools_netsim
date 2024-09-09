@@ -51,7 +51,8 @@ use anyhow::anyhow;
 use super::pcap_util::{append_record, append_record_pcapng, wrap_bt_packet, PacketDirection};
 use super::PCAP_MIME_TYPE;
 
-const CHUNK_LEN: usize = 1024;
+/// Max Chunk length of capture file during get_capture
+pub const CHUNK_LEN: usize = 1024;
 const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     enum_values_int: false,
     proto_field_name: false,
@@ -69,6 +70,27 @@ fn get_file(id: ChipIdentifier, device_name: String, chip_kind: ChipKind) -> Res
     filename.push("pcaps");
     filename.push(format!("netsim-{:?}-{:}-{:?}.{}", id, device_name, chip_kind, extension));
     File::open(filename)
+}
+
+/// Getting capture file of the provided ChipIdentifier
+pub fn get_capture(id: ChipIdentifier) -> anyhow::Result<File> {
+    let captures_arc = clone_captures();
+    let mut captures = captures_arc.write().unwrap();
+    let capture = captures
+        .get(id)
+        .ok_or(anyhow!("Cannot access Capture Resource"))?
+        .lock()
+        .map_err(|_| anyhow!("Failed to lock Capture"))?;
+
+    if capture.size == 0 {
+        return Err(anyhow!(
+            "Capture file not found for {:?}-{}-{:?}",
+            id,
+            capture.device_name,
+            capture.chip_kind
+        ));
+    }
+    Ok(get_file(id, capture.device_name.clone(), capture.chip_kind)?)
 }
 
 // TODO: GetCapture should return the information of the capture. Need to reconsider
@@ -119,8 +141,8 @@ fn handle_capture_get(writer: ResponseWritable, id: ChipIdentifier) -> anyhow::R
     Ok(())
 }
 
-/// Performs ListCapture to get the list of CaptureInfos and write to writer.
-fn handle_capture_list(writer: ResponseWritable) -> anyhow::Result<()> {
+/// List capture information of all chips
+pub fn list_capture() -> anyhow::Result<ListCaptureResponse> {
     let captures_arc = clone_captures();
     let captures = captures_arc.write().unwrap();
     // Instantiate ListCaptureResponse and add Captures
@@ -130,11 +152,34 @@ fn handle_capture_list(writer: ResponseWritable) -> anyhow::Result<()> {
             capture.lock().expect("Failed to acquire lock on CaptureInfo").get_capture_proto(),
         );
     }
+    Ok(response)
+}
+
+/// Performs ListCapture to get the list of CaptureInfos and write to writer.
+fn handle_capture_list(writer: ResponseWritable) -> anyhow::Result<()> {
+    let response = list_capture()?;
 
     // Perform protobuf-json-mapping with the given protobuf
     let json_response = print_to_string_with_options(&response, &JSON_PRINT_OPTION)
         .map_err(|e| anyhow!("proto to JSON mapping failure: {}", e))?;
     writer.put_ok("text/json", &json_response, vec![]);
+    Ok(())
+}
+
+/// Patch capture state of a chip with provided ChipIdentifier
+pub fn patch_capture(id: ChipIdentifier, state: bool) -> anyhow::Result<()> {
+    let captures_arc = clone_captures();
+    let mut captures = captures_arc.write().unwrap();
+    if let Some(mut capture) = captures
+        .get(id)
+        .map(|arc_capture| arc_capture.lock().expect("Failed to acquire lock on CaptureInfo"))
+    {
+        if state {
+            capture.start_capture()?;
+        } else {
+            capture.stop_capture();
+        }
+    }
     Ok(())
 }
 

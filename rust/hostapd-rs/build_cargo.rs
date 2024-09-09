@@ -28,7 +28,7 @@ pub fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let out_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
         .join("src")
-        .join("libslirp_sys")
+        .join("hostapd_sys")
         .join(target_os);
 
     std::fs::create_dir_all(&out_dir).expect("Failed to create output directory");

@@ -12,4 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod libslirp;
+pub mod libslirp_config;
 pub mod libslirp_sys;

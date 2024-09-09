@@ -31,3 +31,13 @@ pdl_gen(
   ieee80211_packets.rs
   LANG
   rust)
+
+pdl_gen(
+  NAME
+  LlcPackets_rs
+  INPUT
+  ${CMAKE_CURRENT_LIST_DIR}/llc.pdl
+  OUTPUT
+  llc_packets.rs
+  LANG
+  rust)

@@ -39,6 +39,7 @@ pub struct DeviceAdded {
     pub id: DeviceIdentifier,
     pub name: String,
     pub builtin: bool,
+    pub kind: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -171,9 +172,10 @@ mod tests {
         let events_clone = Arc::clone(&events);
         let rx = events_clone.lock().unwrap().subscribe();
         let handle = thread::spawn(move || match rx.recv() {
-            Ok(Event::DeviceAdded(DeviceAdded { id, name, builtin: false })) => {
+            Ok(Event::DeviceAdded(DeviceAdded { id, name, builtin: false, kind })) => {
                 assert_eq!(id.0, 123);
                 assert_eq!(name, "Device1");
+                assert_eq!(kind, "TestDevice")
             }
             _ => panic!("Unexpected event"),
         });
@@ -182,6 +184,7 @@ mod tests {
             id: DeviceIdentifier(123),
             name: "Device1".into(),
             builtin: false,
+            kind: "TestDevice".into(),
         }));
 
         // Wait for the other thread to process the message.
@@ -198,9 +201,10 @@ mod tests {
             let events_clone = Arc::clone(&events);
             let rx = events_clone.lock().unwrap().subscribe();
             let handle = thread::spawn(move || match rx.recv() {
-                Ok(Event::DeviceAdded(DeviceAdded { id, name, builtin: false })) => {
+                Ok(Event::DeviceAdded(DeviceAdded { id, name, builtin: false, kind })) => {
                     assert_eq!(id.0, 123);
                     assert_eq!(name, "Device1");
+                    assert_eq!(kind, "TestDevice");
                 }
                 _ => panic!("Unexpected event"),
             });
@@ -211,6 +215,7 @@ mod tests {
             id: DeviceIdentifier(123),
             name: "Device1".into(),
             builtin: false,
+            kind: "TestDevice".into(),
         }));
 
         // Wait for the other threads to process the message.
@@ -232,6 +237,7 @@ mod tests {
             id: DeviceIdentifier(123),
             name: "Device1".into(),
             builtin: false,
+            kind: "TestDevice".into(),
         }));
         assert_eq!(events.lock().unwrap().subscribers.len(), 0);
     }

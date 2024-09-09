@@ -15,13 +15,13 @@
 //! A module to collect and write session stats
 
 use crate::devices::devices_handler::get_radio_stats;
-use crate::events::{ChipRemoved, Event, ShutDown};
+use crate::events::{ChipRemoved, DeviceAdded, Event, ShutDown};
 use crate::version::get_version;
 use anyhow::Context;
 use log::error;
 use log::info;
 use netsim_common::system::netsimd_temp_dir;
-use netsim_proto::stats::NetsimStats;
+use netsim_proto::stats::{NetsimDeviceStats, NetsimStats};
 use protobuf_json_mapping::print_to_string;
 use std::fs::File;
 use std::io::Write;
@@ -101,7 +101,7 @@ impl Session {
                                 lock.current_device_count -= 1;
                             }
 
-                            Ok(Event::DeviceAdded(_)) => {
+                            Ok(Event::DeviceAdded(DeviceAdded { id, kind, .. })) => {
                                 // update the current_device_count and peak device usage
                                 lock.current_device_count += 1;
                                 let current_device_count = lock.current_device_count;
@@ -114,6 +114,11 @@ impl Session {
                                     lock.stats_proto
                                         .set_peak_concurrent_devices(current_device_count);
                                 }
+                                // Add added device's stats
+                                let mut device_stats = NetsimDeviceStats::new();
+                                device_stats.set_device_id(id.0);
+                                device_stats.set_kind(kind);
+                                lock.stats_proto.device_stats.push(device_stats);
                             }
 
                             Ok(Event::ChipRemoved(ChipRemoved {
@@ -171,7 +176,8 @@ impl Session {
 
         let lock = self.info.read().expect("Could not acquire session lock");
         if lock.write_json {
-            write_stats_to_json(lock.stats_proto.clone())?;
+            let current_stats = get_current_stats(lock.stats_proto.clone());
+            write_stats_to_json(current_stats)?;
         }
         Ok(())
     }

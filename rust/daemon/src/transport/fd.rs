@@ -184,7 +184,9 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
     let mut fd_vec: Vec<(i32, i32, ChipKindEnum, DeviceIdentifier, ChipIdentifier)> = Vec::new();
     let chip_count = startup_info.devices.iter().map(|d| d.chips.len()).sum();
     for (device_guid, device) in startup_info.devices.iter().enumerate() {
+        info!("Processing startup device {}", device_guid);
         for chip in &device.chips {
+            info!("Processing chip {:?}", chip);
             let chip_kind = match chip.kind {
                 ChipKindEnum::BLUETOOTH => ChipKind::BLUETOOTH,
                 ChipKindEnum::WIFI => ChipKind::WIFI,

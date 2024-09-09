@@ -23,5 +23,12 @@ path = "src/lib.rs"
 crate-type = ["staticlib","lib"]
 doctest = false
 
+[dependencies]
+bytes = { version = "1.4.0"}
+libc = "0.2"
+log = "0.4.17"
+lazy_static = "1.4.0"
+
+
 [build-dependencies]
 ##bindgen = "0.69.4"

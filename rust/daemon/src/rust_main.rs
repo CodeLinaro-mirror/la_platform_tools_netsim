@@ -209,7 +209,12 @@ fn disambiguate_args(args: &mut NetsimdArgs, config: &mut Config) {
 }
 
 fn run_netsimd_primary(mut args: NetsimdArgs) {
-    info!("Netsim Version: {}", get_version());
+    info!(
+        "Netsim Version: {}, OS: {}, Arch: {}",
+        get_version(),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
 
     let fd_startup_str = args.fd_startup_str.clone().unwrap_or_default();
     let instance_num = get_instance(args.instance);
@@ -286,7 +291,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
 
     // Start radio facades
     wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
-    wireless::wifi::wifi_start(&config.wifi);
+    wireless::wifi::wifi_start(&config.wifi, args.rust_slirp, args.rust_hostapd);
     wireless::uwb::uwb_start();
 
     // Create test beacons if required

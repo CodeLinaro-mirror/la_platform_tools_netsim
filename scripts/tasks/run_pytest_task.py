@@ -118,9 +118,5 @@ class RunPytestManager:
     # TODO: Resolve Windows PyTest failure
     if platform.system() != "Windows":
       cmd.append("--failures_as_errors")
-    # Attempt rerunning test to resolve flakiness due to b/343503670
-    if platform.system() == "Darwin" and platform.machine() == "arm64":
-      RunPytestManager._run_with_n_attempts(cmd, 3)
-    else:
-      run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
+    run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
     return True

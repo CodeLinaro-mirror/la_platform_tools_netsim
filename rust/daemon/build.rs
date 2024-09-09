@@ -20,10 +20,11 @@ fn main() {
     let _build = cxx_build::bridge("src/ffi.rs");
     println!("cargo:rerun-if-changed=src/ffi.rs");
 
-    let prebuilts: [[&str; 2]; 4] = [
+    let prebuilts: [[&str; 2]; 5] = [
         ["LINK_LAYER_PACKETS_PREBUILT", "link_layer_packets.rs"],
         ["MAC80211_HWSIM_PACKETS_PREBUILT", "mac80211_hwsim_packets.rs"],
         ["IEEE80211_PACKETS_PREBUILT", "ieee80211_packets.rs"],
+        ["LLC_PACKETS_PREBUILT", "llc_packets.rs"],
         ["NETLINK_PACKETS_PREBUILT", "netlink_packets.rs"],
     ];
 

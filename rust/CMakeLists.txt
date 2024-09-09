@@ -7,12 +7,14 @@ file(REMOVE ${CMAKE_CURRENT_LIST_DIR}/Cargo.lock)
 corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
 corrosion_set_env_vars(netsim-common CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(libslirp-rs CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(hostapd-rs CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(
   netsim-daemon
   LINK_LAYER_PACKETS_PREBUILT=${RootCanalGeneratedPackets_rs}
   NETLINK_PACKETS_PREBUILT=${NetlinkPackets_rs}
   MAC80211_HWSIM_PACKETS_PREBUILT=${Mac80211HwsimPackets_rs}
   IEEE80211_PACKETS_PREBUILT=${Ieee80211Packets_rs}
+  LLC_PACKETS_PREBUILT=${LlcPackets_rs}
   CARGO_HOME=${Rust_CARGO_HOME}
   GRPCIO_SYS_GRPC_INCLUDE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../../external/grpc/include"
 )
@@ -31,7 +33,8 @@ corrosion_set_env_vars(
 add_custom_target(
   netsim_rust_packets
   DEPENDS pdl_gen-RootCanalGeneratedPackets_rs pdl_gen-NetlinkPackets_rs
-          pdl_gen-Ieee80211Packets_rs pdl_gen-Mac80211HwsimPackets_rs)
+          pdl_gen-LlcPackets_rs pdl_gen-Ieee80211Packets_rs
+          pdl_gen-Mac80211HwsimPackets_rs)
 
 # Make sure we have the rust packets generated before we build them.
 add_dependencies(cargo-build_netsim-daemon netsim_rust_packets)
@@ -61,21 +64,10 @@ endif()
 
 add_subdirectory(proto)
 
-# Steps to generate protobuf -> rust files are as follows:
+# To re-generate Rust protobuf files, follow these steps:
 #
-# 1. Install protobuf for protoc binary.
-#
-# Linux: sudo apt-get install protobuf-compiler
-#
-# Mac: brew install protobuf
-#
-# 1. Uncomment the following lines in rust/proto/Cargo.toml. build =
-#    "build_cargo.rs" protobuf = "=3.2.0" protobuf-codegen = "3.2.0"
-# 2. export CARGO_HOME=$REPO_EMU/tools/netsim/objs/rust/.cargo
-# 3. cd $REPO_EMU/tools/netsim
-# 4. cargo build --manifest-path rust/proto/Cargo.toml
-# 5. git checkout rust/proto/Cargo.toml
-# 6. bash scripts/format_code.sh
+# 1. Read the file comments in scripts/proto_update.sh
+# 2. Execute `scripts/proto_update.sh`
 
 android_license(TARGET "netsim-daemon" LIBNAME None SPDX None LICENSE None
                 LOCAL None)
