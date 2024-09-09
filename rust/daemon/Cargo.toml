@@ -1,6 +1,6 @@
 [package]
 name = "netsim-daemon"
-version = "0.3.21"
+version = "0.3.22"
 edition = "2021"
 build = "build.rs"
 
@@ -20,6 +20,7 @@ netsim-proto = { path = "../proto" }
 http = "0.2.9"
 netsim-common = { path = "../common" }
 libslirp-rs = { path = "../libslirp-rs" }
+hostapd-rs = { path = "../hostapd-rs" }
 pica = { version = "0.1.9", default-features = false }
 protobuf = "3.2.0"
 protobuf-json-mapping = "3.2.0"

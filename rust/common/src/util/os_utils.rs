@@ -236,7 +236,7 @@ mod tests {
         std::env::set_var("TMPDIR", "/tmpdir");
         assert_eq!(get_discovery_directory(), PathBuf::from("/tmpdir"));
 
-        // Test netsim_ini_filepath
+        // Test get_netsim_ini_filepath
         assert_eq!(get_netsim_ini_filepath(1), PathBuf::from("/tmpdir/netsim.ini"));
         assert_eq!(get_netsim_ini_filepath(2), PathBuf::from("/tmpdir/netsim_2.ini"));
     }
