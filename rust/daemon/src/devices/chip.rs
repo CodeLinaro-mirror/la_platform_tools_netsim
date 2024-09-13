@@ -34,9 +34,9 @@ use std::time::Instant;
 
 use super::device::DeviceIdentifier;
 
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialOrd, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialOrd, PartialEq)]
 pub struct ChipIdentifier(pub u32);
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialOrd, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialOrd, PartialEq)]
 pub struct FacadeIdentifier(pub u32);
 
 impl fmt::Display for ChipIdentifier {
@@ -45,7 +45,19 @@ impl fmt::Display for ChipIdentifier {
     }
 }
 
+impl fmt::Debug for ChipIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl fmt::Display for FacadeIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl fmt::Debug for FacadeIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }

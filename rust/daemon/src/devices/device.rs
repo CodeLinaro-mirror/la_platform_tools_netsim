@@ -14,26 +14,29 @@
 
 // Device.rs
 
-use protobuf::Message;
-
 use crate::devices::chip;
 use crate::devices::chip::Chip;
 use crate::devices::chip::ChipIdentifier;
+use crate::devices::devices_handler::PoseManager;
 use crate::wireless::WirelessAdaptorImpl;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::Device as ProtoDevice;
-use netsim_proto::model::Orientation as ProtoOrientation;
-use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialOrd, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, Hash, Ord, PartialOrd, PartialEq)]
 pub struct DeviceIdentifier(pub u32);
 
 impl fmt::Display for DeviceIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl fmt::Debug for DeviceIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -44,8 +47,6 @@ pub struct Device {
     pub guid: String,
     pub name: String,
     pub visible: AtomicBool,
-    pub position: RwLock<ProtoPosition>,
-    pub orientation: RwLock<ProtoOrientation>,
     pub chips: RwLock<BTreeMap<ChipIdentifier, Arc<Chip>>>,
     pub builtin: bool,
     #[allow(dead_code)]
@@ -64,8 +65,6 @@ impl Device {
             guid: guid.into(),
             name: name.into(),
             visible: AtomicBool::new(true),
-            position: RwLock::new(ProtoPosition::new()),
-            orientation: RwLock::new(ProtoOrientation::new()),
             chips: RwLock::new(BTreeMap::new()),
             builtin,
             kind: kind.into(),
@@ -80,14 +79,13 @@ pub struct AddChipResult {
 }
 
 impl Device {
-    pub fn get(&self) -> Result<ProtoDevice, String> {
+    pub fn get(&self, pose_manager: Arc<PoseManager>) -> Result<ProtoDevice, String> {
         let mut device = ProtoDevice::new();
         device.id = self.id.0;
         device.name.clone_from(&self.name);
         device.visible = Some(self.visible.load(Ordering::SeqCst));
-        device.position = protobuf::MessageField::from(Some(self.position.read().unwrap().clone()));
-        device.orientation =
-            protobuf::MessageField::from(Some(self.orientation.read().unwrap().clone()));
+        device.position = protobuf::MessageField::from(pose_manager.get_position(&self.id));
+        device.orientation = protobuf::MessageField::from(pose_manager.get_orientation(&self.id));
         for chip in self.chips.read().unwrap().values() {
             device.chips.push(chip.get()?);
         }
@@ -95,15 +93,15 @@ impl Device {
     }
 
     /// Patch a device and its chips.
-    pub fn patch(&self, patch: &ProtoDevice) -> Result<(), String> {
+    pub fn patch(&self, patch: &ProtoDevice, pose_manager: Arc<PoseManager>) -> Result<(), String> {
         if patch.visible.is_some() {
             self.visible.store(patch.visible.unwrap(), Ordering::SeqCst);
         }
         if patch.position.is_some() {
-            self.position.write().unwrap().clone_from(&patch.position);
+            pose_manager.set_position(self.id, &patch.position);
         }
         if patch.orientation.is_some() {
-            self.orientation.write().unwrap().clone_from(&patch.orientation);
+            pose_manager.set_orientation(self.id, &patch.orientation);
         }
         // iterate over patched ProtoChip entries and patch matching chip
         for patch_chip in patch.chips.iter() {
@@ -218,8 +216,6 @@ impl Device {
     /// Reset a device to its default state.
     pub fn reset(&self) -> Result<(), String> {
         self.visible.store(true, Ordering::SeqCst);
-        self.position.write().unwrap().clear();
-        self.orientation.write().unwrap().clear();
         for chip in self.chips.read().unwrap().values() {
             chip.reset()?;
         }

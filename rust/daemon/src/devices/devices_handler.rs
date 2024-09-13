@@ -49,6 +49,7 @@ use netsim_proto::frontend::PatchDeviceRequest;
 use netsim_proto::frontend::SubscribeDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
 use netsim_proto::model::Device as ProtoDevice;
+use netsim_proto::model::Orientation as ProtoOrientation;
 use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::stats::NetsimRadioStats;
 use protobuf::well_known_types::timestamp::Timestamp;
@@ -58,12 +59,13 @@ use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string;
 use protobuf_json_mapping::print_to_string_with_options;
 use protobuf_json_mapping::PrintOptions;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -90,6 +92,54 @@ macro_rules! info_linux_arm {
             log::info!("[Thread: {} ({:?})] {}", thread_name, thread_id, format_args!($($arg)*));
         }
     };
+}
+
+static POSE_MANAGER: OnceLock<Arc<PoseManager>> = OnceLock::new();
+
+fn get_pose_manager() -> Arc<PoseManager> {
+    POSE_MANAGER.get_or_init(|| Arc::new(PoseManager::new())).clone()
+}
+
+pub struct PoseManager {
+    positions: RwLock<HashMap<DeviceIdentifier, ProtoPosition>>,
+    orientations: RwLock<HashMap<DeviceIdentifier, ProtoOrientation>>,
+}
+
+impl PoseManager {
+    pub fn new() -> Self {
+        PoseManager {
+            positions: RwLock::new(HashMap::new()),
+            orientations: RwLock::new(HashMap::new()),
+        }
+    }
+
+    pub fn add(&self, device_id: DeviceIdentifier) {
+        self.positions.write().unwrap().insert(device_id, ProtoPosition::new());
+        self.orientations.write().unwrap().insert(device_id, ProtoOrientation::new());
+    }
+
+    pub fn remove(&self, device_id: &DeviceIdentifier) {
+        self.positions.write().unwrap().remove(device_id);
+        self.orientations.write().unwrap().remove(device_id);
+    }
+
+    pub fn reset(&self, device_id: DeviceIdentifier) {
+        self.positions.write().unwrap().insert(device_id, ProtoPosition::new());
+        self.orientations.write().unwrap().insert(device_id, ProtoOrientation::new());
+    }
+
+    pub fn set_position(&self, device_id: DeviceIdentifier, position: &ProtoPosition) {
+        self.positions.write().unwrap().insert(device_id, position.clone());
+    }
+    pub fn get_position(&self, device_id: &DeviceIdentifier) -> Option<ProtoPosition> {
+        self.positions.read().unwrap().get(device_id).cloned()
+    }
+    pub fn set_orientation(&self, device_id: DeviceIdentifier, orientation: &ProtoOrientation) {
+        self.orientations.write().unwrap().insert(device_id, orientation.clone());
+    }
+    pub fn get_orientation(&self, device_id: &DeviceIdentifier) -> Option<ProtoOrientation> {
+        self.orientations.read().unwrap().get(device_id).cloned()
+    }
 }
 
 lazy_static! {
@@ -201,6 +251,7 @@ pub fn add_chip(
         None,
     );
     info_linux_arm!("Device {} retrieved/created: with ID {}", device_guid, device_id);
+    get_pose_manager().add(device_id);
 
     // Create
     let chip_id = chip::next_id();
@@ -354,7 +405,9 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
         guard.get(&device_id).ok_or(format!("RemoveChip device id {device_id} not found"))?;
     let radio_stats = device.remove_chip(&chip_id)?;
 
+    let mut device_id_to_remove = None;
     if device.chips.read().unwrap().is_empty() {
+        device_id_to_remove = Some(device_id);
         let device = guard
             .remove(&device_id)
             .ok_or(format!("RemoveChip device id {device_id} not found"))?;
@@ -368,6 +421,11 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
     let remaining_nonbuiltin_devices = guard.values().filter(|device| !device.builtin).count();
     info_linux_arm!("Releasing write lock on devices");
     drop(guard);
+
+    if let Some(device_id) = device_id_to_remove {
+        get_pose_manager().remove(&device_id);
+    }
+
     events::publish(Event::ChipRemoved(ChipRemoved {
         chip_id,
         device_id,
@@ -454,7 +512,7 @@ pub fn create_device(create_device_request: &CreateDeviceRequest) -> Result<Prot
     let manager = get_manager();
     let guard = manager.devices.read().unwrap();
     let device = guard.get(&device_id).expect("could not find test bluetooth beacon device");
-    let device_proto = device.get()?;
+    let device_proto = device.get(get_pose_manager())?;
     Ok(device_proto)
 }
 
@@ -468,7 +526,7 @@ pub fn patch_device(
     match id_option {
         Some(id) => match manager.devices.read().unwrap().get(&id) {
             Some(device) => {
-                let result = device.patch(&proto_device);
+                let result = device.patch(&proto_device, get_pose_manager());
                 let name = device.name.clone();
                 if result.is_ok() {
                     // Update last modified timestamp for manager
@@ -488,7 +546,7 @@ pub fn patch_device(
             for device in devices.values() {
                 if device.name.contains(&proto_device.name) {
                     if device.name == proto_device.name {
-                        let result = device.patch(&proto_device);
+                        let result = device.patch(&proto_device, get_pose_manager());
                         let id = device.id;
                         let name = device.name.clone();
                         if result.is_ok() {
@@ -512,7 +570,7 @@ pub fn patch_device(
             }
             match target {
                 Some(device) => {
-                    let result = device.patch(&proto_device);
+                    let result = device.patch(&proto_device, get_pose_manager());
                     let id = device.id;
                     let name = device.name.clone();
                     if result.is_ok() {
@@ -553,31 +611,14 @@ fn get_distance(id: &ChipIdentifier, other_id: &ChipIdentifier) -> Result<f32, S
     let other_device_id = crate::devices::chip::get_chip(other_id)
         .ok_or(format!("No such device with chip_id {other_id}"))?
         .device_id;
-    let manager = get_manager();
-    info_linux_arm!(
-        "Acquiring read lock on devices. Try lock result: {}",
-        manager.devices.try_read().is_ok()
-    );
-    let a = manager
-        .devices
-        .read()
-        .unwrap()
-        .get(&device_id)
-        .map(|device_ref| device_ref.position.read().unwrap().clone())
-        .ok_or(format!("No such device with id {id}"))?;
-    info_linux_arm!("Released read lock");
-    info_linux_arm!(
-        "Acquiring read lock on devices. Try lock result: {}",
-        manager.devices.try_read().is_ok()
-    );
-    let b = manager
-        .devices
-        .read()
-        .unwrap()
-        .get(&other_device_id)
-        .map(|device_ref| device_ref.position.read().unwrap().clone())
-        .ok_or(format!("No such device with id {other_id}"))?;
-    info_linux_arm!("Released read lock");
+
+    let pose_manager = get_pose_manager();
+    let a = pose_manager
+        .get_position(&device_id)
+        .ok_or(format!("no position for device {device_id}"))?;
+    let b = pose_manager
+        .get_position(&other_device_id)
+        .ok_or(format!("no position for device {other_device_id}"))?;
     Ok(distance(&a, &b))
 }
 
@@ -605,7 +646,7 @@ pub fn get_device(chip_id: &ChipIdentifier) -> anyhow::Result<netsim_proto::mode
     let res = guard
         .get(&device_id)
         .ok_or(anyhow::anyhow!("Can't find device for device_id: {device_id}"))?
-        .get()
+        .get(get_pose_manager())
         .map_err(|e| anyhow::anyhow!("{e:?}"));
     drop(guard);
     info_linux_arm!("Released read lock");
@@ -615,11 +656,16 @@ pub fn get_device(chip_id: &ChipIdentifier) -> anyhow::Result<netsim_proto::mode
 pub fn reset_all() -> Result<(), String> {
     let manager = get_manager();
     // Perform reset for all manager
+    let mut device_ids = Vec::new();
     info_linux_arm!("Acquiring read lock on devices");
     for device in manager.devices.read().unwrap().values() {
         device.reset()?;
+        device_ids.push(device.id);
     }
     info_linux_arm!("Released read lock");
+    for device_id in device_ids {
+        get_pose_manager().reset(device_id);
+    }
     // Update last modified timestamp for manager
     manager.update_timestamp();
     events::publish(Event::DeviceReset);
@@ -673,7 +719,7 @@ pub fn list_device() -> anyhow::Result<ListDeviceResponse, String> {
 
     info_linux_arm!("Acquiring read lock on devices");
     for device in manager.devices.read().unwrap().values() {
-        if let Ok(device_proto) = device.get() {
+        if let Ok(device_proto) = device.get(get_pose_manager()) {
             response.devices.push(device_proto);
         }
     }
@@ -1043,6 +1089,7 @@ mod tests {
 
     fn reset(id: DeviceIdentifier) -> Result<(), String> {
         let manager = get_manager();
+        get_pose_manager().reset(id);
         info_linux_arm!("Acquiring write lock on devices");
         let mut devices = manager.devices.write().unwrap();
         let res = match devices.get_mut(&id) {
@@ -1267,13 +1314,25 @@ mod tests {
         patch_device_json(Some(chip_result.device_id), patch_json.as_str()).unwrap();
         match get_manager().devices.read().unwrap().get(&chip_result.device_id) {
             Some(device) => {
-                assert_eq!(device.position.read().unwrap().x, request_position.x);
-                assert_eq!(device.position.read().unwrap().y, request_position.y);
-                assert_eq!(device.position.read().unwrap().z, request_position.z);
-                assert_eq!(device.orientation.read().unwrap().yaw, request_orientation.yaw);
-                assert_eq!(device.orientation.read().unwrap().pitch, request_orientation.pitch);
-                assert_eq!(device.orientation.read().unwrap().roll, request_orientation.roll);
                 assert!(!device.visible.load(Ordering::SeqCst));
+            }
+            None => unreachable!(),
+        }
+
+        match get_pose_manager().get_position(&chip_result.device_id) {
+            Some(position) => {
+                assert_eq!(position.x, request_position.x);
+                assert_eq!(position.y, request_position.y);
+                assert_eq!(position.z, request_position.z);
+            }
+            None => unreachable!(),
+        }
+
+        match get_pose_manager().get_orientation(&chip_result.device_id) {
+            Some(orientation) => {
+                assert_eq!(orientation.yaw, request_orientation.yaw);
+                assert_eq!(orientation.pitch, request_orientation.pitch);
+                assert_eq!(orientation.roll, request_orientation.roll);
             }
             None => unreachable!(),
         }
@@ -1399,22 +1458,47 @@ mod tests {
         .unwrap();
         match get_manager().devices.read().unwrap().get(&chip_result.device_id) {
             Some(device) => {
-                assert_eq!(device.position.read().unwrap().x, 10.0);
-                assert_eq!(device.orientation.read().unwrap().yaw, 1.0);
                 assert!(!device.visible.load(Ordering::SeqCst));
             }
             None => unreachable!(),
         }
+
+        match get_pose_manager().get_position(&chip_result.device_id) {
+            Some(position) => {
+                assert_eq!(position.x, 10.0);
+            }
+            None => unreachable!(),
+        }
+
+        match get_pose_manager().get_orientation(&chip_result.device_id) {
+            Some(orientation) => {
+                assert_eq!(orientation.yaw, 1.0);
+            }
+            None => unreachable!(),
+        }
+
         reset(chip_result.device_id).unwrap();
         match get_manager().devices.read().unwrap().get(&chip_result.device_id) {
             Some(device) => {
-                assert_eq!(device.position.read().unwrap().x, 0.0);
-                assert_eq!(device.position.read().unwrap().y, 0.0);
-                assert_eq!(device.position.read().unwrap().z, 0.0);
-                assert_eq!(device.orientation.read().unwrap().yaw, 0.0);
-                assert_eq!(device.orientation.read().unwrap().pitch, 0.0);
-                assert_eq!(device.orientation.read().unwrap().roll, 0.0);
                 assert!(device.visible.load(Ordering::SeqCst));
+            }
+            None => unreachable!(),
+        }
+
+        match get_pose_manager().get_position(&chip_result.device_id) {
+            Some(position) => {
+                assert_eq!(position.x, 0.0);
+                assert_eq!(position.y, 0.0);
+                assert_eq!(position.z, 0.0);
+            }
+            None => unreachable!(),
+        }
+
+        match get_pose_manager().get_orientation(&chip_result.device_id) {
+            Some(orientation) => {
+                assert_eq!(orientation.yaw, 0.0);
+                assert_eq!(orientation.pitch, 0.0);
+                assert_eq!(orientation.roll, 0.0);
             }
             None => unreachable!(),
         }
@@ -1665,22 +1749,25 @@ mod tests {
         let device = devices
             .get_mut(&DeviceIdentifier(device_proto.id))
             .expect("could not find test bluetooth beacon device");
-        let patch_result = device.patch(&DeviceProto {
-            name: device_proto.name.clone(),
-            id: device_proto.id,
-            chips: vec![ChipProto {
-                name: request.device.chips[0].name.clone(),
-                kind: EnumOrUnknown::new(ProtoChipKind::BLUETOOTH_BEACON),
-                chip: Some(Chip::BleBeacon(BleBeacon {
-                    bt: MessageField::some(Default::default()),
+        let patch_result = device.patch(
+            &DeviceProto {
+                name: device_proto.name.clone(),
+                id: device_proto.id,
+                chips: vec![ChipProto {
+                    name: request.device.chips[0].name.clone(),
+                    kind: EnumOrUnknown::new(ProtoChipKind::BLUETOOTH_BEACON),
+                    chip: Some(Chip::BleBeacon(BleBeacon {
+                        bt: MessageField::some(Default::default()),
+                        ..Default::default()
+                    })),
                     ..Default::default()
-                })),
+                }],
                 ..Default::default()
-            }],
-            ..Default::default()
-        });
+            },
+            get_pose_manager(),
+        );
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
-        let patched_device = device.get();
+        let patched_device = device.get(get_pose_manager());
         assert!(patched_device.is_ok(), "{}", patched_device.unwrap_err());
         let patched_device = patched_device.unwrap();
         assert_eq!(1, patched_device.chips.len());
