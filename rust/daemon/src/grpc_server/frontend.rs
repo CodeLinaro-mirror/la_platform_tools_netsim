@@ -182,4 +182,40 @@ impl FrontendService for FrontendClient {
         .map(|_| ());
         ctx.spawn(f)
     }
+
+    fn create_device(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: netsim_proto::frontend::CreateDeviceRequest,
+        sink: ::grpcio::UnarySink<netsim_proto::frontend::CreateDeviceResponse>,
+    ) {
+        let response = match devices_handler::create_device(&req) {
+            Ok(device_proto) => sink.success(netsim_proto::frontend::CreateDeviceResponse {
+                device: protobuf::MessageField::some(device_proto),
+                ..Default::default()
+            }),
+            Err(e) => {
+                warn!("failed to create chip: {}", e);
+                sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
+            }
+        };
+        ctx.spawn(response.map_err(move |e| warn!("client error: {:?}", e)).map(|_| ()))
+    }
+
+    fn delete_chip(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: netsim_proto::frontend::DeleteChipRequest,
+        sink: ::grpcio::UnarySink<Empty>,
+    ) {
+        let response = match devices_handler::delete_chip(&req) {
+            Ok(()) => sink.success(Empty::new()),
+            Err(e) => {
+                warn!("failed to delete chip: {}", e);
+                sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
+            }
+        };
+
+        ctx.spawn(response.map_err(move |e| warn!("client error: {:?}", e)).map(|_| ()))
+    }
 }

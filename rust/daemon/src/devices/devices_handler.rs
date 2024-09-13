@@ -48,6 +48,7 @@ use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
 use netsim_proto::frontend::SubscribeDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
+use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::stats::NetsimRadioStats;
 use protobuf::well_known_types::timestamp::Timestamp;
@@ -378,15 +379,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
     Ok(())
 }
 
-pub fn delete_chip(delete_json: &str) -> Result<(), String> {
-    let mut request = DeleteChipRequest::new();
-    if merge_from_str(&mut request, delete_json).is_err() {
-        return Err(format!(
-            "failed to delete chip: incorrectly formatted delete json: {}",
-            delete_json
-        ));
-    };
-
+pub fn delete_chip(request: &DeleteChipRequest) -> Result<(), String> {
     let chip_id = ChipIdentifier(request.id);
 
     info_linux_arm!("Acquiring read lock on devices");
@@ -409,19 +402,11 @@ pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
     let _ = remove_chip(DeviceIdentifier(device_id), ChipIdentifier(chip_id));
 }
 
-/// Create a device from a CreateDeviceRequest json.
+/// Create a device from a CreateDeviceRequest.
 /// Uses a default name if none is provided.
 /// Returns an error if the device already exists.
-pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
-    let mut create_device_request = CreateDeviceRequest::new();
-    if merge_from_str(&mut create_device_request, create_json).is_err() {
-        return Err(format!(
-            "failed to create device: incorrectly formatted create json: {}",
-            create_json
-        ));
-    }
-
-    let new_device = create_device_request.device;
+pub fn create_device(create_device_request: &CreateDeviceRequest) -> Result<ProtoDevice, String> {
+    let new_device = &create_device_request.device;
     let manager = get_manager();
     // Check if specified device name is already mapped.
     info_linux_arm!("Acquiring read lock on devices");
@@ -466,7 +451,11 @@ pub fn create_device(create_json: &str) -> Result<DeviceIdentifier, String> {
         .map(|_| ())
     })?;
 
-    Ok(device_id)
+    let manager = get_manager();
+    let guard = manager.devices.read().unwrap();
+    let device = guard.get(&device_id).expect("could not find test bluetooth beacon device");
+    let device_proto = device.get()?;
+    Ok(device_proto)
 }
 
 // lock the devices, find the id and call the patch function
@@ -640,23 +629,16 @@ pub fn reset_all() -> Result<(), String> {
 fn handle_device_create(writer: ResponseWritable, create_json: &str) {
     let mut response = CreateDeviceResponse::new();
 
-    let mut collate_results = || {
-        let id = create_device(create_json)?;
-
-        info_linux_arm!("Acquiring read lock on devices");
-        let device_proto = get_manager()
-            .devices
-            .read()
-            .unwrap()
-            .get(&id)
-            .ok_or("failed to create device")?
-            .get()?;
-        info_linux_arm!("Released read lock");
+    let mut get_result = || {
+        let mut create_device_request = CreateDeviceRequest::new();
+        merge_from_str(&mut create_device_request, create_json)
+            .map_err(|_| format!("create device: invalid json: {}", create_json))?;
+        let device_proto = create_device(&create_device_request)?;
         response.device = MessageField::some(device_proto);
         print_to_string(&response).map_err(|_| String::from("failed to convert device to json"))
     };
 
-    match collate_results() {
+    match get_result() {
         Ok(response) => writer.put_ok("text/json", &response, vec![]),
         Err(err) => writer.put_error(404, err.as_str()),
     }
@@ -671,7 +653,14 @@ fn handle_device_patch(writer: ResponseWritable, id: Option<DeviceIdentifier>, p
 }
 
 fn handle_chip_delete(writer: ResponseWritable, delete_json: &str) {
-    match delete_chip(delete_json) {
+    let get_result = || {
+        let mut delete_chip_request = DeleteChipRequest::new();
+        merge_from_str(&mut delete_chip_request, delete_json)
+            .map_err(|_| format!("delete chip: invalid json: {}", delete_json))?;
+        delete_chip(&delete_chip_request)
+    };
+
+    match get_result() {
         Ok(()) => writer.put_ok("text/plain", "Chip Delete Success", vec![]),
         Err(err) => writer.put_error(404, err.as_str()),
     }
@@ -1567,17 +1556,6 @@ mod tests {
         CreateDeviceRequest { device: MessageField::some(device_proto), ..Default::default() }
     }
 
-    fn get_device_proto(id: DeviceIdentifier) -> DeviceProto {
-        let manager = get_manager();
-        let devices = manager.devices.read().unwrap();
-        let device = devices.get(&id).expect("could not find test bluetooth beacon device");
-
-        let device_proto = device.get();
-        assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
-
-        device_proto.unwrap()
-    }
-
     #[test]
     fn test_create_device_succeeds() {
         logger_setup();
@@ -1587,11 +1565,9 @@ mod tests {
             thread::current().id()
         )));
 
-        let id = create_device(&print_to_string(&request).unwrap());
-        assert!(id.is_ok(), "{}", id.unwrap_err());
-        let id = id.unwrap();
-
-        let device_proto = get_device_proto(id);
+        let device_proto = create_device(&request);
+        assert!(device_proto.is_ok());
+        let device_proto = device_proto.unwrap();
         assert_eq!(request.device.name, device_proto.name);
         assert_eq!(1, device_proto.chips.len());
         assert_eq!(request.device.chips[0].name, device_proto.chips[0].name);
@@ -1606,8 +1582,8 @@ mod tests {
             ..Default::default()
         };
 
-        let id = create_device(&print_to_string(&request).unwrap());
-        assert!(id.is_err(), "{}", id.unwrap());
+        let device_proto = create_device(&request);
+        assert!(device_proto.is_err(), "{}", device_proto.unwrap());
     }
 
     #[test]
@@ -1622,8 +1598,8 @@ mod tests {
             ..Default::default()
         };
 
-        let id = create_device(&print_to_string(&request).unwrap());
-        assert!(id.is_err(), "{}", id.unwrap());
+        let device_proto = create_device(&request);
+        assert!(device_proto.is_err(), "{}", device_proto.unwrap());
     }
 
     #[test]
@@ -1635,11 +1611,9 @@ mod tests {
             thread::current().id()
         )));
 
-        let id = create_device(&print_to_string(&request).unwrap());
-        assert!(id.is_ok(), "{}", id.unwrap_err());
-        let id = id.unwrap();
-
-        let device_proto = get_device_proto(id);
+        let device_proto = create_device(&request);
+        assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
+        let device_proto = device_proto.unwrap();
         assert_eq!(1, device_proto.chips.len());
         assert!(device_proto.chips[0].chip.is_some());
         assert!(matches!(device_proto.chips[0].chip, Some(Chip::BleBeacon(_))));
@@ -1651,12 +1625,10 @@ mod tests {
 
         let request = get_test_create_device_request(None);
 
-        let id = create_device(&print_to_string(&request).unwrap());
-        assert!(id.is_ok(), "{}", id.unwrap_err());
-        let id = id.unwrap();
-
-        let device_proto = get_device_proto(id);
-        assert_eq!(format!("device-{id}"), device_proto.name);
+        let device_proto = create_device(&request);
+        assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
+        let device_proto = device_proto.unwrap();
+        assert_eq!(format!("device-{}", device_proto.id), device_proto.name);
     }
 
     #[test]
@@ -1668,14 +1640,12 @@ mod tests {
             thread::current().id()
         )));
 
-        let request_json = print_to_string(&request).unwrap();
-
-        let id = create_device(&request_json);
-        assert!(id.is_ok(), "{}", id.unwrap_err());
+        let device_proto = create_device(&request);
+        assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
 
         // Attempt to create the device again. This should fail because the devices have the same name.
-        let id = create_device(&request_json);
-        assert!(id.is_err());
+        let device_proto = create_device(&request);
+        assert!(device_proto.is_err());
     }
 
     #[test]
@@ -1687,22 +1657,17 @@ mod tests {
             thread::current().id()
         )));
 
-        let id = create_device(&print_to_string(&request).unwrap());
-        assert!(id.is_ok(), "{}", id.unwrap_err());
-        let id = id.unwrap();
-
-        let manager = get_manager();
-        let mut devices = manager.devices.write().unwrap();
-
-        let device = devices.get_mut(&id).expect("could not find test bluetooth beacon device");
-
-        let device_proto = device.get();
+        let device_proto = create_device(&request);
         assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
         let device_proto = device_proto.unwrap();
-
+        let manager = get_manager();
+        let mut devices = manager.devices.write().unwrap();
+        let device = devices
+            .get_mut(&DeviceIdentifier(device_proto.id))
+            .expect("could not find test bluetooth beacon device");
         let patch_result = device.patch(&DeviceProto {
             name: device_proto.name.clone(),
-            id: id.0,
+            id: device_proto.id,
             chips: vec![ChipProto {
                 name: request.device.chips[0].name.clone(),
                 kind: EnumOrUnknown::new(ProtoChipKind::BLUETOOTH_BEACON),
@@ -1715,7 +1680,6 @@ mod tests {
             ..Default::default()
         });
         assert!(patch_result.is_ok(), "{}", patch_result.unwrap_err());
-
         let patched_device = device.get();
         assert!(patched_device.is_ok(), "{}", patched_device.unwrap_err());
         let patched_device = patched_device.unwrap();
@@ -1728,23 +1692,27 @@ mod tests {
         logger_setup();
 
         let create_request = get_test_create_device_request(None);
-        let device_id = create_device(&print_to_string(&create_request).unwrap());
-        assert!(device_id.is_ok(), "{}", device_id.unwrap_err());
+        let device_proto = create_device(&create_request);
+        assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
 
-        let device_id = device_id.unwrap();
+        let device_proto = device_proto.unwrap();
         let chip_id = {
             let manager = get_manager();
             let devices = manager.devices.read().unwrap();
-            let device = devices.get(&device_id).unwrap();
+            let device = devices.get(&DeviceIdentifier(device_proto.id)).unwrap();
             let chips = device.chips.read().unwrap();
             chips.first_key_value().map(|(id, _)| *id).unwrap()
         };
 
         let delete_request = DeleteChipRequest { id: chip_id.0, ..Default::default() };
-        let delete_result = delete_chip(&print_to_string(&delete_request).unwrap());
+        let delete_result = delete_chip(&delete_request);
         assert!(delete_result.is_ok(), "{}", delete_result.unwrap_err());
 
-        assert!(!get_manager().devices.read().unwrap().contains_key(&device_id))
+        assert!(!get_manager()
+            .devices
+            .read()
+            .unwrap()
+            .contains_key(&DeviceIdentifier(device_proto.id)))
     }
 
     #[test]
@@ -1752,15 +1720,15 @@ mod tests {
         logger_setup();
 
         let create_request = get_test_create_device_request(None);
-        let device_id = create_device(&print_to_string(&create_request).unwrap());
-        assert!(device_id.is_ok(), "{}", device_id.unwrap_err());
+        let device_proto = create_device(&create_request);
+        assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
 
-        let device_id = device_id.unwrap();
+        let device_proto = device_proto.unwrap();
         let chip_id = get_manager()
             .devices
             .read()
             .unwrap()
-            .get(&device_id)
+            .get(&DeviceIdentifier(device_proto.id))
             .unwrap()
             .chips
             .read()
@@ -1770,10 +1738,10 @@ mod tests {
             .unwrap();
 
         let delete_request = DeleteChipRequest { id: chip_id.0, ..Default::default() };
-        let delete_result = delete_chip(&print_to_string(&delete_request).unwrap());
+        let delete_result = delete_chip(&delete_request);
         assert!(delete_result.is_ok(), "{}", delete_result.unwrap_err());
 
-        let delete_result = delete_chip(&print_to_string(&delete_request).unwrap());
+        let delete_result = delete_chip(&delete_request);
         assert!(delete_result.is_err());
     }
 
