@@ -15,12 +15,12 @@
 # limitations under the License.
 
 
-from distutils.spawn import find_executable
 import itertools
 import logging
 import os
 from pathlib import Path
 import platform
+import shutil
 import socket
 from environment import get_default_environment
 from utils import AOSP_ROOT, run
@@ -67,7 +67,7 @@ class ServerConfig(object):
         "sccache",
         f"{self.target}-x86_64",
     ).absolute()
-    self.sccache = find_executable("sccache", str(search_dir))
+    self.sccache = shutil.which("sccache", path=search_dir)
 
   def get_env(self):
     return self.env
