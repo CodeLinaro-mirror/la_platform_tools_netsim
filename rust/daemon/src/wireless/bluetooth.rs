@@ -93,6 +93,7 @@ impl WirelessAdaptor for Bluetooth {
     fn handle_request(&self, packet: &Bytes) {
         // Lock to protect device_to_transport_ table in C++
         let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
+        info_linux_arm!("Handle bluetooth request: {:?}", packet);
         ffi_bluetooth::handle_bt_request(self.rootcanal_id, packet[0], &packet[1..].to_vec())
     }
 
@@ -143,18 +144,15 @@ impl WirelessAdaptor for Bluetooth {
         // Construct NetsimRadioStats for BLE and Classic.
         let mut ble_stats_proto = ProtoRadioStats::new();
         ble_stats_proto.set_duration_secs(duration_secs);
-        info_linux_arm!("Acquiring BLUETOOTH_INVALID_PACKETS lock");
         if let Some(v) = BLUETOOTH_INVALID_PACKETS
             .lock()
             .expect("Failed to acquire lock on BLUETOOTH_INVALID_PACKETS")
             .get(&self.rootcanal_id)
         {
-            info_linux_arm!("invalid packet ");
             for invalid_packet in v {
                 ble_stats_proto.invalid_packets.push(invalid_packet.clone());
             }
         }
-        info_linux_arm!("Released BLUETOOTH_INVALID_PACKETS lock");
         let mut classic_stats_proto = ble_stats_proto.clone();
 
         // Obtain the Chip Information with get()

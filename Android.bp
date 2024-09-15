@@ -79,8 +79,6 @@ rust_defaults {
         "libprotobuf_json_mapping",
         "librand",
         "libregex",
-        "libserde",
-        "libserde_json",
         "libthiserror",
         "libtokio",
         "libtokio_stream",

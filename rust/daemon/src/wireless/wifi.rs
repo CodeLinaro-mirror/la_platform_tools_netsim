@@ -74,9 +74,9 @@ impl WifiManager {
         rx_response: mpsc::Receiver<Bytes>,
         rx_ieee8023_response: mpsc::Receiver<Bytes>,
     ) -> anyhow::Result<()> {
-        let _ = self.start_request_thread(rx_request);
-        let _ = self.start_response_thread(rx_response);
-        let _ = self.start_ieee8023_response_thread(rx_ieee8023_response);
+        self.start_request_thread(rx_request)?;
+        self.start_response_thread(rx_response)?;
+        self.start_ieee8023_response_thread(rx_ieee8023_response)?;
         Ok(())
     }
 
@@ -120,7 +120,7 @@ impl WifiManager {
                                             .expect("slirp initialized")
                                             .input(ethernet_frame.into()),
                                         Err(err) => {
-                                            warn!("Failed to convert 802.11 to 802.3: {:?}", err)
+                                            warn!("Failed to convert 802.11 to 802.3: {}", err)
                                         }
                                     }
                                 } else {
