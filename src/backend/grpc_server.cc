@@ -100,10 +100,17 @@ class ServiceImpl final : public packet::PacketStreamer::Service {
                                         message_vec.size())) {
       BtsLogError("Failed to serialize bt_properties to bytes");
     }
-
+    auto device_info = request.initial_info().device_info();
+    auto kind = device_info.kind();
+    auto version = device_info.version();
+    auto sdk_version = device_info.sdk_version();
+    auto build_id = device_info.build_id();
+    auto variant = device_info.variant();
+    auto arch = device_info.arch();
     auto result = netsim::device::AddChipCxx(
         peer, device_name, chip_kind_string, chip_address, chip_name,
-        manufacturer, product_name, message_vec);
+        manufacturer, product_name, message_vec, kind, version, sdk_version,
+        build_id, variant, arch);
     if (result->IsError()) {
       return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT,
                             "AddChipCxx failed to add chip into netsim");

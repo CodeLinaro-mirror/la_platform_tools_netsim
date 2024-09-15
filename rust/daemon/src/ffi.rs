@@ -310,6 +310,12 @@ pub mod ffi_devices {
             chip_manufacturer: &str,
             chip_product_name: &str,
             bt_properties: &CxxVector<u8>,
+            kind: &str,
+            version: &str,
+            sdk_version: &str,
+            build_id: &str,
+            variant: &str,
+            arch: &str,
         ) -> Box<AddChipResultCxx>;
 
         #[cxx_name = RemoveChipCxx]

@@ -367,13 +367,6 @@ impl Medium {
 
     /// Determine the client id based on Ieee80211 destination and send to client.
     fn send_response(&self, packet: &Bytes) -> anyhow::Result<()> {
-        // When Wi-Fi P2P is disabled, send all packets from WifiService to all clients.
-        if crate::config::get_disable_wifi_p2p() {
-            for client_id in self.clients.read().unwrap().keys() {
-                (self.callback)(*client_id, packet);
-            }
-            return Ok(());
-        }
         let hwsim_msg = HwsimMsg::decode_full(packet)?;
         let hwsim_cmd = hwsim_msg.hwsim_hdr.hwsim_cmd;
         match hwsim_cmd {

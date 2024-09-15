@@ -49,8 +49,6 @@ pub struct Device {
     pub visible: AtomicBool,
     pub chips: RwLock<BTreeMap<ChipIdentifier, Arc<Chip>>>,
     pub builtin: bool,
-    #[allow(dead_code)]
-    pub kind: String,
 }
 impl Device {
     pub fn new(
@@ -58,7 +56,6 @@ impl Device {
         guid: impl Into<String>,
         name: impl Into<String>,
         builtin: bool,
-        kind: impl Into<String>,
     ) -> Self {
         Device {
             id,
@@ -67,7 +64,6 @@ impl Device {
             visible: AtomicBool::new(true),
             chips: RwLock::new(BTreeMap::new()),
             builtin,
-            kind: kind.into(),
         }
     }
 }
@@ -235,8 +231,7 @@ mod tests {
     static IDS: AtomicU32 = AtomicU32::new(1000);
 
     fn create_test_device() -> Result<Device, String> {
-        let mut device =
-            Device::new(DeviceIdentifier(0), "0", TEST_DEVICE_NAME, false, "TestDevice");
+        let mut device = Device::new(DeviceIdentifier(0), "0", TEST_DEVICE_NAME, false);
         let chip_id_1 = ChipIdentifier(IDS.fetch_add(1, Ordering::SeqCst));
         let chip_id_2 = ChipIdentifier(IDS.fetch_add(1, Ordering::SeqCst));
         device.add_chip(
