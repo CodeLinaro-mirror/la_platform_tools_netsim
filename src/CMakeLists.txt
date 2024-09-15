@@ -90,6 +90,9 @@ if(TARGET Rust::Rustc)
     netsimd-lib PUBLIC android-emu-base android-emu-net
     PRIVATE libslirp glib2 ssl hostapd android-emu-base-headers)
 
+  # Update to protobuf 26.x introduces some warnings.
+  target_compile_options(netsimd-lib PRIVATE -Wno-unused-result)
+
   target_include_directories(
     netsimd-lib PRIVATE . ${PROTOBUF_INCLUDE_DIR}
                         ${ANDROID_QEMU2_TOP_DIR}/include ${ANDROID_AUTOGEN}
