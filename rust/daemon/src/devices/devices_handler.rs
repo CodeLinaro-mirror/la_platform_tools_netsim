@@ -897,7 +897,7 @@ fn check_device_event(
 /// the function will publish a ShutDown event when
 /// 1. Initial timeout before first device is added
 /// 2. Last Chip Removed from netsimd
-/// this function should NOT be invoked if running in no-shutdown mode
+///    this function should NOT be invoked if running in no-shutdown mode
 pub fn spawn_shutdown_publisher(events_rx: Receiver<Event>) {
     spawn_shutdown_publisher_with_timeout(events_rx, IDLE_SECS_FOR_SHUTDOWN, events::get_events());
 }

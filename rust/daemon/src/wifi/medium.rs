@@ -197,8 +197,8 @@ impl Medium {
     /// This is the processing that will be implemented:
     ///
     /// * The source MacAddress in 802.11 frames is re-mapped to a globally
-    /// unique MacAddress because resumed Emulator AVDs appear with the
-    /// same address.
+    ///   unique MacAddress because resumed Emulator AVDs appear with the
+    ///   same address.
     ///
     /// * 802.11 frames sent between stations
     ///
