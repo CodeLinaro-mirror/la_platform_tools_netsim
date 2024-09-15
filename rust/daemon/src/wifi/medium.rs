@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::packets::ieee80211::MacAddress;
+use super::packets::ieee80211::{Ieee80211, MacAddress};
 use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
 use crate::ffi::ffi_wifi::is_eapol;
 use crate::wifi::frame::Frame;
@@ -26,9 +26,12 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
 
 const NLMSG_MIN_TYPE: u16 = 0x10;
+const NL_AUTO_SEQ: u16 = 0;
+const NL_AUTO_PORT: u32 = 0;
 // Default values for mac80211_hwsim.
 const RX_RATE: u32 = 0;
 const SIGNAL: u32 = 4294967246; // -50
+const NL_MSG_HDR_LEN: usize = 16;
 
 pub struct Processor {
     pub hostapd: bool,
@@ -59,11 +62,18 @@ struct Station {
     // Hwsim virtual address from HWSIM_ATTR_ADDR_TRANSMITTER
     // Used to create the HwsimMsg to stations.
     hwsim_addr: MacAddress,
+    // Caches the frequency (HWSIM_ATTR_FREQ) from the latest HwsimMsg request.
+    // This value is used to populate the HWSIM_ATTR_FREQ field in HwsimMsg response.
+    freq: Arc<AtomicU32>,
 }
 
 impl Station {
     fn new(client_id: u32, addr: MacAddress, hwsim_addr: MacAddress) -> Self {
-        Self { client_id, addr, hwsim_addr }
+        Self { client_id, addr, hwsim_addr, freq: Arc::new(AtomicU32::new(0)) }
+    }
+
+    fn update_freq(&self, freq: u32) {
+        self.freq.store(freq, Ordering::Relaxed);
     }
 }
 
@@ -209,6 +219,15 @@ impl Medium {
         let mut processor = Processor { hostapd: false, network: false, wmedium: false, frame };
 
         let dest_addr = processor.frame.ieee80211.get_destination();
+
+        processor.frame.attrs.freq.map(|freq| {
+            self.get_station(&processor.frame.ieee80211.get_source())
+                .map(|sta| sta.update_freq(freq))
+                .map_err(|e| {
+                    warn!("Failed to get station for client {client_id} to update freq: {e}")
+                })
+        });
+
         let frame = &processor.frame;
         if self.contains_station(&dest_addr) {
             processor.wmedium = true;
@@ -223,7 +242,7 @@ impl Medium {
             // EAPoL is used in Wi-Fi 4-way handshake.
             // Need to decrypt frame to access LLC header.
             // TODO: Implement this function in ieee80211.rs after Hostapd is in Rust.
-            if is_eapol(&frame.data) {
+            if is_eapol(packet) {
                 processor.hostapd = true;
             } else if frame.ieee80211.is_to_ap() {
                 processor.network = true;
@@ -269,10 +288,73 @@ impl Medium {
         }
     }
 
-    /// Handle Wi-Fi Ieee802.3 from network.
+    /// Handle Wi-Fi Ieee802.3 frame from network.
     /// Convert to HwsimMsg and send to clients.
-    pub fn process_ieee8023_response(&self, _packet: &Bytes) {
-        todo!("Convert to HwsimMsg and send to clients.")
+    pub fn process_ieee8023_response(&self, packet: &Bytes) {
+        if let Err(e) = self.send_ieee8023_response(packet) {
+            warn!("{}", e);
+        }
+    }
+
+    /// Determine the client id based on destination and send to client.
+    fn send_ieee8023_response(&self, ieee8023: &Bytes) -> anyhow::Result<()> {
+        let ieee80211 = Ieee80211::from_ieee8023(ieee8023, self.hostapd_bssid)?;
+        let dest_addr = ieee80211.get_destination();
+        if let Ok(destination) = self.get_station(&dest_addr) {
+            self.send_ieee80211_response(&ieee80211, &destination)?;
+        } else if dest_addr.is_multicast() {
+            for destination in self.stations() {
+                self.send_ieee80211_response(&ieee80211, &destination)?;
+            }
+        } else {
+            warn!("Send frame response to unknown destination: {}", dest_addr);
+        }
+        Ok(())
+    }
+
+    fn send_ieee80211_response(
+        &self,
+        ieee80211: &Ieee80211,
+        destination: &Station,
+    ) -> anyhow::Result<()> {
+        let hwsim_msg = self.create_hwsim_msg_from_ieee80211(ieee80211, destination)?;
+        (self.callback)(destination.client_id, &hwsim_msg.encode_to_vec()?.into());
+        self.incr_rx(destination.client_id)?;
+        Ok(())
+    }
+
+    fn create_hwsim_msg_from_ieee80211(
+        &self,
+        ieee80211: &Ieee80211,
+        destination: &Station,
+    ) -> anyhow::Result<HwsimMsg> {
+        let attributes = self.create_hwsim_msg_attr(ieee80211, destination)?;
+        let hwsim_hdr = HwsimMsgHdr { hwsim_cmd: HwsimCmd::Frame, hwsim_version: 0, reserved: 0 };
+        let nlmsg_len = (NL_MSG_HDR_LEN + hwsim_hdr.encoded_len() + attributes.len()) as u32;
+        let nl_hdr = NlMsgHdr {
+            nlmsg_len,
+            nlmsg_type: NLMSG_MIN_TYPE,
+            nlmsg_flags: NL_AUTO_SEQ,
+            nlmsg_seq: NL_AUTO_PORT,
+            nlmsg_pid: 0,
+        };
+        Ok(HwsimMsg { nl_hdr, hwsim_hdr, attributes })
+    }
+
+    fn create_hwsim_msg_attr(
+        &self,
+        ieee80211: &Ieee80211,
+        destination: &Station,
+    ) -> anyhow::Result<Vec<u8>> {
+        let mut builder = HwsimAttrSet::builder();
+        // Attributes required by mac80211_hwsim.
+        builder.receiver(&destination.hwsim_addr.to_vec());
+        let frame_bytes = ieee80211.encode_to_vec()?;
+        builder.frame(&frame_bytes);
+        builder.rx_rate(RX_RATE);
+        builder.signal(SIGNAL);
+        builder.freq(destination.freq.load(Ordering::Relaxed));
+        Ok(builder.build()?.attributes)
     }
 
     /// Handle Wi-Fi MwsimMsg from libslirp and hostapd.
@@ -602,13 +684,22 @@ mod tests {
         let medium = Medium {
             callback,
             stations: RwLock::new(HashMap::from([
-                (addr, Arc::new(Station { client_id: test_client_id, addr, hwsim_addr })),
+                (
+                    addr,
+                    Arc::new(Station {
+                        client_id: test_client_id,
+                        addr,
+                        hwsim_addr,
+                        freq: Arc::new(AtomicU32::new(0)),
+                    }),
+                ),
                 (
                     other_addr,
                     Arc::new(Station {
                         client_id: other_client_id,
                         addr: other_addr,
                         hwsim_addr: other_hwsim_addr,
+                        freq: Arc::new(AtomicU32::new(0)),
                     }),
                 ),
             ])),

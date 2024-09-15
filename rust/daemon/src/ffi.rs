@@ -263,7 +263,7 @@ pub mod ffi_wifi {
 
         #[rust_name = is_eapol]
         #[namespace = "netsim::wifi"]
-        fn IsEapolCxx(packet: &Vec<u8>) -> bool;
+        fn IsEapolCxx(packet: &[u8]) -> bool;
 
         #[namespace = "netsim::wifi"]
         pub fn libslirp_main_loop_wait();
