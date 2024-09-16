@@ -213,7 +213,6 @@ pub fn new_test_beacon(idx: u32, interval: u64) {
     use netsim_proto::model::ChipCreate as ChipCreateProto;
     use netsim_proto::model::DeviceCreate as DeviceCreateProto;
     use protobuf::MessageField;
-    use protobuf_json_mapping::print_to_string;
 
     let beacon_proto = BleBeaconCreateProto {
         address: format!("be:ac:01:be:ef:{:02x}", idx),
@@ -253,7 +252,7 @@ pub fn new_test_beacon(idx: u32, interval: u64) {
     let request =
         CreateDeviceRequest { device: MessageField::some(device_proto), ..Default::default() };
 
-    if let Err(err) = create_device(&print_to_string(&request).unwrap()) {
+    if let Err(err) = create_device(&request) {
         warn!("Failed to create beacon device {idx}: {err}");
     }
 }

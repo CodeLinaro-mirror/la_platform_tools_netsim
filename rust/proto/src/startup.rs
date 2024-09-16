@@ -475,10 +475,14 @@ impl ::protobuf::reflect::ProtobufValue for ChipInfo {
 // @@protoc_insertion_point(message:netsim.startup.DeviceInfo)
 pub struct DeviceInfo {
     // message fields
+    // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.name)
+    pub name: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.kind)
     pub kind: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.version)
     pub version: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.sdk_version)
+    pub sdk_version: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.build_id)
     pub build_id: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.variant)
@@ -502,8 +506,13 @@ impl DeviceInfo {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(5);
+        let mut fields = ::std::vec::Vec::with_capacity(7);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "name",
+            |m: &DeviceInfo| { &m.name },
+            |m: &mut DeviceInfo| { &mut m.name },
+        ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "kind",
             |m: &DeviceInfo| { &m.kind },
@@ -513,6 +522,11 @@ impl DeviceInfo {
             "version",
             |m: &DeviceInfo| { &m.version },
             |m: &mut DeviceInfo| { &mut m.version },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "sdk_version",
+            |m: &DeviceInfo| { &m.sdk_version },
+            |m: &mut DeviceInfo| { &mut m.sdk_version },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "build_id",
@@ -548,18 +562,24 @@ impl ::protobuf::Message for DeviceInfo {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 10 => {
-                    self.kind = is.read_string()?;
+                    self.name = is.read_string()?;
                 },
                 18 => {
-                    self.version = is.read_string()?;
+                    self.kind = is.read_string()?;
                 },
                 26 => {
-                    self.build_id = is.read_string()?;
+                    self.version = is.read_string()?;
                 },
                 34 => {
-                    self.variant = is.read_string()?;
+                    self.sdk_version = is.read_string()?;
                 },
                 42 => {
+                    self.build_id = is.read_string()?;
+                },
+                50 => {
+                    self.variant = is.read_string()?;
+                },
+                58 => {
                     self.arch = is.read_string()?;
                 },
                 tag => {
@@ -574,20 +594,26 @@ impl ::protobuf::Message for DeviceInfo {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
+        if !self.name.is_empty() {
+            my_size += ::protobuf::rt::string_size(1, &self.name);
+        }
         if !self.kind.is_empty() {
-            my_size += ::protobuf::rt::string_size(1, &self.kind);
+            my_size += ::protobuf::rt::string_size(2, &self.kind);
         }
         if !self.version.is_empty() {
-            my_size += ::protobuf::rt::string_size(2, &self.version);
+            my_size += ::protobuf::rt::string_size(3, &self.version);
+        }
+        if !self.sdk_version.is_empty() {
+            my_size += ::protobuf::rt::string_size(4, &self.sdk_version);
         }
         if !self.build_id.is_empty() {
-            my_size += ::protobuf::rt::string_size(3, &self.build_id);
+            my_size += ::protobuf::rt::string_size(5, &self.build_id);
         }
         if !self.variant.is_empty() {
-            my_size += ::protobuf::rt::string_size(4, &self.variant);
+            my_size += ::protobuf::rt::string_size(6, &self.variant);
         }
         if !self.arch.is_empty() {
-            my_size += ::protobuf::rt::string_size(5, &self.arch);
+            my_size += ::protobuf::rt::string_size(7, &self.arch);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
@@ -595,20 +621,26 @@ impl ::protobuf::Message for DeviceInfo {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if !self.name.is_empty() {
+            os.write_string(1, &self.name)?;
+        }
         if !self.kind.is_empty() {
-            os.write_string(1, &self.kind)?;
+            os.write_string(2, &self.kind)?;
         }
         if !self.version.is_empty() {
-            os.write_string(2, &self.version)?;
+            os.write_string(3, &self.version)?;
+        }
+        if !self.sdk_version.is_empty() {
+            os.write_string(4, &self.sdk_version)?;
         }
         if !self.build_id.is_empty() {
-            os.write_string(3, &self.build_id)?;
+            os.write_string(5, &self.build_id)?;
         }
         if !self.variant.is_empty() {
-            os.write_string(4, &self.variant)?;
+            os.write_string(6, &self.variant)?;
         }
         if !self.arch.is_empty() {
-            os.write_string(5, &self.arch)?;
+            os.write_string(7, &self.arch)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -627,8 +659,10 @@ impl ::protobuf::Message for DeviceInfo {
     }
 
     fn clear(&mut self) {
+        self.name.clear();
         self.kind.clear();
         self.version.clear();
+        self.sdk_version.clear();
         self.build_id.clear();
         self.variant.clear();
         self.arch.clear();
@@ -637,8 +671,10 @@ impl ::protobuf::Message for DeviceInfo {
 
     fn default_instance() -> &'static DeviceInfo {
         static instance: DeviceInfo = DeviceInfo {
+            name: ::std::string::String::new(),
             kind: ::std::string::String::new(),
             version: ::std::string::String::new(),
+            sdk_version: ::std::string::String::new(),
             build_id: ::std::string::String::new(),
             variant: ::std::string::String::new(),
             arch: ::std::string::String::new(),
@@ -953,29 +989,31 @@ impl ::protobuf::reflect::ProtobufValue for Chip {
 
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x14netsim/startup.proto\x12\x0enetsim.startup\x1a\x13netsim/common.pr\
-    oto\x1a\x12netsim/model.proto\x1a\x1drootcanal/configuration.proto\"\xd3\
+    oto\x1a\x12netsim/model.proto\x1a\x1drootcanal/configuration.proto\"\xd7\
     \x01\n\x0bStartupInfo\x12<\n\x07devices\x18\x01\x20\x03(\x0b2\".netsim.s\
-    tartup.StartupInfo.DeviceR\x07devices\x1a\x85\x01\n\x06Device\x12\x12\n\
-    \x04name\x18\x01\x20\x01(\tR\x04name\x12*\n\x05chips\x18\x02\x20\x03(\
-    \x0b2\x14.netsim.startup.ChipR\x05chips\x12;\n\x0bdevice_info\x18\x03\
-    \x20\x01(\x0b2\x1a.netsim.startup.DeviceInfoR\ndeviceInfo\"\x85\x01\n\
-    \x08ChipInfo\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04name\x12(\n\x04chi\
-    p\x18\x02\x20\x01(\x0b2\x14.netsim.startup.ChipR\x04chip\x12;\n\x0bdevic\
-    e_info\x18\x03\x20\x01(\x0b2\x1a.netsim.startup.DeviceInfoR\ndeviceInfo\
-    \"\x83\x01\n\nDeviceInfo\x12\x12\n\x04kind\x18\x01\x20\x01(\tR\x04kind\
-    \x12\x18\n\x07version\x18\x02\x20\x01(\tR\x07version\x12\x19\n\x08build_\
-    id\x18\x03\x20\x01(\tR\x07buildId\x12\x18\n\x07variant\x18\x04\x20\x01(\
-    \tR\x07variant\x12\x12\n\x04arch\x18\x05\x20\x01(\tR\x04arch\"\xf6\x02\n\
-    \x04Chip\x12+\n\x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.common.ChipKind\
-    R\x04kind\x12\x0e\n\x02id\x18\x02\x20\x01(\tR\x02id\x12\"\n\x0cmanufactu\
-    rer\x18\x03\x20\x01(\tR\x0cmanufacturer\x12!\n\x0cproduct_name\x18\x04\
-    \x20\x01(\tR\x0bproductName\x12\x13\n\x05fd_in\x18\x05\x20\x01(\x05R\x04\
-    fdIn\x12\x15\n\x06fd_out\x18\x06\x20\x01(\x05R\x05fdOut\x12\x1a\n\x08loo\
-    pback\x18\x07\x20\x01(\x08R\x08loopback\x12H\n\rbt_properties\x18\x08\
-    \x20\x01(\x0b2#.rootcanal.configuration.ControllerR\x0cbtProperties\x12\
-    \x18\n\x07address\x18\t\x20\x01(\tR\x07address\x123\n\x06offset\x18\n\
-    \x20\x01(\x0b2\x16.netsim.model.PositionH\0R\x06offset\x88\x01\x01B\t\n\
-    \x07_offsetb\x06proto3\
+    tartup.StartupInfo.DeviceR\x07devices\x1a\x89\x01\n\x06Device\x12\x16\n\
+    \x04name\x18\x01\x20\x01(\tR\x04nameB\x02\x18\x01\x12*\n\x05chips\x18\
+    \x02\x20\x03(\x0b2\x14.netsim.startup.ChipR\x05chips\x12;\n\x0bdevice_in\
+    fo\x18\x03\x20\x01(\x0b2\x1a.netsim.startup.DeviceInfoR\ndeviceInfo\"\
+    \x89\x01\n\x08ChipInfo\x12\x16\n\x04name\x18\x01\x20\x01(\tR\x04nameB\
+    \x02\x18\x01\x12(\n\x04chip\x18\x02\x20\x01(\x0b2\x14.netsim.startup.Chi\
+    pR\x04chip\x12;\n\x0bdevice_info\x18\x03\x20\x01(\x0b2\x1a.netsim.startu\
+    p.DeviceInfoR\ndeviceInfo\"\xb8\x01\n\nDeviceInfo\x12\x12\n\x04name\x18\
+    \x01\x20\x01(\tR\x04name\x12\x12\n\x04kind\x18\x02\x20\x01(\tR\x04kind\
+    \x12\x18\n\x07version\x18\x03\x20\x01(\tR\x07version\x12\x1f\n\x0bsdk_ve\
+    rsion\x18\x04\x20\x01(\tR\nsdkVersion\x12\x19\n\x08build_id\x18\x05\x20\
+    \x01(\tR\x07buildId\x12\x18\n\x07variant\x18\x06\x20\x01(\tR\x07variant\
+    \x12\x12\n\x04arch\x18\x07\x20\x01(\tR\x04arch\"\xf6\x02\n\x04Chip\x12+\
+    \n\x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\
+    \x0e\n\x02id\x18\x02\x20\x01(\tR\x02id\x12\"\n\x0cmanufacturer\x18\x03\
+    \x20\x01(\tR\x0cmanufacturer\x12!\n\x0cproduct_name\x18\x04\x20\x01(\tR\
+    \x0bproductName\x12\x13\n\x05fd_in\x18\x05\x20\x01(\x05R\x04fdIn\x12\x15\
+    \n\x06fd_out\x18\x06\x20\x01(\x05R\x05fdOut\x12\x1a\n\x08loopback\x18\
+    \x07\x20\x01(\x08R\x08loopback\x12H\n\rbt_properties\x18\x08\x20\x01(\
+    \x0b2#.rootcanal.configuration.ControllerR\x0cbtProperties\x12\x18\n\x07\
+    address\x18\t\x20\x01(\tR\x07address\x123\n\x06offset\x18\n\x20\x01(\x0b\
+    2\x16.netsim.model.PositionH\0R\x06offset\x88\x01\x01B\t\n\x07_offsetb\
+    \x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
