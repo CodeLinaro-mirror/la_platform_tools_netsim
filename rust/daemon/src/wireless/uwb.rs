@@ -22,7 +22,6 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 
 use crate::devices::chip::ChipIdentifier;
-use crate::info_linux_arm;
 use crate::uwb::ranging_estimator::{SharedState, UwbRangingEstimator};
 use crate::wireless::packet::handle_response;
 
@@ -101,7 +100,6 @@ impl WirelessAdaptor for Uwb {
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
-        info_linux_arm!("uwb get_stats");
         let mut stats_proto = ProtoRadioStats::new();
         stats_proto.set_duration_secs(duration_secs);
         stats_proto.set_kind(netsim_radio_stats::Kind::UWB);

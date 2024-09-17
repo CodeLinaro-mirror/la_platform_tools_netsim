@@ -14,7 +14,6 @@
 
 use crate::devices::chip::ChipIdentifier;
 use crate::ffi::ffi_bluetooth;
-use crate::info_linux_arm;
 use crate::wireless::{WirelessAdaptor, WirelessAdaptorImpl};
 
 use bytes::Bytes;
@@ -93,7 +92,6 @@ impl WirelessAdaptor for Bluetooth {
     fn handle_request(&self, packet: &Bytes) {
         // Lock to protect device_to_transport_ table in C++
         let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
-        info_linux_arm!("Handle bluetooth request: {:?}", packet);
         ffi_bluetooth::handle_bt_request(self.rootcanal_id, packet[0], &packet[1..].to_vec())
     }
 
@@ -140,7 +138,6 @@ impl WirelessAdaptor for Bluetooth {
     }
 
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats> {
-        info_linux_arm!("bluetooth get_stats");
         // Construct NetsimRadioStats for BLE and Classic.
         let mut ble_stats_proto = ProtoRadioStats::new();
         ble_stats_proto.set_duration_secs(duration_secs);

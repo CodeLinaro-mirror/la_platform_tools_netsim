@@ -66,6 +66,7 @@ fn add_chip(initial_info: &ChipInfo, device_guid: &str) -> anyhow::Result<AddChi
         &initial_info.name,
         &chip_create_params,
         &wireless_create_param,
+        initial_info.device_info.clone().unwrap_or_default(),
     )
     .map_err(|err| anyhow!(err))
 }

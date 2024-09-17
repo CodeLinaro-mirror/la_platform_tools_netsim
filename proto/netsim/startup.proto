@@ -69,7 +69,7 @@ message ChipInfo {
 message DeviceInfo {
   // Name of device
   string name = 1;
-  // Identifier for device kind e.g. Goldfish, Cuttlefish, Bumble, etc
+  // Identifier for device kind e.g. EMULATOR, CUTTLEFISH, BUMBLE, etc
   string kind = 2;
   // Version info as applicable e.g. Android emulator version 34.1.15.0, etc
   string version = 3;

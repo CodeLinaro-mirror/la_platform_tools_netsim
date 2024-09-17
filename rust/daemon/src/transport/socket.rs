@@ -21,6 +21,7 @@ use crate::wireless::packet::{register_transport, unregister_transport, Response
 use bytes::Bytes;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
+use netsim_proto::startup::DeviceInfo as ProtoDeviceInfo;
 use std::io::{ErrorKind, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::thread;
@@ -99,11 +100,13 @@ fn handle_hci_client(stream: TcpStream) {
     let wireless_create_params = wireless::CreateParam::Mock(wireless::mocked::CreateParams {
         chip_kind: ChipKind::BLUETOOTH,
     });
+    let device_info = ProtoDeviceInfo { kind: "HCI_SOCKET".to_string(), ..Default::default() };
     let result = match add_chip(
         &stream.peer_addr().unwrap().port().to_string(),
         &format!("socket-{}", stream.peer_addr().unwrap()),
         &chip_create_params,
         &wireless_create_params,
+        device_info,
     ) {
         Ok(chip_result) => chip_result,
         Err(err) => {

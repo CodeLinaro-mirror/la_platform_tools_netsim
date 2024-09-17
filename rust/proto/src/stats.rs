@@ -1292,6 +1292,8 @@ pub struct NetsimDeviceStats {
     pub kind: ::std::option::Option<::std::string::String>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.version)
     pub version: ::std::option::Option<::std::string::String>,
+    // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.sdk_version)
+    pub sdk_version: ::std::option::Option<::std::string::String>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.build_id)
     pub build_id: ::std::option::Option<::std::string::String>,
     // @@protoc_insertion_point(field:netsim.stats.NetsimDeviceStats.variant)
@@ -1405,7 +1407,43 @@ impl NetsimDeviceStats {
         self.version.take().unwrap_or_else(|| ::std::string::String::new())
     }
 
-    // optional string build_id = 4;
+    // optional string sdk_version = 4;
+
+    pub fn sdk_version(&self) -> &str {
+        match self.sdk_version.as_ref() {
+            Some(v) => v,
+            None => "",
+        }
+    }
+
+    pub fn clear_sdk_version(&mut self) {
+        self.sdk_version = ::std::option::Option::None;
+    }
+
+    pub fn has_sdk_version(&self) -> bool {
+        self.sdk_version.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_sdk_version(&mut self, v: ::std::string::String) {
+        self.sdk_version = ::std::option::Option::Some(v);
+    }
+
+    // Mutable pointer to the field.
+    // If field is not initialized, it is initialized with default value first.
+    pub fn mut_sdk_version(&mut self) -> &mut ::std::string::String {
+        if self.sdk_version.is_none() {
+            self.sdk_version = ::std::option::Option::Some(::std::string::String::new());
+        }
+        self.sdk_version.as_mut().unwrap()
+    }
+
+    // Take field
+    pub fn take_sdk_version(&mut self) -> ::std::string::String {
+        self.sdk_version.take().unwrap_or_else(|| ::std::string::String::new())
+    }
+
+    // optional string build_id = 5;
 
     pub fn build_id(&self) -> &str {
         match self.build_id.as_ref() {
@@ -1441,7 +1479,7 @@ impl NetsimDeviceStats {
         self.build_id.take().unwrap_or_else(|| ::std::string::String::new())
     }
 
-    // optional string variant = 5;
+    // optional string variant = 6;
 
     pub fn variant(&self) -> &str {
         match self.variant.as_ref() {
@@ -1477,7 +1515,7 @@ impl NetsimDeviceStats {
         self.variant.take().unwrap_or_else(|| ::std::string::String::new())
     }
 
-    // optional string arch = 6;
+    // optional string arch = 7;
 
     pub fn arch(&self) -> &str {
         match self.arch.as_ref() {
@@ -1514,7 +1552,7 @@ impl NetsimDeviceStats {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(6);
+        let mut fields = ::std::vec::Vec::with_capacity(7);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "device_id",
@@ -1530,6 +1568,11 @@ impl NetsimDeviceStats {
             "version",
             |m: &NetsimDeviceStats| { &m.version },
             |m: &mut NetsimDeviceStats| { &mut m.version },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "sdk_version",
+            |m: &NetsimDeviceStats| { &m.sdk_version },
+            |m: &mut NetsimDeviceStats| { &mut m.sdk_version },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "build_id",
@@ -1574,12 +1617,15 @@ impl ::protobuf::Message for NetsimDeviceStats {
                     self.version = ::std::option::Option::Some(is.read_string()?);
                 },
                 34 => {
-                    self.build_id = ::std::option::Option::Some(is.read_string()?);
+                    self.sdk_version = ::std::option::Option::Some(is.read_string()?);
                 },
                 42 => {
-                    self.variant = ::std::option::Option::Some(is.read_string()?);
+                    self.build_id = ::std::option::Option::Some(is.read_string()?);
                 },
                 50 => {
+                    self.variant = ::std::option::Option::Some(is.read_string()?);
+                },
+                58 => {
                     self.arch = ::std::option::Option::Some(is.read_string()?);
                 },
                 tag => {
@@ -1603,14 +1649,17 @@ impl ::protobuf::Message for NetsimDeviceStats {
         if let Some(v) = self.version.as_ref() {
             my_size += ::protobuf::rt::string_size(3, &v);
         }
-        if let Some(v) = self.build_id.as_ref() {
+        if let Some(v) = self.sdk_version.as_ref() {
             my_size += ::protobuf::rt::string_size(4, &v);
         }
-        if let Some(v) = self.variant.as_ref() {
+        if let Some(v) = self.build_id.as_ref() {
             my_size += ::protobuf::rt::string_size(5, &v);
         }
-        if let Some(v) = self.arch.as_ref() {
+        if let Some(v) = self.variant.as_ref() {
             my_size += ::protobuf::rt::string_size(6, &v);
+        }
+        if let Some(v) = self.arch.as_ref() {
+            my_size += ::protobuf::rt::string_size(7, &v);
         }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
@@ -1627,14 +1676,17 @@ impl ::protobuf::Message for NetsimDeviceStats {
         if let Some(v) = self.version.as_ref() {
             os.write_string(3, v)?;
         }
-        if let Some(v) = self.build_id.as_ref() {
+        if let Some(v) = self.sdk_version.as_ref() {
             os.write_string(4, v)?;
         }
-        if let Some(v) = self.variant.as_ref() {
+        if let Some(v) = self.build_id.as_ref() {
             os.write_string(5, v)?;
         }
-        if let Some(v) = self.arch.as_ref() {
+        if let Some(v) = self.variant.as_ref() {
             os.write_string(6, v)?;
+        }
+        if let Some(v) = self.arch.as_ref() {
+            os.write_string(7, v)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -1656,6 +1708,7 @@ impl ::protobuf::Message for NetsimDeviceStats {
         self.device_id = ::std::option::Option::None;
         self.kind = ::std::option::Option::None;
         self.version = ::std::option::Option::None;
+        self.sdk_version = ::std::option::Option::None;
         self.build_id = ::std::option::Option::None;
         self.variant = ::std::option::Option::None;
         self.arch = ::std::option::Option::None;
@@ -1667,6 +1720,7 @@ impl ::protobuf::Message for NetsimDeviceStats {
             device_id: ::std::option::Option::None,
             kind: ::std::option::Option::None,
             version: ::std::option::Option::None,
+            sdk_version: ::std::option::Option::None,
             build_id: ::std::option::Option::None,
             variant: ::std::option::Option::None,
             arch: ::std::option::Option::None,
@@ -2045,20 +2099,20 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \rR\nlistDevice\x12)\n\x10subscribe_device\x18\x07\x20\x01(\rR\x0fsubscr\
     ibeDevice\x12#\n\rpatch_capture\x18\x08\x20\x01(\rR\x0cpatchCapture\x12!\
     \n\x0clist_capture\x18\t\x20\x01(\rR\x0blistCapture\x12\x1f\n\x0bget_cap\
-    ture\x18\n\x20\x01(\rR\ngetCapture\"\xa7\x01\n\x11NetsimDeviceStats\x12\
+    ture\x18\n\x20\x01(\rR\ngetCapture\"\xc8\x01\n\x11NetsimDeviceStats\x12\
     \x1b\n\tdevice_id\x18\x01\x20\x01(\rR\x08deviceId\x12\x12\n\x04kind\x18\
     \x02\x20\x01(\tR\x04kind\x12\x18\n\x07version\x18\x03\x20\x01(\tR\x07ver\
-    sion\x12\x19\n\x08build_id\x18\x04\x20\x01(\tR\x07buildId\x12\x18\n\x07v\
-    ariant\x18\x05\x20\x01(\tR\x07variant\x12\x12\n\x04arch\x18\x06\x20\x01(\
-    \tR\x04arch\"\xf6\x02\n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\
-    \x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\
-    \x0bdeviceCount\x126\n\x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\
-    \x15peakConcurrentDevices\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\
-    \x1e.netsim.stats.NetsimRadioStatsR\nradioStats\x12\x18\n\x07version\x18\
-    \x05\x20\x01(\tR\x07version\x12H\n\x0efrontend_stats\x18\x06\x20\x01(\
-    \x0b2!.netsim.stats.NetsimFrontendStatsR\rfrontendStats\x12B\n\x0cdevice\
-    _stats\x18\x07\x20\x03(\x0b2\x1f.netsim.stats.NetsimDeviceStatsR\x0bdevi\
-    ceStats\
+    sion\x12\x1f\n\x0bsdk_version\x18\x04\x20\x01(\tR\nsdkVersion\x12\x19\n\
+    \x08build_id\x18\x05\x20\x01(\tR\x07buildId\x12\x18\n\x07variant\x18\x06\
+    \x20\x01(\tR\x07variant\x12\x12\n\x04arch\x18\x07\x20\x01(\tR\x04arch\"\
+    \xf6\x02\n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\x01(\x04R\
+    \x0cdurationSecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\x0bdeviceC\
+    ount\x126\n\x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\x15peakConc\
+    urrentDevices\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\x1e.netsim.sta\
+    ts.NetsimRadioStatsR\nradioStats\x12\x18\n\x07version\x18\x05\x20\x01(\t\
+    R\x07version\x12H\n\x0efrontend_stats\x18\x06\x20\x01(\x0b2!.netsim.stat\
+    s.NetsimFrontendStatsR\rfrontendStats\x12B\n\x0cdevice_stats\x18\x07\x20\
+    \x03(\x0b2\x1f.netsim.stats.NetsimDeviceStatsR\x0bdeviceStats\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

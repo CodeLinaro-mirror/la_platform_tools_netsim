@@ -23,6 +23,7 @@ export class DeviceDragZone extends LitElement {
   handleDragStart(ev: DragEvent) {
     this.style.opacity = '0.4';
     if (ev.dataTransfer && ev.target) {
+      simulationState.patchSelected((ev.target as Element).id);
       DeviceDragZone.dragged = ev.target;
       // eslint-disable-next-line no-param-reassign
       ev.dataTransfer.effectAllowed = this.action === 'move' ? 'move' : 'copy';
