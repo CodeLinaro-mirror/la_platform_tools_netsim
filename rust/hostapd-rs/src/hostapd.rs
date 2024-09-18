@@ -27,7 +27,7 @@ use std::collections::HashMap;
 use std::ffi::{c_char, c_int, CString};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
-use std::thread::{self, JoinHandle};
+use std::thread;
 
 pub struct Hostapd {
     running: Arc<AtomicBool>,

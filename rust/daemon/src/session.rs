@@ -21,7 +21,7 @@ use anyhow::Context;
 use log::error;
 use log::info;
 use netsim_common::system::netsimd_temp_dir;
-use netsim_proto::stats::{NetsimDeviceStats, NetsimStats};
+use netsim_proto::stats::NetsimStats as ProtoNetsimStats;
 use protobuf_json_mapping::print_to_string;
 use std::fs::File;
 use std::io::Write;
@@ -43,7 +43,7 @@ pub struct Session {
 
 // Fields accessed by threads
 struct SessionInfo {
-    stats_proto: NetsimStats,
+    stats_proto: ProtoNetsimStats,
     current_device_count: i32,
     session_start: Instant,
     write_json: bool,
@@ -57,7 +57,10 @@ impl Session {
         Session {
             handle: None,
             info: Arc::new(RwLock::new(SessionInfo {
-                stats_proto: NetsimStats { version: Some(get_version()), ..Default::default() },
+                stats_proto: ProtoNetsimStats {
+                    version: Some(get_version()),
+                    ..Default::default()
+                },
                 current_device_count: 0,
                 session_start: Instant::now(),
                 write_json,
@@ -101,7 +104,7 @@ impl Session {
                                 lock.current_device_count -= 1;
                             }
 
-                            Ok(Event::DeviceAdded(DeviceAdded { id, kind, .. })) => {
+                            Ok(Event::DeviceAdded(DeviceAdded { device_stats, .. })) => {
                                 // update the current_device_count and peak device usage
                                 lock.current_device_count += 1;
                                 let current_device_count = lock.current_device_count;
@@ -115,9 +118,6 @@ impl Session {
                                         .set_peak_concurrent_devices(current_device_count);
                                 }
                                 // Add added device's stats
-                                let mut device_stats = NetsimDeviceStats::new();
-                                device_stats.set_device_id(id.0);
-                                device_stats.set_kind(kind);
                                 lock.stats_proto.device_stats.push(device_stats);
                             }
 
@@ -190,13 +190,13 @@ fn update_session_duration(session_lock: &mut RwLockWriteGuard<'_, SessionInfo>)
 }
 
 /// Construct current radio stats
-fn get_current_stats(mut current_stats: NetsimStats) -> NetsimStats {
+fn get_current_stats(mut current_stats: ProtoNetsimStats) -> ProtoNetsimStats {
     current_stats.radio_stats.extend(get_radio_stats());
     current_stats
 }
 
 /// Write netsim stats to json file
-fn write_stats_to_json(stats_proto: NetsimStats) -> anyhow::Result<()> {
+fn write_stats_to_json(stats_proto: ProtoNetsimStats) -> anyhow::Result<()> {
     let filename = netsimd_temp_dir().join("netsim_session_stats.json");
     let mut file = File::create(filename)?;
     let json = print_to_string(&stats_proto)?;
@@ -211,11 +211,13 @@ mod tests {
     use crate::devices::chip::ChipIdentifier;
     use crate::devices::device::DeviceIdentifier;
     use crate::events;
-    use crate::events::{
-        ChipAdded, ChipRemoved, DeviceAdded, DeviceRemoved, Event, Events, ShutDown,
+    use crate::events::{ChipAdded, ChipRemoved, DeviceRemoved, Event, Events, ShutDown};
+    use netsim_proto::stats::{
+        NetsimDeviceStats as ProtoDeviceStats, NetsimRadioStats as ProtoRadioStats,
     };
-    use netsim_proto::stats::NetsimRadioStats;
     use std::sync::Mutex;
+
+    const TEST_DEVICE_KIND: &str = "TEST_DEVICE";
 
     #[test]
     fn test_new() {
@@ -225,7 +227,7 @@ mod tests {
         assert_eq!(lock.current_device_count, 0);
         assert!(matches!(
             lock.stats_proto,
-            NetsimStats { version: Some(_), duration_secs: None, .. }
+            ProtoNetsimStats { version: Some(_), duration_secs: None, .. }
         ));
         assert_eq!(lock.stats_proto.version.clone().unwrap(), get_version().clone());
         assert_eq!(lock.stats_proto.radio_stats.len(), 0);
@@ -239,7 +241,7 @@ mod tests {
         (session, events)
     }
 
-    fn get_stats_proto(session: &Session) -> NetsimStats {
+    fn get_stats_proto(session: &Session) -> ProtoNetsimStats {
         session.info.read().expect("Could not acquire session lock").stats_proto.clone()
     }
 
@@ -287,6 +289,7 @@ mod tests {
         session.stop().unwrap();
     }
 
+    // Tests for session.rs involving devices
     #[test]
     fn test_start_and_device_add() {
         let (mut session, mut events) = setup_session_start_test();
@@ -294,9 +297,18 @@ mod tests {
         // we want to be able to check the session time gets incremented
         std::thread::sleep(std::time::Duration::from_secs(1));
 
+        // Create a device, publishing DeviceAdded event
         events::test::publish(
             &mut events,
-            Event::DeviceAdded(DeviceAdded { builtin: false, ..Default::default() }),
+            Event::DeviceAdded(DeviceAdded {
+                builtin: false,
+                id: DeviceIdentifier(1),
+                device_stats: ProtoDeviceStats {
+                    kind: Some(TEST_DEVICE_KIND.to_string()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
         );
 
         // publish the shutdown afterwards to cause the separate thread to stop
@@ -319,6 +331,8 @@ mod tests {
         assert_eq!(stats_proto.peak_concurrent_devices.unwrap(), 1i32);
         // check the session time is > 0
         assert!(stats_proto.duration_secs.unwrap() > 0u64);
+        // check the device stats is populated
+        assert_eq!(stats_proto.device_stats.len(), 1);
     }
 
     #[test]
@@ -328,11 +342,16 @@ mod tests {
         // we want to be able to check the session time gets incremented
         std::thread::sleep(std::time::Duration::from_secs(1));
 
+        // Create a device, publishing DeviceAdded event
         events::test::publish(
             &mut events,
             Event::DeviceAdded(DeviceAdded {
                 builtin: false,
                 id: DeviceIdentifier(1),
+                device_stats: ProtoDeviceStats {
+                    kind: Some(TEST_DEVICE_KIND.to_string()),
+                    ..Default::default()
+                },
                 ..Default::default()
             }),
         );
@@ -346,11 +365,16 @@ mod tests {
             }),
         );
 
+        // Create another device, publishing DeviceAdded event
         events::test::publish(
             &mut events,
             Event::DeviceAdded(DeviceAdded {
                 builtin: false,
                 id: DeviceIdentifier(2),
+                device_stats: ProtoDeviceStats {
+                    kind: Some(TEST_DEVICE_KIND.to_string()),
+                    ..Default::default()
+                },
                 ..Default::default()
             }),
         );
@@ -384,6 +408,8 @@ mod tests {
 
         // check the session time is > 0
         assert!(stats_proto.duration_secs.unwrap() > 0u64);
+        // check the device stats are populated
+        assert_eq!(stats_proto.device_stats.len(), 2);
     }
 
     #[test]
@@ -411,7 +437,7 @@ mod tests {
             &mut events,
             Event::ChipRemoved(ChipRemoved {
                 chip_id: ChipIdentifier(0),
-                radio_stats: vec![NetsimRadioStats { ..Default::default() }],
+                radio_stats: vec![ProtoRadioStats { ..Default::default() }],
                 ..Default::default()
             }),
         );

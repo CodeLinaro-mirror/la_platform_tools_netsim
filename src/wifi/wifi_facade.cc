@@ -143,7 +143,7 @@ void LibslirpSendCxx(const rust::Vec<uint8_t> &packet) {
 #endif
 }
 
-bool IsEapolCxx(const rust::Vec<uint8_t> &packet) {
+bool IsEapolCxx(const rust::Slice<uint8_t const> packet) {
 #ifdef NETSIM_ANDROID_EMULATOR
   struct iovec iov[1];
   iov[0].iov_base = (void *)packet.data();

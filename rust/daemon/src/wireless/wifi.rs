@@ -96,11 +96,7 @@ impl WifiManager {
                 };
                 match rx_request.recv_timeout(timeout) {
                     Ok((chip_id, packet)) => {
-                        // When Wi-Fi P2P is disabled, send all packets to WifiService.
-                        if crate::config::get_disable_wifi_p2p() {
-                            ffi_wifi::handle_wifi_request(&packet.to_vec());
-                            ffi_wifi::libslirp_main_loop_wait();
-                        } else if let Some(processor) =
+                        if let Some(processor) =
                             get_wifi_manager().medium.get_processor(chip_id, &packet)
                         {
                             get_wifi_manager().medium.ack_frame(chip_id, &processor.frame);

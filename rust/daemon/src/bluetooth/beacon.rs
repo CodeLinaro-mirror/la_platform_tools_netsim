@@ -24,7 +24,6 @@ use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::devices_handler::add_chip;
 use crate::ffi::ffi_bluetooth;
-use crate::info_linux_arm;
 use crate::wireless;
 use cxx::{let_cxx_string, UniquePtr};
 use lazy_static::lazy_static;
@@ -134,17 +133,13 @@ impl BeaconChip {
     }
 
     pub fn send_link_layer_le_packet(&self, packet: &[u8], tx_power: i8) {
-        info_linux_arm!("Acquiring read lock on BT_CHIPS");
         let binding = BT_CHIPS.read().unwrap();
-        info_linux_arm!("Acquired read lock on BT_CHIPS");
         if let Some(rust_bluetooth_chip) = binding.get(&self.chip_id) {
-            info_linux_arm!("Acquiring mutex on rust_bluetooth_chip");
             rust_bluetooth_chip
                 .lock()
                 .expect("Failed to acquire lock on RustBluetoothChip")
                 .pin_mut()
                 .send_link_layer_le_packet(packet, tx_power);
-            info_linux_arm!("Released mutex on rust_bluetooth_chip");
         } else {
             warn!("Failed to get RustBluetoothChip for unknown chip id: {}", self.chip_id);
         };
@@ -352,7 +347,6 @@ pub fn ble_beacon_get(
     chip_id: ChipIdentifier,
     _facade_id: FacadeIdentifier,
 ) -> Result<BleBeaconProto, String> {
-    info_linux_arm!("ble_beacon_get");
     let guard = BEACON_CHIPS.read().unwrap();
     let beacon = guard
         .get(&chip_id)
@@ -361,7 +355,6 @@ pub fn ble_beacon_get(
         .expect("Failed to acquire lock on BeaconChip");
     #[cfg(not(test))]
     let bt = {
-        info_linux_arm!("bluetooth_get_cxx({})", _facade_id.0);
         let bluetooth_bytes = ffi_bluetooth::bluetooth_get_cxx(_facade_id.0);
         Some(Bluetooth::parse_from_bytes(&bluetooth_bytes).unwrap())
     };

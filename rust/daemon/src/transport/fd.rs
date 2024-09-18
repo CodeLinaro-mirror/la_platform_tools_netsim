@@ -182,6 +182,7 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
                 &device.name.clone(),
                 &chip_create_params,
                 &wireless_create_param,
+                device.device_info.clone().unwrap_or_default(),
             ) {
                 Ok(chip_result) => chip_result,
                 Err(err) => {

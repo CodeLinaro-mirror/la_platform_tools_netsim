@@ -35,6 +35,6 @@ void HostapdSendCxx(const rust::Vec<uint8_t> &packet);
 
 void LibslirpSendCxx(const rust::Vec<uint8_t> &packet);
 
-bool IsEapolCxx(const rust::Vec<uint8_t> &packet);
+bool IsEapolCxx(const rust::Slice<uint8_t const> packet);
 
 }  // namespace netsim::wifi

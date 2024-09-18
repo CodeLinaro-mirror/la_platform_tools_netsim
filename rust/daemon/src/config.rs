@@ -18,7 +18,6 @@ use std::sync::{Once, RwLock};
 
 static SET_DEV_CALLED: Once = Once::new();
 static SET_PCAP_CALLED: Once = Once::new();
-static SET_DISABLE_WIFI_P2P_CALLED: Once = Once::new();
 
 lazy_static! {
     static ref CONFIG: RwLock<Config> = RwLock::new(Config::new());
@@ -27,12 +26,11 @@ lazy_static! {
 struct Config {
     pub dev: Option<bool>,
     pub pcap: Option<bool>,
-    pub disable_wifi_p2p: Option<bool>,
 }
 
 impl Config {
     pub fn new() -> Self {
-        Self { dev: None, pcap: None, disable_wifi_p2p: None }
+        Self { dev: None, pcap: None }
     }
 }
 
@@ -61,20 +59,6 @@ pub fn set_pcap(flag: bool) {
     SET_PCAP_CALLED.call_once(|| {
         let mut config = CONFIG.write().unwrap();
         config.pcap = Some(flag);
-    });
-}
-
-/// Get the flag of disable_wifi_p2p
-pub fn get_disable_wifi_p2p() -> bool {
-    let config = CONFIG.read().unwrap();
-    config.disable_wifi_p2p.unwrap_or(false)
-}
-
-/// Set the flag of disable_wifi_p2p
-pub fn set_disable_wifi_p2p(flag: bool) {
-    SET_DISABLE_WIFI_P2P_CALLED.call_once(|| {
-        let mut config = CONFIG.write().unwrap();
-        config.disable_wifi_p2p = Some(flag);
     });
 }
 
@@ -108,19 +92,5 @@ mod tests {
         // Check if set_pcap can only be called once
         set_pcap(false);
         assert!(get_pcap());
-    }
-
-    #[test]
-    fn test_disable_wifi_p2p() {
-        // Check if default disable_wifi_p2p boolean is false
-        assert!(!get_disable_wifi_p2p());
-
-        // Check if set_disable_wifi_p2p changes the flag to true
-        set_disable_wifi_p2p(true);
-        assert!(get_disable_wifi_p2p());
-
-        // Check if set_disable_wifi_p2p can only be called once
-        set_disable_wifi_p2p(false);
-        assert!(get_disable_wifi_p2p());
     }
 }

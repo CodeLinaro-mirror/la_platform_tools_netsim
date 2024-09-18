@@ -103,6 +103,7 @@ impl Default for SlirpConfig {
 
 // Struct to hold a "C" SlirpConfig and the Rust storage that is
 // referenced by SlirpConfig.
+#[allow(dead_code)]
 pub struct SlirpConfigs {
     pub c_slirp_config: libslirp_sys::SlirpConfig,
 

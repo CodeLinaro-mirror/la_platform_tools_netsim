@@ -56,11 +56,6 @@ pub struct NetsimdArgs {
     #[arg(short, long)]
     pub dev: bool,
 
-    /// Disable Wi-Fi peer-to-peer features.
-    /// WARNING: This flag is for development purpose.
-    #[arg(long)]
-    pub disable_wifi_p2p: bool,
-
     /// Use Rust gRPC server.
     /// WARNING: This flag is for development purpose.
     #[arg(long)]
