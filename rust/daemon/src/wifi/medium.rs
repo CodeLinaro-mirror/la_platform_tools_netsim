@@ -14,7 +14,6 @@
 
 use super::packets::ieee80211::{Ieee80211, MacAddress};
 use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
-use crate::ffi::ffi_wifi::is_eapol;
 use crate::wifi::frame::Frame;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::{anyhow, Context};
@@ -239,10 +238,13 @@ impl Medium {
 
         // Data frames
         if frame.ieee80211.is_data() {
+            // TODO: Need to handle encrypted IEEE 802.11 frame.
             // EAPoL is used in Wi-Fi 4-way handshake.
-            // Need to decrypt frame to access LLC header.
-            // TODO: Implement this function in ieee80211.rs after Hostapd is in Rust.
-            if is_eapol(packet) {
+            let is_eapol = frame.ieee80211.is_eapol().unwrap_or_else(|e| {
+                debug!("Failed to get ether type for is_eapol(): {}", e);
+                false
+            });
+            if is_eapol {
                 processor.hostapd = true;
             } else if frame.ieee80211.is_to_ap() {
                 processor.network = true;
