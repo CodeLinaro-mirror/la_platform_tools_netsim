@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::packets::ieee80211::{Ieee80211, MacAddress};
+use super::packets::ieee80211::{DataSubType, Ieee80211, MacAddress};
 use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
 use crate::wifi::frame::Frame;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
@@ -247,7 +247,10 @@ impl Medium {
             if is_eapol {
                 processor.hostapd = true;
             } else if frame.ieee80211.is_to_ap() {
-                processor.network = true;
+                // Don't forward Null Data frames to slirp because they are used to maintain an active connection and carry no user data.
+                if processor.frame.ieee80211.stype() != DataSubType::Nodata.into() {
+                    processor.network = true;
+                }
             }
         } else {
             // Mgmt or Ctrl frames.
