@@ -191,6 +191,11 @@ impl Ieee80211 {
         self.ftype == FrameType::Ctl && self.stype == (ManagementSubType::ProbeReq as u8)
     }
 
+    // Frame type is EAPoL
+    pub fn is_eapol(&self) -> anyhow::Result<bool> {
+        Ok(self.get_ethertype()? == EtherType::Eapol)
+    }
+
     pub fn get_ds(&self) -> String {
         match self.specialize().unwrap() {
             Ieee80211Child::Ieee80211ToAp(hdr) => "ToAp",

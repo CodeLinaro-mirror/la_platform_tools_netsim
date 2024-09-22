@@ -13,15 +13,12 @@
 // limitations under the License.
 
 /// Configuration for netsim
-use lazy_static::lazy_static;
 use std::sync::{Once, RwLock};
 
 static SET_DEV_CALLED: Once = Once::new();
 static SET_PCAP_CALLED: Once = Once::new();
 
-lazy_static! {
-    static ref CONFIG: RwLock<Config> = RwLock::new(Config::new());
-}
+static CONFIG: RwLock<Config> = RwLock::new(Config::new());
 
 struct Config {
     pub dev: Option<bool>,
@@ -29,7 +26,7 @@ struct Config {
 }
 
 impl Config {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { dev: None, pcap: None }
     }
 }

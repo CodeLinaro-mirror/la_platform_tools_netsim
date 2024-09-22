@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::packets::ieee80211::{Ieee80211, MacAddress};
+use super::packets::ieee80211::{DataSubType, Ieee80211, MacAddress};
 use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
-use crate::ffi::ffi_wifi::is_eapol;
 use crate::wifi::frame::Frame;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::{anyhow, Context};
@@ -239,13 +238,19 @@ impl Medium {
 
         // Data frames
         if frame.ieee80211.is_data() {
+            // TODO: Need to handle encrypted IEEE 802.11 frame.
             // EAPoL is used in Wi-Fi 4-way handshake.
-            // Need to decrypt frame to access LLC header.
-            // TODO: Implement this function in ieee80211.rs after Hostapd is in Rust.
-            if is_eapol(packet) {
+            let is_eapol = frame.ieee80211.is_eapol().unwrap_or_else(|e| {
+                debug!("Failed to get ether type for is_eapol(): {}", e);
+                false
+            });
+            if is_eapol {
                 processor.hostapd = true;
             } else if frame.ieee80211.is_to_ap() {
-                processor.network = true;
+                // Don't forward Null Data frames to slirp because they are used to maintain an active connection and carry no user data.
+                if processor.frame.ieee80211.stype() != DataSubType::Nodata.into() {
+                    processor.network = true;
+                }
             }
         } else {
             // Mgmt or Ctrl frames.
@@ -291,14 +296,28 @@ impl Medium {
     /// Handle Wi-Fi Ieee802.3 frame from network.
     /// Convert to HwsimMsg and send to clients.
     pub fn process_ieee8023_response(&self, packet: &Bytes) {
-        if let Err(e) = self.send_ieee8023_response(packet) {
+        let result = Ieee80211::from_ieee8023(packet, self.hostapd_bssid)
+            .and_then(|ieee80211| self.handle_ieee80211_response(ieee80211));
+
+        if let Err(e) = result {
+            warn!("{}", e);
+        }
+    }
+
+    /// Handle Wi-Fi Ieee802.11 frame from network.
+    /// Convert to HwsimMsg and send to clients.
+    pub fn process_ieee80211_response(&self, packet: &Bytes) {
+        let result = Ieee80211::decode_full(packet)
+            .context("Ieee80211")
+            .and_then(|ieee80211| self.handle_ieee80211_response(ieee80211));
+
+        if let Err(e) = result {
             warn!("{}", e);
         }
     }
 
     /// Determine the client id based on destination and send to client.
-    fn send_ieee8023_response(&self, ieee8023: &Bytes) -> anyhow::Result<()> {
-        let ieee80211 = Ieee80211::from_ieee8023(ieee8023, self.hostapd_bssid)?;
+    fn handle_ieee80211_response(&self, ieee80211: Ieee80211) -> anyhow::Result<()> {
         let dest_addr = ieee80211.get_destination();
         if let Ok(destination) = self.get_station(&dest_addr) {
             self.send_ieee80211_response(&ieee80211, &destination)?;

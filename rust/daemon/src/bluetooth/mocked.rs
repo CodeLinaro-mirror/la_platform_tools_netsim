@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::bluetooth::{BeaconChip, BEACON_CHIPS};
+use crate::bluetooth::{get_beacon_chips, BeaconChip};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use ::protobuf::MessageField;
-use lazy_static::lazy_static;
 use log::info;
 use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::configuration::Controller as RootcanalController;
@@ -28,9 +27,7 @@ use std::sync::Mutex;
 use std::sync::RwLock;
 use std::{collections::HashMap, ptr::null};
 
-lazy_static! {
-    static ref IDS: AtomicU32 = AtomicU32::new(0);
-}
+static IDS: AtomicU32 = AtomicU32::new(0);
 
 fn next_id() -> FacadeIdentifier {
     FacadeIdentifier(IDS.fetch_add(1, Ordering::SeqCst))
@@ -48,7 +45,7 @@ pub fn ble_beacon_add(
     };
 
     let beacon_chip = BeaconChip::from_proto(device_name, chip_id, beacon_proto)?;
-    if BEACON_CHIPS.write().unwrap().insert(chip_id, Mutex::new(beacon_chip)).is_some() {
+    if get_beacon_chips().write().unwrap().insert(chip_id, Mutex::new(beacon_chip)).is_some() {
         return Err(format!(
             "failed to create a bluetooth beacon chip with id {chip_id}: chip id already exists.",
         ));
@@ -64,8 +61,8 @@ pub fn ble_beacon_remove(
     chip_id: ChipIdentifier,
     facade_id: FacadeIdentifier,
 ) -> Result<(), String> {
-    info!("{:?}", BEACON_CHIPS.read().unwrap().keys());
-    if BEACON_CHIPS.write().unwrap().remove(&chip_id).is_none() {
+    info!("{:?}", get_beacon_chips().read().unwrap().keys());
+    if get_beacon_chips().write().unwrap().remove(&chip_id).is_none() {
         Err(format!("failed to delete ble beacon chip: chip with id {chip_id} does not exist"))
     } else {
         Ok(())

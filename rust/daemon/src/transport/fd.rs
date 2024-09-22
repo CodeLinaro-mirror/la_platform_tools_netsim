@@ -26,7 +26,6 @@ use crate::ffi::ffi_transport;
 use crate::wireless;
 use crate::wireless::packet::{register_transport, unregister_transport, Response};
 use bytes::Bytes;
-use lazy_static::lazy_static;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
 use netsim_proto::hci_packet::{hcipacket::PacketType, HCIPacket};
@@ -37,7 +36,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{ErrorKind, Write};
 use std::os::fd::FromRawFd;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::thread;
 use std::thread::JoinHandle;
 
@@ -293,9 +292,10 @@ unsafe fn connector_fd_reader(fd_rx: i32, kind: ChipKind, stream_id: u32) -> Joi
 }
 
 // For connector.
-lazy_static! {
-    static ref CONNECTOR_FILES: Arc<RwLock<HashMap<u32, File>>> =
-        Arc::new(RwLock::new(HashMap::new()));
+static CONNECTOR_FILES: OnceLock<Arc<RwLock<HashMap<u32, File>>>> = OnceLock::new();
+
+fn get_connector_files() -> Arc<RwLock<HashMap<u32, File>>> {
+    CONNECTOR_FILES.get_or_init(|| Arc::new(RwLock::new(HashMap::new()))).clone()
 }
 
 /// This function is called when a packet is received from the gRPC server.
@@ -310,7 +310,7 @@ fn connector_grpc_read_callback(stream_id: u32, proto_bytes: &[u8]) {
         buffer.extend(request.packet());
     }
 
-    if let Some(mut file_in) = CONNECTOR_FILES.read().unwrap().get(&stream_id) {
+    if let Some(mut file_in) = get_connector_files().read().unwrap().get(&stream_id) {
         if let Err(e) = file_in.write_all(&buffer[..]) {
             error!("Failed to write: {}", e);
         }
@@ -326,7 +326,8 @@ fn connector_grpc_reader(chip_kind: ChipKind, stream_id: u32, file_in: File) -> 
         .name(format!("grpc_reader_{}", stream_id))
         .spawn(move || {
             {
-                let mut binding = CONNECTOR_FILES.write().unwrap();
+                let connector_files = get_connector_files();
+                let mut binding = connector_files.write().unwrap();
                 if binding.contains_key(&stream_id) {
                     error!(
                         "register_connector: key already present for \
@@ -341,7 +342,7 @@ fn connector_grpc_reader(chip_kind: ChipKind, stream_id: u32, file_in: File) -> 
             // Read packet from grpc and send to file_in.
             ffi_transport::read_packet_response_loop(stream_id, connector_grpc_read_callback);
 
-            CONNECTOR_FILES.write().unwrap().remove(&stream_id);
+            get_connector_files().write().unwrap().remove(&stream_id);
         })
         .unwrap()
 }

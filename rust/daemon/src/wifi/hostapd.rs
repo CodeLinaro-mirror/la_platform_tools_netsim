@@ -22,19 +22,20 @@ use std::sync::mpsc;
 // Provides a stub implementation while the hostapd-rs crate is not integrated into the aosp-main.
 #[cfg(feature = "cuttlefish")]
 pub struct Hostapd {}
+#[cfg(feature = "cuttlefish")]
+impl Hostapd {
+    pub fn input(&self, _bytes: Bytes) {}
+}
 
 #[cfg(not(feature = "cuttlefish"))]
-pub fn hostapd_run(_opt: ProtoHostapdOptions) -> anyhow::Result<(Hostapd, mpsc::Receiver<Bytes>)> {
-    let (tx, rx) = mpsc::channel();
+pub fn hostapd_run(_opt: ProtoHostapdOptions, tx: mpsc::Sender<Bytes>) -> anyhow::Result<Hostapd> {
     let mut hostapd = Hostapd::new(tx, true);
     hostapd.init();
     hostapd.run();
-    Ok((hostapd, rx))
+    Ok(hostapd)
 }
 
 #[cfg(feature = "cuttlefish")]
-pub fn hostapd_run(_opt: ProtoHostapdOptions) -> anyhow::Result<(Hostapd, mpsc::Receiver<Bytes>)> {
-    let hostapd = Hostapd {};
-    let (_, rx) = mpsc::channel();
-    Ok((hostapd, rx))
+pub fn hostapd_run(_opt: ProtoHostapdOptions, _tx: mpsc::Sender<Bytes>) -> anyhow::Result<Hostapd> {
+    Ok(Hostapd {})
 }
