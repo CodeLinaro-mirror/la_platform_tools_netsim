@@ -26,7 +26,6 @@ use crate::devices::devices_handler::add_chip;
 use crate::ffi::ffi_bluetooth;
 use crate::wireless;
 use cxx::{let_cxx_string, UniquePtr};
-use lazy_static::lazy_static;
 use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
 use netsim_proto::model::chip::Bluetooth;
@@ -41,19 +40,32 @@ use netsim_proto::model::{ChipCreate as ChipCreateProto, DeviceCreate as DeviceC
 use pdl_runtime::Packet;
 use protobuf::{Message, MessageField};
 use std::alloc::System;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, ptr::null};
 
-lazy_static! {
-    static ref EMPTY_ADDRESS: Address = Address::try_from(0u64).unwrap();
-    // A singleton that contains a hash map from chip id to RustBluetoothChip.
-    // It's used by `BeaconChip` to access `RustBluetoothChip` to call send_link_layer_packet().
-    static ref BT_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi_bluetooth::RustBluetoothChip>>>> =
-        RwLock::new(HashMap::new());
-    // Used to find beacon chip based on it's id from static methods.
-    pub(crate) static ref BEACON_CHIPS: RwLock<HashMap<ChipIdentifier, Mutex<BeaconChip>>> =
-        RwLock::new(HashMap::new());
+static EMPTY_ADDRESS: OnceLock<Address> = OnceLock::new();
+
+fn get_empty_address() -> &'static Address {
+    EMPTY_ADDRESS.get_or_init(|| Address::try_from(0u64).unwrap())
+}
+
+// A singleton that contains a hash map from chip id to RustBluetoothChip.
+// It's used by `BeaconChip` to access `RustBluetoothChip` to call send_link_layer_packet().
+static BT_CHIPS: OnceLock<
+    RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi_bluetooth::RustBluetoothChip>>>>,
+> = OnceLock::new();
+
+fn get_bt_chips(
+) -> &'static RwLock<HashMap<ChipIdentifier, Mutex<UniquePtr<ffi_bluetooth::RustBluetoothChip>>>> {
+    BT_CHIPS.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+// Used to find beacon chip based on it's id from static methods.
+static BEACON_CHIPS: OnceLock<RwLock<HashMap<ChipIdentifier, Mutex<BeaconChip>>>> = OnceLock::new();
+
+pub(crate) fn get_beacon_chips() -> &'static RwLock<HashMap<ChipIdentifier, Mutex<BeaconChip>>> {
+    BEACON_CHIPS.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
 /// BeaconChip class.
@@ -133,7 +145,7 @@ impl BeaconChip {
     }
 
     pub fn send_link_layer_le_packet(&self, packet: &[u8], tx_power: i8) {
-        let binding = BT_CHIPS.read().unwrap();
+        let binding = get_bt_chips().read().unwrap();
         if let Some(rust_bluetooth_chip) = binding.get(&self.chip_id) {
             rust_bluetooth_chip
                 .lock()
@@ -154,7 +166,7 @@ pub struct BeaconChipCallbacks {
 
 impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
     fn tick(&mut self) {
-        let guard = BEACON_CHIPS.read().unwrap();
+        let guard = get_beacon_chips().read().unwrap();
         let mut beacon = guard.get(&self.chip_id);
         if beacon.is_none() {
             error!("could not find bluetooth beacon with chip id {}", self.chip_id);
@@ -185,7 +197,7 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
             advertising_address_type: AddressType::Public,
             target_address_type: AddressType::Public,
             source_address: beacon.address,
-            destination_address: *EMPTY_ADDRESS,
+            destination_address: *get_empty_address(),
         }
         .build()
         .encode_to_vec()
@@ -200,7 +212,7 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
         packet_type: u8,
         packet: &[u8],
     ) {
-        let guard = BEACON_CHIPS.read().unwrap();
+        let guard = get_beacon_chips().read().unwrap();
         let beacon = guard.get(&self.chip_id);
         if beacon.is_none() {
             error!("could not find bluetooth beacon with chip id {}", self.chip_id);
@@ -244,7 +256,7 @@ pub fn ble_beacon_add(
     };
 
     let beacon_chip = BeaconChip::from_proto(device_name, chip_id, beacon_proto)?;
-    if BEACON_CHIPS.write().unwrap().insert(chip_id, Mutex::new(beacon_chip)).is_some() {
+    if get_beacon_chips().write().unwrap().insert(chip_id, Mutex::new(beacon_chip)).is_some() {
         return Err(format!(
             "failed to create a bluetooth beacon chip with id {chip_id}: chip id already exists.",
         ));
@@ -260,7 +272,7 @@ pub fn ble_beacon_add(
     let rust_chip = add_rust_device_result.rust_chip;
     let facade_id = add_rust_device_result.facade_id;
     info!("Creating HCI facade_id: {} for chip_id: {}", facade_id, chip_id);
-    BT_CHIPS.write().unwrap().insert(chip_id, Mutex::new(rust_chip));
+    get_bt_chips().write().unwrap().insert(chip_id, Mutex::new(rust_chip));
     Ok(FacadeIdentifier(facade_id))
 }
 
@@ -269,8 +281,8 @@ pub fn ble_beacon_remove(
     chip_id: ChipIdentifier,
     facade_id: FacadeIdentifier,
 ) -> Result<(), String> {
-    let removed_beacon = BEACON_CHIPS.write().unwrap().remove(&chip_id);
-    let removed_radio = BT_CHIPS.write().unwrap().remove(&chip_id);
+    let removed_beacon = get_beacon_chips().write().unwrap().remove(&chip_id);
+    let removed_radio = get_bt_chips().write().unwrap().remove(&chip_id);
     if removed_beacon.is_none() || removed_radio.is_none() {
         Err(format!("failed to delete ble beacon chip: chip with id {chip_id} does not exist"))
     } else {
@@ -284,7 +296,7 @@ pub fn ble_beacon_patch(
     chip_id: ChipIdentifier,
     patch: &BleBeaconProto,
 ) -> Result<(), String> {
-    let mut guard = BEACON_CHIPS.write().unwrap();
+    let mut guard = get_beacon_chips().write().unwrap();
     let mut beacon = guard
         .get_mut(&chip_id)
         .ok_or(format!("could not find bluetooth beacon with chip id {chip_id} for patching"))?
@@ -347,7 +359,7 @@ pub fn ble_beacon_get(
     chip_id: ChipIdentifier,
     _facade_id: FacadeIdentifier,
 ) -> Result<BleBeaconProto, String> {
-    let guard = BEACON_CHIPS.read().unwrap();
+    let guard = get_beacon_chips().read().unwrap();
     let beacon = guard
         .get(&chip_id)
         .ok_or(format!("could not get bluetooth beacon with chip id {chip_id}"))?
@@ -378,7 +390,7 @@ fn addr_to_str(addr: Address) -> String {
 
 fn str_to_addr(addr: &str) -> Result<Address, String> {
     if addr == String::default() {
-        Ok(*EMPTY_ADDRESS)
+        Ok(*get_empty_address())
     } else {
         if addr.len() != 17 {
             return Err(String::from("failed to parse address: address was not the right length"));
@@ -408,9 +420,7 @@ pub mod tests {
     // using ble_beacon_add from mocked.rs
     use crate::bluetooth::ble_beacon_add;
 
-    lazy_static! {
-        static ref TEST_GUID_GENERATOR: AtomicU32 = AtomicU32::new(0);
-    }
+    static TEST_GUID_GENERATOR: AtomicU32 = AtomicU32::new(0);
 
     fn next_id() -> ChipIdentifier {
         ChipIdentifier(TEST_GUID_GENERATOR.fetch_add(1, Ordering::SeqCst))
@@ -438,7 +448,7 @@ pub mod tests {
     }
 
     fn cleanup_beacon(chip_id: ChipIdentifier) {
-        BEACON_CHIPS.write().unwrap().remove(&chip_id);
+        get_beacon_chips().write().unwrap().remove(&chip_id);
     }
 
     #[test]

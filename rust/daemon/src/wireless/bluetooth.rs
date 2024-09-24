@@ -18,7 +18,6 @@ use crate::wireless::{WirelessAdaptor, WirelessAdaptorImpl};
 
 use bytes::Bytes;
 use cxx::{let_cxx_string, CxxString, CxxVector};
-use lazy_static::lazy_static;
 use log::{error, info};
 use netsim_proto::config::Bluetooth as BluetoothConfig;
 use netsim_proto::configuration::Controller as RootcanalController;
@@ -27,12 +26,10 @@ use netsim_proto::model::chip::Radio as ProtoRadio;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::invalid_packet::Reason as InvalidPacketReason;
 use netsim_proto::stats::{netsim_radio_stats, InvalidPacket, NetsimRadioStats as ProtoRadioStats};
-use std::sync::atomic::{AtomicBool, Ordering};
-
 use protobuf::{Enum, Message, MessageField};
-
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 
 static WIRELESS_BT_MUTEX: Mutex<()> = Mutex::new(());
 
@@ -42,9 +39,13 @@ pub type RootcanalIdentifier = u32;
 // RootcanalIdentifier to Vec<InvalidPacket>
 // This singleton is only used when Rootcanal reports invalid
 // packets by rootcanal_id and we add those to Bluetooth struct.
-lazy_static! {
-    static ref BLUETOOTH_INVALID_PACKETS: Arc<Mutex<BTreeMap<RootcanalIdentifier, Vec<InvalidPacket>>>> =
-        Arc::new(Mutex::new(BTreeMap::new()));
+static BLUETOOTH_INVALID_PACKETS: OnceLock<
+    Arc<Mutex<BTreeMap<RootcanalIdentifier, Vec<InvalidPacket>>>>,
+> = OnceLock::new();
+
+fn get_bluetooth_invalid_packets() -> Arc<Mutex<BTreeMap<RootcanalIdentifier, Vec<InvalidPacket>>>>
+{
+    BLUETOOTH_INVALID_PACKETS.get_or_init(|| Arc::new(Mutex::new(BTreeMap::new()))).clone()
 }
 
 /// Parameters for creating Bluetooth chips
@@ -84,7 +85,7 @@ impl Drop for Bluetooth {
         // Lock to protect id_to_chip_info_ table in C++
         let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
         ffi_bluetooth::bluetooth_remove(self.rootcanal_id);
-        BLUETOOTH_INVALID_PACKETS.lock().expect("invalid packets").remove(&self.rootcanal_id);
+        get_bluetooth_invalid_packets().lock().expect("invalid packets").remove(&self.rootcanal_id);
     }
 }
 
@@ -141,7 +142,7 @@ impl WirelessAdaptor for Bluetooth {
         // Construct NetsimRadioStats for BLE and Classic.
         let mut ble_stats_proto = ProtoRadioStats::new();
         ble_stats_proto.set_duration_secs(duration_secs);
-        if let Some(v) = BLUETOOTH_INVALID_PACKETS
+        if let Some(v) = get_bluetooth_invalid_packets()
             .lock()
             .expect("Failed to acquire lock on BLUETOOTH_INVALID_PACKETS")
             .get(&self.rootcanal_id)
@@ -186,7 +187,10 @@ pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAda
         low_energy_enabled: AtomicBool::new(true),
         classic_enabled: AtomicBool::new(true),
     };
-    BLUETOOTH_INVALID_PACKETS.lock().expect("invalid packets").insert(rootcanal_id, Vec::new());
+    get_bluetooth_invalid_packets()
+        .lock()
+        .expect("invalid packets")
+        .insert(rootcanal_id, Vec::new());
     Box::new(wireless_adaptor)
 }
 
@@ -210,7 +214,7 @@ pub fn report_invalid_packet(
 ) {
     // TODO(b/330726276): spawn task on tokio once context is provided from rust_main
     let _ = std::thread::Builder::new().name("report_invalid_packet".to_string()).spawn(move || {
-        match BLUETOOTH_INVALID_PACKETS.lock().unwrap().get_mut(&rootcanal_id) {
+        match get_bluetooth_invalid_packets().lock().unwrap().get_mut(&rootcanal_id) {
             Some(v) => {
                 // Remove the earliest reported packet if length greater than 5
                 if v.len() >= 5 {

@@ -19,6 +19,8 @@ pub(crate) mod frame;
 pub(crate) mod hostapd;
 pub(crate) mod hwsim_attr_set;
 pub(crate) mod libslirp;
+#[cfg(not(feature = "cuttlefish"))]
+pub(crate) mod mdns_forwarder;
 pub(crate) mod medium;
 pub(crate) mod packets;
 pub(crate) mod radiotap;

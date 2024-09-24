@@ -23,8 +23,7 @@ use netsim_proto::stats::{
     NetsimDeviceStats as ProtoDeviceStats, NetsimRadioStats as ProtoRadioStats,
 };
 
-use lazy_static::lazy_static;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 // Publish the event to all subscribers
 pub fn publish(event: Event) {
@@ -91,12 +90,10 @@ pub enum Event {
     ShutDown(ShutDown),
 }
 
-lazy_static! {
-    static ref EVENTS: Arc<Mutex<Events>> = Events::new();
-}
+static EVENTS: OnceLock<Arc<Mutex<Events>>> = OnceLock::new();
 
 pub fn get_events() -> Arc<Mutex<Events>> {
-    Arc::clone(&EVENTS)
+    EVENTS.get_or_init(Events::new).clone()
 }
 
 /// A multi-producer, multi-consumer broadcast queue based on

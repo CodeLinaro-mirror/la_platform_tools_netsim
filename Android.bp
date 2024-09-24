@@ -83,7 +83,6 @@ rust_defaults {
         "libtokio",
         "libtokio_stream",
         "libtungstenite",
-        "liblazy_static",
         "liblog_rust",
         "libopenssl",
     ],
