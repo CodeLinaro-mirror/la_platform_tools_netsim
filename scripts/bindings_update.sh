@@ -34,10 +34,8 @@
 #    directory within your LLVM installation:
 #    `set LIBCLANG_PATH=C:\Program Files\LLVM\bin`
 # 3. Uncomment the lines starting with `##` in Cargo.toml.
-# 4. In rust/daemon/Cargo.toml, update `pica` version to "0.1.7"
-#    (version "0.1.9" is unavailable in crates.io).
-# 5. Navigate to the rust/hostapd-rs directory and run `cargo build`.
-# 6. Revert the change in Cargo.toml: `git checkout rust/hostapd-rs/Cargo.toml`
+# 4. Navigate to the rust/hostapd-rs directory and run `cargo build`.
+# 5. Revert the change in Cargo.toml: `git checkout rust/hostapd-rs/Cargo.toml`
 
 if [ $# -ne 1 ] || ([ "$1" != "libslirp-rs" ] && [ "$1" != "hostapd-rs" ]); then
     echo "Must provide library name to update bindings i.e. libslirp-rs or hostapd-rs"

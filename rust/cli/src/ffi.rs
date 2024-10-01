@@ -30,6 +30,7 @@ pub trait ClientResponseReadable {
 }
 
 #[cxx::bridge(namespace = "netsim::frontend")]
+#[allow(clippy::needless_maybe_sized)]
 #[allow(missing_docs)]
 #[allow(unsafe_op_in_unsafe_fn)]
 pub mod frontend_client_ffi {
