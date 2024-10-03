@@ -253,6 +253,10 @@ fn slirp_thread(
     // since this thread is no longer processing Slirp commands.
     drop(tx_poll);
 
+    // Drop callback context
+    *CONTEXT.lock().unwrap() =
+        CallbackContext { tx_bytes: None, tx_cmds: None, poll_fds: Vec::new() };
+
     // SAFETY: Slirp is shutdown. `slirp` `config` and `libslirp` can
     // be released.
 }

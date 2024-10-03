@@ -14,4 +14,6 @@
 
 pub fn main() {
     println!("cargo:rustc-link-search=../objs/archives");
+    println!("cargo:rustc-link-lib=libslirp");
+    println!("cargo:rustc-link-lib=glib-2.0");
 }
