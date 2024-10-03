@@ -392,13 +392,14 @@ fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>
     use winapi::{
         shared::minwindef::ULONG as OsPollFdsLenType,
         um::winsock2::{
-            WSAPoll as poll, POLLERR, POLLHUP, POLLIN, POLLOUT, POLLPRI, SOCKET as FdType,
-            WSAPOLLFD as pollfd,
+            WSAPoll as poll, POLLERR, POLLHUP, POLLOUT, POLLPRI, POLLRDBAND, POLLRDNORM,
+            SOCKET as FdType, WSAPOLLFD as pollfd,
         },
     };
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     type FdType = c_int;
 
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn to_os_events(events: libslirp_sys::SlirpPollType) -> i16 {
         ternary!(events & libslirp_sys::SLIRP_POLL_IN, POLLIN)
             | ternary!(events & libslirp_sys::SLIRP_POLL_OUT, POLLOUT)
@@ -407,12 +408,32 @@ fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>
             | ternary!(events & libslirp_sys::SLIRP_POLL_HUP, POLLHUP)
     }
 
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn to_slirp_events(events: i16) -> libslirp_sys::SlirpPollType {
         ternary!(events & POLLIN, libslirp_sys::SLIRP_POLL_IN)
             | ternary!(events & POLLOUT, libslirp_sys::SLIRP_POLL_OUT)
             | ternary!(events & POLLPRI, libslirp_sys::SLIRP_POLL_PRI)
             | ternary!(events & POLLOUT, libslirp_sys::SLIRP_POLL_ERR)
             | ternary!(events & POLLHUP, libslirp_sys::SLIRP_POLL_HUP)
+    }
+
+    #[cfg(target_os = "windows")]
+    fn to_os_events(events: libslirp_sys::SlirpPollType) -> i16 {
+        ternary!(events & libslirp_sys::SLIRP_POLL_IN, POLLRDNORM)
+            | ternary!(events & libslirp_sys::SLIRP_POLL_OUT, POLLOUT)
+            | ternary!(events & libslirp_sys::SLIRP_POLL_PRI, POLLRDBAND)
+    }
+
+    #[cfg(target_os = "windows")]
+    fn to_slirp_events(events: i16) -> libslirp_sys::SlirpPollType {
+        ternary!(events & POLLRDNORM, libslirp_sys::SLIRP_POLL_IN)
+            | ternary!(events & POLLERR, libslirp_sys::SLIRP_POLL_IN)
+            | ternary!(events & POLLHUP, libslirp_sys::SLIRP_POLL_IN)
+            | ternary!(events & POLLOUT, libslirp_sys::SLIRP_POLL_OUT)
+            | ternary!(events & POLLERR, libslirp_sys::SLIRP_POLL_PRI)
+            | ternary!(events & POLLHUP, libslirp_sys::SLIRP_POLL_PRI)
+            | ternary!(events & POLLPRI, libslirp_sys::SLIRP_POLL_PRI)
+            | ternary!(events & POLLRDBAND, libslirp_sys::SLIRP_POLL_PRI)
     }
 
     while let Ok((poll_fds, timeout)) = rx.recv() {
@@ -436,6 +457,7 @@ fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>
         };
 
         let mut slirp_poll_fds: Vec<PollFd> = Vec::with_capacity(poll_fds.len());
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         for &fd in &os_poll_fds {
             slirp_poll_fds.push(PollFd {
                 fd: fd.fd as c_int,
@@ -443,6 +465,15 @@ fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>
                 revents: to_slirp_events(fd.revents) & to_slirp_events(fd.events),
             });
         }
+        #[cfg(target_os = "windows")]
+        for (fd, poll_fd) in os_poll_fds.iter().zip(poll_fds.iter()) {
+            slirp_poll_fds.push(PollFd {
+                fd: fd.fd as c_int,
+                events: poll_fd.events,
+                revents: to_slirp_events(fd.revents) & poll_fd.events,
+            });
+        }
+
         // 'select_error' should be 1 if poll() returned an error, else 0.
         if let Err(e) = tx.send(SlirpCmd::PollResult(slirp_poll_fds, (poll_result < 0) as i32)) {
             warn!("Failed to send slirp PollResult cmd: {}", e);
@@ -572,4 +603,22 @@ extern "C" fn unregister_poll_fd_cb(
 
 extern "C" fn notify_cb(_opaque: *mut ::std::os::raw::c_void) {
     //TODO: Un-implemented
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[link(name = "libslirp")]
+    extern "C" {
+        fn slirp_version_string() -> *const ::std::os::raw::c_char;
+    }
+
+    #[test]
+    fn test_version_string() {
+        // Safety
+        // Function returns a constant c_str
+        let c_version_str = unsafe { CStr::from_ptr(slirp_version_string()) };
+        assert_eq!("4.7.0", c_version_str.to_str().unwrap());
+    }
 }

@@ -294,7 +294,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
         &config.wifi,
         args.rust_slirp,
         args.rust_hostapd,
-        args.mdns_forwarder,
+        args.forward_host_mdns,
     );
     wireless::uwb::uwb_start();
 
