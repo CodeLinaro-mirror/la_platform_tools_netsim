@@ -31,7 +31,7 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr};
-use std::sync::{mpsc, Arc, Mutex, OnceLock};
+use std::sync::{mpsc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -118,7 +118,7 @@ impl TimerManager {
     // Return the minimum duration until the next timer
     fn min_duration(&self) -> Duration {
         match self.map.iter().min_by_key(|(_, timer)| timer.expire_time) {
-            Some((_, &ref timer)) => {
+            Some((_, timer)) => {
                 let now_ms = self.clock.elapsed().as_millis() as u64;
                 // Duration is >= 0
                 Duration::from_millis(timer.expire_time.saturating_sub(now_ms))
@@ -368,7 +368,7 @@ extern "C" fn slirp_get_revents_cb(idx: c_int, _opaue: *mut c_void) -> c_int {
     if let Some(poll_fd) = CONTEXT.lock().unwrap().poll_fds.get(idx as usize) {
         return poll_fd.revents as c_int;
     }
-    return 0;
+    0
 }
 
 macro_rules! ternary {
@@ -383,14 +383,21 @@ macro_rules! ternary {
 
 // Loop issuing blocking poll requests, sending the results into the slirp thread
 
-#[cfg(target_os = "windows")]
 fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>) {
-    todo!();
-}
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>) {
-    use libc::{poll, pollfd, POLLERR, POLLHUP, POLLIN, POLLOUT, POLLPRI};
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    use libc::{
+        nfds_t as OsPollFdsLenType, poll, pollfd, POLLERR, POLLHUP, POLLIN, POLLOUT, POLLPRI,
+    };
+    #[cfg(target_os = "windows")]
+    use winapi::{
+        shared::minwindef::ULONG as OsPollFdsLenType,
+        um::winsock2::{
+            WSAPoll as poll, POLLERR, POLLHUP, POLLIN, POLLOUT, POLLPRI, SOCKET as FdType,
+            WSAPOLLFD as pollfd,
+        },
+    };
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    type FdType = c_int;
 
     fn to_os_events(events: libslirp_sys::SlirpPollType) -> i16 {
         ternary!(events & libslirp_sys::SLIRP_POLL_IN, POLLIN)
@@ -412,25 +419,26 @@ fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>
         // Create a c format array with the same size as poll
         let mut os_poll_fds: Vec<pollfd> = Vec::with_capacity(poll_fds.len());
         for fd in &poll_fds {
-            os_poll_fds.push(pollfd { fd: fd.fd, events: to_os_events(fd.events), revents: 0 });
+            os_poll_fds.push(pollfd {
+                fd: fd.fd as FdType,
+                events: to_os_events(fd.events),
+                revents: 0,
+            });
         }
 
-        #[cfg(target_os = "linux")]
-        let os_poll_fds_len = os_poll_fds.len() as u64;
-        #[cfg(target_os = "macos")]
-        let os_poll_fds_len = os_poll_fds.len() as u32;
         // SAFETY: we ensure that:
         //
         // `os_poll_fds` is a valid ptr to a vector of pollfd which
         // the `poll` system call can write into. Note `os_poll_fds`
         // is created and allocated above.
-        let poll_result =
-            unsafe { poll(os_poll_fds.as_mut_ptr(), os_poll_fds_len, timeout as i32) };
+        let poll_result = unsafe {
+            poll(os_poll_fds.as_mut_ptr(), os_poll_fds.len() as OsPollFdsLenType, timeout as i32)
+        };
 
         let mut slirp_poll_fds: Vec<PollFd> = Vec::with_capacity(poll_fds.len());
         for &fd in &os_poll_fds {
             slirp_poll_fds.push(PollFd {
-                fd: fd.fd,
+                fd: fd.fd as c_int,
                 events: to_slirp_events(fd.events),
                 revents: to_slirp_events(fd.revents) & to_slirp_events(fd.events),
             });
@@ -512,7 +520,7 @@ extern "C" fn timer_new_opaque_cb(
     _opaque: *mut c_void,
 ) -> *mut c_void {
     let timers = get_timers();
-    let mut guard = get_timers().lock().unwrap();
+    let mut guard = timers.lock().unwrap();
     let timer = guard.next_timer();
     debug!("timer_new_opaque {timer}");
     guard.map.insert(timer, Timer { expire_time: u64::MAX, id, cb_opaque: cb_opaque as usize });
