@@ -1,0 +1,227 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use regex::Regex;
+use std::fmt;
+use std::net::{IpAddr, ToSocketAddrs};
+
+/// Proxy configuration
+pub struct ProxyConfig {
+    pub protocol: String,
+    pub host: IpAddr,
+    pub port: u16,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ProxyConfigError {
+    InvalidConfigString,
+    InvalidPortNumber,
+    InvalidHost,
+}
+
+impl fmt::Display for ProxyConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ProxyConfigError::InvalidConfigString => {
+                write!(f, "Invalid proxy configuration string")
+            }
+            ProxyConfigError::InvalidPortNumber => write!(f, "Invalid port number"),
+            ProxyConfigError::InvalidHost => write!(f, "Invalid host"),
+        }
+    }
+}
+
+impl std::error::Error for ProxyConfigError {}
+
+impl ProxyConfig {
+    /// Parses a proxy configuration string and returns a `ProxyConfig` struct.
+    ///
+    /// The function expects the proxy configuration string to be in the following format:
+    ///
+    /// ```
+    /// [protocol://][username:password@]host:port
+    /// [protocol://][username:password@]/[host/]:port
+    /// ```
+    ///
+    /// where:
+    /// * `protocol`: The network protocol (e.g., `http`, `https`, `socks5`). If not provided, defaults to `http`.
+    /// * `username`: and `password` are optional credentials for authentication.
+    /// * `host`: The hostname or IP address of the proxy server. If it's an IPv6 address, it should be enclosed in square brackets (e.g., "[::1]").
+    /// * `port`: The port number on which the proxy server is listening.
+    ///
+    /// # Errors
+    /// Returns a `ProxyConfigError` if the input string is not in a valid format or if the hostname/port resolution fails.
+    ///
+    /// # Limitations
+    /// * Usernames and passwords cannot contain `@` or `:`.
+    pub fn from_string(config_string: &str) -> Result<ProxyConfig, ProxyConfigError> {
+        let re = Regex::new(r"^(?:(?P<protocol>\w+)://)?(?:(?P<user>\w+):(?P<pass>\w+)@)?(?P<host>(?:[\w\.-]+|\[[^\]]+\])):(?P<port>\d+)$").unwrap();
+        let caps = re.captures(config_string).ok_or(ProxyConfigError::InvalidConfigString)?;
+
+        let protocol =
+            caps.name("protocol").map_or_else(|| "http".to_string(), |m| m.as_str().to_string());
+        let username = caps.name("user").map(|m| m.as_str().to_string());
+        let password = caps.name("pass").map(|m| m.as_str().to_string());
+
+        // Extract host, removing surrounding brackets if present
+        let hostname = caps
+            .name("host")
+            .ok_or(ProxyConfigError::InvalidConfigString)?
+            .as_str()
+            .trim_matches(|c| c == '[' || c == ']')
+            .to_string();
+
+        let port = caps
+            .name("port")
+            .ok_or(ProxyConfigError::InvalidConfigString)?
+            .as_str()
+            .parse::<u16>()
+            .map_err(|_| ProxyConfigError::InvalidPortNumber)?;
+
+        let host = (hostname, port)
+            .to_socket_addrs()
+            .map_err(|_| ProxyConfigError::InvalidHost)?
+            .next() // Take the first resolved address
+            .ok_or(ProxyConfigError::InvalidHost)?
+            .ip();
+
+        Ok(ProxyConfig { protocol, username, password, host, port })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+    #[test]
+    fn parse_configuration_string_success() {
+        // Test data
+        let data = [
+            (
+                "127.0.0.1:8080",
+                ProxyConfig {
+                    protocol: "http".to_owned(),
+                    host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                    port: 8080,
+                    username: None,
+                    password: None,
+                },
+            ),
+            (
+                "http://127.0.0.1:8080",
+                ProxyConfig {
+                    protocol: "http".to_owned(),
+                    host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                    port: 8080,
+                    username: None,
+                    password: None,
+                },
+            ),
+            (
+                "https://127.0.0.1:8080",
+                ProxyConfig {
+                    protocol: "https".to_owned(),
+                    host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                    port: 8080,
+                    username: None,
+                    password: None,
+                },
+            ),
+            (
+                "sock5://127.0.0.1:8080",
+                ProxyConfig {
+                    protocol: "sock5".to_owned(),
+                    host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                    port: 8080,
+                    username: None,
+                    password: None,
+                },
+            ),
+            (
+                "user:pass@192.168.0.18:3128",
+                ProxyConfig {
+                    protocol: "http".to_owned(),
+                    host: IpAddr::V4(Ipv4Addr::new(192, 168, 0, 18)),
+                    port: 3128,
+                    username: Some("user".to_string()),
+                    password: Some("pass".to_string()),
+                },
+            ),
+            (
+                "https://[::1]:7000",
+                ProxyConfig {
+                    protocol: "https".to_owned(),
+                    host: IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
+                    port: 7000,
+                    username: None,
+                    password: None,
+                },
+            ),
+            (
+                "[::1]:7000",
+                ProxyConfig {
+                    protocol: "http".to_owned(),
+                    host: IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
+                    port: 7000,
+                    username: None,
+                    password: None,
+                },
+            ),
+        ];
+
+        // TODO: Mock DNS server to to test hostname. e.g. "proxy.example.com:3000".
+        for (input, expected) in data {
+            let result = ProxyConfig::from_string(input);
+            assert!(
+                result.is_ok(),
+                "Unexpected error {} for input: {}",
+                result.err().unwrap(),
+                input
+            );
+            let result = result.ok().unwrap();
+            assert_eq!(result.host, expected.host, "For input: {}", input);
+            assert_eq!(result.port, expected.port, "For input: {}", input);
+            assert_eq!(result.username, expected.username, "For input: {}", input);
+            assert_eq!(result.password, expected.password, "For input: {}", input);
+        }
+    }
+
+    #[test]
+    fn parse_configuration_string_with_errors() {
+        let data = [
+            ("http://", ProxyConfigError::InvalidConfigString),
+            ("", ProxyConfigError::InvalidConfigString),
+            ("256.0.0.1:8080", ProxyConfigError::InvalidHost),
+            ("127.0.0.1:foo", ProxyConfigError::InvalidConfigString),
+            ("127.0.0.1:-2", ProxyConfigError::InvalidConfigString),
+            ("127.0.0.1:100000", ProxyConfigError::InvalidPortNumber),
+            ("127.0.0.1", ProxyConfigError::InvalidConfigString),
+            ("http:127.0.0.1:8080", ProxyConfigError::InvalidConfigString),
+            ("::1:8080", ProxyConfigError::InvalidConfigString),
+            ("user@pass:127.0.0.1:8080", ProxyConfigError::InvalidConfigString),
+            ("user@127.0.0.1:8080", ProxyConfigError::InvalidConfigString),
+            ("proxy.example.com:7000", ProxyConfigError::InvalidHost),
+            ("[::1}:7000", ProxyConfigError::InvalidConfigString),
+        ];
+
+        for (input, expected_error) in data {
+            let result = ProxyConfig::from_string(input);
+            assert!(result.is_err(), "Expected an error for input: {}", input);
+            assert_eq!(result.err().unwrap(), expected_error, "For input: {}", input);
+        }
+    }
+}
