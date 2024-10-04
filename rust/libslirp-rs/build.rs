@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Version library.
-
-pub const VERSION: &str = "0.3.27";
-
-pub fn get_version() -> String {
-    VERSION.to_owned()
+pub fn main() {
+    println!("cargo:rustc-link-search=../objs/archives");
+    println!("cargo:rustc-link-lib=libslirp");
+    println!("cargo:rustc-link-lib=glib-2.0");
 }

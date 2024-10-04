@@ -71,6 +71,14 @@ pub struct NetsimdArgs {
     #[arg(long)]
     pub rust_slirp: bool,
 
+    /// Forwards mDNS from the host to the guest, allowing emulator to discover mDNS services running on the host.
+    ///
+    /// # Limitations
+    /// * Currently only supports a single emulator.
+    /// * May impact Wi-Fi connectivity between emulators.
+    #[arg(long, verbatim_doc_comment)]
+    pub forward_host_mdns: bool,
+
     /// Set the vsock port number to be listened by the frontend grpc server
     #[arg(short, long)]
     pub vsock: Option<u16>,
