@@ -1,6 +1,6 @@
 [package]
 name = "netsim-daemon"
-version = "0.3.25"
+version = "0.3.27"
 edition = "2021"
 build = "build.rs"
 
@@ -21,12 +21,14 @@ http = "0.2.9"
 netsim-common = { path = "../common" }
 libslirp-rs = { path = "../libslirp-rs" }
 hostapd-rs = { path = "../hostapd-rs" }
-pica = { version = "0.1.9", default-features = false }
+# Relax the version constraint for 'pica' to allow cargo to select a compatible version
+# from crates.io since 0.1.9 seems to be only available in AOSP.
+pica = { version = "0.1", default-features = false }
 protobuf = "3.2.0"
 protobuf-json-mapping = "3.2.0"
 rand = "0.8.5"
 regex = "1.6.0"
-tokio = { verison = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread"] }
+tokio = { version = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 thiserror = { version = ">=1.0.40"}
 tungstenite = { version = ">=0.19.0", default-features = false }

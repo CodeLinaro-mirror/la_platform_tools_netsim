@@ -16,6 +16,8 @@
 use bytes::Bytes;
 #[cfg(not(feature = "cuttlefish"))]
 pub use hostapd_rs::hostapd::Hostapd;
+#[cfg(not(feature = "cuttlefish"))]
+use netsim_common::util::os_utils::get_discovery_directory;
 use netsim_proto::config::HostapdOptions as ProtoHostapdOptions;
 use std::sync::mpsc;
 
@@ -24,13 +26,16 @@ use std::sync::mpsc;
 pub struct Hostapd {}
 #[cfg(feature = "cuttlefish")]
 impl Hostapd {
-    pub fn input(&self, _bytes: Bytes) {}
+    pub fn input(&self, _bytes: Bytes) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(not(feature = "cuttlefish"))]
 pub fn hostapd_run(_opt: ProtoHostapdOptions, tx: mpsc::Sender<Bytes>) -> anyhow::Result<Hostapd> {
-    let mut hostapd = Hostapd::new(tx, true);
-    hostapd.init();
+    // Create hostapd.conf under discovery directory
+    let config_path = get_discovery_directory().join("hostapd.conf");
+    let mut hostapd = Hostapd::new(tx, true, config_path);
     hostapd.run();
     Ok(hostapd)
 }

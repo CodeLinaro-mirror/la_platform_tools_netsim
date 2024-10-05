@@ -137,7 +137,7 @@ class InstallEmulatorManager:
     for filename in os.listdir(EMULATOR_ARTIFACT_PATH):
       # Check if the filename matches the pattern
       if re.match(
-          rf"^sdk-repo-{os_name_artifact}-emulator-\d+\.zip$", filename
+          rf"^sdk-repo-{os_name_artifact}-emulator-(P?\d+)\.zip$", filename
       ):
         zip_file_exists = True
         logging.info(f"Unzipping {filename}...")

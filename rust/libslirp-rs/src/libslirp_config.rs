@@ -185,3 +185,60 @@ impl SlirpConfigs {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_slirp_config_default() {
+        let config = SlirpConfig::default();
+
+        assert_eq!(config.version, 5);
+        assert_eq!(config.restricted, 0);
+        assert!(config.in_enabled);
+        assert_eq!(config.vnetwork, Ipv4Addr::new(10, 0, 2, 0));
+        assert_eq!(config.vnetmask, Ipv4Addr::new(255, 255, 255, 0));
+        assert_eq!(config.vhost, Ipv4Addr::new(10, 0, 2, 2));
+        assert!(config.in6_enabled);
+        assert_eq!(config.vprefix_addr6, "fec0::".parse::<Ipv6Addr>().unwrap());
+        assert_eq!(config.vprefix_len, 64);
+        assert_eq!(config.vhost6, "fec0::2".parse::<Ipv6Addr>().unwrap());
+        assert_eq!(config.vhostname, None);
+        assert_eq!(config.tftp_server_name, None);
+        assert_eq!(config.tftp_path, None);
+        assert_eq!(config.bootfile, None);
+        assert_eq!(config.vdhcp_start, Ipv4Addr::new(10, 0, 2, 16));
+        assert_eq!(config.vnameserver, Ipv4Addr::new(10, 0, 2, 3));
+        assert_eq!(config.vnameserver6, "fec0::3".parse::<Ipv6Addr>().unwrap());
+        assert!(config.vdnssearch.is_empty());
+        assert_eq!(config.vdomainname, None);
+        assert_eq!(config.if_mtu, 0);
+        assert_eq!(config.if_mru, 0);
+        assert!(!config.disable_host_loopback);
+        assert!(!config.enable_emu);
+        assert_eq!(config.outbound_addr, None);
+        assert_eq!(config.outbound_addr6, None);
+        assert!(!config.disable_dns);
+        assert!(!config.disable_dhcp);
+        assert_eq!(config.mfr_id, 0);
+        assert_eq!(config.oob_eth_addr, [0; 6]);
+        assert!(!config.http_proxy_on);
+        assert_eq!(config.host_dns_count, 0);
+    }
+
+    #[test]
+    fn test_slirp_configs_new() {
+        let rust_config = SlirpConfig::default();
+        let c_configs = SlirpConfigs::new(&rust_config);
+
+        // Check basic field conversions
+        assert_eq!(c_configs.c_slirp_config.version, rust_config.version);
+        assert_eq!(c_configs.c_slirp_config.restricted, rust_config.restricted);
+        assert_eq!(c_configs.c_slirp_config.in_enabled as i32, rust_config.in_enabled as i32);
+
+        // Check string conversions and null pointers
+        assert_eq!(c_configs.c_slirp_config.vhostname, std::ptr::null());
+        assert_eq!(c_configs.c_slirp_config.tftp_server_name, std::ptr::null());
+    }
+}
