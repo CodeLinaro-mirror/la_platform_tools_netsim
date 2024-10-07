@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import platform
 import subprocess
+from utils import rust_version
 
 
 class BaseEnvironment(UserDict):
@@ -27,21 +28,35 @@ class BaseEnvironment(UserDict):
   """
 
   def __init__(self, aosp: Path):
-    super().__init__({
-        "PATH": (
-            str(
-                aosp
-                / "external"
-                / "qemu"
-                / "android"
-                / "third_party"
-                / "chromium"
-                / "depot_tools"
-            )
-            + os.pathsep
-            + os.environ.get("PATH", "")
+    paths = [
+        str(
+            aosp
+            / "external"
+            / "qemu"
+            / "android"
+            / "third_party"
+            / "chromium"
+            / "depot_tools"
         )
-    })
+    ]
+
+    # Append prebuilt rust toolchain except for darwin_aarch64
+    # TODO(360874898): aarch64-apple-darwin prebuilt rust toolchain supported from 1.77.1
+    if not (platform.system() == "Darwin" and platform.machine() == "arm64"):
+      paths.append(
+          str(
+              aosp
+              / "prebuilts"
+              / "rust"
+              / f"{platform.system().lower()}-x86"
+              / f"{rust_version()}"
+              / "bin"
+          )
+      )
+
+    paths.append(os.environ.get("PATH", ""))
+
+    super().__init__({"PATH": os.pathsep.join(paths)})
 
 
 class PosixEnvironment(BaseEnvironment):

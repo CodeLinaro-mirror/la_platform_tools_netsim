@@ -57,13 +57,18 @@ impl ProxyConfig {
     /// ```
     ///
     /// where:
-    /// * `protocol`: The network protocol (e.g., `http`, `https`, `socks5`). If not provided, defaults to `http`.
+
+    /// * `protocol`: The network protocol (e.g., `http`, `https`,
+    /// `socks5`). If not provided, defaults to `http`.
     /// * `username`: and `password` are optional credentials for authentication.
-    /// * `host`: The hostname or IP address of the proxy server. If it's an IPv6 address, it should be enclosed in square brackets (e.g., "[::1]").
+    /// * `host`: The hostname or IP address of the proxy server. If
+    /// it's an IPv6 address, it should be enclosed in square brackets
+    /// (e.g., "[::1]").
     /// * `port`: The port number on which the proxy server is listening.
     ///
     /// # Errors
-    /// Returns a `ProxyConfigError` if the input string is not in a valid format or if the hostname/port resolution fails.
+    /// Returns a `ProxyConfigError` if the input string is not in a
+    /// valid format or if the hostname/port resolution fails.
     ///
     /// # Limitations
     /// * Usernames and passwords cannot contain `@` or `:`.
