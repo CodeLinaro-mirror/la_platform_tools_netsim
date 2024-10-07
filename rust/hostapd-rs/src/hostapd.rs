@@ -277,6 +277,9 @@ impl Hostapd {
 /// Convert TcpStream to RawDescriptor (i32)
 fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
     let std_stream = stream.into_std().expect("into_raw_descriptor's into_std() failed");
+    // hostapd fd expects blocking, but rust set non-blocking for async
+    std_stream.set_nonblocking(false).expect("non-blocking");
+
     // Use into_raw_fd for Unix to pass raw file descriptor to C
     #[cfg(unix)]
     return std_stream.into_raw_fd();
