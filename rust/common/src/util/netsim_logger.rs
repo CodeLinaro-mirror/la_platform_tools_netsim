@@ -33,7 +33,8 @@ use crate::util::time_display::log_current_time;
 /// The current log format follows the same format as Android Emulator team.
 pub fn init(prefix: &'static str, is_verbose: bool) {
     let log_filter = if is_verbose { "debug" } else { "info" };
-    let mut builder = Builder::from_env(Env::default().default_filter_or(log_filter));
+    std::env::set_var("NETSIMD_RUST_LOG", format!("pica=debug,{log_filter}"));
+    let mut builder = Builder::from_env("NETSIMD_RUST_LOG");
     builder.format(move |buf, record| {
         let level = level_to_string(record.level());
         let message = format!(
