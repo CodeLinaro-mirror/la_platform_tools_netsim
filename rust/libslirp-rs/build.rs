@@ -14,6 +14,16 @@
 
 pub fn main() {
     println!("cargo:rustc-link-search=../objs/archives");
+    println!("cargo:rustc-link-search=../objs/lib64");
     println!("cargo:rustc-link-lib=libslirp");
-    println!("cargo:rustc-link-lib=glib-2.0");
+    #[cfg(target_os = "linux")]
+    println!("cargo:rustc-link-lib=glib2_linux-x86_64");
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    println!("cargo:rustc-link-lib=glib2_darwin-x86_64");
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    println!("cargo:rustc-link-lib=glib2_darwin-aarch64");
+    #[cfg(target_os = "windows")]
+    println!("cargo:rustc-link-lib=glib2_windows_msvc-x86_64");
+    #[cfg(target_os = "windows")]
+    println!("cargo:rustc-link-lib=iphlpapi");
 }

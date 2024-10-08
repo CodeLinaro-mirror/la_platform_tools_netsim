@@ -22,6 +22,7 @@ from tasks.compile_task import CompileTask
 from tasks.configure_task import ConfigureTask
 from tasks.install_emulator_task import InstallEmulatorTask
 from tasks.run_pytest_task import RunPyTestTask
+from tasks.run_test_task import RunTestTask
 from tasks.task import Task
 from tasks.zip_artifact_task import ZipArtifactTask
 
@@ -29,6 +30,7 @@ TASK_LIST = [
     "Configure",
     "Compile",
     "CompileInstall",
+    "RunTest",
     "ZipArtifact",
     "InstallEmulator",
     "RunPyTest",
@@ -51,6 +53,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
       "Configure": ConfigureTask(args, env),
       "Compile": CompileTask(args, env),
       "CompileInstall": CompileInstallTask(args, env),
+      "RunTest": RunTestTask(args, env),
       "ZipArtifact": ZipArtifactTask(args),
       "InstallEmulator": InstallEmulatorTask(args),
       "RunPyTest": RunPyTestTask(args),
@@ -76,6 +79,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
         for task_name in [
             "Configure",
             "Compile",
+            "RunTest",
             "InstallEmulator",
             "RunPyTest",
         ]:
@@ -87,6 +91,8 @@ def get_tasks(args, env) -> Mapping[str, Task]:
         tasks["Compile"].enable(True)
       elif args_task_name.lower() == "compileinstall":
         tasks["CompileInstall"].enable(True)
+      elif args_task_name.lower() == "runtest":
+        tasks["RunTest"].enable(True)
       elif args_task_name.lower() == "zipartifact":
         tasks["ZipArtifact"].enable(True)
       elif args_task_name.lower() == "installemulator":

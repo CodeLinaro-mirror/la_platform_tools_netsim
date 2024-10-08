@@ -19,8 +19,9 @@ edition = "2021"
 
 [lib]
 crate-type = ["staticlib", "lib"]
+path = "src/lib.rs"
 doctest = false
-test = false
 
 [dependencies]
 regex = "1.6.0"
+httparse = "1.8.0"

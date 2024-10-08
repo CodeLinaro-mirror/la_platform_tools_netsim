@@ -613,16 +613,11 @@ extern "C" fn notify_cb(_opaque: *mut ::std::os::raw::c_void) {
 mod tests {
     use super::*;
 
-    #[link(name = "libslirp")]
-    extern "C" {
-        fn slirp_version_string() -> *const ::std::os::raw::c_char;
-    }
-
     #[test]
     fn test_version_string() {
         // Safety
         // Function returns a constant c_str
-        let c_version_str = unsafe { CStr::from_ptr(slirp_version_string()) };
+        let c_version_str = unsafe { CStr::from_ptr(crate::libslirp_sys::slirp_version_string()) };
         assert_eq!("4.7.0", c_version_str.to_str().unwrap());
     }
 }

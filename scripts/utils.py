@@ -72,6 +72,15 @@ CMAKE = shutil.which(
 )
 
 
+def rust_version() -> str:
+  """Returns rust version"""
+  with open(
+      AOSP_ROOT / "external" / "qemu" / "android" / "build" / "toolchains.json",
+      encoding="utf-8",
+  ) as f:
+    return json.load(f)["rust"]
+
+
 def default_target() -> str:
   """Returns default value for target"""
   # If Mac M1, the default target should be 'darwin-aarch64'

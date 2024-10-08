@@ -93,6 +93,7 @@ rust_defaults {
         ":netsim_mac80211_hwsim_rust_gen",
         ":netsim_ieee80211_rust_gen",
         ":netsim_llc_rust_gen",
+        ":netsim_arp_rust_gen",
         ":rootcanal_link_layer_packets_rust_gen",
     ],
 }
@@ -167,6 +168,13 @@ genrule {
     defaults: ["pdl_rust_generator_defaults"],
     srcs: ["pdl/llc.pdl"],
     out: ["llc_packets.rs"],
+}
+
+genrule {
+    name: "netsim_arp_rust_gen",
+    defaults: ["pdl_rust_generator_defaults"],
+    srcs: ["pdl/arp.pdl"],
+    out: ["arp_packets.rs"],
 }
 
 cc_library_host_static {
