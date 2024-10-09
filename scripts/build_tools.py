@@ -173,6 +173,9 @@ def main():
   # Install
   tasks.get("CompileInstall").run()
 
+  # Run Tests
+  tasks.get("RunTest").run()
+
   # Zip results..
   tasks.get("ZipArtifact").run()
 

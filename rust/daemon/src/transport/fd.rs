@@ -376,6 +376,7 @@ pub fn run_fd_connector(startup_json: &String, server: &str) -> Result<(), Strin
             initial_request.set_initial_info(ChipInfoProto {
                 name: device.name.clone(),
                 chip: MessageField::some(chip.clone()),
+                device_info: device.device_info.clone(),
                 ..Default::default()
             });
             ffi_transport::write_packet_request(

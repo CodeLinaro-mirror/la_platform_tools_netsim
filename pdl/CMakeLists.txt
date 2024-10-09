@@ -41,3 +41,13 @@ pdl_gen(
   llc_packets.rs
   LANG
   rust)
+
+pdl_gen(
+  NAME
+  ArpPackets_rs
+  INPUT
+  ${CMAKE_CURRENT_LIST_DIR}/arp.pdl
+  OUTPUT
+  arp_packets.rs
+  LANG
+  rust)
