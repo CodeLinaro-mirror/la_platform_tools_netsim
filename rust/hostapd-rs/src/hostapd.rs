@@ -156,10 +156,12 @@ impl Hostapd {
     pub fn input(&self, bytes: Bytes) -> anyhow::Result<()> {
         // Make sure hostapd is already running
         assert!(self.is_running(), "Failed to send input. Hostapd is not running.");
-        Ok(get_runtime().block_on(async {
+        get_runtime().block_on(async {
             let mut writer_guard = self.data_writer.as_ref().unwrap().lock().await;
-            writer_guard.write_all(&bytes).await
-        })?)
+            writer_guard.write_all(&bytes).await?;
+            writer_guard.flush().await?;
+            Ok(())
+        })
     }
 
     /// Check whether the hostapd thread is running
@@ -256,7 +258,9 @@ impl Hostapd {
                 sleep(Duration::from_millis(250));
                 continue;
             };
-
+            break;
+        }
+        loop {
             let size = match get_runtime().block_on(async { data_reader.read(&mut buf[..]).await })
             {
                 Ok(size) => size,

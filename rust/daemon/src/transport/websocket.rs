@@ -96,7 +96,6 @@ pub fn run_websocket_transport(stream: TcpStream, queries: HashMap<&str, &str>) 
         name: Some(format!("websocket-{}", stream.peer_addr().unwrap())),
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
-        bt_properties: None,
     };
     #[cfg(not(test))]
     let wireless_create_params =

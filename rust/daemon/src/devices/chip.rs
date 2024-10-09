@@ -21,7 +21,6 @@
 ///
 use crate::wireless::WirelessAdaptorImpl;
 use netsim_proto::common::ChipKind as ProtoChipKind;
-use netsim_proto::configuration::Controller as ProtoController;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use protobuf::EnumOrUnknown;
@@ -81,8 +80,6 @@ pub struct CreateParams {
     pub name: Option<String>,
     pub manufacturer: String,
     pub product_name: String,
-    #[allow(dead_code)]
-    pub bt_properties: Option<ProtoController>, // TODO: move to wireless_adaptor CreateParams
 }
 
 /// Chip contains the common information for each Chip/Controller.
@@ -247,7 +244,6 @@ mod tests {
                 name: None,
                 manufacturer: MANUFACTURER.to_string(),
                 product_name: PRODUCT_NAME.to_string(),
-                bt_properties: None,
             };
             self.new_chip(CHIP_ID, DEVICE_ID, DEVICE_NAME, &create_params, wireless_adaptor)
                 .unwrap()

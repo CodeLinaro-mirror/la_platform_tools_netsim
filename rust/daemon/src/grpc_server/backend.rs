@@ -39,7 +39,7 @@ fn add_chip(initial_info: &ChipInfo, device_guid: &str) -> anyhow::Result<AddChi
         ProtoChipKind::BLUETOOTH => {
             wireless::CreateParam::Bluetooth(wireless::bluetooth::CreateParams {
                 address: chip.address.clone(),
-                bt_properties: None,
+                bt_properties: Some(chip.bt_properties.clone()),
             })
         }
         ProtoChipKind::WIFI => wireless::CreateParam::Wifi(wireless::wifi::CreateParams {}),
@@ -58,7 +58,6 @@ fn add_chip(initial_info: &ChipInfo, device_guid: &str) -> anyhow::Result<AddChi
         name: Some(chip.id.clone()),
         manufacturer: chip.manufacturer.clone(),
         product_name: chip.product_name.clone(),
-        bt_properties: None,
     };
 
     devices_handler::add_chip(

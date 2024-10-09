@@ -172,7 +172,7 @@ impl FrontendService for FrontendClient {
                     break;
                 }
                 let mut response = netsim_proto::frontend::GetCaptureResponse::new();
-                response.capture_stream = buffer.to_vec();
+                response.capture_stream = buffer[..length].to_vec(); // Send only read data
                 sink.send((response, WriteFlags::default())).await?;
             }
             sink.close().await?;

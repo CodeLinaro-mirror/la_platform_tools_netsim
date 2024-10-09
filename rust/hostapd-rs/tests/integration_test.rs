@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Version library.
+use bytes::Bytes;
+use hostapd_rs::hostapd::Hostapd;
+use std::sync::mpsc;
 
-pub const VERSION: &str = "0.3.29";
-
-pub fn get_version() -> String {
-    VERSION.to_owned()
+/// Test whether run() starts the hostapd thread
+#[test]
+fn test_hostapd_run() {
+    let (tx, _rx): (mpsc::Sender<Bytes>, mpsc::Receiver<Bytes>) = mpsc::channel();
+    let config_path = std::env::temp_dir().join("hostapd.conf");
+    let mut hostapd = Hostapd::new(tx, true, config_path);
+    hostapd.run();
+    assert!(hostapd.is_running());
 }
