@@ -199,6 +199,7 @@ class SimulationState implements Observable {
   }
 
   handleDrop(id: string, x: number, y: number) {
+    this.simulationInfo.selectedId = id;
     for (const device of this.simulationInfo.devices) {
       if (id === device.name) {
         device.position = {x, y, z: device.position.z};

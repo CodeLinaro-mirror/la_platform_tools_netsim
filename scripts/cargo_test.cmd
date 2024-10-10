@@ -10,7 +10,7 @@ set RUST_PKG=%2
 set OUT_PATH=%3
 
 :: Set environment variables
-set %PATH%=%PATH%;%OUT_PATH%\lib64
+set PATH=%PATH%;%OUT_PATH%\lib64
 set CARGO_HOME=%OUT_PATH%\rust\.cargo
 
 :: Build the package

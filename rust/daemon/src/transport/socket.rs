@@ -88,7 +88,6 @@ fn handle_hci_client(stream: TcpStream) {
         name: Some(format!("socket-{}", stream.peer_addr().unwrap())),
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
-        bt_properties: None,
     };
     #[cfg(not(test))]
     let wireless_create_params =

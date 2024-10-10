@@ -299,14 +299,14 @@ pub fn add_chip_cxx(
     variant: &str,
     arch: &str,
 ) -> Box<AddChipResultCxx> {
-    let bt_properties_proto = Controller::parse_from_bytes(bt_properties.as_slice());
+    let _bt_properties_proto = Controller::parse_from_bytes(bt_properties.as_slice());
     #[cfg(not(test))]
     let (chip_kind_enum, wireless_create_param) = match chip_kind.to_string().as_str() {
         "BLUETOOTH" => (
             ProtoChipKind::BLUETOOTH,
             wireless::CreateParam::Bluetooth(wireless::bluetooth::CreateParams {
                 address: chip_address.to_string(),
-                bt_properties: bt_properties_proto
+                bt_properties: _bt_properties_proto
                     .as_ref()
                     .map_or(None, |p| Some(MessageField::some(p.clone()))),
             }),
@@ -362,7 +362,6 @@ pub fn add_chip_cxx(
         name: if chip_name.is_empty() { None } else { Some(chip_name.to_string()) },
         manufacturer: chip_manufacturer.to_string(),
         product_name: chip_product_name.to_string(),
-        bt_properties: bt_properties_proto.ok(),
     };
     let device_info = ProtoDeviceInfo {
         kind: kind.to_string(),
@@ -490,7 +489,6 @@ pub fn create_device(create_device_request: &CreateDeviceRequest) -> Result<Prot
                 name: if chip.name.is_empty() { None } else { Some(chip.name.to_string()) },
                 manufacturer: chip.manufacturer.clone(),
                 product_name: chip.product_name.clone(),
-                bt_properties: chip.bt_properties.as_ref().cloned(),
             };
             let wireless_create_params =
                 wireless::CreateParam::BleBeacon(wireless::ble_beacon::CreateParams {
@@ -992,7 +990,6 @@ mod tests {
                 name: Some(self.chip_name.clone()),
                 manufacturer: self.chip_manufacturer.clone(),
                 product_name: self.chip_product_name.clone(),
-                bt_properties: None,
             };
             let wireless_create_params =
                 wireless::CreateParam::Mock(wireless::mocked::CreateParams {
