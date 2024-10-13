@@ -22,7 +22,7 @@
 use bytes::Bytes;
 use log::warn;
 use std::collections::HashMap;
-use std::ffi::{c_char, c_int, CString};
+use std::ffi::{c_char, c_int, CStr, CString};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 #[cfg(unix)]
@@ -41,7 +41,9 @@ use tokio::net::{
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 
-use crate::hostapd_sys::{run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock};
+use crate::hostapd_sys::{
+    run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock, VIRTIO_WIFI_CTRL_CMD_TERMINATE,
+};
 
 /// Alias for RawFd on Unix or RawSocket on Windows (converted to i32)
 type RawDescriptor = i32;
@@ -56,7 +58,7 @@ pub struct Hostapd {
     config: HashMap<String, String>,
     config_path: PathBuf,
     data_writer: Option<Mutex<OwnedWriteHalf>>,
-    _ctrl_writer: Option<Mutex<OwnedWriteHalf>>,
+    ctrl_writer: Option<Mutex<OwnedWriteHalf>>,
     tx_bytes: mpsc::Sender<Bytes>,
 }
 
@@ -92,7 +94,7 @@ impl Hostapd {
             config,
             config_path,
             data_writer: None,
-            _ctrl_writer: None,
+            ctrl_writer: None,
             tx_bytes,
         }
     }
@@ -114,7 +116,7 @@ impl Hostapd {
         // Setup Sockets
         let (ctrl_listener, _ctrl_reader, ctrl_writer) =
             Self::create_pipe().expect("Failed to create ctrl pipe");
-        self._ctrl_writer = Some(Mutex::new(ctrl_writer));
+        self.ctrl_writer = Some(Mutex::new(ctrl_writer));
         let (data_listener, data_reader, data_writer) =
             Self::create_pipe().expect("Failed to create data pipe");
         self.data_writer = Some(Mutex::new(data_writer));
@@ -156,12 +158,7 @@ impl Hostapd {
     pub fn input(&self, bytes: Bytes) -> anyhow::Result<()> {
         // Make sure hostapd is already running
         assert!(self.is_running(), "Failed to send input. Hostapd is not running.");
-        get_runtime().block_on(async {
-            let mut writer_guard = self.data_writer.as_ref().unwrap().lock().await;
-            writer_guard.write_all(&bytes).await?;
-            writer_guard.flush().await?;
-            Ok(())
-        })
+        get_runtime().block_on(Self::async_write(self.data_writer.as_ref().unwrap(), &bytes))
     }
 
     /// Check whether the hostapd thread is running
@@ -171,7 +168,18 @@ impl Hostapd {
     }
 
     pub fn terminate(&self) {
-        todo!();
+        if !self.is_running() {
+            warn!("hostapd terminate() called when hostapd thread is not running");
+            return;
+        }
+
+        // Send terminate command to hostapd
+        if let Err(e) = get_runtime().block_on(Self::async_write(
+            self.ctrl_writer.as_ref().unwrap(),
+            c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_TERMINATE),
+        )) {
+            warn!("Failed to send VIRTIO_WIFI_CTRL_CMD_TERMINATE to hostapd to terminate: {:?}", e);
+        }
     }
 
     /// Generate hostapd.conf in discovery directory
@@ -208,6 +216,13 @@ impl Hostapd {
         let stream = TcpStream::connect(addr).await?;
         let (listener, _) = listener.accept().await?;
         Ok((listener, stream))
+    }
+
+    async fn async_write(writer: &Mutex<OwnedWriteHalf>, data: &[u8]) -> anyhow::Result<()> {
+        let mut writer_guard = writer.lock().await;
+        writer_guard.write_all(data).await?;
+        writer_guard.flush().await?;
+        Ok(())
     }
 
     /// Run the C hostapd process with run_hostapd_main
@@ -278,6 +293,12 @@ impl Hostapd {
     }
 }
 
+impl Drop for Hostapd {
+    fn drop(&mut self) {
+        self.terminate();
+    }
+}
+
 /// Convert TcpStream to RawDescriptor (i32)
 fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
     let std_stream = stream.into_std().expect("into_raw_descriptor's into_std() failed");
@@ -291,6 +312,11 @@ fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
     // Use into_raw_socket for Windows to pass raw socket to C
     #[cfg(windows)]
     std_stream.into_raw_socket().try_into().expect("Failed to convert Raw Socket value into i32")
+}
+
+/// Convert a null terminated c-string slice into &[u8] bytes without the nul terminator
+fn c_string_to_bytes(c_string: &[u8]) -> &[u8] {
+    CStr::from_bytes_with_nul(c_string).unwrap().to_bytes()
 }
 
 /// Get or init the hostapd tokio runtime
