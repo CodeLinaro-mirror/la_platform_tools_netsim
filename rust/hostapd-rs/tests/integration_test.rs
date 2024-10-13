@@ -14,14 +14,30 @@
 
 use bytes::Bytes;
 use hostapd_rs::hostapd::Hostapd;
-use std::sync::mpsc;
+use std::{
+    env,
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant},
+};
 
-/// Test whether run() starts the hostapd thread
+/// Test whether hostapd starts and terminates successfully
 #[test]
-fn test_hostapd_run() {
+fn test_hostapd_run_and_terminate() {
     let (tx, _rx): (mpsc::Sender<Bytes>, mpsc::Receiver<Bytes>) = mpsc::channel();
-    let config_path = std::env::temp_dir().join("hostapd.conf");
+    let config_path = env::temp_dir().join("hostapd.conf");
     let mut hostapd = Hostapd::new(tx, true, config_path);
     hostapd.run();
     assert!(hostapd.is_running());
+    hostapd.terminate();
+    // Check that hostapd terminates within 30s
+    let max_wait_time = Duration::from_secs(30);
+    let start_time = Instant::now();
+    while start_time.elapsed() < max_wait_time {
+        if !hostapd.is_running() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(250));
+    }
+    assert!(!hostapd.is_running());
 }
