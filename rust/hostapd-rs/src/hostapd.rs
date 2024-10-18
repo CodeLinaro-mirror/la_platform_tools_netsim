@@ -26,6 +26,7 @@ use std::collections::HashMap;
 use std::ffi::{c_char, c_int, CStr, CString};
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 #[cfg(unix)]
 use std::os::fd::IntoRawFd;
 #[cfg(windows)]
@@ -261,7 +262,14 @@ impl Hostapd {
     }
 
     async fn async_create_pipe() -> anyhow::Result<(TcpStream, TcpStream), std::io::Error> {
-        let listener = TcpListener::bind("127.0.0.1:0").await?;
+        let listener = match TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).await {
+            Ok(listener) => listener,
+            Err(e) => {
+                // Support hosts that only have IPv6
+                info!("Failed to bind to 127.0.0.1:0. Try to bind to [::1]:0 next. Err: {:?}", e);
+                TcpListener::bind(SocketAddr::from((Ipv6Addr::LOCALHOST, 0))).await?
+            }
+        };
         let addr = listener.local_addr()?;
         let stream = TcpStream::connect(addr).await?;
         let (listener, _) = listener.accept().await?;
