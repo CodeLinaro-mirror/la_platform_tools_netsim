@@ -237,10 +237,22 @@ fn slirp_thread(
             // Error
             _ => break,
         }
-        // Callback any expired timers in the slirp thread...
-        for timer in get_timers().lock().unwrap().collect_expired() {
+
+        // Explicitly store expired timers to release lock
+        let timers = get_timers().lock().unwrap().collect_expired();
+        // Handle any expired timers' callback in the slirp thread
+        //
+        // SAFETY: We ensure that:
+        //
+        // `slirp` is a valid state returned by `slirp_new()`
+        //
+        // 'timer.id' is a valid c_uint from "C" slirp library calling `timer_new_opaque_cb()`
+        //
+        // 'timer.cb_opaque` is an usize representing a pointer to callback function from
+        // "C" slirp library calling `timer_new_opaque_cb()`
+        for timer in timers {
             unsafe {
-                libslirp_sys::slirp_handle_timer(slirp, timer.id, timer.cb_opaque as *mut c_void)
+                libslirp_sys::slirp_handle_timer(slirp, timer.id, timer.cb_opaque as *mut c_void);
             };
         }
     }
@@ -305,7 +317,6 @@ unsafe fn slirp_pollfds_fill(slirp: *mut libslirp_sys::Slirp, tx: &mpsc::Sender<
         );
     }
     let poll_fds: Vec<PollFd> = CONTEXT.lock().unwrap().poll_fds.drain(..).collect();
-    debug!("got {} items", poll_fds.len());
     if let Err(e) = tx.send((poll_fds, timeout)) {
         warn!("Failed to send poll fds: {}", e);
     }
@@ -440,7 +451,12 @@ fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>
             | ternary!(events & POLLRDBAND, libslirp_sys::SLIRP_POLL_PRI)
     }
 
+    let mut prev_poll_fds_len = 0;
     while let Ok((poll_fds, timeout)) = rx.recv() {
+        if poll_fds.len() != prev_poll_fds_len {
+            prev_poll_fds_len = poll_fds.len();
+            debug!("slirp_poll_thread recv poll_fds.len(): {:?}", prev_poll_fds_len);
+        }
         // Create a c format array with the same size as poll
         let mut os_poll_fds: Vec<pollfd> = Vec::with_capacity(poll_fds.len());
         for fd in &poll_fds {
