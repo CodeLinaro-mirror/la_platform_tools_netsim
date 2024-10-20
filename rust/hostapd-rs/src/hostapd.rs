@@ -19,12 +19,14 @@
 ///
 /// hostapd.conf file is generated under discovery directory.
 ///
+use anyhow::bail;
 use bytes::Bytes;
-use log::warn;
+use log::{info, warn};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, CStr, CString};
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 #[cfg(unix)]
 use std::os::fd::IntoRawFd;
 #[cfg(windows)]
@@ -42,7 +44,8 @@ use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 
 use crate::hostapd_sys::{
-    run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock, VIRTIO_WIFI_CTRL_CMD_TERMINATE,
+    run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock, VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG,
+    VIRTIO_WIFI_CTRL_CMD_TERMINATE,
 };
 
 /// Alias for RawFd on Unix or RawSocket on Windows (converted to i32)
@@ -65,7 +68,7 @@ pub struct Hostapd {
 impl Hostapd {
     pub fn new(tx_bytes: mpsc::Sender<Bytes>, verbose: bool, config_path: PathBuf) -> Self {
         // Default Hostapd conf entries
-        let config_data = vec![
+        let config_data = [
             ("ssid", "AndroidWifi"),
             ("interface", "wlan1"),
             ("driver", "virtio_wifi"),
@@ -86,7 +89,7 @@ impl Hostapd {
             ("eapol_key_index_workaround", "0"),
         ];
         let mut config: HashMap<String, String> = HashMap::new();
-        config.extend(config_data.into_iter().map(|(k, v)| (k.to_string(), v.to_string())));
+        config.extend(config_data.iter().map(|(k, v)| (k.to_string(), v.to_string())));
 
         Hostapd {
             handle: RwLock::new(None),
@@ -143,12 +146,53 @@ impl Hostapd {
         true
     }
 
-    pub fn set_ssid(&mut self, _ssid: String, _password: String) -> bool {
-        todo!();
+    /// Reconfigure Hostapd with specified SSID (and password) config
+    ///
+    /// TODO:
+    /// * implement password & encryption support
+    /// * update as async fn.
+    pub fn set_ssid(&mut self, ssid: String, password: String) -> anyhow::Result<()> {
+        if ssid.is_empty() {
+            bail!("set_ssid must have a non-empty SSID");
+        }
+
+        if !password.is_empty() {
+            bail!("set_ssid with password is not yet supported.");
+        }
+
+        if ssid == self.get_ssid() && password == self.get_config_val("password") {
+            info!("SSID and password matches current configuration.");
+            return Ok(());
+        }
+
+        // Update the config
+        self.config.insert("ssid".to_string(), ssid);
+        if !password.is_empty() {
+            let password_config = [
+                ("wpa", "2"),
+                ("wpa_key_mgmt", "WPA-PSK"),
+                ("rsn_pairwise", "CCMP"),
+                ("wpa_passphrase", &password),
+            ];
+            self.config.extend(password_config.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+        }
+
+        // Update the config file.
+        self.gen_config_file()?;
+
+        // Send command for Hostapd to reload config file
+        if let Err(e) = get_runtime().block_on(Self::async_write(
+            self.ctrl_writer.as_ref().unwrap(),
+            c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG),
+        )) {
+            bail!("Failed to send VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG to hostapd to reload config: {:?}", e);
+        }
+
+        Ok(())
     }
 
-    pub fn get_ssid(&self) -> Option<String> {
-        self.config.get("ssid").cloned()
+    pub fn get_ssid(&self) -> String {
+        self.get_config_val("ssid")
     }
 
     /// Input data packet bytes from netsim to hostapd
@@ -194,6 +238,13 @@ impl Hostapd {
         Ok(writer.flush()?) // Ensure all data is written to the file
     }
 
+    /// Get the value of the given key in the config
+    ///
+    /// Returns empty String if key is not found
+    fn get_config_val(&self, key: &str) -> String {
+        self.config.get(key).cloned().unwrap_or_default()
+    }
+
     /// Creates a pipe of two connected TcpStream objects
     ///
     /// Extracts the first stream's raw descriptor and splits the second stream as OwnedReadHalf and OwnedWriteHalf
@@ -211,7 +262,14 @@ impl Hostapd {
     }
 
     async fn async_create_pipe() -> anyhow::Result<(TcpStream, TcpStream), std::io::Error> {
-        let listener = TcpListener::bind("127.0.0.1:0").await?;
+        let listener = match TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).await {
+            Ok(listener) => listener,
+            Err(e) => {
+                // Support hosts that only have IPv6
+                info!("Failed to bind to 127.0.0.1:0. Try to bind to [::1]:0 next. Err: {:?}", e);
+                TcpListener::bind(SocketAddr::from((Ipv6Addr::LOCALHOST, 0))).await?
+            }
+        };
         let addr = listener.local_addr()?;
         let stream = TcpStream::connect(addr).await?;
         let (listener, _) = listener.accept().await?;
@@ -285,7 +343,7 @@ impl Hostapd {
                 }
             };
 
-            if let Err(e) = tx_bytes.send(Bytes::from(buf[..size].to_vec())) {
+            if let Err(e) = tx_bytes.send(Bytes::copy_from_slice(&buf[..size])) {
                 warn!("Failed to send hostapd packet response: {:?}", e);
                 break;
             };
