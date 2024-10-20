@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import logging
+import platform
 from typing import Mapping
 
 from tasks.compile_install_task import CompileInstallTask
@@ -69,6 +70,9 @@ def get_tasks(args, env) -> Mapping[str, Task]:
         "RunPyTest",
     ]:
       tasks[task_name].enable(True)
+    #(b/365096061) Resolve cargo_test.cmd on Windows buildbot with using prebuilt cargo
+    if platform.system() != "Windows":
+      tasks["RunTest"].enable(True)
     return tasks
 
   if args.task:
