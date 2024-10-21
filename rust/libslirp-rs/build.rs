@@ -13,8 +13,10 @@
 // limitations under the License.
 
 pub fn main() {
-    println!("cargo:rustc-link-search=../objs/archives");
-    println!("cargo:rustc-link-search=../objs/lib64");
+    let objs_path = std::env::var("OBJS_PATH").unwrap_or("../objs".to_string());
+
+    println!("cargo:rustc-link-search={objs_path}/archives");
+    println!("cargo:rustc-link-search={objs_path}/lib64");
     println!("cargo:rustc-link-lib=libslirp");
     #[cfg(target_os = "linux")]
     println!("cargo:rustc-link-lib=glib2_linux-x86_64");

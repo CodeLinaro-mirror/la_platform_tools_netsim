@@ -118,9 +118,5 @@ class RunPytestManager:
     # TODO: Resolve Windows PyTest failure
     if platform.system() != "Windows":
       cmd.append("--failures_as_errors")
-    # Temporarily disabling Mac x86 PyTest due to b/372315152
-    if platform.system() == "Darwin" and platform.machine() == "x86_64":
-      logging.info("Skipping PyTest for darwin-x86_64")
-    else:
-      run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
+    run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
     return True
