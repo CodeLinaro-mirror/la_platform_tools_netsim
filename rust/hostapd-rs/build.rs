@@ -13,8 +13,10 @@
 // limitations under the License.
 
 pub fn main() {
+    let objs_path = std::env::var("OBJS_PATH").unwrap_or("../objs".to_string());
+
     // Shared dependencies
-    println!("cargo:rustc-link-search=../objs/archives");
+    println!("cargo:rustc-link-search={objs_path}/archives");
     println!("cargo:rustc-link-lib=hostapd");
     println!("cargo:rustc-link-lib=crypto");
     println!("cargo:rustc-link-lib=android-emu-base");
@@ -24,14 +26,14 @@ pub fn main() {
     // Linux and Mac dependencies
     #[cfg(unix)]
     {
-        println!("cargo:rustc-link-search=../objs/lib64");
+        println!("cargo:rustc-link-search={objs_path}/lib64");
         println!("cargo:rustc-link-lib=c++");
     }
     // Windows dependencies
     #[cfg(windows)]
     {
         println!("cargo:rustc-link-lib=crypto_asm_lib");
-        println!("cargo:rustc-link-search=../objs/msvc-posix-compat/msvc-compat-layer");
+        println!("cargo:rustc-link-search={objs_path}/msvc-posix-compat/msvc-compat-layer");
         println!("cargo:rustc-link-lib=msvc-posix-compat");
     }
 }
