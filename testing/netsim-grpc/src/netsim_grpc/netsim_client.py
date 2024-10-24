@@ -138,6 +138,45 @@ class NetsimClient(object):
     request.device.chips.append(chip)
     self._stub.PatchDevice(request)
 
+  def get_captures(self) -> list[model.Capture]:
+    """Get info for all capture information in netsim.
+
+    Returns:
+      A List of all captures where capture is netsim.model.Capture.
+    """
+    return self._stub.ListCapture(_Empty()).captures
+
+  def set_capture(
+      self, device_name: str, radio: common.ChipKind, state: bool
+  ) -> None:
+    """Set the capture state of the specific device and radio.
+
+    Args:
+      device_name: The avd name of the specified device.
+      radio: The specified radio ChipKind, e.g. BLUETOOTH, WIFI, UWB
+      state: Set capture state UP if True, Down if False.
+    """
+    for capture in self.get_captures():
+      if capture.chip_kind == radio and capture.device_name == device_name:
+        request = frontend.PatchCaptureRequest()
+        request.id = capture.id
+        request.patch.state = state
+        logging.info(
+            'Setting capture state of radio %s for device %s to %s',
+            common.ChipKind.Name(radio),
+            device_name,
+            state,
+        )
+        self._stub.PatchCapture(request)
+
+  def set_capture_all(self, state: bool) -> None:
+    logging.info('Setting capture state for all devices: %s', state)
+    for capture in self.get_captures():
+      request = frontend.PatchCaptureRequest()
+      request.id = capture.id
+      request.patch.state = state
+      self._stub.PatchCapture(request)
+
   def reset(self) -> None:
     """Reset all devices."""
     self._stub.Reset(_Empty())
