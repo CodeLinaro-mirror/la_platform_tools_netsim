@@ -46,7 +46,7 @@ std::pair<std::unique_ptr<grpc::Server>, uint32_t> RunGrpcServer(
     int netsim_grpc_port, bool no_cli_ui, int vsock) {
   grpc::ServerBuilder builder;
   int selected_port;
-  builder.AddListeningPort("0.0.0.0:" + std::to_string(netsim_grpc_port),
+  builder.AddListeningPort("127.0.0.1:" + std::to_string(netsim_grpc_port),
                            grpc::InsecureServerCredentials(), &selected_port);
   if (!no_cli_ui) {
     static auto frontend_service = GetFrontendService();
