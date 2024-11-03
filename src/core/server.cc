@@ -28,12 +28,14 @@
 #include "util/log.h"
 #ifdef _WIN32
 #include <Windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #else
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #endif
 #ifndef NETSIM_ANDROID_EMULATOR
-#include <sys/socket.h>
-
 // Needs to be below sys/socket.h
 #include <linux/vm_sockets.h>
 #endif
@@ -46,8 +48,47 @@ std::pair<std::unique_ptr<grpc::Server>, uint32_t> RunGrpcServer(
     int netsim_grpc_port, bool no_cli_ui, int vsock) {
   grpc::ServerBuilder builder;
   int selected_port;
-  builder.AddListeningPort("0.0.0.0:" + std::to_string(netsim_grpc_port),
-                           grpc::InsecureServerCredentials(), &selected_port);
+
+  // Add IPv6 listening port if bind succeeds.
+  int sockfd6 = socket(AF_INET6, SOCK_STREAM, 0);
+  if (sockfd6 != -1) {
+    sockaddr_in6 addr6;
+    memset(&addr6, 0, sizeof(addr6));
+    addr6.sin6_family = AF_INET6;
+    addr6.sin6_addr = in6addr_loopback;
+    addr6.sin6_port = htons(netsim_grpc_port);
+    if (bind(sockfd6, (struct sockaddr *)&addr6, sizeof(addr6)) == 0) {
+      builder.AddListeningPort("[::1]:" + std::to_string(netsim_grpc_port),
+                               grpc::InsecureServerCredentials(),
+                               &selected_port);
+    }
+#ifdef _WIN32
+    closesocket(sockfd6);
+#else
+    close(sockfd6);
+#endif
+  }
+
+  // Add IPv4 listening port if bind succeeds
+  int sockfd4 = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd4 != -1) {
+    sockaddr_in addr4;
+    memset(&addr4, 0, sizeof(addr4));
+    addr4.sin_family = AF_INET;
+    addr4.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr4.sin_port = htons(netsim_grpc_port);
+    if (bind(sockfd4, (struct sockaddr *)&addr4, sizeof(addr4)) == 0) {
+      builder.AddListeningPort("127.0.0.1:" + std::to_string(netsim_grpc_port),
+                               grpc::InsecureServerCredentials(),
+                               &selected_port);
+    }
+#ifdef _WIN32
+    closesocket(sockfd4);
+#else
+    close(sockfd4);
+#endif
+  }
+
   if (!no_cli_ui) {
     static auto frontend_service = GetFrontendService();
     builder.RegisterService(frontend_service.release());

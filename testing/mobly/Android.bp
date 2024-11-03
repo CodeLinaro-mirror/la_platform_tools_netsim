@@ -24,7 +24,7 @@ python_test_host {
     ],
     main: "ble_gatt_test.py",
     libs: ["mobly"],
-    data: [
+    device_common_data: [
         // test APK module
         ":mobly-bundled-snippets",
     ],
