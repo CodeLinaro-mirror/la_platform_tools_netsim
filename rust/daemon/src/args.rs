@@ -62,13 +62,12 @@ pub struct NetsimdArgs {
     pub rust_grpc: bool,
 
     /// Use hostapd-rs and disable c++ hostapd.
-    /// WARNING: This flag is for development purpose.
-    #[arg(long)]
+    #[arg(long, default_value = "true")]
     pub rust_hostapd: bool,
 
     /// Use libslirp-rs and disable qemu slirp.
     /// WARNING: This flag is for development purpose.
-    #[arg(long, default_value = "true")]
+    #[arg(long)]
     pub rust_slirp: bool,
 
     /// Forwards mDNS from the host to the guest, allowing emulator to discover mDNS services running on the host.
