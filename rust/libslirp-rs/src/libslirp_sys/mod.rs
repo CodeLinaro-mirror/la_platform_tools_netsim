@@ -158,13 +158,41 @@ impl Into<u32> for in_addr {
     }
 }
 
+mod net {
+    /// Converts a value from host byte order to network byte order.
+    #[inline]
+    pub fn htonl(hostlong: u32) -> u32 {
+        hostlong.to_be()
+    }
+
+    /// Converts a value from network byte order to host byte order.
+    #[inline]
+    pub fn ntohl(netlong: u32) -> u32 {
+        u32::from_be(netlong)
+    }
+
+    /// Converts a value from host byte order to network byte order.
+    #[inline]
+    pub fn htons(hostshort: u16) -> u16 {
+        hostshort.to_be()
+    }
+
+    /// Converts a value from network byte order to host byte order.
+    #[inline]
+    pub fn ntohs(netshort: u16) -> u16 {
+        u16::from_be(netshort)
+    }
+}
+
 impl From<Ipv4Addr> for in_addr {
     fn from(item: Ipv4Addr) -> Self {
         #[cfg(target_os = "windows")]
-        return in_addr { S_un: in_addr__bindgen_ty_1 { S_addr: item.into() } };
+        return in_addr {
+            S_un: in_addr__bindgen_ty_1 { S_addr: std::os::raw::c_ulong::to_be(item.into()) },
+        };
 
         #[cfg(any(target_os = "macos", target_os = "linux"))]
-        return in_addr { s_addr: item.into() };
+        return in_addr { s_addr: net::htonl(item.into()) };
     }
 }
 
@@ -212,7 +240,7 @@ impl From<SocketAddrV4> for sockaddr_in {
         return sockaddr_in {
             sin_len: 16u8,
             sin_family: AF_INET as u8,
-            sin_port: item.port(),
+            sin_port: net::htons(item.port()),
             sin_addr: (*item.ip()).into(),
             sin_zero: [0; 8],
         };
@@ -220,7 +248,7 @@ impl From<SocketAddrV4> for sockaddr_in {
         #[cfg(any(target_os = "linux", target_os = "windows"))]
         return sockaddr_in {
             sin_family: AF_INET as u16,
-            sin_port: item.port(),
+            sin_port: net::htons(item.port()),
             sin_addr: (*item.ip()).into(),
             sin_zero: [0; 8],
         };
@@ -229,7 +257,10 @@ impl From<SocketAddrV4> for sockaddr_in {
 
 impl From<sockaddr_in> for SocketAddrV4 {
     fn from(item: sockaddr_in) -> Self {
-        SocketAddrV4::new(Ipv4Addr::from(Into::<u32>::into(item.sin_addr)), item.sin_port)
+        SocketAddrV4::new(
+            Ipv4Addr::from(net::ntohl(item.sin_addr.into())),
+            net::ntohs(item.sin_port),
+        )
     }
 }
 
