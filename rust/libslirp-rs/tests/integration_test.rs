@@ -28,7 +28,7 @@ fn it_shutdown() {
     let before_fd_count = count_open_fds().unwrap();
 
     let (tx, rx) = mpsc::channel::<Bytes>();
-    let slirp = LibSlirp::new(config, tx);
+    let slirp = LibSlirp::new(config, tx, None);
     slirp.shutdown();
     assert_eq!(
         rx.recv_timeout(Duration::from_millis(5)),
