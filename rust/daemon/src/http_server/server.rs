@@ -16,21 +16,29 @@ use crate::http_server::http_handlers::{create_filename_hash_set, handle_connect
 
 use crate::http_server::thread_pool::ThreadPool;
 use log::{info, warn};
-use std::net::TcpListener;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener};
 use std::sync::Arc;
 use std::thread;
 
 const DEFAULT_HTTP_PORT: u16 = 7681;
 
-/// Start the HTTP Server.
+/// Bind HTTP Server to IPv4 or IPv6 based on availability.
+fn bind_listener(http_port: u16) -> Result<TcpListener, std::io::Error> {
+    TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, http_port)))
+        .or_else(|e| {
+            warn!("Failed to bind to 127.0.0.1:{http_port} in netsimd frontend http server. Trying [::1]:{http_port}. {e:?}");
+            TcpListener::bind(SocketAddr::from((Ipv6Addr::LOCALHOST, http_port)))
+        })
+}
 
+/// Start the HTTP Server.
 pub fn run_http_server(instance_num: u16) -> u16 {
     let http_port = DEFAULT_HTTP_PORT + instance_num - 1;
     let _ = thread::Builder::new().name("http_server".to_string()).spawn(move || {
-        let listener = match TcpListener::bind(format!("127.0.0.1:{}", http_port)) {
+        let listener = match bind_listener(http_port) {
             Ok(listener) => listener,
             Err(e) => {
-                warn!("bind error in netsimd frontend http server. {}", e);
+                warn!("{e:?}");
                 return;
             }
         };

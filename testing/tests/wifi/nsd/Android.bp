@@ -37,7 +37,7 @@ python_test_host {
     main: "instrumentation_test.py",
     srcs: ["instrumentation_test.py"],
     test_config: "AndroidTest.xml",
-    data: [
+    device_common_data: [
         ":WifiNsdInstrumentationTest",
     ],
     test_options: {

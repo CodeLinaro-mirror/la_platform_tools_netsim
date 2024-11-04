@@ -24,6 +24,7 @@ crate-type = ["staticlib","lib"]
 doctest = false
 
 [dependencies]
+etherparse = {version = "0.16" }
 bytes = { version = "1.4.0" }
 http-proxy = { path = "../http-proxy" }
 libc = "0.2"

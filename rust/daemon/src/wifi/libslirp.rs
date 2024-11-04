@@ -36,7 +36,7 @@ pub fn slirp_run(
 ) -> anyhow::Result<LibSlirp> {
     // TODO: Convert ProtoSlirpOptions to SlirpConfig.
     let config = SlirpConfig { ..Default::default() };
-    Ok(LibSlirp::new(config, tx_bytes))
+    Ok(LibSlirp::new(config, tx_bytes, None))
 }
 
 #[cfg(feature = "cuttlefish")]

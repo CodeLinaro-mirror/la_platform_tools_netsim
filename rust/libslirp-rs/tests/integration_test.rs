@@ -15,7 +15,7 @@
 use bytes::Bytes;
 use libslirp_rs::libslirp::LibSlirp;
 use libslirp_rs::libslirp_config::SlirpConfig;
-use std::fs;
+
 use std::io;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -28,7 +28,7 @@ fn it_shutdown() {
     let before_fd_count = count_open_fds().unwrap();
 
     let (tx, rx) = mpsc::channel::<Bytes>();
-    let slirp = LibSlirp::new(config, tx);
+    let slirp = LibSlirp::new(config, tx, None);
     slirp.shutdown();
     assert_eq!(
         rx.recv_timeout(Duration::from_millis(5)),
@@ -41,6 +41,7 @@ fn it_shutdown() {
 
 #[cfg(target_os = "linux")]
 fn count_open_fds() -> io::Result<usize> {
+    use std::fs;
     let entries = fs::read_dir("/proc/self/fd")?;
     Ok(entries.count())
 }
