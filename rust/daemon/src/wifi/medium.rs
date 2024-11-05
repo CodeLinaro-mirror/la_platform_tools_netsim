@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::packets::ieee80211::{DataSubType, Ieee80211, MacAddress};
-use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
 use crate::wifi::frame::Frame;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::{anyhow, Context};
 use bytes::Bytes;
 use log::{debug, info, warn};
+use netsim_packets::ieee80211::{DataSubType, Ieee80211, MacAddress};
+use netsim_packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
 use pdl_runtime::Packet;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -679,7 +679,7 @@ pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wifi::packets::ieee80211::parse_mac_address;
+    use netsim_packets::ieee80211::parse_mac_address;
     #[test]
     fn test_remove() {
         let hostapd_bssid: MacAddress = parse_mac_address("00:13:10:85:fe:01").unwrap();

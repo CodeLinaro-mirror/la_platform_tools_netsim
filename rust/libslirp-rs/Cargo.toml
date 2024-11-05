@@ -30,6 +30,7 @@ http-proxy = { path = "../http-proxy" }
 libc = "0.2"
 log = "0.4.17"
 winapi = { version = "0.3", features = ["winsock2"] }
+tokio = { version = "1.32.0", features = [ "net", "rt-multi-thread"] }
 
 [build-dependencies]
 ##bindgen = "0.69.4"

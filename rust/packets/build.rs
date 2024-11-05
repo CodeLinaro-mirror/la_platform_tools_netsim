@@ -1,5 +1,5 @@
 //
-//  Copyright 2023 Google, Inc.
+//  Copyright 2024 Google, Inc.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -17,11 +17,12 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
-    let _build = cxx_build::bridge("src/ffi.rs");
-    println!("cargo:rerun-if-changed=src/ffi.rs");
-
-    // TODO: Migrate BT packet definitions to packets crate
-    let prebuilts: [[&str; 2]; 1] = [["LINK_LAYER_PACKETS_PREBUILT", "link_layer_packets.rs"]];
+    let prebuilts: [[&str; 2]; 4] = [
+        ["MAC80211_HWSIM_PACKETS_PREBUILT", "mac80211_hwsim_packets.rs"],
+        ["IEEE80211_PACKETS_PREBUILT", "ieee80211_packets.rs"],
+        ["LLC_PACKETS_PREBUILT", "llc_packets.rs"],
+        ["NETLINK_PACKETS_PREBUILT", "netlink_packets.rs"],
+    ];
 
     for [var, name] in prebuilts {
         let prebuilt = env::var(var).unwrap();

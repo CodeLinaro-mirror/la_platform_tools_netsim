@@ -15,9 +15,6 @@
 use crate::libslirp_config;
 use crate::libslirp_config::SlirpConfigs;
 use crate::libslirp_sys;
-use bytes::Bytes;
-use core::sync::atomic::{AtomicUsize, Ordering};
-use log::{debug, info, warn};
 ///
 /// This crate is a wrapper for libslirp C library.
 ///
@@ -29,48 +26,26 @@ use log::{debug, info, warn};
 ///
 /// Callbacks for libslirp send_packet are delivered on Channel.
 ///
+use bytes::Bytes;
+use core::sync::atomic::{AtomicUsize, Ordering};
+use log::{debug, info, warn};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::io;
+use std::mem::ManuallyDrop;
 use std::net::SocketAddr;
-use std::sync::{mpsc, Mutex, OnceLock};
+use std::rc::Rc;
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-// Uses a static to hold callback state instead of the libslirp's
-// opaque parameter. We do this to limit the number of unsafe regions.
-//
-// The `slirp_thread` and callbacks run in the same thread.
-thread_local! {
-    static CONTEXT: RefCell<Option<CallbackContext>> =
-    RefCell::new(None);
-}
-
-// TODO: remove Mutex since callbacks happen on SlirpCmd Thread.
-
-// Timers are managed across the ffi boundary using a unique usize ID
-// (TimerOpaque) and a hashmap rather than memory pointers to reduce
-// unsafe code.
-
-static TIMERS: OnceLock<Mutex<TimerManager>> = OnceLock::new();
-
-fn get_timers() -> &'static Mutex<TimerManager> {
-    TIMERS.get_or_init(|| {
-        Mutex::new(TimerManager {
-            clock: Instant::now(),
-            map: HashMap::new(),
-            timers: AtomicUsize::new(1),
-        })
-    })
-}
-
 type TimerOpaque = usize;
 
 struct TimerManager {
-    clock: Instant,
-    map: HashMap<TimerOpaque, Timer>,
+    clock: RefCell<Instant>,
+    map: RefCell<HashMap<TimerOpaque, Timer>>,
     timers: AtomicUsize,
 }
 
@@ -94,6 +69,7 @@ enum SlirpCmd {
 /// Alias for io::fd::RawFd on Unix or RawSocket on Windows (converted to i32)
 pub type RawFd = i32;
 
+// HTTP Proxy callback trait
 pub trait ProxyConnector: Send {
     fn connect(&self, sockaddr: SocketAddr) -> Result<RawFd, io::Error>;
 }
@@ -101,8 +77,9 @@ pub trait ProxyConnector: Send {
 struct CallbackContext {
     tx_bytes: mpsc::Sender<Bytes>,
     tx_cmds: mpsc::Sender<SlirpCmd>,
-    poll_fds: Vec<PollFd>,
+    poll_fds: Rc<RefCell<Vec<PollFd>>>,
     proxy_connector: Option<Box<dyn ProxyConnector>>,
+    timer_manager: Rc<TimerManager>,
 }
 
 // A poll thread request has a poll_fds and a timeout
@@ -120,9 +97,10 @@ impl TimerManager {
     }
 
     // Finds expired Timers, clears then clones them
-    fn collect_expired(&mut self) -> Vec<Timer> {
-        let now_ms = self.clock.elapsed().as_millis() as u64;
+    fn collect_expired(&self) -> Vec<Timer> {
+        let now_ms = self.get_elapsed().as_millis() as u64;
         self.map
+            .borrow_mut()
             .iter_mut()
             .filter(|(_, timer)| timer.expire_time < now_ms)
             .map(|(_, &mut ref mut timer)| {
@@ -134,13 +112,34 @@ impl TimerManager {
 
     // Return the minimum duration until the next timer
     fn min_duration(&self) -> Duration {
-        match self.map.iter().min_by_key(|(_, timer)| timer.expire_time) {
+        match self.map.borrow().iter().min_by_key(|(_, timer)| timer.expire_time) {
             Some((_, timer)) => {
-                let now_ms = self.clock.elapsed().as_millis() as u64;
+                let now_ms = self.get_elapsed().as_millis() as u64;
                 // Duration is >= 0
                 Duration::from_millis(timer.expire_time.saturating_sub(now_ms))
             }
             None => Duration::from_millis(u64::MAX),
+        }
+    }
+
+    fn get_elapsed(&self) -> Duration {
+        self.clock.borrow().elapsed()
+    }
+
+    fn remove(&self, timer_key: &TimerOpaque) -> Option<Timer> {
+        self.map.borrow_mut().remove(timer_key)
+    }
+
+    fn insert(&self, timer_key: TimerOpaque, value: Timer) {
+        self.map.borrow_mut().insert(timer_key, value);
+    }
+
+    fn timer_mod(&self, timer_key: &TimerOpaque, expire_time: u64) {
+        if let Some(&mut ref mut timer) = self.map.borrow_mut().get_mut(&timer_key) {
+            // expire_time is >= 0
+            timer.expire_time = expire_time;
+        } else {
+            warn!("Unknown timer {timer_key}");
         }
     }
 }
@@ -187,6 +186,106 @@ impl LibSlirp {
     }
 }
 
+// Converts a libslirp callback's `opaque` handle into a
+// `CallbackContext.`
+//
+// Wrapped in a `ManuallyDrop` because we do not want to release the
+// storage when the callback returns.
+//
+// SAFETY:
+//
+// * opaque is a CallbackContext passed to the slirp API
+unsafe fn callback_context_from_raw(opaque: *mut c_void) -> ManuallyDrop<Box<CallbackContext>> {
+    ManuallyDrop::new(unsafe { Box::from_raw(opaque as *mut CallbackContext) })
+}
+
+// A Rust struct for the fields held by `slirp` C library through it's
+// lifetime.
+//
+// All libslirp C calls are impl on this struct.
+struct Slirp {
+    slirp: *mut libslirp_sys::Slirp,
+    // These fields are held by slirp C library
+    #[allow(dead_code)]
+    configs: Box<SlirpConfigs>,
+    #[allow(dead_code)]
+    callbacks: Box<libslirp_sys::SlirpCb>,
+    // Passed to API calls and then to callbacks
+    callback_context: Box<CallbackContext>,
+}
+
+impl Slirp {
+    fn new(config: libslirp_config::SlirpConfig, callback_context: Box<CallbackContext>) -> Slirp {
+        let callbacks = Box::new(libslirp_sys::SlirpCb {
+            send_packet: Some(send_packet_cb),
+            guest_error: Some(guest_error_cb),
+            clock_get_ns: Some(clock_get_ns_cb),
+            timer_new: None,
+            timer_free: Some(timer_free_cb),
+            timer_mod: Some(timer_mod_cb),
+            register_poll_fd: Some(register_poll_fd_cb),
+            unregister_poll_fd: Some(unregister_poll_fd_cb),
+            notify: Some(notify_cb),
+            init_completed: Some(init_completed_cb),
+            timer_new_opaque: Some(timer_new_opaque_cb),
+            try_connect: None,
+            remove: None,
+        });
+        let configs = Box::new(SlirpConfigs::new(&config));
+
+        // Call libslrip "C" library to create a new instance of a slirp
+        // protocol stack.
+        //
+        // SAFETY: We ensure that:
+        //
+        // * config is a valid pointer to the "C" config struct. It is
+        // held by the "C" slirp library for lifetime of the slirp
+        // instance.
+        //
+        // * callbacks is a valid pointer to an array of callback
+        // functions. It is held by the "C" slirp library for the lifetime
+        // of the slirp instance.
+        //
+        // * callback_context is an arbitrary opaque type passed back
+        //  to callback functions by libslirp.
+        let slirp = unsafe {
+            libslirp_sys::slirp_new(
+                &configs.c_slirp_config,
+                &*callbacks,
+                &*callback_context as *const CallbackContext as *mut c_void,
+            )
+        };
+
+        Slirp { slirp, configs, callbacks, callback_context }
+    }
+
+    fn handle_timer(&self, timer: Timer) {
+        unsafe {
+            //
+            // SAFETY: We ensure that:
+            //
+            // *self.slirp is a valid state returned by `slirp_new()`
+            //
+            // * timer.id is a valid c_uint from "C" slirp library calling `timer_new_opaque_cb()`
+            //
+            // * timer.cb_opaque is an usize representing a pointer to callback function from
+            // "C" slirp library calling `timer_new_opaque_cb()`
+            libslirp_sys::slirp_handle_timer(self.slirp, timer.id, timer.cb_opaque as *mut c_void);
+        };
+    }
+}
+
+impl Drop for Slirp {
+    fn drop(&mut self) {
+        // SAFETY:
+        //
+        // * self.slirp is a slirp pointer initialized by slirp_new;
+        // it's private to the struct and is only constructed that
+        // way.
+        unsafe { libslirp_sys::slirp_cleanup(self.slirp) };
+    }
+}
+
 fn slirp_thread(
     config: libslirp_config::SlirpConfig,
     tx_bytes: mpsc::Sender<Bytes>,
@@ -195,56 +294,43 @@ fn slirp_thread(
     tx_poll: mpsc::Sender<PollRequest>,
     proxy_connector: Option<Box<dyn ProxyConnector>>,
 ) {
-    // Initialize the thread local CallbackContext, this assures
-    // callbacks are only on the slirp thread.
-    CONTEXT.with_borrow_mut(|c| {
-        *c = Some(CallbackContext { tx_bytes, tx_cmds, poll_fds: Vec::new(), proxy_connector })
+    // Data structures wrapped in an RC are referenced through the
+    // libslirp callbacks and this code (both in the same thread).
+
+    let timer_manager = Rc::new(TimerManager {
+        clock: RefCell::new(Instant::now()),
+        map: RefCell::new(HashMap::new()),
+        timers: AtomicUsize::new(1),
     });
 
-    let callbacks = libslirp_sys::SlirpCb {
-        send_packet: Some(send_packet_cb),
-        guest_error: Some(guest_error_cb),
-        clock_get_ns: Some(clock_get_ns_cb),
-        timer_new: None,
-        timer_free: Some(timer_free_cb),
-        timer_mod: Some(timer_mod_cb),
-        register_poll_fd: Some(register_poll_fd_cb),
-        unregister_poll_fd: Some(unregister_poll_fd_cb),
-        notify: Some(notify_cb),
-        init_completed: Some(init_completed),
-        remove: None,
-        timer_new_opaque: Some(timer_new_opaque_cb),
-        try_connect: Some(try_connect_cb),
-    };
-    let configs = SlirpConfigs::new(&config);
-    // Call libslrip "C" library to create a new instance of a slirp
-    // protocol stack.
-    //
-    // SAFETY: We ensure that:
-    //
-    // `config` is a valid pointer to the "C" config struct. It is
-    // held by the "C" slirp library for lifetime of the slirp
-    // instance.
-    //
-    // `callbacks` is a valid pointer to an array of callback
-    // functions. It is held by the "C" slirp library for the lifetime
-    // of the slirp instance.
-    let slirp = unsafe {
-        libslirp_sys::slirp_new(&configs.c_slirp_config, &callbacks, std::ptr::null_mut())
-    };
+    let poll_fds = Rc::new(RefCell::new(Vec::new()));
 
-    unsafe { slirp_pollfds_fill(slirp, &tx_poll) };
+    let callback_context = Box::new(CallbackContext {
+        tx_bytes,
+        tx_cmds,
+        poll_fds: poll_fds.clone(),
+        proxy_connector,
+        timer_manager: timer_manager.clone(),
+    });
 
-    let min_duration = get_timers().lock().unwrap().min_duration();
+    let slirp = Slirp::new(config, callback_context);
+
+    slirp.pollfds_fill_and_send(&poll_fds, &tx_poll);
+
+    let min_duration = timer_manager.min_duration();
     loop {
         match rx.recv_timeout(min_duration) {
-            Ok(SlirpCmd::PollResult(poll_fds, select_error)) => {
-                // SAFETY: we ensure that slirp is a valid state returned by `slirp_new()`
-                unsafe { slirp_pollfds_poll(slirp, select_error, poll_fds) };
-                unsafe { slirp_pollfds_fill(slirp, &tx_poll) };
+            // The dance to tell libslirp which FDs have IO ready
+            // starts with a response from a worker thread sending a
+            // PollResult, followed by pollfds_poll forwarding the FDs
+            // to libslirp, followed by giving the worker thread
+            // another set of fds to poll (and block).
+            Ok(SlirpCmd::PollResult(poll_fds_result, select_error)) => {
+                poll_fds.borrow_mut().clone_from_slice(&poll_fds_result);
+                slirp.pollfds_poll(select_error);
+                slirp.pollfds_fill_and_send(&poll_fds, &tx_poll);
             }
-            // SAFETY: we ensure that slirp is a valid state returned by `slirp_new()`
-            Ok(SlirpCmd::Input(bytes)) => unsafe { slirp_input(slirp, &bytes) },
+            Ok(SlirpCmd::Input(bytes)) => slirp.input(&bytes),
 
             // A timer has been modified, new expired_time value
             Ok(SlirpCmd::TimerModified) => continue,
@@ -272,39 +358,22 @@ fn slirp_thread(
         }
 
         // Explicitly store expired timers to release lock
-        let timers = get_timers().lock().unwrap().collect_expired();
+        let timers = timer_manager.collect_expired();
         // Handle any expired timers' callback in the slirp thread
-        //
-        // SAFETY: We ensure that:
-        //
-        // `slirp` is a valid state returned by `slirp_new()`
-        //
-        // 'timer.id' is a valid c_uint from "C" slirp library calling `timer_new_opaque_cb()`
-        //
-        // 'timer.cb_opaque` is an usize representing a pointer to callback function from
-        // "C" slirp library calling `timer_new_opaque_cb()`
         for timer in timers {
-            unsafe {
-                libslirp_sys::slirp_handle_timer(slirp, timer.id, timer.cb_opaque as *mut c_void);
-            };
+            slirp.handle_timer(timer);
         }
     }
     // Shuts down the instance of a slirp stack and release slirp storage. No callbacks
-    // occur after `slirp_cleanup` is called.
+    // occur after this since it calls slirp_cleanup.
+    drop(slirp);
 
-    // SAFETY: we ensure that slirp is a valid state returned by `slirp_new()`
-    unsafe { libslirp_sys::slirp_cleanup(slirp) };
     // Shutdown slirp_poll_thread -- worst case it sends a PollResult that is ignored
     // since this thread is no longer processing Slirp commands.
     drop(tx_poll);
-
-    // Drop callback context
-    CONTEXT.with_borrow_mut(|c| *c = None);
-
-    // SAFETY: Slirp is shutdown. `slirp` `config` and `libslirp` can
-    // be released.
 }
 
+#[derive(Clone, Debug)]
 struct PollFd {
     fd: c_int,
     events: libslirp_sys::SlirpPollType,
@@ -325,50 +394,63 @@ struct PollFd {
 // # Safety
 //
 // `slirp` must be a valid Slirp state returned by `slirp_new()`
-unsafe fn slirp_pollfds_fill(slirp: *mut libslirp_sys::Slirp, tx: &mpsc::Sender<PollRequest>) {
-    // Timeout will be updated by slirp_pollfds_fill.
-    let mut timeout: u32 = u32::MAX;
-    CONTEXT.with_borrow_mut(|c| c.as_mut().expect("cb").poll_fds.clear());
+impl Slirp {
+    fn pollfds_fill_and_send(
+        &self,
+        poll_fds: &RefCell<Vec<PollFd>>,
+        tx: &mpsc::Sender<PollRequest>,
+    ) {
+        let mut timeout: u32 = u32::MAX;
+        poll_fds.borrow_mut().clear();
 
-    // Call libslrip "C" library to fill poll information using
-    // slirp_add_poll_cb callback function.
-    //
-    // SAFETY: we ensure that:
-    //
-    // `slirp` is a valid Slirp state.
-    //
-    // `timeout` is a valid ptr to a mutable u32.  The "C" slirp
-    // library stores into timeout.
-    //
-    // `slirp_add_poll_cb` is a valid `SlirpAddPollCb` function.
-    unsafe {
-        libslirp_sys::slirp_pollfds_fill(
-            slirp,
-            &mut timeout,
-            Some(slirp_add_poll_cb),
-            std::ptr::null_mut(),
-        );
-    }
-    let poll_fds: Vec<PollFd> =
-        CONTEXT.with_borrow_mut(|c| c.as_mut().expect("cb").poll_fds.drain(..).collect());
-    if let Err(e) = tx.send((poll_fds, timeout)) {
-        warn!("Failed to send poll fds: {}", e);
+        // Call libslrip "C" library to fill poll information using
+        // slirp_add_poll_cb callback function.
+        //
+        // SAFETY: we ensure that:
+        //
+        // * self.slirp has a slirp pointer initialized by slirp_new,
+        // as it's private to the struct is only constructed that way
+        //
+        // * timeout is a valid ptr to a mutable u32.  The "C" slirp
+        // library stores into timeout.
+        //
+        // * slirp_add_poll_cb is a valid `SlirpAddPollCb` function.
+        //
+        // * self.callback_context is a CallbackContext
+        unsafe {
+            libslirp_sys::slirp_pollfds_fill(
+                self.slirp,
+                &mut timeout,
+                Some(slirp_add_poll_cb),
+                &*self.callback_context as *const CallbackContext as *mut c_void,
+            );
+        }
+        if let Err(e) = tx.send((poll_fds.borrow().to_vec(), timeout)) {
+            warn!("Failed to send poll fds: {}", e);
+        }
     }
 }
 
 // "C" library callback that is called for each file descriptor that
 // should be monitored.
+//
+// SAFETY:
+//
+// * opaque is a CallbackContext
+unsafe extern "C" fn slirp_add_poll_cb(fd: c_int, events: c_int, opaque: *mut c_void) -> c_int {
+    unsafe { callback_context_from_raw(opaque) }.add_poll(fd, events)
+}
 
-extern "C" fn slirp_add_poll_cb(fd: c_int, events: c_int, _opaque: *mut c_void) -> c_int {
-    let idx = CONTEXT.with_borrow(|c| c.as_ref().expect("cb").poll_fds.len());
-    CONTEXT.with_borrow_mut(|c| {
-        c.as_mut().expect("cb").poll_fds.push(PollFd {
+impl CallbackContext {
+    fn add_poll(&mut self, fd: c_int, events: c_int) -> c_int {
+        let idx = self.poll_fds.borrow().len();
+        self.poll_fds.borrow_mut().push(PollFd {
             fd,
             events: events as libslirp_sys::SlirpPollType,
             revents: 0,
-        })
-    });
-    idx as i32
+        });
+        idx as i32
+    }
 }
 
 // Pass the result from the polling thread back to libslirp
@@ -382,50 +464,53 @@ extern "C" fn slirp_add_poll_cb(fd: c_int, events: c_int, _opaque: *mut c_void) 
 // that should be monitored along the sleep. The opaque pointer is
 // passed as such to add_poll, and add_poll returns an index.
 //
-// # Safety
-//
-// `slirp` must be a valid Slirp state returned by `slirp_new()`
-//
-// 'select_error' should be 1 if poll() returned an error, else 0.
-unsafe fn slirp_pollfds_poll(
-    slirp: *mut libslirp_sys::Slirp,
-    select_error: c_int,
-    poll_fds: Vec<PollFd>,
-) {
-    CONTEXT.with_borrow_mut(|c| c.as_mut().expect("cb").poll_fds = poll_fds);
+// * select_error should be 1 if poll() returned an error, else 0.
 
-    // Call libslrip "C" library to fill poll return event information
-    // using slirp_get_revents_cb callback function.
-    //
-    // SAFETY: we ensure that:
-    //
-    // `slirp` is a valid Slirp state.
-    //
-    // `slirp_get_revents_cb` is a valid `SlirpGetREventsCb` callback
-    // function.
-    //
-    // 'select_error' should be 1 if poll() returned an error, else 0.
-    unsafe {
-        libslirp_sys::slirp_pollfds_poll(
-            slirp,
-            select_error,
-            Some(slirp_get_revents_cb),
-            std::ptr::null_mut(),
-        );
+impl Slirp {
+    fn pollfds_poll(&self, select_error: c_int) {
+        // Call libslrip "C" library to fill poll return event information
+        // using slirp_get_revents_cb callback function.
+        //
+        // SAFETY: we ensure that:
+        //
+        // * self.slirp has a slirp pointer initialized by slirp_new,
+        // as it's private to the struct is only constructed that way
+        //
+        // * slirp_get_revents_cb is a valid `SlirpGetREventsCb` callback
+        // function.
+        //
+        // * select_error should be 1 if poll() returned an error, else 0.
+        //
+        // * self.callback_context is a CallbackContext
+        unsafe {
+            libslirp_sys::slirp_pollfds_poll(
+                self.slirp,
+                select_error,
+                Some(slirp_get_revents_cb),
+                &*self.callback_context as *const CallbackContext as *mut c_void,
+            );
+        }
     }
 }
 
 // "C" library callback that is called on each file descriptor, giving
 // it the index that add_poll returned.
+//
+// SAFETY:
+//
+// * opaque is a CallbackContext
+unsafe extern "C" fn slirp_get_revents_cb(idx: c_int, opaque: *mut c_void) -> c_int {
+    unsafe { callback_context_from_raw(opaque) }.get_events(idx)
+}
 
-extern "C" fn slirp_get_revents_cb(idx: c_int, _opaue: *mut c_void) -> c_int {
-    CONTEXT.with_borrow_mut(|c| {
-        if let Some(poll_fd) = c.as_mut().expect("cb").poll_fds.get(idx as usize) {
+impl CallbackContext {
+    fn get_events(&self, idx: c_int) -> c_int {
+        if let Some(poll_fd) = self.poll_fds.borrow().get(idx as usize) {
             poll_fd.revents as c_int
         } else {
             0
         }
-    })
+    }
 }
 
 macro_rules! ternary {
@@ -438,7 +523,8 @@ macro_rules! ternary {
     };
 }
 
-// Loop issuing blocking poll requests, sending the results into the slirp thread
+// Worker thread loops issuing blocking poll requests, sending the
+// results into the slirp thread
 
 fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>) {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -547,15 +633,13 @@ fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>
 //
 // This is called by the application when the guest emits a packet on
 // the guest network, to be interpreted by slirp.
-//
-// # Safety
-//
-// `slirp` must be a valid Slirp state returned by `slirp_new()`
-unsafe fn slirp_input(slirp: *mut libslirp_sys::Slirp, bytes: &[u8]) {
-    // SAFETY: The "C" library ensure that the memory is not
-    // referenced after the call and `bytes` does not need to remain
-    // valid after the function returns.
-    unsafe { libslirp_sys::slirp_input(slirp, bytes.as_ptr(), bytes.len() as i32) };
+impl Slirp {
+    fn input(&self, bytes: &[u8]) {
+        // SAFETY: The "C" library ensure that the memory is not
+        // referenced after the call and `bytes` does not need to remain
+        // valid after the function returns.
+        unsafe { libslirp_sys::slirp_input(self.slirp, bytes.as_ptr(), bytes.len() as i32) };
+    }
 }
 
 // "C" library callback that is called to send an ethernet frame to
@@ -566,20 +650,29 @@ unsafe fn slirp_input(slirp: *mut libslirp_sys::Slirp, bytes: &[u8]) {
 //
 // # Safety:
 //
-// `buf` must be a valid pointer to `len` bytes of memory. The
+// * buf must be a valid pointer to `len` bytes of memory. The
 // contents of buf must be valid for the duration of this call.
+//
+// * len is > 0
+//
+// * opaque is a CallbackContext
 unsafe extern "C" fn send_packet_cb(
     buf: *const c_void,
     len: usize,
-    _opaque: *mut c_void,
+    opaque: *mut c_void,
 ) -> libslirp_sys::slirp_ssize_t {
-    // SAFETY: The caller ensures that `buf` is contains `len` bytes of data.
-    let c_slice = unsafe { std::slice::from_raw_parts(buf as *const u8, len) };
-    // Bytes::from(slice: &'static [u8]) creates a Bytes object without copying the data.
-    // To own its data, copy &'static [u8] to Vec<u8> before converting to Bytes.
-    let _ = CONTEXT
-        .with_borrow(|c| c.as_ref().expect("cb").tx_bytes.send(Bytes::from(c_slice.to_vec())));
-    len as libslirp_sys::slirp_ssize_t
+    unsafe { callback_context_from_raw(opaque) }.send_packet(buf, len)
+}
+
+impl CallbackContext {
+    fn send_packet(&self, buf: *const c_void, len: usize) -> libslirp_sys::slirp_ssize_t {
+        // SAFETY: The caller ensures that `buf` is contains `len` bytes of data.
+        let c_slice = unsafe { std::slice::from_raw_parts(buf as *const u8, len) };
+        // Bytes::from(slice: &'static [u8]) creates a Bytes object without copying the data.
+        // To own its data, copy &'static [u8] to Vec<u8> before converting to Bytes.
+        let _ = self.tx_bytes.send(Bytes::from(c_slice.to_vec()));
+        len as libslirp_sys::slirp_ssize_t
+    }
 }
 
 // "C" library callback to print a message for an error due to guest
@@ -587,120 +680,160 @@ unsafe extern "C" fn send_packet_cb(
 //
 // # Safety:
 //
-// `msg` must be a valid nul-terminated utf8 string.
-unsafe extern "C" fn guest_error_cb(msg: *const c_char, _opaque: *mut c_void) {
+// * msg must be a valid nul-terminated utf8 string.
+//
+// * opaque is a CallbackContext
+unsafe extern "C" fn guest_error_cb(msg: *const c_char, opaque: *mut c_void) {
     // SAFETY: The caller ensures that `msg` is a nul-terminated string.
     let msg = String::from_utf8_lossy(unsafe { CStr::from_ptr(msg) }.to_bytes());
-    warn!("libslirp: {msg}");
+    unsafe { callback_context_from_raw(opaque) }.guest_error(msg.to_string());
 }
 
-extern "C" fn clock_get_ns_cb(_opaque: *mut c_void) -> i64 {
-    get_timers().lock().unwrap().clock.elapsed().as_nanos() as i64
+impl CallbackContext {
+    fn guest_error(&self, msg: String) {
+        warn!("libslirp: {msg}");
+    }
 }
 
-extern "C" fn init_completed(_slirp: *mut libslirp_sys::Slirp, _opaque: *mut c_void) {
-    info!("libslirp: initialization completed.");
+// SAFETY:
+//
+// * opaque is a CallbackContext
+unsafe extern "C" fn clock_get_ns_cb(opaque: *mut c_void) -> i64 {
+    unsafe { callback_context_from_raw(opaque) }.clock_get_ns()
+}
+
+impl CallbackContext {
+    fn clock_get_ns(&self) -> i64 {
+        self.timer_manager.get_elapsed().as_nanos() as i64
+    }
+}
+
+// SAFETY:
+//
+// * opaque is a CallbackContext
+unsafe extern "C" fn init_completed_cb(_slirp: *mut libslirp_sys::Slirp, opaque: *mut c_void) {
+    unsafe { callback_context_from_raw(opaque) }.init_completed();
+}
+
+impl CallbackContext {
+    fn init_completed(&self) {
+        info!("libslirp: initialization completed.");
+    }
 }
 
 // Create a new timer
-extern "C" fn timer_new_opaque_cb(
+//
+// SAFETY:
+//
+// * opaque is a CallbackContext
+unsafe extern "C" fn timer_new_opaque_cb(
     id: libslirp_sys::SlirpTimerId,
     cb_opaque: *mut c_void,
-    _opaque: *mut c_void,
+    opaque: *mut c_void,
 ) -> *mut c_void {
-    let timers = get_timers();
-    let mut guard = timers.lock().unwrap();
-    let timer = guard.next_timer();
-    debug!("timer_new_opaque {timer}");
-    guard.map.insert(timer, Timer { expire_time: u64::MAX, id, cb_opaque: cb_opaque as usize });
-    timer as *mut c_void
+    unsafe { callback_context_from_raw(opaque) }.timer_new_opaque(id, cb_opaque)
 }
 
-extern "C" fn timer_free_cb(
-    timer: *mut ::std::os::raw::c_void,
-    _opaque: *mut ::std::os::raw::c_void,
-) {
-    let timer = timer as TimerOpaque;
-    debug!("timer_free {timer}");
-    if get_timers().lock().unwrap().map.remove(&timer).is_none() {
-        warn!("Unknown timer {timer}");
+impl CallbackContext {
+    // SAFETY:
+    //
+    // * cb_opaque is only passed back to libslirp
+    unsafe fn timer_new_opaque(
+        &self,
+        id: libslirp_sys::SlirpTimerId,
+        cb_opaque: *mut c_void,
+    ) -> *mut c_void {
+        let timer = self.timer_manager.next_timer();
+        self.timer_manager
+            .insert(timer, Timer { expire_time: u64::MAX, id, cb_opaque: cb_opaque as usize });
+        timer as *mut c_void
     }
 }
 
-extern "C" fn timer_mod_cb(
-    timer: *mut ::std::os::raw::c_void,
-    expire_time: i64,
-    _opaque: *mut ::std::os::raw::c_void,
-) {
-    let timer_key = timer as TimerOpaque;
-    let now_ms = get_timers().lock().unwrap().clock.elapsed().as_millis() as u64;
-    if let Some(&mut ref mut timer) = get_timers().lock().unwrap().map.get_mut(&timer_key) {
-        // expire_time is > 0
-        timer.expire_time = std::cmp::max(expire_time, 0) as u64;
-        debug!("timer_mod {timer_key} expire_time: {}ms", timer.expire_time.saturating_sub(now_ms));
-    } else {
-        warn!("Unknown timer {timer_key}");
+// SAFETY:
+//
+// * timer is a TimerOpaque key for timer manager
+//
+// * opaque is a CallbackContext
+unsafe extern "C" fn timer_free_cb(timer: *mut c_void, opaque: *mut c_void) {
+    unsafe { callback_context_from_raw(opaque) }.timer_free(timer);
+}
+
+impl CallbackContext {
+    fn timer_free(&self, timer: *mut c_void) {
+        let timer = timer as TimerOpaque;
+        if self.timer_manager.remove(&timer).is_none() {
+            warn!("Unknown timer {timer}");
+        }
     }
-    // Wake up slirp command thread to reset sleep duration
-    let _ = CONTEXT.with_borrow(|c| c.as_ref().expect("cb").tx_cmds.send(SlirpCmd::TimerModified));
 }
 
-extern "C" fn register_poll_fd_cb(
-    _fd: ::std::os::raw::c_int,
-    _opaque: *mut ::std::os::raw::c_void,
-) {
+// SAFETY:
+//
+// * timer is a TimerOpaque key for timer manager
+//
+// * opaque is a CallbackContext
+unsafe extern "C" fn timer_mod_cb(timer: *mut c_void, expire_time: i64, opaque: *mut c_void) {
+    unsafe { callback_context_from_raw(opaque) }.timer_mod(timer, expire_time);
+}
+
+impl CallbackContext {
+    fn timer_mod(&self, timer: *mut c_void, expire_time: i64) {
+        let timer_key = timer as TimerOpaque;
+        let expire_time = std::cmp::max(expire_time, 0) as u64;
+        self.timer_manager.timer_mod(&timer_key, expire_time);
+        // Wake up slirp command thread to reset sleep duration
+        let _ = self.tx_cmds.send(SlirpCmd::TimerModified);
+    }
+}
+
+extern "C" fn register_poll_fd_cb(_fd: c_int, _opaque: *mut c_void) {
     //TODO: Need implementation for Windows
 }
 
-extern "C" fn unregister_poll_fd_cb(
-    _fd: ::std::os::raw::c_int,
-    _opaque: *mut ::std::os::raw::c_void,
-) {
+extern "C" fn unregister_poll_fd_cb(_fd: c_int, _opaque: *mut c_void) {
     //TODO: Need implementation for Windows
 }
 
-extern "C" fn notify_cb(_opaque: *mut ::std::os::raw::c_void) {
+extern "C" fn notify_cb(_opaque: *mut c_void) {
     //TODO: Un-implemented
 }
 
 // Called by libslirp to initiate a proxy connection to address
 // `addr.` Eventually this will notify libslirp with a result by
 // calling the passed `connect_func.`
-
-extern "C" fn try_connect_cb(
-    _addr: *const libslirp_sys::sockaddr_storage,
-    _connect_func: libslirp_sys::SlirpProxyConnectFunc,
-    _connect_opaque: *mut c_void,
+//
+// SAFETY:
+//
+// * opaque is a CallbackContext
+unsafe extern "C" fn try_connect_cb(
+    addr: *const libslirp_sys::sockaddr_storage,
+    connect_func: libslirp_sys::SlirpProxyConnectFunc,
+    opaque: *mut c_void,
 ) -> bool {
-    CONTEXT.with_borrow(|c| {
-        if let Some(_proxy_connector) = &c.as_ref().expect("cb").proxy_connector {
+    unsafe { callback_context_from_raw(opaque) }.try_connect(addr, connect_func)
+}
+
+impl CallbackContext {
+    fn try_connect(
+        &self,
+        _addr: *const libslirp_sys::sockaddr_storage,
+        _connect_func: libslirp_sys::SlirpProxyConnectFunc,
+    ) -> bool {
+        if let Some(_proxy_connector) = &self.proxy_connector {
             // TODO: once sockaddr_storage.into() is available
             // let addr = *addr;
             // if let Ok(fd) = proxy_connector.connect(addr.into()) {
-            //   proxy_connect_func(connect_func, connect_opaque, fd, 0);
-            //   return true
+            //   self.tx_cmds.send(SlirpCmd::ProxyConnect(
+            //     func,
+            //     connect_opaque as usize,
+            //     fd,
+            //     af);
             // }
+            true
+        } else {
+            false
         }
-        false
-    })
-}
-
-// Invokes the callback SlirpProxyConnectFunc in the slirp thread
-pub fn proxy_connect_func(
-    func: libslirp_sys::SlirpProxyConnectFunc,
-    connect_opaque: *mut c_void,
-    fd: c_int,
-    af: c_int,
-) {
-    if let Err(e) = CONTEXT.with_borrow(|c| {
-        c.as_ref().expect("cb").tx_cmds.send(SlirpCmd::ProxyConnect(
-            func,
-            connect_opaque as usize,
-            fd,
-            af,
-        ))
-    }) {
-        warn!("Failed to send ProxyConnect: {}", e)
     }
 }
 
