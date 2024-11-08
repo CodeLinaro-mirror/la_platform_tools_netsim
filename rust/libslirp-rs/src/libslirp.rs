@@ -227,9 +227,9 @@ impl Slirp {
             unregister_poll_fd: Some(unregister_poll_fd_cb),
             notify: Some(notify_cb),
             init_completed: Some(init_completed_cb),
-            remove: None,
             timer_new_opaque: Some(timer_new_opaque_cb),
-            try_connect: Some(try_connect_cb),
+            try_connect: None,
+            remove: None,
         });
         let configs = Box::new(SlirpConfigs::new(&config));
 

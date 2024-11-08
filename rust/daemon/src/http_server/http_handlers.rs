@@ -39,7 +39,7 @@ use super::{
     server_response::{ResponseWritable, ServerResponseWritable, ServerResponseWriter},
 };
 
-const PATH_PREFIXES: [&str; 4] = ["js", "js/netsim", "assets", "node_modules/tslib"];
+const PATH_PREFIXES: [&str; 3] = ["js", "assets", "node_modules/tslib"];
 
 fn ui_path(suffix: &str) -> PathBuf {
     let mut path = std::env::current_exe().unwrap();

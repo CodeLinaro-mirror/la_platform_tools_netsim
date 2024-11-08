@@ -23,7 +23,7 @@ use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const PAYLOAD: &[u8; 23] = b"Hello, UDP echo server!";
 const PAYLOAD_PONG: &[u8; 23] = b"Hello, UDP echo client!";
@@ -81,7 +81,9 @@ fn udp_echo() {
 
     // Read from oneshot_udp_echo server (via libslirp)
     // No ARP packets will be seen
-    match rx.recv() {
+
+    // Try to receive a packet before end_time
+    match rx.recv_timeout(Duration::from_secs(2)) {
         Ok(packet) => {
             let headers = PacketHeaders::from_ethernet_slice(&packet).unwrap();
 
@@ -110,6 +112,9 @@ fn udp_echo() {
             } else {
                 panic!("expected Udp payload");
             }
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            assert!(false, "Timeout waiting for udp packet");
         }
         Err(e) => {
             panic!("Failed to receive data in main thread: {}", e);

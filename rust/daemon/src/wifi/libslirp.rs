@@ -15,15 +15,22 @@
 /// LibSlirp Interface for Network Simulation
 use bytes::Bytes;
 pub use libslirp_rs::libslirp::LibSlirp;
-use libslirp_rs::libslirp_config::SlirpConfig;
+use libslirp_rs::libslirp_config::{lookup_host_dns, SlirpConfig};
 use netsim_proto::config::SlirpOptions as ProtoSlirpOptions;
 use std::sync::mpsc;
+use tokio::runtime::Runtime;
 
 pub fn slirp_run(
-    _opt: ProtoSlirpOptions,
+    opt: ProtoSlirpOptions,
     tx_bytes: mpsc::Sender<Bytes>,
 ) -> anyhow::Result<LibSlirp> {
     // TODO: Convert ProtoSlirpOptions to SlirpConfig.
-    let config = SlirpConfig { ..Default::default() };
+    let mut config = SlirpConfig { ..Default::default() };
+
+    if !opt.host_dns.is_empty() {
+        let rt = Runtime::new().unwrap();
+        config.host_dns = rt.block_on(lookup_host_dns(&opt.host_dns))?;
+    }
+
     Ok(LibSlirp::new(config, tx_bytes, None))
 }
