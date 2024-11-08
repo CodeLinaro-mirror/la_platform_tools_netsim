@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # netsim-packets Crate
+//!
+//! A collection of packet definitions for netsimd.
+
 pub mod ieee80211;
 pub mod llc;
 

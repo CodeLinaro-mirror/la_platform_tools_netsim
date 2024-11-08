@@ -20,7 +20,7 @@
 #![allow(unused)]
 include!(concat!(env!("OUT_DIR"), "/ieee80211_packets.rs"));
 
-use super::llc::{EtherType, LlcCtrl, LlcSap, LlcSnapHeader};
+use crate::llc::{EtherType, LlcCtrl, LlcSap, LlcSnapHeader};
 use anyhow::anyhow;
 
 const ETHERTYPE_LEN: usize = 2;
