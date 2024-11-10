@@ -1,6 +1,6 @@
 [package]
 name = "netsim-daemon"
-version = "0.3.32"
+version = "0.3.33"
 edition = "2021"
 build = "build.rs"
 
@@ -21,6 +21,7 @@ http = "0.2.9"
 netsim-common = { path = "../common" }
 libslirp-rs = { path = "../libslirp-rs" }
 hostapd-rs = { path = "../hostapd-rs" }
+netsim-packets = { path = "../packets" }
 # Relax the version constraint for 'pica' to allow cargo to select a compatible version
 # from crates.io since 0.1.9 seems to be only available in AOSP.
 pica = { version = "0.1", default-features = false }

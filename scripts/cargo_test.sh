@@ -40,7 +40,7 @@ fi
 # Run the cargo command
 # TODO(360874898): prebuilt rust toolchain for darwin-aarch64 is supported from 1.77.1
 if [[ "$OS" == "darwin" && $(uname -m) == "arm64" ]]; then
-  cargo test -vv --package $RUST_PKG --manifest-path $REPO/tools/netsim/rust/Cargo.toml
+  cargo test -vv --package $RUST_PKG --manifest-path $REPO/tools/netsim/rust/Cargo.toml -- --nocapture
 else
-  $REPO/prebuilts/rust/$OS-x86/$RUST_VERSION/bin/cargo test -vv --package $RUST_PKG --manifest-path $REPO/tools/netsim/rust/Cargo.toml
+  $REPO/prebuilts/rust/$OS-x86/$RUST_VERSION/bin/cargo test -vv --package $RUST_PKG --manifest-path $REPO/tools/netsim/rust/Cargo.toml -- --nocapture
 fi

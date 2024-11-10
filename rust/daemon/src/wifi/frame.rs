@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::packets::ieee80211::{Ieee80211, MacAddress};
-use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, TxRate};
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::Context;
+use netsim_packets::ieee80211::{Ieee80211, MacAddress};
+use netsim_packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, TxRate};
 use pdl_runtime::Packet;
 
 /// Parser for the hwsim Frame command (HWSIM_CMD_FRAME).

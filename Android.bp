@@ -73,6 +73,7 @@ rust_defaults {
         "libnetsim_proto",
         "libhttp",
         "libnetsim_common",
+        "libnetsim_packets",
         "libpdl_runtime",
         "libpica",
         "libprotobuf",
@@ -89,10 +90,6 @@ rust_defaults {
     static_libs: ["libgrpc_wrap"],
     srcs: [
         "rust/daemon/src/lib.rs",
-        ":netsim_netlink_rust_gen",
-        ":netsim_mac80211_hwsim_rust_gen",
-        ":netsim_ieee80211_rust_gen",
-        ":netsim_llc_rust_gen",
         ":netsim_arp_rust_gen",
         ":rootcanal_link_layer_packets_rust_gen",
     ],
@@ -351,6 +348,28 @@ rust_library_host {
     name: "libnetsim_common",
     crate_name: "netsim_common",
     defaults: ["libnetsim_common_defaults"],
+}
+
+rust_defaults {
+    name: "libnetsim_packets_defaults",
+    srcs: [
+        "rust/packets/src/lib.rs",
+        ":netsim_netlink_rust_gen",
+        ":netsim_mac80211_hwsim_rust_gen",
+        ":netsim_ieee80211_rust_gen",
+        ":netsim_llc_rust_gen",
+    ],
+    rustlibs: [
+        "libanyhow",
+        "libbytes",
+        "libpdl_runtime",
+    ],
+}
+
+rust_library_host {
+    name: "libnetsim_packets",
+    crate_name: "netsim_packets",
+    defaults: ["libnetsim_packets_defaults"],
 }
 
 rust_test_host {
