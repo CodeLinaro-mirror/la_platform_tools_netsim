@@ -14,10 +14,10 @@
 
 use std::fmt;
 
-use super::packets::ieee80211::MacAddress;
-use super::packets::mac80211_hwsim::{self, HwsimAttr, HwsimAttrChild::*, TxRate, TxRateFlag};
-use super::packets::netlink::NlAttrHdr;
 use anyhow::{anyhow, Context};
+use netsim_packets::ieee80211::MacAddress;
+use netsim_packets::mac80211_hwsim::{self, HwsimAttr, HwsimAttrChild::*, TxRate, TxRateFlag};
+use netsim_packets::netlink::NlAttrHdr;
 use pdl_runtime::Packet;
 use std::option::Option;
 
@@ -288,10 +288,10 @@ impl HwsimAttrSet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wifi::packets::ieee80211::parse_mac_address;
-    use crate::wifi::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg};
     use anyhow::Context;
     use anyhow::Error;
+    use netsim_packets::ieee80211::parse_mac_address;
+    use netsim_packets::mac80211_hwsim::{HwsimCmd, HwsimMsg};
 
     // Validate `HwsimAttrSet` attribute parsing from byte vector.
     #[test]

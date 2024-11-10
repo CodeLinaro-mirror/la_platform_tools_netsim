@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Version library.
+/// LibSlirp Interface for Network Simulation
+use bytes::Bytes;
+use netsim_proto::config::SlirpOptions as ProtoSlirpOptions;
+use std::sync::mpsc;
 
-pub const VERSION: &str = "0.3.33";
+// Provides a stub implementation while the libslirp-rs crate is not integrated into the aosp-main.
+pub struct LibSlirp {}
+impl LibSlirp {
+    pub fn input(&self, _bytes: Bytes) {}
+}
 
-pub fn get_version() -> String {
-    VERSION.to_owned()
+pub fn slirp_run(
+    _opt: ProtoSlirpOptions,
+    _tx_bytes: mpsc::Sender<Bytes>,
+) -> anyhow::Result<LibSlirp> {
+    Ok(LibSlirp {})
 }
