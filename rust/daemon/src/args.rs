@@ -97,6 +97,7 @@ pub struct NetsimdArgs {
     ///     (the 'http://' prefix can be omitted)
     /// WARNING: This flag is still working in progress.
     #[arg(long, verbatim_doc_comment)]
+    #[cfg_attr(not(feature = "cuttlefish"), arg(env = "http_proxy"))]
     pub http_proxy: Option<String>,
 
     // Use TAP interface instead of libslirp for Wi-Fi
