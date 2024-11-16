@@ -58,7 +58,7 @@ pub struct NetsimdArgs {
 
     /// Use Rust gRPC server.
     /// WARNING: This flag is for development purpose.
-    #[arg(long)]
+    #[arg(long, default_value = "true")]
     pub rust_grpc: bool,
 
     /// Use hostapd-rs and disable c++ hostapd.

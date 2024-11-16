@@ -27,6 +27,12 @@ OS=$(uname | tr '[:upper:]' '[:lower:]')
 # Set environment variables
 export CARGO_HOME=$OUT_PATH/rust/.cargo
 export OBJS_PATH=$OUT_PATH
+# Paths to pdl generated packets files
+PDL_PATH=$OUT_PATH/pdl/pdl_gen
+export MAC80211_HWSIM_PACKETS_PREBUILT=$PDL_PATH/mac80211_hwsim_packets.rs
+export IEEE80211_PACKETS_PREBUILT=$PDL_PATH/ieee80211_packets.rs
+export LLC_PACKETS_PREBUILT=$PDL_PATH/llc_packets.rs
+export NETLINK_PACKETS_PREBUILT=$PDL_PATH/netlink_packets.rs
 
 # Build the package
 ninja -C $OUT_PATH $RUST_PKG
