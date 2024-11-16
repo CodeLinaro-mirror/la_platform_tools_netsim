@@ -32,7 +32,6 @@ use log::{debug, info, warn};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr};
-use std::io;
 use std::mem::ManuallyDrop;
 use std::net::SocketAddr;
 use std::rc::Rc;
@@ -63,22 +62,28 @@ enum SlirpCmd {
     PollResult(Vec<PollFd>, c_int),
     TimerModified,
     Shutdown,
-    ProxyConnect(libslirp_sys::SlirpProxyConnectFunc, usize, c_int, c_int),
+    ProxyConnect(libslirp_sys::SlirpProxyConnectFunc, usize, i32, i32),
 }
 
 /// Alias for io::fd::RawFd on Unix or RawSocket on Windows (converted to i32)
 pub type RawFd = i32;
 
 // HTTP Proxy callback trait
-pub trait ProxyConnector: Send {
-    fn connect(&self, sockaddr: SocketAddr) -> Result<RawFd, io::Error>;
+pub trait ProxyManager: Send {
+    fn try_connect(
+        &self,
+        sockaddr: SocketAddr,
+        connect_id: usize,
+        connect_func: Box<dyn ProxyConnect>,
+    ) -> bool;
+    fn remove(&self, connect_id: usize);
 }
 
 struct CallbackContext {
     tx_bytes: mpsc::Sender<Bytes>,
     tx_cmds: mpsc::Sender<SlirpCmd>,
     poll_fds: Rc<RefCell<Vec<PollFd>>>,
-    proxy_connector: Option<Box<dyn ProxyConnector>>,
+    proxy_manager: Option<Box<dyn ProxyManager>>,
     timer_manager: Rc<TimerManager>,
 }
 
@@ -148,7 +153,7 @@ impl LibSlirp {
     pub fn new(
         config: libslirp_config::SlirpConfig,
         tx_bytes: mpsc::Sender<Bytes>,
-        proxy_connector: Option<Box<dyn ProxyConnector>>,
+        proxy_manager: Option<Box<dyn ProxyManager>>,
     ) -> LibSlirp {
         let (tx_cmds, rx_cmds) = mpsc::channel::<SlirpCmd>();
         let (tx_poll, rx_poll) = mpsc::channel::<PollRequest>();
@@ -165,7 +170,7 @@ impl LibSlirp {
         let tx_cmds_slirp = tx_cmds.clone();
         // Create channels for command processor thread and launch
         if let Err(e) = thread::Builder::new().name("slirp".to_string()).spawn(move || {
-            slirp_thread(config, tx_bytes, tx_cmds_slirp, rx_cmds, tx_poll, proxy_connector)
+            slirp_thread(config, tx_bytes, tx_cmds_slirp, rx_cmds, tx_poll, proxy_manager)
         }) {
             warn!("Failed to start slirp thread: {}", e);
         }
@@ -183,6 +188,29 @@ impl LibSlirp {
         if let Err(e) = self.tx_cmds.send(SlirpCmd::Input(bytes)) {
             warn!("Failed to send Input cmd: {}", e);
         }
+    }
+}
+
+struct ConnectRequest {
+    tx_cmds: mpsc::Sender<SlirpCmd>,
+    connect_func: libslirp_sys::SlirpProxyConnectFunc,
+    connect_id: usize,
+    af: i32,
+}
+
+pub trait ProxyConnect {
+    fn proxy_connect(&self, fd: i32);
+}
+
+impl ProxyConnect for ConnectRequest {
+    fn proxy_connect(&self, fd: i32) {
+        // Send it to Slirp after try_connect() completed
+        let _ = self.tx_cmds.send(SlirpCmd::ProxyConnect(
+            self.connect_func,
+            self.connect_id,
+            fd,
+            self.af,
+        ));
     }
 }
 
@@ -228,8 +256,8 @@ impl Slirp {
             notify: Some(notify_cb),
             init_completed: Some(init_completed_cb),
             timer_new_opaque: Some(timer_new_opaque_cb),
-            try_connect: None,
-            remove: None,
+            try_connect: Some(try_connect_cb),
+            remove: Some(remove_cb),
         });
         let configs = Box::new(SlirpConfigs::new(&config));
 
@@ -292,7 +320,7 @@ fn slirp_thread(
     tx_cmds: mpsc::Sender<SlirpCmd>,
     rx: mpsc::Receiver<SlirpCmd>,
     tx_poll: mpsc::Sender<PollRequest>,
-    proxy_connector: Option<Box<dyn ProxyConnector>>,
+    proxy_manager: Option<Box<dyn ProxyManager>>,
 ) {
     // Data structures wrapped in an RC are referenced through the
     // libslirp callbacks and this code (both in the same thread).
@@ -309,7 +337,7 @@ fn slirp_thread(
         tx_bytes,
         tx_cmds,
         poll_fds: poll_fds.clone(),
-        proxy_connector,
+        proxy_manager,
         timer_manager: timer_manager.clone(),
     });
 
@@ -345,8 +373,8 @@ fn slirp_thread(
             // Parameter `fd` will be >= 0 and the descriptor for the
             // active socket to use, `af` will be either AF_INET or
             // AF_INET6. On failure `fd` will be negative.
-            Ok(SlirpCmd::ProxyConnect(func, connect_opaque, fd, af)) => match func {
-                Some(func) => unsafe { func(connect_opaque as *mut c_void, fd, af) },
+            Ok(SlirpCmd::ProxyConnect(func, connect_id, fd, af)) => match func {
+                Some(func) => unsafe { func(connect_id as *mut c_void, fd as c_int, af as c_int) },
                 None => warn!("Proxy connect function not found"),
             },
 
@@ -809,30 +837,52 @@ extern "C" fn notify_cb(_opaque: *mut c_void) {
 unsafe extern "C" fn try_connect_cb(
     addr: *const libslirp_sys::sockaddr_storage,
     connect_func: libslirp_sys::SlirpProxyConnectFunc,
+    connect_opaque: *mut c_void,
     opaque: *mut c_void,
 ) -> bool {
-    unsafe { callback_context_from_raw(opaque) }.try_connect(addr, connect_func)
+    unsafe { callback_context_from_raw(opaque) }.try_connect(
+        addr,
+        connect_func,
+        connect_opaque as usize,
+    )
 }
 
 impl CallbackContext {
     fn try_connect(
         &self,
-        _addr: *const libslirp_sys::sockaddr_storage,
-        _connect_func: libslirp_sys::SlirpProxyConnectFunc,
+        addr: *const libslirp_sys::sockaddr_storage,
+        connect_func: libslirp_sys::SlirpProxyConnectFunc,
+        connect_id: usize,
     ) -> bool {
-        if let Some(_proxy_connector) = &self.proxy_connector {
-            // TODO: once sockaddr_storage.into() is available
-            // let addr = *addr;
-            // if let Ok(fd) = proxy_connector.connect(addr.into()) {
-            //   self.tx_cmds.send(SlirpCmd::ProxyConnect(
-            //     func,
-            //     connect_opaque as usize,
-            //     fd,
-            //     af);
-            // }
-            true
+        if let Some(proxy_connector) = &self.proxy_manager {
+            // SAFETY: We ensure that addr is valid when `try_connect` is called from libslirp
+            let storage = unsafe { *addr };
+            let af = storage.ss_family as i32;
+            let socket_addr: SocketAddr = storage.into();
+            proxy_connector.try_connect(
+                socket_addr,
+                connect_id,
+                Box::new(ConnectRequest {
+                    tx_cmds: self.tx_cmds.clone(),
+                    connect_func,
+                    connect_id,
+                    af,
+                }),
+            )
         } else {
             false
+        }
+    }
+}
+
+unsafe extern "C" fn remove_cb(connect_opaque: *mut c_void, opaque: *mut c_void) {
+    unsafe { callback_context_from_raw(opaque) }.remove(connect_opaque as usize);
+}
+
+impl CallbackContext {
+    fn remove(&self, connect_id: usize) {
+        if let Some(proxy_connector) = &self.proxy_manager {
+            proxy_connector.remove(connect_id);
         }
     }
 }

@@ -21,6 +21,7 @@ http = "0.2.9"
 netsim-common = { path = "../common" }
 libslirp-rs = { path = "../libslirp-rs" }
 hostapd-rs = { path = "../hostapd-rs" }
+http-proxy = { path = "../http-proxy" }
 netsim-packets = { path = "../packets" }
 # Relax the version constraint for 'pica' to allow cargo to select a compatible version
 # from crates.io since 0.1.9 seems to be only available in AOSP.
