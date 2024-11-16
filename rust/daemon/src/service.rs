@@ -103,13 +103,13 @@ impl Service {
     }
 
     /// Runs netsim gRPC server
-    fn run_grpc_server(&mut self) -> Option<u32> {
+    fn run_grpc_server(&mut self) -> anyhow::Result<u32> {
         // If NETSIM_GRPC_PORT is set, use the fixed port for grpc server.
         let mut netsim_grpc_port =
             env::var("NETSIM_GRPC_PORT").map(|val| val.parse::<u32>().unwrap_or(0)).unwrap_or(0);
         if self.service_params.rust_grpc {
             // Run netsim gRPC server
-            let (server, port) = crate::grpc_server::server::start(netsim_grpc_port);
+            let (server, port) = crate::grpc_server::server::start(netsim_grpc_port)?;
             self.rust_grpc_server = Some(server);
             netsim_grpc_port = port.into();
         } else {
@@ -119,14 +119,14 @@ impl Service {
                 self.service_params.vsock,
             );
             match grpc_server.is_null() {
-                true => return None,
+                true => return Err(anyhow::anyhow!("Failed to start grpc server")),
                 false => {
                     self.grpc_server = grpc_server;
                     netsim_grpc_port = self.grpc_server.get_grpc_port();
                 }
             }
         }
-        Some(netsim_grpc_port)
+        Ok(netsim_grpc_port)
     }
 
     /// Runs netsim web server
@@ -166,9 +166,9 @@ impl Service {
         }
 
         let grpc_port = match self.run_grpc_server() {
-            Some(port) => port,
-            None => {
-                error!("Failed to run netsimd because unable to start grpc server");
+            Ok(port) => port,
+            Err(e) => {
+                error!("Failed to run netsimd: {e:?}");
                 return;
             }
         };
