@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod connector;
+mod error;
+mod manager;
 mod rewriter;
 mod util;
 
+pub use connector::*;
+pub use error::Error;
+pub use manager::*;
 pub use rewriter::*;
 pub use util::*;

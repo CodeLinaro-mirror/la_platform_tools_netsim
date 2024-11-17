@@ -151,7 +151,13 @@ impl Hostapd {
     /// TODO:
     /// * implement password & encryption support
     /// * update as async fn.
-    pub fn set_ssid(&mut self, ssid: String, password: String) -> anyhow::Result<()> {
+    pub fn set_ssid(
+        &mut self,
+        ssid: impl Into<String>,
+        password: impl Into<String>,
+    ) -> anyhow::Result<()> {
+        let ssid = ssid.into();
+        let password = password.into();
         if ssid.is_empty() {
             bail!("set_ssid must have a non-empty SSID");
         }

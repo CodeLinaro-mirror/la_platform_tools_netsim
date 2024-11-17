@@ -58,7 +58,7 @@ pub struct NetsimdArgs {
 
     /// Use Rust gRPC server.
     /// WARNING: This flag is for development purpose.
-    #[arg(long)]
+    #[arg(long, default_value = "true")]
     pub rust_grpc: bool,
 
     /// Use hostapd-rs and disable c++ hostapd.
@@ -97,6 +97,7 @@ pub struct NetsimdArgs {
     ///     (the 'http://' prefix can be omitted)
     /// WARNING: This flag is still working in progress.
     #[arg(long, verbatim_doc_comment)]
+    #[cfg_attr(not(feature = "cuttlefish"), arg(env = "http_proxy"))]
     pub http_proxy: Option<String>,
 
     // Use TAP interface instead of libslirp for Wi-Fi
