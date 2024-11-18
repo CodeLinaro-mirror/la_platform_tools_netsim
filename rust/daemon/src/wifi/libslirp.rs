@@ -14,7 +14,9 @@
 
 /// LibSlirp Interface for Network Simulation
 use bytes::Bytes;
+use http_proxy::{Manager, ProxyConfig};
 pub use libslirp_rs::libslirp::LibSlirp;
+use libslirp_rs::libslirp::ProxyManager;
 use libslirp_rs::libslirp_config::{lookup_host_dns, SlirpConfig};
 use netsim_proto::config::SlirpOptions as ProtoSlirpOptions;
 use std::sync::mpsc;
@@ -25,12 +27,21 @@ pub fn slirp_run(
     tx_bytes: mpsc::Sender<Bytes>,
 ) -> anyhow::Result<LibSlirp> {
     // TODO: Convert ProtoSlirpOptions to SlirpConfig.
-    let mut config = SlirpConfig { ..Default::default() };
+    let http_proxy = Some(opt.http_proxy).filter(|s| !s.is_empty());
+    let http_proxy_on = http_proxy.is_some();
+    let proxy_manager = if let Some(addr) = http_proxy {
+        let config = ProxyConfig::from_string(&addr)?;
+        Some(Box::new(Manager::new(config)) as Box<dyn ProxyManager + 'static>)
+    } else {
+        None
+    };
+
+    let mut config = SlirpConfig { http_proxy_on, ..Default::default() };
 
     if !opt.host_dns.is_empty() {
         let rt = Runtime::new().unwrap();
         config.host_dns = rt.block_on(lookup_host_dns(&opt.host_dns))?;
     }
 
-    Ok(LibSlirp::new(config, tx_bytes, None))
+    Ok(LibSlirp::new(config, tx_bytes, proxy_manager))
 }

@@ -181,6 +181,11 @@ impl Ieee80211 {
         self.ftype == FrameType::Mgmt
     }
 
+    // Frame is (management) beacon frame
+    pub fn is_beacon(&self) -> bool {
+        self.ftype == FrameType::Mgmt && self.stype == (ManagementSubType::Beacon as u8)
+    }
+
     // Frame type is data
     pub fn is_data(&self) -> bool {
         self.ftype == FrameType::Data
@@ -248,6 +253,26 @@ impl Ieee80211 {
             Ieee80211Child::Ieee80211Wds(hdr) => hdr.receiver,
             _ => panic!("unexpected specialized header"),
         }
+    }
+
+    pub fn get_ssid_from_beacon_frame(&self) -> anyhow::Result<String> {
+        // Verify packet is a beacon frame
+        if !self.is_beacon() {
+            return Err(anyhow!("Frame is not beacon frame."));
+        };
+
+        // SSID field starts after the first 36 bytes. Ieee80211 payload starts after 4 bytes.
+        let pos = 36 - 4;
+
+        // Check for SSID element ID (0) and extract the SSID
+        let payload = &self.payload;
+        if payload[pos] == 0 {
+            let ssid_len = payload[pos + 1] as usize;
+            let ssid_bytes = &payload[pos + 2..pos + 2 + ssid_len];
+            return Ok(String::from_utf8(ssid_bytes.to_vec())?);
+        }
+
+        Err(anyhow!("SSID not found."))
     }
 
     fn get_payload(&self) -> Vec<u8> {
@@ -451,6 +476,28 @@ mod tests {
         let a = format!("{}", hdr.get_source());
         let b = format!("{}", parse_mac_address("00:0b:85:71:20:ce").unwrap());
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_beacon_frame() {
+        // Example from actual beacon frame from Hostapd with "AndroidWifi" SSID
+        let frame: Vec<u8> = vec![
+            0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x13, 0x10, 0x85,
+            0xfe, 0x01, 0x00, 0x13, 0x10, 0x85, 0xfe, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0xe8, 0x03, 0x01, 0x04, 0x00, 0x0b, 0x41, 0x6e, 0x64, 0x72,
+            0x6f, 0x69, 0x64, 0x57, 0x69, 0x66, 0x69, 0x01, 0x04, 0x82, 0x84, 0x8b, 0x96, 0x03,
+            0x01, 0x08, 0x2a, 0x01, 0x07, 0x2d, 0x1a, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x3d, 0x16, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x7f, 0x04, 0x00, 0x00, 0x00, 0x02,
+        ];
+        let decoded_frame = Ieee80211::decode_full(&frame).unwrap();
+        assert!(decoded_frame.is_mgmt());
+        assert!(decoded_frame.is_beacon());
+        let ssid = decoded_frame.get_ssid_from_beacon_frame();
+        assert!(ssid.is_ok());
+        assert_eq!(ssid.unwrap(), "AndroidWifi");
     }
 
     #[test]

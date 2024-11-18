@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Error;
 use regex::Regex;
-use std::fmt;
 use std::net::{IpAddr, ToSocketAddrs};
 
 /// Proxy configuration
@@ -24,27 +24,6 @@ pub struct ProxyConfig {
     pub username: Option<String>,
     pub password: Option<String>,
 }
-
-#[derive(Debug, PartialEq)]
-pub enum ProxyConfigError {
-    InvalidConfigString,
-    InvalidPortNumber,
-    InvalidHost,
-}
-
-impl fmt::Display for ProxyConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ProxyConfigError::InvalidConfigString => {
-                write!(f, "Invalid proxy configuration string")
-            }
-            ProxyConfigError::InvalidPortNumber => write!(f, "Invalid port number"),
-            ProxyConfigError::InvalidHost => write!(f, "Invalid host"),
-        }
-    }
-}
-
-impl std::error::Error for ProxyConfigError {}
 
 impl ProxyConfig {
     /// Parses a proxy configuration string and returns a `ProxyConfig` struct.
@@ -67,14 +46,14 @@ impl ProxyConfig {
     /// * `port`: The port number on which the proxy server is listening.
     ///
     /// # Errors
-    /// Returns a `ProxyConfigError` if the input string is not in a
+    /// Returns a `Error` if the input string is not in a
     /// valid format or if the hostname/port resolution fails.
     ///
     /// # Limitations
     /// * Usernames and passwords cannot contain `@` or `:`.
-    pub fn from_string(config_string: &str) -> Result<ProxyConfig, ProxyConfigError> {
+    pub fn from_string(config_string: &str) -> Result<ProxyConfig, Error> {
         let re = Regex::new(r"^(?:(?P<protocol>\w+)://)?(?:(?P<user>\w+):(?P<pass>\w+)@)?(?P<host>(?:[\w\.-]+|\[[^\]]+\])):(?P<port>\d+)$").unwrap();
-        let caps = re.captures(config_string).ok_or(ProxyConfigError::InvalidConfigString)?;
+        let caps = re.captures(config_string).ok_or(Error::MalformedConfigString)?;
 
         let protocol =
             caps.name("protocol").map_or_else(|| "http".to_string(), |m| m.as_str().to_string());
@@ -84,23 +63,23 @@ impl ProxyConfig {
         // Extract host, removing surrounding brackets if present
         let hostname = caps
             .name("host")
-            .ok_or(ProxyConfigError::InvalidConfigString)?
+            .ok_or(Error::MalformedConfigString)?
             .as_str()
             .trim_matches(|c| c == '[' || c == ']')
             .to_string();
 
         let port = caps
             .name("port")
-            .ok_or(ProxyConfigError::InvalidConfigString)?
+            .ok_or(Error::MalformedConfigString)?
             .as_str()
             .parse::<u16>()
-            .map_err(|_| ProxyConfigError::InvalidPortNumber)?;
+            .map_err(|_| Error::InvalidPortNumber)?;
 
         let host = (hostname, port)
             .to_socket_addrs()
-            .map_err(|_| ProxyConfigError::InvalidHost)?
+            .map_err(|_| Error::InvalidHost)?
             .next() // Take the first resolved address
-            .ok_or(ProxyConfigError::InvalidHost)?
+            .ok_or(Error::InvalidHost)?
             .ip();
 
         Ok(ProxyConfig { protocol, username, password, host, port })
@@ -208,25 +187,29 @@ mod tests {
     #[test]
     fn parse_configuration_string_with_errors() {
         let data = [
-            ("http://", ProxyConfigError::InvalidConfigString),
-            ("", ProxyConfigError::InvalidConfigString),
-            ("256.0.0.1:8080", ProxyConfigError::InvalidHost),
-            ("127.0.0.1:foo", ProxyConfigError::InvalidConfigString),
-            ("127.0.0.1:-2", ProxyConfigError::InvalidConfigString),
-            ("127.0.0.1:100000", ProxyConfigError::InvalidPortNumber),
-            ("127.0.0.1", ProxyConfigError::InvalidConfigString),
-            ("http:127.0.0.1:8080", ProxyConfigError::InvalidConfigString),
-            ("::1:8080", ProxyConfigError::InvalidConfigString),
-            ("user@pass:127.0.0.1:8080", ProxyConfigError::InvalidConfigString),
-            ("user@127.0.0.1:8080", ProxyConfigError::InvalidConfigString),
-            ("proxy.example.com:7000", ProxyConfigError::InvalidHost),
-            ("[::1}:7000", ProxyConfigError::InvalidConfigString),
+            ("http://", Error::MalformedConfigString),
+            ("", Error::MalformedConfigString),
+            ("256.0.0.1:8080", Error::InvalidHost),
+            ("127.0.0.1:foo", Error::MalformedConfigString),
+            ("127.0.0.1:-2", Error::MalformedConfigString),
+            ("127.0.0.1:100000", Error::InvalidPortNumber),
+            ("127.0.0.1", Error::MalformedConfigString),
+            ("http:127.0.0.1:8080", Error::MalformedConfigString),
+            ("::1:8080", Error::MalformedConfigString),
+            ("user@pass:127.0.0.1:8080", Error::MalformedConfigString),
+            ("user@127.0.0.1:8080", Error::MalformedConfigString),
+            ("proxy.example.com:7000", Error::InvalidHost),
+            ("[::1}:7000", Error::MalformedConfigString),
         ];
 
         for (input, expected_error) in data {
             let result = ProxyConfig::from_string(input);
-            assert!(result.is_err(), "Expected an error for input: {}", input);
-            assert_eq!(result.err().unwrap(), expected_error, "For input: {}", input);
+            assert_eq!(
+                result.err().unwrap().to_string(),
+                expected_error.to_string(),
+                "Expected an error for input: {}",
+                input
+            );
         }
     }
 }

@@ -37,7 +37,13 @@ class RunTestTask(Task):
       script = AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_test.sh"
 
     # Run cargo Test
-    for package in ["hostapd-rs", "libslirp-rs", "http-proxy", "netsim-common"]:
+    for package in [
+        "hostapd-rs",
+        "libslirp-rs",
+        "http-proxy",
+        "netsim-common",
+        "netsim-packets",
+    ]:
       cmd = [script, rust_version(), package, str(self.out)]
       run(cmd, self.env, f"{package}_unit_tests")
     return True
