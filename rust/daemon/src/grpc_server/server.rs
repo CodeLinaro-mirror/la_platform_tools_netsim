@@ -22,7 +22,7 @@ use netsim_proto::frontend_grpc::create_frontend_service;
 use netsim_proto::packet_streamer_grpc::create_packet_streamer;
 use std::sync::Arc;
 
-pub fn start(port: u32) -> (Server, u16) {
+pub fn start(port: u32) -> anyhow::Result<(Server, u16)> {
     let env = Arc::new(Environment::new(1));
     let backend_service = create_packet_streamer(PacketStreamerService);
     let frontend_service = create_frontend_service(FrontendClient);
@@ -32,19 +32,16 @@ pub fn start(port: u32) -> (Server, u16) {
         .register_service(frontend_service)
         .register_service(backend_service)
         .channel_args(ch_builder.build_args())
-        .build()
-        .unwrap();
+        .build()?;
 
     let addr_v4 = format!("127.0.0.1:{}", port);
     let addr_v6 = format!("[::1]:{}", port);
-    let port = server
-        .add_listening_port(addr_v4, ServerCredentials::insecure())
-        .or_else(|e| {
-            warn!("Failed to bind to 127.0.0.1:{port} in grpc server. Trying [::1]:{port}. {e:?}");
-            server.add_listening_port(addr_v6, ServerCredentials::insecure())
-        })
-        .unwrap();
+    let port = server.add_listening_port(addr_v4, ServerCredentials::insecure()).or_else(|e| {
+        warn!("Failed to bind to 127.0.0.1:{port} in grpc server. Trying [::1]:{port}. {e:?}");
+        server.add_listening_port(addr_v6, ServerCredentials::insecure())
+    })?;
+
     server.start();
     info!("Rust gRPC listening on localhost:{port}");
-    (server, port)
+    Ok((server, port))
 }
