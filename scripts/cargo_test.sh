@@ -17,9 +17,10 @@
 REPO=$(dirname "$0")/../../..
 
 # Get the Rust version, package, and objs path from arguments
-RUST_VERSION="$1"
-RUST_PKG="$2"
-OUT_PATH="$3"
+RUST_PKG="$1"
+OUT_PATH="$2"
+RUST_VERSION="$3"
+CLANG_VERSION="$4"
 
 # The possible values are "linux" and "darwin".
 OS=$(uname | tr '[:upper:]' '[:lower:]')
