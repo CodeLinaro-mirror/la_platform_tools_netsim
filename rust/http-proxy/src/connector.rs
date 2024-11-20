@@ -21,16 +21,20 @@ const HTTP_VERSION: &str = "1.1";
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+#[allow(dead_code)]
+#[derive(Clone)]
 pub struct Connector {
     proxy_addr: SocketAddr,
+    username: Option<String>,
+    password: Option<String>,
 }
 
 impl Connector {
-    pub fn new(proxy_addr: SocketAddr) -> Self {
-        Connector { proxy_addr }
+    pub fn new(proxy_addr: SocketAddr, username: Option<String>, password: Option<String>) -> Self {
+        Connector { proxy_addr, username, password }
     }
 
-    async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
+    pub async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
         let mut stream = TcpStream::connect(self.proxy_addr).await?;
 
         // Construct the CONNECT request
@@ -79,7 +83,7 @@ mod tests {
             stream.write_all(response.as_bytes()).await.unwrap();
         });
 
-        let client = Connector::new(proxy_addr);
+        let client = Connector::new(proxy_addr, None, None);
 
         client.connect(addr).await.unwrap();
 

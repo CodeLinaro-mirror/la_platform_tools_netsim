@@ -18,8 +18,5 @@ mod manager;
 mod rewriter;
 mod util;
 
-pub use connector::*;
 pub use error::Error;
 pub use manager::*;
-pub use rewriter::*;
-pub use util::*;

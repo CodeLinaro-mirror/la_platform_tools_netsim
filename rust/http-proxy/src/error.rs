@@ -31,13 +31,13 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Error::IoError(err) => write!(f, "I/O error: {}", err),
-            Error::ConnectionError(addr) => write!(f, "Failed to connect to {}", addr),
+            Error::IoError(err) => write!(f, "Proxy I/O error: {}", err),
+            Error::ConnectionError(addr) => write!(f, "Failed to connect to proxy at {}", addr),
             Error::MalformedConfigString => {
                 write!(f, "Invalid proxy configuration string")
             }
-            Error::InvalidPortNumber => write!(f, "Invalid port number"),
-            Error::InvalidHost => write!(f, "Invalid host"),
+            Error::InvalidPortNumber => write!(f, "Invalid proxy port number"),
+            Error::InvalidHost => write!(f, "Invalid proxy host"),
         }
     }
 }
