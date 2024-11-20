@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::error::Error;
+use base64::{engine::general_purpose, Engine as _};
 use std::net::SocketAddr;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
@@ -21,7 +22,6 @@ const HTTP_VERSION: &str = "1.1";
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Connector {
     proxy_addr: SocketAddr,
@@ -38,7 +38,21 @@ impl Connector {
         let mut stream = TcpStream::connect(self.proxy_addr).await?;
 
         // Construct the CONNECT request
-        let request = format!("CONNECT {} HTTP/{}\r\n\r\n", addr.to_string(), HTTP_VERSION);
+        let mut request = format!("CONNECT {} HTTP/{}\r\n", addr.to_string(), HTTP_VERSION);
+
+        // Authentication
+        if let (Some(username), Some(password)) = (&self.username, &self.password) {
+            let encoded_auth = base64_encode(format!("{}:{}", username, password).as_bytes());
+            let auth_header = format!(
+                "Proxy-Authorization: Basic {}\r\n",
+                String::from_utf8_lossy(&encoded_auth)
+            );
+            // Add the header to the request
+            request.push_str(&auth_header);
+        }
+
+        // Add the final CRLF
+        request.push_str("\r\n");
         stream.write_all(request.as_bytes()).await?;
 
         // Read the proxy's response
@@ -48,14 +62,19 @@ impl Connector {
         if response.starts_with(&format!("HTTP/{} 200", HTTP_VERSION)) {
             Ok(reader.into_inner())
         } else {
-            Err(Error::ConnectionError(addr))
+            Err(Error::ConnectionError(addr, response.trim_end_matches("\r\n").to_string()))
         }
     }
+}
+
+fn base64_encode(src: &[u8]) -> Vec<u8> {
+    general_purpose::STANDARD.encode(src).into_bytes()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::AsyncReadExt;
     use tokio::net::{lookup_host, TcpListener};
 
     #[tokio::test]
@@ -90,5 +109,56 @@ mod tests {
         handle.await.unwrap(); // Wait for the task to complete
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_connect_with_auth() -> Result<()> {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let proxy_addr = listener.local_addr().unwrap();
+
+        let addr: SocketAddr = lookup_host("localhost:8000").await.unwrap().next().unwrap();
+
+        let handle = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+
+            // Server expects a client greeting with auth header
+            let expected_greeting = format!(
+                "CONNECT {} HTTP/1.1\r\nProxy-Authorization: Basic dXNlcjpwYXNzd29yZA==\r\n\r\n",
+                &addr
+            );
+
+            let mut buf = [0; 1024];
+            let n = stream.read(&mut buf).await.unwrap();
+            let actual_greeting = String::from_utf8_lossy(&buf[..n]);
+
+            assert_eq!(actual_greeting, expected_greeting);
+
+            // Server sends a response
+            let response = "HTTP/1.1 200 Connection established\r\n\r\n";
+
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let client = Connector::new(proxy_addr, Some("user".into()), Some("password".into()));
+
+        client.connect(addr).await.unwrap();
+
+        handle.await.unwrap(); // Wait for the task to complete
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_proxy_base64_encode_success() {
+        let input = b"hello world";
+        let encoded = base64_encode(input);
+        assert_eq!(encoded, b"aGVsbG8gd29ybGQ=");
+    }
+
+    #[test]
+    fn test_proxy_base64_encode_empty_input() {
+        let input = b"";
+        let encoded = base64_encode(input);
+        assert_eq!(encoded, b"");
     }
 }
