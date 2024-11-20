@@ -90,8 +90,6 @@ rust_defaults {
     static_libs: ["libgrpc_wrap"],
     srcs: [
         "rust/daemon/src/lib.rs",
-        ":netsim_arp_rust_gen",
-        ":rootcanal_link_layer_packets_rust_gen",
     ],
 }
 
@@ -357,6 +355,8 @@ rust_defaults {
         ":netsim_mac80211_hwsim_rust_gen",
         ":netsim_ieee80211_rust_gen",
         ":netsim_llc_rust_gen",
+        ":netsim_arp_rust_gen",
+        ":rootcanal_link_layer_packets_rust_gen",
     ],
     rustlibs: [
         "libanyhow",

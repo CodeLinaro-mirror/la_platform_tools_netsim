@@ -14,6 +14,7 @@ corrosion_set_env_vars(libslirp-rs CARGO_HOME=${Rust_CARGO_HOME})
 function(set_prebuilt_packets_env_vars target)
   corrosion_set_env_vars(
     ${target}
+    LINK_LAYER_PACKETS_PREBUILT=${RootCanalGeneratedPackets_rs}
     NETLINK_PACKETS_PREBUILT=${NetlinkPackets_rs}
     MAC80211_HWSIM_PACKETS_PREBUILT=${Mac80211HwsimPackets_rs}
     IEEE80211_PACKETS_PREBUILT=${Ieee80211Packets_rs}
@@ -26,7 +27,6 @@ set_prebuilt_packets_env_vars(netsim-packets)
 
 corrosion_set_env_vars(
   netsim-daemon
-  LINK_LAYER_PACKETS_PREBUILT=${RootCanalGeneratedPackets_rs}
   CARGO_HOME=${Rust_CARGO_HOME}
   GRPCIO_SYS_GRPC_INCLUDE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../../external/grpc/include"
 )
@@ -42,19 +42,16 @@ corrosion_set_env_vars(
   GRPCIO_SYS_GRPC_INCLUDE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../../external/grpc/include"
 )
 
-add_custom_target(netsim_rust_bt_packets
-                  DEPENDS pdl_gen-RootCanalGeneratedPackets_rs)
-
 add_custom_target(
   netsim_rust_packets
-  DEPENDS pdl_gen-NetlinkPackets_rs pdl_gen-LlcPackets_rs
-          pdl_gen-Ieee80211Packets_rs pdl_gen-Mac80211HwsimPackets_rs)
+  DEPENDS pdl_gen-RootCanalGeneratedPackets_rs pdl_gen-NetlinkPackets_rs
+          pdl_gen-LlcPackets_rs pdl_gen-Ieee80211Packets_rs
+          pdl_gen-Mac80211HwsimPackets_rs)
 
 # Make sure we have the rust packets generated before we build them.
 add_dependencies(cargo-build_netsim-packets netsim_rust_packets)
 add_dependencies(cargo-build_hostapd-rs cargo-build_netsim-packets)
-add_dependencies(cargo-build_netsim-daemon netsim_rust_bt_packets
-                 cargo-build_netsim-packets)
+add_dependencies(cargo-build_netsim-daemon cargo-build_netsim-packets)
 
 # cxx crates
 if(WIN32)

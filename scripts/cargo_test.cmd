@@ -26,6 +26,8 @@ set CARGO_HOME=%OUT_PATH%\rust\.cargo
 set RUSTFLAGS=-Cdefault-linker-libraries=yes
 
 :: Paths to pdl generated packets files
+set ROOTCANAL_PDL_PATH=%OUT_PATH%\rootcanal\pdl_gen
+set LINK_LAYER_PACKETS_PREBUILT=%ROOTCANAL_PDL_PATH%\link_layer_packets.rs
 set PDL_PATH=%OUT_PATH%\pdl\pdl_gen
 set MAC80211_HWSIM_PACKETS_PREBUILT=%PDL_PATH%\mac80211_hwsim_packets.rs
 set IEEE80211_PACKETS_PREBUILT=%PDL_PATH%\ieee80211_packets.rs
