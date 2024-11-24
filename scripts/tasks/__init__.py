@@ -65,14 +65,12 @@ def get_tasks(args, env) -> Mapping[str, Task]:
     for task_name in [
         "Configure",
         "CompileInstall",
+        "RunTest",
         "ZipArtifact",
         "InstallEmulator",
         "RunPyTest",
     ]:
       tasks[task_name].enable(True)
-    # (b/365096061) Resolve cargo_test.cmd on Windows buildbot with using prebuilt cargo
-    if platform.system() != "Windows":
-      tasks["RunTest"].enable(True)
     return tasks
 
   if args.task:

@@ -18,7 +18,8 @@ use std::path::PathBuf;
 
 fn main() {
     // Locate prebuilt pdl generated rust packet definition files
-    let prebuilts: [[&str; 2]; 4] = [
+    let prebuilts: [[&str; 2]; 5] = [
+        ["LINK_LAYER_PACKETS_PREBUILT", "link_layer_packets.rs"],
         ["MAC80211_HWSIM_PACKETS_PREBUILT", "mac80211_hwsim_packets.rs"],
         ["IEEE80211_PACKETS_PREBUILT", "ieee80211_packets.rs"],
         ["LLC_PACKETS_PREBUILT", "llc_packets.rs"],

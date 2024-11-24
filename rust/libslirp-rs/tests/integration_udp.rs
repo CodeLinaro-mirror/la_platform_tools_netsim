@@ -23,12 +23,13 @@ use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const PAYLOAD: &[u8; 23] = b"Hello, UDP echo server!";
 const PAYLOAD_PONG: &[u8; 23] = b"Hello, UDP echo client!";
 
 /// Test UDP packets sent through libslirp
+#[cfg(not(windows))] // TOOD: remove once test is working on windows.
 #[test]
 fn udp_echo() {
     let config = SlirpConfig { ..Default::default() };

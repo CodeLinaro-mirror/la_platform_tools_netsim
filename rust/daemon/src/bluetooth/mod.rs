@@ -25,4 +25,3 @@ pub(crate) use self::mocked::*;
 pub(crate) mod advertise_data;
 pub(crate) mod advertise_settings;
 pub(crate) mod chip;
-pub(crate) mod packets;

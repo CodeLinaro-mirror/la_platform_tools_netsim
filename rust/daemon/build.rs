@@ -13,20 +13,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::env;
-use std::path::PathBuf;
-
 fn main() {
     let _build = cxx_build::bridge("src/ffi.rs");
     println!("cargo:rerun-if-changed=src/ffi.rs");
-
-    // TODO: Migrate BT packet definitions to packets crate
-    let prebuilts: [[&str; 2]; 1] = [["LINK_LAYER_PACKETS_PREBUILT", "link_layer_packets.rs"]];
-
-    for [var, name] in prebuilts {
-        let prebuilt = env::var(var).unwrap();
-        println!("cargo:rerun-if-changed={}", prebuilt);
-        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-        std::fs::copy(prebuilt.as_str(), out_dir.join(name).as_os_str().to_str().unwrap()).unwrap();
-    }
 }

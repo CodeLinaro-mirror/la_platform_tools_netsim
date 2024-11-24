@@ -13,13 +13,12 @@
 // limitations under the License.
 
 mod connector;
+mod dns;
 mod error;
 mod manager;
 mod rewriter;
 mod util;
 
-pub use connector::*;
+pub use dns::*;
 pub use error::Error;
 pub use manager::*;
-pub use rewriter::*;
-pub use util::*;

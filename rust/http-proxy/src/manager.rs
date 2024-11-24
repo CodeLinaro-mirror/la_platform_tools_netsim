@@ -12,16 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::ProxyConfig;
+use crate::util::{into_raw_descriptor, ProxyConfig};
+use crate::{connector::Connector, error::Error};
 use libslirp_rs::libslirp::{ProxyConnect, ProxyManager};
-use log::info;
+use log::{debug, warn};
 use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::runtime::Runtime;
 
-pub struct Manager {}
+pub struct Manager {
+    runtime: Arc<Runtime>,
+    connector: Connector,
+}
 
 impl Manager {
-    pub fn new(_config: ProxyConfig) -> Self {
-        Manager {}
+    pub fn new(proxy: &str) -> Result<Self, Error> {
+        let config = ProxyConfig::from_string(&proxy)?;
+        Ok(Self {
+            runtime: Arc::new(Runtime::new()?),
+            connector: Connector::new(config.addr, config.username, config.password),
+        })
     }
 }
 
@@ -30,13 +40,26 @@ impl ProxyManager for Manager {
         &self,
         sockaddr: SocketAddr,
         connect_id: usize,
-        _connect_func: Box<dyn ProxyConnect>,
+        connect_func: Box<dyn ProxyConnect + Send>,
     ) -> bool {
-        info!("try_connect: sockaddr:{:?} connect_id {}", sockaddr, connect_id);
-        false
+        debug!("Connecting to {sockaddr:?} with connect ID {connect_id}");
+        let connector = self.connector.clone();
+
+        self.runtime.handle().spawn(async move {
+            let fd = match connector.connect(sockaddr).await {
+                Ok(tcp_stream) => into_raw_descriptor(tcp_stream),
+                Err(e) => {
+                    warn!("Failed to connect to proxy {}. {}", sockaddr, e);
+                    -1
+                }
+            };
+            connect_func.proxy_connect(fd, sockaddr);
+        });
+
+        true
     }
 
     fn remove(&self, connect_id: usize) {
-        info!("remove connect id {}", connect_id);
+        debug!("Remove connect ID {}", connect_id);
     }
 }
