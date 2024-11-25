@@ -19,7 +19,7 @@ from pathlib import Path
 import platform
 
 from tasks.task import Task
-from utils import (AOSP_ROOT, run, rust_version)
+from utils import (AOSP_ROOT, clang_version, run, rust_version)
 
 
 class RunTestTask(Task):
@@ -44,6 +44,6 @@ class RunTestTask(Task):
         "netsim-common",
         "netsim-packets",
     ]:
-      cmd = [script, rust_version(), package, str(self.out)]
+      cmd = [script, package, str(self.out), rust_version(), clang_version()]
       run(cmd, self.env, f"{package}_unit_tests")
     return True

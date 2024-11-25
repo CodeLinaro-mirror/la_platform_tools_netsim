@@ -90,8 +90,6 @@ rust_defaults {
     static_libs: ["libgrpc_wrap"],
     srcs: [
         "rust/daemon/src/lib.rs",
-        ":netsim_arp_rust_gen",
-        ":rootcanal_link_layer_packets_rust_gen",
     ],
 }
 
@@ -191,7 +189,6 @@ cc_library_host_static {
         "src/util/log.cc",
         "src/util/os_utils.cc",
         "src/util/string_utils.cc",
-        "src/wifi/wifi_facade.cc",
     ],
     generated_headers: [
         "cxx-bridge-header",
@@ -358,6 +355,8 @@ rust_defaults {
         ":netsim_mac80211_hwsim_rust_gen",
         ":netsim_ieee80211_rust_gen",
         ":netsim_llc_rust_gen",
+        ":netsim_arp_rust_gen",
+        ":rootcanal_link_layer_packets_rust_gen",
     ],
     rustlibs: [
         "libanyhow",
