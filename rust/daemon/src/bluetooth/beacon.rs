@@ -17,9 +17,6 @@ use super::advertise_settings::{
     AdvertiseMode, AdvertiseSettings, AdvertiseSettingsBuilder, TxPowerLevel,
 };
 use super::chip::{rust_bluetooth_add, RustBluetoothChipCallbacks};
-use super::packets::link_layer::{
-    Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, PacketType,
-};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
 use crate::devices::device::{AddChipResult, DeviceIdentifier};
 use crate::devices::devices_handler::add_chip;
@@ -27,6 +24,9 @@ use crate::ffi::ffi_bluetooth;
 use crate::wireless;
 use cxx::{let_cxx_string, UniquePtr};
 use log::{error, info, warn};
+use netsim_packets::link_layer::{
+    Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, PacketType,
+};
 use netsim_proto::common::ChipKind;
 use netsim_proto::model::chip::Bluetooth;
 use netsim_proto::model::chip::{

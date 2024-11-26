@@ -19,6 +19,14 @@
 pub mod ieee80211;
 pub mod llc;
 
+pub mod link_layer {
+    #![allow(clippy::all)]
+    #![allow(unused)]
+    #![allow(missing_docs)]
+
+    include!(concat!(env!("OUT_DIR"), "/link_layer_packets.rs"));
+}
+
 pub mod netlink {
     #![allow(clippy::all)]
     #![allow(unused)]

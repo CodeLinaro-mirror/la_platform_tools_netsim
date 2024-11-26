@@ -295,7 +295,7 @@ impl Hostapd {
     fn hostapd_thread(verbose: bool, config_path: String) {
         let mut args = vec![CString::new("hostapd").unwrap()];
         if verbose {
-            args.push(CString::new("-dddd").unwrap())
+            args.push(CString::new("-dddd").unwrap());
         }
         args.push(
             CString::new(config_path.clone()).unwrap_or_else(|_| {
@@ -303,8 +303,7 @@ impl Hostapd {
             }),
         );
         let mut argv: Vec<*const c_char> = args.iter().map(|arg| arg.as_ptr()).collect();
-        argv.push(std::ptr::null());
-        let argc = argv.len() as c_int - 1;
+        let argc = argv.len() as c_int;
         // Safety: we ensure that argc is length of argv and argv.as_ptr() is a valid pointer of hostapd args
         unsafe { run_hostapd_main(argc, argv.as_ptr()) };
     }

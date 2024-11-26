@@ -35,5 +35,7 @@ pub fn main() {
         println!("cargo:rustc-link-lib=crypto_asm_lib");
         println!("cargo:rustc-link-search={objs_path}/msvc-posix-compat/msvc-compat-layer");
         println!("cargo:rustc-link-lib=msvc-posix-compat");
+        println!("cargo:rustc-link-search=C:/Windows/System32");
+        println!("cargo:rustc-link-lib=vcruntime140");
     }
 }

@@ -57,10 +57,7 @@ if(TARGET Rust::Rustc)
   android_add_library(
     TARGET netsimd-lib
     LICENSE Apache-2.0
-    SRC ${ANDROID_QEMU2_TOP_DIR}/android-qemu2-glue/emulation/VirtioWifiForwarder.cpp
-        ${ANDROID_QEMU2_TOP_DIR}/android-qemu2-glue/emulation/WifiService.cpp
-        ${ANDROID_QEMU2_TOP_DIR}/android-qemu2-glue/netsim/libslirp_driver.cpp
-        ${binding_header}
+    SRC ${binding_header}
         ${binding_source}
         ${common_header}
         backend/backend_packet_hub.h
@@ -80,9 +77,6 @@ if(TARGET Rust::Rustc)
         hci/hci_packet_transport.h
         hci/rust_device.cc
         hci/rust_device.h
-        wifi/wifi_facade.cc
-        wifi/wifi_facade.h
-        wifi/wifi_packet_hub.h
     DEPS grpc++ libbt-rootcanal netsimd-proto-lib packet-streamer-proto-lib
          protobuf::libprotobuf util-lib)
 
@@ -93,13 +87,9 @@ if(TARGET Rust::Rustc)
   # Update to protobuf 26.x introduces some warnings.
   target_compile_options(netsimd-lib PRIVATE -Wno-unused-result)
 
-  target_include_directories(
-    netsimd-lib PRIVATE . ${PROTOBUF_INCLUDE_DIR}
-                        ${ANDROID_QEMU2_TOP_DIR}/include ${ANDROID_AUTOGEN}
-    PUBLIC ${cxx_bridge_binary_folder} ${ANDROID_QEMU2_TOP_DIR})
-  target_compile_definitions(netsimd-lib PUBLIC NETSIM_ANDROID_EMULATOR
-                                                -DNETSIM_WIFI)
+  target_include_directories(netsimd-lib PRIVATE . ${PROTOBUF_INCLUDE_DIR}
+                             PUBLIC ${cxx_bridge_binary_folder})
+  target_compile_definitions(netsimd-lib PUBLIC NETSIM_ANDROID_EMULATOR)
   # Make sure we have the cxx files generated before we build them.
   add_dependencies(netsimd-lib cargo-build_netsim-daemon)
-  android_target_compile_definitions(netsimd-lib windows PRIVATE "-DIOV_MAX=1")
 endif()

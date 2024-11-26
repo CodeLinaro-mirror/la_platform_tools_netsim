@@ -14,13 +14,19 @@
 
 use crate::Error;
 use regex::Regex;
-use std::net::{IpAddr, ToSocketAddrs};
+use std::net::{SocketAddr, ToSocketAddrs};
+#[cfg(unix)]
+use std::os::fd::IntoRawFd;
+#[cfg(windows)]
+use std::os::windows::io::IntoRawSocket;
+use tokio::net::TcpStream;
+
+pub type RawDescriptor = i32;
 
 /// Proxy configuration
 pub struct ProxyConfig {
     pub protocol: String,
-    pub host: IpAddr,
-    pub port: u16,
+    pub addr: SocketAddr,
     pub username: Option<String>,
     pub password: Option<String>,
 }
@@ -82,8 +88,23 @@ impl ProxyConfig {
             .ok_or(Error::InvalidHost)?
             .ip();
 
-        Ok(ProxyConfig { protocol, username, password, host, port })
+        Ok(ProxyConfig { protocol, username, password, addr: SocketAddr::from((host, port)) })
     }
+}
+
+/// Convert TcpStream to RawDescriptor (i32)
+pub fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
+    let std_stream = stream.into_std().expect("into_raw_descriptor's into_std() failed");
+
+    std_stream.set_nonblocking(false).expect("non-blocking");
+
+    // Use into_raw_fd for Unix to pass raw file descriptor to C
+    #[cfg(unix)]
+    return std_stream.into_raw_fd();
+
+    // Use into_raw_socket for Windows to pass raw socket to C
+    #[cfg(windows)]
+    std_stream.into_raw_socket().try_into().expect("Failed to convert Raw Socket value into i32")
 }
 
 #[cfg(test)]
@@ -99,8 +120,7 @@ mod tests {
                 "127.0.0.1:8080",
                 ProxyConfig {
                     protocol: "http".to_owned(),
-                    host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                    port: 8080,
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
                 },
@@ -109,8 +129,7 @@ mod tests {
                 "http://127.0.0.1:8080",
                 ProxyConfig {
                     protocol: "http".to_owned(),
-                    host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                    port: 8080,
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
                 },
@@ -119,8 +138,7 @@ mod tests {
                 "https://127.0.0.1:8080",
                 ProxyConfig {
                     protocol: "https".to_owned(),
-                    host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                    port: 8080,
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
                 },
@@ -129,8 +147,7 @@ mod tests {
                 "sock5://127.0.0.1:8080",
                 ProxyConfig {
                     protocol: "sock5".to_owned(),
-                    host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                    port: 8080,
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
                 },
@@ -139,8 +156,7 @@ mod tests {
                 "user:pass@192.168.0.18:3128",
                 ProxyConfig {
                     protocol: "http".to_owned(),
-                    host: IpAddr::V4(Ipv4Addr::new(192, 168, 0, 18)),
-                    port: 3128,
+                    addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(192, 168, 0, 18)), 3128)),
                     username: Some("user".to_string()),
                     password: Some("pass".to_string()),
                 },
@@ -149,8 +165,10 @@ mod tests {
                 "https://[::1]:7000",
                 ProxyConfig {
                     protocol: "https".to_owned(),
-                    host: IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
-                    port: 7000,
+                    addr: SocketAddr::from((
+                        IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
+                        7000,
+                    )),
                     username: None,
                     password: None,
                 },
@@ -159,8 +177,10 @@ mod tests {
                 "[::1]:7000",
                 ProxyConfig {
                     protocol: "http".to_owned(),
-                    host: IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
-                    port: 7000,
+                    addr: SocketAddr::from((
+                        IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
+                        7000,
+                    )),
                     username: None,
                     password: None,
                 },
@@ -177,8 +197,7 @@ mod tests {
                 input
             );
             let result = result.ok().unwrap();
-            assert_eq!(result.host, expected.host, "For input: {}", input);
-            assert_eq!(result.port, expected.port, "For input: {}", input);
+            assert_eq!(result.addr, expected.addr, "For input: {}", input);
             assert_eq!(result.username, expected.username, "For input: {}", input);
             assert_eq!(result.password, expected.password, "For input: {}", input);
         }

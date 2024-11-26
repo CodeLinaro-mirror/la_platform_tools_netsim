@@ -17,9 +17,10 @@
 REPO=$(dirname "$0")/../../..
 
 # Get the Rust version, package, and objs path from arguments
-RUST_VERSION="$1"
-RUST_PKG="$2"
-OUT_PATH="$3"
+RUST_PKG="$1"
+OUT_PATH="$2"
+RUST_VERSION="$3"
+CLANG_VERSION="$4"
 
 # The possible values are "linux" and "darwin".
 OS=$(uname | tr '[:upper:]' '[:lower:]')
@@ -28,6 +29,8 @@ OS=$(uname | tr '[:upper:]' '[:lower:]')
 export CARGO_HOME=$OUT_PATH/rust/.cargo
 export OBJS_PATH=$OUT_PATH
 # Paths to pdl generated packets files
+ROOTCANAL_PDL_PATH=$OUT_PATH/rootcanal/pdl_gen
+export LINK_LAYER_PACKETS_PREBUILT=$ROOTCANAL_PDL_PATH/link_layer_packets.rs
 PDL_PATH=$OUT_PATH/pdl/pdl_gen
 export MAC80211_HWSIM_PACKETS_PREBUILT=$PDL_PATH/mac80211_hwsim_packets.rs
 export IEEE80211_PACKETS_PREBUILT=$PDL_PATH/ieee80211_packets.rs
