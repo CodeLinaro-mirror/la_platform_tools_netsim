@@ -14,7 +14,6 @@
 
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
-use crate::config::{set_dev, set_pcap};
 use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
 use crate::http_server::server::run_http_server;
 use crate::transport::socket::run_socket_transport;
@@ -33,7 +32,6 @@ pub struct ServiceParams {
     fd_startup_str: String,
     no_cli_ui: bool,
     no_web_ui: bool,
-    pcap: bool,
     hci_port: u16,
     instance_num: u16,
     dev: bool,
@@ -47,7 +45,6 @@ impl ServiceParams {
         fd_startup_str: String,
         no_cli_ui: bool,
         no_web_ui: bool,
-        pcap: bool,
         hci_port: u16,
         instance_num: u16,
         dev: bool,
@@ -58,7 +55,6 @@ impl ServiceParams {
             fd_startup_str,
             no_cli_ui,
             no_web_ui,
-            pcap,
             hci_port,
             instance_num,
             dev,
@@ -97,9 +93,6 @@ impl Service {
         if clear_pcap_files() {
             info!("netsim generated pcap files in temp directory has been removed.");
         }
-
-        set_pcap(self.service_params.pcap);
-        set_dev(self.service_params.dev);
     }
 
     /// Runs netsim gRPC server
@@ -134,7 +127,9 @@ impl Service {
         // If NETSIM_NO_WEB_SERVER is set, don't start http server.
         let no_web_server = env::var("NETSIM_NO_WEB_SERVER").is_ok_and(|v| v == "1");
         match !no_web_server && !self.service_params.no_web_ui {
-            true => Some(run_http_server(self.service_params.instance_num)),
+            true => {
+                Some(run_http_server(self.service_params.instance_num, self.service_params.dev))
+            }
             false => None,
         }
     }

@@ -212,9 +212,13 @@ pub fn redirect_std_stream(instance_name: &str) -> anyhow::Result<()> {
 mod tests {
 
     use super::*;
+    #[cfg(not(target_os = "windows"))]
+    use crate::system::tests::ENV_MUTEX;
 
     #[test]
     fn test_get_discovery_directory() {
+        #[cfg(not(target_os = "windows"))]
+        let _locked = ENV_MUTEX.lock();
         // Remove all environment variable
         std::env::remove_var(DISCOVERY.root_env);
         std::env::remove_var("TMPDIR");

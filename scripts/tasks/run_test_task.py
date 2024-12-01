@@ -14,12 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from pathlib import Path
 import platform
 
 from tasks.task import Task
-from utils import (AOSP_ROOT, clang_version, run, rust_version)
+from utils import (AOSP_ROOT, run, rust_version)
 
 
 class RunTestTask(Task):
@@ -31,6 +30,31 @@ class RunTestTask(Task):
     self.env = env
 
   def do_run(self):
+    # TODO(b/379745416): Support clippy for Mac and Windows
+    if platform.system() == "Linux":
+      # Set Clippy flags
+      clippy_flags = [
+          "-A clippy::disallowed_names",
+          "-A clippy::type-complexity",
+          "-A clippy::unnecessary-wraps",
+          "-A clippy::unusual-byte-groupings",
+          "-A clippy::upper-case-acronyms",
+          "-W clippy::undocumented_unsafe_blocks",
+          "-W clippy::cognitive-complexity",
+      ]
+      # Run cargo clippy
+      run(
+          [
+              AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_clippy.sh",
+              str(self.out),
+              rust_version(),
+              " ".join(clippy_flags),
+          ],
+          self.env,
+          "clippy",
+      )
+
+    # Set script for cargo Test
     if platform.system() == "Windows":
       script = AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_test.cmd"
     else:
@@ -44,6 +68,6 @@ class RunTestTask(Task):
         "netsim-common",
         "netsim-packets",
     ]:
-      cmd = [script, package, str(self.out), rust_version(), clang_version()]
+      cmd = [script, package, str(self.out), rust_version()]
       run(cmd, self.env, f"{package}_unit_tests")
     return True

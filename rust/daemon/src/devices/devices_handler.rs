@@ -40,6 +40,7 @@ use http::Version;
 use log::{info, warn};
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::configuration::Controller;
+use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
 use netsim_proto::frontend::CreateDeviceRequest;
 use netsim_proto::frontend::CreateDeviceResponse;
 use netsim_proto::frontend::DeleteChipRequest;
@@ -47,6 +48,7 @@ use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
 use netsim_proto::frontend::SubscribeDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
+use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::model::Orientation as ProtoOrientation;
 use netsim_proto::model::Position as ProtoPosition;
@@ -514,42 +516,131 @@ pub fn create_device(create_device_request: &CreateDeviceRequest) -> Result<Prot
     Ok(device_proto)
 }
 
-// lock the devices, find the id and call the patch function
-pub fn patch_device(
-    id_option: Option<DeviceIdentifier>,
-    patch_device_request: PatchDeviceRequest,
-) -> Result<(), String> {
-    let manager = get_manager();
-    let proto_device = patch_device_request.device;
-    match id_option {
-        Some(id) => match manager.devices.read().unwrap().get(&id) {
-            Some(device) => {
-                let result = device.patch(&proto_device, get_pose_manager());
-                let name = device.name.clone();
-                if result.is_ok() {
-                    // Update last modified timestamp for manager
-                    manager.update_timestamp();
+struct ProtoChipDisplay(ProtoChip);
 
-                    // Publish Device Patched event
-                    events::publish(Event::DevicePatched(DevicePatched { id, name }));
+// Due to the low readability of debug formatter for ProtoChip, we implemented our own fmt.
+impl std::fmt::Display for ProtoChipDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let chip = &self.0;
+        if let Ok(kind) = chip.kind.enum_value() {
+            match kind {
+                ProtoChipKind::BLUETOOTH => {
+                    chip.bt().low_energy.clone().map(|v| {
+                        write!(
+                            f,
+                            "{{ id: {}, kind: BLUETOOTH_LOW_ENERGY, state: {:?} }}",
+                            self.0.id, v.state
+                        )
+                    });
+                    chip.bt().classic.clone().map(|v| {
+                        write!(
+                            f,
+                            "{{ id: {}, kind: BLUETOOTH_CLASSIC, state: {:?} }}",
+                            chip.id, v.state
+                        )
+                    });
                 }
-                result
+                ProtoChipKind::BLUETOOTH_BEACON => {
+                    chip.ble_beacon().bt.low_energy.clone().map(|v| {
+                        write!(f, "{{ id: {}, kind: BLE_BEACON, state: {:?} }}", chip.id, v.state)
+                    });
+                    chip.ble_beacon().bt.classic.clone().map(|v| {
+                        write!(
+                            f,
+                            "{{ id: {}, kind: BLUETOOTH_CLASSIC_BEACON, state: {:?} }}",
+                            chip.id, v.state
+                        )
+                    });
+                }
+                ProtoChipKind::WIFI => {
+                    write!(f, "{{ id: {}, kind: WIFI, state: {:?} }}", chip.id, chip.wifi().state)?
+                }
+                ProtoChipKind::UWB => {
+                    write!(f, "{{ id: {}, kind: UWB, state: {:?} }}", chip.id, chip.uwb().state)?
+                }
+                _ => (),
             }
-            None => Err(format!("No such device with id {id}")),
-        },
-        None => {
+        }
+        Ok(())
+    }
+}
+
+struct PatchDeviceFieldsDisplay(DeviceIdentifier, ProtoPatchDeviceFields);
+
+// Due to the low readability of debug formatter for ProtoPatchDeviceFields, we implemented our own fmt.
+impl std::fmt::Display for PatchDeviceFieldsDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "PatchDevice: ")?;
+        let mut fields = Vec::<String>::new();
+        fields.push(format!("id: {}", self.0));
+        if let Some(name) = &self.1.name {
+            fields.push(format!("name: {}", name));
+        }
+        if let Some(visible) = &self.1.visible {
+            fields.push(format!("visible: {}", visible));
+        }
+        if let Some(position) = &self.1.position.0 {
+            fields.push(format!("position: {{ {} }}", position));
+        }
+        if let Some(orientation) = &self.1.orientation.0 {
+            fields.push(format!("orientation: {{ {} }}", orientation));
+        }
+        if !self.1.chips.is_empty() {
+            let mut chip_field = Vec::<String>::new();
+            for chip in &self.1.chips {
+                chip_field.push(format!("{}", ProtoChipDisplay(chip.clone())));
+            }
+            fields.push(format!("chips: {{ {} }}", chip_field.join(", ")));
+        }
+        write!(f, "{}", fields.join(", "))
+    }
+}
+
+// lock the devices, find the id and call the patch function
+pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), String> {
+    let manager = get_manager();
+    let proto_device = patch_device_request
+        .device
+        .into_option()
+        .ok_or("Missing PatchDevice in PatchDeviceRequest".to_string())?;
+    match (patch_device_request.id, proto_device.name.clone()) {
+        (Some(id), _) => {
+            let id = DeviceIdentifier(id);
+            match manager.devices.read().unwrap().get(&id) {
+                Some(device) => {
+                    let result = device.patch(&proto_device, get_pose_manager());
+                    let name = device.name.clone();
+                    if result.is_ok() {
+                        // Update last modified timestamp for manager
+                        manager.update_timestamp();
+
+                        // Log patched fields
+                        log::info!("{}", PatchDeviceFieldsDisplay(id, proto_device));
+
+                        // Publish Device Patched event
+                        events::publish(Event::DevicePatched(DevicePatched { id, name }));
+                    }
+                    result
+                }
+                None => Err(format!("No such device with id {id}")),
+            }
+        }
+        (_, Some(name)) => {
             let mut multiple_matches = false;
             let mut target: Option<&Device> = None;
             let devices = manager.devices.read().unwrap();
             for device in devices.values() {
-                if device.name.contains(&proto_device.name) {
-                    if device.name == proto_device.name {
+                if device.name.contains(&name) {
+                    if device.name == name {
                         let result = device.patch(&proto_device, get_pose_manager());
                         let id = device.id;
                         let name = device.name.clone();
                         if result.is_ok() {
                             // Update last modified timestamp for manager
                             manager.update_timestamp();
+
+                            // Log patched fields
+                            log::info!("{}", PatchDeviceFieldsDisplay(id, proto_device));
 
                             // Publish Device Patched event
                             events::publish(Event::DevicePatched(DevicePatched { id, name }));
@@ -563,7 +654,7 @@ pub fn patch_device(
             if multiple_matches {
                 return Err(format!(
                     "Multiple ambiguous matches were found with substring {}",
-                    proto_device.name
+                    name
                 ));
             }
             match target {
@@ -575,23 +666,29 @@ pub fn patch_device(
                         // Update last modified timestamp for devices
                         manager.update_timestamp();
 
+                        // Log patched fields
+                        log::info!("{}", PatchDeviceFieldsDisplay(id, proto_device));
+
                         // Publish Device Patched event
                         events::publish(Event::DevicePatched(DevicePatched { id, name }));
                     }
                     result
                 }
-                None => Err(format!("No such device with name {}", proto_device.name)),
+                None => Err(format!("No such device with name {}", name)),
             }
         }
+        (_, _) => Err("Both id and name are not provided".to_string()),
     }
 }
 
 // Parse from input json string to proto
-#[allow(dead_code)]
 fn patch_device_json(id_option: Option<DeviceIdentifier>, patch_json: &str) -> Result<(), String> {
     let mut patch_device_request = PatchDeviceRequest::new();
     if merge_from_str(&mut patch_device_request, patch_json).is_ok() {
-        patch_device(id_option, patch_device_request)
+        if patch_device_request.id.is_none() {
+            patch_device_request.id = id_option.map(|id| id.0);
+        }
+        patch_device(patch_device_request)
     } else {
         Err(format!("Incorrect format of patch json {}", patch_json))
     }
@@ -949,9 +1046,8 @@ pub fn get_radio_stats() -> Vec<NetsimRadioStats> {
 mod tests {
     use crate::events;
     use netsim_common::util::netsim_logger::init_for_test;
-    use netsim_proto::model::{
-        Device as ProtoDevice, DeviceCreate as ProtoDeviceCreate, Orientation as ProtoOrientation,
-    };
+    use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
+    use netsim_proto::model::{DeviceCreate as ProtoDeviceCreate, Orientation as ProtoOrientation};
     use protobuf_json_mapping::print_to_string;
     use std::{sync::Once, thread};
 
@@ -1285,10 +1381,10 @@ mod tests {
         let chip_params = test_chip_1_bt();
         let chip_result = chip_params.add_chip().unwrap();
         let mut patch_device_request = PatchDeviceRequest::new();
-        let mut proto_device = ProtoDevice::new();
+        let mut proto_device = ProtoPatchDeviceFields::new();
         let request_position = new_position(1.1, 2.2, 3.3);
         let request_orientation = new_orientation(4.4, 5.5, 6.6);
-        proto_device.name = chip_params.device_name;
+        proto_device.name = Some(chip_params.device_name);
         proto_device.visible = Some(false);
         proto_device.position = Some(request_position.clone()).into();
         proto_device.orientation = Some(request_orientation.clone()).into();
@@ -1321,7 +1417,7 @@ mod tests {
         }
 
         // Patch device by name with substring match
-        proto_device.name = format!("test-device-name-1-{:?}", thread::current().id());
+        proto_device.name = format!("test-device-name-1-{:?}", thread::current().id()).into();
         patch_device_request.device = Some(proto_device).into();
         let patch_json = print_to_string(&patch_device_request).unwrap();
         assert!(patch_device_json(None, patch_json.as_str()).is_ok());
@@ -1426,10 +1522,10 @@ mod tests {
         let chip_params = test_chip_1_bt();
         let chip_result = chip_params.add_chip().unwrap();
         let mut patch_device_request = PatchDeviceRequest::new();
-        let mut proto_device = ProtoDevice::new();
+        let mut proto_device = ProtoPatchDeviceFields::new();
         let request_position = new_position(10.0, 20.0, 30.0);
         let request_orientation = new_orientation(1.0, 2.0, 3.0);
-        proto_device.name = chip_params.device_name;
+        proto_device.name = Some(chip_params.device_name);
         proto_device.visible = Some(false);
         proto_device.position = Some(request_position).into();
         proto_device.orientation = Some(request_orientation).into();
@@ -1558,9 +1654,9 @@ mod tests {
 
         // Patch the first chip
         let mut patch_device_request = PatchDeviceRequest::new();
-        let mut proto_device = ProtoDevice::new();
+        let mut proto_device = ProtoPatchDeviceFields::new();
         let request_position = new_position(1.0, 1.0, 1.0);
-        proto_device.name = bt_chip_params.device_name;
+        proto_device.name = Some(bt_chip_params.device_name);
         proto_device.position = Some(request_position.clone()).into();
         patch_device_request.device = Some(proto_device.clone()).into();
         let patch_json = print_to_string(&patch_device_request).unwrap();
@@ -1568,9 +1664,9 @@ mod tests {
 
         // Patch the second chip
         let mut patch_device_request = PatchDeviceRequest::new();
-        let mut proto_device = ProtoDevice::new();
+        let mut proto_device = ProtoPatchDeviceFields::new();
         let request_position = new_position(1.0, 4.0, 5.0);
-        proto_device.name = bt_chip_2_params.device_name;
+        proto_device.name = Some(bt_chip_2_params.device_name);
         proto_device.position = Some(request_position.clone()).into();
         patch_device_request.device = Some(proto_device.clone()).into();
         let patch_json = print_to_string(&patch_device_request).unwrap();
@@ -1597,7 +1693,6 @@ mod tests {
     use netsim_proto::model::chip_create::{BleBeaconCreate, Chip as BuiltChipProto};
     use netsim_proto::model::Chip as ChipProto;
     use netsim_proto::model::ChipCreate as ProtoChipCreate;
-    use netsim_proto::model::Device as DeviceProto;
     use protobuf::{EnumOrUnknown, MessageField};
 
     fn get_test_create_device_request(device_name: Option<String>) -> CreateDeviceRequest {
@@ -1733,9 +1828,8 @@ mod tests {
             .get_mut(&DeviceIdentifier(device_proto.id))
             .expect("could not find test bluetooth beacon device");
         let patch_result = device.patch(
-            &DeviceProto {
-                name: device_proto.name.clone(),
-                id: device_proto.id,
+            &ProtoPatchDeviceFields {
+                name: Some(device_proto.name.clone()),
                 chips: vec![ChipProto {
                     name: request.device.chips[0].name.clone(),
                     kind: EnumOrUnknown::new(ProtoChipKind::BLUETOOTH_BEACON),

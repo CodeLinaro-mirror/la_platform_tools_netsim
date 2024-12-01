@@ -8,17 +8,11 @@ set REPO=%~dp0\..\..\..
 set RUST_PKG=%1
 set OUT_PATH=%2
 set RUST_VERSION=%3
-set CLANG_VERSION=%4
 set OBJS_PATH=%OUT_PATH%
 
 :: Set environment variables
 set PATH=%PATH%;%OUT_PATH%\lib64
 set PATH=%PATH%;%REPO%\prebuilts\gcc\linux-x86\host\x86_64-w64-mingw32-4.8\x86_64-w64-mingw32\lib;%REPO%\prebuilts\gcc\linux-x86\host\x86_64-w64-mingw32-4.8\x86_64-w64-mingw32\bin
-set CC_x86_64-pc-windows-gnu=%REPO%/prebuilts/clang/host/windows-x86/%CLANG_VERSION%/bin/clang-cl.exe
-set HOST_CC=%REPO%/prebuilts/clang/host/windows-x86/%CLANG_VERSION%/bin/clang-cl.exe
-set CXX_x86_64-pc-windows-gnu=%REPO%/prebuilts/clang/host/windows-x86/%CLANG_VERSION%/bin/clang-cl.exe
-set HOST_CXX=%REPO%/prebuilts/clang/host/windows-x86/%CLANG_VERSION%/bin/clang-cl.exe
-set AR_x86_64-pc-windows-gnu=%REPO%/prebuilts/clang/host/windows-x86/%CLANG_VERSION%/bin/llvm-ar
 set CORROSION_BUILD_DIR=%OUT_PATH%/rust
 set CARGO_BUILD_RUSTC=%REPO%/prebuilts/rust/windows-x86/%RUST_VERSION%/bin/rustc
 set RUSTC=%REPO%/prebuilts/rust/windows-x86/%RUST_VERSION%/bin/rustc
