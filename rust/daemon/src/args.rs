@@ -56,11 +56,6 @@ pub struct NetsimdArgs {
     #[arg(short, long)]
     pub dev: bool,
 
-    /// Use Rust gRPC server.
-    /// WARNING: This flag is for development purpose.
-    #[arg(long, default_value = "true")]
-    pub rust_grpc: bool,
-
     /// Forwards mDNS from the host to the guest, allowing emulator to discover mDNS services running on the host.
     ///
     /// # Limitations

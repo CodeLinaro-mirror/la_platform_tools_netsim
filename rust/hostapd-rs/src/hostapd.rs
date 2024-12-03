@@ -12,13 +12,51 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-///
-/// This crate is a wrapper for hostapd C library.
-///
-/// Hostapd process is managed by a separate thread.
-///
-/// hostapd.conf file is generated under discovery directory.
-///
+//! Controller interface for the `hostapd` C library.
+//!
+//! This module allows interaction with `hostapd` to manage WiFi access point and perform various wireless networking tasks directly from Rust code.
+//!
+//! The main `hostapd` process is managed by a separate thread while responses from the `hostapd` process are handled
+//! by another thread, ensuring efficient and non-blocking communication.
+//!
+//! `hostapd` configuration consists of key-value pairs. The default configuration file is generated in the discovery directory.
+//!
+//! ## Features
+//!
+//! * **Asynchronous operation:** The module utilizes `tokio` for asynchronous communication with the `hostapd` process,
+//!   allowing for efficient and non-blocking operations.
+//! * **Platform support:** Supports Linux, macOS, and Windows.
+//! * **Configuration management:** Provides functionality to generate and manage `hostapd` configuration files.
+//! * **Easy integration:** Offers a high-level API to simplify interaction with `hostapd`, abstracting away
+//!   low-level details.
+//!
+//! ## Usage
+//!
+//! Here's a basic example of how to create a `Hostapd` instance and start the `hostapd` process:
+//!
+//! ```
+//! use hostapd_rs::hostapd::Hostapd;
+//! use std::path::PathBuf;
+//! use std::sync::mpsc;
+//!
+//! fn main() {
+//!     // Create a channel for receiving data from hostapd
+//!     let (tx, _) = mpsc::channel();
+//!
+//!     // Create a new Hostapd instance
+//!     let mut hostapd = Hostapd::new(
+//!         tx,                                 // Sender for receiving data
+//!         true,                               // Verbose mode (optional)
+//!         PathBuf::from("/tmp/hostapd.conf"), // Path to the configuration file
+//!     );
+//!
+//!     // Start the hostapd process
+//!     hostapd.run();
+//! }
+//! ```
+//!
+//! This starts `hostapd` in a separate thread, allowing interaction with it using the `Hostapd` struct's methods.
+
 use anyhow::bail;
 use bytes::Bytes;
 use log::{info, warn};
@@ -51,6 +89,11 @@ use crate::hostapd_sys::{
 /// Alias for RawFd on Unix or RawSocket on Windows (converted to i32)
 type RawDescriptor = i32;
 
+/// Hostapd process interface.
+///
+/// This struct provides methods for interacting with the `hostapd` process,
+/// such as starting and stopping the process, configuring the access point,
+/// and sending and receiving data.
 pub struct Hostapd {
     // TODO: update to tokio based RwLock when usages are async
     handle: RwLock<Option<thread::JoinHandle<()>>>,
@@ -64,6 +107,14 @@ pub struct Hostapd {
 }
 
 impl Hostapd {
+    /// Creates a new `Hostapd` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `tx_bytes`: Sender for transmitting data received from `hostapd`.
+    /// * `verbose`: Whether to run `hostapd` in verbose mode.
+    /// * `config_path`: Path to the `hostapd` configuration file.
+
     pub fn new(tx_bytes: mpsc::Sender<Bytes>, verbose: bool, config_path: PathBuf) -> Self {
         // Default Hostapd conf entries
         let config_data = [
@@ -101,9 +152,10 @@ impl Hostapd {
         }
     }
 
-    /// Start hostapd main process and pass responses to netsim
-    /// The "hostapd" thread manages the C hostapd process by running "run_hostapd_main"
-    /// The "hostapd_response" thread manages traffic between hostapd and netsim
+    /// Starts the `hostapd` main process and response thread.
+    ///
+    /// The "hostapd" thread manages the C `hostapd` process by running `run_hostapd_main`.
+    /// The "hostapd_response" thread manages traffic between `hostapd` and netsim.
     ///
     /// TODO:
     /// * update as async fn.
@@ -152,7 +204,7 @@ impl Hostapd {
         true
     }
 
-    /// Reconfigure Hostapd with specified SSID (and password) config
+    /// Reconfigures `Hostapd` with the specified SSID (and password).
     ///
     /// TODO:
     /// * implement password & encryption support
@@ -203,11 +255,12 @@ impl Hostapd {
         Ok(())
     }
 
+    /// Retrieves the current SSID in the `Hostapd` configuration.
     pub fn get_ssid(&self) -> String {
         self.get_config_val("ssid")
     }
 
-    /// Input data packet bytes from netsim to hostapd
+    /// Inputs data packet bytes from netsim to `hostapd`.
     ///
     /// TODO:
     /// * update as async fn.
@@ -217,12 +270,13 @@ impl Hostapd {
         self.runtime.block_on(Self::async_write(self.data_writer.as_ref().unwrap(), &bytes))
     }
 
-    /// Check whether the hostapd thread is running
+    /// Checks whether the `hostapd` thread is running.
     pub fn is_running(&self) -> bool {
         let handle_lock = self.handle.read().unwrap();
         handle_lock.is_some() && !handle_lock.as_ref().unwrap().is_finished()
     }
 
+    /// Terminates the `Hostapd` process thread by sending a control command.
     pub fn terminate(&self) {
         if !self.is_running() {
             warn!("hostapd terminate() called when hostapd thread is not running");
@@ -238,7 +292,7 @@ impl Hostapd {
         }
     }
 
-    /// Generate hostapd.conf in discovery directory
+    /// Generates the `hostapd.conf` file in the discovery directory.
     fn gen_config_file(&self) -> anyhow::Result<()> {
         let conf_file = File::create(self.config_path.clone())?; // Create or overwrite the file
         let mut writer = BufWriter::new(conf_file);
@@ -250,21 +304,22 @@ impl Hostapd {
         Ok(writer.flush()?) // Ensure all data is written to the file
     }
 
-    /// Get the value of the given key in the config
+    /// Gets the value of the given key in the config.
     ///
-    /// Returns empty String if key is not found
+    /// Returns an empty String if the key is not found.
     fn get_config_val(&self, key: &str) -> String {
         self.config.get(key).cloned().unwrap_or_default()
     }
 
-    /// Creates a pipe of two connected TcpStream objects
+    /// Creates a pipe of two connected `TcpStream` objects.
     ///
-    /// Extracts the first stream's raw descriptor and splits the second stream as OwnedReadHalf and OwnedWriteHalf
+    /// Extracts the first stream's raw descriptor and splits the second stream
+    /// into `OwnedReadHalf` and `OwnedWriteHalf`.
     ///
     /// # Returns
     ///
-    /// * `Ok((listener, read_half, write_half))` if the pipe creation is successful
-    /// * `Err(std::io::Error)` if an error occurs during the pipe creation.
+    /// * `Ok((listener, read_half, write_half))` if the pipe creation is successful.
+    /// * `Err(std::io::Error)` if an error occurs during pipe creation.
     fn create_pipe(
         &self,
     ) -> anyhow::Result<(RawDescriptor, OwnedReadHalf, OwnedWriteHalf), std::io::Error> {
@@ -274,6 +329,7 @@ impl Hostapd {
         Ok((listener, read_half, write_half))
     }
 
+    /// Creates a pipe asynchronously.
     async fn async_create_pipe() -> anyhow::Result<(TcpStream, TcpStream), std::io::Error> {
         let listener = match TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).await {
             Ok(listener) => listener,
@@ -289,6 +345,7 @@ impl Hostapd {
         Ok((listener, stream))
     }
 
+    /// Writes data to a writer asynchronously.
     async fn async_write(writer: &Mutex<OwnedWriteHalf>, data: &[u8]) -> anyhow::Result<()> {
         let mut writer_guard = writer.lock().await;
         writer_guard.write_all(data).await?;
@@ -296,9 +353,9 @@ impl Hostapd {
         Ok(())
     }
 
-    /// Run the C hostapd process with run_hostapd_main
+    /// Runs the C `hostapd` process with `run_hostapd_main`.
     ///
-    /// This function is meant to be spawn in a separate thread.
+    /// This function is meant to be spawned in a separate thread.
     fn hostapd_thread(verbose: bool, config_path: String) {
         let mut args = vec![CString::new("hostapd").unwrap()];
         if verbose {
@@ -315,7 +372,7 @@ impl Hostapd {
         unsafe { run_hostapd_main(argc, argv.as_ptr()) };
     }
 
-    /// Sets the virtio (driver) data and control sockets
+    /// Sets the virtio (driver) data and control sockets.
     fn set_virtio_driver_socket(
         data_descriptor: RawDescriptor,
         ctrl_descriptor: RawDescriptor,
@@ -326,10 +383,10 @@ impl Hostapd {
         }
     }
 
-    /// Manage reading hostapd responses and sending via tx_bytes
+    /// Manages reading `hostapd` responses and sending them via `tx_bytes`.
     ///
-    /// The thread first attempt to set virtio driver sockets with retries unitl success.
-    /// Next the thread reads hostapd responses and writes to netsim
+    /// The thread first attempts to set virtio driver sockets with retries until success.
+    /// Next, the thread reads `hostapd` responses and writes them to netsim.
     fn hostapd_response_thread(
         data_listener: RawDescriptor,
         ctrl_listener: RawDescriptor,
@@ -364,12 +421,13 @@ impl Hostapd {
 }
 
 impl Drop for Hostapd {
+    /// Terminates the `hostapd` process when the `Hostapd` instance is dropped.
     fn drop(&mut self) {
         self.terminate();
     }
 }
 
-/// Convert TcpStream to RawDescriptor (i32)
+/// Converts a `TcpStream` to a `RawDescriptor` (i32).
 fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
     let std_stream = stream.into_std().expect("into_raw_descriptor's into_std() failed");
     // hostapd fd expects blocking, but rust set non-blocking for async
@@ -384,7 +442,7 @@ fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
     std_stream.into_raw_socket().try_into().expect("Failed to convert Raw Socket value into i32")
 }
 
-/// Convert a null terminated c-string slice into &[u8] bytes without the nul terminator
+/// Converts a null-terminated c-string slice into `&[u8]` bytes without the null terminator.
 fn c_string_to_bytes(c_string: &[u8]) -> &[u8] {
     CStr::from_bytes_with_nul(c_string).unwrap().to_bytes()
 }

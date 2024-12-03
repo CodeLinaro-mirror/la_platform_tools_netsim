@@ -63,8 +63,6 @@ if(TARGET Rust::Rustc)
         backend/backend_packet_hub.h
         backend/grpc_server.cc
         backend/grpc_server.h
-        core/server.cc
-        core/server.h
         frontend/frontend_client_stub.cc
         frontend/frontend_client_stub.h
         frontend/frontend_server.cc

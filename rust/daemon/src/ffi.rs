@@ -65,26 +65,6 @@ pub mod ffi_transport {
         #[namespace = "netsim::backend"]
         fn HandleResponseCxx(chip_id: u32, packet: &Vec<u8>, packet_type: u8);
 
-        include!("core/server.h");
-
-        #[namespace = "netsim::server"]
-        type GrpcServer;
-        #[rust_name = shut_down]
-        #[namespace = "netsim::server"]
-        fn Shutdown(self: &GrpcServer);
-
-        #[rust_name = get_grpc_port]
-        #[namespace = "netsim::server"]
-        fn GetGrpcPort(self: &GrpcServer) -> u32;
-
-        #[rust_name = run_grpc_server_cxx]
-        #[namespace = "netsim::server"]
-        pub fn RunGrpcServerCxx(
-            netsim_grpc_port: u32,
-            no_cli_ui: bool,
-            vsock: u16,
-        ) -> UniquePtr<GrpcServer>;
-
         // Grpc client.
         // Expose functions in Cuttlefish only, because it's only used by CVDs and it's
         // unable to pass function pointers on Windows.

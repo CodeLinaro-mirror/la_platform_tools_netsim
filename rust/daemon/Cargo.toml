@@ -7,7 +7,6 @@ build = "build.rs"
 [lib]
 crate-type = ["staticlib", "lib"]
 doctest = false
-test = false
 
 [dependencies]
 bytes = { version = ">=1.4.0"}

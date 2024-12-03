@@ -66,8 +66,13 @@ class RunTestTask(Task):
         "libslirp-rs",
         "http-proxy",
         "netsim-common",
+        "netsim-daemon",
         "netsim-packets",
+        "capture",
     ]:
+      # TODO(b/379708365): Resolve netsim-daemon test for Mac & Windows
+      if package == "netsim-daemon" and platform.system() != "Linux":
+        continue
       cmd = [script, package, str(self.out), rust_version()]
       run(cmd, self.env, f"{package}_unit_tests")
     return True

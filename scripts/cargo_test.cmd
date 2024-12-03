@@ -18,6 +18,7 @@ set CARGO_BUILD_RUSTC=%REPO%/prebuilts/rust/windows-x86/%RUST_VERSION%/bin/rustc
 set RUSTC=%REPO%/prebuilts/rust/windows-x86/%RUST_VERSION%/bin/rustc
 set CARGO_HOME=%OUT_PATH%\rust\.cargo
 set RUSTFLAGS=-Cdefault-linker-libraries=yes
+set GRPCIO_SYS_GRPC_INCLUDE_PATH=%REPO%/external/grpc/include
 
 :: Paths to pdl generated packets files
 set ROOTCANAL_PDL_PATH=%OUT_PATH%\rootcanal\pdl_gen

@@ -267,7 +267,6 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
         instance_num,
         args.dev,
         args.vsock.unwrap_or_default(),
-        args.rust_grpc,
     );
 
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain

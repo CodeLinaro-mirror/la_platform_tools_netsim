@@ -70,6 +70,7 @@ rust_defaults {
         "libfutures_util",
         "libglam",
         "libgrpcio",
+        "liblibc",
         "libnetsim_proto",
         "libhttp",
         "libnetsim_common",
@@ -176,7 +177,6 @@ cc_library_host_static {
     name: "lib-netsim",
     defaults: ["netsim_defaults"],
     srcs: [
-        "src/core/server.cc",
         "src/frontend/frontend_client_stub.cc",
         "src/frontend/frontend_server.cc",
         "src/backend/grpc_server.cc",

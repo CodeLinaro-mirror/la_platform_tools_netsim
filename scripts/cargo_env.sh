@@ -21,32 +21,37 @@
 #   OUT_PATH: Optional. The output directory for build artifacts.
 #             Defaults to "tools/netsim/objs" if not specified.
 
-# Get the directory of the script
-REPO=$(dirname "$0")/../../..
+# Set up necessary env vars for Cargo
+function setup_cargo_env {
+  # Get the directory of the script
+  local REPO=$(realpath "$(dirname "${BASH_SOURCE[0]}")/../../..")
 
-# Determine the OUT_PATH
-OUT_PATH="${1:-$REPO/tools/netsim/objs}"
+  # Determine the OUT_PATH
+  local OUT_PATH="${1:-$REPO/tools/netsim/objs}"
 
-# Get OS name (lowercase)
-OS=$(uname | tr '[:upper:]' '[:lower:]')
+  # Get OS name (lowercase)
+  local OS=$(uname | tr '[:upper:]' '[:lower:]')
 
-# Set environment variables
-export CARGO_HOME=$OUT_PATH/rust/.cargo
-export OBJS_PATH=$OUT_PATH
-export GRPCIO_SYS_GRPC_INCLUDE_PATH=$REPO/external/grpc/include
+  # Set environment variables
+  export CARGO_HOME=$OUT_PATH/rust/.cargo
+  export OBJS_PATH=$OUT_PATH
+  export GRPCIO_SYS_GRPC_INCLUDE_PATH=$REPO/external/grpc/include
 
-# Paths to pdl generated packets files
-ROOTCANAL_PDL_PATH=$OUT_PATH/rootcanal/pdl_gen
-export LINK_LAYER_PACKETS_PREBUILT=$ROOTCANAL_PDL_PATH/link_layer_packets.rs
-PDL_PATH=$OUT_PATH/pdl/pdl_gen
-export MAC80211_HWSIM_PACKETS_PREBUILT=$PDL_PATH/mac80211_hwsim_packets.rs
-export IEEE80211_PACKETS_PREBUILT=$PDL_PATH/ieee80211_packets.rs
-export LLC_PACKETS_PREBUILT=$PDL_PATH/llc_packets.rs
-export NETLINK_PACKETS_PREBUILT=$PDL_PATH/netlink_packets.rs
+  # Paths to pdl generated packets files
+  local ROOTCANAL_PDL_PATH=$OUT_PATH/rootcanal/pdl_gen
+  export LINK_LAYER_PACKETS_PREBUILT=$ROOTCANAL_PDL_PATH/link_layer_packets.rs
+  local PDL_PATH=$OUT_PATH/pdl/pdl_gen
+  export MAC80211_HWSIM_PACKETS_PREBUILT=$PDL_PATH/mac80211_hwsim_packets.rs
+  export IEEE80211_PACKETS_PREBUILT=$PDL_PATH/ieee80211_packets.rs
+  export LLC_PACKETS_PREBUILT=$PDL_PATH/llc_packets.rs
+  export NETLINK_PACKETS_PREBUILT=$PDL_PATH/netlink_packets.rs
 
-# Set library path based on OS
-if [[ "$OS" == "darwin" ]]; then
-  export DYLD_FALLBACK_LIBRARY_PATH=$OUT_PATH/lib64
-else
-  export LD_LIBRARY_PATH=$OUT_PATH/lib64
-fi
+  # Set library path based on OS
+  if [[ "$OS" == "darwin" ]]; then
+    export DYLD_FALLBACK_LIBRARY_PATH=$OUT_PATH/lib64
+  else
+    export LD_LIBRARY_PATH=$OUT_PATH/lib64
+  fi
+}
+
+setup_cargo_env "$1"
