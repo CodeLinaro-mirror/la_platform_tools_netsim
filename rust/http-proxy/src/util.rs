@@ -12,6 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// # Http Proxy Utils
+//
+// This module provides functionality for parsing proxy configuration
+// strings and converting `TcpStream` objects to raw file
+// descriptors.
+//
+// The `ProxyConfig` struct holds the parsed proxy configuration,
+// including protocol, address, username, and password. The
+// `from_string` function parses a proxy configuration string in the
+// format `[protocol://][username:password@]host:port` or
+// `[protocol://][username:password@]/[host/]:port` and returns a
+// `ProxyConfig` struct.
+//
+// The `into_raw_descriptor` function converts a `TcpStream` object
+// to a raw file descriptor (`RawDescriptor`), which is an `i32`
+// representing the underlying socket. This is used for compatibility
+// with libraries that require raw file descriptors, such as
+// `libslirp_rs`.
+
 use crate::Error;
 use regex::Regex;
 use std::net::{SocketAddr, ToSocketAddrs};

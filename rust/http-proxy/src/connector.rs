@@ -22,19 +22,27 @@ const HTTP_VERSION: &str = "1.1";
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// Establishes a TCP connection to a target address through an HTTP proxy.
+///
+/// The `Connector` handles the CONNECT request handshake with the proxy, including
+/// optional Basic authentication.
 #[derive(Clone)]
-pub struct Connector {
+pub(crate) struct Connector {
     proxy_addr: SocketAddr,
     username: Option<String>,
     password: Option<String>,
 }
 
 impl Connector {
-    pub fn new(proxy_addr: SocketAddr, username: Option<String>, password: Option<String>) -> Self {
+    pub(crate) fn new(
+        proxy_addr: SocketAddr,
+        username: Option<String>,
+        password: Option<String>,
+    ) -> Self {
         Connector { proxy_addr, username, password }
     }
 
-    pub async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
+    pub(crate) async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
         let mut stream = TcpStream::connect(self.proxy_addr).await?;
 
         // Construct the CONNECT request
