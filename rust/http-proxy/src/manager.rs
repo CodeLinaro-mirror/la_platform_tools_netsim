@@ -52,9 +52,6 @@ use tokio::runtime::Runtime;
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let manager = Manager::new("http://127.0.0.1:8080").unwrap();
-///     let addr: SocketAddr = "[invalid URL removed]:80".parse().unwrap();
-///     manager.try_connect(addr, 0, Box::new(MyProxyConnect));
 /// }
 /// ```
 pub struct Manager {

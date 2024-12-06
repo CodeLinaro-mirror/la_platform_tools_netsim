@@ -32,7 +32,7 @@ fn bind_listener(http_port: u16) -> Result<TcpListener, std::io::Error> {
 }
 
 /// Start the HTTP Server.
-pub fn run_http_server(instance_num: u16) -> u16 {
+pub fn run_http_server(instance_num: u16, dev: bool) -> u16 {
     let http_port = DEFAULT_HTTP_PORT + instance_num - 1;
     let _ = thread::Builder::new().name("http_server".to_string()).spawn(move || {
         let listener = match bind_listener(http_port) {
@@ -49,7 +49,7 @@ pub fn run_http_server(instance_num: u16) -> u16 {
             let stream = stream.unwrap();
             let valid_files = valid_files.clone();
             pool.execute(move || {
-                handle_connection(stream, valid_files);
+                handle_connection(stream, valid_files, dev);
             });
         }
         info!("Shutting down frontend http server.");

@@ -40,6 +40,7 @@ use http::Version;
 use log::{info, warn};
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::configuration::Controller;
+use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
 use netsim_proto::frontend::CreateDeviceRequest;
 use netsim_proto::frontend::CreateDeviceResponse;
 use netsim_proto::frontend::DeleteChipRequest;
@@ -47,6 +48,7 @@ use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
 use netsim_proto::frontend::SubscribeDeviceRequest;
 use netsim_proto::model::chip_create::Chip as ProtoBuiltin;
+use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::model::Orientation as ProtoOrientation;
 use netsim_proto::model::Position as ProtoPosition;
@@ -514,10 +516,93 @@ pub fn create_device(create_device_request: &CreateDeviceRequest) -> Result<Prot
     Ok(device_proto)
 }
 
+struct ProtoChipDisplay(ProtoChip);
+
+// Due to the low readability of debug formatter for ProtoChip, we implemented our own fmt.
+impl std::fmt::Display for ProtoChipDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let chip = &self.0;
+        if let Ok(kind) = chip.kind.enum_value() {
+            match kind {
+                ProtoChipKind::BLUETOOTH => {
+                    chip.bt().low_energy.clone().map(|v| {
+                        write!(
+                            f,
+                            "{{ id: {}, kind: BLUETOOTH_LOW_ENERGY, state: {:?} }}",
+                            self.0.id, v.state
+                        )
+                    });
+                    chip.bt().classic.clone().map(|v| {
+                        write!(
+                            f,
+                            "{{ id: {}, kind: BLUETOOTH_CLASSIC, state: {:?} }}",
+                            chip.id, v.state
+                        )
+                    });
+                }
+                ProtoChipKind::BLUETOOTH_BEACON => {
+                    chip.ble_beacon().bt.low_energy.clone().map(|v| {
+                        write!(f, "{{ id: {}, kind: BLE_BEACON, state: {:?} }}", chip.id, v.state)
+                    });
+                    chip.ble_beacon().bt.classic.clone().map(|v| {
+                        write!(
+                            f,
+                            "{{ id: {}, kind: BLUETOOTH_CLASSIC_BEACON, state: {:?} }}",
+                            chip.id, v.state
+                        )
+                    });
+                }
+                ProtoChipKind::WIFI => {
+                    write!(f, "{{ id: {}, kind: WIFI, state: {:?} }}", chip.id, chip.wifi().state)?
+                }
+                ProtoChipKind::UWB => {
+                    write!(f, "{{ id: {}, kind: UWB, state: {:?} }}", chip.id, chip.uwb().state)?
+                }
+                _ => (),
+            }
+        }
+        Ok(())
+    }
+}
+
+struct PatchDeviceFieldsDisplay(DeviceIdentifier, ProtoPatchDeviceFields);
+
+// Due to the low readability of debug formatter for ProtoPatchDeviceFields, we implemented our own fmt.
+impl std::fmt::Display for PatchDeviceFieldsDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "PatchDevice: ")?;
+        let mut fields = Vec::<String>::new();
+        fields.push(format!("id: {}", self.0));
+        if let Some(name) = &self.1.name {
+            fields.push(format!("name: {}", name));
+        }
+        if let Some(visible) = &self.1.visible {
+            fields.push(format!("visible: {}", visible));
+        }
+        if let Some(position) = &self.1.position.0 {
+            fields.push(format!("position: {{ {} }}", position));
+        }
+        if let Some(orientation) = &self.1.orientation.0 {
+            fields.push(format!("orientation: {{ {} }}", orientation));
+        }
+        if !self.1.chips.is_empty() {
+            let mut chip_field = Vec::<String>::new();
+            for chip in &self.1.chips {
+                chip_field.push(format!("{}", ProtoChipDisplay(chip.clone())));
+            }
+            fields.push(format!("chips: {{ {} }}", chip_field.join(", ")));
+        }
+        write!(f, "{}", fields.join(", "))
+    }
+}
+
 // lock the devices, find the id and call the patch function
 pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), String> {
     let manager = get_manager();
-    let proto_device = patch_device_request.device;
+    let proto_device = patch_device_request
+        .device
+        .into_option()
+        .ok_or("Missing PatchDevice in PatchDeviceRequest".to_string())?;
     match (patch_device_request.id, proto_device.name.clone()) {
         (Some(id), _) => {
             let id = DeviceIdentifier(id);
@@ -528,6 +613,9 @@ pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), Stri
                     if result.is_ok() {
                         // Update last modified timestamp for manager
                         manager.update_timestamp();
+
+                        // Log patched fields
+                        log::info!("{}", PatchDeviceFieldsDisplay(id, proto_device));
 
                         // Publish Device Patched event
                         events::publish(Event::DevicePatched(DevicePatched { id, name }));
@@ -550,6 +638,9 @@ pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), Stri
                         if result.is_ok() {
                             // Update last modified timestamp for manager
                             manager.update_timestamp();
+
+                            // Log patched fields
+                            log::info!("{}", PatchDeviceFieldsDisplay(id, proto_device));
 
                             // Publish Device Patched event
                             events::publish(Event::DevicePatched(DevicePatched { id, name }));
@@ -574,6 +665,9 @@ pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), Stri
                     if result.is_ok() {
                         // Update last modified timestamp for devices
                         manager.update_timestamp();
+
+                        // Log patched fields
+                        log::info!("{}", PatchDeviceFieldsDisplay(id, proto_device));
 
                         // Publish Device Patched event
                         events::publish(Event::DevicePatched(DevicePatched { id, name }));

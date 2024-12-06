@@ -55,13 +55,11 @@ impl ProxyConfig {
     ///
     /// The function expects the proxy configuration string to be in the following format:
     ///
-    /// ```
     /// [protocol://][username:password@]host:port
     /// [protocol://][username:password@]/[host/]:port
-    /// ```
     ///
     /// where:
-
+    ///
     /// * `protocol`: The network protocol (e.g., `http`, `https`,
     /// `socks5`). If not provided, defaults to `http`.
     /// * `username`: and `password` are optional credentials for authentication.

@@ -27,22 +27,18 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// The `Connector` handles the CONNECT request handshake with the proxy, including
 /// optional Basic authentication.
 #[derive(Clone)]
-pub(crate) struct Connector {
+pub struct Connector {
     proxy_addr: SocketAddr,
     username: Option<String>,
     password: Option<String>,
 }
 
 impl Connector {
-    pub(crate) fn new(
-        proxy_addr: SocketAddr,
-        username: Option<String>,
-        password: Option<String>,
-    ) -> Self {
+    pub fn new(proxy_addr: SocketAddr, username: Option<String>, password: Option<String>) -> Self {
         Connector { proxy_addr, username, password }
     }
 
-    pub(crate) async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
+    pub async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
         let mut stream = TcpStream::connect(self.proxy_addr).await?;
 
         // Construct the CONNECT request

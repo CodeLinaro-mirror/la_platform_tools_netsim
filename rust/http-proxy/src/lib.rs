@@ -30,20 +30,13 @@
 //! ## Example
 //!
 //! ```
-//! use tokio::net::lookup_host;
 //! use std::net::SocketAddr;
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let proxy_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-//!     let target_addr: SocketAddr = lookup_host("[invalid URL removed]")
-//!         .await
-//!         .unwrap()
-//!         .next()
-//!         .unwrap();
 //!
-//!     let connector = Connector::new(proxy_addr, None, None);
-//!     let _stream = connector.connect(target_addr).await.unwrap();
+//!     let connector = http_proxy::Connector::new(proxy_addr, None, None);
 //! }
 //! ```
 //!
@@ -63,6 +56,7 @@ mod manager;
 mod rewriter;
 mod util;
 
+pub use connector::*;
 pub use dns::*;
 pub use error::Error;
 pub use manager::*;
