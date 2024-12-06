@@ -14,7 +14,6 @@
 
 use crate::captures::captures_handler;
 use crate::devices::chip::ChipIdentifier;
-use crate::devices::device::DeviceIdentifier;
 use crate::devices::devices_handler;
 use futures_util::{FutureExt as _, SinkExt as _, TryFutureExt as _};
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink, WriteFlags};
@@ -62,11 +61,7 @@ impl FrontendService for FrontendClient {
         req: netsim_proto::frontend::PatchDeviceRequest,
         sink: grpcio::UnarySink<Empty>,
     ) {
-        let id_option = match req.device.id {
-            0 => None,
-            v => Some(DeviceIdentifier(v)),
-        };
-        let response = match devices_handler::patch_device(id_option, req) {
+        let response = match devices_handler::patch_device(req) {
             Ok(_) => sink.success(Empty::new()),
             Err(e) => {
                 warn!("failed to patch device: {}", e);
