@@ -20,6 +20,40 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
+/// # Manager
+///
+/// The `Manager` struct implements the `ProxyManager` trait from
+/// `libslirp_rs`.  It is responsible for managing TCP connections
+/// through an HTTP proxy using the `Connector` struct.
+///
+/// The `Manager` uses a `tokio::runtime::Runtime` to spawn tasks for
+/// establishing proxy connections.  It takes a proxy configuration
+/// string as input, which is parsed into a `ProxyConfig` to create a
+/// `Connector` instance.
+///
+/// The `try_connect` method attempts to establish a connection to the
+/// given `SocketAddr` through the proxy.  If successful, it calls the
+/// `proxy_connect` function with the raw file descriptor of the
+/// connected socket.
+///
+/// # Example
+///
+/// ```
+/// use std::net::SocketAddr;
+/// use libslirp_rs::libslirp::ProxyConnect;
+///
+/// struct MyProxyConnect;
+///
+/// impl ProxyConnect for MyProxyConnect {
+///     fn proxy_connect(&self, fd: i32, sockaddr: SocketAddr) {
+///         // Handle the connected socket
+///     }
+/// }
+///
+/// #[tokio::main]
+/// async fn main() {
+/// }
+/// ```
 pub struct Manager {
     runtime: Arc<Runtime>,
     connector: Connector,
@@ -36,6 +70,21 @@ impl Manager {
 }
 
 impl ProxyManager for Manager {
+    /// Attempts to establish a TCP connection to the given `sockaddr` through the proxy.
+    ///
+    /// This function spawns a new task in the `tokio` runtime to handle the connection process.
+    /// If the connection is successful, it calls the `proxy_connect` function of the provided
+    /// `ProxyConnect` object with the raw file descriptor of the connected socket.
+    ///
+    /// # Arguments
+    ///
+    /// * `sockaddr` - The target socket address to connect to.
+    /// * `connect_id` - An identifier for the connection.
+    /// * `connect_func` - A `ProxyConnect` object that will be called with the connected socket.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the connection attempt was initiated, `false` otherwise.
     fn try_connect(
         &self,
         sockaddr: SocketAddr,
@@ -59,6 +108,13 @@ impl ProxyManager for Manager {
         true
     }
 
+    /// Removes a connection with the given `connect_id`.
+    ///
+    /// Currently, this function only logs a debug message.
+    ///
+    /// # Arguments
+    ///
+    /// * `connect_id` - The identifier of the connection to remove.
     fn remove(&self, connect_id: usize) {
         debug!("Remove connect ID {}", connect_id);
     }

@@ -137,7 +137,7 @@ fn handle_dev(request: &Request<Vec<u8>>, _param: &str, writer: ResponseWritable
     handle_file(request.method().as_str(), "dev.html", writer)
 }
 
-pub fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>) {
+pub fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>, dev: bool) {
     let mut router = Router::new();
     router.add_route(Uri::from_static("/"), Box::new(handle_index));
     router.add_route(Uri::from_static("/version"), Box::new(handle_version));
@@ -148,7 +148,7 @@ pub fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>
     router.add_route(Uri::from_static(r"/v1/websocket/{radio}"), Box::new(handle_websocket));
 
     // Adding additional routes in dev mode.
-    if crate::config::get_dev() {
+    if dev {
         router.add_route(Uri::from_static("/dev"), Box::new(handle_dev));
     }
 

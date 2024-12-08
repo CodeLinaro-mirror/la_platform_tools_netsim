@@ -518,8 +518,10 @@ impl ::protobuf::reflect::ProtobufValue for DeleteChipRequest {
 // @@protoc_insertion_point(message:netsim.frontend.PatchDeviceRequest)
 pub struct PatchDeviceRequest {
     // message fields
+    // @@protoc_insertion_point(field:netsim.frontend.PatchDeviceRequest.id)
+    pub id: ::std::option::Option<u32>,
     // @@protoc_insertion_point(field:netsim.frontend.PatchDeviceRequest.device)
-    pub device: ::protobuf::MessageField<super::model::Device>,
+    pub device: ::protobuf::MessageField<patch_device_request::PatchDeviceFields>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.frontend.PatchDeviceRequest.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -537,9 +539,14 @@ impl PatchDeviceRequest {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut fields = ::std::vec::Vec::with_capacity(2);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
-        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::Device>(
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "id",
+            |m: &PatchDeviceRequest| { &m.id },
+            |m: &mut PatchDeviceRequest| { &mut m.id },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, patch_device_request::PatchDeviceFields>(
             "device",
             |m: &PatchDeviceRequest| { &m.device },
             |m: &mut PatchDeviceRequest| { &mut m.device },
@@ -562,6 +569,9 @@ impl ::protobuf::Message for PatchDeviceRequest {
     fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
+                8 => {
+                    self.id = ::std::option::Option::Some(is.read_uint32()?);
+                },
                 18 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.device)?;
                 },
@@ -577,6 +587,9 @@ impl ::protobuf::Message for PatchDeviceRequest {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
+        if let Some(v) = self.id {
+            my_size += ::protobuf::rt::uint32_size(1, v);
+        }
         if let Some(v) = self.device.as_ref() {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
@@ -587,6 +600,9 @@ impl ::protobuf::Message for PatchDeviceRequest {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.id {
+            os.write_uint32(1, v)?;
+        }
         if let Some(v) = self.device.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
         }
@@ -607,12 +623,14 @@ impl ::protobuf::Message for PatchDeviceRequest {
     }
 
     fn clear(&mut self) {
+        self.id = ::std::option::Option::None;
         self.device.clear();
         self.special_fields.clear();
     }
 
     fn default_instance() -> &'static PatchDeviceRequest {
         static instance: PatchDeviceRequest = PatchDeviceRequest {
+            id: ::std::option::Option::None,
             device: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
@@ -635,6 +653,206 @@ impl ::std::fmt::Display for PatchDeviceRequest {
 
 impl ::protobuf::reflect::ProtobufValue for PatchDeviceRequest {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+/// Nested message and enums of message `PatchDeviceRequest`
+pub mod patch_device_request {
+    #[derive(PartialEq,Clone,Default,Debug)]
+    // @@protoc_insertion_point(message:netsim.frontend.PatchDeviceRequest.PatchDeviceFields)
+    pub struct PatchDeviceFields {
+        // message fields
+        // @@protoc_insertion_point(field:netsim.frontend.PatchDeviceRequest.PatchDeviceFields.name)
+        pub name: ::std::option::Option<::std::string::String>,
+        // @@protoc_insertion_point(field:netsim.frontend.PatchDeviceRequest.PatchDeviceFields.visible)
+        pub visible: ::std::option::Option<bool>,
+        // @@protoc_insertion_point(field:netsim.frontend.PatchDeviceRequest.PatchDeviceFields.position)
+        pub position: ::protobuf::MessageField<super::super::model::Position>,
+        // @@protoc_insertion_point(field:netsim.frontend.PatchDeviceRequest.PatchDeviceFields.orientation)
+        pub orientation: ::protobuf::MessageField<super::super::model::Orientation>,
+        // @@protoc_insertion_point(field:netsim.frontend.PatchDeviceRequest.PatchDeviceFields.chips)
+        pub chips: ::std::vec::Vec<super::super::model::Chip>,
+        // special fields
+        // @@protoc_insertion_point(special_field:netsim.frontend.PatchDeviceRequest.PatchDeviceFields.special_fields)
+        pub special_fields: ::protobuf::SpecialFields,
+    }
+
+    impl<'a> ::std::default::Default for &'a PatchDeviceFields {
+        fn default() -> &'a PatchDeviceFields {
+            <PatchDeviceFields as ::protobuf::Message>::default_instance()
+        }
+    }
+
+    impl PatchDeviceFields {
+        pub fn new() -> PatchDeviceFields {
+            ::std::default::Default::default()
+        }
+
+        pub(in super) fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+            let mut fields = ::std::vec::Vec::with_capacity(5);
+            let mut oneofs = ::std::vec::Vec::with_capacity(0);
+            fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+                "name",
+                |m: &PatchDeviceFields| { &m.name },
+                |m: &mut PatchDeviceFields| { &mut m.name },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+                "visible",
+                |m: &PatchDeviceFields| { &m.visible },
+                |m: &mut PatchDeviceFields| { &mut m.visible },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::super::model::Position>(
+                "position",
+                |m: &PatchDeviceFields| { &m.position },
+                |m: &mut PatchDeviceFields| { &mut m.position },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::super::model::Orientation>(
+                "orientation",
+                |m: &PatchDeviceFields| { &m.orientation },
+                |m: &mut PatchDeviceFields| { &mut m.orientation },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
+                "chips",
+                |m: &PatchDeviceFields| { &m.chips },
+                |m: &mut PatchDeviceFields| { &mut m.chips },
+            ));
+            ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<PatchDeviceFields>(
+                "PatchDeviceRequest.PatchDeviceFields",
+                fields,
+                oneofs,
+            )
+        }
+    }
+
+    impl ::protobuf::Message for PatchDeviceFields {
+        const NAME: &'static str = "PatchDeviceFields";
+
+        fn is_initialized(&self) -> bool {
+            true
+        }
+
+        fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+            while let Some(tag) = is.read_raw_tag_or_eof()? {
+                match tag {
+                    18 => {
+                        self.name = ::std::option::Option::Some(is.read_string()?);
+                    },
+                    24 => {
+                        self.visible = ::std::option::Option::Some(is.read_bool()?);
+                    },
+                    34 => {
+                        ::protobuf::rt::read_singular_message_into_field(is, &mut self.position)?;
+                    },
+                    42 => {
+                        ::protobuf::rt::read_singular_message_into_field(is, &mut self.orientation)?;
+                    },
+                    50 => {
+                        self.chips.push(is.read_message()?);
+                    },
+                    tag => {
+                        ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                    },
+                };
+            }
+            ::std::result::Result::Ok(())
+        }
+
+        // Compute sizes of nested messages
+        #[allow(unused_variables)]
+        fn compute_size(&self) -> u64 {
+            let mut my_size = 0;
+            if let Some(v) = self.name.as_ref() {
+                my_size += ::protobuf::rt::string_size(2, &v);
+            }
+            if let Some(v) = self.visible {
+                my_size += 1 + 1;
+            }
+            if let Some(v) = self.position.as_ref() {
+                let len = v.compute_size();
+                my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+            }
+            if let Some(v) = self.orientation.as_ref() {
+                let len = v.compute_size();
+                my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+            }
+            for value in &self.chips {
+                let len = value.compute_size();
+                my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+            };
+            my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+            self.special_fields.cached_size().set(my_size as u32);
+            my_size
+        }
+
+        fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+            if let Some(v) = self.name.as_ref() {
+                os.write_string(2, v)?;
+            }
+            if let Some(v) = self.visible {
+                os.write_bool(3, v)?;
+            }
+            if let Some(v) = self.position.as_ref() {
+                ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
+            }
+            if let Some(v) = self.orientation.as_ref() {
+                ::protobuf::rt::write_message_field_with_cached_size(5, v, os)?;
+            }
+            for v in &self.chips {
+                ::protobuf::rt::write_message_field_with_cached_size(6, v, os)?;
+            };
+            os.write_unknown_fields(self.special_fields.unknown_fields())?;
+            ::std::result::Result::Ok(())
+        }
+
+        fn special_fields(&self) -> &::protobuf::SpecialFields {
+            &self.special_fields
+        }
+
+        fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+            &mut self.special_fields
+        }
+
+        fn new() -> PatchDeviceFields {
+            PatchDeviceFields::new()
+        }
+
+        fn clear(&mut self) {
+            self.name = ::std::option::Option::None;
+            self.visible = ::std::option::Option::None;
+            self.position.clear();
+            self.orientation.clear();
+            self.chips.clear();
+            self.special_fields.clear();
+        }
+
+        fn default_instance() -> &'static PatchDeviceFields {
+            static instance: PatchDeviceFields = PatchDeviceFields {
+                name: ::std::option::Option::None,
+                visible: ::std::option::Option::None,
+                position: ::protobuf::MessageField::none(),
+                orientation: ::protobuf::MessageField::none(),
+                chips: ::std::vec::Vec::new(),
+                special_fields: ::protobuf::SpecialFields::new(),
+            };
+            &instance
+        }
+    }
+
+    impl ::protobuf::MessageFull for PatchDeviceFields {
+        fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+            static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+            descriptor.get(|| super::file_descriptor().message_by_package_relative_name("PatchDeviceRequest.PatchDeviceFields").unwrap()).clone()
+        }
+    }
+
+    impl ::std::fmt::Display for PatchDeviceFields {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            ::protobuf::text_format::fmt(self, f)
+        }
+    }
+
+    impl ::protobuf::reflect::ProtobufValue for PatchDeviceFields {
+        type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+    }
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
@@ -1822,38 +2040,47 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     (\x0b2\x1a.netsim.model.DeviceCreateR\x06device\"D\n\x14CreateDeviceResp\
     onse\x12,\n\x06device\x18\x01\x20\x01(\x0b2\x14.netsim.model.DeviceR\x06\
     device\"#\n\x11DeleteChipRequest\x12\x0e\n\x02id\x18\x02\x20\x01(\rR\x02\
-    id\"B\n\x12PatchDeviceRequest\x12,\n\x06device\x18\x02\x20\x01(\x0b2\x14\
-    .netsim.model.DeviceR\x06device\"\x85\x01\n\x12ListDeviceResponse\x12.\n\
-    \x07devices\x18\x01\x20\x03(\x0b2\x14.netsim.model.DeviceR\x07devices\
-    \x12?\n\rlast_modified\x18\x02\x20\x01(\x0b2\x1a.google.protobuf.Timesta\
-    mpR\x0clastModified\"p\n\x16SubscribeDeviceRequest\x12D\n\rlast_modified\
-    \x18\x01\x20\x01(\x0b2\x1a.google.protobuf.TimestampH\0R\x0clastModified\
-    \x88\x01\x01B\x10\n\x0e_last_modified\"\xbf\x01\n\x17SubscribeDeviceResp\
-    onse\x12W\n\x14list_device_response\x18\x01\x20\x01(\x0b2#.netsim.fronte\
-    nd.ListDeviceResponseH\0R\x12listDeviceResponse\x12?\n\x0eempty_response\
-    \x18\x02\x20\x01(\x0b2\x16.google.protobuf.EmptyH\0R\remptyResponseB\n\n\
-    \x08response\"\xa3\x01\n\x13PatchCaptureRequest\x12\x0e\n\x02id\x18\x01\
-    \x20\x01(\rR\x02id\x12G\n\x05patch\x18\x02\x20\x01(\x0b21.netsim.fronten\
-    d.PatchCaptureRequest.PatchCaptureR\x05patch\x1a3\n\x0cPatchCapture\x12\
-    \x19\n\x05state\x18\x01\x20\x01(\x08H\0R\x05state\x88\x01\x01B\x08\n\x06\
-    _state\"H\n\x13ListCaptureResponse\x121\n\x08captures\x18\x01\x20\x03(\
-    \x0b2\x15.netsim.model.CaptureR\x08captures\"#\n\x11GetCaptureRequest\
-    \x12\x0e\n\x02id\x18\x01\x20\x01(\rR\x02id\";\n\x12GetCaptureResponse\
-    \x12%\n\x0ecapture_stream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xaa\x06\
-    \n\x0fFrontendService\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\
-    \x1a\x20.netsim.frontend.VersionResponse\x12[\n\x0cCreateDevice\x12$.net\
-    sim.frontend.CreateDeviceRequest\x1a%.netsim.frontend.CreateDeviceRespon\
-    se\x12H\n\nDeleteChip\x12\".netsim.frontend.DeleteChipRequest\x1a\x16.go\
-    ogle.protobuf.Empty\x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDevi\
-    ceRequest\x1a\x16.google.protobuf.Empty\x127\n\x05Reset\x12\x16.google.p\
-    rotobuf.Empty\x1a\x16.google.protobuf.Empty\x12I\n\nListDevice\x12\x16.g\
-    oogle.protobuf.Empty\x1a#.netsim.frontend.ListDeviceResponse\x12d\n\x0fS\
-    ubscribeDevice\x12'.netsim.frontend.SubscribeDeviceRequest\x1a(.netsim.f\
-    rontend.SubscribeDeviceResponse\x12L\n\x0cPatchCapture\x12$.netsim.front\
-    end.PatchCaptureRequest\x1a\x16.google.protobuf.Empty\x12K\n\x0bListCapt\
-    ure\x12\x16.google.protobuf.Empty\x1a$.netsim.frontend.ListCaptureRespon\
-    se\x12W\n\nGetCapture\x12\".netsim.frontend.GetCaptureRequest\x1a#.netsi\
-    m.frontend.GetCaptureResponse0\x01b\x06proto3\
+    id\"\xa4\x03\n\x12PatchDeviceRequest\x12\x13\n\x02id\x18\x01\x20\x01(\rH\
+    \0R\x02id\x88\x01\x01\x12M\n\x06device\x18\x02\x20\x01(\x0b25.netsim.fro\
+    ntend.PatchDeviceRequest.PatchDeviceFieldsR\x06device\x1a\xa2\x02\n\x11P\
+    atchDeviceFields\x12\x17\n\x04name\x18\x02\x20\x01(\tH\0R\x04name\x88\
+    \x01\x01\x12\x1d\n\x07visible\x18\x03\x20\x01(\x08H\x01R\x07visible\x88\
+    \x01\x01\x127\n\x08position\x18\x04\x20\x01(\x0b2\x16.netsim.model.Posit\
+    ionH\x02R\x08position\x88\x01\x01\x12@\n\x0borientation\x18\x05\x20\x01(\
+    \x0b2\x19.netsim.model.OrientationH\x03R\x0borientation\x88\x01\x01\x12(\
+    \n\x05chips\x18\x06\x20\x03(\x0b2\x12.netsim.model.ChipR\x05chipsB\x07\n\
+    \x05_nameB\n\n\x08_visibleB\x0b\n\t_positionB\x0e\n\x0c_orientationB\x05\
+    \n\x03_id\"\x85\x01\n\x12ListDeviceResponse\x12.\n\x07devices\x18\x01\
+    \x20\x03(\x0b2\x14.netsim.model.DeviceR\x07devices\x12?\n\rlast_modified\
+    \x18\x02\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\x0clastModified\"p\
+    \n\x16SubscribeDeviceRequest\x12D\n\rlast_modified\x18\x01\x20\x01(\x0b2\
+    \x1a.google.protobuf.TimestampH\0R\x0clastModified\x88\x01\x01B\x10\n\
+    \x0e_last_modified\"\xbf\x01\n\x17SubscribeDeviceResponse\x12W\n\x14list\
+    _device_response\x18\x01\x20\x01(\x0b2#.netsim.frontend.ListDeviceRespon\
+    seH\0R\x12listDeviceResponse\x12?\n\x0eempty_response\x18\x02\x20\x01(\
+    \x0b2\x16.google.protobuf.EmptyH\0R\remptyResponseB\n\n\x08response\"\
+    \xa3\x01\n\x13PatchCaptureRequest\x12\x0e\n\x02id\x18\x01\x20\x01(\rR\
+    \x02id\x12G\n\x05patch\x18\x02\x20\x01(\x0b21.netsim.frontend.PatchCaptu\
+    reRequest.PatchCaptureR\x05patch\x1a3\n\x0cPatchCapture\x12\x19\n\x05sta\
+    te\x18\x01\x20\x01(\x08H\0R\x05state\x88\x01\x01B\x08\n\x06_state\"H\n\
+    \x13ListCaptureResponse\x121\n\x08captures\x18\x01\x20\x03(\x0b2\x15.net\
+    sim.model.CaptureR\x08captures\"#\n\x11GetCaptureRequest\x12\x0e\n\x02id\
+    \x18\x01\x20\x01(\rR\x02id\";\n\x12GetCaptureResponse\x12%\n\x0ecapture_\
+    stream\x18\x01\x20\x01(\x0cR\rcaptureStream2\xaa\x06\n\x0fFrontendServic\
+    e\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.fronte\
+    nd.VersionResponse\x12[\n\x0cCreateDevice\x12$.netsim.frontend.CreateDev\
+    iceRequest\x1a%.netsim.frontend.CreateDeviceResponse\x12H\n\nDeleteChip\
+    \x12\".netsim.frontend.DeleteChipRequest\x1a\x16.google.protobuf.Empty\
+    \x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.g\
+    oogle.protobuf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\
+    \x16.google.protobuf.Empty\x12I\n\nListDevice\x12\x16.google.protobuf.Em\
+    pty\x1a#.netsim.frontend.ListDeviceResponse\x12d\n\x0fSubscribeDevice\
+    \x12'.netsim.frontend.SubscribeDeviceRequest\x1a(.netsim.frontend.Subscr\
+    ibeDeviceResponse\x12L\n\x0cPatchCapture\x12$.netsim.frontend.PatchCaptu\
+    reRequest\x1a\x16.google.protobuf.Empty\x12K\n\x0bListCapture\x12\x16.go\
+    ogle.protobuf.Empty\x1a$.netsim.frontend.ListCaptureResponse\x12W\n\nGet\
+    Capture\x12\".netsim.frontend.GetCaptureRequest\x1a#.netsim.frontend.Get\
+    CaptureResponse0\x01b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -1874,7 +2101,7 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             deps.push(::protobuf::well_known_types::empty::file_descriptor().clone());
             deps.push(::protobuf::well_known_types::timestamp::file_descriptor().clone());
             deps.push(super::model::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(13);
+            let mut messages = ::std::vec::Vec::with_capacity(14);
             messages.push(VersionResponse::generated_message_descriptor_data());
             messages.push(CreateDeviceRequest::generated_message_descriptor_data());
             messages.push(CreateDeviceResponse::generated_message_descriptor_data());
@@ -1887,6 +2114,7 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(ListCaptureResponse::generated_message_descriptor_data());
             messages.push(GetCaptureRequest::generated_message_descriptor_data());
             messages.push(GetCaptureResponse::generated_message_descriptor_data());
+            messages.push(patch_device_request::PatchDeviceFields::generated_message_descriptor_data());
             messages.push(patch_capture_request::PatchCapture::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(0);
             ::protobuf::reflect::GeneratedFileDescriptor::new_generated(

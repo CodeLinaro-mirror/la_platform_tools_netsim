@@ -20,6 +20,7 @@ use crate::devices::chip::ChipIdentifier;
 use crate::devices::devices_handler::PoseManager;
 use crate::wireless::WirelessAdaptorImpl;
 use netsim_proto::common::ChipKind as ProtoChipKind;
+use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
 use netsim_proto::model::Device as ProtoDevice;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use std::collections::BTreeMap;
@@ -89,7 +90,11 @@ impl Device {
     }
 
     /// Patch a device and its chips.
-    pub fn patch(&self, patch: &ProtoDevice, pose_manager: Arc<PoseManager>) -> Result<(), String> {
+    pub fn patch(
+        &self,
+        patch: &ProtoPatchDeviceFields,
+        pose_manager: Arc<PoseManager>,
+    ) -> Result<(), String> {
         if patch.visible.is_some() {
             self.visible.store(patch.visible.unwrap(), Ordering::SeqCst);
         }

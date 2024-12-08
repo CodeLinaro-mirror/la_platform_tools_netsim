@@ -22,6 +22,10 @@ const HTTP_VERSION: &str = "1.1";
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// Establishes a TCP connection to a target address through an HTTP proxy.
+///
+/// The `Connector` handles the CONNECT request handshake with the proxy, including
+/// optional Basic authentication.
 #[derive(Clone)]
 pub struct Connector {
     proxy_addr: SocketAddr,
