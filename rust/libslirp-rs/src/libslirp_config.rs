@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Conversion between Rust and C configurations.
 use crate::libslirp_sys::{self, SLIRP_MAX_DNS_SERVERS};
 use log::warn;
 use std::ffi::CString;
@@ -23,8 +24,7 @@ use tokio;
 
 const MAX_DNS_SERVERS: usize = SLIRP_MAX_DNS_SERVERS as usize;
 
-// Rust SlirpConfig
-
+/// Rust SlirpConfig
 pub struct SlirpConfig {
     pub version: u32,
     pub restricted: i32,
@@ -105,8 +105,8 @@ impl Default for SlirpConfig {
     }
 }
 
-// Struct to hold a "C" SlirpConfig and the Rust storage that is
-// referenced by SlirpConfig.
+/// Struct to hold a "C" SlirpConfig and the Rust storage that is
+/// referenced by SlirpConfig.
 #[allow(dead_code)]
 pub struct SlirpConfigs {
     pub c_slirp_config: libslirp_sys::SlirpConfig,

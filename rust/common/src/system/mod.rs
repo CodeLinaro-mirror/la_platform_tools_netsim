@@ -58,12 +58,12 @@ fn netsimd_temp_dir_pathbuf() -> PathBuf {
 
 #[cfg(not(target_os = "windows"))]
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::netsimd_temp_dir_pathbuf;
     use std::env;
     use std::sync::Mutex;
 
-    static ENV_MUTEX: Mutex<i32> = Mutex::new(0);
+    pub static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_forge() {

@@ -131,13 +131,13 @@ class FrontendServer final : public frontend::FrontendService::Service {
     std::string request_json;
     google::protobuf::util::MessageToJsonString(*request, &request_json);
     auto device = request->device();
+    auto id = request->id();
     // device.id() starts from 1.
     // If you don't populate the id, you must fill the name field.
-    if (device.id() == 0) {
+    if (id == 0) {
       HandleDeviceCxx(writer, "PATCH", "", request_json);
     } else {
-      HandleDeviceCxx(writer, "PATCH", std::to_string(device.id()),
-                      request_json);
+      HandleDeviceCxx(writer, "PATCH", std::to_string(id), request_json);
     }
     if (writer.is_ok) {
       return grpc::Status::OK;

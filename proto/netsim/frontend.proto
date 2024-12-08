@@ -103,10 +103,22 @@ message DeleteChipRequest {
 //
 // You may patch the device position, orientation, and the radio states.
 // For built-in devices, you may patch the specific configurations.
+// You may provide either the id or name to perform patching devices.
 message PatchDeviceRequest {
-  // Device proto. You must include either the id or name field to have
-  // a successful patch.
-  netsim.model.Device device = 2;
+  // Device Identifier
+  optional uint32 id = 1;
+
+  message PatchDeviceFields {
+    // Field numbers matches that of netsim.model.Device
+    optional string name = 2;
+    optional bool visible = 3;
+    optional netsim.model.Position position = 4;
+    optional netsim.model.Orientation orientation = 5;
+    // TODO: Replace with PatchChip that only includes modifiable fields
+    repeated netsim.model.Chip chips = 6;
+  }
+  // Patch Device proto
+  PatchDeviceFields device = 2;
 }
 
 // Response for ListDevice request.

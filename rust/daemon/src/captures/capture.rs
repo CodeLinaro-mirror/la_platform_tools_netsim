@@ -36,7 +36,6 @@ use log::{info, warn};
 use netsim_proto::{common::ChipKind, model::Capture as ProtoCapture};
 use protobuf::well_known_types::timestamp::Timestamp;
 
-use crate::config::get_pcap;
 use crate::events::{ChipAdded, ChipRemoved, Event};
 use crate::resource::clone_captures;
 
@@ -266,14 +265,14 @@ impl Default for Captures {
 /// connected to the simulation. This procedure monitors ChipAdded
 /// and ChipRemoved events and updates the collection of CaptureInfo.
 ///
-pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>) {
+pub fn spawn_capture_event_subscriber(event_rx: Receiver<Event>, capture: bool) {
     let _ =
         thread::Builder::new().name("capture_event_subscriber".to_string()).spawn(move || loop {
             match event_rx.recv() {
                 Ok(Event::ChipAdded(ChipAdded { chip_id, chip_kind, device_name, .. })) => {
                     let mut capture_info =
                         CaptureInfo::new(chip_kind, chip_id, device_name.clone());
-                    if get_pcap() {
+                    if capture {
                         if let Err(err) = capture_info.start_capture() {
                             warn!("{err:?}");
                         }

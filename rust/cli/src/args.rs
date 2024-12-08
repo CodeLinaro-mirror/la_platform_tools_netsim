@@ -20,6 +20,7 @@ use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::common::ChipKind;
 use netsim_proto::frontend;
 use netsim_proto::frontend::patch_capture_request::PatchCapture as PatchCaptureProto;
+use netsim_proto::frontend::patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto;
 use netsim_proto::model::chip::ble_beacon::advertise_settings::{
     AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
     Interval as IntervalProto, Tx_power as TxPowerProto,
@@ -32,8 +33,8 @@ use netsim_proto::model::chip::{
     Radio as Chip_Radio,
 };
 use netsim_proto::model::{
-    self, chip_create, Chip, ChipCreate as ChipCreateProto, Device,
-    DeviceCreate as DeviceCreateProto, Position,
+    self, chip_create, Chip, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
+    Position,
 };
 use protobuf::{Message, MessageField};
 use std::fmt;
@@ -124,22 +125,22 @@ impl Command {
                     chip.set_bt(bt_chip);
                 }
                 let mut result = frontend::PatchDeviceRequest::new();
-                let mut device = Device::new();
-                cmd.name.clone_into(&mut device.name);
+                let mut device = PatchDeviceFieldsProto::new();
+                device.name = Some(cmd.name.clone());
                 device.chips.push(chip);
                 result.device = Some(device).into();
                 result.write_to_bytes().unwrap()
             }
             Command::Move(cmd) => {
                 let mut result = frontend::PatchDeviceRequest::new();
-                let mut device = Device::new();
+                let mut device = PatchDeviceFieldsProto::new();
                 let position = Position {
                     x: cmd.x,
                     y: cmd.y,
                     z: cmd.z.unwrap_or_default(),
                     ..Default::default()
                 };
-                cmd.name.clone_into(&mut device.name);
+                device.name = Some(cmd.name.clone());
                 device.position = Some(position).into();
                 result.device = Some(device).into();
                 result.write_to_bytes().unwrap()
@@ -191,8 +192,8 @@ impl Command {
                 },
                 Beacon::Patch(kind) => match kind {
                     BeaconPatch::Ble(args) => {
-                        let device = MessageField::some(Device {
-                            name: args.device_name.clone(),
+                        let device = MessageField::some(PatchDeviceFieldsProto {
+                            name: Some(args.device_name.clone()),
                             chips: vec![Chip {
                                 name: args.chip_name.clone(),
                                 kind: ChipKind::BLUETOOTH_BEACON.into(),

@@ -263,7 +263,6 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
         fd_startup_str,
         args.no_cli_ui,
         args.no_web_ui,
-        config.capture.enabled.unwrap_or_default(),
         hci_port,
         instance_num,
         args.dev,
@@ -287,7 +286,8 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     session.start(session_events_rx);
 
     // Pass all event receivers to each modules
-    spawn_capture_event_subscriber(capture_events_rx);
+    let capture = config.capture.enabled.unwrap_or_default();
+    spawn_capture_event_subscriber(capture_events_rx, capture);
 
     if !args.no_shutdown {
         spawn_shutdown_publisher(device_events_rx);
