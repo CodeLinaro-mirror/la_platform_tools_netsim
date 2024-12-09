@@ -12,8 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-//! This module provides a safe and convenient wrapper around libslirp_sys,
-//! allowing for easy integration of user-mode networking into Rust applications.
+//! FFI bindings for libslirp library.
+//!
+//! This allows for easy integration of user-mode networking into Rust applications.
 //!
 //! It offers functionality for:
 //!
@@ -23,7 +24,9 @@
 //! # Example
 //!
 //! ```
-//! use libslirp_rs::{Slirp, Config};
+//! use libslirp_rs::libslirp_sys::sockaddr_storage;
+//! use std::net::Ipv4Addr;
+//! use std::net::SocketAddr;
 //!
 //! let sockaddr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
 //! let storage: sockaddr_storage = sockaddr.into();
@@ -144,17 +147,17 @@ impl From<SocketAddr> for sockaddr_storage {
     }
 }
 
-impl Into<u32> for in_addr {
-    fn into(self) -> u32 {
+impl From<in_addr> for u32 {
+    fn from(val: in_addr) -> Self {
         #[cfg(target_os = "windows")]
         // SAFETY: This is safe because we are accessing a union field and
         // all fields in the union have the same size.
         unsafe {
-            self.S_un.S_addr
+            val.S_un.S_addr
         }
 
         #[cfg(any(target_os = "macos", target_os = "linux"))]
-        self.s_addr
+        val.s_addr
     }
 }
 

@@ -32,7 +32,7 @@ use std::os::fd::IntoRawFd;
 #[cfg(windows)]
 use std::os::windows::io::IntoRawSocket;
 use std::path::PathBuf;
-use std::sync::{mpsc, Arc, OnceLock, RwLock};
+use std::sync::{mpsc, Arc, RwLock};
 use std::thread::{self, sleep};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -51,9 +51,6 @@ use crate::hostapd_sys::{
 /// Alias for RawFd on Unix or RawSocket on Windows (converted to i32)
 type RawDescriptor = i32;
 
-// TODO: Use a (global netsimd) tokio runtime from caller
-static HOSTAPD_RUNTIME: OnceLock<Arc<Runtime>> = OnceLock::new();
-
 pub struct Hostapd {
     // TODO: update to tokio based RwLock when usages are async
     handle: RwLock<Option<thread::JoinHandle<()>>>,
@@ -63,6 +60,7 @@ pub struct Hostapd {
     data_writer: Option<Mutex<OwnedWriteHalf>>,
     ctrl_writer: Option<Mutex<OwnedWriteHalf>>,
     tx_bytes: mpsc::Sender<Bytes>,
+    runtime: Arc<Runtime>,
 }
 
 impl Hostapd {
@@ -99,6 +97,7 @@ impl Hostapd {
             data_writer: None,
             ctrl_writer: None,
             tx_bytes,
+            runtime: Arc::new(Runtime::new().unwrap()),
         }
     }
 
@@ -118,10 +117,10 @@ impl Hostapd {
 
         // Setup Sockets
         let (ctrl_listener, _ctrl_reader, ctrl_writer) =
-            Self::create_pipe().expect("Failed to create ctrl pipe");
+            self.create_pipe().expect("Failed to create ctrl pipe");
         self.ctrl_writer = Some(Mutex::new(ctrl_writer));
         let (data_listener, data_reader, data_writer) =
-            Self::create_pipe().expect("Failed to create data pipe");
+            self.create_pipe().expect("Failed to create data pipe");
         self.data_writer = Some(Mutex::new(data_writer));
 
         // Start hostapd thread
@@ -136,10 +135,17 @@ impl Hostapd {
 
         // Start hostapd response thread
         let tx_bytes = self.tx_bytes.clone();
+        let runtime = Arc::clone(&self.runtime);
         let _ = thread::Builder::new()
             .name("hostapd_response".to_string())
             .spawn(move || {
-                Self::hostapd_response_thread(data_listener, ctrl_listener, data_reader, tx_bytes);
+                Self::hostapd_response_thread(
+                    data_listener,
+                    ctrl_listener,
+                    data_reader,
+                    tx_bytes,
+                    runtime,
+                );
             })
             .expect("Failed to spawn hostapd_response thread");
 
@@ -187,7 +193,7 @@ impl Hostapd {
         self.gen_config_file()?;
 
         // Send command for Hostapd to reload config file
-        if let Err(e) = get_runtime().block_on(Self::async_write(
+        if let Err(e) = self.runtime.block_on(Self::async_write(
             self.ctrl_writer.as_ref().unwrap(),
             c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG),
         )) {
@@ -208,7 +214,7 @@ impl Hostapd {
     pub fn input(&self, bytes: Bytes) -> anyhow::Result<()> {
         // Make sure hostapd is already running
         assert!(self.is_running(), "Failed to send input. Hostapd is not running.");
-        get_runtime().block_on(Self::async_write(self.data_writer.as_ref().unwrap(), &bytes))
+        self.runtime.block_on(Self::async_write(self.data_writer.as_ref().unwrap(), &bytes))
     }
 
     /// Check whether the hostapd thread is running
@@ -224,7 +230,7 @@ impl Hostapd {
         }
 
         // Send terminate command to hostapd
-        if let Err(e) = get_runtime().block_on(Self::async_write(
+        if let Err(e) = self.runtime.block_on(Self::async_write(
             self.ctrl_writer.as_ref().unwrap(),
             c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_TERMINATE),
         )) {
@@ -260,8 +266,9 @@ impl Hostapd {
     /// * `Ok((listener, read_half, write_half))` if the pipe creation is successful
     /// * `Err(std::io::Error)` if an error occurs during the pipe creation.
     fn create_pipe(
+        &self,
     ) -> anyhow::Result<(RawDescriptor, OwnedReadHalf, OwnedWriteHalf), std::io::Error> {
-        let (listener, stream) = get_runtime().block_on(Self::async_create_pipe())?;
+        let (listener, stream) = self.runtime.block_on(Self::async_create_pipe())?;
         let listener = into_raw_descriptor(listener);
         let (read_half, write_half) = stream.into_split();
         Ok((listener, read_half, write_half))
@@ -302,7 +309,7 @@ impl Hostapd {
                 panic!("CString::new error on config file path: {}", config_path)
             }),
         );
-        let mut argv: Vec<*const c_char> = args.iter().map(|arg| arg.as_ptr()).collect();
+        let argv: Vec<*const c_char> = args.iter().map(|arg| arg.as_ptr()).collect();
         let argc = argv.len() as c_int;
         // Safety: we ensure that argc is length of argv and argv.as_ptr() is a valid pointer of hostapd args
         unsafe { run_hostapd_main(argc, argv.as_ptr()) };
@@ -328,6 +335,7 @@ impl Hostapd {
         ctrl_listener: RawDescriptor,
         mut data_reader: OwnedReadHalf,
         tx_bytes: mpsc::Sender<Bytes>,
+        runtime: Arc<Runtime>,
     ) {
         let mut buf: [u8; 1500] = [0u8; 1500];
         loop {
@@ -339,8 +347,7 @@ impl Hostapd {
             break;
         }
         loop {
-            let size = match get_runtime().block_on(async { data_reader.read(&mut buf[..]).await })
-            {
+            let size = match runtime.block_on(async { data_reader.read(&mut buf[..]).await }) {
                 Ok(size) => size,
                 Err(e) => {
                     warn!("Failed to read hostapd response: {:?}", e);
@@ -380,11 +387,4 @@ fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
 /// Convert a null terminated c-string slice into &[u8] bytes without the nul terminator
 fn c_string_to_bytes(c_string: &[u8]) -> &[u8] {
     CStr::from_bytes_with_nul(c_string).unwrap().to_bytes()
-}
-
-/// Get or init the hostapd tokio runtime
-/// TODO:
-/// * make Runtime the responsibility of the caller.
-fn get_runtime() -> &'static Arc<Runtime> {
-    HOSTAPD_RUNTIME.get_or_init(|| Arc::new(Runtime::new().unwrap()))
 }

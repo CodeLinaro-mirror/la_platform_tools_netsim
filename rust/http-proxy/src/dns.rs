@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This module parses DNS response records and extracts fully
-//! qualified domain names (FQDNs) along with their corresponding
-//! Socket Addresses (SockAddr).
-//!
-//! **Note:** This is not a general-purpose DNS response parser. It is
-//! designed to handle specific record types and response formats.
+// This module parses DNS response records and extracts fully
+// qualified domain names (FQDNs) along with their corresponding
+// Socket Addresses (SockAddr).
+//
+// **Note:** This is not a general-purpose DNS response parser. It is
+// designed to handle specific record types and response formats.
 
-use std::cmp::min;
 use std::convert::TryFrom;
 use std::fmt;
 use std::io::{Cursor, Read, Seek, SeekFrom};
@@ -104,7 +103,9 @@ impl CursorExt for Cursor<&[u8]> {
 /// '''
 
 struct Message {
+    #[allow(dead_code)]
     header: Header,
+    #[allow(dead_code)]
     questions: Vec<Question>,
     answers: Vec<ResourceRecord>,
     // Other types not needed
@@ -150,8 +151,9 @@ impl Message {
         Ok(Message { header, questions, answers })
     }
 
-    pub fn dns_responses(cursor: &mut impl CursorExt) -> Result<Vec<DnsResponse>, DnsError> {
-        let msg = Self::parse(cursor)?;
+    pub fn dns_responses(bytes: &[u8]) -> Result<Vec<DnsResponse>, DnsError> {
+        let mut cursor = Cursor::new(bytes);
+        let msg = Self::parse(&mut cursor)?;
         let mut responses = Vec::with_capacity(msg.answers.len());
         for answer in msg.answers {
             responses.push(DnsResponse { name: answer.name, addr: answer.resource_data.into() })
@@ -301,10 +303,6 @@ impl Header {
         };
         Ok(header)
     }
-    /// Size of the header is always 12 bytes
-    pub fn size() -> usize {
-        12
-    }
 }
 
 // END REGION HEADER
@@ -330,10 +328,12 @@ impl Header {
 /// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 /// '''
 
-#[derive(Debug)]
 struct Question {
+    #[allow(dead_code)]
     name: String,
+    #[allow(dead_code)]
     qtype: u16,
+    #[allow(dead_code)]
     qclass: u16,
 }
 
@@ -386,7 +386,6 @@ enum ResourceClass {
 // Type fields in resource records.
 //
 // The only ones we care about are A and AAAA
-#[derive(Debug)]
 enum ResourceType {
     // IPv4 address.
     A = 1,
@@ -394,11 +393,13 @@ enum ResourceType {
     Aaaa = 28,
 }
 
-#[derive(Debug)]
 struct ResourceRecord {
     name: String,
+    #[allow(dead_code)]
     resource_type: ResourceType,
+    #[allow(dead_code)]
     resource_class: ResourceClass,
+    #[allow(dead_code)]
     ttl: u32,
     resource_data: ResourceData,
 }
@@ -566,7 +567,7 @@ impl Name {
     }
 
     pub fn to_string_guard(cursor: &mut impl CursorExt, jumps: usize) -> Result<String, DnsError> {
-        if (jumps > 2) {
+        if jumps > 2 {
             return Err(DnsError::PointerLoop);
         }
         let mut name = String::with_capacity(255);
@@ -608,8 +609,7 @@ mod test_message {
             0x31,
         ];
         let bytes: &[u8] = &bytes;
-        let mut cursor = Cursor::new(bytes);
-        let responses = Message::dns_responses(&mut cursor)?;
+        let responses = Message::dns_responses(bytes)?;
         assert_eq!(
             *responses.get(0).unwrap(),
             DnsResponse {

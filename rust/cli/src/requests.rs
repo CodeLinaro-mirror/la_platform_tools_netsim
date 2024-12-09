@@ -52,7 +52,10 @@ mod tests {
     use super::*;
     use args::{BinaryProtobuf, NetsimArgs};
     use clap::Parser;
-    use netsim_proto::frontend::{CreateDeviceRequest, PatchDeviceRequest};
+    use netsim_proto::frontend::{
+        patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto, CreateDeviceRequest,
+        PatchDeviceRequest,
+    };
     use netsim_proto::model::chip::ble_beacon::AdvertiseData as AdvertiseDataProto;
     use netsim_proto::model::chip::{
         ble_beacon::{
@@ -76,7 +79,7 @@ mod tests {
         model::{
             self,
             chip::{Bluetooth as Chip_Bluetooth, Radio as Chip_Radio},
-            Device, Position,
+            Position,
         },
     };
     use protobuf::Message;
@@ -124,8 +127,8 @@ mod tests {
             chip.set_bt(bt_chip);
         }
         let mut result = frontend::PatchDeviceRequest::new();
-        let mut device = Device::new();
-        name.clone_into(&mut device.name);
+        let mut device = PatchDeviceFieldsProto::new();
+        device.name = Some(name.to_string());
         device.chips.push(chip);
         result.device = Some(device).into();
         result.write_to_bytes().unwrap()
@@ -213,9 +216,9 @@ mod tests {
 
     fn get_expected_move(name: &str, x: f32, y: f32, z: Option<f32>) -> BinaryProtobuf {
         let mut result = frontend::PatchDeviceRequest::new();
-        let mut device = Device::new();
+        let mut device = PatchDeviceFieldsProto::new();
         let position = Position { x, y, z: z.unwrap_or_default(), ..Default::default() };
-        name.clone_into(&mut device.name);
+        device.name = Some(name.to_string());
         device.position = Some(position).into();
         result.device = Some(device).into();
         result.write_to_bytes().unwrap()
@@ -312,8 +315,8 @@ mod tests {
         adv_data: AdvertiseDataProto,
         scan_response: AdvertiseDataProto,
     ) -> Vec<u8> {
-        let device = MessageField::some(Device {
-            name: String::from(device_name),
+        let device = MessageField::some(PatchDeviceFieldsProto {
+            name: Some(String::from(device_name)),
             chips: vec![ChipProto {
                 name: String::from(chip_name),
                 kind: ChipKind::BLUETOOTH_BEACON.into(),
@@ -587,8 +590,8 @@ mod tests {
         let device_name = String::from("device");
         let chip_name = String::from("chip");
 
-        let device = MessageField::some(Device {
-            name: device_name.clone(),
+        let device = MessageField::some(PatchDeviceFieldsProto {
+            name: Some(device_name.clone()),
             chips: vec![ChipProto {
                 name: chip_name.clone(),
                 kind: ChipKind::BLUETOOTH_BEACON.into(),
