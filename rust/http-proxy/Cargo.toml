@@ -29,3 +29,7 @@ httparse = "1.8.0"
 libslirp-rs = { path = "../libslirp-rs" }
 log = "0.4.17"
 tokio = { version = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync"] }
+etherparse = {version = "0.16" }
+
+[dev-dependencies]
+capture = { path = "../capture" }

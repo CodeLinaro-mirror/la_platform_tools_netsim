@@ -28,7 +28,6 @@ use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
 };
 use crate::ranging::*;
-use crate::transport::grpc::{register_grpc_transport, unregister_grpc_transport};
 use crate::version::*;
 use crate::wireless::{
     bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response_cxx,
@@ -49,22 +48,7 @@ pub mod ffi_wireless {
 #[allow(unsafe_op_in_unsafe_fn)]
 #[cxx::bridge(namespace = "netsim::transport")]
 pub mod ffi_transport {
-    extern "Rust" {
-        #[cxx_name = RegisterGrpcTransport]
-        fn register_grpc_transport(chip_id: u32);
-
-        #[cxx_name = UnregisterGrpcTransport]
-        fn unregister_grpc_transport(chip_id: u32);
-    }
-
     unsafe extern "C++" {
-        // Grpc server.
-        include!("backend/backend_packet_hub.h");
-
-        #[rust_name = handle_grpc_response]
-        #[namespace = "netsim::backend"]
-        fn HandleResponseCxx(chip_id: u32, packet: &Vec<u8>, packet_type: u8);
-
         // Grpc client.
         // Expose functions in Cuttlefish only, because it's only used by CVDs and it's
         // unable to pass function pointers on Windows.
@@ -332,14 +316,6 @@ pub mod ffi_util {
         #[rust_name = set_up_crash_report]
         #[namespace = "netsim"]
         pub fn SetUpCrashReport();
-
-        // Frontend client.
-        include!("frontend/frontend_client_stub.h");
-
-        #[rust_name = is_netsimd_alive]
-        #[namespace = "netsim::frontend"]
-        pub fn IsNetsimdAlive(instance_num: u16) -> bool;
-
     }
 }
 

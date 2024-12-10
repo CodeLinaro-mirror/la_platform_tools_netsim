@@ -14,6 +14,7 @@
 
 /// Hostapd Interface for Network Simulation
 use bytes::Bytes;
+use netsim_packets::ieee80211::{Ieee80211, MacAddress};
 use netsim_proto::config::HostapdOptions as ProtoHostapdOptions;
 use std::sync::mpsc;
 
@@ -22,6 +23,21 @@ pub struct Hostapd {}
 impl Hostapd {
     pub fn input(&self, _bytes: Bytes) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    /// Retrieves the `Hostapd`'s BSSID.
+    pub fn get_bssid(&self) -> MacAddress {
+        MacAddress::try_from(0).unwrap()
+    }
+
+    /// Attempt to encrypt the given IEEE 802.11 frame.
+    pub fn try_encrypt(&self, _ieee80211: &Ieee80211) -> Option<Ieee80211> {
+        None
+    }
+
+    /// Attempt to decrypt the given IEEE 802.11 frame.
+    pub fn try_decrypt(&self, _ieee80211: &Ieee80211) -> Option<Ieee80211> {
+        None
     }
 }
 

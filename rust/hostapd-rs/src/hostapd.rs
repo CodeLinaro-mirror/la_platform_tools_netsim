@@ -60,6 +60,7 @@
 use anyhow::bail;
 use bytes::Bytes;
 use log::{info, warn};
+use netsim_packets::ieee80211::{Ieee80211, MacAddress};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, CStr, CString};
 use std::fs::File;
@@ -104,6 +105,8 @@ pub struct Hostapd {
     ctrl_writer: Option<Mutex<OwnedWriteHalf>>,
     tx_bytes: mpsc::Sender<Bytes>,
     runtime: Arc<Runtime>,
+    // MAC address of the access point.
+    bssid: MacAddress,
 }
 
 impl Hostapd {
@@ -140,6 +143,10 @@ impl Hostapd {
         let mut config: HashMap<String, String> = HashMap::new();
         config.extend(config_data.iter().map(|(k, v)| (k.to_string(), v.to_string())));
 
+        // TODO(b/381154253): Allow configuring BSSID in hostapd.conf.
+        // Currently, the BSSID is hardcoded in external/wpa_supplicant_8/src/drivers/driver_virtio_wifi.c. This should be configured by hostapd.conf and allow to be set by `Hostapd`.
+        let bssid_bytes: [u8; 6] = [0x00, 0x13, 0x10, 0x85, 0xfe, 0x01];
+        let bssid = MacAddress::from(&bssid_bytes);
         Hostapd {
             handle: RwLock::new(None),
             verbose,
@@ -149,6 +156,7 @@ impl Hostapd {
             ctrl_writer: None,
             tx_bytes,
             runtime: Arc::new(Runtime::new().unwrap()),
+            bssid,
         }
     }
 
@@ -258,6 +266,23 @@ impl Hostapd {
     /// Retrieves the current SSID in the `Hostapd` configuration.
     pub fn get_ssid(&self) -> String {
         self.get_config_val("ssid")
+    }
+
+    /// Retrieves the `Hostapd`'s BSSID.
+    pub fn get_bssid(&self) -> MacAddress {
+        self.bssid
+    }
+
+    /// Attempt to encrypt the given IEEE 802.11 frame.
+    pub fn try_encrypt(&self, _ieee80211: &Ieee80211) -> Option<Ieee80211> {
+        // TODO
+        None
+    }
+
+    /// Attempt to decrypt the given IEEE 802.11 frame.
+    pub fn try_decrypt(&self, _ieee80211: &Ieee80211) -> Option<Ieee80211> {
+        // TODO
+        None
     }
 
     /// Inputs data packet bytes from netsim to `hostapd`.

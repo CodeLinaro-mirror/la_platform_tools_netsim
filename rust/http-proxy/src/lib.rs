@@ -51,12 +51,14 @@
 
 mod connector;
 mod dns;
+mod dns_manager;
 mod error;
 mod manager;
+mod pattern_vec;
 mod rewriter;
 mod util;
 
 pub use connector::*;
-pub use dns::*;
+pub use dns_manager::*;
 pub use error::Error;
 pub use manager::*;

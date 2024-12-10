@@ -14,44 +14,46 @@
 
 use capture::pcap;
 use std::io::Cursor;
-use tokio::io::{AsyncSeekExt, BufReader};
+use std::net::{IpAddr, Ipv6Addr};
+use std::str::FromStr;
+use tokio::io::BufReader;
 
-fn timestamp(hdr: pcap::PacketHeader) -> f64 {
-    hdr.tv_sec as f64 + (hdr.tv_usec as f64 / 1_000_000.0)
+fn ipv6_from_str(addr: &str) -> Result<IpAddr, std::io::Error> {
+    match Ipv6Addr::from_str(addr) {
+        Ok(addr) => Ok(addr.into()),
+        Err(err) => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, err.to_string())),
+    }
 }
 
-// Read a file with a known number of records.
-//
-// Test magic numbers, record len, and timestamp fields
 #[tokio::test]
-async fn read_file() -> Result<(), std::io::Error> {
-    const DATA: &[u8] = include_bytes!("../data/dns.cap");
-    const RECORDS: i32 = 38;
+async fn dns_manager() -> Result<(), std::io::Error> {
+    const DATA: &[u8] = include_bytes!("../../capture/data/dns.cap");
+
     let mut reader = BufReader::new(Cursor::new(DATA));
     let header = pcap::read_file_header(&mut reader).await?;
     assert_eq!(header.linktype, pcap::LinkType::Ethernet.into());
-    assert_eq!(header.snaplen, u16::MAX as u32);
-    let mut records = 0;
+    let mut dns_manager = http_proxy::DnsManager::new();
     loop {
         match pcap::read_record(&mut reader).await {
-            Ok((hdr, _record)) => {
-                records += 1;
-                if records == 1 {
-                    assert_eq!(1112172466.496046000f64, timestamp(hdr));
-                } else if records == 38 {
-                    assert_eq!(1112172745.375359000f64, timestamp(hdr));
-                }
+            Ok((_hdr, record)) => {
+                dns_manager.add_from_ethernet_slice(&record);
             }
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                assert_eq!(records, RECORDS);
-                assert_eq!(DATA.len() as u64, reader.stream_position().await?);
                 break;
             }
-            _ => {
-                assert!(false, "Unexpected error");
+            Err(e) => {
+                println!("Error: {:?}", e);
+                assert!(false);
             }
         }
     }
+    assert_eq!(dns_manager.len(), 4);
+
+    //  0xf0d4 AAAA www.netbsd.org AAAA
+    assert_eq!(
+        dns_manager.get(&ipv6_from_str("2001:4f8:4:7:2e0:81ff:fe52:9a6b")?),
+        Some("www.netbsd.org".into())
+    );
 
     Ok(())
 }
