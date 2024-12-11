@@ -28,10 +28,15 @@ pub fn slirp_run(
 ) -> anyhow::Result<LibSlirp> {
     // TODO: Convert ProtoSlirpOptions to SlirpConfig.
     let http_proxy = Some(opt.http_proxy).filter(|s| !s.is_empty());
-    let proxy_manager = if let Some(proxy) = http_proxy {
-        Some(Box::new(Manager::new(&proxy)?) as Box<dyn ProxyManager + 'static>)
+    let (proxy_manager, tx_proxy_bytes) = if let Some(proxy) = http_proxy {
+        let (tx_proxy_bytes, rx_proxy_response) = mpsc::channel::<Bytes>();
+        (
+            Some(Box::new(Manager::new(&proxy, rx_proxy_response)?)
+                as Box<dyn ProxyManager + 'static>),
+            Some(tx_proxy_bytes),
+        )
     } else {
-        None
+        (None, None)
     };
 
     let mut config = SlirpConfig { http_proxy_on: proxy_manager.is_some(), ..Default::default() };
@@ -41,5 +46,5 @@ pub fn slirp_run(
         config.host_dns = rt.block_on(lookup_host_dns(&opt.host_dns))?;
     }
 
-    Ok(LibSlirp::new(config, tx_bytes, proxy_manager))
+    Ok(LibSlirp::new(config, tx_bytes, proxy_manager, tx_proxy_bytes))
 }
