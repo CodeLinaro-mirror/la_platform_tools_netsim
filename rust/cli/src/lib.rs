@@ -17,36 +17,37 @@
 mod args;
 mod browser;
 mod display;
-mod ffi;
 mod file_handler;
+mod grpc_client;
 mod requests;
 mod response;
 
 use netsim_common::util::os_utils::{get_instance, get_server_address};
 use netsim_proto::frontend::{DeleteChipRequest, ListDeviceResponse};
+
+use anyhow::anyhow;
+use grpcio::{ChannelBuilder, EnvBuilder};
 use protobuf::Message;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
 use tracing::error;
 
-use crate::ffi::frontend_client_ffi::{
-    new_frontend_client, ClientResult, FrontendClient, GrpcMethod,
-};
-use crate::ffi::ClientResponseReader;
+use crate::grpc_client::{ClientResponseReader, GrpcMethod};
+use netsim_proto::frontend_grpc::FrontendServiceClient;
+
 use args::{BinaryProtobuf, GetCapture, NetsimArgs};
 use clap::Parser;
-use cxx::{let_cxx_string, UniquePtr};
 use file_handler::FileHandler;
 use netsim_common::util::netsim_logger;
 
 // helper function to process streaming Grpc request
 fn perform_streaming_request(
-    client: &cxx::UniquePtr<FrontendClient>,
+    client: &FrontendServiceClient,
     cmd: &mut GetCapture,
     req: &BinaryProtobuf,
     filename: &str,
-) -> UniquePtr<ClientResult> {
+) -> anyhow::Result<BinaryProtobuf> {
     let dir = if cmd.location.is_some() {
         PathBuf::from(cmd.location.to_owned().unwrap())
     } else {
@@ -54,9 +55,10 @@ fn perform_streaming_request(
     };
     let output_file = dir.join(filename);
     cmd.current_file = output_file.display().to_string();
-    client.get_capture(
+    grpc_client::get_capture(
+        client,
         req,
-        &ClientResponseReader {
+        &mut ClientResponseReader {
             handler: Box::new(FileHandler {
                 file: File::create(&output_file).unwrap_or_else(|_| {
                     panic!("Failed to create file: {}", &output_file.display())
@@ -70,10 +72,10 @@ fn perform_streaming_request(
 /// helper function to send the Grpc request(s) and handle the response(s) per the given command
 fn perform_command(
     command: &mut args::Command,
-    client: cxx::UniquePtr<FrontendClient>,
-    grpc_method: GrpcMethod,
+    client: FrontendServiceClient,
+    grpc_method: &GrpcMethod,
     verbose: bool,
-) -> Result<(), String> {
+) -> anyhow::Result<()> {
     // Get command's gRPC request(s)
     let requests = match command {
         args::Command::Capture(args::Capture::Patch(_) | args::Capture::Get(_)) => {
@@ -90,26 +92,26 @@ fn perform_command(
         let result = match command {
             // Continuous option sends the gRPC call every second
             args::Command::Devices(ref cmd) if cmd.continuous => {
-                continuous_perform_command(command, &client, grpc_method, req, verbose)?
+                continuous_perform_command(command, &client, grpc_method, req, verbose)
             }
             args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
-                continuous_perform_command(command, &client, grpc_method, req, verbose)?
+                continuous_perform_command(command, &client, grpc_method, req, verbose)
             }
             // Get Capture use streaming gRPC reader request
             args::Command::Capture(args::Capture::Get(ref mut cmd)) => {
                 perform_streaming_request(&client, cmd, req, &cmd.filenames[i].to_owned())
             }
             args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
-                let devices = client.send_grpc(&GrpcMethod::ListDevice, req);
-                let id = find_id_for_remove(devices.byte_vec().as_slice(), cmd)?;
+                let devices = grpc_client::send_grpc(&client, &GrpcMethod::ListDevice, req)?;
+                let id = find_id_for_remove(devices.as_slice(), cmd)?;
                 let req = &DeleteChipRequest { id, ..Default::default() }
                     .write_to_bytes()
-                    .map_err(|err| format!("{err}"))?;
+                    .map_err(|err| anyhow!("{err}"))?;
 
-                client.send_grpc(&grpc_method, req)
+                grpc_client::send_grpc(&client, grpc_method, req)
             }
             // All other commands use a single gRPC call
-            _ => client.send_grpc(&grpc_method, req),
+            _ => grpc_client::send_grpc(&client, grpc_method, req),
         };
         if let Err(e) = process_result(command, result, verbose) {
             error!("{}", e);
@@ -117,12 +119,12 @@ fn perform_command(
         };
     }
     if process_error {
-        return Err("Not all requests were processed successfully.".to_string());
+        return Err(anyhow!("Not all requests were processed successfully."));
     }
     Ok(())
 }
 
-fn find_id_for_remove(response: &[u8], cmd: &args::BeaconRemove) -> Result<u32, String> {
+fn find_id_for_remove(response: &[u8], cmd: &args::BeaconRemove) -> anyhow::Result<u32> {
     let devices = ListDeviceResponse::parse_from_bytes(response).unwrap().devices;
     let id = devices
         .iter()
@@ -131,9 +133,18 @@ fn find_id_for_remove(response: &[u8], cmd: &args::BeaconRemove) -> Result<u32, 
             (device.chips.len() == 1).then_some(&device.chips[0]),
             |chip_name| device.chips.iter().find(|chip| &chip.name == chip_name)
         ))
-        .ok_or(cmd.chip_name.as_ref().map_or(
-            format!("failed to delete chip: device '{}' has multiple possible candidates, please specify a chip name", cmd.device_name),
-            |chip_name| format!("failed to delete chip: could not find chip '{}' on device '{}'", chip_name, cmd.device_name))
+        .ok_or(
+            cmd.chip_name
+                .as_ref()
+                .map_or(
+                    anyhow!("failed to delete chip: device '{}' has multiple possible candidates, please specify a chip name", cmd.device_name),
+                    |chip_name| {
+                        anyhow!(
+                            "failed to delete chip: could not find chip '{}' on device '{}'",
+                            chip_name, cmd.device_name
+                        )
+                    },
+                )
         )?
         .id;
 
@@ -143,28 +154,29 @@ fn find_id_for_remove(response: &[u8], cmd: &args::BeaconRemove) -> Result<u32, 
 /// Check and handle the gRPC call result
 fn continuous_perform_command(
     command: &args::Command,
-    client: &cxx::UniquePtr<FrontendClient>,
-    grpc_method: GrpcMethod,
-    request: &Vec<u8>,
+    client: &FrontendServiceClient,
+    grpc_method: &GrpcMethod,
+    request: &[u8],
     verbose: bool,
-) -> Result<UniquePtr<ClientResult>, String> {
+) -> anyhow::Result<BinaryProtobuf> {
     loop {
-        process_result(command, client.send_grpc(&grpc_method, request), verbose)?;
+        process_result(command, grpc_client::send_grpc(client, grpc_method, request), verbose)?;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
 /// Check and handle the gRPC call result
 fn process_result(
     command: &args::Command,
-    result: UniquePtr<ClientResult>,
+    result: anyhow::Result<BinaryProtobuf>,
     verbose: bool,
-) -> Result<(), String> {
-    if result.is_ok() {
-        command.print_response(result.byte_vec().as_slice(), verbose);
-    } else {
-        return Err(format!("Grpc call error: {}", result.err()));
+) -> anyhow::Result<()> {
+    match result {
+        Ok(binary_protobuf) => {
+            command.print_response(binary_protobuf.as_slice(), verbose);
+            Ok(())
+        }
+        Err(e) => Err(anyhow!("Grpc call error: {}", e)),
     }
-    Ok(())
 }
 #[no_mangle]
 /// main Rust netsim CLI function to be called by C wrapper netsim.cc
@@ -191,17 +203,10 @@ pub extern "C" fn rust_main() {
         (_, Some(port)) => format!("localhost:{port}"),
         _ => get_server_address(get_instance(args.instance)).unwrap_or_default(),
     };
-    let_cxx_string!(server = server);
-    let client = new_frontend_client(&server);
-    if client.is_null() {
-        if !server.is_empty() {
-            error!("Unable to create frontend client. Please ensure netsimd is running and listening on {server:?}.");
-        } else {
-            error!("Unable to create frontend client. Please ensure netsimd is running.");
-        }
-        return;
-    }
-    if let Err(e) = perform_command(&mut args.command, client, grpc_method, args.verbose) {
+    let channel =
+        ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build())).connect(&server);
+    let client = FrontendServiceClient::new(channel);
+    if let Err(e) = perform_command(&mut args.command, client, &grpc_method, args.verbose) {
         error!("{e}");
     }
 }

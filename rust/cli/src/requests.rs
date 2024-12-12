@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::args::{self, Beacon, Command};
-use crate::ffi::frontend_client_ffi::GrpcMethod;
+use crate::grpc_client::GrpcMethod;
 
 impl args::Command {
     /// Return the respective GrpcMethod for the command
@@ -280,7 +280,7 @@ mod tests {
         test_command("netsim-cli pcap list", GrpcMethod::ListCapture, Vec::new())
     }
 
-    //TODO: Add capture patch and get tests once able to run tests with cxx definitions
+    //TODO: Add capture patch and get tests
 
     fn get_create_device_req_bytes(
         device_name: &str,

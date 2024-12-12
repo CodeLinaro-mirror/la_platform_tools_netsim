@@ -2,7 +2,6 @@
 name = "netsim-cli"
 version = "0.3.37"
 edition = "2021"
-build = "build.rs"
 
 [lib]
 crate-type = ["staticlib", "lib"]
@@ -10,7 +9,7 @@ doctest = false
 test = false
 
 [dependencies]
-hex = "0.4.3"
+anyhow = "1"
 clap = { version = "4.1.8", default-features = false, features = [
     "derive",
     "error-context",
@@ -18,13 +17,12 @@ clap = { version = "4.1.8", default-features = false, features = [
     "std",
     "usage",
 ] }
+futures = "0.3.30"
+futures-util = { version = "0.3.30", default-features = false, features = ["sink"] }
+grpcio =  {version= "0.13.0", default-features = false, features = ["protobufv3-codec"]}
+hex = "0.4.3"
+log = "0.4.17"
 netsim-proto = { path = "../proto" }
 netsim-common = { path = "../common" }
 protobuf = "3.2.0"
-cxx = { version = ">=1.0.85", features = ["c++17"] }
-log = "0.4.17"
 tracing = "0.1"
-grpcio =  {version= "0.13.0", default-features = false, features = ["protobufv3-codec"]}
-
-[build-dependencies]
-cxx-build = "1.0.92"
