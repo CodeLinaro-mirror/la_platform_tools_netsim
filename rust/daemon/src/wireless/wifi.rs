@@ -27,7 +27,7 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 use protobuf::MessageField;
 use std::sync::atomic::Ordering;
-use std::sync::{mpsc, OnceLock};
+use std::sync::{mpsc, Arc, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -45,7 +45,7 @@ pub struct WifiManager {
     medium: Medium,
     tx_request: mpsc::Sender<(u32, Bytes)>,
     slirp: libslirp::LibSlirp,
-    hostapd: hostapd::Hostapd,
+    hostapd: Arc<hostapd::Hostapd>,
 }
 
 impl WifiManager {
@@ -54,7 +54,13 @@ impl WifiManager {
         slirp: libslirp::LibSlirp,
         hostapd: hostapd::Hostapd,
     ) -> WifiManager {
-        WifiManager { medium: Medium::new(medium_callback), tx_request, slirp, hostapd }
+        let hostapd = Arc::new(hostapd);
+        WifiManager {
+            medium: Medium::new(medium_callback, hostapd.clone()),
+            tx_request,
+            slirp,
+            hostapd,
+        }
     }
 
     /// Starts background threads:
@@ -97,13 +103,13 @@ impl WifiManager {
                         {
                             get_wifi_manager().medium.ack_frame(chip_id, &processor.frame);
                             if processor.hostapd {
-                                let ieee80211: Bytes = processor.frame.data.clone().into();
+                                let ieee80211: Bytes = processor.get_ieee80211_bytes();
                                 if let Err(err) = get_wifi_manager().hostapd.input(ieee80211) {
                                     warn!("Failed to call hostapd input: {:?}", err);
                                 };
                             }
                             if processor.network {
-                                match processor.frame.ieee80211.to_ieee8023() {
+                                match processor.get_ieee80211().to_ieee8023() {
                                     Ok(ethernet_frame) => {
                                         get_wifi_manager().slirp.input(ethernet_frame.into())
                                     }
@@ -113,7 +119,9 @@ impl WifiManager {
                                 }
                             }
                             if processor.wmedium {
-                                get_wifi_manager().medium.queue_frame(processor.frame);
+                                // Decrypt the frame using the sender's key and re-encrypt it using the receiver's key for peer-to-peer communication through hostapd (broadcast or unicast).
+                                let ieee80211 = processor.get_ieee80211().clone();
+                                get_wifi_manager().medium.queue_frame(processor.frame, ieee80211);
                             }
                         }
                     }

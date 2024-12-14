@@ -1,13 +1,12 @@
 [package]
 name = "netsim-daemon"
-version = "0.3.36"
+version = "0.3.37"
 edition = "2021"
 build = "build.rs"
 
 [lib]
 crate-type = ["staticlib", "lib"]
 doctest = false
-test = false
 
 [dependencies]
 bytes = { version = ">=1.4.0"}
