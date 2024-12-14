@@ -34,3 +34,7 @@ etherparse = {version = "0.16" }
 
 [dev-dependencies]
 capture = { path = "../capture" }
+
+[[bench]]
+name = "dns_benchmark"
+harness = false

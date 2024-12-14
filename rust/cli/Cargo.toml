@@ -6,7 +6,6 @@ edition = "2021"
 [lib]
 crate-type = ["staticlib", "lib"]
 doctest = false
-test = false
 
 [dependencies]
 anyhow = "1"

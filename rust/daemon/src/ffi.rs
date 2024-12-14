@@ -14,18 +14,12 @@
 
 //! Netsim daemon cxx libraries.
 
-use std::pin::Pin;
-
 use crate::bluetooth::chip::{
     create_add_rust_device_result, AddRustDeviceResult, RustBluetoothChipCallbacks,
 };
-use crate::http_server::server_response::ServerResponseWritable;
-use crate::http_server::server_response::StrHeaders;
-use cxx::let_cxx_string;
 
-use crate::captures::captures_handler::handle_capture_cxx;
 use crate::devices::devices_handler::{
-    add_chip_cxx, get_distance_cxx, handle_device_cxx, remove_chip_cxx, AddChipResultCxx,
+    add_chip_cxx, get_distance_cxx, remove_chip_cxx, AddChipResultCxx,
 };
 use crate::ranging::*;
 use crate::version::*;
@@ -250,50 +244,6 @@ pub mod ffi_devices {
 
 #[allow(unsafe_op_in_unsafe_fn)]
 #[cxx::bridge(namespace = "netsim")]
-pub mod ffi_response_writable {
-    extern "Rust" {
-        // handlers for gRPC server's invocation of API calls
-
-        #[cxx_name = "HandleCaptureCxx"]
-        fn handle_capture_cxx(
-            responder: Pin<&mut CxxServerResponseWriter>,
-            method: String,
-            param: String,
-            body: String,
-        );
-
-        #[cxx_name = "HandleDeviceCxx"]
-        fn handle_device_cxx(
-            responder: Pin<&mut CxxServerResponseWriter>,
-            method: String,
-            param: String,
-            body: String,
-        );
-    }
-    unsafe extern "C++" {
-        /// A C++ class which can be used to respond to a request.
-        include!("frontend/server_response_writable.h");
-
-        #[namespace = "netsim::frontend"]
-        type CxxServerResponseWriter;
-
-        #[namespace = "netsim::frontend"]
-        fn put_ok_with_length(self: &CxxServerResponseWriter, mime_type: &CxxString, length: usize);
-
-        #[namespace = "netsim::frontend"]
-        fn put_chunk(self: &CxxServerResponseWriter, chunk: &[u8]);
-
-        #[namespace = "netsim::frontend"]
-        fn put_ok(self: &CxxServerResponseWriter, mime_type: &CxxString, body: &CxxString);
-
-        #[namespace = "netsim::frontend"]
-        fn put_error(self: &CxxServerResponseWriter, error_code: u32, error_message: &CxxString);
-
-    }
-}
-
-#[allow(unsafe_op_in_unsafe_fn)]
-#[cxx::bridge(namespace = "netsim")]
 pub mod ffi_util {
     extern "Rust" {
         // Ranging
@@ -343,36 +293,4 @@ fn receive_link_layer_packet(
         packet_type,
         packet,
     );
-}
-
-/// CxxServerResponseWriter is defined in server_response_writable.h
-/// Wrapper struct allows the impl to discover the respective C++ methods
-pub struct CxxServerResponseWriterWrapper<'a> {
-    pub writer: Pin<&'a mut ffi_response_writable::CxxServerResponseWriter>,
-}
-
-impl ServerResponseWritable for CxxServerResponseWriterWrapper<'_> {
-    fn put_ok_with_length(&mut self, mime_type: &str, length: usize, _headers: StrHeaders) {
-        let_cxx_string!(mime_type = mime_type);
-        self.writer.put_ok_with_length(&mime_type, length);
-    }
-    fn put_chunk(&mut self, chunk: &[u8]) {
-        self.writer.put_chunk(chunk);
-    }
-    fn put_ok(&mut self, mime_type: &str, body: &str, _headers: StrHeaders) {
-        let_cxx_string!(mime_type = mime_type);
-        let_cxx_string!(body = body);
-        self.writer.put_ok(&mime_type, &body);
-    }
-    fn put_error(&mut self, error_code: u16, error_message: &str) {
-        let_cxx_string!(error_message = error_message);
-        self.writer.put_error(error_code.into(), &error_message);
-    }
-
-    fn put_ok_with_vec(&mut self, _mime_type: &str, _body: Vec<u8>, _headers: StrHeaders) {
-        todo!()
-    }
-    fn put_ok_switch_protocol(&mut self, _connection: &str, _headers: StrHeaders) {
-        todo!()
-    }
 }

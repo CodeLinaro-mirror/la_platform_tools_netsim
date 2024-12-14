@@ -23,20 +23,19 @@ mod requests;
 mod response;
 
 use netsim_common::util::os_utils::{get_instance, get_server_address};
-use netsim_proto::frontend::{DeleteChipRequest, ListDeviceResponse};
+use netsim_proto::frontend;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use grpcio::{ChannelBuilder, EnvBuilder};
-use protobuf::Message;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
 use tracing::error;
 
-use crate::grpc_client::{ClientResponseReader, GrpcMethod};
+use crate::grpc_client::{ClientResponseReader, GrpcRequest, GrpcResponse};
 use netsim_proto::frontend_grpc::FrontendServiceClient;
 
-use args::{BinaryProtobuf, GetCapture, NetsimArgs};
+use args::{GetCapture, NetsimArgs};
 use clap::Parser;
 use file_handler::FileHandler;
 use netsim_common::util::netsim_logger;
@@ -45,9 +44,9 @@ use netsim_common::util::netsim_logger;
 fn perform_streaming_request(
     client: &FrontendServiceClient,
     cmd: &mut GetCapture,
-    req: &BinaryProtobuf,
+    req: &frontend::GetCaptureRequest,
     filename: &str,
-) -> anyhow::Result<BinaryProtobuf> {
+) -> Result<()> {
     let dir = if cmd.location.is_some() {
         PathBuf::from(cmd.location.to_owned().unwrap())
     } else {
@@ -73,7 +72,6 @@ fn perform_streaming_request(
 fn perform_command(
     command: &mut args::Command,
     client: FrontendServiceClient,
-    grpc_method: &GrpcMethod,
     verbose: bool,
 ) -> anyhow::Result<()> {
     // Get command's gRPC request(s)
@@ -82,9 +80,9 @@ fn perform_command(
             command.get_requests(&client)
         }
         args::Command::Beacon(args::Beacon::Remove(_)) => {
-            vec![args::Command::Devices(args::Devices { continuous: false }).get_request_bytes()]
+            vec![args::Command::Devices(args::Devices { continuous: false }).get_request()]
         }
-        _ => vec![command.get_request_bytes()],
+        _ => vec![command.get_request()],
     };
     let mut process_error = false;
     // Process each request
@@ -92,26 +90,41 @@ fn perform_command(
         let result = match command {
             // Continuous option sends the gRPC call every second
             args::Command::Devices(ref cmd) if cmd.continuous => {
-                continuous_perform_command(command, &client, grpc_method, req, verbose)
+                continuous_perform_command(command, &client, req, verbose)?;
+                panic!("Continuous command interrupted. Exiting.");
             }
             args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
-                continuous_perform_command(command, &client, grpc_method, req, verbose)
+                continuous_perform_command(command, &client, req, verbose)?;
+                panic!("Continuous command interrupted. Exiting.");
             }
             // Get Capture use streaming gRPC reader request
             args::Command::Capture(args::Capture::Get(ref mut cmd)) => {
-                perform_streaming_request(&client, cmd, req, &cmd.filenames[i].to_owned())
+                let GrpcRequest::GetCapture(request) = req else {
+                    panic!("Expected to find GetCaptureRequest. Got: {:?}", req);
+                };
+                perform_streaming_request(&client, cmd, request, &cmd.filenames[i].to_owned())?;
+                Ok(None)
             }
             args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
-                let devices = grpc_client::send_grpc(&client, &GrpcMethod::ListDevice, req)?;
-                let id = find_id_for_remove(devices.as_slice(), cmd)?;
-                let req = &DeleteChipRequest { id, ..Default::default() }
-                    .write_to_bytes()
-                    .map_err(|err| anyhow!("{err}"))?;
-
-                grpc_client::send_grpc(&client, grpc_method, req)
+                let response = grpc_client::send_grpc(&client, &GrpcRequest::ListDevice)?;
+                let GrpcResponse::ListDevice(response) = response else {
+                    panic!("Expected to find ListDeviceResponse. Got: {:?}", response);
+                };
+                let id = find_id_for_remove(response, cmd)?;
+                let res = grpc_client::send_grpc(
+                    &client,
+                    &GrpcRequest::DeleteChip(frontend::DeleteChipRequest {
+                        id,
+                        ..Default::default()
+                    }),
+                )?;
+                Ok(Some(res))
             }
             // All other commands use a single gRPC call
-            _ => grpc_client::send_grpc(&client, grpc_method, req),
+            _ => {
+                let response = grpc_client::send_grpc(&client, req)?;
+                Ok(Some(response))
+            }
         };
         if let Err(e) = process_result(command, result, verbose) {
             error!("{}", e);
@@ -124,8 +137,11 @@ fn perform_command(
     Ok(())
 }
 
-fn find_id_for_remove(response: &[u8], cmd: &args::BeaconRemove) -> anyhow::Result<u32> {
-    let devices = ListDeviceResponse::parse_from_bytes(response).unwrap().devices;
+fn find_id_for_remove(
+    response: frontend::ListDeviceResponse,
+    cmd: &args::BeaconRemove,
+) -> anyhow::Result<u32> {
+    let devices = response.devices;
     let id = devices
         .iter()
         .find(|device| device.name == cmd.device_name)
@@ -155,24 +171,25 @@ fn find_id_for_remove(response: &[u8], cmd: &args::BeaconRemove) -> anyhow::Resu
 fn continuous_perform_command(
     command: &args::Command,
     client: &FrontendServiceClient,
-    grpc_method: &GrpcMethod,
-    request: &[u8],
+    grpc_request: &GrpcRequest,
     verbose: bool,
-) -> anyhow::Result<BinaryProtobuf> {
+) -> anyhow::Result<()> {
     loop {
-        process_result(command, grpc_client::send_grpc(client, grpc_method, request), verbose)?;
+        let response = grpc_client::send_grpc(client, grpc_request)?;
+        process_result(command, Ok(Some(response)), verbose)?;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
 /// Check and handle the gRPC call result
 fn process_result(
     command: &args::Command,
-    result: anyhow::Result<BinaryProtobuf>,
+    result: anyhow::Result<Option<GrpcResponse>>,
     verbose: bool,
 ) -> anyhow::Result<()> {
     match result {
-        Ok(binary_protobuf) => {
-            command.print_response(binary_protobuf.as_slice(), verbose);
+        Ok(grpc_response) => {
+            let response = grpc_response.unwrap_or(GrpcResponse::Unknown);
+            command.print_response(&response, verbose);
             Ok(())
         }
         Err(e) => Err(anyhow!("Grpc call error: {}", e)),
@@ -197,7 +214,6 @@ pub extern "C" fn rust_main() {
         browser::open("https://google.github.io/bumble/hive/index.html");
         return;
     }
-    let grpc_method = args.command.grpc_method();
     let server = match (args.vsock, args.port) {
         (Some(vsock), _) => format!("vsock:{vsock}"),
         (_, Some(port)) => format!("localhost:{port}"),
@@ -206,7 +222,7 @@ pub extern "C" fn rust_main() {
     let channel =
         ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build())).connect(&server);
     let client = FrontendServiceClient::new(channel);
-    if let Err(e) = perform_command(&mut args.command, client, &grpc_method, args.verbose) {
+    if let Err(e) = perform_command(&mut args.command, client, args.verbose) {
         error!("{e}");
     }
 }
@@ -218,7 +234,6 @@ mod tests {
         frontend::ListDeviceResponse,
         model::{Chip as ChipProto, Device as DeviceProto},
     };
-    use protobuf::Message;
 
     use crate::find_id_for_remove;
 
@@ -239,7 +254,7 @@ mod tests {
             ..Default::default()
         };
 
-        let id = find_id_for_remove(response.write_to_bytes().unwrap().as_slice(), cmd);
+        let id = find_id_for_remove(response, cmd);
         assert!(id.is_ok(), "{}", id.unwrap_err());
         let id = id.unwrap();
 
@@ -273,7 +288,7 @@ mod tests {
             ..Default::default()
         };
 
-        let id = find_id_for_remove(response.write_to_bytes().unwrap().as_slice(), cmd);
+        let id = find_id_for_remove(response, cmd);
         assert!(id.is_ok(), "{}", id.unwrap_err());
         let id = id.unwrap();
 
@@ -300,7 +315,7 @@ mod tests {
             ..Default::default()
         };
 
-        let id = find_id_for_remove(response.write_to_bytes().unwrap().as_slice(), cmd);
+        let id = find_id_for_remove(response, cmd);
         assert!(id.is_err());
     }
 
@@ -328,7 +343,7 @@ mod tests {
             ..Default::default()
         };
 
-        let id = find_id_for_remove(response.write_to_bytes().unwrap().as_slice(), cmd);
+        let id = find_id_for_remove(response, cmd);
         assert!(id.is_err());
     }
 }
