@@ -1,4 +1,4 @@
-# Copyright 2022 The Android Open Source Project
+# Copyright 2024 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-[workspace]
-members = [
-    "proto",
-    "cli",
-    "common",
-    "daemon",
-    "http-proxy",
-    "libslirp-rs",
-    "hostapd-rs",
-    "packets",
-    "capture",
-]
-resolver = "2"
+[package]
+name = "capture"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib","lib"]
+doctest = false
+
+[dependencies]
+zerocopy = "0.7.35"
+zerocopy-derive = "0.7.35"
+tokio = { version = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync"] }

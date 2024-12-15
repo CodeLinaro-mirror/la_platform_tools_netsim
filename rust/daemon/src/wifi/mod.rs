@@ -16,6 +16,7 @@
 // [cfg(not(test))] avoids getting compiled during local Rust unit tests
 
 pub(crate) mod frame;
+#[cfg_attr(feature = "cuttlefish", path = "hostapd_cf.rs")]
 pub(crate) mod hostapd;
 pub(crate) mod hwsim_attr_set;
 #[cfg_attr(feature = "cuttlefish", path = "libslirp_cf.rs")]

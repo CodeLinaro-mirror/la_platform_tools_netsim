@@ -10,6 +10,7 @@ corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
 corrosion_set_env_vars(netsim-common CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(http-proxy CARGO_HOME=${Rust_CARGO_HOME})
 corrosion_set_env_vars(libslirp-rs CARGO_HOME=${Rust_CARGO_HOME})
+corrosion_set_env_vars(capture CARGO_HOME=${Rust_CARGO_HOME})
 
 function(set_prebuilt_packets_env_vars target)
   corrosion_set_env_vars(

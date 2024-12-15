@@ -708,14 +708,44 @@ fn slirp_poll_thread(rx: mpsc::Receiver<PollRequest>, tx: mpsc::Sender<SlirpCmd>
             });
         }
 
-        // SAFETY: we ensure that:
-        //
-        // `os_poll_fds` is a valid ptr to a vector of pollfd which
-        // the `poll` system call can write into. Note `os_poll_fds`
-        // is created and allocated above.
-        let poll_result = unsafe {
-            poll(os_poll_fds.as_mut_ptr(), os_poll_fds.len() as OsPollFdsLenType, timeout as i32)
-        };
+        let mut poll_result = 0;
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            // SAFETY: we ensure that:
+            //
+            // `os_poll_fds` is a valid ptr to a vector of pollfd which
+            // the `poll` system call can write into. Note `os_poll_fds`
+            // is created and allocated above.
+            poll_result = unsafe {
+                poll(
+                    os_poll_fds.as_mut_ptr(),
+                    os_poll_fds.len() as OsPollFdsLenType,
+                    timeout as i32,
+                )
+            };
+        }
+        // WSAPoll requires an array of one or more POLLFD structures.
+        // When nfds == 0, WSAPoll returns immediately with result -1, ignoring the timeout.
+        // This is different from poll on Linux/macOS, which will wait for the timeout.
+        // Therefore, on Windows, we don't call WSAPoll when nfds == 0, and instead explicitly sleep for the timeout.
+        #[cfg(target_os = "windows")]
+        if os_poll_fds.is_empty() {
+            // If there are no FDs to poll, sleep for the specified timeout.
+            thread::sleep(Duration::from_millis(timeout as u64));
+        } else {
+            // SAFETY: we ensure that:
+            //
+            // `os_poll_fds` is a valid ptr to a vector of pollfd which
+            // the `poll` system call can write into. Note `os_poll_fds`
+            // is created and allocated above.
+            poll_result = unsafe {
+                poll(
+                    os_poll_fds.as_mut_ptr(),
+                    os_poll_fds.len() as OsPollFdsLenType,
+                    timeout as i32,
+                )
+            };
+        }
 
         let mut slirp_poll_fds: Vec<PollFd> = Vec::with_capacity(poll_fds.len());
         #[cfg(any(target_os = "linux", target_os = "macos"))]
