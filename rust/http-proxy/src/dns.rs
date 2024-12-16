@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This module parses DNS response records and extracts fully
-// qualified domain names (FQDNs) along with their corresponding
-// Socket Addresses (SockAddr).
-//
-// **Note:** This is not a general-purpose DNS response parser. It is
-// designed to handle specific record types and response formats.
-
+/// This module parses DNS response records and extracts fully
+/// qualified domain names (FQDNs) along with their corresponding
+/// IP Addresses (IpAddr).
+///
+/// **Note:** This is not a general-purpose DNS response parser. It is
+/// designed to handle specific record types and response formats.
 use std::convert::TryFrom;
 use std::fmt;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str;
+#[allow(unused_imports)]
 use std::str::FromStr;
 
 // REGION CURSOR
@@ -102,6 +102,7 @@ impl CursorExt for Cursor<&[u8]> {
 ///  +---------------------+
 /// '''
 
+#[derive(Debug)]
 struct Message {
     #[allow(dead_code)]
     header: Header,
@@ -113,14 +114,8 @@ struct Message {
     // Additional
 }
 
-#[derive(Debug, PartialEq)]
-struct DnsResponse {
-    name: String,
-    addr: IpAddr,
-}
-
 impl Message {
-    fn parse(cursor: &mut impl CursorExt) -> Result<Message, DnsError> {
+    fn parse(cursor: &mut impl CursorExt) -> Result<Message> {
         let header = Header::parse(cursor)?;
 
         // Reject DNS messages that are not responses
@@ -150,16 +145,16 @@ impl Message {
         }
         Ok(Message { header, questions, answers })
     }
+}
 
-    pub fn dns_responses(bytes: &[u8]) -> Result<Vec<DnsResponse>, DnsError> {
-        let mut cursor = Cursor::new(bytes);
-        let msg = Self::parse(&mut cursor)?;
-        let mut responses = Vec::with_capacity(msg.answers.len());
-        for answer in msg.answers {
-            responses.push(DnsResponse { name: answer.name, addr: answer.resource_data.into() })
-        }
-        Ok(responses)
+pub fn parse_answers(bytes: &[u8]) -> Result<Vec<(IpAddr, String)>> {
+    let mut cursor = Cursor::new(bytes);
+    let msg = Message::parse(&mut cursor)?;
+    let mut responses = Vec::with_capacity(msg.answers.len());
+    for answer in msg.answers {
+        responses.push((answer.resource_data.into(), answer.name));
     }
+    Ok(responses)
 }
 
 // END REGION MESSAGE
@@ -207,7 +202,7 @@ struct Header {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Opcode {
+enum Opcode {
     /// Normal query
     StandardQuery = 0,
     /// Inverse query (query a name by IP)
@@ -218,7 +213,7 @@ pub enum Opcode {
 
 /// The RCODE value according to RFC 1035
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum ResponseCode {
+enum ResponseCode {
     NoError,
     FormatError,
     ServerFailure,
@@ -228,9 +223,9 @@ pub enum ResponseCode {
 }
 
 impl TryFrom<u16> for ResponseCode {
-    type Error = crate::DnsError;
+    type Error = DnsError;
 
-    fn try_from(value: u16) -> Result<Self, DnsError> {
+    fn try_from(value: u16) -> Result<Self> {
         match value {
             0 => Ok(ResponseCode::NoError),
             1 => Ok(ResponseCode::FormatError),
@@ -244,9 +239,9 @@ impl TryFrom<u16> for ResponseCode {
 }
 
 impl TryFrom<u16> for Opcode {
-    type Error = crate::DnsError;
+    type Error = DnsError;
 
-    fn try_from(value: u16) -> Result<Self, DnsError> {
+    fn try_from(value: u16) -> Result<Self> {
         match value {
             0 => Ok(Opcode::StandardQuery),
             1 => Ok(Opcode::InverseQuery),
@@ -260,10 +255,10 @@ impl TryFrom<u16> for Opcode {
 struct Flag(u16);
 
 impl Flag {
-    pub const RESPONSE: u16 = 0x8000;
-    pub const OPCODE_MASK: u16 = 0x7800;
-    pub const RESERVED_MASK: u16 = 0x0004;
-    pub const RESPONSE_CODE_MASK: u16 = 0x000F;
+    const RESPONSE: u16 = 0x8000;
+    const OPCODE_MASK: u16 = 0x7800;
+    const RESERVED_MASK: u16 = 0x0004;
+    const RESPONSE_CODE_MASK: u16 = 0x000F;
 
     fn new(value: u16) -> Self {
         Self(value)
@@ -280,7 +275,7 @@ impl Flag {
 
 impl Header {
     /// Parse the header into a header structure
-    pub fn parse(cursor: &mut impl CursorExt) -> Result<Header, DnsError> {
+    fn parse(cursor: &mut impl CursorExt) -> Result<Header> {
         let id = cursor.read_u16()?;
         let f = cursor.read_u16()?;
         let question_count = cursor.read_u16()? as usize;
@@ -328,6 +323,7 @@ impl Header {
 /// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 /// '''
 
+#[derive(Debug)]
 struct Question {
     #[allow(dead_code)]
     name: String,
@@ -338,7 +334,7 @@ struct Question {
 }
 
 impl Question {
-    pub fn split_once(cursor: &mut impl CursorExt) -> Result<Question, DnsError> {
+    fn split_once(cursor: &mut impl CursorExt) -> Result<Question> {
         let name = Name::to_string(cursor)?;
         let qtype = cursor.read_u16()?;
         let qclass = cursor.read_u16()?;
@@ -386,6 +382,7 @@ enum ResourceClass {
 // Type fields in resource records.
 //
 // The only ones we care about are A and AAAA
+#[derive(Debug)]
 enum ResourceType {
     // IPv4 address.
     A = 1,
@@ -393,6 +390,7 @@ enum ResourceType {
     Aaaa = 28,
 }
 
+#[derive(Debug)]
 struct ResourceRecord {
     name: String,
     #[allow(dead_code)]
@@ -405,7 +403,7 @@ struct ResourceRecord {
 }
 
 impl ResourceRecord {
-    pub fn split_once(cursor: &mut impl CursorExt) -> Result<ResourceRecord, DnsError> {
+    fn split_once(cursor: &mut impl CursorExt) -> Result<ResourceRecord> {
         let name = Name::to_string(cursor)?;
         let rtype = cursor.read_u16()?;
         let resource_type = match rtype {
@@ -439,7 +437,7 @@ impl ResourceData {
     fn split_once(
         cursor: &mut impl CursorExt,
         resource_type: &ResourceType,
-    ) -> Result<ResourceData, DnsError> {
+    ) -> Result<ResourceData> {
         match resource_type {
             ResourceType::A => Ok(ResourceData(cursor.read_ipv4addr()?.into())),
             ResourceType::Aaaa => Ok(ResourceData(cursor.read_ipv6addr()?.into())),
@@ -450,6 +448,8 @@ impl ResourceData {
 // END REGION RESOURCE RECORD
 
 // REGION LABEL
+
+type Result<T> = core::result::Result<T, DnsError>;
 
 #[derive(Debug)]
 pub enum DnsError {
@@ -525,7 +525,7 @@ impl NamePart {
     const MAX: u8 = 63;
 
     #[allow(dead_code)]
-    pub fn split_once(cursor: &mut impl CursorExt) -> Result<NamePart, DnsError> {
+    fn split_once(cursor: &mut impl CursorExt) -> Result<NamePart> {
         let size = cursor.read_u8()?;
         if size & PTR_MASK == PTR_MASK {
             let two = cursor.read_u8()?;
@@ -562,11 +562,11 @@ impl Name {
     // Limit the number of Pointers in malificient messages to avoid
     // looping.
     //
-    pub fn to_string(cursor: &mut impl CursorExt) -> Result<String, DnsError> {
+    fn to_string(cursor: &mut impl CursorExt) -> Result<String> {
         Self::to_string_guard(cursor, 0)
     }
 
-    pub fn to_string_guard(cursor: &mut impl CursorExt, jumps: usize) -> Result<String, DnsError> {
+    fn to_string_guard(cursor: &mut impl CursorExt, jumps: usize) -> Result<String> {
         if jumps > 2 {
             return Err(DnsError::PointerLoop);
         }
@@ -599,7 +599,7 @@ mod test_message {
     use super::*;
 
     #[test]
-    fn test_dns_responses() -> Result<(), DnsError> {
+    fn test_dns_responses() -> Result<()> {
         let bytes: [u8; 81] = [
             0xc2, 0x87, 0x81, 0x80, 0x0, 0x1, 0x0, 0x2, 0x0, 0x0, 0x0, 0x0, 0x3, 0x69, 0x62, 0x6d,
             0x3, 0x63, 0x6f, 0x6d, 0x0, 0x0, 0x1c, 0x0, 0x1, 0xc0, 0xc, 0x0, 0x1c, 0x0, 0x1, 0x0,
@@ -609,20 +609,14 @@ mod test_message {
             0x31,
         ];
         let bytes: &[u8] = &bytes;
-        let responses = Message::dns_responses(bytes)?;
+        let answers = parse_answers(bytes)?;
         assert_eq!(
-            *responses.get(0).unwrap(),
-            DnsResponse {
-                name: "ibm.com".to_string(),
-                addr: Ipv6Addr::from_str("2600:1406:5e00:293::3831")?.into()
-            }
+            *answers.get(0).unwrap(),
+            (Ipv6Addr::from_str("2600:1406:5e00:293::3831")?.into(), "ibm.com".to_string())
         );
         assert_eq!(
-            *responses.get(1).unwrap(),
-            DnsResponse {
-                name: "ibm.com".to_string(),
-                addr: Ipv6Addr::from_str("2600:1406:5e00:2aa::3831")?.into()
-            }
+            *answers.get(1).unwrap(),
+            (Ipv6Addr::from_str("2600:1406:5e00:2aa::3831")?.into(), "ibm.com".to_string())
         );
         Ok(())
     }

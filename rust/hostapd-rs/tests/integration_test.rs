@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Integration tests for the `hostapd-rs` crate.
+
 use bytes::Bytes;
 use hostapd_rs::hostapd::Hostapd;
 use log::warn;
@@ -24,14 +26,17 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Helper function to initialize Hostapd for test
+/// Initializes a `Hostapd` instance for testing.
+///
+/// Returns a tuple containing the `Hostapd` instance and a receiver for
+/// receiving data from `hostapd`.
 fn init_test_hostapd() -> (Hostapd, mpsc::Receiver<Bytes>) {
     let (tx, rx) = mpsc::channel();
     let config_path = env::temp_dir().join("hostapd.conf");
     (Hostapd::new(tx, true, config_path), rx)
 }
 
-/// Helper function to wait for Hostapd to terminate
+/// Waits for the `Hostapd` process to terminate.
 fn terminate_hostapd(hostapd: &Hostapd) {
     hostapd.terminate();
     let max_wait_time = Duration::from_secs(30);
@@ -45,10 +50,12 @@ fn terminate_hostapd(hostapd: &Hostapd) {
     warn!("Hostapd failed to terminate successfully within 30s");
 }
 
-/// Hostapd integration test
+/// Hostapd integration test.
 ///
-/// A single test is used here to avoid conflicts when multiple hostapd runs in parallel
-/// TODO: Split up tests once serial_test crate is available
+/// A single test is used to avoid conflicts when multiple `hostapd` instances
+/// run in parallel.
+///
+/// TODO: Split up tests once feasible with `serial_test` crate or other methods.
 #[test]
 fn test_hostapd() {
     // Initialize a single Hostapd instance to share across tests to avoid >5s startup &
@@ -60,19 +67,19 @@ fn test_hostapd() {
     test_terminate(&hostapd);
 }
 
-/// Test Hostapd starts successfully
+/// Tests that `Hostapd` starts successfully.
 fn test_start(hostapd: &mut Hostapd) {
     hostapd.run();
     assert!(hostapd.is_running());
 }
 
-/// Test Hostapd terminates successfully
+/// Tests that `Hostapd` terminates successfully.
 fn test_terminate(hostapd: &Hostapd) {
     terminate_hostapd(&hostapd);
     assert!(!hostapd.is_running());
 }
 
-/// Test whether beacon frame packet is received after Hostapd starts up
+/// Tests whether a beacon frame packet is received after `Hostapd` starts up.
 fn test_receive_beacon_frame(receiver: &mpsc::Receiver<Bytes>) {
     let end_time = Instant::now() + Duration::from_secs(10);
     loop {
@@ -86,7 +93,7 @@ fn test_receive_beacon_frame(receiver: &mpsc::Receiver<Bytes>) {
     }
 }
 
-/// Check receiver receives beacon frame with specified SSID within 10s
+/// Checks if the receiver receives a beacon frame with the specified SSID within 10 seconds.
 fn verify_beacon_frame_ssid(receiver: &mpsc::Receiver<Bytes>, ssid: &str) {
     let end_time = Instant::now() + Duration::from_secs(10);
     loop {
@@ -112,7 +119,7 @@ fn verify_beacon_frame_ssid(receiver: &mpsc::Receiver<Bytes>, ssid: &str) {
     }
 }
 
-/// Test various ways to configure Hostapd SSID and password
+/// Tests various ways to configure `Hostapd` SSID and password.
 fn test_get_and_set_ssid(hostapd: &mut Hostapd, receiver: &mpsc::Receiver<Bytes>) {
     // Check default ssid is set
     let default_ssid = "AndroidWifi";
