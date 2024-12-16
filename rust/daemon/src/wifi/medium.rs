@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::packets::ieee80211::{DataSubType, Ieee80211, MacAddress};
-use super::packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
 use crate::wifi::frame::Frame;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::{anyhow, Context};
 use bytes::Bytes;
 use log::{debug, info, warn};
+use netsim_packets::ieee80211::{DataSubType, Ieee80211, MacAddress};
+use netsim_packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
 use pdl_runtime::Packet;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -376,82 +376,6 @@ impl Medium {
         Ok(builder.build()?.attributes)
     }
 
-    /// Handle Wi-Fi MwsimMsg from libslirp and hostapd.
-    /// Send it to clients.
-    pub fn process_response(&self, packet: &Bytes) {
-        if let Err(e) = self.send_response(packet) {
-            warn!("{}", e);
-        }
-    }
-
-    /// Determine the client id based on Ieee80211 destination and send to client.
-    fn send_response(&self, packet: &Bytes) -> anyhow::Result<()> {
-        let hwsim_msg = HwsimMsg::decode_full(packet)?;
-        let hwsim_cmd = hwsim_msg.hwsim_hdr.hwsim_cmd;
-        match hwsim_cmd {
-            HwsimCmd::Frame => self.send_frame_response(packet, &hwsim_msg)?,
-            // TODO: Handle sending TxInfo frame for WifiService so we don't have to
-            // send duplicate HwsimMsg for all clients with the same Hwsim addr.
-            HwsimCmd::TxInfoFrame => self.send_tx_info_response(packet, &hwsim_msg)?,
-            _ => return Err(anyhow!("Invalid HwsimMsg cmd={:?}", hwsim_cmd)),
-        };
-        Ok(())
-    }
-
-    fn send_frame_response(&self, packet: &Bytes, hwsim_msg: &HwsimMsg) -> anyhow::Result<()> {
-        let frame = Frame::parse(hwsim_msg)?;
-        let dest_addr = frame.ieee80211.get_destination();
-        if let Ok(destination) = self.get_station(&dest_addr) {
-            self.send_from_ds_frame(packet, &frame, &destination)?;
-        } else if dest_addr.is_multicast() {
-            for destination in self.stations() {
-                self.send_from_ds_frame(packet, &frame, &destination)?;
-            }
-        } else {
-            warn!("Send frame response to unknown destination: {}", dest_addr);
-        }
-        Ok(())
-    }
-
-    /// Send frame from DS to STA.
-    fn send_from_ds_frame(
-        &self,
-        packet: &Bytes,
-        frame: &Frame,
-        destination: &Station,
-    ) -> anyhow::Result<()> {
-        if frame.attrs.receiver.context("receiver")? == destination.hwsim_addr {
-            (self.callback)(destination.client_id, packet);
-        } else {
-            // Broadcast: replace HwsimMsg destination but keep other attributes
-            let hwsim_msg = self
-                .create_hwsim_msg(frame, &destination.hwsim_addr)
-                .context("Create HwsimMsg from WifiService")?;
-            (self.callback)(destination.client_id, &hwsim_msg.encode_to_vec()?.into());
-        }
-        self.incr_rx(destination.client_id)?;
-        Ok(())
-    }
-
-    fn send_tx_info_response(&self, packet: &Bytes, hwsim_msg: &HwsimMsg) -> anyhow::Result<()> {
-        let attrs = HwsimAttrSet::parse(&hwsim_msg.attributes).context("HwsimAttrSet")?;
-        let hwsim_addr = attrs.transmitter.context("missing transmitter")?;
-        let client_ids = self
-            .stations()
-            .filter(|v| v.hwsim_addr == hwsim_addr)
-            .map(|v| v.client_id)
-            .collect::<HashSet<_>>();
-        if client_ids.len() > 1 {
-            warn!("multiple clients found for TxInfo frame");
-        }
-        for client_id in client_ids {
-            if self.enabled(client_id)? {
-                (self.callback)(client_id, packet);
-            }
-        }
-        Ok(())
-    }
-
     pub fn set_enabled(&self, client_id: u32, enabled: bool) {
         if let Some(client) = self.clients.read().unwrap().get(&client_id) {
             client.enabled.store(enabled, Ordering::Relaxed);
@@ -679,7 +603,7 @@ pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wifi::packets::ieee80211::parse_mac_address;
+    use netsim_packets::ieee80211::parse_mac_address;
     #[test]
     fn test_remove() {
         let hostapd_bssid: MacAddress = parse_mac_address("00:13:10:85:fe:01").unwrap();

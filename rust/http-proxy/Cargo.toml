@@ -23,5 +23,9 @@ path = "src/lib.rs"
 doctest = false
 
 [dependencies]
+base64 = "0.22.0"
 regex = "1.6.0"
 httparse = "1.8.0"
+libslirp-rs = { path = "../libslirp-rs" }
+log = "0.4.17"
+tokio = { version = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync"] }

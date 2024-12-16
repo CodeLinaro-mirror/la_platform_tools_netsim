@@ -13,10 +13,10 @@
 # limitations under the License.
 
 [package]
-name = "hostapd-rs"
+name = "netsim-packets"
 version = "0.1.0"
 edition = "2021"
-##build = "build_cargo.rs"
+build = "build.rs"
 
 [lib]
 path = "src/lib.rs"
@@ -25,12 +25,6 @@ doctest = false
 
 [dependencies]
 anyhow = "1"
-bytes = { version = "1.4.0"}
-log = "0.4.17"
-netsim-common = { path = "../common" }
-netsim-packets = { path = "../packets" }
+bytes = { version = ">=1.4.0"}
 pdl-runtime = "0.3.0"
-tokio = { version = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync"] }
 
-[build-dependencies]
-##bindgen = "0.69.4"

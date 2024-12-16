@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::packets::link_layer::LegacyAdvertisingType;
+use netsim_packets::link_layer::LegacyAdvertisingType;
 use netsim_proto::model::chip::ble_beacon::{
     advertise_settings::{
         AdvertiseMode as Mode, AdvertiseTxPower as Level, Interval as IntervalProto,

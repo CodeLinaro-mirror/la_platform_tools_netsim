@@ -118,5 +118,5 @@ class RunPytestManager:
     # TODO: Resolve Windows PyTest failure
     if platform.system() != "Windows":
       cmd.append("--failures_as_errors")
-    run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
+      run(cmd, get_default_environment(AOSP_ROOT), "e2e_pytests")
     return True

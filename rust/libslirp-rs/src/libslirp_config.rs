@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::libslirp_sys;
+//! Conversion between Rust and C configurations.
+use crate::libslirp_sys::{self, SLIRP_MAX_DNS_SERVERS};
+use log::warn;
 use std::ffi::CString;
+use std::io;
+use std::net::SocketAddr;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::path::PathBuf;
+use tokio;
 
-// Rust SlirpConfig
+const MAX_DNS_SERVERS: usize = SLIRP_MAX_DNS_SERVERS as usize;
 
+/// Rust SlirpConfig
 pub struct SlirpConfig {
     pub version: u32,
     pub restricted: i32,
@@ -50,8 +56,7 @@ pub struct SlirpConfig {
     pub mfr_id: u32,
     pub oob_eth_addr: [u8; 6usize],
     pub http_proxy_on: bool,
-    pub host_dns_count: usize,
-    pub host_dns: [libslirp_sys::sockaddr_storage; 4usize],
+    pub host_dns: Vec<SocketAddr>,
 }
 
 impl Default for SlirpConfig {
@@ -95,14 +100,13 @@ impl Default for SlirpConfig {
             mfr_id: 0,
             oob_eth_addr: [0; 6usize],
             http_proxy_on: false,
-            host_dns_count: 0,
-            host_dns: [libslirp_sys::sockaddr_storage::default(); 4usize],
+            host_dns: Vec::new(),
         }
     }
 }
 
-// Struct to hold a "C" SlirpConfig and the Rust storage that is
-// referenced by SlirpConfig.
+/// Struct to hold a "C" SlirpConfig and the Rust storage that is
+/// referenced by SlirpConfig.
 #[allow(dead_code)]
 pub struct SlirpConfigs {
     pub c_slirp_config: libslirp_sys::SlirpConfig,
@@ -113,7 +117,36 @@ pub struct SlirpConfigs {
     c_vdomainname: Option<CString>,
     c_vhostname: Option<CString>,
     c_tftp_path: Option<CString>,
+    c_host_dns: [libslirp_sys::sockaddr_storage; MAX_DNS_SERVERS],
     // TODO: add other fields
+}
+
+pub async fn lookup_host_dns(host_dns: &str) -> io::Result<Vec<SocketAddr>> {
+    let mut set = tokio::task::JoinSet::new();
+    if host_dns.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    for addr in host_dns.split(",") {
+        set.spawn(tokio::net::lookup_host(format!("{addr}:0")));
+    }
+
+    let mut addrs = Vec::new();
+    while let Some(result) = set.join_next().await {
+        addrs.push(result??.next().ok_or(io::Error::from(io::ErrorKind::NotFound))?);
+    }
+    Ok(addrs)
+}
+
+fn to_socketaddr_storage(dns: &[SocketAddr]) -> [libslirp_sys::sockaddr_storage; MAX_DNS_SERVERS] {
+    let mut result = [libslirp_sys::sockaddr_storage::default(); MAX_DNS_SERVERS];
+    if dns.len() > MAX_DNS_SERVERS {
+        warn!("Too many DNS servers, only keeping the first {} ones", MAX_DNS_SERVERS);
+    }
+    for i in 0..usize::min(dns.len(), MAX_DNS_SERVERS) {
+        result[i] = dns[i].into();
+    }
+    result
 }
 
 impl SlirpConfigs {
@@ -128,6 +161,8 @@ impl SlirpConfigs {
         let c_tftp_server_name = as_cstring(&config.tftp_server_name);
         let c_bootfile = as_cstring(&config.bootfile);
         let c_vdomainname = as_cstring(&config.vdomainname);
+
+        let c_host_dns = to_socketaddr_storage(&config.host_dns);
 
         // Convert to a ptr::null() or a raw ptr to managed
         // memory. Whenever storing a ptr in "C" Struct using `as_ptr`
@@ -169,8 +204,8 @@ impl SlirpConfigs {
             mfr_id: config.mfr_id,
             oob_eth_addr: config.oob_eth_addr,
             http_proxy_on: config.http_proxy_on,
-            host_dns_count: config.host_dns_count,
-            host_dns: config.host_dns,
+            host_dns_count: config.host_dns.len(),
+            host_dns: c_host_dns,
         };
 
         // Return the "C" struct and Rust members holding the storage
@@ -182,6 +217,7 @@ impl SlirpConfigs {
             c_bootfile,
             c_vdomainname,
             c_tftp_path,
+            c_host_dns,
         }
     }
 }
@@ -189,6 +225,7 @@ impl SlirpConfigs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::runtime::Runtime;
 
     #[test]
     fn test_slirp_config_default() {
@@ -224,7 +261,7 @@ mod tests {
         assert_eq!(config.mfr_id, 0);
         assert_eq!(config.oob_eth_addr, [0; 6]);
         assert!(!config.http_proxy_on);
-        assert_eq!(config.host_dns_count, 0);
+        assert_eq!(config.host_dns.len(), 0);
     }
 
     #[test]
@@ -240,5 +277,77 @@ mod tests {
         // Check string conversions and null pointers
         assert_eq!(c_configs.c_slirp_config.vhostname, std::ptr::null());
         assert_eq!(c_configs.c_slirp_config.tftp_server_name, std::ptr::null());
+    }
+
+    #[test]
+    fn test_lookup_host_dns() -> io::Result<()> {
+        let rt = Runtime::new().unwrap();
+        let results = rt.block_on(lookup_host_dns(""))?;
+        assert_eq!(results.len(), 0);
+
+        let results = rt.block_on(lookup_host_dns("localhost"))?;
+        assert_eq!(results.len(), 1);
+
+        let results = rt.block_on(lookup_host_dns("example.com"))?;
+        assert_eq!(results.len(), 1);
+
+        let results = rt.block_on(lookup_host_dns("localhost,example.com"))?;
+        assert_eq!(results.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_to_socketaddr_storage_empty_input() {
+        let dns: [SocketAddr; 0] = [];
+        let result = to_socketaddr_storage(&dns);
+        assert_eq!(result.len(), MAX_DNS_SERVERS);
+        for entry in result {
+            // Assuming `sockaddr_storage::default()` initializes all fields to 0
+            assert_eq!(entry.ss_family, 0);
+        }
+    }
+
+    #[test]
+    fn test_to_socketaddr_storage() {
+        let dns = ["1.1.1.1:53".parse().unwrap(), "8.8.8.8:53".parse().unwrap()];
+        let result = to_socketaddr_storage(&dns);
+        assert_eq!(result.len(), MAX_DNS_SERVERS);
+        for i in 0..dns.len() {
+            assert_ne!(result[i].ss_family, 0); // Converted addresses should have a non-zero family
+        }
+        for i in dns.len()..MAX_DNS_SERVERS {
+            assert_eq!(result[i].ss_family, 0); // Remaining entries should be default
+        }
+    }
+
+    #[test]
+    fn test_to_socketaddr_storage_valid_input_at_max() {
+        let dns = [
+            "1.1.1.1:53".parse().unwrap(),
+            "8.8.8.8:53".parse().unwrap(),
+            "9.9.9.9:53".parse().unwrap(),
+            "1.0.0.1:53".parse().unwrap(),
+        ];
+        let result = to_socketaddr_storage(&dns);
+        assert_eq!(result.len(), MAX_DNS_SERVERS);
+        for i in 0..dns.len() {
+            assert_ne!(result[i].ss_family, 0);
+        }
+    }
+
+    #[test]
+    fn test_to_socketaddr_storage_input_exceeds_max() {
+        let dns = [
+            "1.1.1.1:53".parse().unwrap(),
+            "8.8.8.8:53".parse().unwrap(),
+            "9.9.9.9:53".parse().unwrap(),
+            "1.0.0.1:53".parse().unwrap(),
+            "1.2.3.4:53".parse().unwrap(), // Extra address
+        ];
+        let result = to_socketaddr_storage(&dns);
+        assert_eq!(result.len(), MAX_DNS_SERVERS);
+        for i in 0..MAX_DNS_SERVERS {
+            assert_ne!(result[i].ss_family, 0);
+        }
     }
 }

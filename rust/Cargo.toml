@@ -21,5 +21,6 @@ members = [
     "http-proxy",
     "libslirp-rs",
     "hostapd-rs",
+    "packets",
 ]
 resolver = "2"

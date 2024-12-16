@@ -19,7 +19,7 @@ from pathlib import Path
 import platform
 
 from tasks.task import Task
-from utils import (AOSP_ROOT, run, rust_version)
+from utils import (AOSP_ROOT, clang_version, run, rust_version)
 
 
 class RunTestTask(Task):
@@ -37,7 +37,13 @@ class RunTestTask(Task):
       script = AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_test.sh"
 
     # Run cargo Test
-    for package in ["hostapd-rs", "libslirp-rs"]:
-      cmd = [script, rust_version(), package, str(self.out)]
+    for package in [
+        "hostapd-rs",
+        "libslirp-rs",
+        "http-proxy",
+        "netsim-common",
+        "netsim-packets",
+    ]:
+      cmd = [script, package, str(self.out), rust_version(), clang_version()]
       run(cmd, self.env, f"{package}_unit_tests")
     return True
