@@ -30,10 +30,9 @@ fn main() {
         let env_prebuilt = env::var(var);
         let out_file = out_dir.join(name);
         // Check and use prebuilt pdl generated rust file from env var
-        if env_prebuilt.is_ok() {
-            let env_prebuilt = env_prebuilt.unwrap();
-            println!("cargo:rerun-if-changed={}", env_prebuilt);
-            std::fs::copy(env_prebuilt.as_str(), out_file.as_os_str().to_str().unwrap()).unwrap();
+        if let Ok(prebuilt_path) = env_prebuilt {
+            println!("cargo:rerun-if-changed={}", prebuilt_path);
+            std::fs::copy(prebuilt_path.as_str(), out_file.as_os_str().to_str().unwrap()).unwrap();
         // Prebuilt env var not set - check and use pdl generated file that is already present in out_dir
         } else if out_file.exists() {
             println!(
