@@ -60,11 +60,6 @@ if(TARGET Rust::Rustc)
     SRC ${binding_header}
         ${binding_source}
         ${common_header}
-        backend/backend_packet_hub.h
-        backend/grpc_server.cc
-        backend/grpc_server.h
-        frontend/frontend_server.cc
-        frontend/frontend_server.h
         frontend/server_response_writable.h
         hci/async_manager.cc
         hci/bluetooth_facade.cc
