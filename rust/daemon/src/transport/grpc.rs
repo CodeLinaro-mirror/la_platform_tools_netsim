@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::devices::chip::ChipIdentifier;
-use crate::ffi::ffi_transport::handle_grpc_response;
-use crate::wireless::packet::{register_transport, unregister_transport, Response};
+use crate::wireless::packet::Response;
 use bytes::Bytes;
 use futures_executor::block_on;
 use futures_util::SinkExt as _;
@@ -25,31 +23,6 @@ use protobuf::Enum;
 use protobuf::EnumOrUnknown;
 
 /// Grpc transport.
-///
-/// This module provides a wrapper around the C++ Grpc implementation. It
-/// provides a higher-level API that is easier to use from Rust.
-
-struct GrpcTransport {
-    chip_id: u32,
-}
-
-impl Response for GrpcTransport {
-    fn response(&mut self, packet: Bytes, packet_type: u8) {
-        handle_grpc_response(self.chip_id, &packet.to_vec(), packet_type)
-    }
-}
-
-// for grpc server in C++
-pub fn register_grpc_transport(chip_id: u32) {
-    register_transport(ChipIdentifier(chip_id), Box::new(GrpcTransport { chip_id }));
-}
-
-// for grpc server in C++
-pub fn unregister_grpc_transport(chip_id: u32) {
-    unregister_transport(ChipIdentifier(chip_id));
-}
-
-/// Rust grpc transport.s
 pub struct RustGrpcTransport {
     pub sink: grpcio::DuplexSink<PacketResponse>,
 }

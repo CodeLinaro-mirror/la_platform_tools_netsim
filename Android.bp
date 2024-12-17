@@ -177,8 +177,6 @@ cc_library_host_static {
     name: "lib-netsim",
     defaults: ["netsim_defaults"],
     srcs: [
-        "src/frontend/frontend_server.cc",
-        "src/backend/grpc_server.cc",
         "src/backend/grpc_client.cc",
         "src/hci/bluetooth_facade.cc",
         "src/hci/hci_packet_transport.cc",
