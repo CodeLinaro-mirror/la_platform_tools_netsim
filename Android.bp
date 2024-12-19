@@ -397,26 +397,3 @@ rust_binary_host {
         "libnetsim_cli",
     ],
 }
-
-rust_binary_host {
-    name: "netsim_test_client",
-    srcs: ["rust/frontend/src/netsim_test_client.rs"],
-    rustlibs: [
-        "libgrpcio",
-        "libnetsim_proto",
-        "libprotobuf",
-        "libnetsim_common",
-    ],
-}
-
-rust_binary_host {
-    name: "netsim_test_server",
-    srcs: ["rust/frontend/src/netsim_test_server.rs"],
-    rustlibs: [
-        "libgrpcio",
-        "libnetsim_proto",
-        "libprotobuf",
-        "libnetsim_common",
-        "libfutures",
-    ],
-}
