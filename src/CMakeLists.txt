@@ -37,7 +37,6 @@ if(TARGET Rust::Rustc)
     SRC ${binding_header}
         ${binding_source}
         ${common_header}
-        frontend/server_response_writable.h
         hci/async_manager.cc
         hci/bluetooth_facade.cc
         hci/bluetooth_facade.h

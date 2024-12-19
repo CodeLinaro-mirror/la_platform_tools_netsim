@@ -158,8 +158,7 @@ message PatchCaptureRequest {
   // Capture Identifier
   uint32 id = 1;
 
-  // Body of PatchCapture that will be channeled into
-  // body for HandleCaptureCxx
+  // Valid capture field(s) to patch
   message PatchCapture {
     // Capture state
     optional bool state = 1;
