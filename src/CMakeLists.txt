@@ -21,29 +21,6 @@ if(TARGET Rust::Rustc)
       ${CMAKE_BINARY_DIR}/cargo/build/${Rust_CARGO_TARGET_CACHED}/cxxbridge)
   set(common_header ${cxx_bridge_binary_folder}/rust/cxx.h)
   set(cxx_bridge_source_file "src/ffi.rs")
-  set(crate_name "netsim-cli")
-  set(binding_header
-      ${cxx_bridge_binary_folder}/${crate_name}/${cxx_bridge_source_file}.h)
-  set(binding_source
-      ${cxx_bridge_binary_folder}/${crate_name}/${cxx_bridge_source_file}.cc)
-
-  # Make sure we have the cxx files generated before we build them.
-  add_custom_command(OUTPUT ${common_header} ${binding_header} ${binding_source}
-                     COMMAND DEPENDS ${crate_name}-static)
-
-  android_add_library(
-    TARGET frontend-client
-    LICENSE Apache-2.0
-    SRC ${binding_header} ${binding_source} ${common_header}
-        frontend/frontend_client.cc frontend/frontend_client.h
-    DEPS grpc++ netsim-cli-proto-lib protobuf::libprotobuf util-lib)
-  target_include_directories(frontend-client PRIVATE .
-                             PUBLIC ${cxx_bridge_binary_folder})
-
-  set(cxx_bridge_binary_folder
-      ${CMAKE_BINARY_DIR}/cargo/build/${Rust_CARGO_TARGET_CACHED}/cxxbridge)
-  set(common_header ${cxx_bridge_binary_folder}/rust/cxx.h)
-  set(cxx_bridge_source_file "src/ffi.rs")
   set(crate_name "netsim-daemon")
   set(binding_header
       ${cxx_bridge_binary_folder}/${crate_name}/${cxx_bridge_source_file}.h)

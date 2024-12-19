@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::ffi::frontend_client_ffi::{FrontendClient, GrpcMethod};
+use crate::grpc_client::{self, GrpcMethod};
 use clap::builder::{PossibleValue, TypedValueParser};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use hex::{decode as hex_to_bytes, FromHexError};
@@ -21,6 +21,7 @@ use netsim_proto::common::ChipKind;
 use netsim_proto::frontend;
 use netsim_proto::frontend::patch_capture_request::PatchCapture as PatchCaptureProto;
 use netsim_proto::frontend::patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto;
+use netsim_proto::frontend_grpc::FrontendServiceClient;
 use netsim_proto::model::chip::ble_beacon::advertise_settings::{
     AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
     Interval as IntervalProto, Tx_power as TxPowerProto,
@@ -228,7 +229,7 @@ impl Command {
     /// In the case of a command with pattern argument(s) there may be multiple gRPC requests.
     /// The parsed command parameters are used to construct the request protobuf.
     /// The client is used to send gRPC call(s) to retrieve information needed for request protobufs.
-    pub fn get_requests(&mut self, client: &cxx::UniquePtr<FrontendClient>) -> Vec<BinaryProtobuf> {
+    pub fn get_requests(&mut self, client: &FrontendServiceClient) -> Vec<BinaryProtobuf> {
         match self {
             Command::Capture(Capture::Patch(cmd)) => {
                 let mut reqs = Vec::new();
@@ -281,17 +282,17 @@ impl Command {
     }
 
     fn get_filtered_captures(
-        client: &cxx::UniquePtr<FrontendClient>,
+        client: &FrontendServiceClient,
         patterns: &[String],
     ) -> Vec<model::Capture> {
         // Get list of captures
-        let result = client.send_grpc(&GrpcMethod::ListCapture, &Vec::new());
-        if !result.is_ok() {
-            error!("ListCapture Grpc call error: {}", result.err());
+        let result = grpc_client::send_grpc(client, &GrpcMethod::ListCapture, &Vec::new());
+        if result.is_err() {
+            error!("ListCapture Grpc call error: {}", result.err().unwrap());
             return Vec::new();
         }
         let mut response =
-            frontend::ListCaptureResponse::parse_from_bytes(result.byte_vec().as_slice()).unwrap();
+            frontend::ListCaptureResponse::parse_from_bytes(result.unwrap().as_slice()).unwrap();
         if !patterns.is_empty() {
             // Filter out list of captures with matching patterns
             Self::filter_captures(&mut response.captures, patterns)

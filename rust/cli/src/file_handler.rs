@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::ffi::ClientResponseReadable;
+use crate::grpc_client::ClientResponseReadable;
 use std::fs::File;
 /// Implements handler for pcap operations
 use std::io::Write;
 use std::path::PathBuf;
-use tracing::error;
 
 pub struct FileHandler {
     pub file: File,
@@ -30,14 +29,5 @@ impl ClientResponseReadable for FileHandler {
         (&self.file)
             .write_all(chunk)
             .unwrap_or_else(|_| panic!("Unable to write to file: {}", self.path.display()));
-    }
-    // function to handle error response
-    fn handle_error(&self, error_code: u32, error_message: &str) {
-        error!(
-            "Handling error code: {}, msg: {}, on file: {}",
-            error_code,
-            error_message,
-            self.path.display()
-        );
     }
 }
