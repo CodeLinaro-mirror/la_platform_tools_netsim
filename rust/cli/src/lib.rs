@@ -22,8 +22,7 @@ mod file_handler;
 mod requests;
 mod response;
 
-use netsim_common::util::ini_file::get_server_address;
-use netsim_common::util::os_utils::get_instance;
+use netsim_common::util::os_utils::{get_instance, get_server_address};
 use netsim_proto::frontend::{DeleteChipRequest, ListDeviceResponse};
 use protobuf::Message;
 use std::env;

@@ -4,7 +4,7 @@ use std::env;
 use std::sync::Arc;
 
 use grpcio::{ChannelBuilder, EnvBuilder};
-use netsim_common::util::ini_file::get_server_address;
+use netsim_common::util::os_utils::get_server_address;
 use netsim_proto::frontend_grpc::FrontendServiceClient;
 
 fn main() {

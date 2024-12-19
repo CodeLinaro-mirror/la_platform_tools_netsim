@@ -22,13 +22,9 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-use log::error;
-
-use super::os_utils::get_discovery_directory;
-
 /// A simple class to process init file. Based on
 /// external/qemu/android/android-emu-base/android/base/files/IniFile.h
-struct IniFile {
+pub struct IniFile {
     /// The data stored in the ini file.
     data: HashMap<String, String>,
     /// The path to the ini file.
@@ -41,7 +37,7 @@ impl IniFile {
     /// # Arguments
     ///
     /// * `filepath` - The path to the ini file.
-    fn new(filepath: PathBuf) -> IniFile {
+    pub fn new(filepath: PathBuf) -> IniFile {
         IniFile { data: HashMap::new(), filepath }
     }
 
@@ -51,7 +47,7 @@ impl IniFile {
     /// # Returns
     ///
     /// `Ok` if the write was successful, `Error` otherwise.
-    fn read(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn read(&mut self) -> Result<(), Box<dyn Error>> {
         self.data.clear();
 
         let mut f = File::open(self.filepath.clone())?;
@@ -76,13 +72,26 @@ impl IniFile {
     /// # Returns
     ///
     /// `Ok` if the write was successful, `Error` otherwise.
-    fn write(&self) -> std::io::Result<()> {
-        let mut f = create_new(self.filepath.clone())?;
+    pub fn write(&self) -> Result<(), Box<dyn Error>> {
+        let mut f = File::create(self.filepath.clone())?;
         for (key, value) in &self.data {
             writeln!(&mut f, "{}={}", key, value)?;
         }
         f.flush()?;
         Ok(())
+    }
+
+    /// Checks if a certain key exists in the file.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to check.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the key exists, `false` otherwise.
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.data.contains_key(key)
     }
 
     /// Gets value.
@@ -94,7 +103,7 @@ impl IniFile {
     /// # Returns
     ///
     /// An `Option` containing the value if it exists, `None` otherwise.
-    fn get(&self, key: &str) -> Option<&str> {
+    pub fn get(&self, key: &str) -> Option<&str> {
         self.data.get(key).map(|v| v.as_str())
     }
 
@@ -104,71 +113,9 @@ impl IniFile {
     ///
     /// * `key` - The key to set the value for.
     /// * `value` - The value to set.
-    fn insert(&mut self, key: &str, value: &str) {
+    pub fn insert(&mut self, key: &str, value: &str) {
         self.data.insert(key.to_owned(), value.to_owned());
     }
-}
-
-// TODO: Replace with std::fs::File::create_new once Rust toolchain is upgraded to 1.77
-/// Create new file, errors if it already exists.
-fn create_new<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<File> {
-    std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(path.as_ref())
-}
-
-/// Write ports to ini file
-pub fn create_ini(instance_num: u16, grpc_port: u32, web_port: Option<u16>) -> std::io::Result<()> {
-    // Instantiate IniFile
-    let filepath = get_ini_filepath(instance_num);
-    let mut ini_file = IniFile::new(filepath);
-
-    // Write ports to ini file
-    if let Some(num) = web_port {
-        ini_file.insert("web.port", &num.to_string());
-    }
-    ini_file.insert("grpc.port", &grpc_port.to_string());
-    ini_file.write()
-}
-
-/// Remove netsim ini file
-pub fn remove_ini(instance_num: u16) -> std::io::Result<()> {
-    let filepath = get_ini_filepath(instance_num);
-    std::fs::remove_file(filepath)
-}
-
-/// Get the filepath of netsim.ini under discovery directory
-fn get_ini_filepath(instance_num: u16) -> PathBuf {
-    let mut discovery_dir = get_discovery_directory();
-    let filename = if instance_num == 1 {
-        "netsim.ini".to_string()
-    } else {
-        format!("netsim_{instance_num}.ini")
-    };
-    discovery_dir.push(filename);
-    discovery_dir
-}
-
-/// Get the grpc server address for netsim
-pub fn get_server_address(instance_num: u16) -> Option<String> {
-    let filepath = get_ini_filepath(instance_num);
-    if !filepath.exists() {
-        error!("Unable to find netsim ini file: {filepath:?}");
-        return None;
-    }
-    if !filepath.is_file() {
-        error!("Not a file: {filepath:?}");
-        return None;
-    }
-    let mut ini_file = IniFile::new(filepath);
-    if let Err(err) = ini_file.read() {
-        error!("Error reading ini file: {err:?}");
-    }
-    ini_file.get("grpc.port").map(|s: &str| {
-        if s.contains(':') {
-            s.to_string()
-        } else {
-            format!("localhost:{}", s)
-        }
-    })
 }
 
 #[cfg(test)]
@@ -179,26 +126,7 @@ mod tests {
     use std::io::{Read, Write};
     use std::path::PathBuf;
 
-    use super::get_ini_filepath;
     use super::IniFile;
-
-    #[cfg(not(target_os = "windows"))]
-    use crate::system::tests::ENV_MUTEX;
-
-    impl IniFile {
-        /// Checks if a certain key exists in the file.
-        ///
-        /// # Arguments
-        ///
-        /// * `key` - The key to check.
-        ///
-        /// # Returns
-        ///
-        /// `true` if the key exists, `false` otherwise.
-        fn contains_key(&self, key: &str) -> bool {
-            self.data.contains_key(key)
-        }
-    }
 
     fn get_temp_ini_filepath(prefix: &str) -> PathBuf {
         env::temp_dir().join(format!(
@@ -387,15 +315,24 @@ mod tests {
     }
 
     #[test]
-    fn test_get_ini_filepath() {
-        #[cfg(not(target_os = "windows"))]
-        let _locked = ENV_MUTEX.lock();
+    fn test_overwrite() {
+        let filepath = get_temp_ini_filepath("test_overwrite");
+        {
+            let mut tmpfile = match File::create(&filepath) {
+                Ok(f) => f,
+                Err(_) => return,
+            };
+            write!(tmpfile, "port=123\nport2=456\n").unwrap();
+        }
 
-        // Test with TMPDIR variable
-        std::env::set_var("TMPDIR", "/tmpdir");
+        let mut inifile = IniFile::new(filepath.clone());
+        inifile.insert("port3", "789");
 
-        // Test get_netsim_ini_filepath
-        assert_eq!(get_ini_filepath(1), PathBuf::from("/tmpdir/netsim.ini"));
-        assert_eq!(get_ini_filepath(2), PathBuf::from("/tmpdir/netsim_2.ini"));
+        inifile.write().unwrap();
+        let mut file = File::open(&filepath).unwrap();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+
+        assert_eq!(contents, "port3=789\n");
     }
 }

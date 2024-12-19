@@ -17,9 +17,9 @@ use grpcio::{ChannelBuilder, Deadline, EnvBuilder};
 use log::warn;
 use log::{error, info};
 use netsim_common::system::netsimd_temp_dir;
-use netsim_common::util::ini_file::{create_ini, get_server_address, remove_ini};
 use netsim_common::util::os_utils::{
-    get_hci_port, get_instance, get_instance_name, redirect_std_stream,
+    get_hci_port, get_instance, get_instance_name, get_server_address, redirect_std_stream,
+    remove_netsim_ini,
 };
 use netsim_common::util::zip_artifact::zip_artifacts;
 use netsim_proto::frontend_grpc::FrontendServiceClient;
@@ -260,18 +260,6 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
             http_proxy;
     }
 
-    // Create all Event Receivers before any events are posted
-    let capture_events_rx = events::subscribe();
-    let device_events_rx = events::subscribe();
-    let main_events_rx = events::subscribe();
-    let session_events_rx = events::subscribe();
-
-    // Start radio facades
-    wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
-    wireless::wifi::wifi_start(&config.wifi, args.forward_host_mdns);
-    wireless::uwb::uwb_start();
-
-    // Instantiate ServiceParams
     let service_params = ServiceParams::new(
         fd_startup_str,
         args.no_cli_ui,
@@ -285,33 +273,13 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
     // valid and open for as long as the program runs.
     let mut service = unsafe { Service::new(service_params) };
+    service.set_up();
 
-    // Run all netsimd services (grpc, socket, web)
-    if let Ok((grpc_port, web_port)) = service.run() {
-        // If create_ini fails, check if there is another netsimd instance.
-        // If there isn't another netsimd instance, remove_ini and create_ini once more.
-        for _ in 0..2 {
-            if let Err(e) = create_ini(instance_num, grpc_port, web_port) {
-                warn!("create_ini error with {e:?}");
-                // Checkes if a different netsimd instance exists
-                if is_netsimd_alive(instance_num) {
-                    warn!("netsimd already running, exiting...");
-                    service.shut_down();
-                    return;
-                } else {
-                    info!("Removing stale netsim ini");
-                    if let Err(e) = remove_ini(instance_num) {
-                        error!("{e:?}");
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-    }
-
-    // Gets rid of old artifacts (pcap and zip files)
-    service.remove_artifacts();
+    // Create all Event Receivers
+    let capture_events_rx = events::subscribe();
+    let device_events_rx = events::subscribe();
+    let main_events_rx = events::subscribe();
+    let session_events_rx = events::subscribe();
 
     // Start Session Event listener
     let mut session = Session::new();
@@ -325,11 +293,19 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
         spawn_shutdown_publisher(device_events_rx);
     }
 
+    // Start radio facades
+    wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
+    wireless::wifi::wifi_start(&config.wifi, args.forward_host_mdns);
+    wireless::uwb::uwb_start();
+
     // Create test beacons if required
     if config.bluetooth.test_beacons == Some(true) {
         new_test_beacon(1, 1000);
         new_test_beacon(2, 1000);
     }
+
+    // Run all netsimd services (grpc, socket, web)
+    service.run();
 
     // Runs a synchronous main loop
     main_loop(main_events_rx);
@@ -346,30 +322,19 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     }
 
     // Once shutdown is complete, delete the netsim ini file
-    match remove_ini(instance_num) {
-        Ok(_) => info!("Removed netsim ini file"),
-        Err(e) => error!("Failed to remove netsim ini file: {e:?}"),
-    }
+    remove_netsim_ini(instance_num);
 }
 
 fn is_netsimd_alive(instance_num: u16) -> bool {
-    for _ in 0..2 {
-        match get_server_address(instance_num) {
-            Some(address) => {
-                // Check if grpc server has started
-                let channel = ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build()))
-                    .connect(&address);
-                let client = FrontendServiceClient::new(channel);
-                let deadline = Deadline::from(std::time::Duration::from_secs(1));
-                return futures::executor::block_on(
-                    client.client.channel().wait_for_connected(deadline),
-                );
-            }
-            None => {
-                info!("get_server_address({instance_num}) returned None. Retrying...");
-                std::thread::sleep(std::time::Duration::from_secs(1));
-            }
+    match get_server_address(instance_num) {
+        Some(address) => {
+            // Check if grpc server has started
+            let channel = ChannelBuilder::new(std::sync::Arc::new(EnvBuilder::new().build()))
+                .connect(&address);
+            let client = FrontendServiceClient::new(channel);
+            let deadline = Deadline::from(std::time::Duration::from_secs(1));
+            futures::executor::block_on(client.client.channel().wait_for_connected(deadline))
         }
+        None => false,
     }
-    false
 }
