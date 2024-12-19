@@ -37,7 +37,7 @@ fn udp_echo() {
     let before_fd_count = count_open_fds().unwrap();
 
     let (tx, rx) = mpsc::channel::<Bytes>();
-    let slirp = LibSlirp::new(config, tx, None);
+    let slirp = LibSlirp::new(config, tx, None, None);
 
     // Start up an IPV4 UDP echo server
     let server_addr = one_shot_udp_echo_server().unwrap();
