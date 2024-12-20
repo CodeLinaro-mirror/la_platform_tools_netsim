@@ -66,7 +66,6 @@ if(WIN32)
   # 4. This isn't needed in mac and Linux because corrosion doesn't pass
   #    -fno-exception flag.
   set(CXXFLAGS "${CMAKE_CXX_FLAGS} /DRUST_CXX_NO_EXCEPTIONS")
-  corrosion_set_env_vars(netsim-cli CXXFLAGS=${CXXFLAGS})
   corrosion_set_env_vars(netsim-daemon CXXFLAGS=${CXXFLAGS})
 endif()
 

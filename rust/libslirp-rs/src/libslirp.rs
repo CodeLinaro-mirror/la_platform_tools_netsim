@@ -153,6 +153,7 @@ struct CallbackContext {
     tx_cmds: mpsc::Sender<SlirpCmd>,
     poll_fds: Rc<RefCell<Vec<PollFd>>>,
     proxy_manager: Option<Box<dyn ProxyManager>>,
+    tx_proxy_bytes: Option<mpsc::Sender<Bytes>>,
     timer_manager: Rc<TimerManager>,
 }
 
@@ -223,6 +224,7 @@ impl LibSlirp {
         config: libslirp_config::SlirpConfig,
         tx_bytes: mpsc::Sender<Bytes>,
         proxy_manager: Option<Box<dyn ProxyManager>>,
+        tx_proxy_bytes: Option<mpsc::Sender<Bytes>>,
     ) -> LibSlirp {
         let (tx_cmds, rx_cmds) = mpsc::channel::<SlirpCmd>();
         let (tx_poll, rx_poll) = mpsc::channel::<PollRequest>();
@@ -239,7 +241,15 @@ impl LibSlirp {
         let tx_cmds_slirp = tx_cmds.clone();
         // Create channels for command processor thread and launch
         if let Err(e) = thread::Builder::new().name("slirp".to_string()).spawn(move || {
-            slirp_thread(config, tx_bytes, tx_cmds_slirp, rx_cmds, tx_poll, proxy_manager)
+            slirp_thread(
+                config,
+                tx_bytes,
+                tx_cmds_slirp,
+                rx_cmds,
+                tx_poll,
+                proxy_manager,
+                tx_proxy_bytes,
+            )
         }) {
             warn!("Failed to start slirp thread: {}", e);
         }
@@ -398,6 +408,7 @@ fn slirp_thread(
     rx: mpsc::Receiver<SlirpCmd>,
     tx_poll: mpsc::Sender<PollRequest>,
     proxy_manager: Option<Box<dyn ProxyManager>>,
+    tx_proxy_bytes: Option<mpsc::Sender<Bytes>>,
 ) {
     // Data structures wrapped in an RC are referenced through the
     // libslirp callbacks and this code (both in the same thread).
@@ -415,6 +426,7 @@ fn slirp_thread(
         tx_cmds,
         poll_fds: poll_fds.clone(),
         proxy_manager,
+        tx_proxy_bytes,
         timer_manager: timer_manager.clone(),
     });
 
@@ -813,7 +825,12 @@ impl CallbackContext {
         let c_slice = unsafe { std::slice::from_raw_parts(buf as *const u8, len) };
         // Bytes::from(slice: &'static [u8]) creates a Bytes object without copying the data.
         // To own its data, copy &'static [u8] to Vec<u8> before converting to Bytes.
-        let _ = self.tx_bytes.send(Bytes::from(c_slice.to_vec()));
+        let bytes = Bytes::from(c_slice.to_vec());
+        let _ = self.tx_bytes.send(bytes.clone());
+        // When HTTP Proxy is enabled, it tracks DNS packets.
+        if let Some(tx_proxy) = &self.tx_proxy_bytes {
+            tx_proxy.send(bytes);
+        }
         len as libslirp_sys::slirp_ssize_t
     }
 }

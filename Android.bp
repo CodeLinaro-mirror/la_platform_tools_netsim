@@ -123,22 +123,6 @@ genrule {
 }
 
 genrule {
-    name: "netsim_cli_cc",
-    tools: ["cxxbridge"],
-    cmd: "$(location cxxbridge) $(in) >> $(out)",
-    srcs: ["rust/cli/src/ffi.rs"],
-    out: ["netsim-cli/src/ffi.rs.cc"],
-}
-
-genrule {
-    name: "netsim_cli_h",
-    tools: ["cxxbridge"],
-    cmd: "$(location cxxbridge) $(in) --header >> $(out)",
-    srcs: ["rust/cli/src/ffi.rs"],
-    out: ["netsim-cli/src/ffi.rs.h"],
-}
-
-genrule {
     name: "netsim_netlink_rust_gen",
     defaults: ["pdl_rust_generator_defaults"],
     srcs: ["pdl/netlink.pdl"],
@@ -374,48 +358,19 @@ rust_test_host {
     test_suites: ["general_tests"],
 }
 
-cc_library_host_static {
-    name: "lib-netsim-frontend-client",
-    defaults: ["netsim_defaults"],
-    srcs: [
-        "src/frontend/frontend_client.cc",
-        "src/util/ini_file.cc",
-        "src/util/log.cc",
-        "src/util/os_utils.cc",
-        "src/util/string_utils.cc",
-    ],
-    generated_headers: [
-        "cxx-bridge-header",
-        "netsim_cli_h",
-    ],
-    shared_libs: ["libgrpc++"],
-    generated_sources: ["netsim_cli_cc"],
-    static_libs: [
-        "libprotobuf-cpp-full",
-        "lib-netsim-frontend-proto",
-    ],
-}
-
 rust_defaults {
     name: "netsim_cli_defaults",
     rustlibs: [
+        "libanyhow",
         "libclap",
-        "libcxx",
+        "libfutures",
+        "libfutures_util",
+        "libgrpcio",
         "libhex",
         "libnetsim_common",
         "libnetsim_proto",
         "libprotobuf",
         "libtracing",
-    ],
-}
-
-rust_defaults {
-    name: "netsim_cli_cc_defaults",
-    shared_libs: ["libgrpc++"],
-    static_libs: [
-        "lib-netsim-frontend-client",
-        "lib-netsim-frontend-proto",
-        "libprotobuf-cpp-full",
     ],
 }
 
@@ -432,7 +387,6 @@ rust_library_host {
     srcs: ["rust/cli/src/lib.rs"],
     defaults: [
         "netsim_cli_defaults",
-        "netsim_cli_cc_defaults",
     ],
 }
 
@@ -441,28 +395,5 @@ rust_binary_host {
     srcs: ["rust/cli/bin/netsim.rs"],
     rustlibs: [
         "libnetsim_cli",
-    ],
-}
-
-rust_binary_host {
-    name: "netsim_test_client",
-    srcs: ["rust/frontend/src/netsim_test_client.rs"],
-    rustlibs: [
-        "libgrpcio",
-        "libnetsim_proto",
-        "libprotobuf",
-        "libnetsim_common",
-    ],
-}
-
-rust_binary_host {
-    name: "netsim_test_server",
-    srcs: ["rust/frontend/src/netsim_test_server.rs"],
-    rustlibs: [
-        "libgrpcio",
-        "libnetsim_proto",
-        "libprotobuf",
-        "libnetsim_common",
-        "libfutures",
     ],
 }

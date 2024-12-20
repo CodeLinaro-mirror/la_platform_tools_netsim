@@ -16,20 +16,19 @@ use std::cmp::max;
 
 use crate::args::{self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, OnOffState};
 use crate::display::Displayer;
+use crate::grpc_client::GrpcResponse;
 use netsim_common::util::time_display::TimeDisplay;
-use netsim_proto::{
-    common::ChipKind,
-    frontend::{CreateDeviceResponse, ListCaptureResponse, ListDeviceResponse, VersionResponse},
-    model,
-};
-use protobuf::Message;
+use netsim_proto::{common::ChipKind, frontend, model};
 
 impl args::Command {
     /// Format and print the response received from the frontend server for the command
-    pub fn print_response(&self, response: &[u8], verbose: bool) {
+    pub fn print_response(&self, response: &GrpcResponse, verbose: bool) {
         match self {
             Command::Version => {
-                Self::print_version_response(VersionResponse::parse_from_bytes(response).unwrap());
+                let GrpcResponse::GetVersion(res) = response else {
+                    panic!("Expected to print VersionResponse. Got: {:?}", response);
+                };
+                Self::print_version_response(res);
             }
             Command::Radio(cmd) => {
                 if verbose {
@@ -53,24 +52,26 @@ impl args::Command {
                 }
             }
             Command::Devices(_) => {
-                println!(
-                    "{}",
-                    Displayer::new(
-                        ListDeviceResponse::parse_from_bytes(response).unwrap(),
-                        verbose
-                    )
-                );
+                let GrpcResponse::ListDevice(res) = response else {
+                    panic!("Expected to print ListDeviceResponse. Got: {:?}", response);
+                };
+                println!("{}", Displayer::new(res.clone(), verbose));
             }
             Command::Reset => {
                 if verbose {
                     println!("All devices have been reset.");
                 }
             }
-            Command::Capture(Capture::List(cmd)) => Self::print_list_capture_response(
-                ListCaptureResponse::parse_from_bytes(response).unwrap(),
-                verbose,
-                cmd.patterns.to_owned(),
-            ),
+            Command::Capture(Capture::List(cmd)) => {
+                let GrpcResponse::ListCapture(res) = response else {
+                    panic!("Expected to print ListCaptureResponse. Got: {:?}", response);
+                };
+                Self::print_list_capture_response(
+                    &mut res.clone(),
+                    verbose,
+                    cmd.patterns.to_owned(),
+                )
+            }
             Command::Capture(Capture::Patch(cmd)) => {
                 if verbose {
                     println!(
@@ -96,10 +97,10 @@ impl args::Command {
                         if !verbose {
                             return;
                         }
-                        let device = CreateDeviceResponse::parse_from_bytes(response)
-                            .expect("could not read device from response")
-                            .device;
-
+                        let GrpcResponse::CreateDevice(res) = response else {
+                            panic!("Expected to print CreateDeviceResponse. Got: {:?}", response);
+                        };
+                        let device = &res.device;
                         if device.chips.len() == 1 {
                             println!(
                                 "Created device '{}' with ble beacon chip '{}'",
@@ -189,13 +190,13 @@ impl args::Command {
     }
 
     /// Helper function to format and print VersionResponse
-    fn print_version_response(response: VersionResponse) {
+    fn print_version_response(response: &frontend::VersionResponse) {
         println!("Netsim version: {}", response.version);
     }
 
     /// Helper function to format and print ListCaptureResponse
     fn print_list_capture_response(
-        mut response: ListCaptureResponse,
+        response: &mut frontend::ListCaptureResponse,
         verbose: bool,
         patterns: Vec<String>,
     ) {
