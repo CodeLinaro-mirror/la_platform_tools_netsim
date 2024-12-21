@@ -21,12 +21,14 @@ import platform
 import subprocess
 import time
 import psutil
+import requests
 
 PLATFORM_SYSTEM = platform.system().lower()
 PLATFORM_MACHINE = platform.machine()
 TEST_DURATION = 300
 CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
 NETSIMD_BINARY = 'netsimd.exe' if PLATFORM_SYSTEM == 'windows' else 'netsimd'
+NETSIM_FRONTEND_HTTP_URI = 'http://localhost:7681'
 EMULATOR_BINARY = 'emulator.exe' if PLATFORM_SYSTEM == 'windows' else 'emulator'
 QEMU_SYSTEM_BINARY = (
     f'qemu-system-{PLATFORM_MACHINE}.exe'
@@ -57,11 +59,14 @@ def _get_cpu_usage():
   return netsimd_cpu_usage[0], qemu_cpu_usage[0]
 
 
-def _trace_cpu_usage(filename):
+def _trace_usage(filename: str, avd: str, netsim_wifi: bool):
   """Utility function for tracing CPU usage and write into csv"""
   with open(filename, 'w', newline='') as csvfile:
     writer = csv.writer(csvfile)
-    writer.writerow(['Timestamp', NETSIMD_BINARY, QEMU_SYSTEM_BINARY])
+    headers = ['Timestamp', NETSIMD_BINARY, QEMU_SYSTEM_BINARY]
+    if netsim_wifi:
+      headers.extend(['txCount', 'rxCount'])
+    writer.writerow(headers)
     first_time = True
     for _ in range(TEST_DURATION):
       try:
@@ -75,6 +80,8 @@ def _trace_cpu_usage(filename):
         time.sleep(0.1)
         continue
       data = [time.time(), netsimd_cpu_usage, qemu_cpu_usage]
+      if netsim_wifi:
+        data.extend(_get_wifi_packet_count(avd))
       print(f'Got {data}')
       writer.writerow(data)
       time.sleep(1)
@@ -105,6 +112,29 @@ def _terminate_emulator(process):
     print('Process already termianted')
 
 
+def _get_wifi_packet_count(avd: str):
+  """Utility function for getting WiFi Packet Counts.
+
+  Returns (txCount, rxCount)
+  """
+  avd = avd.replace('_', ' ')
+  try:
+    response = requests.get(NETSIM_FRONTEND_HTTP_URI + '/v1/devices')
+    response.raise_for_status()
+    for device in response.json()['devices']:
+      if device['name'] == avd:
+        for chip in device['chips']:
+          if chip['kind'] == 'WIFI':
+            return (chip['wifi']['txCount'], chip['wifi']['rxCount'])
+  except requests.exceptions.RequestException as e:
+    print(f'Request Error: {e}')
+  except KeyError as e:
+    print(f'KeyError: {e}')
+  except IndexError as e:
+    print(f'IndexError: {e}')
+  return (0, 0)
+
+
 def _collect_cpu_usage(avd: str, netsim_wifi: bool):
   """Utility function for running the CPU usage collection session"""
   # Setup cmd and filename to trace
@@ -124,7 +154,7 @@ def _collect_cpu_usage(avd: str, netsim_wifi: bool):
   time.sleep(10)
 
   # Trace CPU usage
-  _trace_cpu_usage(filename)
+  _trace_usage(filename, avd, netsim_wifi)
 
   # Terminate Emulator Process
   _terminate_emulator(process)
