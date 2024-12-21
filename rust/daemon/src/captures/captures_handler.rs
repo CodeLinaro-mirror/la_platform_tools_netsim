@@ -20,7 +20,6 @@
 //!
 //! /v1/captures/{id} --> handle_capture_patch, handle_capture_get
 //!
-//! handle_capture_cxx calls handle_capture, which calls handle_capture_* based on uri.
 //! handle_packet_request and handle_packet_response is invoked by packet_hub
 //! to write packets to files if capture state is on.
 
@@ -28,7 +27,7 @@
 // and more descriptive error messages with proper error codes.
 
 use bytes::Bytes;
-use http::{Request, Version};
+use http::Request;
 use log::warn;
 use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::common::ChipKind;
@@ -36,12 +35,9 @@ use netsim_proto::frontend::ListCaptureResponse;
 use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
 use std::fs::File;
 use std::io::{Read, Result};
-use std::pin::Pin;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::devices::chip::ChipIdentifier;
-use crate::ffi::ffi_response_writable::CxxServerResponseWriter;
-use crate::ffi::CxxServerResponseWriterWrapper;
 use crate::http_server::server_response::ResponseWritable;
 use crate::resource::clone_captures;
 use crate::wifi::radiotap;
@@ -210,7 +206,7 @@ fn handle_capture_patch(
     Ok(())
 }
 
-/// The Rust capture handler used directly by Http frontend or handle_capture_cxx for LIST, GET, and PATCH
+/// The Rust capture handler used directly by Http frontend for LIST, GET, and PATCH
 pub fn handle_capture(request: &Request<Vec<u8>>, param: &str, writer: ResponseWritable) {
     if let Err(e) = handle_capture_internal(request, param, writer) {
         writer.put_error(404, &e.to_string());
@@ -250,34 +246,6 @@ fn handle_capture_internal(
             _ => Err(anyhow!("Not found.")),
         }
     }
-}
-
-/// Capture handler cxx for grpc server to call
-pub fn handle_capture_cxx(
-    responder: Pin<&mut CxxServerResponseWriter>,
-    method: String,
-    param: String,
-    body: String,
-) {
-    let mut builder = Request::builder().method(method.as_str());
-    if param.is_empty() {
-        builder = builder.uri("/v1/captures");
-    } else {
-        builder = builder.uri(format!("/v1/captures/{}", param));
-    }
-    builder = builder.version(Version::HTTP_11);
-    let request = match builder.body(body.as_bytes().to_vec()) {
-        Ok(request) => request,
-        Err(err) => {
-            warn!("{err:?}");
-            return;
-        }
-    };
-    handle_capture(
-        &request,
-        param.as_str(),
-        &mut CxxServerResponseWriterWrapper { writer: responder },
-    );
 }
 
 /// A common code for handle_request and handle_response methods.

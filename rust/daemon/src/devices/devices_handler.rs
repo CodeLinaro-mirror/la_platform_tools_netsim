@@ -30,13 +30,10 @@ use crate::events;
 use crate::events::{
     ChipAdded, ChipRemoved, DeviceAdded, DevicePatched, DeviceRemoved, Event, Events, ShutDown,
 };
-use crate::ffi::ffi_response_writable::CxxServerResponseWriter;
-use crate::ffi::CxxServerResponseWriterWrapper;
 use crate::http_server::server_response::ResponseWritable;
 use crate::wireless;
 use cxx::{CxxString, CxxVector};
 use http::Request;
-use http::Version;
 use log::{info, warn};
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::configuration::Controller;
@@ -62,7 +59,6 @@ use protobuf_json_mapping::print_to_string;
 use protobuf_json_mapping::print_to_string_with_options;
 use protobuf_json_mapping::PrintOptions;
 use std::collections::{BTreeMap, HashMap};
-use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
@@ -871,7 +867,7 @@ fn handle_device_subscribe(writer: ResponseWritable, subscribe_json: &str) {
     }
 }
 
-/// The Rust device handler used directly by Http frontend or handle_device_cxx for LIST, GET, and PATCH
+/// The Rust device handler used directly by Http frontend for LIST, GET, and PATCH
 pub fn handle_device(request: &Request<Vec<u8>>, param: &str, writer: ResponseWritable) {
     // Route handling
     if request.uri() == "/v1/devices" {
@@ -923,34 +919,6 @@ pub fn handle_device(request: &Request<Vec<u8>>, param: &str, writer: ResponseWr
             _ => writer.put_error(404, "Not found."),
         }
     }
-}
-
-/// Device handler cxx for grpc server to call
-pub fn handle_device_cxx(
-    responder: Pin<&mut CxxServerResponseWriter>,
-    method: String,
-    param: String,
-    body: String,
-) {
-    let mut builder = Request::builder().method(method.as_str());
-    if param.is_empty() {
-        builder = builder.uri("/v1/devices");
-    } else {
-        builder = builder.uri(format!("/v1/devices/{}", param));
-    }
-    builder = builder.version(Version::HTTP_11);
-    let request = match builder.body(body.as_bytes().to_vec()) {
-        Ok(request) => request,
-        Err(err) => {
-            warn!("{err:?}");
-            return;
-        }
-    };
-    handle_device(
-        &request,
-        param.as_str(),
-        &mut CxxServerResponseWriterWrapper { writer: responder },
-    )
 }
 
 /// return enum type for check_device_event
@@ -1045,6 +1013,7 @@ pub fn get_radio_stats() -> Vec<NetsimRadioStats> {
 #[cfg(test)]
 mod tests {
     use crate::events;
+    use http::Version;
     use netsim_common::util::netsim_logger::init_for_test;
     use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
     use netsim_proto::model::{DeviceCreate as ProtoDeviceCreate, Orientation as ProtoOrientation};

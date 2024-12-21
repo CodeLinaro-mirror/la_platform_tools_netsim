@@ -40,8 +40,7 @@ add_subdirectory(src)
 if(TARGET Rust::Rustc)
   android_add_executable(
     TARGET netsim LICENSE Apache-2.0 INSTALL . SRC rust/netsim.cc
-    DEPS frontend-client grpc++ netsim-cli-proto-lib netsim-cli-rust-lib
-         protobuf::libprotobuf util-lib)
+    DEPS netsim-cli-proto-lib netsim-cli-rust-lib)
 
   android_add_executable(
     TARGET netsimd
