@@ -24,17 +24,15 @@ import psutil
 import requests
 
 PLATFORM_SYSTEM = platform.system().lower()
-PLATFORM_MACHINE = platform.machine()
+QEMU_ARCH_MAP = {'arm64': 'aarch64', 'AMD64': 'x86_64'}
+PLATFORM_MACHINE = QEMU_ARCH_MAP.get(platform.machine(), platform.machine())
 TEST_DURATION = 300
 CURRENT_PATH = os.path.dirname(os.path.abspath(__file__))
-NETSIMD_BINARY = 'netsimd.exe' if PLATFORM_SYSTEM == 'windows' else 'netsimd'
+EXE_SUFFIX = '.exe' if PLATFORM_SYSTEM == 'windows' else ''
+NETSIMD_BINARY = f'netsimd{EXE_SUFFIX}'
 NETSIM_FRONTEND_HTTP_URI = 'http://localhost:7681'
-EMULATOR_BINARY = 'emulator.exe' if PLATFORM_SYSTEM == 'windows' else 'emulator'
-QEMU_SYSTEM_BINARY = (
-    f'qemu-system-{PLATFORM_MACHINE}.exe'
-    if PLATFORM_SYSTEM == 'windows'
-    else f'qemu-system-{PLATFORM_MACHINE}'
-)
+EMULATOR_BINARY = f'emulator{EXE_SUFFIX}'
+QEMU_SYSTEM_BINARY = f'qemu-system-{PLATFORM_MACHINE}{EXE_SUFFIX}'
 
 
 def _get_cpu_usage():
