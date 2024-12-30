@@ -43,6 +43,8 @@ corrosion_set_env_vars(
   GRPCIO_SYS_GRPC_INCLUDE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../../../external/grpc/include"
 )
 
+set_prebuilt_packets_env_vars(netsim-daemon)
+
 add_custom_target(
   netsim_rust_packets
   DEPENDS pdl_gen-RootCanalGeneratedPackets_rs pdl_gen-NetlinkPackets_rs
