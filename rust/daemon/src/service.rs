@@ -14,11 +14,9 @@
 
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
-use crate::ffi::ffi_transport::{run_grpc_server_cxx, GrpcServer};
 use crate::http_server::server::run_http_server;
 use crate::transport::socket::run_socket_transport;
 use crate::wireless;
-use cxx::UniquePtr;
 use log::{error, info, warn};
 use netsim_common::util::ini_file::IniFile;
 use netsim_common::util::os_utils::get_netsim_ini_filepath;
@@ -36,7 +34,6 @@ pub struct ServiceParams {
     instance_num: u16,
     dev: bool,
     vsock: u16,
-    rust_grpc: bool,
 }
 
 impl ServiceParams {
@@ -49,27 +46,15 @@ impl ServiceParams {
         instance_num: u16,
         dev: bool,
         vsock: u16,
-        rust_grpc: bool,
     ) -> Self {
-        ServiceParams {
-            fd_startup_str,
-            no_cli_ui,
-            no_web_ui,
-            hci_port,
-            instance_num,
-            dev,
-            vsock,
-            rust_grpc,
-        }
+        ServiceParams { fd_startup_str, no_cli_ui, no_web_ui, hci_port, instance_num, dev, vsock }
     }
 }
 
 pub struct Service {
     // netsimd states, like device resource.
     service_params: ServiceParams,
-    // grpc server
-    grpc_server: UniquePtr<GrpcServer>,
-    rust_grpc_server: Option<grpcio::Server>,
+    grpc_server: Option<grpcio::Server>,
 }
 
 impl Service {
@@ -78,7 +63,7 @@ impl Service {
     /// The file descriptors in `service_params.fd_startup_str` must be valid and open, and must
     /// remain so for as long as the `Service` exists.
     pub unsafe fn new(service_params: ServiceParams) -> Service {
-        Service { service_params, grpc_server: UniquePtr::null(), rust_grpc_server: None }
+        Service { service_params, grpc_server: None }
     }
 
     /// Sets up the states for netsimd.
@@ -100,25 +85,14 @@ impl Service {
         // If NETSIM_GRPC_PORT is set, use the fixed port for grpc server.
         let mut netsim_grpc_port =
             env::var("NETSIM_GRPC_PORT").map(|val| val.parse::<u32>().unwrap_or(0)).unwrap_or(0);
-        if self.service_params.rust_grpc {
-            // Run netsim gRPC server
-            let (server, port) = crate::grpc_server::server::start(netsim_grpc_port)?;
-            self.rust_grpc_server = Some(server);
-            netsim_grpc_port = port.into();
-        } else {
-            let grpc_server = run_grpc_server_cxx(
-                netsim_grpc_port,
-                self.service_params.no_cli_ui,
-                self.service_params.vsock,
-            );
-            match grpc_server.is_null() {
-                true => return Err(anyhow::anyhow!("Failed to start grpc server")),
-                false => {
-                    self.grpc_server = grpc_server;
-                    netsim_grpc_port = self.grpc_server.get_grpc_port();
-                }
-            }
-        }
+        // Run netsim gRPC server
+        let (server, port) = crate::grpc_server::server::start(
+            netsim_grpc_port,
+            self.service_params.no_cli_ui,
+            self.service_params.vsock,
+        )?;
+        self.grpc_server = Some(server);
+        netsim_grpc_port = port.into();
         Ok(netsim_grpc_port)
     }
 
@@ -181,10 +155,7 @@ impl Service {
     /// Shut down the netsimd services
     pub fn shut_down(&mut self) {
         // TODO: shutdown other services in Rust
-        if !self.grpc_server.is_null() {
-            self.grpc_server.shut_down();
-        }
-        self.rust_grpc_server.as_mut().map(|server| server.shutdown());
+        self.grpc_server.as_mut().map(|server| server.shutdown());
         wireless::bluetooth::bluetooth_stop();
         wireless::wifi::wifi_stop();
     }

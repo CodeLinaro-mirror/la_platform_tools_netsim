@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::wifi::frame::Frame;
+use crate::wifi::hostapd::Hostapd;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
 use anyhow::{anyhow, Context};
 use bytes::Bytes;
@@ -37,6 +38,25 @@ pub struct Processor {
     pub network: bool,
     pub wmedium: bool,
     pub frame: Frame,
+    pub plaintext_ieee80211: Option<Ieee80211>,
+}
+
+impl Processor {
+    /// Returns the decrypted IEEE 802.11 frame if available.
+    /// Otherwise, returns the original IEEE 80211 frame.
+    pub fn get_ieee80211(&self) -> &Ieee80211 {
+        self.plaintext_ieee80211.as_ref().unwrap_or(&self.frame.ieee80211)
+    }
+
+    /// Returns the decrypted IEEE 802.11 frame as bytes if available.
+    /// Otherwise, returns the original IEEE 80211 frame as bytes.
+    pub fn get_ieee80211_bytes(&self) -> Bytes {
+        if let Some(ieee80211) = self.plaintext_ieee80211.as_ref() {
+            ieee80211.encode_to_vec().unwrap().into()
+        } else {
+            self.frame.data.clone().into()
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -98,24 +118,20 @@ pub struct Medium {
     // Ieee80211 source address
     stations: RwLock<HashMap<MacAddress, Arc<Station>>>,
     clients: RwLock<HashMap<u32, Client>>,
-    // BSSID. MAC address of the access point in WiFi Service.
-    hostapd_bssid: MacAddress,
     // Simulate the re-transmission of frames sent to hostapd
     ap_simulation: bool,
+    hostapd: Arc<Hostapd>,
 }
 
 type HwsimCmdCallback = fn(u32, &Bytes);
 impl Medium {
-    pub fn new(callback: HwsimCmdCallback) -> Medium {
-        // Defined in external/qemu/android-qemu2-glue/emulation/WifiService.cpp
-        // TODO: Use hostapd_bssid to initialize hostapd.
-        let bssid_bytes: [u8; 6] = [0x00, 0x13, 0x10, 0x85, 0xfe, 0x01];
+    pub fn new(callback: HwsimCmdCallback, hostapd: Arc<Hostapd>) -> Medium {
         Self {
             callback,
             stations: RwLock::new(HashMap::new()),
             clients: RwLock::new(HashMap::new()),
-            hostapd_bssid: MacAddress::from(&bssid_bytes),
             ap_simulation: true,
+            hostapd,
         }
     }
 
@@ -215,7 +231,15 @@ impl Medium {
             .map_err(|e| warn!("error upsert station for client {client_id}: {e}"))
             .ok()?;
 
-        let mut processor = Processor { hostapd: false, network: false, wmedium: false, frame };
+        let plaintext_ieee80211 = self.hostapd.try_decrypt(&frame.ieee80211);
+
+        let mut processor = Processor {
+            hostapd: false,
+            network: false,
+            wmedium: false,
+            frame,
+            plaintext_ieee80211,
+        };
 
         let dest_addr = processor.frame.ieee80211.get_destination();
 
@@ -227,7 +251,6 @@ impl Medium {
                 })
         });
 
-        let frame = &processor.frame;
         if self.contains_station(&dest_addr) {
             processor.wmedium = true;
             return Some(processor);
@@ -236,27 +259,33 @@ impl Medium {
             processor.wmedium = true;
         }
 
+        let ieee80211: &Ieee80211 = processor.get_ieee80211();
+        // If the BSSID is unicast and does not match the hostapd's BSSID, the packet is not handled by hostapd. Skip further checks.
+        if let Some(bssid) = ieee80211.get_bssid() {
+            if !bssid.is_multicast() && bssid != self.hostapd.get_bssid() {
+                return Some(processor);
+            }
+        }
         // Data frames
-        if frame.ieee80211.is_data() {
-            // TODO: Need to handle encrypted IEEE 802.11 frame.
+        if ieee80211.is_data() {
             // EAPoL is used in Wi-Fi 4-way handshake.
-            let is_eapol = frame.ieee80211.is_eapol().unwrap_or_else(|e| {
+            let is_eapol = ieee80211.is_eapol().unwrap_or_else(|e| {
                 debug!("Failed to get ether type for is_eapol(): {}", e);
                 false
             });
             if is_eapol {
                 processor.hostapd = true;
-            } else if frame.ieee80211.is_to_ap() {
+            } else if ieee80211.is_to_ap() {
                 // Don't forward Null Data frames to slirp because they are used to maintain an active connection and carry no user data.
-                if processor.frame.ieee80211.stype() != DataSubType::Nodata.into() {
+                if ieee80211.stype() != DataSubType::Nodata.into() {
                     processor.network = true;
                 }
             }
         } else {
             // Mgmt or Ctrl frames.
             // TODO: Refactor this check after verifying all packets sent to hostapd are of ToAP type.
-            let addr1 = frame.ieee80211.get_addr1();
-            if addr1.is_multicast() || addr1.is_broadcast() || addr1 == self.hostapd_bssid {
+            let addr1 = ieee80211.get_addr1();
+            if addr1.is_multicast() || addr1.is_broadcast() || addr1 == self.hostapd.get_bssid() {
                 processor.hostapd = true;
             }
         }
@@ -296,7 +325,7 @@ impl Medium {
     /// Handle Wi-Fi Ieee802.3 frame from network.
     /// Convert to HwsimMsg and send to clients.
     pub fn process_ieee8023_response(&self, packet: &Bytes) {
-        let result = Ieee80211::from_ieee8023(packet, self.hostapd_bssid)
+        let result = Ieee80211::from_ieee8023(packet, self.hostapd.get_bssid())
             .and_then(|ieee80211| self.handle_ieee80211_response(ieee80211));
 
         if let Err(e) = result {
@@ -317,7 +346,10 @@ impl Medium {
     }
 
     /// Determine the client id based on destination and send to client.
-    fn handle_ieee80211_response(&self, ieee80211: Ieee80211) -> anyhow::Result<()> {
+    fn handle_ieee80211_response(&self, mut ieee80211: Ieee80211) -> anyhow::Result<()> {
+        if let Some(encrypted_ieee80211) = self.hostapd.try_encrypt(&ieee80211) {
+            ieee80211 = encrypted_ieee80211;
+        }
         let dest_addr = ieee80211.get_destination();
         if let Ok(destination) = self.get_station(&dest_addr) {
             self.send_ieee80211_response(&ieee80211, &destination)?;
@@ -430,11 +462,12 @@ impl Medium {
     fn send_from_sta_frame(
         &self,
         frame: &Frame,
+        ieee80211: &Ieee80211,
         source: &Station,
         destination: &Station,
     ) -> anyhow::Result<()> {
         if self.enabled(source.client_id)? && self.enabled(destination.client_id)? {
-            if let Some(packet) = self.create_hwsim_msg(frame, &destination.hwsim_addr) {
+            if let Some(packet) = self.create_hwsim_msg(frame, ieee80211, &destination.hwsim_addr) {
                 self.incr_rx(destination.client_id)?;
                 (self.callback)(destination.client_id, &packet.encode_to_vec()?.into());
                 log_hwsim_msg(frame, source.client_id, destination.client_id);
@@ -445,37 +478,44 @@ impl Medium {
 
     // Broadcast an 802.11 frame to all stations.
     /// TODO: Compare with the implementations in mac80211_hwsim.c and wmediumd.c.
-    fn broadcast_from_sta_frame(&self, frame: &Frame, source: &Station) -> anyhow::Result<()> {
+    fn broadcast_from_sta_frame(
+        &self,
+        frame: &Frame,
+        ieee80211: &Ieee80211,
+        source: &Station,
+    ) -> anyhow::Result<()> {
         for destination in self.stations() {
             if source.addr != destination.addr {
-                self.send_from_sta_frame(frame, source, &destination)?;
+                self.send_from_sta_frame(frame, ieee80211, source, &destination)?;
             }
         }
         Ok(())
     }
-
-    pub fn queue_frame(&self, frame: Frame) {
-        self.queue_frame_internal(frame).unwrap_or_else(move |e| {
+    /// Queues the frame for sending to medium.
+    ///
+    /// The `frame` contains an `ieee80211` field, but it might be encrypted. This function uses the provided `ieee80211` parameter directly, as it's expected to be decrypted if necessary.
+    pub fn queue_frame(&self, frame: Frame, ieee80211: Ieee80211) {
+        self.queue_frame_internal(frame, ieee80211).unwrap_or_else(move |e| {
             // TODO: add this error to the netsim_session_stats
             warn!("queue frame error {e}");
         });
     }
 
-    fn queue_frame_internal(&self, frame: Frame) -> anyhow::Result<()> {
-        let source = self.get_station(&frame.ieee80211.get_source())?;
-        let dest_addr = frame.ieee80211.get_destination();
+    fn queue_frame_internal(&self, frame: Frame, ieee80211: Ieee80211) -> anyhow::Result<()> {
+        let source = self.get_station(&ieee80211.get_source())?;
+        let dest_addr = ieee80211.get_destination();
         if self.contains_station(&dest_addr) {
             debug!("Frame deliver from {} to {}", source.addr, dest_addr);
             let destination = self.get_station(&dest_addr)?;
-            self.send_from_sta_frame(&frame, &source, &destination)?;
+            self.send_from_sta_frame(&frame, &ieee80211, &source, &destination)?;
             return Ok(());
         } else if dest_addr.is_multicast() {
-            debug!("Frame multicast {}", frame.ieee80211);
-            self.broadcast_from_sta_frame(&frame, &source)?;
+            debug!("Frame multicast {}", ieee80211);
+            self.broadcast_from_sta_frame(&frame, &ieee80211, &source)?;
             return Ok(());
         }
 
-        Err(anyhow!("Dropped packet {}", &frame.ieee80211))
+        Err(anyhow!("Dropped packet {}", ieee80211))
     }
 
     // Simulate transmission through hostapd by rewriting frames with 802.11 ToDS
@@ -483,16 +523,22 @@ impl Medium {
     fn create_hwsim_attr(
         &self,
         frame: &Frame,
+        ieee80211: &Ieee80211,
         dest_hwsim_addr: &MacAddress,
     ) -> anyhow::Result<Vec<u8>> {
+        // Encrypt Ieee80211 if needed
         let attrs = &frame.attrs;
-        let frame = match self.ap_simulation
-            && frame.ieee80211.is_to_ap()
-            && frame.ieee80211.get_bssid() == Some(self.hostapd_bssid)
+        let mut ieee80211_response = match self.ap_simulation
+            && ieee80211.is_to_ap()
+            && ieee80211.get_bssid() == Some(self.hostapd.get_bssid())
         {
-            true => frame.ieee80211.into_from_ap()?.encode_to_vec()?,
-            false => attrs.frame.clone().unwrap(),
+            true => ieee80211.into_from_ap()?.try_into()?,
+            false => ieee80211.clone(),
         };
+        if let Some(encrypted_ieee80211) = self.hostapd.try_encrypt(&ieee80211_response) {
+            ieee80211_response = encrypted_ieee80211;
+        }
+        let frame = ieee80211_response.encode_to_vec()?;
 
         let mut builder = HwsimAttrSet::builder();
 
@@ -512,10 +558,15 @@ impl Medium {
     }
 
     // Simulates transmission through hostapd.
-    fn create_hwsim_msg(&self, frame: &Frame, dest_hwsim_addr: &MacAddress) -> Option<HwsimMsg> {
+    fn create_hwsim_msg(
+        &self,
+        frame: &Frame,
+        ieee80211: &Ieee80211,
+        dest_hwsim_addr: &MacAddress,
+    ) -> Option<HwsimMsg> {
         let hwsim_msg = &frame.hwsim_msg;
         assert_eq!(hwsim_msg.hwsim_hdr.hwsim_cmd, HwsimCmd::Frame);
-        let attributes_result = self.create_hwsim_attr(frame, dest_hwsim_addr);
+        let attributes_result = self.create_hwsim_attr(frame, ieee80211, dest_hwsim_addr);
         let attributes = match attributes_result {
             Ok(attributes) => attributes,
             Err(e) => {
@@ -603,17 +654,78 @@ pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use netsim_packets::ieee80211::parse_mac_address;
+    use crate::wifi::hostapd;
+    use netsim_packets::ieee80211::{parse_mac_address, FrameType, Ieee80211, Ieee80211ToAp};
+
+    #[test]
+    fn test_get_plaintext_ieee80211() {
+        // Test Data (802.11 frame with LLC/SNAP)
+        let bssid = parse_mac_address("0:0:0:0:0:0").unwrap();
+        let source = parse_mac_address("1:1:1:1:1:1").unwrap();
+        let destination = parse_mac_address("2:2:2:2:2:2").unwrap();
+        let ieee80211: Ieee80211 = Ieee80211ToAp {
+            duration_id: 0,
+            ftype: FrameType::Data,
+            more_data: 0,
+            more_frags: 0,
+            order: 0,
+            pm: 0,
+            protected: 0,
+            retry: 0,
+            stype: 0,
+            version: 0,
+            bssid,
+            source,
+            destination,
+            seq_ctrl: 0,
+            payload: Vec::new(),
+        }
+        .try_into()
+        .unwrap();
+
+        let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame_mdns.csv");
+        let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
+        let frame1 = Frame::parse(&hwsim_msg).unwrap();
+        let frame2 = Frame::parse(&hwsim_msg).unwrap();
+
+        // Case 1: plaintext_ieee80211 is None
+        let processor = Processor {
+            hostapd: false,
+            network: false,
+            wmedium: false,
+            frame: frame1,
+            plaintext_ieee80211: None,
+        };
+        assert_eq!(processor.get_ieee80211(), &processor.frame.ieee80211);
+        assert_eq!(processor.get_ieee80211_bytes(), Bytes::from(processor.frame.data.clone()));
+
+        // Case 2: plaintext_ieee80211 has a value
+        let processor = Processor {
+            hostapd: false,
+            network: false,
+            wmedium: false,
+            frame: frame2,
+            plaintext_ieee80211: Some(ieee80211),
+        };
+        assert_eq!(processor.get_ieee80211(), processor.plaintext_ieee80211.as_ref().unwrap());
+        assert_eq!(
+            processor.get_ieee80211_bytes(),
+            Bytes::from(processor.plaintext_ieee80211.as_ref().unwrap().encode_to_vec().unwrap())
+        );
+    }
+
     #[test]
     fn test_remove() {
-        let hostapd_bssid: MacAddress = parse_mac_address("00:13:10:85:fe:01").unwrap();
-
         let test_client_id: u32 = 1234;
         let other_client_id: u32 = 5678;
         let addr: MacAddress = parse_mac_address("00:0b:85:71:20:00").unwrap();
         let other_addr: MacAddress = parse_mac_address("00:0b:85:71:20:01").unwrap();
         let hwsim_addr: MacAddress = parse_mac_address("00:0b:85:71:20:ce").unwrap();
         let other_hwsim_addr: MacAddress = parse_mac_address("00:0b:85:71:20:cf").unwrap();
+
+        let hostapd_options = netsim_proto::config::HostapdOptions::new();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let hostapd = Arc::new(hostapd::hostapd_run(hostapd_options, tx).unwrap());
 
         // Create a test Medium object
         let callback: HwsimCmdCallback = |_, _| {};
@@ -643,8 +755,8 @@ mod tests {
                 (test_client_id, Client::new()),
                 (other_client_id, Client::new()),
             ])),
-            hostapd_bssid,
             ap_simulation: true,
+            hostapd,
         };
 
         medium.remove(test_client_id);
