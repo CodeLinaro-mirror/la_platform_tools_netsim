@@ -59,20 +59,6 @@ impl Processor {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug)]
-pub enum HwsimCmdEnum {
-    Unspec,
-    Register,
-    Frame(Box<Frame>),
-    TxInfoFrame,
-    NewRadio,
-    DelRadio,
-    GetRadio,
-    AddMacAddr,
-    DelMacAddr,
-}
-
 #[derive(Clone)]
 struct Station {
     client_id: u32,
@@ -638,19 +624,6 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> anyhow::Result<HwsimMsg> {
     Ok(new_hwsim_msg)
 }
 
-// It's used by radiotap.rs for packet capture.
-pub fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
-    let hwsim_msg = HwsimMsg::decode_full(packet)?;
-    match hwsim_msg.hwsim_hdr.hwsim_cmd {
-        HwsimCmd::Frame => {
-            let frame = Frame::parse(&hwsim_msg)?;
-            Ok(HwsimCmdEnum::Frame(Box::new(frame)))
-        }
-        HwsimCmd::TxInfoFrame => Ok(HwsimCmdEnum::TxInfoFrame),
-        _ => Err(anyhow!("Unknown HwsimMsg cmd={:?}", hwsim_msg.hwsim_hdr.hwsim_cmd)),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -765,27 +738,6 @@ mod tests {
         assert!(medium.contains_station(&other_addr));
         assert!(!medium.contains_client(test_client_id));
         assert!(medium.contains_client(other_client_id));
-    }
-
-    #[test]
-    fn test_netlink_attr() {
-        let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
-        assert!(parse_hwsim_cmd(&packet).is_ok());
-
-        let tx_info_packet: Vec<u8> = include!("test_packets/hwsim_cmd_tx_info.csv");
-        assert!(parse_hwsim_cmd(&tx_info_packet).is_ok());
-    }
-
-    #[test]
-    fn test_netlink_attr_response_packet() {
-        // Response packet may not contain transmitter, flags, tx_info, or cookie fields.
-        let response_packet: Vec<u8> =
-            include!("test_packets/hwsim_cmd_frame_response_no_transmitter_flags_tx_info.csv");
-        assert!(parse_hwsim_cmd(&response_packet).is_ok());
-
-        let response_packet2: Vec<u8> =
-            include!("test_packets/hwsim_cmd_frame_response_no_cookie.csv");
-        assert!(parse_hwsim_cmd(&response_packet2).is_ok());
     }
 
     #[test]
