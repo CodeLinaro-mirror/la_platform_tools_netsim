@@ -25,22 +25,24 @@
 ///
 use crate::dns;
 use etherparse::{PacketHeaders, PayloadSlice, TransportHeader};
+use log::debug;
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::Mutex;
 
 pub struct DnsManager {
-    map: HashMap<IpAddr, String>,
+    map: Mutex<HashMap<IpAddr, String>>,
 }
 
 impl DnsManager {
     const DNS_PORT: u16 = 53;
 
     pub fn new() -> Self {
-        DnsManager { map: HashMap::new() }
+        DnsManager { map: Mutex::new(HashMap::new()) }
     }
 
     /// Add potential DNS entries to the cache.
-    pub fn add_from_packet_headers(&mut self, headers: &PacketHeaders) {
+    pub fn add_from_packet_headers(&self, headers: &PacketHeaders) {
         // Check if the packet contains a UDP header
         // with source port from DNS server
         // and DNS answers with A/AAAA records
@@ -51,7 +53,8 @@ impl DnsManager {
                     // Add any A/AAAA domain names
                     if let Ok(answers) = dns::parse_answers(payload) {
                         for (ip_addr, name) in answers {
-                            self.map.insert(ip_addr, name);
+                            self.map.lock().unwrap().insert(ip_addr, name.clone());
+                            debug!("Added {} ({}) to DNS cache", name, ip_addr);
                         }
                     }
                 }
@@ -59,17 +62,17 @@ impl DnsManager {
         }
     }
 
-    pub fn add_from_ethernet_slice(&mut self, packet: &[u8]) {
+    pub fn add_from_ethernet_slice(&self, packet: &[u8]) {
         let headers = PacketHeaders::from_ethernet_slice(packet).unwrap();
         self.add_from_packet_headers(&headers);
     }
 
     /// Return a FQDN from a prior DNS response for ip address
     pub fn get(&self, ip_addr: &IpAddr) -> Option<String> {
-        self.map.get(ip_addr).cloned()
+        self.map.lock().unwrap().get(ip_addr).cloned()
     }
 
     pub fn len(&self) -> usize {
-        self.map.len()
+        self.map.lock().unwrap().len()
     }
 }
