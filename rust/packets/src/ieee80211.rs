@@ -169,7 +169,7 @@ impl Ieee80211 {
 
     // Frame has addr4 field
     pub fn has_a4(&self) -> bool {
-        self.to_ds == 1 || self.from_ds == 1
+        self.to_ds == 1 && self.from_ds == 1
     }
 
     pub fn is_to_ap(&self) -> bool {
@@ -630,6 +630,34 @@ mod tests {
         .unwrap()
     }
 
+    fn create_test_wds_ieee80211(
+        receiver: MacAddress,
+        transmitter: MacAddress,
+        destination: MacAddress,
+        source: MacAddress,
+    ) -> Ieee80211 {
+        Ieee80211Wds {
+            duration_id: 0,
+            ftype: FrameType::Mgmt,
+            more_data: 0,
+            more_frags: 0,
+            order: 0,
+            pm: 0,
+            protected: 0,
+            retry: 0,
+            stype: 0,
+            version: 0,
+            receiver,
+            transmitter,
+            destination,
+            seq_ctrl: 0,
+            source,
+            payload: Vec::new(),
+        }
+        .try_into()
+        .unwrap()
+    }
+
     fn test_with_address(
         create_test_ieee80211: fn(MacAddress, MacAddress, MacAddress) -> Ieee80211,
     ) {
@@ -717,5 +745,19 @@ mod tests {
         assert_eq!(&ethernet_frame[0..6], destination.to_vec().as_slice()); // Destination MAC
         assert_eq!(&ethernet_frame[6..12], source.to_vec().as_slice()); // Source MAC
         assert_eq!(&ethernet_frame[12..14], [0x08, 0x00]); // EtherType
+    }
+
+    #[test]
+    fn test_has_a4() {
+        let addr1 = parse_mac_address("01:02:03:00:00:01").unwrap();
+        let addr2 = parse_mac_address("01:02:03:00:00:02").unwrap();
+        let addr3 = parse_mac_address("01:02:03:00:00:03").unwrap();
+        let addr4 = parse_mac_address("01:02:03:00:00:04").unwrap();
+
+        // Only WDS has addr4
+        assert!(!create_test_from_ap_ieee80211(addr1, addr2, addr3).has_a4());
+        assert!(!create_test_ibss_ieee80211(addr1, addr2, addr3).has_a4());
+        assert!(!create_test_to_ap_ieee80211(addr1, addr2, addr3).has_a4());
+        assert!(create_test_wds_ieee80211(addr1, addr2, addr3, addr4).has_a4());
     }
 }
