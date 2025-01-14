@@ -22,7 +22,8 @@ mod grpc_client;
 mod requests;
 mod response;
 
-use netsim_common::util::os_utils::{get_instance, get_server_address};
+use netsim_common::util::ini_file::get_server_address;
+use netsim_common::util::os_utils::get_instance;
 use netsim_proto::frontend;
 
 use anyhow::{anyhow, Result};

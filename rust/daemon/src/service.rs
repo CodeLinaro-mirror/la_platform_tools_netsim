@@ -18,13 +18,14 @@ use crate::http_server::server::run_http_server;
 use crate::transport::socket::run_socket_transport;
 use crate::wireless;
 use log::{error, info, warn};
-use netsim_common::util::ini_file::IniFile;
-use netsim_common::util::os_utils::get_netsim_ini_filepath;
 use netsim_common::util::zip_artifact::remove_zip_files;
 use std::env;
 use std::time::Duration;
 
 /// Module to control startup, run, and cleanup netsimd services.
+
+type GrpcPort = u32;
+type WebPort = Option<u16>;
 
 pub struct ServiceParams {
     fd_startup_str: String,
@@ -66,8 +67,8 @@ impl Service {
         Service { service_params, grpc_server: None }
     }
 
-    /// Sets up the states for netsimd.
-    pub fn set_up(&self) {
+    /// Remove old artifacts
+    pub fn remove_artifacts(&self) {
         // Clear all zip files
         match remove_zip_files() {
             Ok(()) => info!("netsim generated zip files in temp directory has been removed."),
@@ -108,22 +109,9 @@ impl Service {
         }
     }
 
-    /// Write ports to netsim.ini file
-    fn write_ports_to_ini(&self, grpc_port: u32, web_port: Option<u16>) {
-        let filepath = get_netsim_ini_filepath(self.service_params.instance_num);
-        let mut ini_file = IniFile::new(filepath);
-        if let Some(num) = web_port {
-            ini_file.insert("web.port", &num.to_string());
-        }
-        ini_file.insert("grpc.port", &grpc_port.to_string());
-        if let Err(err) = ini_file.write() {
-            error!("{err:?}");
-        }
-    }
-
     /// Runs the netsimd services.
     #[allow(unused_unsafe)]
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> anyhow::Result<(GrpcPort, WebPort)> {
         if !self.service_params.fd_startup_str.is_empty() {
             // SAFETY: When the `Service` was constructed by `Service::new` the caller guaranteed
             // that the file descriptors in `service_params.fd_startup_str` would remain valid and
@@ -138,18 +126,17 @@ impl Service {
             Ok(port) => port,
             Err(e) => {
                 error!("Failed to run netsimd: {e:?}");
-                return;
+                return Err(e);
             }
         };
 
         // Run frontend web server
         let web_port = self.run_web_server();
 
-        // Write the port numbers to ini file
-        self.write_ports_to_ini(grpc_port, web_port);
-
         // Run the socket server.
         run_socket_transport(self.service_params.hci_port);
+
+        Ok((grpc_port, web_port))
     }
 
     /// Shut down the netsimd services
