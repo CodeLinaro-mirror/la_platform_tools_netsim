@@ -182,8 +182,7 @@ mod tests {
     use super::get_ini_filepath;
     use super::IniFile;
 
-    #[cfg(not(target_os = "windows"))]
-    use crate::system::tests::ENV_MUTEX;
+    use crate::tests::ENV_MUTEX;
 
     impl IniFile {
         /// Checks if a certain key exists in the file.
@@ -388,7 +387,6 @@ mod tests {
 
     #[test]
     fn test_get_ini_filepath() {
-        #[cfg(not(target_os = "windows"))]
         let _locked = ENV_MUTEX.lock();
 
         // Test with TMPDIR variable
