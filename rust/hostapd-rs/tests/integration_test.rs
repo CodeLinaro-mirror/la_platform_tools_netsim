@@ -142,8 +142,15 @@ fn test_get_and_set_ssid(hostapd: &mut Hostapd, receiver: &mpsc::Receiver<Bytes>
     // Verify setting same ssid again succeeds
     assert!(hostapd.set_ssid(&test_ssid, &test_password).is_ok());
 
-    // Verify set_ssid fails if password is not empty
-    // TODO: Update once password support is implemented
+    test_ssid = "EncryptedSsid".to_string();
     test_password = "TestPassword".to_string();
-    assert!(hostapd.set_ssid(&test_ssid, &test_password).is_err());
+
+    // Verify set_ssid with password succeeds
+    assert!(hostapd.set_ssid(&test_ssid, &test_password).is_ok());
+
+    // Verify ssid was set successfully
+    assert_eq!(hostapd.get_ssid(), test_ssid);
+
+    // Verify hostapd sends new beacon frame with updated SSID
+    verify_beacon_frame_ssid(receiver, &test_ssid);
 }
