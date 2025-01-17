@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::empty_line_after_doc_comments)]
+
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
 use crate::http_server::server::run_http_server;
