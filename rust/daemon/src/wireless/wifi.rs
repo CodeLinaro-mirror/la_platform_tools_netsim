@@ -41,24 +41,55 @@ pub struct Wifi {
     chip_id: ChipIdentifier,
 }
 
-pub struct WifiManager {
+/// Network interface for sending and receiving packets to/from the internet.
+trait Network: Send + Sync {
+    /// Sends the given bytes over the network to the internet.
+    fn input(&self, bytes: Bytes);
+}
+
+/// A network implementation using libslirp.
+struct SlirpNetwork {
+    slirp: libslirp::LibSlirp,
+}
+
+impl SlirpNetwork {
+    /// Starts a new SlirpNetwork instance.
+    fn start(
+        wifi_config: &WiFiConfig,
+        tx_ieee8023_response: mpsc::Sender<Bytes>,
+    ) -> Box<dyn Network> {
+        let slirp_opt = wifi_config.slirp_options.as_ref().unwrap_or_default().clone();
+        let slirp = libslirp::slirp_run(slirp_opt, tx_ieee8023_response)
+            .map_err(|e| warn!("Failed to run libslirp. {e}"))
+            .unwrap();
+        Box::new(SlirpNetwork { slirp })
+    }
+}
+
+impl Network for SlirpNetwork {
+    fn input(&self, bytes: Bytes) {
+        self.slirp.input(bytes);
+    }
+}
+
+struct WifiManager {
     medium: Medium,
     tx_request: mpsc::Sender<(u32, Bytes)>,
-    slirp: libslirp::LibSlirp,
+    network: Box<dyn Network>,
     hostapd: Arc<hostapd::Hostapd>,
 }
 
 impl WifiManager {
-    pub fn new(
+    fn new(
         tx_request: mpsc::Sender<(u32, Bytes)>,
-        slirp: libslirp::LibSlirp,
+        network: Box<dyn Network>,
         hostapd: hostapd::Hostapd,
     ) -> WifiManager {
         let hostapd = Arc::new(hostapd);
         WifiManager {
             medium: Medium::new(medium_callback, hostapd.clone()),
             tx_request,
-            slirp,
+            network,
             hostapd,
         }
     }
@@ -67,7 +98,7 @@ impl WifiManager {
     /// * One to handle requests from medium.
     /// * One to handle IEEE802.3 responses from network.
     /// * One to handle IEEE802.11 responses from hostapd.
-    pub fn start(
+    fn start(
         &self,
         rx_request: mpsc::Receiver<(u32, Bytes)>,
         rx_ieee8023_response: mpsc::Receiver<Bytes>,
@@ -111,7 +142,7 @@ impl WifiManager {
                             if processor.network {
                                 match processor.get_ieee80211().to_ieee8023() {
                                     Ok(ethernet_frame) => {
-                                        get_wifi_manager().slirp.input(ethernet_frame.into())
+                                        get_wifi_manager().network.input(ethernet_frame.into())
                                     }
                                     Err(err) => {
                                         warn!("Failed to convert 802.11 to 802.3: {}", err)
@@ -261,23 +292,26 @@ pub fn wifi_start(
     config: &MessageField<WiFiConfig>,
     forward_host_mdns: bool,
     wifi_args: Option<Vec<String>>,
+    wifi_tap: Option<String>,
 ) {
     let (tx_request, rx_request) = mpsc::channel::<(u32, Bytes)>();
     let (tx_ieee8023_response, rx_ieee8023_response) = mpsc::channel::<Bytes>();
     let (tx_ieee80211_response, rx_ieee80211_response) = mpsc::channel::<Bytes>();
     let tx_ieee8023_response_clone = tx_ieee8023_response.clone();
     let wifi_config = config.clone().unwrap_or_default();
-    let slirp_opt = wifi_config.slirp_options.as_ref().unwrap_or_default().clone();
-    let slirp = libslirp::slirp_run(slirp_opt, tx_ieee8023_response_clone)
-        .map_err(|e| warn!("Failed to run libslirp. {e}"))
-        .unwrap();
+
+    let network: Box<dyn Network> = if wifi_tap.is_some() {
+        todo!();
+    } else {
+        SlirpNetwork::start(config, tx_ieee8023_response_clone)
+    };
 
     let hostapd_opt = wifi_config.hostapd_options.as_ref().unwrap_or_default().clone();
     let hostapd = hostapd::hostapd_run(hostapd_opt, tx_ieee80211_response, wifi_args)
         .map_err(|e| warn!("Failed to run hostapd. {e}"))
         .unwrap();
 
-    let _ = WIFI_MANAGER.set(WifiManager::new(tx_request, slirp, hostapd));
+    let _ = WIFI_MANAGER.set(WifiManager::new(tx_request, network, hostapd));
 
     if let Err(e) = get_wifi_manager().start(
         rx_request,
