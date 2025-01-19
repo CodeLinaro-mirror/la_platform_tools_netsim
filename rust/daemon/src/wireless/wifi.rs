@@ -257,7 +257,11 @@ pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorIm
 }
 
 /// Starts the WiFi service.
-pub fn wifi_start(config: &MessageField<WiFiConfig>, forward_host_mdns: bool) {
+pub fn wifi_start(
+    config: &MessageField<WiFiConfig>,
+    forward_host_mdns: bool,
+    wifi_args: Option<Vec<String>>,
+) {
     let (tx_request, rx_request) = mpsc::channel::<(u32, Bytes)>();
     let (tx_ieee8023_response, rx_ieee8023_response) = mpsc::channel::<Bytes>();
     let (tx_ieee80211_response, rx_ieee80211_response) = mpsc::channel::<Bytes>();
@@ -269,7 +273,7 @@ pub fn wifi_start(config: &MessageField<WiFiConfig>, forward_host_mdns: bool) {
         .unwrap();
 
     let hostapd_opt = wifi_config.hostapd_options.as_ref().unwrap_or_default().clone();
-    let hostapd = hostapd::hostapd_run(hostapd_opt, tx_ieee80211_response)
+    let hostapd = hostapd::hostapd_run(hostapd_opt, tx_ieee80211_response, wifi_args)
         .map_err(|e| warn!("Failed to run hostapd. {e}"))
         .unwrap();
 
