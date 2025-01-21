@@ -41,6 +41,10 @@ impl Hostapd {
     }
 }
 
-pub fn hostapd_run(_opt: ProtoHostapdOptions, _tx: mpsc::Sender<Bytes>) -> anyhow::Result<Hostapd> {
+pub fn hostapd_run(
+    _opt: ProtoHostapdOptions,
+    _tx: mpsc::Sender<Bytes>,
+    _wifi_args: Option<Vec<String>>,
+) -> anyhow::Result<Hostapd> {
     Ok(Hostapd {})
 }

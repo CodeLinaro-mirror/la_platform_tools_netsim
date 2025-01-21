@@ -86,10 +86,14 @@ pub struct NetsimdArgs {
     #[cfg_attr(not(feature = "cuttlefish"), arg(env = "http_proxy"))]
     pub http_proxy: Option<String>,
 
-    // Use TAP interface instead of libslirp for Wi-Fi
+    /// Use TAP interface instead of libslirp for Wi-Fi
     /// WARNING: This flag is still working in progress.
     #[arg(long)]
     pub wifi_tap: Option<String>,
+
+    /// Customize Wi-Fi with a required SSID and optional password (min 8 characters)
+    #[arg(short, long, num_args = 1..=2, value_names = &["ssid", "password"])]
+    pub wifi: Option<Vec<String>>,
 
     /// Start with test beacons
     #[arg(long, alias = "test_beacons", overrides_with("no_test_beacons"))]
