@@ -23,13 +23,21 @@ use std::{
     time::Duration,
 };
 
-macro_rules! be_vec {
+macro_rules! ne_vec {
     ( $( $x:expr ),* ) => {
          Vec::<u8>::new().iter().copied()
-         $( .chain($x.to_be_bytes()) )*
+         $( .chain($x.to_ne_bytes()) )*
          .collect()
        };
     }
+
+macro_rules! be_vec {
+        ( $( $x:expr ),* ) => {
+             Vec::<u8>::new().iter().copied()
+             $( .chain($x.to_be_bytes()) )*
+             .collect()
+           };
+        }
 
 macro_rules! le_vec {
     ( $( $x:expr ),* ) => {
@@ -63,7 +71,7 @@ pub enum LinkType {
 /// pcap file.
 pub fn write_pcap_header<W: Write>(link_type: LinkType, output: &mut W) -> Result<usize> {
     // https://tools.ietf.org/id/draft-gharris-opsawg-pcap-00.html#name-file-header
-    let header: Vec<u8> = be_vec![
+    let header: Vec<u8> = ne_vec![
         0xa1b2c3d4u32, // magic number
         2u16,          // major version
         4u16,          // minor version
@@ -126,7 +134,7 @@ pub fn append_record<W: Write>(
 ) -> Result<usize> {
     // https://tools.ietf.org/id/draft-gharris-opsawg-pcap-00.html#name-packet-record
     let length = packet.len();
-    let header: Vec<u8> = be_vec![
+    let header: Vec<u8> = ne_vec![
         timestamp.as_secs() as u32, // seconds
         timestamp.subsec_micros(),  // microseconds
         length as u32,              // Captured Packet Length
@@ -173,7 +181,12 @@ mod tests {
     use super::*;
 
     static EXPECTED_PCAP: &[u8; 76] = include_bytes!("sample.pcap");
+    static EXPECTED_PCAP_LE: &[u8; 76] = include_bytes!("sample_le.pcap");
     static EXPECTED_PCAPNG: &[u8; 88] = include_bytes!("sample.pcapng");
+
+    fn is_little_endian() -> bool {
+        0x12345678u32.to_le_bytes()[0] == 0x78
+    }
 
     #[test]
     /// The test is done with the golden file sample.pcap with following packets:
@@ -196,7 +209,10 @@ mod tests {
             &wrap_bt_packet(PacketDirection::ControllerToHost, 1, &[10, 32, 1, 0]),
         )
         .unwrap();
-        assert_eq!(actual, EXPECTED_PCAP);
+        match is_little_endian() {
+            true => assert_eq!(actual, EXPECTED_PCAP_LE),
+            false => assert_eq!(actual, EXPECTED_PCAP),
+        }
     }
 
     #[test]

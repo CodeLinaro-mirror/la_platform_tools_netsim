@@ -452,7 +452,10 @@ impl Medium {
         source: &Station,
         destination: &Station,
     ) -> anyhow::Result<()> {
-        if self.enabled(source.client_id)? && self.enabled(destination.client_id)? {
+        if source.client_id != destination.client_id
+            && self.enabled(source.client_id)?
+            && self.enabled(destination.client_id)?
+        {
             if let Some(packet) = self.create_hwsim_msg(frame, ieee80211, &destination.hwsim_addr) {
                 self.incr_rx(destination.client_id)?;
                 (self.callback)(destination.client_id, &packet.encode_to_vec()?.into());
