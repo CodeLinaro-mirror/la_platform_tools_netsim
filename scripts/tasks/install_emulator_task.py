@@ -186,20 +186,17 @@ class InstallEmulatorManager:
       shutil.copytree(
           Path(self.out_dir) / "distribution" / "emulator",
           emulator_filepath,
-          symlinks=True,
           dirs_exist_ok=True,
       )
     else:
       shutil.copytree(
           emulator_filepath,
           OBJS_DIR,
-          symlinks=True,
           dirs_exist_ok=True,
       )
       shutil.copytree(
           emulator_filepath,
           OBJS_DIR / "distribution" / "emulator",
-          symlinks=True,
           dirs_exist_ok=True,
       )
 
