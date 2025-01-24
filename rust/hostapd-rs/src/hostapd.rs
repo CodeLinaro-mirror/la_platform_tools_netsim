@@ -66,7 +66,7 @@ use ccm::{
     Ccm, KeyInit,
 };
 use log::{debug, info, warn};
-use netsim_packets::ieee80211::{Ieee80211, MacAddress, CCMP_HDR_LEN};
+use netsim_packets::ieee80211::{parse_mac_address, Ieee80211, MacAddress, CCMP_HDR_LEN};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, CStr, CString};
 use std::fs::File;
@@ -132,11 +132,12 @@ impl Hostapd {
 
     pub fn new(tx_bytes: mpsc::Sender<Bytes>, verbose: bool, config_path: PathBuf) -> Self {
         // Default Hostapd conf entries
+        let bssid = "00:13:10:85:fe:01";
         let config_data = [
             ("ssid", "AndroidWifi"),
             ("interface", "wlan1"),
             ("driver", "virtio_wifi"),
-            ("bssid", "00:13:10:95:fe:0b"),
+            ("bssid", bssid),
             ("country_code", "US"),
             ("hw_mode", "g"),
             ("channel", "8"),
@@ -155,10 +156,6 @@ impl Hostapd {
         let mut config: HashMap<String, String> = HashMap::new();
         config.extend(config_data.iter().map(|(k, v)| (k.to_string(), v.to_string())));
 
-        // TODO(b/381154253): Allow configuring BSSID in hostapd.conf.
-        // Currently, the BSSID is hardcoded in external/wpa_supplicant_8/src/drivers/driver_virtio_wifi.c. This should be configured by hostapd.conf and allow to be set by `Hostapd`.
-        let bssid_bytes: [u8; 6] = [0x00, 0x13, 0x10, 0x85, 0xfe, 0x01];
-        let bssid = MacAddress::from(&bssid_bytes);
         Hostapd {
             handle: RwLock::new(None),
             verbose,
@@ -168,7 +165,7 @@ impl Hostapd {
             ctrl_writer: None,
             tx_bytes,
             runtime: Arc::new(Runtime::new().unwrap()),
-            bssid,
+            bssid: parse_mac_address(bssid).unwrap(),
             tx_pn: AtomicI64::new(1),
         }
     }
