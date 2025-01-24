@@ -14,6 +14,8 @@
 
 //! Ranging library
 
+#![allow(clippy::empty_line_after_doc_comments)]
+
 use glam::{EulerRot, Quat, Vec3};
 
 /// The Free Space Path Loss (FSPL) model is considered as the standard

@@ -267,7 +267,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
 
     // Start radio facades
     wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
-    wireless::wifi::wifi_start(&config.wifi, args.forward_host_mdns);
+    wireless::wifi::wifi_start(&config.wifi, args.forward_host_mdns, args.wifi);
     wireless::uwb::uwb_start();
 
     // Instantiate ServiceParams

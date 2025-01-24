@@ -77,7 +77,7 @@ fn format_file<'a>(record: &'a Record<'a>) -> &'a str {
                 return file.file_name().unwrap_or(OsStr::new("N/A")).to_str().unwrap();
             }
             // Print full path for all dependent crates
-            return file.to_str().unwrap();
+            file.to_str().unwrap()
         }
         None => "N/A",
     }
