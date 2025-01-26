@@ -19,9 +19,10 @@
 ///
 /// See https://www.radiotap.org/
 use crate::wifi::frame::Frame;
-use crate::wifi::medium;
-use crate::wifi::medium::HwsimCmdEnum;
+use anyhow::anyhow;
 use log::info;
+use netsim_packets::mac80211_hwsim::{HwsimCmd, HwsimMsg};
+use pdl_runtime::Packet;
 
 #[repr(C, packed)]
 struct RadiotapHeader {
@@ -39,8 +40,34 @@ struct ChannelInfo {
     flags: u16,
 }
 
+#[allow(dead_code)]
+#[derive(Debug)]
+enum HwsimCmdEnum {
+    Unspec,
+    Register,
+    Frame(Box<Frame>),
+    TxInfoFrame,
+    NewRadio,
+    DelRadio,
+    GetRadio,
+    AddMacAddr,
+    DelMacAddr,
+}
+
+fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
+    let hwsim_msg = HwsimMsg::decode_full(packet)?;
+    match hwsim_msg.hwsim_hdr.hwsim_cmd {
+        HwsimCmd::Frame => {
+            let frame = Frame::parse(&hwsim_msg)?;
+            Ok(HwsimCmdEnum::Frame(Box::new(frame)))
+        }
+        HwsimCmd::TxInfoFrame => Ok(HwsimCmdEnum::TxInfoFrame),
+        _ => Err(anyhow!("Unknown HwsimMsg cmd={:?}", hwsim_msg.hwsim_hdr.hwsim_cmd)),
+    }
+}
+
 pub fn into_pcap(packet: &[u8]) -> Option<Vec<u8>> {
-    match medium::parse_hwsim_cmd(packet) {
+    match parse_hwsim_cmd(packet) {
         Ok(HwsimCmdEnum::Frame(frame)) => frame_into_pcap(*frame).ok(),
         Ok(_) => None,
         Err(e) => {
@@ -76,4 +103,24 @@ pub fn frame_into_pcap(frame: Frame) -> anyhow::Result<Vec<u8>> {
     buffer.extend_from_slice(&frame.data);
 
     Ok(buffer)
+}
+
+#[test]
+fn test_netlink_attr() {
+    let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
+    assert!(parse_hwsim_cmd(&packet).is_ok());
+
+    let tx_info_packet: Vec<u8> = include!("test_packets/hwsim_cmd_tx_info.csv");
+    assert!(parse_hwsim_cmd(&tx_info_packet).is_ok());
+}
+
+#[test]
+fn test_netlink_attr_response_packet() {
+    // Response packet may not contain transmitter, flags, tx_info, or cookie fields.
+    let response_packet: Vec<u8> =
+        include!("test_packets/hwsim_cmd_frame_response_no_transmitter_flags_tx_info.csv");
+    assert!(parse_hwsim_cmd(&response_packet).is_ok());
+
+    let response_packet2: Vec<u8> = include!("test_packets/hwsim_cmd_frame_response_no_cookie.csv");
+    assert!(parse_hwsim_cmd(&response_packet2).is_ok());
 }

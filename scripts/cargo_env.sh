@@ -36,6 +36,13 @@ function setup_cargo_env {
   export CARGO_HOME=$OUT_PATH/rust/.cargo
   export OBJS_PATH=$OUT_PATH
   export GRPCIO_SYS_GRPC_INCLUDE_PATH=$REPO/external/grpc/include
+  if [[ "$OS" == "linux" ]]; then
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=$OUT_PATH/toolchain/x86_64-linux-g++
+    env 'CC_x86_64-unknown-linux-gnu=$OUT_PATH/toolchain/x86_64-linux-gcc'
+    env 'CXX_x86_64-unknown-linux-gnu=$OUT_PATH/toolchain/x86_64-linux-g++'
+    env 'AR_x86_64-unknown-linux-gnu=$REPO/prebuilts/clang/host/linux-x86/llvm-binutils-stable/llvm-ar'
+    export CORROSION_BUILD_DIR=$OUT_PATH/rust
+  fi
 
   # Paths to pdl generated packets files
   local ROOTCANAL_PDL_PATH=$OUT_PATH/rootcanal/pdl_gen

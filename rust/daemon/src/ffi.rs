@@ -22,7 +22,6 @@ use crate::devices::devices_handler::{
     add_chip_cxx, get_distance_cxx, remove_chip_cxx, AddChipResultCxx,
 };
 use crate::ranging::*;
-use crate::version::*;
 use crate::wireless::{
     bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response_cxx,
 };
@@ -250,11 +249,6 @@ pub mod ffi_util {
 
         #[cxx_name = "DistanceToRssi"]
         fn distance_to_rssi(tx_power: i8, distance: f32) -> i8;
-
-        // Version
-
-        #[cxx_name = "GetVersion"]
-        fn get_version() -> String;
     }
 
     #[allow(dead_code)]
