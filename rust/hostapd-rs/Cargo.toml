@@ -24,8 +24,10 @@ crate-type = ["staticlib","lib"]
 doctest = false
 
 [dependencies]
+aes = { version = "0.8.4"}
 anyhow = "1"
 bytes = { version = "1.4.0"}
+ccm = "0.5.0"
 log = "0.4.17"
 netsim-common = { path = "../common" }
 netsim-packets = { path = "../packets" }

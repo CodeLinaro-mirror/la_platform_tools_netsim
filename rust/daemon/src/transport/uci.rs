@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::empty_line_after_doc_comments)]
+
 use bytes::Bytes;
 
 use std::io::{Error, Read};

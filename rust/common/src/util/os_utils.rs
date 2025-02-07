@@ -21,13 +21,11 @@ use std::os::fd::AsRawFd;
 #[cfg(target_os = "windows")]
 use std::os::windows::io::AsRawHandle;
 
-use std::{fs::remove_file, path::PathBuf};
+use std::path::PathBuf;
 
-use log::{error, info, warn};
+use log::warn;
 
 use crate::system::netsimd_temp_dir;
-
-use super::ini_file::IniFile;
 
 const DEFAULT_HCI_PORT: u32 = 6402;
 
@@ -61,50 +59,6 @@ pub fn get_discovery_directory() -> PathBuf {
     };
     path.push(DISCOVERY.subdir);
     path
-}
-
-/// Get the filepath of netsim.ini under discovery directory
-pub fn get_netsim_ini_filepath(instance_num: u16) -> PathBuf {
-    let mut discovery_dir = get_discovery_directory();
-    let filename = if instance_num == 1 {
-        "netsim.ini".to_string()
-    } else {
-        format!("netsim_{instance_num}.ini")
-    };
-    discovery_dir.push(filename);
-    discovery_dir
-}
-
-/// Remove the ini file
-pub fn remove_netsim_ini(instance_num: u16) {
-    match remove_file(get_netsim_ini_filepath(instance_num)) {
-        Ok(_) => info!("Removed netsim ini file"),
-        Err(e) => error!("Failed to remove netsim ini file: {e:?}"),
-    }
-}
-
-/// Get the grpc server address for netsim
-pub fn get_server_address(instance_num: u16) -> Option<String> {
-    let filepath = get_netsim_ini_filepath(instance_num);
-    if !filepath.exists() {
-        error!("Unable to find netsim ini file: {filepath:?}");
-        return None;
-    }
-    if !filepath.is_file() {
-        error!("Not a file: {filepath:?}");
-        return None;
-    }
-    let mut ini_file = IniFile::new(filepath);
-    if let Err(err) = ini_file.read() {
-        error!("Error reading ini file: {err:?}");
-    }
-    ini_file.get("grpc.port").map(|s| {
-        if s.contains(':') {
-            s.to_string()
-        } else {
-            format!("localhost:{}", s)
-        }
-    })
 }
 
 const DEFAULT_INSTANCE: u16 = 1;
@@ -209,15 +163,12 @@ pub fn redirect_std_stream(instance_name: &str) -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-
+pub mod tests {
     use super::*;
-    #[cfg(not(target_os = "windows"))]
-    use crate::system::tests::ENV_MUTEX;
+    use crate::tests::ENV_MUTEX;
 
     #[test]
     fn test_get_discovery_directory() {
-        #[cfg(not(target_os = "windows"))]
         let _locked = ENV_MUTEX.lock();
         // Remove all environment variable
         std::env::remove_var(DISCOVERY.root_env);
@@ -239,10 +190,6 @@ mod tests {
         // Test with TMPDIR variable
         std::env::set_var("TMPDIR", "/tmpdir");
         assert_eq!(get_discovery_directory(), PathBuf::from("/tmpdir"));
-
-        // Test get_netsim_ini_filepath
-        assert_eq!(get_netsim_ini_filepath(1), PathBuf::from("/tmpdir/netsim.ini"));
-        assert_eq!(get_netsim_ini_filepath(2), PathBuf::from("/tmpdir/netsim_2.ini"));
     }
 
     #[test]

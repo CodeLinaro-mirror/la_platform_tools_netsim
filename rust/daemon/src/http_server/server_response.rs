@@ -49,7 +49,7 @@ pub struct ServerResponseWriter<'a> {
     response: Option<Response<Vec<u8>>>,
 }
 
-impl<'a> ServerResponseWriter<'a> {
+impl ServerResponseWriter<'_> {
     pub fn new<W: Write>(writer: &mut W) -> ServerResponseWriter {
         ServerResponseWriter { writer, response: None }
     }

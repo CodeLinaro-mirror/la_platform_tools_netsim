@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::empty_line_after_doc_comments)]
+
 use super::h4::PacketError;
 use crate::devices::chip::{self, ChipIdentifier};
 use crate::devices::devices_handler::{add_chip, remove_chip};

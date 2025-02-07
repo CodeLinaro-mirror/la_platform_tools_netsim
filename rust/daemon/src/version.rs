@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::empty_line_after_doc_comments)]
+
 /// Version library.
 
-pub const VERSION: &str = "0.3.39";
+pub const VERSION: &str = "0.3.42";
 
 pub fn get_version() -> String {
     VERSION.to_owned()

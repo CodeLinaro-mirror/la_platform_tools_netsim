@@ -23,7 +23,20 @@ include!(concat!(env!("OUT_DIR"), "/ieee80211_packets.rs"));
 use crate::llc::{EtherType, LlcCtrl, LlcSap, LlcSnapHeader};
 use anyhow::anyhow;
 
+// Constants for field lengths
 const ETHERTYPE_LEN: usize = 2;
+pub const CCMP_HDR_LEN: usize = 8;
+
+// Constants for Ieee80211 definitions.
+// Reference: external/wpa_supplicant_8/src/common/ieee802_11_defs.h
+const WLAN_FC_RETRY: u16 = 0x0800;
+const WLAN_FC_PWRMGT: u16 = 0x1000;
+const WLAN_FC_MOREDATA: u16 = 0x2000;
+const WLAN_FC_ISWEP: u16 = 0x4000;
+const WLAN_ACTION_PUBLIC: u8 = 4;
+const WLAN_ACTION_HT: u8 = 7;
+const WLAN_ACTION_SELF_PROTECTED: u8 = 15;
+const WLAN_ACTION_VENDOR_SPECIFIC: u8 = 127;
 
 /// A Ieee80211 MAC address
 
@@ -131,7 +144,7 @@ impl<'a> Ieee8023<'a> {
 }
 
 impl Ieee80211 {
-    // Create Ieee80211 from Ieee8023 frame.
+    /// Create Ieee80211 from Ieee8023 frame.
     pub fn from_ieee8023(packet: &[u8], bssid: MacAddress) -> anyhow::Result<Ieee80211> {
         let ieee8023 = Ieee8023::from(packet)?;
 
@@ -167,38 +180,214 @@ impl Ieee80211 {
         .try_into()?)
     }
 
-    // Frame has addr4 field
+    /// Frame has addr4 field
     pub fn has_a4(&self) -> bool {
-        self.to_ds == 1 || self.from_ds == 1
+        self.to_ds == 1 && self.from_ds == 1
     }
 
+    /// Frame is sent to ap
     pub fn is_to_ap(&self) -> bool {
         self.to_ds == 1 && self.from_ds == 0
     }
 
-    // Frame type is management
+    /// Frame type is management
     pub fn is_mgmt(&self) -> bool {
         self.ftype == FrameType::Mgmt
     }
 
-    // Frame is (management) beacon frame
+    /// Generates the Additional Authentication Data (AAD) for CCMP encryption.
+    ///
+    /// Reference Linux kernel net/mac80211/wpa.c
+    pub fn get_aad(&self) -> Vec<u8> {
+        // Initialize AAD with header length - 2 bytes (no duration id)
+        let hdr_len = self.hdr_length();
+        let mut aad = vec![0u8; hdr_len - 2];
+
+        // Construct the Frame Control bytes for the AAD:
+        aad[0] = (self.version as u8) | (self.ftype as u8) << 2 | (self.stype as u8) << 4;
+
+        if !self.is_mgmt() {
+            // Clear the first three bits of stype (bits 4, 5, and 6)
+            aad[0] &= !(0x07 << 4);
+        }
+
+        aad[1] = (self.to_ds as u8) << 0
+        | (self.from_ds as u8) << 1
+        | (self.more_frags as u8) << 2
+        | (0 << 3) // Clear Retry bit
+        | (0 << 4) // Clear Power Management bit
+        | (0 << 5) // Clear More Data bit
+        | (1 << 6) // Set Protected Frame bit
+        | (self.order as u8) << 7;
+
+        // Insert 3 MAC Addresses ( 3 * 6 = 18 bytes):
+        aad[2..20].copy_from_slice(&self.payload[..18]);
+        // Insert Masked Sequence Control.
+        aad[20] = (self.payload[18] & 0x0f) as u8;
+        // aad[21] is set to 0 by default
+
+        // Handle Address 4 and QoS Control field (TID) as applicable
+        if self.has_a4() {
+            aad[22..28].copy_from_slice(&self.payload[20..26]);
+            if self.is_qos_data() {
+                aad[28] = self.get_qos_tid();
+            }
+        } else if self.is_qos_data() {
+            aad[22] = self.get_qos_tid();
+        }
+
+        aad
+    }
+
+    /// Calculates the length of the IEEE 802.11 frame header.
+    pub fn hdr_length(&self) -> usize {
+        // Base header length is 24. +6 if Addr4 is used. +2 for QoS Data
+        24 + (6 * self.has_a4() as usize) + (2 * self.is_qos_data() as usize)
+    }
+
+    /// Frame is a QoS Data frame
+    pub fn is_qos_data(&self) -> bool {
+        self.is_data() && self.stype == DataSubType::Qos as u8
+    }
+
+    /// Retrieves the QoS TID (Traffic Identifier) from the IEEE 802.11 frame
+    pub fn get_qos_tid(&self) -> u8 {
+        if !self.is_qos_data() {
+            return 0; // No QoS Control field, return default TID 0
+        }
+
+        // QOS TID is last 2 bytes of header
+        let qos_offset = self.hdr_length() - 2;
+        // Extract the QoS TID
+        let qos_control = u16::from_be_bytes(
+            self.payload[qos_offset..qos_offset + 2]
+                .try_into()
+                .expect("Failed to convert QoS control bytes"),
+        );
+
+        (qos_control >> 8) as u8
+    }
+
+    /// Retrieves the QoS Control field from the IEEE 802.11 frame
+    pub fn get_qos_control(&self) -> u16 {
+        if !self.is_qos_data() {
+            return 0;
+        }
+        u16::from_be_bytes(
+            self.get_payload()[2..4].try_into().expect("Failed to convert QoS control bytes"),
+        )
+    }
+
+    /// Extracts the Packet Number (PN) from the IEEE 802.11 frame
+    pub fn get_packet_number(&self) -> [u8; 6] {
+        let body_pos = self.hdr_length() - 4;
+        let frame_body = &self.payload[body_pos..(body_pos + 8)]; // Get the packet num from frame
+
+        // Extract the PN bytes in the specified order
+        [frame_body[7], frame_body[6], frame_body[5], frame_body[4], frame_body[1], frame_body[0]]
+    }
+
+    /// Generates the Nonce for CCMP encryption
+    ///
+    /// Reference Linux kernel net/mac80211/wpa.c
+    pub fn get_nonce(&self, pn: &[u8]) -> [u8; 13] {
+        let qos_tid = self.get_qos_tid();
+        let mgmt_flag = self.is_mgmt() as u8;
+        let addr2 = self.get_addr2().to_vec();
+        let mut nonce = [0u8; 13];
+        // Construct the nonce using qos_tid, mgmt bit, addr2, and pn
+        nonce[0] = qos_tid | (mgmt_flag << 4);
+        nonce[1..7].copy_from_slice(&addr2);
+        nonce[7..].copy_from_slice(pn);
+        nonce
+    }
+
+    /// Check if the frame is multicast based on the destination address
+    pub fn is_multicast(&self) -> bool {
+        self.get_addr1().is_multicast()
+    }
+
+    /// Check if the frame is broadcast based on the destination address
+    pub fn is_broadcast(&self) -> bool {
+        self.get_addr1().is_broadcast()
+    }
+
+    /// Frame is Robust Management frame
+    ///
+    /// Reference Linux kernel include/linux/ieee80211.h
+    pub fn is_robust_mgmt(&self) -> bool {
+        if self.payload.len() < 21 || !self.is_mgmt() {
+            // 25 - 4 (fc and duration id)
+            return false;
+        }
+
+        match ManagementSubType::try_from(self.stype).unwrap() {
+            // Disassoc and Deauth are robust mgmt
+            ManagementSubType::Disassoc | ManagementSubType::Deauth => true,
+            /*
+             * Action frames, excluding Public Action frames, are Robust
+             * Management Frames. However, if we are looking at a Protected
+             * frame, skip the check since the data may be encrypted and
+             * the frame has already been found to be a Robust Management
+             * Frame (by the other end).
+             */
+            ManagementSubType::Action => {
+                if self.is_protected() {
+                    return true; // Assume protected Action frames are robust
+                }
+                // Access category at offset 20 (24 - 2 frame control - 2 dutation id)
+                let category = u8::from_be_bytes([self.payload[20]]);
+
+                !matches!(
+                    category,
+                    WLAN_ACTION_PUBLIC
+                        | WLAN_ACTION_HT
+                        | WLAN_ACTION_SELF_PROTECTED
+                        | WLAN_ACTION_VENDOR_SPECIFIC
+                )
+            }
+            _ => false, // Other management frames are not robust by default
+        }
+    }
+
+    /// Frame is (management) beacon frame
     pub fn is_beacon(&self) -> bool {
         self.ftype == FrameType::Mgmt && self.stype == (ManagementSubType::Beacon as u8)
     }
 
-    // Frame type is data
+    /// Frame type is data
     pub fn is_data(&self) -> bool {
         self.ftype == FrameType::Data
     }
 
-    // Frame is probe request
+    /// Frame is probe request
     pub fn is_probe_req(&self) -> bool {
         self.ftype == FrameType::Ctl && self.stype == (ManagementSubType::ProbeReq as u8)
     }
 
-    // Frame type is EAPoL
+    /// Frame is protected
+    pub fn is_protected(&self) -> bool {
+        self.protected != 0u8
+    }
+
+    /// Frame type is EAPoL
     pub fn is_eapol(&self) -> anyhow::Result<bool> {
         Ok(self.get_ethertype()? == EtherType::Eapol)
+    }
+
+    /// Whether frame needs to be encrypted
+    pub fn needs_encryption(&self) -> bool {
+        !self.is_protected() && (self.is_data() || self.is_robust_mgmt())
+    }
+
+    /// Whether frame needs to be decrypted
+    pub fn needs_decryption(&self) -> bool {
+        self.is_protected() && (self.is_data() || self.is_robust_mgmt())
+    }
+
+    /// Set whether frame is protected
+    pub fn set_protected(&mut self, protected: bool) {
+        self.protected = protected.into();
     }
 
     pub fn get_ds(&self) -> String {
@@ -251,6 +440,16 @@ impl Ieee80211 {
             Ieee80211Child::Ieee80211FromAp(hdr) => hdr.destination,
             Ieee80211Child::Ieee80211Ibss(hdr) => hdr.destination,
             Ieee80211Child::Ieee80211Wds(hdr) => hdr.receiver,
+            _ => panic!("unexpected specialized header"),
+        }
+    }
+
+    pub fn get_addr2(&self) -> MacAddress {
+        match self.specialize().unwrap() {
+            Ieee80211Child::Ieee80211Ibss(hdr) => hdr.source,
+            Ieee80211Child::Ieee80211FromAp(hdr) => hdr.bssid,
+            Ieee80211Child::Ieee80211ToAp(hdr) => hdr.source,
+            Ieee80211Child::Ieee80211Wds(hdr) => hdr.transmitter,
             _ => panic!("unexpected specialized header"),
         }
     }
@@ -630,6 +829,34 @@ mod tests {
         .unwrap()
     }
 
+    fn create_test_wds_ieee80211(
+        receiver: MacAddress,
+        transmitter: MacAddress,
+        destination: MacAddress,
+        source: MacAddress,
+    ) -> Ieee80211 {
+        Ieee80211Wds {
+            duration_id: 0,
+            ftype: FrameType::Mgmt,
+            more_data: 0,
+            more_frags: 0,
+            order: 0,
+            pm: 0,
+            protected: 0,
+            retry: 0,
+            stype: 0,
+            version: 0,
+            receiver,
+            transmitter,
+            destination,
+            seq_ctrl: 0,
+            source,
+            payload: Vec::new(),
+        }
+        .try_into()
+        .unwrap()
+    }
+
     fn test_with_address(
         create_test_ieee80211: fn(MacAddress, MacAddress, MacAddress) -> Ieee80211,
     ) {
@@ -717,5 +944,19 @@ mod tests {
         assert_eq!(&ethernet_frame[0..6], destination.to_vec().as_slice()); // Destination MAC
         assert_eq!(&ethernet_frame[6..12], source.to_vec().as_slice()); // Source MAC
         assert_eq!(&ethernet_frame[12..14], [0x08, 0x00]); // EtherType
+    }
+
+    #[test]
+    fn test_has_a4() {
+        let addr1 = parse_mac_address("01:02:03:00:00:01").unwrap();
+        let addr2 = parse_mac_address("01:02:03:00:00:02").unwrap();
+        let addr3 = parse_mac_address("01:02:03:00:00:03").unwrap();
+        let addr4 = parse_mac_address("01:02:03:00:00:04").unwrap();
+
+        // Only WDS has addr4
+        assert!(!create_test_from_ap_ieee80211(addr1, addr2, addr3).has_a4());
+        assert!(!create_test_ibss_ieee80211(addr1, addr2, addr3).has_a4());
+        assert!(!create_test_to_ap_ieee80211(addr1, addr2, addr3).has_a4());
+        assert!(create_test_wds_ieee80211(addr1, addr2, addr3, addr4).has_a4());
     }
 }

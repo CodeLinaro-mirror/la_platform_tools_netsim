@@ -57,10 +57,16 @@
 //!
 //! This starts `hostapd` in a separate thread, allowing interaction with it using the `Hostapd` struct's methods.
 
+use aes::Aes128;
 use anyhow::bail;
 use bytes::Bytes;
-use log::{info, warn};
-use netsim_packets::ieee80211::{Ieee80211, MacAddress};
+use ccm::{
+    aead::{generic_array::GenericArray, Aead, Payload},
+    consts::{U13, U8},
+    Ccm, KeyInit,
+};
+use log::{debug, info, warn};
+use netsim_packets::ieee80211::{parse_mac_address, Ieee80211, MacAddress, CCMP_HDR_LEN};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, CStr, CString};
 use std::fs::File;
@@ -71,7 +77,10 @@ use std::os::fd::IntoRawFd;
 #[cfg(windows)]
 use std::os::windows::io::IntoRawSocket;
 use std::path::PathBuf;
-use std::sync::{mpsc, Arc, RwLock};
+use std::sync::{
+    atomic::{AtomicI64, Ordering},
+    mpsc, Arc, RwLock,
+};
 use std::thread::{self, sleep};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -83,12 +92,13 @@ use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 
 use crate::hostapd_sys::{
-    run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock, VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG,
-    VIRTIO_WIFI_CTRL_CMD_TERMINATE,
+    get_active_gtk, get_active_ptk, run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock,
+    VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG, VIRTIO_WIFI_CTRL_CMD_TERMINATE,
 };
 
 /// Alias for RawFd on Unix or RawSocket on Windows (converted to i32)
 type RawDescriptor = i32;
+type KeyData = [u8; 32];
 
 /// Hostapd process interface.
 ///
@@ -107,6 +117,8 @@ pub struct Hostapd {
     runtime: Arc<Runtime>,
     // MAC address of the access point.
     bssid: MacAddress,
+    // Current transmit packet number (PN) used for encryption
+    tx_pn: AtomicI64,
 }
 
 impl Hostapd {
@@ -120,11 +132,12 @@ impl Hostapd {
 
     pub fn new(tx_bytes: mpsc::Sender<Bytes>, verbose: bool, config_path: PathBuf) -> Self {
         // Default Hostapd conf entries
+        let bssid = "00:13:10:85:fe:01";
         let config_data = [
             ("ssid", "AndroidWifi"),
             ("interface", "wlan1"),
             ("driver", "virtio_wifi"),
-            ("bssid", "00:13:10:95:fe:0b"),
+            ("bssid", bssid),
             ("country_code", "US"),
             ("hw_mode", "g"),
             ("channel", "8"),
@@ -143,10 +156,6 @@ impl Hostapd {
         let mut config: HashMap<String, String> = HashMap::new();
         config.extend(config_data.iter().map(|(k, v)| (k.to_string(), v.to_string())));
 
-        // TODO(b/381154253): Allow configuring BSSID in hostapd.conf.
-        // Currently, the BSSID is hardcoded in external/wpa_supplicant_8/src/drivers/driver_virtio_wifi.c. This should be configured by hostapd.conf and allow to be set by `Hostapd`.
-        let bssid_bytes: [u8; 6] = [0x00, 0x13, 0x10, 0x85, 0xfe, 0x01];
-        let bssid = MacAddress::from(&bssid_bytes);
         Hostapd {
             handle: RwLock::new(None),
             verbose,
@@ -156,7 +165,8 @@ impl Hostapd {
             ctrl_writer: None,
             tx_bytes,
             runtime: Arc::new(Runtime::new().unwrap()),
-            bssid,
+            bssid: parse_mac_address(bssid).unwrap(),
+            tx_pn: AtomicI64::new(1),
         }
     }
 
@@ -168,6 +178,8 @@ impl Hostapd {
     /// TODO:
     /// * update as async fn.
     pub fn run(&mut self) -> bool {
+        debug!("Running hostapd with config: {:?}", &self.config);
+
         // Check if already running
         assert!(!self.is_running(), "hostapd is already running!");
         // Setup config file
@@ -215,7 +227,6 @@ impl Hostapd {
     /// Reconfigures `Hostapd` with the specified SSID (and password).
     ///
     /// TODO:
-    /// * implement password & encryption support
     /// * update as async fn.
     pub fn set_ssid(
         &mut self,
@@ -228,12 +239,8 @@ impl Hostapd {
             bail!("set_ssid must have a non-empty SSID");
         }
 
-        if !password.is_empty() {
-            bail!("set_ssid with password is not yet supported.");
-        }
-
-        if ssid == self.get_ssid() && password == self.get_config_val("password") {
-            info!("SSID and password matches current configuration.");
+        if ssid == self.get_ssid() && password == self.get_config_val("wpa_passphrase") {
+            debug!("SSID and password matches current configuration.");
             return Ok(());
         }
 
@@ -253,11 +260,13 @@ impl Hostapd {
         self.gen_config_file()?;
 
         // Send command for Hostapd to reload config file
-        if let Err(e) = self.runtime.block_on(Self::async_write(
-            self.ctrl_writer.as_ref().unwrap(),
-            c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG),
-        )) {
-            bail!("Failed to send VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG to hostapd to reload config: {:?}", e);
+        if self.is_running() {
+            if let Err(e) = self.runtime.block_on(Self::async_write(
+                self.ctrl_writer.as_ref().unwrap(),
+                c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG),
+            )) {
+                bail!("Failed to send VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG to hostapd to reload config: {:?}", e);
+            }
         }
 
         Ok(())
@@ -273,16 +282,125 @@ impl Hostapd {
         self.bssid
     }
 
+    /// Generate the next packet number
+    pub fn gen_packet_number(&self) -> [u8; 6] {
+        let tx_pn = self.tx_pn.fetch_add(1, Ordering::Relaxed);
+        tx_pn.to_be_bytes()[2..].try_into().unwrap()
+    }
+
+    /// Retrieve the current active GTK or PTK key data from Hostapd
+    #[cfg(not(test))]
+    fn get_key(&self, ieee80211: &Ieee80211) -> (KeyData, usize, u8) {
+        let key = if ieee80211.is_multicast() || ieee80211.is_broadcast() {
+            // SAFETY: get_active_gtk requires no input and returns a virtio_wifi_key_data struct
+            unsafe { get_active_gtk() }
+        } else {
+            // SAFETY: get_active_ptk requires no input and returns a virtio_wifi_key_data struct
+            unsafe { get_active_ptk() }
+        };
+
+        // Return key data, length, and index from virtio_wifi_key_data
+        (key.key_material, key.key_len as usize, key.key_idx as u8)
+    }
+
     /// Attempt to encrypt the given IEEE 802.11 frame.
-    pub fn try_encrypt(&self, _ieee80211: &Ieee80211) -> Option<Ieee80211> {
-        // TODO
-        None
+    pub fn try_encrypt(&self, ieee80211: &Ieee80211) -> Option<Ieee80211> {
+        if !ieee80211.needs_encryption() {
+            return None;
+        }
+
+        // Retrieve current active key & skip encryption if key is not available
+        let (key_material, key_len, key_id) = self.get_key(ieee80211);
+        if key_len == 0 {
+            return None;
+        }
+        let key = GenericArray::from_slice(&key_material[..key_len]);
+
+        // Prep encryption parameters
+        let cipher = Ccm::<Aes128, U8, U13>::new(key);
+        let pn = self.gen_packet_number();
+        let nonce_binding = &ieee80211.get_nonce(&pn);
+        let nonce = GenericArray::from_slice(nonce_binding);
+
+        // Encryption payload offset at header length - frame control (2) - duration id (2)
+        let payload_offset = ieee80211.hdr_length() - 4;
+        // Encrypt the data with nonce and aad
+        let ciphertext = match cipher.encrypt(
+            nonce,
+            Payload { msg: &ieee80211.payload[payload_offset..], aad: &ieee80211.get_aad() },
+        ) {
+            Ok(ciphertext) => ciphertext,
+            Err(e) => {
+                warn!("Encryption error: {:?}", e);
+                return None;
+            }
+        };
+
+        // Prepare the new encrypted frame with new payload size
+        let mut encrypted_ieee80211 = ieee80211.clone();
+        encrypted_ieee80211.payload.resize(payload_offset + CCMP_HDR_LEN + ciphertext.len(), 0);
+
+        // Fill in the CCMP header using the pn and key ID
+        encrypted_ieee80211.payload[payload_offset..payload_offset + 8].copy_from_slice(&[
+            pn[5],
+            pn[4],
+            0,                    // Reserved
+            0x20 | (key_id << 6), // Key ID + Ext IV
+            pn[3],
+            pn[2],
+            pn[1],
+            pn[0],
+        ]);
+
+        // Fill in the encrypted data and set protected bit
+        encrypted_ieee80211.payload[payload_offset + CCMP_HDR_LEN..].copy_from_slice(&ciphertext);
+        encrypted_ieee80211.set_protected(true);
+
+        Some(encrypted_ieee80211)
     }
 
     /// Attempt to decrypt the given IEEE 802.11 frame.
-    pub fn try_decrypt(&self, _ieee80211: &Ieee80211) -> Option<Ieee80211> {
-        // TODO
-        None
+    pub fn try_decrypt(&self, ieee80211: &Ieee80211) -> Option<Ieee80211> {
+        if !ieee80211.needs_decryption() {
+            return None;
+        }
+
+        // Retrieve current active key, skip decryption if key is not available
+        let (key_material, key_len, _) = self.get_key(ieee80211);
+        if key_len == 0 {
+            return None;
+        }
+        let key = GenericArray::from_slice(&key_material[..key_len]);
+
+        // Prep encryption parameters
+        let cipher = Ccm::<Aes128, U8, U13>::new(key);
+        let pn = &ieee80211.get_packet_number();
+        let nonce_binding = &ieee80211.get_nonce(pn);
+        let nonce = GenericArray::from_slice(nonce_binding);
+
+        // Calculate header position and extract data and AAD
+        let hdr_pos = ieee80211.hdr_length() - 4;
+        let data = &ieee80211.payload[(hdr_pos + CCMP_HDR_LEN)..];
+        let aad = ieee80211.get_aad();
+
+        // Decrypt the data
+        let plaintext = match cipher.decrypt(nonce, Payload { msg: data, aad: &aad }) {
+            Ok(plaintext) => plaintext,
+            Err(e) => {
+                warn!("Decryption error: {:?}", e);
+                return None;
+            }
+        };
+
+        // Construct the decrypted frame
+        let mut decrypted_ieee80211 = ieee80211.clone();
+        decrypted_ieee80211.payload.truncate(hdr_pos); // Keep only the 802.11 header
+        decrypted_ieee80211.payload.extend_from_slice(&plaintext); // Append the decrypted data
+
+        // Reset protected bit
+        decrypted_ieee80211.set_protected(false);
+
+        Some(decrypted_ieee80211)
     }
 
     /// Inputs data packet bytes from netsim to `hostapd`.
@@ -470,4 +588,118 @@ fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
 /// Converts a null-terminated c-string slice into `&[u8]` bytes without the null terminator.
 fn c_string_to_bytes(c_string: &[u8]) -> &[u8] {
     CStr::from_bytes_with_nul(c_string).unwrap().to_bytes()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use netsim_packets::ieee80211::{parse_mac_address, FrameType, Ieee80211, Ieee80211ToAp};
+    use pdl_runtime::Packet;
+    use std::env;
+
+    fn init_hostapd() -> Hostapd {
+        let (tx, _rx) = mpsc::channel();
+        let config_path = env::temp_dir().join("hostapd.conf");
+        Hostapd::new(tx, true, config_path)
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_generic() {
+        // Test Data (802.11 frame with LLC/SNAP)
+        let bssid = parse_mac_address("0:0:0:0:0:0").unwrap();
+        let source = parse_mac_address("1:1:1:1:1:1").unwrap();
+        let destination = parse_mac_address("2:2:2:2:2:2").unwrap();
+        let ieee80211: Ieee80211 = Ieee80211ToAp {
+            duration_id: 0,
+            ftype: FrameType::Data,
+            more_data: 0,
+            more_frags: 0,
+            order: 0,
+            pm: 0,
+            protected: 0,
+            retry: 0,
+            stype: 0,
+            version: 0,
+            bssid,
+            source,
+            destination,
+            seq_ctrl: 0,
+            payload: vec![0, 1, 2, 3, 4, 5],
+        }
+        .try_into()
+        .unwrap();
+
+        let hostapd = init_hostapd();
+
+        let encrypted_ieee80211 = hostapd.try_encrypt(&ieee80211);
+        assert!(encrypted_ieee80211.is_some());
+        let encrypted_ieee80211 = encrypted_ieee80211.unwrap();
+
+        let decrypted_ieee80211 = hostapd.try_decrypt(&encrypted_ieee80211);
+        assert!(decrypted_ieee80211.is_some());
+        let decrypted_ieee80211 = decrypted_ieee80211.unwrap();
+
+        assert_eq!(
+            decrypted_ieee80211.encode_to_bytes().unwrap(),
+            ieee80211.encode_to_bytes().unwrap()
+        );
+    }
+
+    impl Hostapd {
+        // get_key for unit test only. Return a known key for tests
+        pub fn get_key(&self, ieee80211: &Ieee80211) -> (KeyData, usize, u8) {
+            let mut key = [0u8; 32];
+            let test_key =
+                [202, 238, 127, 166, 61, 206, 22, 214, 17, 180, 130, 229, 4, 249, 255, 122];
+            key[..16].copy_from_slice(&test_key);
+            (key, 16, 0)
+        }
+    }
+
+    #[test]
+    fn test_decrypt_encrypt_golden_frame() {
+        // Test data from C implementation
+        let _test_key = [202, 238, 127, 166, 61, 206, 22, 214, 17, 180, 130, 229, 4, 249, 255, 122];
+        let encrypted_frame = [
+            8, 65, 58, 1, 0, 19, 16, 133, 254, 1, 2, 21, 178, 0, 0, 0, 51, 51, 255, 197, 140, 97,
+            192, 70, 1, 0, 0, 32, 0, 0, 0, 0, 119, 72, 195, 215, 149, 122, 79, 220, 238, 60, 113,
+            167, 129, 55, 206, 110, 94, 178, 141, 180, 240, 63, 37, 182, 166, 61, 249, 112, 74, 78,
+            132, 238, 161, 210, 196, 91, 135, 234, 60, 234, 87, 75, 245, 43, 158, 205, 127, 101,
+            66, 180, 91, 220, 148, 42, 230, 210, 117, 207, 94, 106, 241, 213, 122, 104, 231, 25,
+            185, 174, 25, 5, 197, 116, 5, 168, 53, 71, 77, 26, 77, 94, 65, 159, 97, 218, 14, 238,
+            220, 157,
+        ];
+        let expected_decrypted_bytes = [
+            8, 1, 58, 1, 0, 19, 16, 133, 254, 1, 2, 21, 178, 0, 0, 0, 51, 51, 255, 197, 140, 97,
+            192, 70, 170, 170, 3, 0, 0, 0, 134, 221, 96, 0, 0, 0, 0, 32, 58, 255, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 255, 197, 140, 97,
+            135, 0, 44, 90, 0, 0, 0, 0, 254, 128, 0, 0, 0, 0, 0, 0, 121, 29, 23, 252, 71, 197, 140,
+            97, 14, 1, 27, 50, 219, 39, 89, 3,
+        ];
+
+        // Construct Ieee80211 frame from the encrypted bytes
+        let ieee80211 = Ieee80211::decode(&encrypted_frame).unwrap().0;
+
+        // Set up Hostapd
+        let hostapd = init_hostapd();
+
+        // Perform decryption
+        let decrypted_ieee80211 = hostapd.try_decrypt(&ieee80211).unwrap();
+
+        // Assert that the decrypted bytes match the expected output
+        assert_eq!(
+            decrypted_ieee80211.encode_to_bytes().unwrap().to_vec(),
+            expected_decrypted_bytes
+        );
+
+        // Encrypt again to verify the result is expected
+        let reencrypted_frame = hostapd.try_encrypt(&decrypted_ieee80211).unwrap();
+        assert_eq!(reencrypted_frame.encode_to_bytes().unwrap().to_vec(), encrypted_frame);
+
+        // Decrypt again to verify the result is expected
+        let redecrypted_frame = hostapd.try_decrypt(&reencrypted_frame).unwrap();
+
+        assert_eq!(redecrypted_frame.encode_to_bytes().unwrap().to_vec(), expected_decrypted_bytes);
+    }
 }
