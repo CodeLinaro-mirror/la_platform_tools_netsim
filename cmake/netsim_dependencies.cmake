@@ -122,13 +122,6 @@ endif()
 
 prebuilt(Threads)
 
-# We need the auto generated header for some components, so let's set the
-# ANDROID_HW_CONFIG_H variable to point to the generated header. Those that need
-# it can add it to their sources list, and it will be there.
-set(HW_PROPERTIES_INI
-    ${EXTERNAL_QEMU}/android/emu/avd/src/android/avd/hardware-properties.ini)
-android_generate_hw_config()
-
 if(DARWIN_AARCH64 AND NOT Rust_COMPILER)
   message(
     STATUS
@@ -200,21 +193,13 @@ add_subdirectory(${EXTERNAL_QEMU}/android/third_party/libslirp libslirp)
 add_subdirectory(${EXTERNAL_QEMU}/android/third_party/googletest/ gtest)
 add_subdirectory(${EXTERNAL_QEMU}/android/third_party/lz4 lz4)
 add_subdirectory(${EXTERNAL_QEMU}/android/third_party/re2 re2)
-add_subdirectory(${EXTERNAL_QEMU}/android/third_party/libselinux libselinux)
-add_subdirectory(${EXTERNAL_QEMU}/android/third_party/libsparse libsparse)
-add_subdirectory(${EXTERNAL_QEMU}/android/third_party/ext4_utils ext4_utils)
 add_subdirectory(${EXTERNAL}/cares cares)
 add_subdirectory(${EXTERNAL}/glib/glib glib2)
 add_subdirectory(${EXTERNAL}/grpc/emulator grpc)
 add_subdirectory(${EXTERNAL}/qemu/android/android-emu-base android-emu-base)
 add_subdirectory(${EXTERNAL}/qemu/android/android-net/android android-emu-net)
-add_subdirectory(${EXTERNAL}/qemu/android-qemu2-glue/netsim
-                 android-wifi-service)
 add_subdirectory(${EXTERNAL}/qemu/android/emu/base emu-base)
 add_subdirectory(${EXTERNAL}/qemu/android/emu/utils android-emu-utils)
-add_subdirectory(${EXTERNAL}/qemu/android/emu/files android-emu-files)
-add_subdirectory(${EXTERNAL}/qemu/android/emu/agents android-emu-agents)
-add_subdirectory(${EXTERNAL}/qemu/android/emu/proxy android-emu-proxy)
 add_subdirectory(${EXTERNAL}/webrtc/third_party/jsoncpp jsoncpp)
 
 # Short term fix for missing glib2 dll for Windows build
