@@ -27,7 +27,7 @@ pub fn start(port: u32, no_cli_ui: bool, _vsock: u16) -> anyhow::Result<(Server,
     let backend_service = create_packet_streamer(PacketStreamerService);
     let frontend_service = create_frontend_service(FrontendClient);
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
-    let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota);
+    let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota).reuse_port(false);
     let mut server_builder = ServerBuilder::new(env);
     if !no_cli_ui {
         server_builder = server_builder.register_service(frontend_service);
