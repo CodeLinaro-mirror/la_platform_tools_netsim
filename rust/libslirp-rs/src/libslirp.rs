@@ -1031,4 +1031,45 @@ mod tests {
         let c_version_str = unsafe { CStr::from_ptr(crate::libslirp_sys::slirp_version_string()) };
         assert_eq!("4.7.0", c_version_str.to_str().unwrap());
     }
+
+    #[test]
+    fn test_slirp_poll_thread_exit() {
+        let (tx_cmds, rx_cmds) = mpsc::channel::<SlirpCmd>();
+        let (tx_poll, rx_poll) = mpsc::channel::<PollRequest>();
+
+        // Create channels for polling thread and launch
+        let handle = thread::Builder::new()
+            .name("slirp_poll".to_string())
+            .spawn(move || slirp_poll_thread(rx_poll, tx_cmds))
+            .unwrap();
+        drop(tx_poll);
+        handle.join();
+    }
+
+    #[test]
+    fn test_slirp_poll_thread() {
+        let (tx_cmds, rx_cmds) = mpsc::channel::<SlirpCmd>();
+        let (tx_poll, rx_poll) = mpsc::channel::<PollRequest>();
+
+        // Create channels for polling thread and launch
+        let handle = thread::Builder::new()
+            .name("slirp_poll".to_string())
+            .spawn(move || slirp_poll_thread(rx_poll, tx_cmds))
+            .unwrap();
+
+        // Create a TcpListener::bind
+        // Create a TcpStream::connect / send message
+        // Get AsRawFd or AsRawSocket for TcpListener
+        // Send/Read from slirp_poll_thread
+        // Check for POLLIN (see man poll)
+        // Read from TcpListener
+        // Send/Read from slirp_poll_thread
+        // Check for !POLLIN
+        // Close TcpStream
+        // Send/Read from slirp_poll_thread
+        // Cheeck for POLLERR
+
+        drop(tx_poll);
+        handle.join();
+    }
 }
