@@ -156,15 +156,16 @@ pub fn append_record_pcapng<W: Write>(
 ) -> Result<usize> {
     let packet_data_padding: usize = 4 - packet.len() % 4;
     let block_total_length: u32 = (packet.len() + packet_data_padding + 32) as u32;
+    let timestamp_micro = timestamp.as_micros() as u64;
     // Wrap the packet inside an Enhanced Packet Block.
     let header: Vec<u8> = le_vec![
-        0x00000006_u32,             // Block Type
-        block_total_length,         // Block Total Length
-        0_u32,                      // Interface ID
-        timestamp.as_secs() as u32, // seconds
-        timestamp.subsec_micros(),  // microseconds
-        packet.len() as u32,        // Captured Packet Length
-        packet.len() as u32         // Original Packet Length
+        0x00000006_u32,                            // Block Type
+        block_total_length,                        // Block Total Length
+        0_u32,                                     // Interface ID
+        (timestamp_micro >> 32) as u32,            // Timestamp Upper
+        (timestamp_micro & 0xFFFFFFFF_u64) as u32, // Timestamp Lower
+        packet.len() as u32,                       // Captured Packet Length
+        packet.len() as u32                        // Original Packet Length
     ];
     output.write_all(&header)?;
     output.write_all(packet)?;
@@ -182,7 +183,7 @@ mod tests {
 
     static EXPECTED_PCAP: &[u8; 76] = include_bytes!("sample.pcap");
     static EXPECTED_PCAP_LE: &[u8; 76] = include_bytes!("sample_le.pcap");
-    static EXPECTED_PCAPNG: &[u8; 88] = include_bytes!("sample.pcapng");
+    static EXPECTED_PCAPNG: &[u8; 136] = include_bytes!("sample.pcapng");
 
     fn is_little_endian() -> bool {
         0x12345678u32.to_le_bytes()[0] == 0x78
@@ -191,7 +192,7 @@ mod tests {
     #[test]
     /// The test is done with the golden file sample.pcap with following packets:
     /// Packet 1: HCI_EVT from Controller to Host (Sent Command Complete (LE Set Advertise Enable))
-    /// Packet 2: HCI_CMD from Host to Controller (Rcvd LE Set Advertise Enable) [250 milisecs later]
+    /// Packet 2: HCI_CMD from Host to Controller (Rcvd LE Set Advertise Enable) [250 millisecs later]
     fn test_pcap_file() {
         let mut actual = Vec::<u8>::new();
         write_pcap_header(LinkType::BluetoothHciH4WithPhdr, &mut actual).unwrap();
@@ -216,11 +217,19 @@ mod tests {
     }
 
     #[test]
+    // This test is done with the golden file sample.pcapng with following packets:
+    // Packet 1: UCI Core Get Device Info Cmd
+    // Packet 2: UCI Core Get Device Info Rsp [250 millisecs later]
     fn test_pcapng_file() {
         let mut actual = Vec::<u8>::new();
         write_pcapng_header(LinkType::FiraUci, &mut actual).unwrap();
-        // Appending a UCI packet: Core Get Device Info Cmd
-        let _ = append_record_pcapng(Duration::new(0, 0), &mut actual, &[32, 2, 0, 0]).unwrap();
+        let _ = append_record_pcapng(Duration::from_secs(0), &mut actual, &[32, 2, 0, 0]).unwrap();
+        let _ = append_record_pcapng(
+            Duration::from_millis(250),
+            &mut actual,
+            &[64, 2, 0, 10, 0, 2, 0, 1, 48, 1, 48, 1, 16, 0],
+        )
+        .unwrap();
         assert_eq!(actual, EXPECTED_PCAPNG);
     }
 }

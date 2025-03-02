@@ -36,53 +36,70 @@ QEMU_SYSTEM_BINARY = f'qemu-system-{PLATFORM_MACHINE}{EXE_SUFFIX}'
 
 
 def _get_cpu_usage():
-  """Utility function for getting netsimd CPU usage"""
-  # Perform cpu_percent collection using psutil
-  netsimd_cpu_usage, qemu_cpu_usage = [], []
-  for process in psutil.process_iter(['name', 'cpu_percent']):
-    if process.info['name'] == NETSIMD_BINARY:
-      netsimd_cpu_usage.append(process.info['cpu_percent'])
-    elif process.info['name'] == QEMU_SYSTEM_BINARY:
-      qemu_cpu_usage.append(process.info['cpu_percent'])
+  """Retrieves CPU and memory usage for netsimd and qemu."""
+  netsimd_usage, qemu_usage = [], []
 
-  # Check for unreachable cases
-  if len(netsimd_cpu_usage) > 1:
-    raise LookupError(f'Multiple {NETSIMD_BINARY} processes found')
-  if len(netsimd_cpu_usage) == 0:
-    raise LookupError(f'Process {NETSIMD_BINARY} not found')
-  if len(qemu_cpu_usage) > 1:
-    raise LookupError(f'Multiple {QEMU_SYSTEM_BINARY} processes found')
-  if len(qemu_cpu_usage) == 0:
-    raise LookupError(f'Process {QEMU_SYSTEM_BINARY} not found')
-  return netsimd_cpu_usage[0], qemu_cpu_usage[0]
+  for process in psutil.process_iter(
+      ['name', 'cpu_percent', 'num_threads', 'memory_info']
+  ):
+    process_name = process.info['name']
+    if process_name == NETSIMD_BINARY:
+      netsimd_usage.append(process.info)
+    elif process_name == QEMU_SYSTEM_BINARY:
+      qemu_usage.append(process.info)
+
+  def _validate_and_extract(process_list, process_name):
+    if len(process_list) > 1:
+      raise LookupError(f'Multiple {process_name} processes found')
+    if not process_list:
+      raise LookupError(f'Process {process_name} not found')
+    return process_list[0]
+
+  netsimd_info = _validate_and_extract(netsimd_usage, NETSIMD_BINARY)
+  qemu_info = _validate_and_extract(qemu_usage, QEMU_SYSTEM_BINARY)
+
+  return (
+      netsimd_info['cpu_percent'],
+      qemu_info['cpu_percent'],
+      netsimd_info['num_threads'],
+      netsimd_info['memory_info'].rss / 1024 / 1024,
+  )
+
+
+def _process_usage_iteration(writer, avd, netsim_wifi, iteration):
+  """Collects and writes usage data for a single iteration."""
+  try:
+    netsimd_cpu, qemu_cpu, netsimd_threads, netsimd_mem = _get_cpu_usage()
+    if iteration == 0:
+      time.sleep(0.1)
+      return
+    data = [time.time(), netsimd_cpu, qemu_cpu, netsimd_threads, netsimd_mem]
+    if netsim_wifi:
+      data.extend(_get_wifi_packet_count(avd))
+    print(f'Got {data}')
+    writer.writerow(data)
+  except LookupError as e:
+    print(e)
+    time.sleep(1)
+  time.sleep(1)
 
 
 def _trace_usage(filename: str, avd: str, netsim_wifi: bool):
-  """Utility function for tracing CPU usage and write into csv"""
+  """Traces usage data and writes to a CSV file."""
   with open(filename, 'w', newline='') as csvfile:
     writer = csv.writer(csvfile)
-    headers = ['Timestamp', NETSIMD_BINARY, QEMU_SYSTEM_BINARY]
+    headers = [
+        'Timestamp',
+        NETSIMD_BINARY,
+        QEMU_SYSTEM_BINARY,
+        'NetSimThreads',
+        'NetSimMemUsage(MB)',
+    ]
     if netsim_wifi:
       headers.extend(['txCount', 'rxCount'])
     writer.writerow(headers)
-    first_time = True
-    for _ in range(TEST_DURATION):
-      try:
-        netsimd_cpu_usage, qemu_cpu_usage = _get_cpu_usage()
-      except LookupError as e:
-        print(e)
-        time.sleep(1)
-        continue
-      if first_time:
-        first_time = False
-        time.sleep(0.1)
-        continue
-      data = [time.time(), netsimd_cpu_usage, qemu_cpu_usage]
-      if netsim_wifi:
-        data.extend(_get_wifi_packet_count(avd))
-      print(f'Got {data}')
-      writer.writerow(data)
-      time.sleep(1)
+    for i in range(TEST_DURATION):
+      _process_usage_iteration(writer, avd, netsim_wifi, i)
 
 
 def _launch_emulator(cmd):
