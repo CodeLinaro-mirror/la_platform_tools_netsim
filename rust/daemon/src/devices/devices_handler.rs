@@ -32,11 +32,9 @@ use crate::events::{
 };
 use crate::http_server::server_response::ResponseWritable;
 use crate::wireless;
-use cxx::{CxxString, CxxVector};
 use http::Request;
 use log::{info, warn};
 use netsim_proto::common::ChipKind as ProtoChipKind;
-use netsim_proto::configuration::Controller;
 use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
 use netsim_proto::frontend::CreateDeviceRequest;
 use netsim_proto::frontend::CreateDeviceResponse;
@@ -52,7 +50,6 @@ use netsim_proto::model::Position as ProtoPosition;
 use netsim_proto::startup::DeviceInfo as ProtoDeviceInfo;
 use netsim_proto::stats::{NetsimDeviceStats as ProtoDeviceStats, NetsimRadioStats};
 use protobuf::well_known_types::timestamp::Timestamp;
-use protobuf::Message;
 use protobuf::MessageField;
 use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string;
@@ -257,138 +254,6 @@ pub fn add_chip(
     Ok(AddChipResult { device_id, chip_id })
 }
 
-/// AddChipResult for C++ to handle
-pub struct AddChipResultCxx {
-    device_id: u32,
-    chip_id: u32,
-    is_error: bool,
-}
-
-impl AddChipResultCxx {
-    pub fn get_device_id(&self) -> u32 {
-        self.device_id
-    }
-
-    pub fn get_chip_id(&self) -> u32 {
-        self.chip_id
-    }
-
-    pub fn is_error(&self) -> bool {
-        self.is_error
-    }
-}
-
-/// An AddChip function for Rust Device API.
-/// The backend gRPC code will be invoking this method.
-#[allow(clippy::too_many_arguments)]
-pub fn add_chip_cxx(
-    device_guid: &str,
-    device_name: &str,
-    chip_kind: &CxxString,
-    chip_address: &str,
-    chip_name: &str,
-    chip_manufacturer: &str,
-    chip_product_name: &str,
-    bt_properties: &CxxVector<u8>,
-    kind: &str,
-    version: &str,
-    sdk_version: &str,
-    build_id: &str,
-    variant: &str,
-    arch: &str,
-) -> Box<AddChipResultCxx> {
-    let _bt_properties_proto = Controller::parse_from_bytes(bt_properties.as_slice());
-    #[cfg(not(test))]
-    let (chip_kind_enum, wireless_create_param) = match chip_kind.to_string().as_str() {
-        "BLUETOOTH" => (
-            ProtoChipKind::BLUETOOTH,
-            wireless::CreateParam::Bluetooth(wireless::bluetooth::CreateParams {
-                address: chip_address.to_string(),
-                bt_properties: _bt_properties_proto
-                    .as_ref()
-                    .map_or(None, |p| Some(MessageField::some(p.clone()))),
-            }),
-        ),
-        "WIFI" => {
-            (ProtoChipKind::WIFI, wireless::CreateParam::Wifi(wireless::wifi::CreateParams {}))
-        }
-        "UWB" => (
-            ProtoChipKind::UWB,
-            wireless::CreateParam::Uwb(wireless::uwb::CreateParams {
-                address: chip_address.to_string(),
-            }),
-        ),
-        _ => {
-            return Box::new(AddChipResultCxx {
-                device_id: u32::MAX,
-                chip_id: u32::MAX,
-                is_error: true,
-            })
-        }
-    };
-    #[cfg(test)]
-    let (chip_kind_enum, wireless_create_param) = match chip_kind.to_string().as_str() {
-        "BLUETOOTH" => (
-            ProtoChipKind::BLUETOOTH,
-            wireless::CreateParam::Mock(wireless::mocked::CreateParams {
-                chip_kind: ProtoChipKind::BLUETOOTH,
-            }),
-        ),
-        "WIFI" => (
-            ProtoChipKind::WIFI,
-            wireless::CreateParam::Mock(wireless::mocked::CreateParams {
-                chip_kind: ProtoChipKind::WIFI,
-            }),
-        ),
-        "UWB" => (
-            ProtoChipKind::UWB,
-            wireless::CreateParam::Mock(wireless::mocked::CreateParams {
-                chip_kind: ProtoChipKind::UWB,
-            }),
-        ),
-        _ => {
-            return Box::new(AddChipResultCxx {
-                device_id: u32::MAX,
-                chip_id: u32::MAX,
-                is_error: true,
-            })
-        }
-    };
-    let chip_create_params = chip::CreateParams {
-        kind: chip_kind_enum,
-        address: chip_address.to_string(),
-        name: if chip_name.is_empty() { None } else { Some(chip_name.to_string()) },
-        manufacturer: chip_manufacturer.to_string(),
-        product_name: chip_product_name.to_string(),
-    };
-    let device_info = ProtoDeviceInfo {
-        kind: kind.to_string(),
-        version: version.to_string(),
-        sdk_version: sdk_version.to_string(),
-        build_id: build_id.to_string(),
-        variant: variant.to_string(),
-        arch: arch.to_string(),
-        ..Default::default()
-    };
-
-    match add_chip(
-        device_guid,
-        device_name,
-        &chip_create_params,
-        &wireless_create_param,
-        device_info,
-    ) {
-        Ok(result) => Box::new(AddChipResultCxx {
-            device_id: result.device_id.0,
-            chip_id: result.chip_id.0,
-            is_error: false,
-        }),
-        Err(_) => {
-            Box::new(AddChipResultCxx { device_id: u32::MAX, chip_id: u32::MAX, is_error: true })
-        }
-    }
-}
-
 /// Remove a chip from a device.
 ///
 /// Called when the packet transport for the chip shuts down.
@@ -443,12 +308,6 @@ pub fn delete_chip(request: &DeleteChipRequest) -> Result<(), String> {
         .ok_or(format!("failed to delete chip: could not find chip with id {}", request.id))?;
 
     remove_chip(device_id, chip_id)
-}
-
-/// A RemoveChip function for Rust Device API.
-/// The backend gRPC code will be invoking this method.
-pub fn remove_chip_cxx(device_id: u32, chip_id: u32) {
-    let _ = remove_chip(DeviceIdentifier(device_id), ChipIdentifier(chip_id));
 }
 
 /// Create a device from a CreateDeviceRequest.
@@ -941,7 +800,7 @@ fn check_device_event(
             DeviceWaitStatus::LastDeviceRemoved
         }
         // DeviceAdded (event from CreateDevice)
-        // ChipAdded (event from add_chip or add_chip_cxx)
+        // ChipAdded (event from add_chip)
         Ok(Event::DeviceAdded(DeviceAdded { builtin: false, .. }))
         | Ok(Event::ChipAdded(ChipAdded { builtin: false, .. })) => DeviceWaitStatus::DeviceAdded,
         Err(_) => DeviceWaitStatus::Timeout,
