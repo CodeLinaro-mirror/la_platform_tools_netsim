@@ -33,10 +33,5 @@ python_test_host {
         // This tag is used to enable the ATest Mobly runner
         tags: ["mobly"],
     },
-    version: {
-        py3: {
-            embedded_launcher: true,
-        },
-    },
     // test_suites: ["general-tests"],
 }
