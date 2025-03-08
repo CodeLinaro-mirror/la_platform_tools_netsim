@@ -25,9 +25,8 @@ use netsim_proto::frontend_grpc::FrontendServiceClient;
 
 use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
-use crate::devices::devices_handler::spawn_shutdown_publisher;
-use crate::events;
-use crate::events::{Event, ShutDown};
+use crate::devices::devices_handler::{spawn_shutdown_publisher, DeviceManager};
+use crate::events::{Event, Events, ShutDown};
 use crate::session::Session;
 use crate::version::get_version;
 use crate::wireless;
@@ -260,10 +259,13 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     }
 
     // Create all Event Receivers before any events are posted
-    let capture_events_rx = events::subscribe();
-    let device_events_rx = events::subscribe();
-    let main_events_rx = events::subscribe();
-    let session_events_rx = events::subscribe();
+    let events = Events::new();
+    let capture_events_rx = events.subscribe();
+    let device_events_rx = events.subscribe();
+    let main_events_rx = events.subscribe();
+    let session_events_rx = events.subscribe();
+
+    DeviceManager::init(events.clone());
 
     // Start radio facades
     wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
@@ -336,7 +338,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     spawn_capture_event_subscriber(capture_events_rx, capture);
 
     if !args.no_shutdown {
-        spawn_shutdown_publisher(device_events_rx);
+        spawn_shutdown_publisher(device_events_rx, events);
     }
 
     // Create test beacons if required

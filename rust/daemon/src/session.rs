@@ -210,12 +210,10 @@ mod tests {
     use super::*;
     use crate::devices::chip::ChipIdentifier;
     use crate::devices::device::DeviceIdentifier;
-    use crate::events;
     use crate::events::{ChipAdded, ChipRemoved, DeviceRemoved, Event, Events, ShutDown};
     use netsim_proto::stats::{
         NetsimDeviceStats as ProtoDeviceStats, NetsimRadioStats as ProtoRadioStats,
     };
-    use std::sync::Mutex;
 
     const TEST_DEVICE_KIND: &str = "TEST_DEVICE";
 
@@ -233,10 +231,10 @@ mod tests {
         assert_eq!(lock.stats_proto.radio_stats.len(), 0);
     }
 
-    fn setup_session_start_test() -> (Session, Arc<Mutex<Events>>) {
+    fn setup_session_start_test() -> (Session, Arc<Events>) {
         let mut session = Session::new_internal(false);
-        let mut events = events::test::new();
-        let events_rx = events::test::subscribe(&mut events);
+        let events = Events::new();
+        let events_rx = events.subscribe();
         session.start(events_rx);
         (session, events)
     }
@@ -247,16 +245,13 @@ mod tests {
 
     #[test]
     fn test_start_and_shutdown() {
-        let (mut session, mut events) = setup_session_start_test();
+        let (mut session, events) = setup_session_start_test();
 
         // we want to be able to check the session time gets incremented
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         // publish the shutdown afterwards to cause the separate thread to stop
-        events::test::publish(
-            &mut events,
-            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
-        );
+        events.publish(Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }));
 
         // join the handle
         session.handle.take().map(JoinHandle::join);
@@ -274,16 +269,13 @@ mod tests {
 
     #[test]
     fn test_start_and_stop() {
-        let (session, mut events) = setup_session_start_test();
+        let (session, events) = setup_session_start_test();
 
         // we want to be able to check the session time gets incremented
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         // publish the shutdown which is required when using `session.stop()`
-        events::test::publish(
-            &mut events,
-            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
-        );
+        events.publish(Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }));
 
         // should not panic or deadlock
         session.stop().unwrap();
@@ -292,30 +284,24 @@ mod tests {
     // Tests for session.rs involving devices
     #[test]
     fn test_start_and_device_add() {
-        let (mut session, mut events) = setup_session_start_test();
+        let (mut session, events) = setup_session_start_test();
 
         // we want to be able to check the session time gets incremented
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         // Create a device, publishing DeviceAdded event
-        events::test::publish(
-            &mut events,
-            Event::DeviceAdded(DeviceAdded {
-                builtin: false,
-                id: DeviceIdentifier(1),
-                device_stats: ProtoDeviceStats {
-                    kind: Some(TEST_DEVICE_KIND.to_string()),
-                    ..Default::default()
-                },
+        events.publish(Event::DeviceAdded(DeviceAdded {
+            builtin: false,
+            id: DeviceIdentifier(1),
+            device_stats: ProtoDeviceStats {
+                kind: Some(TEST_DEVICE_KIND.to_string()),
                 ..Default::default()
-            }),
-        );
+            },
+            ..Default::default()
+        }));
 
         // publish the shutdown afterwards to cause the separate thread to stop
-        events::test::publish(
-            &mut events,
-            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
-        );
+        events.publish(Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }));
 
         // join the handle
         session.handle.take().map(JoinHandle::join);
@@ -337,62 +323,47 @@ mod tests {
 
     #[test]
     fn test_start_and_device_add_and_remove() {
-        let (mut session, mut events) = setup_session_start_test();
+        let (mut session, events) = setup_session_start_test();
 
         // we want to be able to check the session time gets incremented
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         // Create a device, publishing DeviceAdded event
-        events::test::publish(
-            &mut events,
-            Event::DeviceAdded(DeviceAdded {
-                builtin: false,
-                id: DeviceIdentifier(1),
-                device_stats: ProtoDeviceStats {
-                    kind: Some(TEST_DEVICE_KIND.to_string()),
-                    ..Default::default()
-                },
+        events.publish(Event::DeviceAdded(DeviceAdded {
+            builtin: false,
+            id: DeviceIdentifier(1),
+            device_stats: ProtoDeviceStats {
+                kind: Some(TEST_DEVICE_KIND.to_string()),
                 ..Default::default()
-            }),
-        );
+            },
+            ..Default::default()
+        }));
 
-        events::test::publish(
-            &mut events,
-            Event::DeviceRemoved(DeviceRemoved {
-                builtin: false,
-                id: DeviceIdentifier(1),
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::DeviceRemoved(DeviceRemoved {
+            builtin: false,
+            id: DeviceIdentifier(1),
+            ..Default::default()
+        }));
 
         // Create another device, publishing DeviceAdded event
-        events::test::publish(
-            &mut events,
-            Event::DeviceAdded(DeviceAdded {
-                builtin: false,
-                id: DeviceIdentifier(2),
-                device_stats: ProtoDeviceStats {
-                    kind: Some(TEST_DEVICE_KIND.to_string()),
-                    ..Default::default()
-                },
+        events.publish(Event::DeviceAdded(DeviceAdded {
+            builtin: false,
+            id: DeviceIdentifier(2),
+            device_stats: ProtoDeviceStats {
+                kind: Some(TEST_DEVICE_KIND.to_string()),
                 ..Default::default()
-            }),
-        );
+            },
+            ..Default::default()
+        }));
 
-        events::test::publish(
-            &mut events,
-            Event::DeviceRemoved(DeviceRemoved {
-                builtin: false,
-                id: DeviceIdentifier(2),
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::DeviceRemoved(DeviceRemoved {
+            builtin: false,
+            id: DeviceIdentifier(2),
+            ..Default::default()
+        }));
 
         // publish the shutdown afterwards to cause the separate thread to stop
-        events::test::publish(
-            &mut events,
-            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
-        );
+        events.publish(Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }));
 
         // join the handle
         session.handle.take().map(JoinHandle::join);
@@ -414,39 +385,30 @@ mod tests {
 
     #[test]
     fn test_start_and_chip_add_and_remove() {
-        let (mut session, mut events) = setup_session_start_test();
+        let (mut session, events) = setup_session_start_test();
 
         // we want to be able to check the session time gets incremented
         std::thread::sleep(std::time::Duration::from_secs(1));
 
-        events::test::publish(
-            &mut events,
-            Event::ChipAdded(ChipAdded {
-                builtin: false,
-                chip_id: ChipIdentifier(0),
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::ChipAdded(ChipAdded {
+            builtin: false,
+            chip_id: ChipIdentifier(0),
+            ..Default::default()
+        }));
 
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         // no radio stats until after we remove the chip
         assert_eq!(get_stats_proto(&session).radio_stats.len(), 0usize);
 
-        events::test::publish(
-            &mut events,
-            Event::ChipRemoved(ChipRemoved {
-                chip_id: ChipIdentifier(0),
-                radio_stats: vec![ProtoRadioStats { ..Default::default() }],
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::ChipRemoved(ChipRemoved {
+            chip_id: ChipIdentifier(0),
+            radio_stats: vec![ProtoRadioStats { ..Default::default() }],
+            ..Default::default()
+        }));
 
         // publish the shutdown afterwards to cause the separate thread to stop
-        events::test::publish(
-            &mut events,
-            Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }),
-        );
+        events.publish(Event::ShutDown(ShutDown { reason: "Stop the session".to_string() }));
 
         // join the handle
         session.handle.take().map(JoinHandle::join);
