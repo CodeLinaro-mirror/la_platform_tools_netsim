@@ -18,9 +18,7 @@ use crate::bluetooth::chip::{
     create_add_rust_device_result, AddRustDeviceResult, RustBluetoothChipCallbacks,
 };
 
-use crate::devices::devices_handler::{
-    add_chip_cxx, get_distance_cxx, remove_chip_cxx, AddChipResultCxx,
-};
+use crate::devices::devices_handler::get_distance_cxx;
 use crate::ranging::*;
 use crate::wireless::{
     bluetooth::report_invalid_packet_cxx, handle_request_cxx, handle_response_cxx,
@@ -204,38 +202,6 @@ pub mod ffi_bluetooth {
 #[cxx::bridge(namespace = "netsim::device")]
 pub mod ffi_devices {
     extern "Rust" {
-
-        // Device Resource
-        type AddChipResultCxx;
-        #[cxx_name = "GetDeviceId"]
-        fn get_device_id(self: &AddChipResultCxx) -> u32;
-        #[cxx_name = "GetChipId"]
-        fn get_chip_id(self: &AddChipResultCxx) -> u32;
-        #[cxx_name = "IsError"]
-        fn is_error(self: &AddChipResultCxx) -> bool;
-
-        #[allow(clippy::too_many_arguments)]
-        #[cxx_name = AddChipCxx]
-        fn add_chip_cxx(
-            device_guid: &str,
-            device_name: &str,
-            chip_kind: &CxxString,
-            chip_address: &str,
-            chip_name: &str,
-            chip_manufacturer: &str,
-            chip_product_name: &str,
-            bt_properties: &CxxVector<u8>,
-            kind: &str,
-            version: &str,
-            sdk_version: &str,
-            build_id: &str,
-            variant: &str,
-            arch: &str,
-        ) -> Box<AddChipResultCxx>;
-
-        #[cxx_name = RemoveChipCxx]
-        fn remove_chip_cxx(device_id: u32, chip_id: u32);
-
         #[cxx_name = GetDistanceCxx]
         fn get_distance_cxx(a: u32, b: u32) -> f32;
     }
