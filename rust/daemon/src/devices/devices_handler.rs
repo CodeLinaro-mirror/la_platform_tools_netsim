@@ -26,7 +26,6 @@ use super::chip;
 use super::chip::ChipIdentifier;
 use super::device::DeviceIdentifier;
 use crate::devices::device::{AddChipResult, Device};
-use crate::events;
 use crate::events::{
     ChipAdded, ChipRemoved, DeviceAdded, DevicePatched, DeviceRemoved, Event, Events, ShutDown,
 };
@@ -59,7 +58,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -126,22 +124,32 @@ impl PoseManager {
 static DEVICE_MANAGER: OnceLock<Arc<DeviceManager>> = OnceLock::new();
 
 fn get_manager() -> Arc<DeviceManager> {
-    DEVICE_MANAGER.get_or_init(|| Arc::new(DeviceManager::new())).clone()
+    DEVICE_MANAGER.get().unwrap().clone()
 }
 
 // TODO: last_modified atomic
 /// The Device resource is a singleton that manages all devices.
-struct DeviceManager {
+pub struct DeviceManager {
     // BTreeMap allows ListDevice to output devices in order of identifiers.
     devices: RwLock<BTreeMap<DeviceIdentifier, Device>>,
+    events: Arc<Events>,
     ids: AtomicU32,
     last_modified: RwLock<Duration>,
 }
 
 impl DeviceManager {
-    fn new() -> Self {
+    pub fn init(events: Arc<Events>) -> Arc<DeviceManager> {
+        let manager = Arc::new(Self::new(events));
+        if let Err(_e) = DEVICE_MANAGER.set(manager.clone()) {
+            panic!("Error setting device manager");
+        }
+        manager
+    }
+
+    fn new(events: Arc<Events>) -> Self {
         DeviceManager {
             devices: RwLock::new(BTreeMap::new()),
+            events,
             ids: AtomicU32::new(INITIAL_DEVICE_ID),
             last_modified: RwLock::new(
                 SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards"),
@@ -198,7 +206,7 @@ impl DeviceManager {
         };
         let event =
             Event::DeviceAdded(DeviceAdded { id, name: String::from(name), builtin, device_stats });
-        events::publish(event);
+        self.events.publish(event);
         (id, String::from(name))
     }
 }
@@ -250,7 +258,7 @@ pub fn add_chip(
         device_name: device_name.to_string(),
         builtin: chip_kind == ProtoChipKind::BLUETOOTH_BEACON,
     });
-    events::publish(event);
+    manager.events.publish(event);
     Ok(AddChipResult { device_id, chip_id })
 }
 
@@ -270,7 +278,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
         let device = guard
             .remove(&device_id)
             .ok_or(format!("RemoveChip device id {device_id} not found"))?;
-        events::publish(Event::DeviceRemoved(DeviceRemoved {
+        manager.events.publish(Event::DeviceRemoved(DeviceRemoved {
             id: device.id,
             name: device.name,
             builtin: device.builtin,
@@ -284,7 +292,7 @@ pub fn remove_chip(device_id: DeviceIdentifier, chip_id: ChipIdentifier) -> Resu
         get_pose_manager().remove(&device_id);
     }
 
-    events::publish(Event::ChipRemoved(ChipRemoved {
+    manager.events.publish(Event::ChipRemoved(ChipRemoved {
         chip_id,
         device_id,
         remaining_nonbuiltin_devices,
@@ -473,7 +481,7 @@ pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), Stri
                         log::info!("{}", PatchDeviceFieldsDisplay(id, proto_device));
 
                         // Publish Device Patched event
-                        events::publish(Event::DevicePatched(DevicePatched { id, name }));
+                        manager.events.publish(Event::DevicePatched(DevicePatched { id, name }));
                     }
                     result
                 }
@@ -498,7 +506,9 @@ pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), Stri
                             log::info!("{}", PatchDeviceFieldsDisplay(id, proto_device));
 
                             // Publish Device Patched event
-                            events::publish(Event::DevicePatched(DevicePatched { id, name }));
+                            manager
+                                .events
+                                .publish(Event::DevicePatched(DevicePatched { id, name }));
                         }
                         return result;
                     }
@@ -525,7 +535,7 @@ pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), Stri
                         log::info!("{}", PatchDeviceFieldsDisplay(id, proto_device));
 
                         // Publish Device Patched event
-                        events::publish(Event::DevicePatched(DevicePatched { id, name }));
+                        manager.events.publish(Event::DevicePatched(DevicePatched { id, name }));
                     }
                     result
                 }
@@ -613,7 +623,7 @@ pub fn reset_all() -> Result<(), String> {
     }
     // Update last modified timestamp for manager
     manager.update_timestamp();
-    events::publish(Event::DeviceReset);
+    manager.events.publish(Event::DeviceReset);
     Ok(())
 }
 
@@ -712,7 +722,8 @@ fn handle_device_subscribe(writer: ResponseWritable, subscribe_json: &str) {
         }
     }
 
-    let event_rx = events::subscribe();
+    let manager = get_manager();
+    let event_rx = manager.events.subscribe();
     // Timeout after 15 seconds with no event received
     match event_rx.recv_timeout(Duration::from_secs(15)) {
         Ok(Event::DeviceAdded(_))
@@ -813,26 +824,23 @@ fn check_device_event(
 /// 1. Initial timeout before first device is added
 /// 2. Last Chip Removed from netsimd
 ///    this function should NOT be invoked if running in no-shutdown mode
-pub fn spawn_shutdown_publisher(events_rx: Receiver<Event>) {
-    spawn_shutdown_publisher_with_timeout(events_rx, IDLE_SECS_FOR_SHUTDOWN, events::get_events());
+pub fn spawn_shutdown_publisher(events_rx: Receiver<Event>, events: Arc<Events>) {
+    spawn_shutdown_publisher_with_timeout(events_rx, IDLE_SECS_FOR_SHUTDOWN, events);
 }
 
 // separate function for testability
 fn spawn_shutdown_publisher_with_timeout(
     events_rx: Receiver<Event>,
     timeout_duration_s: u64,
-    events_tx: Arc<Mutex<Events>>,
+    events: Arc<Events>,
 ) {
     let _ =
         std::thread::Builder::new().name("device_event_subscriber".to_string()).spawn(move || {
-            let publish_event =
-                |e: Event| events_tx.lock().expect("Failed to acquire lock on events").publish(e);
-
             let mut timeout_time = Some(Instant::now() + Duration::from_secs(timeout_duration_s));
             loop {
                 match check_device_event(&events_rx, timeout_time) {
                     DeviceWaitStatus::LastDeviceRemoved => {
-                        publish_event(Event::ShutDown(ShutDown {
+                        events.publish(Event::ShutDown(ShutDown {
                             reason: "last device disconnected".to_string(),
                         }));
                         return;
@@ -841,7 +849,7 @@ fn spawn_shutdown_publisher_with_timeout(
                         timeout_time = None;
                     }
                     DeviceWaitStatus::Timeout => {
-                        publish_event(Event::ShutDown(ShutDown {
+                        events.publish(Event::ShutDown(ShutDown {
                             reason: format!(
                                 "no devices connected within {IDLE_SECS_FOR_SHUTDOWN}s"
                             ),
@@ -871,7 +879,6 @@ pub fn get_radio_stats() -> Vec<NetsimRadioStats> {
 
 #[cfg(test)]
 mod tests {
-    use crate::events;
     use http::Version;
     use netsim_common::util::netsim_logger::init_for_test;
     use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
@@ -886,10 +893,11 @@ mod tests {
     // This allows Log init method to be invoked once when running all tests.
     static INIT: Once = Once::new();
 
-    /// Logger setup function that is only run once, even if called multiple times.
-    fn logger_setup() {
+    /// Module setup function that is only run once, even if called multiple times.
+    fn module_setup() {
         INIT.call_once(|| {
             init_for_test();
+            DeviceManager::init(Events::new());
         });
     }
 
@@ -1006,27 +1014,24 @@ mod tests {
         }
     }
 
-    fn spawn_shutdown_publisher_test_setup(timeout: u64) -> (Arc<Mutex<Events>>, Receiver<Event>) {
-        let mut events = events::test::new();
-        let events_rx = events::test::subscribe(&mut events);
+    fn spawn_shutdown_publisher_test_setup(timeout: u64) -> (Arc<Events>, Receiver<Event>) {
+        let events = Events::new();
+        let events_rx = events.subscribe();
         spawn_shutdown_publisher_with_timeout(events_rx, timeout, events.clone());
 
-        let events_rx2 = events::test::subscribe(&mut events);
+        let events_rx2 = events.subscribe();
 
         (events, events_rx2)
     }
 
     #[test]
     fn test_spawn_shutdown_publisher_last_chip_removed() {
-        let (mut events, events_rx) = spawn_shutdown_publisher_test_setup(IDLE_SECS_FOR_SHUTDOWN);
+        let (events, events_rx) = spawn_shutdown_publisher_test_setup(IDLE_SECS_FOR_SHUTDOWN);
 
-        events::test::publish(
-            &mut events,
-            Event::ChipRemoved(ChipRemoved {
-                remaining_nonbuiltin_devices: 0,
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::ChipRemoved(ChipRemoved {
+            remaining_nonbuiltin_devices: 0,
+            ..Default::default()
+        }));
 
         // receive our own ChipRemoved
         assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(ChipRemoved { .. }))));
@@ -1036,28 +1041,22 @@ mod tests {
 
     #[test]
     fn test_spawn_shutdown_publisher_chip_removed_which_is_not_last_chip() {
-        let (mut events, events_rx) = spawn_shutdown_publisher_test_setup(IDLE_SECS_FOR_SHUTDOWN);
-        events::test::publish(
-            &mut events,
-            Event::ChipRemoved(ChipRemoved {
-                chip_id: ChipIdentifier(1),
-                remaining_nonbuiltin_devices: 1,
-                ..Default::default()
-            }),
-        );
+        let (events, events_rx) = spawn_shutdown_publisher_test_setup(IDLE_SECS_FOR_SHUTDOWN);
+        events.publish(Event::ChipRemoved(ChipRemoved {
+            chip_id: ChipIdentifier(1),
+            remaining_nonbuiltin_devices: 1,
+            ..Default::default()
+        }));
 
         // give other thread time to generate a ShutDown if it was going to
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         // only the 2nd ChipRemoved should generate a ShutDown as it is marked the last one
-        events::test::publish(
-            &mut events,
-            Event::ChipRemoved(ChipRemoved {
-                chip_id: ChipIdentifier(0),
-                remaining_nonbuiltin_devices: 0,
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::ChipRemoved(ChipRemoved {
+            chip_id: ChipIdentifier(0),
+            remaining_nonbuiltin_devices: 0,
+            ..Default::default()
+        }));
 
         // receive our own ChipRemoved
         assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(ChipRemoved { .. }))));
@@ -1069,15 +1068,12 @@ mod tests {
 
     #[test]
     fn test_spawn_shutdown_publisher_last_chip_removed_with_duplicate_event() {
-        let (mut events, events_rx) = spawn_shutdown_publisher_test_setup(IDLE_SECS_FOR_SHUTDOWN);
-        events::test::publish(
-            &mut events,
-            Event::ChipRemoved(ChipRemoved {
-                chip_id: ChipIdentifier(0),
-                remaining_nonbuiltin_devices: 0,
-                ..Default::default()
-            }),
-        );
+        let (events, events_rx) = spawn_shutdown_publisher_test_setup(IDLE_SECS_FOR_SHUTDOWN);
+        events.publish(Event::ChipRemoved(ChipRemoved {
+            chip_id: ChipIdentifier(0),
+            remaining_nonbuiltin_devices: 0,
+            ..Default::default()
+        }));
 
         // give other thread time to generate a ShutDown if it was going to
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -1088,14 +1084,11 @@ mod tests {
         // we would receive ChipRemoved, ShutDown, ChipRemoved
         // but if first ChipRemoved has remaining_nonbuiltin_devices,
         // we instead receive ChipRemoved, ChipRemoved, ShutDown
-        events::test::publish(
-            &mut events,
-            Event::ChipRemoved(ChipRemoved {
-                chip_id: ChipIdentifier(0),
-                remaining_nonbuiltin_devices: 0,
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::ChipRemoved(ChipRemoved {
+            chip_id: ChipIdentifier(0),
+            remaining_nonbuiltin_devices: 0,
+            ..Default::default()
+        }));
 
         // receive our own ChipRemoved
         assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(_))));
@@ -1118,30 +1111,24 @@ mod tests {
 
     #[test]
     fn test_spawn_shutdown_publisher_timeout_is_canceled_if_a_chip_is_added() {
-        let (mut events, events_rx) = spawn_shutdown_publisher_test_setup(1u64);
+        let (events, events_rx) = spawn_shutdown_publisher_test_setup(1u64);
 
-        events::test::publish(
-            &mut events,
-            Event::ChipAdded(ChipAdded {
-                chip_id: ChipIdentifier(0),
-                chip_kind: ProtoChipKind::BLUETOOTH,
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::ChipAdded(ChipAdded {
+            chip_id: ChipIdentifier(0),
+            chip_kind: ProtoChipKind::BLUETOOTH,
+            ..Default::default()
+        }));
         assert!(matches!(events_rx.recv(), Ok(Event::ChipAdded(_))));
 
         // should NO longer receive the ShutDown emitted by the function under test
         // based on timeout removed when chip added
         assert!(events_rx.recv_timeout(Duration::from_secs(2)).is_err());
 
-        events::test::publish(
-            &mut events,
-            Event::ChipRemoved(ChipRemoved {
-                chip_id: ChipIdentifier(0),
-                remaining_nonbuiltin_devices: 0,
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::ChipRemoved(ChipRemoved {
+            chip_id: ChipIdentifier(0),
+            remaining_nonbuiltin_devices: 0,
+            ..Default::default()
+        }));
         // receive our own ChipRemoved
         assert!(matches!(events_rx.recv(), Ok(Event::ChipRemoved(_))));
         // receive the ShutDown emitted by the function under test
@@ -1160,13 +1147,14 @@ mod tests {
 
     #[test]
     fn test_add_chip() {
-        // Initializing Logger
-        logger_setup();
+        module_setup();
+
+        let manager = get_manager();
 
         // Adding a chip
         let chip_params = test_chip_1_bt();
         let chip_result = chip_params.add_chip().unwrap();
-        match get_manager().devices.read().unwrap().get(&chip_result.device_id) {
+        match manager.devices.read().unwrap().get(&chip_result.device_id) {
             Some(device) => {
                 let chips = device.chips.read().unwrap();
                 let chip = chips.get(&chip_result.chip_id).unwrap();
@@ -1183,13 +1171,14 @@ mod tests {
                 assert_eq!(chip_params.device_name, device.name);
             }
             None => unreachable!(),
-        }
+        };
     }
 
     #[test]
     fn test_get_or_create_device() {
-        // Initializing Logger
-        logger_setup();
+        module_setup();
+
+        let manager = get_manager();
 
         // Creating a device and getting device
         let bt_chip_params = test_chip_1_bt();
@@ -1197,13 +1186,12 @@ mod tests {
         let wifi_chip_params = test_chip_1_wifi();
         let device_id_2 = wifi_chip_params.get_or_create_device();
         assert_eq!(device_id_1, device_id_2);
-        assert!(get_manager().devices.read().unwrap().get(&device_id_1).is_some())
+        assert!(manager.devices.read().unwrap().get(&device_id_1).is_some())
     }
 
     #[test]
     fn test_patch_device_json() {
-        // Initializing Logger
-        logger_setup();
+        module_setup();
 
         // Patching device position and orientation by id
         let chip_params = test_chip_1_bt();
@@ -1253,8 +1241,7 @@ mod tests {
 
     #[test]
     fn test_patch_error() {
-        // Initializing Logger
-        logger_setup();
+        module_setup();
 
         // Patch Error Testing
         let bt_chip_params = test_chip_1_bt();
@@ -1314,8 +1301,8 @@ mod tests {
 
     #[test]
     fn test_adding_two_chips() {
-        // Initializing Logger
-        logger_setup();
+        module_setup();
+        let manager = get_manager();
 
         // Adding two chips of the same device
         let bt_chip_params = test_chip_1_bt();
@@ -1323,7 +1310,6 @@ mod tests {
         let bt_chip_result = bt_chip_params.add_chip().unwrap();
         let wifi_chip_result = wifi_chip_params.add_chip().unwrap();
         assert_eq!(bt_chip_result.device_id, wifi_chip_result.device_id);
-        let manager = get_manager();
         let devices = manager.devices.read().unwrap();
         let device = devices.get(&bt_chip_result.device_id).unwrap();
         assert_eq!(device.id, bt_chip_result.device_id);
@@ -1343,8 +1329,8 @@ mod tests {
 
     #[test]
     fn test_reset() {
-        // Initializing Logger
-        logger_setup();
+        module_setup();
+        let manager = get_manager();
 
         // Patching Device and Resetting scene
         let chip_params = test_chip_1_bt();
@@ -1363,7 +1349,7 @@ mod tests {
             print_to_string(&patch_device_request).unwrap().as_str(),
         )
         .unwrap();
-        match get_manager().devices.read().unwrap().get(&chip_result.device_id) {
+        match manager.devices.read().unwrap().get(&chip_result.device_id) {
             Some(device) => {
                 assert!(!device.visible.load(Ordering::SeqCst));
             }
@@ -1385,7 +1371,7 @@ mod tests {
         }
 
         reset(chip_result.device_id).unwrap();
-        match get_manager().devices.read().unwrap().get(&chip_result.device_id) {
+        match manager.devices.read().unwrap().get(&chip_result.device_id) {
             Some(device) => {
                 assert!(device.visible.load(Ordering::SeqCst));
             }
@@ -1413,8 +1399,8 @@ mod tests {
 
     #[test]
     fn test_remove_chip() {
-        // Initializing Logger
-        logger_setup();
+        module_setup();
+        let manager = get_manager();
 
         // Add 2 chips of same device and 1 chip of different device
         let bt_chip_params = test_chip_1_bt();
@@ -1426,7 +1412,7 @@ mod tests {
 
         // Remove a bt chip of first device
         remove_chip(bt_chip_result.device_id, bt_chip_result.chip_id).unwrap();
-        match get_manager().devices.read().unwrap().get(&bt_chip_result.device_id) {
+        match manager.devices.read().unwrap().get(&bt_chip_result.device_id) {
             Some(device) => {
                 assert_eq!(device.chips.read().unwrap().len(), 1);
                 assert_eq!(
@@ -1439,17 +1425,17 @@ mod tests {
 
         // Remove a wifi chip of first device
         remove_chip(wifi_chip_result.device_id, wifi_chip_result.chip_id).unwrap();
-        assert!(!get_manager().devices.read().unwrap().contains_key(&wifi_chip_result.device_id));
+        assert!(!manager.devices.read().unwrap().contains_key(&wifi_chip_result.device_id));
 
         // Remove a bt chip of second device
         remove_chip(bt_chip_2_result.device_id, bt_chip_2_result.chip_id).unwrap();
-        assert!(!get_manager().devices.read().unwrap().contains_key(&bt_chip_2_result.device_id));
+        assert!(!manager.devices.read().unwrap().contains_key(&bt_chip_2_result.device_id));
     }
 
     #[test]
     fn test_remove_chip_error() {
-        // Initializing Logger
-        logger_setup();
+        module_setup();
+        let manager = get_manager();
 
         // Add 2 chips of same device and 1 chip of different device
         let bt_chip_params = test_chip_1_bt();
@@ -1466,13 +1452,12 @@ mod tests {
             Ok(_) => unreachable!(),
             Err(err) => assert_eq!(err, "RemoveChip device id 9999 not found"),
         }
-        assert!(get_manager().devices.read().unwrap().contains_key(&bt_chip_result.device_id));
+        assert!(manager.devices.read().unwrap().contains_key(&bt_chip_result.device_id));
     }
 
     #[test]
     fn test_get_distance() {
-        // Initializing Logger
-        logger_setup();
+        module_setup();
 
         // Add 2 chips of different devices
         let bt_chip_params = test_chip_1_bt();
@@ -1548,7 +1533,7 @@ mod tests {
 
     #[test]
     fn test_create_device_succeeds() {
-        logger_setup();
+        module_setup();
 
         let request = get_test_create_device_request(Some(format!(
             "bob-the-beacon-{:?}",
@@ -1565,7 +1550,7 @@ mod tests {
 
     #[test]
     fn test_create_chipless_device_fails() {
-        logger_setup();
+        module_setup();
 
         let request = CreateDeviceRequest {
             device: MessageField::some(ProtoDeviceCreate { ..Default::default() }),
@@ -1578,7 +1563,7 @@ mod tests {
 
     #[test]
     fn test_create_radioless_device_fails() {
-        logger_setup();
+        module_setup();
 
         let request = CreateDeviceRequest {
             device: MessageField::some(ProtoDeviceCreate {
@@ -1594,7 +1579,7 @@ mod tests {
 
     #[test]
     fn test_get_beacon_device() {
-        logger_setup();
+        module_setup();
 
         let request = get_test_create_device_request(Some(format!(
             "bob-the-beacon-{:?}",
@@ -1611,7 +1596,7 @@ mod tests {
 
     #[test]
     fn test_create_device_default_name() {
-        logger_setup();
+        module_setup();
 
         let request = get_test_create_device_request(None);
 
@@ -1623,7 +1608,7 @@ mod tests {
 
     #[test]
     fn test_create_existing_device_fails() {
-        logger_setup();
+        module_setup();
 
         let request = get_test_create_device_request(Some(format!(
             "existing-device-{:?}",
@@ -1640,7 +1625,8 @@ mod tests {
 
     #[test]
     fn test_patch_beacon_device() {
-        logger_setup();
+        module_setup();
+        let manager = get_manager();
 
         let request = get_test_create_device_request(Some(format!(
             "bob-the-beacon-{:?}",
@@ -1650,7 +1636,6 @@ mod tests {
         let device_proto = create_device(&request);
         assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
         let device_proto = device_proto.unwrap();
-        let manager = get_manager();
         let mut devices = manager.devices.write().unwrap();
         let device = devices
             .get_mut(&DeviceIdentifier(device_proto.id))
@@ -1681,7 +1666,8 @@ mod tests {
 
     #[test]
     fn test_remove_beacon_device_succeeds() {
-        logger_setup();
+        module_setup();
+        let manager = get_manager();
 
         let create_request = get_test_create_device_request(None);
         let device_proto = create_device(&create_request);
@@ -1689,7 +1675,6 @@ mod tests {
 
         let device_proto = device_proto.unwrap();
         let chip_id = {
-            let manager = get_manager();
             let devices = manager.devices.read().unwrap();
             let device = devices.get(&DeviceIdentifier(device_proto.id)).unwrap();
             let chips = device.chips.read().unwrap();
@@ -1700,23 +1685,20 @@ mod tests {
         let delete_result = delete_chip(&delete_request);
         assert!(delete_result.is_ok(), "{}", delete_result.unwrap_err());
 
-        assert!(!get_manager()
-            .devices
-            .read()
-            .unwrap()
-            .contains_key(&DeviceIdentifier(device_proto.id)))
+        assert!(!manager.devices.read().unwrap().contains_key(&DeviceIdentifier(device_proto.id)))
     }
 
     #[test]
     fn test_remove_beacon_device_fails() {
-        logger_setup();
+        module_setup();
+        let manager = get_manager();
 
         let create_request = get_test_create_device_request(None);
         let device_proto = create_device(&create_request);
         assert!(device_proto.is_ok(), "{}", device_proto.unwrap_err());
 
         let device_proto = device_proto.unwrap();
-        let chip_id = get_manager()
+        let chip_id = manager
             .devices
             .read()
             .unwrap()
@@ -1739,10 +1721,10 @@ mod tests {
 
     #[test]
     fn test_check_device_event_initial_timeout() {
-        logger_setup();
+        module_setup();
 
-        let mut events = events::test::new();
-        let events_rx = events::test::subscribe(&mut events);
+        let events = get_manager().events.clone();
+        let events_rx = events.subscribe();
         assert_eq!(
             check_device_event(&events_rx, Some(std::time::Instant::now())),
             DeviceWaitStatus::Timeout
@@ -1751,74 +1733,59 @@ mod tests {
 
     #[test]
     fn test_check_device_event_last_device_removed() {
-        logger_setup();
+        module_setup();
 
-        let mut events = events::test::new();
-        let events_rx = events::test::subscribe(&mut events);
-        events::test::publish(
-            &mut events,
-            Event::ChipRemoved(ChipRemoved {
-                remaining_nonbuiltin_devices: 0,
-                ..Default::default()
-            }),
-        );
+        let events = Events::new();
+        let events_rx = events.subscribe();
+        events.publish(Event::ChipRemoved(ChipRemoved {
+            remaining_nonbuiltin_devices: 0,
+            ..Default::default()
+        }));
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::LastDeviceRemoved);
     }
 
     #[test]
     fn test_check_device_event_device_chip_added() {
-        logger_setup();
+        module_setup();
 
-        let mut events = events::test::new();
-        let events_rx = events::test::subscribe(&mut events);
-        events::test::publish(
-            &mut events,
-            Event::DeviceAdded(DeviceAdded {
-                id: DeviceIdentifier(0),
-                name: "".to_string(),
-                builtin: false,
-                device_stats: ProtoDeviceStats::new(),
-            }),
-        );
+        let events = Events::new();
+        let events_rx = events.subscribe();
+        events.publish(Event::DeviceAdded(DeviceAdded {
+            id: DeviceIdentifier(0),
+            name: "".to_string(),
+            builtin: false,
+            device_stats: ProtoDeviceStats::new(),
+        }));
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::DeviceAdded);
-        events::test::publish(
-            &mut events,
-            Event::ChipAdded(ChipAdded { builtin: false, ..Default::default() }),
-        );
+        events.publish(Event::ChipAdded(ChipAdded { builtin: false, ..Default::default() }));
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::DeviceAdded);
     }
 
     #[test]
     fn test_check_device_event_ignore_event() {
-        logger_setup();
+        module_setup();
 
-        let mut events = events::test::new();
-        let events_rx = events::test::subscribe(&mut events);
-        events::test::publish(
-            &mut events,
-            Event::DevicePatched(DevicePatched { id: DeviceIdentifier(0), name: "".to_string() }),
-        );
+        let events = Events::new();
+        let events_rx = events.subscribe();
+        events.publish(Event::DevicePatched(DevicePatched {
+            id: DeviceIdentifier(0),
+            name: "".to_string(),
+        }));
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
-        events::test::publish(
-            &mut events,
-            Event::ChipRemoved(ChipRemoved {
-                remaining_nonbuiltin_devices: 1,
-                ..Default::default()
-            }),
-        );
+        events.publish(Event::ChipRemoved(ChipRemoved {
+            remaining_nonbuiltin_devices: 1,
+            ..Default::default()
+        }));
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
     }
 
     #[test]
     fn test_check_device_event_ignore_chip_added_for_builtin() {
-        logger_setup();
+        module_setup();
 
-        let mut events = events::test::new();
-        let events_rx = events::test::subscribe(&mut events);
-        events::test::publish(
-            &mut events,
-            Event::ChipAdded(ChipAdded { builtin: true, ..Default::default() }),
-        );
+        let events = Events::new();
+        let events_rx = events.subscribe();
+        events.publish(Event::ChipAdded(ChipAdded { builtin: true, ..Default::default() }));
         assert_eq!(check_device_event(&events_rx, None), DeviceWaitStatus::IgnoreEvent);
     }
 }
