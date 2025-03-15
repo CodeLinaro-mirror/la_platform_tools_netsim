@@ -14,6 +14,16 @@
 
 //! Netsim daemon libraries.
 
+use std::sync::OnceLock;
+use tokio::runtime::{Handle, Runtime};
+
+static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+/// Retrieves a handle to a shared, lazily initialized Tokio runtime.
+pub fn get_runtime() -> Handle {
+    RUNTIME.get_or_init(|| Runtime::new().unwrap()).handle().clone()
+}
+
 mod args;
 mod bluetooth;
 pub mod captures;

@@ -21,6 +21,7 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 
 use crate::devices::chip::ChipIdentifier;
+use crate::get_runtime;
 use crate::uwb::ranging_estimator::{SharedState, UwbRangingEstimator};
 use crate::wireless::packet::handle_response;
 
@@ -47,12 +48,6 @@ fn get_pica() -> Arc<Mutex<Pica>> {
         )))
     })
     .clone()
-}
-
-static PICA_RUNTIME: OnceLock<Arc<tokio::runtime::Runtime>> = OnceLock::new();
-
-fn get_pica_runtime() -> Arc<tokio::runtime::Runtime> {
-    PICA_RUNTIME.get_or_init(|| Arc::new(tokio::runtime::Runtime::new().unwrap())).clone()
 }
 
 /// Parameters for creating UWB chips
@@ -129,7 +124,7 @@ pub fn uwb_start() {
     // TODO: Provide TcpStream as UWB connector
     let _ = thread::Builder::new().name("pica_service".to_string()).spawn(move || {
         log::info!("PICA STARTED");
-        let _guard = get_pica_runtime().enter();
+        let _guard = get_runtime().enter();
         futures::executor::block_on(pica::run(&get_pica()))
     });
 }
@@ -137,7 +132,7 @@ pub fn uwb_start() {
 pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
     let (uci_stream_sender, uci_stream_receiver) = futures::channel::mpsc::unbounded();
     let (uci_sink_sender, uci_sink_receiver) = futures::channel::mpsc::unbounded();
-    let _guard = get_pica_runtime().enter();
+    let _guard = get_runtime().enter();
     let pica_id = get_pica()
         .lock()
         .unwrap()
@@ -155,7 +150,7 @@ pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAd
     };
 
     // Spawn a future for obtaining packet from pica and invoking handle_response_rust
-    get_pica_runtime().spawn(async move {
+    get_runtime().spawn(async move {
         let mut uci_sink_receiver = uci_sink_receiver;
         while let Some(packet) = uci_sink_receiver.next().await {
             handle_response(chip_id, &Bytes::from(packet));
