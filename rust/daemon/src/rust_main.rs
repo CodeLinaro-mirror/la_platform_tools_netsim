@@ -30,6 +30,7 @@ use crate::events::{Event, Events, ShutDown};
 use crate::session::Session;
 use crate::version::get_version;
 use crate::wireless;
+
 use netsim_common::util::netsim_logger;
 
 use crate::args::NetsimdArgs;
