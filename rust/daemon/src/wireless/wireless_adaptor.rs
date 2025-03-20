@@ -24,7 +24,7 @@ use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 pub type WirelessAdaptorImpl = Box<dyn WirelessAdaptor + Send + Sync>;
 
 #[cfg(not(test))]
-use crate::wireless::{bluetooth, uwb, wifi};
+use crate::wireless::{bluetooth, uwb, wifi, wifi_manager};
 
 /// Parameter for each constructor of Emulated Chips
 #[allow(clippy::large_enum_variant, dead_code)]
@@ -80,7 +80,7 @@ pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> WirelessAdapt
         #[cfg(not(test))]
         CreateParam::Bluetooth(params) => bluetooth::new(params, chip_id),
         #[cfg(not(test))]
-        CreateParam::Wifi(params) => wifi::new(params, chip_id),
+        CreateParam::Wifi(params) => wifi_manager::new(params, chip_id),
         #[cfg(not(test))]
         CreateParam::Uwb(params) => uwb::new(params, chip_id),
         CreateParam::Mock(params) => mocked::new(params, chip_id),

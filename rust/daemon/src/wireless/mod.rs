@@ -18,6 +18,7 @@ pub mod mocked;
 pub mod packet;
 pub mod uwb;
 pub mod wifi;
+pub mod wifi_manager;
 pub mod wireless_adaptor;
 
 pub use crate::wireless::packet::{handle_request, handle_request_cxx, handle_response_cxx};
