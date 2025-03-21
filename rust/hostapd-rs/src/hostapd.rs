@@ -35,24 +35,18 @@
 //! Here's a basic example of how to create a `Hostapd` instance and start the `hostapd` process:
 //!
 //! ```
-//! use hostapd_rs::hostapd::Hostapd;
-//! use std::path::PathBuf;
-//! use std::sync::mpsc;
+//! // Create a channel for receiving data from hostapd
+//! let (tx, _) = mpsc::channel();
 //!
-//! fn main() {
-//!     // Create a channel for receiving data from hostapd
-//!     let (tx, _) = mpsc::channel();
+//! // Create a new Hostapd instance
+//! let mut hostapd = Hostapd::new(
+//!     tx,                                 // Sender for receiving data
+//!     true,                               // Verbose mode (optional)
+//!     PathBuf::from("/tmp/hostapd.conf"), // Path to the configuration file
+//! );
 //!
-//!     // Create a new Hostapd instance
-//!     let mut hostapd = Hostapd::new(
-//!         tx,                                 // Sender for receiving data
-//!         true,                               // Verbose mode (optional)
-//!         PathBuf::from("/tmp/hostapd.conf"), // Path to the configuration file
-//!     );
-//!
-//!     // Start the hostapd process
-//!     hostapd.run();
-//! }
+//! // Start the hostapd process
+//! hostapd.run();
 //! ```
 //!
 //! This starts `hostapd` in a separate thread, allowing interaction with it using the `Hostapd` struct's methods.

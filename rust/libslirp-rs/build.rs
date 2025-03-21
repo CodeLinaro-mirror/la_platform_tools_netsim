@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Build script for linking `libslirp-rs` with dependencies.
+
+/// The main function of the build script.
+///
+/// Configures the build process to link against `libslirp` and other
+/// OS-dependent libraries.
 pub fn main() {
     let objs_path = std::env::var("OBJS_PATH").unwrap_or("../objs".to_string());
 

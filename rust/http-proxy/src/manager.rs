@@ -63,9 +63,13 @@ pub struct Manager {
 }
 
 impl Manager {
+    /// Creates a new `LibSlirp` instance.
+    ///
+    /// This function initializes the libslirp library and spawns the necessary threads
+    /// for handling network traffic and polling.
     pub fn new(proxy: &str, rx_proxy_bytes: mpsc::Receiver<Bytes>) -> Result<Self, Error> {
-        let config = ProxyConfig::from_string(&proxy)?;
-        let mut dns_manager = Arc::new(DnsManager::new());
+        let config = ProxyConfig::from_string(proxy)?;
+        let dns_manager = Arc::new(DnsManager::new());
         let dns_manager_clone = dns_manager.clone();
         let _ = thread::Builder::new().name("Dns Manager".to_string()).spawn(move || {
             while let Ok(bytes) = rx_proxy_bytes.recv() {

@@ -48,6 +48,7 @@
 //!
 //! * Currently only supports HTTP proxies.
 //! * Usernames and passwords cannot contain `@` or `:`.
+#![allow(dead_code)] //TODO: Remove once implementation is complete
 
 mod connector;
 mod dns;

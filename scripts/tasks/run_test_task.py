@@ -34,27 +34,46 @@ class RunTestTask(Task):
   def do_run(self):
     # TODO(b/379745416): Support clippy for Mac and Windows
     if PLATFORM_SYSTEM == "Linux":
-      # Set Clippy flags
-      clippy_flags = [
+
+      def run_clippy(flags):
+        run(
+            [
+                AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_clippy.sh",
+                str(self.out),
+                rust_version(),
+                " ".join(flags),
+            ],
+            self.env,
+            "clippy",
+        )
+
+      # Default Rust lints in Android. Reference: build/soong/rust/config/lints.go
+      default_clippy_flags = [
+          # Default rustc Lints from main build
+          "-A deprecated",
+          "-A unknown_lints",
+          "-D missing-docs",
+          "-D warnings",
+          "-D unsafe_op_in_unsafe_fn",
+          # Default Clippy lints from main build
           "-A clippy::disallowed_names",
+          "-A clippy::empty_line_after_doc_comments",
           "-A clippy::type-complexity",
+          # TODO: Enable once prebuilt clippy is updated to 1.75.0+
+          # "-A clippy::unnecessary_fallible_conversions",
           "-A clippy::unnecessary-wraps",
           "-A clippy::unusual-byte-groupings",
           "-A clippy::upper-case-acronyms",
-          "-W clippy::undocumented_unsafe_blocks",
+          "-D clippy::undocumented_unsafe_blocks",
+      ]
+      # Additional lints for our project.
+      additional_clippy_flags = [
           "-W clippy::cognitive-complexity",
       ]
-      # Run cargo clippy
-      run(
-          [
-              AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_clippy.sh",
-              str(self.out),
-              rust_version(),
-              " ".join(clippy_flags),
-          ],
-          self.env,
-          "clippy",
-      )
+      # Run cargo clippy with default flags
+      run_clippy(default_clippy_flags)
+      # Run cargo clippy with additional flags
+      run_clippy(additional_clippy_flags)
 
     # Set script for cargo Test
     if PLATFORM_SYSTEM == "Windows":
