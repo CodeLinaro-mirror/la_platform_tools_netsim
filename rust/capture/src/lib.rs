@@ -29,4 +29,5 @@
 //!   compatibility with other pcap tools.
 //!
 
+/// This module contains the core functionality for reading and writing pcap files.
 pub mod pcap;

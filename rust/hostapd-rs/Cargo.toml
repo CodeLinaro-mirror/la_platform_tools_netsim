@@ -32,7 +32,7 @@ log = "0.4.17"
 netsim-common = { path = "../common" }
 netsim-packets = { path = "../packets" }
 pdl-runtime = "0.3.0"
-tokio = { version = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync"] }
+tokio = { version = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
 
 [build-dependencies]
 ##bindgen = "0.69.4"

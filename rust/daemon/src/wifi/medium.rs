@@ -696,8 +696,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_remove() {
+    #[tokio::test]
+    async fn test_remove() {
         let test_client_id: u32 = 1234;
         let other_client_id: u32 = 5678;
         let addr: MacAddress = parse_mac_address("00:0b:85:71:20:00").unwrap();
@@ -706,8 +706,9 @@ mod tests {
         let other_hwsim_addr: MacAddress = parse_mac_address("00:0b:85:71:20:cf").unwrap();
 
         let hostapd_options = netsim_proto::config::HostapdOptions::new();
-        let (tx, _rx) = std::sync::mpsc::channel();
-        let hostapd = Arc::new(hostapd::hostapd_run(hostapd_options, tx, None).unwrap());
+        let (tx, _rx) = tokio::sync::mpsc::channel(100);
+        let hostapd_result = hostapd::hostapd_run(hostapd_options, tx, None).await;
+        let hostapd = Arc::new(hostapd_result.expect("hostapd_run failed"));
 
         // Create a test Medium object
         let callback: HwsimCmdCallback = |_, _| {};
