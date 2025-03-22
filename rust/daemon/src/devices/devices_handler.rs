@@ -237,7 +237,7 @@ pub fn add_chip(
 
     // Create
     let chip_id = chip::next_id();
-    let wireless_adaptor = wireless::new(wireless_create_params, chip_id);
+    let wireless_chip = wireless::add_chip(wireless_create_params, chip_id);
 
     // This is infrequent, so we can afford to do another lookup for the device.
     let _ = manager
@@ -246,7 +246,7 @@ pub fn add_chip(
         .unwrap()
         .get_mut(&device_id)
         .ok_or(format!("Device not found for device_id: {}", device_id))?
-        .add_chip(chip_create_params, chip_id, wireless_adaptor);
+        .add_chip(chip_create_params, chip_id, wireless_chip);
 
     // Update last modified timestamp for devices
     manager.update_timestamp();
@@ -355,11 +355,12 @@ pub fn create_device(create_device_request: &CreateDeviceRequest) -> Result<Prot
                 manufacturer: chip.manufacturer.clone(),
                 product_name: chip.product_name.clone(),
             };
-            let wireless_create_params =
-                wireless::CreateParam::BleBeacon(wireless::ble_beacon::CreateParams {
+            let wireless_create_params = wireless::wireless_manager::CreateParam::BleBeacon(
+                wireless::ble_beacon::CreateParams {
                     device_name: device_name.clone(),
                     chip_proto: chip.clone(),
-                });
+                },
+            );
 
             add_chip(
                 &device_name,
@@ -865,7 +866,7 @@ fn spawn_shutdown_publisher_with_timeout(
 /// Return vector containing current radio chip stats from all devices
 pub fn get_radio_stats() -> Vec<NetsimRadioStats> {
     let mut result: Vec<NetsimRadioStats> = Vec::new();
-    // TODO: b/309805437 - optimize logic using get_stats for WirelessAdaptor
+    // TODO: b/309805437 - optimize logic using get_stats for WirelessChip
     for (device_id, device) in get_manager().devices.read().unwrap().iter() {
         for chip in device.chips.read().unwrap().values() {
             for mut radio_stats in chip.get_stats() {

@@ -17,12 +17,12 @@ pub mod bluetooth;
 pub mod mocked;
 pub mod packet;
 pub mod uwb;
-pub mod wifi;
+pub mod wifi_chip;
 pub mod wifi_manager;
-pub mod wireless_adaptor;
+pub mod wireless_chip;
+pub mod wireless_manager;
 
 pub use crate::wireless::packet::{handle_request, handle_request_cxx, handle_response_cxx};
-pub use crate::wireless::wireless_adaptor::new;
-pub use crate::wireless::wireless_adaptor::CreateParam;
-pub use crate::wireless::wireless_adaptor::WirelessAdaptor;
-pub use crate::wireless::wireless_adaptor::WirelessAdaptorImpl;
+pub use crate::wireless::wireless_chip::WirelessChip;
+pub use crate::wireless::wireless_chip::WirelessChipImpl;
+pub use crate::wireless::wireless_manager::{add_chip, CreateParam};

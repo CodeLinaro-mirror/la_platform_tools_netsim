@@ -18,8 +18,8 @@ use crate::wifi::libslirp;
 #[cfg(not(feature = "cuttlefish"))]
 use crate::wifi::mdns_forwarder;
 use crate::wifi::medium::Medium;
-use crate::wireless::wifi::{CreateParams, Wifi};
-use crate::wireless::{packet::handle_response, WirelessAdaptorImpl};
+use crate::wireless::wifi_chip::{CreateParams, WifiChip};
+use crate::wireless::{packet::handle_response, WirelessChipImpl};
 use anyhow;
 use bytes::Bytes;
 use log::{info, warn};
@@ -261,10 +261,10 @@ fn get_wifi_manager() -> Arc<WifiManager> {
 /// Create a new Emulated Wifi Chip
 /// allow(dead_code) due to not being used in unit tests
 #[allow(dead_code)]
-pub fn new(_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
+pub fn add_chip(_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessChipImpl {
     let wifi_manager = get_wifi_manager();
     wifi_manager.medium.add(chip_id.0);
-    info!("WiFi WirelessAdaptor created chip_id: {chip_id}");
-    let wifi = Wifi { wifi_manager, chip_id };
+    info!("WiFi WirelessChip created chip_id: {chip_id}");
+    let wifi = WifiChip { wifi_manager, chip_id };
     Box::new(wifi)
 }

@@ -14,7 +14,7 @@
 
 use crate::devices::chip::ChipIdentifier;
 use crate::wireless::wifi_manager::WifiManager;
-use crate::wireless::WirelessAdaptor;
+use crate::wireless::WirelessChip;
 use bytes::Bytes;
 use log::warn;
 use netsim_proto::model::Chip as ProtoChip;
@@ -22,24 +22,24 @@ use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStat
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-/// Parameters for creating Wifi chips
+/// Parameters for creating WifiChips
 /// allow(dead_code) due to not being used in unit tests
 #[allow(dead_code)]
 pub struct CreateParams {}
 
-/// Wifi struct will keep track of chip_id
-pub struct Wifi {
+/// WifiChip struct will keep track of chip_id
+pub struct WifiChip {
     pub chip_id: ChipIdentifier,
     pub wifi_manager: Arc<WifiManager>,
 }
 
-impl Drop for Wifi {
+impl Drop for WifiChip {
     fn drop(&mut self) {
         self.wifi_manager.medium.remove(self.chip_id.0);
     }
 }
 
-impl WirelessAdaptor for Wifi {
+impl WirelessChip for WifiChip {
     fn handle_request(&self, packet: &Bytes) {
         if let Err(e) = self.wifi_manager.tx_request.send((self.chip_id.0, packet.clone())) {
             warn!("Failed wifi handle_request: {:?}", e);
