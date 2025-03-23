@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
+use crate::get_runtime;
 use crate::wifi::hostapd;
 use crate::wifi::libslirp;
 #[cfg(not(feature = "cuttlefish"))]
@@ -28,6 +29,7 @@ use protobuf::MessageField;
 use std::sync::{mpsc, Arc, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc as tokio_mpsc;
 
 /// Starts the WiFi service.
 pub fn wifi_start(
@@ -38,7 +40,6 @@ pub fn wifi_start(
 ) {
     let (tx_request, rx_request) = mpsc::channel::<(u32, Bytes)>();
     let (tx_ieee8023_response, rx_ieee8023_response) = mpsc::channel::<Bytes>();
-    let (tx_ieee80211_response, rx_ieee80211_response) = mpsc::channel::<Bytes>();
     let tx_ieee8023_response_clone = tx_ieee8023_response.clone();
     let wifi_config = config.clone().unwrap_or_default();
 
@@ -49,9 +50,12 @@ pub fn wifi_start(
     };
 
     let hostapd_opt = wifi_config.hostapd_options.as_ref().unwrap_or_default().clone();
-    let hostapd = hostapd::hostapd_run(hostapd_opt, tx_ieee80211_response, wifi_args)
-        .map_err(|e| warn!("Failed to run hostapd. {e}"))
-        .unwrap();
+    // Create mpsc channel with fixed channel size
+    let (tx_ieee80211_response, rx_ieee80211_response) = tokio_mpsc::channel(100);
+    // Create the hostapd instance with global runtime
+    let hostapd_result =
+        get_runtime().block_on(hostapd::hostapd_run(hostapd_opt, tx_ieee80211_response, wifi_args));
+    let hostapd = hostapd_result.map_err(|e| warn!("Failed to run hostapd. {e}")).unwrap();
 
     let _ = WIFI_MANAGER.set(Arc::new(WifiManager::new(tx_request, network, hostapd)));
     let wifi_manager = get_wifi_manager();
@@ -139,7 +143,7 @@ fn start_threads(
     wifi_manager: Arc<WifiManager>,
     rx_request: mpsc::Receiver<(u32, Bytes)>,
     rx_ieee8023_response: mpsc::Receiver<Bytes>,
-    rx_ieee80211_response: mpsc::Receiver<Bytes>,
+    rx_ieee80211_response: tokio_mpsc::Receiver<Bytes>,
     tx_ieee8023_response: mpsc::Sender<Bytes>,
     forward_host_mdns: bool,
 ) -> anyhow::Result<()> {
@@ -156,6 +160,7 @@ fn start_request_thread(
     wifi_manager: Arc<WifiManager>,
     rx_request: mpsc::Receiver<(u32, Bytes)>,
 ) -> anyhow::Result<()> {
+    let hostapd = wifi_manager.hostapd.clone(); // Arc clone for thread
     thread::Builder::new().name("Wi-Fi HwsimMsg request".to_string()).spawn(move || {
         const POLL_INTERVAL: Duration = Duration::from_millis(1);
         let mut next_instant = Instant::now() + POLL_INTERVAL;
@@ -173,9 +178,12 @@ fn start_request_thread(
                         wifi_manager.medium.ack_frame(chip_id, &processor.frame);
                         if processor.hostapd {
                             let ieee80211: Bytes = processor.get_ieee80211_bytes();
-                            if let Err(err) = wifi_manager.hostapd.input(ieee80211) {
-                                warn!("Failed to call hostapd input: {:?}", err);
-                            };
+                            let hostapd_clone = hostapd.clone();
+                            get_runtime().block_on(async move {
+                                if let Err(err) = hostapd_clone.input(ieee80211).await {
+                                    warn!("Failed to call hostapd input: {:?}", err);
+                                };
+                            });
                         }
                         if processor.network {
                             match processor.get_ieee80211().to_ieee8023() {
@@ -225,10 +233,10 @@ fn start_ieee8023_response_thread(
 /// and forwards them to the Wi-Fi manager's medium.
 fn start_ieee80211_response_thread(
     wifi_manager: Arc<WifiManager>,
-    rx_ieee80211_response: mpsc::Receiver<Bytes>,
+    mut rx_ieee80211_response: tokio_mpsc::Receiver<Bytes>,
 ) -> anyhow::Result<()> {
     thread::Builder::new().name("Wi-Fi IEEE802.11 response".to_string()).spawn(move || {
-        for packet in rx_ieee80211_response {
+        while let Some(packet) = get_runtime().block_on(rx_ieee80211_response.recv()) {
             wifi_manager.medium.process_ieee80211_response(&packet);
         }
     })?;

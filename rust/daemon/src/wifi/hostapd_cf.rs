@@ -16,12 +16,12 @@
 use bytes::Bytes;
 use netsim_packets::ieee80211::{Ieee80211, MacAddress};
 use netsim_proto::config::HostapdOptions as ProtoHostapdOptions;
-use std::sync::mpsc;
+use tokio::sync::mpsc;
 
 // Provides a stub implementation while the hostapd-rs crate is not integrated into the aosp-main.
 pub struct Hostapd {}
 impl Hostapd {
-    pub fn input(&self, _bytes: Bytes) -> anyhow::Result<()> {
+    pub async fn input(&self, _bytes: Bytes) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -41,7 +41,7 @@ impl Hostapd {
     }
 }
 
-pub fn hostapd_run(
+pub async fn hostapd_run(
     _opt: ProtoHostapdOptions,
     _tx: mpsc::Sender<Bytes>,
     _wifi_args: Option<Vec<String>>,

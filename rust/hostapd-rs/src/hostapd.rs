@@ -14,10 +14,10 @@
 
 //! Controller interface for the `hostapd` C library.
 //!
-//! This module allows interaction with `hostapd` to manage WiFi access point and perform various wireless networking tasks directly from Rust code.
+//! This module allows interaction with `hostapd` to manage WiFi access point and various wireless networking tasks directly from Rust code.
 //!
-//! The main `hostapd` process is managed by a separate thread while responses from the `hostapd` process are handled
-//! by another thread, ensuring efficient and non-blocking communication.
+//! The main `hostapd` process is managed by a separate task while responses from the `hostapd` process are handled
+//! by another task, ensuring efficient and non-blocking communication.
 //!
 //! `hostapd` configuration consists of key-value pairs. The default configuration file is generated in the discovery directory.
 //!
@@ -35,21 +35,29 @@
 //! Here's a basic example of how to create a `Hostapd` instance and start the `hostapd` process:
 //!
 //! ```
-//! // Create a channel for receiving data from hostapd
-//! let (tx, _) = mpsc::channel();
+//! use hostapd_rs::hostapd::Hostapd;
+//! use std::path::PathBuf;
+//! use tokio::sync::mpsc;
+//! use tokio::runtime::Runtime;
 //!
-//! // Create a new Hostapd instance
-//! let mut hostapd = Hostapd::new(
-//!     tx,                                 // Sender for receiving data
-//!     true,                               // Verbose mode (optional)
-//!     PathBuf::from("/tmp/hostapd.conf"), // Path to the configuration file
-//! );
+//! let rt = Runtime::new().unwrap();
+//! rt.block_on(async {
+//!     // Create a channel for receiving data from hostapd
+//!     let (tx, _) = mpsc::channel(100);
 //!
-//! // Start the hostapd process
-//! hostapd.run();
+//!     // Create a new Hostapd instance
+//!     let mut hostapd = Hostapd::new(
+//!         tx,                                 // Sender for receiving data
+//!         false,                              // Verbose mode
+//!         PathBuf::from("/tmp/hostapd.conf"), // Path to the configuration file
+//!     );
+//!
+//!     // Start the hostapd process
+//!     hostapd.run().await;
+//! });
 //! ```
 //!
-//! This starts `hostapd` in a separate thread, allowing interaction with it using the `Hostapd` struct's methods.
+//! This starts `hostapd` in a separate task, allowing interaction with it using the `Hostapd` struct's methods.
 
 use aes::Aes128;
 use anyhow::bail;
@@ -63,32 +71,28 @@ use log::{debug, info, warn};
 use netsim_packets::ieee80211::{parse_mac_address, Ieee80211, MacAddress, CCMP_HDR_LEN};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, CStr, CString};
-use std::fs::File;
-use std::io::{BufWriter, Write};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 #[cfg(unix)]
 use std::os::fd::IntoRawFd;
 #[cfg(windows)]
 use std::os::windows::io::IntoRawSocket;
 use std::path::PathBuf;
-use std::sync::{
-    atomic::{AtomicI64, Ordering},
-    mpsc, Arc, RwLock,
-};
-use std::thread::{self, sleep};
-use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::sync::atomic::{AtomicI64, Ordering};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::net::{
     tcp::{OwnedReadHalf, OwnedWriteHalf},
     TcpListener, TcpStream,
 };
-use tokio::runtime::Runtime;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::task::JoinHandle;
 
 use crate::hostapd_sys::{
     get_active_gtk, get_active_ptk, run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock,
     VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG, VIRTIO_WIFI_CTRL_CMD_TERMINATE,
 };
+use std::time::Duration;
+use tokio::fs::File;
+use tokio::time::sleep;
 
 /// Alias for RawFd on Unix or RawSocket on Windows (converted to i32)
 type RawDescriptor = i32;
@@ -100,15 +104,13 @@ type KeyData = [u8; 32];
 /// such as starting and stopping the process, configuring the access point,
 /// and sending and receiving data.
 pub struct Hostapd {
-    // TODO: update to tokio based RwLock when usages are async
-    handle: RwLock<Option<thread::JoinHandle<()>>>,
+    task_handle: RwLock<Option<JoinHandle<()>>>,
     verbose: bool,
     config: HashMap<String, String>,
     config_path: PathBuf,
     data_writer: Option<Mutex<OwnedWriteHalf>>,
     ctrl_writer: Option<Mutex<OwnedWriteHalf>>,
     tx_bytes: mpsc::Sender<Bytes>,
-    runtime: Arc<Runtime>,
     // MAC address of the access point.
     bssid: MacAddress,
     // Current transmit packet number (PN) used for encryption
@@ -151,78 +153,67 @@ impl Hostapd {
         config.extend(config_data.iter().map(|(k, v)| (k.to_string(), v.to_string())));
 
         Hostapd {
-            handle: RwLock::new(None),
+            task_handle: RwLock::new(None),
             verbose,
             config,
             config_path,
             data_writer: None,
             ctrl_writer: None,
             tx_bytes,
-            runtime: Arc::new(Runtime::new().unwrap()),
             bssid: parse_mac_address(bssid).unwrap(),
             tx_pn: AtomicI64::new(1),
         }
     }
 
-    /// Starts the `hostapd` main process and response thread.
+    /// Starts the `hostapd` main process and response task.
     ///
-    /// The "hostapd" thread manages the C `hostapd` process by running `run_hostapd_main`.
-    /// The "hostapd_response" thread manages traffic between `hostapd` and netsim.
+    /// The "hostapd" task manages the C `hostapd` process by running `run_hostapd_main`.
+    /// The "hostapd_response" task manages traffic between `hostapd` and netsim.
     ///
-    /// TODO:
-    /// * update as async fn.
-    pub fn run(&mut self) -> bool {
+    pub async fn run(&mut self) -> bool {
         debug!("Running hostapd with config: {:?}", &self.config);
 
         // Check if already running
-        assert!(!self.is_running(), "hostapd is already running!");
+        if self.is_running().await {
+            panic!("hostapd is already running!");
+        }
         // Setup config file
-        self.gen_config_file().unwrap_or_else(|_| {
-            panic!("Failed to generate config file: {:?}.", self.config_path.display())
-        });
+        if let Err(e) = self.gen_config_file().await {
+            panic!(
+                "Failed to generate config file: {:?}. Error: {:?}",
+                self.config_path.display(),
+                e
+            );
+        }
 
         // Setup Sockets
         let (ctrl_listener, _ctrl_reader, ctrl_writer) =
-            self.create_pipe().expect("Failed to create ctrl pipe");
+            self.create_pipe().await.expect("Failed to create ctrl pipe");
         self.ctrl_writer = Some(Mutex::new(ctrl_writer));
         let (data_listener, data_reader, data_writer) =
-            self.create_pipe().expect("Failed to create data pipe");
+            self.create_pipe().await.expect("Failed to create data pipe");
         self.data_writer = Some(Mutex::new(data_writer));
 
-        // Start hostapd thread
+        // Start hostapd task
         let verbose = self.verbose;
         let config_path = self.config_path.to_string_lossy().into_owned();
-        *self.handle.write().unwrap() = Some(
-            thread::Builder::new()
-                .name("hostapd".to_string())
-                .spawn(move || Self::hostapd_thread(verbose, config_path))
-                .expect("Failed to spawn Hostapd thread"),
-        );
+        let task_handle = tokio::spawn(async move {
+            Self::hostapd_task(verbose, config_path).await;
+        });
+        *self.task_handle.write().await = Some(task_handle);
 
-        // Start hostapd response thread
+        // Start hostapd response task
         let tx_bytes = self.tx_bytes.clone();
-        let runtime = Arc::clone(&self.runtime);
-        let _ = thread::Builder::new()
-            .name("hostapd_response".to_string())
-            .spawn(move || {
-                Self::hostapd_response_thread(
-                    data_listener,
-                    ctrl_listener,
-                    data_reader,
-                    tx_bytes,
-                    runtime,
-                );
-            })
-            .expect("Failed to spawn hostapd_response thread");
+        let _response_handle = tokio::spawn(async move {
+            Self::hostapd_response_task(data_listener, ctrl_listener, data_reader, tx_bytes).await;
+        });
+        // We don't need to store response_handle as we don't need to explicitly manage it after start.
 
         true
     }
 
     /// Reconfigures `Hostapd` with the specified SSID (and password).
-    ///
-    /// TODO:
-    /// * update as async fn.
-    pub fn set_ssid(
+    pub async fn set_ssid(
         &mut self,
         ssid: impl Into<String>,
         password: impl Into<String>,
@@ -251,14 +242,16 @@ impl Hostapd {
         }
 
         // Update the config file.
-        self.gen_config_file()?;
+        self.gen_config_file().await?;
 
         // Send command for Hostapd to reload config file
-        if self.is_running() {
-            if let Err(e) = self.runtime.block_on(Self::async_write(
+        if self.is_running().await {
+            if let Err(e) = Self::async_write(
                 self.ctrl_writer.as_ref().unwrap(),
                 c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG),
-            )) {
+            )
+            .await
+            {
                 bail!("Failed to send VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG to hostapd to reload config: {:?}", e);
             }
         }
@@ -398,47 +391,56 @@ impl Hostapd {
     }
 
     /// Inputs data packet bytes from netsim to `hostapd`.
-    ///
-    /// TODO:
-    /// * update as async fn.
-    pub fn input(&self, bytes: Bytes) -> anyhow::Result<()> {
+    pub async fn input(&self, bytes: Bytes) -> anyhow::Result<()> {
         // Make sure hostapd is already running
-        assert!(self.is_running(), "Failed to send input. Hostapd is not running.");
-        self.runtime.block_on(Self::async_write(self.data_writer.as_ref().unwrap(), &bytes))
+        if !self.is_running().await {
+            panic!("Failed to send input. Hostapd is not running.");
+        }
+        Self::async_write(self.data_writer.as_ref().unwrap(), &bytes).await
     }
 
-    /// Checks whether the `hostapd` thread is running.
-    pub fn is_running(&self) -> bool {
-        let handle_lock = self.handle.read().unwrap();
-        handle_lock.is_some() && !handle_lock.as_ref().unwrap().is_finished()
+    /// Checks whether the `hostapd` task is running.
+    pub async fn is_running(&self) -> bool {
+        let task_handle_lock = self.task_handle.read().await;
+        task_handle_lock.is_some() && !task_handle_lock.as_ref().unwrap().is_finished()
     }
 
-    /// Terminates the `Hostapd` process thread by sending a control command.
-    pub fn terminate(&self) {
-        if !self.is_running() {
-            warn!("hostapd terminate() called when hostapd thread is not running");
+    /// Terminates the `Hostapd` process task by sending a control command.
+    pub async fn terminate(&self) {
+        if !self.is_running().await {
+            warn!("hostapd terminate() called when hostapd task is not running");
             return;
         }
 
         // Send terminate command to hostapd
-        if let Err(e) = self.runtime.block_on(Self::async_write(
+        if let Err(e) = Self::async_write(
             self.ctrl_writer.as_ref().unwrap(),
             c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_TERMINATE),
-        )) {
+        )
+        .await
+        {
             warn!("Failed to send VIRTIO_WIFI_CTRL_CMD_TERMINATE to hostapd to terminate: {:?}", e);
+        }
+        // Wait for hostapd task to finish.
+        if let Some(task_handle) = self.task_handle.write().await.take() {
+            if let Err(e) = task_handle.await {
+                warn!("Failed to join hostapd task during terminate: {:?}", e);
+            }
         }
     }
 
     /// Generates the `hostapd.conf` file in the discovery directory.
-    fn gen_config_file(&self) -> anyhow::Result<()> {
-        let conf_file = File::create(self.config_path.clone())?; // Create or overwrite the file
+    async fn gen_config_file(&self) -> anyhow::Result<()> {
+        let conf_file = File::create(self.config_path.clone()).await?; // Create or overwrite the file
         let mut writer = BufWriter::new(conf_file);
 
         for (key, value) in &self.config {
-            writeln!(&mut writer, "{}={}", key, value)?;
+            let line = format!("{}={}\n", key, value);
+            writer.write_all(line.as_bytes()).await?;
         }
 
-        Ok(writer.flush()?) // Ensure all data is written to the file
+        writer.flush().await?; // Ensure all data is written to the file
+        Ok(())
     }
 
     /// Gets the value of the given key in the config.
@@ -457,11 +459,11 @@ impl Hostapd {
     ///
     /// * `Ok((listener, read_half, write_half))` if the pipe creation is successful.
     /// * `Err(std::io::Error)` if an error occurs during pipe creation.
-    fn create_pipe(
+    async fn create_pipe(
         &self,
     ) -> anyhow::Result<(RawDescriptor, OwnedReadHalf, OwnedWriteHalf), std::io::Error> {
-        let (listener, stream) = self.runtime.block_on(Self::async_create_pipe())?;
-        let listener = into_raw_descriptor(listener);
+        let (listener_stream, stream) = Self::async_create_pipe().await?;
+        let listener = into_raw_descriptor(listener_stream);
         let (read_half, write_half) = stream.into_split();
         Ok((listener, read_half, write_half))
     }
@@ -478,8 +480,8 @@ impl Hostapd {
         };
         let addr = listener.local_addr()?;
         let stream = TcpStream::connect(addr).await?;
-        let (listener, _) = listener.accept().await?;
-        Ok((listener, stream))
+        let (listener_stream, _) = listener.accept().await?;
+        Ok((listener_stream, stream))
     }
 
     /// Writes data to a writer asynchronously.
@@ -492,8 +494,8 @@ impl Hostapd {
 
     /// Runs the C `hostapd` process with `run_hostapd_main`.
     ///
-    /// This function is meant to be spawned in a separate thread.
-    fn hostapd_thread(verbose: bool, config_path: String) {
+    /// This function is meant to be spawned in a separate task.
+    async fn hostapd_task(verbose: bool, config_path: String) {
         let mut args = vec![CString::new("hostapd").unwrap()];
         if verbose {
             args.push(CString::new("-dddd").unwrap());
@@ -522,26 +524,25 @@ impl Hostapd {
 
     /// Manages reading `hostapd` responses and sending them via `tx_bytes`.
     ///
-    /// The thread first attempts to set virtio driver sockets with retries until success.
-    /// Next, the thread reads `hostapd` responses and writes them to netsim.
-    fn hostapd_response_thread(
-        data_listener: RawDescriptor,
-        ctrl_listener: RawDescriptor,
+    /// The task first attempts to set virtio driver sockets with retries until success.
+    /// Next, the task reads `hostapd` responses and writes them to netsim.
+    async fn hostapd_response_task(
+        data_descriptor: RawDescriptor,
+        ctrl_descriptor: RawDescriptor,
         mut data_reader: OwnedReadHalf,
         tx_bytes: mpsc::Sender<Bytes>,
-        runtime: Arc<Runtime>,
     ) {
         let mut buf: [u8; 1500] = [0u8; 1500];
         loop {
-            if !Self::set_virtio_driver_socket(data_listener, ctrl_listener) {
+            if !Self::set_virtio_driver_socket(data_descriptor, ctrl_descriptor) {
                 warn!("Unable to set virtio driver socket. Retrying...");
-                sleep(Duration::from_millis(250));
+                sleep(Duration::from_millis(250)).await;
                 continue;
             };
             break;
         }
         loop {
-            let size = match runtime.block_on(async { data_reader.read(&mut buf[..]).await }) {
+            let size = match data_reader.read(&mut buf[..]).await {
                 Ok(size) => size,
                 Err(e) => {
                     warn!("Failed to read hostapd response: {:?}", e);
@@ -549,18 +550,11 @@ impl Hostapd {
                 }
             };
 
-            if let Err(e) = tx_bytes.send(Bytes::copy_from_slice(&buf[..size])) {
+            if let Err(e) = tx_bytes.send(Bytes::copy_from_slice(&buf[..size])).await {
                 warn!("Failed to send hostapd packet response: {:?}", e);
                 break;
             };
         }
-    }
-}
-
-impl Drop for Hostapd {
-    /// Terminates the `hostapd` process when the `Hostapd` instance is dropped.
-    fn drop(&mut self) {
-        self.terminate();
     }
 }
 
@@ -587,75 +581,75 @@ fn c_string_to_bytes(c_string: &[u8]) -> &[u8] {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use netsim_packets::ieee80211::{parse_mac_address, FrameType, Ieee80211, Ieee80211ToAp};
     use pdl_runtime::Packet;
     use std::env;
+    use std::sync::OnceLock;
+    use tokio::runtime::Runtime;
 
+    /// Initializes a basic Hostapd instance for testing.
     fn init_hostapd() -> Hostapd {
-        let (tx, _rx) = mpsc::channel();
+        let (tx, _rx) = mpsc::channel(100);
         let config_path = env::temp_dir().join("hostapd.conf");
         Hostapd::new(tx, true, config_path)
     }
 
-    #[test]
-    fn test_encrypt_decrypt_generic() {
-        // Test Data (802.11 frame with LLC/SNAP)
-        let bssid = parse_mac_address("0:0:0:0:0:0").unwrap();
-        let source = parse_mac_address("1:1:1:1:1:1").unwrap();
-        let destination = parse_mac_address("2:2:2:2:2:2").unwrap();
-        let ieee80211: Ieee80211 = Ieee80211ToAp {
+    #[tokio::test]
+    async fn test_encrypt_decrypt_generic() {
+        // Sample 802.11 data frame for encryption/decryption test.
+        let ieee80211 = Ieee80211ToAp {
             duration_id: 0,
             ftype: FrameType::Data,
-            more_data: 0,
-            more_frags: 0,
-            order: 0,
-            pm: 0,
-            protected: 0,
-            retry: 0,
             stype: 0,
-            version: 0,
-            bssid,
-            source,
-            destination,
+            destination: parse_mac_address("2:2:2:2:2:2").unwrap(),
+            source: parse_mac_address("1:1:1:1:1:1").unwrap(),
+            bssid: parse_mac_address("0:0:0:0:0:0").unwrap(),
             seq_ctrl: 0,
-            payload: vec![0, 1, 2, 3, 4, 5],
+            protected: 0,
+            order: 0,
+            more_frags: 0,
+            retry: 0,
+            pm: 0,
+            more_data: 0,
+            version: 0,
+            payload: vec![0, 1, 2, 3, 4, 5], // Example payload
         }
         .try_into()
-        .unwrap();
+        .expect("Failed to create Ieee80211 frame");
 
         let hostapd = init_hostapd();
 
-        let encrypted_ieee80211 = hostapd.try_encrypt(&ieee80211);
-        assert!(encrypted_ieee80211.is_some());
-        let encrypted_ieee80211 = encrypted_ieee80211.unwrap();
+        // Encrypt and then decrypt the frame.
+        let encrypted_frame = hostapd.try_encrypt(&ieee80211).expect("Encryption failed");
+        let decrypted_frame = hostapd.try_decrypt(&encrypted_frame).expect("Decryption failed");
 
-        let decrypted_ieee80211 = hostapd.try_decrypt(&encrypted_ieee80211);
-        assert!(decrypted_ieee80211.is_some());
-        let decrypted_ieee80211 = decrypted_ieee80211.unwrap();
-
+        // Verify that the decrypted frame is identical to the original frame.
         assert_eq!(
-            decrypted_ieee80211.encode_to_bytes().unwrap(),
-            ieee80211.encode_to_bytes().unwrap()
+            decrypted_frame.encode_to_bytes().unwrap(),
+            ieee80211.encode_to_bytes().unwrap(),
+            "Decrypted frame does not match original frame" // More descriptive assertion message
         );
     }
 
+    // Implementation block for Hostapd specific to tests.
     impl Hostapd {
-        // get_key for unit test only. Return a known key for tests
-        pub fn get_key(&self, ieee80211: &Ieee80211) -> (KeyData, usize, u8) {
+        /// Test-specific get_key: returns a fixed key for predictable encryption/decryption.
+        pub fn get_key(&self, _ieee80211: &Ieee80211) -> (KeyData, usize, u8) {
             let mut key = [0u8; 32];
-            let test_key =
-                [202, 238, 127, 166, 61, 206, 22, 214, 17, 180, 130, 229, 4, 249, 255, 122];
-            key[..16].copy_from_slice(&test_key);
+            const TEST_KEY: [u8; 16] = [
+                // Defined test key as const for clarity
+                202, 238, 127, 166, 61, 206, 22, 214, 17, 180, 130, 229, 4, 249, 255, 122,
+            ];
+            key[..16].copy_from_slice(&TEST_KEY);
             (key, 16, 0)
         }
     }
 
-    #[test]
-    fn test_decrypt_encrypt_golden_frame() {
-        // Test data from C implementation
-        let _test_key = [202, 238, 127, 166, 61, 206, 22, 214, 17, 180, 130, 229, 4, 249, 255, 122];
-        let encrypted_frame = [
+    #[tokio::test]
+    async fn test_decrypt_encrypt_golden_frame() {
+        // Test vectors from C implementation for golden frame test.
+        const ENCRYPTED_FRAME_BYTES: [u8; 120] = [
+            // Corrected array size to 120
             8, 65, 58, 1, 0, 19, 16, 133, 254, 1, 2, 21, 178, 0, 0, 0, 51, 51, 255, 197, 140, 97,
             192, 70, 1, 0, 0, 32, 0, 0, 0, 0, 119, 72, 195, 215, 149, 122, 79, 220, 238, 60, 113,
             167, 129, 55, 206, 110, 94, 178, 141, 180, 240, 63, 37, 182, 166, 61, 249, 112, 74, 78,
@@ -664,7 +658,8 @@ mod tests {
             185, 174, 25, 5, 197, 116, 5, 168, 53, 71, 77, 26, 77, 94, 65, 159, 97, 218, 14, 238,
             220, 157,
         ];
-        let expected_decrypted_bytes = [
+        const EXPECTED_DECRYPTED_FRAME_BYTES: [u8; 104] = [
+            // Corrected array size to 104
             8, 1, 58, 1, 0, 19, 16, 133, 254, 1, 2, 21, 178, 0, 0, 0, 51, 51, 255, 197, 140, 97,
             192, 70, 170, 170, 3, 0, 0, 0, 134, 221, 96, 0, 0, 0, 0, 32, 58, 255, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 255, 197, 140, 97,
@@ -672,28 +667,41 @@ mod tests {
             97, 14, 1, 27, 50, 219, 39, 89, 3,
         ];
 
-        // Construct Ieee80211 frame from the encrypted bytes
-        let ieee80211 = Ieee80211::decode(&encrypted_frame).unwrap().0;
-
-        // Set up Hostapd
+        // Decode the encrypted frame from bytes.
+        let encrypted_ieee80211 = Ieee80211::decode(&ENCRYPTED_FRAME_BYTES)
+            .expect("Failed to decode encrypted Ieee80211 frame")
+            .0;
         let hostapd = init_hostapd();
 
-        // Perform decryption
-        let decrypted_ieee80211 = hostapd.try_decrypt(&ieee80211).unwrap();
+        // Decrypt the golden encrypted frame.
+        let decrypted_ieee80211 =
+            hostapd.try_decrypt(&encrypted_ieee80211).expect("Decryption of golden frame failed");
 
-        // Assert that the decrypted bytes match the expected output
+        // Verify decryption against expected decrypted bytes.
         assert_eq!(
-            decrypted_ieee80211.encode_to_bytes().unwrap().to_vec(),
-            expected_decrypted_bytes
+            decrypted_ieee80211.encode_to_bytes().unwrap().to_vec(), // Changed to .to_vec() for direct Vec<u8> comparison
+            EXPECTED_DECRYPTED_FRAME_BYTES.to_vec(), // Changed to .to_vec() for direct Vec<u8> comparison
+            "Decrypted golden frame does not match expected bytes" // More descriptive assertion message
         );
 
-        // Encrypt again to verify the result is expected
-        let reencrypted_frame = hostapd.try_encrypt(&decrypted_ieee80211).unwrap();
-        assert_eq!(reencrypted_frame.encode_to_bytes().unwrap().to_vec(), encrypted_frame);
+        // Re-encrypt the decrypted frame to verify round-trip.
+        let reencrypted_frame = hostapd
+            .try_encrypt(&decrypted_ieee80211)
+            .expect("Re-encryption of decrypted frame failed");
+        assert_eq!(
+            reencrypted_frame.encode_to_bytes().unwrap().to_vec(), // Changed to .to_vec()
+            ENCRYPTED_FRAME_BYTES.to_vec(),                        // Changed to .to_vec()
+            "Re-encrypted frame does not match original encrypted frame" // More descriptive assertion message
+        );
 
-        // Decrypt again to verify the result is expected
-        let redecrypted_frame = hostapd.try_decrypt(&reencrypted_frame).unwrap();
-
-        assert_eq!(redecrypted_frame.encode_to_bytes().unwrap().to_vec(), expected_decrypted_bytes);
+        // Re-decrypt again to ensure consistent round-trip decryption.
+        let redecrypted_frame = hostapd
+            .try_decrypt(&reencrypted_frame)
+            .expect("Re-decryption of re-encrypted frame failed");
+        assert_eq!(
+            redecrypted_frame.encode_to_bytes().unwrap().to_vec(), // Changed to .to_vec()
+            EXPECTED_DECRYPTED_FRAME_BYTES.to_vec(),               // Changed to .to_vec()
+            "Re-decrypted frame does not match expected bytes after re-encryption" // More descriptive assertion message
+        );
     }
 }
