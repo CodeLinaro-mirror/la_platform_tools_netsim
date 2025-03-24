@@ -146,7 +146,7 @@ impl Service {
         // TODO: shutdown other services in Rust
         self.grpc_server.as_mut().map(|server| server.shutdown());
         wireless::bluetooth::bluetooth_stop();
-        wireless::wifi::wifi_stop();
+        wireless::wifi_manager::wifi_stop();
     }
 }
 

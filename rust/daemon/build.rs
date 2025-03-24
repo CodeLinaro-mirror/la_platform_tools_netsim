@@ -13,10 +13,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+//! Build script for linking `netsim-daemon` with dependencies.
+
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+/// Adds all archive library dependencies from the specified `objs/archives` directory.
 fn _all_archives_dependencies(objs_path: &str) {
     let archives_path = format!("{objs_path}/archives");
     if let Ok(entry_lst) = fs::read_dir(&archives_path) {
@@ -40,7 +43,7 @@ fn _all_archives_dependencies(objs_path: &str) {
         }
     }
 }
-
+/// Configures linking for Linux test builds, including prebuilt PDL files and Rootcanal library.
 fn _run_test_link() {
     // Linking libraries in objs/archives & objs/lib64
     let objs_path = std::env::var("OBJS_PATH").unwrap_or("../objs".to_string());
@@ -83,6 +86,7 @@ fn _run_test_link() {
     }
 }
 
+/// Configures C++ FFI bindings and Linux test linking.
 fn main() {
     // Linking for FFI
     let _build = cxx_build::bridge("src/ffi.rs");

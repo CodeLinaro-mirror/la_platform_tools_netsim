@@ -18,7 +18,7 @@ use crate::devices::chip;
 use crate::devices::chip::Chip;
 use crate::devices::chip::ChipIdentifier;
 use crate::devices::devices_handler::PoseManager;
-use crate::wireless::WirelessAdaptorImpl;
+use crate::wireless::WirelessChipImpl;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
 use netsim_proto::model::Device as ProtoDevice;
@@ -198,7 +198,7 @@ impl Device {
         &mut self,
         chip_create_params: &chip::CreateParams,
         chip_id: ChipIdentifier,
-        wireless_adaptor: WirelessAdaptorImpl,
+        wireless_chip: WirelessChipImpl,
     ) -> Result<(DeviceIdentifier, ChipIdentifier), String> {
         for chip in self.chips.read().unwrap().values() {
             if chip.kind == chip_create_params.kind
@@ -208,7 +208,7 @@ impl Device {
             }
         }
         let device_id = self.id;
-        let chip = chip::new(chip_id, device_id, &self.name, chip_create_params, wireless_adaptor)?;
+        let chip = chip::new(chip_id, device_id, &self.name, chip_create_params, wireless_chip)?;
         self.chips.write().unwrap().insert(chip_id, chip);
 
         Ok((device_id, chip_id))
@@ -248,7 +248,10 @@ mod tests {
                 product_name: "test_product_name".to_string(),
             },
             chip_id_1,
-            mocked::new(&mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED }, chip_id_1),
+            mocked::add_chip(
+                &mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED },
+                chip_id_1,
+            ),
         )?;
         device.add_chip(
             &chip::CreateParams {
@@ -259,7 +262,10 @@ mod tests {
                 product_name: "test_product_name".to_string(),
             },
             chip_id_2,
-            mocked::new(&mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED }, chip_id_1),
+            mocked::add_chip(
+                &mocked::CreateParams { chip_kind: ProtoChipKind::UNSPECIFIED },
+                chip_id_1,
+            ),
         )?;
         Ok(device)
     }

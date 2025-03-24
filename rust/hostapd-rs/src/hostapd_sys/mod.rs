@@ -35,15 +35,13 @@
 //! use std::ffi::CString;
 //! use hostapd_rs::hostapd_sys; // Import the module
 //!
-//! fn main() {
-//!     let mut args = vec![CString::new("hostapd").unwrap()];
-//!     args.push(CString::new("/path/to/hostapd.conf").unwrap());
-//!     // Include any other args
-//!     let argv: Vec<*const std::os::raw::c_char> = args.iter().map(|arg| arg.as_ptr()).collect();
+//! let mut args = vec![CString::new("hostapd").unwrap()];
+//! args.push(CString::new("/path/to/hostapd.conf").unwrap());
+//! // Include any other args
+//! let argv: Vec<*const std::os::raw::c_char> = args.iter().map(|arg| arg.as_ptr()).collect();
 //!
-//!     unsafe {
-//!         hostapd_sys::run_hostapd_main(argv.len() as i32, argv.as_ptr());
-//!     }
+//! unsafe {
+//!     hostapd_sys::run_hostapd_main(argv.len() as i32, argv.as_ptr());
 //! }
 //! ```
 //!
@@ -76,6 +74,8 @@
 //! # #[cfg(not(target_os = "linux"))]
 //! # fn main() {}
 //! ```
+
+#![allow(missing_docs)]
 
 #[cfg(target_os = "linux")]
 include!("linux/bindings.rs");
