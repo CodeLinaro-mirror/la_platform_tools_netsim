@@ -18,7 +18,7 @@ from pathlib import Path
 import platform
 import shutil
 from tasks.task import Task
-from utils import (AOSP_ROOT, cmake_toolchain, run)
+from utils import (AOSP_ROOT, cmake_toolchain, run, WINDOWS_TMP_OBJS_PATH)
 
 
 class ConfigureTask(Task):
@@ -51,14 +51,31 @@ class ConfigureTask(Task):
             / "bin"
         ),
     )
-    launcher = [
+    if platform.system() == "Windows":
+      try:
+        WINDOWS_TMP_OBJS_PATH.mkdir(parents=True, exist_ok=True)
+        print(f"Directory '{WINDOWS_TMP_OBJS_PATH}' ensured (created or already exists).")
+
+      except OSError as e:
+        print(f"Error creating directory '{WINDOWS_TMP_OBJS_PATH}': {e}")
+
+      launcher = [
+        cmake,
+        f"-B{WINDOWS_TMP_OBJS_PATH}",
+        "-G Ninja",
+        self.build_config,
+        f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain(self.target)}",
+        AOSP_ROOT / "tools" / "netsim",
+      ]
+      run(launcher, self.env, "bld")
+    else:
+      launcher = [
         cmake,
         f"-B{self.out}",
         "-G Ninja",
         self.build_config,
         f"-DCMAKE_TOOLCHAIN_FILE={cmake_toolchain(self.target)}",
         AOSP_ROOT / "tools" / "netsim",
-    ]
-
-    run(launcher, self.env, "bld")
+      ]
+      run(launcher, self.env, "bld")
     return True
