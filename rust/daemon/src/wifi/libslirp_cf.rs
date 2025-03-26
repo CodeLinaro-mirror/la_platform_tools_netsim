@@ -13,6 +13,7 @@
 // limitations under the License.
 
 /// LibSlirp Interface for Network Simulation
+use crate::wifi::error::WifiResult;
 use bytes::Bytes;
 use netsim_proto::config::SlirpOptions as ProtoSlirpOptions;
 use std::sync::mpsc;
@@ -23,9 +24,6 @@ impl LibSlirp {
     pub fn input(&self, _bytes: Bytes) {}
 }
 
-pub fn slirp_run(
-    _opt: ProtoSlirpOptions,
-    _tx_bytes: mpsc::Sender<Bytes>,
-) -> anyhow::Result<LibSlirp> {
+pub fn slirp_run(_opt: ProtoSlirpOptions, _tx_bytes: mpsc::Sender<Bytes>) -> WifiResult<LibSlirp> {
     Ok(LibSlirp {})
 }

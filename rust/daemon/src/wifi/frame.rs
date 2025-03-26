@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::wifi::error::WifiError;
 use crate::wifi::hwsim_attr_set::HwsimAttrSet;
-use anyhow::Context;
 use netsim_packets::ieee80211::{Ieee80211, MacAddress};
 use netsim_packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, TxRate};
 use pdl_runtime::Packet;
@@ -46,14 +46,15 @@ impl Frame {
     // Builds and validates the Frame from the attributes in the
     // packet. Called when a hwsim packet with HwsimCmd::Frame is
     // found.
-    pub fn parse(msg: &HwsimMsg) -> anyhow::Result<Frame> {
+    pub fn parse(msg: &HwsimMsg) -> Result<Frame, WifiError> {
         // Only expected to be called with HwsimCmd::Frame
         if msg.hwsim_hdr.hwsim_cmd != HwsimCmd::Frame {
             panic!("Invalid hwsim_cmd");
         }
-        let attrs = HwsimAttrSet::parse(&msg.attributes).context("HwsimAttrSet")?;
-        let frame = attrs.frame.clone().context("Frame")?;
-        let ieee80211 = Ieee80211::decode_full(&frame).context("Ieee80211")?;
+        let attrs = HwsimAttrSet::parse(&msg.attributes)?;
+        let frame =
+            attrs.frame.clone().ok_or(WifiError::Frame("Missing frame attribute".to_string()))?;
+        let ieee80211 = Ieee80211::decode_full(&frame)?;
         // Required attributes are unwrapped and return an error if
         // they are not present.
         Ok(Frame {
