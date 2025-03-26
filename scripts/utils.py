@@ -35,6 +35,7 @@ else:
 from threading import Thread, currentThread
 
 AOSP_ROOT = Path(__file__).absolute().parents[3]
+WINDOWS_TMP_OBJS_PATH = Path("C:\\netsim\\objs")
 TOOLS = Path(AOSP_ROOT, "tools")
 EMULATOR_ARTIFACT_PATH = Path(AOSP_ROOT, "tools", "netsim", "emulator_tmp")
 PYTHON_EXE = sys.executable or "python3"
@@ -159,6 +160,25 @@ def get_host_and_ip():
     hostname = "Unkwown"
 
   return hostname, my_ip
+
+
+def move_contents(source, destination):
+  """Moves the contents of a source directory to a destination directory."""
+
+  if not os.path.exists(source):
+    print(f"Source directory '{source}' does not exist.")
+    return
+
+  if not os.path.exists(destination):
+    os.makedirs(destination)  # Create destination if it doesn't exist
+
+  for item in os.listdir(source):
+    s = os.path.join(source, item)
+    d = os.path.join(destination, item)
+    try:
+      shutil.move(s, d)
+    except Exception as e:
+      print(f"Error moving '{s}' to '{d}': {e}")
 
 
 class LogBelowLevel(logging.Filter):
