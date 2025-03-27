@@ -47,9 +47,4 @@ python_test_host {
         "mobly",
     ],
     test_suites: ["device-tests"],
-    version: {
-        py3: {
-            embedded_launcher: true,
-        },
-    },
 }
