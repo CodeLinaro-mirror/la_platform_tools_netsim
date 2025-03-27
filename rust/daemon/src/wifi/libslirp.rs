@@ -13,6 +13,8 @@
 // limitations under the License.
 
 /// LibSlirp Interface for Network Simulation
+use crate::get_runtime;
+
 use bytes::Bytes;
 use http_proxy::Manager;
 pub use libslirp_rs::libslirp::LibSlirp;
@@ -20,7 +22,6 @@ use libslirp_rs::libslirp::ProxyManager;
 use libslirp_rs::libslirp_config::{lookup_host_dns, SlirpConfig};
 use netsim_proto::config::SlirpOptions as ProtoSlirpOptions;
 use std::sync::mpsc;
-use tokio::runtime::Runtime;
 
 pub fn slirp_run(
     opt: ProtoSlirpOptions,
@@ -42,8 +43,7 @@ pub fn slirp_run(
     let mut config = SlirpConfig { http_proxy_on: proxy_manager.is_some(), ..Default::default() };
 
     if !opt.host_dns.is_empty() {
-        let rt = Runtime::new().unwrap();
-        config.host_dns = rt.block_on(lookup_host_dns(&opt.host_dns))?;
+        config.host_dns = get_runtime().block_on(lookup_host_dns(&opt.host_dns))?;
     }
 
     Ok(LibSlirp::new(config, tx_bytes, proxy_manager, tx_proxy_bytes))

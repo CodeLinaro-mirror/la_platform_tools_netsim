@@ -23,17 +23,7 @@ use netsim_proto::stats::{
     NetsimDeviceStats as ProtoDeviceStats, NetsimRadioStats as ProtoRadioStats,
 };
 
-use std::sync::{Arc, Mutex, OnceLock};
-
-// Publish the event to all subscribers
-pub fn publish(event: Event) {
-    get_events().lock().expect("Failed to acquire lock on events").publish(event);
-}
-
-// Subscribe to events over the receiver
-pub fn subscribe() -> Receiver<Event> {
-    get_events().lock().expect("Failed to acquire locks on events").subscribe()
-}
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, Default)]
 pub struct DeviceAdded {
@@ -90,12 +80,6 @@ pub enum Event {
     ShutDown(ShutDown),
 }
 
-static EVENTS: OnceLock<Arc<Mutex<Events>>> = OnceLock::new();
-
-pub fn get_events() -> Arc<Mutex<Events>> {
-    EVENTS.get_or_init(Events::new).clone()
-}
-
 /// A multi-producer, multi-consumer broadcast queue based on
 /// `std::sync::mpsc`.
 ///
@@ -107,53 +91,38 @@ pub fn get_events() -> Arc<Mutex<Events>> {
 pub struct Events {
     // For each subscriber this module retrain the sender half and the
     // subscriber reads events from the receiver half.
-    subscribers: Vec<Sender<Event>>,
+    subscribers: Mutex<Vec<Sender<Event>>>,
 }
 
 impl Events {
-    // Events is always owned by multiple publishers and subscribers
-    // across threads so return an Arc type.
-    fn new() -> Arc<Mutex<Events>> {
-        Arc::new(Mutex::new(Self { subscribers: Vec::new() }))
+    // Events held by multiple publishers and subscribers across
+    // threads so return an Arc type.
+    pub fn new() -> Arc<Events> {
+        Arc::new(Self { subscribers: Mutex::new(Vec::new()) })
     }
 
     // Creates a new asynchronous channel, returning the receiver
     // half. All `Event` messages sent through `publish` will become
     // available on the receiver in the same order as it was sent.
-    fn subscribe(&mut self) -> Receiver<Event> {
+    pub fn subscribe(&self) -> Receiver<Event> {
         let (tx, rx) = channel::<Event>();
-        self.subscribers.push(tx);
+        self.subscribers.lock().expect("failed to lock subscribers").push(tx);
         rx
     }
 
     // Attempts to send an Event on the events channel.
-    pub fn publish(&mut self, msg: Event) {
-        if self.subscribers.is_empty() {
+    pub fn publish(&self, msg: Event) {
+        if self.subscribers.lock().expect("failed to lock subscribers").is_empty() {
             log::warn!("No Subscribers to the event: {msg:?}");
         } else {
             // Any channel with a disconnected receiver will return an
             // error and be removed by retain.
             log::info!("{msg:?}");
-            self.subscribers.retain(|subscriber| subscriber.send(msg.clone()).is_ok())
+            self.subscribers
+                .lock()
+                .expect("failed to lock subscribers")
+                .retain(|subscriber| subscriber.send(msg.clone()).is_ok())
         }
-    }
-}
-
-// Test public functions to allow testing with local Events struct.
-#[cfg(test)]
-pub mod test {
-    use super::*;
-
-    pub fn new() -> Arc<Mutex<Events>> {
-        Events::new()
-    }
-
-    pub fn publish(s: &mut Arc<Mutex<Events>>, msg: Event) {
-        s.lock().unwrap().publish(msg);
-    }
-
-    pub fn subscribe(s: &mut Arc<Mutex<Events>>) -> Receiver<Event> {
-        s.lock().unwrap().subscribe()
     }
 }
 
@@ -164,12 +133,18 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
 
+    impl Events {
+        pub fn subscriber_count(&self) -> usize {
+            self.subscribers.lock().expect("events subscribers lock").len()
+        }
+    }
+
     #[test]
     fn test_subscribe_and_publish() {
         let events = Events::new();
 
         let events_clone = Arc::clone(&events);
-        let rx = events_clone.lock().unwrap().subscribe();
+        let rx = events_clone.subscribe();
         let handle = thread::spawn(move || match rx.recv() {
             Ok(Event::DeviceAdded(DeviceAdded { id, name, builtin, device_stats })) => {
                 assert_eq!(id.0, 123);
@@ -180,7 +155,7 @@ mod tests {
             _ => panic!("Unexpected event"),
         });
 
-        events.lock().unwrap().publish(Event::DeviceAdded(DeviceAdded {
+        events.publish(Event::DeviceAdded(DeviceAdded {
             id: DeviceIdentifier(123),
             name: "Device1".into(),
             builtin: false,
@@ -199,7 +174,7 @@ mod tests {
         let mut handles = Vec::with_capacity(num_subscribers);
         for _ in 0..num_subscribers {
             let events_clone = Arc::clone(&events);
-            let rx = events_clone.lock().unwrap().subscribe();
+            let rx = events_clone.subscribe();
             let handle = thread::spawn(move || match rx.recv() {
                 Ok(Event::DeviceAdded(DeviceAdded { id, name, builtin, device_stats })) => {
                     assert_eq!(id.0, 123);
@@ -212,7 +187,7 @@ mod tests {
             handles.push(handle);
         }
 
-        events.lock().unwrap().publish(Event::DeviceAdded(DeviceAdded {
+        events.publish(Event::DeviceAdded(DeviceAdded {
             id: DeviceIdentifier(123),
             name: "Device1".into(),
             builtin: false,
@@ -231,15 +206,15 @@ mod tests {
     // removed when send() notices an error.
     fn test_publish_to_dropped_subscriber() {
         let events = Events::new();
-        let rx = events.lock().unwrap().subscribe();
-        assert_eq!(events.lock().unwrap().subscribers.len(), 1);
+        let rx = events.subscribe();
+        assert_eq!(events.subscriber_count(), 1);
         std::mem::drop(rx);
-        events.lock().unwrap().publish(Event::DeviceAdded(DeviceAdded {
+        events.publish(Event::DeviceAdded(DeviceAdded {
             id: DeviceIdentifier(123),
             name: "Device1".into(),
             builtin: false,
             device_stats: ProtoDeviceStats::new(),
         }));
-        assert_eq!(events.lock().unwrap().subscribers.len(), 0);
+        assert_eq!(events.subscriber_count(), 0);
     }
 }
