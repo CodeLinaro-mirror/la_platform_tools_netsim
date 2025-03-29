@@ -13,6 +13,7 @@
 // limitations under the License.
 
 /// Hostapd Interface for Network Simulation
+use crate::wifi::error::{WifiError, WifiResult};
 use bytes::Bytes;
 pub use hostapd_rs::hostapd::Hostapd;
 use netsim_common::util::os_utils::get_discovery_directory;
@@ -23,15 +24,20 @@ pub async fn hostapd_run(
     _opt: ProtoHostapdOptions,
     tx: mpsc::Sender<Bytes>,
     wifi_args: Option<Vec<String>>,
-) -> anyhow::Result<Hostapd> {
+) -> WifiResult<Hostapd> {
     // Create hostapd.conf under discovery directory
     let config_path = get_discovery_directory().join("hostapd.conf");
     let mut hostapd = Hostapd::new(tx, true, config_path);
     if let Some(wifi_values) = wifi_args {
         let ssid = &wifi_values[0];
         let password = wifi_values.get(1).cloned().unwrap_or_default();
-        hostapd.set_ssid(ssid, password).await?;
+        hostapd
+            .set_ssid(ssid, password)
+            .await
+            .map_err(|e| WifiError::Hostapd(format!("Failed to set SSID: {:?}", e)))?;
     }
-    hostapd.run().await;
+    if !hostapd.run().await {
+        return Err(WifiError::Hostapd("Hostapd run failed".into()));
+    }
     Ok(hostapd)
 }

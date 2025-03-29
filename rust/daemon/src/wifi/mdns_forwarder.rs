@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::anyhow;
+use crate::wifi::error::{WifiError, WifiResult};
 use bytes::Bytes;
 use log::{debug, warn};
 use socket2::{Protocol, Socket};
@@ -155,35 +155,45 @@ const ETHER_HEADER_LEN: usize = std::mem::size_of::<EtherHeader>();
 
 /// Creates a new UDP socket to bind to `port` with REUSEPORT option.
 /// `non_block` indicates whether to set O_NONBLOCK for the socket.
-fn new_socket(addr: SocketAddr, non_block: bool) -> anyhow::Result<Socket> {
+fn new_socket(addr: SocketAddr, non_block: bool) -> WifiResult<Socket> {
     let domain = match addr {
         SocketAddr::V4(_) => socket2::Domain::IPV4,
         SocketAddr::V6(_) => socket2::Domain::IPV6,
     };
 
     let socket = Socket::new(domain, socket2::Type::DGRAM, Some(Protocol::UDP))
-        .map_err(|e| anyhow!("create socket failed: {:?}", e))?;
+        .map_err(|e| WifiError::Network(format!("create socket failed: {:?}", e)))?;
 
-    socket.set_reuse_address(true).map_err(|e| anyhow!("set ReuseAddr failed: {:?}", e))?;
+    socket
+        .set_reuse_address(true)
+        .map_err(|e| WifiError::Network(format!("set ReuseAddr failed: {:?}", e)))?;
     #[cfg(not(windows))]
     socket.set_reuse_port(true)?;
 
     #[cfg(unix)] // this is currently restricted to Unix's in socket2
-    socket.set_reuse_port(true).map_err(|e| anyhow!("set ReusePort failed: {:?}", e))?;
+    socket
+        .set_reuse_port(true)
+        .map_err(|e| WifiError::Network(format!("set ReusePort failed: {:?}", e)))?;
 
     if non_block {
-        socket.set_nonblocking(true).map_err(|e| anyhow!("set O_NONBLOCK: {:?}", e))?;
+        socket
+            .set_nonblocking(true)
+            .map_err(|e| WifiError::Network(format!("set O_NONBLOCK: {:?}", e)))?;
     }
 
-    socket.join_multicast_v4(&MDNS_IP, &Ipv4Addr::UNSPECIFIED)?;
+    socket
+        .join_multicast_v4(&MDNS_IP, &Ipv4Addr::UNSPECIFIED)
+        .map_err(|e| WifiError::Network(format!("join_multicast_v4 failed: {:?}", e)))?;
     socket.set_multicast_loop_v4(false).expect("set_multicast_loop_v4 call failed");
 
-    socket.bind(&addr.into()).map_err(|e| anyhow!("socket bind to {} failed: {:?}", &addr, e))?;
+    socket
+        .bind(&addr.into())
+        .map_err(|e| WifiError::Network(format!("socket bind to {} failed: {:?}", &addr, e)))?;
 
     Ok(socket)
 }
 
-fn create_ethernet_frame(packet: &[u8], ip_addr: &Ipv4Addr) -> anyhow::Result<Vec<u8>> {
+fn create_ethernet_frame(packet: &[u8], ip_addr: &Ipv4Addr) -> WifiResult<Vec<u8>> {
     // TODO: Use the etherparse crate
     let ether_header = EtherHeader {
         // mDNS multicast IP address
@@ -228,14 +238,16 @@ fn create_ethernet_frame(packet: &[u8], ip_addr: &Ipv4Addr) -> anyhow::Result<Ve
     Ok(response_packet)
 }
 
-pub fn run_mdns_forwarder(tx: mpsc::Sender<Bytes>) -> anyhow::Result<()> {
+pub fn run_mdns_forwarder(tx: mpsc::Sender<Bytes>) -> WifiResult<()> {
     let addr = SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), MDNS_PORT);
     let socket = new_socket(addr.into(), false)?;
 
     // Typical max mDNS packet size
     let mut buf: [MaybeUninit<u8>; 1500] = [MaybeUninit::new(0_u8); 1500];
     loop {
-        let (size, src_addr) = socket.recv_from(&mut buf[..])?;
+        let (size, src_addr) = socket
+            .recv_from(&mut buf[..])
+            .map_err(|e| WifiError::Network(format!("recv_from failed: {:?}", e)))?;
         // SAFETY: `recv_from` implementation promises not to write uninitialized bytes to `buf`.
         // Documentation: https://docs.rs/socket2/latest/socket2/struct.Socket.html#method.recv_from
         let packet = unsafe { &*(&buf[..size] as *const [MaybeUninit<u8>] as *const [u8]) };
@@ -244,7 +256,7 @@ pub fn run_mdns_forwarder(tx: mpsc::Sender<Bytes>) -> anyhow::Result<()> {
             match create_ethernet_frame(packet, socket_addr_v4.ip()) {
                 Ok(ethernet_frame) => {
                     if let Err(e) = tx.send(ethernet_frame.into()) {
-                        warn!("Failed to send packet: {e}");
+                        warn!("Failed to send packet: {}", e);
                     }
                 }
                 Err(e) => warn!("Failed to create ethernet frame from UDP payload: {}", e),

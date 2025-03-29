@@ -15,6 +15,7 @@
 // [cfg(test)] gets compiled during local Rust unit tests
 // [cfg(not(test))] avoids getting compiled during local Rust unit tests
 
+pub(crate) mod error;
 pub(crate) mod frame;
 #[cfg_attr(feature = "cuttlefish", path = "hostapd_cf.rs")]
 pub(crate) mod hostapd;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 /// Hostapd Interface for Network Simulation
+use crate::wifi::error::WifiResult;
 use bytes::Bytes;
 use netsim_packets::ieee80211::{Ieee80211, MacAddress};
 use netsim_proto::config::HostapdOptions as ProtoHostapdOptions;
@@ -21,7 +22,7 @@ use tokio::sync::mpsc;
 // Provides a stub implementation while the hostapd-rs crate is not integrated into the aosp-main.
 pub struct Hostapd {}
 impl Hostapd {
-    pub async fn input(&self, _bytes: Bytes) -> anyhow::Result<()> {
+    pub async fn input(&self, _bytes: Bytes) -> WifiResult<()> {
         Ok(())
     }
 
@@ -45,6 +46,6 @@ pub async fn hostapd_run(
     _opt: ProtoHostapdOptions,
     _tx: mpsc::Sender<Bytes>,
     _wifi_args: Option<Vec<String>>,
-) -> anyhow::Result<Hostapd> {
+) -> WifiResult<Hostapd> {
     Ok(Hostapd {})
 }

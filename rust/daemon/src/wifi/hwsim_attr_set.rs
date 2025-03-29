@@ -14,14 +14,12 @@
 
 #![allow(clippy::empty_line_after_doc_comments)]
 
-use std::fmt;
-
-use anyhow::{anyhow, Context};
+use crate::wifi::error::{WifiError, WifiResult};
 use netsim_packets::ieee80211::MacAddress;
 use netsim_packets::mac80211_hwsim::{self, HwsimAttr, HwsimAttrChild::*, TxRate, TxRateFlag};
 use netsim_packets::netlink::NlAttrHdr;
 use pdl_runtime::Packet;
-use std::option::Option;
+use std::fmt;
 
 /// Parse or Build the Hwsim attributes into a set.
 ///
@@ -184,7 +182,7 @@ impl HwsimAttrSetBuilder {
         self
     }
 
-    pub fn build(self) -> anyhow::Result<HwsimAttrSet> {
+    pub fn build(self) -> WifiResult<HwsimAttrSet> {
         Ok(HwsimAttrSet {
             transmitter: self.transmitter,
             receiver: self.receiver,
@@ -238,7 +236,7 @@ impl HwsimAttrSet {
     }
 
     /// Parse and validates the attributes from a HwsimMsg command.
-    pub fn parse(attributes: &[u8]) -> anyhow::Result<HwsimAttrSet> {
+    pub fn parse(attributes: &[u8]) -> WifiResult<HwsimAttrSet> {
         Self::parse_with_frame_transmitter(attributes, Option::None, Option::None)
     }
     /// Parse and validates the attributes from a HwsimMsg command.
@@ -247,18 +245,17 @@ impl HwsimAttrSet {
         attributes: &[u8],
         frame: Option<&[u8]>,
         transmitter: Option<&[u8; 6]>,
-    ) -> anyhow::Result<HwsimAttrSet> {
+    ) -> WifiResult<HwsimAttrSet> {
         let mut index: usize = 0;
         let mut builder = HwsimAttrSet::builder();
         while index < attributes.len() {
             // Parse a generic netlink attribute to get the size
-            let nla_hdr =
-                NlAttrHdr::decode_full(&attributes[index..index + 4]).context("NlAttrHdr")?;
+            let nla_hdr = NlAttrHdr::decode_full(&attributes[index..index + 4])?;
             let nla_len = nla_hdr.nla_len as usize;
             // Now parse a single attribute at a time from the
             // attributes to allow padding per attribute.
             let hwsim_attr = HwsimAttr::decode_full(&attributes[index..index + nla_len])?;
-            match hwsim_attr.specialize().context("HwsimAttr")? {
+            match hwsim_attr.specialize()? {
                 HwsimAttrAddrTransmitter(child) => {
                     builder.transmitter(transmitter.unwrap_or(child.address()))
                 }
@@ -272,10 +269,10 @@ impl HwsimAttrSet {
                 HwsimAttrTxInfo(child) => builder.tx_info(&child.tx_rates),
                 HwsimAttrTxInfoFlags(child) => builder.tx_info_flags(&child.tx_rate_flags),
                 _ => {
-                    return Err(anyhow!(
+                    return Err(WifiError::Frame(format!(
                         "Invalid attribute message: {:?}",
                         hwsim_attr.nla_type as u32
-                    ))
+                    )));
                 }
             };
             // Manually step through the attribute bytes aligning as
@@ -290,8 +287,6 @@ impl HwsimAttrSet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Context;
-    use anyhow::Error;
     use netsim_packets::ieee80211::parse_mac_address;
     use netsim_packets::mac80211_hwsim::{HwsimCmd, HwsimMsg};
 
@@ -333,12 +328,13 @@ mod tests {
     /// 2. Insert modified values, parse to bytes, and parse back again to check
     ///    if the round trip values are identical.
     #[test]
-    fn test_attr_set_parse_with_frame_transmitter() -> Result<(), Error> {
+    fn test_attr_set_parse_with_frame_transmitter() -> WifiResult<()> {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame.csv");
         let hwsim_msg = HwsimMsg::decode_full(&packet)?;
         assert_eq!(hwsim_msg.hwsim_hdr().hwsim_cmd, HwsimCmd::Frame);
         let attrs = HwsimAttrSet::parse(hwsim_msg.attributes())?;
-        let transmitter: [u8; 6] = attrs.transmitter.context("transmitter")?.into();
+        let transmitter: [u8; 6] =
+            attrs.transmitter.ok_or(WifiError::Frame("Missing transmitter".to_string()))?.into();
         let mod_attrs = HwsimAttrSet::parse_with_frame_transmitter(
             hwsim_msg.attributes(),
             attrs.frame.as_deref(),
@@ -349,8 +345,9 @@ mod tests {
 
         // Change frame and transmitter.
         let mod_frame = Some(vec![0, 1, 2, 3]);
-        let mod_transmitter: Option<[u8; 6]> =
-            Some(parse_mac_address("00:0b:85:71:20:ce").context("transmitter")?.into());
+        let parsed_mac = parse_mac_address("00:0b:85:71:20:ce")
+            .ok_or(WifiError::Frame("Failed to parse MAC address".to_string()))?;
+        let mod_transmitter: Option<[u8; 6]> = Some(parsed_mac.into());
 
         let mod_attrs = HwsimAttrSet::parse_with_frame_transmitter(
             &attrs.attributes,
