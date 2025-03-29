@@ -20,6 +20,7 @@ use tokio::net::TcpStream;
 
 const HTTP_VERSION: &str = "1.1";
 
+/// A alias for `Result` where the error type is this crate's `Error`.
 pub type Result<T> = core::result::Result<T, Error>;
 
 /// Establishes a TCP connection to a target address through an HTTP proxy.
@@ -34,10 +35,12 @@ pub struct Connector {
 }
 
 impl Connector {
+    /// Creates a new `Connector` with proxy address and optional authentication details
     pub fn new(proxy_addr: SocketAddr, username: Option<String>, password: Option<String>) -> Self {
         Connector { proxy_addr, username, password }
     }
 
+    /// Establishes a TCP connection to the given address through the proxy.
     pub async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
         let mut stream = TcpStream::connect(self.proxy_addr).await?;
 

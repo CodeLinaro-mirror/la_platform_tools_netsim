@@ -14,7 +14,7 @@
 
 use crate::devices::chip::ChipIdentifier;
 use crate::ffi::ffi_bluetooth;
-use crate::wireless::{WirelessAdaptor, WirelessAdaptorImpl};
+use crate::wireless::{WirelessChip, WirelessChipImpl};
 
 use bytes::Bytes;
 use cxx::{let_cxx_string, CxxString, CxxVector};
@@ -89,7 +89,7 @@ impl Drop for Bluetooth {
     }
 }
 
-impl WirelessAdaptor for Bluetooth {
+impl WirelessChip for Bluetooth {
     fn handle_request(&self, packet: &Bytes) {
         // Lock to protect device_to_transport_ table in C++
         let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
@@ -172,7 +172,7 @@ impl WirelessAdaptor for Bluetooth {
 /// Create a new Emulated Bluetooth Chip
 /// allow(dead_code) due to not being used in unit tests
 #[allow(dead_code)]
-pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
+pub fn add_chip(create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessChipImpl {
     // Lock to protect id_to_chip_info_ table in C++
     let _guard = WIRELESS_BT_MUTEX.lock().expect("Failed to acquire lock on WIRELESS_BT_MUTEX");
     let_cxx_string!(cxx_address = create_params.address.clone());
@@ -181,8 +181,8 @@ pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAda
         None => Vec::new(),
     };
     let rootcanal_id = ffi_bluetooth::bluetooth_add(chip_id.0, &cxx_address, &proto_bytes);
-    info!("Bluetooth WirelessAdaptor created with rootcanal_id: {rootcanal_id} chip_id: {chip_id}");
-    let wireless_adaptor = Bluetooth {
+    info!("Bluetooth WirelessChip created with rootcanal_id: {rootcanal_id} chip_id: {chip_id}");
+    let wireless_chip = Bluetooth {
         rootcanal_id,
         low_energy_enabled: AtomicBool::new(true),
         classic_enabled: AtomicBool::new(true),
@@ -191,7 +191,7 @@ pub fn new(create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAda
         .lock()
         .expect("invalid packets")
         .insert(rootcanal_id, Vec::new());
-    Box::new(wireless_adaptor)
+    Box::new(wireless_chip)
 }
 
 /// Starts the Bluetooth service.
@@ -229,7 +229,7 @@ pub fn report_invalid_packet(
                 // Log the report
                 info!("Invalid Packet for rootcanal_id: {rootcanal_id}, reason: {reason:?}, description: {description:?}, packet: {packet:?}");
             }
-            None => error!("Bluetooth WirelessAdaptor not created for rootcanal_id: {rootcanal_id}"),
+            None => error!("Bluetooth WirelessChip not created for rootcanal_id: {rootcanal_id}"),
         }
     });
 }

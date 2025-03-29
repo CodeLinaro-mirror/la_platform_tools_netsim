@@ -34,6 +34,9 @@
 //! // Interact with the Slirp instance
 //! ```
 
+#![allow(missing_docs)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(unsafe_op_in_unsafe_fn)]
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -208,11 +211,11 @@ impl From<in6_addr> for Ipv6Addr {
         #[cfg(target_os = "macos")]
         return Ipv6Addr::from(unsafe { item.__u6_addr.__u6_addr8 });
 
+        #[cfg(target_os = "linux")]
         // SAFETY: Access union field. This is safe because we are
         // accessing the underlying byte array representation of the
         // `in6_addr` struct on Linux and all variants have the same
         // size.
-        #[cfg(target_os = "linux")]
         return Ipv6Addr::from(unsafe { item.__in6_u.__u6_addr8 });
 
         // SAFETY: Access union field. This is safe because we are

@@ -30,13 +30,21 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
 
+/// DNS Manager of IP addresses to FQDN
 pub struct DnsManager {
     map: Mutex<HashMap<IpAddr, String>>,
+}
+
+impl Default for DnsManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DnsManager {
     const DNS_PORT: u16 = 53;
 
+    /// Creates a new `DnsManager`.
     pub fn new() -> Self {
         DnsManager { map: Mutex::new(HashMap::new()) }
     }
@@ -49,7 +57,7 @@ impl DnsManager {
         if let Some(TransportHeader::Udp(udp_header)) = &headers.transport {
             // with source port from DNS server
             if udp_header.source_port == Self::DNS_PORT {
-                if let PayloadSlice::Udp(ref payload) = headers.payload {
+                if let PayloadSlice::Udp(payload) = headers.payload {
                     // Add any A/AAAA domain names
                     if let Ok(answers) = dns::parse_answers(payload) {
                         for (ip_addr, name) in answers {
@@ -62,6 +70,7 @@ impl DnsManager {
         }
     }
 
+    /// Adds potential DNS entries from an Ethernet slice.
     pub fn add_from_ethernet_slice(&self, packet: &[u8]) {
         let headers = PacketHeaders::from_ethernet_slice(packet).unwrap();
         self.add_from_packet_headers(&headers);
@@ -72,7 +81,13 @@ impl DnsManager {
         self.map.lock().unwrap().get(ip_addr).cloned()
     }
 
+    /// Returns the number of entries in the cache.
     pub fn len(&self) -> usize {
         self.map.lock().unwrap().len()
+    }
+
+    /// Checks if the cache is empty.
+    pub fn is_empty(&self) -> bool {
+        self.map.lock().unwrap().len() == 0
     }
 }

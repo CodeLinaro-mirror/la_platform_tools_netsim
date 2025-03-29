@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::devices::chip::ChipIdentifier;
-use crate::wireless::{WirelessAdaptor, WirelessAdaptorImpl};
+use crate::wireless::{WirelessChip, WirelessChipImpl};
 
 use bytes::Bytes;
 use netsim_proto::common::ChipKind as ProtoChipKind;
@@ -31,7 +31,7 @@ pub struct Mock {
     chip_kind: ProtoChipKind,
 }
 
-impl WirelessAdaptor for Mock {
+impl WirelessChip for Mock {
     fn handle_request(&self, _packet: &Bytes) {}
 
     fn reset(&self) {}
@@ -58,6 +58,6 @@ impl WirelessAdaptor for Mock {
 }
 
 /// Create a new MockedChip
-pub fn new(create_params: &CreateParams, _chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
+pub fn add_chip(create_params: &CreateParams, _chip_id: ChipIdentifier) -> WirelessChipImpl {
     Box::new(Mock { chip_kind: create_params.chip_kind })
 }
