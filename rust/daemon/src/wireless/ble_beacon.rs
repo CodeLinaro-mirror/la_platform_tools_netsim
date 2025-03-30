@@ -14,7 +14,7 @@
 
 use crate::bluetooth::{ble_beacon_add, ble_beacon_get, ble_beacon_patch, ble_beacon_remove};
 use crate::devices::chip::{ChipIdentifier, FacadeIdentifier};
-use crate::wireless::{WirelessAdaptor, WirelessAdaptorImpl};
+use crate::wireless::{WirelessChip, WirelessChipImpl};
 
 use bytes::Bytes;
 use log::{error, info};
@@ -45,7 +45,7 @@ impl Drop for BleBeacon {
     }
 }
 
-impl WirelessAdaptor for BleBeacon {
+impl WirelessChip for BleBeacon {
     fn handle_request(&self, packet: &Bytes) {
         #[cfg(not(test))]
         ffi_bluetooth::handle_bt_request(self.facade_id.0, packet[0], &packet[1..].to_vec());
@@ -89,12 +89,10 @@ impl WirelessAdaptor for BleBeacon {
 }
 
 /// Create a new Emulated BleBeacon Chip
-pub fn new(params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
+pub fn add_chip(params: &CreateParams, chip_id: ChipIdentifier) -> WirelessChipImpl {
     match ble_beacon_add(params.device_name.clone(), chip_id, &params.chip_proto) {
         Ok(facade_id) => {
-            info!(
-                "BleBeacon WirelessAdaptor created with facade_id: {facade_id} chip_id: {chip_id}"
-            );
+            info!("BleBeacon WirelessChip created with facade_id: {facade_id} chip_id: {chip_id}");
             Box::new(BleBeacon { facade_id, chip_id })
         }
         Err(err) => {

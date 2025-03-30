@@ -233,7 +233,7 @@ pub fn run_mdns_forwarder(tx: mpsc::Sender<Bytes>) -> anyhow::Result<()> {
     let socket = new_socket(addr.into(), false)?;
 
     // Typical max mDNS packet size
-    let mut buf: [MaybeUninit<u8>; 1500] = [MaybeUninit::new(0 as u8); 1500];
+    let mut buf: [MaybeUninit<u8>; 1500] = [MaybeUninit::new(0_u8); 1500];
     loop {
         let (size, src_addr) = socket.recv_from(&mut buf[..])?;
         // SAFETY: `recv_from` implementation promises not to write uninitialized bytes to `buf`.

@@ -14,35 +14,15 @@
 
 use bytes::Bytes;
 
-use crate::{
-    devices::chip::ChipIdentifier,
-    wireless::{ble_beacon, mocked},
-};
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 
-pub type WirelessAdaptorImpl = Box<dyn WirelessAdaptor + Send + Sync>;
-
-#[cfg(not(test))]
-use crate::wireless::{bluetooth, uwb, wifi};
-
-/// Parameter for each constructor of Emulated Chips
-#[allow(clippy::large_enum_variant, dead_code)]
-pub enum CreateParam {
-    BleBeacon(ble_beacon::CreateParams),
-    #[cfg(not(test))]
-    Bluetooth(bluetooth::CreateParams),
-    #[cfg(not(test))]
-    Wifi(wifi::CreateParams),
-    #[cfg(not(test))]
-    Uwb(uwb::CreateParams),
-    Mock(mocked::CreateParams),
-}
+pub type WirelessChipImpl = Box<dyn WirelessChip + Send + Sync>;
 
 // TODO: Factory trait to include start, stop, and add
-/// WirelessAdaptor is a trait that provides interface between the generic Chip
+/// WirelessChip is a trait that provides interface between the generic Chip
 /// and Radio specific library (rootcanal, libslirp, pica).
-pub trait WirelessAdaptor {
+pub trait WirelessChip {
     /// This is the main entry for incoming host-to-controller packets
     /// from virtual devices called by the transport module. The format of the
     /// packet depends on the emulated chip kind:
@@ -71,29 +51,13 @@ pub trait WirelessAdaptor {
     fn get_stats(&self, duration_secs: u64) -> Vec<ProtoRadioStats>;
 }
 
-/// This is called when the transport module receives a new packet stream
-/// connection from a virtual device.
-pub fn new(create_param: &CreateParam, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
-    // Based on create_param, construct WirelessAdaptor.
-    match create_param {
-        CreateParam::BleBeacon(params) => ble_beacon::new(params, chip_id),
-        #[cfg(not(test))]
-        CreateParam::Bluetooth(params) => bluetooth::new(params, chip_id),
-        #[cfg(not(test))]
-        CreateParam::Wifi(params) => wifi::new(params, chip_id),
-        #[cfg(not(test))]
-        CreateParam::Uwb(params) => uwb::new(params, chip_id),
-        CreateParam::Mock(params) => mocked::new(params, chip_id),
-    }
-}
-
 // TODO(b/309529194):
 // 1. Create Mock wireless adaptor, patch and get
 // 2. Create Mock wireless adptor, patch and reset
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_wireless_adaptor_new() {
+    fn test_wireless_chip_new() {
         // TODO
     }
 }

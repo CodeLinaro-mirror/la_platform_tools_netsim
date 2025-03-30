@@ -13,9 +13,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+//! Build script for linking `netsim-packets` crate with dependencies.
+
 use std::env;
 use std::path::PathBuf;
 
+/// Locates and copies prebuilt Rust packet definition files into the
+/// output directory (`OUT_DIR`).
 fn main() {
     // Locate prebuilt pdl generated rust packet definition files
     let prebuilts: [[&str; 2]; 5] = [
