@@ -156,7 +156,7 @@ pub unsafe fn run_fd_transport(startup_json: &String) {
                         bt_properties: Some(chip.bt_properties.clone()),
                     })
                 }
-                ChipKind::WIFI => wireless::CreateParam::Wifi(wireless::wifi::CreateParams {}),
+                ChipKind::WIFI => wireless::CreateParam::Wifi(wireless::wifi_chip::CreateParams {}),
                 ChipKind::UWB => wireless::CreateParam::Uwb(wireless::uwb::CreateParams {
                     address: chip.address.clone(),
                 }),

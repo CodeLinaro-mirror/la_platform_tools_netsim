@@ -17,9 +17,9 @@ use bytes::Bytes;
 pub use hostapd_rs::hostapd::Hostapd;
 use netsim_common::util::os_utils::get_discovery_directory;
 use netsim_proto::config::HostapdOptions as ProtoHostapdOptions;
-use std::sync::mpsc;
+use tokio::sync::mpsc;
 
-pub fn hostapd_run(
+pub async fn hostapd_run(
     _opt: ProtoHostapdOptions,
     tx: mpsc::Sender<Bytes>,
     wifi_args: Option<Vec<String>>,
@@ -30,8 +30,8 @@ pub fn hostapd_run(
     if let Some(wifi_values) = wifi_args {
         let ssid = &wifi_values[0];
         let password = wifi_values.get(1).cloned().unwrap_or_default();
-        hostapd.set_ssid(ssid, password)?;
+        hostapd.set_ssid(ssid, password).await?;
     }
-    hostapd.run();
+    hostapd.run().await;
     Ok(hostapd)
 }

@@ -21,31 +21,31 @@ use netsim_packets::ieee80211::Ieee80211;
 use pdl_runtime::Packet;
 use std::{
     env,
-    sync::mpsc,
-    thread,
     time::{Duration, Instant},
 };
-
+use tokio::runtime::Runtime;
+use tokio::sync::mpsc;
+use tokio::time::{sleep, timeout};
 /// Initializes a `Hostapd` instance for testing.
 ///
 /// Returns a tuple containing the `Hostapd` instance and a receiver for
 /// receiving data from `hostapd`.
 fn init_test_hostapd() -> (Hostapd, mpsc::Receiver<Bytes>) {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::channel(100);
     let config_path = env::temp_dir().join("hostapd.conf");
     (Hostapd::new(tx, true, config_path), rx)
 }
 
 /// Waits for the `Hostapd` process to terminate.
-fn terminate_hostapd(hostapd: &Hostapd) {
-    hostapd.terminate();
+async fn terminate_hostapd(hostapd: &Hostapd) {
+    hostapd.terminate().await;
     let max_wait_time = Duration::from_secs(30);
     let start_time = Instant::now();
     while start_time.elapsed() < max_wait_time {
-        if !hostapd.is_running() {
+        if !hostapd.is_running().await {
             break;
         }
-        thread::sleep(Duration::from_millis(250));
+        sleep(Duration::from_millis(250)).await; // Using tokio::time::sleep now
     }
     warn!("Hostapd failed to terminate successfully within 30s");
 }
@@ -55,72 +55,70 @@ fn terminate_hostapd(hostapd: &Hostapd) {
 /// A single test is used to avoid conflicts when multiple `hostapd` instances
 /// run in parallel.
 ///
+/// Multi threaded tokio runtime is required for hostapd.
+///
 /// TODO: Split up tests once feasible with `serial_test` crate or other methods.
-#[test]
-fn test_hostapd() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_hostapd() {
     // Initialize a single Hostapd instance to share across tests to avoid >5s startup &
     // shutdown overhead for every test
-    let (mut hostapd, receiver) = init_test_hostapd();
-    test_start(&mut hostapd);
-    test_receive_beacon_frame(&receiver);
-    test_get_and_set_ssid(&mut hostapd, &receiver);
-    test_terminate(&hostapd);
+    let (mut hostapd, mut receiver) = init_test_hostapd();
+    test_start(&mut hostapd).await;
+    test_receive_beacon_frame(&mut receiver).await;
+    test_get_and_set_ssid(&mut hostapd, &mut receiver).await;
+    test_terminate(&hostapd).await;
 }
 
 /// Tests that `Hostapd` starts successfully.
-fn test_start(hostapd: &mut Hostapd) {
-    hostapd.run();
-    assert!(hostapd.is_running());
+async fn test_start(hostapd: &mut Hostapd) {
+    hostapd.run().await;
+    assert!(hostapd.is_running().await);
 }
 
 /// Tests that `Hostapd` terminates successfully.
-fn test_terminate(hostapd: &Hostapd) {
-    terminate_hostapd(&hostapd);
-    assert!(!hostapd.is_running());
+async fn test_terminate(hostapd: &Hostapd) {
+    terminate_hostapd(&hostapd).await;
+    assert!(!hostapd.is_running().await);
 }
 
 /// Tests whether a beacon frame packet is received after `Hostapd` starts up.
-fn test_receive_beacon_frame(receiver: &mpsc::Receiver<Bytes>) {
-    let end_time = Instant::now() + Duration::from_secs(10);
-    loop {
-        // Try to receive a packet before end_time
-        match receiver.recv_timeout(end_time - Instant::now()) {
-            // Parse and verify received packet is beacon frame
-            Ok(packet) if Ieee80211::decode_full(&packet).unwrap().is_beacon() => break,
-            Ok(_) => continue, // Received a non beacon packet. Continue
-            _ => assert!(false, "Did not receive beacon frame in 10s"), // Error occurred
+async fn test_receive_beacon_frame(receiver: &mut mpsc::Receiver<Bytes>) {
+    let timeout_duration = Duration::from_secs(10);
+    match timeout(timeout_duration, receiver.recv()).await {
+        // Using tokio::time::timeout
+        Ok(Some(packet)) if Ieee80211::decode_full(&packet).unwrap().is_beacon() => {}
+        Ok(Some(_)) => assert!(false, "Received a non beacon packet within timeout"),
+        Ok(None) => {
+            assert!(false, "Sender closed unexpectedly before beacon received within timeout")
         }
+        Err(_timeout_err) => assert!(false, "Did not receive beacon frame in 10s timeout"),
     }
 }
 
 /// Checks if the receiver receives a beacon frame with the specified SSID within 10 seconds.
-fn verify_beacon_frame_ssid(receiver: &mpsc::Receiver<Bytes>, ssid: &str) {
-    let end_time = Instant::now() + Duration::from_secs(10);
-    loop {
-        // Try to receive a packet before end_time
-        match receiver.recv_timeout(end_time - Instant::now()) {
-            Ok(packet) => {
-                if let Ok(beacon_ssid) =
-                    Ieee80211::decode_full(&packet).unwrap().get_ssid_from_beacon_frame()
-                {
-                    if beacon_ssid == ssid {
-                        break; // Found expected beacon frame
-                    }
+async fn verify_beacon_frame_ssid(receiver: &mut mpsc::Receiver<Bytes>, ssid: &str) {
+    let timeout_duration = Duration::from_secs(10);
+    match timeout(timeout_duration, receiver.recv()).await {
+        // Using tokio::time::timeout
+        Ok(Some(packet)) => {
+            if let Ok(beacon_ssid) =
+                Ieee80211::decode_full(&packet).unwrap().get_ssid_from_beacon_frame()
+            {
+                if beacon_ssid == ssid {
+                    return; // Found expected beacon frame
                 }
-                // Not expected beacon frame. Continue...
             }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                assert!(false, "No Beacon frame received within 10s");
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                assert!(false, "Receiver disconnected while waiting for Beacon frame.");
-            }
+            assert!(false, "Received non-matching beacon frame within timeout");
         }
+        Ok(None) => {
+            assert!(false, "Sender closed before expected beacon frame received within timeout")
+        }
+        Err(_timeout_err) => assert!(false, "No Beacon frame received within 10s timeout"),
     }
 }
 
 /// Tests various ways to configure `Hostapd` SSID and password.
-fn test_get_and_set_ssid(hostapd: &mut Hostapd, receiver: &mpsc::Receiver<Bytes>) {
+async fn test_get_and_set_ssid(hostapd: &mut Hostapd, receiver: &mut mpsc::Receiver<Bytes>) {
     // Check default ssid is set
     let default_ssid = "AndroidWifi";
     assert_eq!(hostapd.get_ssid(), default_ssid);
@@ -128,29 +126,29 @@ fn test_get_and_set_ssid(hostapd: &mut Hostapd, receiver: &mpsc::Receiver<Bytes>
     let mut test_ssid = String::new();
     let mut test_password = String::new();
     // Verify set_ssid fails if SSID is empty
-    assert!(hostapd.set_ssid(&test_ssid, &test_password).is_err());
+    assert!(hostapd.set_ssid(&test_ssid, &test_password).await.is_err());
 
     // Verify set_ssid succeeds if SSID is not empty
     test_ssid = "TestSsid".to_string();
-    assert!(hostapd.set_ssid(&test_ssid, &test_password).is_ok());
+    assert!(hostapd.set_ssid(&test_ssid, &test_password).await.is_ok());
     // Verify hostapd sends new beacon frame with updated SSID
-    verify_beacon_frame_ssid(receiver, &test_ssid);
+    verify_beacon_frame_ssid(receiver, &test_ssid).await;
 
     // Verify ssid was set successfully
     assert_eq!(hostapd.get_ssid(), test_ssid);
 
     // Verify setting same ssid again succeeds
-    assert!(hostapd.set_ssid(&test_ssid, &test_password).is_ok());
+    assert!(hostapd.set_ssid(&test_ssid, &test_password).await.is_ok());
 
     test_ssid = "EncryptedSsid".to_string();
     test_password = "TestPassword".to_string();
 
     // Verify set_ssid with password succeeds
-    assert!(hostapd.set_ssid(&test_ssid, &test_password).is_ok());
+    assert!(hostapd.set_ssid(&test_ssid, &test_password).await.is_ok());
 
     // Verify ssid was set successfully
     assert_eq!(hostapd.get_ssid(), test_ssid);
 
     // Verify hostapd sends new beacon frame with updated SSID
-    verify_beacon_frame_ssid(receiver, &test_ssid);
+    verify_beacon_frame_ssid(receiver, &test_ssid).await;
 }
