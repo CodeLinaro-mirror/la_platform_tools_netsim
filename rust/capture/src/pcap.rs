@@ -57,12 +57,19 @@ type Result<A> = std::result::Result<A, std::io::Error>;
 #[derive(AsBytes, FromBytes, FromZeroes)]
 /// Represents the global header of a pcap capture file.
 pub struct FileHeader {
+    /// Magic number identifying the file format.
     pub magic: u32,
+    /// Major version of the pcap format.
     pub version_major: u16,
+    /// Minor version of the pcap format.
     pub version_minor: u16,
+    /// Time zone offset.
     pub thiszone: i32,
+    /// Timestamp accuracy.
     pub sigfigs: u32,
+    /// Maximum packet length in bytes.
     pub snaplen: u32,
+    /// Data link type of packets.
     pub linktype: u32,
 }
 
@@ -100,6 +107,7 @@ impl Default for FileHeader {
 /// https://www.tcpdump.org/linktypes.html
 #[repr(u32)]
 pub enum LinkType {
+    /// Null link type (BSD loopback)
     Null = 0,
     /// Ethernet
     Ethernet = 1,
@@ -153,9 +161,11 @@ impl From<LinkType> for u32 {
 #[derive(AsBytes, FromBytes, FromZeroes)]
 /// Represents the header prepended to each packet in a pcap capture file.
 pub struct PacketHeader {
-    /// Timestamp of the captured packet.
+    /// Timestamp of the captured packet (seconds).
     pub tv_sec: u32,
+    /// Timestamp of the captured packet (microseconds).
     pub tv_usec: u32,
+    /// Number of bytes captured from the packet.
     pub caplen: u32,
     /// Original length of the packet on the network.
     pub len: u32,

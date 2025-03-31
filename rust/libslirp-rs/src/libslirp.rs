@@ -142,12 +142,14 @@ pub type RawFd = i32;
 
 /// HTTP Proxy callback trait
 pub trait ProxyManager: Send {
+    /// Attempts to establish a connection through the proxy.
     fn try_connect(
         &self,
         sockaddr: SocketAddr,
         connect_id: usize,
         connect_func: Box<dyn ProxyConnect + Send>,
     ) -> bool;
+    /// Removes a proxy connection.
     fn remove(&self, connect_id: usize);
 }
 
@@ -213,7 +215,7 @@ impl TimerManager {
     }
 
     fn timer_mod(&self, timer_key: &TimerOpaque, expire_time: u64) {
-        if let Some(&mut ref mut timer) = self.map.borrow_mut().get_mut(&timer_key) {
+        if let Some(&mut ref mut timer) = self.map.borrow_mut().get_mut(timer_key) {
             // expire_time is >= 0
             timer.expire_time = expire_time;
         } else {
@@ -223,6 +225,7 @@ impl TimerManager {
 }
 
 impl LibSlirp {
+    /// Creates a new `LibSlirp` instance.
     pub fn new(
         config: libslirp_config::SlirpConfig,
         tx_bytes: mpsc::Sender<Bytes>,
@@ -260,12 +263,14 @@ impl LibSlirp {
         LibSlirp { tx_cmds }
     }
 
+    /// Shuts down the `LibSlirp` instance.
     pub fn shutdown(self) {
         if let Err(e) = self.tx_cmds.send(SlirpCmd::Shutdown) {
             warn!("Failed to send Shutdown cmd: {}", e);
         }
     }
 
+    /// Inputs network data into the `LibSlirp` instance.
     pub fn input(&self, bytes: Bytes) {
         if let Err(e) = self.tx_cmds.send(SlirpCmd::Input(bytes)) {
             warn!("Failed to send Input cmd: {}", e);
@@ -281,7 +286,9 @@ struct ConnectRequest {
     start: Instant,
 }
 
+/// Trait for handling proxy connection results.
 pub trait ProxyConnect: Send {
+    /// Notifies libslirp about the result of a proxy connection attempt.
     fn proxy_connect(&self, fd: i32, addr: SocketAddr);
 }
 
@@ -315,7 +322,14 @@ impl ProxyConnect for ConnectRequest {
 /// * `opaque` must be a valid pointer to a `CallbackContext` originally passed
 ///   to the slirp API.
 unsafe fn callback_context_from_raw(opaque: *mut c_void) -> ManuallyDrop<Box<CallbackContext>> {
-    ManuallyDrop::new(unsafe { Box::from_raw(opaque as *mut CallbackContext) })
+    ManuallyDrop::new(
+        // Safety:
+        //
+        // * `opaque` is a valid pointer to a `CallbackContext` originally passed
+        //    to the slirp API. The `callback_context_from_raw` function itself
+        //    is marked `unsafe` to enforce this precondition on its callers.
+        unsafe { Box::from_raw(opaque as *mut CallbackContext) },
+    )
 }
 
 /// A Rust struct for the fields held by `slirp` C library through its
@@ -392,8 +406,12 @@ impl Slirp {
 }
 
 impl Drop for Slirp {
+    /// # Safety
+    ///
+    /// * self.slirp is always slirp pointer initialized by slirp_new
+    ///   to the slirp API.
     fn drop(&mut self) {
-        // Safety
+        // Safety:
         //
         // * self.slirp is a slirp pointer initialized by slirp_new;
         // it's private to the struct and is only constructed that
@@ -460,14 +478,14 @@ fn slirp_thread(
             // Exit the while loop and shutdown
             Ok(SlirpCmd::Shutdown) => break,
 
-            // Safety: we ensure that func (`SlirpProxyConnectFunc`)
-            // and `connect_opaque` are valid because they originated
-            // from the libslirp call to `try_connect_cb.`
-            //
-            // Parameter `fd` will be >= 0 and the descriptor for the
-            // active socket to use, `af` will be either AF_INET or
-            // AF_INET6. On failure `fd` will be negative.
             Ok(SlirpCmd::ProxyConnect(func, connect_id, fd, af)) => match func {
+                // Safety: we ensure that func (`SlirpProxyConnectFunc`)
+                // and `connect_opaque` are valid because they originated
+                // from the libslirp call to `try_connect_cb.`
+                //
+                // Parameter `fd` will be >= 0 and the descriptor for the
+                // active socket to use, `af` will be either AF_INET or
+                // AF_INET6. On failure `fd` will be negative.
                 Some(func) => unsafe { func(connect_id as *mut c_void, fd as c_int, af as c_int) },
                 None => warn!("Proxy connect function not found"),
             },
@@ -559,8 +577,11 @@ impl Slirp {
 ///
 /// # Safety
 ///
-/// * opaque is a CallbackContext
+/// * opaque must be a CallbackContext
 unsafe extern "C" fn slirp_add_poll_cb(fd: c_int, events: c_int, opaque: *mut c_void) -> c_int {
+    // Safety:
+    //
+    // * opaque is a CallbackContext
     unsafe { callback_context_from_raw(opaque) }.add_poll(fd, events)
 }
 
@@ -607,8 +628,11 @@ impl Slirp {
 ///
 /// # Safety
 ///
-/// * opaque is a CallbackContext
+/// * opaque must be a CallbackContext
 unsafe extern "C" fn slirp_get_revents_cb(idx: c_int, opaque: *mut c_void) -> c_int {
+    // Safety:
+    //
+    // * opaque is a CallbackContext
     unsafe { callback_context_from_raw(opaque) }.get_events(idx)
 }
 
@@ -776,6 +800,11 @@ unsafe extern "C" fn send_packet_cb(
     len: usize,
     opaque: *mut c_void,
 ) -> libslirp_sys::slirp_ssize_t {
+    // Safety:
+    //
+    // * `buf` is a valid pointer to `len` bytes of memory.
+    // * `len` is greater than 0.
+    // * `opaque` is a valid `CallbackContext` pointer.
     unsafe { callback_context_from_raw(opaque) }.send_packet(buf, len)
 }
 
@@ -789,7 +818,7 @@ impl CallbackContext {
         let _ = self.tx_bytes.send(bytes.clone());
         // When HTTP Proxy is enabled, it tracks DNS packets.
         if let Some(tx_proxy) = &self.tx_proxy_bytes {
-            tx_proxy.send(bytes);
+            let _ = tx_proxy.send(bytes);
         }
         len as libslirp_sys::slirp_ssize_t
     }
@@ -808,11 +837,12 @@ impl CallbackContext {
 unsafe extern "C" fn guest_error_cb(msg: *const c_char, opaque: *mut c_void) {
     // Safety:
     //  * `msg` is guaranteed to be a valid C string by the caller.
+    let msg = String::from_utf8_lossy(unsafe { CStr::from_ptr(msg) }.to_bytes());
+    // Safety:
     //  * `opaque` is guaranteed to be a valid, non-null pointer to a `CallbackContext` struct that was originally passed
     //     to `slirp_new()` and is guaranteed to be valid for the lifetime of the Slirp instance.
     //  * `callback_context_from_raw()` safely converts the raw `opaque` pointer back to a
     //     `CallbackContext` reference. This is safe because the `opaque` pointer is guaranteed to be valid.
-    let msg = String::from_utf8_lossy(unsafe { CStr::from_ptr(msg) }.to_bytes());
     unsafe { callback_context_from_raw(opaque) }.guest_error(msg.to_string());
 }
 
@@ -835,6 +865,10 @@ impl CallbackContext {
 ///
 /// The current time in nanoseconds.
 unsafe extern "C" fn clock_get_ns_cb(opaque: *mut c_void) -> i64 {
+    // Safety:
+    //
+    // * `opaque` is a valid `CallbackContext` pointer.
+    //
     unsafe { callback_context_from_raw(opaque) }.clock_get_ns()
 }
 
@@ -854,6 +888,10 @@ impl CallbackContext {
 /// * `_slirp` is a raw pointer to the slirp instance, but it's not used in this callback.
 /// * `opaque` must be a valid `CallbackContext` pointer.
 unsafe extern "C" fn init_completed_cb(_slirp: *mut libslirp_sys::Slirp, opaque: *mut c_void) {
+    // Safety:
+    //
+    // * `_slirp` is a raw pointer to the slirp instance, but it's not used in this callback.
+    // * `opaque` is a valid `CallbackContext` pointer.
     unsafe { callback_context_from_raw(opaque) }.init_completed();
 }
 
@@ -887,7 +925,7 @@ unsafe extern "C" fn timer_new_opaque_cb(
     //     to `slirp_new()` and is guaranteed to be valid for the lifetime of the Slirp instance.
     //  * `callback_context_from_raw()` safely converts the raw `opaque` pointer back to a
     //     `CallbackContext` reference. This is safe because the `opaque` pointer is guaranteed to be valid.
-    unsafe { callback_context_from_raw(opaque) }.timer_new_opaque(id, cb_opaque)
+    unsafe { callback_context_from_raw(opaque).timer_new_opaque(id, cb_opaque) }
 }
 
 impl CallbackContext {
@@ -915,6 +953,10 @@ impl CallbackContext {
 /// * `timer` must be a valid `TimerOpaque` key that was previously returned by `timer_new_opaque_cb`.
 /// * `opaque` must be a valid `CallbackContext` pointer.
 unsafe extern "C" fn timer_free_cb(timer: *mut c_void, opaque: *mut c_void) {
+    // Safety:
+    //
+    // * `timer` is a valid `TimerOpaque` key that was previously returned by `timer_new_opaque_cb`.
+    // * `opaque` is a valid `CallbackContext` pointer.
     unsafe { callback_context_from_raw(opaque) }.timer_free(timer);
 }
 
@@ -942,6 +984,10 @@ impl CallbackContext {
 /// * `timer` must be a valid `TimerOpaque` key that was previously returned by `timer_new_opaque_cb`.
 /// * `opaque` must be a valid `CallbackContext` pointer.
 unsafe extern "C" fn timer_mod_cb(timer: *mut c_void, expire_time: i64, opaque: *mut c_void) {
+    // Safety:
+    //
+    // * `timer` is a valid `TimerOpaque` key that was previously returned by `timer_new_opaque_cb`.
+    // * `opaque` is a valid `CallbackContext` pointer.
     unsafe { callback_context_from_raw(opaque) }.timer_mod(timer, expire_time);
 }
 
@@ -994,11 +1040,15 @@ unsafe extern "C" fn try_connect_cb(
     connect_opaque: *mut c_void,
     opaque: *mut c_void,
 ) -> bool {
-    unsafe { callback_context_from_raw(opaque) }.try_connect(
-        addr,
-        connect_func,
-        connect_opaque as usize,
-    )
+    // Safety:
+    //
+    // * `addr` is a valid pointer to a `sockaddr_storage` structure.
+    // * `connect_func` is a valid callback function pointer.
+    // * `connect_opaque` is a valid pointer that can be passed back to libslirp.
+    // * `opaque` is a valid `CallbackContext` pointer.
+    unsafe {
+        callback_context_from_raw(opaque).try_connect(addr, connect_func, connect_opaque as usize)
+    }
 }
 
 impl CallbackContext {
@@ -1018,6 +1068,7 @@ impl CallbackContext {
     ) -> bool {
         if let Some(proxy_manager) = &self.proxy_manager {
             // Safety:
+            //
             //  * `addr` is a valid pointer to a `sockaddr_storage` structure, as guaranteed by the caller
             //  * Obtaining the `ss_family` field from a valid `sockaddr_storage` struct is safe
             let storage = unsafe { *addr };
@@ -1051,6 +1102,10 @@ impl CallbackContext {
 /// * `connect_opaque` must be a valid pointer that was previously passed to `try_connect_cb`.
 /// * `opaque` must be a valid `CallbackContext` pointer.
 unsafe extern "C" fn remove_cb(connect_opaque: *mut c_void, opaque: *mut c_void) {
+    //  Safety:
+    //
+    // * `connect_opaque` is a valid pointer that was previously passed to `try_connect_cb`.
+    // * `opaque` is a valid `CallbackContext` pointer.
     unsafe { callback_context_from_raw(opaque) }.remove(connect_opaque as usize);
 }
 
@@ -1073,12 +1128,12 @@ mod tests {
     use std::net::{TcpListener, TcpStream};
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     use std::os::unix::io::AsRawFd;
-    #[cfg(any(target_os = "windows"))]
+    #[cfg(target_os = "windows")]
     use std::os::windows::io::AsRawSocket;
 
     #[test]
     fn test_version_string() {
-        // Safety
+        // Safety:
         // Function returns a constant c_str
         let c_version_str = unsafe { CStr::from_ptr(crate::libslirp_sys::slirp_version_string()) };
         assert_eq!("4.7.0", c_version_str.to_str().unwrap());
@@ -1159,7 +1214,7 @@ mod tests {
         // Write initial data to pipe
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         writer.write_all(&[1]).unwrap();
-        #[cfg(any(target_os = "windows"))]
+        #[cfg(target_os = "windows")]
         writer.write_all(b"1").unwrap();
 
         (reader, writer)

@@ -21,10 +21,15 @@ use std::net::SocketAddr;
 /// An enumeration of possible errors.
 #[derive(Debug)]
 pub enum Error {
+    /// An I/O error occurred.
     IoError(io::Error),
+    /// An error occurred during connection establishment.
     ConnectionError(SocketAddr, String),
+    /// The configuration string was malformed.
     MalformedConfigString,
+    /// The provided port number was invalid.
     InvalidPortNumber,
+    /// The provided host was invalid.
     InvalidHost,
 }
 

@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Build script for linking `hostapd-rs` with the `hostapd` C library and its dependencies.
+//! Build script for linking `hostapd-rs` with dependencies.
 
+/// Build script for linking `hostapd-rs` with the `hostapd` C library and OS specific dependencies.
 pub fn main() {
     let objs_path = std::env::var("OBJS_PATH").unwrap_or("../objs".to_string());
 
