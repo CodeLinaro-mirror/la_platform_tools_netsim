@@ -229,7 +229,7 @@ class InstallEmulatorManager:
                 "--target",
                 self.target,
                 "--branch",
-                "aosp-emu-master-dev",
+                "git_emu-main-dev",
                 "sdk-repo-linux-emulator-*.zip",
             ],
             get_default_environment(AOSP_ROOT),
