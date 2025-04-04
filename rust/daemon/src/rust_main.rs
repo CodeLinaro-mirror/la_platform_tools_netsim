@@ -299,11 +299,11 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
             error!("service.run() -> Err({e:?})");
             return;
         }
-        Ok((grpc_port, web_port)) => {
+        Ok((grpc_port, web_port, websocket_port)) => {
             // If create_ini fails, check if there is another netsimd instance.
             // If there isn't another netsimd instance, remove_ini and create_ini once more.
             for _ in 0..2 {
-                if let Err(e) = create_ini(instance_num, grpc_port, web_port) {
+                if let Err(e) = create_ini(instance_num, grpc_port, web_port, websocket_port) {
                     warn!("create_ini error with {e:?}");
                     // Continue if the address overlaps to support Oxygen CF Boot.
                     // The pre-warmed device may leave stale netsim ini with the same grpc port.

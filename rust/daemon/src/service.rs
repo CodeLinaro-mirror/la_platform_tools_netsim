@@ -18,6 +18,7 @@ use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
 use crate::http_server::server::run_http_server;
 use crate::transport::socket::run_socket_transport;
+use crate::websocket_server::run_websocket_server;
 use crate::wireless;
 use log::{error, info, warn};
 use netsim_common::util::zip_artifact::remove_zip_files;
@@ -28,6 +29,7 @@ use std::time::Duration;
 
 type GrpcPort = u32;
 type WebPort = Option<u16>;
+type WebSocketPort = Option<u16>;
 
 pub struct ServiceParams {
     fd_startup_str: String,
@@ -113,7 +115,7 @@ impl Service {
 
     /// Runs the netsimd services.
     #[allow(unused_unsafe)]
-    pub fn run(&mut self) -> anyhow::Result<(GrpcPort, WebPort)> {
+    pub fn run(&mut self) -> anyhow::Result<(GrpcPort, WebPort, WebSocketPort)> {
         if !self.service_params.fd_startup_str.is_empty() {
             // SAFETY: When the `Service` was constructed by `Service::new` the caller guaranteed
             // that the file descriptors in `service_params.fd_startup_str` would remain valid and
@@ -135,10 +137,14 @@ impl Service {
         // Run frontend web server
         let web_port = self.run_web_server();
 
+        // Run the websocket server.
+        let websocket_port =
+            run_websocket_server(self.service_params.instance_num).map_err(|e| warn!("{e:?}")).ok();
+
         // Run the socket server.
         run_socket_transport(self.service_params.hci_port);
 
-        Ok((grpc_port, web_port))
+        Ok((grpc_port, web_port, websocket_port))
     }
 
     /// Shut down the netsimd services

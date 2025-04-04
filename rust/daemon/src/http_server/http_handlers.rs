@@ -145,7 +145,9 @@ pub fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>
     router.add_route(Uri::from_static(r"/v1/devices/{id}"), Box::new(handle_device));
     router.add_route(Uri::from_static("/v1/captures"), Box::new(handle_capture));
     router.add_route(Uri::from_static(r"/v1/captures/{id}"), Box::new(handle_capture));
-    router.add_route(Uri::from_static(r"/v1/websocket/{radio}"), Box::new(handle_websocket));
+    if std::env::var("NETSIM_WS_PORT").is_err() {
+        router.add_route(Uri::from_static(r"/v1/websocket/{radio}"), Box::new(handle_websocket));
+    }
 
     // Adding additional routes in dev mode.
     if dev {

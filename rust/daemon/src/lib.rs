@@ -41,6 +41,7 @@ mod session;
 mod transport;
 mod uwb;
 mod version;
+mod websocket_server;
 mod wifi;
 mod wireless;
 
