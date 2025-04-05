@@ -19,7 +19,7 @@ import platform
 import shutil
 
 from tasks.task import Task
-from utils import (CMAKE, move_contents, run, WINDOWS_TMP_OBJS_PATH)
+from utils import (CMAKE, WINDOWS_TMP_OBJS_PATH, move_contents, run)
 
 
 class CompileTask(Task):
@@ -35,24 +35,27 @@ class CompileTask(Task):
       try:
         # Use mkdir() with parents=True and exist_ok=True
         WINDOWS_TMP_OBJS_PATH.mkdir(parents=True, exist_ok=True)
-        print(f"Directory '{WINDOWS_TMP_OBJS_PATH}' ensured (created or already exists).")
+        print(
+            f"Directory '{WINDOWS_TMP_OBJS_PATH}' ensured (created or already"
+            " exists)."
+        )
 
       except OSError as e:
         # Catch potential OS errors (like permission issues)
         print(f"Error creating directory '{WINDOWS_TMP_OBJS_PATH}': {e}")
       run(
-        [CMAKE, "--build", WINDOWS_TMP_OBJS_PATH],
-        self.env,
-        "bld",
+          [CMAKE, "--build", WINDOWS_TMP_OBJS_PATH],
+          self.env,
+          "bld",
       )
       move_contents(
-        WINDOWS_TMP_OBJS_PATH,
-        self.out,
+          WINDOWS_TMP_OBJS_PATH,
+          self.out,
       )
     else:
       run(
-        [CMAKE, "--build", self.out],
-        self.env,
-        "bld",
+          [CMAKE, "--build", self.out],
+          self.env,
+          "bld",
       )
     return True
