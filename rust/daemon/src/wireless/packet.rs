@@ -157,8 +157,8 @@ pub fn handle_request(chip_id: ChipIdentifier, packet: &Bytes, packet_type: u8) 
 
     // Perform handle_request
     match chip::get_chip(&chip_id) {
-        Some(c) => c.wireless_adaptor.handle_request(&Bytes::from(packet_vec)),
-        None => warn!("SharedWirelessAdaptor doesn't exist for chip_id: {chip_id}"),
+        Some(c) => c.wireless_chip.handle_request(&Bytes::from(packet_vec)),
+        None => warn!("SharedWirelessChip doesn't exist for chip_id: {chip_id}"),
     }
 }
 

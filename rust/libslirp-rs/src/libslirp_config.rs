@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.apache.org/licenses/LICENSE-2.0
+//     https://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,44 +22,80 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::path::PathBuf;
 use tokio;
 
+/// The maximum number of DNS servers supported by libslirp.
 const MAX_DNS_SERVERS: usize = SLIRP_MAX_DNS_SERVERS as usize;
 
-/// Rust SlirpConfig
+/// Configuration options for the Slirp network stack.
 pub struct SlirpConfig {
+    /// Slirp version.
     pub version: u32,
+    /// Whether to run in restricted mode.
     pub restricted: i32,
+    /// Whether IPv4 is enabled.
     pub in_enabled: bool,
+    /// The virtual network address for IPv4.
     pub vnetwork: Ipv4Addr,
+    /// The virtual network mask for IPv4.
     pub vnetmask: Ipv4Addr,
+    /// The virtual host address for IPv4.
     pub vhost: Ipv4Addr,
+    /// Whether IPv6 is enabled.
     pub in6_enabled: bool,
+    /// The virtual prefix address for IPv6.
     pub vprefix_addr6: Ipv6Addr,
+    /// The length of the virtual prefix for IPv6.
     pub vprefix_len: u8,
+    /// The virtual host address for IPv6.
     pub vhost6: Ipv6Addr,
+    /// The virtual hostname.
     pub vhostname: Option<String>,
+    /// The TFTP server name.
     pub tftp_server_name: Option<String>,
+    /// The path to the TFTP root directory.
     pub tftp_path: Option<PathBuf>,
+    /// The bootfile name for DHCP.
     pub bootfile: Option<String>,
+    /// The starting IP address for the DHCP server.
     pub vdhcp_start: Ipv4Addr,
+    /// The primary DNS server address for IPv4.
     pub vnameserver: Ipv4Addr,
+    /// The primary DNS server address for IPv6.
     pub vnameserver6: Ipv6Addr,
+    /// A list of DNS search domains.
     pub vdnssearch: Vec<String>,
+    /// The virtual domain name.
     pub vdomainname: Option<String>,
+    /// The interface MTU (Maximum Transmission Unit).
     pub if_mtu: usize,
+    /// The interface MRU (Maximum Receive Unit).
     pub if_mru: usize,
+    /// Whether to disable the host loopback interface.
     pub disable_host_loopback: bool,
+    /// Whether to enable emulation features.
     pub enable_emu: bool,
+    /// The outbound IPv4 address to bind to (optional).
     pub outbound_addr: Option<SocketAddrV4>,
+    /// The outbound IPv6 address to bind to (optional).
     pub outbound_addr6: Option<SocketAddrV6>,
+    /// Whether to disable the built-in DNS server.
     pub disable_dns: bool,
+    /// Whether to disable the built-in DHCP server.
     pub disable_dhcp: bool,
+    /// The manufacturer ID.
     pub mfr_id: u32,
+    /// The out-of-band Ethernet address.
     pub oob_eth_addr: [u8; 6usize],
+    /// Whether the HTTP proxy is enabled.
     pub http_proxy_on: bool,
+    /// A list of host DNS servers to use.
     pub host_dns: Vec<SocketAddr>,
 }
 
 impl Default for SlirpConfig {
+    /// Creates a new `SlirpConfig` with default values.
+    ///
+    /// The default configuration has IPv4 and IPv6 enabled on a private network,
+    /// with DHCP starting at `10.0.2.16` and a DNS server at `10.0.2.3`.
     fn default() -> Self {
         SlirpConfig {
             version: 5,
@@ -71,7 +107,7 @@ impl Default for SlirpConfig {
             vnetmask: Ipv4Addr::new(255, 255, 255, 0),
             // Default host address
             vhost: Ipv4Addr::new(10, 0, 2, 2),
-            // IPv6 disabled by default
+            // IPv6 enabled by default
             in6_enabled: true,
             vprefix_addr6: "fec0::".parse().unwrap(),
             vprefix_len: 64,
@@ -105,10 +141,11 @@ impl Default for SlirpConfig {
     }
 }
 
-/// Struct to hold a "C" SlirpConfig and the Rust storage that is
-/// referenced by SlirpConfig.
+/// Struct to hold a "C" `SlirpConfig` and the Rust storage that is
+/// referenced by `SlirpConfig`.
 #[allow(dead_code)]
 pub struct SlirpConfigs {
+    /// The "C" representation of the Slirp configuration.
     pub c_slirp_config: libslirp_sys::SlirpConfig,
 
     // fields that hold the managed storage for "C" struct.
@@ -121,13 +158,25 @@ pub struct SlirpConfigs {
     // TODO: add other fields
 }
 
+/// Asynchronously looks up the IP addresses for a given hostname or comma-separated list of hostnames.
+///
+/// Each hostname in the input string is resolved using `tokio::net::lookup_host`.
+/// The port in the resolved `SocketAddr` will be 0.
+///
+/// # Arguments
+///
+/// * `host_dns` - A string containing a single hostname or a comma-separated list of hostnames.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec` of `SocketAddr` on success, or an `io::Error` on failure.
 pub async fn lookup_host_dns(host_dns: &str) -> io::Result<Vec<SocketAddr>> {
     let mut set = tokio::task::JoinSet::new();
     if host_dns.is_empty() {
         return Ok(Vec::new());
     }
 
-    for addr in host_dns.split(",") {
+    for addr in host_dns.split(',') {
         set.spawn(tokio::net::lookup_host(format!("{addr}:0")));
     }
 
@@ -138,6 +187,19 @@ pub async fn lookup_host_dns(host_dns: &str) -> io::Result<Vec<SocketAddr>> {
     Ok(addrs)
 }
 
+/// Converts a slice of `SocketAddr` into an array of `libslirp_sys::sockaddr_storage`.
+///
+/// If the input slice contains more than `MAX_DNS_SERVERS` addresses, a warning is logged,
+/// and only the first `MAX_DNS_SERVERS` addresses are converted. The remaining entries
+/// in the output array will be default-initialized.
+///
+/// # Arguments
+///
+/// * `dns` - A slice of `SocketAddr` representing DNS server addresses.
+///
+/// # Returns
+///
+/// An array of `libslirp_sys::sockaddr_storage` containing the converted addresses.
 fn to_socketaddr_storage(dns: &[SocketAddr]) -> [libslirp_sys::sockaddr_storage; MAX_DNS_SERVERS] {
     let mut result = [libslirp_sys::sockaddr_storage::default(); MAX_DNS_SERVERS];
     if dns.len() > MAX_DNS_SERVERS {
@@ -150,6 +212,15 @@ fn to_socketaddr_storage(dns: &[SocketAddr]) -> [libslirp_sys::sockaddr_storage;
 }
 
 impl SlirpConfigs {
+    /// Creates a new `SlirpConfigs` instance from a Rust `SlirpConfig`.
+    ///
+    /// This function converts the Rust configuration into the "C" representation
+    /// used by libslirp, handling string conversions and storing necessary Rust
+    /// data to be referenced by the "C" struct.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - A reference to the Rust `SlirpConfig`.
     pub fn new(config: &SlirpConfig) -> SlirpConfigs {
         let as_cstring =
             |s: &Option<String>| s.as_ref().and_then(|s| CString::new(s.as_bytes()).ok());
@@ -227,6 +298,7 @@ mod tests {
     use super::*;
     use tokio::runtime::Runtime;
 
+    /// Tests the default values of the `SlirpConfig` struct.
     #[test]
     fn test_slirp_config_default() {
         let config = SlirpConfig::default();
@@ -264,6 +336,7 @@ mod tests {
         assert_eq!(config.host_dns.len(), 0);
     }
 
+    /// Tests the creation of a `SlirpConfigs` instance from a default `SlirpConfig`.
     #[test]
     fn test_slirp_configs_new() {
         let rust_config = SlirpConfig::default();
@@ -279,6 +352,7 @@ mod tests {
         assert_eq!(c_configs.c_slirp_config.tftp_server_name, std::ptr::null());
     }
 
+    /// Tests the `lookup_host_dns` function with different inputs.
     #[test]
     fn test_lookup_host_dns() -> io::Result<()> {
         let rt = Runtime::new().unwrap();
@@ -296,6 +370,7 @@ mod tests {
         Ok(())
     }
 
+    /// Tests the `to_socketaddr_storage` function with an empty input slice.
     #[test]
     fn test_to_socketaddr_storage_empty_input() {
         let dns: [SocketAddr; 0] = [];
@@ -307,6 +382,7 @@ mod tests {
         }
     }
 
+    /// Tests the `to_socketaddr_storage` function with a valid input slice.
     #[test]
     fn test_to_socketaddr_storage() {
         let dns = ["1.1.1.1:53".parse().unwrap(), "8.8.8.8:53".parse().unwrap()];
@@ -320,6 +396,7 @@ mod tests {
         }
     }
 
+    /// Tests the `to_socketaddr_storage` function with a valid input slice at the maximum allowed size.
     #[test]
     fn test_to_socketaddr_storage_valid_input_at_max() {
         let dns = [
@@ -335,6 +412,7 @@ mod tests {
         }
     }
 
+    /// Tests the `to_socketaddr_storage` function when the input slice exceeds the maximum allowed size.
     #[test]
     fn test_to_socketaddr_storage_input_exceeds_max() {
         let dns = [

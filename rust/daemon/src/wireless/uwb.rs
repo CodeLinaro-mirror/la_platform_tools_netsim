@@ -21,6 +21,7 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::{netsim_radio_stats, NetsimRadioStats as ProtoRadioStats};
 
 use crate::devices::chip::ChipIdentifier;
+use crate::get_runtime;
 use crate::uwb::ranging_estimator::{SharedState, UwbRangingEstimator};
 use crate::wireless::packet::handle_response;
 
@@ -28,9 +29,9 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
-use super::{WirelessAdaptor, WirelessAdaptorImpl};
+use super::{WirelessChip, WirelessChipImpl};
 
-// TODO(b/331267949): Construct Manager struct for each wireless_adaptor module
+// TODO(b/331267949): Construct Manager struct for each wireless_chip module
 static PICA_HANDLE_TO_STATE: OnceLock<SharedState> = OnceLock::new();
 
 fn get_pica_handle_to_state() -> &'static SharedState {
@@ -47,12 +48,6 @@ fn get_pica() -> Arc<Mutex<Pica>> {
         )))
     })
     .clone()
-}
-
-static PICA_RUNTIME: OnceLock<Arc<tokio::runtime::Runtime>> = OnceLock::new();
-
-fn get_pica_runtime() -> Arc<tokio::runtime::Runtime> {
-    PICA_RUNTIME.get_or_init(|| Arc::new(tokio::runtime::Runtime::new().unwrap())).clone()
 }
 
 /// Parameters for creating UWB chips
@@ -76,7 +71,7 @@ impl Drop for Uwb {
     }
 }
 
-impl WirelessAdaptor for Uwb {
+impl WirelessChip for Uwb {
     fn handle_request(&self, packet: &Bytes) {
         // TODO(b/330788870): Increment tx_count
         self.uci_stream_writer
@@ -129,15 +124,15 @@ pub fn uwb_start() {
     // TODO: Provide TcpStream as UWB connector
     let _ = thread::Builder::new().name("pica_service".to_string()).spawn(move || {
         log::info!("PICA STARTED");
-        let _guard = get_pica_runtime().enter();
+        let _guard = get_runtime().enter();
         futures::executor::block_on(pica::run(&get_pica()))
     });
 }
 
-pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAdaptorImpl {
+pub fn add_chip(_create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessChipImpl {
     let (uci_stream_sender, uci_stream_receiver) = futures::channel::mpsc::unbounded();
     let (uci_sink_sender, uci_sink_receiver) = futures::channel::mpsc::unbounded();
-    let _guard = get_pica_runtime().enter();
+    let _guard = get_runtime().enter();
     let pica_id = get_pica()
         .lock()
         .unwrap()
@@ -155,7 +150,7 @@ pub fn new(_create_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessAd
     };
 
     // Spawn a future for obtaining packet from pica and invoking handle_response_rust
-    get_pica_runtime().spawn(async move {
+    get_runtime().spawn(async move {
         let mut uci_sink_receiver = uci_sink_receiver;
         while let Some(packet) = uci_sink_receiver.next().await {
             handle_response(chip_id, &Bytes::from(packet));
@@ -170,8 +165,8 @@ mod tests {
 
     use super::*;
 
-    fn new_uwb_wireless_adaptor() -> WirelessAdaptorImpl {
-        new(&CreateParams { address: "test".to_string() }, ChipIdentifier(0))
+    fn add_uwb_wireless_chip() -> WirelessChipImpl {
+        add_chip(&CreateParams { address: "test".to_string() }, ChipIdentifier(0))
     }
 
     fn patch_chip_proto() -> ProtoChip {
@@ -183,19 +178,19 @@ mod tests {
 
     #[test]
     fn test_uwb_get() {
-        let wireless_adaptor = new_uwb_wireless_adaptor();
-        assert!(wireless_adaptor.get().has_uwb());
+        let wireless_chip = add_uwb_wireless_chip();
+        assert!(wireless_chip.get().has_uwb());
     }
 
     #[test]
     fn test_uwb_patch_and_reset() {
-        let wireless_adaptor = new_uwb_wireless_adaptor();
-        wireless_adaptor.patch(&patch_chip_proto());
-        let binding = wireless_adaptor.get();
+        let wireless_chip = add_uwb_wireless_chip();
+        wireless_chip.patch(&patch_chip_proto());
+        let binding = wireless_chip.get();
         let radio = binding.uwb();
         assert_eq!(radio.state, Some(false));
-        wireless_adaptor.reset();
-        let binding = wireless_adaptor.get();
+        wireless_chip.reset();
+        let binding = wireless_chip.get();
         let radio = binding.uwb();
         assert_eq!(radio.rx_count, 0);
         assert_eq!(radio.tx_count, 0);
@@ -204,8 +199,8 @@ mod tests {
 
     #[test]
     fn test_get_stats() {
-        let wireless_adaptor = new_uwb_wireless_adaptor();
-        let radio_stat_vec = wireless_adaptor.get_stats(0);
+        let wireless_chip = add_uwb_wireless_chip();
+        let radio_stat_vec = wireless_chip.get_stats(0);
         let radio_stat = radio_stat_vec.first().unwrap();
         assert_eq!(radio_stat.kind(), netsim_radio_stats::Kind::UWB);
         assert_eq!(radio_stat.duration_secs(), 0);
