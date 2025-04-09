@@ -14,12 +14,13 @@
 
 use crate::devices::chip::ChipIdentifier;
 use crate::get_runtime;
-use crate::wifi::error::WifiResult;
+use crate::wifi::error::{WifiError, WifiResult};
 use crate::wifi::hostapd;
 use crate::wifi::libslirp;
 #[cfg(not(feature = "cuttlefish"))]
 use crate::wifi::mdns_forwarder;
 use crate::wifi::medium::Medium;
+use crate::wifi::stats::WifiStats;
 use crate::wireless::wifi_chip::{CreateParams, WifiChip};
 use crate::wireless::{packet::handle_response, WirelessChipImpl};
 use bytes::Bytes;
@@ -37,7 +38,7 @@ pub fn wifi_start(
     forward_host_mdns: bool,
     wifi_args: Option<Vec<String>>,
     wifi_tap: Option<String>,
-) {
+) -> WifiStats {
     let (tx_request, rx_request) = mpsc::channel::<(u32, Bytes)>();
     let (tx_ieee8023_response, rx_ieee8023_response) = mpsc::channel::<Bytes>();
     let tx_ieee8023_response_clone = tx_ieee8023_response.clone();
@@ -57,11 +58,19 @@ pub fn wifi_start(
         get_runtime().block_on(hostapd::hostapd_run(hostapd_opt, tx_ieee80211_response, wifi_args));
     let hostapd = hostapd_result.map_err(|e| warn!("Failed to run hostapd. {e}")).unwrap();
 
-    let _ = WIFI_MANAGER.set(Arc::new(WifiManager::new(tx_request, network, hostapd)));
+    let wifi_stats = WifiStats::default();
+
+    let _ = WIFI_MANAGER.set(Arc::new(WifiManager::new(
+        tx_request,
+        network,
+        hostapd,
+        wifi_stats.clone(),
+    )));
     let wifi_manager = get_wifi_manager();
 
     if let Err(e) = start_threads(
         wifi_manager,
+        wifi_stats.clone(),
         rx_request,
         rx_ieee8023_response,
         rx_ieee80211_response,
@@ -70,6 +79,7 @@ pub fn wifi_start(
     ) {
         warn!("Failed to start Wi-Fi manager: {}", e);
     }
+    wifi_stats
 }
 
 /// Stops the WiFi service.
@@ -122,10 +132,11 @@ impl WifiManager {
         tx_request: mpsc::Sender<(u32, Bytes)>,
         network: Box<dyn Network>,
         hostapd: hostapd::Hostapd,
+        wifi_stats: WifiStats,
     ) -> WifiManager {
         let hostapd = Arc::new(hostapd);
         WifiManager {
-            medium: Medium::new(medium_callback, hostapd.clone()),
+            medium: Medium::new(medium_callback, hostapd.clone(), wifi_stats),
             tx_request,
             network,
             hostapd,
@@ -139,15 +150,16 @@ impl WifiManager {
 /// * One to handle IEEE802.11 responses from hostapd.
 fn start_threads(
     wifi_manager: Arc<WifiManager>,
+    wifi_stats: WifiStats,
     rx_request: mpsc::Receiver<(u32, Bytes)>,
     rx_ieee8023_response: mpsc::Receiver<Bytes>,
     rx_ieee80211_response: tokio_mpsc::Receiver<Bytes>,
     tx_ieee8023_response: mpsc::Sender<Bytes>,
     forward_host_mdns: bool,
 ) -> WifiResult<()> {
-    start_request_thread(wifi_manager.clone(), rx_request)?;
-    start_ieee8023_response_thread(wifi_manager.clone(), rx_ieee8023_response)?;
-    start_ieee80211_response_thread(wifi_manager.clone(), rx_ieee80211_response)?;
+    start_request_thread(wifi_manager.clone(), rx_request, wifi_stats.clone())?;
+    start_ieee8023_response_thread(wifi_manager.clone(), rx_ieee8023_response, wifi_stats.clone())?;
+    start_ieee80211_response_thread(wifi_manager.clone(), rx_ieee80211_response, wifi_stats)?;
     if forward_host_mdns {
         start_mdns_forwarder_thread(tx_ieee8023_response)?;
     }
@@ -157,6 +169,7 @@ fn start_threads(
 fn start_request_thread(
     wifi_manager: Arc<WifiManager>,
     rx_request: mpsc::Receiver<(u32, Bytes)>,
+    wifi_stats: WifiStats,
 ) -> WifiResult<()> {
     let hostapd = wifi_manager.hostapd.clone(); // Arc clone for thread
     thread::Builder::new().name("Wi-Fi HwsimMsg request".to_string()).spawn(move || {
@@ -172,33 +185,51 @@ fn start_request_thread(
             };
             match rx_request.recv_timeout(timeout) {
                 Ok((chip_id, packet)) => {
-                    if let Some(processor) = wifi_manager.medium.get_processor(chip_id, &packet) {
-                        wifi_manager.medium.ack_frame(chip_id, &processor.frame);
-                        if processor.hostapd {
-                            let ieee80211: Bytes = processor.get_ieee80211_bytes();
-                            let hostapd_clone = hostapd.clone();
-                            get_runtime().block_on(async move {
-                                if let Err(err) = hostapd_clone.input(ieee80211).await {
-                                    warn!("Failed to call hostapd input: {:?}", err);
-                                };
-                            });
-                        }
-                        if processor.network {
-                            match processor.get_ieee80211().to_ieee8023() {
-                                Ok(ethernet_frame) => {
-                                    wifi_manager.network.input(ethernet_frame.into())
+                    match wifi_manager.medium.get_processor(chip_id, &packet) {
+                        Err(e) => wifi_stats.log_and_incr_err_count(&e),
+                        Ok(processor) => {
+                            if let Err(e) = wifi_manager.medium.ack_frame(chip_id, &processor.frame)
+                            {
+                                wifi_stats.log_and_incr_err_count(&e);
+                            }
+                            if processor.hostapd {
+                                let ieee80211: Bytes = processor.get_ieee80211_bytes();
+                                let hostapd_clone = hostapd.clone();
+                                let wifi_stats_clone = wifi_stats.clone();
+                                get_runtime().block_on(async move {
+                                    if let Err(err) = hostapd_clone.input(ieee80211).await {
+                                        wifi_stats_clone.log_and_incr_err_count(
+                                            &WifiError::Hostapd(format!(
+                                                "Failed to call hostapd input: {}",
+                                                err
+                                            )),
+                                        );
+                                    }
+                                });
+                            }
+                            if processor.network {
+                                match processor.get_ieee80211().to_ieee8023() {
+                                    Ok(ethernet_frame) => {
+                                        wifi_manager.network.input(ethernet_frame.into())
+                                    }
+                                    Err(err) => {
+                                        wifi_stats.log_and_incr_err_count(&WifiError::Frame(
+                                            format!("Failed to convert 802.11 to 802.3: {}", err),
+                                        ));
+                                    }
                                 }
-                                Err(err) => {
-                                    warn!("Failed to convert 802.11 to 802.3: {}", err)
+                            }
+                            if processor.wmedium {
+                                // Decrypt the frame using the sender's key and re-encrypt it using the receiver's key for peer-to-peer communication through hostapd (broadcast or unicast).
+                                let ieee80211 = processor.get_ieee80211().clone();
+                                if let Err(e) =
+                                    wifi_manager.medium.queue_frame(processor.frame, ieee80211)
+                                {
+                                    wifi_stats.log_and_incr_err_count(&e);
                                 }
                             }
                         }
-                        if processor.wmedium {
-                            // Decrypt the frame using the sender's key and re-encrypt it using the receiver's key for peer-to-peer communication through hostapd (broadcast or unicast).
-                            let ieee80211 = processor.get_ieee80211().clone();
-                            wifi_manager.medium.queue_frame(processor.frame, ieee80211);
-                        }
-                    }
+                    };
                 }
                 _ => {
                     next_instant = Instant::now() + POLL_INTERVAL;
@@ -216,10 +247,13 @@ fn start_request_thread(
 fn start_ieee8023_response_thread(
     wifi_manager: Arc<WifiManager>,
     rx_ieee8023_response: mpsc::Receiver<Bytes>,
+    wifi_stats: WifiStats,
 ) -> WifiResult<()> {
     thread::Builder::new().name("Wi-Fi IEEE802.3 response".to_string()).spawn(move || {
         for packet in rx_ieee8023_response {
-            wifi_manager.medium.process_ieee8023_response(&packet);
+            if let Err(e) = wifi_manager.medium.process_ieee8023_response(&packet) {
+                wifi_stats.log_and_incr_err_count(&e);
+            }
         }
     })?;
     Ok(())
@@ -232,10 +266,13 @@ fn start_ieee8023_response_thread(
 fn start_ieee80211_response_thread(
     wifi_manager: Arc<WifiManager>,
     mut rx_ieee80211_response: tokio_mpsc::Receiver<Bytes>,
+    wifi_stats: WifiStats,
 ) -> WifiResult<()> {
     thread::Builder::new().name("Wi-Fi IEEE802.11 response".to_string()).spawn(move || {
         while let Some(packet) = get_runtime().block_on(rx_ieee80211_response.recv()) {
-            wifi_manager.medium.process_ieee80211_response(&packet);
+            if let Err(e) = wifi_manager.medium.process_ieee80211_response(&packet) {
+                wifi_stats.log_and_incr_err_count(&e);
+            }
         }
     })?;
     Ok(())
