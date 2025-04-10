@@ -59,7 +59,6 @@ pub fn wifi_start(
     let hostapd = hostapd_result.map_err(|e| warn!("Failed to run hostapd. {e}")).unwrap();
 
     let wifi_stats = WifiStats::default();
-
     let _ = WIFI_MANAGER.set(Arc::new(WifiManager::new(
         tx_request,
         network,
@@ -197,6 +196,7 @@ fn start_request_thread(
                                 let hostapd_clone = hostapd.clone();
                                 let wifi_stats_clone = wifi_stats.clone();
                                 get_runtime().block_on(async move {
+                                    wifi_stats_clone.incr_hostapd_frames_tx();
                                     if let Err(err) = hostapd_clone.input(ieee80211).await {
                                         wifi_stats_clone.log_and_incr_err_count(
                                             &WifiError::Hostapd(format!(
@@ -210,6 +210,7 @@ fn start_request_thread(
                             if processor.network {
                                 match processor.get_ieee80211().to_ieee8023() {
                                     Ok(ethernet_frame) => {
+                                        wifi_stats.incr_network_packets_tx();
                                         wifi_manager.network.input(ethernet_frame.into())
                                     }
                                     Err(err) => {
@@ -251,6 +252,7 @@ fn start_ieee8023_response_thread(
 ) -> WifiResult<()> {
     thread::Builder::new().name("Wi-Fi IEEE802.3 response".to_string()).spawn(move || {
         for packet in rx_ieee8023_response {
+            wifi_stats.incr_network_packets_rx();
             if let Err(e) = wifi_manager.medium.process_ieee8023_response(&packet) {
                 wifi_stats.log_and_incr_err_count(&e);
             }
@@ -270,6 +272,7 @@ fn start_ieee80211_response_thread(
 ) -> WifiResult<()> {
     thread::Builder::new().name("Wi-Fi IEEE802.11 response".to_string()).spawn(move || {
         while let Some(packet) = get_runtime().block_on(rx_ieee80211_response.recv()) {
+            wifi_stats.incr_hostapd_frames_rx();
             if let Err(e) = wifi_manager.medium.process_ieee80211_response(&packet) {
                 wifi_stats.log_and_incr_err_count(&e);
             }

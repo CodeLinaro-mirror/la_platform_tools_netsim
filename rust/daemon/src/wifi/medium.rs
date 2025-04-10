@@ -212,6 +212,8 @@ impl Medium {
             .validate(client_id, packet)
             .map_err(|e| WifiError::Frame(format!("error validate for client {client_id}: {e}")))?;
 
+        self.wifi_stats.incr_hwsim_frames_rx();
+
         // Creates Stations on the fly when there is no config file.
         // WiFi Direct will use a randomized mac address for probing
         // new networks. This block associates the new mac with the station.
@@ -228,6 +230,10 @@ impl Medium {
             frame,
             plaintext_ieee80211,
         };
+
+        if processor.get_ieee80211().is_mgmt() {
+            self.wifi_stats.incr_mgmt_frames_rx();
+        }
 
         let dest_addr = processor.frame.ieee80211.get_destination();
 
@@ -365,7 +371,13 @@ impl Medium {
         ieee80211: &Ieee80211,
         destination: &Station,
     ) -> WifiResult<()> {
+        if !self.enabled(destination.client_id)? {
+            debug!("Dropping frame to disabled client {}", destination.client_id);
+            return Ok(());
+        }
+
         let hwsim_msg = self.create_hwsim_msg_from_ieee80211(ieee80211, destination)?;
+        self.wifi_stats.incr_hwsim_frames_tx();
         (self.callback)(destination.client_id, &hwsim_msg.encode_to_vec()?.into());
         self.incr_rx(destination.client_id)?;
         Ok(())
@@ -457,6 +469,8 @@ impl Medium {
         {
             match self.create_hwsim_msg(frame, ieee80211, &destination.hwsim_addr) {
                 Ok(packet) => {
+                    self.wifi_stats.incr_wmedium_frames_tx();
+                    self.wifi_stats.incr_hwsim_frames_tx();
                     self.incr_rx(destination.client_id)?;
                     (self.callback)(destination.client_id, &packet.encode_to_vec()?.into());
                     log_hwsim_msg(frame, source.client_id, destination.client_id);
@@ -482,6 +496,7 @@ impl Medium {
         }
         Ok(())
     }
+
     /// Queues the frame for sending to medium.
     ///
     /// The `frame` contains an `ieee80211` field, but it might be encrypted. This function uses the provided `ieee80211` parameter directly, as it's expected to be decrypted if necessary.
@@ -489,17 +504,26 @@ impl Medium {
         let source = self.get_station(&ieee80211.get_source())?;
         let dest_addr = ieee80211.get_destination();
         if self.contains_station(&dest_addr) {
-            debug!("Frame deliver from {} to {}", source.addr, dest_addr);
+            // Unicast to another station
+            debug!("Frame deliver unicast from {} to {}", source.addr, dest_addr);
+            self.wifi_stats.incr_wmedium_unicast_frames_tx();
             let destination = self.get_station(&dest_addr)?;
             self.send_from_sta_frame(&frame, &ieee80211, &source, &destination)?;
             return Ok(());
         } else if dest_addr.is_multicast() {
+            // Broadcast/Multicast from a station
             debug!("Frame multicast {}", ieee80211);
+            if dest_addr.is_mdns() {
+                self.wifi_stats.incr_mdns_count();
+            }
             self.broadcast_from_sta_frame(&frame, &ieee80211, &source)?;
             return Ok(());
         }
 
-        Err(WifiError::Transmission(format!("Dropped packet {}", ieee80211)))
+        Err(WifiError::Transmission(format!(
+            "Dropped packet from {} to {}",
+            source.addr, dest_addr
+        )))
     }
 
     // Simulate transmission through hostapd by rewriting frames with 802.11 ToDS
@@ -762,6 +786,8 @@ mod tests {
         let mdns_frame = mdns_frame_result.unwrap();
         assert!(!mdns_frame.ieee80211.get_source().is_multicast());
         assert!(mdns_frame.ieee80211.get_destination().is_multicast());
+        // Check against the constant
+        assert!(mdns_frame.ieee80211.get_destination().is_mdns());
     }
 
     #[test]
