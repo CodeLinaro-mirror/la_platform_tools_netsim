@@ -89,6 +89,25 @@ message NetsimDeviceStats {
   optional string arch = 7;
 }
 
+// Detailed Wi-Fi stats
+message WifiStats {
+  // Errors related to the hostapd.
+  optional int32 hostapd_errors = 1;
+  // Errors related to network connectivity (e.g., slirp).
+  optional int32 network_errors = 2;
+  // Errors related to client-specific operations or state.
+  optional int32 client_errors = 3;
+  // Errors encountered while parsing, decoding, or handling IEEE 802.11
+  // frames.
+  optional int32 frame_errors = 4;
+  // Errors related to transmission or reception of frame.
+  optional int32 transmission_errors = 5;
+  // Other uncategorized errors.
+  optional int32 other_errors = 6;
+
+  // TODO: Wi-Fi usage statistics
+}
+
 // Statistics for a netsim session.
 message NetsimStats {
   // The length of the session in seconds
@@ -105,4 +124,6 @@ message NetsimStats {
   optional NetsimFrontendStats frontend_stats = 6;
   // Device statistics
   repeated NetsimDeviceStats device_stats = 7;
+  // Wi-Fi statistics
+  optional WifiStats wifi_stats = 8;
 }
