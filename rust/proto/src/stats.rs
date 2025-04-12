@@ -1762,6 +1762,26 @@ pub struct WifiStats {
     pub transmission_errors: ::std::option::Option<i32>,
     // @@protoc_insertion_point(field:netsim.stats.WifiStats.other_errors)
     pub other_errors: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.hwsim_frames_rx)
+    pub hwsim_frames_rx: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.hwsim_frames_tx)
+    pub hwsim_frames_tx: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.network_packets_tx)
+    pub network_packets_tx: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.network_packets_rx)
+    pub network_packets_rx: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.hostapd_frames_tx)
+    pub hostapd_frames_tx: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.hostapd_frames_rx)
+    pub hostapd_frames_rx: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.wmedium_frames_tx)
+    pub wmedium_frames_tx: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.wmedium_unicast_frames_tx)
+    pub wmedium_unicast_frames_tx: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.mgmt_frames_rx)
+    pub mgmt_frames_rx: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.mdns_count)
+    pub mdns_count: ::std::option::Option<i32>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.WifiStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -1892,8 +1912,198 @@ impl WifiStats {
         self.other_errors = ::std::option::Option::Some(v);
     }
 
+    // optional int32 hwsim_frames_rx = 7;
+
+    pub fn hwsim_frames_rx(&self) -> i32 {
+        self.hwsim_frames_rx.unwrap_or(0)
+    }
+
+    pub fn clear_hwsim_frames_rx(&mut self) {
+        self.hwsim_frames_rx = ::std::option::Option::None;
+    }
+
+    pub fn has_hwsim_frames_rx(&self) -> bool {
+        self.hwsim_frames_rx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_hwsim_frames_rx(&mut self, v: i32) {
+        self.hwsim_frames_rx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 hwsim_frames_tx = 8;
+
+    pub fn hwsim_frames_tx(&self) -> i32 {
+        self.hwsim_frames_tx.unwrap_or(0)
+    }
+
+    pub fn clear_hwsim_frames_tx(&mut self) {
+        self.hwsim_frames_tx = ::std::option::Option::None;
+    }
+
+    pub fn has_hwsim_frames_tx(&self) -> bool {
+        self.hwsim_frames_tx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_hwsim_frames_tx(&mut self, v: i32) {
+        self.hwsim_frames_tx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 network_packets_tx = 9;
+
+    pub fn network_packets_tx(&self) -> i32 {
+        self.network_packets_tx.unwrap_or(0)
+    }
+
+    pub fn clear_network_packets_tx(&mut self) {
+        self.network_packets_tx = ::std::option::Option::None;
+    }
+
+    pub fn has_network_packets_tx(&self) -> bool {
+        self.network_packets_tx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_network_packets_tx(&mut self, v: i32) {
+        self.network_packets_tx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 network_packets_rx = 10;
+
+    pub fn network_packets_rx(&self) -> i32 {
+        self.network_packets_rx.unwrap_or(0)
+    }
+
+    pub fn clear_network_packets_rx(&mut self) {
+        self.network_packets_rx = ::std::option::Option::None;
+    }
+
+    pub fn has_network_packets_rx(&self) -> bool {
+        self.network_packets_rx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_network_packets_rx(&mut self, v: i32) {
+        self.network_packets_rx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 hostapd_frames_tx = 11;
+
+    pub fn hostapd_frames_tx(&self) -> i32 {
+        self.hostapd_frames_tx.unwrap_or(0)
+    }
+
+    pub fn clear_hostapd_frames_tx(&mut self) {
+        self.hostapd_frames_tx = ::std::option::Option::None;
+    }
+
+    pub fn has_hostapd_frames_tx(&self) -> bool {
+        self.hostapd_frames_tx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_hostapd_frames_tx(&mut self, v: i32) {
+        self.hostapd_frames_tx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 hostapd_frames_rx = 12;
+
+    pub fn hostapd_frames_rx(&self) -> i32 {
+        self.hostapd_frames_rx.unwrap_or(0)
+    }
+
+    pub fn clear_hostapd_frames_rx(&mut self) {
+        self.hostapd_frames_rx = ::std::option::Option::None;
+    }
+
+    pub fn has_hostapd_frames_rx(&self) -> bool {
+        self.hostapd_frames_rx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_hostapd_frames_rx(&mut self, v: i32) {
+        self.hostapd_frames_rx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 wmedium_frames_tx = 13;
+
+    pub fn wmedium_frames_tx(&self) -> i32 {
+        self.wmedium_frames_tx.unwrap_or(0)
+    }
+
+    pub fn clear_wmedium_frames_tx(&mut self) {
+        self.wmedium_frames_tx = ::std::option::Option::None;
+    }
+
+    pub fn has_wmedium_frames_tx(&self) -> bool {
+        self.wmedium_frames_tx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_wmedium_frames_tx(&mut self, v: i32) {
+        self.wmedium_frames_tx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 wmedium_unicast_frames_tx = 14;
+
+    pub fn wmedium_unicast_frames_tx(&self) -> i32 {
+        self.wmedium_unicast_frames_tx.unwrap_or(0)
+    }
+
+    pub fn clear_wmedium_unicast_frames_tx(&mut self) {
+        self.wmedium_unicast_frames_tx = ::std::option::Option::None;
+    }
+
+    pub fn has_wmedium_unicast_frames_tx(&self) -> bool {
+        self.wmedium_unicast_frames_tx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_wmedium_unicast_frames_tx(&mut self, v: i32) {
+        self.wmedium_unicast_frames_tx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 mgmt_frames_rx = 15;
+
+    pub fn mgmt_frames_rx(&self) -> i32 {
+        self.mgmt_frames_rx.unwrap_or(0)
+    }
+
+    pub fn clear_mgmt_frames_rx(&mut self) {
+        self.mgmt_frames_rx = ::std::option::Option::None;
+    }
+
+    pub fn has_mgmt_frames_rx(&self) -> bool {
+        self.mgmt_frames_rx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_mgmt_frames_rx(&mut self, v: i32) {
+        self.mgmt_frames_rx = ::std::option::Option::Some(v);
+    }
+
+    // optional int32 mdns_count = 16;
+
+    pub fn mdns_count(&self) -> i32 {
+        self.mdns_count.unwrap_or(0)
+    }
+
+    pub fn clear_mdns_count(&mut self) {
+        self.mdns_count = ::std::option::Option::None;
+    }
+
+    pub fn has_mdns_count(&self) -> bool {
+        self.mdns_count.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_mdns_count(&mut self, v: i32) {
+        self.mdns_count = ::std::option::Option::Some(v);
+    }
+
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(6);
+        let mut fields = ::std::vec::Vec::with_capacity(16);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "hostapd_errors",
@@ -1924,6 +2134,56 @@ impl WifiStats {
             "other_errors",
             |m: &WifiStats| { &m.other_errors },
             |m: &mut WifiStats| { &mut m.other_errors },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "hwsim_frames_rx",
+            |m: &WifiStats| { &m.hwsim_frames_rx },
+            |m: &mut WifiStats| { &mut m.hwsim_frames_rx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "hwsim_frames_tx",
+            |m: &WifiStats| { &m.hwsim_frames_tx },
+            |m: &mut WifiStats| { &mut m.hwsim_frames_tx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "network_packets_tx",
+            |m: &WifiStats| { &m.network_packets_tx },
+            |m: &mut WifiStats| { &mut m.network_packets_tx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "network_packets_rx",
+            |m: &WifiStats| { &m.network_packets_rx },
+            |m: &mut WifiStats| { &mut m.network_packets_rx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "hostapd_frames_tx",
+            |m: &WifiStats| { &m.hostapd_frames_tx },
+            |m: &mut WifiStats| { &mut m.hostapd_frames_tx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "hostapd_frames_rx",
+            |m: &WifiStats| { &m.hostapd_frames_rx },
+            |m: &mut WifiStats| { &mut m.hostapd_frames_rx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "wmedium_frames_tx",
+            |m: &WifiStats| { &m.wmedium_frames_tx },
+            |m: &mut WifiStats| { &mut m.wmedium_frames_tx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "wmedium_unicast_frames_tx",
+            |m: &WifiStats| { &m.wmedium_unicast_frames_tx },
+            |m: &mut WifiStats| { &mut m.wmedium_unicast_frames_tx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "mgmt_frames_rx",
+            |m: &WifiStats| { &m.mgmt_frames_rx },
+            |m: &mut WifiStats| { &mut m.mgmt_frames_rx },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "mdns_count",
+            |m: &WifiStats| { &m.mdns_count },
+            |m: &mut WifiStats| { &mut m.mdns_count },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<WifiStats>(
             "WifiStats",
@@ -1961,6 +2221,36 @@ impl ::protobuf::Message for WifiStats {
                 48 => {
                     self.other_errors = ::std::option::Option::Some(is.read_int32()?);
                 },
+                56 => {
+                    self.hwsim_frames_rx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                64 => {
+                    self.hwsim_frames_tx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                72 => {
+                    self.network_packets_tx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                80 => {
+                    self.network_packets_rx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                88 => {
+                    self.hostapd_frames_tx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                96 => {
+                    self.hostapd_frames_rx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                104 => {
+                    self.wmedium_frames_tx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                112 => {
+                    self.wmedium_unicast_frames_tx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                120 => {
+                    self.mgmt_frames_rx = ::std::option::Option::Some(is.read_int32()?);
+                },
+                128 => {
+                    self.mdns_count = ::std::option::Option::Some(is.read_int32()?);
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -1991,6 +2281,36 @@ impl ::protobuf::Message for WifiStats {
         if let Some(v) = self.other_errors {
             my_size += ::protobuf::rt::int32_size(6, v);
         }
+        if let Some(v) = self.hwsim_frames_rx {
+            my_size += ::protobuf::rt::int32_size(7, v);
+        }
+        if let Some(v) = self.hwsim_frames_tx {
+            my_size += ::protobuf::rt::int32_size(8, v);
+        }
+        if let Some(v) = self.network_packets_tx {
+            my_size += ::protobuf::rt::int32_size(9, v);
+        }
+        if let Some(v) = self.network_packets_rx {
+            my_size += ::protobuf::rt::int32_size(10, v);
+        }
+        if let Some(v) = self.hostapd_frames_tx {
+            my_size += ::protobuf::rt::int32_size(11, v);
+        }
+        if let Some(v) = self.hostapd_frames_rx {
+            my_size += ::protobuf::rt::int32_size(12, v);
+        }
+        if let Some(v) = self.wmedium_frames_tx {
+            my_size += ::protobuf::rt::int32_size(13, v);
+        }
+        if let Some(v) = self.wmedium_unicast_frames_tx {
+            my_size += ::protobuf::rt::int32_size(14, v);
+        }
+        if let Some(v) = self.mgmt_frames_rx {
+            my_size += ::protobuf::rt::int32_size(15, v);
+        }
+        if let Some(v) = self.mdns_count {
+            my_size += ::protobuf::rt::int32_size(16, v);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -2015,6 +2335,36 @@ impl ::protobuf::Message for WifiStats {
         if let Some(v) = self.other_errors {
             os.write_int32(6, v)?;
         }
+        if let Some(v) = self.hwsim_frames_rx {
+            os.write_int32(7, v)?;
+        }
+        if let Some(v) = self.hwsim_frames_tx {
+            os.write_int32(8, v)?;
+        }
+        if let Some(v) = self.network_packets_tx {
+            os.write_int32(9, v)?;
+        }
+        if let Some(v) = self.network_packets_rx {
+            os.write_int32(10, v)?;
+        }
+        if let Some(v) = self.hostapd_frames_tx {
+            os.write_int32(11, v)?;
+        }
+        if let Some(v) = self.hostapd_frames_rx {
+            os.write_int32(12, v)?;
+        }
+        if let Some(v) = self.wmedium_frames_tx {
+            os.write_int32(13, v)?;
+        }
+        if let Some(v) = self.wmedium_unicast_frames_tx {
+            os.write_int32(14, v)?;
+        }
+        if let Some(v) = self.mgmt_frames_rx {
+            os.write_int32(15, v)?;
+        }
+        if let Some(v) = self.mdns_count {
+            os.write_int32(16, v)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -2038,6 +2388,16 @@ impl ::protobuf::Message for WifiStats {
         self.frame_errors = ::std::option::Option::None;
         self.transmission_errors = ::std::option::Option::None;
         self.other_errors = ::std::option::Option::None;
+        self.hwsim_frames_rx = ::std::option::Option::None;
+        self.hwsim_frames_tx = ::std::option::Option::None;
+        self.network_packets_tx = ::std::option::Option::None;
+        self.network_packets_rx = ::std::option::Option::None;
+        self.hostapd_frames_tx = ::std::option::Option::None;
+        self.hostapd_frames_rx = ::std::option::Option::None;
+        self.wmedium_frames_tx = ::std::option::Option::None;
+        self.wmedium_unicast_frames_tx = ::std::option::Option::None;
+        self.mgmt_frames_rx = ::std::option::Option::None;
+        self.mdns_count = ::std::option::Option::None;
         self.special_fields.clear();
     }
 
@@ -2049,6 +2409,16 @@ impl ::protobuf::Message for WifiStats {
             frame_errors: ::std::option::Option::None,
             transmission_errors: ::std::option::Option::None,
             other_errors: ::std::option::Option::None,
+            hwsim_frames_rx: ::std::option::Option::None,
+            hwsim_frames_tx: ::std::option::Option::None,
+            network_packets_tx: ::std::option::Option::None,
+            network_packets_rx: ::std::option::Option::None,
+            hostapd_frames_tx: ::std::option::Option::None,
+            hostapd_frames_rx: ::std::option::Option::None,
+            wmedium_frames_tx: ::std::option::Option::None,
+            wmedium_unicast_frames_tx: ::std::option::Option::None,
+            mgmt_frames_rx: ::std::option::Option::None,
+            mdns_count: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -2449,21 +2819,31 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     sion\x12\x1f\n\x0bsdk_version\x18\x04\x20\x01(\tR\nsdkVersion\x12\x19\n\
     \x08build_id\x18\x05\x20\x01(\tR\x07buildId\x12\x18\n\x07variant\x18\x06\
     \x20\x01(\tR\x07variant\x12\x12\n\x04arch\x18\x07\x20\x01(\tR\x04arch\"\
-    \xf5\x01\n\tWifiStats\x12%\n\x0ehostapd_errors\x18\x01\x20\x01(\x05R\rho\
+    \xa5\x05\n\tWifiStats\x12%\n\x0ehostapd_errors\x18\x01\x20\x01(\x05R\rho\
     stapdErrors\x12%\n\x0enetwork_errors\x18\x02\x20\x01(\x05R\rnetworkError\
     s\x12#\n\rclient_errors\x18\x03\x20\x01(\x05R\x0cclientErrors\x12!\n\x0c\
     frame_errors\x18\x04\x20\x01(\x05R\x0bframeErrors\x12/\n\x13transmission\
     _errors\x18\x05\x20\x01(\x05R\x12transmissionErrors\x12!\n\x0cother_erro\
-    rs\x18\x06\x20\x01(\x05R\x0botherErrors\"\xae\x03\n\x0bNetsimStats\x12#\
-    \n\rduration_secs\x18\x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice\
-    _count\x18\x02\x20\x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurrent_de\
-    vices\x18\x03\x20\x01(\x05R\x15peakConcurrentDevices\x12?\n\x0bradio_sta\
-    ts\x18\x04\x20\x03(\x0b2\x1e.netsim.stats.NetsimRadioStatsR\nradioStats\
-    \x12\x18\n\x07version\x18\x05\x20\x01(\tR\x07version\x12H\n\x0efrontend_\
-    stats\x18\x06\x20\x01(\x0b2!.netsim.stats.NetsimFrontendStatsR\rfrontend\
-    Stats\x12B\n\x0cdevice_stats\x18\x07\x20\x03(\x0b2\x1f.netsim.stats.Nets\
-    imDeviceStatsR\x0bdeviceStats\x126\n\nwifi_stats\x18\x08\x20\x01(\x0b2\
-    \x17.netsim.stats.WifiStatsR\twifiStats\
+    rs\x18\x06\x20\x01(\x05R\x0botherErrors\x12&\n\x0fhwsim_frames_rx\x18\
+    \x07\x20\x01(\x05R\rhwsimFramesRx\x12&\n\x0fhwsim_frames_tx\x18\x08\x20\
+    \x01(\x05R\rhwsimFramesTx\x12,\n\x12network_packets_tx\x18\t\x20\x01(\
+    \x05R\x10networkPacketsTx\x12,\n\x12network_packets_rx\x18\n\x20\x01(\
+    \x05R\x10networkPacketsRx\x12*\n\x11hostapd_frames_tx\x18\x0b\x20\x01(\
+    \x05R\x0fhostapdFramesTx\x12*\n\x11hostapd_frames_rx\x18\x0c\x20\x01(\
+    \x05R\x0fhostapdFramesRx\x12*\n\x11wmedium_frames_tx\x18\r\x20\x01(\x05R\
+    \x0fwmediumFramesTx\x129\n\x19wmedium_unicast_frames_tx\x18\x0e\x20\x01(\
+    \x05R\x16wmediumUnicastFramesTx\x12$\n\x0emgmt_frames_rx\x18\x0f\x20\x01\
+    (\x05R\x0cmgmtFramesRx\x12\x1d\n\nmdns_count\x18\x10\x20\x01(\x05R\tmdns\
+    Count\"\xae\x03\n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\x01(\
+    \x04R\x0cdurationSecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\x0bde\
+    viceCount\x126\n\x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\x15pea\
+    kConcurrentDevices\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\x1e.netsi\
+    m.stats.NetsimRadioStatsR\nradioStats\x12\x18\n\x07version\x18\x05\x20\
+    \x01(\tR\x07version\x12H\n\x0efrontend_stats\x18\x06\x20\x01(\x0b2!.nets\
+    im.stats.NetsimFrontendStatsR\rfrontendStats\x12B\n\x0cdevice_stats\x18\
+    \x07\x20\x03(\x0b2\x1f.netsim.stats.NetsimDeviceStatsR\x0bdeviceStats\
+    \x126\n\nwifi_stats\x18\x08\x20\x01(\x0b2\x17.netsim.stats.WifiStatsR\tw\
+    ifiStats\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
