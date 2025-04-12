@@ -14,6 +14,7 @@
 
 /// LibSlirp Interface for Network Simulation
 use crate::get_runtime;
+use crate::wifi::error::WifiResult;
 
 use bytes::Bytes;
 use http_proxy::Manager;
@@ -23,10 +24,7 @@ use libslirp_rs::libslirp_config::{lookup_host_dns, SlirpConfig};
 use netsim_proto::config::SlirpOptions as ProtoSlirpOptions;
 use std::sync::mpsc;
 
-pub fn slirp_run(
-    opt: ProtoSlirpOptions,
-    tx_bytes: mpsc::Sender<Bytes>,
-) -> anyhow::Result<LibSlirp> {
+pub fn slirp_run(opt: ProtoSlirpOptions, tx_bytes: mpsc::Sender<Bytes>) -> WifiResult<LibSlirp> {
     // TODO: Convert ProtoSlirpOptions to SlirpConfig.
     let http_proxy = Some(opt.http_proxy).filter(|s| !s.is_empty());
     let (proxy_manager, tx_proxy_bytes) = if let Some(proxy) = http_proxy {

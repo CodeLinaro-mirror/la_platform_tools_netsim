@@ -18,8 +18,8 @@
 /// for logging 802.11 frames.
 ///
 /// See https://www.radiotap.org/
+use crate::wifi::error::{WifiError, WifiResult};
 use crate::wifi::frame::Frame;
-use anyhow::anyhow;
 use log::info;
 use netsim_packets::mac80211_hwsim::{HwsimCmd, HwsimMsg};
 use pdl_runtime::Packet;
@@ -54,7 +54,7 @@ enum HwsimCmdEnum {
     DelMacAddr,
 }
 
-fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
+fn parse_hwsim_cmd(packet: &[u8]) -> WifiResult<HwsimCmdEnum> {
     let hwsim_msg = HwsimMsg::decode_full(packet)?;
     match hwsim_msg.hwsim_hdr.hwsim_cmd {
         HwsimCmd::Frame => {
@@ -62,7 +62,10 @@ fn parse_hwsim_cmd(packet: &[u8]) -> anyhow::Result<HwsimCmdEnum> {
             Ok(HwsimCmdEnum::Frame(Box::new(frame)))
         }
         HwsimCmd::TxInfoFrame => Ok(HwsimCmdEnum::TxInfoFrame),
-        _ => Err(anyhow!("Unknown HwsimMsg cmd={:?}", hwsim_msg.hwsim_hdr.hwsim_cmd)),
+        _ => Err(WifiError::Other(format!(
+            "Unknown HwsimMsg cmd={:?}",
+            hwsim_msg.hwsim_hdr.hwsim_cmd
+        ))),
     }
 }
 
@@ -77,7 +80,7 @@ pub fn into_pcap(packet: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-pub fn frame_into_pcap(frame: Frame) -> anyhow::Result<Vec<u8>> {
+pub fn frame_into_pcap(frame: Frame) -> WifiResult<Vec<u8>> {
     // Create an instance of the RadiotapHeader with fields for
     // Channel and Signal.  In the future add more fields from the
     // Frame.
