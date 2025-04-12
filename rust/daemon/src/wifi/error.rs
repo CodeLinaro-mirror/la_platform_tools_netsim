@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Wi-Fi Error Handling
+//!
+//! This module defines the `WifiError` enum, which represents various error conditions that can occur
+//! within the Wi-Fi module. It also provides a `WifiResult` type alias for convenient error
+//! handling.
 use pdl_runtime::{DecodeError, EncodeError};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum WifiError {
-    #[cfg(not(feature = "cuttlefish"))]
     /// Errors related to the hostapd.
     Hostapd(String),
     /// Errors related to network connectivity (e.g., slirp).
@@ -34,7 +38,6 @@ pub enum WifiError {
 impl std::fmt::Display for WifiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            #[cfg(not(feature = "cuttlefish"))]
             WifiError::Hostapd(msg) => write!(f, "Hostapd error: {}", msg),
             WifiError::Network(msg) => write!(f, "Network error: {}", msg),
             WifiError::Client(msg) => write!(f, "Client error: {}", msg),
