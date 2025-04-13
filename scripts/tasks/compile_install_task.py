@@ -18,7 +18,7 @@ from pathlib import Path
 import platform
 
 from tasks.task import Task
-from utils import (CMAKE, run)
+from utils import (CMAKE, move_contents, run, WINDOWS_TMP_OBJS_PATH)
 
 
 class CompileInstallTask(Task):
@@ -35,9 +35,28 @@ class CompileInstallTask(Task):
       target += "/strip"
 
     # Build
-    run(
+    if platform.system() == "Windows":
+      try:
+        # Use mkdir() with parents=True and exist_ok=True
+        WINDOWS_TMP_OBJS_PATH.mkdir(parents=True, exist_ok=True)
+        print(f"Directory '{WINDOWS_TMP_OBJS_PATH}' ensured (created or already exists).")
+
+      except OSError as e:
+        # Catch potential OS errors (like permission issues)
+        print(f"Error creating directory '{WINDOWS_TMP_OBJS_PATH}': {e}")
+      run(
+        [CMAKE, "--build", WINDOWS_TMP_OBJS_PATH, "--target", target],
+        self.env,
+        "bld",
+      )
+      move_contents(
+        WINDOWS_TMP_OBJS_PATH,
+        self.out,
+      )
+    else:
+      run(
         [CMAKE, "--build", self.out, "--target", target],
         self.env,
         "bld",
-    )
+      )
     return True

@@ -14,6 +14,7 @@
 
 use crate::devices::chip::ChipIdentifier;
 use crate::get_runtime;
+use crate::wifi::error::WifiResult;
 use crate::wifi::hostapd;
 use crate::wifi::libslirp;
 #[cfg(not(feature = "cuttlefish"))]
@@ -21,7 +22,6 @@ use crate::wifi::mdns_forwarder;
 use crate::wifi::medium::Medium;
 use crate::wireless::wifi_chip::{CreateParams, WifiChip};
 use crate::wireless::{packet::handle_response, WirelessChipImpl};
-use anyhow;
 use bytes::Bytes;
 use log::{info, warn};
 use netsim_proto::config::WiFi as WiFiConfig;
@@ -46,7 +46,7 @@ pub fn wifi_start(
     let network: Box<dyn Network> = if wifi_tap.is_some() {
         todo!();
     } else {
-        SlirpNetwork::start(config, tx_ieee8023_response_clone)
+        SlirpNetwork::start(config, tx_ieee8023_response_clone).unwrap()
     };
 
     let hostapd_opt = wifi_config.hostapd_options.as_ref().unwrap_or_default().clone();
@@ -97,12 +97,10 @@ impl SlirpNetwork {
     fn start(
         wifi_config: &WiFiConfig,
         tx_ieee8023_response: mpsc::Sender<Bytes>,
-    ) -> Box<dyn Network> {
+    ) -> WifiResult<Box<dyn Network>> {
         let slirp_opt = wifi_config.slirp_options.as_ref().unwrap_or_default().clone();
-        let slirp = libslirp::slirp_run(slirp_opt, tx_ieee8023_response)
-            .map_err(|e| warn!("Failed to run libslirp. {e}"))
-            .unwrap();
-        Box::new(SlirpNetwork { slirp })
+        let slirp = libslirp::slirp_run(slirp_opt, tx_ieee8023_response)?;
+        Ok(Box::new(SlirpNetwork { slirp }))
     }
 }
 
@@ -146,7 +144,7 @@ fn start_threads(
     rx_ieee80211_response: tokio_mpsc::Receiver<Bytes>,
     tx_ieee8023_response: mpsc::Sender<Bytes>,
     forward_host_mdns: bool,
-) -> anyhow::Result<()> {
+) -> WifiResult<()> {
     start_request_thread(wifi_manager.clone(), rx_request)?;
     start_ieee8023_response_thread(wifi_manager.clone(), rx_ieee8023_response)?;
     start_ieee80211_response_thread(wifi_manager.clone(), rx_ieee80211_response)?;
@@ -159,7 +157,7 @@ fn start_threads(
 fn start_request_thread(
     wifi_manager: Arc<WifiManager>,
     rx_request: mpsc::Receiver<(u32, Bytes)>,
-) -> anyhow::Result<()> {
+) -> WifiResult<()> {
     let hostapd = wifi_manager.hostapd.clone(); // Arc clone for thread
     thread::Builder::new().name("Wi-Fi HwsimMsg request".to_string()).spawn(move || {
         const POLL_INTERVAL: Duration = Duration::from_millis(1);
@@ -218,7 +216,7 @@ fn start_request_thread(
 fn start_ieee8023_response_thread(
     wifi_manager: Arc<WifiManager>,
     rx_ieee8023_response: mpsc::Receiver<Bytes>,
-) -> anyhow::Result<()> {
+) -> WifiResult<()> {
     thread::Builder::new().name("Wi-Fi IEEE802.3 response".to_string()).spawn(move || {
         for packet in rx_ieee8023_response {
             wifi_manager.medium.process_ieee8023_response(&packet);
@@ -234,7 +232,7 @@ fn start_ieee8023_response_thread(
 fn start_ieee80211_response_thread(
     wifi_manager: Arc<WifiManager>,
     mut rx_ieee80211_response: tokio_mpsc::Receiver<Bytes>,
-) -> anyhow::Result<()> {
+) -> WifiResult<()> {
     thread::Builder::new().name("Wi-Fi IEEE802.11 response".to_string()).spawn(move || {
         while let Some(packet) = get_runtime().block_on(rx_ieee80211_response.recv()) {
             wifi_manager.medium.process_ieee80211_response(&packet);
@@ -244,12 +242,12 @@ fn start_ieee80211_response_thread(
 }
 
 #[cfg(feature = "cuttlefish")]
-fn start_mdns_forwarder_thread(_tx_ieee8023_response: mpsc::Sender<Bytes>) -> anyhow::Result<()> {
+fn start_mdns_forwarder_thread(_tx_ieee8023_response: mpsc::Sender<Bytes>) -> WifiResult<()> {
     Ok(())
 }
 
 #[cfg(not(feature = "cuttlefish"))]
-fn start_mdns_forwarder_thread(tx_ieee8023_response: mpsc::Sender<Bytes>) -> anyhow::Result<()> {
+fn start_mdns_forwarder_thread(tx_ieee8023_response: mpsc::Sender<Bytes>) -> WifiResult<()> {
     info!("Start mDNS forwarder thread");
     thread::Builder::new().name("Wi-Fi mDNS forwarder".to_string()).spawn(move || {
         if let Err(e) = mdns_forwarder::run_mdns_forwarder(tx_ieee8023_response) {
