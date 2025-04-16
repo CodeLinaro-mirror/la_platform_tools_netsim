@@ -1286,6 +1286,8 @@ pub enum ControllerPreset {
     LAIRD_BL654 = 1,
     // @@protoc_insertion_point(enum_value:rootcanal.configuration.ControllerPreset.CSR_RCK_PTS_DONGLE)
     CSR_RCK_PTS_DONGLE = 2,
+    // @@protoc_insertion_point(enum_value:rootcanal.configuration.ControllerPreset.INTEL_BE200)
+    INTEL_BE200 = 3,
 }
 
 impl ::protobuf::Enum for ControllerPreset {
@@ -1300,6 +1302,7 @@ impl ::protobuf::Enum for ControllerPreset {
             0 => ::std::option::Option::Some(ControllerPreset::DEFAULT),
             1 => ::std::option::Option::Some(ControllerPreset::LAIRD_BL654),
             2 => ::std::option::Option::Some(ControllerPreset::CSR_RCK_PTS_DONGLE),
+            3 => ::std::option::Option::Some(ControllerPreset::INTEL_BE200),
             _ => ::std::option::Option::None
         }
     }
@@ -1308,6 +1311,7 @@ impl ::protobuf::Enum for ControllerPreset {
         ControllerPreset::DEFAULT,
         ControllerPreset::LAIRD_BL654,
         ControllerPreset::CSR_RCK_PTS_DONGLE,
+        ControllerPreset::INTEL_BE200,
     ];
 }
 
@@ -1359,9 +1363,9 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x19\n\x08tcp_port\x18\x01\x20\x02(\x05R\x07tcpPort\x12I\n\rconfiguratio\
     n\x18\x02\x20\x01(\x0b2#.rootcanal.configuration.ControllerR\rconfigurat\
     ion\"R\n\rConfiguration\x12A\n\ntcp_server\x18\x01\x20\x03(\x0b2\".rootc\
-    anal.configuration.TcpServerR\ttcpServer*H\n\x10ControllerPreset\x12\x0b\
+    anal.configuration.TcpServerR\ttcpServer*Y\n\x10ControllerPreset\x12\x0b\
     \n\x07DEFAULT\x10\0\x12\x0f\n\x0bLAIRD_BL654\x10\x01\x12\x16\n\x12CSR_RC\
-    K_PTS_DONGLE\x10\x02B\x02H\x02\
+    K_PTS_DONGLE\x10\x02\x12\x0f\n\x0bINTEL_BE200\x10\x03B\x02H\x02\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
