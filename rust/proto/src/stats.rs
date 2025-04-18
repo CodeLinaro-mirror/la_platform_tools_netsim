@@ -1782,6 +1782,10 @@ pub struct WifiStats {
     pub mgmt_frames_rx: ::std::option::Option<i32>,
     // @@protoc_insertion_point(field:netsim.stats.WifiStats.mdns_count)
     pub mdns_count: ::std::option::Option<i32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.max_download_throughput)
+    pub max_download_throughput: ::std::option::Option<f32>,
+    // @@protoc_insertion_point(field:netsim.stats.WifiStats.max_upload_throughput)
+    pub max_upload_throughput: ::std::option::Option<f32>,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.stats.WifiStats.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -2102,8 +2106,46 @@ impl WifiStats {
         self.mdns_count = ::std::option::Option::Some(v);
     }
 
+    // optional float max_download_throughput = 17;
+
+    pub fn max_download_throughput(&self) -> f32 {
+        self.max_download_throughput.unwrap_or(0.)
+    }
+
+    pub fn clear_max_download_throughput(&mut self) {
+        self.max_download_throughput = ::std::option::Option::None;
+    }
+
+    pub fn has_max_download_throughput(&self) -> bool {
+        self.max_download_throughput.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_max_download_throughput(&mut self, v: f32) {
+        self.max_download_throughput = ::std::option::Option::Some(v);
+    }
+
+    // optional float max_upload_throughput = 18;
+
+    pub fn max_upload_throughput(&self) -> f32 {
+        self.max_upload_throughput.unwrap_or(0.)
+    }
+
+    pub fn clear_max_upload_throughput(&mut self) {
+        self.max_upload_throughput = ::std::option::Option::None;
+    }
+
+    pub fn has_max_upload_throughput(&self) -> bool {
+        self.max_upload_throughput.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_max_upload_throughput(&mut self, v: f32) {
+        self.max_upload_throughput = ::std::option::Option::Some(v);
+    }
+
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(16);
+        let mut fields = ::std::vec::Vec::with_capacity(18);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "hostapd_errors",
@@ -2185,6 +2227,16 @@ impl WifiStats {
             |m: &WifiStats| { &m.mdns_count },
             |m: &mut WifiStats| { &mut m.mdns_count },
         ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "max_download_throughput",
+            |m: &WifiStats| { &m.max_download_throughput },
+            |m: &mut WifiStats| { &mut m.max_download_throughput },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "max_upload_throughput",
+            |m: &WifiStats| { &m.max_upload_throughput },
+            |m: &mut WifiStats| { &mut m.max_upload_throughput },
+        ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<WifiStats>(
             "WifiStats",
             fields,
@@ -2251,6 +2303,12 @@ impl ::protobuf::Message for WifiStats {
                 128 => {
                     self.mdns_count = ::std::option::Option::Some(is.read_int32()?);
                 },
+                141 => {
+                    self.max_download_throughput = ::std::option::Option::Some(is.read_float()?);
+                },
+                149 => {
+                    self.max_upload_throughput = ::std::option::Option::Some(is.read_float()?);
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -2311,6 +2369,12 @@ impl ::protobuf::Message for WifiStats {
         if let Some(v) = self.mdns_count {
             my_size += ::protobuf::rt::int32_size(16, v);
         }
+        if let Some(v) = self.max_download_throughput {
+            my_size += 2 + 4;
+        }
+        if let Some(v) = self.max_upload_throughput {
+            my_size += 2 + 4;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -2365,6 +2429,12 @@ impl ::protobuf::Message for WifiStats {
         if let Some(v) = self.mdns_count {
             os.write_int32(16, v)?;
         }
+        if let Some(v) = self.max_download_throughput {
+            os.write_float(17, v)?;
+        }
+        if let Some(v) = self.max_upload_throughput {
+            os.write_float(18, v)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -2398,6 +2468,8 @@ impl ::protobuf::Message for WifiStats {
         self.wmedium_unicast_frames_tx = ::std::option::Option::None;
         self.mgmt_frames_rx = ::std::option::Option::None;
         self.mdns_count = ::std::option::Option::None;
+        self.max_download_throughput = ::std::option::Option::None;
+        self.max_upload_throughput = ::std::option::Option::None;
         self.special_fields.clear();
     }
 
@@ -2419,6 +2491,8 @@ impl ::protobuf::Message for WifiStats {
             wmedium_unicast_frames_tx: ::std::option::Option::None,
             mgmt_frames_rx: ::std::option::Option::None,
             mdns_count: ::std::option::Option::None,
+            max_download_throughput: ::std::option::Option::None,
+            max_upload_throughput: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -2819,7 +2893,7 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     sion\x12\x1f\n\x0bsdk_version\x18\x04\x20\x01(\tR\nsdkVersion\x12\x19\n\
     \x08build_id\x18\x05\x20\x01(\tR\x07buildId\x12\x18\n\x07variant\x18\x06\
     \x20\x01(\tR\x07variant\x12\x12\n\x04arch\x18\x07\x20\x01(\tR\x04arch\"\
-    \xa5\x05\n\tWifiStats\x12%\n\x0ehostapd_errors\x18\x01\x20\x01(\x05R\rho\
+    \x91\x06\n\tWifiStats\x12%\n\x0ehostapd_errors\x18\x01\x20\x01(\x05R\rho\
     stapdErrors\x12%\n\x0enetwork_errors\x18\x02\x20\x01(\x05R\rnetworkError\
     s\x12#\n\rclient_errors\x18\x03\x20\x01(\x05R\x0cclientErrors\x12!\n\x0c\
     frame_errors\x18\x04\x20\x01(\x05R\x0bframeErrors\x12/\n\x13transmission\
@@ -2834,16 +2908,18 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x0fwmediumFramesTx\x129\n\x19wmedium_unicast_frames_tx\x18\x0e\x20\x01(\
     \x05R\x16wmediumUnicastFramesTx\x12$\n\x0emgmt_frames_rx\x18\x0f\x20\x01\
     (\x05R\x0cmgmtFramesRx\x12\x1d\n\nmdns_count\x18\x10\x20\x01(\x05R\tmdns\
-    Count\"\xae\x03\n\x0bNetsimStats\x12#\n\rduration_secs\x18\x01\x20\x01(\
-    \x04R\x0cdurationSecs\x12!\n\x0cdevice_count\x18\x02\x20\x01(\x05R\x0bde\
-    viceCount\x126\n\x17peak_concurrent_devices\x18\x03\x20\x01(\x05R\x15pea\
-    kConcurrentDevices\x12?\n\x0bradio_stats\x18\x04\x20\x03(\x0b2\x1e.netsi\
-    m.stats.NetsimRadioStatsR\nradioStats\x12\x18\n\x07version\x18\x05\x20\
-    \x01(\tR\x07version\x12H\n\x0efrontend_stats\x18\x06\x20\x01(\x0b2!.nets\
-    im.stats.NetsimFrontendStatsR\rfrontendStats\x12B\n\x0cdevice_stats\x18\
-    \x07\x20\x03(\x0b2\x1f.netsim.stats.NetsimDeviceStatsR\x0bdeviceStats\
-    \x126\n\nwifi_stats\x18\x08\x20\x01(\x0b2\x17.netsim.stats.WifiStatsR\tw\
-    ifiStats\
+    Count\x126\n\x17max_download_throughput\x18\x11\x20\x01(\x02R\x15maxDown\
+    loadThroughput\x122\n\x15max_upload_throughput\x18\x12\x20\x01(\x02R\x13\
+    maxUploadThroughput\"\xae\x03\n\x0bNetsimStats\x12#\n\rduration_secs\x18\
+    \x01\x20\x01(\x04R\x0cdurationSecs\x12!\n\x0cdevice_count\x18\x02\x20\
+    \x01(\x05R\x0bdeviceCount\x126\n\x17peak_concurrent_devices\x18\x03\x20\
+    \x01(\x05R\x15peakConcurrentDevices\x12?\n\x0bradio_stats\x18\x04\x20\
+    \x03(\x0b2\x1e.netsim.stats.NetsimRadioStatsR\nradioStats\x12\x18\n\x07v\
+    ersion\x18\x05\x20\x01(\tR\x07version\x12H\n\x0efrontend_stats\x18\x06\
+    \x20\x01(\x0b2!.netsim.stats.NetsimFrontendStatsR\rfrontendStats\x12B\n\
+    \x0cdevice_stats\x18\x07\x20\x03(\x0b2\x1f.netsim.stats.NetsimDeviceStat\
+    sR\x0bdeviceStats\x126\n\nwifi_stats\x18\x08\x20\x01(\x0b2\x17.netsim.st\
+    ats.WifiStatsR\twifiStats\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
