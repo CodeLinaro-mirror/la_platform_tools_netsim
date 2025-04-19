@@ -199,10 +199,7 @@ fn start_request_thread(
                                     wifi_stats_clone.incr_hostapd_frames_tx();
                                     if let Err(err) = hostapd_clone.input(ieee80211).await {
                                         wifi_stats_clone.log_and_incr_err_count(
-                                            &WifiError::Hostapd(format!(
-                                                "Failed to call hostapd input: {}",
-                                                err
-                                            )),
+                                            &WifiError::Hostapd(format!("Failed to call hostapd input from client: {chip_id}: {err}")),
                                         );
                                     }
                                 });
@@ -215,7 +212,7 @@ fn start_request_thread(
                                     }
                                     Err(err) => {
                                         wifi_stats.log_and_incr_err_count(&WifiError::Frame(
-                                            format!("Failed to convert 802.11 to 802.3: {}", err),
+                                            format!("Failed to convert 802.11 to 802.3 from client: {chip_id}: {err}"),
                                         ));
                                     }
                                 }
