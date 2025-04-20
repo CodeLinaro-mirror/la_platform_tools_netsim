@@ -270,7 +270,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
 
     // Start radio facades
     wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
-    wireless::wifi_manager::wifi_start(
+    let wifi_stats = wireless::wifi_manager::wifi_start(
         &config.wifi,
         args.forward_host_mdns,
         args.wifi,
@@ -337,7 +337,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
 
     // Start Session Event listener
     let mut session = Session::new();
-    session.start(session_events_rx);
+    session.start(session_events_rx, wifi_stats.clone());
 
     // Pass all event receivers to each modules
     let capture = config.capture.enabled.unwrap_or_default();
@@ -360,7 +360,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     service.shut_down();
 
     // write out session stats
-    let _ = session.stop();
+    let _ = session.stop(wifi_stats);
 
     // zip all artifacts
     if let Err(err) = zip_artifacts() {

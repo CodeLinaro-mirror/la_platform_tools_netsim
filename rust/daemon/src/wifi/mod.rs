@@ -26,3 +26,4 @@ pub(crate) mod libslirp;
 pub(crate) mod mdns_forwarder;
 pub(crate) mod medium;
 pub(crate) mod radiotap;
+pub(crate) mod stats;

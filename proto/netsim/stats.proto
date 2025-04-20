@@ -91,9 +91,10 @@ message NetsimDeviceStats {
 
 // Detailed Wi-Fi stats
 message WifiStats {
+  // === Error Counters ===
   // Errors related to the hostapd.
   optional int32 hostapd_errors = 1;
-  // Errors related to network connectivity (e.g., slirp).
+  // Errors related to network connectivity (e.g., Slirp/Tap interface).
   optional int32 network_errors = 2;
   // Errors related to client-specific operations or state.
   optional int32 client_errors = 3;
@@ -105,7 +106,29 @@ message WifiStats {
   // Other uncategorized errors.
   optional int32 other_errors = 6;
 
-  // TODO: Wi-Fi usage statistics
+  // === Core Traffic Flow & Type Counters ===
+  // 802.11 frames received from clients via Hwsim messages.
+  optional int32 hwsim_frames_rx = 7;
+  // 802.11 frames transmitted to clients via Hwsim messages.
+  optional int32 hwsim_frames_tx = 8;
+  // L3 packets transmitted to external network (e.g., Slirp).
+  optional int32 network_packets_tx = 9;
+  // L3 packets received from external network.
+  optional int32 network_packets_rx = 10;
+  // 802.11 frames transmitted to hostapd process.
+  optional int32 hostapd_frames_tx = 11;
+  // 802.11 frames received from hostapd process.
+  optional int32 hostapd_frames_rx = 12;
+  // Station-to-station 802.11 frames transmitted via medium.
+  optional int32 wmedium_frames_tx = 13;
+  // Unicast 802.11 frames transmitted to another station via medium.
+  optional int32 wmedium_unicast_frames_tx = 14;
+  // 802.11 Management frames received by medium.
+  optional int32 mgmt_frames_rx = 15;
+
+  // === Specific Protocol Counters ===
+  // mDNS frames count.
+  optional int32 mdns_count = 16;
 }
 
 // Statistics for a netsim session.
