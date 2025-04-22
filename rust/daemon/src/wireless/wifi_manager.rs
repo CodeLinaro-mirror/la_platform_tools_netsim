@@ -25,6 +25,7 @@ use crate::wireless::wifi_chip::{CreateParams, WifiChip};
 use crate::wireless::{packet::handle_response, WirelessChipImpl};
 use bytes::Bytes;
 use log::{info, warn};
+use netsim_packets::ieee80211;
 use netsim_proto::config::WiFi as WiFiConfig;
 use protobuf::MessageField;
 use std::sync::{mpsc, Arc, OnceLock};
@@ -208,6 +209,8 @@ fn start_request_thread(
                                 match processor.get_ieee80211().to_ieee8023() {
                                     Ok(ethernet_frame) => {
                                         wifi_stats.incr_network_packets_tx();
+                                        // Record throughput. Payload size is ieee802.3 frame len - header len
+                                        wifi_stats.record_upload_bytes(ethernet_frame.len() - ieee80211::Ieee8023::HDR_LEN);
                                         wifi_manager.network.input(ethernet_frame.into())
                                     }
                                     Err(err) => {
@@ -250,6 +253,8 @@ fn start_ieee8023_response_thread(
     thread::Builder::new().name("Wi-Fi IEEE802.3 response".to_string()).spawn(move || {
         for packet in rx_ieee8023_response {
             wifi_stats.incr_network_packets_rx();
+            // Record throughput. Actual data size is ieee802.3 frame len - header len
+            wifi_stats.record_download_bytes(packet.len() - ieee80211::Ieee8023::HDR_LEN);
             if let Err(e) = wifi_manager.medium.process_ieee8023_response(&packet) {
                 wifi_stats.log_and_incr_err_count(&e);
             }
