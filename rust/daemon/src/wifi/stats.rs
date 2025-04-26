@@ -16,19 +16,21 @@
 //! This module provides structures and functions for tracking and managing Wi-Fi related statistics.
 
 use crate::wifi::error::WifiError;
-use log::warn;
+use log::{debug, warn};
 use netsim_proto::stats::WifiStats as ProtoWifiStats;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Default)]
 pub struct WifiStats {
     counts: Arc<WifiCounts>,
+    values: Arc<WifiValues>,
 }
 
 impl Clone for WifiStats {
     fn clone(&self) -> Self {
-        WifiStats { counts: self.counts.clone() }
+        WifiStats { counts: self.counts.clone(), values: self.values.clone() }
     }
 }
 
@@ -58,10 +60,22 @@ struct WifiCounts {
     mdns_count: AtomicU32,
 }
 
+#[derive(Debug, Default)]
+struct ThroughputValues {
+    max_throughput: AtomicU32, // Max throughput in Mbits/sec
+    window_start: AtomicU64,   // Start of the current window as milliseconds since epoch
+    window_bytes: AtomicU64,   // Total number of bytes in the current window
+}
+
+#[derive(Debug, Default)]
+struct WifiValues {
+    // Fields for throughput values
+    download_throughput: ThroughputValues,
+    upload_throughput: ThroughputValues,
+}
+
 // Define the macro to generate incrementer methods
 macro_rules! impl_incr_method {
-    // $method: Name of the function to generate (e.g., incr_hwsim_frames_rx)
-    // $field: Name of the field in WifiCounts to increment (e.g., hwsim_frames_rx)
     ($method:ident, $field:ident) => {
         pub fn $method(&self) {
             self.counts.$field.fetch_add(1, Ordering::Relaxed);
@@ -70,6 +84,48 @@ macro_rules! impl_incr_method {
 }
 
 impl WifiStats {
+    fn record_throughput(&self, throughput_values: &ThroughputValues, bytes: usize, name: &str) {
+        const WINDOW_MILLIS: u64 = Duration::from_secs(5).as_millis() as u64;
+        let now =
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let start_time = throughput_values.window_start.load(Ordering::Relaxed);
+
+        if start_time == 0 {
+            // First packet, initialize the window start time and bytes
+            throughput_values.window_start.store(now, Ordering::Relaxed);
+            throughput_values.window_bytes.store(bytes as u64, Ordering::Relaxed);
+        } else if now.saturating_sub(start_time) < WINDOW_MILLIS {
+            // Within the current window, just add the bytes
+            throughput_values.window_bytes.fetch_add(bytes as u64, Ordering::Relaxed);
+        } else {
+            // Window expired, calculate throughput and reset window
+            let window_bytes = throughput_values.window_bytes.load(Ordering::Relaxed);
+            let elapsed = now.saturating_sub(start_time) as f64 / 1000.0;
+            let current_throughput = (window_bytes as f64 / elapsed) as u32;
+            debug!("{} Throughput Result: Interval: {:.2} sec, Transfer: {:.2} MBytes, Current Throughput: {:.1} Mbits/sec, Previous Max Throughput: {:.1} Mbits/s",
+                name,
+                elapsed,
+                (window_bytes as f64) / (1024.0 * 1024.0),
+                Self::bytes_ps_to_mbps(current_throughput),
+                Self::bytes_ps_to_mbps(throughput_values.max_throughput.load(Ordering::Relaxed))
+            );
+            // Store current max throughput
+            throughput_values.max_throughput.fetch_max(current_throughput, Ordering::Relaxed);
+
+            // Start a new window with the current packet's bytes
+            throughput_values.window_start.store(now, Ordering::Relaxed);
+            throughput_values.window_bytes.store(bytes as u64, Ordering::Relaxed);
+        }
+    }
+
+    pub fn record_download_bytes(&self, bytes: usize) {
+        self.record_throughput(&self.values.download_throughput, bytes, "Download");
+    }
+
+    pub fn record_upload_bytes(&self, bytes: usize) {
+        self.record_throughput(&self.values.upload_throughput, bytes, "Upload");
+    }
+
     /// Logs the error and increments the corresponding counter.
     pub fn log_and_incr_err_count(&self, error: &WifiError) {
         warn!("{}", error);
@@ -95,6 +151,11 @@ impl WifiStats {
     impl_incr_method!(incr_wmedium_unicast_frames_tx, wmedium_unicast_frames_tx);
     impl_incr_method!(incr_mgmt_frames_rx, mgmt_frames_rx);
     impl_incr_method!(incr_mdns_count, mdns_count);
+
+    /// Helper function to convert bytes per second to megabits per second.
+    pub fn bytes_ps_to_mbps(bytes_per_second: u32) -> f32 {
+        ((bytes_per_second as f64 * 8.0) / (1_000_000.0)) as f32
+    }
 }
 
 fn load_as_option_i32(counter: &AtomicU32) -> Option<i32> {
@@ -104,6 +165,9 @@ fn load_as_option_i32(counter: &AtomicU32) -> Option<i32> {
 impl From<&WifiStats> for ProtoWifiStats {
     fn from(wifi_stats: &WifiStats) -> Self {
         let counts = &wifi_stats.counts;
+        let values = &wifi_stats.values;
+        let to_mbps =
+            |bytes: &AtomicU32| Some(WifiStats::bytes_ps_to_mbps(bytes.load(Ordering::Relaxed)));
         ProtoWifiStats {
             // Errors
             hostapd_errors: load_as_option_i32(&counts.hostapd_error),
@@ -127,6 +191,9 @@ impl From<&WifiStats> for ProtoWifiStats {
             // Specific Protocols
             mdns_count: load_as_option_i32(&counts.mdns_count),
 
+            // Performance data
+            max_download_throughput: to_mbps(&values.download_throughput.max_throughput),
+            max_upload_throughput: to_mbps(&values.upload_throughput.max_throughput),
             ..Default::default()
         }
     }
