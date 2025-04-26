@@ -116,7 +116,12 @@ fn create_new<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<File> {
 }
 
 /// Write ports to ini file
-pub fn create_ini(instance_num: u16, grpc_port: u32, web_port: Option<u16>) -> std::io::Result<()> {
+pub fn create_ini(
+    instance_num: u16,
+    grpc_port: u32,
+    web_port: Option<u16>,
+    websocket_port: Option<u16>,
+) -> std::io::Result<()> {
     // Instantiate IniFile
     let filepath = get_ini_filepath(instance_num);
     let mut ini_file = IniFile::new(filepath);
@@ -124,6 +129,9 @@ pub fn create_ini(instance_num: u16, grpc_port: u32, web_port: Option<u16>) -> s
     // Write ports to ini file
     if let Some(num) = web_port {
         ini_file.insert("web.port", &num.to_string());
+    }
+    if let Some(num) = websocket_port {
+        ini_file.insert("ws.port", &num.to_string())
     }
     ini_file.insert("grpc.port", &grpc_port.to_string());
     ini_file.write()

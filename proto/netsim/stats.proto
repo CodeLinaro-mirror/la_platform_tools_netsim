@@ -129,6 +129,12 @@ message WifiStats {
   // === Specific Protocol Counters ===
   // mDNS frames count.
   optional int32 mdns_count = 16;
+
+  // === Performance Statistics ===
+  // Max Throughput from Internet to device(s) in Mbits per second
+  optional float max_download_throughput = 17;
+  // Max Throughput from device(s) to Internet in Mbits per second
+  optional float max_upload_throughput = 18;
 }
 
 // Statistics for a netsim session.
