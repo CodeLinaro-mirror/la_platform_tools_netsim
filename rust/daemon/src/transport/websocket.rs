@@ -35,7 +35,7 @@ use super::h4;
 use crate::openssl;
 
 /// Generate Sec-Websocket-Accept value from given Sec-Websocket-Key value
-fn generate_websocket_accept(websocket_key: String) -> String {
+pub fn generate_websocket_accept(websocket_key: String) -> String {
     let concat = websocket_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     let hashed = openssl::sha::sha1(concat.as_bytes());
     data_encoding::BASE64.encode(&hashed)

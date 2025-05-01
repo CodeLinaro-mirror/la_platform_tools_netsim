@@ -17,4 +17,4 @@ pub(crate) mod http_request;
 mod http_router;
 pub(crate) mod server;
 pub(crate) mod server_response;
-mod thread_pool;
+pub(crate) mod thread_pool;

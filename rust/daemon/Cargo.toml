@@ -1,6 +1,6 @@
 [package]
 name = "netsim-daemon"
-version = "0.3.53"
+version = "0.3.54"
 edition = "2021"
 build = "build.rs"
 
@@ -17,6 +17,7 @@ futures = "0.3.30"
 glam = { version = "0.25.0", features = ["libm"] }
 netsim-proto = { path = "../proto" }
 http = "0.2.9"
+httparse = "1.9.5"
 netsim-common = { path = "../common" }
 libslirp-rs = { path = "../libslirp-rs" }
 hostapd-rs = { path = "../hostapd-rs" }
