@@ -103,7 +103,7 @@ impl From<MacAddress> for [u8; 6] {
     }
 }
 
-struct Ieee8023<'a> {
+pub struct Ieee8023<'a> {
     destination: MacAddress,
     source: MacAddress,
     ethertype: EtherType,
