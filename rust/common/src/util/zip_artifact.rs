@@ -66,7 +66,7 @@ fn fetch_zip_files(root: &PathBuf) -> Result<Vec<PathBuf>> {
         .map(|e| e.path())
         .filter(|path| {
             path.is_file()
-                && path.file_name().and_then(|os_name| os_name.to_str()).map_or(false, |filename| {
+                && path.file_name().and_then(|os_name| os_name.to_str()).is_some_and(|filename| {
                     filename.starts_with("netsim_artifacts_") && filename.ends_with(".zip")
                 })
         })
