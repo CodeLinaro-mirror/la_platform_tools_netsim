@@ -62,6 +62,7 @@ impl Processor {
 
 #[derive(Clone)]
 struct Station {
+    // The station's client_id. Equivalent to the chip_id of the WifiChip
     client_id: u32,
     // Ieee80211 source address
     addr: MacAddress,
@@ -102,8 +103,9 @@ impl Client {
 
 pub struct Medium {
     callback: HwsimCmdCallback,
-    // Ieee80211 source address
+    // Map of Ieee80211 source address to Station struct
     stations: RwLock<HashMap<MacAddress, Arc<Station>>>,
+    // Map of client_id (equivalent to chip_id) to Client struct
     clients: RwLock<HashMap<u32, Client>>,
     // Simulate the re-transmission of frames sent to hostapd
     ap_simulation: bool,
@@ -166,14 +168,14 @@ impl Medium {
             .unwrap()
             .get(addr)
             .cloned()
-            .ok_or_else(|| WifiError::Client(format!("Station not found for address: {}", addr)))
+            .ok_or_else(|| WifiError::Client(format!("Station not found for address: {addr}")))
     }
 
     fn upsert_station(&self, client_id: u32, frame: &Frame) -> WifiResult<()> {
         let src_addr = frame.ieee80211.get_source();
-        let hwsim_addr = frame
-            .transmitter
-            .ok_or(WifiError::Frame("Missing transmitter attribute in frame".into()))?;
+        let hwsim_addr = frame.transmitter.ok_or(WifiError::Frame(format!(
+            "Missing transmitter attribute in frame for client: {client_id}"
+        )))?;
         self.stations.write().unwrap().entry(src_addr).or_insert_with(|| {
             info!(
                 "Insert station with client id {}, hwsimaddr: {}, \
@@ -305,27 +307,29 @@ impl Medium {
                     || frame.cookie.is_none()
                     || frame.tx_info.is_none()
                 {
-                    return Err(WifiError::Frame(
-                        "Missing Hwsim attributes for incoming packet".to_string(),
-                    ));
+                    return Err(WifiError::Frame(format!(
+                        "Missing Hwsim attributes for incoming packet for client: {client_id}"
+                    )));
                 }
                 // Use as receiver for outgoing HwsimMsg.
-                let hwsim_addr = frame
-                    .transmitter
-                    .ok_or(WifiError::Frame("Missing transmitter attribute in frame".into()))?;
-                let flags = frame
-                    .flags
-                    .ok_or(WifiError::Frame("Missing flags attribute in frame".into()))?;
-                let cookie = frame
-                    .cookie
-                    .ok_or(WifiError::Frame("Missing cookie attribute in frame".into()))?;
+                let hwsim_addr = frame.transmitter.ok_or(WifiError::Frame(format!(
+                    "Missing transmitter attribute in frame for client: {client_id}"
+                )))?;
+                let flags = frame.flags.ok_or(WifiError::Frame(format!(
+                    "Missing flags attribute in frame for client: {client_id}"
+                )))?;
+                let cookie = frame.cookie.ok_or(WifiError::Frame(format!(
+                    "Missing cookie attribute in frame for client: {client_id}"
+                )))?;
                 debug!(
                     "Frame chip {}, transmitter {}, flags {}, cookie {}, ieee80211 {}",
                     client_id, hwsim_addr, flags, cookie, frame.ieee80211
                 );
                 Ok(frame)
             }
-            _ => Err(WifiError::Frame(format!("Another command found {:?}", hwsim_msg))),
+            _ => Err(WifiError::Frame(format!(
+                "Another command found {hwsim_msg:?} for client: {client_id}"
+            ))),
         }
     }
 
@@ -429,12 +433,12 @@ impl Medium {
             .unwrap()
             .get(&client_id)
             .map(|c| c.enabled.load(Ordering::Relaxed))
-            .ok_or_else(|| WifiError::Client(format!("client {} is missing", client_id)))
+            .ok_or_else(|| WifiError::Client(format!("client {client_id} is missing")))
     }
 
     fn incr_tx(&self, client_id: u32) -> WifiResult<()> {
         self.clients.read().unwrap().get(&client_id).map_or(
-            Err(WifiError::Client(format!("client {} is missing for incr_tx", client_id))),
+            Err(WifiError::Client(format!("client {client_id} is missing for incr_tx"))),
             |c| {
                 c.tx_count.fetch_add(1, Ordering::Relaxed);
                 Ok(())
@@ -444,7 +448,7 @@ impl Medium {
 
     fn incr_rx(&self, client_id: u32) -> WifiResult<()> {
         self.clients.read().unwrap().get(&client_id).map_or(
-            Err(WifiError::Client(format!("client {} is missing for incr_rx", client_id))),
+            Err(WifiError::Client(format!("client {client_id} is missing for incr_rx"))),
             |c| {
                 c.rx_count.fetch_add(1, Ordering::Relaxed);
                 Ok(())
