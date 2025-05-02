@@ -64,6 +64,18 @@ service FrontendService {
 
   // Retrieve the contents of the packet capture as streaming bytes
   rpc GetCapture(GetCaptureRequest) returns (stream GetCaptureResponse);
+
+  // List all current RSSI Overrides on netsim.
+  rpc ListRssiOverride(google.protobuf.Empty)
+      returns (ListRssiOverrideResponse);
+
+  // Patch a Rssi Override for the specified link between two chips.
+  rpc PatchRssiOverride(PatchRssiOverrideRequest)
+      returns (google.protobuf.Empty);
+
+  // Delete a Rssi Override for the specified link between two chips.
+  rpc DeleteRssiOverride(DeleteRssiOverrideRequest)
+      returns (google.protobuf.Empty);
 }
 
 // Response of GetVersion.
@@ -188,4 +200,22 @@ message GetCaptureRequest {
 message GetCaptureResponse {
   // Max of 1024 bytes of capture file
   bytes capture_stream = 1;
+}
+
+// Request to add or modify a RssiOverride.
+message PatchRssiOverrideRequest {
+  // The RssiOverride data to apply.
+  netsim.model.RssiOverride rssi_override = 1;
+}
+
+// Request of RssiOverride.
+message DeleteRssiOverrideRequest {
+  // The specific link on which to delete the RSSI override.
+  netsim.model.Link link = 1;
+}
+
+// Response of ListRssiOverride
+message ListRssiOverrideResponse {
+  // Collection of current RSSI Overrides
+  repeated netsim.model.RssiOverride rssi_overrides = 1;
 }
