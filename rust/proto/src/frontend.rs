@@ -2033,45 +2033,45 @@ impl ::protobuf::reflect::ProtobufValue for GetCaptureResponse {
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:netsim.frontend.PatchRssiOverrideRequest)
-pub struct PatchRssiOverrideRequest {
+// @@protoc_insertion_point(message:netsim.frontend.ListLinkResponse)
+pub struct ListLinkResponse {
     // message fields
-    // @@protoc_insertion_point(field:netsim.frontend.PatchRssiOverrideRequest.rssi_override)
-    pub rssi_override: ::protobuf::MessageField<super::model::RssiOverride>,
+    // @@protoc_insertion_point(field:netsim.frontend.ListLinkResponse.links)
+    pub links: ::std::vec::Vec<super::model::Link>,
     // special fields
-    // @@protoc_insertion_point(special_field:netsim.frontend.PatchRssiOverrideRequest.special_fields)
+    // @@protoc_insertion_point(special_field:netsim.frontend.ListLinkResponse.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
-impl<'a> ::std::default::Default for &'a PatchRssiOverrideRequest {
-    fn default() -> &'a PatchRssiOverrideRequest {
-        <PatchRssiOverrideRequest as ::protobuf::Message>::default_instance()
+impl<'a> ::std::default::Default for &'a ListLinkResponse {
+    fn default() -> &'a ListLinkResponse {
+        <ListLinkResponse as ::protobuf::Message>::default_instance()
     }
 }
 
-impl PatchRssiOverrideRequest {
-    pub fn new() -> PatchRssiOverrideRequest {
+impl ListLinkResponse {
+    pub fn new() -> ListLinkResponse {
         ::std::default::Default::default()
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
         let mut fields = ::std::vec::Vec::with_capacity(1);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
-        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::RssiOverride>(
-            "rssi_override",
-            |m: &PatchRssiOverrideRequest| { &m.rssi_override },
-            |m: &mut PatchRssiOverrideRequest| { &mut m.rssi_override },
+        fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
+            "links",
+            |m: &ListLinkResponse| { &m.links },
+            |m: &mut ListLinkResponse| { &mut m.links },
         ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<PatchRssiOverrideRequest>(
-            "PatchRssiOverrideRequest",
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<ListLinkResponse>(
+            "ListLinkResponse",
             fields,
             oneofs,
         )
     }
 }
 
-impl ::protobuf::Message for PatchRssiOverrideRequest {
-    const NAME: &'static str = "PatchRssiOverrideRequest";
+impl ::protobuf::Message for ListLinkResponse {
+    const NAME: &'static str = "ListLinkResponse";
 
     fn is_initialized(&self) -> bool {
         true
@@ -2081,7 +2081,7 @@ impl ::protobuf::Message for PatchRssiOverrideRequest {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 10 => {
-                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.rssi_override)?;
+                    self.links.push(is.read_message()?);
                 },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
@@ -2095,19 +2095,19 @@ impl ::protobuf::Message for PatchRssiOverrideRequest {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
-        if let Some(v) = self.rssi_override.as_ref() {
-            let len = v.compute_size();
+        for value in &self.links {
+            let len = value.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
-        }
+        };
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
-        if let Some(v) = self.rssi_override.as_ref() {
+        for v in &self.links {
             ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
-        }
+        };
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -2120,60 +2120,60 @@ impl ::protobuf::Message for PatchRssiOverrideRequest {
         &mut self.special_fields
     }
 
-    fn new() -> PatchRssiOverrideRequest {
-        PatchRssiOverrideRequest::new()
+    fn new() -> ListLinkResponse {
+        ListLinkResponse::new()
     }
 
     fn clear(&mut self) {
-        self.rssi_override.clear();
+        self.links.clear();
         self.special_fields.clear();
     }
 
-    fn default_instance() -> &'static PatchRssiOverrideRequest {
-        static instance: PatchRssiOverrideRequest = PatchRssiOverrideRequest {
-            rssi_override: ::protobuf::MessageField::none(),
+    fn default_instance() -> &'static ListLinkResponse {
+        static instance: ListLinkResponse = ListLinkResponse {
+            links: ::std::vec::Vec::new(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
     }
 }
 
-impl ::protobuf::MessageFull for PatchRssiOverrideRequest {
+impl ::protobuf::MessageFull for ListLinkResponse {
     fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
         static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("PatchRssiOverrideRequest").unwrap()).clone()
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("ListLinkResponse").unwrap()).clone()
     }
 }
 
-impl ::std::fmt::Display for PatchRssiOverrideRequest {
+impl ::std::fmt::Display for ListLinkResponse {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for PatchRssiOverrideRequest {
+impl ::protobuf::reflect::ProtobufValue for ListLinkResponse {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:netsim.frontend.DeleteRssiOverrideRequest)
-pub struct DeleteRssiOverrideRequest {
+// @@protoc_insertion_point(message:netsim.frontend.PatchLinkRequest)
+pub struct PatchLinkRequest {
     // message fields
-    // @@protoc_insertion_point(field:netsim.frontend.DeleteRssiOverrideRequest.link)
+    // @@protoc_insertion_point(field:netsim.frontend.PatchLinkRequest.link)
     pub link: ::protobuf::MessageField<super::model::Link>,
     // special fields
-    // @@protoc_insertion_point(special_field:netsim.frontend.DeleteRssiOverrideRequest.special_fields)
+    // @@protoc_insertion_point(special_field:netsim.frontend.PatchLinkRequest.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
-impl<'a> ::std::default::Default for &'a DeleteRssiOverrideRequest {
-    fn default() -> &'a DeleteRssiOverrideRequest {
-        <DeleteRssiOverrideRequest as ::protobuf::Message>::default_instance()
+impl<'a> ::std::default::Default for &'a PatchLinkRequest {
+    fn default() -> &'a PatchLinkRequest {
+        <PatchLinkRequest as ::protobuf::Message>::default_instance()
     }
 }
 
-impl DeleteRssiOverrideRequest {
-    pub fn new() -> DeleteRssiOverrideRequest {
+impl PatchLinkRequest {
+    pub fn new() -> PatchLinkRequest {
         ::std::default::Default::default()
     }
 
@@ -2182,19 +2182,19 @@ impl DeleteRssiOverrideRequest {
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::Link>(
             "link",
-            |m: &DeleteRssiOverrideRequest| { &m.link },
-            |m: &mut DeleteRssiOverrideRequest| { &mut m.link },
+            |m: &PatchLinkRequest| { &m.link },
+            |m: &mut PatchLinkRequest| { &mut m.link },
         ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<DeleteRssiOverrideRequest>(
-            "DeleteRssiOverrideRequest",
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<PatchLinkRequest>(
+            "PatchLinkRequest",
             fields,
             oneofs,
         )
     }
 }
 
-impl ::protobuf::Message for DeleteRssiOverrideRequest {
-    const NAME: &'static str = "DeleteRssiOverrideRequest";
+impl ::protobuf::Message for PatchLinkRequest {
+    const NAME: &'static str = "PatchLinkRequest";
 
     fn is_initialized(&self) -> bool {
         true
@@ -2243,8 +2243,8 @@ impl ::protobuf::Message for DeleteRssiOverrideRequest {
         &mut self.special_fields
     }
 
-    fn new() -> DeleteRssiOverrideRequest {
-        DeleteRssiOverrideRequest::new()
+    fn new() -> PatchLinkRequest {
+        PatchLinkRequest::new()
     }
 
     fn clear(&mut self) {
@@ -2252,8 +2252,8 @@ impl ::protobuf::Message for DeleteRssiOverrideRequest {
         self.special_fields.clear();
     }
 
-    fn default_instance() -> &'static DeleteRssiOverrideRequest {
-        static instance: DeleteRssiOverrideRequest = DeleteRssiOverrideRequest {
+    fn default_instance() -> &'static PatchLinkRequest {
+        static instance: PatchLinkRequest = PatchLinkRequest {
             link: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
@@ -2261,63 +2261,63 @@ impl ::protobuf::Message for DeleteRssiOverrideRequest {
     }
 }
 
-impl ::protobuf::MessageFull for DeleteRssiOverrideRequest {
+impl ::protobuf::MessageFull for PatchLinkRequest {
     fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
         static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("DeleteRssiOverrideRequest").unwrap()).clone()
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("PatchLinkRequest").unwrap()).clone()
     }
 }
 
-impl ::std::fmt::Display for DeleteRssiOverrideRequest {
+impl ::std::fmt::Display for PatchLinkRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for DeleteRssiOverrideRequest {
+impl ::protobuf::reflect::ProtobufValue for PatchLinkRequest {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
 #[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:netsim.frontend.ListRssiOverrideResponse)
-pub struct ListRssiOverrideResponse {
+// @@protoc_insertion_point(message:netsim.frontend.DeleteLinkRequest)
+pub struct DeleteLinkRequest {
     // message fields
-    // @@protoc_insertion_point(field:netsim.frontend.ListRssiOverrideResponse.rssi_overrides)
-    pub rssi_overrides: ::std::vec::Vec<super::model::RssiOverride>,
+    // @@protoc_insertion_point(field:netsim.frontend.DeleteLinkRequest.link)
+    pub link: ::protobuf::MessageField<super::model::Link>,
     // special fields
-    // @@protoc_insertion_point(special_field:netsim.frontend.ListRssiOverrideResponse.special_fields)
+    // @@protoc_insertion_point(special_field:netsim.frontend.DeleteLinkRequest.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
-impl<'a> ::std::default::Default for &'a ListRssiOverrideResponse {
-    fn default() -> &'a ListRssiOverrideResponse {
-        <ListRssiOverrideResponse as ::protobuf::Message>::default_instance()
+impl<'a> ::std::default::Default for &'a DeleteLinkRequest {
+    fn default() -> &'a DeleteLinkRequest {
+        <DeleteLinkRequest as ::protobuf::Message>::default_instance()
     }
 }
 
-impl ListRssiOverrideResponse {
-    pub fn new() -> ListRssiOverrideResponse {
+impl DeleteLinkRequest {
+    pub fn new() -> DeleteLinkRequest {
         ::std::default::Default::default()
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
         let mut fields = ::std::vec::Vec::with_capacity(1);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
-        fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
-            "rssi_overrides",
-            |m: &ListRssiOverrideResponse| { &m.rssi_overrides },
-            |m: &mut ListRssiOverrideResponse| { &mut m.rssi_overrides },
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::Link>(
+            "link",
+            |m: &DeleteLinkRequest| { &m.link },
+            |m: &mut DeleteLinkRequest| { &mut m.link },
         ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<ListRssiOverrideResponse>(
-            "ListRssiOverrideResponse",
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<DeleteLinkRequest>(
+            "DeleteLinkRequest",
             fields,
             oneofs,
         )
     }
 }
 
-impl ::protobuf::Message for ListRssiOverrideResponse {
-    const NAME: &'static str = "ListRssiOverrideResponse";
+impl ::protobuf::Message for DeleteLinkRequest {
+    const NAME: &'static str = "DeleteLinkRequest";
 
     fn is_initialized(&self) -> bool {
         true
@@ -2327,7 +2327,7 @@ impl ::protobuf::Message for ListRssiOverrideResponse {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 10 => {
-                    self.rssi_overrides.push(is.read_message()?);
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.link)?;
                 },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
@@ -2341,19 +2341,19 @@ impl ::protobuf::Message for ListRssiOverrideResponse {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
-        for value in &self.rssi_overrides {
-            let len = value.compute_size();
+        if let Some(v) = self.link.as_ref() {
+            let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
-        };
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
-        for v in &self.rssi_overrides {
+        if let Some(v) = self.link.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
-        };
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -2366,38 +2366,38 @@ impl ::protobuf::Message for ListRssiOverrideResponse {
         &mut self.special_fields
     }
 
-    fn new() -> ListRssiOverrideResponse {
-        ListRssiOverrideResponse::new()
+    fn new() -> DeleteLinkRequest {
+        DeleteLinkRequest::new()
     }
 
     fn clear(&mut self) {
-        self.rssi_overrides.clear();
+        self.link.clear();
         self.special_fields.clear();
     }
 
-    fn default_instance() -> &'static ListRssiOverrideResponse {
-        static instance: ListRssiOverrideResponse = ListRssiOverrideResponse {
-            rssi_overrides: ::std::vec::Vec::new(),
+    fn default_instance() -> &'static DeleteLinkRequest {
+        static instance: DeleteLinkRequest = DeleteLinkRequest {
+            link: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
     }
 }
 
-impl ::protobuf::MessageFull for ListRssiOverrideResponse {
+impl ::protobuf::MessageFull for DeleteLinkRequest {
     fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
         static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("ListRssiOverrideResponse").unwrap()).clone()
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("DeleteLinkRequest").unwrap()).clone()
     }
 }
 
-impl ::std::fmt::Display for ListRssiOverrideResponse {
+impl ::std::fmt::Display for DeleteLinkRequest {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for ListRssiOverrideResponse {
+impl ::protobuf::reflect::ProtobufValue for DeleteLinkRequest {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
@@ -2435,30 +2435,29 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x13ListCaptureResponse\x121\n\x08captures\x18\x01\x20\x03(\x0b2\x15.net\
     sim.model.CaptureR\x08captures\"#\n\x11GetCaptureRequest\x12\x0e\n\x02id\
     \x18\x01\x20\x01(\rR\x02id\";\n\x12GetCaptureResponse\x12%\n\x0ecapture_\
-    stream\x18\x01\x20\x01(\x0cR\rcaptureStream\"[\n\x18PatchRssiOverrideReq\
-    uest\x12?\n\rrssi_override\x18\x01\x20\x01(\x0b2\x1a.netsim.model.RssiOv\
-    errideR\x0crssiOverride\"C\n\x19DeleteRssiOverrideRequest\x12&\n\x04link\
-    \x18\x01\x20\x01(\x0b2\x12.netsim.model.LinkR\x04link\"]\n\x18ListRssiOv\
-    errideResponse\x12A\n\x0erssi_overrides\x18\x01\x20\x03(\x0b2\x1a.netsim\
-    .model.RssiOverrideR\rrssiOverrides2\xb3\x08\n\x0fFrontendService\x12F\n\
-    \nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.frontend.Versi\
-    onResponse\x12[\n\x0cCreateDevice\x12$.netsim.frontend.CreateDeviceReque\
-    st\x1a%.netsim.frontend.CreateDeviceResponse\x12H\n\nDeleteChip\x12\".ne\
-    tsim.frontend.DeleteChipRequest\x1a\x16.google.protobuf.Empty\x12J\n\x0b\
-    PatchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.google.proto\
-    buf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\x16.google.p\
-    rotobuf.Empty\x12I\n\nListDevice\x12\x16.google.protobuf.Empty\x1a#.nets\
-    im.frontend.ListDeviceResponse\x12d\n\x0fSubscribeDevice\x12'.netsim.fro\
-    ntend.SubscribeDeviceRequest\x1a(.netsim.frontend.SubscribeDeviceRespons\
-    e\x12L\n\x0cPatchCapture\x12$.netsim.frontend.PatchCaptureRequest\x1a\
-    \x16.google.protobuf.Empty\x12K\n\x0bListCapture\x12\x16.google.protobuf\
-    .Empty\x1a$.netsim.frontend.ListCaptureResponse\x12W\n\nGetCapture\x12\"\
-    .netsim.frontend.GetCaptureRequest\x1a#.netsim.frontend.GetCaptureRespon\
-    se0\x01\x12U\n\x10ListRssiOverride\x12\x16.google.protobuf.Empty\x1a).ne\
-    tsim.frontend.ListRssiOverrideResponse\x12V\n\x11PatchRssiOverride\x12).\
-    netsim.frontend.PatchRssiOverrideRequest\x1a\x16.google.protobuf.Empty\
-    \x12X\n\x12DeleteRssiOverride\x12*.netsim.frontend.DeleteRssiOverrideReq\
-    uest\x1a\x16.google.protobuf.Emptyb\x06proto3\
+    stream\x18\x01\x20\x01(\x0cR\rcaptureStream\"<\n\x10ListLinkResponse\x12\
+    (\n\x05links\x18\x01\x20\x03(\x0b2\x12.netsim.model.LinkR\x05links\":\n\
+    \x10PatchLinkRequest\x12&\n\x04link\x18\x01\x20\x01(\x0b2\x12.netsim.mod\
+    el.LinkR\x04link\";\n\x11DeleteLinkRequest\x12&\n\x04link\x18\x01\x20\
+    \x01(\x0b2\x12.netsim.model.LinkR\x04link2\x83\x08\n\x0fFrontendService\
+    \x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.fronten\
+    d.VersionResponse\x12[\n\x0cCreateDevice\x12$.netsim.frontend.CreateDevi\
+    ceRequest\x1a%.netsim.frontend.CreateDeviceResponse\x12H\n\nDeleteChip\
+    \x12\".netsim.frontend.DeleteChipRequest\x1a\x16.google.protobuf.Empty\
+    \x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.g\
+    oogle.protobuf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\
+    \x16.google.protobuf.Empty\x12I\n\nListDevice\x12\x16.google.protobuf.Em\
+    pty\x1a#.netsim.frontend.ListDeviceResponse\x12d\n\x0fSubscribeDevice\
+    \x12'.netsim.frontend.SubscribeDeviceRequest\x1a(.netsim.frontend.Subscr\
+    ibeDeviceResponse\x12L\n\x0cPatchCapture\x12$.netsim.frontend.PatchCaptu\
+    reRequest\x1a\x16.google.protobuf.Empty\x12K\n\x0bListCapture\x12\x16.go\
+    ogle.protobuf.Empty\x1a$.netsim.frontend.ListCaptureResponse\x12W\n\nGet\
+    Capture\x12\".netsim.frontend.GetCaptureRequest\x1a#.netsim.frontend.Get\
+    CaptureResponse0\x01\x12E\n\x08ListLink\x12\x16.google.protobuf.Empty\
+    \x1a!.netsim.frontend.ListLinkResponse\x12F\n\tPatchLink\x12!.netsim.fro\
+    ntend.PatchLinkRequest\x1a\x16.google.protobuf.Empty\x12H\n\nDeleteLink\
+    \x12\".netsim.frontend.DeleteLinkRequest\x1a\x16.google.protobuf.Emptyb\
+    \x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -2492,9 +2491,9 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(ListCaptureResponse::generated_message_descriptor_data());
             messages.push(GetCaptureRequest::generated_message_descriptor_data());
             messages.push(GetCaptureResponse::generated_message_descriptor_data());
-            messages.push(PatchRssiOverrideRequest::generated_message_descriptor_data());
-            messages.push(DeleteRssiOverrideRequest::generated_message_descriptor_data());
-            messages.push(ListRssiOverrideResponse::generated_message_descriptor_data());
+            messages.push(ListLinkResponse::generated_message_descriptor_data());
+            messages.push(PatchLinkRequest::generated_message_descriptor_data());
+            messages.push(DeleteLinkRequest::generated_message_descriptor_data());
             messages.push(patch_device_request::PatchDeviceFields::generated_message_descriptor_data());
             messages.push(patch_capture_request::PatchCapture::generated_message_descriptor_data());
             let mut enums = ::std::vec::Vec::with_capacity(0);

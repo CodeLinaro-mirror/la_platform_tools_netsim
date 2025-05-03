@@ -112,32 +112,32 @@ const METHOD_FRONTEND_SERVICE_GET_CAPTURE: ::grpcio::Method<
     resp_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
 };
 
-const METHOD_FRONTEND_SERVICE_LIST_RSSI_OVERRIDE: ::grpcio::Method<
+const METHOD_FRONTEND_SERVICE_LIST_LINK: ::grpcio::Method<
     super::empty::Empty,
-    super::frontend::ListRssiOverrideResponse,
+    super::frontend::ListLinkResponse,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
-    name: "/netsim.frontend.FrontendService/ListRssiOverride",
+    name: "/netsim.frontend.FrontendService/ListLink",
     req_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
     resp_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
 };
 
-const METHOD_FRONTEND_SERVICE_PATCH_RSSI_OVERRIDE: ::grpcio::Method<
-    super::frontend::PatchRssiOverrideRequest,
+const METHOD_FRONTEND_SERVICE_PATCH_LINK: ::grpcio::Method<
+    super::frontend::PatchLinkRequest,
     super::empty::Empty,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
-    name: "/netsim.frontend.FrontendService/PatchRssiOverride",
+    name: "/netsim.frontend.FrontendService/PatchLink",
     req_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
     resp_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
 };
 
-const METHOD_FRONTEND_SERVICE_DELETE_RSSI_OVERRIDE: ::grpcio::Method<
-    super::frontend::DeleteRssiOverrideRequest,
+const METHOD_FRONTEND_SERVICE_DELETE_LINK: ::grpcio::Method<
+    super::frontend::DeleteLinkRequest,
     super::empty::Empty,
 > = ::grpcio::Method {
     ty: ::grpcio::MethodType::Unary,
-    name: "/netsim.frontend.FrontendService/DeleteRssiOverride",
+    name: "/netsim.frontend.FrontendService/DeleteLink",
     req_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
     resp_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
 };
@@ -440,96 +440,94 @@ impl FrontendServiceClient {
         self.get_capture_opt(req, ::grpcio::CallOption::default())
     }
 
-    pub fn list_rssi_override_opt(
+    pub fn list_link_opt(
         &self,
         req: &super::empty::Empty,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<super::frontend::ListRssiOverrideResponse> {
-        self.client.unary_call(&METHOD_FRONTEND_SERVICE_LIST_RSSI_OVERRIDE, req, opt)
+    ) -> ::grpcio::Result<super::frontend::ListLinkResponse> {
+        self.client.unary_call(&METHOD_FRONTEND_SERVICE_LIST_LINK, req, opt)
     }
 
-    pub fn list_rssi_override(
+    pub fn list_link(
         &self,
         req: &super::empty::Empty,
-    ) -> ::grpcio::Result<super::frontend::ListRssiOverrideResponse> {
-        self.list_rssi_override_opt(req, ::grpcio::CallOption::default())
+    ) -> ::grpcio::Result<super::frontend::ListLinkResponse> {
+        self.list_link_opt(req, ::grpcio::CallOption::default())
     }
 
-    pub fn list_rssi_override_async_opt(
+    pub fn list_link_async_opt(
         &self,
         req: &super::empty::Empty,
         opt: ::grpcio::CallOption,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::frontend::ListRssiOverrideResponse>>
-    {
-        self.client.unary_call_async(&METHOD_FRONTEND_SERVICE_LIST_RSSI_OVERRIDE, req, opt)
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::frontend::ListLinkResponse>> {
+        self.client.unary_call_async(&METHOD_FRONTEND_SERVICE_LIST_LINK, req, opt)
     }
 
-    pub fn list_rssi_override_async(
+    pub fn list_link_async(
         &self,
         req: &super::empty::Empty,
-    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::frontend::ListRssiOverrideResponse>>
-    {
-        self.list_rssi_override_async_opt(req, ::grpcio::CallOption::default())
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::frontend::ListLinkResponse>> {
+        self.list_link_async_opt(req, ::grpcio::CallOption::default())
     }
 
-    pub fn patch_rssi_override_opt(
+    pub fn patch_link_opt(
         &self,
-        req: &super::frontend::PatchRssiOverrideRequest,
+        req: &super::frontend::PatchLinkRequest,
         opt: ::grpcio::CallOption,
     ) -> ::grpcio::Result<super::empty::Empty> {
-        self.client.unary_call(&METHOD_FRONTEND_SERVICE_PATCH_RSSI_OVERRIDE, req, opt)
+        self.client.unary_call(&METHOD_FRONTEND_SERVICE_PATCH_LINK, req, opt)
     }
 
-    pub fn patch_rssi_override(
+    pub fn patch_link(
         &self,
-        req: &super::frontend::PatchRssiOverrideRequest,
+        req: &super::frontend::PatchLinkRequest,
     ) -> ::grpcio::Result<super::empty::Empty> {
-        self.patch_rssi_override_opt(req, ::grpcio::CallOption::default())
+        self.patch_link_opt(req, ::grpcio::CallOption::default())
     }
 
-    pub fn patch_rssi_override_async_opt(
+    pub fn patch_link_async_opt(
         &self,
-        req: &super::frontend::PatchRssiOverrideRequest,
+        req: &super::frontend::PatchLinkRequest,
         opt: ::grpcio::CallOption,
     ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::empty::Empty>> {
-        self.client.unary_call_async(&METHOD_FRONTEND_SERVICE_PATCH_RSSI_OVERRIDE, req, opt)
+        self.client.unary_call_async(&METHOD_FRONTEND_SERVICE_PATCH_LINK, req, opt)
     }
 
-    pub fn patch_rssi_override_async(
+    pub fn patch_link_async(
         &self,
-        req: &super::frontend::PatchRssiOverrideRequest,
+        req: &super::frontend::PatchLinkRequest,
     ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::empty::Empty>> {
-        self.patch_rssi_override_async_opt(req, ::grpcio::CallOption::default())
+        self.patch_link_async_opt(req, ::grpcio::CallOption::default())
     }
 
-    pub fn delete_rssi_override_opt(
+    pub fn delete_link_opt(
         &self,
-        req: &super::frontend::DeleteRssiOverrideRequest,
+        req: &super::frontend::DeleteLinkRequest,
         opt: ::grpcio::CallOption,
     ) -> ::grpcio::Result<super::empty::Empty> {
-        self.client.unary_call(&METHOD_FRONTEND_SERVICE_DELETE_RSSI_OVERRIDE, req, opt)
+        self.client.unary_call(&METHOD_FRONTEND_SERVICE_DELETE_LINK, req, opt)
     }
 
-    pub fn delete_rssi_override(
+    pub fn delete_link(
         &self,
-        req: &super::frontend::DeleteRssiOverrideRequest,
+        req: &super::frontend::DeleteLinkRequest,
     ) -> ::grpcio::Result<super::empty::Empty> {
-        self.delete_rssi_override_opt(req, ::grpcio::CallOption::default())
+        self.delete_link_opt(req, ::grpcio::CallOption::default())
     }
 
-    pub fn delete_rssi_override_async_opt(
+    pub fn delete_link_async_opt(
         &self,
-        req: &super::frontend::DeleteRssiOverrideRequest,
+        req: &super::frontend::DeleteLinkRequest,
         opt: ::grpcio::CallOption,
     ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::empty::Empty>> {
-        self.client.unary_call_async(&METHOD_FRONTEND_SERVICE_DELETE_RSSI_OVERRIDE, req, opt)
+        self.client.unary_call_async(&METHOD_FRONTEND_SERVICE_DELETE_LINK, req, opt)
     }
 
-    pub fn delete_rssi_override_async(
+    pub fn delete_link_async(
         &self,
-        req: &super::frontend::DeleteRssiOverrideRequest,
+        req: &super::frontend::DeleteLinkRequest,
     ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::empty::Empty>> {
-        self.delete_rssi_override_async_opt(req, ::grpcio::CallOption::default())
+        self.delete_link_async_opt(req, ::grpcio::CallOption::default())
     }
     pub fn spawn<F>(&self, f: F)
     where
@@ -620,26 +618,26 @@ pub trait FrontendService {
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
-    fn list_rssi_override(
+    fn list_link(
         &mut self,
         ctx: ::grpcio::RpcContext,
         _req: super::empty::Empty,
-        sink: ::grpcio::UnarySink<super::frontend::ListRssiOverrideResponse>,
+        sink: ::grpcio::UnarySink<super::frontend::ListLinkResponse>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
-    fn patch_rssi_override(
+    fn patch_link(
         &mut self,
         ctx: ::grpcio::RpcContext,
-        _req: super::frontend::PatchRssiOverrideRequest,
+        _req: super::frontend::PatchLinkRequest,
         sink: ::grpcio::UnarySink<super::empty::Empty>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
-    fn delete_rssi_override(
+    fn delete_link(
         &mut self,
         ctx: ::grpcio::RpcContext,
-        _req: super::frontend::DeleteRssiOverrideRequest,
+        _req: super::frontend::DeleteLinkRequest,
         sink: ::grpcio::UnarySink<super::empty::Empty>,
     ) {
         grpcio::unimplemented_call!(ctx, sink)
@@ -701,18 +699,18 @@ pub fn create_frontend_service<S: FrontendService + Send + Clone + 'static>(
     );
     let mut instance = s.clone();
     builder = builder
-        .add_unary_handler(&METHOD_FRONTEND_SERVICE_LIST_RSSI_OVERRIDE, move |ctx, req, resp| {
-            instance.list_rssi_override(ctx, req, resp)
+        .add_unary_handler(&METHOD_FRONTEND_SERVICE_LIST_LINK, move |ctx, req, resp| {
+            instance.list_link(ctx, req, resp)
         });
     let mut instance = s.clone();
     builder = builder
-        .add_unary_handler(&METHOD_FRONTEND_SERVICE_PATCH_RSSI_OVERRIDE, move |ctx, req, resp| {
-            instance.patch_rssi_override(ctx, req, resp)
+        .add_unary_handler(&METHOD_FRONTEND_SERVICE_PATCH_LINK, move |ctx, req, resp| {
+            instance.patch_link(ctx, req, resp)
         });
     let mut instance = s;
     builder = builder
-        .add_unary_handler(&METHOD_FRONTEND_SERVICE_DELETE_RSSI_OVERRIDE, move |ctx, req, resp| {
-            instance.delete_rssi_override(ctx, req, resp)
+        .add_unary_handler(&METHOD_FRONTEND_SERVICE_DELETE_LINK, move |ctx, req, resp| {
+            instance.delete_link(ctx, req, resp)
         });
     builder.build()
 }
