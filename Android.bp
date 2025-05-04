@@ -73,6 +73,7 @@ rust_defaults {
         "liblibc",
         "libnetsim_proto",
         "libhttp",
+        "libhttparse",
         "libnetsim_common",
         "libnetsim_packets",
         "libpdl_runtime",
