@@ -293,3 +293,19 @@ message Capture {
   // False if chip has been detached from netsim.
   bool valid = 8;
 }
+
+// Link model between sender and receiver chips for netsim
+message Link {
+  // Sender Chip Identifier
+  uint32 sender_id = 1;
+  // Receiver Chip Identifier
+  uint32 receiver_id = 2;
+}
+
+// RssiOverride model for netsim
+message RssiOverride {
+  // Link to apply the override
+  Link link = 1;
+  // RSSI value in dBm
+  int32 rssi = 2;
+}
