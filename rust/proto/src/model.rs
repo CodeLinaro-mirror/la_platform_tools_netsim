@@ -3526,6 +3526,10 @@ pub struct Link {
     pub sender_id: u32,
     // @@protoc_insertion_point(field:netsim.model.Link.receiver_id)
     pub receiver_id: u32,
+    // @@protoc_insertion_point(field:netsim.model.Link.link_kind)
+    pub link_kind: ::protobuf::EnumOrUnknown<PhyKind>,
+    // @@protoc_insertion_point(field:netsim.model.Link.rssi)
+    pub rssi: i32,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.model.Link.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -3543,7 +3547,7 @@ impl Link {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(2);
+        let mut fields = ::std::vec::Vec::with_capacity(4);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "sender_id",
@@ -3554,6 +3558,16 @@ impl Link {
             "receiver_id",
             |m: &Link| { &m.receiver_id },
             |m: &mut Link| { &mut m.receiver_id },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "link_kind",
+            |m: &Link| { &m.link_kind },
+            |m: &mut Link| { &mut m.link_kind },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "rssi",
+            |m: &Link| { &m.rssi },
+            |m: &mut Link| { &mut m.rssi },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Link>(
             "Link",
@@ -3579,6 +3593,12 @@ impl ::protobuf::Message for Link {
                 16 => {
                     self.receiver_id = is.read_uint32()?;
                 },
+                24 => {
+                    self.link_kind = is.read_enum_or_unknown()?;
+                },
+                32 => {
+                    self.rssi = is.read_int32()?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -3597,6 +3617,12 @@ impl ::protobuf::Message for Link {
         if self.receiver_id != 0 {
             my_size += ::protobuf::rt::uint32_size(2, self.receiver_id);
         }
+        if self.link_kind != ::protobuf::EnumOrUnknown::new(PhyKind::NONE) {
+            my_size += ::protobuf::rt::int32_size(3, self.link_kind.value());
+        }
+        if self.rssi != 0 {
+            my_size += ::protobuf::rt::int32_size(4, self.rssi);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -3608,6 +3634,12 @@ impl ::protobuf::Message for Link {
         }
         if self.receiver_id != 0 {
             os.write_uint32(2, self.receiver_id)?;
+        }
+        if self.link_kind != ::protobuf::EnumOrUnknown::new(PhyKind::NONE) {
+            os.write_enum(3, ::protobuf::EnumOrUnknown::value(&self.link_kind))?;
+        }
+        if self.rssi != 0 {
+            os.write_int32(4, self.rssi)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -3628,6 +3660,8 @@ impl ::protobuf::Message for Link {
     fn clear(&mut self) {
         self.sender_id = 0;
         self.receiver_id = 0;
+        self.link_kind = ::protobuf::EnumOrUnknown::new(PhyKind::NONE);
+        self.rssi = 0;
         self.special_fields.clear();
     }
 
@@ -3635,6 +3669,8 @@ impl ::protobuf::Message for Link {
         static instance: Link = Link {
             sender_id: 0,
             receiver_id: 0,
+            link_kind: ::protobuf::EnumOrUnknown::from_i32(0),
+            rssi: 0,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -3655,147 +3691,6 @@ impl ::std::fmt::Display for Link {
 }
 
 impl ::protobuf::reflect::ProtobufValue for Link {
-    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
-}
-
-#[derive(PartialEq,Clone,Default,Debug)]
-// @@protoc_insertion_point(message:netsim.model.RssiOverride)
-pub struct RssiOverride {
-    // message fields
-    // @@protoc_insertion_point(field:netsim.model.RssiOverride.link)
-    pub link: ::protobuf::MessageField<Link>,
-    // @@protoc_insertion_point(field:netsim.model.RssiOverride.rssi)
-    pub rssi: i32,
-    // special fields
-    // @@protoc_insertion_point(special_field:netsim.model.RssiOverride.special_fields)
-    pub special_fields: ::protobuf::SpecialFields,
-}
-
-impl<'a> ::std::default::Default for &'a RssiOverride {
-    fn default() -> &'a RssiOverride {
-        <RssiOverride as ::protobuf::Message>::default_instance()
-    }
-}
-
-impl RssiOverride {
-    pub fn new() -> RssiOverride {
-        ::std::default::Default::default()
-    }
-
-    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(2);
-        let mut oneofs = ::std::vec::Vec::with_capacity(0);
-        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, Link>(
-            "link",
-            |m: &RssiOverride| { &m.link },
-            |m: &mut RssiOverride| { &mut m.link },
-        ));
-        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
-            "rssi",
-            |m: &RssiOverride| { &m.rssi },
-            |m: &mut RssiOverride| { &mut m.rssi },
-        ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<RssiOverride>(
-            "RssiOverride",
-            fields,
-            oneofs,
-        )
-    }
-}
-
-impl ::protobuf::Message for RssiOverride {
-    const NAME: &'static str = "RssiOverride";
-
-    fn is_initialized(&self) -> bool {
-        true
-    }
-
-    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
-        while let Some(tag) = is.read_raw_tag_or_eof()? {
-            match tag {
-                10 => {
-                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.link)?;
-                },
-                16 => {
-                    self.rssi = is.read_int32()?;
-                },
-                tag => {
-                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
-                },
-            };
-        }
-        ::std::result::Result::Ok(())
-    }
-
-    // Compute sizes of nested messages
-    #[allow(unused_variables)]
-    fn compute_size(&self) -> u64 {
-        let mut my_size = 0;
-        if let Some(v) = self.link.as_ref() {
-            let len = v.compute_size();
-            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
-        }
-        if self.rssi != 0 {
-            my_size += ::protobuf::rt::int32_size(2, self.rssi);
-        }
-        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
-        self.special_fields.cached_size().set(my_size as u32);
-        my_size
-    }
-
-    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
-        if let Some(v) = self.link.as_ref() {
-            ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
-        }
-        if self.rssi != 0 {
-            os.write_int32(2, self.rssi)?;
-        }
-        os.write_unknown_fields(self.special_fields.unknown_fields())?;
-        ::std::result::Result::Ok(())
-    }
-
-    fn special_fields(&self) -> &::protobuf::SpecialFields {
-        &self.special_fields
-    }
-
-    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
-        &mut self.special_fields
-    }
-
-    fn new() -> RssiOverride {
-        RssiOverride::new()
-    }
-
-    fn clear(&mut self) {
-        self.link.clear();
-        self.rssi = 0;
-        self.special_fields.clear();
-    }
-
-    fn default_instance() -> &'static RssiOverride {
-        static instance: RssiOverride = RssiOverride {
-            link: ::protobuf::MessageField::none(),
-            rssi: 0,
-            special_fields: ::protobuf::SpecialFields::new(),
-        };
-        &instance
-    }
-}
-
-impl ::protobuf::MessageFull for RssiOverride {
-    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
-        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("RssiOverride").unwrap()).clone()
-    }
-}
-
-impl ::std::fmt::Display for RssiOverride {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-        ::protobuf::text_format::fmt(self, f)
-    }
-}
-
-impl ::protobuf::reflect::ProtobufValue for RssiOverride {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
@@ -3951,13 +3846,13 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x05R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\x07records\x128\
     \n\ttimestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttime\
     stamp\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05validB\x08\n\x06_state\
-    \"D\n\x04Link\x12\x1b\n\tsender_id\x18\x01\x20\x01(\rR\x08senderId\x12\
-    \x1f\n\x0breceiver_id\x18\x02\x20\x01(\rR\nreceiverId\"J\n\x0cRssiOverri\
-    de\x12&\n\x04link\x18\x01\x20\x01(\x0b2\x12.netsim.model.LinkR\x04link\
-    \x12\x12\n\x04rssi\x18\x02\x20\x01(\x05R\x04rssi*e\n\x07PhyKind\x12\x08\
-    \n\x04NONE\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLU\
-    ETOOTH_LOW_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\
-    \x04\x12\x0c\n\x08WIFI_RTT\x10\x05b\x06proto3\
+    \"\x8c\x01\n\x04Link\x12\x1b\n\tsender_id\x18\x01\x20\x01(\rR\x08senderI\
+    d\x12\x1f\n\x0breceiver_id\x18\x02\x20\x01(\rR\nreceiverId\x122\n\tlink_\
+    kind\x18\x03\x20\x01(\x0e2\x15.netsim.model.PhyKindR\x08linkKind\x12\x12\
+    \n\x04rssi\x18\x04\x20\x01(\x05R\x04rssi*e\n\x07PhyKind\x12\x08\n\x04NON\
+    E\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LO\
+    W_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\
+    \x0c\n\x08WIFI_RTT\x10\x05b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -3978,7 +3873,7 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             deps.push(super::common::file_descriptor().clone());
             deps.push(::protobuf::well_known_types::timestamp::file_descriptor().clone());
             deps.push(super::configuration::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(17);
+            let mut messages = ::std::vec::Vec::with_capacity(16);
             messages.push(Position::generated_message_descriptor_data());
             messages.push(Orientation::generated_message_descriptor_data());
             messages.push(Chip::generated_message_descriptor_data());
@@ -3988,7 +3883,6 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(Scene::generated_message_descriptor_data());
             messages.push(Capture::generated_message_descriptor_data());
             messages.push(Link::generated_message_descriptor_data());
-            messages.push(RssiOverride::generated_message_descriptor_data());
             messages.push(chip::Radio::generated_message_descriptor_data());
             messages.push(chip::Bluetooth::generated_message_descriptor_data());
             messages.push(chip::BleBeacon::generated_message_descriptor_data());
