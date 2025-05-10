@@ -115,4 +115,13 @@ pub struct NetsimdArgs {
     /// Print Netsimd version information
     #[arg(long)]
     pub version: bool,
+
+    /// Set RSSI (in dBm) for all links on specified PhyKinds
+    /// Accepts `PHY_KIND=RSSI_VALUE ...` (e.g., `WIFI=-65 ble=-72 UWB=-45`).
+    /// `PHY_KIND` is case-insensitive (aliases like "ble" supported). `RSSI_VALUE` must be an i8.
+    ///
+    /// # Limitations
+    /// * RSSI control is currently implemented for BLE and BT_CLASSIC only.
+    #[arg(long, value_name = "PHY_KIND=RSSI_VALUE", num_args = 1.., verbatim_doc_comment)]
+    pub rssi: Option<Vec<String>>,
 }
