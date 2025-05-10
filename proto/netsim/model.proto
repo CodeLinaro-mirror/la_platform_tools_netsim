@@ -294,18 +294,14 @@ message Capture {
   bool valid = 8;
 }
 
-// Link model between sender and receiver chips for netsim
+// Link model for netsim
 message Link {
-  // Sender Chip Identifier
+  // Sender chip identifier. 0 acts as a wildcard, matching any chip.
   uint32 sender_id = 1;
-  // Receiver Chip Identifier
+  // Receiver chip identifier. 0 acts as a wildcard, matching any chip.
   uint32 receiver_id = 2;
-}
-
-// RssiOverride model for netsim
-message RssiOverride {
-  // Link to apply the override
-  Link link = 1;
-  // RSSI value in dBm
-  int32 rssi = 2;
+  // Radio kind of link (i.e. BLE, WiFi, etc)
+  PhyKind link_kind = 3;
+  // Received Signal Strength Indicator (RSSI) value in dBm
+  int32 rssi = 4;
 }
