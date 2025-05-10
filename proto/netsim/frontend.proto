@@ -65,17 +65,15 @@ service FrontendService {
   // Retrieve the contents of the packet capture as streaming bytes
   rpc GetCapture(GetCaptureRequest) returns (stream GetCaptureResponse);
 
-  // List all current RSSI Overrides on netsim.
-  rpc ListRssiOverride(google.protobuf.Empty)
-      returns (ListRssiOverrideResponse);
+  // List all current links on netsim.
+  rpc ListLink(google.protobuf.Empty) returns (ListLinkResponse);
 
-  // Patch a Rssi Override for the specified link between two chips.
-  rpc PatchRssiOverride(PatchRssiOverrideRequest)
-      returns (google.protobuf.Empty);
+  // Patch (add or modify) a link.
+  rpc PatchLink(PatchLinkRequest) returns (google.protobuf.Empty);
 
-  // Delete a Rssi Override for the specified link between two chips.
-  rpc DeleteRssiOverride(DeleteRssiOverrideRequest)
-      returns (google.protobuf.Empty);
+  // Delete specified properties for the link. Deletes entire link if all
+  // properties are deleted.
+  rpc DeleteLink(DeleteLinkRequest) returns (google.protobuf.Empty);
 }
 
 // Response of GetVersion.
@@ -202,20 +200,20 @@ message GetCaptureResponse {
   bytes capture_stream = 1;
 }
 
-// Request to add or modify a RssiOverride.
-message PatchRssiOverrideRequest {
-  // The RssiOverride data to apply.
-  netsim.model.RssiOverride rssi_override = 1;
+// Response of ListLink
+message ListLinkResponse {
+  // Collection of current links
+  repeated netsim.model.Link links = 1;
 }
 
-// Request of RssiOverride.
-message DeleteRssiOverrideRequest {
-  // The specific link on which to delete the RSSI override.
+// Request of PatchLink.
+message PatchLinkRequest {
+  // The link and properties to apply.
   netsim.model.Link link = 1;
 }
 
-// Response of ListRssiOverride
-message ListRssiOverrideResponse {
-  // Collection of current RSSI Overrides
-  repeated netsim.model.RssiOverride rssi_overrides = 1;
+// Request of DeleteLink.
+message DeleteLinkRequest {
+  // The link containing properties to be removed.
+  netsim.model.Link link = 1;
 }
