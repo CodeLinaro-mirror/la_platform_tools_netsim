@@ -28,10 +28,10 @@ use netsim_proto::frontend;
 
 use anyhow::{anyhow, Result};
 use grpcio::{ChannelBuilder, EnvBuilder};
+use log::error;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
-use tracing::error;
 
 use crate::grpc_client::{ClientResponseReader, GrpcRequest, GrpcResponse};
 use netsim_proto::frontend_grpc::FrontendServiceClient;

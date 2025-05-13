@@ -24,4 +24,3 @@ log = "0.4.17"
 netsim-proto = { path = "../proto" }
 netsim-common = { path = "../common" }
 protobuf = "3.2.0"
-tracing = "0.1"
