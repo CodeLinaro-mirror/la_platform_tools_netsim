@@ -29,10 +29,10 @@
 use bytes::Bytes;
 use http::Request;
 use log::warn;
-use netsim_common::util::time_display::TimeDisplay;
+use netsim_common::util::{proto_print_options::JSON_PRINT_OPTION, time_display::TimeDisplay};
 use netsim_proto::common::ChipKind;
 use netsim_proto::frontend::ListCaptureResponse;
-use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
+use protobuf_json_mapping::print_to_string_with_options;
 use std::fs::File;
 use std::io::{Read, Result};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -49,12 +49,6 @@ use super::PCAP_MIME_TYPE;
 
 /// Max Chunk length of capture file during get_capture
 pub const CHUNK_LEN: usize = 1024;
-const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
-    enum_values_int: false,
-    proto_field_name: false,
-    always_output_default_values: true,
-    _future_options: (),
-};
 
 /// Helper function for getting file name from the given fields.
 fn get_file(id: ChipIdentifier, device_name: String, chip_kind: ChipKind) -> Result<File> {
