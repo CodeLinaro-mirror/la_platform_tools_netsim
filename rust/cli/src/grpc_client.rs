@@ -36,6 +36,9 @@ pub enum GrpcRequest {
     PatchDevice(frontend::PatchDeviceRequest),
     PatchCapture(frontend::PatchCaptureRequest),
     GetCapture(frontend::GetCaptureRequest),
+    ListLink,
+    PatchLink(frontend::PatchLinkRequest),
+    DeleteLink(frontend::DeleteLinkRequest),
 }
 
 // Enum of Grpc Responses holding the response proto as applicable
@@ -49,6 +52,9 @@ pub enum GrpcResponse {
     DeleteChip,
     PatchDevice,
     PatchCapture,
+    ListLink(frontend::ListLinkResponse),
+    PatchLink,
+    DeleteLink,
     Unknown,
 }
 
@@ -102,6 +108,17 @@ pub fn send_grpc(
         GrpcRequest::PatchCapture(req) => {
             client.patch_capture(req)?;
             Ok(GrpcResponse::PatchCapture)
+        }
+        GrpcRequest::ListLink => {
+            Ok(GrpcResponse::ListLink(client.list_link(&empty::Empty::new())?))
+        }
+        GrpcRequest::PatchLink(req) => {
+            client.patch_link(req)?;
+            Ok(GrpcResponse::PatchLink)
+        }
+        GrpcRequest::DeleteLink(req) => {
+            client.delete_link(req)?;
+            Ok(GrpcResponse::DeleteLink)
         }
         _ => Err(anyhow!(grpcio::RpcStatus::new(grpcio::RpcStatusCode::INVALID_ARGUMENT,))),
     }

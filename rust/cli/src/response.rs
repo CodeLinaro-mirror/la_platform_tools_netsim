@@ -14,8 +14,11 @@
 
 use std::cmp::max;
 
-use crate::args::{self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, OnOffState};
-use crate::display::Displayer;
+use crate::args::{
+    self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, LinkDelete, LinkPatch,
+    OnOffState,
+};
+use crate::display::{Displayer, LinkChipIdDisplay};
 use crate::grpc_client::GrpcResponse;
 use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::{common::ChipKind, frontend, model};
@@ -175,6 +178,38 @@ impl args::Command {
             Command::Bumble => {
                 unimplemented!("No Grpc Response for Bumble Command.");
             }
+            Command::Link(link_cmd) => match link_cmd {
+                Link::List => {
+                    let GrpcResponse::ListLink(res) = response else {
+                        panic!("Expected to print ListLinkResponse. Got: {:?}", response);
+                    };
+                    println!("{}", Displayer::new(res.clone(), verbose));
+                }
+                Link::Patch(patch_struct) => match &patch_struct.command {
+                    LinkPatch::Rssi(args) => {
+                        if verbose {
+                            println!(
+                                "Successfully patched RSSI for link (Sender: {}, Receiver: {}, Type: {:?}) to {}.",
+                                LinkChipIdDisplay(args.sender_id.unwrap_or(0)),
+                                LinkChipIdDisplay(args.receiver_id.unwrap_or(0)),
+                                args.radio_type, args.value
+                            );
+                        }
+                    }
+                },
+                Link::Delete(delete_struct) => match &delete_struct.command {
+                    LinkDelete::Rssi(args) => {
+                        if verbose {
+                            println!(
+                                "Successfully deleted RSSI for link (Sender: {}, Receiver: {}, Type: {:?}).",
+                                LinkChipIdDisplay(args.sender_id.unwrap_or(0)),
+                                LinkChipIdDisplay(args.receiver_id.unwrap_or(0)),
+                                args.radio_type
+                            );
+                        }
+                    }
+                },
+            },
         }
     }
 
