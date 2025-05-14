@@ -17,13 +17,14 @@
 use crate::bluetooth::advertise_settings as ble_advertise_settings;
 use crate::captures::captures_handler::clear_pcap_files;
 use crate::http_server::server::run_http_server;
+use crate::link::LinkManager;
 use crate::transport::socket::run_socket_transport;
 use crate::websocket_server::run_websocket_server;
 use crate::wireless;
 use log::{error, info, warn};
 use netsim_common::util::zip_artifact::remove_zip_files;
-use std::env;
 use std::time::Duration;
+use std::{env, sync::Arc};
 
 /// Module to control startup, run, and cleanup netsimd services.
 
@@ -59,6 +60,7 @@ impl ServiceParams {
 pub struct Service {
     // netsimd states, like device resource.
     service_params: ServiceParams,
+    link_manager: Arc<LinkManager>,
     grpc_server: Option<grpcio::Server>,
 }
 
@@ -67,8 +69,8 @@ impl Service {
     ///
     /// The file descriptors in `service_params.fd_startup_str` must be valid and open, and must
     /// remain so for as long as the `Service` exists.
-    pub unsafe fn new(service_params: ServiceParams) -> Service {
-        Service { service_params, grpc_server: None }
+    pub unsafe fn new(service_params: ServiceParams, link_manager: Arc<LinkManager>) -> Service {
+        Service { service_params, link_manager, grpc_server: None }
     }
 
     /// Remove old artifacts
@@ -94,6 +96,7 @@ impl Service {
         let (server, port) = crate::grpc_server::server::start(
             netsim_grpc_port,
             self.service_params.no_cli_ui,
+            self.link_manager.clone(),
             self.service_params.vsock,
         )?;
         self.grpc_server = Some(server);
