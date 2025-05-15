@@ -138,8 +138,9 @@ impl Service {
         let web_port = self.run_web_server();
 
         // Run the websocket server.
-        let websocket_port =
-            run_websocket_server(self.service_params.instance_num).map_err(|e| warn!("{e:?}")).ok();
+        let websocket_port = run_websocket_server(self.service_params.instance_num)
+            .map_err(|e| warn!("run_websocket_server error: {e}"))
+            .ok();
 
         // Run the socket server.
         run_socket_transport(self.service_params.hci_port);

@@ -243,9 +243,9 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     cketTypeR\npacketType\x12\x16\n\x06packet\x18\x02\x20\x01(\x0cR\x06packe\
     t\"[\n\nPacketType\x12\x1a\n\x16HCI_PACKET_UNSPECIFIED\x10\0\x12\x0b\n\
     \x07COMMAND\x10\x01\x12\x07\n\x03ACL\x10\x02\x12\x07\n\x03SCO\x10\x03\
-    \x12\t\n\x05EVENT\x10\x04\x12\x07\n\x03ISO\x10\x05BJ\n\x1fcom.android.em\
-    ulation.bluetoothP\x01\xf8\x01\x01\xa2\x02\x03AEB\xaa\x02\x1bAndroid.Emu\
-    lation.Bluetoothb\x06proto3\
+    \x12\t\n\x05EVENT\x10\x04\x12\x07\n\x03ISO\x10\x05BG\n\x1fcom.android.em\
+    ulation.bluetoothP\x01\xa2\x02\x03AEB\xaa\x02\x1bAndroid.Emulation.Bluet\
+    oothb\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
