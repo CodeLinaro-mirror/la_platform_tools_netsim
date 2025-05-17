@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use crate::args::{
-    Beacon, BeaconCreate, BeaconPatch, Capture, Command, OnOffState, RadioType, UpDownStatus,
+    Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, LinkDelete, LinkPatch, OnOffState,
+    RadioType, UpDownStatus,
 };
 use crate::grpc_client::{self, GrpcRequest, GrpcResponse};
+use log::error;
 use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::common::ChipKind;
 use netsim_proto::frontend;
@@ -27,10 +29,18 @@ use netsim_proto::model::chip::{
 };
 use netsim_proto::model::{
     self, chip_create, Chip, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
-    Position,
+    PhyKind as PhyKindProto, Position,
 };
 use protobuf::MessageField;
-use tracing::error;
+
+fn radio_type_to_proto_phy_kind(radio_type: RadioType) -> PhyKindProto {
+    match radio_type {
+        RadioType::Ble => PhyKindProto::BLUETOOTH_LOW_ENERGY,
+        RadioType::Classic => PhyKindProto::BLUETOOTH_CLASSIC,
+        RadioType::Wifi => PhyKindProto::WIFI,
+        RadioType::Uwb => PhyKindProto::UWB,
+    }
+}
 
 impl Command {
     /// Return the generated request protobuf message
@@ -166,6 +176,40 @@ impl Command {
             Command::Bumble => {
                 unimplemented!("get_request is not implemented for Bumble Command.");
             }
+            Command::Link(link_cmd) => match link_cmd {
+                Link::List => GrpcRequest::ListLink,
+                Link::Patch(patch_struct) => match &patch_struct.command {
+                    LinkPatch::Rssi(args) => {
+                        let link = model::Link {
+                            sender_id: args.sender_id.unwrap_or(0),
+                            receiver_id: args.receiver_id.unwrap_or(0),
+                            link_kind: radio_type_to_proto_phy_kind(args.radio_type).into(),
+                            rssi: args.value as i32,
+                            ..Default::default()
+                        };
+                        let request = frontend::PatchLinkRequest {
+                            link: MessageField::some(link),
+                            ..Default::default()
+                        };
+                        GrpcRequest::PatchLink(request)
+                    }
+                },
+                Link::Delete(delete_struct) => match &delete_struct.command {
+                    LinkDelete::Rssi(args) => {
+                        let link = model::Link {
+                            sender_id: args.sender_id.unwrap_or(0),
+                            receiver_id: args.receiver_id.unwrap_or(0),
+                            link_kind: radio_type_to_proto_phy_kind(args.radio_type).into(),
+                            ..Default::default()
+                        };
+                        let request = frontend::DeleteLinkRequest {
+                            link: MessageField::some(link),
+                            ..Default::default()
+                        };
+                        GrpcRequest::DeleteLink(request)
+                    }
+                },
+            },
         }
     }
 
@@ -256,39 +300,36 @@ mod tests {
     use super::*;
     use crate::args::{
         AdvertiseMode, BeaconBleAdvertiseData, BeaconBleScanResponseData, BeaconBleSettings,
-        BeaconCreateBle, BeaconPatchBle, Command, Devices, Interval, ListCapture, Move, NetsimArgs,
-        ParsableBytes, Radio, RadioType, TxPower, TxPowerLevel,
+        BeaconCreateBle, BeaconPatchBle, Command, Devices, Interval, Link, LinkDelete,
+        LinkDeleteCommand, LinkPatch, LinkPatchCommand, ListCapture, Move, NetsimArgs,
+        ParsableBytes, Radio, RadioType, RssiDelete, RssiPatch, TxPower, TxPowerLevel,
     };
 
     use clap::Parser;
-    use netsim_proto::frontend::{
-        patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto, CreateDeviceRequest,
-        PatchDeviceRequest,
-    };
-    use netsim_proto::model::chip::ble_beacon::AdvertiseData as AdvertiseDataProto;
-    use netsim_proto::model::chip::{
-        ble_beacon::{
-            advertise_settings::{
-                AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
-                Interval as IntervalProto, Tx_power as TxPowerProto,
-            },
-            AdvertiseSettings as AdvertiseSettingsProto,
-        },
-        BleBeacon as BleBeaconProto, Chip as ChipKindProto,
-    };
-    use netsim_proto::model::chip_create::{
-        BleBeaconCreate as BleBeaconCreateProto, Chip as ChipKindCreateProto,
-    };
-    use netsim_proto::model::{
-        Chip as ChipProto, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
-    };
     use netsim_proto::{
         common::ChipKind,
-        frontend,
+        frontend::{
+            patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto, CreateDeviceRequest,
+            PatchDeviceRequest,
+        },
         model::{
             self,
-            chip::{Bluetooth as Chip_Bluetooth, Radio as Chip_Radio},
-            Position,
+            chip::{
+                ble_beacon::{
+                    advertise_settings::{
+                        AdvertiseMode as AdvertiseModeProto,
+                        AdvertiseTxPower as AdvertiseTxPowerProto, Interval as IntervalProto,
+                        Tx_power as TxPowerProto,
+                    },
+                    AdvertiseData as AdvertiseDataProto,
+                    AdvertiseSettings as AdvertiseSettingsProto,
+                },
+                BleBeacon as BleBeaconProto, Bluetooth as Chip_Bluetooth, Chip as ChipKindProto,
+                Radio as Chip_Radio,
+            },
+            chip_create::{BleBeaconCreate as BleBeaconCreateProto, Chip as ChipKindCreateProto},
+            Chip as ChipProto, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
+            PhyKind as PhyKindProto, Position,
         },
     };
     use protobuf::MessageField;
@@ -1028,5 +1069,108 @@ mod tests {
     fn test_patch_beacon_mfg_data_fails() {
         let command = String::from("netsim-cli beacon patch ble --manufacturer-data not-a-number");
         assert!(NetsimArgs::try_parse_from(command.split_whitespace()).is_err());
+    }
+
+    #[test]
+    fn test_link_list_request() {
+        let command = Command::Link(Link::List);
+        let grpc_request = command.get_request();
+        assert_eq!(grpc_request, GrpcRequest::ListLink);
+    }
+
+    #[test]
+    fn test_link_patch_rssi_request_full() {
+        let command = Command::Link(Link::Patch(LinkPatchCommand {
+            command: LinkPatch::Rssi(RssiPatch {
+                radio_type: RadioType::Ble,
+                value: -60,
+                sender_id: Some(100),
+                receiver_id: Some(200),
+            }),
+        }));
+        let grpc_request = command.get_request();
+        let expected_link = model::Link {
+            sender_id: 100,
+            receiver_id: 200,
+            link_kind: PhyKindProto::BLUETOOTH_LOW_ENERGY.into(),
+            rssi: -60,
+            ..Default::default()
+        };
+        let expected_request = frontend::PatchLinkRequest {
+            link: MessageField::some(expected_link),
+            ..Default::default()
+        };
+        assert_eq!(grpc_request, GrpcRequest::PatchLink(expected_request));
+    }
+
+    #[test]
+    fn test_link_patch_rssi_request_no_ids() {
+        let command = Command::Link(Link::Patch(LinkPatchCommand {
+            command: LinkPatch::Rssi(RssiPatch {
+                radio_type: RadioType::Wifi,
+                value: -70,
+                sender_id: None,
+                receiver_id: None,
+            }),
+        }));
+        let grpc_request = command.get_request();
+        let expected_link = model::Link {
+            sender_id: 0,   // Default for None
+            receiver_id: 0, // Default for None
+            link_kind: PhyKindProto::WIFI.into(),
+            rssi: -70,
+            ..Default::default()
+        };
+        let expected_request = frontend::PatchLinkRequest {
+            link: MessageField::some(expected_link),
+            ..Default::default()
+        };
+        assert_eq!(grpc_request, GrpcRequest::PatchLink(expected_request));
+    }
+
+    #[test]
+    fn test_link_delete_rssi_request_full() {
+        let command = Command::Link(Link::Delete(LinkDeleteCommand {
+            command: LinkDelete::Rssi(RssiDelete {
+                radio_type: RadioType::Classic,
+                sender_id: Some(10),
+                receiver_id: Some(20),
+            }),
+        }));
+        let grpc_request = command.get_request();
+        let expected_link = model::Link {
+            sender_id: 10,
+            receiver_id: 20,
+            link_kind: PhyKindProto::BLUETOOTH_CLASSIC.into(),
+            ..Default::default() // RSSI is not part of delete request key
+        };
+        let expected_request = frontend::DeleteLinkRequest {
+            link: MessageField::some(expected_link),
+            ..Default::default()
+        };
+        assert_eq!(grpc_request, GrpcRequest::DeleteLink(expected_request));
+    }
+
+    #[test]
+    fn test_link_delete_rssi_request_no_ids() {
+        let command = Command::Link(Link::Delete(LinkDeleteCommand {
+            command: LinkDelete::Rssi(RssiDelete {
+                radio_type: RadioType::Ble,
+                sender_id: None,
+                receiver_id: None,
+            }),
+        }));
+        let grpc_request = command.get_request();
+        let expected_link = model::Link {
+            sender_id: 0,   // Default for None
+            receiver_id: 0, // Default for None
+            link_kind: PhyKindProto::BLUETOOTH_LOW_ENERGY.into(),
+            ..Default::default()
+        };
+        let expected_request = frontend::DeleteLinkRequest {
+            link: MessageField::some(expected_link),
+            ..Default::default()
+        };
+        assert_eq!(grpc_request, GrpcRequest::DeleteLink(expected_request));
     }
 }

@@ -27,6 +27,7 @@ use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
 use crate::devices::devices_handler::{spawn_shutdown_publisher, DeviceManager};
 use crate::events::{Event, Events, ShutDown};
+use crate::link::{LinkManager, PhyKind, ANY_CHIP};
 use crate::session::Session;
 use crate::version::get_version;
 use crate::wireless;
@@ -40,6 +41,7 @@ use netsim_proto::config::{Bluetooth as BluetoothConfig, Capture, Config};
 use std::env;
 use std::ffi::{c_char, c_int};
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
 
 /// Wireless network simulator for android (and other) emulated devices.
 ///
@@ -208,6 +210,59 @@ fn disambiguate_args(args: &mut NetsimdArgs, config: &mut Config) {
     };
 }
 
+/// Parses a single "PHY_KIND=RSSI_VALUE" string and sets the global RSSI.
+fn parse_and_set_rssi(link_manager: &Arc<LinkManager>, rssi_str: &str) -> Result<(), String> {
+    let parts: Vec<&str> = rssi_str.split('=').collect();
+    if parts.len() != 2 {
+        return Err(format!(
+            "Invalid RSSI default format: '{}'. Expected PHY_KIND=RSSI_VALUE",
+            rssi_str
+        ));
+    }
+
+    let phy_kind_input_str = parts[0].trim();
+    let rssi_input_str = parts[1].trim();
+    let phy_kind_str = phy_kind_input_str.to_uppercase();
+
+    // Match the uppercased input string against a list of known aliases and full names
+    // for PhyKind. This is case-insensitive due to the to_uppercase() call.
+    let phy_kind = match phy_kind_str.as_str() {
+        "BLE" | "BT_LE" | "BLUETOOTH_LOW_ENERGY" => Ok(PhyKind::BluetoothLowEnergy),
+        "CLASSIC" | "BT_CLASSIC" | "BLUETOOTH_CLASSIC" => Ok(PhyKind::BluetoothClassic),
+        "WIFI" => Ok(PhyKind::Wifi),
+        "UWB" => Ok(PhyKind::Uwb),
+        "WIFIRTT" | "WIFI_RTT" => Ok(PhyKind::WifiRtt),
+        "NONE" => Ok(PhyKind::None),
+        _ => Err(format!("Invalid or unhandled PhyKind string: '{}'", phy_kind_input_str)),
+    }?;
+
+    let rssi_value = rssi_input_str.parse::<i8>().map_err(|e| {
+        format!(
+            "Invalid RSSI for {}: '{}'. Expected i8 ({} to {}). Error: {}",
+            phy_kind_input_str,
+            rssi_input_str,
+            i8::MIN,
+            i8::MAX,
+            e
+        )
+    })?;
+    info!("Setting global RSSI default: {:?} = {}", phy_kind, rssi_value);
+
+    link_manager.set_rssi(ANY_CHIP, ANY_CHIP, phy_kind, rssi_value);
+    Ok(())
+}
+
+/// Processes the `rssi` command line arguments and configures the LinkManager.
+fn process_rssi_arg(rssi_opt: &Option<Vec<String>>, link_manager: &Arc<LinkManager>) {
+    if let Some(rssi) = rssi_opt {
+        for rssi_str in rssi {
+            if let Err(e) = parse_and_set_rssi(link_manager, rssi_str) {
+                error!("{}", e);
+            }
+        }
+    }
+}
+
 fn run_netsimd_primary(mut args: NetsimdArgs) {
     info!(
         "Netsim Version: {}, OS: {}, Arch: {}",
@@ -265,8 +320,9 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     let device_events_rx = events.subscribe();
     let main_events_rx = events.subscribe();
     let session_events_rx = events.subscribe();
-
-    DeviceManager::init(events.clone());
+    let link_manager = Arc::new(LinkManager::new());
+    process_rssi_arg(&args.rssi, &link_manager);
+    DeviceManager::init(events.clone(), link_manager.clone());
 
     // Start radio facades
     wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
@@ -291,7 +347,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
 
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
     // valid and open for as long as the program runs.
-    let mut service = unsafe { Service::new(service_params) };
+    let mut service = unsafe { Service::new(service_params, link_manager) };
 
     // Run all netsimd services (grpc, socket, web)
     match service.run() {
