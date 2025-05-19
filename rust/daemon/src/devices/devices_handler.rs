@@ -30,11 +30,12 @@ use crate::events::{
     ChipAdded, ChipRemoved, DeviceAdded, DevicePatched, DeviceRemoved, Event, Events, ShutDown,
 };
 use crate::http_server::server_response::ResponseWritable;
-use crate::link::{LinkManager, PhyKind};
+use crate::links::link::{LinkManager, PhyKind};
 use crate::ranging;
 use crate::wireless;
 use http::Request;
 use log::{info, warn};
+use netsim_common::util::proto_print_options::JSON_PRINT_OPTION;
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::frontend::patch_device_request::PatchDeviceFields as ProtoPatchDeviceFields;
 use netsim_proto::frontend::CreateDeviceRequest;
@@ -56,7 +57,6 @@ use protobuf::{Enum, MessageField};
 use protobuf_json_mapping::merge_from_str;
 use protobuf_json_mapping::print_to_string;
 use protobuf_json_mapping::print_to_string_with_options;
-use protobuf_json_mapping::PrintOptions;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::Receiver;
@@ -69,12 +69,6 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 static IDLE_SECS_FOR_SHUTDOWN: u64 = 15;
 
 const INITIAL_DEVICE_ID: u32 = 1;
-const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
-    enum_values_int: false,
-    proto_field_name: false,
-    always_output_default_values: true,
-    _future_options: (),
-};
 
 static POSE_MANAGER: OnceLock<Arc<PoseManager>> = OnceLock::new();
 

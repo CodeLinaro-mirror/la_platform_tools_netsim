@@ -14,7 +14,7 @@
 
 //! Centralized conversion logic between Protobuf and internal types.
 
-use crate::link::{Link as InternalLink, PhyKind as InternalPhyKind};
+use crate::links::link::{Link as InternalLink, PhyKind as InternalPhyKind};
 use netsim_proto::model::{Link as ProtoLink, PhyKind as ProtoPhyKind};
 use protobuf::EnumOrUnknown;
 

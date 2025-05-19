@@ -15,7 +15,7 @@
 use crate::captures::captures_handler;
 use crate::devices::chip::ChipIdentifier;
 use crate::devices::devices_handler;
-use crate::link::{Link, LinkManager, PhyKind};
+use crate::links::link::{Link, LinkManager, PhyKind};
 use futures_util::{FutureExt as _, SinkExt as _, TryFutureExt as _};
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink, WriteFlags};
 use log::warn;

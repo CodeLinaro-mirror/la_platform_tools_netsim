@@ -33,7 +33,7 @@ mod events;
 mod ffi;
 mod grpc_server;
 mod http_server;
-mod link;
+mod links;
 mod proto_mapping;
 mod ranging;
 mod resource;
