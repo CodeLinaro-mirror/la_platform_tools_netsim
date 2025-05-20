@@ -318,6 +318,7 @@ rust_defaults {
         "librand",
         "liblibc",
         "liblog_rust",
+        "libprotobuf_json_mapping",
         "libenv_logger",
         "libzip",
     ],

@@ -27,7 +27,7 @@ use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
 use crate::devices::devices_handler::{spawn_shutdown_publisher, DeviceManager};
 use crate::events::{Event, Events, ShutDown};
-use crate::link::{LinkManager, PhyKind, ANY_CHIP};
+use crate::links::link::{LinkManager, PhyKind, ANY_CHIP};
 use crate::session::Session;
 use crate::version::get_version;
 use crate::wireless;
