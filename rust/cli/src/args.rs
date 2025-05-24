@@ -71,7 +71,7 @@ pub enum Command {
     Beacon(Beacon),
     /// Open Bumble Hive Web Page
     Bumble,
-    /// Manage Link prooperties
+    /// Manage Link properties
     #[command(subcommand)]
     Link(Link),
 }
