@@ -58,3 +58,6 @@ if [ -f "$BPFMT" ]; then
   find $find \( -name "Android.bp" \) \
     -exec $BPFMT -w {} \;
 fi
+
+# Run buildifier to format Bazel build files
+buildifier -r $REPO/tools/netsim
