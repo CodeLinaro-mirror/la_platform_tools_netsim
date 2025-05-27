@@ -1,5 +1,5 @@
 //! gRPC frontend client library for netsim.
-use anyhow::{anyhow, Result};
+use crate::error::Result;
 use futures_util::StreamExt;
 use netsim_proto::frontend;
 use netsim_proto::frontend_grpc::FrontendServiceClient;
@@ -120,6 +120,9 @@ pub fn send_grpc(
             client.delete_link(req)?;
             Ok(GrpcResponse::DeleteLink)
         }
-        _ => Err(anyhow!(grpcio::RpcStatus::new(grpcio::RpcStatusCode::INVALID_ARGUMENT,))),
+        _ => Err(grpcio::Error::RpcFailure(grpcio::RpcStatus::new(
+            grpcio::RpcStatusCode::INVALID_ARGUMENT,
+        ))
+        .into()),
     }
 }
