@@ -15,6 +15,7 @@ use crate::args::{
     Beacon, BeaconCreate, BeaconPatch, Capture, Command, OnOffState, RadioType, UpDownStatus,
 };
 use crate::grpc_client::{self, GrpcRequest, GrpcResponse};
+use log::error;
 use netsim_common::util::time_display::TimeDisplay;
 use netsim_proto::common::ChipKind;
 use netsim_proto::frontend;
@@ -30,7 +31,6 @@ use netsim_proto::model::{
     Position,
 };
 use protobuf::MessageField;
-use tracing::error;
 
 impl Command {
     /// Return the generated request protobuf message

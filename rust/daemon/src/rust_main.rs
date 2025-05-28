@@ -27,6 +27,7 @@ use crate::captures::capture::spawn_capture_event_subscriber;
 use crate::config_file;
 use crate::devices::devices_handler::{spawn_shutdown_publisher, DeviceManager};
 use crate::events::{Event, Events, ShutDown};
+use crate::link::LinkManager;
 use crate::session::Session;
 use crate::version::get_version;
 use crate::wireless;
@@ -40,6 +41,7 @@ use netsim_proto::config::{Bluetooth as BluetoothConfig, Capture, Config};
 use std::env;
 use std::ffi::{c_char, c_int};
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
 
 /// Wireless network simulator for android (and other) emulated devices.
 ///
@@ -265,8 +267,8 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     let device_events_rx = events.subscribe();
     let main_events_rx = events.subscribe();
     let session_events_rx = events.subscribe();
-
-    DeviceManager::init(events.clone());
+    let link_manager = Arc::new(LinkManager::new());
+    DeviceManager::init(events.clone(), link_manager.clone());
 
     // Start radio facades
     wireless::bluetooth::bluetooth_start(&config.bluetooth, instance_num);
@@ -291,7 +293,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
 
     // SAFETY: The caller guaranteed that the file descriptors in `fd_startup_str` would remain
     // valid and open for as long as the program runs.
-    let mut service = unsafe { Service::new(service_params) };
+    let mut service = unsafe { Service::new(service_params, link_manager) };
 
     // Run all netsimd services (grpc, socket, web)
     match service.run() {
