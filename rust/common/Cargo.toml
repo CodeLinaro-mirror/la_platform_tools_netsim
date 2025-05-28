@@ -13,5 +13,6 @@ chrono = { version = "0.4.19", default-features = false }
 env_logger = { version = "0.10.0", default-features = false }
 libc = "0.2.150"
 log = "0.4.17"
+protobuf-json-mapping = "3.2.0"
 rand = "0.8.5"
 zip = { version = "0.6.4", default-features = false }

@@ -14,7 +14,7 @@
 
 use super::backend::PacketStreamerService;
 use super::frontend::FrontendClient;
-use crate::link::LinkManager;
+use crate::links::link::LinkManager;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
