@@ -71,6 +71,9 @@ pub enum Command {
     Beacon(Beacon),
     /// Open Bumble Hive Web Page
     Bumble,
+    /// Manage Link prooperties
+    #[command(subcommand)]
+    Link(Link),
 }
 
 #[derive(Debug, Args, PartialEq)]
@@ -214,6 +217,65 @@ pub struct BeaconBleAdvertiseData {
     /// Manufacturer-specific data given as bytes in hexadecimal
     #[arg(long)]
     pub manufacturer_data: Option<ParsableBytes>,
+}
+
+#[derive(Debug, Subcommand, PartialEq)]
+pub enum Link {
+    /// List all current links and their properties
+    List,
+    /// Add or modify link properties
+    Patch(LinkPatchCommand),
+    /// Remove link properties
+    Delete(LinkDeleteCommand),
+}
+
+#[derive(Debug, Args, PartialEq)]
+pub struct LinkPatchCommand {
+    #[command(subcommand)]
+    pub command: LinkPatch,
+}
+
+#[derive(Debug, Subcommand, PartialEq)]
+pub enum LinkPatch {
+    /// Patch RSSI (Received Signal Strength Indication) for a link.
+    Rssi(RssiPatch),
+}
+
+#[derive(Debug, Args, PartialEq)]
+pub struct LinkDeleteCommand {
+    #[command(subcommand)]
+    pub command: LinkDelete,
+}
+
+#[derive(Debug, Subcommand, PartialEq)]
+pub enum LinkDelete {
+    /// Delete RSSI (Received Signal Strength Indication) for a link.
+    Rssi(RssiDelete),
+}
+
+#[derive(Debug, Args, PartialEq)]
+pub struct RssiPatch {
+    /// Radio type for the link.
+    #[arg(value_enum, ignore_case = true)]
+    pub radio_type: RadioType,
+    /// RSSI value in dBm (e.g., -60). Must be between -128 and 127.
+    #[arg(allow_hyphen_values = true)]
+    pub value: i8,
+    /// Identifier for the sender chip. Defaults to 0 (ANY_CHIP), affecting all senders to the specified receiver.
+    pub sender_id: Option<u32>,
+    /// Identifier for the receiver chip. Defaults to 0 (ANY_CHIP), affecting all receivers from the specified sender.
+    pub receiver_id: Option<u32>,
+}
+
+#[derive(Debug, Args, PartialEq)]
+pub struct RssiDelete {
+    /// Radio type for the link.
+    #[arg(value_enum, ignore_case = true)]
+    pub radio_type: RadioType,
+    /// Identifier for the sender chip. Defaults to 0 (ANY_CHIP).
+    pub sender_id: Option<u32>,
+    /// Identifier for the receiver chip. Defaults to 0 (ANY_CHIP).
+    pub receiver_id: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
