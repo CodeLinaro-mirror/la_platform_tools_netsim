@@ -14,6 +14,7 @@
 
 use super::backend::PacketStreamerService;
 use super::frontend::FrontendClient;
+use crate::links::link::LinkManager;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
@@ -22,10 +23,15 @@ use netsim_proto::frontend_grpc::create_frontend_service;
 use netsim_proto::packet_streamer_grpc::create_packet_streamer;
 use std::sync::Arc;
 
-pub fn start(port: u32, no_cli_ui: bool, _vsock: u16) -> anyhow::Result<(Server, u16)> {
+pub fn start(
+    port: u32,
+    no_cli_ui: bool,
+    link_manager: Arc<LinkManager>,
+    _vsock: u16,
+) -> anyhow::Result<(Server, u16)> {
     let env = Arc::new(Environment::new(1));
     let backend_service = create_packet_streamer(PacketStreamerService);
-    let frontend_service = create_frontend_service(FrontendClient);
+    let frontend_service = create_frontend_service(FrontendClient::new(link_manager));
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
     let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota).reuse_port(false);
     let mut server_builder = ServerBuilder::new(env);

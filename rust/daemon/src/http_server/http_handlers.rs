@@ -29,6 +29,10 @@ use log::warn;
 use crate::{
     captures::captures_handler::handle_capture,
     devices::devices_handler::handle_device,
+    links::{
+        link::LinkManager,
+        links_handler::{handle_link_delete, handle_link_list, handle_link_patch},
+    },
     transport::websocket::{handle_websocket, run_websocket_transport},
     version::VERSION,
 };
@@ -137,7 +141,12 @@ fn handle_dev(request: &Request<Vec<u8>>, _param: &str, writer: ResponseWritable
     handle_file(request.method().as_str(), "dev.html", writer)
 }
 
-pub fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>>, dev: bool) {
+pub fn handle_connection(
+    mut stream: TcpStream,
+    valid_files: Arc<HashSet<String>>,
+    dev: bool,
+    link_manager: Arc<LinkManager>,
+) {
     let mut router = Router::new();
     router.add_route(Uri::from_static("/"), Box::new(handle_index));
     router.add_route(Uri::from_static("/version"), Box::new(handle_version));
@@ -175,6 +184,36 @@ pub fn handle_connection(mut stream: TcpStream, valid_files: Arc<HashSet<String>
             Box::new(handle_static_wrapper.clone()),
         )
     }
+
+    // A closure for checking if path is link, and call methods in links_handler accordingly
+    let handle_link_wrapper = move |request: &Request<Vec<u8>>,
+                                    _path: &str,
+                                    writer: ResponseWritable| {
+        match request.method().as_str() {
+            "LIST" => match handle_link_list(&link_manager) {
+                Ok(response) => writer.put_ok("text/json", &response, vec![]),
+                Err(e) => writer.put_error(404, &e),
+            },
+            "PATCH" => {
+                let body = request.body();
+                let patch_json = String::from_utf8(body.to_vec()).unwrap();
+                match handle_link_patch(&link_manager, &patch_json) {
+                    Ok(response) => writer.put_ok("text/plain", &response, vec![]),
+                    Err(e) => writer.put_error(404, &e),
+                }
+            }
+            "DELETE" => {
+                let body = request.body();
+                let delete_json = String::from_utf8(body.to_vec()).unwrap();
+                match handle_link_delete(&link_manager, &delete_json) {
+                    Ok(response) => writer.put_ok("text/plain", &response, vec![]),
+                    Err(e) => writer.put_error(404, &e),
+                }
+            }
+            _ => writer.put_error(404, "Unsupported request method"),
+        }
+    };
+    router.add_route(Uri::from_static(r"/v1/link"), Box::new(handle_link_wrapper.clone()));
 
     if let Ok(request) = parse_http_request::<&TcpStream>(&mut BufReader::new(&stream)) {
         let mut response_writer = ServerResponseWriter::new(&mut stream);

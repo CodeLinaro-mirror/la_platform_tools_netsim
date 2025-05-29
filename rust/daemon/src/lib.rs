@@ -33,6 +33,8 @@ mod events;
 mod ffi;
 mod grpc_server;
 mod http_server;
+mod links;
+mod proto_mapping;
 mod ranging;
 mod resource;
 mod rust_main;

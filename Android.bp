@@ -318,6 +318,7 @@ rust_defaults {
         "librand",
         "liblibc",
         "liblog_rust",
+        "libprotobuf_json_mapping",
         "libenv_logger",
         "libzip",
     ],
@@ -368,10 +369,10 @@ rust_defaults {
         "libfutures_util",
         "libgrpcio",
         "libhex",
+        "liblog_rust",
         "libnetsim_common",
         "libnetsim_proto",
         "libprotobuf",
-        "libtracing",
     ],
 }
 
