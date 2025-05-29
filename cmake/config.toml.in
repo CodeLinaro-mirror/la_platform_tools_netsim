@@ -135,8 +135,8 @@ unicode-width = { path = "${AOSP_ROOT}/external/rust/android-crates-io/crates/un
 utf-8 = { path = "${AOSP_ROOT}/external/rust/android-crates-io/crates/utf-8" }
 walkdir = { path = "${AOSP_ROOT}/external/rust/android-crates-io/crates/walkdir" }
 which = { path = "${AOSP_ROOT}/external/rust/android-crates-io/crates/which" }
-zerocopy = { path = "${AOSP_ROOT}/external/rust/android-crates-io/crates/zerocopy" }
-zerocopy-derive = { path = "${AOSP_ROOT}/external/rust/android-crates-io/crates/zerocopy-derive" }
+zerocopy = { path = "${AOSP_ROOT}/external/rust/android-crates-io-zerocopy/crates/zerocopy" }
+zerocopy-derive = { path = "${AOSP_ROOT}/external/rust/android-crates-io-zerocopy/crates/zerocopy-derive" }
 zip = { path = "${AOSP_ROOT}/external/rust/android-crates-io/crates/zip" }
 
 # TODO: Update Rust toolchain to use the latest clap crates.
