@@ -363,7 +363,6 @@ rust_test_host {
 rust_defaults {
     name: "netsim_cli_defaults",
     rustlibs: [
-        "libanyhow",
         "libclap",
         "libfutures",
         "libfutures_util",
