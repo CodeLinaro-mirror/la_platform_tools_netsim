@@ -12,3 +12,6 @@ objs
 # Android test
 **/.idea
 **/out
+# Bazel build files
+bazel-*
+MODULE.bazel.lock
