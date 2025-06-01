@@ -212,10 +212,10 @@ fn disambiguate_args(args: &mut NetsimdArgs, config: &mut Config) {
 
 /// Parses a single "PHY_KIND=RSSI_VALUE" string and sets the global RSSI.
 fn parse_and_set_rssi(link_manager: &Arc<LinkManager>, rssi_str: &str) -> Result<(), String> {
-    let parts: Vec<&str> = rssi_str.split('=').collect();
+    let parts: Vec<&str> = rssi_str.split(':').collect();
     if parts.len() != 2 {
         return Err(format!(
-            "Invalid RSSI default format: '{}'. Expected PHY_KIND=RSSI_VALUE",
+            "Invalid RSSI default format: '{}'. Expected PHY_KIND:RSSI_VALUE",
             rssi_str
         ));
     }
@@ -257,7 +257,7 @@ fn process_rssi_arg(rssi_opt: &Option<Vec<String>>, link_manager: &Arc<LinkManag
     if let Some(rssi) = rssi_opt {
         for rssi_str in rssi {
             if let Err(e) = parse_and_set_rssi(link_manager, rssi_str) {
-                error!("{}", e);
+                panic!("{}", e);
             }
         }
     }
