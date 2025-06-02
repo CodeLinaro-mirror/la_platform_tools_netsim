@@ -44,7 +44,7 @@ class InstallEmulatorTask(Task):
     self.buildbot = args.buildbot
     self.out_dir = args.out_dir
     # Local fetching use only - default to emulator-linux_x64_gfxstream
-    self.target = args.emulator_target + "_gfxstream"
+    self.target = args.emulator_target
     # Local Emulator directory
     self.local_emulator_dir = args.local_emulator_dir
 
