@@ -73,6 +73,7 @@ struct WebSocketTransport {
 }
 
 impl Response for WebSocketTransport {
+    #[allow(clippy::useless_conversion)]
     fn response(&mut self, packet: Bytes, packet_type: u8) {
         let mut buffer = Vec::new();
         buffer.push(packet_type);
@@ -81,7 +82,7 @@ impl Response for WebSocketTransport {
             .websocket_writer
             .lock()
             .expect("Failed to acquire lock on WebSocket")
-            .send(Message::Binary(buffer))
+            .send(Message::Binary(buffer.into()))
         {
             error!("{err}");
         };
