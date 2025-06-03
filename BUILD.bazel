@@ -14,9 +14,10 @@
 """netsim bazel build rule."""
 
 load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 proto_library(
-    name = "lib-netsimd-proto",
+    name = "netsimd-proto",
     srcs = [
         "proto/netsim/common.proto",
         "proto/netsim/frontend.proto",
@@ -32,4 +33,25 @@ proto_library(
         "@protobuf//:timestamp_proto",
         "@rootcanal//:rootcanal-configuration-proto",
     ],
+)
+
+rust_library(
+    name = "netsim_common",
+    srcs = glob(["rust/common/src/**/*.rs"]),
+    deps = [
+        "@anyhow",
+        "@chrono",
+        "@env_logger",
+        "@libc",
+        "@log_rust",
+        "@protobuf_json_mapping",
+        "@rand",
+        "@zip",
+    ],
+)
+
+rust_test(
+    name = "netsim_common_tests",
+    crate = ":netsim_common",
+    tags = ["general_tests"],
 )
