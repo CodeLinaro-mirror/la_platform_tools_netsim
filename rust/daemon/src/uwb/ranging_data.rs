@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rand::{prelude::SliceRandom, rngs::ThreadRng, thread_rng};
+use rand::{prelude::*, rngs::ThreadRng, thread_rng};
 
 use std::collections::BTreeMap;
 
