@@ -127,19 +127,20 @@ impl Medium {
     }
 
     pub fn add(&self, client_id: u32) {
-        let _ = self.clients.write().unwrap().entry(client_id).or_insert_with(|| {
-            info!("Insert client {}", client_id);
-            Client::new()
-        });
+        let _ =
+            self.clients.write().expect("RwLock poisoned").entry(client_id).or_insert_with(|| {
+                info!("Insert client {}", client_id);
+                Client::new()
+            });
     }
 
     pub fn remove(&self, client_id: u32) {
-        self.stations.write().unwrap().retain(|_, s| s.client_id != client_id);
-        self.clients.write().unwrap().remove(&client_id);
+        self.stations.write().expect("RwLock poisoned").retain(|_, s| s.client_id != client_id);
+        self.clients.write().expect("RwLock poisoned").remove(&client_id);
     }
 
     pub fn reset(&self, client_id: u32) {
-        if let Some(client) = self.clients.read().unwrap().get(&client_id) {
+        if let Some(client) = self.clients.read().expect("RwLock poisoned").get(&client_id) {
             client.enabled.store(true, Ordering::Relaxed);
             client.tx_count.store(0, Ordering::Relaxed);
             client.rx_count.store(0, Ordering::Relaxed);
@@ -147,7 +148,7 @@ impl Medium {
     }
 
     pub fn get(&self, client_id: u32) -> Option<Client> {
-        self.clients.read().unwrap().get(&client_id).map(|c| c.to_owned())
+        self.clients.read().expect("RwLock poisoned").get(&client_id).map(|c| c.to_owned())
     }
 
     fn contains_client(&self, client_id: u32) -> bool {
@@ -155,17 +156,17 @@ impl Medium {
     }
 
     fn stations(&self) -> impl Iterator<Item = Arc<Station>> {
-        self.stations.read().unwrap().clone().into_values()
+        self.stations.read().expect("RwLock poisoned").clone().into_values()
     }
 
     fn contains_station(&self, addr: &MacAddress) -> bool {
-        self.stations.read().unwrap().contains_key(addr)
+        self.stations.read().expect("RwLock poisoned").contains_key(addr)
     }
 
     fn get_station(&self, addr: &MacAddress) -> WifiResult<Arc<Station>> {
         self.stations
             .read()
-            .unwrap()
+            .expect("RwLock poisoned")
             .get(addr)
             .cloned()
             .ok_or_else(|| WifiError::Client(format!("Station not found for address: {addr}")))
@@ -176,7 +177,7 @@ impl Medium {
         let hwsim_addr = frame.transmitter.ok_or(WifiError::Frame(format!(
             "Missing transmitter attribute in frame for client: {client_id}"
         )))?;
-        self.stations.write().unwrap().entry(src_addr).or_insert_with(|| {
+        self.stations.write().expect("RwLock poisoned").entry(src_addr).or_insert_with(|| {
             info!(
                 "Insert station with client id {}, hwsimaddr: {}, \
                 Ieee80211 addr: {}",
@@ -358,8 +359,14 @@ impl Medium {
         if let Ok(destination) = self.get_station(&dest_addr) {
             self.send_ieee80211_response(&ieee80211, &destination)?;
         } else if dest_addr.is_multicast() {
+            // Deduplicates based on (hwsim_addr, freq) as these are used to construct
+            // the HwsimMsg for the destination.
+            let mut sent_to_hwsim_addrs_freq = std::collections::HashSet::new();
             for destination in self.stations() {
-                self.send_ieee80211_response(&ieee80211, &destination)?;
+                let freq = destination.freq.load(Ordering::Relaxed);
+                if sent_to_hwsim_addrs_freq.insert((destination.hwsim_addr, freq)) {
+                    self.send_ieee80211_response(&ieee80211, &destination)?;
+                }
             }
         } else {
             return Err(WifiError::Transmission(format!(
@@ -392,7 +399,15 @@ impl Medium {
         ieee80211: &Ieee80211,
         destination: &Station,
     ) -> WifiResult<HwsimMsg> {
-        let attributes = self.create_hwsim_msg_attr(ieee80211, destination)?;
+        let mut builder = HwsimAttrSet::builder();
+        // Attributes required by mac80211_hwsim.
+        builder.receiver(&destination.hwsim_addr.to_vec());
+        let frame_bytes = ieee80211.encode_to_vec()?;
+        builder.frame(&frame_bytes);
+        builder.rx_rate(RX_RATE);
+        builder.signal(SIGNAL);
+        builder.freq(destination.freq.load(Ordering::Relaxed));
+        let attributes = builder.build()?.attributes;
         let hwsim_hdr = HwsimMsgHdr { hwsim_cmd: HwsimCmd::Frame, hwsim_version: 0, reserved: 0 };
         let nlmsg_len = (NL_MSG_HDR_LEN + hwsim_hdr.encoded_len() + attributes.len()) as u32;
         let nl_hdr = NlMsgHdr {
@@ -405,24 +420,8 @@ impl Medium {
         Ok(HwsimMsg { nl_hdr, hwsim_hdr, attributes })
     }
 
-    fn create_hwsim_msg_attr(
-        &self,
-        ieee80211: &Ieee80211,
-        destination: &Station,
-    ) -> WifiResult<Vec<u8>> {
-        let mut builder = HwsimAttrSet::builder();
-        // Attributes required by mac80211_hwsim.
-        builder.receiver(&destination.hwsim_addr.to_vec());
-        let frame_bytes = ieee80211.encode_to_vec()?;
-        builder.frame(&frame_bytes);
-        builder.rx_rate(RX_RATE);
-        builder.signal(SIGNAL);
-        builder.freq(destination.freq.load(Ordering::Relaxed));
-        Ok(builder.build()?.attributes)
-    }
-
     pub fn set_enabled(&self, client_id: u32, enabled: bool) {
-        if let Some(client) = self.clients.read().unwrap().get(&client_id) {
+        if let Some(client) = self.clients.read().expect("RwLock poisoned").get(&client_id) {
             client.enabled.store(enabled, Ordering::Relaxed);
         }
     }
@@ -430,14 +429,14 @@ impl Medium {
     fn enabled(&self, client_id: u32) -> WifiResult<bool> {
         self.clients
             .read()
-            .unwrap()
+            .expect("RwLock poisoned")
             .get(&client_id)
             .map(|c| c.enabled.load(Ordering::Relaxed))
             .ok_or_else(|| WifiError::Client(format!("client {client_id} is missing")))
     }
 
     fn incr_tx(&self, client_id: u32) -> WifiResult<()> {
-        self.clients.read().unwrap().get(&client_id).map_or(
+        self.clients.read().expect("RwLock poisoned").get(&client_id).map_or(
             Err(WifiError::Client(format!("client {client_id} is missing for incr_tx"))),
             |c| {
                 c.tx_count.fetch_add(1, Ordering::Relaxed);
@@ -447,7 +446,7 @@ impl Medium {
     }
 
     fn incr_rx(&self, client_id: u32) -> WifiResult<()> {
-        self.clients.read().unwrap().get(&client_id).map_or(
+        self.clients.read().expect("RwLock poisoned").get(&client_id).map_or(
             Err(WifiError::Client(format!("client {client_id} is missing for incr_rx"))),
             |c| {
                 c.rx_count.fetch_add(1, Ordering::Relaxed);
@@ -486,15 +485,19 @@ impl Medium {
     }
 
     // Broadcast an 802.11 frame to all stations.
-    /// TODO: Compare with the implementations in mac80211_hwsim.c and wmediumd.c.
+    // TODO: Compare with the implementations in mac80211_hwsim.c and wmediumd.c.
     fn broadcast_from_sta_frame(
         &self,
         frame: &Frame,
         ieee80211: &Ieee80211,
         source: &Station,
     ) -> WifiResult<()> {
-        for destination in self.stations() {
-            if source.addr != destination.addr {
+        // Deduplicates based on (hwsim_addr, freq) as these are used to construct
+        // the HwsimMsg for the destination.
+        let mut sent_to_hwsim_addrs_freq = std::collections::HashSet::new();
+        for destination in self.stations().filter(|sta| sta.addr != source.addr) {
+            let current_freq = destination.freq.load(Ordering::Relaxed);
+            if sent_to_hwsim_addrs_freq.insert((destination.hwsim_addr, current_freq)) {
                 self.send_from_sta_frame(frame, ieee80211, source, &destination)?;
             }
         }

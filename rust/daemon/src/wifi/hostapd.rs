@@ -26,7 +26,8 @@ pub async fn hostapd_run(
     wifi_args: Option<Vec<String>>,
 ) -> WifiResult<Hostapd> {
     // Create hostapd.conf under discovery directory
-    let config_path = get_discovery_directory().join("hostapd.conf");
+    let config_path =
+        get_discovery_directory().join(format!("hostapd_{}.conf", std::process::id()));
     let mut hostapd = Hostapd::new(tx, true, config_path);
     if let Some(wifi_values) = wifi_args {
         let ssid = &wifi_values[0];
