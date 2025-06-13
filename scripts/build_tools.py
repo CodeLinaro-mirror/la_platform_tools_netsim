@@ -100,10 +100,10 @@ def main():
   parser.add_argument(
       "--emulator_target",
       type=str,
-      default="emulator-linux_x64",
+      default="emulator-linux_x64_gfxstream",
       help=(
           "The emulator build target to install for local case, defaults to"
-          " emulator-linux_x64"
+          " emulator-linux_x64_gfxstream"
       ),
   )
   parser.add_argument(
