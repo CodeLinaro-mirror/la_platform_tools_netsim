@@ -181,11 +181,10 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use rand::{distributions::Alphanumeric, Rng};
-    use std::env;
     use std::fs::File;
     use std::io::{Read, Write};
     use std::path::PathBuf;
+    use std::{env, time::SystemTime};
 
     use super::get_ini_filepath;
     use super::IniFile;
@@ -210,11 +209,13 @@ mod tests {
     fn get_temp_ini_filepath(prefix: &str) -> PathBuf {
         env::temp_dir().join(format!(
             "{prefix}_{}.ini",
-            rand::thread_rng()
-                .sample_iter(&Alphanumeric)
-                .take(8)
-                .map(char::from)
-                .collect::<String>()
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                .to_string()
+                + "_"
+                + &rand::random::<u64>().to_string()
         ))
     }
 
