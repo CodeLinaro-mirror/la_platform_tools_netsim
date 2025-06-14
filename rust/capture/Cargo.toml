@@ -23,6 +23,6 @@ crate-type = ["staticlib","lib"]
 doctest = false
 
 [dependencies]
-zerocopy = "0.7.35"
-zerocopy-derive = "0.7.35"
+zerocopy = "0.8.25"
+zerocopy-derive = "0.8.25"
 tokio = { version = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync"] }
