@@ -1,3 +1,17 @@
+// Copyright 2025 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Provides JSON serialization and deserialization for Ethernet frames.
 //!
 //! This module defines `serde`-compatible structures that mirror the `zerocopy`
@@ -50,20 +64,7 @@ impl TryFrom<JsonMacAddr> for MacAddr {
     type Error = JsonError;
 
     fn try_from(json_mac: JsonMacAddr) -> Result<Self, Self::Error> {
-        let parts: Vec<&str> = json_mac.0.split(':').collect();
-        if parts.len() != 6 {
-            return Err(JsonError::MacAddrParseError(format!(
-                "Invalid MAC address format: expected 6 parts, got {}",
-                json_mac.0
-            )));
-        }
-        let mut bytes = [0u8; 6];
-        for (i, part) in parts.iter().enumerate() {
-            bytes[i] = u8::from_str_radix(part, 16).map_err(|_| {
-                JsonError::MacAddrParseError(format!("Invalid hex byte in MAC address: {}", part))
-            })?;
-        }
-        Ok(MacAddr { bytes })
+        json_mac.0.parse().map_err(JsonError::MacAddrParseError)
     }
 }
 
