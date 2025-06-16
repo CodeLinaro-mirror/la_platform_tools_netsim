@@ -1,3 +1,17 @@
+// Copyright 2025 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Provides JSON serialization and deserialization for IEEE 802.11 MAC headers.
 //!
 //! This module defines `serde`-compatible structures that mirror the `zerocopy`
@@ -33,7 +47,11 @@ impl fmt::Display for JsonError {
     }
 }
 
-impl std::error::Error for JsonError {}
+impl From<crate::ethernet_json::JsonError> for JsonError {
+    fn from(err: crate::ethernet_json::JsonError) -> Self {
+        JsonError::ConversionError(err.to_string())
+    }
+}
 
 impl From<serde_json::Error> for JsonError {
     fn from(err: serde_json::Error) -> Self {
@@ -186,19 +204,17 @@ impl From<&MacHeader3Addr> for JsonMacHeader3Addr {
 }
 
 impl TryFrom<&JsonMacHeader3Addr> for MacHeader3Addr {
-    type Error = crate::ethernet_json::JsonError; // Re-use ethernet's MacAddr parsing error
+    type Error = JsonError;
 
     fn try_from(json_header: &JsonMacHeader3Addr) -> Result<Self, Self::Error> {
         let wlan_fields = &json_header.wlan;
         Ok(MacHeader3Addr {
-            frame_control: FrameControl::try_from(wlan_fields.frame_control.clone())
-                .map_err(|e| crate::ethernet_json::JsonError::MacAddrParseError(e.to_string()))?, // Bit of a hack for error type
+            frame_control: FrameControl::try_from(wlan_fields.frame_control.clone())?,
             duration_id: U16::<LittleEndian>::new(wlan_fields.duration_id),
             addr1: crate::ethernet::MacAddr::try_from(wlan_fields.addr1.clone())?,
             addr2: crate::ethernet::MacAddr::try_from(wlan_fields.addr2.clone())?,
             addr3: crate::ethernet::MacAddr::try_from(wlan_fields.addr3.clone())?,
-            sequence_control: SequenceControl::try_from(wlan_fields.sequence_control.clone())
-                .map_err(|e| crate::ethernet_json::JsonError::MacAddrParseError(e.to_string()))?,
+            sequence_control: SequenceControl::try_from(wlan_fields.sequence_control.clone())?,
         })
     }
 }
