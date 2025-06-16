@@ -410,10 +410,10 @@ impl fmt::Display for Displayer<ListLinkResponse> {
                     f,
                     "{:indent$}{:<chip_width$} | {:<chip_width$} | {:<phykind_width$} | {:<rssi_width$}",
                     "",
-                    LinkChipIdDisplay(link.sender_id),
-                    LinkChipIdDisplay(link.receiver_id),
+                    format!("{}", LinkChipIdDisplay(link.sender_id)),
+                    format!("{}", LinkChipIdDisplay(link.receiver_id)),
                     format!("{:?}", link.link_kind.enum_value_or_default()),
-                    link.rssi
+                    link.rssi,
                 )?;
             }
         }
