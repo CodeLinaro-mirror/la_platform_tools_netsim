@@ -22,65 +22,13 @@
 //!
 //! - **`rewrite_request_to_absolute_form`**: The primary function that reads from a
 //!   `BufRead` stream and performs the transformation.
-//! - **`RewriteError`**: An enum that defines possible errors, such as I/O
+//! - **`Error`**: An enum that defines possible errors, such as I/O
 //!   issues, malformed requests, or a missing `Host` header.
 //!
 //! This is typically used in the core logic of an HTTP proxy server.
 
-use std::fmt;
-use std::io::{self, BufRead};
-
-// --- Custom Error Type ---
-
-/// Represents all possible errors that can occur during request rewriting.
-/// The `PartialEq` trait is derived for easier comparison in tests.
-#[derive(Debug)]
-pub enum RewriteError {
-    /// An error occurred during I/O operations (e.g., reading from the stream).
-    /// Note: `io::Error` does not implement `PartialEq`, so we handle it specially in tests.
-    Io(io::Error),
-    /// The HTTP request-line is malformed and cannot be parsed.
-    MalformedRequestLine(String),
-    /// The 'Host' header is missing, which is required for HTTP/1.1.
-    MissingHostHeader,
-}
-
-impl PartialEq for RewriteError {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            // For Io errors, we compare their 'kind'. This is a reliable way
-            // to check if they represent the same type of error (e.g., NotFound).
-            (Self::Io(a), Self::Io(b)) => a.kind() == b.kind(),
-
-            // For other variants, we compare their inner values directly.
-            (Self::MalformedRequestLine(a), Self::MalformedRequestLine(b)) => a == b,
-            (Self::MissingHostHeader, Self::MissingHostHeader) => true,
-
-            // If the variants are different, they are not equal.
-            _ => false,
-        }
-    }
-}
-
-// Implement the Display trait for user-friendly error messages.
-impl fmt::Display for RewriteError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RewriteError::Io(err) => write!(f, "I/O error: {}", err),
-            RewriteError::MalformedRequestLine(line) => {
-                write!(f, "Malformed request line: '{}'", line)
-            }
-            RewriteError::MissingHostHeader => write!(f, "Mandatory 'Host' header is missing"),
-        }
-    }
-}
-
-// Allow `io::Error` to be converted into our custom `RewriteError::Io`.
-impl From<io::Error> for RewriteError {
-    fn from(err: io::Error) -> Self {
-        RewriteError::Io(err)
-    }
-}
+use crate::error::Error;
+use std::io::BufRead;
 
 // --- Core Rewriting Function ---
 
@@ -110,11 +58,9 @@ impl From<io::Error> for RewriteError {
 ///
 /// A `Result` containing either:
 /// - `Ok(String)`: The rewritten request (new request-line + original headers).
-/// - `Err(RewriteError)`: An error that occurred during processing.
+/// - `Err(Error)`: An error that occurred during processing.
 ///
-pub fn rewrite_request_to_absolute_form<R: BufRead>(
-    reader: &mut R,
-) -> Result<String, RewriteError> {
+pub fn rewrite_request_to_absolute_form<R: BufRead>(reader: &mut R) -> Result<String, Error> {
     // A buffer to hold the raw header lines as we read them.
     let mut header_lines = Vec::new();
 
@@ -143,18 +89,18 @@ pub fn rewrite_request_to_absolute_form<R: BufRead>(
         .iter()
         .find(|h| h.to_lowercase().starts_with("host:"))
         .map(|h| h.split_once(':').map_or("", |(_key, value)| value.trim()))
-        .ok_or(RewriteError::MissingHostHeader)?;
+        .ok_or(Error::MissingHostHeader)?;
 
     // Ensure the Host header was not present but empty (e.g., "Host: ").
     if host.is_empty() {
-        return Err(RewriteError::MissingHostHeader);
+        return Err(Error::MissingHostHeader);
     }
 
     // 2. Parse the original request-line (e.g., "GET /path HTTP/1.1").
     let request_parts: Vec<&str> = request_line.split_whitespace().collect();
     if request_parts.len() != 3 {
         // Return the invalid line in the error for easier debugging.
-        return Err(RewriteError::MalformedRequestLine(request_line.trim_end().to_string()));
+        return Err(Error::MalformedRequestLine(request_line.trim_end().to_string()));
     }
     let method = request_parts[0];
     let path = request_parts[1]; // This is the origin-form target (e.g., "/path")
@@ -244,7 +190,7 @@ mod tests {
         let mut reader = BufReader::new(&request[..]);
         let result = rewrite_request_to_absolute_form(&mut reader);
 
-        assert_eq!(result, Err(RewriteError::MissingHostHeader));
+        assert_eq!(result, Err(Error::MissingHostHeader));
     }
 
     /// Tests that an error is returned if the 'Host' header is present but has an empty value.
@@ -254,7 +200,7 @@ mod tests {
         let mut reader = BufReader::new(&request[..]);
         let result = rewrite_request_to_absolute_form(&mut reader);
 
-        assert_eq!(result, Err(RewriteError::MissingHostHeader));
+        assert_eq!(result, Err(Error::MissingHostHeader));
     }
 
     /// Tests that an error is returned for a malformed request-line.
@@ -266,7 +212,7 @@ mod tests {
         let result = rewrite_request_to_absolute_form(&mut reader);
 
         // We can check that the error contains the invalid line.
-        let expected_error = RewriteError::MalformedRequestLine("GET /path".to_string());
+        let expected_error = Error::MalformedRequestLine("GET /path".to_string());
         assert_eq!(result, Err(expected_error));
     }
 }
