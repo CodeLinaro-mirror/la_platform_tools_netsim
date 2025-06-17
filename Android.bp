@@ -80,7 +80,7 @@ rust_defaults {
         "libpica",
         "libprotobuf",
         "libprotobuf_json_mapping",
-        "librand-0.8",
+        "librand",
         "libregex",
         "libthiserror",
         "libtokio",
@@ -315,7 +315,7 @@ rust_defaults {
     rustlibs: [
         "libanyhow",
         "libchrono",
-        "librand-0.8",
+        "librand",
         "liblibc",
         "liblog_rust",
         "libprotobuf_json_mapping",

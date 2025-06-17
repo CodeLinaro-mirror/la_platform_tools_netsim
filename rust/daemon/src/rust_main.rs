@@ -353,6 +353,8 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     match service.run() {
         Err(e) => {
             error!("service.run() -> Err({e:?})");
+            error!("Failed to run netsimd services, exiting...");
+            service.shut_down();
             return;
         }
         Ok((grpc_port, web_port, websocket_port)) => {
