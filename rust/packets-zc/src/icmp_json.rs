@@ -1,4 +1,4 @@
-// Copyright 2024 The Android Open Source Project
+// Copyright 2025 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,33 +13,14 @@
 // limitations under the License.
 
 use crate::icmp::IcmpHeader;
-use serde::ser::SerializeStruct;
-use serde::{Serialize, Serializer};
+use std::collections::BTreeMap;
 
-pub struct IcmpHeaderJson<'a> {
-    header: &'a IcmpHeader,
-}
-
-impl<'a> Serialize for IcmpHeaderJson<'a> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut s = serializer.serialize_struct("IcmpHeader", 3)?;
-        s.serialize_field("type", &self.header.icmp_type)?;
-        s.serialize_field("code", &self.header.icmp_code)?;
-        s.serialize_field("checksum", &self.header.icmp_checksum.get())?;
-        s.end()
-    }
-}
-
-pub fn to_json(icmp_header: &IcmpHeader) -> IcmpHeaderJson {
-    IcmpHeaderJson { header: icmp_header }
-}
-
-pub fn to_json_string(icmp_header: &IcmpHeader) -> Result<String, serde_json::Error> {
-    let json = IcmpHeaderJson { header: icmp_header };
-    serde_json::to_string(&json)
+pub fn to_json(header: &IcmpHeader) -> BTreeMap<String, String> {
+    let mut icmp = BTreeMap::new();
+    icmp.insert("icmp.type".to_string(), format!("{}", header.icmp_type));
+    icmp.insert("icmp.code".to_string(), format!("{}", header.icmp_code));
+    icmp.insert("icmp.checksum".to_string(), format!("{:#06x}", header.icmp_checksum.get()));
+    icmp
 }
 
 #[cfg(test)]
@@ -55,22 +36,23 @@ mod tests {
             icmp_checksum: U16::new(0x1234),
             rest: [0; 4],
         };
-        let json = to_json(&header);
-        let value = serde_json::to_value(&json).unwrap();
-        assert_eq!(value["type"], 8);
-        assert_eq!(value["code"], 0);
-        assert_eq!(value["checksum"], 0x1234);
+        let json_map = to_json(&header);
+        let value = serde_json::to_value(&json_map).unwrap();
+        assert_eq!(value["icmp.type"], "8");
+        assert_eq!(value["icmp.code"], "0");
+        assert_eq!(value["icmp.checksum"], "0x1234");
     }
 
     #[test]
     fn test_to_json_string() {
         let header = IcmpHeader {
-            icmp_type: 0,
+            icmp_type: 8,
             icmp_code: 0,
-            icmp_checksum: U16::new(0x5678),
+            icmp_checksum: U16::new(0x1234),
             rest: [0; 4],
         };
-        let json_string = to_json_string(&header).unwrap();
-        assert_eq!(json_string, r#"{"type":0,"code":0,"checksum":22136}"#);
+        let json_map = to_json(&header);
+        let s = serde_json::to_string(&json_map).unwrap();
+        assert!(s.contains("icmp.type"));
     }
 }
