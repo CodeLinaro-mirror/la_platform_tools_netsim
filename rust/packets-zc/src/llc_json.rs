@@ -1,10 +1,24 @@
+// Copyright 2025 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Provides JSON serialization and deserialization for LLC and SNAP headers.
 //!
 //! This module defines `serde`-compatible structures that mirror the `zerocopy`
 //! LLC and SNAP structures from the `llc` module. It includes functions
 //! for converting between these types and for serializing to/from JSON strings.
 
-use crate::llc::{control_field, sap, LlcHeader, LlcSnapHeader, SnapHeader};
+use crate::llc::{LlcHeader, LlcSnapHeader, SnapHeader};
 use crate::llc_util; // For string representations
 use serde::{Deserialize, Serialize};
 use std::{fmt, num::ParseIntError};
@@ -147,6 +161,7 @@ pub fn from_json_string(json_str: &str) -> Result<LlcSnapHeader, JsonError> {
 mod tests {
     use super::*;
     use crate::ethernet::ether_type;
+    use crate::llc::{control_field, sap};
 
     #[test]
     fn test_llc_snap_header_json_serialization_deserialization() {
@@ -209,6 +224,6 @@ mod tests {
                 "llc.oui": "0080C2", "llc.type": 2048, "llc.type.str": "IPv4"
             }
         }"#;
-        assert!(from_json_string(json_str).is_err());
+        assert!(from_json_string(json_str_no_prefix).is_err());
     }
 }
