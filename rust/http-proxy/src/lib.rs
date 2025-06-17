@@ -61,5 +61,5 @@ mod util;
 
 pub use connector::*;
 pub use dns_manager::*;
-pub use error::Error;
+pub use error::{Error, Result};
 pub use manager::*;
