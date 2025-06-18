@@ -45,7 +45,16 @@ pub fn start(
 
     let addr_v4 = format!("127.0.0.1:{}", port);
     let addr_v6 = format!("[::1]:{}", port);
-    let port = server.add_listening_port(addr_v4, ServerCredentials::insecure()).or_else(|e| {
+    let port = server.add_listening_port(&addr_v4, ServerCredentials::insecure()).or_else(|e| {
+        match std::net::TcpListener::bind(&addr_v4) {
+            Ok(listener) => drop(listener),
+            Err(bind_e) => {
+                if bind_e.kind() == std::io::ErrorKind::AddrInUse {
+                    warn!("Rust gRPC Address {} is already in use.", addr_v4);
+                    return Err(e);
+                }
+            }
+        }
         warn!("Failed to bind to 127.0.0.1:{port} in grpc server. Trying [::1]:{port}. {e:?}");
         server.add_listening_port(addr_v6, ServerCredentials::insecure())
     })?;

@@ -16,8 +16,8 @@ use std::marker::Unpin;
 use std::mem::size_of;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use zerocopy::{AsBytes, FromBytes};
-use zerocopy_derive::{AsBytes, FromBytes, FromZeroes};
+use zerocopy::{FromBytes as ZerocopyFromBytes, IntoBytes as ZerocopyIntoBytes};
+use zerocopy_derive::{FromBytes, Immutable, IntoBytes};
 
 type Result<A> = std::result::Result<A, std::io::Error>;
 
@@ -54,7 +54,7 @@ type Result<A> = std::result::Result<A, std::io::Error>;
 /// * `snaplen`: The maximum number of bytes captured from each packet.
 /// * `linktype`: The data link type of the network interface used to capture the packets.
 #[repr(C)]
-#[derive(AsBytes, FromBytes, FromZeroes)]
+#[derive(IntoBytes, FromBytes, Immutable)]
 /// Represents the global header of a pcap capture file.
 pub struct FileHeader {
     /// Magic number identifying the file format.
@@ -158,7 +158,7 @@ impl From<LinkType> for u32 {
 /// * `len`: The original length of the packet on the network.
 //
 #[repr(C)]
-#[derive(AsBytes, FromBytes, FromZeroes)]
+#[derive(IntoBytes, FromBytes, Immutable)]
 /// Represents the header prepended to each packet in a pcap capture file.
 pub struct PacketHeader {
     /// Timestamp of the captured packet (seconds).
@@ -184,10 +184,9 @@ pub struct PacketHeader {
 pub async fn read_file_header(mut reader: impl AsyncRead + Unpin) -> Result<FileHeader> {
     let mut header_bytes = [0u8; size_of::<FileHeader>()];
     reader.read_exact(&mut header_bytes).await?;
-    let header = FileHeader::read_from(&header_bytes[..]).ok_or(std::io::Error::new(
-        std::io::ErrorKind::InvalidData,
-        "Failed to parse pcap file header",
-    ))?;
+    let header = FileHeader::read_from_bytes(&header_bytes[..]).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, "Failed to parse pcap file header")
+    })?;
     if header.magic != FileHeader::MAGIC {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -211,10 +210,9 @@ pub async fn read_file_header(mut reader: impl AsyncRead + Unpin) -> Result<File
 pub async fn read_record(mut reader: impl AsyncRead + Unpin) -> Result<(PacketHeader, Vec<u8>)> {
     let mut pkt_hdr_bytes = [0u8; std::mem::size_of::<PacketHeader>()];
     reader.read_exact(&mut pkt_hdr_bytes).await?;
-    let pkt_hdr = PacketHeader::read_from(&pkt_hdr_bytes[..]).ok_or(std::io::Error::new(
-        std::io::ErrorKind::InvalidData,
-        "Failed to parse pcap record header",
-    ))?;
+    let pkt_hdr = PacketHeader::read_from_bytes(&pkt_hdr_bytes[..]).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, "Failed to parse pcap record header")
+    })?;
     let mut packet_data = vec![0u8; pkt_hdr.caplen as usize];
     reader.read_exact(&mut packet_data).await?;
     Ok((pkt_hdr, packet_data))
