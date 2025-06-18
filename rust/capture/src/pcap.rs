@@ -54,7 +54,7 @@ type Result<A> = std::result::Result<A, std::io::Error>;
 /// * `snaplen`: The maximum number of bytes captured from each packet.
 /// * `linktype`: The data link type of the network interface used to capture the packets.
 #[repr(C)]
-#[derive(IntoBytes, FromBytes, Immutable)]
+#[derive(IntoBytes, FromBytes, Immutable, Debug, PartialEq, Eq)]
 /// Represents the global header of a pcap capture file.
 pub struct FileHeader {
     /// Magic number identifying the file format.
@@ -79,7 +79,7 @@ impl FileHeader {
     const VERSION_MINOR: u16 = 4u16;
     const RESERVED_1: i32 = 0;
     const RESERVED_2: u32 = 0;
-    const SNAP_LEN: u32 = u32::MAX;
+    const SNAP_LEN: u32 = u16::MAX as u32;
 }
 
 impl Default for FileHeader {
@@ -106,6 +106,7 @@ impl Default for FileHeader {
 /// refer to the tcpdump documentation:
 /// https://www.tcpdump.org/linktypes.html
 #[repr(u32)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum LinkType {
     /// Null link type (BSD loopback)
     Null = 0,
@@ -118,6 +119,19 @@ pub enum LinkType {
     BluetoothHciH4WithPhdr = 201,
     /// Ultra-wideband controller interface protocol
     FiraUci = 299,
+}
+
+impl From<u32> for LinkType {
+    fn from(val: u32) -> Self {
+        match val {
+            0 => LinkType::Null,
+            1 => LinkType::Ethernet,
+            127 => LinkType::Ieee80211RadioTap,
+            201 => LinkType::BluetoothHciH4WithPhdr,
+            299 => LinkType::FiraUci,
+            _ => LinkType::Null,
+        }
+    }
 }
 
 impl From<LinkType> for u32 {
@@ -158,7 +172,7 @@ impl From<LinkType> for u32 {
 /// * `len`: The original length of the packet on the network.
 //
 #[repr(C)]
-#[derive(IntoBytes, FromBytes, Immutable)]
+#[derive(IntoBytes, FromBytes, Immutable, Debug, PartialEq, Eq)]
 /// Represents the header prepended to each packet in a pcap capture file.
 pub struct PacketHeader {
     /// Timestamp of the captured packet (seconds).
@@ -272,9 +286,8 @@ pub async fn write_record(
         caplen: pkt_len as u32,
         len: pkt_len as u32,
     };
-    let mut bytes = Vec::<u8>::with_capacity(pkt_hdr_len + pkt_len);
-    bytes.extend(header.as_bytes());
-    bytes.extend(packet);
-    output.write_all(&bytes).await?;
+    output.write_all(header.as_bytes()).await?;
+    output.write_all(packet).await?;
+    output.flush().await?;
     Ok(pkt_hdr_len + pkt_len)
 }
