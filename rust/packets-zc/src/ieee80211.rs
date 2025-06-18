@@ -320,8 +320,8 @@ mod tests {
         assert_eq!(fc.protocol_version(), 0);
         assert_eq!(fc.frame_type(), frame_type::DATA); // 0b10 = 2
         assert_eq!(fc.frame_subtype(), data_subtype::DATA); // 0b0000 = 0
-        assert_eq!(fc.to_ds(), true);
-        assert_eq!(fc.from_ds(), false);
+        assert!(fc.to_ds());
+        assert!(!fc.from_ds());
     }
 
     #[test]

@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Provides utility functions for working with mac80211_hwsim Netlink attributes.
+//! Provides utility functions for working with `nl80211` Netlink attributes, particularly for `mac80211_hwsim`.
+//!
+//! This module offers helpers to build, parse, and interpret the attributes within `nl80211` messages
+//! that are sent between a user space daemon and the `mac80211_hwsim` kernel module. These functions
+//! simplify tasks like creating Netlink messages to command the simulated hardware (e.g., to transmit a frame)
+//! and parsing messages received from it (e.g., an incoming frame notification).
 
 use crate::ethernet::MacAddr as EthernetMacAddr;
 use crate::ieee80211::MacHeader3Addr;
-use crate::mac80211_hwsim_netlink::attr_id;
-use crate::mac80211_hwsim_netlink::GenlMsgHdr;
-use crate::mac80211_hwsim_netlink::NlAttrHdr;
+use crate::nl80211::attr_id;
+use crate::nl80211::GenlMsgHdr;
+use crate::nl80211_attr::NlAttrHdr;
 use zerocopy::{FromBytes, IntoBytes, LittleEndian, Ref, U16, U32};
 
 /// Netlink attribute type flags.
@@ -94,8 +99,8 @@ pub fn is_attr_nested(nla_type: u16) -> bool {
 ///
 /// # Examples
 /// ```
-/// use packets_zc::mac80211_hwsim_netlink::attr_id;
-/// use packets_zc::mac80211_hwsim_netlink_util::attr_id_to_string;
+/// use packets_zc::nl80211::attr_id;
+/// use packets_zc::nl80211_util::attr_id_to_string;
 ///
 /// assert_eq!(attr_id_to_string(attr_id::IFACE_MAC), "IFACE_MAC");
 /// assert_eq!(attr_id_to_string(0xFFFF), "Unknown(0xFFFF)");
