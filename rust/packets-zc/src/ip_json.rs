@@ -73,7 +73,7 @@ mod tests {
             dest_addr: [192, 168, 1, 1],
         };
         let json_map = ipv4_to_json(&header, &[]);
-        let value = serde_json::to_value(&json_map).unwrap();
+        let value = serde_json::to_value(json_map).unwrap();
         assert_eq!(value["ip.version"], "4");
         assert_eq!(value["ip.ihl"], "5");
         assert_eq!(value["ip.ttl"], "64");
@@ -93,7 +93,7 @@ mod tests {
             dest_addr: [0; 16],
         };
         let json_map = ipv6_to_json(&header, &[]);
-        let value = serde_json::to_value(&json_map).unwrap();
+        let value = serde_json::to_value(json_map).unwrap();
         assert_eq!(value["ipv6.version"], "6");
         assert_eq!(value["ip.version"], "6");
         assert_eq!(value["ipv6.nxt"], "58");

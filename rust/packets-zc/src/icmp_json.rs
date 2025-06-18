@@ -37,7 +37,7 @@ mod tests {
             rest: [0; 4],
         };
         let json_map = to_json(&header);
-        let value = serde_json::to_value(&json_map).unwrap();
+        let value = serde_json::to_value(json_map).unwrap();
         assert_eq!(value["icmp.type"], "8");
         assert_eq!(value["icmp.code"], "0");
         assert_eq!(value["icmp.checksum"], "0x1234");

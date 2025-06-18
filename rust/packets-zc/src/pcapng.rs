@@ -103,7 +103,7 @@ mod tests {
         let block = SectionHeaderBlock::new(0x0A0D0D0A, 28, 0x1A2B3C4D, 1, 0, 0xFFFFFFFFFFFFFFFF);
         let bytes = block.as_bytes();
         let (header, rest) =
-            SectionHeaderBlock::parse(&bytes).expect("Failed to parse Section Header Block");
+            SectionHeaderBlock::parse(bytes).expect("Failed to parse Section Header Block");
 
         assert_eq!(header.block_type, 0x0A0D0D0A);
         assert_eq!(header.block_total_length, 28);
