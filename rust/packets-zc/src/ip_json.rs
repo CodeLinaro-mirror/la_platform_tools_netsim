@@ -1,16 +1,19 @@
+// Copyright 2025 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use crate::ip::{Ipv4Header, Ipv6Header};
-use serde::Serialize;
 use std::collections::BTreeMap;
-
-#[derive(Serialize)]
-pub struct IpPacket {
-    pub ip: BTreeMap<String, String>,
-}
-
-#[derive(Serialize)]
-pub struct Ipv6Packet {
-    pub ipv6: BTreeMap<String, String>,
-}
 
 fn format_ipv4_addr(addr: &[u8; 4]) -> String {
     format!("{}.{}.{}.{}", addr[0], addr[1], addr[2], addr[3])
@@ -27,7 +30,7 @@ fn format_ipv6_addr(addr: &[u8; 16]) -> String {
     s
 }
 
-pub fn ipv4_to_json(ipv4_packet: &Ipv4Header, _ipv4_payload: &[u8]) -> IpPacket {
+pub fn ipv4_to_json(ipv4_packet: &Ipv4Header, _ipv4_payload: &[u8]) -> BTreeMap<String, String> {
     let mut ip = BTreeMap::new();
     ip.insert("ip.version".to_string(), format!("{}", ipv4_packet.version()));
     ip.insert("ip.ihl".to_string(), format!("{}", ipv4_packet.ihl()));
@@ -35,10 +38,10 @@ pub fn ipv4_to_json(ipv4_packet: &Ipv4Header, _ipv4_payload: &[u8]) -> IpPacket 
     ip.insert("ip.proto".to_string(), format!("{}", ipv4_packet.protocol));
     ip.insert("ip.src".to_string(), format_ipv4_addr(&ipv4_packet.source_addr));
     ip.insert("ip.dst".to_string(), format_ipv4_addr(&ipv4_packet.dest_addr));
-    IpPacket { ip }
+    ip
 }
 
-pub fn ipv6_to_json(ipv6_packet: &Ipv6Header, _ipv6_payload: &[u8]) -> Ipv6Packet {
+pub fn ipv6_to_json(ipv6_packet: &Ipv6Header, _ipv6_payload: &[u8]) -> BTreeMap<String, String> {
     let mut ipv6 = BTreeMap::new();
     ipv6.insert("ipv6.version".to_string(), format!("{}", ipv6_packet.version()));
     ipv6.insert("ip.version".to_string(), format!("{}", ipv6_packet.version()));
@@ -46,55 +49,56 @@ pub fn ipv6_to_json(ipv6_packet: &Ipv6Header, _ipv6_payload: &[u8]) -> Ipv6Packe
     ipv6.insert("ipv6.hlim".to_string(), format!("{}", ipv6_packet.hop_limit));
     ipv6.insert("ipv6.src".to_string(), format_ipv6_addr(&ipv6_packet.source_addr));
     ipv6.insert("ipv6.dst".to_string(), format_ipv6_addr(&ipv6_packet.dest_addr));
-    Ipv6Packet { ipv6 }
+    ipv6
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zerocopy::byteorder::U16;
+    use crate::ip::Ipv4Header;
+    use zerocopy::byteorder::{U16, U32};
 
     #[test]
     fn test_ipv4_to_json() {
         let header = Ipv4Header {
             version_ihl: 0x45,
-            tos: 0,
+            dscp_ecn: 0,
             total_length: U16::new(20),
-            id: U16::new(0),
-            frag_offset: U16::new(0),
+            identification: U16::new(0),
+            flags_fragment_offset: U16::new(0),
             ttl: 64,
             protocol: 6,
-            checksum: U16::new(0),
+            header_checksum: U16::new(0),
             source_addr: [127, 0, 0, 1],
             dest_addr: [192, 168, 1, 1],
         };
-        let json = ipv4_to_json(&header, &[]);
-        let value = serde_json::to_value(&json).unwrap();
-        assert_eq!(value["ip"]["ip.version"], "4");
-        assert_eq!(value["ip"]["ip.ihl"], "5");
-        assert_eq!(value["ip"]["ip.ttl"], "64");
-        assert_eq!(value["ip"]["ip.proto"], "6");
-        assert_eq!(value["ip"]["ip.src"], "127.0.0.1");
-        assert_eq!(value["ip"]["ip.dst"], "192.168.1.1");
+        let json_map = ipv4_to_json(&header, &[]);
+        let value = serde_json::to_value(json_map).unwrap();
+        assert_eq!(value["ip.version"], "4");
+        assert_eq!(value["ip.ihl"], "5");
+        assert_eq!(value["ip.ttl"], "64");
+        assert_eq!(value["ip.proto"], "6");
+        assert_eq!(value["ip.src"], "127.0.0.1");
+        assert_eq!(value["ip.dst"], "192.168.1.1");
     }
 
     #[test]
     fn test_ipv6_to_json() {
         let header = Ipv6Header {
-            version_tc_flow: [0x60, 0, 0, 0],
+            version_tc_fl: U32::new(0x60000000),
             payload_length: U16::new(0),
             next_header: 58,
             hop_limit: 64,
             source_addr: [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
             dest_addr: [0; 16],
         };
-        let json = ipv6_to_json(&header, &[]);
-        let value = serde_json::to_value(&json).unwrap();
-        assert_eq!(value["ipv6"]["ipv6.version"], "6");
-        assert_eq!(value["ipv6"]["ip.version"], "6");
-        assert_eq!(value["ipv6"]["ipv6.nxt"], "58");
-        assert_eq!(value["ipv6"]["ipv6.hlim"], "64");
-        assert_eq!(value["ipv6"]["ipv6.src"], "2001:0db8:0000:0000:0000:0000:0000:0001");
-        assert_eq!(value["ipv6"]["ipv6.dst"], "0000:0000:0000:0000:0000:0000:0000:0000");
+        let json_map = ipv6_to_json(&header, &[]);
+        let value = serde_json::to_value(json_map).unwrap();
+        assert_eq!(value["ipv6.version"], "6");
+        assert_eq!(value["ip.version"], "6");
+        assert_eq!(value["ipv6.nxt"], "58");
+        assert_eq!(value["ipv6.hlim"], "64");
+        assert_eq!(value["ipv6.src"], "2001:0db8:0000:0000:0000:0000:0000:0001");
+        assert_eq!(value["ipv6.dst"], "0000:0000:0000:0000:0000:0000:0000:0000");
     }
 }

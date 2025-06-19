@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::util::{into_raw_descriptor, ProxyConfig};
-use crate::{Connector, DnsManager, Error};
+use crate::{
+    util::{into_raw_descriptor, ProxyConfig},
+    Connector, DnsManager, Result,
+};
 use bytes::Bytes;
 use libslirp_rs::libslirp::{ProxyConnect, ProxyManager};
 use log::{debug, warn};
@@ -67,7 +69,7 @@ impl Manager {
     ///
     /// This function initializes the libslirp library and spawns the necessary threads
     /// for handling network traffic and polling.
-    pub fn new(proxy: &str, rx_proxy_bytes: mpsc::Receiver<Bytes>) -> Result<Self, Error> {
+    pub fn new(proxy: &str, rx_proxy_bytes: mpsc::Receiver<Bytes>) -> Result<Self> {
         let config = ProxyConfig::from_string(proxy)?;
         let dns_manager = Arc::new(DnsManager::new());
         let dns_manager_clone = dns_manager.clone();

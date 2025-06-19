@@ -76,6 +76,9 @@ impl From<io::Error> for Error {
     }
 }
 
+/// A type alias for `Result` where the error type is this crate's `Error`.
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[cfg(test)]
 mod tests {
     use super::*;

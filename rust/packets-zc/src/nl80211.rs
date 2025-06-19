@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Defines structures for parsing Netlink packets used by the mac80211_hwsim driver.
+//! Defines structures for parsing `nl80211` Netlink packets, specifically for the `mac80211_hwsim` driver.
 //!
-//! This module provides structures to represent the Netlink attribute header used
-//! for communication with the `mac80211_hwsim` kernel module, enabling interaction
-//! with simulated wireless devices.
+//! The `nl80211` protocol is used for communication between user space daemons (like `wpa_supplicant` or `hostapd`)
+//! and the kernel's wireless subsystem (`mac80211`). The `mac80211_hwsim` is a software-simulated WiFi device
+//! that uses this `nl80211` interface. This module provides the data structures to parse, create, and
+//! interpret these Netlink messages, allowing a user space daemon to control and interact with simulated WiFi hardware.
 
-use zerocopy::IntoBytes as AsBytes;
-use zerocopy::{byteorder::LittleEndian, FromBytes, Immutable, KnownLayout, Unaligned, U16};
+use zerocopy::{
+    byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16,
+};
 
 /// Attribute IDs used in Netlink messages for mac80211_hwsim.
 /// These IDs correspond to specific data types or actions.
@@ -116,7 +118,7 @@ pub mod attr_id {
 /// Generic Netlink message header (`struct genlmsghdr`).
 /// This header precedes the Netlink attributes in a generic Netlink message.
 #[repr(C)]
-#[derive(Debug, Copy, Clone, FromBytes, AsBytes, Unaligned, Immutable, KnownLayout)]
+#[derive(Debug, Copy, Clone, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout)]
 pub struct GenlMsgHdr {
     /// Command (`nlmsg_type` for the generic netlink family).
     pub cmd: u8,
@@ -126,78 +128,15 @@ pub struct GenlMsgHdr {
     pub reserved: U16<LittleEndian>,
 }
 
-/// Represents the Netlink attribute header.
-/// This header precedes the actual attribute data in a Netlink message.
-#[repr(C)]
-#[derive(Debug, Copy, Clone, FromBytes, AsBytes, Unaligned, Immutable, KnownLayout)]
-pub struct NlAttrHdr {
-    /// Length of the attribute, including the header.
-    pub nla_len: U16<LittleEndian>,
-    /// Type of the attribute. The lower 14 bits are the attribute ID,
-    /// and the upper 16 bits are flags (e.g., NLA_F_NESTED).
-    pub attr_type: U16<LittleEndian>,
-}
-
-impl NlAttrHdr {
-    /// Creates a new Netlink attribute header.
-    ///
-    /// # Arguments
-    ///
-    /// * `len` - The total length of the attribute, including the header.
-    /// * `attr_type` - The type of the attribute (see `attr_id` module).
-    pub fn new(len: u16, attr_type_val: u16) -> Self {
-        NlAttrHdr { nla_len: U16::new(len), attr_type: U16::new(attr_type_val) }
-    }
-
-    /// Gets the length of the attribute.
-    pub fn length(&self) -> u16 {
-        self.nla_len.get()
-    }
-
-    /// Gets the type of the attribute.
-    pub fn attr_type(&self) -> u16 {
-        self.attr_type.get()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mac80211_hwsim_netlink::attr_id::HWSIM_ATTR_FRAME_DATA;
+    use crate::nl80211::attr_id::HWSIM_ATTR_FRAME_DATA;
     use core::mem::size_of;
-    use zerocopy::Ref;
 
     #[test]
     fn test_genl_msg_hdr_size() {
         assert_eq!(size_of::<GenlMsgHdr>(), 4, "GenlMsgHdr size should be 4 bytes");
-    }
-
-    #[test]
-    fn test_nl_attr_hdr_size() {
-        // nla_len (u16) + nla_type (u16) = 4 bytes
-        assert_eq!(size_of::<NlAttrHdr>(), 4, "NlAttrHdr size should be 4 bytes");
-    }
-
-    #[test]
-    fn test_nl_attr_hdr_new_and_getters() {
-        let len: u16 = 8;
-        let attr_type_val: u16 = attr_id::IFACE_MAC;
-        let hdr = NlAttrHdr::new(len, attr_type_val);
-
-        assert_eq!(hdr.length(), len);
-        assert_eq!(hdr.attr_type(), attr_type_val);
-    }
-
-    #[test]
-    fn test_nl_attr_hdr_parsing() {
-        // Sample bytes for NlAttrHdr: len=8 (0x0008), type=IFACE_MAC (0x0002)
-        // Little Endian representation: 08 00 02 00
-        let bytes: [u8; 4] = [0x08, 0x00, 0x02, 0x00];
-        let hdr_ref = Ref::<&[u8], NlAttrHdr>::from_bytes(&bytes[..])
-            .expect("Should parse NlAttrHdr from bytes");
-
-        assert_eq!(hdr_ref.length(), 8);
-        assert_eq!(hdr_ref.attr_type(), attr_id::IFACE_MAC);
     }
 
     #[test]
