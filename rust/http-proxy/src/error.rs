@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,28 +18,57 @@ use std::fmt;
 use std::io;
 use std::net::SocketAddr;
 
-/// An enumeration of possible errors.
+/// Represents all possible errors that can occur in the http-proxy crate.
 #[derive(Debug)]
 pub enum Error {
     /// An I/O error occurred.
     IoError(io::Error),
-    /// An error occurred during connection establishment.
+    /// The HTTP request-line is malformed.
+    MalformedRequestLine(String),
+    /// The 'Host' header is missing.
+    MissingHostHeader,
+    /// The proxy server returned an error.
     ConnectionError(SocketAddr, String),
-    /// The configuration string was malformed.
+    /// The proxy configuration string is malformed.
     MalformedConfigString,
-    /// The provided port number was invalid.
+    /// The port number in the proxy configuration is invalid.
     InvalidPortNumber,
-    /// The provided host was invalid.
+    /// The host in the proxy configuration is invalid.
     InvalidHost,
+}
+
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::IoError(a), Self::IoError(b)) => a.kind() == b.kind(),
+            (Self::MalformedRequestLine(a), Self::MalformedRequestLine(b)) => a == b,
+            (Self::MissingHostHeader, Self::MissingHostHeader) => true,
+            (Self::ConnectionError(a, b), Self::ConnectionError(c, d)) => a == c && b == d,
+            (Self::MalformedConfigString, Self::MalformedConfigString) => true,
+            (Self::InvalidPortNumber, Self::InvalidPortNumber) => true,
+            (Self::InvalidHost, Self::InvalidHost) => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ProxyError: {self:?}")
+        match self {
+            Error::IoError(err) => write!(f, "I/O error: {}", err),
+            Error::MalformedRequestLine(line) => {
+                write!(f, "Malformed request line: '{}'", line)
+            }
+            Error::MissingHostHeader => write!(f, "Mandatory 'Host' header is missing"),
+            Error::ConnectionError(addr, msg) => {
+                write!(f, "Connection to {} failed: {}", addr, msg)
+            }
+            Error::MalformedConfigString => write!(f, "Malformed configuration string"),
+            Error::InvalidPortNumber => write!(f, "Invalid port number"),
+            Error::InvalidHost => write!(f, "Invalid host"),
+        }
     }
 }
-
-impl std::error::Error for Error {}
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
