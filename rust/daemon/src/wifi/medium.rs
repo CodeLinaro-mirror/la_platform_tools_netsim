@@ -359,8 +359,14 @@ impl Medium {
         if let Ok(destination) = self.get_station(&dest_addr) {
             self.send_ieee80211_response(&ieee80211, &destination)?;
         } else if dest_addr.is_multicast() {
+            // Deduplicates based on (hwsim_addr, freq) as these are used to construct
+            // the HwsimMsg for the destination.
+            let mut sent_to_hwsim_addrs_freq = std::collections::HashSet::new();
             for destination in self.stations() {
-                self.send_ieee80211_response(&ieee80211, &destination)?;
+                let freq = destination.freq.load(Ordering::Relaxed);
+                if sent_to_hwsim_addrs_freq.insert((destination.hwsim_addr, freq)) {
+                    self.send_ieee80211_response(&ieee80211, &destination)?;
+                }
             }
         } else {
             return Err(WifiError::Transmission(format!(
@@ -479,15 +485,19 @@ impl Medium {
     }
 
     // Broadcast an 802.11 frame to all stations.
-    /// TODO: Compare with the implementations in mac80211_hwsim.c and wmediumd.c.
+    // TODO: Compare with the implementations in mac80211_hwsim.c and wmediumd.c.
     fn broadcast_from_sta_frame(
         &self,
         frame: &Frame,
         ieee80211: &Ieee80211,
         source: &Station,
     ) -> WifiResult<()> {
-        for destination in self.stations() {
-            if source.addr != destination.addr {
+        // Deduplicates based on (hwsim_addr, freq) as these are used to construct
+        // the HwsimMsg for the destination.
+        let mut sent_to_hwsim_addrs_freq = std::collections::HashSet::new();
+        for destination in self.stations().filter(|sta| sta.addr != source.addr) {
+            let current_freq = destination.freq.load(Ordering::Relaxed);
+            if sent_to_hwsim_addrs_freq.insert((destination.hwsim_addr, current_freq)) {
                 self.send_from_sta_frame(frame, ieee80211, source, &destination)?;
             }
         }

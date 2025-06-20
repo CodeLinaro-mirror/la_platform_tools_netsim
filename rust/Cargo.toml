@@ -23,5 +23,6 @@ members = [
     "hostapd-rs",
     "packets",
     "capture",
+    "packets-zc",
 ]
 resolver = "2"
