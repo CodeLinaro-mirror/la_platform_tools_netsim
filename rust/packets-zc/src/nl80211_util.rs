@@ -374,27 +374,28 @@ pub fn extract_mac80211_frame_from_netlink<'a>(
     netlink_packet_bytes: &'a [u8],
 ) -> Option<ExtractedMacFrame<'a>> {
     if netlink_packet_bytes.len() < GENL_HDR_SIZE {
-        return None; // Not enough data for GenlMsgHdr
+        return None;
     }
 
     let (genl_hdr, attributes_bytes) =
         Ref::<&'a [u8], GenlMsgHdr>::from_prefix(netlink_packet_bytes).ok()?;
 
-    for (nl_attr_hdr, nl_attr_payload) in iter_nl_attrs(attributes_bytes) {
+    iter_nl_attrs(attributes_bytes).find_map(|(nl_attr_hdr, nl_attr_payload)| {
         if get_attr_id_from_type(nl_attr_hdr.attr_type()) == attr_id::HWSIM_ATTR_FRAME_DATA {
-            // Found the attribute containing the 802.11 frame.
-            // Now, try to parse the MacHeader3Addr from its payload.
-            let (mac_hdr, mac_payload) =
-                Ref::<&'a [u8], MacHeader3Addr>::from_prefix(nl_attr_payload).ok()?;
-            return Some((genl_hdr, mac_hdr, mac_payload));
+            Ref::<&'a [u8], MacHeader3Addr>::from_prefix(nl_attr_payload)
+                .map(|(mac_hdr, mac_payload)| (genl_hdr, mac_hdr, mac_payload))
+                .ok()
+        } else {
+            None
         }
-    }
-    None // HWSIM_ATTR_FRAME_DATA not found or 802.11 frame parsing failed
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ieee80211::{FrameControl, MacHeader3Addr, SequenceControl};
+    use zerocopy::U16;
 
     #[test]
     fn test_get_attr_id_and_nested_flag() {
@@ -594,5 +595,57 @@ mod tests {
         let (nl_attr_hdr, nl_payload) = iter_nl_attrs(attrs_bytes).next().unwrap();
         assert_eq!(nl_attr_hdr.length() as usize, expected_attr_total_unaligned_len);
         assert_eq!(parse_string_from_payload(nl_payload).unwrap(), if_name);
+    }
+
+    #[test]
+    fn test_extract_mac80211_frame_from_netlink_success() {
+        // 1. Construct the inner 802.11 frame
+        let mac_hdr = MacHeader3Addr {
+            frame_control: FrameControl::new(0x0008), // Data frame
+            duration_id: U16::new(0),
+            addr1: EthernetMacAddr::new([1; 6]),
+            addr2: EthernetMacAddr::new([2; 6]),
+            addr3: EthernetMacAddr::new([3; 6]),
+            sequence_control: SequenceControl::new(0),
+        };
+        let mac_payload = [0xDE, 0xAD, 0xBE, 0xEF];
+        let mut frame_bytes = Vec::new();
+        frame_bytes.extend_from_slice(mac_hdr.as_bytes());
+        frame_bytes.extend_from_slice(&mac_payload);
+
+        // 2. Build the Netlink message with this frame as an attribute
+        let attributes =
+            [(attr_id::HWSIM_ATTR_FRAME_DATA, create_bytes_attr_payload(&frame_bytes))];
+        let netlink_message = build_netlink_message(5, 1, &attributes).unwrap();
+
+        // 3. Attempt to extract the frame
+        let result = extract_mac80211_frame_from_netlink(&netlink_message);
+
+        // 4. Assert success and correctness
+        assert!(result.is_some());
+        let (genl_hdr, extracted_mac_hdr, extracted_mac_payload) = result.unwrap();
+
+        assert_eq!(genl_hdr.cmd, 5);
+        assert_eq!(extracted_mac_hdr.addr1.bytes, [1; 6]);
+        assert_eq!(extracted_mac_hdr.addr2.bytes, [2; 6]);
+        assert_eq!(extracted_mac_payload, &mac_payload);
+    }
+
+    #[test]
+    fn test_extract_mac80211_frame_from_netlink_no_frame_attr() {
+        // Build a message *without* the HWSIM_ATTR_FRAME_DATA attribute
+        let attributes = [(attr_id::HW_INDEX, create_u32_attr_payload(123))];
+        let netlink_message = build_netlink_message(5, 1, &attributes).unwrap();
+
+        let result = extract_mac80211_frame_from_netlink(&netlink_message);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_extract_mac80211_frame_from_netlink_buffer_too_short() {
+        // Message is too short to even contain a GenlMsgHdr
+        let short_message = [0x01, 0x02, 0x03];
+        let result = extract_mac80211_frame_from_netlink(&short_message);
+        assert!(result.is_none());
     }
 }
