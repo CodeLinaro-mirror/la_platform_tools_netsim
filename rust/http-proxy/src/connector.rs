@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::rewriter;
 use crate::{Error, Result};
 use base64::{engine::general_purpose, Engine as _};
 use std::net::SocketAddr;
@@ -37,20 +38,48 @@ impl Connector {
         Connector { proxy_addr, username, password }
     }
 
-    /// Establishes a TCP connection to the given address through the proxy.
-    pub async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
-        let mut stream = TcpStream::connect(self.proxy_addr).await?;
+    /// Returns the proxy address.
+    pub fn proxy_addr(&self) -> SocketAddr {
+        self.proxy_addr
+    }
 
-        // Construct the CONNECT request
-        let mut request = format!("CONNECT {} HTTP/{}\r\n", addr.to_string(), HTTP_VERSION);
-
-        // Authentication
+    /// Returns the proxy authorization header if username and password are provided.
+    pub fn auth_header(&self) -> Option<String> {
         if let (Some(username), Some(password)) = (&self.username, &self.password) {
             let encoded_auth = base64_encode(format!("{}:{}", username, password).as_bytes());
             let auth_header = format!(
                 "Proxy-Authorization: Basic {}\r\n",
                 String::from_utf8_lossy(&encoded_auth)
             );
+            Some(auth_header)
+        } else {
+            None
+        }
+    }
+
+    /// Establishes a TCP connection to the given address.
+    ///
+    /// If the address is on port 80, it will be rewritten to an absolute-form request.
+    /// Otherwise, it will connect directly.
+    pub async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
+        let proxy_addr = self.proxy_addr;
+        let auth_header = self.auth_header();
+        if addr.port() == 80 {
+            rewriter::connect_with_header_rewrite(proxy_addr, auth_header).await
+        } else {
+            self.connect_with_tunnel(addr).await
+        }
+    }
+
+    /// Establishes a TCP connection to the given address through the proxy.
+    async fn connect_with_tunnel(&self, addr: SocketAddr) -> Result<TcpStream> {
+        let mut stream = TcpStream::connect(self.proxy_addr).await?;
+
+        // Construct the CONNECT request
+        let mut request = format!("CONNECT {} HTTP/{}\r\n", addr.to_string(), HTTP_VERSION);
+
+        // Authentication
+        if let Some(auth_header) = self.auth_header() {
             // Add the header to the request
             request.push_str(&auth_header);
         }
