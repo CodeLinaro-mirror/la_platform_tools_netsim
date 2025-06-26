@@ -21,6 +21,16 @@ from tasks.task import Task
 from utils import (AOSP_ROOT, run, rust_version)
 
 PLATFORM_SYSTEM = platform.system()
+ALL_PACKAGES = [
+    "hostapd-rs",
+    "libslirp-rs",
+    "http-proxy",
+    "netsim-cli",
+    "netsim-common",
+    "netsim-daemon",
+    "netsim-packets",
+    "capture",
+]
 
 
 class RunTestTask(Task):
@@ -29,6 +39,7 @@ class RunTestTask(Task):
     super().__init__("RunTest")
     self.buildbot = args.buildbot
     self.out = Path(args.out_dir)
+    self.crate = args.crate
     self.env = env
 
   def do_run(self):
@@ -82,16 +93,8 @@ class RunTestTask(Task):
       script = AOSP_ROOT / "tools" / "netsim" / "scripts" / "cargo_test.sh"
 
     # Run cargo Test
-    for package in [
-        "hostapd-rs",
-        "libslirp-rs",
-        "http-proxy",
-        "netsim-cli",
-        "netsim-common",
-        "netsim-daemon",
-        "netsim-packets",
-        "capture",
-    ]:
+    packages = self.crate if self.crate else ALL_PACKAGES
+    for package in packages:
       # TODO(b/379708365): Resolve netsim-daemon test for Mac & Windows
       if (
           package in ["netsim-daemon", "netsim-cli"]

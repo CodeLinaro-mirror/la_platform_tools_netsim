@@ -233,9 +233,9 @@ mod tests {
         let json_fc: JsonFrameControl = fc.into();
         assert_eq!(json_fc.r#type, 2);
         assert_eq!(json_fc.subtype, 0);
-        assert_eq!(json_fc.to_ds, true);
-        assert_eq!(json_fc.from_ds, false);
-        assert_eq!(json_fc.protected_frame, false);
+        assert!(json_fc.to_ds);
+        assert!(!json_fc.from_ds);
+        assert!(!json_fc.protected_frame);
         assert_eq!(json_fc.field_hex, "0108");
 
         let recon_fc: FrameControl = json_fc.try_into().unwrap();
