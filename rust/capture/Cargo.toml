@@ -16,11 +16,11 @@
 name = "capture"
 version = "0.1.0"
 edition = "2021"
+readme = "README.md"
 
 [lib]
 path = "src/lib.rs"
 crate-type = ["staticlib","lib"]
-doctest = false
 
 [dependencies]
 zerocopy = "0.8.25"
