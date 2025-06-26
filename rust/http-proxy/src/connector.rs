@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::error::Error;
+use crate::{Error, Result};
 use base64::{engine::general_purpose, Engine as _};
 use std::net::SocketAddr;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
 const HTTP_VERSION: &str = "1.1";
-
-/// A alias for `Result` where the error type is this crate's `Error`.
-pub type Result<T> = core::result::Result<T, Error>;
 
 /// Establishes a TCP connection to a target address through an HTTP proxy.
 ///
