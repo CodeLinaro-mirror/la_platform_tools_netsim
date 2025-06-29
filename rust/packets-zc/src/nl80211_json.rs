@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Provides JSON serialization and deserialization for mac80211_hwsim Netlink attributes.
+//! Provides JSON serialization and deserialization for `nl80211` Netlink attributes.
+//!
+//! This module is designed to facilitate the debugging and logging of `nl80211` messages
+//! exchanged between a user space daemon and the `mac80211_hwsim` kernel module. By converting
+//! the binary Netlink attribute format to a human-readable JSON format (and back), it allows
+//! for easier inspection of the commands and data being sent to the simulated WiFi device.
 
-use crate::mac80211_hwsim_netlink::NlAttrHdr;
-use crate::mac80211_hwsim_netlink_util;
+use crate::nl80211_attr::NlAttrHdr;
+use crate::nl80211_util;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -71,13 +76,13 @@ pub struct JsonNlAttrHdr {
 impl From<&NlAttrHdr> for JsonNlAttrHdr {
     fn from(hdr: &NlAttrHdr) -> Self {
         let type_raw = hdr.attr_type();
-        let type_id = mac80211_hwsim_netlink_util::get_attr_id_from_type(type_raw);
+        let type_id = nl80211_util::get_attr_id_from_type(type_raw);
         JsonNlAttrHdr {
             nla_len: hdr.length(),
             nla_type_raw: type_raw,
             nla_type_id: type_id,
-            nla_type_name: mac80211_hwsim_netlink_util::attr_id_to_string(type_id),
-            nla_is_nested: mac80211_hwsim_netlink_util::is_attr_nested(type_raw),
+            nla_type_name: nl80211_util::attr_id_to_string(type_id),
+            nla_is_nested: nl80211_util::is_attr_nested(type_raw),
         }
     }
 }
@@ -143,7 +148,7 @@ pub fn from_json_string(json_str: &str) -> Result<(NlAttrHdr, Vec<u8>), JsonErro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mac80211_hwsim_netlink::attr_id;
+    use crate::nl80211::attr_id;
 
     #[test]
     fn test_nl_attr_hdr_json_conversion() {

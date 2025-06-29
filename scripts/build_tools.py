@@ -27,6 +27,7 @@ from tasks import (
     get_tasks,
     log_enabled_tasks,
 )
+from tasks.run_test_task import ALL_PACKAGES
 from utils import (
     AOSP_ROOT,
     config_logging,
@@ -126,8 +127,19 @@ def main():
           " pytest_input_dir"
       ),
   )
+  parser.add_argument(
+      "--crate",
+      type=str,
+      nargs="+",
+      default=[],
+      choices=ALL_PACKAGES,
+      help="The name of the crate(s) to run tests for.",
+  )
 
   args = parser.parse_args()
+
+  if args.crate and "runtest" not in (args.task or []):
+    parser.error("argument --crate: can only be used with --task runtest")
 
   presubmit = is_presubmit(args.build_id)
 

@@ -31,7 +31,7 @@
 // with libraries that require raw file descriptors, such as
 // `libslirp_rs`.
 
-use crate::Error;
+use crate::{Error, Result};
 use regex::Regex;
 use std::net::{SocketAddr, ToSocketAddrs};
 #[cfg(unix)]
@@ -74,7 +74,7 @@ impl ProxyConfig {
     ///
     /// # Limitations
     /// * Usernames and passwords cannot contain `@` or `:`.
-    pub fn from_string(config_string: &str) -> Result<ProxyConfig, Error> {
+    pub fn from_string(config_string: &str) -> Result<ProxyConfig> {
         let re = Regex::new(r"^(?:(?P<protocol>\w+)://)?(?:(?P<user>\w+):(?P<pass>\w+)@)?(?P<host>(?:[\w\.-]+|\[[^\]]+\])):(?P<port>\d+)$").unwrap();
         let caps = re.captures(config_string).ok_or(Error::MalformedConfigString)?;
 
