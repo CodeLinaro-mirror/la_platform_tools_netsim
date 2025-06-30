@@ -89,7 +89,7 @@ pub fn frame_into_pcap(frame: Frame) -> WifiResult<Vec<u8>> {
         version: 0,
         pad: 0,
         len: (std::mem::size_of::<RadiotapHeader>() as u16),
-        present: (1 << 3 /* channel */ | 1 << 5/* signal dBm */),
+        present: ((1 << 3) /* channel */ | (1 << 5)/* signal dBm */),
         channel: ChannelInfo { freq: frame.freq.unwrap_or(0) as u16, flags: 0 },
         signal: frame.signal.unwrap_or(0) as u8,
     };
