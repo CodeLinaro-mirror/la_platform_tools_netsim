@@ -83,7 +83,7 @@ pub fn read_h4_packet<R: Read>(reader: &mut R) -> Result<Packet, PacketError> {
         }
         H4_ISO_TYPE => {
             // 2 bytes for handle and flags, 12 bits for length (Volume 2, Part E, 5.4.5)
-            usize::from(packet[3] & 0x0f) << 8 | usize::from(packet[2])
+            (usize::from(packet[3] & 0x0f) << 8) | usize::from(packet[2])
         }
         _ => {
             // This case was handled above resulting in call to h4_recovery
