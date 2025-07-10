@@ -194,4 +194,37 @@ mod tests {
         let encoded = base64_encode(input);
         assert_eq!(encoded, b"");
     }
+
+    #[tokio::test]
+    async fn test_connect_with_port_80() {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        // Mock server that receives the rewritten request
+        let server_task = tokio::spawn(async move {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            tx.send(listener.local_addr().unwrap()).unwrap();
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buffer = [0; 1024];
+            let n = stream.read(&mut buffer).await.unwrap();
+            String::from_utf8_lossy(&buffer[..n]).to_string()
+        });
+
+        let proxy_addr = rx.await.unwrap();
+        let connector = Connector::new(proxy_addr, None, None);
+
+        // This is the address we want to connect to, which is on port 80.
+        let target_addr: SocketAddr = "127.0.0.1:80".parse().unwrap();
+
+        // The client stream that our test will write to.
+        let mut client_stream = connector.connect(target_addr).await.unwrap();
+
+        // The client writes a simple HTTP request to the stream.
+        let request = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        client_stream.write_all(request.as_bytes()).await.unwrap();
+
+        // The mock server should receive the rewritten request.
+        let received_request = server_task.await.unwrap();
+        let expected_request = "GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n";
+        assert_eq!(received_request, expected_request);
+    }
 }
