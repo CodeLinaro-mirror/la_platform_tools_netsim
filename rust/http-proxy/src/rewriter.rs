@@ -27,8 +27,11 @@
 //!
 //! This is typically used in the core logic of an HTTP proxy server.
 
-use crate::error::Error;
-use std::io::BufRead;
+use crate::{Error, Result};
+use log::warn;
+use std::net::SocketAddr;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
+use tokio::net::{TcpListener, TcpStream};
 
 // --- Core Rewriting Function ---
 
@@ -59,160 +62,351 @@ use std::io::BufRead;
 /// A `Result` containing either:
 /// - `Ok(String)`: The rewritten request (new request-line + original headers).
 /// - `Err(Error)`: An error that occurred during processing.
-///
-pub fn rewrite_request_to_absolute_form<R: BufRead>(reader: &mut R) -> Result<String, Error> {
-    // A buffer to hold the raw header lines as we read them.
+async fn rewrite_request_to_absolute_form<R: AsyncRead + Unpin>(
+    reader: &mut BufReader<R>,
+    auth_header: Option<String>,
+) -> Result<String> {
     let mut header_lines = Vec::new();
-
-    // The first line from the reader is the special request-line.
     let mut request_line = String::new();
-    reader.read_line(&mut request_line)?;
+    reader.read_line(&mut request_line).await?;
 
-    // Read all subsequent header lines until we find an empty line (`\r\n`),
-    // which signifies the end of the headers section.
     loop {
         let mut line = String::new();
-        let bytes_read = reader.read_line(&mut line)?;
-
-        // An empty line or a 0-byte read indicates the end of headers or the stream.
+        let bytes_read = reader.read_line(&mut line).await?;
         if line.trim().is_empty() || bytes_read == 0 {
             break;
         }
         header_lines.push(line);
     }
 
-    // --- Parse, Validate, and Rewrite ---
-
-    // 1. Find the 'Host' header. It's case-insensitive and required by HTTP/1.1.
-    // The `trim()` handles potential whitespace around the host value.
+    // --- Try to find a valid Host header ---
     let host = header_lines
         .iter()
         .find(|h| h.to_lowercase().starts_with("host:"))
-        .map(|h| h.split_once(':').map_or("", |(_key, value)| value.trim()))
-        .ok_or(Error::MissingHostHeader)?;
+        .and_then(|h| h.split_once(':'))
+        .map(|(_, value)| value.trim())
+        .filter(|v| !v.is_empty());
 
-    // Ensure the Host header was not present but empty (e.g., "Host: ").
-    if host.is_empty() {
-        return Err(Error::MissingHostHeader);
+    // --- Rewrite if Host is present, otherwise pass through ---
+    let final_request_line = if let Some(host) = host {
+        let request_parts: Vec<&str> = request_line.split_whitespace().collect();
+        if request_parts.len() != 3 {
+            return Err(Error::MalformedRequestLine(request_line.trim_end().to_string()));
+        }
+        let method = request_parts[0];
+        let path = request_parts[1];
+        let version = request_parts[2];
+        let absolute_uri = format!("http://{}{}", host, path);
+        format!("{} {} {}\r\n", method, absolute_uri, version)
+    } else {
+        // If no valid Host header, use the original request line.
+        warn!("No valid Host header found. Passing request through without rewrite.");
+        request_line
+    };
+
+    if let Some(auth_header) = auth_header {
+        header_lines.push(auth_header);
     }
 
-    // 2. Parse the original request-line (e.g., "GET /path HTTP/1.1").
-    let request_parts: Vec<&str> = request_line.split_whitespace().collect();
-    if request_parts.len() != 3 {
-        // Return the invalid line in the error for easier debugging.
-        return Err(Error::MalformedRequestLine(request_line.trim_end().to_string()));
-    }
-    let method = request_parts[0];
-    let path = request_parts[1]; // This is the origin-form target (e.g., "/path")
-    let version = request_parts[2];
-
-    // 3. Construct the new "absolute-form" URI required for a proxy request.
-    //    e.g., "http://" + "www.example.com" + "/path/to/resource.html"
-    let absolute_uri = format!("http://{}{}", host, path);
-
-    // 4. Build the final rewritten request string.
-    let mut rewritten_request = String::new();
-
-    // Add the new proxy-style request-line.
-    rewritten_request.push_str(&format!("{} {} {}\r\n", method, absolute_uri, version));
-
-    // Append all the original headers unmodified.
+    // --- Assemble the final request ---
+    let mut final_request = String::new();
+    final_request.push_str(&final_request_line);
     for header in header_lines {
-        rewritten_request.push_str(&header);
+        final_request.push_str(&header);
     }
+    final_request.push_str("\r\n");
 
-    // Add the final empty line to terminate the header section.
-    rewritten_request.push_str("\r\n");
+    Ok(final_request)
+}
 
-    Ok(rewritten_request)
+/// Creates a proxy stream that forwards data to a given server SocketAddr
+/// after performing a header rewrite on the initial data.
+///
+/// This function first connects to the destination to ensure it's available,
+/// then sets up an intermediate TCP pipe and returns a stream that the caller can write to.
+///
+/// # Arguments
+/// * `destination_addr`: The `SocketAddr` of the final destination server.
+pub async fn connect_with_header_rewrite(
+    proxy_addr: SocketAddr,
+    auth_header: Option<String>,
+) -> Result<TcpStream> {
+    // If a proxy is specified, connect there. Otherwise, connect to the original destination.
+    let connect_addr = proxy_addr;
+
+    // 1. Connect to the next hop (either proxy or final destination).
+    let mut destination_stream = TcpStream::connect(connect_addr).await?;
+
+    // 2. Create the intermediate listener on a random port.
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let pipe_addr = listener.local_addr()?;
+
+    // 3. Spawn the background bridge task.
+    tokio::spawn(async move {
+        let task_logic = async {
+            let (pipe_server_stream, _client_addr) = listener.accept().await?;
+            let mut reader = BufReader::new(pipe_server_stream);
+
+            // Peek at the buffer to see if there's data to read without consuming it.
+            let buffer = reader.fill_buf().await?;
+            if buffer.is_empty() {
+                return Ok::<_, Error>(());
+            }
+
+            let new_header = rewrite_request_to_absolute_form(&mut reader, auth_header).await?;
+            destination_stream.write_all(new_header.as_bytes()).await?;
+            tokio::io::copy_bidirectional(&mut reader, &mut destination_stream).await?;
+            Ok::<_, Error>(())
+        };
+
+        if let Err(e) = task_logic.await {
+            warn!("Proxy bridge task failed: {}", e);
+        }
+    });
+
+    // 4. Connect to the intermediate listener and return the client-side stream.
+    let pipe_client_stream = TcpStream::connect(pipe_addr).await?;
+    Ok(pipe_client_stream)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::BufReader;
+    use crate::Connector;
+    use std::net::SocketAddr;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::sync::oneshot;
+
+    #[tokio::test]
+    async fn test_rewrite_passes_on_missing_host_header() {
+        let request = b"GET /test HTTP/1.1\r\n\r\n";
+        let mut reader = BufReader::new(&request[..]);
+        let result = rewrite_request_to_absolute_form(&mut reader, None).await.unwrap();
+        assert_eq!(result, "GET /test HTTP/1.1\r\n\r\n");
+    }
 
     /// Tests a standard, well-formed GET request.
-    #[test]
-    fn test_successful_get_request_rewrite() {
+    #[tokio::test]
+    async fn test_successful_get_request_rewrite() {
         let request =
             b"GET /path/to/page.html HTTP/1.1\r\nHost: example.com\r\nUser-Agent: test\r\n\r\n";
         let mut reader = BufReader::new(&request[..]);
-        let result = rewrite_request_to_absolute_form(&mut reader).unwrap();
-
+        let result = rewrite_request_to_absolute_form(&mut reader, None).await.unwrap();
         let expected = "GET http://example.com/path/to/page.html HTTP/1.1\r\nHost: example.com\r\nUser-Agent: test\r\n\r\n";
-
         assert_eq!(result, expected);
     }
 
     /// Tests that methods other than GET, like POST, are handled correctly.
-    #[test]
-    fn test_successful_post_request_rewrite() {
+    #[tokio::test]
+    async fn test_successful_post_request_rewrite() {
         let request =
             b"POST /api/v1/users HTTP/1.1\r\nHost: api.service.io\r\nContent-Length: 42\r\n\r\n";
         let mut reader = BufReader::new(&request[..]);
-        let result = rewrite_request_to_absolute_form(&mut reader).unwrap();
-
+        let result = rewrite_request_to_absolute_form(&mut reader, None).await.unwrap();
         let expected = "POST http://api.service.io/api/v1/users HTTP/1.1\r\nHost: api.service.io\r\nContent-Length: 42\r\n\r\n";
-
         assert_eq!(result, expected);
     }
 
     /// Verifies that the 'Host' header key is treated as case-insensitive.
-    #[test]
-    fn test_host_header_is_case_insensitive() {
+    #[tokio::test]
+    async fn test_host_header_is_case_insensitive() {
         let request = b"GET / HTTP/1.1\r\nhOsT: case-matters-not.com\r\n\r\n";
         let mut reader = BufReader::new(&request[..]);
-        let result = rewrite_request_to_absolute_form(&mut reader).unwrap();
-
+        let result = rewrite_request_to_absolute_form(&mut reader, None).await.unwrap();
         let expected =
             "GET http://case-matters-not.com/ HTTP/1.1\r\nhOsT: case-matters-not.com\r\n\r\n";
-
         assert_eq!(result, expected);
     }
 
     /// Ensures that extra whitespace around the `Host` header value is trimmed.
-    #[test]
-    fn test_host_header_trims_whitespace() {
+    #[tokio::test]
+    async fn test_host_header_trims_whitespace() {
         let request = b"GET / HTTP/1.1\r\nHost:  spaced-out.net  \r\n\r\n";
         let mut reader = BufReader::new(&request[..]);
-        let result = rewrite_request_to_absolute_form(&mut reader).unwrap();
-
+        let result = rewrite_request_to_absolute_form(&mut reader, None).await.unwrap();
         let expected = "GET http://spaced-out.net/ HTTP/1.1\r\nHost:  spaced-out.net  \r\n\r\n";
-
         assert_eq!(result, expected);
     }
 
     /// Tests that an error is returned if the 'Host' header is completely missing.
-    #[test]
-    fn test_error_on_missing_host_header() {
+    #[tokio::test]
+    async fn test_pass_through_on_missing_host_header() {
         let request = b"GET /path HTTP/1.1\r\nUser-Agent: No-Host-Client\r\n\r\n";
         let mut reader = BufReader::new(&request[..]);
-        let result = rewrite_request_to_absolute_form(&mut reader);
-
-        assert_eq!(result, Err(Error::MissingHostHeader));
+        let result = rewrite_request_to_absolute_form(&mut reader, None).await.unwrap();
+        assert_eq!(result, "GET /path HTTP/1.1\r\nUser-Agent: No-Host-Client\r\n\r\n");
     }
 
     /// Tests that an error is returned if the 'Host' header is present but has an empty value.
-    #[test]
-    fn test_error_on_empty_host_header_value() {
+    #[tokio::test]
+    async fn test_pass_through_on_empty_host_header_value() {
         let request = b"GET /path HTTP/1.1\r\nHost: \r\n\r\n";
         let mut reader = BufReader::new(&request[..]);
-        let result = rewrite_request_to_absolute_form(&mut reader);
-
-        assert_eq!(result, Err(Error::MissingHostHeader));
+        let result = rewrite_request_to_absolute_form(&mut reader, None).await.unwrap();
+        assert_eq!(result, "GET /path HTTP/1.1\r\nHost: \r\n\r\n");
     }
 
     /// Tests that an error is returned for a malformed request-line.
-    #[test]
-    fn test_error_on_malformed_request_line() {
+    #[tokio::test]
+    async fn test_error_on_malformed_request_line() {
         // This request line only has two parts, which is invalid.
         let request = b"GET /path\r\nHost: example.com\r\n\r\n";
         let mut reader = BufReader::new(&request[..]);
-        let result = rewrite_request_to_absolute_form(&mut reader);
-
-        // We can check that the error contains the invalid line.
+        let result = rewrite_request_to_absolute_form(&mut reader, None).await;
         let expected_error = Error::MalformedRequestLine("GET /path".to_string());
         assert_eq!(result, Err(expected_error));
+    }
+
+    /// Test 1: The "happy path" success case.
+    #[tokio::test]
+    async fn test_proxy_with_header_rewrite() {
+        // 1. Setup server that reads a request and writes a response.
+        let (tx, rx) = oneshot::channel::<SocketAddr>();
+        let server_task = tokio::spawn(async move {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            tx.send(listener.local_addr().unwrap()).unwrap();
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            let received_request = {
+                let mut reader = BufReader::new(&mut socket);
+                let mut headers = String::new();
+                let mut content_length = 0;
+
+                // Read headers line by line
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).await.unwrap() == 0 {
+                        break; // Connection closed
+                    }
+                    let lower_line = line.to_lowercase();
+                    if lower_line.starts_with("content-length:") {
+                        if let Some(val) = lower_line.split(':').nth(1) {
+                            content_length = val.trim().parse().unwrap_or(0);
+                        }
+                    }
+                    headers.push_str(&line);
+                    if line == "\r\n" {
+                        break; // End of headers
+                    }
+                }
+
+                let mut body = String::new();
+                if content_length > 0 {
+                    let mut body_buffer = vec![0; content_length];
+                    reader.read_exact(&mut body_buffer).await.unwrap();
+                    body = String::from_utf8_lossy(&body_buffer).to_string();
+                }
+                format!("{}{}", headers, body)
+            };
+
+            socket.write_all(b"pong").await.unwrap();
+            received_request
+        });
+
+        // 2. Test Logic
+        let server_addr = rx.await.expect("Server failed to start");
+        let mut proxy_stream = connect_with_header_rewrite(server_addr, None).await.unwrap();
+        let request =
+            "POST /resource HTTP/1.1\r\nHost: my-server.com\r\nContent-Length: 4\r\n\r\nbody";
+        proxy_stream.write_all(request.as_bytes()).await.unwrap();
+
+        // 3. Read the echoed response.
+        let mut response_body = [0u8; 4];
+        proxy_stream.read_exact(&mut response_body).await.unwrap();
+
+        // 4. Verify the result.
+        let received_data = server_task.await.unwrap();
+        let expected_data = "POST http://my-server.com/resource HTTP/1.1\r\nHost: my-server.com\r\nContent-Length: 4\r\n\r\nbody";
+        assert_eq!(received_data, expected_data);
+        assert_eq!(String::from_utf8_lossy(&response_body), "pong");
+    }
+
+    /// Test 2: Destination server is unreachable.
+    #[tokio::test]
+    async fn test_unreachable_destination() {
+        let unreachable_addr: SocketAddr = "127.0.0.1:59999".parse().unwrap();
+        let result = connect_with_header_rewrite(unreachable_addr, None).await;
+        assert!(result.is_err(), "Function should fail when destination is unreachable");
+        if let Err(Error::IoError(e)) = result {
+            assert_eq!(e.kind(), std::io::ErrorKind::ConnectionRefused);
+        } else {
+            panic!("Expected IoError with ConnectionRefused, but got {:?}", result);
+        }
+    }
+
+    /// Test 3: Client connects but sends no data, resulting in an empty request.
+    #[tokio::test]
+    async fn test_client_sends_no_data() {
+        // 1. Setup server and synchronization channel
+        let (tx, rx) = oneshot::channel::<SocketAddr>();
+        let server_task = tokio::spawn(async move {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            tx.send(listener.local_addr().unwrap()).unwrap();
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        // 2. Test Logic: Connect and immediately drop the stream.
+        let server_addr = rx.await.expect("Server failed to start");
+        let proxy_stream = connect_with_header_rewrite(server_addr, None).await.unwrap();
+        drop(proxy_stream);
+
+        // 3. Verify the result: The server should receive no data because the client sent none.
+        let received_data = server_task.await.unwrap();
+        assert!(received_data.is_empty());
+    }
+
+    /// Test 4: A large message body is proxied correctly.
+    #[tokio::test]
+    async fn test_large_body_proxy() {
+        // 1. Setup server and synchronization channel
+        let (tx, rx) = oneshot::channel::<SocketAddr>();
+        let server_task = tokio::spawn(async move {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            tx.send(listener.local_addr().unwrap()).unwrap();
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buffer = Vec::new();
+            socket.read_to_end(&mut buffer).await.unwrap();
+            buffer
+        });
+
+        // 2. Test Logic
+        let server_addr = rx.await.expect("Server failed to start");
+        let mut proxy_stream = connect_with_header_rewrite(server_addr, None).await.unwrap();
+        let large_body = "a".repeat(10 * 1024); // 10 KB body
+        let initial_data = format!(
+            "POST /upload HTTP/1.1\r\nHost: large-data.com\r\nContent-Length: {}\r\n\r\n{}",
+            large_body.len(),
+            large_body
+        );
+        proxy_stream.write_all(initial_data.as_bytes()).await.unwrap();
+        drop(proxy_stream);
+
+        // 3. Verify the result
+        let received_data = server_task.await.unwrap();
+        let expected_data = format!(
+            "POST http://large-data.com/upload HTTP/1.1\r\nHost: large-data.com\r\nContent-Length: {}\r\n\r\n{}",
+            large_body.len(),
+            large_body
+        );
+        assert_eq!(String::from_utf8(received_data).unwrap(), expected_data);
+    }
+
+    #[tokio::test]
+    async fn test_proxy_with_auth() {
+        let request =
+            b"GET /path/to/page.html HTTP/1.1\r\nHost: example.com\r\nUser-Agent: test\r\n\r\n";
+        let mut reader = BufReader::new(&request[..]);
+        let connector = Connector::new(
+            "127.0.0.1:8080".parse().unwrap(),
+            Some("user".into()),
+            Some("password".into()),
+        );
+        let result =
+            rewrite_request_to_absolute_form(&mut reader, connector.auth_header()).await.unwrap();
+        let expected = "GET http://example.com/path/to/page.html HTTP/1.1\r\nHost: example.com\r\nUser-Agent: test\r\nProxy-Authorization: Basic dXNlcjpwYXNzd29yZA==\r\n\r\n";
+        assert_eq!(result, expected);
     }
 }
