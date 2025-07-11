@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::args::DebugArgs;
 use crate::wifi::error::{WifiError, WifiResult};
 use crate::wifi::frame::Frame;
 use crate::wifi::hostapd::Hostapd;
@@ -111,11 +112,17 @@ pub struct Medium {
     ap_simulation: bool,
     hostapd: Arc<Hostapd>,
     wifi_stats: WifiStats,
+    debug: Arc<DebugArgs>,
 }
 
 type HwsimCmdCallback = fn(u32, &Bytes);
 impl Medium {
-    pub fn new(callback: HwsimCmdCallback, hostapd: Arc<Hostapd>, wifi_stats: WifiStats) -> Medium {
+    pub fn new(
+        callback: HwsimCmdCallback,
+        hostapd: Arc<Hostapd>,
+        wifi_stats: WifiStats,
+        debug: Arc<DebugArgs>,
+    ) -> Medium {
         Self {
             callback,
             stations: RwLock::new(HashMap::new()),
@@ -123,6 +130,7 @@ impl Medium {
             ap_simulation: true,
             hostapd,
             wifi_stats,
+            debug,
         }
     }
 
@@ -215,6 +223,16 @@ impl Medium {
             .validate(client_id, packet)
             .map_err(|e| WifiError::Frame(format!("error validate for client {client_id}: {e}")))?;
 
+        if self.debug.debug_no_traffic {
+            return Ok(Processor {
+                hostapd: false,
+                network: false,
+                wmedium: false,
+                frame,
+                plaintext_ieee80211: None,
+            });
+        }
+
         self.wifi_stats.incr_hwsim_frames_rx();
 
         // Creates Stations on the fly when there is no config file.
@@ -248,10 +266,15 @@ impl Medium {
         };
 
         if self.contains_station(&dest_addr) {
-            processor.wmedium = true;
+            if !self.debug.debug_no_wmedium {
+                processor.wmedium = true;
+            }
             return Ok(processor);
         }
-        if dest_addr.is_multicast() {
+        if dest_addr.is_multicast()
+            && !(self.debug.debug_no_wmedium
+                || self.debug.debug_no_mdns_wmedium && dest_addr.is_mdns())
+        {
             processor.wmedium = true;
         }
 
@@ -274,7 +297,11 @@ impl Medium {
             } else if ieee80211.is_to_ap() {
                 // Don't forward Null Data frames to slirp because they are used to maintain an active connection and carry no user data.
                 if ieee80211.stype() != DataSubType::Nodata.into() {
-                    processor.network = if self.enabled(client_id).unwrap() {
+                    processor.network = if self.debug.debug_no_network
+                        || self.debug.debug_no_guest_to_host_mdns && dest_addr.is_mdns()
+                    {
+                        false
+                    } else if self.enabled(client_id).unwrap() {
                         true
                     } else {
                         // If the client is disabled, block all packets to the internet so it can connect to the AP but has no internet access.
@@ -337,14 +364,20 @@ impl Medium {
     /// Handle Wi-Fi Ieee802.3 frame from network.
     /// Convert to HwsimMsg and send to clients.
     pub fn process_ieee8023_response(&self, packet: &Bytes) -> WifiResult<()> {
+        if self.debug.debug_no_traffic || self.debug.debug_no_network {
+            return Ok(());
+        }
         Ieee80211::from_ieee8023(packet, self.hostapd.get_bssid())
             .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.3 response: {}", e)))
             .and_then(|ieee80211| self.handle_ieee80211_response(ieee80211))
     }
 
-    /// Handle Wi-Fi Ieee802.11 frame from network.
+    /// Handle Wi-Fi Ieee802.11 frame from hostapd.
     /// Convert to HwsimMsg and send to clients.
     pub fn process_ieee80211_response(&self, packet: &Bytes) -> WifiResult<()> {
+        if self.debug.debug_no_traffic {
+            return Ok(());
+        }
         Ieee80211::decode_full(packet)
             .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.11 response: {}", e)))
             .and_then(|ieee80211| self.handle_ieee80211_response(ieee80211))
@@ -774,6 +807,7 @@ mod tests {
             ap_simulation: true,
             hostapd,
             wifi_stats,
+            debug: Arc::new(DebugArgs::default()),
         };
 
         medium.remove(test_client_id);
