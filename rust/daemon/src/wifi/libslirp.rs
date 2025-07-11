@@ -21,26 +21,8 @@ use http_proxy::Manager;
 pub use libslirp_rs::libslirp::LibSlirp;
 use libslirp_rs::libslirp::ProxyManager;
 use libslirp_rs::libslirp_config::{lookup_host_dns, SlirpConfig};
-use log::info;
 use netsim_proto::config::SlirpOptions as ProtoSlirpOptions;
-use std::net::UdpSocket;
 use std::sync::mpsc;
-
-/// A utility to detect host network capabilities.
-pub struct HostNetwork {
-    pub ipv4_supported: bool,
-    pub ipv6_supported: bool,
-}
-
-impl HostNetwork {
-    /// Detects IPv4 and IPv6 support by attempting to bind sockets.
-    pub fn detect() -> Self {
-        let ipv4_supported = UdpSocket::bind("0.0.0.0:0").is_ok();
-        let ipv6_supported = UdpSocket::bind("[::]:0").is_ok();
-        info!("Host network support: ipv4={}, ipv6={}", ipv4_supported, ipv6_supported);
-        Self { ipv4_supported, ipv6_supported }
-    }
-}
 
 pub fn slirp_run(opt: ProtoSlirpOptions, tx_bytes: mpsc::Sender<Bytes>) -> WifiResult<LibSlirp> {
     // TODO: Convert ProtoSlirpOptions to SlirpConfig.
@@ -58,27 +40,9 @@ pub fn slirp_run(opt: ProtoSlirpOptions, tx_bytes: mpsc::Sender<Bytes>) -> WifiR
 
     let mut config = SlirpConfig { http_proxy_on: proxy_manager.is_some(), ..Default::default() };
 
-    let host_network = HostNetwork::detect();
-    config.in_enabled = host_network.ipv4_supported;
-    config.in6_enabled = host_network.ipv6_supported;
-
     if !opt.host_dns.is_empty() {
         config.host_dns = get_runtime().block_on(lookup_host_dns(&opt.host_dns))?;
     }
 
     Ok(LibSlirp::new(config, tx_bytes, proxy_manager, tx_proxy_bytes))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_host_network_detect() {
-        let network = HostNetwork::detect();
-        // We can't know for sure if ipv4 and ipv6 are supported,
-        // but we can check that the function returns a valid struct.
-        assert!(network.ipv4_supported || !network.ipv4_supported);
-        assert!(network.ipv6_supported || !network.ipv6_supported);
-    }
 }
