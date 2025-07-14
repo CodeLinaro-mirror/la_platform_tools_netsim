@@ -59,7 +59,7 @@ impl RangingDataSet {
     ///
     /// * `distance` - The true distance for which an estimated distance is required.
     /// * `option_rng` - An optional random number generator
-    ///     (if not provided, a default one will be used)
+    ///   (if not provided, a default one will be used)
     ///
     /// # Returns
     ///
