@@ -331,6 +331,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
         args.forward_host_mdns,
         args.wifi,
         args.wifi_tap,
+        Arc::new(args.debug),
     );
     wireless::uwb::uwb_start();
 
