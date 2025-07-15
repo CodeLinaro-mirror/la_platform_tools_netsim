@@ -25,7 +25,7 @@ use crate::wireless;
 use cxx::{let_cxx_string, UniquePtr};
 use log::{error, info, warn};
 use netsim_packets::link_layer::{
-    Address, AddressType, LeLegacyAdvertisingPduBuilder, LeScanResponseBuilder, PacketType,
+    Address, AddressType, LeLegacyAdvertisingPdu, LeScanResponse, PacketType,
 };
 use netsim_proto::common::ChipKind;
 use netsim_proto::model::chip::Bluetooth;
@@ -191,7 +191,7 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
 
         beacon.advertise_last = Some(Instant::now());
 
-        let packet = LeLegacyAdvertisingPduBuilder {
+        let packet = LeLegacyAdvertisingPdu {
             advertising_type: beacon.advertise_settings.get_packet_type(),
             advertising_data: beacon.advertise_data.to_bytes(),
             advertising_address_type: AddressType::Public,
@@ -199,7 +199,6 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
             source_address: beacon.address,
             destination_address: *get_empty_address(),
         }
-        .build()
         .encode_to_vec()
         .unwrap();
         beacon.send_link_layer_le_packet(&packet, beacon.advertise_settings.tx_power_level.dbm);
@@ -224,13 +223,12 @@ impl RustBluetoothChipCallbacks for BeaconChipCallbacks {
             && destination_address == addr_to_str(beacon.address)
             && packet_type == u8::from(PacketType::LeScan)
         {
-            let packet = LeScanResponseBuilder {
+            let packet = LeScanResponse {
                 advertising_address_type: AddressType::Public,
                 source_address: beacon.address,
                 destination_address: beacon.address,
                 scan_response_data: beacon.scan_response_data.to_bytes(),
             }
-            .build()
             .encode_to_vec()
             .unwrap();
 
