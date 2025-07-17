@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::args::DebugArgs;
 use crate::devices::chip::ChipIdentifier;
 use crate::get_runtime;
 use crate::wifi::error::{WifiError, WifiResult};
@@ -39,6 +40,7 @@ pub fn wifi_start(
     forward_host_mdns: bool,
     wifi_args: Option<Vec<String>>,
     wifi_tap: Option<String>,
+    debug: Arc<DebugArgs>,
 ) -> WifiStats {
     let (tx_request, rx_request) = mpsc::channel::<(u32, Bytes)>();
     let (tx_ieee8023_response, rx_ieee8023_response) = mpsc::channel::<Bytes>();
@@ -65,6 +67,7 @@ pub fn wifi_start(
         network,
         hostapd,
         wifi_stats.clone(),
+        debug,
     )));
     let wifi_manager = get_wifi_manager();
 
@@ -133,10 +136,11 @@ impl WifiManager {
         network: Box<dyn Network>,
         hostapd: hostapd::Hostapd,
         wifi_stats: WifiStats,
+        debug: Arc<DebugArgs>,
     ) -> WifiManager {
         let hostapd = Arc::new(hostapd);
         WifiManager {
-            medium: Medium::new(medium_callback, hostapd.clone(), wifi_stats),
+            medium: Medium::new(medium_callback, hostapd.clone(), wifi_stats, debug),
             tx_request,
             network,
             hostapd,

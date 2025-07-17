@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::Parser;
+use clap::{Args, Parser};
 
 #[derive(Debug, Parser)]
 pub struct NetsimdArgs {
@@ -116,6 +116,9 @@ pub struct NetsimdArgs {
     #[arg(long)]
     pub version: bool,
 
+    #[command(flatten)]
+    pub debug: DebugArgs,
+
     /// Set RSSI (in dBm) for all links on a specified PhyKind.
     /// Accepts `PHY_KIND:RSSI_VALUE` (e.g., `BLE:-65`).
     /// This flag can be specified multiple times for different PhyKinds (e.g., `--rssi=bt_classic:-65 --rssi=ble:-72`).
@@ -125,4 +128,27 @@ pub struct NetsimdArgs {
     /// * RSSI control is currently implemented for BLE and BT_CLASSIC only.
     #[arg(long, value_name = "PHY_KIND:RSSI_VALUE", action = clap::ArgAction::Append, verbatim_doc_comment)]
     pub rssi: Option<Vec<String>>,
+}
+
+#[derive(Args, Debug, Clone, Default)]
+pub struct DebugArgs {
+    /// Disable all packet processing and forwarding.
+    #[arg(long)]
+    pub debug_no_traffic: bool,
+
+    /// Disable forwarding packets to the external network.
+    #[arg(long)]
+    pub debug_no_network: bool,
+
+    /// Disable packet forwarding between simulated devices.
+    #[arg(long)]
+    pub debug_no_wmedium: bool,
+
+    /// Disable mDNS traffic between simulated devices.
+    #[arg(long)]
+    pub debug_no_mdns_wmedium: bool,
+
+    /// Disable mDNS traffic from guest to host.
+    #[arg(long)]
+    pub debug_no_guest_to_host_mdns: bool,
 }
