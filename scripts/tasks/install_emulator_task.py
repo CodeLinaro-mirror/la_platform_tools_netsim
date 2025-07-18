@@ -43,6 +43,7 @@ class InstallEmulatorTask(Task):
     super().__init__("InstallEmulator")
     self.buildbot = args.buildbot
     self.out_dir = args.out_dir
+    self.build_id = args.emulator_build_id
     # Local fetching use only - default to emulator-linux_x64_gfxstream
     self.target = args.emulator_target
     # Local Emulator directory
@@ -50,7 +51,11 @@ class InstallEmulatorTask(Task):
 
   def do_run(self):
     install_emulator_manager = InstallEmulatorManager(
-        self.buildbot, self.out_dir, self.target, self.local_emulator_dir
+        self.buildbot,
+        self.out_dir,
+        self.target,
+        self.local_emulator_dir,
+        self.build_id,
     )
     return install_emulator_manager.process()
 
@@ -69,7 +74,9 @@ class InstallEmulatorManager:
       used for Android Build Bots.
   """
 
-  def __init__(self, buildbot, out_dir, target, local_emulator_dir):
+  def __init__(
+      self, buildbot, out_dir, target, local_emulator_dir, build_id
+  ):
     """Initializes the instances based on environment
 
     Args:
@@ -81,6 +88,7 @@ class InstallEmulatorManager:
     self.out_dir = out_dir
     self.target = target
     self.local_emulator_dir = local_emulator_dir
+    self.build_id = build_id
 
   def __os_name_fetch(self):
     """Obtains the os substring of the emulator artifact"""
@@ -222,16 +230,20 @@ class InstallEmulatorManager:
       # Artifact fetching for local case
       if not self.buildbot:
         # Simulating the shell command
+        fetch_cmd = [
+            "/google/data/ro/projects/android/fetch_artifact",
+            "--branch",
+            "git_emu-main-dev",
+            "--target",
+            self.target,
+        ]
+        if self.build_id:
+          fetch_cmd.extend(["--bid", self.build_id])
+        else:
+          fetch_cmd.append("--latest")
+        fetch_cmd.append("sdk-repo-linux-emulator-*.zip")
         run(
-            [
-                "/google/data/ro/projects/android/fetch_artifact",
-                "--latest",
-                "--target",
-                self.target,
-                "--branch",
-                "git_emu-main-dev",
-                "sdk-repo-linux-emulator-*.zip",
-            ],
+            fetch_cmd,
             get_default_environment(AOSP_ROOT),
             "install_emulator",
             cwd=EMULATOR_ARTIFACT_PATH,

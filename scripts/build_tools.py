@@ -99,6 +99,13 @@ def main():
       help="Whether we are building a release or debug configuration.",
   )
   parser.add_argument(
+      "--emulator_build_id",
+      type=str,
+      default="",
+      dest="emulator_build_id",
+      help="The emulator build number",
+  )
+  parser.add_argument(
       "--emulator_target",
       type=str,
       default="emulator-linux_x64_gfxstream",
