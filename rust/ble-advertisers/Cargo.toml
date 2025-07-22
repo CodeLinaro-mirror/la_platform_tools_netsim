@@ -1,0 +1,11 @@
+[package]
+name = "ble-advertisers"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hex = "0.4"
+thiserror = "1.0"
+zerocopy = { version = "0.8", features = ["derive"] }
+
+[workspace]
