@@ -31,7 +31,7 @@ const NLMSG_MIN_TYPE: u16 = 0x10;
 const NL_AUTO_SEQ: u16 = 0;
 const NL_AUTO_PORT: u32 = 0;
 // Default values for mac80211_hwsim.
-const RX_RATE: u32 = 0;
+const RX_RATE: u32 = 1;
 const SIGNAL: u32 = 4294967246; // -50
 const NL_MSG_HDR_LEN: usize = 16;
 
