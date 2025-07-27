@@ -20,6 +20,7 @@
 # - protobuf-compiler
 # Linux: sudo apt-get install protobuf-compiler
 # Mac:   brew install protobuf
+# Fixing Cargo version: rustup default 1.81.0
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
@@ -27,7 +28,7 @@ echo "Starting Rust protobuf file update process..."
 
 # --- Configuration ---
 # Absolute path to tools/netsim using this scripts directory
-REPO_NETSIM=$(dirname $(readlink -f "$0"))/..
+REPO_NETSIM=$(dirname "$0")/..
 CARGO_MANIFEST="$REPO_NETSIM/rust/proto/Cargo.toml"
 PROTO_SRC_DIR="$REPO_NETSIM/rust/proto/src"
 OS=$(uname | tr '[:upper:]' '[:lower:]')
@@ -106,11 +107,10 @@ echo "[Step 3] Post-processing generated Rust files..."
 # Remove #![allow(box_pointers)] attribute from generated files. This has been removed with latest toolchain.
 # TODO: Remove this step after Rust toolchain upgrade.
 echo "Removing #![allow(box_pointers)] attribute..."
-PATTERN_TO_REMOVE='^#\!\[allow(box_pointers)\]$'
 if [[ "$OS" == "linux" ]]; then
-    find "$PROTO_SRC_DIR" -name '*.rs' -exec sed -i "/${PATTERN_TO_REMOVE}/d" {} \;
+    find "$PROTO_SRC_DIR" -name '*.rs' -exec sed -i '/^#!\[allow(box_pointers)\]$/d' {} +
 elif [[ "$OS" == "darwin" ]]; then
-    find "$PROTO_SRC_DIR" -name '*.rs' -exec sed -i '' "/${PATTERN_TO_REMOVE}/d" {} \;
+    find "$PROTO_SRC_DIR" -name '*.rs' -exec sed -i '' '/^#!\[allow(box_pointers)\]$/d' {} +
 else
     echo "Warning: Unsupported OS '$OS' for automatic removal of '#![allow(box_pointers)]'. Please check files manually."
 fi

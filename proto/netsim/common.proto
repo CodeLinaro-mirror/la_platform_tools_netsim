@@ -16,6 +16,9 @@ syntax = "proto3";
 
 package netsim.common;
 
+option java_multiple_files = true;
+option java_package = "com.android.emulation.bluetooth";
+
 // Radio Type (BT, WIFI, UWB, BLEBEACON)
 enum ChipKind {
   // Default to UNSPECIFIED

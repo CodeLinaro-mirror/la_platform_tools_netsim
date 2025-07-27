@@ -725,7 +725,8 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x20\x01(\x0b2\x18.netsim.packet.HCIPacketH\0R\thciPacket\x12\x18\n\x06p\
     acket\x18\x03\x20\x01(\x0cH\0R\x06packetB\x0f\n\rresponse_type2b\n\x0ePa\
     cketStreamer\x12P\n\rStreamPackets\x12\x1c.netsim.packet.PacketRequest\
-    \x1a\x1d.netsim.packet.PacketResponse(\x010\x01b\x06proto3\
+    \x1a\x1d.netsim.packet.PacketResponse(\x010\x01B#\n\x1fcom.android.emula\
+    tion.bluetoothP\x01b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

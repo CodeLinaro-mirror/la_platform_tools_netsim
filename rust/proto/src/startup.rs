@@ -1011,8 +1011,8 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x07\x20\x01(\x08R\x08loopback\x12H\n\rbt_properties\x18\x08\x20\x01(\
     \x0b2#.rootcanal.configuration.ControllerR\x0cbtProperties\x12\x18\n\x07\
     address\x18\t\x20\x01(\tR\x07address\x123\n\x06offset\x18\n\x20\x01(\x0b\
-    2\x16.netsim.model.PositionH\0R\x06offset\x88\x01\x01B\t\n\x07_offsetb\
-    \x06proto3\
+    2\x16.netsim.model.PositionH\0R\x06offset\x88\x01\x01B\t\n\x07_offsetB#\
+    \n\x1fcom.android.emulation.bluetoothP\x01b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
