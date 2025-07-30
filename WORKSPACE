@@ -229,3 +229,129 @@ new_local_repository(
     build_file = "//bazel_deps:protobuf-support.BUILD.bazel",
     path = "../../external/rust/android-crates-io/crates/protobuf-support",
 )
+
+new_local_repository(
+    name = "futures_channel",
+    build_file = "//bazel_deps:futures-channel.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/futures-channel",
+)
+
+new_local_repository(
+    name = "futures_core",
+    build_file = "//bazel_deps:futures-core.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/futures-core",
+)
+
+new_local_repository(
+    name = "futures_executor",
+    build_file = "//bazel_deps:futures-executor.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/futures-executor",
+)
+
+new_local_repository(
+    name = "futures_io",
+    build_file = "//bazel_deps:futures-io.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/futures-io",
+)
+
+new_local_repository(
+    name = "futures_macro",
+    build_file = "//bazel_deps:futures-macro.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/futures-macro",
+)
+
+new_local_repository(
+    name = "futures_sink",
+    build_file = "//bazel_deps:futures-sink.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/futures-sink",
+)
+
+new_local_repository(
+    name = "futures_task",
+    build_file = "//bazel_deps:futures-task.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/futures-task",
+)
+
+new_local_repository(
+    name = "futures_util",
+    build_file = "//bazel_deps:futures-util.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/futures-util",
+)
+
+new_local_repository(
+    name = "grpcio",
+    build_file = "//bazel_deps:grpcio.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/grpcio",
+)
+
+new_local_repository(
+    name = "grpcio_sys",
+    build_file = "//bazel_deps:grpcio-sys.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/grpcio-sys",
+)
+
+new_local_repository(
+    name = "libz_sys",
+    build_file = "//bazel_deps:libz-sys.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/libz-sys",
+)
+
+new_local_repository(
+    name = "lock_api",
+    build_file = "//bazel_deps:lock_api.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/lock_api",
+)
+
+new_local_repository(
+    name = "memchr",
+    build_file = "//bazel_deps:memchr.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/memchr",
+)
+
+new_local_repository(
+    name = "num_cpus",
+    build_file = "//bazel_deps:num_cpus.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/num_cpus",
+)
+
+new_local_repository(
+    name = "parking_lot",
+    build_file = "//bazel_deps:parking_lot.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/parking_lot",
+)
+
+new_local_repository(
+    name = "parking_lot_core",
+    build_file = "//bazel_deps:parking_lot_core.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/parking_lot_core",
+)
+
+new_local_repository(
+    name = "pin_project_lite",
+    build_file = "//bazel_deps:pin-project-lite.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/pin-project-lite",
+)
+
+new_local_repository(
+    name = "pin_utils",
+    build_file = "//bazel_deps:pin-utils.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/pin-utils",
+)
+
+new_local_repository(
+    name = "scopeguard",
+    build_file = "//bazel_deps:scopeguard.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/scopeguard",
+)
+
+new_local_repository(
+    name = "slab",
+    build_file = "//bazel_deps:slab.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/slab",
+)
+
+new_local_repository(
+    name = "smallvec",
+    build_file = "//bazel_deps:smallvec.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/smallvec",
+)

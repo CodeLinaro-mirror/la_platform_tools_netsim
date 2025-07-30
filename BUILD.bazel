@@ -55,3 +55,13 @@ rust_test(
     crate = ":netsim_common",
     tags = ["general_tests"],
 )
+
+rust_library(
+    name = "netsim_proto",
+    srcs = glob(["rust/proto/src/**/*.rs"]),
+    crate_name = "netsim_proto",
+    deps = [
+        "@grpcio",
+        "@protobuf-rust",
+    ],
+)
