@@ -74,9 +74,7 @@ class InstallEmulatorManager:
       used for Android Build Bots.
   """
 
-  def __init__(
-      self, buildbot, out_dir, target, local_emulator_dir, build_id
-  ):
+  def __init__(self, buildbot, out_dir, target, local_emulator_dir, build_id):
     """Initializes the instances based on environment
 
     Args:

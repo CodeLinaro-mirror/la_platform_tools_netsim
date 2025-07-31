@@ -60,4 +60,5 @@ if [ -f "$BPFMT" ]; then
 fi
 
 # Run buildifier to format Bazel build files
-buildifier -r $REPO/tools/netsim
+find $REPO/tools/netsim \( -name "*.bazel" \) -print0 | xargs -0 buildifier
+buildifier $REPO/tools/netsim/WORKSPACE
