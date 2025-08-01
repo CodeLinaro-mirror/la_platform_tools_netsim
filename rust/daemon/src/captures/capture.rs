@@ -123,11 +123,13 @@ impl CaptureInfo {
             ChipKind::BLUETOOTH_BEACON => LinkType::BluetoothHciH4WithPhdr,
             ChipKind::WIFI => LinkType::Ieee80211RadioTap,
             ChipKind::UWB => LinkType::FiraUci,
+            #[allow(clippy::io_other_error)]
             _ => return Err(Error::new(ErrorKind::Other, "Unsupported link type")),
         };
         let size = match self.extension.as_str() {
             "pcap" => write_pcap_header(link_type, &mut file)?,
             "pcapng" => write_pcapng_header(link_type, &mut file)?,
+            #[allow(clippy::io_other_error)]
             _ => return Err(Error::new(ErrorKind::Other, "Incorrect Extension for file")),
         };
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");

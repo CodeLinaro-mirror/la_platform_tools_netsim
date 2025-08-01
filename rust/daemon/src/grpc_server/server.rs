@@ -18,7 +18,7 @@ use crate::links::link::LinkManager;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
-use log::{info, warn};
+use log::{error, info, warn};
 use netsim_proto::frontend_grpc::create_frontend_service;
 use netsim_proto::packet_streamer_grpc::create_packet_streamer;
 use std::sync::Arc;
@@ -43,20 +43,20 @@ pub fn start(
         .channel_args(ch_builder.build_args())
         .build()?;
 
-    let addr_v4 = format!("127.0.0.1:{}", port);
-    let addr_v6 = format!("[::1]:{}", port);
-    let port = server.add_listening_port(&addr_v4, ServerCredentials::insecure()).or_else(|e| {
-        match std::net::TcpListener::bind(&addr_v4) {
+    let addr = format!("localhost:{}", port);
+    #[allow(clippy::manual_inspect)]
+    let port = server.add_listening_port(&addr, ServerCredentials::insecure()).map_err(|e| {
+        match std::net::TcpListener::bind(&addr) {
             Ok(listener) => drop(listener),
             Err(bind_e) => {
                 if bind_e.kind() == std::io::ErrorKind::AddrInUse {
-                    warn!("Rust gRPC Address {} is already in use.", addr_v4);
-                    return Err(e);
+                    warn!("Rust gRPC Address {addr} is already in use.");
+                } else {
+                    error!("Rust gRPC bind error: {bind_e:?}")
                 }
             }
         }
-        warn!("Failed to bind to 127.0.0.1:{port} in grpc server. Trying [::1]:{port}. {e:?}");
-        server.add_listening_port(addr_v6, ServerCredentials::insecure())
+        e
     })?;
 
     #[cfg(feature = "cuttlefish")]
