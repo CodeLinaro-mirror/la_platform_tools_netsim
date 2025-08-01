@@ -355,3 +355,57 @@ new_local_repository(
     build_file = "//bazel_deps:smallvec.BUILD.bazel",
     path = "../../external/rust/android-crates-io/crates/smallvec",
 )
+
+new_local_repository(
+    name = "anstyle",
+    build_file = "//bazel_deps:anstyle.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/anstyle",
+)
+
+new_local_repository(
+    name = "clap",
+    build_file = "//bazel_deps:clap.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/clap",
+)
+
+new_local_repository(
+    name = "clap_builder",
+    build_file = "//bazel_deps:clap_builder.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/clap_builder",
+)
+
+new_local_repository(
+    name = "clap_derive",
+    build_file = "//bazel_deps:clap_derive.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/clap_derive",
+)
+
+new_local_repository(
+    name = "clap_lex",
+    build_file = "//bazel_deps:clap_lex.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/clap_lex",
+)
+
+new_local_repository(
+    name = "futures",
+    build_file = "//bazel_deps:futures.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/futures",
+)
+
+new_local_repository(
+    name = "heck",
+    build_file = "//bazel_deps:heck.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/heck",
+)
+
+new_local_repository(
+    name = "hex",
+    build_file = "//bazel_deps:hex.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/hex",
+)
+
+new_local_repository(
+    name = "strsim",
+    build_file = "//bazel_deps:strsim.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/strsim",
+)

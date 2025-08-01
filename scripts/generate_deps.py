@@ -315,8 +315,16 @@ def generate_rust_rule(block, crate_info):
     srcs_attr = '    srcs = glob(["**/*.rs"]),'
 
   compile_data_attr = ''
-  if crate_name in ['getrandom', 'libz_rs_sys', 'zlib_rs']:
+  if crate_name in [
+      'getrandom',
+      'libz_rs_sys',
+      'zlib_rs',
+      'clap_derive',
+      'clap_builder',
+  ]:
     compile_data_attr = '    compile_data = glob(["README.md"]),'
+  elif crate_name == 'clap':
+    compile_data_attr = '    compile_data = glob(["examples/demo.md"]),'
   crate_root_attr = '    crate_root = "src/lib.rs",'
 
   content = f"""
@@ -657,4 +665,4 @@ def main():
 
 if __name__ == '__main__':
   main()
-  os.system('buildifier tools/netsim/bazel_deps/*')
+  os.system('buildifier tools/netsim/bazel_deps/* tools/netsim/WORKSPACE')
