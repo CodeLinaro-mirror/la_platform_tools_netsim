@@ -409,3 +409,105 @@ new_local_repository(
     build_file = "//bazel_deps:strsim.BUILD.bazel",
     path = "../../external/rust/android-crates-io/crates/strsim",
 )
+
+new_local_repository(
+    name = "pdl_runtime",
+    build_file = "//bazel_deps:pdl-runtime.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/pdl-runtime",
+)
+
+new_local_repository(
+    name = "argh",
+    build_file = "//bazel_deps:argh.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/argh",
+)
+
+new_local_repository(
+    name = "argh_derive",
+    build_file = "//bazel_deps:argh_derive.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/argh_derive",
+)
+
+new_local_repository(
+    name = "argh_shared",
+    build_file = "//bazel_deps:argh_shared.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/argh_shared",
+)
+
+new_local_repository(
+    name = "codespan_reporting",
+    build_file = "//bazel_deps:codespan-reporting.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/codespan-reporting",
+)
+
+new_local_repository(
+    name = "itoa",
+    build_file = "//bazel_deps:itoa.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/itoa",
+)
+
+new_local_repository(
+    name = "pdl_compiler",
+    build_file = "//bazel_deps:pdl-compiler.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/pdl-compiler",
+)
+
+new_local_repository(
+    name = "pest",
+    build_file = "//bazel_deps:pest.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/pest",
+)
+
+new_local_repository(
+    name = "pest_derive",
+    build_file = "//bazel_deps:pest_derive.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/pest_derive",
+)
+
+new_local_repository(
+    name = "pest_generator",
+    build_file = "//bazel_deps:pest_generator.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/pest_generator",
+)
+
+new_local_repository(
+    name = "pest_meta",
+    build_file = "//bazel_deps:pest_meta.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/pest_meta",
+)
+
+new_local_repository(
+    name = "prettyplease",
+    build_file = "//bazel_deps:prettyplease.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/prettyplease",
+)
+
+new_local_repository(
+    name = "ryu",
+    build_file = "//bazel_deps:ryu.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/ryu",
+)
+
+new_local_repository(
+    name = "serde_json",
+    build_file = "//bazel_deps:serde_json.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/serde_json",
+)
+
+new_local_repository(
+    name = "termcolor",
+    build_file = "//bazel_deps:termcolor.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/termcolor",
+)
+
+new_local_repository(
+    name = "ucd_trie",
+    build_file = "//bazel_deps:ucd-trie.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/ucd-trie",
+)
+
+new_local_repository(
+    name = "unicode_width",
+    build_file = "//bazel_deps:unicode-width.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/unicode-width",
+)
