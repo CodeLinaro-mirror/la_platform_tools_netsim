@@ -315,8 +315,16 @@ def generate_rust_rule(block, crate_info):
     srcs_attr = '    srcs = glob(["**/*.rs"]),'
 
   compile_data_attr = ''
-  if crate_name in ['getrandom', 'libz_rs_sys', 'zlib_rs']:
+  if crate_name in [
+      'getrandom',
+      'libz_rs_sys',
+      'zlib_rs',
+      'clap_derive',
+      'clap_builder',
+  ]:
     compile_data_attr = '    compile_data = glob(["README.md"]),'
+  elif crate_name == 'clap':
+    compile_data_attr = '    compile_data = glob(["examples/demo.md"]),'
   crate_root_attr = '    crate_root = "src/lib.rs",'
 
   content = f"""
@@ -354,6 +362,70 @@ def generate_bazel_file_content(blocks, crate_info):
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+  if crate_info['workspace_name'] == 'grpcio-sys':
+    return f"""{copyright_header}
+\"\"\"grpcio-sys bazel build rule\"\"\"
+
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "grpcio_sys",
+    srcs = glob(["**/*.rs"]),
+    crate_name = "grpcio_sys",
+    edition = "2018",
+    crate_root = "src/lib.rs",
+    rustc_env = {{
+        "BINDING_PATH": "../bindings/bindings.rs",
+    }},
+    deps = [
+        "@libc",
+        "@libz_sys",
+    ],
+    rustc_flags = [
+        "--cfg=feature=\\"_libz-sys\\"",
+        "--cfg=feature=\\"_secure\\"",
+        "--cfg=feature=\\"boringssl\\"",
+        "--cfg=feature=\\"boringssl-src\\"",
+        "--cfg=feature=\\"libz-sys\\"",
+    ],
+)
+"""
+  if crate_info['workspace_name'] == 'grpcio':
+    return f"""{copyright_header}
+\"\"\"grpcio bazel build rule\"\"\"
+
+load("@rules_rust//rust:defs.bzl", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "grpcio",
+    srcs = glob(["**/*.rs"]),
+    crate_name = "grpcio",
+    edition = "2018",
+    crate_root = "src/lib.rs",
+    deps = [
+        "@futures_executor",
+        "@futures_util",
+        "@grpcio_sys",
+        "@libc",
+        "@log_rust",
+        "@parking_lot",
+        "@protobuf-rust",
+    ],
+    rustc_flags = [
+        "--cfg=feature=\\"_secure\\"",
+        "--cfg=feature=\\"boringssl\\"",
+        "--cfg=feature=\\"protobufv3\\"",
+        "--cfg=feature=\\"protobufv3-codec\\"",
+    ],
+    aliases = {{
+        "@protobuf-rust": "protobufv3",
+    }},
+)
 """
   if crate_info['workspace_name'] == 'protobuf-rust':
     return f"""{copyright_header}
@@ -593,4 +665,4 @@ def main():
 
 if __name__ == '__main__':
   main()
-  os.system('bash tools/netsim/scripts/format_code.sh')
+  os.system('buildifier tools/netsim/bazel_deps/* tools/netsim/WORKSPACE')
