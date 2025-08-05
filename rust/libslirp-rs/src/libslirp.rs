@@ -1402,6 +1402,12 @@ mod tests {
         // Shutdown the write half of the reader
         reader.shutdown(std::net::Shutdown::Write).unwrap();
 
+        // Try to read from the socket to force an update of its state.
+        // A read on a closed socket should return 0, or WouldBlock if non-blocking.
+        // We don't need the result.
+        let mut buf = [0; 1];
+        let _ = reader.read(&mut buf);
+
         // Check that expected poll result when writer end is dropped
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         let expected_revents = SLIRP_POLL_IN | SLIRP_POLL_HUP;
