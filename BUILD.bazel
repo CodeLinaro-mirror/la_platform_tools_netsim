@@ -76,6 +76,21 @@ rust_test(
 )
 
 rust_library(
+    name = "netsim_rootcanal_rs",
+    srcs = ["//rust/netsim-rootcanal-rs:srcs"],
+    deps = [
+        "@rootcanal//:lib_rootcanal_ffi",
+        "@thiserror",
+    ],
+)
+
+rust_test(
+    name = "netsim_rootcanal_rs_tests",
+    crate = ":netsim_rootcanal_rs",
+    tags = ["general_tests"],
+)
+
+rust_library(
     name = "netsim_proto",
     srcs = glob(["rust/proto-cf/src/**/*.rs"]),
     crate_name = "netsim_proto",

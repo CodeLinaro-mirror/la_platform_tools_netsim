@@ -118,6 +118,9 @@ new_local_repository(
         "memchr",
         "mio",
         "num_cpus",
+        "num-bigint",
+        "num-derive",
+        "num-integer",
         "num-traits",
         "once_cell",
         "parking_lot",
@@ -210,3 +213,11 @@ new_local_repository(
     build_file = "//bazel_deps:aemu-base.BUILD.bazel",
     path = "../../hardware/google/aemu/base",
 )
+
+new_local_repository(
+    name = "fmtlib",
+    build_file = "//bazel_deps:fmtlib.BUILD.bazel",
+    path = "../../external/fmtlib",
+)
+
+bazel_dep(name = "boringssl", version = "0.20241024.0")
