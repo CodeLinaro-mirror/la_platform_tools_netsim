@@ -48,7 +48,7 @@ impl Response for SocketTransport {
         buffer.push(packet_type);
         buffer.extend(packet);
         if let Err(e) = self.stream.write_all(&buffer[..]) {
-            error!("error writing {}", e);
+            error!("error writing {e}");
         };
     }
 }
@@ -58,14 +58,14 @@ pub fn run_socket_transport(hci_port: u16) {
         .name("hci_transport".to_string())
         .spawn(move || {
             accept_incoming(hci_port)
-                .unwrap_or_else(|e| error!("Failed to accept incoming stream: {:?}", e));
+                .unwrap_or_else(|e| error!("Failed to accept incoming stream: {e:?}"));
         })
         .unwrap();
 }
 
 fn accept_incoming(hci_port: u16) -> std::io::Result<()> {
     let listener = TcpListener::bind(("localhost", hci_port))?;
-    info!("Hci socket server is listening on: {}", hci_port);
+    info!("Hci socket server is listening on: {hci_port}");
 
     for stream in listener.incoming() {
         let stream = stream?;

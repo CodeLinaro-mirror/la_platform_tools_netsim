@@ -172,8 +172,7 @@ impl Device {
         }
         if multiple_matches {
             return Err(format!(
-                "Multiple ambiguous matches were found with chip name {}",
-                patch_chip_name
+                "Multiple ambiguous matches were found with chip name {patch_chip_name}"
             ));
         }
         Ok(target)
@@ -315,8 +314,7 @@ mod tests {
         assert_eq!(
             result.err(),
             Some(format!(
-                "No chip name is supplied but multiple chips of chip kind {:?} exist.",
-                PATCH_CHIP_KIND
+                "No chip name is supplied but multiple chips of chip kind {PATCH_CHIP_KIND:?} exist."
             ))
         );
     }

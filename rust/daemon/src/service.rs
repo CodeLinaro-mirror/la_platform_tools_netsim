@@ -178,7 +178,7 @@ pub fn new_test_beacon(idx: u32, interval: u64) {
     use protobuf::MessageField;
 
     let beacon_proto = BleBeaconCreateProto {
-        address: format!("be:ac:01:be:ef:{:02x}", idx),
+        address: format!("be:ac:01:be:ef:{idx:02x}"),
         settings: MessageField::some(AdvertiseSettingsProto {
             interval: Some(
                 ble_advertise_settings::AdvertiseMode::new(Duration::from_millis(interval))

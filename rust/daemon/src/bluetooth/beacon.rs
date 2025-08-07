@@ -269,7 +269,7 @@ pub fn ble_beacon_add(
     );
     let rust_chip = add_rust_device_result.rust_chip;
     let facade_id = add_rust_device_result.facade_id;
-    info!("Creating HCI facade_id: {} for chip_id: {}", facade_id, chip_id);
+    info!("Creating HCI facade_id: {facade_id} for chip_id: {chip_id}");
     get_bt_chips().write().unwrap().insert(chip_id, Mutex::new(rust_chip));
     Ok(FacadeIdentifier(facade_id))
 }
@@ -383,7 +383,7 @@ fn addr_to_str(addr: Address) -> String {
     let bytes = u64::from(addr).to_le_bytes();
     bytes[..5]
         .iter()
-        .rfold(format!("{:02x}", bytes[5]), |addr, byte| addr + &format!(":{:02x}", byte))
+        .rfold(format!("{:02x}", bytes[5]), |addr, byte| addr + &format!(":{byte:02x}"))
 }
 
 fn str_to_addr(addr: &str) -> Result<Address, String> {

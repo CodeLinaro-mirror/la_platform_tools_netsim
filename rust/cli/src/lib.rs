@@ -102,7 +102,7 @@ fn perform_command(
             // Get Capture use streaming gRPC reader request
             args::Command::Capture(args::Capture::Get(ref mut cmd)) => {
                 let GrpcRequest::GetCapture(request) = req else {
-                    panic!("Expected to find GetCaptureRequest. Got: {:?}", req);
+                    panic!("Expected to find GetCaptureRequest. Got: {req:?}");
                 };
                 perform_streaming_request(&client, cmd, request, &cmd.filenames[i].to_owned())?;
                 Ok(None)
@@ -110,7 +110,7 @@ fn perform_command(
             args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
                 let response = grpc_client::send_grpc(&client, &GrpcRequest::ListDevice)?;
                 let GrpcResponse::ListDevice(response) = response else {
-                    panic!("Expected to find ListDeviceResponse. Got: {:?}", response);
+                    panic!("Expected to find ListDeviceResponse. Got: {response:?}");
                 };
                 let id = find_id_for_remove(response, cmd)?;
                 let res = grpc_client::send_grpc(
@@ -129,7 +129,7 @@ fn perform_command(
             }
         };
         if let Err(e) = process_result(command, result, verbose) {
-            error!("{}", e);
+            error!("{e}");
             process_error = true;
         };
     }
@@ -194,7 +194,7 @@ fn process_result(
             command.print_response(&response, verbose);
             Ok(())
         }
-        Err(e) => Err(format!("Grpc call error: {}", e).into()),
+        Err(e) => Err(format!("Grpc call error: {e}").into()),
     }
 }
 #[no_mangle]
