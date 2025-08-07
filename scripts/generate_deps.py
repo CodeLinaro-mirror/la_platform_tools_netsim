@@ -279,6 +279,9 @@ def generate_rust_rule(block, crate_info):
   deps = block.get('rustlibs', [])
   proc_macro_deps = block.get('proc_macros', [])
   features = block.get('features', [])
+  cfgs = []
+  if name == 'serde_json' or name == 'serde_json_arbitrary_precision':
+    cfgs = ['fast_arithmetic=\\"64\\"']
 
   deps = [dep[3:] if dep.startswith('lib') else dep for dep in deps]
   proc_macro_deps = [
@@ -303,6 +306,7 @@ def generate_rust_rule(block, crate_info):
   )
   flags_str = ',\n'.join(
       [f'        "--cfg=feature=\\"{f}\\""' for f in features]
+      + [f'        "--cfg={c}"' for c in cfgs]
   )
 
   srcs_attr = ''
