@@ -511,3 +511,57 @@ new_local_repository(
     build_file = "//bazel_deps:unicode-width.BUILD.bazel",
     path = "../../external/rust/android-crates-io/crates/unicode-width",
 )
+
+new_local_repository(
+    name = "arrayvec",
+    build_file = "//bazel_deps:arrayvec.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/arrayvec",
+)
+
+new_local_repository(
+    name = "etherparse",
+    build_file = "//bazel_deps:etherparse.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/etherparse",
+)
+
+new_local_repository(
+    name = "mio",
+    build_file = "//bazel_deps:mio.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/mio",
+)
+
+new_local_repository(
+    name = "signal_hook_registry",
+    build_file = "//bazel_deps:signal-hook-registry.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/signal-hook-registry",
+)
+
+new_local_repository(
+    name = "socket2",
+    build_file = "//bazel_deps:socket2.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/socket2",
+)
+
+new_local_repository(
+    name = "tokio",
+    build_file = "//bazel_deps:tokio.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/tokio",
+)
+
+new_local_repository(
+    name = "tokio_macros",
+    build_file = "//bazel_deps:tokio-macros.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/tokio-macros",
+)
+
+new_local_repository(
+    name = "libslirp",
+    build_file = "//bazel_deps:libslirp.BUILD.bazel",
+    path = "../../external/libslirp",
+)
+
+new_local_repository(
+    name = "glib",
+    build_file = "//bazel_deps:glib.BUILD.bazel",
+    path = "../../external/glib",
+)
