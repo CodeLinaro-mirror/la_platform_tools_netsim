@@ -173,9 +173,6 @@ def main():
     # Set the out_dir to "out/objs"
     args.out_dir = Path(args.out_dir) / "objs"
 
-  env["OUT_DIR"] = args.out_dir
-  env["OBJS_PATH"] = args.out_dir
-
   # Obtain tasks
   tasks = get_tasks(args, env)
 
