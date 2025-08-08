@@ -32,11 +32,11 @@ pub fn open<T: AsRef<OsStr>>(path: T) {
         let mut open_cmd = Command::new(open_handler);
         open_cmd.arg(path);
         if open_cmd.output().is_ok() {
-            println!("Opened with command : {:?}", open_cmd);
+            println!("Opened with command : {open_cmd:?}");
             return;
         }
     }
-    println!("xdg-open, gnome-open, kde-open not working (linux). Open this url:{:?}", path);
+    println!("xdg-open, gnome-open, kde-open not working (linux). Open this url:{path:?}");
 }
 
 #[cfg(target_os = "macos")]

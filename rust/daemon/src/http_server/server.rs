@@ -40,7 +40,7 @@ pub fn run_http_server(instance_num: u16, dev: bool, link_manager: Arc<LinkManag
             }
         };
         let pool = ThreadPool::new(4);
-        info!("Frontend http server is listening on http://localhost:{}", http_port);
+        info!("Frontend http server is listening on http://localhost:{http_port}");
         let valid_files = Arc::new(create_filename_hash_set());
         for stream in listener.incoming() {
             let stream = stream.unwrap();

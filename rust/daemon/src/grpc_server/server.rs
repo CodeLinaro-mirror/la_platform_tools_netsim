@@ -43,7 +43,7 @@ pub fn start(
         .channel_args(ch_builder.build_args())
         .build()?;
 
-    let addr = format!("localhost:{}", port);
+    let addr = format!("localhost:{port}");
     #[allow(clippy::manual_inspect)]
     let port = server.add_listening_port(&addr, ServerCredentials::insecure()).map_err(|e| {
         match std::net::TcpListener::bind(&addr) {
@@ -62,7 +62,7 @@ pub fn start(
     #[cfg(feature = "cuttlefish")]
     if _vsock != 0 {
         let vsock_uri = format!("vsock:{}:{}", libc::VMADDR_CID_ANY, _vsock);
-        info!("vsock_uri: {}", vsock_uri);
+        info!("vsock_uri: {vsock_uri}");
         server.add_listening_port(vsock_uri, ServerCredentials::insecure())?;
     }
 

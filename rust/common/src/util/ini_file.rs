@@ -79,7 +79,7 @@ impl IniFile {
     fn write(&self) -> std::io::Result<()> {
         let mut f = create_new(self.filepath.clone())?;
         for (key, value) in &self.data {
-            writeln!(&mut f, "{}={}", key, value)?;
+            writeln!(&mut f, "{key}={value}")?;
         }
         f.flush()?;
         Ok(())
@@ -174,7 +174,7 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
         if s.contains(':') {
             s.to_string()
         } else {
-            format!("localhost:{}", s)
+            format!("localhost:{s}")
         }
     })
 }
