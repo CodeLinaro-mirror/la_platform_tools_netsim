@@ -101,7 +101,7 @@ impl FrontendService for FrontendClient {
             VersionResponse { version: crate::version::get_version(), ..Default::default() };
         let f = sink
             .success(response)
-            .map_err(move |e| eprintln!("client error {:?}: {:?}", req, e))
+            .map_err(move |e| eprintln!("client error {req:?}: {e:?}"))
             .map(|_| ());
         ctx.spawn(f)
     }
@@ -115,12 +115,12 @@ impl FrontendService for FrontendClient {
         let response = match devices_handler::list_device() {
             Ok(response) => sink.success(response),
             Err(e) => {
-                warn!("failed to list device: {}", e);
+                warn!("failed to list device: {e}");
                 sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e))
             }
         };
 
-        ctx.spawn(response.map_err(move |e| warn!("client error {:?}: {:?}", req, e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| warn!("client error {req:?}: {e:?}")).map(|_| ()))
     }
 
     fn patch_device(
@@ -132,24 +132,24 @@ impl FrontendService for FrontendClient {
         let response = match devices_handler::patch_device(req) {
             Ok(_) => sink.success(Empty::new()),
             Err(e) => {
-                warn!("failed to patch device: {}", e);
+                warn!("failed to patch device: {e}");
                 sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e))
             }
         };
 
-        ctx.spawn(response.map_err(move |e| warn!("client error: {:?}", e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| warn!("client error: {e:?}")).map(|_| ()))
     }
 
     fn reset(&mut self, ctx: grpcio::RpcContext, _req: Empty, sink: grpcio::UnarySink<Empty>) {
         let response = match devices_handler::reset_all() {
             Ok(_) => sink.success(Empty::new()),
             Err(e) => {
-                warn!("failed to reset: {}", e);
+                warn!("failed to reset: {e}");
                 sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e))
             }
         };
 
-        ctx.spawn(response.map_err(move |e| warn!("client error: {:?}", e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| warn!("client error: {e:?}")).map(|_| ()))
     }
 
     fn patch_capture(
@@ -163,7 +163,7 @@ impl FrontendService for FrontendClient {
             Some(v) => v,
             None => {
                 let error_msg = "Capture patch state not provided";
-                warn!("{}", error_msg);
+                warn!("{error_msg}");
                 sink.fail(RpcStatus::with_message(
                     RpcStatusCode::INVALID_ARGUMENT,
                     error_msg.to_string(),
@@ -175,12 +175,12 @@ impl FrontendService for FrontendClient {
         let response = match captures_handler::patch_capture(ChipIdentifier(id), state) {
             Ok(_) => sink.success(Empty::new()),
             Err(e) => {
-                warn!("failed to patch capture: {}", e);
+                warn!("failed to patch capture: {e}");
                 sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
             }
         };
 
-        ctx.spawn(response.map_err(move |e| warn!("client error: {:?}", e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| warn!("client error: {e:?}")).map(|_| ()))
     }
 
     fn list_capture(
@@ -192,12 +192,12 @@ impl FrontendService for FrontendClient {
         let response = match captures_handler::list_capture() {
             Ok(response) => sink.success(response),
             Err(e) => {
-                warn!("failed to list capture: {}", e);
+                warn!("failed to list capture: {e}");
                 sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
             }
         };
 
-        ctx.spawn(response.map_err(move |e| warn!("client error {:?}: {:?}", req, e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| warn!("client error {req:?}: {e:?}")).map(|_| ()))
     }
 
     fn get_capture(
@@ -209,10 +209,10 @@ impl FrontendService for FrontendClient {
         let mut file = match captures_handler::get_capture(ChipIdentifier(req.id)) {
             Ok(f) => f,
             Err(e) => {
-                warn!("failed to get capture: {}", e);
+                warn!("failed to get capture: {e}");
                 return ctx.spawn(
                     sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
-                        .map_err(move |e| warn!("client error {:?}: {:?}", req, e))
+                        .map_err(move |e| warn!("client error {req:?}: {e:?}"))
                         .map(|_| ()),
                 );
             }
@@ -225,7 +225,7 @@ impl FrontendService for FrontendClient {
                 let length = match file.read(&mut buffer) {
                     Ok(l) => l,
                     Err(e) => {
-                        warn!("failed to read file: {}", e);
+                        warn!("failed to read file: {e}");
                         sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
                             .await?;
                         return Ok(());
@@ -241,7 +241,7 @@ impl FrontendService for FrontendClient {
             sink.close().await?;
             Ok(())
         }
-        .map_err(|e: grpcio::Error| log::error!("failed to handle get_capture request: {:?}", e))
+        .map_err(|e: grpcio::Error| log::error!("failed to handle get_capture request: {e:?}"))
         .map(|_| ());
         ctx.spawn(f)
     }
@@ -258,11 +258,11 @@ impl FrontendService for FrontendClient {
                 ..Default::default()
             }),
             Err(e) => {
-                warn!("failed to create chip: {}", e);
+                warn!("failed to create chip: {e}");
                 sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
             }
         };
-        ctx.spawn(response.map_err(move |e| warn!("client error: {:?}", e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| warn!("client error: {e:?}")).map(|_| ()))
     }
 
     fn delete_chip(
@@ -274,12 +274,12 @@ impl FrontendService for FrontendClient {
         let response = match devices_handler::delete_chip(&req) {
             Ok(()) => sink.success(Empty::new()),
             Err(e) => {
-                warn!("failed to delete chip: {}", e);
+                warn!("failed to delete chip: {e}");
                 sink.fail(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
             }
         };
 
-        ctx.spawn(response.map_err(move |e| warn!("client error: {:?}", e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| warn!("client error: {e:?}")).map(|_| ()))
     }
 
     fn patch_link(
@@ -301,7 +301,7 @@ impl FrontendService for FrontendClient {
             }
         };
 
-        ctx.spawn(response.map_err(move |e| log::error!("client sink error: {:?}", e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| log::error!("client sink error: {e:?}")).map(|_| ()))
     }
 
     fn delete_link(
@@ -318,7 +318,7 @@ impl FrontendService for FrontendClient {
                     sink.success(Empty::new())
                 } else {
                     let msg = format!("Failed to delete link with sender: {sender_id}, receiver: {receiver_id}, link_kind: {link_kind:?}");
-                    warn!("{}", msg);
+                    warn!("{msg}");
                     sink.fail(RpcStatus::with_message(RpcStatusCode::NOT_FOUND, msg))
                 }
             }
@@ -328,7 +328,7 @@ impl FrontendService for FrontendClient {
             }
         };
 
-        ctx.spawn(response.map_err(move |e| warn!("client error: {:?}", e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| warn!("client error: {e:?}")).map(|_| ()))
     }
 
     fn list_link(
@@ -340,6 +340,6 @@ impl FrontendService for FrontendClient {
         let links: Vec<Link> = self.link_manager.list();
         let proto_links: Vec<ProtoLink> = links.into_iter().map(ProtoLink::from).collect();
         let response = sink.success(ListLinkResponse { links: proto_links, ..Default::default() });
-        ctx.spawn(response.map_err(move |e| warn!("client error {:?}: {:?}", req, e)).map(|_| ()))
+        ctx.spawn(response.map_err(move |e| warn!("client error {req:?}: {e:?}")).map(|_| ()))
     }
 }

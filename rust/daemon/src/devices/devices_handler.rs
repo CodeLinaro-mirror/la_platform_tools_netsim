@@ -187,7 +187,7 @@ impl DeviceManager {
         }
         // A new device needs to be created and inserted
         let id = self.next_id();
-        let default = format!("device-{}", id);
+        let default = format!("device-{id}");
         let name = name.unwrap_or(&default);
         guard.insert(id, Device::new(id, guid.unwrap_or(&default), name, builtin));
         drop(guard);
@@ -244,7 +244,7 @@ pub fn add_chip(
         .write()
         .unwrap()
         .get_mut(&device_id)
-        .ok_or(format!("Device not found for device_id: {}", device_id))?
+        .ok_or(format!("Device not found for device_id: {device_id}"))?
         .add_chip(chip_create_params, chip_id, wireless_chip);
 
     // Update last modified timestamp for devices
@@ -439,16 +439,16 @@ impl std::fmt::Display for PatchDeviceFieldsDisplay {
         let mut fields = Vec::<String>::new();
         fields.push(format!("id: {}", self.0));
         if let Some(name) = &self.1.name {
-            fields.push(format!("name: {}", name));
+            fields.push(format!("name: {name}"));
         }
         if let Some(visible) = &self.1.visible {
-            fields.push(format!("visible: {}", visible));
+            fields.push(format!("visible: {visible}"));
         }
         if let Some(position) = &self.1.position.0 {
-            fields.push(format!("position: {{ {} }}", position));
+            fields.push(format!("position: {{ {position} }}"));
         }
         if let Some(orientation) = &self.1.orientation.0 {
-            fields.push(format!("orientation: {{ {} }}", orientation));
+            fields.push(format!("orientation: {{ {orientation} }}"));
         }
         if !self.1.chips.is_empty() {
             let mut chip_field = Vec::<String>::new();
@@ -519,10 +519,7 @@ pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), Stri
                 }
             }
             if multiple_matches {
-                return Err(format!(
-                    "Multiple ambiguous matches were found with substring {}",
-                    name
-                ));
+                return Err(format!("Multiple ambiguous matches were found with substring {name}"));
             }
             match target {
                 Some(device) => {
@@ -541,7 +538,7 @@ pub fn patch_device(patch_device_request: PatchDeviceRequest) -> Result<(), Stri
                     }
                     result
                 }
-                None => Err(format!("No such device with name {}", name)),
+                None => Err(format!("No such device with name {name}")),
             }
         }
         (_, _) => Err("Both id and name are not provided".to_string()),
@@ -557,7 +554,7 @@ fn patch_device_json(id_option: Option<DeviceIdentifier>, patch_json: &str) -> R
         }
         patch_device(patch_device_request)
     } else {
-        Err(format!("Incorrect format of patch json {}", patch_json))
+        Err(format!("Incorrect format of patch json {patch_json}"))
     }
 }
 
@@ -635,7 +632,7 @@ fn handle_device_create(writer: ResponseWritable, create_json: &str) {
     let mut get_result = || {
         let mut create_device_request = CreateDeviceRequest::new();
         merge_from_str(&mut create_device_request, create_json)
-            .map_err(|_| format!("create device: invalid json: {}", create_json))?;
+            .map_err(|_| format!("create device: invalid json: {create_json}"))?;
         let device_proto = create_device(&create_device_request)?;
         response.device = MessageField::some(device_proto);
         print_to_string(&response).map_err(|_| String::from("failed to convert device to json"))
@@ -659,7 +656,7 @@ fn handle_chip_delete(writer: ResponseWritable, delete_json: &str) {
     let get_result = || {
         let mut delete_chip_request = DeleteChipRequest::new();
         merge_from_str(&mut delete_chip_request, delete_json)
-            .map_err(|_| format!("delete chip: invalid json: {}", delete_json))?;
+            .map_err(|_| format!("delete chip: invalid json: {delete_json}"))?;
         delete_chip(&delete_chip_request)
     };
 
@@ -888,8 +885,7 @@ pub fn get_rssi(sender_id: u32, receiver_id: u32, link_kind_i32: i32, tx_power: 
         Ok(kind) => kind,
         Err(e) => {
             warn!(
-                "FFI: Error converting ProtoPhyKind {:?} to internal: {}. Defaulting to None.",
-                proto_link_kind, e
+                "FFI: Error converting ProtoPhyKind {proto_link_kind:?} to internal: {e}. Defaulting to None."
             );
             PhyKind::None
         }
@@ -1289,7 +1285,7 @@ mod tests {
         assert!(patch_result.is_err());
         assert_eq!(
             patch_result.unwrap_err(),
-            format!("Incorrect format of patch json {}", error_json)
+            format!("Incorrect format of patch json {error_json}")
         );
 
         // Incorrect key
@@ -1301,7 +1297,7 @@ mod tests {
         assert!(patch_result.is_err());
         assert_eq!(
             patch_result.unwrap_err(),
-            format!("Incorrect format of patch json {}", error_json)
+            format!("Incorrect format of patch json {error_json}")
         );
 
         // Incorrect Id

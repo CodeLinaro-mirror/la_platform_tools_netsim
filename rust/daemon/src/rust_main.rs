@@ -100,7 +100,7 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
     info!("netsim artifacts path: {:?}", netsimd_temp_dir());
 
     // Log all args
-    info!("{:#?}", args);
+    info!("{args:#?}");
 
     if !args.logtostderr {
         if let Err(err) =
@@ -110,7 +110,7 @@ fn run_netsimd_with_args(args: NetsimdArgs) {
         }
         // Duplicating the previous two logs to be included in netsim_stderr.log
         info!("netsim artifacts path: {:?}", netsimd_temp_dir());
-        info!("{:#?}", args);
+        info!("{args:#?}");
     }
 
     match args.connector_instance {
@@ -136,7 +136,7 @@ fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
         if server.is_some() {
             break;
         } else {
-            warn!("Unable to find ini file for instance {}, retrying", instance);
+            warn!("Unable to find ini file for instance {instance}, retrying");
             std::thread::sleep(std::time::Duration::from_secs(second));
         }
     }
@@ -148,7 +148,7 @@ fn run_netsimd_connector(args: NetsimdArgs, instance: u16) {
     // TODO: Make this function returns Result to use `?` instead of unwrap().
     info!("Starting in Connector mode to {}", server.as_str());
     crate::transport::fd::run_fd_connector(&fd_startup, server.as_str())
-        .map_err(|e| error!("Failed to run fd connector: {}", e))
+        .map_err(|e| error!("Failed to run fd connector: {e}"))
         .unwrap();
 }
 
@@ -215,8 +215,7 @@ fn parse_and_set_rssi(link_manager: &Arc<LinkManager>, rssi_str: &str) -> Result
     let parts: Vec<&str> = rssi_str.split(':').collect();
     if parts.len() != 2 {
         return Err(format!(
-            "Invalid RSSI default format: '{}'. Expected PHY_KIND:RSSI_VALUE",
-            rssi_str
+            "Invalid RSSI default format: '{rssi_str}'. Expected PHY_KIND:RSSI_VALUE"
         ));
     }
 
@@ -233,7 +232,7 @@ fn parse_and_set_rssi(link_manager: &Arc<LinkManager>, rssi_str: &str) -> Result
         "UWB" => Ok(PhyKind::Uwb),
         "WIFIRTT" | "WIFI_RTT" => Ok(PhyKind::WifiRtt),
         "NONE" => Ok(PhyKind::None),
-        _ => Err(format!("Invalid or unhandled PhyKind string: '{}'", phy_kind_input_str)),
+        _ => Err(format!("Invalid or unhandled PhyKind string: '{phy_kind_input_str}'")),
     }?;
 
     let rssi_value = rssi_input_str.parse::<i8>().map_err(|e| {
@@ -246,7 +245,7 @@ fn parse_and_set_rssi(link_manager: &Arc<LinkManager>, rssi_str: &str) -> Result
             e
         )
     })?;
-    info!("Setting global RSSI default: {:?} = {}", phy_kind, rssi_value);
+    info!("Setting global RSSI default: {phy_kind:?} = {rssi_value}");
 
     link_manager.set_rssi(ANY_CHIP, ANY_CHIP, phy_kind, rssi_value);
     Ok(())
@@ -294,7 +293,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
                 config = config_from_file;
             }
             Err(e) => {
-                error!("Skipping config in {}: {:?}", filename, e);
+                error!("Skipping config in {filename}: {e:?}");
             }
         }
     }
@@ -302,7 +301,7 @@ fn run_netsimd_primary(mut args: NetsimdArgs) {
     disambiguate_args(&mut args, &mut config);
 
     // Print config file settings
-    info!("{:#?}", config);
+    info!("{config:#?}");
 
     if let Some(host_dns) = args.host_dns {
         config.wifi.mut_or_insert_default().slirp_options.mut_or_insert_default().host_dns =

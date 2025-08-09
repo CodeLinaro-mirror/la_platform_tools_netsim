@@ -45,7 +45,7 @@ pub fn init(prefix: &'static str, is_verbose: bool) {
             record.line().unwrap_or(0),
             record.args()
         );
-        writeln!(buf, "{}", message)
+        writeln!(buf, "{message}")
     });
     builder.init();
 }
@@ -60,7 +60,7 @@ pub fn init_for_test() {
         let level = level_to_string(record.level());
         let message =
             format!("{} {} \t| netsim-test: {}", level, log_current_time(), record.args());
-        writeln!(buf, "{}", message)
+        writeln!(buf, "{message}")
     });
     builder.init();
 }

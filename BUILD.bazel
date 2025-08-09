@@ -35,6 +35,24 @@ proto_library(
     ],
 )
 
+# BLE Advertisers
+
+rust_library(
+    name = "ble_advertisers",
+    srcs = glob(["rust/ble-advertisers/src/**/*.rs"]),
+    deps = [
+        "@hex",
+        "@thiserror",
+        "@zerocopy",
+    ],
+)
+
+rust_test(
+    name = "ble_advertisers_tests",
+    crate = ":ble_advertisers",
+    tags = ["general_tests"],
+)
+
 rust_library(
     name = "netsim_common",
     srcs = glob(["rust/common/src/**/*.rs"]),

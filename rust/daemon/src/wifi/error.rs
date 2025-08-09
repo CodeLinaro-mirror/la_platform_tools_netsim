@@ -38,12 +38,12 @@ pub enum WifiError {
 impl std::fmt::Display for WifiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WifiError::Hostapd(msg) => write!(f, "Hostapd error: {}", msg),
-            WifiError::Network(msg) => write!(f, "Network error: {}", msg),
-            WifiError::Client(msg) => write!(f, "Client error: {}", msg),
-            WifiError::Frame(msg) => write!(f, "Frame error: {}", msg),
-            WifiError::Transmission(msg) => write!(f, "Transmission error: {}", msg),
-            WifiError::Other(msg) => write!(f, "Other error: {}", msg),
+            WifiError::Hostapd(msg) => write!(f, "Hostapd error: {msg}"),
+            WifiError::Network(msg) => write!(f, "Network error: {msg}"),
+            WifiError::Client(msg) => write!(f, "Client error: {msg}"),
+            WifiError::Frame(msg) => write!(f, "Frame error: {msg}"),
+            WifiError::Transmission(msg) => write!(f, "Transmission error: {msg}"),
+            WifiError::Other(msg) => write!(f, "Other error: {msg}"),
         }
     }
 }
@@ -59,19 +59,19 @@ impl From<http_proxy::Error> for WifiError {
 
 impl From<std::io::Error> for WifiError {
     fn from(err: std::io::Error) -> Self {
-        WifiError::Network(format!("IO error: {:?}", err))
+        WifiError::Network(format!("IO error: {err:?}"))
     }
 }
 
 impl From<DecodeError> for WifiError {
     fn from(err: DecodeError) -> Self {
-        WifiError::Frame(format!("Frame decoding failed: {:?}", err))
+        WifiError::Frame(format!("Frame decoding failed: {err:?}"))
     }
 }
 
 impl From<EncodeError> for WifiError {
     fn from(err: EncodeError) -> Self {
-        WifiError::Frame(format!("Frame encoding failed: {:?}", err))
+        WifiError::Frame(format!("Frame encoding failed: {err:?}"))
     }
 }
 

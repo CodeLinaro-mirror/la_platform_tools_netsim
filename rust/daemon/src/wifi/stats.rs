@@ -128,7 +128,7 @@ impl WifiStats {
 
     /// Logs the error and increments the corresponding counter.
     pub fn log_and_incr_err_count(&self, error: &WifiError) {
-        warn!("{}", error);
+        warn!("{error}");
         let counter = match error {
             WifiError::Hostapd(_) => &self.counts.hostapd_error,
             WifiError::Network(_) => &self.counts.network_error,

@@ -183,8 +183,7 @@ impl AdvertiseDataBuilder {
 
         if bytes.len() > MAX_ADV_NONCONN_DATA_LEN {
             return Err(format!(
-                "exceeded maximum advertising packet length of {} bytes",
-                MAX_ADV_NONCONN_DATA_LEN
+                "exceeded maximum advertising packet length of {MAX_ADV_NONCONN_DATA_LEN} bytes"
             ));
         }
 
