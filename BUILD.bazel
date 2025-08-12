@@ -88,3 +88,64 @@ rust_test(
     crate = ":netsim_cli",
     tags = ["general_tests"],
 )
+
+# PDL generated files
+genrule(
+    name = "netsim_netlink_rust_gen",
+    srcs = ["pdl/netlink.pdl"],
+    outs = ["netlink_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+genrule(
+    name = "netsim_mac80211_hwsim_rust_gen",
+    srcs = ["pdl/mac80211_hwsim.pdl"],
+    outs = ["mac80211_hwsim_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+genrule(
+    name = "netsim_ieee80211_rust_gen",
+    srcs = ["pdl/ieee80211.pdl"],
+    outs = ["ieee80211_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+genrule(
+    name = "netsim_llc_rust_gen",
+    srcs = ["pdl/llc.pdl"],
+    outs = ["llc_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+genrule(
+    name = "netsim_link_layer_packets_rust_gen",
+    srcs = ["@rootcanal//:packets/link_layer_packets.pdl"],
+    outs = ["link_layer_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+rust_library(
+    name = "netsim_packets",
+    srcs = glob(["rust/packets/src/**/*.rs"]) + [
+        ":netsim_ieee80211_rust_gen",
+        ":netsim_link_layer_packets_rust_gen",
+        ":netsim_llc_rust_gen",
+        ":netsim_mac80211_hwsim_rust_gen",
+        ":netsim_netlink_rust_gen",
+    ],
+    crate_name = "netsim_packets",
+    rustc_env = {
+        "OUT_DIR": "../../..",
+    },
+    deps = [
+        "@anyhow",
+        "@bytes",
+        "@pdl_runtime",
+    ],
+)
