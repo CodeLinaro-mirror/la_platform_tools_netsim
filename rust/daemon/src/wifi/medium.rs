@@ -137,7 +137,7 @@ impl Medium {
     pub fn add(&self, client_id: u32) {
         let _ =
             self.clients.write().expect("RwLock poisoned").entry(client_id).or_insert_with(|| {
-                info!("Insert client {}", client_id);
+                info!("Insert client {client_id}");
                 Client::new()
             });
     }
@@ -187,14 +187,13 @@ impl Medium {
         )))?;
         self.stations.write().expect("RwLock poisoned").entry(src_addr).or_insert_with(|| {
             info!(
-                "Insert station with client id {}, hwsimaddr: {}, \
-                Ieee80211 addr: {}",
-                client_id, hwsim_addr, src_addr
+                "Insert station with client id {client_id}, hwsimaddr: {hwsim_addr}, \
+                Ieee80211 addr: {src_addr}"
             );
             Arc::new(Station::new(client_id, src_addr, hwsim_addr))
         });
         if !self.contains_client(client_id) {
-            warn!("Client {} is missing", client_id);
+            warn!("Client {client_id} is missing");
             self.add(client_id);
         }
         Ok(())
@@ -289,7 +288,7 @@ impl Medium {
         if ieee80211.is_data() {
             // EAPoL is used in Wi-Fi 4-way handshake.
             let is_eapol = ieee80211.is_eapol().unwrap_or_else(|e| {
-                debug!("Failed to get ether type for is_eapol(): {}", e);
+                debug!("Failed to get ether type for is_eapol(): {e}");
                 false
             });
             if is_eapol {
@@ -368,7 +367,7 @@ impl Medium {
             return Ok(());
         }
         Ieee80211::from_ieee8023(packet, self.hostapd.get_bssid())
-            .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.3 response: {}", e)))
+            .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.3 response: {e}")))
             .and_then(|ieee80211| self.handle_ieee80211_response(ieee80211))
     }
 
@@ -379,7 +378,7 @@ impl Medium {
             return Ok(());
         }
         Ieee80211::decode_full(packet)
-            .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.11 response: {}", e)))
+            .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.11 response: {e}")))
             .and_then(|ieee80211| self.handle_ieee80211_response(ieee80211))
     }
 
@@ -403,8 +402,7 @@ impl Medium {
             }
         } else {
             return Err(WifiError::Transmission(format!(
-                "Send frame response to unknown destination: {}",
-                dest_addr
+                "Send frame response to unknown destination: {dest_addr}"
             )));
         }
         Ok(())
@@ -552,7 +550,7 @@ impl Medium {
             return Ok(());
         } else if dest_addr.is_multicast() {
             // Broadcast/Multicast from a station
-            debug!("Frame multicast {}", ieee80211);
+            debug!("Frame multicast {ieee80211}");
             if dest_addr.is_mdns() {
                 self.wifi_stats.incr_mdns_count();
             }
@@ -582,9 +580,9 @@ impl Medium {
         {
             true => ieee80211
                 .into_from_ap()
-                .map_err(|e| WifiError::Frame(format!("{}", e)))?
+                .map_err(|e| WifiError::Frame(format!("{e}")))?
                 .try_into()
-                .map_err(|e| WifiError::Frame(format!("{}", e)))?,
+                .map_err(|e| WifiError::Frame(format!("{e}")))?,
             false => ieee80211.clone(),
         };
         if let Some(encrypted_ieee80211) = self.hostapd.try_encrypt(&ieee80211_response) {
@@ -620,7 +618,7 @@ impl Medium {
         assert_eq!(hwsim_msg.hwsim_hdr.hwsim_cmd, HwsimCmd::Frame);
         let attributes = self
             .create_hwsim_attr(frame, ieee80211, dest_hwsim_addr)
-            .map_err(|e| WifiError::Frame(format!("Failed to create from_ap attributes. {}", e)))?;
+            .map_err(|e| WifiError::Frame(format!("Failed to create from_ap attributes. {e}")))?;
 
         let nlmsg_len = hwsim_msg.nl_hdr.nlmsg_len + attributes.len() as u32
             - hwsim_msg.attributes.len() as u32;

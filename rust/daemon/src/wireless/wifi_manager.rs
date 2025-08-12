@@ -80,7 +80,7 @@ pub fn wifi_start(
         tx_ieee8023_response,
         forward_host_mdns,
     ) {
-        warn!("Failed to start Wi-Fi manager: {}", e);
+        warn!("Failed to start Wi-Fi manager: {e}");
     }
     wifi_stats
 }

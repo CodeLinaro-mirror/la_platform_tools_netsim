@@ -277,11 +277,11 @@ impl Command {
         let mut result = match grpc_client::send_grpc(client, &GrpcRequest::ListCapture) {
             Ok(GrpcResponse::ListCapture(response)) => response.captures,
             Ok(grpc_response) => {
-                error!("Unexpected GrpcResponse: {:?}", grpc_response);
+                error!("Unexpected GrpcResponse: {grpc_response:?}");
                 return Vec::new();
             }
             Err(err) => {
-                error!("ListCapture Grpc call error: {}", err);
+                error!("ListCapture Grpc call error: {err}");
                 return Vec::new();
             }
         };
@@ -696,8 +696,7 @@ mod tests {
 
         test_command(
             format!(
-                "netsim-cli beacon create ble {} {} --advertise-mode balanced --tx-power-level ultra-low --scannable --timeout {} --include-device-name --include-tx-power-level --manufacturer-data 0x1234",
-                device_name, chip_name, timeout,
+                "netsim-cli beacon create ble {device_name} {chip_name} --advertise-mode balanced --tx-power-level ultra-low --scannable --timeout {timeout} --include-device-name --include-tx-power-level --manufacturer-data 0x1234",
             )
             .as_str(),
             command,
@@ -752,8 +751,7 @@ mod tests {
 
         test_command(
             format!(
-                "netsim-cli beacon patch ble {} {} --advertise-mode {} --scannable --timeout {} --tx-power-level {} --manufacturer-data 0xabcdef --include-device-name --include-tx-power-level",
-                device_name, chip_name, interval, timeout, tx_power_level
+                "netsim-cli beacon patch ble {device_name} {chip_name} --advertise-mode {interval} --scannable --timeout {timeout} --tx-power-level {tx_power_level} --manufacturer-data 0xabcdef --include-device-name --include-tx-power-level"
             )
             .as_str(),
             command,
@@ -795,8 +793,7 @@ mod tests {
 
         test_command(
             format!(
-                "netsim-cli beacon create ble {} {} --scan-response-include-device-name --scan-response-include-tx-power-level --scan-response-manufacturer-data 0x21beef",
-                device_name, chip_name
+                "netsim-cli beacon create ble {device_name} {chip_name} --scan-response-include-device-name --scan-response-include-tx-power-level --scan-response-manufacturer-data 0x21beef"
             )
             .as_str(),
             command,
@@ -840,8 +837,7 @@ mod tests {
 
         test_command(
             format!(
-                "netsim-cli beacon patch ble {} {} --scan-response-include-device-name --scan-response-include-tx-power-level --scan-response-manufacturer-data 59beac09",
-                device_name, chip_name
+                "netsim-cli beacon patch ble {device_name} {chip_name} --scan-response-include-device-name --scan-response-include-tx-power-level --scan-response-manufacturer-data 59beac09"
             )
             .as_str(),
             command,
@@ -880,8 +876,7 @@ mod tests {
 
         test_command(
             format!(
-                "netsim-cli beacon create ble {} {} --tx-power-level high --include-tx-power-level",
-                device_name, chip_name
+                "netsim-cli beacon create ble {device_name} {chip_name} --tx-power-level high --include-tx-power-level"
             )
             .as_str(),
             command,
@@ -936,8 +931,7 @@ mod tests {
 
         test_command(
             format!(
-                "netsim-cli beacon patch ble {} {} --advertise-mode low-latency",
-                device_name, chip_name
+                "netsim-cli beacon patch ble {device_name} {chip_name} --advertise-mode low-latency"
             )
             .as_str(),
             command,
@@ -971,7 +965,7 @@ mod tests {
         })));
 
         test_command(
-            format!("netsim-cli beacon create ble --address {}", address).as_str(),
+            format!("netsim-cli beacon create ble --address {address}").as_str(),
             command,
             GrpcRequest::CreateDevice(request),
         )
@@ -1011,11 +1005,8 @@ mod tests {
         })));
 
         test_command(
-            format!(
-                "netsim-cli beacon patch ble {} {} --address {}",
-                device_name, chip_name, address
-            )
-            .as_str(),
+            format!("netsim-cli beacon patch ble {device_name} {chip_name} --address {address}")
+                .as_str(),
             command,
             GrpcRequest::PatchDevice(request),
         )

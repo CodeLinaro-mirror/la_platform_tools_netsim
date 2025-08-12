@@ -120,7 +120,7 @@ pub fn handle_response_cxx(chip_id: u32, packet: &cxx::CxxVector<u8>, packet_typ
     };
     // transports lock is now released
     if let Err(e) = result {
-        warn!("handle_response: error {:?}", e);
+        warn!("handle_response: error {e:?}");
         unregister_transport(chip_id);
     }
 }
@@ -138,7 +138,7 @@ pub fn handle_response(chip_id: ChipIdentifier, packet: &Bytes) {
     };
     // transports lock is now released
     if let Err(e) = result {
-        warn!("handle_response: error {:?}", e);
+        warn!("handle_response: error {e:?}");
         unregister_transport(chip_id);
     }
 }

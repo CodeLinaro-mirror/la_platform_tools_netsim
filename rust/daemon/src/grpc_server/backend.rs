@@ -118,18 +118,18 @@ impl PacketStreamer for PacketStreamerService {
                         );
                     }
                     _ => {
-                        warn!("unknown control packet chip_kind: {:?}", chip_kind);
+                        warn!("unknown control packet chip_kind: {chip_kind:?}");
                         break;
                     }
                 };
             }
             unregister_transport(result.chip_id);
             if let Err(e) = devices_handler::remove_chip(result.device_id, result.chip_id) {
-                warn!("failed to remove chip: {}", e);
+                warn!("failed to remove chip: {e}");
             }
             Ok(())
         }
-        .map_err(|e: anyhow::Error| warn!("failed to stream packets: {:?}", e))
+        .map_err(|e: anyhow::Error| warn!("failed to stream packets: {e:?}"))
         .map(|_| ());
         ctx.spawn(f)
     }
