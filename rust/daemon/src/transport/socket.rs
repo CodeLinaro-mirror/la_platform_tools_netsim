@@ -25,7 +25,7 @@ use log::{error, info, warn};
 use netsim_proto::common::ChipKind;
 use netsim_proto::startup::DeviceInfo as ProtoDeviceInfo;
 use std::io::{ErrorKind, Write};
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream};
 use std::thread;
 
 // The HCI server implements the Bluetooth UART transport protocol
@@ -64,11 +64,7 @@ pub fn run_socket_transport(hci_port: u16) {
 }
 
 fn accept_incoming(hci_port: u16) -> std::io::Result<()> {
-    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, hci_port))).or_else(|e| {
-            warn!("Failed to bind to 127.0.0.1:{hci_port} in netsimd socket server, Trying [::1]:{hci_port}. {e:?}");
-            TcpListener::bind(SocketAddr::from((Ipv6Addr::LOCALHOST, hci_port)))
-        }
-    )?;
+    let listener = TcpListener::bind(("localhost", hci_port))?;
     info!("Hci socket server is listening on: {}", hci_port);
 
     for stream in listener.incoming() {
