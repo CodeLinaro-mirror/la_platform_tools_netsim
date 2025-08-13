@@ -302,7 +302,7 @@ rust_library_host {
     name: "libnetsim_proto",
     features: ["cuttlefish"],
     crate_name: "netsim_proto",
-    srcs: ["rust/proto/src/lib.rs"],
+    srcs: ["rust/proto-cf/src/lib.rs"],
     rustlibs: [
         "libprotobuf",
         "libgrpcio",
