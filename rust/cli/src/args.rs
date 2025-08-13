@@ -97,7 +97,7 @@ pub enum RadioType {
 
 impl fmt::Display for RadioType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -109,7 +109,7 @@ pub enum UpDownStatus {
 
 impl fmt::Display for UpDownStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

@@ -11,9 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """rootcanal bazel build rule"""
 
 load("@rules_proto//proto:defs.bzl", "proto_library")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["packets/link_layer_packets.pdl"])
 
 proto_library(
     strip_import_prefix = "proto",
@@ -21,5 +26,4 @@ proto_library(
     srcs = [
         "proto/rootcanal/configuration.proto",
     ],
-    visibility = ["//visibility:public"],
 )

@@ -17,7 +17,7 @@ use crate::http_server::http_handlers::{create_filename_hash_set, handle_connect
 use crate::http_server::thread_pool::ThreadPool;
 use crate::links::link::LinkManager;
 use log::{info, warn};
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener};
+use std::net::TcpListener;
 use std::sync::Arc;
 use std::thread;
 
@@ -25,11 +25,7 @@ const DEFAULT_HTTP_PORT: u16 = 7681;
 
 /// Bind HTTP Server to IPv4 or IPv6 based on availability.
 fn bind_listener(http_port: u16) -> Result<TcpListener, std::io::Error> {
-    TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, http_port)))
-        .or_else(|e| {
-            warn!("Failed to bind to 127.0.0.1:{http_port} in netsimd frontend http server. Trying [::1]:{http_port}. {e:?}");
-            TcpListener::bind(SocketAddr::from((Ipv6Addr::LOCALHOST, http_port)))
-        })
+    TcpListener::bind(("localhost", http_port))
 }
 
 /// Start the HTTP Server.
@@ -44,7 +40,7 @@ pub fn run_http_server(instance_num: u16, dev: bool, link_manager: Arc<LinkManag
             }
         };
         let pool = ThreadPool::new(4);
-        info!("Frontend http server is listening on http://localhost:{}", http_port);
+        info!("Frontend http server is listening on http://localhost:{http_port}");
         let valid_files = Arc::new(create_filename_hash_set());
         for stream in listener.incoming() {
             let stream = stream.unwrap();

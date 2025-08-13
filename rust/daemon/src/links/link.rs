@@ -83,10 +83,7 @@ impl LinkManager {
         rssi: i8,
     ) {
         self.rssi.write().unwrap().insert((sender, receiver, link_kind), rssi);
-        info!(
-            "Set RSSI between sender {} and receiver {} on {:?}: {}",
-            sender, receiver, link_kind, rssi
-        );
+        info!("Set RSSI between sender {sender} and receiver {receiver} on {link_kind:?}: {rssi}");
     }
 
     /// Gets the RSSI setting on the specified link if one exists.
@@ -129,10 +126,7 @@ impl LinkManager {
     ) -> bool {
         let removed = self.rssi.write().unwrap().remove(&(sender, receiver, link_kind)).is_some();
         if removed {
-            info!(
-                "Deleted RSSI between sender {} and receiver {} on {:?}",
-                sender, receiver, link_kind
-            );
+            info!("Deleted RSSI between sender {sender} and receiver {receiver} on {link_kind:?}");
         }
         removed
     }
@@ -144,7 +138,7 @@ impl LinkManager {
         rssis.retain(|(sender, receiver, _), _| *sender != chip_id && *receiver != chip_id);
         let removed_count = initial_count - rssis.len();
         if removed_count > 0 {
-            info!("Removed {} RSSI(s) associated with chip {}", removed_count, chip_id);
+            info!("Removed {removed_count} RSSI(s) associated with chip {chip_id}");
         }
     }
 
@@ -154,7 +148,7 @@ impl LinkManager {
         let initial_count = rssis.len();
         if initial_count > 0 {
             rssis.clear();
-            info!("Cleared all {} RSSI(s).", initial_count);
+            info!("Cleared all {initial_count} RSSI(s).");
         }
     }
 }
@@ -403,8 +397,7 @@ mod tests {
                 && link.receiver_id == chip3
                 && link.link_kind == phy_ble
                 && link.rssi == -70),
-            "Link (C2->C3, BLE, -70) not found in remaining links: {:?}",
-            remaining_links
+            "Link (C2->C3, BLE, -70) not found in remaining links: {remaining_links:?}"
         );
 
         assert!(
@@ -412,8 +405,7 @@ mod tests {
                 && link.receiver_id == ANY_CHIP
                 && link.link_kind == phy_ble
                 && link.rssi == -85),
-            "Global wildcard link (*,*, BLE, -85) not found in remaining links: {:?}",
-            remaining_links
+            "Global wildcard link (*,*, BLE, -85) not found in remaining links: {remaining_links:?}"
         );
         assert_eq!(
             link_manager.get_rssi(ChipIdentifier(98), ChipIdentifier(99), phy_ble),
