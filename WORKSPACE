@@ -565,3 +565,69 @@ new_local_repository(
     build_file = "//bazel_deps:glib.BUILD.bazel",
     path = "../../external/glib",
 )
+
+new_local_repository(
+    name = "aes",
+    build_file = "//bazel_deps:aes.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/aes-0.8.4",
+)
+
+new_local_repository(
+    name = "ccm",
+    build_file = "//bazel_deps:ccm.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/ccm-0.5.0",
+)
+
+new_local_repository(
+    name = "aead",
+    build_file = "//bazel_deps:aead.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/aead-0.5.2",
+)
+
+new_local_repository(
+    name = "cipher",
+    build_file = "//bazel_deps:cipher.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/cipher-0.4.4",
+)
+
+new_local_repository(
+    name = "ctr",
+    build_file = "//bazel_deps:ctr.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/ctr-0.9.2",
+)
+
+new_local_repository(
+    name = "subtle",
+    build_file = "//bazel_deps:subtle.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/subtle-2.6.1",
+)
+
+new_local_repository(
+    name = "cpufeatures",
+    build_file = "//bazel_deps:cpufeatures.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/cpufeatures-0.2.16",
+)
+
+new_local_repository(
+    name = "crypto-common",
+    build_file = "//bazel_deps:crypto-common.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/crypto-common-0.1.6",
+)
+
+new_local_repository(
+    name = "generic-array",
+    build_file = "//bazel_deps:generic-array.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/generic-array-0.14.7",
+)
+
+new_local_repository(
+    name = "inout",
+    build_file = "//bazel_deps:inout.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/inout-0.1.3",
+)
+
+new_local_repository(
+    name = "typenum",
+    build_file = "//bazel_deps:typenum.BUILD.bazel",
+    path = "../../external/qemu/android/third_party/rust/crates/typenum-1.17.0",
+)
