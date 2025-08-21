@@ -251,6 +251,24 @@ rust_test(
     tags = ["general_tests"],
 )
 
+rust_test(
+    name = "netsim_hostapd_rs_integration_test",
+    srcs = ["rust/hostapd-rs/tests/integration_test.rs"],
+    aliases = {
+        ":netsim_hostapd_rs": "hostapd_rs",
+    },
+    tags = ["general_tests"],
+    deps = [
+        ":netsim_hostapd_rs",
+        ":netsim_packets",
+        "@bytes",
+        "@log",
+        "@pdl-runtime",
+        "@tokio",
+        "@wpa_supplicant_8//:hostapd_c_lib",
+    ],
+)
+
 rust_library(
     name = "netsim_http_proxy",
     srcs = glob(["rust/http-proxy/src/**/*.rs"]),

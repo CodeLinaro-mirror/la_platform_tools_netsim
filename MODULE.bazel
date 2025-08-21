@@ -188,3 +188,25 @@ new_local_repository(
         ("typenum", "1.17.0"),
     ]
 ]
+
+# Dependencies needed for external/wpa_supplicant_8
+bazel_dep(name = "abseil-cpp", version = "20250127.1")
+bazel_dep(name = "googletest", version = "1.17.0")
+
+new_local_repository(
+    name = "wpa_supplicant_8",
+    build_file = "//bazel_deps:wpa_supplicant_8.BUILD.bazel",
+    path = "../../external/wpa_supplicant_8",
+)
+
+new_local_repository(
+    name = "qemu",
+    build_file = "//bazel_deps:qemu.BUILD.bazel",
+    path = "../../external/qemu",
+)
+
+new_local_repository(
+    name = "aemu-base",
+    build_file = "//bazel_deps:aemu-base.BUILD.bazel",
+    path = "../../hardware/google/aemu/base",
+)
