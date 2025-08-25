@@ -167,3 +167,26 @@ rust_library(
         "@pdl_runtime",
     ],
 )
+
+rust_library(
+    name = "netsim_libslirp_rs",
+    srcs = glob(["rust/libslirp-rs/src/**/*.rs"]),
+    crate_name = "netsim_libslirp_rs",
+    crate_root = "rust/libslirp-rs/src/lib.rs",
+    deps = [
+        "@etherparse",
+        "@bytes",
+        "@libc",
+        "@log_rust",
+        # "@winapi", // TODO: Resolve this dependency to build for Windows
+        "@tokio",
+        "@libslirp",
+        "@glib//:glib-shared",
+    ],
+)
+
+rust_test(
+    name = "netsim_libslirp_rs_tests",
+    crate = ":netsim_libslirp_rs",
+    tags = ["general_tests"],
+)
