@@ -17,7 +17,7 @@
 new_local_repository(
     name = "rootcanal",
     build_file = "//bazel_deps:rootcanal.BUILD.bazel",
-    path = "../../packages/modules/Bluetooth/tools/rootcanal",
+    path = "../../tools/rootcanal",
 )
 
 new_local_repository(

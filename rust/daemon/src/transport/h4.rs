@@ -111,7 +111,7 @@ pub fn read_h4_packet<R: Read>(reader: &mut R) -> Result<Packet, PacketError> {
 /// invalid IDC is received all incoming bytes are dropped until the
 /// HCI RESET command is recognized in the input stream
 ///
-/// Based on packages/modules/Bluetooth/tools/rootcanal/model/hci/h4_parser.cc
+/// Based on tools/rootcanal/model/hci/h4_parser.cc
 ///
 fn h4_recovery<R: Read>(mut reader: R) -> Result<Packet, PacketError> {
     const RESET_COMMAND: [u8; 4] = [0x01, 0x03, 0x0c, 0x00];
