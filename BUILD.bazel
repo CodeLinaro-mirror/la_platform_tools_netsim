@@ -190,3 +190,27 @@ rust_test(
     crate = ":netsim_libslirp_rs",
     tags = ["general_tests"],
 )
+
+rust_library(
+    name = "netsim_hostapd_rs",
+    srcs = glob(["rust/hostapd-rs/src/**/*.rs"]),
+    crate_name = "netsim_hostapd_rs",
+    crate_root = "rust/hostapd-rs/src/lib.rs",
+    deps = [
+        ":netsim_common",
+        ":netsim_packets",
+        "@aes",
+        "@anyhow",
+        "@bytes",
+        "@ccm",
+        "@log_rust",
+        "@pdl_runtime",
+        "@tokio",
+    ],
+)
+
+rust_test(
+    name = "netsim_hostapd_rs_tests",
+    crate = ":netsim_hostapd_rs",
+    tags = ["general_tests"],
+)
