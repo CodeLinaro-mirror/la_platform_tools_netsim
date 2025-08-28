@@ -710,6 +710,7 @@ cc_library(
         "-DEFAULTLIB:Shell32.lib",
         "-DEFAULTLIB:Ole32.lib",
         "-DEFAULTLIB:Advapi32.lib",
+        "-lc",
     ],
     local_defines = [
         "GLIB_COMPILATION",

@@ -3,6 +3,9 @@ message(STATUS "Adding rust ${CMAKE_CURRENT_LIST_DIR}/Cargo.toml")
 # Delete any old Cargo.lock files
 file(REMOVE ${CMAKE_CURRENT_LIST_DIR}/Cargo.lock)
 
+# Delete old tools/rootcanal Cargo.lock file
+file(REMOVE ${CMAKE_CURRENT_LIST_DIR}/../../rootcanal/Cargo.lock)
+
 # This will automatically register all the tests as well.
 corrosion_import_crate(MANIFEST_PATH Cargo.toml FLAGS --offline --verbose)
 
