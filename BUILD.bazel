@@ -191,6 +191,33 @@ rust_test(
     tags = ["general_tests"],
 )
 
+rust_test(
+    name = "netsim_libslirp_rs_integration_test",
+    srcs = ["rust/libslirp-rs/tests/integration_test.rs"],
+    aliases = {
+        ":netsim_libslirp_rs": "libslirp_rs",
+    },
+    tags = ["general_tests"],
+    deps = [
+        ":netsim_libslirp_rs",
+        "@bytes",
+    ],
+)
+
+rust_test(
+    name = "netsim_libslirp_rs_integration_udp",
+    srcs = ["rust/libslirp-rs/tests/integration_udp.rs"],
+    aliases = {
+        ":netsim_libslirp_rs": "libslirp_rs",
+    },
+    tags = ["general_tests"],
+    deps = [
+        ":netsim_libslirp_rs",
+        "@bytes",
+        "@etherparse",
+    ],
+)
+
 rust_library(
     name = "netsim_hostapd_rs",
     srcs = glob(["rust/hostapd-rs/src/**/*.rs"]),
