@@ -19,7 +19,7 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "grpcio_sys",
+    name = "grpcio-sys",
     srcs = glob(["**/*.rs"]),
     crate_name = "grpcio_sys",
     edition = "2018",
@@ -29,7 +29,7 @@ rust_library(
     },
     deps = [
         "@libc",
-        "@libz_sys",
+        "@libz-sys",
     ],
     rustc_flags = [
         "--cfg=feature=\"_libz-sys\"",

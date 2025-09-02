@@ -19,7 +19,7 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "regex_syntax",
+    name = "regex-syntax",
     srcs = glob(["**/*.rs"]),
     crate_name = "regex_syntax",
     edition = "2021",

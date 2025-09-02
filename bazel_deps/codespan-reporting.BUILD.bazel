@@ -19,13 +19,13 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "codespan_reporting",
+    name = "codespan-reporting",
     srcs = glob(["**/*.rs"]),
     crate_name = "codespan_reporting",
     edition = "2018",
     crate_root = "src/lib.rs",
     deps = [
         "@termcolor",
-        "@unicode_width",
+        "@unicode-width",
     ],
 )

@@ -1,2 +1,1 @@
-build --enable_workspace
-test --enable_workspace --verbose_failures --test_output=all
+test --verbose_failures --test_output=all
