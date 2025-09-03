@@ -13,6 +13,7 @@
 # limitations under the License.
 """netsim bazel build rule."""
 
+load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
@@ -76,7 +77,7 @@ rust_test(
 
 rust_library(
     name = "netsim_proto",
-    srcs = glob(["rust/proto/src/**/*.rs"]),
+    srcs = glob(["rust/proto-cf/src/**/*.rs"]),
     crate_name = "netsim_proto",
     deps = [
         "@grpcio",
@@ -98,6 +99,14 @@ rust_library(
         "@hex",
         "@log",
         "@protobuf-rust",
+    ],
+)
+
+cc_binary(
+    name = "netsim",
+    srcs = ["rust/netsim.cc"],
+    deps = [
+        ":netsim_cli",
     ],
 )
 
