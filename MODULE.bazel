@@ -29,15 +29,7 @@ bazel_dep(name = "protobuf", version = "30.2")
 
 # pcre2 needed by glib.
 bazel_dep(name = "pcre2", version = "10.46-DEV")
-# TODO switch to bcr glib
-#bazel_dep(name = "glib", version = "2.82.2.bcr.5")
-#single_version_override(
-#    module_name = "glib",
-#    patch_strip = 1,
-#    patches = [
-#        "//build/bazel/patch:glib-patches-for-AEMU.patch",
-#    ],
-#)
+bazel_dep(name = "glib", version = "2.82.2.bcr.5")
 
 # Non-module repos
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
@@ -52,12 +44,6 @@ new_local_repository(
     name = "libslirp",
     build_file = "//bazel_deps:libslirp.BUILD.bazel",
     path = "../../external/libslirp",
-)
-
-new_local_repository(
-    name = "glib",
-    build_file = "//bazel_deps:glib.BUILD.bazel",
-    path = "../../external/glib",
 )
 
 new_local_repository(

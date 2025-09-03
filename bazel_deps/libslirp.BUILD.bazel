@@ -99,7 +99,7 @@ cc_library(
         ],
         "//conditions:default": [],
     }),
-    deps = ["@glib//:glib-shared"],
+    deps = ["@glib//glib"],
     linkopts = select({
         "@bazel_tools//src/conditions:windows": [
             "-lws2_32",

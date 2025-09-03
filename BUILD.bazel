@@ -221,7 +221,7 @@ rust_library(
         # "@winapi", // TODO: Resolve this dependency to build for Windows
         "@tokio",
         "@libslirp",
-        "@glib//:glib-shared",
+        "@glib//glib",
     ],
 )
 
@@ -237,6 +237,10 @@ rust_test(
     aliases = {
         ":netsim_libslirp_rs": "libslirp_rs",
     },
+    rustc_flags = [
+        "-C",
+        "link-arg=-lc",
+    ],
     tags = ["general_tests"],
     deps = [
         ":netsim_libslirp_rs",
@@ -250,6 +254,10 @@ rust_test(
     aliases = {
         ":netsim_libslirp_rs": "libslirp_rs",
     },
+    rustc_flags = [
+        "-C",
+        "link-arg=-lc",
+    ],
     tags = ["general_tests"],
     deps = [
         ":netsim_libslirp_rs",
@@ -323,6 +331,10 @@ rust_library(
 rust_test(
     name = "netsim_http_proxy_tests",
     crate = ":netsim_http_proxy",
+    rustc_flags = [
+        "-C",
+        "link-arg=-lc",
+    ],
     tags = ["general_tests"],
 )
 
@@ -371,6 +383,10 @@ rust_test(
         ":netsim_http_proxy": "http_proxy",
     },
     compile_data = ["rust/capture/data/dns.cap"],
+    rustc_flags = [
+        "-C",
+        "link-arg=-lc",
+    ],
     tags = ["general_tests"],
     deps = [
         ":netsim_capture",
