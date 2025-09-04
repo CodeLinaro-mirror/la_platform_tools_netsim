@@ -19,13 +19,13 @@ load("@rules_rust//rust:defs.bzl", "rust_proc_macro")
 package(default_visibility = ["//visibility:public"])
 
 rust_proc_macro(
-    name = "thiserror_impl",
+    name = "thiserror-impl",
     srcs = glob(["**/*.rs"]),
     crate_name = "thiserror_impl",
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@proc_macro2",
+        "@proc-macro2",
         "@quote",
         "@syn",
     ],

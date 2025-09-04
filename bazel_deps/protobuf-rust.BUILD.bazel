@@ -34,7 +34,7 @@ rust_library(
     deps = [
         "@bytes",
         "@once_cell",
-        "@protobuf_support",
+        "@protobuf-support",
         "@thiserror",
     ],
     rustc_flags = [

@@ -19,13 +19,13 @@ load("@rules_rust//rust:defs.bzl", "rust_proc_macro")
 package(default_visibility = ["//visibility:public"])
 
 rust_proc_macro(
-    name = "futures_macro",
+    name = "futures-macro",
     srcs = glob(["**/*.rs"]),
     crate_name = "futures_macro",
     edition = "2018",
     crate_root = "src/lib.rs",
     deps = [
-        "@proc_macro2",
+        "@proc-macro2",
         "@quote",
         "@syn",
     ],

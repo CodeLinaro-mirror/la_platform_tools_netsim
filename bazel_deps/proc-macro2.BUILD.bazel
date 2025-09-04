@@ -19,13 +19,13 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "proc_macro2",
+    name = "proc-macro2",
     srcs = glob(["**/*.rs"]),
     crate_name = "proc_macro2",
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@unicode_ident",
+        "@unicode-ident",
     ],
     rustc_flags = [
         "--cfg=feature=\"default\"",

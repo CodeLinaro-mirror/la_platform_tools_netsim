@@ -19,7 +19,7 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "protobuf_support",
+    name = "protobuf-support",
     srcs = glob(["**/*.rs"]),
     crate_name = "protobuf_support",
     edition = "2021",

@@ -25,10 +25,10 @@ rust_library(
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@aho_corasick",
+        "@aho-corasick",
         "@memchr",
-        "@regex_automata",
-        "@regex_syntax",
+        "@regex-automata",
+        "@regex-syntax",
     ],
     rustc_flags = [
         "--cfg=feature=\"default\"",

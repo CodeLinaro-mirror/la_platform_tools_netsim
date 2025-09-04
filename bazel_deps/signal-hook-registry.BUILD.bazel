@@ -19,7 +19,7 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "signal_hook_registry",
+    name = "signal-hook-registry",
     srcs = glob(["**/*.rs"]),
     crate_name = "signal_hook_registry",
     edition = "2015",

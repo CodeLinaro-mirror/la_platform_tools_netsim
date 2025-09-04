@@ -19,7 +19,7 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "base64_rust",
+    name = "base64",
     srcs = glob(["**/*.rs"]),
     crate_name = "base64",
     edition = "2018",

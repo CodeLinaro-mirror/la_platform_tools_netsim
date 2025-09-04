@@ -25,9 +25,9 @@ rust_library(
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@proc_macro2",
+        "@proc-macro2",
         "@quote",
-        "@unicode_ident",
+        "@unicode-ident",
     ],
     rustc_flags = [
         "--cfg=feature=\"clone-impls\"",
