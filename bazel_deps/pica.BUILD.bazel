@@ -12,31 +12,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""clap_builder bazel build rule"""
+"""pica bazel build rule"""
 
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
+genrule(
+    name = "pica_uci_packets",
+    srcs = ["src/uci_packets.pdl"],
+    outs = ["uci_packets.rs"],
+    cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl-compiler//:pdlc"],
+)
+
 rust_library(
-    name = "clap_builder",
-    srcs = glob(["**/*.rs"]),
-    crate_name = "clap_builder",
-    edition = "2021",
-    compile_data = glob(["README.md"]),
-    crate_root = "src/lib.rs",
-    deps = [
-        "@anstyle",
-        "@clap_lex",
-        "@strsim",
+    name = "pica",
+    srcs = glob(["src/**/*.rs"]) + [
+        ":pica_uci_packets",
     ],
-    rustc_flags = [
-        "--cfg=feature=\"env\"",
-        "--cfg=feature=\"error-context\"",
-        "--cfg=feature=\"help\"",
-        "--cfg=feature=\"std\"",
-        "--cfg=feature=\"string\"",
-        "--cfg=feature=\"suggestions\"",
-        "--cfg=feature=\"usage\"",
+    crate_name = "pica",
+    edition = "2021",
+    crate_root = "src/lib.rs",
+    rustc_env = {"OUT_DIR": ".."},
+    deps = [
+        "@anyhow",
+        "@bytes",
+        "@futures",
+        "@glam",
+        "@hex",
+        "@log",
+        "@num-traits",
+        "@pdl-runtime",
+        "@serde",
+        "@thiserror",
+        "@tokio",
+    ],
+    proc_macro_deps = [
+        "@num-derive",
     ],
 )

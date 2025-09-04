@@ -12,31 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""clap_builder bazel build rule"""
+"""hashbrown bazel build rule"""
 
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "clap_builder",
+    name = "hashbrown",
     srcs = glob(["**/*.rs"]),
-    crate_name = "clap_builder",
+    crate_name = "hashbrown",
     edition = "2021",
-    compile_data = glob(["README.md"]),
     crate_root = "src/lib.rs",
     deps = [
-        "@anstyle",
-        "@clap_lex",
-        "@strsim",
+        "@equivalent",
+        "@foldhash",
     ],
     rustc_flags = [
-        "--cfg=feature=\"env\"",
-        "--cfg=feature=\"error-context\"",
-        "--cfg=feature=\"help\"",
-        "--cfg=feature=\"std\"",
-        "--cfg=feature=\"string\"",
-        "--cfg=feature=\"suggestions\"",
-        "--cfg=feature=\"usage\"",
+        "--cfg=feature=\"default-hasher\"",
+        "--cfg=feature=\"equivalent\"",
+        "--cfg=feature=\"inline-more\"",
+        "--cfg=feature=\"raw-entry\"",
     ],
 )

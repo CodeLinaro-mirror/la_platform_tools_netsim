@@ -13,6 +13,8 @@
 # limitations under the License.
 """netsim bazel build rule."""
 
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
@@ -20,6 +22,7 @@ proto_library(
     name = "netsimd-proto",
     srcs = [
         "proto/netsim/common.proto",
+        "proto/netsim/config.proto",
         "proto/netsim/frontend.proto",
         "proto/netsim/hci_packet.proto",
         "proto/netsim/model.proto",
@@ -33,6 +36,11 @@ proto_library(
         "@protobuf//:timestamp_proto",
         "@rootcanal//:rootcanal-configuration-proto",
     ],
+)
+
+cc_proto_library(
+    name = "netsimd_cc_proto",
+    deps = [":netsimd-proto"],
 )
 
 # BLE Advertisers
@@ -368,5 +376,114 @@ rust_test(
         ":netsim_capture",
         ":netsim_http_proxy",
         "@tokio",
+    ],
+)
+
+rust_library(
+    name = "netsim_daemon",
+    srcs = glob(["rust/daemon/src/**/*.rs"]),
+    aliases = {
+        ":netsim_http_proxy": "http_proxy",
+        ":netsim_libslirp_rs": "libslirp_rs",
+        ":netsim_hostapd_rs": "hostapd_rs",
+    },
+    compile_data = [
+        "rust/daemon/src/uwb/sample_ranging_data.csv",
+    ],
+    crate_name = "netsim_daemon",
+    crate_root = "rust/daemon/src/lib.rs",
+    rustc_flags = [
+        "--cfg=feature=\"local_ssl\"",
+    ],
+    deps = [
+        ":netsim_common",
+        ":netsim_hostapd_rs",
+        ":netsim_http_proxy",
+        ":netsim_libslirp_rs",
+        ":netsim_packets",
+        ":netsim_proto",
+        "@anyhow",
+        "@bytes",
+        "@clap",
+        "@cxx.rs//:cxx",
+        "@data-encoding",
+        "@futures",
+        "@futures-channel",
+        "@futures-executor",
+        "@futures-util",
+        "@glam",
+        "@grpcio",
+        "@http",
+        "@httparse",
+        "@libc",
+        "@log",
+        "@pdl-runtime",
+        "@pica",
+        "@protobuf-json-mapping",
+        "@protobuf-rust",
+        "@rand",
+        "@regex",
+        "@socket2",
+        "@thiserror",
+        "@tokio",
+        "@tokio-stream",
+        "@tungstenite",
+    ],
+)
+
+genrule(
+    name = "netsim_daemon_cc",
+    srcs = ["rust/daemon/src/ffi.rs"],
+    outs = ["netsim-daemon/src/ffi.rs.cc"],
+    cmd = "$(location @cxx.rs//:codegen) $(SRCS) --cfg feature=\\\"local_ssl\\\" >> $(OUTS)",
+    tools = ["@cxx.rs//:codegen"],
+)
+
+genrule(
+    name = "netsim_daemon_h",
+    srcs = ["rust/daemon/src/ffi.rs"],
+    outs = ["netsim-daemon/src/ffi.rs.h"],
+    cmd = "$(location @cxx.rs//:codegen) $(SRCS) --cfg feature=\\\"local_ssl\\\" --header >> $(OUTS)",
+    tools = ["@cxx.rs//:codegen"],
+)
+
+genrule(
+    name = "cxx-bridge-header",
+    outs = ["rust/cxx.h"],
+    cmd = "$(location @cxx.rs//:codegen) --header >> $(OUTS)",
+    tools = ["@cxx.rs//:codegen"],
+)
+
+cc_binary(
+    name = "netsimd",
+    srcs = [
+        "rust/netsimd.cc",
+        "src/backend/grpc_client.h",
+        "src/hci/bluetooth_facade.cc",
+        "src/hci/bluetooth_facade.h",
+        "src/hci/hci_packet_hub.h",
+        "src/hci/hci_packet_transport.cc",
+        "src/hci/hci_packet_transport.h",
+        "src/hci/rust_device.cc",
+        "src/hci/rust_device.h",
+        "src/util/crash_report.cc",
+        "src/util/crash_report.h",
+        "src/util/filesystem.h",
+        "src/util/ini_file.h",
+        "src/util/log.cc",
+        "src/util/log.h",
+        ":cxx-bridge-header",
+        ":netsim_daemon_cc",
+        ":netsim_daemon_h",
+    ],
+    defines = ["NETSIM_ANDROID_EMULATOR"],
+    includes = [
+        "src/",
+    ],
+    deps = [
+        ":netsim_daemon",
+        ":netsimd_cc_proto",
+        "@rootcanal//:libbt-rootcanal",
+        "@wpa_supplicant_8//:hostapd_c_lib",
     ],
 )

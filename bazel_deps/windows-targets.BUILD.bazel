@@ -12,31 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""clap_builder bazel build rule"""
+"""windows_targets bazel build rule"""
 
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "clap_builder",
+    name = "windows-targets",
     srcs = glob(["**/*.rs"]),
-    crate_name = "clap_builder",
+    crate_name = "windows_targets",
     edition = "2021",
-    compile_data = glob(["README.md"]),
     crate_root = "src/lib.rs",
     deps = [
-        "@anstyle",
-        "@clap_lex",
-        "@strsim",
-    ],
-    rustc_flags = [
-        "--cfg=feature=\"env\"",
-        "--cfg=feature=\"error-context\"",
-        "--cfg=feature=\"help\"",
-        "--cfg=feature=\"std\"",
-        "--cfg=feature=\"string\"",
-        "--cfg=feature=\"suggestions\"",
-        "--cfg=feature=\"usage\"",
+        "@windows_aarch64_gnullvm",
+        "@windows_i686_gnullvm",
+        "@windows_x86_64_gnullvm",
     ],
 )

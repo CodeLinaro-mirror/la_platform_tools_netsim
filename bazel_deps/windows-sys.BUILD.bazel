@@ -12,31 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""clap_builder bazel build rule"""
+"""windows_sys bazel build rule"""
 
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "clap_builder",
+    name = "windows-sys",
     srcs = glob(["**/*.rs"]),
-    crate_name = "clap_builder",
+    crate_name = "windows_sys",
     edition = "2021",
-    compile_data = glob(["README.md"]),
     crate_root = "src/lib.rs",
     deps = [
-        "@anstyle",
-        "@clap_lex",
-        "@strsim",
+        "@windows-targets",
     ],
     rustc_flags = [
-        "--cfg=feature=\"env\"",
-        "--cfg=feature=\"error-context\"",
-        "--cfg=feature=\"help\"",
-        "--cfg=feature=\"std\"",
-        "--cfg=feature=\"string\"",
-        "--cfg=feature=\"suggestions\"",
-        "--cfg=feature=\"usage\"",
+        "--cfg=feature=\"Win32\"",
+        "--cfg=feature=\"Win32_Foundation\"",
+        "--cfg=feature=\"Win32_Networking\"",
+        "--cfg=feature=\"Win32_Networking_WinSock\"",
+        "--cfg=feature=\"Win32_System\"",
+        "--cfg=feature=\"Win32_System_IO\"",
+        "--cfg=feature=\"Win32_System_Threading\"",
+        "--cfg=feature=\"Win32_System_WindowsProgramming\"",
     ],
 )
