@@ -136,7 +136,7 @@ genrule(
 )
 
 rust_library(
-    name = "pdl_compiler",
+    name = "pdl-compiler",
     srcs = glob(["**/*.rs"]),
     crate_name = "pdl_compiler",
     edition = "2021",
