@@ -20,6 +20,7 @@ and generate corresponding BUILD.bazel files.
 """
 
 import argparse
+import glob
 import os
 import re
 import sys
@@ -496,37 +497,6 @@ rust_library(
   return content
 
 
-def get_crate_path(bp_file_path, android_build_top):
-  """Determines the relative path to the crate for the WORKSPACE file."""
-  # bp_file_path is relative to android_build_top
-  # we want the path relative to tools/netsim
-  crate_dir = os.path.dirname(bp_file_path)
-  return os.path.join('../../', crate_dir)
-
-
-def add_to_workspace(workspace_path, name, crate_path, build_file_name):
-  """Appends a new_local_repository rule to the WORKSPACE file if not present."""
-  build_file_label = f'//bazel_deps:{build_file_name}'
-  workspace_entry = f"""
-new_local_repository(
-    name = "{name}",
-    path = "{crate_path}",
-    build_file = "{build_file_label}",
-)
-"""
-  try:
-    with open(workspace_path, 'r+') as f:
-      content = f.read()
-      # Simple check to avoid adding duplicates
-      if f'name = "{name}"' in content:
-        print(f'Workspace entry for {name} already exists in {workspace_path}')
-        return
-      f.write(workspace_entry)
-    print(f'Successfully updated {workspace_path} with {name}')
-  except IOError as e:
-    print(f'Error updating WORKSPACE file: {e}', file=sys.stderr)
-
-
 def get_primary_rust_block(blocks):
   """Selects the most appropriate rust block, prioritizing library rules."""
   rust_lib_blocks = [
@@ -549,25 +519,27 @@ def main():
   )
   parser.add_argument(
       'crates',
-      metavar='CRATE',
+      metavar='Android.bp_rule_name',
       type=str,
       nargs='+',
-      help='One or more crate names to find dependencies for.',
+      help=(
+          'One or more crate names to find dependencies for. Ex) liblog_rust,'
+          ' libfutures, etc'
+      ),
   )
   parser.add_argument(
       '--android_build_top',
-      default=os.environ.get('ANDROID_BUILD_TOP'),
+      default=os.path.abspath(
+          os.path.join(os.path.dirname(__file__), '../../../')
+      ),
       help='Path to the Android source root. Defaults to $ANDROID_BUILD_TOP.',
   )
   parser.add_argument(
       '--output-dir',
-      default='tools/netsim/bazel_deps',
+      default=os.path.abspath(
+          os.path.join(os.path.dirname(__file__), '../bazel_deps/')
+      ),
       help='Directory to save the generated BUILD.bazel file.',
-  )
-  parser.add_argument(
-      '--workspace',
-      default='tools/netsim/WORKSPACE',
-      help='Path to the WORKSPACE file to update.',
   )
   args = parser.parse_args()
 
@@ -654,19 +626,86 @@ def main():
 
       print(f'Successfully generated {output_path}')
 
-      crate_path = get_crate_path(bp_file_rel_path, args.android_build_top)
-      add_to_workspace(
-          args.workspace,
-          crate_info['bazel_rule_name'],
-          crate_path,
-          output_filename,
-      )
-
     except (ValueError, IOError) as e:
       print(f'Error processing {bp_file_rel_path}: {e}', file=sys.stderr)
       continue
+  print("""
+        ************************************************************
+        IMPORTANT: Make sure to update the crate list in MODULE.bazel
+        ************************************************************
+        """)
+
+
+def fix_rule_name():
+  search_pattern = os.path.join(
+      os.path.dirname(__file__), '..', 'bazel_deps', '*.BUILD.bazel'
+  )
+  file_paths = glob.glob(search_pattern)
+
+  renames = {}
+  # Pass 1: Collect all renames by comparing rule name with filename
+  for file_path in file_paths:
+    try:
+      with open(file_path, 'r') as f:
+        content = f.read()
+    except IOError:
+      continue
+
+    pattern = re.compile(
+        r'(?:rust_library|rust_proc_macro)\s*\(.*?name\s*=\s*"([^"]+)"',
+        re.DOTALL,
+    )
+    match = pattern.search(content)
+    if not match:
+      continue
+
+    old_name = match.group(1)
+    filename = os.path.basename(file_path)
+    new_name = filename.removesuffix('.BUILD.bazel')
+
+    if old_name != new_name:
+      renames[old_name] = new_name
+
+  # Pass 2: Apply renames to rule names and dependencies
+  for file_path in file_paths:
+    try:
+      with open(file_path, 'r') as f:
+        content = f.read()
+    except IOError:
+      continue
+
+    original_content = content
+
+    # Update the rule name itself to match the filename
+    filename = os.path.basename(file_path)
+    correct_name = filename.removesuffix('.BUILD.bazel')
+    pattern = re.compile(
+        r'((?:rust_library|rust_proc_macro)\s*\(.*?name\s*=\s*)"([^"]+)"',
+        re.DOTALL,
+    )
+    content = pattern.sub(r'\1"' + correct_name + '"', content, count=1)
+
+    # Update dependencies using the collected renames
+    for old, new in renames.items():
+      content = content.replace(f'"@{old}"', f'"@{new}"')
+
+      # Replace strings in a list of deps attribute for rules
+      deps_pattern = re.compile(r'(deps\s*=\s*\[.*?\])', re.DOTALL)
+      for match in deps_pattern.finditer(content):
+        deps_block = match.group(1)
+        if f'"@{old}"' in deps_block:
+          updated_deps_block = deps_block.replace(f'"@{old}"', f'"@{new}"')
+          content = content.replace(deps_block, updated_deps_block)
+
+    if content != original_content:
+      with open(file_path, 'w') as f:
+        f.write(content)
 
 
 if __name__ == '__main__':
   main()
-  os.system('buildifier tools/netsim/bazel_deps/* tools/netsim/WORKSPACE')
+  os.system(
+      'buildifier'
+      f' {os.path.abspath(os.path.join(os.path.dirname(__file__), "../bazel_deps/*"))}'
+  )
+  fix_rule_name()

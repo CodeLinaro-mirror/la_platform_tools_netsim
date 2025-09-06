@@ -15,6 +15,17 @@
 
 package(default_visibility = ["//visibility:public"])
 
+genrule(
+    name = "slirp_version_header",
+    srcs = ["src/libslirp-version.h.in"],
+    outs = ["src/libslirp-version.h"],
+    cmd = "sed -e 's/@SLIRP_MAJOR_VERSION@//' " +
+          "-e 's/@SLIRP_MINOR_VERSION@//' " +
+          "-e 's/@SLIRP_MICRO_VERSION@//' " +
+          "-e 's/@SLIRP_VERSION_STRING@/\"4.7.0\"/' " +
+          "$(location src/libslirp-version.h.in) > $(@)",
+)
+
 cc_library(
     name = "libslirp",
     srcs = glob([
@@ -54,7 +65,7 @@ cc_library(
         "@bazel_tools//src/conditions:darwin": ["src/ip_icmp_ping.c"],
         "//conditions:default": [],
     }),
-    hdrs = glob(["src/*.h"]),
+    hdrs = glob(["src/*.h"]) + [":slirp_version_header"],
     includes = [
         "src",
     ],

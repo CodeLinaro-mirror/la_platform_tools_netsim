@@ -18,9 +18,13 @@ module(
     version = "0.0.1",
 )
 
+bazel_dep(name = "bazel_skylib", version = "1.8.1")
+bazel_dep(name = "grpc", version = "1.72.0")
+bazel_dep(name = "rules_cc", version = "0.2.3")
 bazel_dep(name = "rules_proto", version = "7.0.2")
 bazel_dep(name = "rules_python", version = "1.4.0")
 bazel_dep(name = "rules_rust", version = "0.61.0")
+bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "protobuf", version = "30.2")
 
 # pcre2 needed by glib.
@@ -116,6 +120,9 @@ new_local_repository(
         "memchr",
         "mio",
         "num_cpus",
+        "num-bigint",
+        "num-derive",
+        "num-integer",
         "num-traits",
         "once_cell",
         "parking_lot",
@@ -186,3 +193,33 @@ new_local_repository(
         ("typenum", "1.17.0"),
     ]
 ]
+
+# Dependencies needed for external/wpa_supplicant_8
+bazel_dep(name = "abseil-cpp", version = "20250127.1")
+bazel_dep(name = "googletest", version = "1.17.0")
+
+new_local_repository(
+    name = "wpa_supplicant_8",
+    build_file = "//bazel_deps:wpa_supplicant_8.BUILD.bazel",
+    path = "../../external/wpa_supplicant_8",
+)
+
+new_local_repository(
+    name = "qemu",
+    build_file = "//bazel_deps:qemu.BUILD.bazel",
+    path = "../../external/qemu",
+)
+
+new_local_repository(
+    name = "aemu-base",
+    build_file = "//bazel_deps:aemu-base.BUILD.bazel",
+    path = "../../hardware/google/aemu/base",
+)
+
+new_local_repository(
+    name = "fmtlib",
+    build_file = "//bazel_deps:fmtlib.BUILD.bazel",
+    path = "../../external/fmtlib",
+)
+
+bazel_dep(name = "boringssl", version = "0.20241024.0")

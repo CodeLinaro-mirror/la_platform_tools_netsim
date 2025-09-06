@@ -13,6 +13,7 @@
 # limitations under the License.
 """netsim bazel build rule."""
 
+load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
@@ -75,8 +76,23 @@ rust_test(
 )
 
 rust_library(
+    name = "netsim_rootcanal_rs",
+    srcs = ["//rust/netsim-rootcanal-rs:srcs"],
+    deps = [
+        "@rootcanal//:lib_rootcanal_ffi",
+        "@thiserror",
+    ],
+)
+
+rust_test(
+    name = "netsim_rootcanal_rs_tests",
+    crate = ":netsim_rootcanal_rs",
+    tags = ["general_tests"],
+)
+
+rust_library(
     name = "netsim_proto",
-    srcs = glob(["rust/proto/src/**/*.rs"]),
+    srcs = glob(["rust/proto-cf/src/**/*.rs"]),
     crate_name = "netsim_proto",
     deps = [
         "@grpcio",
@@ -98,6 +114,14 @@ rust_library(
         "@hex",
         "@log",
         "@protobuf-rust",
+    ],
+)
+
+cc_binary(
+    name = "netsim",
+    srcs = ["rust/netsim.cc"],
+    deps = [
+        ":netsim_cli",
     ],
 )
 
@@ -240,6 +264,24 @@ rust_test(
     name = "netsim_hostapd_rs_tests",
     crate = ":netsim_hostapd_rs",
     tags = ["general_tests"],
+)
+
+rust_test(
+    name = "netsim_hostapd_rs_integration_test",
+    srcs = ["rust/hostapd-rs/tests/integration_test.rs"],
+    aliases = {
+        ":netsim_hostapd_rs": "hostapd_rs",
+    },
+    tags = ["general_tests"],
+    deps = [
+        ":netsim_hostapd_rs",
+        ":netsim_packets",
+        "@bytes",
+        "@log",
+        "@pdl-runtime",
+        "@tokio",
+        "@wpa_supplicant_8//:hostapd_c_lib",
+    ],
 )
 
 rust_library(
