@@ -169,7 +169,7 @@ rust_binary(
     edition = "2021",
     crate_root = "src/main.rs",
     deps = [
-        ":pdl_compiler",
+        ":pdl-compiler",
         "@argh",
         "@codespan-reporting",
         "@heck",
