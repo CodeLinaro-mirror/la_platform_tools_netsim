@@ -13,9 +13,8 @@
 # limitations under the License.
 """netsim bazel build rule."""
 
-load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_proto//proto:defs.bzl", "proto_library")
-load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
 proto_library(
     name = "netsimd-proto",
@@ -117,9 +116,14 @@ rust_library(
     ],
 )
 
-cc_binary(
+rust_binary(
     name = "netsim",
-    srcs = ["rust/netsim.cc"],
+    srcs = ["rust/cli/bin/netsim.rs"],
+    crate_name = "netsim_cli",
+    rustc_flags = [
+        "-C",
+        "link-arg=-lc",
+    ],
     deps = [
         ":netsim_cli",
     ],
@@ -128,6 +132,10 @@ cc_binary(
 rust_test(
     name = "netsim_cli_tests",
     crate = ":netsim_cli",
+    rustc_flags = [
+        "-C",
+        "link-arg=-lc",
+    ],
     tags = ["general_tests"],
 )
 
