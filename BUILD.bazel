@@ -191,6 +191,33 @@ rust_test(
     tags = ["general_tests"],
 )
 
+rust_test(
+    name = "netsim_libslirp_rs_integration_test",
+    srcs = ["rust/libslirp-rs/tests/integration_test.rs"],
+    aliases = {
+        ":netsim_libslirp_rs": "libslirp_rs",
+    },
+    tags = ["general_tests"],
+    deps = [
+        ":netsim_libslirp_rs",
+        "@bytes",
+    ],
+)
+
+rust_test(
+    name = "netsim_libslirp_rs_integration_udp",
+    srcs = ["rust/libslirp-rs/tests/integration_udp.rs"],
+    aliases = {
+        ":netsim_libslirp_rs": "libslirp_rs",
+    },
+    tags = ["general_tests"],
+    deps = [
+        ":netsim_libslirp_rs",
+        "@bytes",
+        "@etherparse",
+    ],
+)
+
 rust_library(
     name = "netsim_hostapd_rs",
     srcs = glob(["rust/hostapd-rs/src/**/*.rs"]),
@@ -213,4 +240,83 @@ rust_test(
     name = "netsim_hostapd_rs_tests",
     crate = ":netsim_hostapd_rs",
     tags = ["general_tests"],
+)
+
+rust_library(
+    name = "netsim_http_proxy",
+    srcs = glob(["rust/http-proxy/src/**/*.rs"]),
+    aliases = {
+        ":netsim_libslirp_rs": "libslirp_rs",
+    },
+    crate_name = "netsim_http_proxy",
+    crate_root = "rust/http-proxy/src/lib.rs",
+    deps = [
+        ":netsim_libslirp_rs",
+        "@base64_rust",
+        "@bytes",
+        "@etherparse",
+        "@httparse",
+        "@log_rust",
+        "@regex",
+        "@tokio",
+    ],
+)
+
+rust_test(
+    name = "netsim_http_proxy_tests",
+    crate = ":netsim_http_proxy",
+    tags = ["general_tests"],
+)
+
+rust_library(
+    name = "netsim_capture",
+    srcs = glob(["rust/capture/src/**/*.rs"]),
+    aliases = {
+        ":netsim_libslirp_rs": "libslirp_rs",
+    },
+    crate_name = "netsim_capture",
+    crate_root = "rust/capture/src/lib.rs",
+    proc_macro_deps = [
+        "@zerocopy_derive",
+    ],
+    deps = [
+        "@tokio",
+        "@zerocopy",
+    ],
+)
+
+rust_test(
+    name = "netsim_capture_tests",
+    crate = ":netsim_capture",
+    tags = ["general_tests"],
+)
+
+rust_test(
+    name = "netsim_capture_integration_test",
+    srcs = ["rust/capture/tests/integration_test.rs"],
+    aliases = {
+        ":netsim_capture": "capture",
+    },
+    compile_data = ["rust/capture/data/dns.cap"],
+    tags = ["general_tests"],
+    deps = [
+        ":netsim_capture",
+        "@tokio",
+    ],
+)
+
+rust_test(
+    name = "netsim_http_proxy_integration_test",
+    srcs = ["rust/http-proxy/tests/integration_test.rs"],
+    aliases = {
+        ":netsim_capture": "capture",
+        ":netsim_http_proxy": "http_proxy",
+    },
+    compile_data = ["rust/capture/data/dns.cap"],
+    tags = ["general_tests"],
+    deps = [
+        ":netsim_capture",
+        ":netsim_http_proxy",
+        "@tokio",
+    ],
 )
