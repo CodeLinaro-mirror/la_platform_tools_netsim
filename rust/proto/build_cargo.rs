@@ -30,7 +30,7 @@ fn main() {
 
     // Generate protobuf output
     let proto_dir = proto_root.join("proto");
-    let rootcanal_dir = proto_root.join("../../packages/modules/Bluetooth/tools/rootcanal/proto");
+    let rootcanal_dir = proto_root.join("../../tools/rootcanal/proto");
     let proto_input_files = [
         rootcanal_dir.join("rootcanal/configuration.proto"),
         proto_dir.join("netsim/packet_streamer.proto"),

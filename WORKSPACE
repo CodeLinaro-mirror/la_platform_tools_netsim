@@ -17,7 +17,7 @@
 new_local_repository(
     name = "rootcanal",
     build_file = "//bazel_deps:rootcanal.BUILD.bazel",
-    path = "../../packages/modules/Bluetooth/tools/rootcanal",
+    path = "../../tools/rootcanal",
 )
 
 new_local_repository(
@@ -630,4 +630,40 @@ new_local_repository(
     name = "typenum",
     build_file = "//bazel_deps:typenum.BUILD.bazel",
     path = "../../external/qemu/android/third_party/rust/crates/typenum-1.17.0",
+)
+
+new_local_repository(
+    name = "httparse",
+    build_file = "//bazel_deps:httparse.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/httparse",
+)
+
+new_local_repository(
+    name = "aho_corasick",
+    build_file = "//bazel_deps:aho-corasick.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/aho-corasick",
+)
+
+new_local_repository(
+    name = "regex",
+    build_file = "//bazel_deps:regex.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/regex",
+)
+
+new_local_repository(
+    name = "regex_automata",
+    build_file = "//bazel_deps:regex-automata.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/regex-automata",
+)
+
+new_local_repository(
+    name = "regex_syntax",
+    build_file = "//bazel_deps:regex-syntax.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/regex-syntax",
+)
+
+new_local_repository(
+    name = "base64_rust",
+    build_file = "//bazel_deps:base64.BUILD.bazel",
+    path = "../../external/rust/android-crates-io/crates/base64",
 )
