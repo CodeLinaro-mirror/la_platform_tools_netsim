@@ -210,12 +210,8 @@ cc_library(
             "-Wno-deprecated-declarations",  # <-- ADD THIS LINE
         ],
     }),
-    # Add system libraries needed by this C code.
-    linkopts = [
-        "-lcrypto",
-        "-lssl",
-    ],
     deps = [
+        "@boringssl//:crypto",
         "@qemu//:qemu_headers",
     ],
     visibility = ["//visibility:public"],
