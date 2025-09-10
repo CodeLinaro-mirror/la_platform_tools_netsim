@@ -133,6 +133,42 @@ cc_library(
 )
 
 cc_library(
+    name = "libbt-rootcanal",
+    srcs = glob(
+        ["model/controller/**/*.cc"] +
+        ["model/devices/*.cc"] +
+        ["model/hci/*.cc"] +
+        ["model/setup/*.cc"] +
+        ["net/**/*.cc"],
+        exclude = ["model/controller/ffi.cc"],
+    ) + [
+        ":lib_sources",
+    ],
+    hdrs = glob(
+        ["include/**/*.h"] +
+        ["model/controller/**/*.h"] +
+        ["model/devices/*.h"] +
+        ["model/hci/*.h"] +
+        ["model/setup/*.h"] +
+        ["net/**/*.h"],
+        exclude = ["model/controller/ffi.h"],
+    ) + [
+        "rust/include/rootcanal_rs.h",
+    ],
+    includes = [
+        ".",
+        "include",
+    ],
+    deps = [
+        ":generated_headers",
+        ":rootcanal_configuration_cc_proto",
+        ":rootcanal_rs",
+        "@pdl-compiler//:pdl_cxx_packet_runtime",
+        "@fmtlib",
+    ],
+)
+
+cc_library(
     name = "generated_headers",
     hdrs = [
         ":rootcanal_bredr_bb_cxx_gen",
