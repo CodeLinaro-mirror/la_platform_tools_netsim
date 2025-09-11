@@ -24,11 +24,13 @@ from utils import (
     AOSP_ROOT,
     EMULATOR_ARTIFACT_PATH,
     binary_extension,
+    is_bazel_build,
     run,
 )
 
 PYTEST_DIR = AOSP_ROOT / "external" / "adt-infra" / "pytest" / "test_embedded"
 OBJS_DIR = AOSP_ROOT / "tools" / "netsim" / "objs"
+BAZEL_OUT_DIR = AOSP_ROOT / "tools" / "netsim" / "bazel-bin"
 
 
 class RunPyTestTask(Task):
@@ -37,9 +39,12 @@ class RunPyTestTask(Task):
     super().__init__("RunPyTest")
     self.buildbot = args.buildbot
     self.pytest_input_dir = args.pytest_input_dir
+    self.is_bazel_build = is_bazel_build(args)
 
   def do_run(self):
-    run_pytest_manager = RunPytestManager(self.buildbot, self.pytest_input_dir)
+    run_pytest_manager = RunPytestManager(
+        self.buildbot, self.pytest_input_dir, self.is_bazel_build
+    )
     return run_pytest_manager.process()
 
 
@@ -57,7 +62,7 @@ class RunPytestManager:
     Bots
   """
 
-  def __init__(self, buildbot, pytest_input_dir):
+  def __init__(self, buildbot, pytest_input_dir, is_bazel_build):
     """Initializes the instances based on environment
 
     Args:
@@ -66,15 +71,17 @@ class RunPytestManager:
         pytest_input_dir: Defined the directory that includes netsim and
           emulator binaries and libraries. Ignore if the string is empty.
     """
-    # Default self.dir
-    self.dir = EMULATOR_ARTIFACT_PATH / "emulator" if buildbot else OBJS_DIR
-
-    # If pytest_input_dir is provided, set self.dir accordingly
     if pytest_input_dir:
       try:
         self.dir = AOSP_ROOT / "tools" / "netsim" / Path(pytest_input_dir)
       except Exception as e:
         logging.error(f"Invalid pytest_input_dir value: {e}")
+    elif buildbot:
+      self.dir = EMULATOR_ARTIFACT_PATH / "emulator"
+    elif is_bazel_build:
+      self.dir = BAZEL_OUT_DIR
+    else:
+      self.dir = OBJS_DIR
 
   def _run_with_n_attempts(cmd, n):
     for attempt in range(1, n + 1):

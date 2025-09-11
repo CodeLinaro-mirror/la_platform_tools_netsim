@@ -142,6 +142,11 @@ def main():
       choices=ALL_PACKAGES,
       help="The name of the crate(s) to run tests for.",
   )
+  parser.add_argument(
+      "--bazel",
+      action="store_true",
+      help="Buildbot only. Whether to use Bazel to build.",
+  )
 
   args = parser.parse_args()
 
@@ -182,6 +187,9 @@ def main():
   # Turn on sccache?
   # if args.buildbot and cfg.sccache:
   #    launcher.append(f"-DOPTION_CCACHE=${cfg.sccache}")
+
+  # Bazel
+  tasks.get("Bazel").run()
 
   # Configure
   tasks.get("Configure").run()
