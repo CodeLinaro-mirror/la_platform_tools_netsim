@@ -122,7 +122,7 @@ fi
 PROTOC_CMD="protoc --rust_out=$PROTO_SRC_DIR --grpc_out=$PROTO_SRC_DIR \
  --plugin=protoc-gen-grpc=$PROTOC_PLUGIN_PATH \
  -I./proto -I../../external/protobuf/src \
- -I../../packages/modules/Bluetooth/tools/rootcanal/proto"
+ -I../../tools/rootcanal/proto"
 $PROTOC_CMD ./proto/netsim/frontend.proto
 $PROTOC_CMD ./proto/netsim/packet_streamer.proto
 

@@ -23,7 +23,7 @@ rust_library(
     crate_name = "aes",
     edition = "2021",
     deps = [
-        "@cfg_if",
+        "@cfg-if",
         "@cipher",
         "@cpufeatures",
     ],

@@ -12,23 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ppv_lite86 bazel build rule"""
+"""num_derive bazel build rule"""
 
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_proc_macro")
 
 package(default_visibility = ["//visibility:public"])
 
-rust_library(
-    name = "ppv-lite86",
+rust_proc_macro(
+    name = "num-derive",
     srcs = glob(["**/*.rs"]),
-    crate_name = "ppv_lite86",
+    crate_name = "num_derive",
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@zerocopy",
-    ],
-    rustc_flags = [
-        "--cfg=feature=\"default\"",
-        "--cfg=feature=\"std\"",
+        "@proc-macro2",
+        "@quote",
+        "@syn",
     ],
 )

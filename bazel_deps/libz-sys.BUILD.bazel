@@ -19,7 +19,7 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "libz_sys",
+    name = "libz-sys",
     srcs = glob(["**/*.rs"]),
     crate_name = "libz_sys",
     edition = "2018",

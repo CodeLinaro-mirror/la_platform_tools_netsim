@@ -27,7 +27,7 @@ rust_library(
     deps = [
         "@memchr",
         "@thiserror",
-        "@ucd_trie",
+        "@ucd-trie",
     ],
     rustc_flags = [
         "--cfg=feature=\"default\"",

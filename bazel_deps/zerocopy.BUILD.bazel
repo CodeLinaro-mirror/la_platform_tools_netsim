@@ -25,7 +25,7 @@ rust_library(
     edition = "2021",
     crate_root = "src/lib.rs",
     proc_macro_deps = [
-        "@zerocopy_derive",
+        "@zerocopy-derive",
     ],
     rustc_flags = [
         "--cfg=feature=\"alloc\"",

@@ -25,7 +25,7 @@ rust_library(
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@cfg_if",
+        "@cfg-if",
     ],
     rustc_flags = [
         "--cfg=feature=\"default\"",

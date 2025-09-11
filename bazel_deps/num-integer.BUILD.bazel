@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ppv_lite86 bazel build rule"""
+"""num_integer bazel build rule"""
 
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "ppv-lite86",
+    name = "num-integer",
     srcs = glob(["**/*.rs"]),
-    crate_name = "ppv_lite86",
-    edition = "2021",
+    crate_name = "num_integer",
+    edition = "2018",
     crate_root = "src/lib.rs",
     deps = [
-        "@zerocopy",
+        "@num-traits",
     ],
     rustc_flags = [
         "--cfg=feature=\"default\"",

@@ -26,7 +26,7 @@ rust_proc_macro(
     crate_root = "src/lib.rs",
     deps = [
         "@argh_shared",
-        "@proc_macro2",
+        "@proc-macro2",
         "@quote",
         "@syn",
     ],
