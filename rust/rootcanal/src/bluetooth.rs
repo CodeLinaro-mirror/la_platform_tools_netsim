@@ -41,10 +41,13 @@ pub trait Callbacks: Send + Sync {
     ) -> Option<i32>;
 }
 
+use std::sync::atomic::{AtomicU32, Ordering};
+
 /// The Bluetooth subsystem.
 pub struct Bluetooth {
     controllers: Mutex<HashMap<ControllerId, Controller>>,
     callbacks: Box<dyn Callbacks>,
+    next_id: AtomicU32,
 }
 
 // A wrapper around the user-provided controller callbacks that also holds a weak
@@ -81,11 +84,15 @@ impl ControllerCallbacks for ControllerCallbacksWrapper {
 impl Bluetooth {
     /// Creates a new Bluetooth subsystem.
     pub fn new(callbacks: Box<dyn Callbacks>) -> Arc<Self> {
-        Arc::new(Self { controllers: Mutex::new(HashMap::new()), callbacks })
+        Arc::new(Self {
+            controllers: Mutex::new(HashMap::new()),
+            callbacks,
+            next_id: AtomicU32::new(1),
+        })
     }
 
     /// Creates a new Bluetooth controller with a unique id and possibly non-unique address
-    pub fn new_controller(
+    pub fn add_controller(
         self: &Arc<Self>,
         id: ControllerId,
         address: Address,
@@ -102,9 +109,25 @@ impl Bluetooth {
         Ok(())
     }
 
+    /// Creates a new Bluetooth controller with a unique id and possibly non-unique address
+    pub fn new_controller(
+        self: &Arc<Self>,
+        address: Address,
+        callbacks: Box<dyn ControllerCallbacks>,
+    ) -> ControllerId {
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        self.add_controller(id, address, callbacks).unwrap();
+        id
+    }
+
     /// Removes a Bluetooth controller.
-    pub fn remove_controller(&self, id: ControllerId) {
-        self.controllers.lock().unwrap().remove(&id);
+    pub fn remove_controller(&self, id: ControllerId) -> Result<()> {
+        self.controllers
+            .lock()
+            .unwrap()
+            .remove(&id)
+            .ok_or(Error::ControllerNotFound(id))
+            .map(|_| ())
     }
 
     /// Forwards a link layer packet to all other controllers.
@@ -148,27 +171,43 @@ impl Bluetooth {
     }
 
     /// Receives an HCI packet from the host for a specific controller.
-    pub fn receive_hci(&self, controller_id: ControllerId, idc: Idc, data: &[u8]) {
-        if let Some(controller) = self.controllers.lock().unwrap().get(&controller_id) {
-            controller.receive_hci(idc, data);
-        }
+    pub fn receive_hci(&self, controller_id: ControllerId, idc: Idc, data: &[u8]) -> Result<()> {
+        self.controllers
+            .lock()
+            .unwrap()
+            .get(&controller_id)
+            .ok_or(Error::ControllerNotFound(controller_id))
+            .map(|controller| controller.receive_hci(idc, data))
     }
 
     /// Returns the address of a specific controller.
-    pub fn get_address(&self, controller_id: ControllerId) -> Option<Address> {
-        self.controllers.lock().unwrap().get(&controller_id).map(|c| c.get_address())
+    pub fn get_address(&self, controller_id: ControllerId) -> Result<Address> {
+        self.controllers
+            .lock()
+            .unwrap()
+            .get(&controller_id)
+            .map(|c| c.get_address())
+            .ok_or(Error::ControllerNotFound(controller_id))
     }
 
     /// Returns the current packet statistics for a specific controller.
-    pub fn get_stats(&self, controller_id: ControllerId) -> Option<Stats> {
-        self.controllers.lock().unwrap().get(&controller_id).map(|c| c.get_stats())
+    pub fn get_stats(&self, controller_id: ControllerId) -> Result<Stats> {
+        self.controllers
+            .lock()
+            .unwrap()
+            .get(&controller_id)
+            .map(|c| c.get_stats())
+            .ok_or(Error::ControllerNotFound(controller_id))
     }
 
     /// Clears the packet statistics for a specific controller.
-    pub fn clear_stats(&self, controller_id: ControllerId) {
-        if let Some(controller) = self.controllers.lock().unwrap().get(&controller_id) {
-            controller.clear_stats();
-        }
+    pub fn clear_stats(&self, controller_id: ControllerId) -> Result<()> {
+        self.controllers
+            .lock()
+            .unwrap()
+            .get(&controller_id)
+            .ok_or(Error::ControllerNotFound(controller_id))
+            .map(|controller| controller.clear_stats())
     }
 }
 
@@ -227,7 +266,7 @@ mod tests {
         for i in 1..=num_controllers {
             let addr = Address::from_str(&format!("01:02:03:04:05:{:02X}", i)).unwrap();
             bluetooth
-                .new_controller(
+                .add_controller(
                     i,
                     addr,
                     Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) }),
@@ -308,7 +347,7 @@ mod tests {
 
         assert_eq!(bluetooth.len(), 2);
 
-        bluetooth.remove_controller(1);
+        assert!(bluetooth.remove_controller(1).is_ok());
         assert_eq!(bluetooth.len(), 1);
         assert_eq!(bluetooth.get_controller_ids(), vec![2]);
 
@@ -318,7 +357,22 @@ mod tests {
     }
 
     #[test]
-    fn test_new_controller_duplicate_id() {
+    fn test_delete_controller_invalid_id() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
+        let bluetooth = Bluetooth::new(callbacks);
+        setup_bluetooth_with_controllers(&bluetooth, 1);
+
+        let result = bluetooth.remove_controller(2);
+        assert!(result.is_err());
+        match result.err().unwrap() {
+            Error::ControllerNotFound(id) => assert_eq!(id, 2),
+            _ => panic!("unexpected error type"),
+        }
+    }
+
+    #[test]
+    fn test_add_controller_duplicate_id() {
         let callbacks =
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
         let bluetooth = Bluetooth::new(callbacks);
@@ -326,7 +380,7 @@ mod tests {
 
         let addr = Address::from_str("01:02:03:04:05:06").unwrap();
 
-        let result = bluetooth.new_controller(
+        let result = bluetooth.add_controller(
             1,
             addr,
             Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) }),
@@ -335,6 +389,70 @@ mod tests {
         assert!(result.is_err());
         match result.err().unwrap() {
             Error::DuplicateControllerId(id) => assert_eq!(id, 1),
+            _ => panic!("unexpected error type"),
+        }
+    }
+
+    #[test]
+    fn test_receive_hci_invalid_controller() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
+        let bluetooth = Bluetooth::new(callbacks);
+        setup_bluetooth_with_controllers(&bluetooth, 1);
+
+        let result = bluetooth.receive_hci(2, Idc::Cmd, &[1, 2, 3]);
+        assert!(result.is_err());
+        match result.err().unwrap() {
+            Error::ControllerNotFound(id) => assert_eq!(id, 2),
+            _ => panic!("unexpected error type"),
+        }
+    }
+
+    #[test]
+    fn test_clear_stats() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
+        let bluetooth = Bluetooth::new(callbacks);
+        setup_bluetooth_with_controllers(&bluetooth, 1);
+
+        // Clear stats for a valid controller.
+        assert!(bluetooth.clear_stats(1).is_ok());
+
+        // Clear stats for an invalid controller.
+        let result = bluetooth.clear_stats(2);
+        assert!(result.is_err());
+        match result.err().unwrap() {
+            Error::ControllerNotFound(id) => assert_eq!(id, 2),
+            _ => panic!("unexpected error type"),
+        }
+    }
+
+    #[test]
+    fn test_get_address_invalid_id() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
+        let bluetooth = Bluetooth::new(callbacks);
+        setup_bluetooth_with_controllers(&bluetooth, 1);
+
+        let result = bluetooth.get_address(2);
+        assert!(result.is_err());
+        match result.err().unwrap() {
+            Error::ControllerNotFound(id) => assert_eq!(id, 2),
+            _ => panic!("unexpected error type"),
+        }
+    }
+
+    #[test]
+    fn test_get_stats_invalid_id() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
+        let bluetooth = Bluetooth::new(callbacks);
+        setup_bluetooth_with_controllers(&bluetooth, 1);
+
+        let result = bluetooth.get_stats(2);
+        assert!(result.is_err());
+        match result.err().unwrap() {
+            Error::ControllerNotFound(id) => assert_eq!(id, 2),
             _ => panic!("unexpected error type"),
         }
     }

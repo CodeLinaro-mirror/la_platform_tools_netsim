@@ -30,6 +30,10 @@ pub enum Error {
     #[error("duplicate controller id: {0}")]
     DuplicateControllerId(u32),
 
+    /// The controller ID is not found.
+    #[error("controller not found: {0}")]
+    ControllerNotFound(u32),
+
     /// The address is malformed.
     #[error("malformed address: {0}")]
     MalformedAddress(String),
