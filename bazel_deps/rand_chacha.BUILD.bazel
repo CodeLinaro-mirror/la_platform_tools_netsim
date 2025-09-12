@@ -25,7 +25,7 @@ rust_library(
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@ppv_lite86",
+        "@ppv-lite86",
         "@rand_core",
     ],
     rustc_flags = [

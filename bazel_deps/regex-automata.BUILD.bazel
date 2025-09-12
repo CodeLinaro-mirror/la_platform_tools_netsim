@@ -19,15 +19,15 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "regex_automata",
+    name = "regex-automata",
     srcs = glob(["**/*.rs"]),
     crate_name = "regex_automata",
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@aho_corasick",
+        "@aho-corasick",
         "@memchr",
-        "@regex_syntax",
+        "@regex-syntax",
     ],
     rustc_flags = [
         "--cfg=feature=\"alloc\"",

@@ -19,14 +19,14 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "futures_channel",
+    name = "futures-channel",
     srcs = glob(["**/*.rs"]),
     crate_name = "futures_channel",
     edition = "2018",
     crate_root = "src/lib.rs",
     deps = [
-        "@futures_core",
-        "@futures_sink",
+        "@futures-core",
+        "@futures-sink",
     ],
     rustc_flags = [
         "--cfg=feature=\"alloc\"",

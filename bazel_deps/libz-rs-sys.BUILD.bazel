@@ -19,14 +19,14 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "libz_rs_sys",
+    name = "libz-rs-sys",
     srcs = glob(["**/*.rs"]),
     crate_name = "libz_rs_sys",
     edition = "2021",
     compile_data = glob(["README.md"]),
     crate_root = "src/lib.rs",
     deps = [
-        "@zlib_rs",
+        "@zlib-rs",
     ],
     rustc_flags = [
         "--cfg=feature=\"default\"",

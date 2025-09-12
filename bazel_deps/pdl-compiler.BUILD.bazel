@@ -14,6 +14,7 @@
 
 """pdl_compiler bazel build rule"""
 
+load("@rules_python//python:defs.bzl", "py_binary")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -135,18 +136,18 @@ genrule(
 )
 
 rust_library(
-    name = "pdl_compiler",
+    name = "pdl-compiler",
     srcs = glob(["**/*.rs"]),
     crate_name = "pdl_compiler",
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
         "@argh",
-        "@codespan_reporting",
+        "@codespan-reporting",
         "@heck",
         "@pest",
         "@prettyplease",
-        "@proc_macro2",
+        "@proc-macro2",
         "@quote",
         "@serde",
         "@serde_json",
@@ -168,13 +169,13 @@ rust_binary(
     edition = "2021",
     crate_root = "src/main.rs",
     deps = [
-        ":pdl_compiler",
+        ":pdl-compiler",
         "@argh",
-        "@codespan_reporting",
+        "@codespan-reporting",
         "@heck",
         "@pest",
         "@prettyplease",
-        "@proc_macro2",
+        "@proc-macro2",
         "@quote",
         "@serde",
         "@serde_json",
@@ -186,5 +187,27 @@ rust_binary(
     rustc_flags = [
         "--cfg=feature=\"default\"",
         "--cfg=feature=\"serde\"",
+    ],
+)
+
+py_binary(
+    name = "pdl_cxx_generator",
+    main = "scripts/generate_cxx_backend.py",
+    srcs = [
+        "scripts/generate_cxx_backend.py",
+        "scripts/pdl/ast.py",
+        "scripts/pdl/core.py",
+        "scripts/pdl/utils.py",
+    ],
+    imports = ["scripts"],
+)
+
+cc_library(
+    name = "pdl_cxx_packet_runtime",
+    hdrs = [
+        "scripts/packet_runtime.h",
+    ],
+    includes = [
+        "scripts",
     ],
 )

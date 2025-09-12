@@ -1,0 +1,64 @@
+# Copyright (C) 2025 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+aemu bazel build rule.
+
+Scaled down aemu/base build rule for external/wpa_supplicant_8
+"""
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "aemu-headers",
+    hdrs = [
+        "include/aemu/base/Compiler.h",
+        "include/aemu/base/CpuTime.h",
+        "include/aemu/base/Optional.h",
+        "include/aemu/base/TypeTraits.h",
+        "include/aemu/base/files/Fd.h",
+        "include/aemu/base/async/Looper.h",
+        "include/aemu/base/sockets/ScopedSocket.h",
+        "include/aemu/base/sockets/SocketErrors.h",
+        "include/aemu/base/sockets/SocketDrainer.h",
+        "include/aemu/base/sockets/SocketUtils.h",
+        "include/aemu/base/system/Memory.h",
+        "include/aemu/base/ThreadAnnotations.h",
+        "include/aemu/base/msvc.h",
+        "include/aemu/base/EintrWrapper.h",
+        "include/aemu/base/EnumFlags.h",
+        "include/aemu/base/files/Stream.h",
+        "include/aemu/base/Log.h",
+        "include/aemu/base/logging/Log.h",
+        "include/aemu/base/c_header.h",
+        "include/aemu/base/logging/LogTags.h",
+        "include/aemu/base/logging/CLog.h",
+        "include/aemu/base/logging/LogSeverity.h",
+        "include/aemu/base/logging/LogFormatter.h",
+        "include/aemu/base/utils/stream.h",
+        "include/aemu/base/synchronization/Lock.h",
+    ],
+    deps = [
+        "@abseil-cpp//absl/strings:str_format",
+        "@abseil-cpp//absl/log:globals",
+        "@abseil-cpp//absl/log:initialize",
+        "@abseil-cpp//absl/log:log",
+        "@abseil-cpp//absl/log:absl_log",
+    ],
+    includes = [
+        "include",
+    ],
+)

@@ -25,7 +25,7 @@ rust_library(
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@num_traits",
+        "@num-traits",
         "@serde",
     ],
     rustc_flags = [

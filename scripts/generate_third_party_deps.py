@@ -17,6 +17,9 @@
 """A script to find all third-party Rust crate dependencies
 
 and generate corresponding BUILD.bazel files.
+
+This script is only for processing crates in
+'external/qemu/android/third_party/rust/crates'
 """
 
 import argparse

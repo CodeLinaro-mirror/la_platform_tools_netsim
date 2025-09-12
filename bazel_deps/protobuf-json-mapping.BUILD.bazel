@@ -19,14 +19,14 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "protobuf_json_mapping",
+    name = "protobuf-json-mapping",
     srcs = glob(["**/*.rs"]),
     crate_name = "protobuf_json_mapping",
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
         "@protobuf-rust",
-        "@protobuf_support",
+        "@protobuf-support",
         "@thiserror",
     ],
 )
