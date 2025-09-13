@@ -206,17 +206,13 @@ cc_library(
             "-Wno-unused-parameter",
             "-Wno-unused-variable",
             "-Wno-macro-redefined",
+            "-Wno-error=maybe-uninitialized",
             "-Wno-deprecated-declarations",  # <-- ADD THIS LINE
         ],
     }),
-    # Add system libraries needed by this C code.
-    linkopts = [
-        "-lcrypto",
-        "-lssl",
-    ],
     deps = [
+        "@boringssl//:crypto",
         "@qemu//:qemu_headers",
-        # "@qemu//:android-emu-utils",
     ],
     visibility = ["//visibility:public"],
 )

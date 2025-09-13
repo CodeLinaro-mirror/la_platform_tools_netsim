@@ -20,7 +20,7 @@ import platform
 import zipfile
 
 from tasks.task import Task
-from utils import platform_to_cmake_target
+from utils import AOSP_ROOT, is_bazel_build, platform_to_cmake_target
 
 
 class ZipArtifactTask(Task):
@@ -34,6 +34,7 @@ class ZipArtifactTask(Task):
     else:
       self.target = platform.system().lower()
     self.dist = Path(args.dist_dir).absolute()
+    self.bazel = is_bazel_build(args)
 
   def do_run(self):
     # Make sure the dist directory exists.
@@ -44,13 +45,20 @@ class ZipArtifactTask(Task):
         self.dist
         / f"netsim-{platform_to_cmake_target(self.target)}-{self.build_id}.zip"
     )
-    search_dir = self.out / "distribution" / "emulator"
+    if self.bazel:
+      search_dir = AOSP_ROOT / "tools" / "netsim" / "bazel-bin"
+      search_glob = list(search_dir.glob("netsim-ui/*"))
+      search_glob.extend([search_dir / "netsim", search_dir / "netsimd"])
+    else:
+      search_dir = self.out / "distribution" / "emulator"
+      search_glob = search_dir.glob("**/*")
+
     logging.info("Creating zip file: %s", zip_fname)
     with zipfile.ZipFile(
         zip_fname, "w", zipfile.ZIP_DEFLATED, allowZip64=True
     ) as zipf:
       logging.info("Searching %s", search_dir)
-      for fname in search_dir.glob("**/*"):
+      for fname in search_glob:
         arcname = fname.relative_to(search_dir)
         logging.info("Adding %s as %s", fname, arcname)
         zipf.write(fname, arcname)
