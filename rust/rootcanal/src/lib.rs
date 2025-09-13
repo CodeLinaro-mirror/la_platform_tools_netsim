@@ -68,7 +68,7 @@ mod tests {
 
     struct MockControllerCallbacks;
     impl ControllerCallbacks for MockControllerCallbacks {
-        fn send_hci(&self, source_id: Id, _idc: Idc, _data: &[u8]) {}
+        fn send_hci(&self, _source_id: Id, _idc: Idc, _data: &[u8]) {}
         fn send_ll(&self, _source_id: Id, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
         fn invalid_packet_received(
             &self,
@@ -84,11 +84,11 @@ mod tests {
     fn test_create_and_delete_controller() {
         let bluetooth = Bluetooth::new(Box::new(MockBluetoothCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        bluetooth.new_controller(1, address, Box::new(MockControllerCallbacks)).unwrap();
+        let id = bluetooth.new_controller(address, Box::new(MockControllerCallbacks));
 
         assert_eq!(bluetooth.len(), 1);
 
-        bluetooth.remove_controller(1);
+        bluetooth.remove_controller(id).unwrap();
         assert_eq!(bluetooth.len(), 0);
     }
 }
