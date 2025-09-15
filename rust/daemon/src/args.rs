@@ -65,7 +65,7 @@ pub struct NetsimdArgs {
     pub forward_host_mdns: bool,
 
     /// Set the vsock port number to be listened by the frontend grpc server
-    #[arg(short, long)]
+    #[arg(long)]
     pub vsock: Option<u16>,
 
     /// The name of a config file to load

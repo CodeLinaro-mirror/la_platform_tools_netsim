@@ -31,6 +31,7 @@ rust_library(
         "@strsim",
     ],
     rustc_flags = [
+        "--cfg=feature=\"env\"",
         "--cfg=feature=\"error-context\"",
         "--cfg=feature=\"help\"",
         "--cfg=feature=\"std\"",

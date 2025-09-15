@@ -29,10 +29,12 @@ from utils import (
     AOSP_ROOT,
     EMULATOR_ARTIFACT_PATH,
     binary_extension,
+    is_bazel_build,
     run,
 )
 
 OBJS_DIR = AOSP_ROOT / "tools" / "netsim" / "objs"
+BAZEL_OUT_DIR = AOSP_ROOT / "tools" / "netsim" / "bazel-bin"
 PLATFORM_SYSTEM = platform.system()
 PLATFORM_MACHINE = platform.machine()
 
@@ -48,6 +50,7 @@ class InstallEmulatorTask(Task):
     self.target = args.emulator_target
     # Local Emulator directory
     self.local_emulator_dir = args.local_emulator_dir
+    self.is_bazel_build = is_bazel_build(args)
 
   def do_run(self):
     install_emulator_manager = InstallEmulatorManager(
@@ -56,6 +59,7 @@ class InstallEmulatorTask(Task):
         self.target,
         self.local_emulator_dir,
         self.build_id,
+        self.is_bazel_build,
     )
     return install_emulator_manager.process()
 
@@ -74,7 +78,15 @@ class InstallEmulatorManager:
       used for Android Build Bots.
   """
 
-  def __init__(self, buildbot, out_dir, target, local_emulator_dir, build_id):
+  def __init__(
+      self,
+      buildbot,
+      out_dir,
+      target,
+      local_emulator_dir,
+      build_id,
+      is_bazel_build,
+  ):
     """Initializes the instances based on environment
 
     Args:
@@ -87,6 +99,10 @@ class InstallEmulatorManager:
     self.target = target
     self.local_emulator_dir = local_emulator_dir
     self.build_id = build_id
+    self.local_netsim_dir = OBJS_DIR
+    if not self.buildbot and is_bazel_build:
+      self.local_netsim_dir = BAZEL_OUT_DIR
+    self.is_bazel_build = is_bazel_build
 
   def __os_name_fetch(self):
     """Obtains the os substring of the emulator artifact"""
@@ -125,13 +141,14 @@ class InstallEmulatorManager:
         return False
       # Check if the netsim has been built prior to install_emulator
       if not (
-          OBJS_DIR.exists()
-          and (OBJS_DIR / binary_extension("netsim")).exists()
-          and (OBJS_DIR / binary_extension("netsimd")).exists()
+          self.local_netsim_dir.exists()
+          and (self.local_netsim_dir / binary_extension("netsim")).exists()
+          and (self.local_netsim_dir / binary_extension("netsimd")).exists()
       ):
         logging.info(
-            "Please run 'scripts/build_tools.sh --Compile' "
-            "before running InstallEmulator"
+            "Please run 'scripts/build_tools.sh --task Compile' or"
+            " 'scripts/build_tools.sh --task bazel' before running"
+            " InstallEmulator"
         )
         return False
     return True
@@ -189,20 +206,20 @@ class InstallEmulatorManager:
         os.remove(file)
     # Copy artifacts
     if self.buildbot:
+      source_dir = (
+          BAZEL_OUT_DIR
+          if self.is_bazel_build
+          else Path(self.out_dir) / "distribution" / "emulator"
+      )
       shutil.copytree(
-          Path(self.out_dir) / "distribution" / "emulator",
+          source_dir,
           emulator_filepath,
           dirs_exist_ok=True,
       )
     else:
       shutil.copytree(
           emulator_filepath,
-          OBJS_DIR,
-          dirs_exist_ok=True,
-      )
-      shutil.copytree(
-          emulator_filepath,
-          OBJS_DIR / "distribution" / "emulator",
+          self.local_netsim_dir,
           dirs_exist_ok=True,
       )
 

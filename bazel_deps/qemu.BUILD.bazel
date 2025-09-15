@@ -72,38 +72,3 @@ cc_library(
         "@aemu-base//:aemu-headers",
     ],
 )
-
-cc_library(
-    name = "android-emu-utils",
-    srcs = [
-        "android/emu/utils/src/android/emulation/ParameterList.cpp",
-        "android/emu/utils/src/android/skin/rect.c",
-        "android/emu/utils/src/android/utils/assert.c",
-        "android/emu/utils/src/android/utils/async.cpp",
-        "android/emu/utils/src/android/utils/cbuffer.c",
-        "android/emu/utils/src/android/utils/dns.cpp",
-        "android/emu/utils/src/android/utils/exec.cpp",
-        "android/emu/utils/src/android/utils/format.cpp",
-        "android/emu/utils/src/android/utils/host_bitness.cpp",
-        "android/emu/utils/src/android/utils/http_utils.cpp",
-        "android/emu/utils/src/android/utils/intmap.c",
-        "android/emu/utils/src/android/utils/iolooper.cpp",
-        "android/emu/utils/src/android/utils/ipaddr.cpp",
-        "android/emu/utils/src/android/utils/lineinput.c",
-        "android/emu/utils/src/android/utils/lock.cpp",
-        "android/emu/utils/src/android/utils/Random.cpp",
-        "android/emu/utils/src/android/utils/reflist.c",
-        "android/emu/utils/src/android/utils/refset.c",
-        "android/emu/utils/src/android/utils/system_wrapper.cpp",
-        "android/emu/utils/src/android/utils/timezone.cpp",
-        "android/emu/utils/src/android/utils/uri.cpp",
-        "android/emu/utils/src/android/utils/utf8_utils.cpp",
-        "android/emu/utils/src/android/utils/vector.c",
-    ],
-    hdrs = glob(["android/emu/utils/include/android/utils/*.h"]),
-    includes = [
-        "android/emu/utils/src",
-        "android/emu/utils/include",
-    ],
-    deps = [":qemu_headers"],
-)
