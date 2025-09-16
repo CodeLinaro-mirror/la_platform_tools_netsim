@@ -15,12 +15,14 @@
 //! This module defines the [`Controller`] struct, which represents a Bluetooth
 //! controller.
 
+pub use crate::types::Idc;
+
 /// A unique ID for the Controller
 pub type Id = u32;
 
 use crate::{
     ffi,
-    types::{Address, Idc, Phy},
+    types::{Address, Phy},
 };
 use std::ffi::{c_int, c_void};
 use std::sync::{
