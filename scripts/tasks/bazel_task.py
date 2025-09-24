@@ -29,9 +29,13 @@ class BazelTask(Task):
     self.path = AOSP_ROOT / "prebuilts" / "bazel" / system / "bazel"
 
   def do_run(self):
-    config = "linux"
     if platform.system().lower() == "darwin":
+      if platform.machine() == "x86_64":
+        config = "macos_x86_64"
+      else:
         config = "macos"
+    else:
+        config = "linux"
 
     # Build
     run(
