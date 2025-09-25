@@ -67,6 +67,7 @@ new_local_repository(
         "argh_derive",
         "argh_shared",
         "arrayvec",
+        "async-trait",
         "base64",
         "byteorder",
         "bytes",
