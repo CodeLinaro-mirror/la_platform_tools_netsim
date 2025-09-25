@@ -29,9 +29,13 @@ class BazelTask(Task):
     self.path = AOSP_ROOT / "prebuilts" / "bazel" / system / "bazel"
 
   def do_run(self):
+    config = "linux"
+    if platform.system().lower() == "darwin":
+        config = "macos"
+
     # Build
     run(
-        [self.path, "build", ":all", "--config=release"],
+        [self.path, "build", ":all", "--config=" + config],
         self.env,
         "bazel build",
         AOSP_ROOT / "tools" / "netsim",
@@ -39,7 +43,7 @@ class BazelTask(Task):
 
     # Test
     run(
-        [self.path, "test", ":all", "--config=release"],
+        [self.path, "test", ":all", "--config=" + config],
         self.env,
         "bazel test",
         AOSP_ROOT / "tools" / "netsim",
