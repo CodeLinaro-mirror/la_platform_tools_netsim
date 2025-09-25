@@ -19,11 +19,30 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
+# This genrule prepares the source files for the `typenum` build script.
+# It copies the necessary Rust files from the `build` directory and
+# removes specific test-related lines that are not needed for the Bazel build.
+# It handles both macOS and other operating systems due to `sed` syntax differences.
 genrule(
     name = "build_script_srcs_gen",
     srcs = glob(["build/**/*.rs"]),
     outs = ["build_script_srcs_dir/main.rs", "build_script_srcs_dir/op.rs", "build_script_srcs_dir/consts.rs"],
-    cmd = "touch $(@D)/build_script_srcs_dir/main.rs $(@D)/build_script_srcs_dir/op.rs $(@D)/build_script_srcs_dir/consts.rs && mkdir -p $(@D)/build_script_srcs_dir && cp -r $(SRCS) $(@D)/build_script_srcs_dir && sed -i '/mod tests;/d' $(@D)/build_script_srcs_dir/main.rs && sed -i '/tests::build_tests().unwrap();/d' $(@D)/build_script_srcs_dir/main.rs",
+    cmd = select({
+        "@platforms//os:macos": """
+            touch $(@D)/build_script_srcs_dir/main.rs $(@D)/build_script_srcs_dir/op.rs $(@D)/build_script_srcs_dir/consts.rs
+            mkdir -p $(@D)/build_script_srcs_dir
+            cp -r $(SRCS) $(@D)/build_script_srcs_dir
+            sed -i '' '/mod tests;/d' $(@D)/build_script_srcs_dir/main.rs
+            sed -i '' '/tests::build_tests().unwrap();/d' $(@D)/build_script_srcs_dir/main.rs
+        """,
+        "//conditions:default": """
+            touch $(@D)/build_script_srcs_dir/main.rs $(@D)/build_script_srcs_dir/op.rs $(@D)/build_script_srcs_dir/consts.rs
+            mkdir -p $(@D)/build_script_srcs_dir
+            cp -r $(SRCS) $(@D)/build_script_srcs_dir
+            sed -i '/mod tests;/d' $(@D)/build_script_srcs_dir/main.rs
+            sed -i '/tests::build_tests().unwrap();/d' $(@D)/build_script_srcs_dir/main.rs
+        """,
+    }),
 )
 
 cargo_build_script(
