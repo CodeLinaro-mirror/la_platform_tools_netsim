@@ -35,7 +35,7 @@ class BazelTask(Task):
       else:
         config = "macos"
     else:
-        config = "linux"
+      config = "linux"
 
     # Build
     run(
