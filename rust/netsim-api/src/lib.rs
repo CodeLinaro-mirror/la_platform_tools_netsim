@@ -1,4 +1,5 @@
 // Copyright 2023-2025 The Android Open Source Project
+#![allow(missing_docs)]
 
 //! A shared, dependency-free crate that defines the shared data structures
 //! and command enums for the netsim control plane.
@@ -39,9 +40,13 @@ pub trait PacketStreamerApi: Send + Sync {
 /// The top-level command enum for all netsim simulation control commands.
 #[derive(Debug)]
 pub enum SimCommand {
+    /// Command to create a new chip.
     CreateChip(CreateChipParams),
+    /// Command to patch an existing chip.
     PatchChip(PatchChipParams),
+    /// Command to get information about a chip.
     GetChip(GetChipParams),
+    /// Command to delete a chip.
     DeleteChip(DeleteChipParams),
 }
 
@@ -54,25 +59,31 @@ pub struct ChipPatch {
 /// The parameters for the `PatchChip` command.
 #[derive(Debug, Clone)]
 pub struct PatchChipParams {
+    /// The ID of the chip to patch.
     pub chip_id: u32,
+    /// The patch to apply to the chip.
     pub patch: ChipPatch,
 }
 
 /// The parameters for the `GetChip` command.
 #[derive(Debug, Clone)]
 pub struct GetChipParams {
+    /// The ID of the chip to get.
     pub chip_id: u32,
 }
 
 /// The parameters for the `DeleteChip` command.
 #[derive(Debug, Clone)]
 pub struct DeleteChipParams {
+    /// The ID of the chip to delete.
     pub chip_id: u32,
 }
 
 /// The parameters for the `CreateChip` command.
 pub struct CreateChipParams {
+    /// The parameters for the chip to create.
     pub chip_params: ChipParams,
+    /// The packet streamer to use for the chip.
     pub packet_streamer: Box<dyn PacketStreamerApi>,
 }
 
@@ -113,9 +124,13 @@ pub struct BluetoothDeviceParams {
 /// The parameters for creating a Beacon chip.
 #[derive(Debug, Clone, Default)]
 pub struct BeaconCreationParams {
+    /// The Bluetooth address of the beacon.
     pub address: String,
+    /// The advertising settings for the beacon.
     pub settings: AdvertiseSettings,
+    /// The advertising data for the beacon.
     pub adv_data: AdvertiseData,
+    /// The scan response data for the beacon.
     pub scan_response: AdvertiseData,
 }
 
@@ -128,8 +143,10 @@ pub struct BluetoothSnifferParams {
 /// Corresponds to `netsim.model.Chip.BleBeacon.AdvertiseSettings.AdvertiseMode`
 #[derive(Debug, Clone, Default)]
 pub enum AdvertiseMode {
+    /// Advertise in low power mode.
     #[default]
     LowPower,
+    /// Advertise in balanced mode.
     Balanced,
     LowLatency,
 }

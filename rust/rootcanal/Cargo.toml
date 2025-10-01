@@ -10,5 +10,5 @@ path = "src/lib.rs"
 crate-type = ["staticlib","lib"]
 
 [dependencies]
-log = "0.4.28"
+log = "0.4.17"
 thiserror = "1.0"
