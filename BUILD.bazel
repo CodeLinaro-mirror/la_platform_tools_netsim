@@ -1,16 +1,4 @@
-# Copyright 2025 - The Android Open Source Project
-#
-# Licensed under the Apache License, Version 2.0 (the',  help='License');
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an',  help='AS IS' BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Copyright 2025 The Android Open Source Project
 """netsim bazel build rule."""
 
 load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
@@ -62,27 +50,6 @@ rust_test(
 )
 
 rust_library(
-    name = "netsim_common",
-    srcs = glob(["rust/common/src/**/*.rs"]),
-    deps = [
-        "@anyhow",
-        "@chrono",
-        "@env_logger",
-        "@libc",
-        "@log",
-        "@protobuf-json-mapping",
-        "@rand",
-        "@zip",
-    ],
-)
-
-rust_test(
-    name = "netsim_common_tests",
-    crate = ":netsim_common",
-    tags = ["general_tests"],
-)
-
-rust_library(
     name = "netsim_proto",
     srcs = glob(["rust/proto-cf/src/**/*.rs"]),
     crate_name = "netsim_proto",
@@ -97,8 +64,8 @@ rust_library(
     srcs = glob(["rust/cli/src/**/*.rs"]),
     crate_name = "netsim_cli",
     deps = [
-        ":netsim_common",
         ":netsim_proto",
+        "//rust/common:netsim_common",
         "@clap",
         "@futures",
         "@futures-util",
@@ -186,6 +153,7 @@ rust_library(
     rustc_env = {
         "OUT_DIR": "../../..",
     },
+    visibility = ["//rust:__subpackages__"],
     deps = [
         "@anyhow",
         "@bytes",
@@ -257,8 +225,8 @@ rust_library(
     crate_name = "netsim_hostapd_rs",
     crate_root = "rust/hostapd-rs/src/lib.rs",
     deps = [
-        ":netsim_common",
         ":netsim_packets",
+        "//rust/common:netsim_common",
         "@aes",
         "@anyhow",
         "@bytes",
@@ -397,12 +365,12 @@ rust_library(
         "--cfg=feature=\"local_ssl\"",
     ],
     deps = [
-        ":netsim_common",
         ":netsim_hostapd_rs",
         ":netsim_http_proxy",
         ":netsim_libslirp_rs",
         ":netsim_packets",
         ":netsim_proto",
+        "//rust/common:netsim_common",
         "@anyhow",
         "@bytes",
         "@clap",
