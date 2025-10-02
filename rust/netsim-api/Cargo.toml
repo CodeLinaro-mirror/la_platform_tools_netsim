@@ -1,0 +1,9 @@
+[package]
+name = "netsim-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["The Android Open Source Project"]
+
+[dependencies]
+async-trait = "0.1.73"
+thiserror = "1.0.48"
