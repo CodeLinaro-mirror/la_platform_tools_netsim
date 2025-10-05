@@ -162,199 +162,12 @@ rust_library(
 )
 
 rust_library(
-    name = "netsim_libslirp_rs",
-    srcs = glob(["rust/libslirp-rs/src/**/*.rs"]),
-    crate_name = "netsim_libslirp_rs",
-    crate_root = "rust/libslirp-rs/src/lib.rs",
-    deps = [
-        "@etherparse",
-        "@bytes",
-        "@libc",
-        "@log",
-        # "@winapi", // TODO: Resolve this dependency to build for Windows
-        "@tokio",
-        "@libslirp",
-        "@glib//glib",
-    ],
-)
-
-rust_test(
-    name = "netsim_libslirp_rs_tests",
-    crate = ":netsim_libslirp_rs",
-    tags = ["general_tests"],
-)
-
-rust_test(
-    name = "netsim_libslirp_rs_integration_test",
-    srcs = ["rust/libslirp-rs/tests/integration_test.rs"],
-    aliases = {
-        ":netsim_libslirp_rs": "libslirp_rs",
-    },
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
-    tags = ["general_tests"],
-    deps = [
-        ":netsim_libslirp_rs",
-        "@bytes",
-    ],
-)
-
-rust_test(
-    name = "netsim_libslirp_rs_integration_udp",
-    srcs = ["rust/libslirp-rs/tests/integration_udp.rs"],
-    aliases = {
-        ":netsim_libslirp_rs": "libslirp_rs",
-    },
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
-    tags = ["general_tests"],
-    deps = [
-        ":netsim_libslirp_rs",
-        "@bytes",
-        "@etherparse",
-    ],
-)
-
-rust_library(
-    name = "netsim_hostapd_rs",
-    srcs = glob(["rust/hostapd-rs/src/**/*.rs"]),
-    crate_name = "netsim_hostapd_rs",
-    crate_root = "rust/hostapd-rs/src/lib.rs",
-    deps = [
-        ":netsim_packets",
-        "//rust/common:netsim_common",
-        "@aes",
-        "@anyhow",
-        "@bytes",
-        "@ccm",
-        "@log",
-        "@pdl-runtime",
-        "@tokio",
-    ],
-)
-
-rust_test(
-    name = "netsim_hostapd_rs_tests",
-    crate = ":netsim_hostapd_rs",
-    tags = ["general_tests"],
-)
-
-rust_test(
-    name = "netsim_hostapd_rs_integration_test",
-    srcs = ["rust/hostapd-rs/tests/integration_test.rs"],
-    aliases = {
-        ":netsim_hostapd_rs": "hostapd_rs",
-    },
-    tags = ["general_tests"],
-    deps = [
-        ":netsim_hostapd_rs",
-        ":netsim_packets",
-        "@bytes",
-        "@log",
-        "@pdl-runtime",
-        "@tokio",
-        "@wpa_supplicant_8//:hostapd_c_lib",
-    ],
-)
-
-rust_library(
-    name = "netsim_http_proxy",
-    srcs = glob(["rust/http-proxy/src/**/*.rs"]),
-    aliases = {
-        ":netsim_libslirp_rs": "libslirp_rs",
-    },
-    crate_name = "netsim_http_proxy",
-    crate_root = "rust/http-proxy/src/lib.rs",
-    deps = [
-        ":netsim_libslirp_rs",
-        "@base64",
-        "@bytes",
-        "@etherparse",
-        "@httparse",
-        "@log",
-        "@regex",
-        "@tokio",
-    ],
-)
-
-rust_test(
-    name = "netsim_http_proxy_tests",
-    crate = ":netsim_http_proxy",
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
-    tags = ["general_tests"],
-)
-
-rust_library(
-    name = "netsim_capture",
-    srcs = glob(["rust/capture/src/**/*.rs"]),
-    aliases = {
-        ":netsim_libslirp_rs": "libslirp_rs",
-    },
-    crate_name = "netsim_capture",
-    crate_root = "rust/capture/src/lib.rs",
-    proc_macro_deps = [
-        "@zerocopy-derive",
-    ],
-    deps = [
-        "@tokio",
-        "@zerocopy",
-    ],
-)
-
-rust_test(
-    name = "netsim_capture_tests",
-    crate = ":netsim_capture",
-    tags = ["general_tests"],
-)
-
-rust_test(
-    name = "netsim_capture_integration_test",
-    srcs = ["rust/capture/tests/integration_test.rs"],
-    aliases = {
-        ":netsim_capture": "capture",
-    },
-    compile_data = ["rust/capture/data/dns.cap"],
-    tags = ["general_tests"],
-    deps = [
-        ":netsim_capture",
-        "@tokio",
-    ],
-)
-
-rust_test(
-    name = "netsim_http_proxy_integration_test",
-    srcs = ["rust/http-proxy/tests/integration_test.rs"],
-    aliases = {
-        ":netsim_capture": "capture",
-        ":netsim_http_proxy": "http_proxy",
-    },
-    compile_data = ["rust/capture/data/dns.cap"],
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
-    tags = ["general_tests"],
-    deps = [
-        ":netsim_capture",
-        ":netsim_http_proxy",
-        "@tokio",
-    ],
-)
-
-rust_library(
     name = "netsim_daemon",
     srcs = glob(["rust/daemon/src/**/*.rs"]),
     aliases = {
-        ":netsim_http_proxy": "http_proxy",
-        ":netsim_libslirp_rs": "libslirp_rs",
-        ":netsim_hostapd_rs": "hostapd_rs",
+        "//rust/http-proxy:netsim_http_proxy": "http_proxy",
+        "//rust/libslirp-rs:netsim_libslirp_rs": "libslirp_rs",
+        "//rust/hostapd-rs:netsim_hostapd_rs": "hostapd_rs",
     },
     compile_data = [
         "rust/daemon/src/uwb/sample_ranging_data.csv",
@@ -365,12 +178,12 @@ rust_library(
         "--cfg=feature=\"local_ssl\"",
     ],
     deps = [
-        ":netsim_hostapd_rs",
-        ":netsim_http_proxy",
-        ":netsim_libslirp_rs",
         ":netsim_packets",
         ":netsim_proto",
         "//rust/common:netsim_common",
+        "//rust/hostapd-rs:netsim_hostapd_rs",
+        "//rust/http-proxy:netsim_http_proxy",
+        "//rust/libslirp-rs:netsim_libslirp_rs",
         "@anyhow",
         "@bytes",
         "@clap",

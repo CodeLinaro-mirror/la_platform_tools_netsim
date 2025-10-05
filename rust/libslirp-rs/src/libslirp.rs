@@ -1241,7 +1241,11 @@ mod tests {
         return stream.as_raw_socket() as i32;
     }
 
-    // Utility function to send a poll request and receive the result
+    /// Polls a file descriptor and asserts the received events.
+    ///
+    /// On some systems (e.g. macOS), the socket state may not update instantly,
+    /// leading to poll not returning the expected events immediately.
+    /// A short delay and a single retry handle this transient condition.
     fn poll_and_assert_result(
         tx_poll: &mpsc::Sender<PollRequest>,
         rx_cmds: &mpsc::Receiver<SlirpCmd>,
@@ -1249,17 +1253,38 @@ mod tests {
         poll_events: SlirpPollType,
         expected_revents: SlirpPollType,
     ) {
-        assert!(
-            tx_poll.send((vec![PollFd { fd, events: poll_events, revents: 0 }], 1000)).is_ok(),
-            "Failed to send poll request"
-        );
-        if let Ok(SlirpCmd::PollResult(poll_fds, select_error)) = rx_cmds.recv() {
-            assert_eq!(poll_fds.len(), 1, "poll_fds len is not 1.");
-            let poll_fd = poll_fds.get(0).unwrap();
-            assert_eq!(poll_fd.fd, fd, "poll file descriptor mismatch.");
-            assert_eq!(poll_fd.revents, expected_revents, "poll revents mismatch.");
-        } else {
-            assert!(false, "Received unexpected command poll result");
+        const POLL_RETRIES: u32 = 2;
+        const POLL_RETRY_DELAY_MS: u64 = 100;
+
+        for i in 0..POLL_RETRIES {
+            assert!(
+                tx_poll.send((vec![PollFd { fd, events: poll_events, revents: 0 }], 1000)).is_ok(),
+                "failed to send poll request"
+            );
+
+            let poll_fd = match rx_cmds.recv() {
+                Ok(SlirpCmd::PollResult(mut poll_fds, _)) if poll_fds.len() == 1 => {
+                    poll_fds.remove(0)
+                }
+                Ok(other) => panic!("unexpected command from poll thread: {:?}", other),
+                Err(e) => panic!("failed to receive command from poll thread: {}", e),
+            };
+
+            assert_eq!(poll_fd.fd, fd, "poll fd mismatch");
+
+            if poll_fd.revents == expected_revents {
+                return; // Success
+            }
+
+            if i < POLL_RETRIES - 1 {
+                warn!(
+                    "poll retry for fd {fd}: got {}, expected {}",
+                    poll_fd.revents, expected_revents
+                );
+                thread::sleep(Duration::from_millis(POLL_RETRY_DELAY_MS));
+            } else {
+                assert_eq!(poll_fd.revents, expected_revents, "revents mismatch after retries");
+            }
         }
     }
 
@@ -1353,7 +1378,7 @@ mod tests {
         // Launch the slirp polling thread.
         let (_tx_cmds, rx_cmds, tx_poll, handle) = launch_polling_thread();
         // Init a "broken" pipe that is accepted but no initial data is written
-        let (mut reader, writer) = create_accepted_stream_pipe();
+        let (reader, writer) = create_accepted_stream_pipe();
         let reader_fd = to_os_fd(&reader);
         // Close the writer end of the pipe
         drop(writer);
