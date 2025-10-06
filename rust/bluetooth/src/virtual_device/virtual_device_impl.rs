@@ -10,7 +10,6 @@ use crate::{
 use bytes::Bytes;
 use log::{debug, error, info};
 use netsim_api::{BluetoothDeviceParams, ChipPatch, PacketStreamerApi};
-use rand::Rng;
 use rootcanal::{
     bluetooth::Bluetooth,
     controller::{Callbacks as ControllerCallbacks, Id, Idc},
@@ -34,10 +33,8 @@ impl VirtualDeviceChip {
         packet_streamer: Box<dyn PacketStreamerApi>,
         chip_death_tx: mpsc::Sender<ChipDied>,
     ) -> ((Self, oneshot::Sender<()>), u32) {
-        let address = params
-            .address
-            .parse()
-            .unwrap_or_else(|_| Address { address: rand::thread_rng().gen() });
+        let address =
+            params.address.parse().unwrap_or_else(|_| Address { address: rand::random() });
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (hci_tx, hci_rx) = mpsc::channel::<Bytes>(128);
 

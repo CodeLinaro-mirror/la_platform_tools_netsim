@@ -5,7 +5,6 @@ use crate::{
     manager::{types::EmulatedChip, ChipState},
 };
 use netsim_api::{BeaconCreationParams, ChipPatch};
-use rand::Rng;
 use rootcanal::{
     bluetooth::Bluetooth,
     controller::{Callbacks as ControllerCallbacks, Id, Idc},
@@ -46,10 +45,8 @@ impl BeaconChip {
         rootcanal: &Arc<Bluetooth>,
         params: BeaconCreationParams,
     ) -> Result<(Self, u32), ChipError> {
-        let address = params
-            .address
-            .parse()
-            .unwrap_or_else(|_| Address { address: rand::thread_rng().gen() });
+        let address =
+            params.address.parse().unwrap_or_else(|_| Address { address: rand::random() });
         let chip_id = rootcanal.new_controller(address, Box::new(BeaconControllerCallbacks));
 
         // Reset the controller first.

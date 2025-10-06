@@ -47,7 +47,7 @@ class BazelTask(Task):
 
     # Test
     run(
-        [self.path, "test", ":all", "--config=" + config],
+        [self.path, "test", ":all", "//rust/...", "--config=" + config],
         self.env,
         "bazel test",
         AOSP_ROOT / "tools" / "netsim",
