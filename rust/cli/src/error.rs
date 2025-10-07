@@ -25,10 +25,10 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Grpc(e) => write!(f, "gRPC error: {}", e),
-            Error::Io(e) => write!(f, "IO error: {}", e),
-            Error::Hex(e) => write!(f, "Hex parsing error: {}", e),
-            Error::Message(s) => write!(f, "{}", s),
+            Error::Grpc(e) => write!(f, "gRPC error: {e}"),
+            Error::Io(e) => write!(f, "IO error: {e}"),
+            Error::Hex(e) => write!(f, "Hex parsing error: {e}"),
+            Error::Message(s) => write!(f, "{s}"),
         }
     }
 }

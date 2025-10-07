@@ -133,7 +133,7 @@ fn handle_static(request: &Request<Vec<u8>>, path: &str, writer: ResponseWritabl
 }
 
 fn handle_version(_request: &Request<Vec<u8>>, _param: &str, writer: ResponseWritable) {
-    let body = format!("{{\"version\": \"{}\"}}", VERSION);
+    let body = format!("{{\"version\": \"{VERSION}\"}}");
     writer.put_ok("text/plain", body.as_str(), vec![]);
 }
 

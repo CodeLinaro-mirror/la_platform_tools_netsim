@@ -19,4 +19,8 @@ module(
 )
 
 bazel_dep(name = "rules_proto", version = "7.0.2")
+bazel_dep(name = "rules_rust", version = "0.61.0")
 bazel_dep(name = "protobuf", version = "30.2")
+
+# pcre2 needed by glib.
+bazel_dep(name = "pcre2", version = "10.46-DEV")

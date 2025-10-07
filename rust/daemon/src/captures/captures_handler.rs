@@ -58,7 +58,7 @@ fn get_file(id: ChipIdentifier, device_name: String, chip_kind: ChipKind) -> Res
         _ => "pcap",
     };
     filename.push("pcaps");
-    filename.push(format!("netsim-{:?}-{:}-{:?}.{}", id, device_name, chip_kind, extension));
+    filename.push(format!("netsim-{id:?}-{device_name:}-{chip_kind:?}.{extension}"));
     File::open(filename)
 }
 

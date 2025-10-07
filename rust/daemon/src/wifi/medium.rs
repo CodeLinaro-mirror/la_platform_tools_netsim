@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::args::DebugArgs;
 use crate::wifi::error::{WifiError, WifiResult};
 use crate::wifi::frame::Frame;
 use crate::wifi::hostapd::Hostapd;
@@ -30,7 +31,7 @@ const NLMSG_MIN_TYPE: u16 = 0x10;
 const NL_AUTO_SEQ: u16 = 0;
 const NL_AUTO_PORT: u32 = 0;
 // Default values for mac80211_hwsim.
-const RX_RATE: u32 = 0;
+const RX_RATE: u32 = 1;
 const SIGNAL: u32 = 4294967246; // -50
 const NL_MSG_HDR_LEN: usize = 16;
 
@@ -111,11 +112,17 @@ pub struct Medium {
     ap_simulation: bool,
     hostapd: Arc<Hostapd>,
     wifi_stats: WifiStats,
+    debug: Arc<DebugArgs>,
 }
 
 type HwsimCmdCallback = fn(u32, &Bytes);
 impl Medium {
-    pub fn new(callback: HwsimCmdCallback, hostapd: Arc<Hostapd>, wifi_stats: WifiStats) -> Medium {
+    pub fn new(
+        callback: HwsimCmdCallback,
+        hostapd: Arc<Hostapd>,
+        wifi_stats: WifiStats,
+        debug: Arc<DebugArgs>,
+    ) -> Medium {
         Self {
             callback,
             stations: RwLock::new(HashMap::new()),
@@ -123,13 +130,14 @@ impl Medium {
             ap_simulation: true,
             hostapd,
             wifi_stats,
+            debug,
         }
     }
 
     pub fn add(&self, client_id: u32) {
         let _ =
             self.clients.write().expect("RwLock poisoned").entry(client_id).or_insert_with(|| {
-                info!("Insert client {}", client_id);
+                info!("Insert client {client_id}");
                 Client::new()
             });
     }
@@ -179,14 +187,13 @@ impl Medium {
         )))?;
         self.stations.write().expect("RwLock poisoned").entry(src_addr).or_insert_with(|| {
             info!(
-                "Insert station with client id {}, hwsimaddr: {}, \
-                Ieee80211 addr: {}",
-                client_id, hwsim_addr, src_addr
+                "Insert station with client id {client_id}, hwsimaddr: {hwsim_addr}, \
+                Ieee80211 addr: {src_addr}"
             );
             Arc::new(Station::new(client_id, src_addr, hwsim_addr))
         });
         if !self.contains_client(client_id) {
-            warn!("Client {} is missing", client_id);
+            warn!("Client {client_id} is missing");
             self.add(client_id);
         }
         Ok(())
@@ -214,6 +221,16 @@ impl Medium {
         let frame = self
             .validate(client_id, packet)
             .map_err(|e| WifiError::Frame(format!("error validate for client {client_id}: {e}")))?;
+
+        if self.debug.debug_no_traffic {
+            return Ok(Processor {
+                hostapd: false,
+                network: false,
+                wmedium: false,
+                frame,
+                plaintext_ieee80211: None,
+            });
+        }
 
         self.wifi_stats.incr_hwsim_frames_rx();
 
@@ -248,10 +265,15 @@ impl Medium {
         };
 
         if self.contains_station(&dest_addr) {
-            processor.wmedium = true;
+            if !self.debug.debug_no_wmedium {
+                processor.wmedium = true;
+            }
             return Ok(processor);
         }
-        if dest_addr.is_multicast() {
+        if dest_addr.is_multicast()
+            && !(self.debug.debug_no_wmedium
+                || self.debug.debug_no_mdns_wmedium && dest_addr.is_mdns())
+        {
             processor.wmedium = true;
         }
 
@@ -266,7 +288,7 @@ impl Medium {
         if ieee80211.is_data() {
             // EAPoL is used in Wi-Fi 4-way handshake.
             let is_eapol = ieee80211.is_eapol().unwrap_or_else(|e| {
-                debug!("Failed to get ether type for is_eapol(): {}", e);
+                debug!("Failed to get ether type for is_eapol(): {e}");
                 false
             });
             if is_eapol {
@@ -274,7 +296,11 @@ impl Medium {
             } else if ieee80211.is_to_ap() {
                 // Don't forward Null Data frames to slirp because they are used to maintain an active connection and carry no user data.
                 if ieee80211.stype() != DataSubType::Nodata.into() {
-                    processor.network = if self.enabled(client_id).unwrap() {
+                    processor.network = if self.debug.debug_no_network
+                        || self.debug.debug_no_guest_to_host_mdns && dest_addr.is_mdns()
+                    {
+                        false
+                    } else if self.enabled(client_id).unwrap() {
                         true
                     } else {
                         // If the client is disabled, block all packets to the internet so it can connect to the AP but has no internet access.
@@ -337,16 +363,22 @@ impl Medium {
     /// Handle Wi-Fi Ieee802.3 frame from network.
     /// Convert to HwsimMsg and send to clients.
     pub fn process_ieee8023_response(&self, packet: &Bytes) -> WifiResult<()> {
+        if self.debug.debug_no_traffic || self.debug.debug_no_network {
+            return Ok(());
+        }
         Ieee80211::from_ieee8023(packet, self.hostapd.get_bssid())
-            .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.3 response: {}", e)))
+            .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.3 response: {e}")))
             .and_then(|ieee80211| self.handle_ieee80211_response(ieee80211))
     }
 
-    /// Handle Wi-Fi Ieee802.11 frame from network.
+    /// Handle Wi-Fi Ieee802.11 frame from hostapd.
     /// Convert to HwsimMsg and send to clients.
     pub fn process_ieee80211_response(&self, packet: &Bytes) -> WifiResult<()> {
+        if self.debug.debug_no_traffic {
+            return Ok(());
+        }
         Ieee80211::decode_full(packet)
-            .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.11 response: {}", e)))
+            .map_err(|e| WifiError::Frame(format!("Failed to process IEEE 802.11 response: {e}")))
             .and_then(|ieee80211| self.handle_ieee80211_response(ieee80211))
     }
 
@@ -370,8 +402,7 @@ impl Medium {
             }
         } else {
             return Err(WifiError::Transmission(format!(
-                "Send frame response to unknown destination: {}",
-                dest_addr
+                "Send frame response to unknown destination: {dest_addr}"
             )));
         }
         Ok(())
@@ -519,7 +550,7 @@ impl Medium {
             return Ok(());
         } else if dest_addr.is_multicast() {
             // Broadcast/Multicast from a station
-            debug!("Frame multicast {}", ieee80211);
+            debug!("Frame multicast {ieee80211}");
             if dest_addr.is_mdns() {
                 self.wifi_stats.incr_mdns_count();
             }
@@ -549,9 +580,9 @@ impl Medium {
         {
             true => ieee80211
                 .into_from_ap()
-                .map_err(|e| WifiError::Frame(format!("{}", e)))?
+                .map_err(|e| WifiError::Frame(format!("{e}")))?
                 .try_into()
-                .map_err(|e| WifiError::Frame(format!("{}", e)))?,
+                .map_err(|e| WifiError::Frame(format!("{e}")))?,
             false => ieee80211.clone(),
         };
         if let Some(encrypted_ieee80211) = self.hostapd.try_encrypt(&ieee80211_response) {
@@ -587,7 +618,7 @@ impl Medium {
         assert_eq!(hwsim_msg.hwsim_hdr.hwsim_cmd, HwsimCmd::Frame);
         let attributes = self
             .create_hwsim_attr(frame, ieee80211, dest_hwsim_addr)
-            .map_err(|e| WifiError::Frame(format!("Failed to create from_ap attributes. {}", e)))?;
+            .map_err(|e| WifiError::Frame(format!("Failed to create from_ap attributes. {e}")))?;
 
         let nlmsg_len = hwsim_msg.nl_hdr.nlmsg_len + attributes.len() as u32
             - hwsim_msg.attributes.len() as u32;
@@ -774,6 +805,7 @@ mod tests {
             ap_simulation: true,
             hostapd,
             wifi_stats,
+            debug: Arc::new(DebugArgs::default()),
         };
 
         medium.remove(test_client_id);

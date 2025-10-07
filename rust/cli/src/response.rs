@@ -29,7 +29,7 @@ impl args::Command {
         match self {
             Command::Version => {
                 let GrpcResponse::GetVersion(res) = response else {
-                    panic!("Expected to print VersionResponse. Got: {:?}", response);
+                    panic!("Expected to print VersionResponse. Got: {response:?}");
                 };
                 Self::print_version_response(res);
             }
@@ -56,7 +56,7 @@ impl args::Command {
             }
             Command::Devices(_) => {
                 let GrpcResponse::ListDevice(res) = response else {
-                    panic!("Expected to print ListDeviceResponse. Got: {:?}", response);
+                    panic!("Expected to print ListDeviceResponse. Got: {response:?}");
                 };
                 println!("{}", Displayer::new(res.clone(), verbose));
             }
@@ -67,7 +67,7 @@ impl args::Command {
             }
             Command::Capture(Capture::List(cmd)) => {
                 let GrpcResponse::ListCapture(res) = response else {
-                    panic!("Expected to print ListCaptureResponse. Got: {:?}", response);
+                    panic!("Expected to print ListCaptureResponse. Got: {response:?}");
                 };
                 Self::print_list_capture_response(
                     &mut res.clone(),
@@ -101,7 +101,7 @@ impl args::Command {
                             return;
                         }
                         let GrpcResponse::CreateDevice(res) = response else {
-                            panic!("Expected to print CreateDeviceResponse. Got: {:?}", response);
+                            panic!("Expected to print CreateDeviceResponse. Got: {response:?}");
                         };
                         let device = &res.device;
                         if device.chips.len() == 1 {
@@ -123,20 +123,20 @@ impl args::Command {
                             if let Some(advertise_mode) = &args.settings.advertise_mode {
                                 match advertise_mode {
                                     args::Interval::Mode(mode) => {
-                                        println!("Set advertise mode to {:#?}", mode)
+                                        println!("Set advertise mode to {mode:#?}")
                                     }
                                     args::Interval::Milliseconds(ms) => {
-                                        println!("Set advertise interval to {} ms", ms)
+                                        println!("Set advertise interval to {ms} ms")
                                     }
                                 }
                             }
                             if let Some(tx_power_level) = &args.settings.tx_power_level {
                                 match tx_power_level {
                                     args::TxPower::Level(level) => {
-                                        println!("Set transmit power level to {:#?}", level)
+                                        println!("Set transmit power level to {level:#?}")
                                     }
                                     args::TxPower::Dbm(dbm) => {
-                                        println!("Set transmit power level to {} dBm", dbm)
+                                        println!("Set transmit power level to {dbm} dBm")
                                     }
                                 }
                             }
@@ -144,7 +144,7 @@ impl args::Command {
                                 println!("Set scannable to true");
                             }
                             if let Some(timeout) = args.settings.timeout {
-                                println!("Set timeout to {} ms", timeout);
+                                println!("Set timeout to {timeout} ms");
                             }
                             if args.advertise_data.include_device_name {
                                 println!("Added the device's name to the advertise packet")
@@ -159,7 +159,7 @@ impl args::Command {
                                 println!("Set scannable to true");
                             }
                             if let Some(timeout) = args.settings.timeout {
-                                println!("Set timeout to {} ms", timeout);
+                                println!("Set timeout to {timeout} ms");
                             }
                         }
                     }
@@ -181,7 +181,7 @@ impl args::Command {
             Command::Link(link_cmd) => match link_cmd {
                 Link::List => {
                     let GrpcResponse::ListLink(res) = response else {
-                        panic!("Expected to print ListLinkResponse. Got: {:?}", response);
+                        panic!("Expected to print ListLinkResponse. Got: {response:?}");
                     };
                     println!("{}", Displayer::new(res.clone(), verbose));
                 }
@@ -248,11 +248,11 @@ impl args::Command {
             Self::filter_captures(&mut response.captures, &patterns);
             if response.captures.is_empty() {
                 if verbose {
-                    println!("No available Capture found matching pattern(s) `{:?}`:", patterns);
+                    println!("No available Capture found matching pattern(s) `{patterns:?}`:");
                 }
                 return;
             }
-            println!("List of Captures matching pattern(s) `{:?}`:", patterns);
+            println!("List of Captures matching pattern(s) `{patterns:?}`:");
         }
         // Create the header row and determine column widths
         let id_hdr = "ID";
@@ -293,19 +293,11 @@ impl args::Command {
         println!(
             "{}",
             if verbose {
-                format!("{:id_width$} | {:name_width$} | {:chipkind_width$} | {:state_width$} | {:time_width$} | {:records_width$} | {:size_width$} |",
-                    id_hdr,
-                    name_hdr,
-                    chipkind_hdr,
-                    state_hdr,
-                    time_hdr,
-                    records_hdr,
-                    size_hdr,
+                format!("{id_hdr:id_width$} | {name_hdr:name_width$} | {chipkind_hdr:chipkind_width$} | {state_hdr:state_width$} | {time_hdr:time_width$} | {records_hdr:records_width$} | {size_hdr:size_width$} |",
                 )
             } else {
                 format!(
-                    "{:name_width$} | {:chipkind_width$} | {:state_width$} | {:records_width$} |",
-                    name_hdr, chipkind_hdr, state_hdr, records_hdr
+                    "{name_hdr:name_width$} | {chipkind_hdr:chipkind_width$} | {state_hdr:state_width$} | {records_hdr:records_width$} |"
                 )
             }
         );

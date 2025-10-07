@@ -1,0 +1,341 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! This module defines common Bluetooth data types, such as addresses.
+
+use crate::controller::Callbacks as ControllerCallbacks;
+use crate::controller::Id as ControllerId;
+use crate::controller::{Controller, ControllerImpl, Stats};
+use crate::error::{Error, Result};
+use crate::types::{Address, Idc, Phy};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, Weak};
+
+/// The callbacks for Bluetooth
+pub trait Callbacks: Send + Sync {
+    /// Intercept and optionally rewrite a link layer packet before it is sent.
+    ///
+    /// The `source_id` is the id of the controller sending the packet.
+    /// The destination_id is the id of the controller receiving the packet.
+    ///
+    /// To modify the tx_power, return `Some(new_tx_power)`.
+    /// To drop the packet, return `None`.
+    fn on_send_ll(
+        &self,
+        source_id: ControllerId,
+        destination_id: ControllerId,
+        packet: &[u8],
+        phy: Phy,
+        tx_power: i32,
+    ) -> Option<i32>;
+}
+
+/// The Bluetooth subsystem.
+pub struct Bluetooth {
+    controllers: Mutex<HashMap<ControllerId, Controller>>,
+    callbacks: Box<dyn Callbacks>,
+}
+
+// A wrapper around the user-provided controller callbacks that also holds a weak
+// reference to the Bluetooth subsystem. This allows the controller to send link
+// layer packets without holding a strong reference to the Bluetooth instance,
+// preventing reference cycles.
+struct ControllerCallbacksWrapper {
+    callbacks: Box<dyn ControllerCallbacks>,
+    bluetooth: Weak<Bluetooth>,
+}
+
+impl ControllerCallbacks for ControllerCallbacksWrapper {
+    fn send_hci(&self, source_id: ControllerId, idc: Idc, data: &[u8]) {
+        self.callbacks.send_hci(source_id, idc, data);
+    }
+
+    fn send_ll(&self, source_id: ControllerId, packet: &[u8], phy: Phy, tx_power: i32) {
+        if let Some(bluetooth) = self.bluetooth.upgrade() {
+            bluetooth.send_ll_packet(source_id, packet, phy, tx_power);
+        }
+    }
+
+    fn invalid_packet_received(
+        &self,
+        source_id: ControllerId,
+        reason: std::ffi::c_int,
+        message: &str,
+        data: &[u8],
+    ) {
+        self.callbacks.invalid_packet_received(source_id, reason, message, data);
+    }
+}
+
+impl Bluetooth {
+    /// Creates a new Bluetooth subsystem.
+    pub fn new(callbacks: Box<dyn Callbacks>) -> Arc<Self> {
+        Arc::new(Self { controllers: Mutex::new(HashMap::new()), callbacks })
+    }
+
+    /// Creates a new Bluetooth controller with a unique id and possibly non-unique address
+    pub fn new_controller(
+        self: &Arc<Self>,
+        id: ControllerId,
+        address: Address,
+        callbacks: Box<dyn ControllerCallbacks>,
+    ) -> Result<()> {
+        let mut controllers = self.controllers.lock().unwrap();
+        if controllers.contains_key(&id) {
+            return Err(Error::DuplicateControllerId(id));
+        }
+        let wrapper =
+            Box::new(ControllerCallbacksWrapper { callbacks, bluetooth: Arc::downgrade(self) });
+        let controller = ControllerImpl::new(id, address, wrapper);
+        controllers.insert(id, controller);
+        Ok(())
+    }
+
+    /// Removes a Bluetooth controller.
+    pub fn remove_controller(&self, id: ControllerId) {
+        self.controllers.lock().unwrap().remove(&id);
+    }
+
+    /// Forwards a link layer packet to all other controllers.
+    fn send_ll_packet(&self, sender_id: ControllerId, packet: &[u8], phy: Phy, rssi: i32) {
+        let controllers = self.controllers.lock().unwrap();
+        let controllers_to_send_to = controllers.values().filter(|c| c.get_id() != sender_id);
+
+        for controller in controllers_to_send_to {
+            let b = controller.get_id();
+            if let Some(new_rssi) = self.callbacks.on_send_ll(sender_id, b, packet, phy, rssi) {
+                controller.receive_ll(packet, phy, new_rssi);
+            } else {
+                controller.increment_ll_packets_dropped();
+            }
+        }
+    }
+
+    /// Advances the state of all controllers by one tick.
+    pub fn tick(&self) {
+        for controller in self.controllers.lock().unwrap().values() {
+            controller.tick();
+        }
+    }
+
+    /// Returns the number of controllers.
+    pub fn len(&self) -> usize {
+        self.controllers.lock().unwrap().len()
+    }
+
+    /// Returns true if there are no controllers.
+    pub fn is_empty(&self) -> bool {
+        self.controllers.lock().unwrap().is_empty()
+    }
+
+    /// Returns a vector of the current controller IDs.
+    pub fn get_controller_ids(&self) -> Vec<ControllerId> {
+        let mut keys: Vec<ControllerId> =
+            self.controllers.lock().unwrap().keys().copied().collect();
+        keys.sort();
+        keys
+    }
+
+    /// Receives an HCI packet from the host for a specific controller.
+    pub fn receive_hci(&self, controller_id: ControllerId, idc: Idc, data: &[u8]) {
+        if let Some(controller) = self.controllers.lock().unwrap().get(&controller_id) {
+            controller.receive_hci(idc, data);
+        }
+    }
+
+    /// Returns the address of a specific controller.
+    pub fn get_address(&self, controller_id: ControllerId) -> Option<Address> {
+        self.controllers.lock().unwrap().get(&controller_id).map(|c| c.get_address())
+    }
+
+    /// Returns the current packet statistics for a specific controller.
+    pub fn get_stats(&self, controller_id: ControllerId) -> Option<Stats> {
+        self.controllers.lock().unwrap().get(&controller_id).map(|c| c.get_stats())
+    }
+
+    /// Clears the packet statistics for a specific controller.
+    pub fn clear_stats(&self, controller_id: ControllerId) {
+        if let Some(controller) = self.controllers.lock().unwrap().get(&controller_id) {
+            controller.clear_stats();
+        }
+    }
+}
+
+impl Default for Bluetooth {
+    fn default() -> Self {
+        panic!("Use `Bluetooth::new()` instead");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Address, Idc};
+    use std::ffi::c_int;
+    use std::str::FromStr;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    struct MockCallbacks {
+        drop_packet: bool,
+        packets_sent: AtomicU32,
+    }
+
+    impl Callbacks for MockCallbacks {
+        fn on_send_ll(
+            &self,
+            _source_id: ControllerId,
+            _destination_id: ControllerId,
+            _packet: &[u8],
+            _phy: Phy,
+            tx_power: i32,
+        ) -> Option<i32> {
+            self.packets_sent.fetch_add(1, Ordering::Relaxed);
+            if self.drop_packet {
+                None
+            } else {
+                Some(tx_power)
+            }
+        }
+    }
+
+    impl ControllerCallbacks for MockCallbacks {
+        fn send_hci(&self, _source_id: ControllerId, _idc: Idc, _data: &[u8]) {}
+        fn send_ll(&self, _source_id: ControllerId, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
+        fn invalid_packet_received(
+            &self,
+            _source_id: ControllerId,
+            _reason: c_int,
+            _message: &str,
+            _data: &[u8],
+        ) {
+        }
+    }
+
+    /// Test helper to create a Bluetooth instance and a specified number of controllers.
+    fn setup_bluetooth_with_controllers(bluetooth: &Arc<Bluetooth>, num_controllers: u32) {
+        for i in 1..=num_controllers {
+            let addr = Address::from_str(&format!("01:02:03:04:05:{:02X}", i)).unwrap();
+            bluetooth
+                .new_controller(
+                    i,
+                    addr,
+                    Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) }),
+                )
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn test_address_from_str_valid() {
+        let addr_str = "01:23:45:67:89:AB";
+        let addr = Address::from_str(addr_str).unwrap();
+        assert_eq!(addr.address, [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB]);
+    }
+
+    #[test]
+    fn test_address_from_str_invalid_length() {
+        let addr_str = "01:23:45:67:89";
+        assert!(Address::from_str(addr_str).is_err());
+    }
+
+    #[test]
+    fn test_address_from_str_invalid_chars() {
+        let addr_str = "01:23:45:67:89:XX";
+        assert!(Address::from_str(addr_str).is_err());
+    }
+
+    #[test]
+    fn test_address_types() {
+        let resolvable = Address::from_str("41:23:45:67:89:AB").unwrap();
+        assert!(resolvable.is_resolvable());
+
+        let non_resolvable = Address::from_str("01:23:45:67:89:AB").unwrap();
+        assert!(non_resolvable.is_non_resolvable());
+
+        let static_identity = Address::from_str("C1:23:45:67:89:AB").unwrap();
+        assert!(static_identity.is_static_identity());
+    }
+
+    #[test]
+    fn test_send_ll_packet() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
+        let bluetooth = Bluetooth::new(callbacks);
+        setup_bluetooth_with_controllers(&bluetooth, 2);
+
+        // TODO: Send valid link layer packets.
+        bluetooth.send_ll_packet(1, &[1, 2, 3], Phy::LowEnergy, -80);
+
+        // Controller 1 should not receive its own packet.
+        assert_eq!(bluetooth.get_stats(1).unwrap().ll_packets_in, 0);
+        // Controller 2 should receive the packet.
+        assert_eq!(bluetooth.get_stats(2).unwrap().ll_packets_in, 1);
+    }
+
+    #[test]
+    fn test_send_ll_packet_dropped() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: true, packets_sent: AtomicU32::new(0) });
+        let bluetooth = Bluetooth::new(callbacks);
+        setup_bluetooth_with_controllers(&bluetooth, 2);
+
+        // TODO: Send valid link layer packets.
+        bluetooth.send_ll_packet(1, &[1, 2, 3], Phy::LowEnergy, -80);
+
+        assert_eq!(bluetooth.get_stats(1).unwrap().ll_packets_in, 0);
+        assert_eq!(bluetooth.get_stats(2).unwrap().ll_packets_in, 0);
+        assert_eq!(bluetooth.get_stats(1).unwrap().ll_packets_dropped, 0);
+        assert_eq!(bluetooth.get_stats(2).unwrap().ll_packets_dropped, 1);
+    }
+
+    #[test]
+    fn test_delete_controller() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
+        let bluetooth = Bluetooth::new(callbacks);
+        setup_bluetooth_with_controllers(&bluetooth, 2);
+
+        assert_eq!(bluetooth.len(), 2);
+
+        bluetooth.remove_controller(1);
+        assert_eq!(bluetooth.len(), 1);
+        assert_eq!(bluetooth.get_controller_ids(), vec![2]);
+
+        // This call should not panic.
+        // TODO: Send valid link layer packets.
+        bluetooth.send_ll_packet(2, &[4, 5, 6], Phy::LowEnergy, -70);
+    }
+
+    #[test]
+    fn test_new_controller_duplicate_id() {
+        let callbacks =
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) });
+        let bluetooth = Bluetooth::new(callbacks);
+        setup_bluetooth_with_controllers(&bluetooth, 1);
+
+        let addr = Address::from_str("01:02:03:04:05:06").unwrap();
+
+        let result = bluetooth.new_controller(
+            1,
+            addr,
+            Box::new(MockCallbacks { drop_packet: false, packets_sent: AtomicU32::new(0) }),
+        );
+
+        assert!(result.is_err());
+        match result.err().unwrap() {
+            Error::DuplicateControllerId(id) => assert_eq!(id, 1),
+            _ => panic!("unexpected error type"),
+        }
+    }
+}

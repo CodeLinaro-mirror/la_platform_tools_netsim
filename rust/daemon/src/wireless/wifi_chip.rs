@@ -42,7 +42,7 @@ impl Drop for WifiChip {
 impl WirelessChip for WifiChip {
     fn handle_request(&self, packet: &Bytes) {
         if let Err(e) = self.wifi_manager.tx_request.send((self.chip_id.0, packet.clone())) {
-            warn!("Failed wifi handle_request: {:?}", e);
+            warn!("Failed wifi handle_request: {e:?}");
         }
     }
 

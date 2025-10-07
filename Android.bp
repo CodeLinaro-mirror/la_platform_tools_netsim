@@ -90,8 +90,9 @@ rust_defaults {
         "libopenssl",
     ],
     static_libs: ["libgrpc_wrap"],
+    crate_root: "rust/daemon/src/lib.rs",
     srcs: [
-        "rust/daemon/src/lib.rs",
+        "rust/daemon/src/uwb/sample_ranging_data.csv",
     ],
 }
 
@@ -105,6 +106,20 @@ rust_test_host {
     name: "libnetsim_daemon_tests",
     defaults: ["libnetsim_daemon_defaults"],
     test_suites: ["general_tests"],
+    srcs: [
+        "rust/daemon/src/captures/sample.pcap",
+        "rust/daemon/src/captures/sample.pcapng",
+        "rust/daemon/src/captures/sample_le.pcap",
+        "rust/daemon/src/wifi/test_packets/hwsim_cmd_frame.csv",
+        "rust/daemon/src/wifi/test_packets/hwsim_cmd_frame_mdns.csv",
+        "rust/daemon/src/wifi/test_packets/hwsim_cmd_frame_response_no_cookie.csv",
+        "rust/daemon/src/wifi/test_packets/hwsim_cmd_frame_response_no_transmitter_flags_tx_info.csv",
+        "rust/daemon/src/wifi/test_packets/hwsim_cmd_frame_request_mdns.csv",
+        "rust/daemon/src/wifi/test_packets/hwsim_cmd_frame_request.csv",
+        "rust/daemon/src/wifi/test_packets/hwsim_cmd_tx_info.csv",
+        "rust/daemon/src/wifi/test_packets/hwsim_cmd_tx_info_response.csv",
+        "rust/daemon/src/wifi/test_packets/hwsim_cmd_tx_info_response_mdns.csv",
+    ],
 }
 
 genrule {
@@ -302,7 +317,7 @@ rust_library_host {
     name: "libnetsim_proto",
     features: ["cuttlefish"],
     crate_name: "netsim_proto",
-    srcs: ["rust/proto/src/lib.rs"],
+    srcs: ["rust/proto-cf/src/lib.rs"],
     rustlibs: [
         "libprotobuf",
         "libgrpcio",

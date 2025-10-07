@@ -14,9 +14,10 @@
 """netsim bazel build rule."""
 
 load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 proto_library(
-    name = "lib-netsimd-proto",
+    name = "netsimd-proto",
     srcs = [
         "proto/netsim/common.proto",
         "proto/netsim/frontend.proto",
@@ -32,4 +33,160 @@ proto_library(
         "@protobuf//:timestamp_proto",
         "@rootcanal//:rootcanal-configuration-proto",
     ],
+)
+
+# BLE Advertisers
+
+rust_library(
+    name = "ble_advertisers",
+    srcs = glob(["rust/ble-advertisers/src/**/*.rs"]),
+    deps = [
+        "@hex",
+        "@thiserror",
+        "@zerocopy",
+    ],
+)
+
+rust_test(
+    name = "ble_advertisers_tests",
+    crate = ":ble_advertisers",
+    tags = ["general_tests"],
+)
+
+rust_library(
+    name = "netsim_common",
+    srcs = glob(["rust/common/src/**/*.rs"]),
+    deps = [
+        "@anyhow",
+        "@chrono",
+        "@env_logger",
+        "@libc",
+        "@log_rust",
+        "@protobuf_json_mapping",
+        "@rand",
+        "@zip",
+    ],
+)
+
+rust_test(
+    name = "netsim_common_tests",
+    crate = ":netsim_common",
+    tags = ["general_tests"],
+)
+
+rust_library(
+    name = "netsim_proto",
+    srcs = glob(["rust/proto/src/**/*.rs"]),
+    crate_name = "netsim_proto",
+    deps = [
+        "@grpcio",
+        "@protobuf-rust",
+    ],
+)
+
+rust_library(
+    name = "netsim_cli",
+    srcs = glob(["rust/cli/src/**/*.rs"]),
+    crate_name = "netsim_cli",
+    deps = [
+        ":netsim_common",
+        ":netsim_proto",
+        "@clap",
+        "@futures",
+        "@futures_util",
+        "@grpcio",
+        "@hex",
+        "@log_rust",
+        "@protobuf-rust",
+    ],
+)
+
+rust_test(
+    name = "netsim_cli_tests",
+    crate = ":netsim_cli",
+    tags = ["general_tests"],
+)
+
+# PDL generated files
+genrule(
+    name = "netsim_netlink_rust_gen",
+    srcs = ["pdl/netlink.pdl"],
+    outs = ["netlink_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+genrule(
+    name = "netsim_mac80211_hwsim_rust_gen",
+    srcs = ["pdl/mac80211_hwsim.pdl"],
+    outs = ["mac80211_hwsim_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+genrule(
+    name = "netsim_ieee80211_rust_gen",
+    srcs = ["pdl/ieee80211.pdl"],
+    outs = ["ieee80211_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+genrule(
+    name = "netsim_llc_rust_gen",
+    srcs = ["pdl/llc.pdl"],
+    outs = ["llc_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+genrule(
+    name = "netsim_link_layer_packets_rust_gen",
+    srcs = ["@rootcanal//:packets/link_layer_packets.pdl"],
+    outs = ["link_layer_packets.rs"],
+    cmd = "$(location @pdl_compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
+    tools = ["@pdl_compiler//:pdlc"],
+)
+
+rust_library(
+    name = "netsim_packets",
+    srcs = glob(["rust/packets/src/**/*.rs"]) + [
+        ":netsim_ieee80211_rust_gen",
+        ":netsim_link_layer_packets_rust_gen",
+        ":netsim_llc_rust_gen",
+        ":netsim_mac80211_hwsim_rust_gen",
+        ":netsim_netlink_rust_gen",
+    ],
+    crate_name = "netsim_packets",
+    rustc_env = {
+        "OUT_DIR": "../../..",
+    },
+    deps = [
+        "@anyhow",
+        "@bytes",
+        "@pdl_runtime",
+    ],
+)
+
+rust_library(
+    name = "netsim_libslirp_rs",
+    srcs = glob(["rust/libslirp-rs/src/**/*.rs"]),
+    crate_name = "netsim_libslirp_rs",
+    crate_root = "rust/libslirp-rs/src/lib.rs",
+    deps = [
+        "@etherparse",
+        "@bytes",
+        "@libc",
+        "@log_rust",
+        # "@winapi", // TODO: Resolve this dependency to build for Windows
+        "@tokio",
+        "@libslirp",
+        "@glib//:glib-shared",
+    ],
+)
+
+rust_test(
+    name = "netsim_libslirp_rs_tests",
+    crate = ":netsim_libslirp_rs",
+    tags = ["general_tests"],
 )

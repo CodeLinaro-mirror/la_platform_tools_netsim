@@ -15,3 +15,5 @@ objs
 # Bazel build files
 bazel-*
 MODULE.bazel.lock
+# GEMINI
+.gemini/

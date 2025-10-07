@@ -46,7 +46,7 @@ fn netsimd_temp_dir_pathbuf() -> PathBuf {
     #[cfg(not(target_os = "windows"))]
     {
         let user = match env::var("USER") {
-            Ok(var) => format!("android-{}", var),
+            Ok(var) => format!("android-{var}"),
             _ => "android".to_string(),
         };
         path.push(user);
