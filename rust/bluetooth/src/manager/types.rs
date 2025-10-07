@@ -14,13 +14,29 @@ pub(crate) type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
 #[derive(Debug)]
 pub enum BluetoothCommand {
     /// Create a new chip.
-    CreateChip { params: CreateChipParams, responder: Responder<u32> },
+    CreateChip {
+        params: CreateChipParams,
+        responder: Responder<u32>,
+    },
     /// Patch an existing chip.
-    PatchChip { params: PatchChipParams, responder: Responder<ChipState> },
+    PatchChip {
+        params: PatchChipParams,
+        responder: Responder<ChipState>,
+    },
     /// Get the state of a chip.
-    GetChip { params: GetChipParams, responder: Responder<ChipState> },
+    GetChip {
+        params: GetChipParams,
+        responder: Responder<ChipState>,
+    },
     /// Delete a chip.
-    DeleteChip { params: DeleteChipParams, responder: Responder<()> },
+    DeleteChip {
+        params: DeleteChipParams,
+        responder: Responder<()>,
+    },
+    // Get chip counts for testing.
+    GetChipCountForTesting {
+        responder: Responder<usize>,
+    },
 }
 
 /// A notification sent from a chip to the manager when it terminates unexpectedly.

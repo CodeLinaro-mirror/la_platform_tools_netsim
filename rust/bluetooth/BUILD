@@ -24,9 +24,6 @@ package(default_visibility = ["//visibility:public"])
 rust_library(
     name = "bluetooth",
     srcs = glob(["src/**/*.rs"]),
-    crate_features = [
-        "test-utils",
-    ],
     proc_macro_deps = [
         "@async-trait",
         "@zerocopy-derive",

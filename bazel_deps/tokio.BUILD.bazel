@@ -85,7 +85,6 @@ rust_library(
         "--cfg=feature=\"signal-hook-registry\"",
         "--cfg=feature=\"socket2\"",
         "--cfg=feature=\"sync\"",
-        "--cfg=feature=\"test-util\"",
         "--cfg=feature=\"time\"",
         "--cfg=feature=\"tokio-macros\"",
     ],

@@ -102,15 +102,19 @@ async fn test_chipper() {
     utils::setup_logging();
 }
 
+async fn get_chip_count(command_tx: &mpsc::Sender<BluetoothCommand>) -> usize {
+    let (responder, rx) = oneshot::channel();
+    command_tx.send(BluetoothCommand::GetChipCountForTesting { responder }).await.unwrap();
+    rx.await.unwrap().unwrap()
+}
+
 #[tokio::test]
 async fn test_chip_dies_on_packet_stream_error() {
     utils::setup_logging();
 
     let (bt_manager, command_tx) = BluetoothManager::new();
-    let bt_manager = Arc::new(bt_manager);
-    let manager_clone = bt_manager.clone();
     tokio::spawn(async move {
-        manager_clone.run().await;
+        bt_manager.run().await;
     });
 
     let (death_confirm_tx, mut death_confirm_rx) = mpsc::channel(1);
@@ -138,7 +142,7 @@ async fn test_chip_dies_on_packet_stream_error() {
 
     // A small delay to ensure the chip is registered before we check the count.
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(bt_manager.get_chip_count_for_testing(), 1);
+    assert_eq!(get_chip_count(&command_tx).await, 1);
 
     // 2. Trigger a packet stream error.
     streamer.should_error.store(true, Ordering::SeqCst);
@@ -151,7 +155,7 @@ async fn test_chip_dies_on_packet_stream_error() {
     // 4. Verify the chip has been removed.
     // A small delay is needed to ensure the manager has time to process the death notice.
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(bt_manager.get_chip_count_for_testing(), 0);
+    assert_eq!(get_chip_count(&command_tx).await, 0);
 }
 
 #[tokio::test]
@@ -159,10 +163,8 @@ async fn test_delete_chip_shuts_down_task() {
     utils::setup_logging();
 
     let (bt_manager, command_tx) = BluetoothManager::new();
-    let bt_manager = Arc::new(bt_manager);
-    let manager_clone = bt_manager.clone();
     tokio::spawn(async move {
-        manager_clone.run().await;
+        bt_manager.run().await;
     });
 
     let (death_confirm_tx, mut death_confirm_rx) = mpsc::channel(1);
@@ -187,7 +189,7 @@ async fn test_delete_chip_shuts_down_task() {
         .unwrap();
     let chip_id = rx.await.unwrap().unwrap();
 
-    assert_eq!(bt_manager.get_chip_count_for_testing(), 1);
+    assert_eq!(get_chip_count(&command_tx).await, 1);
 
     // 2. Send a DeleteChip command.
     let (responder, rx) = oneshot::channel();
@@ -202,5 +204,5 @@ async fn test_delete_chip_shuts_down_task() {
     death_confirm_rx.recv().await;
 
     // 4. Verify the chip has been removed.
-    assert_eq!(bt_manager.get_chip_count_for_testing(), 0);
+    assert_eq!(get_chip_count(&command_tx).await, 0);
 }
