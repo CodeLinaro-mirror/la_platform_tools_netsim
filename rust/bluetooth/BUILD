@@ -29,8 +29,8 @@ rust_library(
         "@zerocopy-derive",
     ],
     deps = [
-        "//:netsim_proto",
         "//rust/netsim-api",
+        "//rust/proto-cf",
         "//rust/rootcanal",
         "@bytes",
         "@env_logger",
@@ -56,8 +56,8 @@ rust_test(
     tags = ["general_tests"],
     deps = [
         ":bluetooth",
-        "//:netsim_proto",
         "//rust/netsim-api",
+        "//rust/proto-cf",
         "//rust/rootcanal",
         "@bytes",
         "@env_logger",
