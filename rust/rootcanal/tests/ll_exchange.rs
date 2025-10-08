@@ -103,12 +103,17 @@ async fn test_ll_exchange() {
 
     // Create a sniffer to listen for packets.
     let sniffer_address = Address::from_str("00:00:00:00:00:01").unwrap();
-    let _sniffer_id =
-        rootcanal.new_controller(sniffer_address, Box::new(SnifferCallbacks { sender }));
+    let sniffer_id = 1;
+    rootcanal
+        .new_controller(sniffer_id, sniffer_address, Box::new(SnifferCallbacks { sender }))
+        .expect("new controller failed");
 
     // Create a raw controller to send a packet.
     let sender_address = Address::from_str("00:00:00:00:00:02").unwrap();
-    let sender_id = rootcanal.new_controller(sender_address, Box::new(DummyCallbacks));
+    let sender_id = 2;
+    rootcanal
+        .new_controller(sender_id, sender_address, Box::new(DummyCallbacks))
+        .expect("new controller failed");
 
     // Construct a valid ADV_IND packet.
     let advertising_data = vec![
