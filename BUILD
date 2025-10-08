@@ -4,7 +4,7 @@
 load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_proto//proto:defs.bzl", "proto_library")
-load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
 
 proto_library(
     name = "netsimd-proto",
@@ -31,50 +31,22 @@ cc_proto_library(
     deps = [":netsimd-proto"],
 )
 
-rust_library(
-    name = "netsim_proto",
-    srcs = glob(["rust/proto-cf/src/**/*.rs"]),
-    crate_name = "netsim_proto",
-    visibility = ["//rust:__subpackages__"],
-    deps = [
-        "@grpcio",
-        "@protobuf-rust",
-    ],
-)
-
-rust_library(
-    name = "netsim_cli",
-    srcs = glob(["rust/cli/src/**/*.rs"]),
-    crate_name = "netsim_cli",
-    deps = [
-        ":netsim_proto",
-        "//rust/common:netsim_common",
-        "@clap",
-        "@futures",
-        "@futures-util",
-        "@grpcio",
-        "@hex",
-        "@log",
-        "@protobuf-rust",
-    ],
-)
-
 rust_binary(
     name = "netsim",
-    srcs = ["rust/cli/bin/netsim.rs"],
+    srcs = ["//rust/cli:bin/netsim.rs"],
     crate_name = "netsim_cli",
     rustc_flags = [
         "-C",
         "link-arg=-lc",
     ],
     deps = [
-        ":netsim_cli",
+        "//rust/cli:netsim_cli",
     ],
 )
 
 rust_test(
     name = "netsim_cli_tests",
-    crate = ":netsim_cli",
+    crate = "//rust/cli:netsim_cli",
     rustc_flags = [
         "-C",
         "link-arg=-lc",
@@ -89,6 +61,7 @@ genrule(
     outs = ["netlink_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
+    visibility = ["//rust/packets:__pkg__"],
 )
 
 genrule(
@@ -97,6 +70,7 @@ genrule(
     outs = ["mac80211_hwsim_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
+    visibility = ["//rust/packets:__pkg__"],
 )
 
 genrule(
@@ -105,6 +79,7 @@ genrule(
     outs = ["ieee80211_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
+    visibility = ["//rust/packets:__pkg__"],
 )
 
 genrule(
@@ -113,6 +88,7 @@ genrule(
     outs = ["llc_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
+    visibility = ["//rust/packets:__pkg__"],
 )
 
 genrule(
@@ -121,87 +97,12 @@ genrule(
     outs = ["link_layer_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-)
-
-rust_library(
-    name = "netsim_packets",
-    srcs = glob(["rust/packets/src/**/*.rs"]) + [
-        ":netsim_ieee80211_rust_gen",
-        ":netsim_link_layer_packets_rust_gen",
-        ":netsim_llc_rust_gen",
-        ":netsim_mac80211_hwsim_rust_gen",
-        ":netsim_netlink_rust_gen",
-    ],
-    crate_name = "netsim_packets",
-    proc_macro_deps = [
-        "@async-trait",
-    ],
-    rustc_env = {
-        "OUT_DIR": "../../..",
-    },
-    visibility = ["//rust:__subpackages__"],
-    deps = [
-        "@anyhow",
-        "@bytes",
-        "@pdl-runtime",
-    ],
-)
-
-rust_library(
-    name = "netsim_daemon",
-    srcs = glob(["rust/daemon/src/**/*.rs"]),
-    aliases = {
-        "//rust/http-proxy:netsim_http_proxy": "http_proxy",
-        "//rust/libslirp-rs:netsim_libslirp_rs": "libslirp_rs",
-        "//rust/hostapd-rs:netsim_hostapd_rs": "hostapd_rs",
-    },
-    compile_data = [
-        "rust/daemon/src/uwb/sample_ranging_data.csv",
-    ],
-    crate_name = "netsim_daemon",
-    crate_root = "rust/daemon/src/lib.rs",
-    rustc_flags = [
-        "--cfg=feature=\"local_ssl\"",
-    ],
-    deps = [
-        ":netsim_packets",
-        ":netsim_proto",
-        "//rust/common:netsim_common",
-        "//rust/hostapd-rs:netsim_hostapd_rs",
-        "//rust/http-proxy:netsim_http_proxy",
-        "//rust/libslirp-rs:netsim_libslirp_rs",
-        "@anyhow",
-        "@bytes",
-        "@clap",
-        "@cxx.rs//:cxx",
-        "@data-encoding",
-        "@futures",
-        "@futures-channel",
-        "@futures-executor",
-        "@futures-util",
-        "@glam",
-        "@grpcio",
-        "@http",
-        "@httparse",
-        "@libc",
-        "@log",
-        "@pdl-runtime",
-        "@pica",
-        "@protobuf-json-mapping",
-        "@protobuf-rust",
-        "@rand",
-        "@regex",
-        "@socket2",
-        "@thiserror",
-        "@tokio",
-        "@tokio-stream",
-        "@tungstenite",
-    ],
+    visibility = ["//rust/packets:__pkg__"],
 )
 
 genrule(
     name = "netsim_daemon_cc",
-    srcs = ["rust/daemon/src/ffi.rs"],
+    srcs = ["//rust/daemon:src/ffi.rs"],
     outs = ["netsim-daemon/src/ffi.rs.cc"],
     cmd = "$(location @cxx.rs//:codegen) $(SRCS) --cfg feature=\\\"local_ssl\\\" >> $(OUTS)",
     tools = ["@cxx.rs//:codegen"],
@@ -209,23 +110,15 @@ genrule(
 
 genrule(
     name = "netsim_daemon_h",
-    srcs = ["rust/daemon/src/ffi.rs"],
+    srcs = ["//rust/daemon:src/ffi.rs"],
     outs = ["netsim-daemon/src/ffi.rs.h"],
     cmd = "$(location @cxx.rs//:codegen) $(SRCS) --cfg feature=\\\"local_ssl\\\" --header >> $(OUTS)",
-    tools = ["@cxx.rs//:codegen"],
-)
-
-genrule(
-    name = "cxx-bridge-header",
-    outs = ["rust/cxx.h"],
-    cmd = "$(location @cxx.rs//:codegen) --header >> $(OUTS)",
     tools = ["@cxx.rs//:codegen"],
 )
 
 cc_binary(
     name = "netsimd",
     srcs = [
-        "rust/netsimd.cc",
         "src/backend/grpc_client.h",
         "src/hci/bluetooth_facade.cc",
         "src/hci/bluetooth_facade.h",
@@ -240,17 +133,20 @@ cc_binary(
         "src/util/ini_file.h",
         "src/util/log.cc",
         "src/util/log.h",
-        ":cxx-bridge-header",
         ":netsim_daemon_cc",
         ":netsim_daemon_h",
+        "//rust:cxx-bridge-header",
+        "//rust:netsimd.cc",
     ],
+    copts = ["-I include"],
     defines = ["NETSIM_ANDROID_EMULATOR"],
     includes = [
+        "include",
         "src/",
     ],
     deps = [
-        ":netsim_daemon",
         ":netsimd_cc_proto",
+        "//rust/daemon:netsim_daemon",
         "@rootcanal//:libbt-rootcanal",
         "@wpa_supplicant_8//:hostapd_c_lib",
     ],

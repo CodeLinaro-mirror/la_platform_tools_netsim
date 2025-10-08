@@ -10,8 +10,8 @@ rust_library(
     crate_name = "netsim_hostapd_rs",
     crate_root = "src/lib.rs",
     deps = [
-        "//:netsim_packets",
         "//rust/common:netsim_common",
+        "//rust/packets:netsim_packets",
         "@aes",
         "@anyhow",
         "@bytes",
@@ -37,7 +37,7 @@ rust_test(
     tags = ["general_tests"],
     deps = [
         ":netsim_hostapd_rs",
-        "//:netsim_packets",
+        "//rust/packets:netsim_packets",
         "@bytes",
         "@log",
         "@pdl-runtime",
