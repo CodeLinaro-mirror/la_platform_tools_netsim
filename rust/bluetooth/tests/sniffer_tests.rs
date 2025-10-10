@@ -1,11 +1,11 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use crate::utils;
-use ::bluetooth::manager::{BluetoothCommand, BluetoothManager};
+use ::bluetooth::manager::BluetoothManager;
 use bytes::Bytes;
-use netsim_api::{
-    BeaconCreationParams, BluetoothSnifferParams, ChipParams, CreateChipParams, PacketStreamerApi,
-};
+use netsim_api::chips::{ChipIdentifier, ChipRequest, CreateChipParams};
+use netsim_api::packet_streamer::{PacketStreamerApi, PsError};
+use netsim_proto::model::chip::BleBeacon;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use tokio::time::{timeout, Duration};
@@ -17,11 +17,11 @@ struct MockPacketStreamer {
 
 #[async_trait::async_trait]
 impl PacketStreamerApi for MockPacketStreamer {
-    async fn read_packet(&mut self) -> Result<Option<Vec<u8>>, netsim_api::Error> {
+    async fn read_packet(&mut self) -> Result<Option<Vec<u8>>, PsError> {
         Ok(None)
     }
 
-    async fn write_packet(&mut self, packet: Vec<u8>) -> Result<(), netsim_api::Error> {
+    async fn write_packet(&mut self, packet: Vec<u8>) -> Result<(), PsError> {
         self.packets.lock().unwrap().push(Bytes::from(packet));
         Ok(())
     }
@@ -30,7 +30,7 @@ impl PacketStreamerApi for MockPacketStreamer {
 #[tokio::test]
 async fn test_sniffer_receives_advertisement() {
     utils::setup_logging();
-    let (mut bt_manager, command_tx) = BluetoothManager::new();
+    let (bt_manager, command_tx) = BluetoothManager::new();
     tokio::spawn(async move {
         bt_manager.run().await;
     });
@@ -38,26 +38,33 @@ async fn test_sniffer_receives_advertisement() {
     let mock_streamer = MockPacketStreamer::default();
 
     // 1. Create a beacon.
-    let beacon_params =
-        BeaconCreationParams { address: "00:11:22:3D:44:55".to_string(), ..Default::default() };
-    let chip_params = ChipParams::BluetoothBeacon(beacon_params);
-    let (responder, rx) = oneshot::channel();
-    let create_chip_params =
-        CreateChipParams { chip_params, packet_streamer: Box::new(MockPacketStreamer::default()) };
+    let (respond_to, rx) = oneshot::channel();
+    let beacon_id = 1;
+    let create_chip_params = CreateChipParams {
+        packet_streamer: Box::new(MockPacketStreamer::default()),
+        address: "00:11:22:3D:44:55".to_string(),
+        bt_properties: None,
+        ble_beacon: Some(BleBeacon::default()),
+        id: ChipIdentifier(beacon_id),
+    };
     command_tx
-        .send(BluetoothCommand::CreateChip { params: create_chip_params, responder })
+        .send(ChipRequest::CreateChip { params: create_chip_params, respond_to })
         .await
         .unwrap();
     rx.await.unwrap().unwrap();
 
     // 2. Create a sniffer.
-    let sniffer_params = BluetoothSnifferParams::default();
-    let chip_params = ChipParams::BluetoothSniffer(sniffer_params);
-    let (responder, rx) = oneshot::channel();
-    let create_chip_params =
-        CreateChipParams { chip_params, packet_streamer: Box::new(mock_streamer.clone()) };
+    let (respond_to, rx) = oneshot::channel();
+    let sniffer_id = 2;
+    let create_chip_params = CreateChipParams {
+        packet_streamer: Box::new(mock_streamer.clone()),
+        address: "".to_string(),
+        bt_properties: None,
+        ble_beacon: None,
+        id: ChipIdentifier(sniffer_id),
+    };
     command_tx
-        .send(BluetoothCommand::CreateChip { params: create_chip_params, responder })
+        .send(ChipRequest::CreateChip { params: create_chip_params, respond_to })
         .await
         .unwrap();
     rx.await.unwrap().unwrap();

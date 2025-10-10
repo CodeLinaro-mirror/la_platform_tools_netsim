@@ -1,10 +1,10 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use crate::{
-    error::ChipError,
-    manager::{types::EmulatedChip, ChipState},
-};
-use netsim_api::{BeaconCreationParams, ChipPatch};
+use crate::types::EmulatedChip;
+use crate::utils::ToChipError;
+use netsim_api::chip_error::ChipError;
+use netsim_api::chips::{ChipIdentifier, CreateChipParams};
+use netsim_proto::model::Chip as ProtoChip;
 use rootcanal::{
     bluetooth::Bluetooth,
     controller::{Callbacks as ControllerCallbacks, Id, Idc},
@@ -14,8 +14,9 @@ use std::ffi::c_int;
 use std::sync::Arc;
 
 /// A single BLE beacon chip.
+#[allow(dead_code)]
 pub(crate) struct BeaconChip {
-    chip_id: u32,
+    chip_id: ChipIdentifier,
 }
 
 pub(crate) struct BeaconControllerCallbacks;
@@ -41,51 +42,57 @@ impl ControllerCallbacks for BeaconControllerCallbacks {
 
 impl BeaconChip {
     /// Creates a new `BeaconChip`.
-    pub fn new(
-        rootcanal: &Arc<Bluetooth>,
-        params: BeaconCreationParams,
-    ) -> Result<(Self, u32), ChipError> {
+    pub fn new(rootcanal: &Arc<Bluetooth>, params: CreateChipParams) -> Result<Self, ChipError> {
+        let beacon_params = params.ble_beacon.unwrap();
         let address =
-            params.address.parse().unwrap_or_else(|_| Address { address: rand::random() });
-        let chip_id = rootcanal.new_controller(address, Box::new(BeaconControllerCallbacks));
+            beacon_params.address.parse().unwrap_or_else(|_| Address { address: rand::random() });
+        let chip_id = params.id;
+        rootcanal
+            .new_controller(chip_id.as_u32(), address, Box::new(BeaconControllerCallbacks))
+            .to_chip_error()?;
 
         // Reset the controller first.
         let reset_cmd = vec![0x03, 0x0c, 0x00];
-        rootcanal.receive_hci(chip_id, Idc::Cmd, &reset_cmd).unwrap();
+        rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &reset_cmd).unwrap();
 
         // LE Set Advertising Parameters
         let adv_params = vec![
             0x06, 0x20, 15, 0xA0, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x07, 0x00,
         ];
-        rootcanal.receive_hci(chip_id, Idc::Cmd, &adv_params).unwrap();
+        rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_params).unwrap();
 
         // LE Set Advertising Data
         let mut adv_data_cmd = vec![0x08, 0x20, 32];
-        if !params.adv_data.manufacturer_data.is_empty() {
-            adv_data_cmd.push(params.adv_data.manufacturer_data.len() as u8);
-            adv_data_cmd.extend_from_slice(&params.adv_data.manufacturer_data);
+        if let Some(adv_data) = beacon_params.adv_data.as_ref() {
+            if !adv_data.manufacturer_data.is_empty() {
+                adv_data_cmd.push(adv_data.manufacturer_data.len() as u8);
+                adv_data_cmd.extend_from_slice(&adv_data.manufacturer_data);
+            } else {
+                adv_data_cmd.push(3); // Advertising_Data_Length
+                adv_data_cmd.extend_from_slice(&[0x02, 0x01, 0x06]); // Advertising_Data
+            }
         } else {
             adv_data_cmd.push(3); // Advertising_Data_Length
             adv_data_cmd.extend_from_slice(&[0x02, 0x01, 0x06]); // Advertising_Data
         }
         adv_data_cmd.resize(3 + 32, 0);
-        rootcanal.receive_hci(chip_id, Idc::Cmd, &adv_data_cmd).unwrap();
+        rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_data_cmd).unwrap();
 
         // LE Set Advertising Enable
         let adv_enable = vec![0x0A, 0x20, 0x01, 0x01];
-        rootcanal.receive_hci(chip_id, Idc::Cmd, &adv_enable).unwrap();
+        rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_enable).unwrap();
 
-        Ok((Self { chip_id }, chip_id))
+        Ok(Self { chip_id })
     }
 }
 
 impl EmulatedChip for BeaconChip {
-    fn patch_chip(&mut self, _patch: ChipPatch) -> Result<ChipState, ChipError> {
+    fn update_chip(&mut self, _update: ProtoChip) -> Result<ProtoChip, ChipError> {
         self.get_chip()
     }
 
-    fn get_chip(&self) -> Result<ChipState, ChipError> {
-        Ok(ChipState { id: self.chip_id })
+    fn get_chip(&self) -> Result<ProtoChip, ChipError> {
+        Ok(ProtoChip::default())
     }
 }

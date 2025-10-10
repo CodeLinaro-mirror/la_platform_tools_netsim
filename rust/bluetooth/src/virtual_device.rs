@@ -1,15 +1,13 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use crate::{
-    error::ChipError,
-    manager::{
-        types::{ChipDied, EmulatedChip},
-        ChipState,
-    },
-};
+use crate::types::{ChipDied, EmulatedChip};
+use crate::utils::ToChipError;
 use bytes::Bytes;
 use log::{debug, error, info};
-use netsim_api::{BluetoothDeviceParams, ChipPatch, PacketStreamerApi};
+use netsim_api::chip_error::ChipError;
+use netsim_api::chips::{ChipIdentifier, CreateChipParams};
+use netsim_api::packet_streamer::PacketStreamerApi;
+use netsim_proto::model::Chip as ProtoChip;
 use rootcanal::{
     bluetooth::Bluetooth,
     controller::{Callbacks as ControllerCallbacks, Id, Idc},
@@ -21,25 +19,28 @@ use tokio::runtime::Handle;
 use tokio::sync::{mpsc, oneshot};
 
 /// Manages the packet stream for a single virtual device.
+#[allow(dead_code)]
 pub(crate) struct VirtualDeviceChip {
-    chip_id: u32,
+    chip_id: ChipIdentifier,
 }
 
 impl VirtualDeviceChip {
     /// Creates a new `VirtualDeviceChip` and starts its packet processing loop.
     pub fn new(
         rootcanal: Arc<Bluetooth>,
-        params: BluetoothDeviceParams,
-        packet_streamer: Box<dyn PacketStreamerApi>,
+        params: CreateChipParams,
         chip_death_tx: mpsc::Sender<ChipDied>,
-    ) -> ((Self, oneshot::Sender<()>), u32) {
+    ) -> Result<(Self, oneshot::Sender<()>), ChipError> {
+        let packet_streamer = params.packet_streamer;
         let address =
             params.address.parse().unwrap_or_else(|_| Address { address: rand::random() });
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (hci_tx, hci_rx) = mpsc::channel::<Bytes>(128);
 
         let callbacks = Box::new(VirtualDeviceCallbacks { hci_tx });
-        let chip_id = rootcanal.new_controller(address, callbacks);
+        // TODO: Provide id to the controller
+        let chip_id = params.id.as_u32();
+        rootcanal.new_controller(chip_id, address, callbacks).to_chip_error()?;
 
         Self::start_packet_processing_loop(
             chip_id,
@@ -50,7 +51,7 @@ impl VirtualDeviceChip {
             chip_death_tx,
         );
 
-        ((Self { chip_id }, shutdown_tx), chip_id)
+        Ok((Self { chip_id: params.id }, shutdown_tx))
     }
 
     /// Spawns the main packet processing loop for the virtual device.
@@ -68,7 +69,11 @@ impl VirtualDeviceChip {
             loop {
                 tokio::select! {
                     result = packet_streamer.read_packet() => {
-                        if !Self::handle_hci_from_streamer(result, chip_id, &rootcanal) {
+                        if !Self::handle_hci_from_streamer(
+                            result.map_err(ChipError::from),
+                            chip_id,
+                            &rootcanal,
+                        ) {
                             break;
                         }
                     }
@@ -92,7 +97,7 @@ impl VirtualDeviceChip {
 
     /// Handles a packet read from the streamer, returning false if the loop should break.
     fn handle_hci_from_streamer(
-        result: Result<Option<Vec<u8>>, netsim_api::Error>,
+        result: Result<Option<Vec<u8>>, ChipError>,
         chip_id: u32,
         rootcanal: &Arc<Bluetooth>,
     ) -> bool {
@@ -147,11 +152,11 @@ impl ControllerCallbacks for VirtualDeviceCallbacks {
 }
 
 impl EmulatedChip for VirtualDeviceChip {
-    fn patch_chip(&mut self, _patch: ChipPatch) -> Result<ChipState, ChipError> {
+    fn update_chip(&mut self, _patch: netsim_proto::model::Chip) -> Result<ProtoChip, ChipError> {
         self.get_chip()
     }
 
-    fn get_chip(&self) -> Result<ChipState, ChipError> {
-        Ok(ChipState { id: self.chip_id })
+    fn get_chip(&self) -> Result<ProtoChip, ChipError> {
+        Ok(ProtoChip::default())
     }
 }
