@@ -11,15 +11,17 @@ rust_library(
     crate_root = "src/lib.rs",
     edition = "2021",
     deps = [
-        "@etherparse",
         "@bytes",
-        "@libc",
-        "@log",
-        # "@winapi", // TODO: Resolve this dependency to build for Windows
-        "@tokio",
-        "@libslirp",
+        "@etherparse",
         "@glib//glib",
-    ],
+        "@libc",
+        "@libslirp",
+        "@log",
+        "@tokio",
+    ] + select({
+        "@bazel_tools//src/conditions:windows": ["@winapi"],
+        "//conditions:default": [],
+    }),
 )
 
 rust_test(
