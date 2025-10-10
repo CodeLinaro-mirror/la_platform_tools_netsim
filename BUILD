@@ -35,6 +35,7 @@ rust_binary(
     name = "netsim",
     srcs = ["//rust/cli:bin/netsim.rs"],
     crate_name = "netsim_cli",
+    edition = "2021",
     rustc_flags = [
         "-C",
         "link-arg=-lc",
@@ -47,6 +48,7 @@ rust_binary(
 rust_test(
     name = "netsim_cli_tests",
     crate = "//rust/cli:netsim_cli",
+    edition = "2021",
     rustc_flags = [
         "-C",
         "link-arg=-lc",

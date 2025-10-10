@@ -9,6 +9,7 @@ rust_library(
     name = "proto-cf",
     srcs = glob(["src/*.rs"]),
     crate_name = "netsim_proto",
+    edition = "2021",
     deps = [
         "@grpcio",
         "@protobuf-rust",

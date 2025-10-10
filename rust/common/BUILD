@@ -7,6 +7,7 @@ package(default_visibility = ["//visibility:public"])
 rust_library(
     name = "netsim_common",
     srcs = glob(["src/**/*.rs"]),
+    edition = "2021",
     deps = [
         "@anyhow",
         "@chrono",
@@ -22,5 +23,6 @@ rust_library(
 rust_test(
     name = "tests",
     crate = ":netsim_common",
+    edition = "2021",
     tags = ["general_tests"],
 )

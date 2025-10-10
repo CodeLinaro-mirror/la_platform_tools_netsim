@@ -12,6 +12,7 @@ rust_library(
         "//:netsim_netlink_rust_gen",
     ],
     crate_name = "netsim_packets",
+    edition = "2021",
     proc_macro_deps = [
         "@async-trait",
     ],

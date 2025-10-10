@@ -9,6 +9,7 @@ rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "netsim_hostapd_rs",
     crate_root = "src/lib.rs",
+    edition = "2021",
     deps = [
         "//rust/common:netsim_common",
         "//rust/packets:netsim_packets",
@@ -25,6 +26,7 @@ rust_library(
 rust_test(
     name = "netsim_hostapd_rs_tests",
     crate = ":netsim_hostapd_rs",
+    edition = "2021",
     tags = ["general_tests"],
 )
 
@@ -34,6 +36,7 @@ rust_test(
     aliases = {
         ":netsim_hostapd_rs": "hostapd_rs",
     },
+    edition = "2021",
     tags = ["general_tests"],
     deps = [
         ":netsim_hostapd_rs",

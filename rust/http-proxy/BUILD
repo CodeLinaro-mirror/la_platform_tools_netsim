@@ -12,6 +12,7 @@ rust_library(
     },
     crate_name = "netsim_http_proxy",
     crate_root = "src/lib.rs",
+    edition = "2021",
     deps = [
         "//rust/libslirp-rs:netsim_libslirp_rs",
         "@base64",
@@ -27,6 +28,7 @@ rust_library(
 rust_test(
     name = "netsim_http_proxy_tests",
     crate = ":netsim_http_proxy",
+    edition = "2021",
     rustc_flags = [
         "-C",
         "link-arg=-lc",

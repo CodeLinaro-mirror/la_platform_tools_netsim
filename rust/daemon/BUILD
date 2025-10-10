@@ -17,6 +17,7 @@ rust_library(
     ],
     crate_name = "netsim_daemon",
     crate_root = "src/lib.rs",
+    edition = "2021",
     rustc_flags = [
         "--cfg=feature=\"local_ssl\"",
     ],
