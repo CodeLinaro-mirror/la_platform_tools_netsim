@@ -12,18 +12,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
     name = "netsim-api",
-    srcs = ["src/lib.rs"],
+    srcs = glob(["src/**/*.rs"]),
     crate_name = "netsim_api",
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
         "@thiserror-impl",
     ],
-    deps = ["@thiserror"],
+    deps = [
+        "//rust/proto-cf",
+        "@thiserror",
+        "@tokio",
+    ],
+)
+
+rust_test(
+    name = "tests",
+    srcs = glob(["src/**/*.rs"]),
+    crate_root = "src/lib.rs",
+    proc_macro_deps = [
+        "@async-trait",
+        "@thiserror-impl",
+    ],
+    rustc_flags = [
+        "-C",
+        "link-arg=-lc",
+    ],
+    tags = ["general_tests"],
+    deps = [
+        "//rust/proto-cf",
+        "@thiserror",
+        "@tokio",
+    ],
 )

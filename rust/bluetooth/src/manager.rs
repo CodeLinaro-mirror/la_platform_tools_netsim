@@ -2,6 +2,7 @@
 
 use super::types::*;
 use log::debug;
+use netsim_api::chips::ChipRequest;
 use rootcanal::{
     bluetooth::{Bluetooth, Callbacks as RootcanalCallbacks},
     types::Phy,
@@ -21,7 +22,7 @@ use tokio::time::{interval, Duration};
 pub struct BluetoothManager {
     pub(crate) rootcanal: Arc<Bluetooth>,
     pub(crate) chips: HashMap<u32, ChipEntry>,
-    pub(crate) command_rx: mpsc::Receiver<BluetoothCommand>,
+    pub(crate) command_rx: mpsc::Receiver<ChipRequest>,
     pub(crate) chip_death_rx: mpsc::Receiver<ChipDied>,
     pub(crate) chip_death_tx: mpsc::Sender<ChipDied>,
 }
@@ -44,7 +45,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
 impl BluetoothManager {
     /// Creates a new `BluetoothManager` and returns a tuple containing the
     /// manager and a channel for sending commands to it.
-    pub fn new() -> (Self, mpsc::Sender<BluetoothCommand>) {
+    pub fn new() -> (Self, mpsc::Sender<ChipRequest>) {
         let (command_tx, command_rx) = mpsc::channel(10);
         let (chip_death_tx, chip_death_rx) = mpsc::channel(10);
         let manager = BluetoothManager {
@@ -68,7 +69,9 @@ impl BluetoothManager {
                     self.rootcanal.tick();
                 }
                 Some(cmd) = async { self.command_rx.recv().await } => {
-                    self.handle_command(cmd);
+                    if self.handle_command(cmd) {
+                        break
+                    }
                 }
                 Some(death_notice) = async { self.chip_death_rx.recv().await } => {
                     self.handle_chip_death(death_notice);

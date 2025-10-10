@@ -1,18 +1,27 @@
 // Copyright (C) 2025 The Android Open Source Project
 
-//! This module defines the error types for the bluetooth crate.
+//! This module defines the error types for the chip service.
 
+use crate::chips::ChipIdentifier;
+use crate::packet_streamer::PsError;
 use thiserror::Error;
 
-/// A specialized `Result` type for bluetooth chip operations.
-pub type ChipError = BluetoothError;
-
-/// The error type for the bluetooth crate.
+/// The error type for operations within the chip service.
 #[derive(Error, Debug)]
-pub enum BluetoothError {
-    /// An I/O error occurred.
+pub enum ChipError {
+    #[error("Chip not found error: {0}")]
+    ChipNotFound(ChipIdentifier),
+
+    /// An error occurred during I/O.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+    /// An error occurred during packet processing.
+    #[error("Packet processing error: {0}")]
+    Packet(String),
+
+    /// The operation is not supported.
+    #[error("Unsupported operation")]
+    Unsupported,
 
     /// The advertising or scan response data exceeds the 31-byte limit.
     #[error("Data exceeds 31-byte limit")]
@@ -25,10 +34,6 @@ pub enum BluetoothError {
     /// Error indicating that a chip with the given ID already exists.
     #[error("Chip with ID {0} already exists")]
     ChipExists(u32),
-
-    /// Error indicating that a chip with the given ID could not be found.
-    #[error("Chip with ID {0} not found")]
-    ChipNotFound(u32),
 
     /// Error indicating that a patch operation failed due to invalid data.
     #[error("Invalid patch: {0}")]
@@ -43,13 +48,16 @@ pub enum BluetoothError {
     #[error("Backend error: {0}")]
     BackendError(String),
 
-    /// Error indicating a failure during protobuf serialization or
-    /// deserialization.
-    #[error("Protobuf error: {0}")]
-    ProtobufError(#[from] protobuf::Error),
+    /// Packet streamer error.
+    #[error("PacketStream error: {0}")]
+    PsError(#[from] PsError),
+
+    /// Radio error.
+    #[error("Radio error: {0}")]
+    RadioError(String),
 }
 
-impl PartialEq for BluetoothError {
+impl PartialEq for ChipError {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Io(l), Self::Io(r)) => l.kind() == r.kind(),
@@ -60,7 +68,6 @@ impl PartialEq for BluetoothError {
             (Self::InvalidPatch(l0), Self::InvalidPatch(r0)) => l0 == r0,
             (Self::InvalidArguments(l0), Self::InvalidArguments(r0)) => l0 == r0,
             (Self::BackendError(l0), Self::BackendError(r0)) => l0 == r0,
-            (Self::ProtobufError(_), Self::ProtobufError(_)) => true,
             _ => false,
         }
     }
