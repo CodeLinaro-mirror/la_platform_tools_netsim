@@ -31,28 +31,11 @@ cc_proto_library(
     deps = [":netsimd-proto"],
 )
 
-# BLE Advertisers
-
-rust_library(
-    name = "ble_advertisers",
-    srcs = glob(["rust/ble-advertisers/src/**/*.rs"]),
-    deps = [
-        "@hex",
-        "@thiserror",
-        "@zerocopy",
-    ],
-)
-
-rust_test(
-    name = "ble_advertisers_tests",
-    crate = ":ble_advertisers",
-    tags = ["general_tests"],
-)
-
 rust_library(
     name = "netsim_proto",
     srcs = glob(["rust/proto-cf/src/**/*.rs"]),
     crate_name = "netsim_proto",
+    visibility = ["//rust:__subpackages__"],
     deps = [
         "@grpcio",
         "@protobuf-rust",
@@ -150,6 +133,9 @@ rust_library(
         ":netsim_netlink_rust_gen",
     ],
     crate_name = "netsim_packets",
+    proc_macro_deps = [
+        "@async-trait",
+    ],
     rustc_env = {
         "OUT_DIR": "../../..",
     },
