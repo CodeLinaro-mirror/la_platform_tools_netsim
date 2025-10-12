@@ -6,4 +6,4 @@ authors = ["The Android Open Source Project"]
 
 [dependencies]
 async-trait = "0.1.73"
-thiserror = "1.0.48"
+thiserror = "1.0"

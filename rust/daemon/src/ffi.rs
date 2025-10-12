@@ -70,6 +70,7 @@ pub mod ffi_transport {
 
 #[allow(clippy::needless_maybe_sized)]
 #[allow(unsafe_op_in_unsafe_fn)]
+#[allow(unused_attributes)]
 #[cxx::bridge(namespace = "netsim")]
 pub mod ffi_bluetooth {
     extern "Rust" {
