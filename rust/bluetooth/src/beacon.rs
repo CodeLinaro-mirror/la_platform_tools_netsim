@@ -3,7 +3,7 @@
 use crate::types::EmulatedChip;
 use crate::utils::ToChipError;
 use netsim_api::chip_error::ChipError;
-use netsim_api::chips::{ChipIdentifier, CreateChipParams};
+use netsim_api::chips::{BeaconParams, ChipIdentifier};
 use netsim_proto::model::Chip as ProtoChip;
 use rootcanal::{
     bluetooth::Bluetooth,
@@ -12,6 +12,7 @@ use rootcanal::{
 };
 use std::ffi::c_int;
 use std::sync::Arc;
+use tokio::sync::oneshot;
 
 /// A single BLE beacon chip.
 #[allow(dead_code)]
@@ -42,11 +43,13 @@ impl ControllerCallbacks for BeaconControllerCallbacks {
 
 impl BeaconChip {
     /// Creates a new `BeaconChip`.
-    pub fn new(rootcanal: &Arc<Bluetooth>, params: CreateChipParams) -> Result<Self, ChipError> {
-        let beacon_params = params.ble_beacon.unwrap();
+    pub fn new(
+        rootcanal: &Arc<Bluetooth>,
+        chip_id: ChipIdentifier,
+        params: &BeaconParams,
+    ) -> Result<(Self, Option<oneshot::Sender<()>>), ChipError> {
         let address =
-            beacon_params.address.parse().unwrap_or_else(|_| Address { address: rand::random() });
-        let chip_id = params.id;
+            params.address.parse().unwrap_or_else(|_| Address { address: rand::random() });
         rootcanal
             .new_controller(chip_id.as_u32(), address, Box::new(BeaconControllerCallbacks))
             .to_chip_error()?;
@@ -64,7 +67,7 @@ impl BeaconChip {
 
         // LE Set Advertising Data
         let mut adv_data_cmd = vec![0x08, 0x20, 32];
-        if let Some(adv_data) = beacon_params.adv_data.as_ref() {
+        if let Some(adv_data) = params.ble_beacon.adv_data.as_ref() {
             if !adv_data.manufacturer_data.is_empty() {
                 adv_data_cmd.push(adv_data.manufacturer_data.len() as u8);
                 adv_data_cmd.extend_from_slice(&adv_data.manufacturer_data);
@@ -83,7 +86,7 @@ impl BeaconChip {
         let adv_enable = vec![0x0A, 0x20, 0x01, 0x01];
         rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_enable).unwrap();
 
-        Ok(Self { chip_id })
+        Ok((Self { chip_id }, None))
     }
 }
 
