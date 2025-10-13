@@ -23,7 +23,7 @@ bazel_dep(name = "grpc", version = "1.72.0")
 bazel_dep(name = "rules_cc", version = "0.2.3")
 bazel_dep(name = "rules_proto", version = "7.0.2")
 bazel_dep(name = "rules_python", version = "1.4.0")
-bazel_dep(name = "rules_rust", version = "0.61.0")
+bazel_dep(name = "rules_rust", version = "0.64.0")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "protobuf", version = "30.2")
 
@@ -34,31 +34,39 @@ bazel_dep(name = "glib", version = "2.82.2.bcr.5")
 # Non-module repos
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
-new_local_repository(
-    name = "rootcanal",
-    build_file = "//bazel_deps:rootcanal.BUILD.bazel",
-    path = "../../tools/rootcanal",
-)
+[
+    new_local_repository(
+        name = path.split("/")[-1],
+        build_file = "//build_files/{}:BUILD".format(path),
+        path = "../../{}".format(path),
+    )
+    for path in [
+        "tools/rootcanal",
+        "external/libslirp",
+        "external/fmtlib",
+        "external/wpa_supplicant_8",
+    ]
+]
 
 new_local_repository(
-    name = "libslirp",
-    build_file = "//bazel_deps:libslirp.BUILD.bazel",
-    path = "../../external/libslirp",
+    name = "aemu-base",
+    build_file = "//build_files/hardware/google/aemu/base:BUILD",
+    path = "../../hardware/google/aemu/base",
 )
 
 new_local_repository(
     name = "protobuf-rust",
-    build_file = "//bazel_deps:protobuf-rust.BUILD.bazel",
+    build_file = "//build_files/external/rust/android-crates-io/crates/protobuf:BUILD",
     path = "../../external/rust/android-crates-io/crates/protobuf",
 )
 
 [
     new_local_repository(
-        name = create,
-        build_file = "//bazel_deps:{}.BUILD.bazel".format(create),
-        path = "../../external/rust/android-crates-io/crates/{}".format(create),
+        name = crate,
+        build_file = "//build_files/external/rust/android-crates-io/crates/{}:BUILD".format(crate),
+        path = "../../external/rust/android-crates-io/crates/{}".format(crate),
     )
-    for create in [
+    for crate in [
         "aho-corasick",
         "android_log-sys",
         "anstyle",
@@ -179,7 +187,7 @@ new_local_repository(
 [
     new_local_repository(
         name = crate,
-        build_file = "//bazel_deps:{}.BUILD.bazel".format(crate),
+        build_file = "//build_files/external/qemu/android/third_party/rust/crates/{}-{}:BUILD".format(crate, version),
         path = "../../external/qemu/android/third_party/rust/crates/{}-{}".format(crate, version),
     )
     for crate, version in [
@@ -199,37 +207,19 @@ new_local_repository(
 
 new_local_repository(
     name = "pica",
-    build_file = "//bazel_deps:pica.BUILD.bazel",
+    build_file = "//build_files/external/rust/crates/pica:BUILD",
     path = "../../external/rust/crates/pica",
+)
+
+new_local_repository(
+    name = "qemu",
+    build_file = "//build_files/external/qemu:BUILD",
+    path = "../../external/qemu",
+    #    repo_mapping = {"@aemu-base": "@aemu-base"},
 )
 
 # Dependencies needed for external/wpa_supplicant_8
 bazel_dep(name = "abseil-cpp", version = "20250127.1")
 bazel_dep(name = "googletest", version = "1.17.0")
-
-new_local_repository(
-    name = "wpa_supplicant_8",
-    build_file = "//bazel_deps:wpa_supplicant_8.BUILD.bazel",
-    path = "../../external/wpa_supplicant_8",
-)
-
-new_local_repository(
-    name = "qemu",
-    build_file = "//bazel_deps:qemu.BUILD.bazel",
-    path = "../../external/qemu",
-)
-
-new_local_repository(
-    name = "aemu-base",
-    build_file = "//bazel_deps:aemu-base.BUILD.bazel",
-    path = "../../hardware/google/aemu/base",
-)
-
-new_local_repository(
-    name = "fmtlib",
-    build_file = "//bazel_deps:fmtlib.BUILD.bazel",
-    path = "../../external/fmtlib",
-)
-
 bazel_dep(name = "boringssl", version = "0.20241024.0")
 bazel_dep(name = "cxx.rs", version = "1.0.175")

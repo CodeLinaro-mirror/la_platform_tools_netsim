@@ -9,6 +9,7 @@ rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "netsim_libslirp_rs",
     crate_root = "src/lib.rs",
+    edition = "2021",
     deps = [
         "@etherparse",
         "@bytes",
@@ -24,6 +25,7 @@ rust_library(
 rust_test(
     name = "netsim_libslirp_rs_tests",
     crate = ":netsim_libslirp_rs",
+    edition = "2021",
     tags = ["general_tests"],
 )
 
@@ -33,6 +35,7 @@ rust_test(
     aliases = {
         ":netsim_libslirp_rs": "libslirp_rs",
     },
+    edition = "2021",
     rustc_flags = [
         "-C",
         "link-arg=-lc",
@@ -50,6 +53,7 @@ rust_test(
     aliases = {
         ":netsim_libslirp_rs": "libslirp_rs",
     },
+    edition = "2021",
     rustc_flags = [
         "-C",
         "link-arg=-lc",

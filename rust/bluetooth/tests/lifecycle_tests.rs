@@ -1,11 +1,10 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use crate::utils;
-use ::bluetooth::manager::{BluetoothCommand, BluetoothManager};
-
-use netsim_api::{
-    BluetoothDeviceParams, ChipParams, CreateChipParams, DeleteChipParams, PacketStreamerApi,
-};
+use ::bluetooth::manager::BluetoothManager;
+use netsim_api::chips::{ChipIdentifier, ChipRequest, CreateChipParams};
+use netsim_api::packet_streamer::{PacketStreamerApi, PsError};
+use netsim_proto::configuration::Controller as RootcanalController;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -33,24 +32,24 @@ impl Drop for MockHciStreamer {
 
 #[async_trait::async_trait]
 impl PacketStreamerApi for MockHciStreamer {
-    async fn read_packet(&mut self) -> Result<Option<Vec<u8>>, netsim_api::Error> {
+    async fn read_packet(&mut self) -> Result<Option<Vec<u8>>, PsError> {
         let packet = self
             .packet_out_rx
             .lock()
             .await
             .recv()
             .await
-            .ok_or(netsim_api::Error::Packet("Channel closed".to_string()))?;
+            .ok_or(PsError::Packet("Channel closed".to_string()))?;
 
         if self.should_error.load(Ordering::SeqCst) {
-            return Err(netsim_api::Error::Packet("Simulated packet stream error".to_string()));
+            return Err(PsError::Packet("Simulated packet stream error".to_string()));
         }
 
         Ok(Some(packet))
     }
 
-    async fn write_packet(&mut self, packet: Vec<u8>) -> Result<(), netsim_api::Error> {
-        self.packet_in_tx.send(packet).await.map_err(|e| netsim_api::Error::Packet(e.to_string()))
+    async fn write_packet(&mut self, packet: Vec<u8>) -> Result<(), PsError> {
+        self.packet_in_tx.send(packet).await.map_err(|e| PsError::Packet(e.to_string()))
     }
 }
 
@@ -74,15 +73,20 @@ async fn test_hci_reset_command() {
     };
 
     // 1. Create a virtual device chip.
-    let params = BluetoothDeviceParams { address: "AB:CD:EF:11:22:33".to_string() };
-    let chip_params = ChipParams::BluetoothDevice(params);
-    let (responder, rx) = oneshot::channel();
-    let create_chip_params = CreateChipParams { chip_params, packet_streamer: Box::new(streamer) };
+    let (respond_to, rx) = oneshot::channel();
+    let chip_id = 1;
+    let create_chip_params = CreateChipParams {
+        packet_streamer: Box::new(streamer),
+        address: "AB:CD:EF:11:22:33".to_string(),
+        bt_properties: Some(RootcanalController::default()),
+        ble_beacon: None,
+        id: ChipIdentifier(chip_id),
+    };
     command_tx
-        .send(BluetoothCommand::CreateChip { params: create_chip_params, responder })
+        .send(ChipRequest::CreateChip { params: create_chip_params, respond_to })
         .await
         .unwrap();
-    let _chip_id = rx.await.unwrap().unwrap();
+    rx.await.unwrap().unwrap();
 
     // 2. Send an HCI Reset command.
     let hci_reset_cmd = vec![0x03, 0x0c, 0x00];
@@ -102,15 +106,19 @@ async fn test_chipper() {
     utils::setup_logging();
 }
 
+async fn get_chip_count(command_tx: &mpsc::Sender<ChipRequest>) -> usize {
+    let (respond_to, rx) = oneshot::channel();
+    command_tx.send(ChipRequest::GetChipCountForTesting { respond_to }).await.unwrap();
+    rx.await.unwrap().unwrap()
+}
+
 #[tokio::test]
 async fn test_chip_dies_on_packet_stream_error() {
     utils::setup_logging();
 
     let (bt_manager, command_tx) = BluetoothManager::new();
-    let bt_manager = Arc::new(bt_manager);
-    let manager_clone = bt_manager.clone();
     tokio::spawn(async move {
-        manager_clone.run().await;
+        bt_manager.run().await;
     });
 
     let (death_confirm_tx, mut death_confirm_rx) = mpsc::channel(1);
@@ -125,20 +133,24 @@ async fn test_chip_dies_on_packet_stream_error() {
     };
 
     // 1. Create a virtual device chip.
-    let params = BluetoothDeviceParams { address: "BE:EF:FA:CE:11:22".to_string() };
-    let chip_params = ChipParams::BluetoothDevice(params);
-    let (responder, rx) = oneshot::channel();
-    let create_chip_params =
-        CreateChipParams { chip_params, packet_streamer: Box::new(streamer.clone()) };
+    let (respond_to, rx) = oneshot::channel();
+    let chip_id = 1;
+    let create_chip_params = CreateChipParams {
+        packet_streamer: Box::new(streamer.clone()),
+        address: "BE:EF:FA:CE:11:22".to_string(),
+        bt_properties: Some(RootcanalController::default()),
+        ble_beacon: None,
+        id: ChipIdentifier(chip_id),
+    };
     command_tx
-        .send(BluetoothCommand::CreateChip { params: create_chip_params, responder })
+        .send(ChipRequest::CreateChip { params: create_chip_params, respond_to })
         .await
         .unwrap();
-    let _chip_id = rx.await.unwrap().unwrap();
+    rx.await.unwrap().unwrap();
 
     // A small delay to ensure the chip is registered before we check the count.
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(bt_manager.get_chip_count_for_testing(), 1);
+    assert_eq!(get_chip_count(&command_tx).await, 1);
 
     // 2. Trigger a packet stream error.
     streamer.should_error.store(true, Ordering::SeqCst);
@@ -151,7 +163,7 @@ async fn test_chip_dies_on_packet_stream_error() {
     // 4. Verify the chip has been removed.
     // A small delay is needed to ensure the manager has time to process the death notice.
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(bt_manager.get_chip_count_for_testing(), 0);
+    assert_eq!(get_chip_count(&command_tx).await, 0);
 }
 
 #[tokio::test]
@@ -159,10 +171,8 @@ async fn test_delete_chip_shuts_down_task() {
     utils::setup_logging();
 
     let (bt_manager, command_tx) = BluetoothManager::new();
-    let bt_manager = Arc::new(bt_manager);
-    let manager_clone = bt_manager.clone();
     tokio::spawn(async move {
-        manager_clone.run().await;
+        bt_manager.run().await;
     });
 
     let (death_confirm_tx, mut death_confirm_rx) = mpsc::channel(1);
@@ -177,23 +187,27 @@ async fn test_delete_chip_shuts_down_task() {
     };
 
     // 1. Create a virtual device chip.
-    let params = BluetoothDeviceParams { address: "DE:AD:BE:EF:33:44".to_string() };
-    let chip_params = ChipParams::BluetoothDevice(params);
-    let (responder, rx) = oneshot::channel();
-    let create_chip_params = CreateChipParams { chip_params, packet_streamer: Box::new(streamer) };
+    let (respond_to, rx) = oneshot::channel();
+    let chip_id = 1;
+    let create_chip_params = CreateChipParams {
+        packet_streamer: Box::new(streamer),
+        address: "DE:AD:BE:EF:33:44".to_string(),
+        bt_properties: Some(RootcanalController::default()),
+        ble_beacon: None,
+        id: ChipIdentifier(chip_id),
+    };
     command_tx
-        .send(BluetoothCommand::CreateChip { params: create_chip_params, responder })
+        .send(ChipRequest::CreateChip { params: create_chip_params, respond_to })
         .await
         .unwrap();
-    let chip_id = rx.await.unwrap().unwrap();
+    rx.await.unwrap().unwrap();
 
-    assert_eq!(bt_manager.get_chip_count_for_testing(), 1);
+    assert_eq!(get_chip_count(&command_tx).await, 1);
 
     // 2. Send a DeleteChip command.
-    let (responder, rx) = oneshot::channel();
-    let delete_params = DeleteChipParams { chip_id };
+    let (respond_to, rx) = oneshot::channel();
     command_tx
-        .send(BluetoothCommand::DeleteChip { params: delete_params, responder })
+        .send(ChipRequest::DeleteChip { id: ChipIdentifier(chip_id), respond_to })
         .await
         .unwrap();
     rx.await.unwrap().unwrap();
@@ -202,5 +216,5 @@ async fn test_delete_chip_shuts_down_task() {
     death_confirm_rx.recv().await;
 
     // 4. Verify the chip has been removed.
-    assert_eq!(bt_manager.get_chip_count_for_testing(), 0);
+    assert_eq!(get_chip_count(&command_tx).await, 0);
 }

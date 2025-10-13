@@ -24,3 +24,6 @@ build:macos_x86_64 --copt=-isysroot
 build:macos_x86_64 --copt=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
 build:macos_x86_64 --linkopt=-isysroot
 build:macos_x86_64 --linkopt=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+
+# Rust format
+build --@rules_rust//rust/settings:rustfmt.toml=//rust:rustfmt.toml
