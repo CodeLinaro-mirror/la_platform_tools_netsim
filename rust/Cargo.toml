@@ -24,6 +24,4 @@ members = [
     "packets",
     "capture",
     "packets-zc",
-    "bluetooth",
-    "rootcanal",
 ]
