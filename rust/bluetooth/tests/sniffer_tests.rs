@@ -42,9 +42,15 @@ async fn test_sniffer_receives_advertisement() {
     let beacon_id = 1;
     let create_chip_params = CreateChipParams {
         packet_streamer: Box::new(MockPacketStreamer::default()),
-        address: "00:11:22:3D:44:55".to_string(),
-        bt_properties: None,
-        ble_beacon: Some(BleBeacon::default()),
+        name: "beacon".to_string(),
+        manufacturer: "test".to_string(),
+        product_name: "test".to_string(),
+        network_params: netsim_api::chips::NetworkParams::Bluetooth(
+            netsim_api::chips::BluetoothMode::Beacon(netsim_api::chips::BeaconParams {
+                address: "00:11:22:3D:44:55".to_string(),
+                ble_beacon: BleBeacon::default(),
+            }),
+        ),
         id: ChipIdentifier(beacon_id),
     };
     command_tx
@@ -58,9 +64,12 @@ async fn test_sniffer_receives_advertisement() {
     let sniffer_id = 2;
     let create_chip_params = CreateChipParams {
         packet_streamer: Box::new(mock_streamer.clone()),
-        address: "".to_string(),
-        bt_properties: None,
-        ble_beacon: None,
+        name: "sniffer".to_string(),
+        manufacturer: "test".to_string(),
+        product_name: "test".to_string(),
+        network_params: netsim_api::chips::NetworkParams::Bluetooth(
+            netsim_api::chips::BluetoothMode::Sniffer(netsim_api::chips::SnifferParams {}),
+        ),
         id: ChipIdentifier(sniffer_id),
     };
     command_tx
