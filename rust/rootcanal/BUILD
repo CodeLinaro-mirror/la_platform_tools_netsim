@@ -12,6 +12,8 @@ rust_library(
     srcs = glob(["src/**/*.rs"]),
     visibility = ["//rust:__subpackages__"],
     deps = [
+        "//rust/packets:netsim_packets",
+        "@cxx.rs//:cxx",
         "@log",
         "@rootcanal//:lib_rootcanal_ffi",
         "@thiserror",
@@ -29,7 +31,8 @@ rust_test_suite(
     tags = ["general_tests"],
     deps = [
         ":rootcanal",
-        "//:netsim_packets",
+        "//rust/packets:netsim_packets",
+        "@cxx.rs//:cxx",
         "@env_logger",
         "@log",
         "@pdl-runtime",

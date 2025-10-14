@@ -29,13 +29,10 @@ pub trait Callbacks: Send + Sync {
     ) -> Option<i32>;
 }
 
-use std::sync::atomic::{AtomicU32, Ordering};
-
 /// The Bluetooth subsystem.
 pub struct Bluetooth {
     controllers: Mutex<HashMap<ControllerId, Controller>>,
     callbacks: Box<dyn Callbacks>,
-    next_id: AtomicU32,
 }
 
 // A wrapper around the Bluetooth ops that a controller uses.  It
@@ -66,11 +63,7 @@ impl BtOps for BtOpsWrapper {
 impl Bluetooth {
     /// Creates a new Bluetooth subsystem.
     pub fn new(callbacks: Box<dyn Callbacks>) -> Arc<Self> {
-        Arc::new(Self {
-            controllers: Mutex::new(HashMap::new()),
-            callbacks,
-            next_id: AtomicU32::new(1),
-        })
+        Arc::new(Self { controllers: Mutex::new(HashMap::new()), callbacks })
     }
 
     /// Creates a new Bluetooth controller with a unique id and possibly non-unique address
@@ -93,13 +86,12 @@ impl Bluetooth {
     /// Creates a new Bluetooth controller with a unique id and possibly non-unique address
     pub fn new_controller(
         self: &Arc<Self>,
+        id: ControllerId,
         address: Address,
         callbacks: Box<dyn ControllerCallbacks>,
         // for when controller sends ll to other controllers
-    ) -> ControllerId {
-        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        self.add_controller(id, address, callbacks).unwrap();
-        id
+    ) -> Result<()> {
+        self.add_controller(id, address, callbacks)
     }
 
     /// Removes a Bluetooth controller.

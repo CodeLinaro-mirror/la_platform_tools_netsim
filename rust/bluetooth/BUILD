@@ -24,16 +24,13 @@ package(default_visibility = ["//visibility:public"])
 rust_library(
     name = "bluetooth",
     srcs = glob(["src/**/*.rs"]),
-    crate_features = [
-        "test-utils",
-    ],
     proc_macro_deps = [
         "@async-trait",
         "@zerocopy-derive",
     ],
     deps = [
-        "//:netsim_proto",
         "//rust/netsim-api",
+        "//rust/proto-cf",
         "//rust/rootcanal",
         "@bytes",
         "@env_logger",
@@ -59,8 +56,8 @@ rust_test(
     tags = ["general_tests"],
     deps = [
         ":bluetooth",
-        "//:netsim_proto",
         "//rust/netsim-api",
+        "//rust/proto-cf",
         "//rust/rootcanal",
         "@bytes",
         "@env_logger",

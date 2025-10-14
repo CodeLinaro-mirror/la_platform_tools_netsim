@@ -8,10 +8,12 @@
 #![allow(missing_docs)]
 
 mod beacon;
-pub mod error;
+mod handlers;
 pub mod manager;
 mod sniffer;
 #[cfg(feature = "test-utils")]
+pub mod test_utils;
+mod types;
 pub mod utils;
 mod virtual_device;
 

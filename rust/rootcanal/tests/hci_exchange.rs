@@ -120,13 +120,21 @@ async fn test_hci_exchange() {
 
     // Create a sniffer to listen for packets.
     let sniffer_address = Address::from_str("00:00:00:00:00:01").unwrap();
-    let _sniffer_id =
-        rootcanal.new_controller(sniffer_address, Box::new(SnifferCallbacks { sender: ll_sender }));
+    let sniffer_id = 1;
+    rootcanal
+        .new_controller(
+            sniffer_id,
+            sniffer_address,
+            Box::new(SnifferCallbacks { sender: ll_sender }),
+        )
+        .expect("new controller failed");
 
     // Create a controller to send the HCI commands.
     let sender_address = Address::from_str("00:00:00:00:00:02").unwrap();
-    let sender_id =
-        rootcanal.new_controller(sender_address, Box::new(DummyCallbacks { sender: hci_sender }));
+    let sender_id = 2;
+    rootcanal
+        .new_controller(sender_id, sender_address, Box::new(DummyCallbacks { sender: hci_sender }))
+        .expect("new controller failed");
 
     // Reset the controller first.
     let reset_cmd = vec![0x03, 0x0c, 0x00];

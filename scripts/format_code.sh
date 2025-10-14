@@ -59,6 +59,12 @@ if [ -f "$BPFMT" ]; then
     -exec $BPFMT -w {} \;
 fi
 
-# Run buildifier to format Bazel build files
-find $REPO/tools/netsim \( -name "*.bazel" \) -print0 | xargs -0 buildifier
-buildifier $REPO/tools/netsim/WORKSPACE
+# Run buildifier to format Bazel build files if available.
+if command -v buildifier &> /dev/null; then
+    buildifier -lint=fix $REPO/tools/netsim/BUILD
+    buildifier -lint=fix $REPO/tools/netsim/MODULE.bazel
+    buildifier -lint=fix -r $REPO/tools/netsim/rust
+    buildifier -lint=fix -r $REPO/tools/netsim/build_files
+else
+    echo "buildifier not found, skipping Bazel file formatting."
+fi
