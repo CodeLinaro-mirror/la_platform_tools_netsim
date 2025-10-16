@@ -2,14 +2,21 @@
 
 use crate::chip_error::ChipError;
 use crate::client_method;
-use crate::packet_streamer::PacketStreamerApi;
+use bytes::Bytes;
+use futures::Sink;
 use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::BleBeacon;
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use std::fmt;
+use std::pin::Pin;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
+use tokio_stream::Stream;
+
+// The only error from PacketStream occurs when source closes connection.
+pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Unpin>;
+pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>;
 
 // CHIP SERVICE
 //
@@ -22,10 +29,10 @@ use tokio::sync::{mpsc, oneshot};
 // of the system to send messages to it.
 
 /// A unique identifier for a simulated chip, represented as a u32.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChipIdentifier(pub u32);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ChipId(pub u32);
 
-impl ChipIdentifier {
+impl ChipId {
     pub fn as_u32(&self) -> u32 {
         self.0
     }
@@ -67,7 +74,7 @@ pub enum ChipRequest {
     /// Update an existing chip.
     UpdateChip {
         /// The ID of the chip to patch.
-        id: ChipIdentifier,
+        id: ChipId,
         /// The patch to apply to the chip.
         chip: ProtoChip,
         /// The channel to send the updated chip state back on.
@@ -76,21 +83,21 @@ pub enum ChipRequest {
     /// Get the state of a chip.
     GetChip {
         /// The ID of the chip to retrieve.
-        id: ChipIdentifier,
+        id: ChipId,
         /// The channel to send the chip's state back on.
         respond_to: Responder<ProtoChip>,
     },
     /// Delete a chip.
     DeleteChip {
         /// The ID of the chip to delete.
-        id: ChipIdentifier,
+        id: ChipId,
         /// The channel to send the operation result back on.
         respond_to: Responder<()>,
     },
     /// Reset all event counters for a chip.
     ResetChip {
         /// The ID of the chip to reset.
-        id: ChipIdentifier,
+        id: ChipId,
     },
     /// Get radio statistics for all chips.
     GetChipStatistics {
@@ -109,9 +116,12 @@ pub enum ChipRequest {
 /// The top-level parameters for creating any kind of chip.
 pub struct CreateChipParams {
     /// A unique identifier for the new chip.
-    pub id: ChipIdentifier,
-    /// The transport for packet I/O.
-    pub packet_streamer: Box<dyn PacketStreamerApi>,
+    pub id: ChipId,
+    /// The transport for packet input.
+    pub packet_stream: Option<PacketStream>,
+    /// The transport for packet output.
+    pub packet_sink: Option<PacketSink>,
+
     /// The name of the chip.
     pub name: String,
     /// The manufacturer of the chip.
@@ -125,9 +135,16 @@ pub struct CreateChipParams {
 /// An enum holding the parameters for a specific chip technology.
 #[derive(Debug)]
 pub enum NetworkParams {
-    Bluetooth(BluetoothMode),
+    Bluetooth(BluetoothParams),
     Wifi(WifiParams),
     Uwb(UwbParams),
+}
+
+#[derive(Debug)]
+pub struct BluetoothParams {
+    pub address: String,
+    pub bt_properties: RootcanalController,
+    pub mode: BluetoothMode,
 }
 
 /// An enum to differentiate between the kinds of Bluetooth chips.
@@ -143,28 +160,17 @@ pub enum BluetoothMode {
 
 /// Parameters for creating a virtual Bluetooth device.
 #[derive(Debug, Clone)]
-pub struct DeviceParams {
-    pub address: String,
-    // TODO: rootcanal crate should pass RootcanalController properties
-    pub bt_properties: RootcanalController,
-}
-
-impl Default for DeviceParams {
-    fn default() -> Self {
-        Self { address: "".to_string(), bt_properties: RootcanalController::default() }
-    }
-}
+pub struct DeviceParams {}
 
 /// Parameters for creating a BLE beacon.
 #[derive(Debug, Clone)]
 pub struct BeaconParams {
-    pub address: String,
     pub ble_beacon: BleBeacon,
 }
 
 impl Default for BeaconParams {
     fn default() -> Self {
-        Self { address: "".to_string(), ble_beacon: BleBeacon::default() }
+        Self { ble_beacon: BleBeacon::default() }
     }
 }
 
@@ -202,7 +208,7 @@ impl fmt::Debug for CreateChipParams {
     }
 }
 
-impl fmt::Display for ChipIdentifier {
+impl fmt::Display for ChipId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -247,17 +253,17 @@ impl ChipClient {
 }
 
 // Generate client methods.
-client_method!(ChipClient => fn get_chip(id: ChipIdentifier) -> ProtoChip as ChipRequest::GetChip);
-client_method!(ChipClient => fn update_chip(id: ChipIdentifier, chip: ProtoChip) -> ProtoChip as ChipRequest::UpdateChip);
+client_method!(ChipClient => fn get_chip(id: ChipId) -> ProtoChip as ChipRequest::GetChip);
+client_method!(ChipClient => fn update_chip(id: ChipId, chip: ProtoChip) -> ProtoChip as ChipRequest::UpdateChip);
 client_method!(ChipClient => fn create_chip(params: CreateChipParams) -> () as ChipRequest::CreateChip);
-client_method!(ChipClient => fn delete_chip(id: ChipIdentifier) -> () as ChipRequest::DeleteChip);
+client_method!(ChipClient => fn delete_chip(id: ChipId) -> () as ChipRequest::DeleteChip);
 client_method!(ChipClient => fn get_chip_statistics() -> Vec<ProtoRadioStats> as ChipRequest::GetChipStatistics);
 client_method!(ChipClient => fn get_chip_count_for_testing() -> usize as ChipRequest::GetChipCountForTesting);
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::packet_streamer::MockPacketStreamerApi;
+    use netsim_proto::configuration::Controller as RootcanalController;
 
     #[tokio::test]
     async fn test_get_chip() {
@@ -266,7 +272,7 @@ mod tests {
 
         // Spawn a task to handle the client call
         tokio::spawn(async move {
-            let chip_id = ChipIdentifier(1);
+            let chip_id = ChipId(1);
             let _ = client.get_chip(chip_id).await;
         });
 
@@ -274,7 +280,7 @@ mod tests {
         let received = rx.recv().await.unwrap();
         match received {
             ChipRequest::GetChip { id, respond_to: _ } => {
-                assert_eq!(id, ChipIdentifier(1));
+                assert_eq!(id, ChipId(1));
             }
             _ => panic!("Received incorrect ChipRequest variant"),
         }
@@ -284,18 +290,19 @@ mod tests {
     async fn test_create_chip() {
         let (tx, mut rx) = mpsc::channel(1);
         let client = ChipClient::new(tx);
-        let (mock_streamer, _, _) = MockPacketStreamerApi::new();
 
         let params = CreateChipParams {
-            id: ChipIdentifier(2),
-            packet_streamer: Box::new(mock_streamer),
+            id: ChipId(2),
+            packet_stream: None,
+            packet_sink: None,
             name: "test_chip".to_string(),
             manufacturer: "test_manufacturer".to_string(),
             product_name: "test_product".to_string(),
-            network_params: NetworkParams::Bluetooth(BluetoothMode::Device(DeviceParams {
+            network_params: NetworkParams::Bluetooth(BluetoothParams {
                 address: "00:11:22:33:44:55".to_string(),
                 bt_properties: RootcanalController::default(),
-            })),
+                mode: BluetoothMode::Device(DeviceParams {}),
+            }),
         };
 
         tokio::spawn(async move {
@@ -305,12 +312,12 @@ mod tests {
         let received = rx.recv().await.unwrap();
         match received {
             ChipRequest::CreateChip { params, respond_to: _ } => {
-                assert_eq!(params.id, ChipIdentifier(2));
+                assert_eq!(params.id, ChipId(2));
                 match params.network_params {
-                    NetworkParams::Bluetooth(BluetoothMode::Device(virtual_device_params)) => {
-                        assert_eq!(virtual_device_params.address, "00:11:22:33:44:55");
+                    NetworkParams::Bluetooth(bt_params) => {
+                        assert_eq!(bt_params.address, "00:11:22:33:44:55");
                     }
-                    _ => panic!("Received incorrect ChipKindParams variant"),
+                    _ => panic!("Received incorrect NetworkParams variant"),
                 }
             }
             _ => panic!("Received incorrect ChipRequest variant"),

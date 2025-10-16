@@ -33,7 +33,7 @@
 #include "util/log.h"
 using netsim::__BtsLog;
 
-#include "aemu/base/EintrWrapper.h"  // for HANDLE_EINTR
+#include "aemu/base/EintrWrapper.h"          // for HANDLE_EINTR
 #include "aemu/base/sockets/SocketUtils.h"   // for socketRecv, socketSet...
 #include "aemu/base/sockets/SocketWaiter.h"  // for SocketWaiter, SocketW...
 
@@ -168,7 +168,8 @@ class AsyncManager::AsyncFdWatcher {
     // set up the communication channel
     if (android::base::socketCreatePair(&notification_listen_fd_,
                                         &notification_write_fd_)) {
-      BtsLogError("Unable to establish a communication channel to the reading thread");
+      BtsLogError(
+          "Unable to establish a communication channel to the reading thread");
       return -1;
     }
     android::base::socketSetNonBlocking(notification_listen_fd_);
@@ -244,7 +245,9 @@ class AsyncManager::AsyncFdWatcher {
       // wait until there is data available to read on some FD
       int retval = read_fds->wait(std::numeric_limits<int64_t>::max());
       if (retval <= 0) {  // there was some error or a timeout
-        BtsLogError("There was an error while waiting for data on the file descriptors: %s",
+        BtsLogError(
+            "There was an error while waiting for data on the file "
+            "descriptors: %s",
             strerror(errno));
         continue;
       }
