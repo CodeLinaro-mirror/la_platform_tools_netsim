@@ -3,7 +3,7 @@
 //! This module defines the data structures and traits used by the Bluetooth
 //! manager.
 
-use netsim_api::chip_error::ChipError;
+use netsim_api::{chip_error::ChipError, chips::BluetoothMode};
 use netsim_proto::model::Chip as ProtoChip;
 use tokio::sync::oneshot;
 
@@ -15,6 +15,8 @@ pub(crate) struct ChipDied {
 }
 
 pub(crate) struct ChipEntry {
+    #[allow(dead_code)]
+    pub(crate) bluetooth_mode: BluetoothMode,
     pub(crate) chip: Box<dyn EmulatedChip>,
     pub(crate) shutdown_tx: Option<oneshot::Sender<()>>,
 }

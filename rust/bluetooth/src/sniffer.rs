@@ -5,7 +5,8 @@ use crate::utils::ToChipError;
 use bytes::Bytes;
 use log::error;
 use netsim_api::chip_error::ChipError;
-use netsim_api::chips::{ChipIdentifier, CreateChipParams};
+use netsim_api::chips::{ChipIdentifier, SnifferParams};
+use netsim_api::packet_streamer::PacketStreamerApi;
 use netsim_proto::model::Chip as ProtoChip;
 use rootcanal::{
     bluetooth::Bluetooth,
@@ -14,8 +15,7 @@ use rootcanal::{
 };
 use std::ffi::c_int;
 use std::sync::Arc;
-use tokio::runtime::Handle;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 /// A chip that snoops on all Bluetooth traffic.
 #[allow(dead_code)]
@@ -45,21 +45,24 @@ impl ControllerCallbacks for SnifferCallbacks {
 }
 
 impl SnifferChip {
-    pub fn new(rootcanal: &Arc<Bluetooth>, params: CreateChipParams) -> Result<Self, ChipError> {
+    pub fn new(
+        rootcanal: &Arc<Bluetooth>,
+        chip_id: ChipIdentifier,
+        _params: &SnifferParams,
+        mut packet_streamer: Box<dyn PacketStreamerApi>,
+    ) -> Result<(Self, Option<oneshot::Sender<()>>), ChipError> {
         let (packet_tx, mut packet_rx) = mpsc::channel(128);
         let callbacks = Box::new(SnifferCallbacks { packet_tx });
-        let chip_id = params.id.as_u32();
         rootcanal
-            .new_controller(chip_id, Address { address: [0; 6] }, callbacks)
+            .new_controller(chip_id.as_u32(), Address { address: [0; 6] }, callbacks)
             .to_chip_error()?;
-        let mut packet_streamer = params.packet_streamer;
         // Enable scanning on the new controller.
         let scan_params = vec![0x12, 0x20, 7, 0x01, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00];
-        rootcanal.receive_hci(chip_id, Idc::Cmd, &scan_params).to_chip_error()?;
+        rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &scan_params).to_chip_error()?;
         let scan_enable = vec![0x0c, 0x20, 2, 0x01, 0x00];
-        rootcanal.receive_hci(chip_id, Idc::Cmd, &scan_enable).to_chip_error()?;
+        rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &scan_enable).to_chip_error()?;
 
-        Handle::current().spawn(async move {
+        tokio::spawn(async move {
             while let Some(packet) = packet_rx.recv().await {
                 if let Err(e) = packet_streamer.write_packet(packet.to_vec()).await {
                     error!("Failed to write packet to sniffer: {e}");
@@ -68,7 +71,7 @@ impl SnifferChip {
             }
         });
 
-        Ok(Self { chip_id: params.id })
+        Ok((Self { chip_id }, None))
     }
 }
 

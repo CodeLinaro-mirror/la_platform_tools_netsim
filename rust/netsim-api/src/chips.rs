@@ -106,28 +106,98 @@ pub enum ChipRequest {
     Shutdown,
 }
 
-/// The parameters for the `CreateChip` command.
+/// The top-level parameters for creating any kind of chip.
 pub struct CreateChipParams {
-    /// The ID of the chip to create.
+    /// A unique identifier for the new chip.
     pub id: ChipIdentifier,
-
-    /// The parameters for the chip to create.
-    pub address: String,
-    pub bt_properties: Option<RootcanalController>,
-    pub ble_beacon: Option<BleBeacon>,
-
-    /// The packet streamer to use for the chip.
+    /// The transport for packet I/O.
     pub packet_streamer: Box<dyn PacketStreamerApi>,
+    /// The name of the chip.
+    pub name: String,
+    /// The manufacturer of the chip.
+    pub manufacturer: String,
+    /// The product name of the chip.
+    pub product_name: String,
+    /// Technology-specific parameters.
+    pub network_params: NetworkParams,
 }
 
+/// An enum holding the parameters for a specific chip technology.
+#[derive(Debug)]
+pub enum NetworkParams {
+    Bluetooth(BluetoothMode),
+    Wifi(WifiParams),
+    Uwb(UwbParams),
+}
+
+/// An enum to differentiate between the kinds of Bluetooth chips.
+#[derive(Debug)]
+pub enum BluetoothMode {
+    /// A full, virtual Bluetooth controller.
+    Device(DeviceParams),
+    /// A simple, non-interactive BLE beacon.
+    Beacon(BeaconParams),
+    /// A passive Bluetooth sniffer.
+    Sniffer(SnifferParams),
+}
+
+/// Parameters for creating a virtual Bluetooth device.
+#[derive(Debug, Clone)]
+pub struct DeviceParams {
+    pub address: String,
+    // TODO: rootcanal crate should pass RootcanalController properties
+    pub bt_properties: RootcanalController,
+}
+
+impl Default for DeviceParams {
+    fn default() -> Self {
+        Self { address: "".to_string(), bt_properties: RootcanalController::default() }
+    }
+}
+
+/// Parameters for creating a BLE beacon.
+#[derive(Debug, Clone)]
+pub struct BeaconParams {
+    pub address: String,
+    pub ble_beacon: BleBeacon,
+}
+
+impl Default for BeaconParams {
+    fn default() -> Self {
+        Self { address: "".to_string(), ble_beacon: BleBeacon::default() }
+    }
+}
+
+// ... (other code)
+
+/// Parameters for a Bluetooth sniffer.
+#[derive(Debug, Default, Clone)]
+pub struct SnifferParams {
+    // Future sniffer-specific properties can be added here.
+}
+
+/// Parameters for creating a Wi-Fi chip.
+#[derive(Debug, Default)]
+pub struct WifiParams {
+    // Future Wi-Fi specific properties.
+}
+
+/// Parameters for creating a UWB chip.
+#[derive(Debug, Default)]
+pub struct UwbParams {
+    // Future UWB specific properties.
+}
+
+// Keep a Debug implementation that doesn't print the packet_streamer internals.
 impl fmt::Debug for CreateChipParams {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CreateChipParams")
             .field("id", &self.id)
-            .field("address", &self.address)
-            .field("bt_properties", &self.bt_properties)
-            .field("ble_beacon", &self.ble_beacon)
             .field("packet_streamer", &"Box<dyn PacketStreamerApi>")
+            .field("name", &self.name)
+            .field("manufacturer", &self.manufacturer)
+            .field("product_name", &self.product_name)
+            .field("kind", &self.network_params)
             .finish()
     }
 }
@@ -218,10 +288,14 @@ mod tests {
 
         let params = CreateChipParams {
             id: ChipIdentifier(2),
-            address: "00:11:22:33:44:55".to_string(),
-            bt_properties: None,
-            ble_beacon: None,
             packet_streamer: Box::new(mock_streamer),
+            name: "test_chip".to_string(),
+            manufacturer: "test_manufacturer".to_string(),
+            product_name: "test_product".to_string(),
+            network_params: NetworkParams::Bluetooth(BluetoothMode::Device(DeviceParams {
+                address: "00:11:22:33:44:55".to_string(),
+                bt_properties: RootcanalController::default(),
+            })),
         };
 
         tokio::spawn(async move {
@@ -232,7 +306,12 @@ mod tests {
         match received {
             ChipRequest::CreateChip { params, respond_to: _ } => {
                 assert_eq!(params.id, ChipIdentifier(2));
-                assert_eq!(params.address, "00:11:22:33:44:55");
+                match params.network_params {
+                    NetworkParams::Bluetooth(BluetoothMode::Device(virtual_device_params)) => {
+                        assert_eq!(virtual_device_params.address, "00:11:22:33:44:55");
+                    }
+                    _ => panic!("Received incorrect ChipKindParams variant"),
+                }
             }
             _ => panic!("Received incorrect ChipRequest variant"),
         }

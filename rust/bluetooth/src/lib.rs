@@ -8,6 +8,7 @@
 #![allow(missing_docs)]
 
 mod beacon;
+mod device;
 mod handlers;
 pub mod manager;
 mod sniffer;
@@ -15,6 +16,5 @@ mod sniffer;
 pub mod test_utils;
 mod types;
 pub mod utils;
-mod virtual_device;
 
 pub use manager::BluetoothManager;
