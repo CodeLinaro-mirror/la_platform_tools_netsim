@@ -9,6 +9,7 @@ use thiserror::Error;
 /// The error type for operations within the chip service.
 #[derive(Error, Debug)]
 pub enum ChipError {
+    /// Error indicating that a chip with the given ID was not found.
     #[error("Chip not found error: {0}")]
     ChipNotFound(ChipId),
 

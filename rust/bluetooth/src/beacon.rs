@@ -1,5 +1,15 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+//! This module provides the functionality for creating and managing Bluetooth
+//! beacon chips.
+//!
+//! It includes the `create` function for initializing a new beacon with
+//! advertising parameters and data, and placeholder functions for updating
+//! and retrieving chip information.
+//!
+//! NOTE: This module is currently missing the complete setup for converting
+//! `BeaconParams` into the appropriate HCI commands for full configuration.
+
 use crate::utils::ToChipError;
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{BeaconParams, ChipId};
@@ -14,14 +24,14 @@ pub fn create(
 ) -> Result<(), ChipError> {
     // Reset the controller first.
     let reset_cmd = vec![0x03, 0x0c, 0x00];
-    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &reset_cmd).to_chip_error()?;
+    rootcanal.receive_hci(chip_id.into(), Idc::Cmd, &reset_cmd).to_chip_error()?;
 
     // LE Set Advertising Parameters
     let adv_params = vec![
         0x06, 0x20, 15, 0xA0, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x07, 0x00,
     ];
-    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_params).to_chip_error()?;
+    rootcanal.receive_hci(chip_id.into(), Idc::Cmd, &adv_params).to_chip_error()?;
 
     // LE Set Advertising Data
     let mut adv_data_cmd = vec![0x08, 0x20, 32];
@@ -38,11 +48,11 @@ pub fn create(
         adv_data_cmd.extend_from_slice(&[0x02, 0x01, 0x06]); // Advertising_Data
     }
     adv_data_cmd.resize(3 + 32, 0);
-    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_data_cmd).to_chip_error()?;
+    rootcanal.receive_hci(chip_id.into(), Idc::Cmd, &adv_data_cmd).to_chip_error()?;
 
     // LE Set Advertising Enable
     let adv_enable = vec![0x0A, 0x20, 0x01, 0x01];
-    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_enable).to_chip_error()?;
+    rootcanal.receive_hci(chip_id.into(), Idc::Cmd, &adv_enable).to_chip_error()?;
 
     Ok(())
 }

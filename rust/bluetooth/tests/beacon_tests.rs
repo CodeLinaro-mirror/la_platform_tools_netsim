@@ -3,7 +3,7 @@
 use crate::test_utils;
 use ::bluetooth::server::Server;
 use netsim_api::chips::{
-    BeaconParams, BluetoothMode, BluetoothParams, ChipId, CreateChipParams, NetworkParams,
+    BeaconParams, BluetoothMode, BluetoothParams, ChipId, CreateParams, NetworkParams,
 };
 use netsim_proto::configuration::Controller as RootcanalController;
 use netsim_proto::model::chip::BleBeacon;
@@ -18,7 +18,7 @@ async fn test_add_chip() {
     });
 
     let chip_id = ChipId(1);
-    let create_chip_params = CreateChipParams {
+    let create_chip_params = CreateParams {
         name: "test_chip".to_string(),
         manufacturer: "test_manufacturer".to_string(),
         product_name: "test_product".to_string(),
@@ -31,9 +31,9 @@ async fn test_add_chip() {
         packet_stream: None,
         packet_sink: None,
     };
-    client.create_chip(create_chip_params).await.expect("creating chip");
+    client.create(create_chip_params).await.expect("creating chip");
 
-    let chip_count: usize = client.get_chip_count_for_testing().await.expect("chip count");
+    let chip_count: usize = client.read_count_for_testing().await.expect("chip count");
     assert_eq!(chip_count, 1);
 
     // TODO: Implement ChipRequest::GetChip().

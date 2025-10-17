@@ -4,7 +4,7 @@ use crate::test_utils;
 use crate::test_utils::mock_sink;
 use ::bluetooth::server::Server;
 use netsim_api::chips::{
-    BeaconParams, BluetoothMode, BluetoothParams, ChipId, CreateChipParams, NetworkParams,
+    BeaconParams, BluetoothMode, BluetoothParams, ChipId, CreateParams, NetworkParams,
     SnifferParams,
 };
 use netsim_proto::model::chip::BleBeacon;
@@ -20,7 +20,7 @@ async fn test_sniffer_receives_advertisement() {
 
     // 1. Create a beacon.
     let id = ChipId(1);
-    let create_chip_params = CreateChipParams {
+    let create_chip_params = CreateParams {
         name: "beacon".to_string(),
         manufacturer: "test".to_string(),
         product_name: "test".to_string(),
@@ -33,12 +33,12 @@ async fn test_sniffer_receives_advertisement() {
         packet_stream: None,
         packet_sink: None,
     };
-    client.create_chip(create_chip_params).await;
+    client.create(create_chip_params).await.ok();
 
     // 2. Create a sniffer with the mock packet sink.
     let (sink, mut sink_rx) = mock_sink();
     let id = ChipId(2);
-    let create_chip_params = CreateChipParams {
+    let create_chip_params = CreateParams {
         name: "sniffer".to_string(),
         manufacturer: "test".to_string(),
         product_name: "test".to_string(),
@@ -51,7 +51,7 @@ async fn test_sniffer_receives_advertisement() {
         packet_stream: None,
         packet_sink: Some(sink),
     };
-    client.create_chip(create_chip_params).await;
+    client.create(create_chip_params).await.ok();
 
     // 3. Wait for the advertisement packet.
     timeout(Duration::from_secs(1), async {

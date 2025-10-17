@@ -6,7 +6,7 @@ use ::bluetooth::server::Server;
 use bytes::Bytes;
 use log::info;
 use netsim_api::chips::{
-    BluetoothMode, BluetoothParams, ChipId, CreateChipParams, DeviceParams, NetworkParams,
+    BluetoothMode, BluetoothParams, ChipId, CreateParams, DeviceParams, NetworkParams,
 };
 use netsim_proto::configuration::Controller as RootcanalController;
 use tokio::time::{timeout, Duration};
@@ -26,7 +26,7 @@ async fn test_hci_reset_command() {
     // 1. Create a virtual device chip.
     let id = ChipId(1);
 
-    let create_chip_params = CreateChipParams {
+    let create_chip_params = CreateParams {
         name: "test_chip".to_string(),
         manufacturer: "test_manufacturer".to_string(),
         product_name: "test_product".to_string(),
@@ -39,7 +39,7 @@ async fn test_hci_reset_command() {
         packet_stream: Some(stream),
         packet_sink: Some(sink),
     };
-    client.create_chip(create_chip_params).await.expect("creating chip");
+    client.create(create_chip_params).await.expect("creating chip");
     // 2. Send an HCI Reset command.
     let hci_reset_cmd = Bytes::from(vec![0x03, 0x0c, 0x00]);
     stream_tx.send(hci_reset_cmd).await.map_err(|e| info!("err:{:?}", e.0)).expect("sending");
@@ -67,7 +67,7 @@ async fn test_chip_dies_on_packet_stream_error() {
 
     // 1. Create a virtual device chip.
     let id = ChipId(1);
-    let create_chip_params = CreateChipParams {
+    let create_chip_params = CreateParams {
         name: "test_chip".to_string(),
         manufacturer: "test_manufacturer".to_string(),
         product_name: "test_product".to_string(),
@@ -80,11 +80,11 @@ async fn test_chip_dies_on_packet_stream_error() {
         packet_stream: Some(stream),
         packet_sink: Some(sink),
     };
-    client.create_chip(create_chip_params).await.expect("creating chip");
+    client.create(create_chip_params).await.expect("creating chip");
 
     // A small delay to ensure the chip is registered before we check the count.
     tokio::time::sleep(Duration::from_millis(10)).await;
-    let chip_count: usize = client.get_chip_count_for_testing().await.expect("chip count");
+    let chip_count: usize = client.read_count_for_testing().await.expect("chip count");
     assert_eq!(chip_count, 1);
 
     // 2. Trigger a packet stream error by closing the channel.
@@ -93,7 +93,7 @@ async fn test_chip_dies_on_packet_stream_error() {
     // 4. Verify the chip has been removed.
     // A small delay is needed to ensure the server has time to process the death notice.
     tokio::time::sleep(Duration::from_millis(10)).await;
-    let chip_count: usize = client.get_chip_count_for_testing().await.expect("chip count");
+    let chip_count: usize = client.read_count_for_testing().await.expect("chip count");
     assert_eq!(chip_count, 0);
 }
 
@@ -111,7 +111,7 @@ async fn test_delete_chip_shuts_down_task() {
 
     // 1. Create a virtual device chip.
     let id = ChipId(1);
-    let create_chip_params = CreateChipParams {
+    let create_chip_params = CreateParams {
         name: "test_chip".to_string(),
         manufacturer: "test_manufacturer".to_string(),
         product_name: "test_product".to_string(),
@@ -124,15 +124,15 @@ async fn test_delete_chip_shuts_down_task() {
         packet_stream: Some(stream),
         packet_sink: Some(sink),
     };
-    client.create_chip(create_chip_params).await.expect("creating chip");
+    client.create(create_chip_params).await.expect("creating chip");
 
-    let chip_count: usize = client.get_chip_count_for_testing().await.expect("chip count");
+    let chip_count: usize = client.read_count_for_testing().await.expect("chip count");
     assert_eq!(chip_count, 1);
 
     // 2. Send a DeleteChip command.
-    client.delete_chip(id).await.expect("delete chip");
+    client.delete(id).await.expect("delete chip");
 
     // 4. Verify the chip has been removed.
-    let chip_count: usize = client.get_chip_count_for_testing().await.expect("chip count");
+    let chip_count: usize = client.read_count_for_testing().await.expect("chip count");
     assert_eq!(chip_count, 0);
 }
