@@ -5,7 +5,7 @@ use crate::utils::ToChipError;
 use bytes::Bytes;
 use log::{debug, error, info};
 use netsim_api::chip_error::ChipError;
-use netsim_api::chips::{ChipIdentifier, CreateChipParams};
+use netsim_api::chips::{ChipIdentifier, DeviceParams};
 use netsim_api::packet_streamer::PacketStreamerApi;
 use netsim_proto::model::Chip as ProtoChip;
 use rootcanal::{
@@ -20,42 +20,34 @@ use tokio::sync::{mpsc, oneshot};
 
 /// Manages the packet stream for a single virtual device.
 #[allow(dead_code)]
-pub(crate) struct VirtualDeviceChip {
+pub(crate) struct DeviceChip {
     chip_id: ChipIdentifier,
 }
 
-impl VirtualDeviceChip {
-    /// Creates a new `VirtualDeviceChip` and starts its packet processing loop.
+impl DeviceChip {
+    /// Creates a new `DeviceChip` and starts its packet processing loop.
     pub fn new(
         rootcanal: Arc<Bluetooth>,
-        params: CreateChipParams,
+        chip_id: ChipIdentifier,
+        packet_streamer: Box<dyn PacketStreamerApi>,
+        params: &DeviceParams,
         chip_death_tx: mpsc::Sender<ChipDied>,
-    ) -> Result<(Self, oneshot::Sender<()>), ChipError> {
-        let packet_streamer = params.packet_streamer;
+    ) -> Result<(Self, Option<oneshot::Sender<()>>), ChipError> {
         let address =
             params.address.parse().unwrap_or_else(|_| Address { address: rand::random() });
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let (hci_tx, hci_rx) = mpsc::channel::<Bytes>(128);
 
         let callbacks = Box::new(VirtualDeviceCallbacks { hci_tx });
-        // TODO: Provide id to the controller
-        let chip_id = params.id.as_u32();
-        rootcanal.new_controller(chip_id, address, callbacks).to_chip_error()?;
+        rootcanal.new_controller(chip_id.as_u32(), address, callbacks).to_chip_error()?;
 
-        Self::start_packet_processing_loop(
-            chip_id,
-            rootcanal.clone(),
-            packet_streamer,
-            hci_rx,
-            shutdown_rx,
-            chip_death_tx,
-        );
+        Self::run(chip_id.as_u32(), rootcanal, packet_streamer, hci_rx, shutdown_rx, chip_death_tx);
 
-        Ok((Self { chip_id: params.id }, shutdown_tx))
+        Ok((Self { chip_id }, Some(shutdown_tx)))
     }
 
     /// Spawns the main packet processing loop for the virtual device.
-    fn start_packet_processing_loop(
+    fn run(
         chip_id: u32,
         rootcanal: Arc<Bluetooth>,
         mut packet_streamer: Box<dyn PacketStreamerApi>,
@@ -151,7 +143,7 @@ impl ControllerCallbacks for VirtualDeviceCallbacks {
     }
 }
 
-impl EmulatedChip for VirtualDeviceChip {
+impl EmulatedChip for DeviceChip {
     fn update_chip(&mut self, _patch: netsim_proto::model::Chip) -> Result<ProtoChip, ChipError> {
         self.get_chip()
     }

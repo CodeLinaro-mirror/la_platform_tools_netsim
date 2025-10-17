@@ -77,9 +77,15 @@ async fn test_hci_reset_command() {
     let chip_id = 1;
     let create_chip_params = CreateChipParams {
         packet_streamer: Box::new(streamer),
-        address: "AB:CD:EF:11:22:33".to_string(),
-        bt_properties: Some(RootcanalController::default()),
-        ble_beacon: None,
+        name: "test_chip".to_string(),
+        manufacturer: "test_manufacturer".to_string(),
+        product_name: "test_product".to_string(),
+        network_params: netsim_api::chips::NetworkParams::Bluetooth(
+            netsim_api::chips::BluetoothMode::Device(netsim_api::chips::DeviceParams {
+                address: "AB:CD:EF:11:22:33".to_string(),
+                bt_properties: RootcanalController::default(),
+            }),
+        ),
         id: ChipIdentifier(chip_id),
     };
     command_tx
@@ -137,9 +143,15 @@ async fn test_chip_dies_on_packet_stream_error() {
     let chip_id = 1;
     let create_chip_params = CreateChipParams {
         packet_streamer: Box::new(streamer.clone()),
-        address: "BE:EF:FA:CE:11:22".to_string(),
-        bt_properties: Some(RootcanalController::default()),
-        ble_beacon: None,
+        name: "test_chip".to_string(),
+        manufacturer: "test_manufacturer".to_string(),
+        product_name: "test_product".to_string(),
+        network_params: netsim_api::chips::NetworkParams::Bluetooth(
+            netsim_api::chips::BluetoothMode::Device(netsim_api::chips::DeviceParams {
+                address: "BE:EF:FA:CE:11:22".to_string(),
+                bt_properties: RootcanalController::default(),
+            }),
+        ),
         id: ChipIdentifier(chip_id),
     };
     command_tx
@@ -191,9 +203,15 @@ async fn test_delete_chip_shuts_down_task() {
     let chip_id = 1;
     let create_chip_params = CreateChipParams {
         packet_streamer: Box::new(streamer),
-        address: "DE:AD:BE:EF:33:44".to_string(),
-        bt_properties: Some(RootcanalController::default()),
-        ble_beacon: None,
+        name: "test_chip".to_string(),
+        manufacturer: "test_manufacturer".to_string(),
+        product_name: "test_product".to_string(),
+        network_params: netsim_api::chips::NetworkParams::Bluetooth(
+            netsim_api::chips::BluetoothMode::Device(netsim_api::chips::DeviceParams {
+                address: "DE:AD:BE:EF:33:44".to_string(),
+                bt_properties: RootcanalController::default(),
+            }),
+        ),
         id: ChipIdentifier(chip_id),
     };
     command_tx

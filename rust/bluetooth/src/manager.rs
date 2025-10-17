@@ -24,6 +24,7 @@ pub struct BluetoothManager {
     pub(crate) chips: HashMap<u32, ChipEntry>,
     pub(crate) command_rx: mpsc::Receiver<ChipRequest>,
     pub(crate) chip_death_rx: mpsc::Receiver<ChipDied>,
+    #[allow(dead_code)]
     pub(crate) chip_death_tx: mpsc::Sender<ChipDied>,
 }
 
