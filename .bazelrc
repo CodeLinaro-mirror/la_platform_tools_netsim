@@ -1,2 +1,29 @@
-build --enable_workspace
-test --enable_workspace --verbose_failures --test_output=all
+test --verbose_failures --test_output=all
+
+# Common flags for Release builds
+build:opt --compilation_mode=opt
+build:release-base --config=opt
+build:release-base --copt="-O3"
+build:release-base --copt="-DNDEBUG"
+build:release-base --strip=always
+
+# Linux release builds
+build:linux --config=release-base
+build:linux --linkopt="-Wl,-strip-all"
+
+# Mac release builds
+build:macos --config=release-base
+build:macos --linkopt="-Wl,-S"
+build:macos --macos_minimum_os=10.14
+build:macos --host_macos_minimum_os=10.14
+
+# Mac x86_64 release builds
+build:macos_x86_64 --config=macos
+build:macos_x86_64 --cpu=darwin_x86_64
+build:macos_x86_64 --copt=-isysroot
+build:macos_x86_64 --copt=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+build:macos_x86_64 --linkopt=-isysroot
+build:macos_x86_64 --linkopt=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+
+# Rust format
+build --@rules_rust//rust/settings:rustfmt.toml=//rust:rustfmt.toml

@@ -1,0 +1,14 @@
+# Copyright 2025 The Android Open Source Project
+
+[package]
+name = "rootcanal"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib","lib"]
+
+[dependencies]
+log = "0.4.17"
+thiserror = "1.0"

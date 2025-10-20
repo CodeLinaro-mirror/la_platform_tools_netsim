@@ -14,8 +14,7 @@
 
 cmake_minimum_required(VERSION 3.5)
 
-set(ROOTCANAL_PROTO_DIR
-    ${AOSP_ROOT}/packages/modules/Bluetooth/tools/rootcanal/proto)
+set(ROOTCANAL_PROTO_DIR ${AOSP_ROOT}/tools/rootcanal/proto)
 
 # For netsimd (netsimd-proto-lib)
 protobuf_generate_grpc_cpp(

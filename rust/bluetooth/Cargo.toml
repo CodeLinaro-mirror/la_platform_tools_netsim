@@ -1,0 +1,32 @@
+[package]
+name = "bluetooth"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib","lib"]
+
+[dependencies]
+netsim-api = { path = "../netsim-api" }
+rootcanal = { path = "../rootcanal" }
+protobuf = "3.2.0"
+thiserror = "1.0"
+tokio = { version = "1.32.0", default-features = false, features = ["rt", "time", "sync", "macros"] }
+zerocopy = "0.8.25"
+netsim-proto = { path = "../proto" }
+hex = "0.4.3"
+bytes = "1.4.0"
+log = "0.4.17"
+async-trait = "0.1.68"
+env_logger = { version = "0.10.0", default-features = false }
+rand = "0.8.5"
+
+[features]
+default = []
+test-utils = []
+
+[dev-dependencies]
+rootcanal = { path = "../rootcanal" }
+
+[workspace]

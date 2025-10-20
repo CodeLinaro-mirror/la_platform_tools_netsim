@@ -30,9 +30,6 @@ class ProtoBuild(build_py):
     proto_dir = path.join(proto_root_dir, "netsim")
     rootcanal_proto_root_dir = path.join(
         aosp_dir,
-        "packages",
-        "modules",
-        "Bluetooth",
         "tools",
         "rootcanal",
         "proto",

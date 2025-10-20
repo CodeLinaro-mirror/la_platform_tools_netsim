@@ -18,6 +18,7 @@ import logging
 import platform
 from typing import Mapping
 
+from tasks.bazel_task import BazelTask
 from tasks.compile_install_task import CompileInstallTask
 from tasks.compile_task import CompileTask
 from tasks.configure_task import ConfigureTask
@@ -26,8 +27,10 @@ from tasks.run_pytest_task import RunPyTestTask
 from tasks.run_test_task import RunTestTask
 from tasks.task import Task
 from tasks.zip_artifact_task import ZipArtifactTask
+from utils import is_bazel_build
 
 TASK_LIST = [
+    "Bazel",
     "Configure",
     "Compile",
     "CompileInstall",
@@ -51,6 +54,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
 
   # Mapping of tasks
   tasks = {
+      "Bazel": BazelTask(args, env),
       "Configure": ConfigureTask(args, env),
       "Compile": CompileTask(args, env),
       "CompileInstall": CompileInstallTask(args, env),
@@ -62,52 +66,62 @@ def get_tasks(args, env) -> Mapping[str, Task]:
 
   # Enable all tasks for buidlbots
   if args.buildbot:
-    for task_name in [
-        "Configure",
-        "CompileInstall",
-        "RunTest",
-        "ZipArtifact",
-        "InstallEmulator",
-        "RunPyTest",
-    ]:
-      tasks[task_name].enable(True)
+    if args.bazel:
+      for task_name in [
+          "Bazel",
+          "ZipArtifact",
+          "InstallEmulator",
+          "RunPyTest",
+      ]:
+        tasks[task_name].enable(True)
+    else:
+      for task_name in [
+          "Configure",
+          "CompileInstall",
+          "RunTest",
+          "ZipArtifact",
+          "InstallEmulator",
+          "RunPyTest",
+      ]:
+        tasks[task_name].enable(True)
     return tasks
 
-  if args.task:
-    # Enable user specified tasks
-    for args_task_name in args.task:
-      if args_task_name.lower() == "localrunall":
-        # We don't need installation process when running locally
-        for task_name in [
-            "Configure",
-            "Compile",
-            "RunTest",
-            "InstallEmulator",
-            "RunPyTest",
-        ]:
-          tasks[task_name].enable(True)
-        break
-      elif args_task_name.lower() == "configure":
-        tasks["Configure"].enable(True)
-      elif args_task_name.lower() == "compile":
-        tasks["Compile"].enable(True)
-      elif args_task_name.lower() == "compileinstall":
-        tasks["CompileInstall"].enable(True)
-      elif args_task_name.lower() == "runtest":
-        tasks["RunTest"].enable(True)
-      elif args_task_name.lower() == "zipartifact":
-        tasks["ZipArtifact"].enable(True)
-      elif args_task_name.lower() == "installemulator":
-        tasks["InstallEmulator"].enable(True)
-      elif args_task_name.lower() == "fullbuild":
-        tasks["Configure"].enable(True)
-        tasks["Compile"].enable(True)
-        tasks["InstallEmulator"].enable(True)
-      elif args_task_name.lower() == "runpytest":
-        tasks["RunPyTest"].enable(True)
-      else:
-        logging.error(f"Unknown task: {args_task_name}")
-  else:
-    # If task argument isn't passed, only enable ConfigureTask
-    tasks["Configure"].enable(True)
+  # Define the complete task map declaratively.
+  task_map = {
+      "configure": ["Configure"],
+      "compile": ["Compile"],
+      "compileinstall": ["CompileInstall"],
+      "runtest": ["RunTest"],
+      "zipartifact": ["ZipArtifact"],
+      "installemulator": ["InstallEmulator"],
+      "runpytest": ["RunPyTest"],
+      "bazel": ["Bazel"],
+      "fullbuild": ["Configure", "Compile", "InstallEmulator"],
+      "localrunall": (
+          ["Bazel", "InstallEmulator", "RunPyTest"]
+          if is_bazel_build(args)
+          else [
+              "Configure",
+              "Compile",
+              "RunTest",
+              "InstallEmulator",
+              "RunPyTest",
+          ]
+      ),
+  }
+
+  # Handle the default case and convert to a set for efficient lookup.
+  # If `localrunall` is present, it becomes the only task.
+  user_tasks = {t.lower() for t in (args.task or ["configure"])}
+  if "localrunall" in user_tasks:
+    user_tasks = {"localrunall"}
+
+  # A single, clean loop to enable all required tasks.
+  for task_name in user_tasks:
+    if task_name in task_map:
+      for task_to_enable in task_map[task_name]:
+        tasks[task_to_enable].enable(True)
+    else:
+      logging.error(f"Unknown task: {task_name}")
+
   return tasks
