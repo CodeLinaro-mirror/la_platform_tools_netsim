@@ -1,5 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+//! This module provides the functionality for creating and managing Bluetooth
+//! sniffer chips.
+//!
+//! The `create` function initializes a new sniffer by enabling scanning.
+//! Placeholder functions for updating and retrieving chip information are also
+//! included.
+//!
+//! Future Features:
+//! * **External Link Layer API:** Currently used for testing, this mode may expose an external API
+//!   in the future to convert Rootcanal LL packets to standard Bluetooth LL packets for capture.
+
 use crate::utils::ToChipError;
 use log::debug;
 use netsim_api::chip_error::ChipError;
@@ -17,9 +28,9 @@ pub(crate) fn create(
     // Enable scanning on the new controller.
     debug!("[{chip_id}] Enabling scanning");
     let scan_params = vec![0x12, 0x20, 7, 0x01, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00];
-    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &scan_params).to_chip_error()?;
+    rootcanal.receive_hci(chip_id.into(), Idc::Cmd, &scan_params).to_chip_error()?;
     let scan_enable = vec![0x0c, 0x20, 2, 0x01, 0x00];
-    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &scan_enable).to_chip_error()?;
+    rootcanal.receive_hci(chip_id.into(), Idc::Cmd, &scan_enable).to_chip_error()?;
     Ok(())
 }
 

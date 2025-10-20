@@ -1,5 +1,11 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+//! This module implements the command handlers for the Bluetooth `Server`.
+//!
+//! It provides the `handle_command` method and related functions for processing
+//! `ChipRequest` messages, managing the lifecycle of Bluetooth chips, and
+//! interacting with the `rootcanal` backend.
+
 use crate::server::ChipEntry;
 use crate::utils::ToChipError;
 use crate::Server;
@@ -8,7 +14,7 @@ use futures::SinkExt;
 use log::{debug, error, info, warn};
 use netsim_api::{
     chip_error::ChipError,
-    chips::{BluetoothMode, ChipId, ChipRequest, CreateChipParams, NetworkParams, PacketSink},
+    chips::{BluetoothMode, ChipId, ChipRequest, CreateParams, NetworkParams, PacketSink},
 };
 use netsim_proto::model::Chip as ProtoChip;
 use rootcanal::{
@@ -56,26 +62,26 @@ impl ControllerCallbacks for HciCallbacks {
 impl Server {
     pub(super) async fn handle_command(&mut self, cmd: ChipRequest, shutdown: &mut bool) {
         match cmd {
-            ChipRequest::CreateChip { params, respond_to } => {
-                respond_to.send(self.create_chip(params)).ok();
+            ChipRequest::Create { params: create_params, respond_to } => {
+                respond_to.send(self.create_chip(create_params)).ok();
             }
-            ChipRequest::UpdateChip { id, chip, respond_to } => {
-                respond_to.send(self.update_chip(id, chip)).ok();
-            }
-            ChipRequest::GetChip { id, respond_to } => {
+            ChipRequest::Read { id, respond_to } => {
                 respond_to.send(self.get_chip(id)).ok();
             }
-            ChipRequest::DeleteChip { id, respond_to } => {
+            ChipRequest::Update { id, chip, respond_to } => {
+                respond_to.send(self.update_chip(id, chip)).ok();
+            }
+            ChipRequest::Delete { id, respond_to } => {
                 respond_to.send(self.delete_chip(id)).ok();
             }
-            ChipRequest::GetChipCountForTesting { respond_to } => {
-                respond_to.send(Ok(self.chips.len())).ok();
-            }
-            ChipRequest::ResetChip { id } => {
+            ChipRequest::Reset { id } => {
                 self.reset_chip(id);
             }
-            ChipRequest::GetChipStatistics { respond_to } => {
+            ChipRequest::GetStatistics { respond_to } => {
                 respond_to.send(Ok(Vec::new())).ok();
+            }
+            ChipRequest::GetCountForTesting { respond_to } => {
+                respond_to.send(Ok(self.chips.len())).ok();
             }
             ChipRequest::Shutdown => {
                 *shutdown = true;
@@ -99,12 +105,12 @@ impl Server {
                 break;
             }
         }
-        info!("Chip {} sink exited", id);
+        info!("Chip {id} sink exited");
 
         id
     }
 
-    fn create_chip(&mut self, mut create_params: CreateChipParams) -> Result<(), ChipError> {
+    fn create_chip(&mut self, mut create_params: CreateParams) -> Result<(), ChipError> {
         let bluetooth_params = match create_params.network_params {
             NetworkParams::Bluetooth(params) => params,
             _ => return Err(ChipError::InvalidArguments("Unsupported chip kind".to_string())),
@@ -129,7 +135,7 @@ impl Server {
             .unwrap_or_else(|_| Address { address: rand::random() });
         let rootcanal = &self.rootcanal;
 
-        rootcanal.new_controller(id.as_u32(), address, Box::new(callback)).to_chip_error()?;
+        rootcanal.new_controller(id.into(), address, Box::new(callback)).to_chip_error()?;
 
         match &bluetooth_params.mode {
             BluetoothMode::Beacon(params) => crate::beacon::create(rootcanal, id, params)?,

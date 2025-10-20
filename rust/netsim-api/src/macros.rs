@@ -11,6 +11,19 @@ macro_rules! client_method {
     // Pattern for methods WITH arguments
     ($client:ty => fn $method:ident($($param:ident: $param_type:ty),*) -> $return_type:ty as $request:ident::$variant:ident) => {
         impl $client {
+            #[doc = "Sends the `"]
+            #[doc = stringify!($variant)]
+            #[doc = "` command to the service and waits for a response."]
+            #[doc = ""]
+            #[doc = "# Arguments"]
+            #[doc = ""]
+            $(
+                #[doc = "* `"]
+                #[doc = stringify!($param)]
+                #[doc = "`: The "]
+                #[doc = stringify!($param_type)]
+                #[doc = " for the command."]
+            )*
             pub async fn $method(&self, $($param: $param_type),*) -> std::result::Result<$return_type, ClientError> {
                 let (respond_to, response) = oneshot::channel();
                 self.sender.send($request::$variant {
@@ -25,6 +38,9 @@ macro_rules! client_method {
     // Pattern for methods WITHOUT arguments
     ($client:ty => fn $method:ident() -> $return_type:ty as $request:ident::$variant:ident) => {
         impl $client {
+            #[doc = "Sends the `"]
+            #[doc = stringify!($variant)]
+            #[doc = "` command to the service and waits for a response."]
             pub async fn $method(&self) -> std::result::Result<$return_type, ClientError> {
                 let (respond_to, response) = oneshot::channel();
                 self.sender.send($request::$variant { respond_to })
