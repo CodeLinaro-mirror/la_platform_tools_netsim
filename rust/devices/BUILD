@@ -12,38 +12,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "netsim-api",
+    name = "devices",
     srcs = glob(["src/**/*.rs"]),
-    crate_name = "netsim_api",
+    crate_name = "devices",
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
         "@thiserror-impl",
     ],
     deps = [
+        "//rust/netsim-api",
         "//rust/proto-cf",
         "@bytes",
         "@chrono",
         "@futures",
         "@log",
-        "@thiserror",
+        "@protobuf-rust",
         "@tokio",
         "@tokio-stream",
     ],
 )
 
 rust_test(
+    name = "unit_tests",
+    crate = ":devices",
+    tags = ["general_tests"],
+)
+
+rust_test(
     name = "tests",
-    srcs = glob(["src/**/*.rs"]),
-    crate_root = "src/lib.rs",
+    srcs = glob(["tests/**/*.rs"]),
+    crate_root = "tests/mod.rs",
     proc_macro_deps = [
         "@async-trait",
-        "@thiserror-impl",
     ],
     rustc_flags = [
         "-C",
@@ -51,11 +57,26 @@ rust_test(
     ],
     tags = ["general_tests"],
     deps = [
+        ":devices",
+        "//rust/netsim-api",
         "//rust/proto-cf",
         "@bytes",
+        "@chrono",
         "@futures",
+        "@log",
+        "@protobuf-rust",
         "@thiserror",
         "@tokio",
         "@tokio-stream",
     ],
+)
+
+rust_clippy(
+    name = "clippy",
+    deps = [":devices"],
+)
+
+rust_doc(
+    name = "doc",
+    crate = ":devices",
 )

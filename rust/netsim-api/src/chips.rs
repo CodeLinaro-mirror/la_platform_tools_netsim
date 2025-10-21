@@ -1,6 +1,7 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use crate::chip_error::ChipError;
+use crate::client_error::ClientError;
 use crate::client_method;
 use bytes::Bytes;
 use futures::Sink;
@@ -10,10 +11,8 @@ use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use std::fmt;
 use std::pin::Pin;
-use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::Stream;
-
 // The only error from PacketStream occurs when source closes connection.
 /// A stream of packets from the chip.
 pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Unpin>;
@@ -46,23 +45,6 @@ impl From<u32> for ChipId {
         ChipId(id)
     }
 }
-
-/// The error type for the `ChipClient`.
-#[derive(Error, Debug)]
-pub enum ClientError {
-    /// An error occurred when sending a command to the service.
-    #[error("Failed to send command to service: {0}")]
-    Send(String),
-
-    /// An error occurred when receiving a response from the service.
-    #[error("Service did not respond: {0}")]
-    Response(#[from] tokio::sync::oneshot::error::RecvError),
-
-    /// An operation-specific error occurred from the chip service.
-    #[error("Operation failed: {0}")]
-    Chip(#[from] ChipError),
-}
-
 /// A reply channel for sending the result of an operation back to the caller.
 pub type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
 
@@ -135,7 +117,22 @@ pub struct CreateParams {
     pub packet_stream: Option<PacketStream>,
     /// The transport for packet output.
     pub packet_sink: Option<PacketSink>,
+    /// Chip config.
+    pub config: ChipConfig,
+}
 
+impl fmt::Debug for CreateParams {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CreateParams")
+            .field("id", &self.id)
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
+/// Chip configuration
+pub struct ChipConfig {
     /// The name of the chip.
     pub name: String,
     /// The manufacturer of the chip.
@@ -146,8 +143,41 @@ pub struct CreateParams {
     pub network_params: NetworkParams,
 }
 
+impl ChipConfig {
+    /// Creates a new `ChipConfig`.
+    pub fn new(
+        name: impl Into<String>,
+        manufacturer: impl Into<String>,
+        product_name: impl Into<String>,
+        network_params: NetworkParams,
+    ) -> Self {
+        ChipConfig {
+            name: name.into(),
+            manufacturer: manufacturer.into(),
+            product_name: product_name.into(),
+            network_params,
+        }
+    }
+}
+
+pub enum NetworkKind {
+    Bluetooth,
+    Wifi,
+    Uwb,
+}
+
+impl From<&NetworkParams> for NetworkKind {
+    fn from(params: &NetworkParams) -> Self {
+        match params {
+            NetworkParams::Bluetooth(_) => NetworkKind::Bluetooth,
+            NetworkParams::Wifi(_) => NetworkKind::Wifi,
+            NetworkParams::Uwb(_) => NetworkKind::Uwb,
+        }
+    }
+}
+
 /// An enum holding the parameters for a specific chip technology.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NetworkParams {
     /// Bluetooth parameters.
     Bluetooth(BluetoothParams),
@@ -163,7 +193,7 @@ pub enum NetworkParams {
 /// including its address, controller properties, and operational mode. It is
 /// nested within [`CreateParams`] when the chip being created is a
 /// Bluetooth chip.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BluetoothParams {
     /// The Bluetooth address of the device.
     pub address: String,
@@ -178,7 +208,7 @@ pub struct BluetoothParams {
 /// This enum differentiates between the various operational modes of a
 /// Bluetooth chip, such as Device, Beacon, and Sniffer. It is used within
 /// [`BluetoothParams`] to specify the chip's behavior.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BluetoothMode {
     /// A full, virtual Bluetooth controller that can be paired with.
     Device(DeviceParams),
@@ -215,31 +245,16 @@ pub struct SnifferParams {
 }
 
 /// Parameters for creating a Wi-Fi chip.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct WifiParams {
     // Future Wi-Fi specific properties.
 }
 
 /// Parameters for creating a UWB chip.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct UwbParams {
     // Future UWB specific properties.
 }
-
-// Keep a Debug implementation that doesn't print the packet_streamer internals.
-impl fmt::Debug for CreateParams {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CreateParams")
-            .field("id", &self.id)
-            .field("packet_streamer", &"Box<dyn PacketStreamerApi>")
-            .field("name", &self.name)
-            .field("manufacturer", &self.manufacturer)
-            .field("product_name", &self.product_name)
-            .field("kind", &self.network_params)
-            .finish()
-    }
-}
-
 impl fmt::Display for ChipId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
@@ -341,14 +356,16 @@ mod tests {
             id: ChipId(2),
             packet_stream: None,
             packet_sink: None,
-            name: "test_chip".to_string(),
-            manufacturer: "test_manufacturer".to_string(),
-            product_name: "test_product".to_string(),
-            network_params: NetworkParams::Bluetooth(BluetoothParams {
-                address: "00:11:22:33:44:55".to_string(),
-                bt_properties: RootcanalController::default(),
-                mode: BluetoothMode::Device(DeviceParams {}),
-            }),
+            config: ChipConfig::new(
+                "test_chip",
+                "test_manufacturer",
+                "test_product",
+                NetworkParams::Bluetooth(BluetoothParams {
+                    address: "00:11:22:33:44:55".to_string(),
+                    bt_properties: RootcanalController::default(),
+                    mode: BluetoothMode::Device(DeviceParams {}),
+                }),
+            ),
         };
 
         tokio::spawn(async move {
@@ -359,7 +376,7 @@ mod tests {
         match received {
             ChipRequest::Create { params, respond_to: _ } => {
                 assert_eq!(params.id, ChipId(2));
-                match params.network_params {
+                match params.config.network_params {
                     NetworkParams::Bluetooth(bt_params) => {
                         assert_eq!(bt_params.address, "00:11:22:33:44:55");
                     }

@@ -7,6 +7,8 @@
 pub mod chip_error;
 /// Chip actor definitions.
 pub mod chips;
+pub mod client_error;
+pub mod device_error;
 /// Device actor definitions.
 pub mod devices;
 /// Macros for the client methods.

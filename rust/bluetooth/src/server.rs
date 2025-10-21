@@ -70,9 +70,10 @@ pub(crate) struct ChipEntry {
 /// - Running the main event loop that drives the simulation.
 /// - Interacting with the `rootcanal` backend.
 pub struct Server {
+    // TODO: reduce visibility of fields
     pub(crate) rootcanal: Arc<Rootcanal>,
     pub(crate) chips: HashMap<ChipId, ChipEntry>,
-    pub(crate) command_rx: mpsc::Receiver<ChipRequest>,
+    command_rx: mpsc::Receiver<ChipRequest>,
     // A map of all active packet streams, keyed by chip ID.
     pub(crate) streams: StreamMap<ChipId, StreamNotifyClose<PacketStream>>,
     pub(crate) sink_tasks: JoinSet<ChipId>,

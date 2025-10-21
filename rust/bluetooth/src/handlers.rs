@@ -111,7 +111,7 @@ impl Server {
     }
 
     fn create_chip(&mut self, mut create_params: CreateParams) -> Result<(), ChipError> {
-        let bluetooth_params = match create_params.network_params {
+        let bluetooth_params = match create_params.config.network_params {
             NetworkParams::Bluetooth(params) => params,
             _ => return Err(ChipError::InvalidArguments("Unsupported chip kind".to_string())),
         };
