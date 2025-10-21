@@ -195,5 +195,12 @@ genrule(
         "netsim-ui/assets/polar-background.svg",
         "netsim-ui/assets/hexagonal-background.png",
     ],
-    cmd = "for f in $(locations //ui:netsim_ui_files); do dest=$(@D)/netsim-ui/$${f#ui/dist/}; mkdir -p $$(dirname $$dest); cp -f $$f $$dest; done",
+    cmd = """
+      set -e
+      mkdir -p $(@D)/netsim-ui
+      # Use a sample path from the source list to find the root 'dist' directory
+      source_path=$$(echo $(locations //ui:netsim_ui_files) | cut -d' ' -f1)
+      dist_dir=$${source_path%/dist/*}/dist
+      cp -r $${dist_dir}/. $(@D)/netsim-ui/
+    """,
 )

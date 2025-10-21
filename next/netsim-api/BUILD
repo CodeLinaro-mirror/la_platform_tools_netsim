@@ -43,6 +43,7 @@ rust_test(
     name = "tests",
     srcs = glob(["src/**/*.rs"]),
     crate_root = "src/lib.rs",
+    edition = "2021",
     proc_macro_deps = [
         "@async-trait",
         "@thiserror-impl",
