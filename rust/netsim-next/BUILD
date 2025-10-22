@@ -36,9 +36,11 @@ rust_library(
         "@chrono",
         "@env_logger",
         "@log",
-        "@rustutils",
         "@tokio",
-    ],
+    ] + select({
+        "@platforms//os:linux": ["@rustutils"],
+        "//conditions:default": [],
+    }),
 )
 
 rust_binary(
