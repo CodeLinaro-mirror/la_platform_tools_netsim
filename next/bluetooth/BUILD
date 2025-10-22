@@ -3,13 +3,13 @@
 # Common Bazel commands for this package:
 #
 # Build the library:
-#   bazel build //rust/bluetooth
+#   bazel build //next/bluetooth
 #
 # Run all tests:
-#   bazel test //rust/bluetooth:tests
+#   bazel test //next/bluetooth:tests
 #
 # Run the linter (uses bazel test):
-#   bazel test //rust/bluetooth:clippy
+#   bazel test //next/bluetooth:clippy
 
 load(
     "@rules_rust//rust:defs.bzl",
@@ -29,9 +29,9 @@ rust_library(
         "@zerocopy-derive",
     ],
     deps = [
-        "//rust/netsim-api",
-        "//rust/proto-cf",
-        "//rust/rootcanal",
+        "//next/netsim-api",
+        "//next/proto",
+        "//next/rootcanal",
         "@bytes",
         "@env_logger",
         "@futures",
@@ -64,9 +64,9 @@ rust_test(
     tags = ["general_tests"],
     deps = [
         ":bluetooth",
-        "//rust/netsim-api",
-        "//rust/proto-cf",
-        "//rust/rootcanal",
+        "//next/netsim-api",
+        "//next/proto",
+        "//next/rootcanal",
         "@bytes",
         "@env_logger",
         "@futures",

@@ -3,13 +3,13 @@
 # Common Bazel commands for this package:
 #
 # Build the binary:
-#   bazel build //rust/netsim-next
+#   bazel build //next/netsim-next
 #
 # Run the binary:
-#   bazel run //rust/netsim-next
+#   bazel run //next/netsim-next
 #
 # Run the tests:
-#   bazel test //rust/netsim-next:tests
+#   bazel test //next/netsim-next:tests
 
 load(
     "@rules_rust//rust:defs.bzl",
@@ -31,8 +31,8 @@ rust_library(
     ],
     crate_name = "netsim_next",
     deps = [
-        "//rust/bluetooth",
-        "//rust/netsim-api",
+        "//next/bluetooth",
+        "//next/netsim-api",
         "@chrono",
         "@env_logger",
         "@log",

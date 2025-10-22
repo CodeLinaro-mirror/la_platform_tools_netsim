@@ -26,8 +26,8 @@ rust_library(
         "@thiserror-impl",
     ],
     deps = [
-        "//rust/netsim-api",
-        "//rust/proto-cf",
+        "//next/netsim-api",
+        "//next/proto",
         "@bytes",
         "@chrono",
         "@futures",
@@ -58,8 +58,8 @@ rust_test(
     tags = ["general_tests"],
     deps = [
         ":devices",
-        "//rust/netsim-api",
-        "//rust/proto-cf",
+        "//next/netsim-api",
+        "//next/proto",
         "@bytes",
         "@chrono",
         "@futures",

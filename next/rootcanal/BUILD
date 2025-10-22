@@ -10,9 +10,9 @@ load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test_suite")
 rust_library(
     name = "rootcanal",
     srcs = glob(["src/**/*.rs"]),
-    visibility = ["//rust:__subpackages__"],
+    visibility = ["//next:__subpackages__"],
     deps = [
-        "//rust/packets:netsim_packets",
+        "//next/packets",
         "@cxx.rs//:cxx",
         "@log",
         "@rootcanal//:lib_rootcanal_ffi",
@@ -31,7 +31,7 @@ rust_test_suite(
     tags = ["general_tests"],
     deps = [
         ":rootcanal",
-        "//rust/packets:netsim_packets",
+        "//next/packets",
         "@cxx.rs//:cxx",
         "@env_logger",
         "@log",

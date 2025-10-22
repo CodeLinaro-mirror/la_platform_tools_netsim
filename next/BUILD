@@ -10,7 +10,11 @@ exports_files([
 rustfmt_test(
     name = "fmt",
     targets = [
+        "//next/bluetooth",
+        "//next/devices",
+        "//next/netsim-api",
         "//next/packets",
         "//next/proto",
+        "//next/rootcanal",
     ],
 )

@@ -26,7 +26,7 @@ rust_library(
         "@thiserror-impl",
     ],
     deps = [
-        "//rust/proto-cf",
+        "//next/proto",
         "@bytes",
         "@chrono",
         "@futures",
@@ -51,7 +51,7 @@ rust_test(
     ],
     tags = ["general_tests"],
     deps = [
-        "//rust/proto-cf",
+        "//next/proto",
         "@bytes",
         "@futures",
         "@thiserror",
