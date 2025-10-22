@@ -35,15 +35,24 @@ impl MiscService {
     }
 
     pub fn handle_get_model_id(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec!["gLinux\r\n".to_string(), "OK\r\n".to_string()],
+            action: None,
+        })
     }
 
     pub fn handle_get_revision(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec!["1.0\r\n".to_string(), "OK\r\n".to_string()],
+            action: None,
+        })
     }
 
     pub fn handle_get_serial_number(&self) -> ExecutionResult {
-        ExecutionResult::Handled(HandledCommand::ok())
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec!["0123456789\r\n".to_string(), "OK\r\n".to_string()],
+            action: None,
+        })
     }
 
     pub fn handle_set_icf(&self) -> ExecutionResult {
@@ -133,11 +142,27 @@ impl MiscService {
     pub fn handle_set_automatic_disconnect_delay(&self) -> ExecutionResult {
         ExecutionResult::Handled(HandledCommand::ok())
     }
+
+    pub fn handle_get_manufacturer_identification(&self) -> ExecutionResult {
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec!["Android\r\n".to_string(), "OK\r\n".to_string()],
+            action: None,
+        })
+    }
+
+    pub fn handle_get_capabilities(&self) -> ExecutionResult {
+        ExecutionResult::Handled(HandledCommand {
+            responses: vec!["+GCAP: +FCLASS,+DS\r\nOK\r\n".to_string()],
+            action: None,
+        })
+    }
 }
 
 impl CommandExecutor for MiscService {
     fn execute(&self, _context: &ModemImpl, command: &Command) -> ExecutionResult {
         match command {
+            Command::GetManufacturerIdentification => self.handle_get_manufacturer_identification(),
+            Command::GetCapabilities => self.handle_get_capabilities(),
             Command::GetModelId => self.handle_get_model_id(),
             Command::GetRevision => self.handle_get_revision(),
             Command::GetSerialNumber => self.handle_get_serial_number(),

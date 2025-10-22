@@ -173,9 +173,76 @@ fn test_set_comma_dial_modifier_time() {
 }
 
 #[test]
+fn test_get_capabilities() {
+    let harness = TestHarness::new();
+    harness.send_at_command(b"AT+GCAP\r\n");
+    let responses = harness.get_responses();
+    assert_eq!(responses.len(), 1);
+    assert_eq!(responses[0], b"+GCAP: +FCLASS,+DS\r\nOK\r\n");
+}
+
+#[test]
 fn test_set_automatic_disconnect_delay() {
     let harness = TestHarness::new();
     harness.send_at_command(b"ATS10=1\r\n");
+    let responses = harness.get_responses();
+    assert_eq!(responses.len(), 1);
+    assert_eq!(responses[0], b"OK\r\n");
+}
+
+#[test]
+fn test_get_manufacturer_identification() {
+    let harness = TestHarness::new();
+    harness.send_at_command(b"AT+GMI\r\n");
+    let responses = harness.get_responses();
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[0], b"Android\r\n");
+    assert_eq!(responses[1], b"OK\r\n");
+}
+
+#[test]
+fn test_get_model_id() {
+    let harness = TestHarness::new();
+    harness.send_at_command(b"AT+GMM\r\n");
+    let responses = harness.get_responses();
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[0], b"gLinux\r\n");
+    assert_eq!(responses[1], b"OK\r\n");
+}
+
+#[test]
+fn test_get_revision() {
+    let harness = TestHarness::new();
+    harness.send_at_command(b"AT+GMR\r\n");
+    let responses = harness.get_responses();
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[0], b"1.0\r\n");
+    assert_eq!(responses[1], b"OK\r\n");
+}
+
+#[test]
+fn test_get_serial_number() {
+    let harness = TestHarness::new();
+    harness.send_at_command(b"AT+GSN\r\n");
+    let responses = harness.get_responses();
+    assert_eq!(responses.len(), 2);
+    assert_eq!(responses[0], b"0123456789\r\n");
+    assert_eq!(responses[1], b"OK\r\n");
+}
+
+#[test]
+fn test_set_te_ta_control_character_framing() {
+    let harness = TestHarness::new();
+    harness.send_at_command(b"AT+ICF=3,4\r\n");
+    let responses = harness.get_responses();
+    assert_eq!(responses.len(), 1);
+    assert_eq!(responses[0], b"OK\r\n");
+}
+
+#[test]
+fn test_set_te_ta_local_data_flow_control() {
+    let harness = TestHarness::new();
+    harness.send_at_command(b"AT+IFC=3,4\r\n");
     let responses = harness.get_responses();
     assert_eq!(responses.len(), 1);
     assert_eq!(responses[0], b"OK\r\n");
