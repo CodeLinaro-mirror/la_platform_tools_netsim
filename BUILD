@@ -63,7 +63,10 @@ genrule(
     outs = ["netlink_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
@@ -72,7 +75,10 @@ genrule(
     outs = ["mac80211_hwsim_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
@@ -81,7 +87,10 @@ genrule(
     outs = ["ieee80211_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
@@ -90,7 +99,10 @@ genrule(
     outs = ["llc_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
@@ -99,7 +111,10 @@ genrule(
     outs = ["link_layer_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
