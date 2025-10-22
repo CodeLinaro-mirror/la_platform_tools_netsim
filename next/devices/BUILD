@@ -12,9 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
+
+DEVICES_DEPS = [
+    "//next/bluetooth",
+    "//next/netsim-api",
+    "//next/proto",
+    "@bytes",
+    "@chrono",
+    "@futures",
+    "@log",
+    "@protobuf-rust",
+    "@tokio",
+    "@tokio-stream",
+]
 
 rust_library(
     name = "devices",
@@ -25,17 +38,7 @@ rust_library(
         "@async-trait",
         "@thiserror-impl",
     ],
-    deps = [
-        "//next/netsim-api",
-        "//next/proto",
-        "@bytes",
-        "@chrono",
-        "@futures",
-        "@log",
-        "@protobuf-rust",
-        "@tokio",
-        "@tokio-stream",
-    ],
+    deps = DEVICES_DEPS,
 )
 
 rust_test(
@@ -56,18 +59,8 @@ rust_test(
         "link-arg=-lc",
     ],
     tags = ["general_tests"],
-    deps = [
-        ":devices",
-        "//next/netsim-api",
-        "//next/proto",
-        "@bytes",
-        "@chrono",
-        "@futures",
-        "@log",
-        "@protobuf-rust",
+    deps = [":devices"] + DEVICES_DEPS + [
         "@thiserror",
-        "@tokio",
-        "@tokio-stream",
     ],
 )
 
@@ -79,4 +72,12 @@ rust_clippy(
 rust_doc(
     name = "doc",
     crate = ":devices",
+)
+
+rust_doc_test(
+    name = "doc_test",
+    crate = ":devices",
+    deps = [
+        "//next/bluetooth",
+    ],
 )

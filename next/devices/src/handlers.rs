@@ -14,6 +14,7 @@ use std::collections::HashSet;
 use std::time::SystemTime;
 
 impl Server {
+    /// This is the main entry point for handling all `DeviceRequest` commands.
     pub(super) async fn handle_command(&mut self, cmd: DeviceRequest) {
         match cmd {
             DeviceRequest::PsCreate { params, respond_to } => {
@@ -31,6 +32,7 @@ impl Server {
         }
     }
 
+    /// Handles the `List` command.
     fn handle_list(&mut self) -> ListDeviceResponse {
         let devices: Vec<model::Device> = self
             .devices_by_id
@@ -56,6 +58,10 @@ impl Server {
         }
     }
 
+    /// Handles the `PsCreate` command.
+    ///
+    /// This function will either create a new device or add a chip to an
+    /// existing device, based on the `device_guid` in the `params`.
     async fn handle_ps_create(&mut self, params: CreateDeviceParams) -> Result<(), DeviceError> {
         let chip_id = self.new_chip_id();
         let guid = &params.device_guid;

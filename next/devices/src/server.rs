@@ -36,9 +36,12 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::{self, Instant, Sleep};
 
-/// The central server for the device service.
+/// The `Server` is the central actor in the device service, responsible for
+/// managing the state of all simulated devices and their associated chips.
 ///
-/// This struct maintains the state of all simulated devices and chips.
+/// It is implemented as a Tokio actor that processes requests in a serialized
+/// manner. This design ensures that all state modifications are thread-safe
+/// without requiring locks or other synchronization primitives.
 pub struct Server {
     /// A client for interacting with the Bluetooth chip service.
     pub bt_client: ChipClient,
@@ -55,22 +58,28 @@ pub struct Server {
     /// The receiver for incoming `DeviceRequest` messages.
     request_rx: mpsc::Receiver<DeviceRequest>,
     /// A timer for shutting down the service when idle.
+    ///
+    /// The `shutdown_alarm` is reset every time a request is received. If the
+    /// alarm fires, it indicates that the service has been idle for the
+    /// configured timeout and should shut down.
     shutdown_alarm: Pin<Box<Sleep>>,
     /// The initial timeout before the service shuts down if no requests are received.
     pub start_timeout: Duration,
     /// The idle timeout before the service shuts down.
+    ///
+    /// This timeout is reset every time a request is received.
     pub idle_timeout: Duration,
 }
 
-/// Represents a single simulated device.
-///
-/// A device is a collection of chips and has properties such as position and orientation.
+/// `DeviceInfo` holds the state of a single simulated device, including its
+/// configuration and the set of chips that belong to it.
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
     /// The unique identifier for the device.
     pub id: DeviceId,
     /// A GUID for the device, typically provided by the packet streamer.
     pub guid: String,
+    /// The set of chips that belong to this device.
     pub chips: HashSet<ChipId>,
     /// Device configuration.
     pub device_config: DeviceConfig,
@@ -130,6 +139,7 @@ impl Server {
         DeviceId(id)
     }
 
+    /// Returns a mutable reference to the `DeviceInfo` for the given `DeviceId`.
     pub(crate) fn get_device_info(
         &mut self,
         id: &DeviceId,

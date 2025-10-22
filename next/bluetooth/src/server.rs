@@ -8,7 +8,6 @@
 //! 2. Spawn the `Server::run()` method into a Tokio task to start its event loop.
 //!
 //! ```no_run
-//! use bluetooth;
 //! use tokio;
 //!
 //! #[tokio::main]
@@ -17,12 +16,7 @@
 //!     tokio::spawn(async move {
 //!         server.run().await;
 //!     });
-//!
-//!     // Use the client to interact with the server, e.g., create chips.
-//!     // client.create_chip(...).await;
-//!
-//!     // Keep the main task alive for a duration or until a shutdown signal.
-//!     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+//!     // Use the client to interact with the server.
 //! }
 //! ```
 //!
@@ -39,7 +33,6 @@
 //! * **RSSI Management:** Manage Received Signal Strength Indication (RSSI) based on chip location.
 //! * **Link Layer Capture:** Sniffer functionality to convert Rootcanal LL packets to standard Bluetooth LL packets.
 //! * **HCI-based Beacon:** Implement Beacon functionality via HCI commands, allowing common Android-like advertisement parameters.
-
 use crate::utils::ToChipError;
 use bytes::Bytes;
 use log::{debug, error, info};

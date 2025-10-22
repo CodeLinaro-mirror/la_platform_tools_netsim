@@ -15,11 +15,29 @@ load(
     "@rules_rust//rust:defs.bzl",
     "rust_clippy",
     "rust_doc",
+    "rust_doc_test",
     "rust_library",
     "rust_test",
 )
 
 package(default_visibility = ["//visibility:public"])
+
+BLUETOOTH_DEPS = [
+    "//next/netsim-api",
+    "//next/proto",
+    "//next/rootcanal",
+    "@bytes",
+    "@env_logger",
+    "@futures",
+    "@hex",
+    "@log",
+    "@protobuf-rust",
+    "@rand",
+    "@thiserror",
+    "@tokio",
+    "@tokio-stream",
+    "@zerocopy",
+]
 
 rust_library(
     name = "bluetooth",
@@ -28,22 +46,7 @@ rust_library(
         "@async-trait",
         "@zerocopy-derive",
     ],
-    deps = [
-        "//next/netsim-api",
-        "//next/proto",
-        "//next/rootcanal",
-        "@bytes",
-        "@env_logger",
-        "@futures",
-        "@hex",
-        "@log",
-        "@protobuf-rust",
-        "@rand",
-        "@thiserror",
-        "@tokio",
-        "@tokio-stream",
-        "@zerocopy",
-    ],
+    deps = BLUETOOTH_DEPS,
 )
 
 rust_test(
@@ -62,18 +65,8 @@ rust_test(
         "link-arg=-lc",
     ],
     tags = ["general_tests"],
-    deps = [
-        ":bluetooth",
-        "//next/netsim-api",
-        "//next/proto",
-        "//next/rootcanal",
-        "@bytes",
-        "@env_logger",
-        "@futures",
-        "@log",
+    deps = [":bluetooth"] + BLUETOOTH_DEPS + [
         "@rootcanal//:lib_rootcanal_ffi",
-        "@tokio",
-        "@tokio-stream",
     ],
 )
 
@@ -84,5 +77,10 @@ rust_clippy(
 
 rust_doc(
     name = "doc",
+    crate = ":bluetooth",
+)
+
+rust_doc_test(
+    name = "doc_test",
     crate = ":bluetooth",
 )

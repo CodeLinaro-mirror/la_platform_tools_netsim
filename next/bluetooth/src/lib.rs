@@ -16,7 +16,6 @@
 //! 3. Use the `ChipClient` to send commands to the running `Server`.
 //!
 //! ```no_run
-//! use bluetooth;
 //! use tokio;
 //!
 //! #[tokio::main]

@@ -12,9 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
+
+NETSIM_API_DEPS = [
+    "//next/proto",
+    "@bytes",
+    "@chrono",
+    "@futures",
+    "@log",
+    "@thiserror",
+    "@tokio",
+    "@tokio-stream",
+]
 
 rust_library(
     name = "netsim-api",
@@ -25,16 +36,7 @@ rust_library(
         "@async-trait",
         "@thiserror-impl",
     ],
-    deps = [
-        "//next/proto",
-        "@bytes",
-        "@chrono",
-        "@futures",
-        "@log",
-        "@thiserror",
-        "@tokio",
-        "@tokio-stream",
-    ],
+    deps = NETSIM_API_DEPS,
 )
 
 rust_test(
@@ -50,12 +52,20 @@ rust_test(
         "link-arg=-lc",
     ],
     tags = ["general_tests"],
-    deps = [
-        "//next/proto",
-        "@bytes",
-        "@futures",
-        "@thiserror",
-        "@tokio",
-        "@tokio-stream",
-    ],
+    deps = NETSIM_API_DEPS,
+)
+
+rust_clippy(
+    name = "clippy",
+    deps = [":netsim-api"],
+)
+
+rust_doc(
+    name = "doc",
+    crate = ":netsim-api",
+)
+
+rust_doc_test(
+    name = "doc_test",
+    crate = ":netsim-api",
 )

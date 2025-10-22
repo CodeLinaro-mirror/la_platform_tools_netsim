@@ -32,6 +32,7 @@ rust_library(
     crate_name = "netsim_next",
     deps = [
         "//next/bluetooth",
+        "//next/devices",
         "//next/netsim-api",
         "@chrono",
         "@env_logger",
