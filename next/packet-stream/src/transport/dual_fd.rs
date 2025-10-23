@@ -1,11 +1,10 @@
-use crate::error::{PacketStreamError, Result, SocketError};
+use crate::error::{PacketStreamError, Result};
 use crate::models::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use crate::transport::traits::{PacketSink, PacketStream, TransportListener};
 use crate::types::StreamAddress;
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 use futures::SinkExt;
-use rustutils::inherited_fd;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File as StdFile;
@@ -77,25 +76,33 @@ pub struct DualFdListener {
 
 impl DualFdListener {
     pub async fn new(config: DualFdConfig) -> Result<Self> {
+        #[allow(unused_mut)]
         let mut listener = Self { config, pending_streams: VecDeque::new() };
+        #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         listener.prepare_streams()?;
         Ok(listener)
     }
 
+    #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
     fn prepare_streams(&mut self) -> Result<()> {
         self.pending_streams.clear();
         for device in &self.config.devices {
             for chip in &device.chips {
-                let in_fd = inherited_fd::take_fd_ownership(chip.fd_in).map_err(|e| {
-                    PacketStreamError::Socket(SocketError::AcceptFailed(e.to_string()))
-                })?;
+                let in_fd =
+                    rustutils::inherited_fd::take_fd_ownership(chip.fd_in).map_err(|e| {
+                        PacketStreamError::Socket(crate::error::SocketError::AcceptFailed(
+                            e.to_string(),
+                        ))
+                    })?;
                 let out_fd = chip.fd_out.ok_or_else(|| {
                     PacketStreamError::InvalidConfig(
                         "DualFdStream requires an output file descriptor.".to_string(),
                     )
                 })?;
-                let out_fd = inherited_fd::take_fd_ownership(out_fd).map_err(|e| {
-                    PacketStreamError::Socket(SocketError::AcceptFailed(e.to_string()))
+                let out_fd = rustutils::inherited_fd::take_fd_ownership(out_fd).map_err(|e| {
+                    PacketStreamError::Socket(crate::error::SocketError::AcceptFailed(
+                        e.to_string(),
+                    ))
                 })?;
                 self.pending_streams.push_back((
                     device.serial.clone(),

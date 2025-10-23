@@ -14,4 +14,6 @@ tokio = { version = "1.28.2", features = ["full"] }
 [dev-dependencies]
 tempfile = "0.3"
 
-[workspace]
+[features]
+default = []
+cuttlefish = []

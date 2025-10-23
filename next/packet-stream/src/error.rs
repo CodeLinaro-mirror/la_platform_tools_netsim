@@ -144,12 +144,6 @@ impl From<ProtocolError> for PacketStreamError {
     }
 }
 
-impl From<nix::Error> for PacketStreamError {
-    fn from(err: nix::Error) -> Self {
-        PacketStreamError::Socket(SocketError::AcceptFailed(err.to_string()))
-    }
-}
-
 // Note: PacketStreamError implements std::error::Error for compatibility with error handling libraries
 
 /// Result type alias for PacketStream operations
