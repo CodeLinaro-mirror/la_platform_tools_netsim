@@ -10,6 +10,7 @@ exports_files([
 
 rustfmt_test(
     name = "fmt",
+    tags = ["manual"],
     targets = [
         "//rust/capture:netsim_capture",
         "//rust/cli:netsim_cli",

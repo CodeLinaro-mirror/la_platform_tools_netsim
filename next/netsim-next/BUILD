@@ -30,6 +30,7 @@ rust_library(
         "src/platform.rs",
     ],
     crate_name = "netsim_next",
+    edition = "2021",
     deps = [
         "//next/bluetooth",
         "//next/devices",
@@ -47,6 +48,7 @@ rust_library(
 rust_binary(
     name = "netsim-next",
     srcs = ["src/main.rs"],
+    edition = "2021",
     rustc_flags = [
         "-C",
         "link-arg=-lc",
@@ -65,6 +67,7 @@ rust_test(
         "tests/tests.rs",
     ],
     crate_root = "tests/tests.rs",
+    edition = "2021",
     rustc_flags = [
         "-C",
         "link-arg=-lc",

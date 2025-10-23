@@ -42,6 +42,7 @@ BLUETOOTH_DEPS = [
 rust_library(
     name = "bluetooth",
     srcs = glob(["src/**/*.rs"]),
+    edition = "2021",
     proc_macro_deps = [
         "@async-trait",
         "@zerocopy-derive",
@@ -59,6 +60,7 @@ rust_test(
     name = "tests",
     srcs = glob(["tests/**/*.rs"]),
     crate_root = "tests/mod.rs",
+    edition = "2021",
     proc_macro_deps = ["@async-trait"],
     rustc_flags = [
         "-C",
