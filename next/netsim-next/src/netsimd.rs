@@ -65,10 +65,29 @@ impl Drop for UnixSocketListener {
     }
 }
 
+// Initialization for linux cuttlefish environment. Cuttelfish passes
+// open file descriptors to netsimd.
+
+#[cfg(target_os = "linux")]
+fn cuttlefish_init() {
+    use rustutils::inherited_fd;
+    // SAFETY: This function must be called before any other code that might take ownership of
+    // file descriptors. `init_once` takes ownership of all open file descriptors except for
+    // the stdio streams. Calling it after other parts of the program have already acquired
+    // ownership of file descriptors can lead to double-frees or other memory corruption issues.
+    unsafe {
+        inherited_fd::init_once().expect("inherited_fds");
+    }
+}
+
 // --- Main Daemon Logic ---
 
 pub async fn run() -> bool {
+    #[cfg(target_os = "linux")]
+    cuttlefish_init();
+
     logger::init("netsim", true);
+
     info!("netsim startup");
 
     let mut ini_file = IniFile::new(&platform::get_runtime_dir(), INI_FILENAME);
