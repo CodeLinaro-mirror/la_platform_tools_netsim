@@ -3,13 +3,13 @@
 # Common Bazel commands for this package:
 #
 # Build the library:
-#   bazel build //rust/packet-stream
+#   bazel build //next/packet-stream
 #
 # Run all tests:
-#   bazel test //rust/packet-stream:tests
+#   bazel test //next/packet-stream:tests
 #
 # Run the linter (uses bazel test):
-#   bazel test //rust/packet-stream:clippy
+#   bazel test //next/packet-stream:clippy
 
 load(
     "@rules_rust//rust:defs.bzl",
@@ -32,16 +32,17 @@ rust_library(
         "@bytes",
         "@futures",
         "@libc",
-        "@nix",
         "@rand",
-        "@rustutils",
         "@serde",
         "@serde_json",
         "@socket2",
         "@tokio",
         "@tokio-stream",
         "@tokio-util",
-    ],
+    ] + select({
+        "@platforms//os:linux": ["@rustutils"],
+        "//conditions:default": [],
+    }),
 )
 
 rust_test(
@@ -50,11 +51,12 @@ rust_test(
     tags = ["general_tests"],
     deps = [
         "@bytes",
-        "@nix",
-        "@rustutils",
         "@serde_json",
         "@tokio",
-    ],
+    ] + select({
+        "@platforms//os:linux": ["@rustutils"],
+        "//conditions:default": [],
+    }),
 )
 
 rust_test(
@@ -67,11 +69,12 @@ rust_test(
         ":packet-stream",
         "@bytes",
         "@futures",
-        "@nix",
-        "@rustutils",
         "@serde_json",
         "@tokio",
-    ],
+    ] + select({
+        "@platforms//os:linux": ["@rustutils"],
+        "//conditions:default": [],
+    }),
 )
 
 rust_clippy(
@@ -83,3 +86,8 @@ rust_doc(
     name = "doc",
     crate = ":packet-stream",
 )
+
+# rust_doc_test(
+#     name = "doc_test",
+#     crate = ":packet-stream",
+# )

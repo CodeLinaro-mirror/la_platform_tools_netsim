@@ -10,7 +10,7 @@ crate-type = ["staticlib","lib"]
 [dependencies]
 netsim-api = { path = "../netsim-api" }
 rootcanal = { path = "../rootcanal" }
-protobuf = "3.2.0"
+protobuf = "3.6.0"
 thiserror = "1.0"
 tokio = { version = "1.32.0", default-features = false, features = ["rt", "time", "sync", "macros"] }
 zerocopy = "0.8.25"
@@ -30,5 +30,3 @@ test-utils = []
 
 [dev-dependencies]
 rootcanal = { path = "../rootcanal" }
-
-[workspace]

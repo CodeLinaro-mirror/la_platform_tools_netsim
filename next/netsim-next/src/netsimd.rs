@@ -68,7 +68,7 @@ impl Drop for UnixSocketListener {
 // Initialization for linux cuttlefish environment. Cuttelfish passes
 // open file descriptors to netsimd.
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 fn cuttlefish_init() {
     use rustutils::inherited_fd;
     // SAFETY: This function must be called before any other code that might take ownership of
@@ -83,7 +83,7 @@ fn cuttlefish_init() {
 // --- Main Daemon Logic ---
 
 pub async fn run() -> bool {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
     cuttlefish_init();
 
     logger::init("netsim", true);

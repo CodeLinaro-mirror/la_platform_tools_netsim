@@ -70,11 +70,11 @@ impl ModemImpl {
         });
 
         if let Some(network) = network.upgrade() {
-            network.schedule_event(
-                id,
-                std::time::Duration::from_millis(10),
-                ModemEvent::NetworkRegistrationComplete,
-            );
+            // network.schedule_event(
+            //     id,
+            //     std::time::Duration::from_millis(10),
+            //     ModemEvent::NetworkRegistrationComplete,
+            // );
         }
 
         modem

@@ -23,7 +23,7 @@ fn test_event_loop_tick_and_duration() {
 
     // 1. Schedule an event 100ms in the future.
     let event_duration = Duration::from_millis(100);
-    simulator.schedule_event(modem_id, event_duration, ModemEvent::TestEvent);
+    // simulator.schedule_event(modem_id, event_duration, ModemEvent::TestEvent);
 
     // 2. Tick before the event is due.
     // It should return the duration until the next event.

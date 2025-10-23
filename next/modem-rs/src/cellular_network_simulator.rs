@@ -223,11 +223,11 @@ impl CellularNetworkSimulator {
             self.find_peer_modem(caller_id, |m| m.phone_number() == phone_number)
         {
             target_modem.receive_at_command(b"RING\r\n");
-            self.schedule_event(
-                target_modem.id,
-                CALL_RING_TIMEOUT,
-                ModemEvent::CallRingTimeout { call_token: 1 },
-            );
+            // self.schedule_event(
+            //     target_modem.id,
+            //     CALL_RING_TIMEOUT,
+            //     ModemEvent::CallRingTimeout { call_token: 1 },
+            // );
         }
     }
 
