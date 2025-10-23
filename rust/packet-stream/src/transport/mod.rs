@@ -1,0 +1,264 @@
+// Copyright 2025 Google LLC
+//=============================================================================
+// src/transport/mod.rs - Transport abstraction layer
+//=============================================================================
+
+//! Transport abstraction layer for packet streaming.
+
+// Public API modules
+#[cfg(unix)]
+pub mod dual_fd;
+pub mod traits;
+pub mod types;
+
+// Platform-specific socket implementations
+#[cfg(unix)]
+pub mod unix;
+#[cfg(windows)]
+pub mod windows;
+
+// Internal implementation modules
+pub(crate) mod adapters;
+
+// Re-export public API only
+#[cfg(unix)]
+pub use dual_fd::{DualFdConfig, DualFdListener};
+pub use types::{ListenerConfig, TransportType};
+
+use crate::error::{PacketStreamError, Result, SocketError};
+use crate::models::ChipInfo;
+use async_trait::async_trait;
+use futures::SinkExt;
+use futures::StreamExt;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use traits::{PacketSink, PacketStream, TransportListener};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SocketType {
+    Unix(PathBuf),
+    NamedPipe(String),
+    Tcp(std::net::SocketAddr),
+}
+
+#[derive(Debug, Clone)]
+pub enum SocketConfig {
+    Auto,
+    Manual(SocketType),
+    /// Optimized for containerized environments
+    Container {
+        /// Prefer volume-mounted Unix sockets for performance
+        prefer_volumes: bool,
+        /// Fallback to host networking if available
+        allow_host_networking: bool,
+    },
+}
+
+pub enum CrossPlatformListener {
+    #[cfg(unix)]
+    Unix(unix::UnixSocketListener),
+    #[cfg(windows)]
+    Windows(windows::WindowsListener),
+    #[cfg(not(windows))]
+    Tcp(tokio::net::TcpListener),
+}
+
+pub enum CrossPlatformStream {
+    #[cfg(unix)]
+    Unix(tokio::net::UnixStream),
+    Tcp(tokio::net::TcpStream),
+    #[cfg(windows)]
+    Windows(windows::WindowsStream),
+}
+
+impl CrossPlatformListener {
+    pub async fn bind(config: SocketConfig) -> Result<Self> {
+        match config {
+            SocketConfig::Auto => Self::bind_auto().await,
+            SocketConfig::Manual(socket_type) => Self::bind_manual(socket_type).await,
+            SocketConfig::Container { prefer_volumes, allow_host_networking } => {
+                Self::bind_container(prefer_volumes, allow_host_networking).await
+            }
+        }
+    }
+
+    async fn bind_container(prefer_volumes: bool, allow_host_networking: bool) -> Result<Self> {
+        if prefer_volumes {
+            #[cfg(unix)]
+            {
+                let volume_socket = PathBuf::from("/shared/sockets/packetstream.sock");
+                if volume_socket.parent().is_some_and(|p| p.exists()) {
+                    if let Ok(listener) = unix::UnixSocketListener::bind(&volume_socket).await {
+                        return Ok(CrossPlatformListener::Unix(listener));
+                    }
+                }
+            }
+        }
+
+        if allow_host_networking {
+            #[cfg(unix)]
+            {
+                let host_socket = PathBuf::from("/tmp/packetstream-host.sock");
+                if let Ok(listener) = unix::UnixSocketListener::bind(&host_socket).await {
+                    return Ok(CrossPlatformListener::Unix(listener));
+                }
+            }
+        }
+
+        let addr: std::net::SocketAddr = "localhost:8080".parse()?;
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        #[cfg(not(windows))]
+        return Ok(CrossPlatformListener::Tcp(listener));
+        #[cfg(windows)]
+        return Ok(CrossPlatformListener::Windows(windows::WindowsListener::bind_tcp(addr).await?));
+    }
+
+    async fn bind_auto() -> Result<Self> {
+        #[cfg(unix)]
+        {
+            let socket_path =
+                std::env::temp_dir().join(format!("packetstream_{}.sock", std::process::id()));
+            let listener = unix::UnixSocketListener::bind(&socket_path).await?;
+            Ok(CrossPlatformListener::Unix(listener))
+        }
+
+        #[cfg(windows)]
+        {
+            let pipe_name = "packetstream";
+            let fallback_addr = "localhost:0".parse()?;
+            let listener =
+                windows::WindowsListener::bind_with_fallback(pipe_name, fallback_addr).await?;
+            Ok(CrossPlatformListener::Windows(listener))
+        }
+
+        #[cfg(not(any(unix, windows)))]
+        {
+            let addr = "localhost:0".parse()?;
+            let listener = tokio::net::TcpListener::bind(addr).await?;
+            Ok(CrossPlatformListener::Tcp(listener))
+        }
+    }
+
+    async fn bind_manual(socket_type: SocketType) -> Result<Self> {
+        match socket_type {
+            #[cfg(unix)]
+            SocketType::Unix(path) => {
+                let listener = unix::UnixSocketListener::bind(path).await?;
+                Ok(CrossPlatformListener::Unix(listener))
+            }
+            #[cfg(not(unix))]
+            SocketType::Unix(_) => {
+                return Err(PacketStreamError::Socket(SocketError::UnsupportedPlatform(
+                    "Unix sockets not supported on this platform".to_string(),
+                )))
+            }
+            #[cfg(windows)]
+            SocketType::NamedPipe(name) => {
+                let listener = windows::WindowsListener::bind_named_pipe(&name).await?;
+                Ok(CrossPlatformListener::Windows(listener))
+            }
+            #[cfg(not(windows))]
+            SocketType::NamedPipe(_) => {
+                Err(PacketStreamError::Socket(SocketError::UnsupportedPlatform(
+                    "Named pipes not supported on this platform".to_string(),
+                )))
+            }
+            SocketType::Tcp(addr) => {
+                #[cfg(windows)]
+                {
+                    let listener = windows::WindowsListener::bind_tcp(addr).await?;
+                    Ok(CrossPlatformListener::Windows(listener))
+                }
+                #[cfg(not(windows))]
+                {
+                    let listener = tokio::net::TcpListener::bind(addr).await?;
+                    Ok(CrossPlatformListener::Tcp(listener))
+                }
+            }
+        }
+    }
+
+    pub async fn accept(&mut self) -> Result<(PacketStream, PacketSink)> {
+        match self {
+            #[cfg(unix)]
+            CrossPlatformListener::Unix(listener) => {
+                let stream = listener.accept().await?;
+                let framed = Framed::new(stream, LengthDelimitedCodec::new());
+                let (sink, stream) = framed.split();
+                let stream =
+                    stream.map(|item| item.map(|b| b.freeze()).map_err(PacketStreamError::Io));
+                let sink = sink.sink_map_err(PacketStreamError::Io);
+                Ok((Box::pin(stream), Box::pin(sink)))
+            }
+            #[cfg(windows)]
+            CrossPlatformListener::Windows(listener) => {
+                let stream = listener.accept().await?;
+                let framed = Framed::new(stream, LengthDelimitedCodec::new());
+                let (sink, stream) = framed.split();
+                let stream =
+                    stream.map(|item| item.map(|b| b.freeze()).map_err(PacketStreamError::Io));
+                let sink = sink.sink_map_err(PacketStreamError::Io);
+                Ok((Box::pin(stream), Box::pin(sink)))
+            }
+            #[cfg(not(windows))]
+            CrossPlatformListener::Tcp(listener) => {
+                let (stream, _) = listener.accept().await?;
+                let framed = Framed::new(stream, LengthDelimitedCodec::new());
+                let (sink, stream) = framed.split();
+                let stream =
+                    stream.map(|item| item.map(|b| b.freeze()).map_err(PacketStreamError::Io));
+                let sink = sink.sink_map_err(PacketStreamError::Io);
+                Ok((Box::pin(stream), Box::pin(sink)))
+            }
+        }
+    }
+
+    pub fn local_addr(&self) -> Result<String> {
+        match self {
+            #[cfg(unix)]
+            CrossPlatformListener::Unix(listener) => Ok(listener.path().display().to_string()),
+            #[cfg(windows)]
+            CrossPlatformListener::Windows(listener) => listener.local_addr(),
+            #[cfg(not(windows))]
+            CrossPlatformListener::Tcp(listener) => Ok(listener.local_addr()?.to_string()),
+        }
+    }
+}
+
+pub enum Listener {
+    Tcp(adapters::TcpTransportListener),
+    Uds(adapters::UdsTransportListener),
+    #[cfg(unix)]
+    DualFd(DualFdListener),
+}
+
+#[async_trait]
+impl TransportListener for Listener {
+    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo)> {
+        match self {
+            Listener::Tcp(l) => l.accept().await,
+            Listener::Uds(l) => l.accept().await,
+            #[cfg(unix)]
+            Listener::DualFd(l) => l.accept().await,
+        }
+    }
+
+    fn local_addr(&self) -> Result<crate::types::StreamAddress> {
+        match self {
+            Listener::Tcp(l) => l.local_addr(),
+            Listener::Uds(l) => l.local_addr(),
+            #[cfg(unix)]
+            Listener::DualFd(l) => l.local_addr(),
+        }
+    }
+
+    async fn shutdown(&mut self) -> Result<()> {
+        match self {
+            Listener::Tcp(l) => l.shutdown().await,
+            Listener::Uds(l) => l.shutdown().await,
+            #[cfg(unix)]
+            Listener::DualFd(l) => l.shutdown().await,
+        }
+    }
+}
