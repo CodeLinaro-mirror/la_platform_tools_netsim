@@ -11,7 +11,11 @@ rustfmt_test(
     name = "fmt",
     targets = [
         "//next/bluetooth",
+        "//next/common",
         "//next/devices",
+        "//next/hostapd-rs",
+        "//next/http-proxy",
+        "//next/libslirp-rs",
         "//next/modem-rs-derive",
         # "//next/modem-rs",
         "//next/netsim-api",
@@ -20,5 +24,6 @@ rustfmt_test(
         "//next/packets",
         "//next/proto",
         "//next/rootcanal",
+        "//next/wifi",
     ],
 )
