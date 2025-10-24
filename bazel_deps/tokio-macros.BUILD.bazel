@@ -19,13 +19,13 @@ load("@rules_rust//rust:defs.bzl", "rust_proc_macro")
 package(default_visibility = ["//visibility:public"])
 
 rust_proc_macro(
-    name = "tokio_macros",
+    name = "tokio-macros",
     srcs = glob(["**/*.rs"]),
     crate_name = "tokio_macros",
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@proc_macro2",
+        "@proc-macro2",
         "@quote",
         "@syn",
     ],

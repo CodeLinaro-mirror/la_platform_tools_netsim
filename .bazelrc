@@ -1,2 +1,11 @@
-build --enable_workspace
-test --enable_workspace --verbose_failures --test_output=all
+test --verbose_failures --test_output=all
+
+# Release build configuration for optimized binaries
+build:opt --compilation_mode=opt
+build:release --config=opt
+build:release --strip=always
+
+# Rust-specific optimization flags for release builds
+build:release --copt="-O3"
+build:release --copt="-DNDEBUG"
+build:release --linkopt="-Wl,-strip-all"

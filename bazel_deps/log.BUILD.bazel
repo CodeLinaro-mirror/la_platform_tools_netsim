@@ -19,13 +19,13 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "log_rust",
+    name = "log",
     srcs = glob(["**/*.rs"]),
     crate_name = "log",
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@android_log_sys",
+        "@android_log-sys",
         "@once_cell",
     ],
     rustc_flags = [
@@ -40,7 +40,7 @@ rust_library(
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@android_log_sys",
+        "@android_log-sys",
         "@once_cell",
     ],
     rustc_flags = [
@@ -57,7 +57,7 @@ rust_library(
     edition = "2021",
     crate_root = "src/lib.rs",
     deps = [
-        "@android_log_sys",
+        "@android_log-sys",
         "@once_cell",
     ],
     rustc_flags = [

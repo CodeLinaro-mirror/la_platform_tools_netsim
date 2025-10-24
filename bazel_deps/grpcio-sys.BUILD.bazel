@@ -14,12 +14,21 @@
 
 """grpcio-sys bazel build rule"""
 
+load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
+cc_library(
+    name = "grpc_wrap_deps",
+    deps = [
+        "@grpc//:grpc++",
+    ],
+    srcs = ["grpc_wrap.cc"],
+)
+
 rust_library(
-    name = "grpcio_sys",
+    name = "grpcio-sys",
     srcs = glob(["**/*.rs"]),
     crate_name = "grpcio_sys",
     edition = "2018",
@@ -28,8 +37,9 @@ rust_library(
         "BINDING_PATH": "../bindings/bindings.rs",
     },
     deps = [
+        ":grpc_wrap_deps",
         "@libc",
-        "@libz_sys",
+        "@libz-sys",
     ],
     rustc_flags = [
         "--cfg=feature=\"_libz-sys\"",

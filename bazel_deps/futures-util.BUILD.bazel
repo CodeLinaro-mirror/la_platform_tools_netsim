@@ -19,24 +19,24 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "futures_util",
+    name = "futures-util",
     srcs = glob(["**/*.rs"]),
     crate_name = "futures_util",
     edition = "2018",
     crate_root = "src/lib.rs",
     deps = [
-        "@futures_channel",
-        "@futures_core",
-        "@futures_io",
-        "@futures_sink",
-        "@futures_task",
+        "@futures-channel",
+        "@futures-core",
+        "@futures-io",
+        "@futures-sink",
+        "@futures-task",
         "@memchr",
-        "@pin_project_lite",
-        "@pin_utils",
+        "@pin-project-lite",
+        "@pin-utils",
         "@slab",
     ],
     proc_macro_deps = [
-        "@futures_macro",
+        "@futures-macro",
     ],
     rustc_flags = [
         "--cfg=feature=\"alloc\"",

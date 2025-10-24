@@ -65,7 +65,7 @@ impl Address {
 
 /// The indicator of the packet type.
 #[repr(C)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Idc {
     /// Host to controller command.
     Cmd = 1,

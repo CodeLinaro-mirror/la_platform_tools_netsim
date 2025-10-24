@@ -29,7 +29,7 @@ genrule_defaults {
     cmd: "$(location aprotoc)" +
         "    -Itools/netsim/proto" +
         "    -Iexternal/protobuf/src" +
-        "    -Ipackages/modules/Bluetooth/tools/rootcanal/proto" +
+        "    -Itools/rootcanal/proto" +
         "    --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-cpp-plugin)" +
         "    --grpc_out=$(genDir)" +
         "    --cpp_out=$(genDir)" +
@@ -75,7 +75,7 @@ cc_library {
         include_dirs: [
             "external/protobuf/src",
             "tools/netsim/proto",
-            "packages/modules/Bluetooth/tools/rootcanal/proto",
+            "tools/rootcanal/proto",
         ],
     },
     shared_libs: [
@@ -102,7 +102,7 @@ cc_library {
         include_dirs: [
             "external/protobuf/src",
             "tools/netsim/proto",
-            "packages/modules/Bluetooth/tools/rootcanal/proto",
+            "tools/rootcanal/proto",
         ],
     },
     srcs: [
@@ -126,7 +126,7 @@ genrule {
     ],
     cmd: "$(location aprotoc)" +
         "    -Itools/netsim/proto" +
-        "    -Ipackages/modules/Bluetooth/tools/rootcanal/proto" +
+        "    -Itools/rootcanal/proto" +
         "    -Iexternal/protobuf/src" +
         "    --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-python-plugin)" +
         "    --python_out=$(genDir)" +

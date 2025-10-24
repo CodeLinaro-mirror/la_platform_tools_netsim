@@ -27,7 +27,7 @@ rust_library(
     deps = [
         "@pest",
         "@pest_meta",
-        "@proc_macro2",
+        "@proc-macro2",
         "@quote",
         "@syn",
     ],

@@ -33,6 +33,7 @@ rust_library(
     ],
     rustc_flags = [
         "--cfg=feature=\"derive\"",
+        "--cfg=feature=\"env\"",
         "--cfg=feature=\"error-context\"",
         "--cfg=feature=\"help\"",
         "--cfg=feature=\"std\"",
