@@ -20,3 +20,6 @@ members = [
     "netsim-next",
     "rootcanal",
 ]
+
+[workspace.doc]
+default-members = ["netsim-next"]
