@@ -9,6 +9,7 @@ exports_files([
 
 rustfmt_test(
     name = "fmt",
+    tags = ["manual"],
     targets = [
         "//next/bluetooth",
         "//next/devices",

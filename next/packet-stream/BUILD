@@ -24,6 +24,7 @@ package(default_visibility = ["//visibility:public"])
 rust_library(
     name = "packet-stream",
     srcs = glob(["src/**/*.rs"]),
+    edition = "2021",
     proc_macro_deps = [
         "@async-trait",
         "@serde_derive",
@@ -48,6 +49,7 @@ rust_library(
 rust_test(
     name = "unit_tests",
     crate = ":packet-stream",
+    edition = "2021",
     tags = ["general_tests"],
     deps = [
         "@bytes",
@@ -63,6 +65,7 @@ rust_test(
     name = "tests",
     srcs = glob(["tests/**/*.rs"]),
     crate_root = "tests/mod.rs",
+    edition = "2021",
     proc_macro_deps = ["@async-trait"],
     tags = ["general_tests"],
     deps = [

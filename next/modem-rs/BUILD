@@ -22,6 +22,7 @@ package(default_visibility = ["//visibility:public"])
 rust_library(
     name = "modem-rs",
     srcs = glob(["src/**/*.rs"]),
+    edition = "2021",
     features = ["test-utils"],
     proc_macro_deps = [
         "@async-trait",
