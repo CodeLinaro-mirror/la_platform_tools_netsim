@@ -34,12 +34,14 @@ rust_library(
         "//rust/rootcanal",
         "@bytes",
         "@env_logger",
+        "@futures",
         "@hex",
         "@log",
         "@protobuf-rust",
         "@rand",
         "@thiserror",
         "@tokio",
+        "@tokio-stream",
         "@zerocopy",
     ],
 )
@@ -61,9 +63,11 @@ rust_test(
         "//rust/rootcanal",
         "@bytes",
         "@env_logger",
+        "@futures",
         "@log",
         "@rootcanal//:lib_rootcanal_ffi",
         "@tokio",
+        "@tokio-stream",
     ],
 )
 

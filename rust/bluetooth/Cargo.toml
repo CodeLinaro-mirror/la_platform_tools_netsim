@@ -28,3 +28,5 @@ test-utils = []
 
 [dev-dependencies]
 rootcanal = { path = "../rootcanal" }
+
+[workspace]

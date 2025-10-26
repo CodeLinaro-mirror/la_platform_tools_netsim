@@ -6,15 +6,13 @@
 //! chips, handling HCI communication, and interacting with the `rootcanal`
 //! simulation backend.
 #![allow(missing_docs)]
+#![allow(clippy::type_complexity)]
 
 mod beacon;
 mod device;
 mod handlers;
-pub mod manager;
+pub mod server;
 mod sniffer;
-#[cfg(feature = "test-utils")]
-pub mod test_utils;
-mod types;
-pub mod utils;
+mod utils;
 
-pub use manager::BluetoothManager;
+pub use server::Server;

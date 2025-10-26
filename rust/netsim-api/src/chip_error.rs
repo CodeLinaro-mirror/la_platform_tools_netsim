@@ -2,7 +2,7 @@
 
 //! This module defines the error types for the chip service.
 
-use crate::chips::ChipIdentifier;
+use crate::chips::ChipId;
 use crate::packet_streamer::PsError;
 use thiserror::Error;
 
@@ -10,7 +10,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ChipError {
     #[error("Chip not found error: {0}")]
-    ChipNotFound(ChipIdentifier),
+    ChipNotFound(ChipId),
 
     /// An error occurred during I/O.
     #[error("I/O error: {0}")]
