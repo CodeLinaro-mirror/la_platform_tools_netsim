@@ -167,16 +167,15 @@ pub async fn run() -> bool {
     #[cfg(not(unix))]
     warn!("IPC is not supported on this platform.");
 
-    let (server, client) = bluetooth::Server::new();
-    join_set.spawn(server.run());
+    let (bt_server, bt_client) = bluetooth::Server::new();
+    let (devices_server, devices_client) = devices::Server::new(bt_client);
+    join_set.spawn(bt_server.run());
     info!("bluetooth server started");
+    join_set.spawn(devices_server.run());
+    info!("devices server started");
 
-    // Gracefully shut down the server
-    if let Err(e) = client.shutdown().await {
-        error!("Failed to send shutdown command: {}", e);
-    }
-
-    // Wait for all tasks in the JoinSet to complete
+    // Wait for all tasks in the JoinSet to complete. This will run until
+    // a shutdown command is received and all services terminate.
     while let Some(res) = join_set.join_next().await {
         if let Err(e) = res {
             error!("Server task panicked: {}", e);

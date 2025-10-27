@@ -28,7 +28,10 @@ impl Server {
             DeviceRequest::Delete { id: _, respond_to: _ } => {}
             DeviceRequest::Reset {} => {}
             DeviceRequest::GetChipStatistics { respond_to: _ } => {}
-            DeviceRequest::Shutdown => {}
+            DeviceRequest::Shutdown => {
+                self.shutdown = true;
+                self.bt_client.shutdown().await.ok();
+            }
         }
     }
 
@@ -94,6 +97,10 @@ impl Server {
                 config: params.chip_config,
             })
             .await?;
+
+        if self.chip_to_device_map.len() == 1 {
+            self.stop_idle_alarm();
+        }
         Ok(())
     }
 }
