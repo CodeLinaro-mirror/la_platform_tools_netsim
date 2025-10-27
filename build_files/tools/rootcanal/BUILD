@@ -221,8 +221,8 @@ genrule(
 
 genrule(
     name = "rootcanal_bredr_bb_cxx_gen",
-    srcs = ["packets/bredr_bb.pdl"],
-    outs = ["bredr_bb.h"],
+    srcs = ["packets/bredr_bb_packets.pdl"],
+    outs = ["packets/bredr_bb_packets.h"],
     cmd = "set -o pipefail; $(location @pdl-compiler//:pdlc) $(SRCS) | $(location @pdl-compiler//:pdl_cxx_generator) --namespace bredr_bb --include-header hci/address.h --using-namespace bluetooth::hci --output $(OUTS)",
     tools = [
         "@pdl-compiler//:pdl_cxx_generator",

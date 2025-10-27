@@ -45,6 +45,7 @@ new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.
         "external/libslirp",
         "external/fmtlib",
         "external/wpa_supplicant_8",
+        "system/librustutils/rustutils",
     ]
 ]
 
@@ -77,6 +78,7 @@ new_local_repository(
         "arrayvec",
         "async-trait",
         "base64",
+        "bitflags",
         "byteorder",
         "bytes",
         "cfg-if",
@@ -120,7 +122,10 @@ new_local_repository(
         "lock_api",
         "log",
         "memchr",
+        "minimal-lexical",
         "mio",
+        "nix",
+        "nom",
         "num_cpus",
         "num-bigint",
         "num-derive",
@@ -149,6 +154,7 @@ new_local_repository(
         "regex",
         "regex-automata",
         "regex-syntax",
+        "rustix",
         "ryu",
         "scopeguard",
         "serde",
@@ -218,8 +224,18 @@ new_local_repository(
     #    repo_mapping = {"@aemu-base": "@aemu-base"},
 )
 
+# Use the boringssl from Google
+
+bazel_dep(
+    name = "boringssl",
+    version = "0.0.0",  # Version is just a placeholder, override handles it
+)
+local_path_override(
+    module_name = "boringssl",
+    path = "../../external/boringssl/src",
+)
+
 # Dependencies needed for external/wpa_supplicant_8
 bazel_dep(name = "abseil-cpp", version = "20250127.1")
 bazel_dep(name = "googletest", version = "1.17.0")
-bazel_dep(name = "boringssl", version = "0.20241024.0")
 bazel_dep(name = "cxx.rs", version = "1.0.175")

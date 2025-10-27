@@ -28,7 +28,10 @@ rust_test(
     name = "netsim_libslirp_rs_tests",
     crate = ":netsim_libslirp_rs",
     edition = "2021",
-    tags = ["general_tests"],
+    tags = [
+        "general_tests",
+        "requires-network",
+    ],
 )
 
 rust_test(
