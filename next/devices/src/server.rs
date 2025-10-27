@@ -69,6 +69,8 @@ pub struct Server {
     ///
     /// This timeout is reset every time a request is received.
     pub idle_timeout: Duration,
+    /// Flag to signal the server to shut down.
+    pub(crate) shutdown: bool,
 }
 
 /// `DeviceInfo` holds the state of a single simulated device, including its
@@ -100,8 +102,9 @@ impl Server {
             chip_to_device_map: HashMap::new(),
             shutdown_alarm: Box::pin(time::sleep_until(Instant::now())),
             // TODO: Pass timeouts on new()
-            start_timeout: Duration::from_secs(15),
-            idle_timeout: Duration::from_secs(15),
+            start_timeout: Duration::from_secs(5),
+            idle_timeout: Duration::from_secs(5),
+            shutdown: false,
         };
         (server, DeviceClient::new(command_tx))
     }
@@ -112,10 +115,11 @@ impl Server {
     /// It will shut down if it remains idle for the configured timeout.
     pub async fn run(mut self) {
         self.set_alarm(self.start_timeout);
-        loop {
+        while !self.shutdown {
             tokio::select! {
-                Some(cmd) = self.request_rx.recv() =>
-                self.handle_command(cmd).await,
+                Some(cmd) = self.request_rx.recv() => {
+                    self.handle_command(cmd).await;
+                }
                 _ = &mut self.shutdown_alarm => break,
             }
         }
@@ -125,6 +129,15 @@ impl Server {
     fn set_alarm(&mut self, duration: Duration) {
         let new_deadline = Instant::now() + duration;
         self.shutdown_alarm.as_mut().reset(new_deadline);
+    }
+
+    pub fn start_idle_alarm(&mut self) {
+        self.set_alarm(self.idle_timeout);
+    }
+
+    pub fn stop_idle_alarm(&mut self) {
+        // Effectively disable the shutdown alarm by setting a very large duration.
+        self.set_alarm(Duration::from_secs(u32::MAX as u64));
     }
 
     /// Generates a new, unique `ChipId`.

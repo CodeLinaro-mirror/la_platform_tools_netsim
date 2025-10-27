@@ -51,6 +51,17 @@ impl DeviceClient {
     pub fn new(sender: mpsc::Sender<DeviceRequest>) -> Self {
         Self { sender }
     }
+
+    /// Sends a shutdown command to the device service.
+    ///
+    /// This is a fire-and-forget command; it does not wait for a response.
+    pub async fn shutdown(&self) -> Result<(), ClientError> {
+        self.sender
+            .send(DeviceRequest::Shutdown)
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        Ok(())
+    }
 }
 
 // Generate client methods.
