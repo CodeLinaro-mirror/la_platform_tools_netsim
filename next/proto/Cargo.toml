@@ -5,11 +5,11 @@ name = "netsim-proto"
 ##build = "build_cargo.rs"
 
 [dependencies]
-protobuf = "=3.6.0"
+protobuf = "=3.7.2"
 
 [build-dependencies]
-##protobuf = "=3.6.0"
-##protobuf-codegen = "3.6.0"
+##protobuf = "=3.7.2"
+##protobuf-codegen = "3.7.2"
 
 [lib]
 path = "src/lib.rs"
