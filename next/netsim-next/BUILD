@@ -35,8 +35,10 @@ rust_library(
         "//next/bluetooth",
         "//next/devices",
         "//next/netsim-api",
+        "//next/packet-stream",
         "@chrono",
         "@env_logger",
+        "@futures",
         "@log",
         "@tokio",
     ] + select({
@@ -74,6 +76,12 @@ rust_test(
     ],
     deps = [
         ":netsim-next-lib",
+        "//next/netsim-api",
+        "//next/packet-stream",
+        "//next/rootcanal",
+        "@bytes",
+        "@futures",
         "@rand",
+        "@tokio",
     ],
 )

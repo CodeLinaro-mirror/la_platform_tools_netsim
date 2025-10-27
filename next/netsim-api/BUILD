@@ -22,6 +22,7 @@ NETSIM_API_DEPS = [
     "@chrono",
     "@futures",
     "@log",
+    "@serde",
     "@thiserror",
     "@tokio",
     "@tokio-stream",

@@ -1,10 +1,10 @@
 use crate::error::{PacketStreamError, Result};
-use crate::models::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use crate::transport::traits::{PacketSink, PacketStream, TransportListener};
 use crate::types::StreamAddress;
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 use futures::SinkExt;
+use netsim_api::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File as StdFile;
@@ -78,12 +78,10 @@ impl DualFdListener {
     pub async fn new(config: DualFdConfig) -> Result<Self> {
         #[allow(unused_mut)]
         let mut listener = Self { config, pending_streams: VecDeque::new() };
-        #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         listener.prepare_streams()?;
         Ok(listener)
     }
 
-    #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
     fn prepare_streams(&mut self) -> Result<()> {
         self.pending_streams.clear();
         for device in &self.config.devices {
