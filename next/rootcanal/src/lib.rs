@@ -4,15 +4,14 @@
 
 //! # Bluetooth Controller
 //!
-//! This crate provides a simplified interface for interacting with a Bluetooth
-//! controller. It is designed to be used in testing and simulation scenarios.
+//! This crate provides a simplified interface for interacting with a Rootcanal
+//! emulated Bluetooth controller. It is designed to be used in testing and simulation scenarios.
 //!
-//! The main entry point is the [`Bluetooth`] struct, which represents the
+//! The main entry point is the [`Rootcanal`] struct, which represents the
 //! Bluetooth subsystem. It provides methods for creating and managing
-//! Bluetooth controllers.
+//! emulated Bluetooth controllers.
 //!
-// The [`bluetooth`] module contains definitions for common Bluetooth data
-//! types, such as addresses, device classes, and features.
+// The [`rootcanal`] module contains the core Rootcanal implementation.
 //!
 //! The [`error`] module defines the error types used in this crate.
 //!
@@ -22,26 +21,25 @@
 //! ## Example
 //!
 
-pub mod bluetooth;
 pub mod controller;
 pub mod error;
 pub mod ffi;
+pub mod rootcanal;
 pub mod types;
 
-pub use bluetooth::Bluetooth;
 pub use controller::{Id, Stats};
+pub use rootcanal::{Callbacks, Rootcanal};
 pub use types::{Address, Idc, Phy};
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::controller::Callbacks as ControllerCallbacks;
     use crate::types::{Address, Idc};
     use std::ffi::c_int;
     use std::str::FromStr;
 
-    struct MockBluetoothCallbacks;
-    impl bluetooth::Callbacks for MockBluetoothCallbacks {
+    struct MockRootcanalCallbacks;
+    impl rootcanal::Callbacks for MockRootcanalCallbacks {
         fn on_send_ll(
             &self,
             _source_id: u32,
@@ -68,18 +66,17 @@ mod tests {
         }
     }
 
-    // Verifies the basic lifecycle of a controller: creation and deletion.
     // It ensures that the controller count is correctly managed when a new
     // controller is added and subsequently removed.
     #[test]
     fn test_create_and_delete_controller() {
-        let bluetooth = Bluetooth::new(Box::new(MockBluetoothCallbacks));
+        let rootcanal = Rootcanal::new(Box::new(MockRootcanalCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let id = bluetooth.new_controller(address, Box::new(MockControllerCallbacks));
+        let id = rootcanal.new_controller(address, Box::new(MockControllerCallbacks));
 
-        assert_eq!(bluetooth.len(), 1);
+        assert_eq!(rootcanal.len(), 1);
 
-        bluetooth.remove_controller(id).unwrap();
-        assert_eq!(bluetooth.len(), 0);
+        rootcanal.remove_controller(id).unwrap();
+        assert_eq!(rootcanal.len(), 0);
     }
 }

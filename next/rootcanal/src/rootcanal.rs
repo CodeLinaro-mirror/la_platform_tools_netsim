@@ -30,7 +30,7 @@ pub trait Callbacks: Send + Sync {
 }
 
 /// The Bluetooth subsystem.
-pub struct Bluetooth {
+pub struct Rootcanal {
     controllers: Mutex<HashMap<ControllerId, Controller>>,
     callbacks: Box<dyn Callbacks>,
 }
@@ -40,7 +40,7 @@ pub struct Bluetooth {
 // controller to send link layer packets without holding a strong
 // reference to the Bluetooth instance, preventing reference cycles.
 pub(crate) struct BtOpsWrapper {
-    bluetooth: Weak<Bluetooth>,
+    bluetooth: Weak<Rootcanal>,
 }
 
 impl BtOps for BtOpsWrapper {
@@ -60,7 +60,7 @@ impl BtOps for BtOpsWrapper {
     }
 }
 
-impl Bluetooth {
+impl Rootcanal {
     /// Creates a new Bluetooth subsystem.
     pub fn new(callbacks: Box<dyn Callbacks>) -> Arc<Self> {
         Arc::new(Self { controllers: Mutex::new(HashMap::new()), callbacks })
@@ -199,9 +199,9 @@ impl Bluetooth {
     }
 }
 
-impl Default for Bluetooth {
+impl Default for Rootcanal {
     fn default() -> Self {
-        panic!("Use `Bluetooth::new()` instead");
+        panic!("Use `Rootcanal::new()` instead");
     }
 }
 

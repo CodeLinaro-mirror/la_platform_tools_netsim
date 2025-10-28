@@ -12,13 +12,13 @@ This crate provides a safe Rust interface to the C++ `rootcanal` library through
 
 ## Usage
 
-Here is an example of how to use this crate to create a `Bluetooth` instance, add two controllers, and send a packet from one to the other.
+Here is an example of how to use this crate to create a `Rootcanal` instance, add two controllers, and send a packet from one to the other.
 
-First, you need to implement the `bluetooth::Callbacks` and `controller::Callbacks` traits to handle events from the `Bluetooth` instance and the `Controller` instances.
+First, you need to implement the `bluetooth::Callbacks` and `controller::Callbacks` traits to handle events from the `Rootcanal` instance and the `Controller` instances.
 
 ```rust
 use netsim_rootcanal_rs::{
-    bluetooth::{self, Bluetooth},
+    rootcanal::{self, Rootcanal},
     controller,
     types::{Address, Idc, Phy},
 };
@@ -71,7 +71,7 @@ impl controller::Callbacks for MyControllerCallbacks {
 }
 
 // Create a Bluetooth instance.
-let bluetooth = Bluetooth::new(Box::new(MyBluetoothCallbacks));
+let rootcanal = Rootcanal::new(Box::new(MyBluetoothCallbacks));
 
 // Create two controllers.
 let callbacks1 = Arc::new(MyControllerCallbacks {

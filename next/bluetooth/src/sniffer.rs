@@ -16,7 +16,7 @@ use log::debug;
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{ChipId, SnifferParams};
 use netsim_proto::model::Chip as ProtoChip;
-use rootcanal::{bluetooth::Bluetooth as Rootcanal, controller::Idc};
+use rootcanal::{controller::Idc, Rootcanal};
 
 /// A stateless struct that provides the behavior for a Bluetooth sniffer.
 pub(crate) fn create(

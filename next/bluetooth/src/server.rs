@@ -38,11 +38,7 @@ use bytes::Bytes;
 use log::{debug, error, info};
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{BluetoothMode, ChipClient, ChipId, ChipRequest, PacketStream};
-use rootcanal::{
-    bluetooth::{Bluetooth as Rootcanal, Callbacks as RootcanalCallbacks},
-    types::Phy,
-    Idc,
-};
+use rootcanal::{Callbacks as RootcanalCallbacks, Idc, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -61,7 +57,7 @@ pub(crate) struct ChipEntry {
 /// - Managing the lifecycle of all simulated Bluetooth chips.
 /// - Handling commands to create, patch, get, and delete chips.
 /// - Running the main event loop that drives the simulation.
-/// - Interacting with the `rootcanal` backend.
+/// - Interacting with the `rootcanal` Bluetooth emulator.
 pub struct Server {
     // TODO: reduce visibility of fields
     pub(crate) rootcanal: Arc<Rootcanal>,

@@ -14,7 +14,7 @@ use crate::utils::ToChipError;
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{BeaconParams, ChipId};
 use netsim_proto::model::Chip as ProtoChip;
-use rootcanal::{bluetooth::Bluetooth as Rootcanal, controller::Idc};
+use rootcanal::{controller::Idc, Rootcanal};
 
 /// Creates a new `BeaconChip`.
 pub fn create(

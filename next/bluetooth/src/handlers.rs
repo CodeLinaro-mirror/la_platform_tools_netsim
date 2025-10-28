@@ -4,7 +4,7 @@
 //!
 //! It provides the `handle_command` method and related functions for processing
 //! `ChipRequest` messages, managing the lifecycle of Bluetooth chips, and
-//! interacting with the `rootcanal` backend.
+//! interacting with the `rootcanal` Bluetooth emulator.
 
 use crate::server::ChipEntry;
 use crate::utils::ToChipError;
