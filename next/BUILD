@@ -20,7 +20,7 @@ rustfmt_test(
         "//next/modem-rs-derive",
         # "//next/modem-rs",
         "//next/netsim-api",
-        "//next/netsim-next",
+        "//next/daemon",
         "//next/packet-stream",
         "//next/packets",
         "//next/proto",
