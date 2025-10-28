@@ -1,0 +1,10 @@
+[package]
+name = "cell"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+netsim-api = { path = "../netsim-api" }
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+log = "0.4"
