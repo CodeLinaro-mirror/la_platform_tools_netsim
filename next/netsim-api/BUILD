@@ -48,10 +48,6 @@ rust_test(
         "@async-trait",
         "@thiserror-impl",
     ],
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
     tags = ["general_tests"],
     deps = NETSIM_API_DEPS,
 )
