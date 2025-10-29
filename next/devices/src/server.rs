@@ -51,10 +51,10 @@ pub struct Server {
     next_device_id: AtomicU32,
     /// A map of all devices, keyed by `DeviceId`.
     pub devices_by_id: HashMap<DeviceId, DeviceInfo>,
-    /// A map from device GUID to `DeviceId`.
+    /// Maps GUIDs to `DeviceId`s. Used to re-identify emulators devices for adding chips. Accessory devices don't use this.
     pub device_ids_by_guid: HashMap<String, DeviceId>,
-    /// A map from `ChipId` to the device it belongs to.
-    pub chip_to_device_map: HashMap<ChipId, (NetworkKind, DeviceId)>,
+    /// A map from `ChipId` to its associated `ChipInfo`.
+    pub chip_info_map: HashMap<ChipId, ChipInfo>,
     /// The receiver for incoming `DeviceRequest` messages.
     request_rx: mpsc::Receiver<DeviceRequest>,
     /// A timer for shutting down the service when idle.
@@ -80,11 +80,19 @@ pub struct DeviceInfo {
     /// The unique identifier for the device.
     pub id: DeviceId,
     /// A GUID for the device, typically provided by the packet streamer.
-    pub guid: String,
+    pub guid: Option<String>,
     /// The set of chips that belong to this device.
     pub chips: HashSet<ChipId>,
     /// Device configuration.
     pub device_config: DeviceConfig,
+}
+
+/// Holds information about a chip, used in the chip_to_device_map.
+#[derive(Debug, Clone)]
+pub struct ChipInfo {
+    pub kind: NetworkKind,
+    pub device_id: DeviceId,
+    pub name: String,
 }
 
 impl Server {
@@ -99,7 +107,7 @@ impl Server {
             request_rx,
             devices_by_id: HashMap::new(),
             device_ids_by_guid: HashMap::new(),
-            chip_to_device_map: HashMap::new(),
+            chip_info_map: HashMap::new(),
             shutdown_alarm: Box::pin(time::sleep_until(Instant::now())),
             // TODO: Pass timeouts on new()
             start_timeout: Duration::from_secs(5),
@@ -160,5 +168,18 @@ impl Server {
         self.devices_by_id
             .get_mut(id)
             .ok_or_else(|| DeviceError::Internal(format!("Device {id}'s info not found")))
+    }
+
+    pub(crate) fn add_chip_to_device(
+        &mut self,
+        device_id: DeviceId,
+        chip_id: ChipId,
+        chip_kind: NetworkKind,
+        name: String,
+    ) -> Result<(), DeviceError> {
+        let device_info = self.get_device_info(&device_id)?;
+        device_info.chips.insert(chip_id);
+        self.chip_info_map.insert(chip_id, ChipInfo { kind: chip_kind, device_id, name });
+        Ok(())
     }
 }

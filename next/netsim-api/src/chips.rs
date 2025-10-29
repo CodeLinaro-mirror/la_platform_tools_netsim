@@ -6,13 +6,16 @@ use crate::client_method;
 use bytes::Bytes;
 use futures::Sink;
 use netsim_proto::configuration::Controller as RootcanalController;
-use netsim_proto::model::chip::BleBeacon;
+use netsim_proto::model::chip::ble_beacon::{
+    AdvertiseData as ProtoAdvertiseData, AdvertiseSettings as ProtoAdvertiseSettings,
+};
 use netsim_proto::model::Chip as ProtoChip;
 use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
 use std::fmt;
 use std::pin::Pin;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::Stream;
+
 // The only error from PacketStream occurs when source closes connection.
 /// A stream of packets from the chip.
 pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Unpin>;
@@ -160,6 +163,7 @@ impl ChipConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NetworkKind {
     Bluetooth,
     Wifi,
@@ -172,6 +176,16 @@ impl From<&NetworkParams> for NetworkKind {
             NetworkParams::Bluetooth(_) => NetworkKind::Bluetooth,
             NetworkParams::Wifi(_) => NetworkKind::Wifi,
             NetworkParams::Uwb(_) => NetworkKind::Uwb,
+        }
+    }
+}
+
+impl From<NetworkKind> for netsim_proto::common::ChipKind {
+    fn from(kind: NetworkKind) -> Self {
+        match kind {
+            NetworkKind::Bluetooth => netsim_proto::common::ChipKind::BLUETOOTH,
+            NetworkKind::Wifi => netsim_proto::common::ChipKind::WIFI,
+            NetworkKind::Uwb => netsim_proto::common::ChipKind::UWB,
         }
     }
 }
@@ -213,9 +227,21 @@ pub enum BluetoothMode {
     /// A full, virtual Bluetooth controller that can be paired with.
     Device(DeviceParams),
     /// A simple, non-interactive BLE beacon that broadcasts advertisements.
-    Beacon(BeaconParams),
+    Beacon(Box<BeaconParams>),
     /// A passive Bluetooth sniffer to capture nearby traffic.
     Sniffer(SnifferParams),
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct BleBeacon {
+    // BD_ADDR address
+    pub address: String,
+    // Settings on how beacon functions
+    pub settings: Option<ProtoAdvertiseSettings>,
+    // Advertising Data
+    pub adv_data: Option<ProtoAdvertiseData>,
+    // Scan Response Data
+    pub scan_response: Option<ProtoAdvertiseData>,
 }
 
 /// Parameters for creating a virtual Bluetooth device.

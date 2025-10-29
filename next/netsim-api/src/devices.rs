@@ -4,7 +4,6 @@ use crate::client_method;
 use crate::device_error::DeviceError;
 use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend::PatchDeviceRequest;
-use netsim_proto::model::Device;
 use netsim_proto::model::{Orientation as ProtoOrientation, Position as ProtoPosition};
 use std::fmt;
 use tokio::sync::{mpsc, oneshot};
@@ -65,6 +64,7 @@ impl DeviceClient {
 }
 
 // Generate client methods.
+client_method!(DeviceClient => fn create(device: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
 client_method!(DeviceClient => fn ps_create(params: CreateDeviceParams) -> () as DeviceRequest::PsCreate);
 client_method!(DeviceClient => fn list() -> ListDeviceResponse as DeviceRequest::List);
 
@@ -74,20 +74,16 @@ pub struct GetVersionMessage {
 }
 
 pub mod api {
-    use netsim_proto::model::chip::ble_beacon::{
-        AdvertiseData as ProtoAdvertiseData, AdvertiseSettings as ProtoAdvertiseSettings,
-    };
-    use netsim_proto::model::{Orientation as ProtoOrientation, Position as ProtoPosition};
+    use crate::chips::BleBeacon;
+    use crate::devices::DeviceConfig;
 
     // TODO: Revisit the APIs to separate the Api from the Domain.
 
     /// The top-level parameters for creating any kind of chip.
     #[derive(Debug)]
     pub struct DeviceCreate {
-        pub name: String,
-        pub position: ProtoPosition,
-        pub orientation: ProtoOrientation,
-        pub chips: Vec<ChipCreate>,
+        pub config: DeviceConfig,
+        pub chip: ChipCreate,
     }
 
     // External API for chip creation.
@@ -102,42 +98,35 @@ pub mod api {
         pub chip: Chip,
     }
 
+    impl ChipCreate {
+        pub fn new(
+            name: impl Into<String>,
+            manufacturer: impl Into<String>,
+            product_name: impl Into<String>,
+            chip: Chip,
+        ) -> ChipCreate {
+            ChipCreate {
+                name: name.into(),
+                manufacturer: manufacturer.into(),
+                product_name: product_name.into(),
+                chip,
+            }
+        }
+    }
+
     #[derive(Debug)]
     pub enum Chip {
         Beacon(BleBeacon),
     }
 
     #[derive(Debug)]
-    pub struct BleBeacon {
-        // BD_ADDR address
-        pub address: String,
-        // Settings on how beacon functions
-        pub settings: ProtoAdvertiseSettings,
-        // Advertising Data
-        pub adv_data: ProtoAdvertiseData,
-        // Scan Response Data
-        pub scan_response: ProtoAdvertiseData,
-    }
-
-    #[derive(Debug)]
     pub struct Update {}
-}
-
-impl From<api::BleBeacon> for netsim_proto::model::chip::BleBeacon {
-    fn from(beacon: api::BleBeacon) -> Self {
-        netsim_proto::model::chip::BleBeacon {
-            address: beacon.address,
-            settings: Some(beacon.settings).into(),
-            adv_data: Some(beacon.adv_data).into(),
-            scan_response: Some(beacon.scan_response).into(),
-            ..Default::default()
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
 pub struct DeviceConfig {
     /// The name of the device.
+    /// TODO: Decide if we should support device and chip name for accessories.
     pub name: String,
     /// Whether the device is visible in the UI.
     pub visible: bool,
@@ -146,6 +135,18 @@ pub struct DeviceConfig {
     /// The orientation of the device.
     pub orientation: ProtoOrientation,
 }
+
+impl DeviceConfig {
+    pub fn new(
+        name: impl Into<String>,
+        visible: bool,
+        position: ProtoPosition,
+        orientation: ProtoOrientation,
+    ) -> DeviceConfig {
+        DeviceConfig { name: name.into(), visible, position, orientation }
+    }
+}
+
 pub struct CreateDeviceParams {
     pub device_guid: String,
     pub packet_stream: Option<PacketStream>,
@@ -171,9 +172,9 @@ pub enum DeviceRequest {
     /// Create a new device.
     Create {
         /// The parameters for the new device.
-        device: Device,
-        /// The channel to send the created device back on.
-        respond_to: Responder<Device>,
+        device: Box<api::DeviceCreate>,
+        /// The channel to send the device ID back on.
+        respond_to: Responder<DeviceId>,
     },
     /// List all devices.
     List {

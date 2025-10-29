@@ -1,12 +1,17 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use crate::test_utils::{self, mock_sink, TestFixture};
-use netsim_api::chips::{BeaconParams, BluetoothMode, ChipId, CreateParams, SnifferParams};
-use netsim_proto::model::chip::BleBeacon;
+use netsim_api::chips::{
+    BeaconParams, BleBeacon, BluetoothMode, ChipId, CreateParams, SnifferParams,
+};
 use tokio::time::{timeout, Duration};
 
 #[tokio::test]
 async fn test_sniffer_receives_advertisement() {
+    test_sniffer_receives_advertisement_inner().await;
+}
+
+async fn test_sniffer_receives_advertisement_inner() {
     let TestFixture { client, _server_task } = test_utils::setup();
 
     // 1. Create a beacon.
@@ -15,9 +20,9 @@ async fn test_sniffer_receives_advertisement() {
         id,
         packet_stream: None,
         packet_sink: None,
-        config: test_utils::create_chip_config(BluetoothMode::Beacon(BeaconParams {
+        config: test_utils::create_chip_config(BluetoothMode::Beacon(Box::new(BeaconParams {
             ble_beacon: BleBeacon::default(),
-        })),
+        }))),
     };
     client.create(create_chip_params).await.ok();
 

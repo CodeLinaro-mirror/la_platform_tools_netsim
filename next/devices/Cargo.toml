@@ -16,3 +16,7 @@ log = "0.4"
 netsim-proto = { path = "../proto" }
 protobuf = "3.6.0"
 chrono = { version = "0.4.19", default-features = false, features = ["clock"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+bluetooth = { path = "../bluetooth" }
