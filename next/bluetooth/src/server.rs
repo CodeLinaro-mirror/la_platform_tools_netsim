@@ -104,7 +104,7 @@ impl Server {
                 self.rootcanal.receive_hci(id.into(), Idc::Cmd, &packet).expect("Receive HCI error")
             }
             None => {
-                if let Err(e) = self.remove_chip(id, "stream") {
+                if let Err(e) = self.remove_chip(id, "stream_closed") {
                     error!("Failed to remove chip {id} after stream closure: {e}");
                 }
             }

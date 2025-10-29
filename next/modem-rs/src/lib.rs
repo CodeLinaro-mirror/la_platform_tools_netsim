@@ -6,6 +6,7 @@ pub mod data_service;
 pub mod metrics;
 pub mod misc_service;
 mod modem;
+pub mod modem_network;
 mod network_service;
 mod parser;
 mod pdu;
@@ -20,6 +21,8 @@ pub mod types;
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
 
+pub use cellular_network_simulator::CellularNetworkSimulator as ModemService;
 pub use cellular_network_simulator::{CellularNetworkSimulator, ScheduledEvent};
 pub use modem::{Modem, ModemEvent};
+pub use modem_network::{ModemCallbacks, ModemNetworkInterface};
 pub use types::{Callbacks, CallbacksExt, ModemError, ModemId, NetworkCallbacks};

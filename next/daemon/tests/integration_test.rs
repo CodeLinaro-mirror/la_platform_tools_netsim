@@ -1,7 +1,7 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use bytes::Bytes;
-use daemon::netsimd::{self, NetsimDaemon};
+use daemon::netsimd::NetsimDaemon;
 use futures::{SinkExt, StreamExt};
 use netsim_api::initial_info::{ChipInfo, ChipKind};
 use packet_stream::{Streams, TransportType};
@@ -13,6 +13,10 @@ const HCI_RESET_COMMAND: [u8; 3] = [0x03, 0x0c, 0x00]; // OpCode, Length
 
 #[tokio::test]
 async fn test_bluetooth_hci_reset() {
+    test_bluetooth_hci_reset_internal().await
+}
+
+async fn test_bluetooth_hci_reset_internal() {
     // Run netsimd in the background
     let (daemon, _ini_file) = NetsimDaemon::new().await.expect("Failed to create daemon");
     let uds_path = daemon.uds_path().expect("NetsimDaemon has no UDS path");
@@ -23,10 +27,10 @@ async fn test_bluetooth_hci_reset() {
 
     let uds_path_str = uds_path.to_str().expect("Invalid UDS path");
 
-    let transport = TransportType::uds(uds_path_str);
-    let chip_info = ChipInfo::new("bt_test", ChipKind::Bluetooth);
+    let transport = TransportType::uds(uds_path_str.to_string());
+    let chip_info = ChipInfo::new("bt_test", ChipKind::BLUETOOTH);
 
-    let mut streams = Streams::new();
+    let streams = Streams::new();
     let (mut stream, mut sink) =
         streams.connect(transport, chip_info).await.expect("Failed to connect to netsim socket");
 

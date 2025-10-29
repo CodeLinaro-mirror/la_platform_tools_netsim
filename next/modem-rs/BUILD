@@ -30,6 +30,9 @@ rust_library(
         "//next/modem-rs-derive",
     ],
     deps = [
+        "//next/netsim-api",
+        "@bytes",
+        "@tokio",
         "@serde",
         # "@toml",
         "@nom",

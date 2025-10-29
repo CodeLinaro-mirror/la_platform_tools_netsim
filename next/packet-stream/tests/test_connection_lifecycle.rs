@@ -14,7 +14,7 @@ fn create_test_chip_info() -> ChipInfo {
     ChipInfo {
         name: "test-chip".to_string(),
         chip: Some(Chip {
-            kind: ChipKind::Wifi,
+            kind: ChipKind::WIFI,
             id: "test-lifecycle-chip".to_string(),
             name: "Test Lifecycle Chip v1.0".to_string(),
             manufacturer: "Test Lifecycle Corp".to_string(),

@@ -18,7 +18,7 @@ use tokio_stream::Stream;
 
 // The only error from PacketStream occurs when source closes connection.
 /// A stream of packets from the chip.
-pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Unpin>;
+pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Sync + Unpin>;
 /// A sink for packets to the chip.
 pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>;
 
@@ -70,7 +70,7 @@ pub enum ChipRequest {
         /// The ID of the chip to retrieve.
         id: ChipId,
         /// The channel to send the chip's state back on.
-        respond_to: Responder<ProtoChip>,
+        respond_to: Responder<ChipInfo>,
     },
     /// Update an existing chip.
     Update {
@@ -168,6 +168,7 @@ pub enum NetworkKind {
     Bluetooth,
     Wifi,
     Uwb,
+    Cell,
 }
 
 impl From<&NetworkParams> for NetworkKind {
@@ -176,16 +177,7 @@ impl From<&NetworkParams> for NetworkKind {
             NetworkParams::Bluetooth(_) => NetworkKind::Bluetooth,
             NetworkParams::Wifi(_) => NetworkKind::Wifi,
             NetworkParams::Uwb(_) => NetworkKind::Uwb,
-        }
-    }
-}
-
-impl From<NetworkKind> for netsim_proto::common::ChipKind {
-    fn from(kind: NetworkKind) -> Self {
-        match kind {
-            NetworkKind::Bluetooth => netsim_proto::common::ChipKind::BLUETOOTH,
-            NetworkKind::Wifi => netsim_proto::common::ChipKind::WIFI,
-            NetworkKind::Uwb => netsim_proto::common::ChipKind::UWB,
+            NetworkParams::Cell(_) => NetworkKind::Cell,
         }
     }
 }
@@ -199,6 +191,8 @@ pub enum NetworkParams {
     Wifi(WifiParams),
     /// UWB parameters.
     Uwb(UwbParams),
+    /// Cellular parameters.
+    Cell(CellParams),
 }
 
 /// Parameters for creating a Bluetooth chip.
@@ -281,10 +275,43 @@ pub struct WifiParams {
 pub struct UwbParams {
     // Future UWB specific properties.
 }
+
+/// Parameters for creating a Cellular chip.
+#[derive(Debug, Default, Clone)]
+pub struct CellParams {
+    // Future Cellular specific properties.
+}
+
+/// Parameters for the ChipDied message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ChipDiedParams {
+    /// The ID of the chip that died.
+    pub id: ChipId,
+}
+
 impl fmt::Display for ChipId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+/// Information about a chip, including technology-specific details.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChipInfo {
+    Bluetooth(ProtoChip),
+    Wifi(ProtoChip),
+    Uwb(ProtoChip),
+    Cell(CellChipInfo),
+}
+
+/// Cellular technology specific chip information.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CellChipInfo {
+    /// The unique identifier for the chip.
+    pub chip_id: ChipId,
+    /// A string representing the current state of the modem.
+    pub state: String,
+    // TODO: Add more fields like signal strength, network registration, etc.
 }
 
 // =============================================================================
@@ -341,7 +368,7 @@ impl ChipClient {
 
 // Generate client methods.
 client_method!(ChipClient => fn create(params: CreateParams) -> () as ChipRequest::Create);
-client_method!(ChipClient => fn read(id: ChipId) -> ProtoChip as ChipRequest::Read);
+client_method!(ChipClient => fn read(id: ChipId) -> ChipInfo as ChipRequest::Read);
 client_method!(ChipClient => fn update(id: ChipId, chip: ProtoChip) -> ProtoChip as ChipRequest::Update);
 client_method!(ChipClient => fn delete(id: ChipId) -> () as ChipRequest::Delete);
 client_method!(ChipClient => fn read_statistics() -> Vec<ProtoRadioStats> as ChipRequest::GetStatistics);

@@ -174,7 +174,7 @@ impl Server {
 
             match chip_info.kind {
                 NetworkKind::Bluetooth => self.bt_client.delete(chip_id).await?,
-                kind @ (NetworkKind::Wifi | NetworkKind::Uwb) => {
+                kind @ (NetworkKind::Wifi | NetworkKind::Uwb | NetworkKind::Cell) => {
                     return Err(DeviceError::InvalidArguments(format!(
                         "{kind:?} chip delete not supported"
                     )));

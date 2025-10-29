@@ -67,10 +67,11 @@ impl DeviceInfo {
 }
 
 /// The kind of network technology the chip supports.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ChipKind {
-    Unspecified,
-    Bluetooth,
-    Wifi,
-    Uwb,
+    UNSPECIFIED,
+    BLUETOOTH,
+    WIFI,
+    UWB,
+    CELL,
 }
