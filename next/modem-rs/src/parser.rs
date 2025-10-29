@@ -31,31 +31,34 @@ impl<'a> Parsable<'a> for QuotedString<'a> {
     }
 }
 
+#[allow(dead_code)]
 fn parse_u8(input: &[u8]) -> IResult<&[u8], u8> {
     map_res(map_res(nom::character::complete::digit1, str::from_utf8), |s: &str| s.parse::<u8>())(
         input,
     )
 }
 
+#[allow(dead_code)]
 fn parse_u32(input: &[u8]) -> IResult<&[u8], u32> {
     map_res(map_res(nom::character::complete::digit1, str::from_utf8), |s: &str| s.parse::<u32>())(
         input,
     )
 }
 
+#[allow(dead_code)]
 fn parse_u16(input: &[u8]) -> IResult<&[u8], u16> {
     map_res(map_res(nom::character::complete::digit1, str::from_utf8), |s: &str| s.parse::<u16>())(
         input,
     )
 }
 
-fn parse_raw_data(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn parse_raw_data(input: &[u8]) -> IResult<&[u8], &[u8]> {
     use nom::bytes::complete::take_while;
     let (input, content) = take_while(|c: u8| c != b'\r' && c != b'\n')(input)?;
     Ok((input, content))
 }
 
-pub(crate) fn parse_until_semicolon(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn parse_until_semicolon(input: &[u8]) -> IResult<&[u8], &[u8]> {
     use nom::bytes::complete::take_while;
     let (input, content) = take_while(|c: u8| c != b';')(input)?;
     Ok((input, content))

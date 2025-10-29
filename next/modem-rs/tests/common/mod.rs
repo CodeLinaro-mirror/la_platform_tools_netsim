@@ -53,7 +53,7 @@ impl MockModemHandler {
 
 #[allow(dead_code)]
 pub struct TestHarness {
-    pub manager: Arc<CellularNetworkSimulator>,
+    pub manager: Arc<ModemNetworkSimulator>,
     pub modem_id: ModemId,
     pub modem_handler: Arc<MockModemHandler>,
     pub clock: Arc<MockClock>,
@@ -88,7 +88,7 @@ impl TestHarness {
     pub fn new_with_sim_profile(profile: Option<modem_rs::config::SimProfile>) -> Self {
         let network_handler = Arc::new(MockNetworkHandler);
         let clock = Arc::new(MockClock::new());
-        let manager = CellularNetworkSimulator::new_with_clock(network_handler, clock.clone());
+        let manager = ModemNetworkSimulator::new_with_clock(network_handler, clock.clone());
         let mut modem_handlers = HashMap::new();
 
         let modem_id: ModemId = 1;

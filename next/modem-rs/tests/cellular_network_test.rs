@@ -7,7 +7,7 @@ use std::sync::Arc;
 fn test_add_modem_to_manager() {
     let manager_handler = Arc::new(MockNetworkHandler::new());
     let clock = Arc::new(MockClock::new());
-    let manager = CellularNetworkSimulator::new_with_clock(manager_handler.clone(), clock);
+    let manager = ModemNetworkSimulator::new_with_clock(manager_handler.clone(), clock);
 
     let modem_id: ModemId = 1;
     let modem_handler = Arc::new(MockModemHandler::new());
@@ -20,7 +20,7 @@ fn test_add_modem_to_manager() {
 fn test_metrics_counters() {
     let manager_handler = Arc::new(MockNetworkHandler::new());
     let clock = Arc::new(MockClock::new());
-    let manager = CellularNetworkSimulator::new_with_clock(manager_handler.clone(), clock);
+    let manager = ModemNetworkSimulator::new_with_clock(manager_handler.clone(), clock);
 
     let modem_id: ModemId = 1;
     let modem_handler = Arc::new(MockModemHandler::new());

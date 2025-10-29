@@ -1,6 +1,6 @@
 // modem-rs/src/controller.rs
 use bytes::Bytes;
-use netsim_api::chips::{CellChipInfo, ChipId, ChipInfo};
+use netsim_api::chips::{ChipId, ChipInfo};
 use std::fmt;
 use std::sync::Arc;
 

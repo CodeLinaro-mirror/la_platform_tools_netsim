@@ -1,7 +1,6 @@
 // tests/network_service_test.rs
 
-mod common;
-use common::TestHarness;
+use crate::common::TestHarness;
 use std::time::Duration;
 
 #[test]

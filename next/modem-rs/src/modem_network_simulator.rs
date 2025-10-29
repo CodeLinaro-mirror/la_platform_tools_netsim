@@ -1,9 +1,11 @@
 use crate::constants::CALL_RING_TIMEOUT;
 use crate::metrics::{Metrics, MetricsSnapshot};
 use crate::modem::{Modem, ModemEvent};
+use crate::modem_network::{ModemCallbacks, ModemError as NetworkError, ModemNetworkInterface};
 use crate::time::{Clock, SystemClock};
 use crate::types::{Callbacks, CallbacksExt, CommandAction, ModemError, ModemId, NetworkCallbacks};
 use log;
+use netsim_api::chips::{ChipId, ChipInfo};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::sync::atomic::Ordering as AtomicOrdering;
@@ -39,9 +41,9 @@ impl Ord for ScheduledEvent {
     }
 }
 
-/// The `CellularNetworkSimulator` is the main public entry point for the library. It is responsible for
+/// The `ModemNetworkSimulator` is the main public entry point for the library. It is responsible for
 /// creating, managing, and communicating with modem instances.
-pub struct CellularNetworkSimulator {
+pub struct ModemNetworkSimulator {
     modems: Mutex<HashMap<ModemId, Modem>>,
     pub(crate) callbacks: Arc<dyn NetworkCallbacks>,
     pub event_queue: Arc<Mutex<BinaryHeap<ScheduledEvent>>>,
@@ -49,13 +51,13 @@ pub struct CellularNetworkSimulator {
     clock: Arc<dyn Clock>,
 }
 
-impl CellularNetworkSimulator {
-    /// Creates a new `CellularNetworkSimulator` with a real system clock.
+impl ModemNetworkSimulator {
+    /// Creates a new `ModemNetworkSimulator` with a real system clock.
     pub fn new(callbacks: Arc<dyn NetworkCallbacks>) -> Arc<Self> {
         Self::new_with_clock(callbacks, Arc::new(SystemClock))
     }
 
-    /// Creates a new `CellularNetworkSimulator` with a specific clock for testing.
+    /// Creates a new `ModemNetworkSimulator` with a specific clock for testing.
     pub fn new_with_clock(
         callbacks: Arc<dyn NetworkCallbacks>,
         clock: Arc<dyn Clock>,
@@ -187,7 +189,7 @@ impl CellularNetworkSimulator {
                 }
                 self.callbacks.on_modem_hanged_up(hung_up_modem_id);
             }
-            CommandAction::InitiateEmergencyCall => {}
+            CommandAction::InitiateEmergencyCall => {} // No-op
             CommandAction::ReceiveSms(pdu) => {
                 self.metrics.sms_sent.fetch_add(1, AtomicOrdering::Relaxed);
                 if let Some(peer) = self.find_peer_modem(id, |_| true) {
@@ -213,7 +215,7 @@ impl CellularNetworkSimulator {
                     peer.callbacks.send_at_response(peer.id, &response);
                 }
             }
-            CommandAction::None => {}
+            CommandAction::None => {} // No-op
         }
     }
 
@@ -223,11 +225,11 @@ impl CellularNetworkSimulator {
             self.find_peer_modem(caller_id, |m| m.phone_number() == phone_number)
         {
             target_modem.receive_at_command(b"RING\r\n");
-            // self.schedule_event(
-            //     target_modem.id,
-            //     CALL_RING_TIMEOUT,
-            //     ModemEvent::CallRingTimeout { call_token: 1 },
-            // );
+            self.schedule_event(
+                target_modem.id,
+                CALL_RING_TIMEOUT,
+                ModemEvent::CallRingTimeout { call_token: 1 },
+            );
         }
     }
 
@@ -282,13 +284,32 @@ impl CellularNetworkSimulator {
     pub fn external_echo_for_debug(&self, text: String) {
         log::debug!("[DEBUG] {}", text);
     }
-}
 
-#[cfg(feature = "test-utils")]
-impl CellularNetworkSimulator {
     pub fn schedule_event(&self, modem_id: ModemId, delay: Duration, event: ModemEvent) {
         let mut event_queue = self.event_queue.lock().unwrap();
         let when = self.clock.now() + delay;
         event_queue.push(ScheduledEvent { when, modem_id, event });
+    }
+}
+
+impl ModemNetworkInterface for ModemNetworkSimulator {
+    fn add_modem(
+        &self,
+        chip_id: ChipId,
+        callbacks: Arc<dyn ModemCallbacks>,
+    ) -> Result<(), NetworkError> {
+        unimplemented!();
+    }
+    fn remove_modem(&self, chip_id: ChipId) -> Result<(), NetworkError> {
+        unimplemented!();
+    }
+    fn send_data(&self, chip_id: ChipId, data: &[u8]) -> Result<(), NetworkError> {
+        unimplemented!();
+    }
+    fn tick(&self) {
+        unimplemented!();
+    }
+    fn get_modem_info(&self, chip_id: ChipId) -> Result<ChipInfo, NetworkError> {
+        unimplemented!();
     }
 }

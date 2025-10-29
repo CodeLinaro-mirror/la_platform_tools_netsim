@@ -1,21 +1,39 @@
+use nom::IResult;
 use proc_macro::TokenStream;
 use quote::quote;
+use std::str;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Type};
 
-fn get_inner_type<'a>(ty: &'a Type, type_name: &str) -> Option<&'a Type> {
-    if let Type::Path(type_path) = ty {
-        if type_path.path.segments.len() == 1 && type_path.path.segments[0].ident == type_name {
-            if let syn::PathArguments::AngleBracketed(args) = &type_path.path.segments[0].arguments
-            {
-                if args.args.len() == 1 {
-                    if let syn::GenericArgument::Type(inner_ty) = &args.args[0] {
-                        return Some(inner_ty);
-                    }
-                }
-            }
-        }
+#[allow(dead_code)]
+trait Parsable<'a>: Sized {
+    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self>;
+}
+
+impl Parsable<'_> for u8 {
+    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        nom::combinator::map_res(
+            nom::combinator::map_res(nom::character::complete::digit1, str::from_utf8),
+            |s: &str| s.parse::<u8>(),
+        )(input)
     }
-    None
+}
+
+impl Parsable<'_> for u16 {
+    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        nom::combinator::map_res(
+            nom::combinator::map_res(nom::character::complete::digit1, str::from_utf8),
+            |s: &str| s.parse::<u16>(),
+        )(input)
+    }
+}
+
+impl Parsable<'_> for u32 {
+    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
+        nom::combinator::map_res(
+            nom::combinator::map_res(nom::character::complete::digit1, str::from_utf8),
+            |s: &str| s.parse::<u32>(),
+        )(input)
+    }
 }
 
 #[proc_macro_derive(CommandParser, attributes(command, parser))]
@@ -169,19 +187,19 @@ pub fn command_parser_derive(input: TokenStream) -> TokenStream {
 }
 
 fn get_parser_for_type(ty: &Type) -> proc_macro2::TokenStream {
-    if let Some(inner_ty) = get_inner_type(ty, "Option") {
-        let inner_parser = get_parser_for_type(inner_ty);
-        return quote! { nom::combinator::opt(#inner_parser) };
-    }
-
     if let Type::Path(type_path) = ty {
-        let type_ident = &type_path.path.segments[0].ident;
-        if type_ident == "u16" {
-            return quote! { parse_u16 };
-        } else if type_ident == "u32" {
-            return quote! { parse_u32 };
+        if type_path.path.segments.len() == 1 && type_path.path.segments[0].ident == "Option" {
+            if let syn::PathArguments::AngleBracketed(args) = &type_path.path.segments[0].arguments
+            {
+                if args.args.len() == 1 {
+                    if let syn::GenericArgument::Type(inner_ty) = &args.args[0] {
+                        let inner_parser = get_parser_for_type(inner_ty);
+                        return quote! { nom::combinator::opt(#inner_parser) };
+                    }
+                }
+            }
         }
     }
 
-    quote! { <#ty as crate::types::Parsable>::parse }
+    quote! { <#ty as Parsable>::parse }
 }

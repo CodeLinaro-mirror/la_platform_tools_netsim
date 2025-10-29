@@ -15,6 +15,7 @@ load(
     "@rules_rust//rust:defs.bzl",
     "rust_doc",
     "rust_library",
+    "rust_test",
 )
 
 package(default_visibility = ["//visibility:public"])
@@ -41,33 +42,6 @@ rust_library(
     ],
 )
 
-# rust_test(
-#     name = "unit_tests",
-#     crate = ":modem-rs",
-#     tags = ["general_tests"],
-#     proc_macro_deps = [
-#         "@async-trait",
-#         "@serde_derive",
-#         "//next/modem-rs-derive",
-
-#     ],
-#     deps = [
-#         ":modem-rs",
-#     ],
-# )
-
-# rust_test(
-#     name = "tests",
-#     srcs = glob(["tests/**/*.rs"]),
-#     crate_root = "tests/mod.rs",
-#     proc_macro_deps = ["@async-trait"],
-#     tags = ["general_tests"],
-#     deps = [
-#         ":modem-rs",
-# "@hex",
-#     ],
-# )
-
 # rust_clippy(
 #     name = "clippy",
 #     deps = [":modem-rs"],
@@ -82,3 +56,18 @@ rust_doc(
 #     name = "doc_test",
 #     crate = ":modem-rs",
 # )
+
+rust_test(
+    name = "tests",
+    srcs = glob(["tests/**/*.rs"]),
+    crate_root = "tests/mod.rs",
+    edition = "2021",
+    proc_macro_deps = ["@async-trait"],
+    tags = ["general_tests"],
+    deps = [
+        ":modem-rs",
+        "@env_logger",
+        "@hex",
+        "@log",
+    ],
+)

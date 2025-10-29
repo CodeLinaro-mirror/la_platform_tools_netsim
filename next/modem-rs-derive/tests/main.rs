@@ -1,3 +1,5 @@
+use modem_rs::parser::{parse_raw_data, parse_until_semicolon, QuotedString};
+use modem_rs::types::Parsable;
 use modem_rs_derive::CommandParser;
 
 // This Command enum is a direct translation of the one in `modem-rs/src/parser.rs`,
@@ -7,13 +9,9 @@ pub enum Command<'a> {
     #[command(tag = "AT+CPIN?")]
     GetSimStatus,
     #[command(tag = "AT+CPIN=")]
-    SetPin(#[parser(parse_quoted_string)] &'a [u8]),
+    SetPin(QuotedString<'a>),
     #[command(tag = "AT+CLCK=")]
-    SetFacilityLock(
-        #[parser(parse_quoted_string)] &'a [u8],
-        u8,
-        #[parser(parse_quoted_string)] &'a [u8],
-    ),
+    SetFacilityLock(QuotedString<'a>, u8, QuotedString<'a>),
     #[command(tag = "AT+CRSM=")]
     SimIo(#[parser(parse_raw_data)] &'a [u8]),
     #[command(tag = "AT+CIMI")]
@@ -27,13 +25,9 @@ pub enum Command<'a> {
     #[command(tag = "AT+CGLA=")]
     TransmitLogicalChannel(u8, u8, #[parser(parse_raw_data)] &'a [u8]),
     #[command(tag = "AT+CPWD=")]
-    ChangePassword(
-        #[parser(parse_quoted_string)] &'a [u8],
-        #[parser(parse_quoted_string)] &'a [u8],
-        #[parser(parse_quoted_string)] &'a [u8],
-    ),
+    ChangePassword(QuotedString<'a>, QuotedString<'a>, QuotedString<'a>),
     #[command(tag = "AT+CPINR=")]
-    QueryPinRetries(#[parser(parse_quoted_string)] &'a [u8]),
+    QueryPinRetries(QuotedString<'a>),
     #[command(tag = "AT+CCSS=")]
     SetCdmaSubscriptionSource(u8),
     #[command(tag = "AT+WRMP=")]
@@ -43,13 +37,7 @@ pub enum Command<'a> {
     #[command(tag = "AT+REMOTEUPADATEPHONENUMBER")]
     UpdatePhoneNumber(#[parser(parse_raw_data)] &'a [u8]),
     #[command(tag = "AT+CCFC=")]
-    CallForwarding {
-        reason: u8,
-        mode: u8,
-        #[parser(parse_quoted_string)]
-        number: Option<&'a [u8]>,
-        type_: Option<u8>,
-    },
+    CallForwarding { reason: u8, mode: u8, number: Option<QuotedString<'a>>, type_: Option<u8> },
     #[command(tag = "ATD")]
     Dial(#[parser(parse_until_semicolon)] &'a [u8]),
     #[command(tag = "ATA")]
@@ -85,7 +73,7 @@ pub enum Command<'a> {
     #[command(tag = "AT+CUSATD?")]
     QueryStkReady,
     #[command(tag = "AT+CUSATE=")]
-    SendStkEnvelopeCommand(#[parser(parse_quoted_string)] &'a [u8]),
+    SendStkEnvelopeCommand(QuotedString<'a>),
     #[command(tag = "AT+CLIR?")]
     QueryClir,
     #[command(tag = "ATE")]
@@ -147,14 +135,14 @@ fn test_parse_cpin_query() {
 fn test_parse_cpin_set() {
     let (rem, cmd) = Command::parse(b"AT+CPIN=\"1234\"").unwrap();
     assert!(rem.is_empty());
-    assert_eq!(cmd, Command::SetPin(b"1234"));
+    assert_eq!(cmd, Command::SetPin(QuotedString(b"1234")));
 }
 
 #[test]
 fn test_parse_clck() {
     let (rem, cmd) = Command::parse(b"AT+CLCK=\"SC\",1,\"1234\"").unwrap();
     assert!(rem.is_empty());
-    assert_eq!(cmd, Command::SetFacilityLock(b"SC", 1, b"1234"));
+    assert_eq!(cmd, Command::SetFacilityLock(QuotedString(b"SC"), 1, QuotedString(b"1234")));
 }
 
 #[test]
@@ -203,14 +191,17 @@ fn test_parse_cgla() {
 fn test_parse_cpwd() {
     let (rem, cmd) = Command::parse(b"AT+CPWD=\"SC\",\"1234\",\"5678\"").unwrap();
     assert!(rem.is_empty());
-    assert_eq!(cmd, Command::ChangePassword(b"SC", b"1234", b"5678"));
+    assert_eq!(
+        cmd,
+        Command::ChangePassword(QuotedString(b"SC"), QuotedString(b"1234"), QuotedString(b"5678"))
+    );
 }
 
 #[test]
 fn test_parse_cpinr() {
     let (rem, cmd) = Command::parse(b"AT+CPINR=\"SIM PIN\"").unwrap();
     assert!(rem.is_empty());
-    assert_eq!(cmd, Command::QueryPinRetries(b"SIM PIN"));
+    assert_eq!(cmd, Command::QueryPinRetries(QuotedString(b"SIM PIN")));
 }
 
 #[test]
@@ -247,7 +238,12 @@ fn test_parse_ccfc_set() {
     assert!(rem.is_empty());
     assert_eq!(
         cmd,
-        Command::CallForwarding { reason: 1, mode: 1, number: Some(b"12345"), type_: Some(145) }
+        Command::CallForwarding {
+            reason: 1,
+            mode: 1,
+            number: Some(QuotedString(b"12345")),
+            type_: Some(145)
+        }
     );
 }
 
@@ -381,7 +377,7 @@ fn test_parse_cusatd_query() {
 fn test_parse_cusate() {
     let (rem, cmd) = Command::parse(b"AT+CUSATE=\"123\"").unwrap();
     assert!(rem.is_empty());
-    assert_eq!(cmd, Command::SendStkEnvelopeCommand(b"123"));
+    assert_eq!(cmd, Command::SendStkEnvelopeCommand(QuotedString(b"123")));
 }
 
 #[test]

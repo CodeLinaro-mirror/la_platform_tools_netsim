@@ -19,6 +19,8 @@ members = [
     "netsim-api",
     "daemon",
     "rootcanal",
+    "modem-rs",
+    "modem-rs-derive",
 ]
 
 [workspace.doc]
