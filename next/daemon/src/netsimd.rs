@@ -22,6 +22,13 @@ use tokio::task::JoinSet;
 
 const INI_FILENAME: &str = "netsim-next.ini";
 
+#[derive(Debug, PartialEq)]
+pub enum RunResult {
+    AlreadyRunning,
+    ExitedNormally,
+    InitializationError(String),
+}
+
 // Initialization for linux cuttlefish environment. Cuttelfish passes
 // open file descriptors to netsimd.
 
@@ -122,8 +129,6 @@ pub struct NetsimDaemon {
     streams: Streams,
     device_client: DeviceClient,
     listener_addresses: HashMap<String, StreamAddress>,
-    #[allow(dead_code)]
-    ini_file: IniFile,
 }
 
 impl NetsimDaemon {
@@ -133,7 +138,7 @@ impl NetsimDaemon {
     /// sets up listeners for UDS and TCP, and starts the Bluetooth and Device servers.
     ///
     /// Returns a `Result` with the `NetsimDaemon` or an error string if initialization fails.
-    pub async fn new() -> Result<Self, String> {
+    pub async fn new() -> Result<(Self, IniFile), RunResult> {
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
 
@@ -144,12 +149,12 @@ impl NetsimDaemon {
         let mut ini_file = IniFile::new(&platform::get_runtime_dir(), INI_FILENAME);
 
         // 1. Lock: Attempt to acquire the lock.
-        ini_file.try_lock().map_err(|e| {
-            format!(
-                "Failed to acquire lock on {}. Another instance may be running. Error: {}",
-                ini_file.path().display(),
-                e
-            )
+        ini_file.try_lock().map_err(|_e| {
+            error!(
+                "Failed to acquire lock on {}. Another instance may be running.",
+                ini_file.path().display()
+            );
+            RunResult::AlreadyRunning
         })?;
         info!("Successfully acquired lock on {}", ini_file.path().display());
 
@@ -161,20 +166,24 @@ impl NetsimDaemon {
         {
             let uds_path = platform::get_runtime_dir().join("netsim.sock");
             if uds_path.exists() {
-                fs::remove_file(&uds_path).map_err(|e| e.to_string())?;
+                fs::remove_file(&uds_path)
+                    .map_err(|e| RunResult::InitializationError(e.to_string()))?;
             }
             if let Some(uds_path_str) = uds_path.to_str() {
                 streams
                     .start_listener("netsim_uds", TransportType::uds(uds_path_str))
                     .await
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e| RunResult::InitializationError(e.to_string()))?;
                 info!("Started UDS listener at {}", uds_path.display());
                 listener_addresses.insert(
                     "netsim_uds".to_string(),
                     streams.listener_address("netsim_uds").unwrap().clone(),
                 );
             } else {
-                return Err(format!("Invalid UDS path: {}", uds_path.display()));
+                return Err(RunResult::InitializationError(format!(
+                    "Invalid UDS path: {}",
+                    uds_path.display()
+                )));
             }
         }
 
@@ -191,7 +200,7 @@ impl NetsimDaemon {
         join_set.spawn(device_server.run());
         info!("Device server started");
 
-        Ok(Self { join_set, streams, device_client, listener_addresses, ini_file })
+        Ok((Self { join_set, streams, device_client, listener_addresses }, ini_file))
     }
 
     /// Gets the path to the Unix Domain Socket, if one is active.
@@ -258,10 +267,12 @@ impl NetsimDaemon {
         }
         info!("NetsimDaemon main loop exited.");
 
-        // Optional: Graceful shutdown of listeners if needed
-        // streams.shutdown_all().await;
-
-        info!("netsim shutdown complete");
+        let (bt_server, bt_client) = bluetooth::Server::new();
+        let (devices_server, _devices_client) = devices::Server::new(bt_client);
+        self.join_set.spawn(bt_server.run());
+        info!("bluetooth server started");
+        self.join_set.spawn(devices_server.run());
+        info!("devices server started");
     }
 }
 
@@ -269,16 +280,17 @@ impl NetsimDaemon {
 ///
 /// This is the main entry point for starting the daemon. It creates and runs
 /// the `NetsimDaemon` instance.
-/// Returns `true` if the daemon starts and runs, `false` on initialization error.
-pub async fn run() -> bool {
+/// Returns `RunResult` indicating the outcome.
+pub async fn run() -> RunResult {
     match NetsimDaemon::new().await {
-        Ok(daemon) => {
+        Ok((daemon, _ini_file)) => {
+            // _ini_file is kept in scope to hold the lock
             daemon.run().await;
-            true
+            RunResult::ExitedNormally
         }
         Err(e) => {
-            error!("Failed to initialize NetsimDaemon: {}", e);
-            false
+            error!("Failed to initialize NetsimDaemon: {:?}", e);
+            e
         }
     }
 }

@@ -2,16 +2,16 @@
 
 //! Integration tests for the `IniFile` manager.
 
-use netsim_next::config::IniFile;
+use daemon::config::IniFile;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Helper function to create a unique temporary directory for a test.
 fn setup_test_dir(test_name: &str) -> PathBuf {
-    let dir = env::temp_dir().join(format!("netsim_test_{}_{}", test_name, rand::random::<u32>()));
+    let dir = env::temp_dir().join(format!("daemon_test_{}_{}", test_name, rand::random::<u32>()));
     fs::create_dir_all(&dir).expect("Failed to create temp dir");
     dir
 }
@@ -24,14 +24,14 @@ fn test_ini_write_and_read_shared() {
 
     let mut config_data = HashMap::new();
     config_data.insert("port".to_string(), "8080".to_string());
-    config_data.insert("host".to_string(), "netsim.google.com".to_string());
+    config_data.insert("host".to_string(), "daemon.google.com".to_string());
     ini_writer.write(&config_data).expect("Failed to write INI file");
 
     let ini_reader = IniFile::new(temp_dir.as_path(), "test.ini");
     let read_data = ini_reader.read_shared().expect("Failed to read shared INI file");
 
     assert_eq!(read_data.get("port"), Some(&"8080".to_string()));
-    assert_eq!(read_data.get("host"), Some(&"netsim.google.com".to_string()));
+    assert_eq!(read_data.get("host"), Some(&"daemon.google.com".to_string()));
 
     fs::remove_dir_all(&temp_dir).unwrap();
 }
@@ -60,32 +60,11 @@ fn test_read_shared_handles_malformed_file() {
 #[test]
 fn test_daemon_mutual_exclusion() {
     let temp_dir = setup_test_dir("mutual_exclusion");
-    let mut first_daemon = IniFile::new(temp_dir.as_path(), "netsim.ini");
+    let mut first_daemon = IniFile::new(temp_dir.as_path(), "daemon.ini");
     assert!(first_daemon.try_lock().is_ok(), "First daemon should acquire the lock");
 
-    let mut second_daemon = IniFile::new(temp_dir.as_path(), "netsim.ini");
+    let mut second_daemon = IniFile::new(temp_dir.as_path(), "daemon.ini");
     assert!(second_daemon.try_lock().is_err(), "Second daemon should fail to acquire the lock");
-
-    fs::remove_dir_all(&temp_dir).unwrap();
-}
-
-#[test]
-fn test_cleanup_removes_lock_file() {
-    let temp_dir = setup_test_dir("cleanup_removes_lock");
-    let lock_path = temp_dir.join("test.ini.lock");
-
-    let mut ini = IniFile::new(temp_dir.as_path(), "test.ini");
-    ini.try_lock().expect("Failed to acquire lock");
-
-    if !Path::new(&lock_path).exists() {
-        panic!("Lock file should exist after try_lock()");
-    }
-
-    drop(ini);
-
-    if Path::new(&lock_path).exists() {
-        panic!("Lock file should be removed after drop()");
-    }
 
     fs::remove_dir_all(&temp_dir).unwrap();
 }

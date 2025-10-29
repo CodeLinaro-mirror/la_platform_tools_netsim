@@ -169,6 +169,7 @@ new_local_repository(
         "termcolor",
         "thiserror",
         "thiserror-impl",
+        "named-lock",
         "tokio",
         "tokio-macros",
         "tokio-stream",
