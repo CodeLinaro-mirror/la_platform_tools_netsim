@@ -31,7 +31,9 @@ impl Server {
                 respond_to.send(self.handle_list()).ok();
             }
             DeviceRequest::Update { request: _ } => {}
-            DeviceRequest::Delete { id: _, respond_to: _ } => {}
+            DeviceRequest::Delete { id, respond_to } => {
+                respond_to.send(self.handle_delete(id).await).ok();
+            }
             DeviceRequest::Reset {} => {}
             DeviceRequest::GetChipStatistics { respond_to: _ } => {}
             DeviceRequest::Shutdown => {
@@ -155,6 +157,34 @@ impl Server {
 
         if self.chip_info_map.len() == 1 {
             self.stop_idle_alarm();
+        }
+        Ok(())
+    }
+
+    async fn handle_delete(&mut self, id: DeviceId) -> Result<(), DeviceError> {
+        let mut device_info = self
+            .devices_by_id
+            .remove(&id)
+            .ok_or(DeviceError::InvalidArguments(format!("Device {id} not found")))?;
+        for chip_id in device_info.chips.drain() {
+            let chip_info = self
+                .chip_info_map
+                .remove(&chip_id)
+                .ok_or(DeviceError::Internal(format!("Chip {chip_id} not found")))?;
+
+            match chip_info.kind {
+                NetworkKind::Bluetooth => self.bt_client.delete(chip_id).await?,
+                kind @ (NetworkKind::Wifi | NetworkKind::Uwb) => {
+                    return Err(DeviceError::InvalidArguments(format!(
+                        "{kind:?} chip delete not supported"
+                    )));
+                }
+            }
+        }
+        info!("Deleted device {:?}", id);
+
+        if self.chip_info_map.is_empty() {
+            self.start_idle_alarm();
         }
         Ok(())
     }

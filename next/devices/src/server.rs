@@ -36,6 +36,9 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::{self, Instant, Sleep};
 
+const DEFAULT_START_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// The `Server` is the central actor in the device service, responsible for
 /// managing the state of all simulated devices and their associated chips.
 ///
@@ -96,8 +99,17 @@ pub struct ChipInfo {
 }
 
 impl Server {
-    /// Creates a new `Server` and a corresponding `DeviceClient`.
+    /// Creates a new `Server` and a corresponding `DeviceClient` with default timeouts.
     pub fn new(bt_client: ChipClient) -> (Self, DeviceClient) {
+        Self::new_with_timeouts(bt_client, DEFAULT_START_TIMEOUT, DEFAULT_IDLE_TIMEOUT)
+    }
+
+    /// Creates a new `Server` and a corresponding `DeviceClient` with custom timeouts.
+    pub fn new_with_timeouts(
+        bt_client: ChipClient,
+        start_timeout: Duration,
+        idle_timeout: Duration,
+    ) -> (Self, DeviceClient) {
         let (command_tx, request_rx) = mpsc::channel(10);
 
         let server = Server {
@@ -109,9 +121,8 @@ impl Server {
             device_ids_by_guid: HashMap::new(),
             chip_info_map: HashMap::new(),
             shutdown_alarm: Box::pin(time::sleep_until(Instant::now())),
-            // TODO: Pass timeouts on new()
-            start_timeout: Duration::from_secs(5),
-            idle_timeout: Duration::from_secs(5),
+            start_timeout,
+            idle_timeout,
             shutdown: false,
         };
         (server, DeviceClient::new(command_tx))

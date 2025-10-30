@@ -1,4 +1,4 @@
-use crate::chips::{ChipConfig, ChipId, PacketSink, PacketStream};
+use crate::chips::{ChipConfig, PacketSink, PacketStream};
 use crate::client_error::ClientError;
 use crate::client_method;
 use crate::device_error::DeviceError;
@@ -67,6 +67,7 @@ impl DeviceClient {
 client_method!(DeviceClient => fn create(device: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
 client_method!(DeviceClient => fn ps_create(params: CreateDeviceParams) -> () as DeviceRequest::PsCreate);
 client_method!(DeviceClient => fn list() -> ListDeviceResponse as DeviceRequest::List);
+client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
 
 #[allow(dead_code)]
 pub struct GetVersionMessage {
@@ -188,8 +189,8 @@ pub enum DeviceRequest {
     },
     /// Delete the chip, removing the device if no other chips are attached.
     Delete {
-        /// Chip Identifier
-        id: ChipId,
+        /// Device Identifier
+        id: DeviceId,
         /// The channel to send the list of devices back on.
         respond_to: Responder<()>,
     },

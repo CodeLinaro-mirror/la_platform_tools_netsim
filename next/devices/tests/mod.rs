@@ -2,3 +2,4 @@
 
 // Test modules
 mod device_lifecycle_tests;
+mod utils;
