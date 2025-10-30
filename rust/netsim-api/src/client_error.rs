@@ -1,0 +1,41 @@
+use crate::chip_error::ChipError;
+use crate::device_error::DeviceError;
+use thiserror::Error;
+
+/// The error type for client-side operations.
+#[derive(Error, Debug)]
+pub enum ClientError {
+    /// Error sending a command to a service.
+    #[error("Failed to send command: {0}")]
+    Send(String),
+
+    /// Error receiving a response from a service.
+    #[error("Failed to receive response: {0}")]
+    Recv(String),
+
+    /// An operation-specific error occurred from the chip service.
+    #[error("Chip error: {0}")]
+    Chip(ChipError),
+
+    /// An operation-specific error occurred from the device service.
+    #[error("Device error: {0}")]
+    Device(Box<DeviceError>),
+}
+
+impl From<DeviceError> for ClientError {
+    fn from(err: DeviceError) -> Self {
+        ClientError::Device(Box::new(err))
+    }
+}
+
+impl From<ChipError> for ClientError {
+    fn from(err: ChipError) -> Self {
+        ClientError::Chip(err)
+    }
+}
+
+impl From<tokio::sync::oneshot::error::RecvError> for ClientError {
+    fn from(err: tokio::sync::oneshot::error::RecvError) -> Self {
+        ClientError::Recv(err.to_string())
+    }
+}

@@ -1,5 +1,45 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+//! This module provides the Bluetooth `Server` which is the central component for managing Bluetooth
+//! simulation.
+//!
+//! To use the `Server`:
+//! 1. Create a new instance using `Server::new()` which returns the `Server` and a `ChipClient`.
+//! 2. Spawn the `Server::run()` method into a Tokio task to start its event loop.
+//!
+//! ```no_run
+//! use bluetooth;
+//! use tokio;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let (server, client) = bluetooth::Server::new();
+//!     tokio::spawn(async move {
+//!         server.run().await;
+//!     });
+//!
+//!     // Use the client to interact with the server, e.g., create chips.
+//!     // client.create_chip(...).await;
+//!
+//!     // Keep the main task alive for a duration or until a shutdown signal.
+//!     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+//! }
+//! ```
+//!
+//! Features:
+//! * **Actor-Based State Management:** Implements the actor model, with the `Server` as a central
+//!   actor that serializes all operations to safely manage the state of multiple Bluetooth
+//!   chips (Device, Beacon, and Sniffer modes).
+//! * **HCI Stream/Sink Bridging:** For each chip, bridges a `PacketStream` (for incoming HCI
+//!   commands) and a `PacketSink` (for outgoing HCI events), routing packets between the host
+//!   and the `rootcanal` simulation.
+//! * **Rootcanal Integration:** Simulates the Bluetooth controller logic using `rootcanal`.
+//!
+//! Future Features:
+//! * **RSSI Management:** Manage Received Signal Strength Indication (RSSI) based on chip location.
+//! * **Link Layer Capture:** Sniffer functionality to convert Rootcanal LL packets to standard Bluetooth LL packets.
+//! * **HCI-based Beacon:** Implement Beacon functionality via HCI commands, allowing common Android-like advertisement parameters.
+
 use crate::utils::ToChipError;
 use bytes::Bytes;
 use log::{debug, error, info};
@@ -30,9 +70,10 @@ pub(crate) struct ChipEntry {
 /// - Running the main event loop that drives the simulation.
 /// - Interacting with the `rootcanal` backend.
 pub struct Server {
+    // TODO: reduce visibility of fields
     pub(crate) rootcanal: Arc<Rootcanal>,
     pub(crate) chips: HashMap<ChipId, ChipEntry>,
-    pub(crate) command_rx: mpsc::Receiver<ChipRequest>,
+    command_rx: mpsc::Receiver<ChipRequest>,
     // A map of all active packet streams, keyed by chip ID.
     pub(crate) streams: StreamMap<ChipId, StreamNotifyClose<PacketStream>>,
     pub(crate) sink_tasks: JoinSet<ChipId>,
@@ -70,10 +111,9 @@ impl Server {
 
     fn streams_next(&mut self, id: ChipId, val: Option<Bytes>) {
         match val {
-            Some(packet) => self
-                .rootcanal
-                .receive_hci(id.as_u32(), Idc::Cmd, &packet)
-                .expect("Receive HCI error"),
+            Some(packet) => {
+                self.rootcanal.receive_hci(id.into(), Idc::Cmd, &packet).expect("Receive HCI error")
+            }
             None => {
                 if let Err(e) = self.remove_chip(id, "stream") {
                     error!("Failed to remove chip {id} after stream closure: {e}");
@@ -117,7 +157,7 @@ impl Server {
         if self.chips.remove(&id).is_some() {
             // A chip might not have a stream (e.g. Beacon)
             self.streams.remove(&id);
-            self.rootcanal.remove_controller(id.as_u32()).to_chip_error()?;
+            self.rootcanal.remove_controller(id.into()).to_chip_error()?;
             debug!("Removed chip {id} by {res}");
             Ok(true)
         } else {

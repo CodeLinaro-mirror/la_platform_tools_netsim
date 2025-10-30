@@ -31,7 +31,7 @@ ccm = "0.5.0"
 log = "0.4.17"
 netsim-common = { path = "../common" }
 netsim-packets = { path = "../packets" }
-pdl-runtime = "0.3.0"
+pdl-runtime = "0.4.2"
 tokio = { version = "1.32.0", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
 
 [build-dependencies]

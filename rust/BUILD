@@ -16,6 +16,7 @@ rustfmt_test(
         "//rust/cli:netsim_cli",
         "//rust/common:netsim_common",
         "//rust/daemon:netsim_daemon",
+        "//rust/devices",
         "//rust/hostapd-rs:netsim_hostapd_rs",
         "//rust/http-proxy:netsim_http_proxy",
         "//rust/libslirp-rs:netsim_libslirp_rs",

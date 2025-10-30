@@ -1,5 +1,6 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+use bluetooth::server::Server;
 use bytes::Bytes;
 use env_logger::{Builder, Target};
 use futures::{
@@ -8,10 +9,31 @@ use futures::{
     task::{Context, Poll},
     Future,
 };
+use netsim_api::chips::{
+    BluetoothMode, BluetoothParams, ChipClient, ChipConfig, NetworkParams, PacketSink, PacketStream,
+};
+use netsim_proto::configuration::Controller as RootcanalController;
 use std::io::Write;
 use std::pin::Pin;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+
+/// Encapsulates the common setup for a test environment.
+pub struct TestFixture {
+    pub client: ChipClient,
+    pub _server_task: JoinHandle<()>, // Keep the task handle to ensure the server runs
+}
+
+/// Sets up a test environment with a running server and a client.
+pub fn setup() -> TestFixture {
+    let (server, client) = Server::new();
+    let server_task = tokio::spawn(async move {
+        server.run().await;
+    });
+    TestFixture { client, _server_task: server_task }
+}
+
 /// Initializes env_logger for tests, defaulting to DEBUG level if RUST_LOG is not set.
 pub fn setup_logging() {
     let _ = Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
@@ -78,4 +100,17 @@ pub fn mock_stream() -> (Box<dyn Stream<Item = Bytes> + Send + Unpin>, mpsc::Sen
     let (packet_tx, packet_rx) = mpsc::channel(10);
     let stream = Box::new(ReceiverStream::new(packet_rx));
     (stream, packet_tx)
+}
+
+pub fn create_chip_config(mode: BluetoothMode) -> ChipConfig {
+    ChipConfig::new(
+        "test_chip",
+        "test_manufacturer",
+        "test_product",
+        NetworkParams::Bluetooth(BluetoothParams {
+            address: "AB:CD:EF:11:22:33".to_string(),
+            bt_properties: RootcanalController::default(),
+            mode,
+        }),
+    )
 }

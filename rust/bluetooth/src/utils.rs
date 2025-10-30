@@ -1,6 +1,9 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-//! This module provides utility functions for the bluetooth crate.
+//! This module provides utility functions and traits for the bluetooth crate.
+//!
+//! It includes helpers for error conversion, such as the `ToChipError` trait,
+//! which simplifies the mapping of `rootcanal` errors to the `ChipError` type.
 
 use netsim_api::chip_error::ChipError;
 use rootcanal::error::Error as RadioError;

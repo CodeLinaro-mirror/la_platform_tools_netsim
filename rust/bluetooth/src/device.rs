@@ -1,5 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+//! This module provides the functionality for creating and managing Bluetooth
+//! device chips.
+//!
+//! A 'Device' chip represents a Bluetooth controller that can be controlled by
+//! an external entity, such as an Android Virtual Device running in an Android
+//! Emulator or a host device like those supported by Bumble.
+//!
+//! The `create` function is responsible for initializing a new device chip.
+//! Placeholder functions for updating and retrieving chip information are also
+//! included.
+
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{ChipId, DeviceParams};
 use netsim_proto::model::Chip as ProtoChip;
