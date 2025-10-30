@@ -28,6 +28,7 @@ rust_library(
     deps = [
         "//rust/proto-cf",
         "@bytes",
+        "@chrono",
         "@futures",
         "@log",
         "@thiserror",

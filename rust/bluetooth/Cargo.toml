@@ -21,6 +21,8 @@ log = "0.4.17"
 async-trait = "0.1.68"
 env_logger = { version = "0.10.0", default-features = false }
 rand = "0.8.5"
+tokio-stream = "0.1.17"
+futures = "0.3.31"
 
 [features]
 default = []

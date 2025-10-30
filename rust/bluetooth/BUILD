@@ -47,6 +47,12 @@ rust_library(
 )
 
 rust_test(
+    name = "unit_tests",
+    crate = ":bluetooth",
+    tags = ["general_tests"],
+)
+
+rust_test(
     name = "tests",
     srcs = glob(["tests/**/*.rs"]),
     crate_root = "tests/mod.rs",

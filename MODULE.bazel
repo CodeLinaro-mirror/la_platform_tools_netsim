@@ -45,6 +45,7 @@ new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.
         "external/libslirp",
         "external/fmtlib",
         "external/wpa_supplicant_8",
+        "system/librustutils/rustutils",
     ]
 ]
 
@@ -77,6 +78,7 @@ new_local_repository(
         "arrayvec",
         "async-trait",
         "base64",
+        "bitflags",
         "byteorder",
         "bytes",
         "cfg-if",
@@ -121,6 +123,7 @@ new_local_repository(
         "log",
         "memchr",
         "mio",
+        "nix",
         "num_cpus",
         "num-bigint",
         "num-derive",
@@ -149,6 +152,7 @@ new_local_repository(
         "regex",
         "regex-automata",
         "regex-syntax",
+        "rustix",
         "ryu",
         "scopeguard",
         "serde",

@@ -26,5 +26,5 @@ doctest = false
 [dependencies]
 anyhow = "1"
 bytes = { version = ">=1.4.0"}
-pdl-runtime = "0.3.0"
+pdl-runtime = "0.4.2"
 
