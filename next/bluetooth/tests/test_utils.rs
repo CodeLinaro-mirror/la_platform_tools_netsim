@@ -72,7 +72,7 @@ pub fn mock_sink(
 use tokio_stream::wrappers::ReceiverStream;
 
 /// Creates a mock packet stream and a sender to inject packets into it.
-pub fn mock_stream() -> (Box<dyn Stream<Item = Bytes> + Send + Unpin>, mpsc::Sender<Bytes>) {
+pub fn mock_stream() -> (Box<dyn Stream<Item = Bytes> + Send + Sync + Unpin>, mpsc::Sender<Bytes>) {
     let (packet_tx, packet_rx) = mpsc::channel(10);
     let stream = Box::new(ReceiverStream::new(packet_rx));
     (stream, packet_tx)

@@ -10,7 +10,7 @@ use futures::{Sink, Stream};
 use netsim_api::initial_info::ChipInfo;
 use std::pin::Pin;
 
-pub type PacketStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>;
+pub type PacketStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + Sync>>;
 pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = PacketStreamError> + Send>>;
 
 #[async_trait]

@@ -14,7 +14,9 @@ use futures::SinkExt;
 use log::{debug, error, info, warn};
 use netsim_api::{
     chip_error::ChipError,
-    chips::{BluetoothMode, ChipId, ChipRequest, CreateParams, NetworkParams, PacketSink},
+    chips::{
+        BluetoothMode, ChipId, ChipInfo, ChipRequest, CreateParams, NetworkParams, PacketSink,
+    },
 };
 use netsim_proto::model::Chip as ProtoChip;
 use rootcanal::{
@@ -66,7 +68,7 @@ impl Server {
                 respond_to.send(self.create_chip(create_params)).ok();
             }
             ChipRequest::Read { id, respond_to } => {
-                respond_to.send(self.get_chip(id)).ok();
+                respond_to.send(self.get_chip(id).map(ChipInfo::Bluetooth)).ok();
             }
             ChipRequest::Update { id, chip, respond_to } => {
                 respond_to.send(self.update_chip(id, chip)).ok();

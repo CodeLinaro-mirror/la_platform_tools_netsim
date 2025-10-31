@@ -73,7 +73,7 @@ async fn handle_new_connection(
     };
 
     let network_params = match chip.kind {
-        ChipKind::Bluetooth => NetworkParams::Bluetooth(BluetoothParams {
+        ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothParams {
             address: "".to_string(), // TODO: Get address from ChipInfo
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
