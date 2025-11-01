@@ -24,7 +24,6 @@ package(default_visibility = ["//visibility:public"])
 
 BLUETOOTH_DEPS = [
     "//next/netsim-api",
-    "//next/proto",
     "//next/rootcanal",
     "@bytes",
     "@env_logger",
