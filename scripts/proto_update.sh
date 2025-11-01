@@ -22,6 +22,15 @@
 # Mac:   brew install protobuf
 # Fixing Cargo version: rustup default 1.85.0
 
+# Check for protoc
+if ! command -v protoc &> /dev/null
+then
+    echo "protobuf-compiler (protoc) not found. Please install it:"
+    echo "Linux: sudo apt-get install protobuf-compiler"
+    echo "Mac:   brew install protobuf"
+    exit 1
+fi
+
 set -e # Exit immediately if a command exits with a non-zero status.
 
 echo "Starting Rust protobuf file update process..."
