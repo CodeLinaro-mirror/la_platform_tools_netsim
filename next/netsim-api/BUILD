@@ -17,7 +17,6 @@ load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_doc_test", "
 package(default_visibility = ["//visibility:public"])
 
 NETSIM_API_DEPS = [
-    "//next/proto",
     "@bytes",
     "@chrono",
     "@futures",

@@ -2,13 +2,24 @@ use crate::chips::{ChipConfig, PacketSink, PacketStream};
 use crate::client_error::ClientError;
 use crate::client_method;
 use crate::device_error::DeviceError;
-use netsim_proto::frontend::ListDeviceResponse;
-use netsim_proto::frontend::PatchDeviceRequest;
-use netsim_proto::model::{Orientation as ProtoOrientation, Position as ProtoPosition};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use tokio::sync::{mpsc, oneshot};
 
 // DEVICE SERVICE
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Position {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Orientation {
+    pub yaw: f32,
+    pub pitch: f32,
+    pub roll: f32,
+}
 
 /// A unique identifier for a simulated device, represented as a u32.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -66,7 +77,7 @@ impl DeviceClient {
 // Generate client methods.
 client_method!(DeviceClient => fn create(device: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
 client_method!(DeviceClient => fn ps_create(params: CreateDeviceParams) -> () as DeviceRequest::PsCreate);
-client_method!(DeviceClient => fn list() -> ListDeviceResponse as DeviceRequest::List);
+client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
 client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
 
 #[allow(dead_code)]
@@ -76,19 +87,30 @@ pub struct GetVersionMessage {
 
 pub mod api {
     use crate::chips::BleBeacon;
-    use crate::devices::DeviceConfig;
+    use crate::devices::{Device, DeviceConfig};
+    use serde::{Deserialize, Serialize};
 
     // TODO: Revisit the APIs to separate the Api from the Domain.
 
+    #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+    pub struct ListDeviceResponse {
+        pub devices: Vec<Device>,
+    }
+
+    #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+    pub struct PatchDeviceRequest {
+        pub device: Option<Device>,
+    }
+
     /// The top-level parameters for creating any kind of chip.
-    #[derive(Debug)]
+    #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
     pub struct DeviceCreate {
         pub config: DeviceConfig,
         pub chip: ChipCreate,
     }
 
     // External API for chip creation.
-    #[derive(Debug)]
+    #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
     pub struct ChipCreate {
         /// The name of the chip.
         pub name: String,
@@ -115,16 +137,29 @@ pub mod api {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     pub enum Chip {
         Beacon(BleBeacon),
     }
 
-    #[derive(Debug)]
-    pub struct Update {}
+    impl Default for Chip {
+        fn default() -> Self {
+            Chip::Beacon(BleBeacon::default())
+        }
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Device {
+    pub id: u32,
+    pub name: String,
+    pub visible: bool,
+    pub position: Position,
+    pub orientation: Orientation,
+    pub chips: Vec<crate::chips::Chip>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DeviceConfig {
     /// The name of the device.
     /// TODO: Decide if we should support device and chip name for accessories.
@@ -132,17 +167,17 @@ pub struct DeviceConfig {
     /// Whether the device is visible in the UI.
     pub visible: bool,
     /// The position of the device in the simulated world.
-    pub position: ProtoPosition,
+    pub position: Position,
     /// The orientation of the device.
-    pub orientation: ProtoOrientation,
+    pub orientation: Orientation,
 }
 
 impl DeviceConfig {
     pub fn new(
         name: impl Into<String>,
         visible: bool,
-        position: ProtoPosition,
-        orientation: ProtoOrientation,
+        position: Position,
+        orientation: Orientation,
     ) -> DeviceConfig {
         DeviceConfig { name: name.into(), visible, position, orientation }
     }
@@ -180,12 +215,12 @@ pub enum DeviceRequest {
     /// List all devices.
     List {
         /// The channel to send the list of devices back on.
-        respond_to: Responder<ListDeviceResponse>,
+        respond_to: Responder<api::ListDeviceResponse>,
     },
     /// Update an existing device.
     Update {
         /// The patch to apply to the device.
-        request: PatchDeviceRequest,
+        request: api::PatchDeviceRequest,
     },
     /// Delete the chip, removing the device if no other chips are attached.
     Delete {

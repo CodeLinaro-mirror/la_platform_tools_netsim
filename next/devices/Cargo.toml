@@ -13,7 +13,6 @@ tokio = { version = ">=1.32.0", features = ["fs", "io-util", "macros", "net", "r
 tokio-stream = { version = ">=0.1.14", features = ["sync"] }
 futures = "0.3.30"
 log = "0.4"
-netsim-proto = { path = "../proto" }
 protobuf = "3.6.0"
 chrono = { version = "0.4.19", default-features = false, features = ["clock"] }
 

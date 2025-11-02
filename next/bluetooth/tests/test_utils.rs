@@ -8,8 +8,8 @@ use futures::{
     task::{Context, Poll},
     Future,
 };
+use netsim_api::bluetooth::Controller as RootcanalController;
 use netsim_api::chips::{BluetoothMode, BluetoothParams, ChipClient, ChipConfig, NetworkParams};
-use netsim_proto::configuration::Controller as RootcanalController;
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;

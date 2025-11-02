@@ -1,7 +1,6 @@
 // Copyright 2023-2025 The Android Post Source Project
 
 use crate::server::{DeviceInfo, Server};
-use chrono::Utc;
 use log::info;
 use netsim_api::{
     chips::{
@@ -9,13 +8,9 @@ use netsim_api::{
         NetworkKind, NetworkParams,
     },
     device_error::DeviceError,
-    devices::{api, CreateDeviceParams, DeviceId, DeviceRequest},
+    devices::{api, CreateDeviceParams, Device, DeviceId, DeviceRequest},
 };
-use netsim_proto::frontend::ListDeviceResponse as ProtoListDeviceResponse;
-use netsim_proto::model::Device as ProtoDevice;
-use protobuf::MessageField;
 use std::collections::HashSet;
-use std::time::SystemTime;
 
 impl Server {
     /// This is the main entry point for handling all `DeviceRequest` commands.
@@ -95,29 +90,24 @@ impl Server {
     }
 
     /// Handles the `List` command.
-    fn handle_list(&mut self) -> Result<ProtoListDeviceResponse, DeviceError> {
-        let devices: Vec<ProtoDevice> = self
+    fn handle_list(&mut self) -> Result<api::ListDeviceResponse, DeviceError> {
+        let devices: Vec<Device> = self
             .devices_by_id
             .values()
-            .map(|device_info| ProtoDevice {
+            .map(|device_info| Device {
                 id: device_info.id.into(),
                 // TODO: populate with name not guid
                 name: device_info.guid.clone().unwrap_or_default(),
-                visible: Some(device_info.device_config.visible),
-                position: MessageField::some(device_info.device_config.position.clone()),
-                orientation: MessageField::some(device_info.device_config.orientation.clone()),
+                visible: device_info.device_config.visible,
+                position: device_info.device_config.position.clone(),
+                orientation: device_info.device_config.orientation.clone(),
                 // TODO: Populate chip info.
                 chips: Vec::new(),
-                special_fields: Default::default(),
             })
             .collect();
 
         // TODO: use Struct not Proto for return
-        Ok(ProtoListDeviceResponse {
-            devices,
-            last_modified: MessageField::some(SystemTime::from(Utc::now()).into()),
-            special_fields: Default::default(),
-        })
+        Ok(api::ListDeviceResponse { devices })
     }
 
     /// Handles the `PsCreate` command.
