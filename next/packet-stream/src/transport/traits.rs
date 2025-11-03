@@ -15,7 +15,7 @@ pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = PacketStreamError> + Send>
 
 #[async_trait]
 pub trait TransportListener: Send {
-    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo)>;
+    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)>;
     fn local_addr(&self) -> Result<StreamAddress>;
     async fn shutdown(&mut self) -> Result<()>;
 }

@@ -50,11 +50,10 @@ async fn handle_new_connection(
     stream: PacketStream,
     sink: PacketSink,
     chip_info: ChipInfo,
+    device_guid: String,
 ) {
     info!("Handling new connection for {:?}, device {}", chip_info.name, chip_info.device_name());
 
-    let device_guid =
-        chip_info.device_info.as_ref().map_or("unknown_device".to_string(), |d| d.id.clone());
     let device_config = DeviceConfig {
         name: chip_info
             .device_info
@@ -244,7 +243,7 @@ impl NetsimDaemon {
                 // Branch 1: Wait for a new connection
                 accept_result = streams.accept_any() => {
                     match accept_result {
-                        Ok((listener_name, (stream, sink, chip_info))) => {
+                        Ok((listener_name, (stream, sink, chip_info, guid))) => {
                             info!(
                                 "Accepted connection on {}: from {}",
                                 listener_name,
@@ -252,7 +251,7 @@ impl NetsimDaemon {
                             );
                             let device_client = dc.clone();
                             // Await connection handling directly in the main loop
-                            handle_new_connection(device_client, stream, sink, chip_info).await;
+                            handle_new_connection(device_client, stream, sink, chip_info, guid).await;
                         }
                         Err(e) => {
                             error!("Error accepting connection: {}. Stopping new connections.", e);

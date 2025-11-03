@@ -20,6 +20,7 @@ pub enum TransportType {
     Tcp { addr: String, port: u16 },
     Uds { path: String },
     Fd { in_fd: i32, out_fd: Option<i32> },
+    Grpc { addr: String, port: u16 },
 }
 
 impl TransportType {
@@ -35,6 +36,10 @@ impl TransportType {
         TransportType::Fd { in_fd, out_fd }
     }
 
+    pub fn grpc(addr: impl Into<String>, port: u16) -> Self {
+        TransportType::Grpc { addr: addr.into(), port }
+    }
+
     pub async fn create_listener(&self) -> Result<super::Listener> {
         match self {
             TransportType::Tcp { addr, port } => {
@@ -48,6 +53,11 @@ impl TransportType {
             TransportType::Fd { .. } => Err(PacketStreamError::InvalidConfig(
                 "File descriptors cannot create listeners, use create_stream() instead".to_string(),
             )),
+            TransportType::Grpc { addr, port } => {
+                let listener =
+                    super::grpc_adapter::GrpcTransportListener::bind(addr, *port).await?;
+                Ok(super::Listener::Grpc(listener))
+            }
         }
     }
 
@@ -74,6 +84,9 @@ impl TransportType {
             TransportType::Fd { .. } => Err(PacketStreamError::InvalidConfig(
                 "FD transport cannot be created directly, it must be inherited".to_string(),
             )),
+            TransportType::Grpc { .. } => Err(PacketStreamError::InvalidConfig(
+                "gRPC transport cannot be created directly, use GrpcTransportClient".to_string(),
+            )),
         }
     }
 
@@ -85,11 +98,15 @@ impl TransportType {
                 Some(out_fd) => format!("FD {in_fd}:{out_fd}"),
                 None => format!("FD {in_fd}"),
             },
+            TransportType::Grpc { addr, port } => format!("gRPC {addr}:{port}"),
         }
     }
 
     pub fn supports_listener(&self) -> bool {
-        matches!(self, TransportType::Tcp { .. } | TransportType::Uds { .. })
+        matches!(
+            self,
+            TransportType::Tcp { .. } | TransportType::Uds { .. } | TransportType::Grpc { .. }
+        )
     }
 
     pub fn supports_stream(&self) -> bool {
