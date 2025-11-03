@@ -46,8 +46,8 @@ const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 /// manner. This design ensures that all state modifications are thread-safe
 /// without requiring locks or other synchronization primitives.
 pub struct Server {
-    /// A client for interacting with the Bluetooth chip service.
-    pub bt_client: ChipClient,
+    /// A map of clients for interacting with technology-specific chip services.
+    pub chip_clients: HashMap<NetworkKind, ChipClient>,
     /// The next available `ChipId`.
     next_chip_id: AtomicU32,
     /// The next available `DeviceId`.
@@ -111,9 +111,11 @@ impl Server {
         idle_timeout: Duration,
     ) -> (Self, DeviceClient) {
         let (command_tx, request_rx) = mpsc::channel(10);
+        let mut chip_clients = HashMap::new();
+        chip_clients.insert(NetworkKind::Bluetooth, bt_client);
 
         let server = Server {
-            bt_client,
+            chip_clients,
             next_chip_id: AtomicU32::new(0),
             next_device_id: AtomicU32::new(0),
             request_rx,
@@ -142,7 +144,15 @@ impl Server {
                 _ = &mut self.shutdown_alarm => break,
             }
         }
-        info!("Device server is shutdown");
+        info!("Device server is shutting down");
+        for (kind, client) in self.chip_clients.iter() {
+            if let Err(e) = client.shutdown().await {
+                log::error!("Failed to send shutdown to {:?} chip service: {}", kind, e);
+            }
+        }
+        // TODO: We might need to wait for chip services to confirm shutdown
+        // if DeviceService needs to ensure they are down before it fully exits.
+        info!("Device server has shut down");
     }
 
     fn set_alarm(&mut self, duration: Duration) {
@@ -179,6 +189,13 @@ impl Server {
         self.devices_by_id
             .get_mut(id)
             .ok_or_else(|| DeviceError::Internal(format!("Device {id}'s info not found")))
+    }
+
+    /// Retrieves the appropriate `ChipClient` for the given `NetworkKind`.
+    pub(crate) fn get_chip_client(&self, kind: NetworkKind) -> Result<&ChipClient, DeviceError> {
+        self.chip_clients.get(&kind).ok_or_else(|| {
+            DeviceError::Internal(format!("ChipClient for {:?} not supported", kind))
+        })
     }
 
     pub(crate) fn add_chip_to_device(

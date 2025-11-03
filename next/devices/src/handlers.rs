@@ -33,7 +33,7 @@ impl Server {
             DeviceRequest::GetChipStatistics { respond_to: _ } => {}
             DeviceRequest::Shutdown => {
                 self.shutdown = true;
-                self.bt_client.shutdown().await.ok();
+                // Shutdown of chip_clients is handled in the run loop in server.rs
             }
         }
     }
@@ -50,7 +50,7 @@ impl Server {
         let chip_params = Self::create_chip_params(chip_id, chip_create)?;
         let chip_kind = NetworkKind::from(&chip_params.config.network_params);
 
-        self.bt_client.create(chip_params).await?;
+        self.get_chip_client(chip_kind)?.create(chip_params).await?;
 
         // Insert device info after successful chip creation
         self.devices_by_id.insert(id, device_info.clone());
@@ -136,7 +136,7 @@ impl Server {
         let network_kind = (&params.chip_config.network_params).into();
         self.add_chip_to_device(device_id, chip_id, network_kind, params.chip_config.name.clone())?;
 
-        self.bt_client
+        self.get_chip_client(network_kind)?
             .create(ChipCreateParams {
                 id: chip_id,
                 packet_stream: params.packet_stream,
@@ -162,14 +162,7 @@ impl Server {
                 .remove(&chip_id)
                 .ok_or(DeviceError::Internal(format!("Chip {chip_id} not found")))?;
 
-            match chip_info.kind {
-                NetworkKind::Bluetooth => self.bt_client.delete(chip_id).await?,
-                kind @ (NetworkKind::Wifi | NetworkKind::Uwb | NetworkKind::Cell) => {
-                    return Err(DeviceError::InvalidArguments(format!(
-                        "{kind:?} chip delete not supported"
-                    )));
-                }
-            }
+            self.get_chip_client(chip_info.kind)?.delete(chip_id).await?;
         }
         info!("Deleted device {:?}", id);
 
