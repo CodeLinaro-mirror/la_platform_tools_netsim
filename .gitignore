@@ -9,6 +9,13 @@ objs
 # rust
 **/target
 **/Cargo.lock
+debug/
+release/
+*.rs.bk
+*.rlib
+*.prof*
+*.log
+.env*
 # Android test
 **/.idea
 **/out
@@ -17,3 +24,7 @@ bazel-*
 MODULE.bazel.lock
 # GEMINI
 .gemini/
+
+# Specification and planning files
+.specify/
+specs/

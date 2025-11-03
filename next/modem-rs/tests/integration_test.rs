@@ -1,11 +1,12 @@
 // tests/integration_test.rs
 
-mod common;
-use common::constants;
-use modem_rs::test_utils::{MockModemHandler, MockNetworkHandler};
-use modem_rs::time::MockClock;
-use modem_rs::types::{ModemId, AT_OK};
-use modem_rs::CellularNetworkSimulator;
+use crate::common::constants;
+use modem_rs::{
+    test_utils::{MockModemHandler, MockNetworkHandler},
+    time::MockClock,
+    types::{ModemId, AT_OK},
+    ModemNetworkSimulator,
+};
 use std::sync::Arc;
 
 #[test]
@@ -13,7 +14,7 @@ fn test_two_modem_end_to_end_scenario() {
     // 1. Setup: Create a manager and two modems (A and B).
     let manager_handler = Arc::new(MockNetworkHandler::new());
     let clock = Arc::new(MockClock::new());
-    let manager = CellularNetworkSimulator::new_with_clock(manager_handler.clone(), clock);
+    let manager = ModemNetworkSimulator::new_with_clock(manager_handler.clone(), clock);
 
     let modem_a_id: ModemId = 1;
     let modem_a_handler = Arc::new(MockModemHandler::new());

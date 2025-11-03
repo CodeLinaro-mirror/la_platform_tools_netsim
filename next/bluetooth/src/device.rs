@@ -12,11 +12,11 @@
 //! included.
 
 use netsim_api::chip_error::ChipError;
+use netsim_api::chips::Chip;
 use netsim_api::chips::{ChipId, DeviceParams};
-use netsim_proto::model::Chip as ProtoChip;
-use rootcanal::bluetooth::Bluetooth as Rootcanal;
+use rootcanal::Rootcanal;
 
-/// Creates a new `DeviceChip` and registers it with `rootcanal`.
+/// Creates a new `DeviceChip` and registers it with the `rootcanal` emulator.
 pub fn create(
     _rootcanal: &Rootcanal,
     _chip_id: ChipId,
@@ -32,11 +32,11 @@ pub fn update_chip(
     chip_id: ChipId,
     _old_params: &DeviceParams,
     _new_params: &DeviceParams,
-) -> Result<ProtoChip, ChipError> {
+) -> Result<Chip, ChipError> {
     get_chip(rootcanal, chip_id)
 }
 
 #[allow(dead_code)]
-pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<ProtoChip, ChipError> {
-    Ok(ProtoChip::default())
+pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<Chip, ChipError> {
+    Ok(Chip::default())
 }

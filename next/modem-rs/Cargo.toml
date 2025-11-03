@@ -7,10 +7,6 @@ edition = "2021"
 crate-type = ["staticlib", "lib"]
 doctest = false
 
-[workspace]
-members = [".", "modem-main"]
-
-
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"

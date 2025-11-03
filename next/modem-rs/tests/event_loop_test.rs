@@ -1,7 +1,6 @@
-mod common;
 use modem_rs::{
-    test_utils::MockNetworkHandler, time::MockClock, types::ModemId, CellularNetworkSimulator,
-    ModemEvent,
+    test_utils::MockNetworkHandler, time::MockClock, types::ModemId, ModemEvent,
+    ModemNetworkSimulator,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,10 +9,10 @@ use std::time::Duration;
 fn test_event_loop_tick_and_duration() {
     let clock = Arc::new(MockClock::new());
     let network_handler = Arc::new(MockNetworkHandler::new());
-    let simulator = CellularNetworkSimulator::new_with_clock(network_handler, clock.clone());
+    let simulator = ModemNetworkSimulator::new_with_clock(network_handler, clock.clone());
 
     let modem_id: ModemId = 1;
-    let modem_handler = Arc::new(common::MockModemHandler::new());
+    let modem_handler = Arc::new(crate::common::MockModemHandler::new());
     simulator.new_modem(modem_id, modem_handler.clone()).unwrap();
 
     // Tick once to clear the initial registration event
@@ -23,7 +22,7 @@ fn test_event_loop_tick_and_duration() {
 
     // 1. Schedule an event 100ms in the future.
     let event_duration = Duration::from_millis(100);
-    // simulator.schedule_event(modem_id, event_duration, ModemEvent::TestEvent);
+    simulator.schedule_event(modem_id, event_duration, ModemEvent::TestEvent);
 
     // 2. Tick before the event is due.
     // It should return the duration until the next event.

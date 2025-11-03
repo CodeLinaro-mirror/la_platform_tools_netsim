@@ -1,61 +1,113 @@
 // Copyright 2023-2025 The Android Post Source Project
 
 use crate::server::{DeviceInfo, Server};
-use chrono::Utc;
+use log::info;
 use netsim_api::{
-    chips::CreateParams,
+    chips::{
+        BeaconParams, BluetoothMode, BluetoothParams, ChipConfig, CreateParams as ChipCreateParams,
+        NetworkKind, NetworkParams,
+    },
     device_error::DeviceError,
-    devices::{CreateDeviceParams, DeviceRequest},
+    devices::{api, CreateDeviceParams, Device, DeviceId, DeviceRequest},
 };
-use netsim_proto::frontend::ListDeviceResponse;
-use netsim_proto::model;
-use protobuf::MessageField;
 use std::collections::HashSet;
-use std::time::SystemTime;
 
 impl Server {
     /// This is the main entry point for handling all `DeviceRequest` commands.
-    pub(super) async fn handle_command(&mut self, cmd: DeviceRequest) {
+    pub(crate) async fn handle_command(&mut self, cmd: DeviceRequest) {
         match cmd {
             DeviceRequest::PsCreate { params, respond_to } => {
                 respond_to.send(self.handle_ps_create(params).await).ok();
             }
-            DeviceRequest::Create { device: _, respond_to: _ } => {}
+            DeviceRequest::Create { device, respond_to } => {
+                respond_to.send(self.handle_create(*device).await).ok();
+            }
             DeviceRequest::List { respond_to } => {
-                respond_to.send(Ok(self.handle_list())).ok();
+                respond_to.send(self.handle_list()).ok();
             }
             DeviceRequest::Update { request: _ } => {}
-            DeviceRequest::Delete { id: _, respond_to: _ } => {}
+            DeviceRequest::Delete { id, respond_to } => {
+                respond_to.send(self.handle_delete(id).await).ok();
+            }
             DeviceRequest::Reset {} => {}
             DeviceRequest::GetChipStatistics { respond_to: _ } => {}
-            DeviceRequest::Shutdown => {}
+            DeviceRequest::Shutdown => {
+                self.shutdown = true;
+                self.bt_client.shutdown().await.ok();
+            }
         }
     }
 
+    // This is used to create user devices, like Beacon and Sniffer.
+    // Those are singleton chips on a new device
+    async fn handle_create(&mut self, request: api::DeviceCreate) -> Result<DeviceId, DeviceError> {
+        let id = self.new_device_id();
+
+        let device_info =
+            DeviceInfo { id, guid: None, chips: HashSet::new(), device_config: request.config };
+        let chip_create = &request.chip;
+        let chip_id = self.new_chip_id();
+        let chip_params = Self::create_chip_params(chip_id, chip_create)?;
+        let chip_kind = NetworkKind::from(&chip_params.config.network_params);
+
+        self.bt_client.create(chip_params).await?;
+
+        // Insert device info after successful chip creation
+        self.devices_by_id.insert(id, device_info.clone());
+
+        self.add_chip_to_device(id, chip_id, chip_kind, chip_create.name.clone())?;
+        info!("Created chip {:?} for device {:?}, name {}", chip_id, id, chip_create.name);
+
+        if self.chip_info_map.len() == 1 {
+            self.stop_idle_alarm();
+        }
+        Ok(id)
+    }
+
+    fn create_chip_params(
+        id: netsim_api::chips::ChipId,
+        chip_create: &api::ChipCreate,
+    ) -> Result<ChipCreateParams, DeviceError> {
+        let network_params = match &chip_create.chip {
+            api::Chip::Beacon(beacon) => NetworkParams::Bluetooth(BluetoothParams {
+                address: beacon.address.clone(),
+                bt_properties: Default::default(),
+                mode: BluetoothMode::Beacon(Box::new(BeaconParams { ble_beacon: beacon.clone() })),
+            }),
+        };
+
+        Ok(ChipCreateParams {
+            id,
+            packet_stream: None,
+            packet_sink: None,
+            config: ChipConfig {
+                name: chip_create.name.clone(),
+                manufacturer: chip_create.manufacturer.clone(),
+                product_name: chip_create.product_name.clone(),
+                network_params,
+            },
+        })
+    }
+
     /// Handles the `List` command.
-    fn handle_list(&mut self) -> ListDeviceResponse {
-        let devices: Vec<model::Device> = self
+    fn handle_list(&mut self) -> Result<api::ListDeviceResponse, DeviceError> {
+        let devices: Vec<Device> = self
             .devices_by_id
             .values()
-            .map(|device_info| model::Device {
+            .map(|device_info| Device {
                 id: device_info.id.into(),
                 // TODO: populate with name not guid
-                name: device_info.guid.clone(),
-                visible: Some(device_info.device_config.visible),
-                position: MessageField::some(device_info.device_config.position.clone()),
-                orientation: MessageField::some(device_info.device_config.orientation.clone()),
+                name: device_info.guid.clone().unwrap_or_default(),
+                visible: device_info.device_config.visible,
+                position: device_info.device_config.position.clone(),
+                orientation: device_info.device_config.orientation.clone(),
                 // TODO: Populate chip info.
                 chips: Vec::new(),
-                special_fields: Default::default(),
             })
             .collect();
 
         // TODO: use Struct not Proto for return
-        ListDeviceResponse {
-            devices,
-            last_modified: MessageField::some(SystemTime::from(Utc::now()).into()),
-            special_fields: Default::default(),
-        }
+        Ok(api::ListDeviceResponse { devices })
     }
 
     /// Handles the `PsCreate` command.
@@ -73,7 +125,7 @@ impl Server {
                 id,
                 DeviceInfo {
                     id,
-                    guid: guid.clone(),
+                    guid: Some(guid.clone()),
                     chips: HashSet::new(),
                     device_config: params.device_config.clone(),
                 },
@@ -81,19 +133,49 @@ impl Server {
             id
         });
 
-        self.get_device_info(&device_id)?.chips.insert(chip_id);
-
         let network_kind = (&params.chip_config.network_params).into();
-        self.chip_to_device_map.insert(chip_id, (network_kind, device_id));
+        self.add_chip_to_device(device_id, chip_id, network_kind, params.chip_config.name.clone())?;
 
         self.bt_client
-            .create(CreateParams {
+            .create(ChipCreateParams {
                 id: chip_id,
                 packet_stream: params.packet_stream,
                 packet_sink: params.packet_sink,
                 config: params.chip_config,
             })
             .await?;
+
+        if self.chip_info_map.len() == 1 {
+            self.stop_idle_alarm();
+        }
+        Ok(())
+    }
+
+    async fn handle_delete(&mut self, id: DeviceId) -> Result<(), DeviceError> {
+        let mut device_info = self
+            .devices_by_id
+            .remove(&id)
+            .ok_or(DeviceError::InvalidArguments(format!("Device {id} not found")))?;
+        for chip_id in device_info.chips.drain() {
+            let chip_info = self
+                .chip_info_map
+                .remove(&chip_id)
+                .ok_or(DeviceError::Internal(format!("Chip {chip_id} not found")))?;
+
+            match chip_info.kind {
+                NetworkKind::Bluetooth => self.bt_client.delete(chip_id).await?,
+                kind @ (NetworkKind::Wifi | NetworkKind::Uwb | NetworkKind::Cell) => {
+                    return Err(DeviceError::InvalidArguments(format!(
+                        "{kind:?} chip delete not supported"
+                    )));
+                }
+            }
+        }
+        info!("Deleted device {:?}", id);
+
+        if self.chip_info_map.is_empty() {
+            self.start_idle_alarm();
+        }
         Ok(())
     }
 }

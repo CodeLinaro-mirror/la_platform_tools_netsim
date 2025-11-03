@@ -3,6 +3,8 @@
 //! A shared, dependency-free crate that defines the shared data structures
 //! and command enums for the netsim control plane.
 
+/// Bluetooth related definitions.
+pub mod bluetooth;
 /// Chip error definitions.
 pub mod chip_error;
 /// Chip actor definitions.
@@ -11,7 +13,13 @@ pub mod client_error;
 pub mod device_error;
 /// Device actor definitions.
 pub mod devices;
+/// Structs for initial connection handshake.
+pub mod initial_info;
 /// Macros for the client methods.
 pub(crate) mod macros;
 /// Packet streamer definitions.
 pub mod packet_streamer;
+/// Statistics related definitions.
+pub mod stats;
+
+pub use initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};

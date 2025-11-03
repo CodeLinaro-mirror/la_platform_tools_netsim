@@ -4,7 +4,7 @@
 //!
 //! It provides the `handle_command` method and related functions for processing
 //! `ChipRequest` messages, managing the lifecycle of Bluetooth chips, and
-//! interacting with the `rootcanal` backend.
+//! interacting with the `rootcanal` Bluetooth emulator.
 
 use crate::server::ChipEntry;
 use crate::utils::ToChipError;
@@ -12,11 +12,13 @@ use crate::Server;
 use bytes::Bytes;
 use futures::SinkExt;
 use log::{debug, error, info, warn};
+use netsim_api::chips::Chip;
 use netsim_api::{
     chip_error::ChipError,
-    chips::{BluetoothMode, ChipId, ChipRequest, CreateParams, NetworkParams, PacketSink},
+    chips::{
+        BluetoothMode, ChipId, ChipInfo, ChipRequest, CreateParams, NetworkParams, PacketSink,
+    },
 };
-use netsim_proto::model::Chip as ProtoChip;
 use rootcanal::{
     controller::{Callbacks as ControllerCallbacks, Id, Idc},
     types::{Address, Phy},
@@ -66,7 +68,7 @@ impl Server {
                 respond_to.send(self.create_chip(create_params)).ok();
             }
             ChipRequest::Read { id, respond_to } => {
-                respond_to.send(self.get_chip(id)).ok();
+                respond_to.send(self.get_chip(id).map(ChipInfo::Bluetooth)).ok();
             }
             ChipRequest::Update { id, chip, respond_to } => {
                 respond_to.send(self.update_chip(id, chip)).ok();
@@ -146,14 +148,13 @@ impl Server {
         Ok(())
     }
 
-    fn update_chip(&mut self, id: ChipId, _chip: ProtoChip) -> Result<ProtoChip, ChipError> {
-        let _ = &mut self.chips.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
-        Ok(ProtoChip::default())
+    fn update_chip(&mut self, _id: ChipId, _chip: Chip) -> Result<Chip, ChipError> {
+        Ok(Chip::default())
     }
 
-    fn get_chip(&self, id: ChipId) -> Result<ProtoChip, ChipError> {
+    fn get_chip(&self, id: ChipId) -> Result<Chip, ChipError> {
         let _ = &self.chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-        Ok(ProtoChip::default())
+        Ok(Chip::default())
     }
 
     fn delete_chip(&mut self, id: ChipId) -> Result<(), ChipError> {

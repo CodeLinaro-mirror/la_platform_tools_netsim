@@ -14,9 +14,8 @@
 use crate::utils::ToChipError;
 use log::debug;
 use netsim_api::chip_error::ChipError;
-use netsim_api::chips::{ChipId, SnifferParams};
-use netsim_proto::model::Chip as ProtoChip;
-use rootcanal::{bluetooth::Bluetooth as Rootcanal, controller::Idc};
+use netsim_api::chips::{Chip, ChipId, SnifferParams};
+use rootcanal::{controller::Idc, Rootcanal};
 
 /// A stateless struct that provides the behavior for a Bluetooth sniffer.
 pub(crate) fn create(
@@ -40,11 +39,11 @@ pub fn update_chip(
     chip_id: ChipId,
     _old_params: &SnifferParams,
     _new_params: &SnifferParams,
-) -> Result<ProtoChip, ChipError> {
+) -> Result<Chip, ChipError> {
     get_chip(rootcanal, chip_id)
 }
 
 #[allow(dead_code)]
-pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<ProtoChip, ChipError> {
-    Ok(ProtoChip::default())
+pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<Chip, ChipError> {
+    Ok(Chip::default())
 }

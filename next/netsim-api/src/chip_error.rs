@@ -56,6 +56,10 @@ pub enum ChipError {
     /// Radio error.
     #[error("Radio error: {0}")]
     RadioError(String),
+
+    /// Error indicating an internal error.
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 impl PartialEq for ChipError {

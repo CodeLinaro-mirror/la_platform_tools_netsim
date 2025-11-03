@@ -3,7 +3,7 @@
 //! The bluetooth crate provides a simulation environment for Bluetooth devices.
 //!
 //! This crate is responsible for managing the lifecycle of simulated Bluetooth
-//! chips, handling HCI communication, and interacting with the `rootcanal`
+//! chips, handling HCI communication, and interacting with the `rootcanal` Bluetooth emulator.
 //! simulation backend.
 //!
 //! # Getting Started

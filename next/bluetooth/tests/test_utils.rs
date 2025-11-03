@@ -2,20 +2,15 @@
 
 use bluetooth::server::Server;
 use bytes::Bytes;
-use env_logger::{Builder, Target};
 use futures::{
     sink::Sink,
     stream::Stream,
     task::{Context, Poll},
     Future,
 };
-use netsim_api::chips::{
-    BluetoothMode, BluetoothParams, ChipClient, ChipConfig, NetworkParams, PacketSink, PacketStream,
-};
-use netsim_proto::configuration::Controller as RootcanalController;
-use std::io::Write;
+use netsim_api::bluetooth::Controller as RootcanalController;
+use netsim_api::chips::{BluetoothMode, BluetoothParams, ChipClient, ChipConfig, NetworkParams};
 use std::pin::Pin;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
@@ -32,25 +27,6 @@ pub fn setup() -> TestFixture {
         server.run().await;
     });
     TestFixture { client, _server_task: server_task }
-}
-
-/// Initializes env_logger for tests, defaulting to DEBUG level if RUST_LOG is not set.
-pub fn setup_logging() {
-    let _ = Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
-        .format(|buf, record| {
-            let secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-            writeln!(
-                buf,
-                "{}s [{}] {}:{} - {}",
-                secs,
-                record.level(),
-                record.module_path().unwrap_or("<unknown>"),
-                record.line().unwrap_or(0),
-                record.args()
-            )
-        })
-        .target(Target::Stderr) // Logs to stderr, visible in Blaze test output
-        .try_init(); // Use try_init to avoid panicking if called multiple times in parallel tests
 }
 
 /// A mock Sink that captures packets into an mpsc channel.
@@ -96,7 +72,7 @@ pub fn mock_sink(
 use tokio_stream::wrappers::ReceiverStream;
 
 /// Creates a mock packet stream and a sender to inject packets into it.
-pub fn mock_stream() -> (Box<dyn Stream<Item = Bytes> + Send + Unpin>, mpsc::Sender<Bytes>) {
+pub fn mock_stream() -> (Box<dyn Stream<Item = Bytes> + Send + Sync + Unpin>, mpsc::Sender<Bytes>) {
     let (packet_tx, packet_rx) = mpsc::channel(10);
     let stream = Box::new(ReceiverStream::new(packet_rx));
     (stream, packet_tx)

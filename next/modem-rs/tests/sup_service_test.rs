@@ -1,5 +1,4 @@
-mod common;
-use common::TestHarness;
+use crate::common::TestHarness;
 
 #[test]
 fn test_set_clip() {

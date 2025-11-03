@@ -1,7 +1,7 @@
 use crate::call_service::CallService;
-use crate::cellular_network_simulator::CellularNetworkSimulator;
 use crate::data_service::DataService;
 use crate::misc_service::MiscService;
+use crate::modem_network_simulator::ModemNetworkSimulator;
 use crate::network_service::NetworkService;
 use crate::parser::Command;
 use crate::sim_service::SimService;
@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex, Weak};
 pub struct ModemImpl {
     pub id: ModemId,
     pub(crate) callbacks: Arc<dyn Callbacks>,
-    pub(crate) network: Weak<CellularNetworkSimulator>,
+    pub(crate) network: Weak<ModemNetworkSimulator>,
     pub sim_service: SimService,
     pub(crate) network_service: Mutex<NetworkService>,
     pub(crate) sms_service: SmsService,
@@ -50,7 +50,7 @@ impl ModemImpl {
     pub(crate) fn new(
         id: ModemId,
         callbacks: Arc<dyn Callbacks>,
-        network: Weak<CellularNetworkSimulator>,
+        network: Weak<ModemNetworkSimulator>,
         profile: crate::config::SimProfile,
     ) -> Modem {
         let modem = Arc::new(Self {
@@ -70,11 +70,11 @@ impl ModemImpl {
         });
 
         if let Some(network) = network.upgrade() {
-            // network.schedule_event(
-            //     id,
-            //     std::time::Duration::from_millis(10),
-            //     ModemEvent::NetworkRegistrationComplete,
-            // );
+            network.schedule_event(
+                id,
+                std::time::Duration::from_millis(10),
+                ModemEvent::NetworkRegistrationComplete,
+            );
         }
 
         modem
@@ -168,13 +168,10 @@ impl ModemImpl {
         }
 
         if let Some(network) = self.network.upgrade() {
-            log::debug!("[Modem {}] Delegating action to CellularNetworkSimulator.", self.id);
+            log::debug!("[Modem {}] Delegating action to ModemNetworkSimulator.", self.id);
             network.handle_command_action(self.id, action);
         } else {
-            log::warn!(
-                "[Modem {}] CellularNetworkSimulator is gone, cannot handle action.",
-                self.id
-            );
+            log::warn!("[Modem {}] ModemNetworkSimulator is gone, cannot handle action.", self.id);
         }
     }
 

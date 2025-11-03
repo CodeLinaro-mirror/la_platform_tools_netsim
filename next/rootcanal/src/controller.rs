@@ -322,11 +322,11 @@ extern "C" fn send_ll_trampoline(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bluetooth::{self, Bluetooth};
+    use crate::rootcanal::{self, Rootcanal};
     use std::str::FromStr;
 
-    struct MockBluetoothCallbacks;
-    impl bluetooth::Callbacks for MockBluetoothCallbacks {
+    struct MockRootcanalCallbacks;
+    impl rootcanal::Callbacks for MockRootcanalCallbacks {
         fn on_send_ll(
             &self,
             _source_id: Id,
@@ -354,8 +354,8 @@ mod tests {
     }
 
     #[test]
-    fn test_get_and_clear_stats() {
-        let _bluetooth = Bluetooth::new(Box::new(MockBluetoothCallbacks));
+    fn test_controller_stats() {
+        let _rootcanal = Rootcanal::new(Box::new(MockRootcanalCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
         let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
 
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn test_receive_hci_increments_counter() {
-        let _bluetooth = Bluetooth::new(Box::new(MockBluetoothCallbacks));
+        let _rootcanal = Rootcanal::new(Box::new(MockBluetoothCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
         let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
 
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_receive_ll_increments_counter() {
-        let _bluetooth = Bluetooth::new(Box::new(MockBluetoothCallbacks));
+        let _rootcanal = Rootcanal::new(Box::new(MockBluetoothCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
         let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
 

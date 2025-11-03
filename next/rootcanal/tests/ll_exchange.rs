@@ -9,8 +9,8 @@ use netsim_packets::link_layer::{
 };
 use pdl_runtime::Packet;
 use rootcanal::{
-    bluetooth::{Bluetooth, Callbacks as RootcanalCallbacks},
     controller::{Callbacks as ControllerCallbacks, Id, Idc},
+    rootcanal::{Callbacks as RootcanalCallbacks, Rootcanal},
     types::{Address, Phy},
 };
 use std::convert::TryFrom;
@@ -90,7 +90,7 @@ impl ControllerCallbacks for DummyCallbacks {
 #[tokio::test]
 async fn test_ll_exchange() {
     setup();
-    let rootcanal = Arc::new(Bluetooth::new(Box::new(TestCallbacks)));
+    let rootcanal = Arc::new(Rootcanal::new(Box::new(TestCallbacks)));
     let (sender, mut receiver) = mpsc::channel(10);
 
     let rootcanal_clone = rootcanal.clone();

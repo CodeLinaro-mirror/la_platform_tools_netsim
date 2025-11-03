@@ -1,21 +1,66 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+use crate::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
+use crate::bluetooth::Controller as RootcanalController;
 use crate::chip_error::ChipError;
 use crate::client_error::ClientError;
 use crate::client_method;
+use crate::stats::NetsimRadioStats;
 use bytes::Bytes;
 use futures::Sink;
-use netsim_proto::configuration::Controller as RootcanalController;
-use netsim_proto::model::chip::BleBeacon;
-use netsim_proto::model::Chip as ProtoChip;
-use netsim_proto::stats::NetsimRadioStats as ProtoRadioStats;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::pin::Pin;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::Stream;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ChipKind {
+    UNSPECIFIED = 0,
+    BLUETOOTH = 1,
+    WIFI = 2,
+    UWB = 3,
+    NFC = 4,
+    BleBeacon = 5,
+    CELLULAR = 6,
+}
+
+impl Default for ChipKind {
+    fn default() -> Self {
+        ChipKind::UNSPECIFIED
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Radio {
+    pub state: Option<bool>,
+    pub range: f32,
+    pub tx_count: i32,
+    pub rx_count: i32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Chip {
+    pub kind: ChipKind,
+    pub id: u32,
+    pub name: String,
+    pub manufacturer: String,
+    pub product_name: String,
+    // pub offset: Option<Position>,
+    pub chip: Option<ChipType>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ChipType {
+    Bt(crate::bluetooth::Bluetooth),
+    BleBeacon(crate::bluetooth::beacon::BleBeacon),
+    Uwb(Radio),
+    Wifi(Radio),
+}
+
 // The only error from PacketStream occurs when source closes connection.
 /// A stream of packets from the chip.
-pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Unpin>;
+pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Sync + Unpin>;
 /// A sink for packets to the chip.
 pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>;
 
@@ -67,16 +112,16 @@ pub enum ChipRequest {
         /// The ID of the chip to retrieve.
         id: ChipId,
         /// The channel to send the chip's state back on.
-        respond_to: Responder<ProtoChip>,
+        respond_to: Responder<ChipInfo>,
     },
     /// Update an existing chip.
     Update {
         /// The ID of the chip to patch.
         id: ChipId,
         /// The patch to apply to the chip.
-        chip: ProtoChip,
+        chip: Chip,
         /// The channel to send the updated chip state back on.
-        respond_to: Responder<ProtoChip>,
+        respond_to: Responder<Chip>,
     },
     /// Delete a chip.
     Delete {
@@ -93,7 +138,7 @@ pub enum ChipRequest {
     /// Get radio statistics for all chips.
     GetStatistics {
         /// The channel to send the statistics back on.
-        respond_to: Responder<Vec<ProtoRadioStats>>,
+        respond_to: Responder<Vec<NetsimRadioStats>>,
     },
     /// Get the total number of chips for testing purposes.
     GetCountForTesting {
@@ -160,10 +205,12 @@ impl ChipConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NetworkKind {
     Bluetooth,
     Wifi,
     Uwb,
+    Cell,
 }
 
 impl From<&NetworkParams> for NetworkKind {
@@ -172,6 +219,7 @@ impl From<&NetworkParams> for NetworkKind {
             NetworkParams::Bluetooth(_) => NetworkKind::Bluetooth,
             NetworkParams::Wifi(_) => NetworkKind::Wifi,
             NetworkParams::Uwb(_) => NetworkKind::Uwb,
+            NetworkParams::Cell(_) => NetworkKind::Cell,
         }
     }
 }
@@ -185,6 +233,8 @@ pub enum NetworkParams {
     Wifi(WifiParams),
     /// UWB parameters.
     Uwb(UwbParams),
+    /// Cellular parameters.
+    Cell(CellParams),
 }
 
 /// Parameters for creating a Bluetooth chip.
@@ -213,9 +263,21 @@ pub enum BluetoothMode {
     /// A full, virtual Bluetooth controller that can be paired with.
     Device(DeviceParams),
     /// A simple, non-interactive BLE beacon that broadcasts advertisements.
-    Beacon(BeaconParams),
+    Beacon(Box<BeaconParams>),
     /// A passive Bluetooth sniffer to capture nearby traffic.
     Sniffer(SnifferParams),
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BleBeacon {
+    // BD_ADDR address
+    pub address: String,
+    // Settings on how beacon functions
+    pub settings: Option<AdvertiseSettings>,
+    // Advertising Data
+    pub adv_data: Option<AdvertiseData>,
+    // Scan Response Data
+    pub scan_response: Option<AdvertiseData>,
 }
 
 /// Parameters for creating a virtual Bluetooth device.
@@ -255,10 +317,43 @@ pub struct WifiParams {
 pub struct UwbParams {
     // Future UWB specific properties.
 }
+
+/// Parameters for creating a Cellular chip.
+#[derive(Debug, Default, Clone)]
+pub struct CellParams {
+    // Future Cellular specific properties.
+}
+
+/// Parameters for the ChipDied message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ChipDiedParams {
+    /// The ID of the chip that died.
+    pub id: ChipId,
+}
+
 impl fmt::Display for ChipId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+/// Information about a chip, including technology-specific details.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChipInfo {
+    Bluetooth(Chip),
+    Wifi(Chip),
+    Uwb(Chip),
+    Cell(CellChipInfo),
+}
+
+/// Cellular technology specific chip information.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CellChipInfo {
+    /// The unique identifier for the chip.
+    pub chip_id: ChipId,
+    /// A string representing the current state of the modem.
+    pub state: String,
+    // TODO: Add more fields like signal strength, network registration, etc.
 }
 
 // =============================================================================
@@ -315,16 +410,15 @@ impl ChipClient {
 
 // Generate client methods.
 client_method!(ChipClient => fn create(params: CreateParams) -> () as ChipRequest::Create);
-client_method!(ChipClient => fn read(id: ChipId) -> ProtoChip as ChipRequest::Read);
-client_method!(ChipClient => fn update(id: ChipId, chip: ProtoChip) -> ProtoChip as ChipRequest::Update);
+client_method!(ChipClient => fn read(id: ChipId) -> ChipInfo as ChipRequest::Read);
+client_method!(ChipClient => fn update(id: ChipId, chip: Chip) -> Chip as ChipRequest::Update);
 client_method!(ChipClient => fn delete(id: ChipId) -> () as ChipRequest::Delete);
-client_method!(ChipClient => fn read_statistics() -> Vec<ProtoRadioStats> as ChipRequest::GetStatistics);
+client_method!(ChipClient => fn read_statistics() -> Vec<NetsimRadioStats> as ChipRequest::GetStatistics);
 client_method!(ChipClient => fn read_count_for_testing() -> usize as ChipRequest::GetCountForTesting);
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use netsim_proto::configuration::Controller as RootcanalController;
 
     #[tokio::test]
     async fn test_get_chip() {

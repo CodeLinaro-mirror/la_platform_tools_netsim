@@ -6,7 +6,7 @@
 //! Transport abstraction layer for packet streaming.
 
 // Public API modules
-#[cfg(unix)]
+#[cfg(all(unix, feature = "dual_fd"))]
 pub mod dual_fd;
 pub mod traits;
 pub mod types;
@@ -21,15 +21,15 @@ pub mod windows;
 pub(crate) mod adapters;
 
 // Re-export public API only
-#[cfg(unix)]
+#[cfg(all(unix, feature = "dual_fd"))]
 pub use dual_fd::{DualFdConfig, DualFdListener};
 pub use types::{ListenerConfig, TransportType};
 
 use crate::error::{PacketStreamError, Result, SocketError};
-use crate::models::ChipInfo;
 use async_trait::async_trait;
 use futures::SinkExt;
 use futures::StreamExt;
+use netsim_api::initial_info::ChipInfo;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
@@ -229,7 +229,7 @@ impl CrossPlatformListener {
 pub enum Listener {
     Tcp(adapters::TcpTransportListener),
     Uds(adapters::UdsTransportListener),
-    #[cfg(unix)]
+    #[cfg(all(unix, feature = "dual_fd"))]
     DualFd(DualFdListener),
 }
 
@@ -239,7 +239,7 @@ impl TransportListener for Listener {
         match self {
             Listener::Tcp(l) => l.accept().await,
             Listener::Uds(l) => l.accept().await,
-            #[cfg(unix)]
+            #[cfg(all(unix, feature = "dual_fd"))]
             Listener::DualFd(l) => l.accept().await,
         }
     }
@@ -248,7 +248,7 @@ impl TransportListener for Listener {
         match self {
             Listener::Tcp(l) => l.local_addr(),
             Listener::Uds(l) => l.local_addr(),
-            #[cfg(unix)]
+            #[cfg(all(unix, feature = "dual_fd"))]
             Listener::DualFd(l) => l.local_addr(),
         }
     }
@@ -257,7 +257,7 @@ impl TransportListener for Listener {
         match self {
             Listener::Tcp(l) => l.shutdown().await,
             Listener::Uds(l) => l.shutdown().await,
-            #[cfg(unix)]
+            #[cfg(all(unix, feature = "dual_fd"))]
             Listener::DualFd(l) => l.shutdown().await,
         }
     }

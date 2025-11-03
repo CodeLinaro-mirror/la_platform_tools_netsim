@@ -5,8 +5,8 @@
 use env_logger;
 use log::error;
 use rootcanal::{
-    bluetooth::{Bluetooth, Callbacks as RootcanalCallbacks},
     controller::{Callbacks as ControllerCallbacks, Id, Idc},
+    rootcanal::{Callbacks as RootcanalCallbacks, Rootcanal},
     types::{Address, Phy},
 };
 use std::str::FromStr;
@@ -106,7 +106,7 @@ async fn assert_command_complete(receiver: &mut mpsc::Receiver<Vec<u8>>, lsb: u8
 #[tokio::test]
 async fn test_hci_exchange() {
     setup();
-    let rootcanal = Arc::new(Bluetooth::new(Box::new(TestCallbacks)));
+    let rootcanal = Arc::new(Rootcanal::new(Box::new(TestCallbacks)));
     let (ll_sender, mut ll_receiver) = mpsc::channel(10);
     let (hci_sender, mut hci_receiver) = mpsc::channel(10);
 

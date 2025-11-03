@@ -19,7 +19,6 @@ package(default_visibility = ["//visibility:public"])
 DEVICES_DEPS = [
     "//next/bluetooth",
     "//next/netsim-api",
-    "//next/proto",
     "@bytes",
     "@chrono",
     "@futures",
@@ -55,10 +54,6 @@ rust_test(
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
-    ],
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
     ],
     tags = ["general_tests"],
     deps = [":devices"] + DEVICES_DEPS + [

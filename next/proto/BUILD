@@ -11,7 +11,6 @@ rust_library(
     crate_name = "netsim_proto",
     edition = "2021",
     deps = [
-        "@grpcio",
         "@protobuf-rust",
     ],
 )

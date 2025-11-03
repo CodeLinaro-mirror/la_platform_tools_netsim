@@ -12,9 +12,9 @@
 
 use crate::utils::ToChipError;
 use netsim_api::chip_error::ChipError;
+use netsim_api::chips::Chip;
 use netsim_api::chips::{BeaconParams, ChipId};
-use netsim_proto::model::Chip as ProtoChip;
-use rootcanal::{bluetooth::Bluetooth as Rootcanal, controller::Idc};
+use rootcanal::{controller::Idc, Rootcanal};
 
 /// Creates a new `BeaconChip`.
 pub fn create(
@@ -35,7 +35,7 @@ pub fn create(
 
     // LE Set Advertising Data
     let mut adv_data_cmd = vec![0x08, 0x20, 32];
-    if let Some(adv_data) = params.ble_beacon.adv_data.as_ref() {
+    if let Some(adv_data) = &params.ble_beacon.adv_data {
         if !adv_data.manufacturer_data.is_empty() {
             adv_data_cmd.push(adv_data.manufacturer_data.len() as u8);
             adv_data_cmd.extend_from_slice(&adv_data.manufacturer_data);
@@ -63,11 +63,11 @@ pub fn update_chip(
     chip_id: ChipId,
     _old_params: &BeaconParams,
     _new_params: &BeaconParams,
-) -> Result<ProtoChip, ChipError> {
+) -> Result<Chip, ChipError> {
     get_chip(rootcanal, chip_id)
 }
 
 #[allow(dead_code)]
-pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<ProtoChip, ChipError> {
-    Ok(ProtoChip::default())
+pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<Chip, ChipError> {
+    Ok(Chip::default())
 }
