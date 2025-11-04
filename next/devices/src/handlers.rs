@@ -25,7 +25,9 @@ impl Server {
             DeviceRequest::List { respond_to } => {
                 respond_to.send(self.handle_list()).ok();
             }
-            DeviceRequest::Update { request: _ } => {}
+            DeviceRequest::Update { update, respond_to } => {
+                respond_to.send(self.handle_update(update).await).ok();
+            }
             DeviceRequest::Delete { id, respond_to } => {
                 respond_to.send(self.handle_delete(id).await).ok();
             }
@@ -96,8 +98,7 @@ impl Server {
             .values()
             .map(|device_info| Device {
                 id: device_info.id.into(),
-                // TODO: populate with name not guid
-                name: device_info.guid.clone().unwrap_or_default(),
+                name: device_info.device_config.name.clone(),
                 visible: device_info.device_config.visible,
                 position: device_info.device_config.position.clone(),
                 orientation: device_info.device_config.orientation.clone(),
@@ -148,6 +149,27 @@ impl Server {
         if self.chip_info_map.len() == 1 {
             self.stop_idle_alarm();
         }
+        Ok(())
+    }
+
+    async fn handle_update(&mut self, update: api::DeviceUpdate) -> Result<(), DeviceError> {
+        let device_id = DeviceId(update.id);
+        let device_info = self.get_device_info(&device_id)?;
+
+        if let Some(name) = update.name {
+            device_info.device_config.name = name;
+        }
+        if let Some(visible) = update.visible {
+            device_info.device_config.visible = visible;
+        }
+        if let Some(position) = update.position {
+            device_info.device_config.position = position;
+        }
+        if let Some(orientation) = update.orientation {
+            device_info.device_config.orientation = orientation;
+        }
+
+        info!("Updated device {:?} to config: {:?}", device_id, device_info.device_config);
         Ok(())
     }
 

@@ -78,6 +78,7 @@ impl DeviceClient {
 client_method!(DeviceClient => fn create(device: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
 client_method!(DeviceClient => fn ps_create(params: CreateDeviceParams) -> () as DeviceRequest::PsCreate);
 client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
+client_method!(DeviceClient => fn update(update: api::DeviceUpdate) -> () as DeviceRequest::Update);
 client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
 
 #[allow(dead_code)]
@@ -87,7 +88,7 @@ pub struct GetVersionMessage {
 
 pub mod api {
     use crate::chips::BleBeacon;
-    use crate::devices::{Device, DeviceConfig};
+    use crate::devices::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
 
     // TODO: Revisit the APIs to separate the Api from the Domain.
@@ -98,8 +99,13 @@ pub mod api {
     }
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-    pub struct PatchDeviceRequest {
-        pub device: Option<Device>,
+    pub struct DeviceUpdate {
+        pub id: u32,
+        pub name: Option<String>,
+        pub visible: Option<bool>,
+        pub position: Option<Position>,
+        pub orientation: Option<Orientation>,
+        // TODO: Consider adding fields/struct for chip-level updates (e.g., Vec<ChipPatch>)
     }
 
     /// The top-level parameters for creating any kind of chip.
@@ -219,8 +225,10 @@ pub enum DeviceRequest {
     },
     /// Update an existing device.
     Update {
-        /// The patch to apply to the device.
-        request: api::PatchDeviceRequest,
+        /// The update to apply to the device.
+        update: api::DeviceUpdate,
+        /// The channel to send the operation result back on.
+        respond_to: Responder<()>,
     },
     /// Delete the chip, removing the device if no other chips are attached.
     Delete {

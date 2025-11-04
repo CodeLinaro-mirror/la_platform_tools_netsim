@@ -22,7 +22,7 @@ use netsim_api::{
     chips::{ChipId, ChipRequest},
     client_error::ClientError,
     device_error::DeviceError,
-    devices::{DeviceConfig, DeviceId},
+    devices::{api, DeviceConfig, DeviceId, Orientation, Position},
 };
 use std::time::Duration;
 
@@ -134,7 +134,7 @@ async fn test_list_devices_inner() {
     let device = &response.devices[0];
     let device_config =
         DeviceConfig::new("test_device", true, Default::default(), Default::default());
-    assert_eq!(device.name, "test_guid");
+    assert_eq!(device.name, device_config.name);
     assert_eq!(device.visible, device_config.visible);
     assert_eq!(device.position, device_config.position);
     assert_eq!(device.orientation, device_config.orientation);
@@ -240,4 +240,50 @@ async fn test_server_shutdown_on_last_chip_delete_inner() {
     // Any subsequent command should fail because the server is down.
     let result = client.list().await;
     assert!(matches!(result, Err(ClientError::Send(_))));
+}
+
+/// Verifies that the Update request modifies device properties.
+#[tokio::test]
+async fn test_update_device() {
+    test_update_device_inner().await;
+}
+
+async fn test_update_device_inner() {
+    let TestFixture { client, chip_rx, .. } = setup();
+
+    // Mock the chip service to respond with success for create.
+    tokio::spawn(mock_chip_service_response(chip_rx, Ok(())));
+
+    // 1. Create a device
+    let device_name = "initial_name".to_string();
+    let request = get_test_create_device_request(device_name.clone());
+    let created_device_id = client.create(Box::new(request)).await.unwrap();
+
+    // 2. Prepare an update request
+    let new_name = "updated_name".to_string();
+    let new_position = Position { x: 1.0, y: 2.0, z: 3.0 };
+    let new_orientation = Orientation { yaw: 10.0, pitch: 20.0, roll: 30.0 };
+    let device_update = api::DeviceUpdate {
+        id: created_device_id.into(),
+        name: Some(new_name.clone()),
+        visible: Some(false),
+        position: Some(new_position.clone()),
+        orientation: Some(new_orientation.clone()),
+    };
+
+    // 3. Send the update request
+    client.update(device_update).await.unwrap();
+
+    // 4. List devices and verify the updates
+    let list_response = client.list().await.unwrap();
+    let listed_device = list_response
+        .devices
+        .iter()
+        .find(|d| d.id == created_device_id.0)
+        .expect("Updated device not found in list");
+
+    assert_eq!(listed_device.name, new_name);
+    assert_eq!(listed_device.visible, false);
+    assert_eq!(listed_device.position, new_position);
+    assert_eq!(listed_device.orientation, new_orientation);
 }
