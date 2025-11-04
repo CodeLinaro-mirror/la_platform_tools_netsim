@@ -12,6 +12,7 @@ rust_library(
     },
     crate_name = "netsim_capture",
     crate_root = "src/lib.rs",
+    edition = "2021",
     proc_macro_deps = [
         "@zerocopy-derive",
     ],

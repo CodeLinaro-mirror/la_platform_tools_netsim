@@ -30,6 +30,7 @@ rust_library(
     rustc_flags = [
         "--cfg=feature=\"bytes\"",
         "--cfg=feature=\"fs\"",
+        "--cfg=feature=\"io-std\"",
         "--cfg=feature=\"io-util\"",
         "--cfg=feature=\"libc\"",
         "--cfg=feature=\"macros\"",
