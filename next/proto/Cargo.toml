@@ -5,6 +5,7 @@ name = "netsim-proto"
 
 [dependencies]
 protobuf = "=3.7.2"
+grpcio =  {version= "0.13.0", default-features = false, features = ["protobufv3-codec"]}
 
 [build-dependencies]
 protobuf = "=3.7.2"
