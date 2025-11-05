@@ -29,28 +29,48 @@ class BazelTask(Task):
     self.path = AOSP_ROOT / "prebuilts" / "bazel" / system / "bazel"
 
   def do_run(self):
-    if platform.system().lower() == "darwin":
-      if platform.machine() == "x86_64":
-        config = "macos_x86_64"
-      else:
-        config = "macos"
-    else:
-      config = "linux"
+    system = platform.system().lower()
+    platform_configs = {
+        "darwin": {
+            "config": (
+                "macos_x86_64" if platform.machine() == "x86_64" else "macos"
+            ),
+            "cwd": AOSP_ROOT / "tools" / "netsim",
+            "build_targets": [":all", "//rust/...", "//next/..."],
+            "test_targets": [":all", "//rust/...", "//next/..."],
+        },
+        "linux": {
+            "config": "release",
+            "cwd": AOSP_ROOT,
+            "build_targets": [
+                "@netsim//:all",
+                "@netsim//rust/...",
+                "@netsim//next/...",
+            ],
+            "test_targets": [
+                "@netsim//:all",
+                "@netsim//rust/...",
+                "@netsim//next/...",
+            ],
+        },
+    }
 
-    # Build
-    run(
-        [self.path, "build", ":all", "--config=" + config],
-        self.env,
-        "bazel build",
-        AOSP_ROOT / "tools" / "netsim",
-    )
+    cfg = platform_configs.get(system)
+    if not cfg:
+      print(f"Unsupported platform for bazel: {platform.system()}")
+      return False
 
-    # Test
-    run(
-        [self.path, "test", ":all", "//rust/...", "--config=" + config],
-        self.env,
-        "bazel test",
-        AOSP_ROOT / "tools" / "netsim",
-    )
+    build_config = f'--config={cfg["config"]}'
+
+    def _run_bazel(action, targets):
+      run(
+          [self.path, action] + targets + [build_config],
+          self.env,
+          f"bazel {action}",
+          cfg["cwd"],
+      )
+
+    _run_bazel("build", cfg["build_targets"])
+    _run_bazel("test", cfg["test_targets"])
 
     return True

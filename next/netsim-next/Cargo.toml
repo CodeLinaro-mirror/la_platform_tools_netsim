@@ -1,0 +1,20 @@
+[package]
+name = "netsim-next"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "0.4", features = ["now"] }
+env_logger = "0.10"
+log = "0.4"
+netsim-api = { path = "../netsim-api" }
+bluetooth = { path = "../bluetooth" }
+devices = { path = "../devices" }
+tokio = { version = "1.28.2", features = ["full"] }
+
+[dev-dependencies]
+tempfile = "0.3"
+
+[features]
+default = []
+cuttlefish = []

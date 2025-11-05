@@ -1,0 +1,8 @@
+[package]
+name = "modem-rs-derive-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+modem-rs-derive = { path = "../modem-rs-derive" }
+nom = "7"
