@@ -12,7 +12,7 @@ use netsim_api::{
         BleBeacon, BluetoothMode, BluetoothParams, ChipClient, ChipConfig, ChipRequest,
         DeviceParams, NetworkParams,
     },
-    devices::{api, CreateDeviceParams, DeviceClient, DeviceConfig},
+    devices::{api, DeviceClient, DeviceConfig, DevicePsCreate},
 };
 use std::time::Duration;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -44,9 +44,9 @@ pub fn setup_for_idle_test() -> TestFixture {
     TestFixture { client, server_task, chip_rx }
 }
 
-/// Helper to create a default `CreateDeviceParams` for tests.
-pub fn create_test_ps_device_params() -> CreateDeviceParams {
-    CreateDeviceParams {
+/// Helper to create a default `DevicePsCreate` for tests.
+pub fn create_test_ps_device_params() -> DevicePsCreate {
+    DevicePsCreate {
         device_guid: "test_guid".to_string(),
         packet_stream: None,
         packet_sink: None,
@@ -84,7 +84,7 @@ pub async fn mock_chip_service_response(
 }
 
 pub fn get_test_create_device_request(device_name: String) -> api::DeviceCreate {
-    let chip_create = api::ChipCreate {
+    let chip_create = api::ChipConfig {
         name: "beacon".to_string(),
         manufacturer: "Netsim".to_string(),
         product_name: "NetsimBeacon".to_string(),
@@ -92,7 +92,7 @@ pub fn get_test_create_device_request(device_name: String) -> api::DeviceCreate 
     };
 
     api::DeviceCreate {
-        config: DeviceConfig::new(device_name, true, Default::default(), Default::default()),
+        device_config: DeviceConfig::new(device_name, true, Default::default(), Default::default()),
         chip: chip_create,
     }
 }
