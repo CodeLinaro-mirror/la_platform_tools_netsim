@@ -8,7 +8,7 @@ use netsim_api::{
         NetworkKind, NetworkParams,
     },
     device_error::DeviceError,
-    devices::{api, CreateDeviceParams, Device, DeviceId, DeviceRequest},
+    devices::{api, Device, DeviceId, DevicePsCreate, DeviceRequest},
 };
 use std::collections::HashSet;
 
@@ -16,11 +16,11 @@ impl Server {
     /// This is the main entry point for handling all `DeviceRequest` commands.
     pub(crate) async fn handle_command(&mut self, cmd: DeviceRequest) {
         match cmd {
-            DeviceRequest::PsCreate { params, respond_to } => {
-                respond_to.send(self.handle_ps_create(params).await).ok();
+            DeviceRequest::PsCreate { request, respond_to } => {
+                respond_to.send(self.handle_ps_create(request).await).ok();
             }
-            DeviceRequest::Create { device, respond_to } => {
-                respond_to.send(self.handle_create(*device).await).ok();
+            DeviceRequest::Create { request, respond_to } => {
+                respond_to.send(self.handle_create(*request).await).ok();
             }
             DeviceRequest::List { respond_to } => {
                 respond_to.send(self.handle_list()).ok();
@@ -40,13 +40,63 @@ impl Server {
         }
     }
 
+    /// Handles the `PsCreate` command.
+    ///
+    /// This function will either create a new device or add a chip to an
+    /// existing device, based on the `device_guid` in the `params`.
+    async fn handle_ps_create(&mut self, request: DevicePsCreate) -> Result<(), DeviceError> {
+        let chip_id = self.new_chip_id();
+        let guid = &request.device_guid;
+
+        let device_id = self.device_ids_by_guid.get(guid).copied().unwrap_or_else(|| {
+            let id = self.new_device_id();
+            self.device_ids_by_guid.insert(guid.clone(), id);
+            self.devices_by_id.insert(
+                id,
+                DeviceInfo {
+                    id,
+                    guid: Some(guid.clone()),
+                    chips: HashSet::new(),
+                    device_config: request.device_config.clone(),
+                },
+            );
+            id
+        });
+
+        let network_kind = (&request.chip_config.network_params).into();
+        self.add_chip_to_device(
+            device_id,
+            chip_id,
+            network_kind,
+            request.chip_config.name.clone(),
+        )?;
+
+        self.get_chip_client(network_kind)?
+            .create(ChipCreateParams {
+                id: chip_id,
+                packet_stream: request.packet_stream,
+                packet_sink: request.packet_sink,
+                config: request.chip_config,
+            })
+            .await?;
+
+        if self.chip_info_map.len() == 1 {
+            self.stop_idle_alarm();
+        }
+        Ok(())
+    }
+
     // This is used to create user devices, like Beacon and Sniffer.
     // Those are singleton chips on a new device
     async fn handle_create(&mut self, request: api::DeviceCreate) -> Result<DeviceId, DeviceError> {
         let id = self.new_device_id();
 
-        let device_info =
-            DeviceInfo { id, guid: None, chips: HashSet::new(), device_config: request.config };
+        let device_info = DeviceInfo {
+            id,
+            guid: None,
+            chips: HashSet::new(),
+            device_config: request.device_config,
+        };
         let chip_create = &request.chip;
         let chip_id = self.new_chip_id();
         let chip_params = Self::create_chip_params(chip_id, chip_create)?;
@@ -68,7 +118,7 @@ impl Server {
 
     fn create_chip_params(
         id: netsim_api::chips::ChipId,
-        chip_create: &api::ChipCreate,
+        chip_create: &api::ChipConfig,
     ) -> Result<ChipCreateParams, DeviceError> {
         let network_params = match &chip_create.chip {
             api::Chip::Beacon(beacon) => NetworkParams::Bluetooth(BluetoothParams {
@@ -109,47 +159,6 @@ impl Server {
 
         // TODO: use Struct not Proto for return
         Ok(api::ListDeviceResponse { devices })
-    }
-
-    /// Handles the `PsCreate` command.
-    ///
-    /// This function will either create a new device or add a chip to an
-    /// existing device, based on the `device_guid` in the `params`.
-    async fn handle_ps_create(&mut self, params: CreateDeviceParams) -> Result<(), DeviceError> {
-        let chip_id = self.new_chip_id();
-        let guid = &params.device_guid;
-
-        let device_id = self.device_ids_by_guid.get(guid).copied().unwrap_or_else(|| {
-            let id = self.new_device_id();
-            self.device_ids_by_guid.insert(guid.clone(), id);
-            self.devices_by_id.insert(
-                id,
-                DeviceInfo {
-                    id,
-                    guid: Some(guid.clone()),
-                    chips: HashSet::new(),
-                    device_config: params.device_config.clone(),
-                },
-            );
-            id
-        });
-
-        let network_kind = (&params.chip_config.network_params).into();
-        self.add_chip_to_device(device_id, chip_id, network_kind, params.chip_config.name.clone())?;
-
-        self.get_chip_client(network_kind)?
-            .create(ChipCreateParams {
-                id: chip_id,
-                packet_stream: params.packet_stream,
-                packet_sink: params.packet_sink,
-                config: params.chip_config,
-            })
-            .await?;
-
-        if self.chip_info_map.len() == 1 {
-            self.stop_idle_alarm();
-        }
-        Ok(())
     }
 
     async fn handle_update(&mut self, update: api::DeviceUpdate) -> Result<(), DeviceError> {

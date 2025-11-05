@@ -10,7 +10,7 @@ use netsim_api::chips::{
     BluetoothMode, BluetoothParams, ChipConfig, DeviceParams, NetworkParams,
     PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
 };
-use netsim_api::devices::{CreateDeviceParams, DeviceClient, DeviceConfig};
+use netsim_api::devices::{DeviceClient, DeviceConfig, DevicePsCreate};
 use netsim_api::initial_info::{ChipInfo, ChipKind};
 use packet_stream::transport::traits::{PacketSink, PacketStream};
 use packet_stream::{StreamAddress, Streams, TransportType};
@@ -107,7 +107,7 @@ async fn handle_new_connection(
     let api_sink: ApiPacketSink =
         Box::pin(sink.sink_map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
 
-    let params = CreateDeviceParams {
+    let request = DevicePsCreate {
         device_guid,
         packet_stream: Some(api_stream),
         packet_sink: Some(api_sink),
@@ -115,7 +115,7 @@ async fn handle_new_connection(
         chip_config,
     };
 
-    if let Err(e) = device_client.ps_create(params).await {
+    if let Err(e) = device_client.ps_create(request).await {
         error!("Failed to register stream for {}: {}", chip_info.name, e);
     }
 }
