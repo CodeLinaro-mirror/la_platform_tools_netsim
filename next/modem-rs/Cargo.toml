@@ -9,6 +9,8 @@ doctest = false
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
+bytes = "1"
+netsim-api = { path = "../netsim-api" }
 toml = "0.8"
 nom = "7"
 modem-rs-derive = { path = "../modem-rs-derive" }
