@@ -38,6 +38,7 @@ use tokio::time::{self, Instant, Sleep};
 
 const DEFAULT_START_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_TIMEOUT: Duration = Duration::from_secs(u32::MAX as u64);
 
 /// The `Server` is the central actor in the device service, responsible for
 /// managing the state of all simulated devices and their associated chips.
@@ -99,9 +100,13 @@ pub struct ChipInfo {
 }
 
 impl Server {
-    /// Creates a new `Server` and a corresponding `DeviceClient` with default timeouts.
-    pub fn new(bt_client: ChipClient) -> (Self, DeviceClient) {
-        Self::new_with_timeouts(bt_client, DEFAULT_START_TIMEOUT, DEFAULT_IDLE_TIMEOUT)
+    /// Creates a new `Server` and a corresponding `DeviceClient` with no or default timeouts.
+    pub fn new(bt_client: ChipClient, no_shutdown: bool) -> (Self, DeviceClient) {
+        if no_shutdown {
+            Self::new_with_timeouts(bt_client, MAX_TIMEOUT, MAX_TIMEOUT)
+        } else {
+            Self::new_with_timeouts(bt_client, DEFAULT_START_TIMEOUT, DEFAULT_IDLE_TIMEOUT)
+        }
     }
 
     /// Creates a new `Server` and a corresponding `DeviceClient` with custom timeouts.
@@ -166,7 +171,7 @@ impl Server {
 
     pub fn stop_idle_alarm(&mut self) {
         // Effectively disable the shutdown alarm by setting a very large duration.
-        self.set_alarm(Duration::from_secs(u32::MAX as u64));
+        self.set_alarm(MAX_TIMEOUT);
     }
 
     /// Generates a new, unique `ChipId`.
