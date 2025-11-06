@@ -1,6 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-//! This module defines the [`Error`] enum, which represents all possible
+//! This module defines the [`enum@Error`] enum, which represents all possible
 //! errors that can occur in this crate.
 
 use std::io;

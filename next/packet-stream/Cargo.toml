@@ -23,7 +23,8 @@ tokio-util = { version = "0.7", features = ["codec"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 serde_json = "1.0.143"
 netsim-api = { path = "../netsim-api" }
-grpcio = { version = "0.13", default-features = false, features = ["protobuf-codec"] }
+protobuf = "=3.7.2"
+grpcio =  {version= "0.13.0", default-features = false, features = ["protobufv3-codec"]}
 netsim-proto = { path = "../proto" }
 futures-util = "0.3"
 
