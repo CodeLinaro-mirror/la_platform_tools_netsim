@@ -30,7 +30,7 @@
 //!     });
 //!
 //!     // 3. Create the device server, providing it with the Bluetooth client.
-//!     let (server, client) = Server::new(bt_client);
+//!     let (server, client) = Server::new(bt_client, false);
 //!     // 4. Spawn the device server.
 //!     tokio::spawn(async move {
 //!         server.run().await;

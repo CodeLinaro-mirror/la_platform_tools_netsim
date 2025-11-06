@@ -1,5 +1,6 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+use crate::args::Args;
 use crate::config::IniFile;
 use crate::logger;
 use crate::platform;
@@ -129,6 +130,7 @@ pub struct NetsimDaemon {
     streams: Streams,
     device_client: DeviceClient,
     listener_addresses: HashMap<String, StreamAddress>,
+    args: Args,
 }
 
 impl NetsimDaemon {
@@ -146,6 +148,8 @@ impl NetsimDaemon {
 
         info!("netsim startup");
 
+        let args = Args::parse();
+
         let mut ini_file = IniFile::new(&platform::get_runtime_dir(), INI_FILENAME);
 
         // 1. Lock: Attempt to acquire the lock.
@@ -157,6 +161,17 @@ impl NetsimDaemon {
             RunResult::AlreadyRunning
         })?;
         info!("Successfully acquired lock on {}", ini_file.path().display());
+
+        // Write initial data to INI file
+        let mut ini_data = HashMap::new();
+        ini_data.insert("daemon_pid".to_string(), std::process::id().to_string());
+        ini_data.insert("status".to_string(), "running".to_string());
+
+        if let Err(e) = ini_file.write(&ini_data) {
+            error!("Failed to write to INI file {}: {}", ini_file.path().display(), e);
+            return Err(RunResult::InitializationError(format!("Failed to write INI file: {}", e)));
+        }
+        info!("Successfully wrote to INI file {}", ini_file.path().display());
 
         let mut listener_addresses = HashMap::new();
         let mut streams = Streams::new();
@@ -196,11 +211,11 @@ impl NetsimDaemon {
         info!("Bluetooth server started");
 
         // Setup Device Server
-        let (device_server, device_client) = DeviceServer::new(bt_client);
+        let (device_server, device_client) = DeviceServer::new(bt_client, args.no_shutdown);
         join_set.spawn(device_server.run());
         info!("Device server started");
 
-        Ok((Self { join_set, streams, device_client, listener_addresses }, ini_file))
+        Ok((Self { join_set, streams, device_client, listener_addresses, args }, ini_file))
     }
 
     /// Gets the path to the Unix Domain Socket, if one is active.
@@ -221,6 +236,8 @@ impl NetsimDaemon {
     pub async fn run(mut self) {
         let dc = self.device_client.clone();
         let mut streams = self.streams;
+
+        info!("Netsimd started {}", if self.args.no_shutdown { "--no-shutdown" } else { "" });
 
         loop {
             tokio::select! {
@@ -266,13 +283,6 @@ impl NetsimDaemon {
             }
         }
         info!("NetsimDaemon main loop exited.");
-
-        let (bt_server, bt_client) = bluetooth::Server::new();
-        let (devices_server, _devices_client) = devices::Server::new(bt_client);
-        self.join_set.spawn(bt_server.run());
-        info!("bluetooth server started");
-        self.join_set.spawn(devices_server.run());
-        info!("devices server started");
     }
 }
 

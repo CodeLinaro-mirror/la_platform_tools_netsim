@@ -29,7 +29,7 @@ pub fn setup() -> TestFixture {
     let (chip_tx, chip_rx) = mpsc::channel(10);
     // TODO: Replace with MockChipServer to reduce boilerplate. It could remember the last command received.
     let bt_client = ChipClient::new(chip_tx);
-    let (server, client) = Server::new(bt_client);
+    let (server, client) = Server::new(bt_client, false);
     let server_task = tokio::spawn(server.run());
     TestFixture { client, server_task, chip_rx }
 }

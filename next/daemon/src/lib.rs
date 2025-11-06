@@ -11,6 +11,7 @@
 //!
 //! ![Internal Module Graph](modules.png)
 
+pub mod args;
 pub mod config;
 pub mod logger;
 pub mod netsimd;
