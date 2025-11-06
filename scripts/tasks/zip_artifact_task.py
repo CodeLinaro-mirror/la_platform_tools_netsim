@@ -46,11 +46,7 @@ class ZipArtifactTask(Task):
         / f"netsim-{platform_to_cmake_target(self.target)}-{self.build_id}.zip"
     )
     if self.bazel:
-      # Collect binary from toplevel build for linux.
-      if self.target.startswith("linux"):
-        search_dir = AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
-      else:
-        search_dir = AOSP_ROOT / "tools" / "netsim" / "bazel-bin"
+      search_dir = AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
       search_glob = list((search_dir / "netsim-ui").glob("**/*"))
       search_glob.extend([search_dir / "netsim", search_dir / "netsimd"])
     else:

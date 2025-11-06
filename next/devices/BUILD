@@ -56,10 +56,6 @@ rust_test(
     proc_macro_deps = [
         "@async-trait",
     ],
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
     tags = ["general_tests"],
     deps = [":devices"] + DEVICES_DEPS + [
         "@thiserror",

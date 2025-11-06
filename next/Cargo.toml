@@ -17,9 +17,11 @@ members = [
     "bluetooth",
     "devices" ,
     "netsim-api",
-    "netsim-next",
+    "daemon",
     "rootcanal",
+    "modem-rs",
+    "modem-rs-derive",
 ]
 
 [workspace.doc]
-default-members = ["netsim-next"]
+default-members = ["daemon"]

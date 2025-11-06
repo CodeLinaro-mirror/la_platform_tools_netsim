@@ -22,6 +22,7 @@ NETSIM_API_DEPS = [
     "@chrono",
     "@futures",
     "@log",
+    "@serde",
     "@thiserror",
     "@tokio",
     "@tokio-stream",
@@ -47,10 +48,6 @@ rust_test(
     proc_macro_deps = [
         "@async-trait",
         "@thiserror-impl",
-    ],
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
     ],
     tags = ["general_tests"],
     deps = NETSIM_API_DEPS,

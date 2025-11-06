@@ -1,9 +1,8 @@
-mod common;
-use common::TestHarness;
+use crate::common::TestHarness;
 
 #[test]
 fn test_read_iccid() {
-    common::init_logger();
+    crate::common::init_logger();
     let harness = TestHarness::new();
     harness.send_at_command(b"AT+CRSM=176,12258,0,0,10\n");
     let responses = harness.get_responses();
@@ -14,7 +13,7 @@ fn test_read_iccid() {
 
 #[test]
 fn test_select_mf() {
-    common::init_logger();
+    crate::common::init_logger();
     let harness = TestHarness::new();
     harness.send_at_command(b"AT+CRSM=162,16128,0,0,0\r\n");
     let responses = harness.get_responses();
