@@ -64,14 +64,13 @@
 
 // Benchmark module moved to packetstream-bins crate
 pub mod error;
-pub mod models;
 pub mod streams; // High-level connection management
 pub mod transport; // Transport implementations (includes socket)
 pub mod types; // Core data types
 
 // Core public API - only expose what users actually need
 pub use error::{PacketStreamError, ProtocolError, SocketError};
-pub use models::{Chip, ChipInfo, ChipKind, DeviceInfo};
+pub use netsim_api::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 pub use transport::{CrossPlatformListener, CrossPlatformStream, SocketConfig, SocketType};
 // Core streaming types - public API only (transport internals hidden)
 pub use transport::TransportType;
@@ -81,5 +80,5 @@ pub use types::StreamAddress;
 pub use streams::{InitInfo, Streams};
 pub use transport::ListenerConfig;
 
-#[cfg(unix)]
+#[cfg(all(unix, feature = "dual_fd"))]
 pub use transport::dual_fd::{ChipConfig, DeviceConfig, DualFdConfig};

@@ -1,5 +1,5 @@
 [package]
-name = "netsim-next"
+name = "daemon"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,10 +10,11 @@ log = "0.4"
 netsim-api = { path = "../netsim-api" }
 bluetooth = { path = "../bluetooth" }
 devices = { path = "../devices" }
+packet-stream = { path = "../packet-stream" }
 tokio = { version = "1.28.2", features = ["full"] }
+named-lock = "0.4.1"
 
 [dev-dependencies]
-tempfile = "0.3"
 
 [features]
 default = []

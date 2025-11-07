@@ -35,7 +35,7 @@ pub fn create(
 
     // LE Set Advertising Data
     let mut adv_data_cmd = vec![0x08, 0x20, 32];
-    if let Some(adv_data) = params.ble_beacon.adv_data.as_ref() {
+    if let Some(adv_data) = &params.ble_beacon.adv_data {
         if !adv_data.manufacturer_data.is_empty() {
             adv_data_cmd.push(adv_data.manufacturer_data.len() as u8);
             adv_data_cmd.extend_from_slice(&adv_data.manufacturer_data);

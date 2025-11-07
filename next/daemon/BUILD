@@ -3,13 +3,13 @@
 # Common Bazel commands for this package:
 #
 # Build the binary:
-#   bazel build //next/netsim-next
+#   bazel build //next/daemon
 #
 # Run the binary:
-#   bazel run //next/netsim-next
+#   bazel run //next/daemon
 #
 # Run the tests:
-#   bazel test //next/netsim-next:tests
+#   bazel test //next/daemon:tests
 
 load(
     "@rules_rust//rust:defs.bzl",
@@ -21,7 +21,7 @@ load(
 package(default_visibility = ["//visibility:public"])
 
 rust_library(
-    name = "netsim-next-lib",
+    name = "daemon-lib",
     srcs = [
         "src/config.rs",
         "src/lib.rs",
@@ -29,15 +29,18 @@ rust_library(
         "src/netsimd.rs",
         "src/platform.rs",
     ],
-    crate_name = "netsim_next",
+    crate_name = "daemon",
     edition = "2021",
     deps = [
         "//next/bluetooth",
         "//next/devices",
         "//next/netsim-api",
+        "//next/packet-stream",
         "@chrono",
         "@env_logger",
+        "@futures",
         "@log",
+        "@named-lock",
         "@tokio",
     ] + select({
         "@platforms//os:linux": ["@rustutils"],
@@ -46,7 +49,7 @@ rust_library(
 )
 
 rust_binary(
-    name = "netsim-next",
+    name = "daemon",
     srcs = ["src/main.rs"],
     edition = "2021",
     rustc_flags = [
@@ -54,7 +57,7 @@ rust_binary(
         "link-arg=-lc",
     ],
     deps = [
-        ":netsim-next-lib",
+        ":daemon-lib",
         "@tokio",
     ],
 )
@@ -73,7 +76,12 @@ rust_test(
         "link-arg=-lc",
     ],
     deps = [
-        ":netsim-next-lib",
+        ":daemon-lib",
+        "//next/netsim-api",
+        "//next/packet-stream",
+        "@bytes",
+        "@futures",
         "@rand",
+        "@tokio",
     ],
 )

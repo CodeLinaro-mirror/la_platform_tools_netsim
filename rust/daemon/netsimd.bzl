@@ -1,0 +1,22 @@
+"""Provides a wrapper for rust_library and rust_static_library for netsimd on different platforms."""
+
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_static_library")
+
+# The correct way to created an rust archive for static linking into a c++ binary is to use rust_static_library.
+# However, on Linux and Mac, rust_library works - probably because we set @rules_rust//rust/settings:experimental_use_cc_common_link.
+# But that flag doesn't work on Windows.
+# This rust library has C++ dependencies and is used to produce a C++ binary: C++ -> Rust -> C++
+# On Linux and Mac with rust_static_library and when compiling for release (-c opt), rustc fails to create the archive when clang is newer (LLVM incompatibility with thinlto).
+# When we upgrade rustc to be newer then clang/lld has similar complaints when linking the binary containing this rust archive.
+# So for now, we leave Linux and Mac to use the "wrong" but working rust_library.
+# This should be rectified when we can upgrade our rust toolchain to match our clang toolchain but that is currently blocked by other issues.
+def netsimd_rust_library(name, **kwargs):
+    rust_library(
+        name = name,
+        target_compatible_with = select({
+            "@platforms//os:windows": ["@platforms//:incompatible"],
+            "//conditions:default": [],
+        }),
+        **kwargs
+    )
+    rust_static_library(name = name + "_windows", target_compatible_with = ["@platforms//os:windows"], **kwargs)

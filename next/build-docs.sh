@@ -2,7 +2,7 @@
 set -euo pipefail
 # Copyright 2025 The Android Open Source Project
 #
-# A script to build the documentation for the netsim-next workspace,
+# A script to build the documentation for the daemon workspace,
 # including generated dependency graphs.
 
 # The script is in tools/netsim/next, which is the workspace root.
@@ -19,7 +19,7 @@ DEST_DIR="/google/data/rw/teams/betosim"
 usage() {
   echo "Usage: $(basename "$0") [--upload]"
   echo ""
-  echo "Builds the Cargo documentation for the netsim-next crate and optionally uploads it to x20 Betosim team folder."
+  echo "Builds the Cargo documentation for the daemon crate and optionally uploads it to x20 Betosim team folder."
   echo ""
   echo "Arguments:"
   echo "  --upload                Uploads the generated documentation to the default destination directory ('${DEST_DIR}')."
@@ -58,17 +58,17 @@ cargo clean --doc
 echo "Building cargo doc for all workspace members..."
 cargo doc --no-deps
 
-# Define the output directory for netsim-next docs to avoid repetition.
-DOC_DIR="target/doc/netsim_next"
+# Define the output directory for daemon docs to avoid repetition.
+DOC_DIR="target/doc/daemon"
 
-echo "Generating module graph for netsim-next..."
+echo "Generating module graph for daemon..."
 cargo modules dependencies \
     --no-externs \
     --no-sysroot \
     --no-traits \
     --no-types \
     --no-uses \
-    --package netsim-next \
+    --package daemon \
     --lib | dot -Tpng > "${DOC_DIR}/modules.png"
 
 echo "Documentation build complete."

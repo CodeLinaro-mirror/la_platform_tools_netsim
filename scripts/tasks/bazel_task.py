@@ -25,52 +25,32 @@ class BazelTask(Task):
   def __init__(self, args, env):
     super().__init__("Bazel")
     self.env = env
+    self.buildbot = args.buildbot
     system = f"{platform.system().lower()}-x86_64"
     self.path = AOSP_ROOT / "prebuilts" / "bazel" / system / "bazel"
 
   def do_run(self):
-    system = platform.system().lower()
-    platform_configs = {
-        "darwin": {
-            "config": (
-                "macos_x86_64" if platform.machine() == "x86_64" else "macos"
-            ),
-            "cwd": AOSP_ROOT / "tools" / "netsim",
-            "build_targets": [":all", "//rust/...", "//next/..."],
-            "test_targets": [":all", "//rust/...", "//next/..."],
-        },
-        "linux": {
-            "config": "release",
-            "cwd": AOSP_ROOT,
-            "build_targets": [
-                "@netsim//:all",
-                "@netsim//rust/...",
-                "@netsim//next/...",
-            ],
-            "test_targets": [
-                "@netsim//:all",
-                "@netsim//rust/...",
-                "@netsim//next/...",
-            ],
-        },
-    }
+    configs = ["release"]
+    if self.buildbot:
+      configs.append("ci")
 
-    cfg = platform_configs.get(system)
-    if not cfg:
-      print(f"Unsupported platform for bazel: {platform.system()}")
-      return False
+    build_configs = [f"--config={c}" for c in configs]
 
-    build_config = f'--config={cfg["config"]}'
+    targets = [
+        "@netsim//:all",
+        "@netsim//rust/...",
+        "@netsim//next/...",
+    ]
 
     def _run_bazel(action, targets):
       run(
-          [self.path, action] + targets + [build_config],
+          [self.path, action] + targets + build_configs,
           self.env,
           f"bazel {action}",
-          cfg["cwd"],
+          AOSP_ROOT,
       )
 
-    _run_bazel("build", cfg["build_targets"])
-    _run_bazel("test", cfg["test_targets"])
+    _run_bazel("build", targets)
+    _run_bazel("test", targets)
 
     return True

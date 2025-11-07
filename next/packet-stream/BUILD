@@ -30,6 +30,7 @@ rust_library(
         "@serde_derive",
     ],
     deps = [
+        "//next/netsim-api",
         "@bytes",
         "@futures",
         "@libc",

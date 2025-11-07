@@ -1,8 +1,9 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use log::warn;
+use named_lock::NamedLock;
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
@@ -11,31 +12,33 @@ use std::path::{Path, PathBuf};
 /// Manages the lifecycle of a lockable INI file used for daemon status and configuration.
 pub struct IniFile {
     path: PathBuf,
-    lock_path: PathBuf,
-    lock_file: Option<File>,
+    lock: NamedLock,
+    _lock_guard: Option<named_lock::NamedLockGuard>,
 }
 
 impl IniFile {
     /// Creates a new `IniFile` manager for a file in the specified directory.
     pub fn new(dir: &Path, filename: &str) -> Self {
         let path = dir.join(filename);
-        let mut lock_path = path.as_os_str().to_owned();
-        lock_path.push(".lock");
-        let lock_path = PathBuf::from(lock_path);
-
-        IniFile { path, lock_path, lock_file: None }
+        let lock_name = path.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "-");
+        let lock = NamedLock::create(&lock_name).unwrap();
+        IniFile { path, lock, _lock_guard: None }
     }
 
     /// Attempts to acquire an exclusive lock file.
     pub fn try_lock(&mut self) -> io::Result<()> {
-        let lock_file = OpenOptions::new().write(true).create_new(true).open(&self.lock_path)?;
-        self.lock_file = Some(lock_file);
-        Ok(())
+        match self.lock.try_lock() {
+            Ok(guard) => {
+                self._lock_guard = Some(guard);
+                Ok(())
+            }
+            Err(_) => Err(io::Error::new(io::ErrorKind::Other, "Failed to acquire lock")),
+        }
     }
 
     /// Writes the given `HashMap` to the INI file, overwriting any existing content.
     pub fn write(&self, data: &HashMap<String, String>) -> io::Result<()> {
-        if self.lock_file.is_none() {
+        if self._lock_guard.is_none() {
             return Err(io::Error::new(io::ErrorKind::Other, "File is not locked for writing"));
         }
         let file = File::create(&self.path)?;
@@ -77,10 +80,7 @@ impl IniFile {
 
 impl Drop for IniFile {
     fn drop(&mut self) {
-        if self.lock_file.is_some() {
-            if let Err(e) = fs::remove_file(&self.lock_path) {
-                warn!("Failed to remove lock file '{}': {}", self.lock_path.display(), e);
-            }
+        if self._lock_guard.is_some() {
             if let Err(e) = fs::remove_file(&self.path) {
                 warn!("Failed to remove ini file '{}': {}", self.path.display(), e);
             }

@@ -13,7 +13,7 @@ fn create_test_chip_info() -> ChipInfo {
     ChipInfo {
         name: "test-chip".to_string(),
         chip: Some(Chip {
-            kind: ChipKind::Wifi,
+            kind: ChipKind::WIFI,
             id: "test-chip".to_string(),
             name: "Test WiFi Chip".to_string(),
             manufacturer: "Test Corp".to_string(),

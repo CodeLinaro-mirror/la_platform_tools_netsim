@@ -154,19 +154,28 @@ cc_binary(
         ":netsim_daemon_h",
         "//rust:cxx-bridge-header",
         "//rust:netsimd.cc",
-    ],
-    copts = ["-I include"],
+    ] + select({
+        "@platforms//os:windows": ["src/hci/async_manager.cc"],
+        "//conditions:default": [],
+    }),
     defines = ["NETSIM_ANDROID_EMULATOR"],
-    includes = [
-        "include",
-        "src/",
-    ],
+    includes = ["src"],
     deps = [
         ":netsimd_cc_proto",
-        "//rust/daemon:netsim_daemon",
+        "@aemu//base:aemu-base",
+        "@aemu//base:aemu-base-socket-utils",
+        "@c-ares//:ares",
+        "@glib//glib",
         "@rootcanal//:libbt-rootcanal",
         "@wpa_supplicant_8//:hostapd_c_lib",
-    ],
+    ] + select({
+        "@platforms//os:windows": [
+            "//rust/daemon:netsim_daemon_windows",
+        ],
+        "//conditions:default": [
+            "//rust/daemon:netsim_daemon",
+        ],
+    }),
 )
 
 genrule(

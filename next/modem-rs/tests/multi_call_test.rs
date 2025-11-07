@@ -1,5 +1,4 @@
-mod common;
-use common::TestHarness;
+use crate::common::TestHarness;
 use modem_rs::types::{ModemId, AT_OK};
 
 #[test]
