@@ -45,7 +45,7 @@ impl fmt::Display for DeviceId {
 
 pub type Responder<T> = oneshot::Sender<Result<T, DeviceError>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DeviceClient {
     sender: mpsc::Sender<DeviceRequest>,
 }
