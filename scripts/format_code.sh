@@ -17,6 +17,23 @@
 # By default, formats all files.
 # Use --diff to format files that are different from HEAD.
 
+if [ -z "${BASH_VERSION}" ] || [ "${BASH_VERSION%%.*}" -lt 4 ]; then
+  echo "Bash version 4+ is required. Trying to find a newer version."
+  _BASH=$(which bash)
+  if [ -z "${_BASH}" ] || [ "${_BASH}" = "/bin/bash" ]; then
+      # If which bash is not enough, try to find it in homebrew standard locations
+      if [ -x "/opt/homebrew/bin/bash" ]; then
+        _BASH="/opt/homebrew/bin/bash"
+      elif [ -x "/usr/local/bin/bash" ]; then
+        _BASH="/usr/local/bin/bash"
+      else
+        echo "Could not find a newer version of bash. Please install bash 4+."
+        exit 1
+      fi
+  fi
+  exec "${_BASH}" "$0" "$@"
+fi
+
 set -euo pipefail
 
 # Go to the root of the git repository (tools/netsim).
