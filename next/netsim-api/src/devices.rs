@@ -1,4 +1,4 @@
-use crate::chips::{ChipConfig, PacketSink, PacketStream};
+use crate::chips::{ChipConfig, ChipId, PacketSink, PacketStream};
 use crate::client_error::ClientError;
 use crate::client_method;
 use crate::device_error::DeviceError;
@@ -70,6 +70,30 @@ impl DeviceClient {
             .send(DeviceRequest::Shutdown)
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Sends a non-blocking notification to the device service that a chip has been removed.
+    pub fn notify_chip_removed(&self, chip_id: ChipId) {
+        let sender = self.sender.clone();
+        tokio::spawn(async move {
+            if let Err(e) =
+                sender.send(DeviceRequest::NotifyChipRemoved { chip_id, respond_to: None }).await
+            {
+                log::error!("Failed to send NotifyChipRemoved for chip {chip_id}: {e}");
+            }
+        });
+    }
+
+    /// Sends a notification and waits for the server to acknowledge processing.
+    /// Primarily intended for test synchronization.
+    pub async fn notify_chip_removed_block(&self, chip_id: ChipId) -> Result<(), ClientError> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(DeviceRequest::NotifyChipRemoved { chip_id, respond_to: Some(tx) })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?;
         Ok(())
     }
 }
@@ -243,6 +267,9 @@ pub enum DeviceRequest {
         /// The channel to send the list of devices back on.
         respond_to: Responder<()>,
     },
+    /// Notification from a ChipService that a chip has been removed.
+    /// Includes an optional oneshot sender for test synchronization.
+    NotifyChipRemoved { chip_id: ChipId, respond_to: Option<oneshot::Sender<()>> },
     /// Shutdown device server.
     Shutdown,
 }

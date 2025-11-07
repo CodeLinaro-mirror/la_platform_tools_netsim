@@ -8,7 +8,7 @@ use devices::Server as DeviceServer;
 use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use netsim_api::chips::{
-    BluetoothMode, BluetoothParams, ChipConfig, DeviceParams, NetworkParams,
+    BluetoothMode, BluetoothParams, ChipConfig, DeviceParams, NetworkKind, NetworkParams,
     PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
 };
 use netsim_api::devices::{DeviceClient, DeviceConfig, DevicePsCreate};
@@ -203,15 +203,24 @@ impl NetsimDaemon {
 
         // TODO: Start TCP listener and add to listener_addresses
 
+        // Setup Device Server first to get the client
+        let (device_server, device_client) = DeviceServer::new(args.no_shutdown);
+        info!("Device server created");
+
         // Setup Bluetooth Server
-        let (bt_server, bt_client) = bluetooth::Server::new();
+        let (bt_server, bt_client) = bluetooth::Server::new(device_client.clone());
+        info!("Bluetooth server created");
+
+        // Prepare chip clients map for DeviceServer
+        let mut chip_clients = HashMap::new();
+        chip_clients.insert(NetworkKind::Bluetooth, bt_client);
+        // TODO: Add other chip clients (WiFi, Cell, etc.) here
+
+        // Spawn server tasks
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_server.run());
         info!("Bluetooth server started");
-
-        // Setup Device Server
-        let (device_server, device_client) = DeviceServer::new(bt_client, args.no_shutdown);
-        join_set.spawn(device_server.run());
+        join_set.spawn(device_server.run(chip_clients));
         info!("Device server started");
 
         Ok((Self { join_set, streams, device_client, listener_addresses, args }, ini_file))

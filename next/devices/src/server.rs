@@ -47,6 +47,7 @@ const MAX_TIMEOUT: Duration = Duration::from_secs(u32::MAX as u64);
 /// manner. This design ensures that all state modifications are thread-safe
 /// without requiring locks or other synchronization primitives.
 pub struct Server {
+    // TODO: change pub to pub(crate) everywhere. Actors only export a message API.
     /// A map of clients for interacting with technology-specific chip services.
     pub chip_clients: HashMap<NetworkKind, ChipClient>,
     /// The next available `ChipId`.
@@ -100,27 +101,24 @@ pub struct ChipInfo {
 }
 
 impl Server {
-    /// Creates a new `Server` and a corresponding `DeviceClient` with no or default timeouts.
-    pub fn new(bt_client: ChipClient, no_shutdown: bool) -> (Self, DeviceClient) {
+    /// Creates a new `Server` and a corresponding `DeviceClient` with default timeouts.
+    pub fn new(no_shutdown: bool) -> (Self, DeviceClient) {
         if no_shutdown {
-            Self::new_with_timeouts(bt_client, MAX_TIMEOUT, MAX_TIMEOUT)
+            Self::new_with_timeouts(MAX_TIMEOUT, MAX_TIMEOUT)
         } else {
-            Self::new_with_timeouts(bt_client, DEFAULT_START_TIMEOUT, DEFAULT_IDLE_TIMEOUT)
+            Self::new_with_timeouts(DEFAULT_START_TIMEOUT, DEFAULT_IDLE_TIMEOUT)
         }
     }
 
     /// Creates a new `Server` and a corresponding `DeviceClient` with custom timeouts.
     pub fn new_with_timeouts(
-        bt_client: ChipClient,
         start_timeout: Duration,
         idle_timeout: Duration,
     ) -> (Self, DeviceClient) {
         let (command_tx, request_rx) = mpsc::channel(10);
-        let mut chip_clients = HashMap::new();
-        chip_clients.insert(NetworkKind::Bluetooth, bt_client);
 
         let server = Server {
-            chip_clients,
+            chip_clients: HashMap::new(),
             next_chip_id: AtomicU32::new(0),
             next_device_id: AtomicU32::new(0),
             request_rx,
@@ -139,7 +137,8 @@ impl Server {
     ///
     /// The server will listen for incoming requests and handle them accordingly.
     /// It will shut down if it remains idle for the configured timeout.
-    pub async fn run(mut self) {
+    pub async fn run(mut self, chip_clients: HashMap<NetworkKind, ChipClient>) {
+        self.chip_clients = chip_clients;
         self.set_alarm(self.start_timeout);
         while !self.shutdown {
             tokio::select! {
@@ -214,5 +213,17 @@ impl Server {
         device_info.chips.insert(chip_id);
         self.chip_info_map.insert(chip_id, ChipInfo { kind: chip_kind, device_id, name });
         Ok(())
+    }
+
+    /// Removes a device and its associated GUID from the server's state.
+    pub(crate) fn delete_device(&mut self, device_id: DeviceId) {
+        if let Some(device_info) = self.devices_by_id.remove(&device_id) {
+            info!("Removed device {:?}", device_id);
+            if let Some(guid) = device_info.guid {
+                self.device_ids_by_guid.remove(&guid);
+            }
+        } else {
+            log::warn!("Delete failed: Device {device_id} not found");
+        }
     }
 }

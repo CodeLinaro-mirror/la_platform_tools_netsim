@@ -284,7 +284,7 @@ pub struct BleBeacon {
 ///
 /// This struct holds parameters for creating a virtual Bluetooth device and is
 /// used when the [`BluetoothMode`] is [`BluetoothMode::Device`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DeviceParams {}
 
 /// Parameters for creating a BLE beacon.

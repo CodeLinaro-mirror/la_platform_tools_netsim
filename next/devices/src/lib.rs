@@ -1,10 +1,10 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-//! The devices crate provides a simulation environment for devices.
+//! # Netsim Device Service
 //!
-//! A device is a logical grouping of one or more radio chips (e.g. Bluetooth, Wi-Fi).
-//! This crate is responsible for managing the lifecycle of simulated devices
-//! and dispatching chip-level requests to the appropriate chip services.
+//! This crate provides the `DeviceServer`, which manages the lifecycle of simulated devices
+//! and their associated chips. It interacts with chip-specific services (like Bluetooth, WiFi)
+//! via `ChipClient` handles.
 //!
 //! # Getting Started
 //!
@@ -12,32 +12,44 @@
 //!
 //! To use the `Server`:
 //! 1. Create a new instance using [`Server::new()`], which returns the `Server` and a `DeviceClient`.
-//! 2. Spawn the [`Server::run()`] method into a Tokio task to start its event loop.
-//! 3. Use the `DeviceClient` to send commands to the running `Server`.
+//! 2. Create clients for all required chip services (e.g., Bluetooth, WiFi).
+//! 3. Collect the chip clients into a `HashMap`.
+//! 4. Spawn the [`Server::run()`] method into a Tokio task, passing the `chip_clients` map.
+//! 5. Use the `DeviceClient` to send commands to the running `Server`.
 //!
 //! ```no_run
 //! use bluetooth;
 //! use devices::Server;
 //! use tokio;
+//! use netsim_api::chips::{ChipClient, NetworkKind};
+//! use netsim_api::devices::{DeviceClient, DeviceRequest};
+//! use std::collections::HashMap;
+//! use tokio::sync::mpsc;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     // 1. Create a Bluetooth chip server and client.
-//!     let (bt_server, bt_client) = bluetooth::Server::new();
-//!     // 2. Spawn the Bluetooth server to run in the background.
+//!     // 1. Create the DeviceServer and its client
+//!     let (device_server, device_client) = Server::new(false);
+//!
+//!     // 2. Create a Bluetooth chip server and client, passing the device_client
+//!     let (bt_server, bt_client) = bluetooth::Server::new(device_client.clone());
+//!     //    Spawn the Bluetooth server to run in the background.
 //!     tokio::spawn(async move {
 //!         bt_server.run().await;
 //!     });
 //!
-//!     // 3. Create the device server, providing it with the Bluetooth client.
-//!     let (server, client) = Server::new(bt_client, false);
+//!     // 3. Create the map of chip clients
+//!     let mut chip_clients = HashMap::new();
+//!     chip_clients.insert(NetworkKind::Bluetooth, bt_client);
+//!     //    Add other chip clients (WiFi, Cell, etc.) here
+//!
 //!     // 4. Spawn the device server.
 //!     tokio::spawn(async move {
-//!         server.run().await;
+//!         device_server.run(chip_clients).await;
 //!     });
 //!
 //!     // Use the client to interact with the server, e.g., create devices.
-//!     // client.create(...).await;
+//!     // device_client.create(...).await;
 //!
 //!     // Keep the main task alive for a duration or until a shutdown signal.
 //!     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
