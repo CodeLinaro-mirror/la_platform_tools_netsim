@@ -23,6 +23,7 @@ pub struct InitInfo {
 }
 
 /// Manages multiple transport listeners and stream connections.
+#[derive(Debug)]
 pub struct Streams {
     listener_tasks: HashMap<String, JoinHandle<()>>,
     listener_addresses: HashMap<String, StreamAddress>,
