@@ -14,15 +14,15 @@
 
 [workspace]
 members = [
-    "bluetooth",
-    "devices" ,
-    "netsim-api",
-    "daemon",
-    "proto",
-    "packet-stream",
-    "rootcanal",
-    "modem-rs",
-    "modem-rs-derive",
+  "bluetooth",
+  "devices",
+  "netsim-api",
+  "daemon",
+  "proto",
+  "packet-stream",
+  "rootcanal",
+  "modem-rs",
+  "modem-rs-derive",
 ]
 
 [workspace.doc]
