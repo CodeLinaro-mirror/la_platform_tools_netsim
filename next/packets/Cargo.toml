@@ -20,11 +20,10 @@ build = "build.rs"
 
 [lib]
 path = "src/lib.rs"
-crate-type = ["staticlib","lib"]
+crate-type = ["staticlib", "lib"]
 doctest = false
 
 [dependencies]
 anyhow = "1"
-bytes = { version = ">=1.4.0"}
+bytes = { version = ">=1.4.0" }
 pdl-runtime = "0.4.2"
-

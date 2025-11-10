@@ -7,7 +7,7 @@ edition = "2021"
 
 [lib]
 path = "src/lib.rs"
-crate-type = ["staticlib","lib"]
+crate-type = ["staticlib", "lib"]
 
 [dependencies]
 log = "0.4.17"

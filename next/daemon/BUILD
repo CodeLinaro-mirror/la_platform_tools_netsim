@@ -23,7 +23,8 @@ package(default_visibility = ["//visibility:public"])
 rust_library(
     name = "daemon-lib",
     srcs = [
-        "src/config.rs",
+        "src/args.rs",
+        "src/ini_file.rs",
         "src/lib.rs",
         "src/logger.rs",
         "src/netsimd.rs",
@@ -37,6 +38,7 @@ rust_library(
         "//next/netsim-api",
         "//next/packet-stream",
         "@chrono",
+        "@clap",
         "@env_logger",
         "@futures",
         "@log",
@@ -65,7 +67,7 @@ rust_binary(
 rust_test(
     name = "tests",
     srcs = [
-        "tests/config_test.rs",
+        "tests/ini_file_test.rs",
         "tests/integration_test.rs",
         "tests/tests.rs",
     ],

@@ -17,10 +17,14 @@
 //!
 //! ```no_run
 //! use tokio;
+//! use netsim_api::devices::{DeviceClient, DeviceRequest};
+//! use tokio::sync::mpsc;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let (server, client) = bluetooth::Server::new();
+//!     let (device_tx, _device_rx) = mpsc::channel::<DeviceRequest>(10);
+//!     let device_client = DeviceClient::new(device_tx);
+//!     let (server, client) = bluetooth::Server::new(device_client);
 //!     tokio::spawn(async move {
 //!         server.run().await;
 //!     });

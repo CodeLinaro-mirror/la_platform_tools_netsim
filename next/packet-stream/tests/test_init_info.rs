@@ -44,11 +44,11 @@ async fn test_normal_init_info_protocol() {
     .unwrap()
     .unwrap();
 
-    let (_name, (_, _, server_chip_info)) =
-        timeout(Duration::from_secs(5), streams.accept_any()).await.unwrap().unwrap();
+    let (_name, (mut server_stream, mut server_sink, chip_info, _guid)) =
+        streams.accept_any().await.unwrap();
 
-    assert_eq!(server_chip_info.device_info.as_ref().unwrap().name, "test-init-info-device");
-    assert_eq!(server_chip_info.chip.as_ref().unwrap().manufacturer, "Test WiFi Corp");
+    assert_eq!(chip_info.device_info.as_ref().unwrap().name, "test-init-info-device");
+    assert_eq!(chip_info.chip.as_ref().unwrap().manufacturer, "Test WiFi Corp");
 
     let test_data = b"Post-init-info packet";
     client_sink.send(Bytes::from_static(test_data)).await.unwrap();

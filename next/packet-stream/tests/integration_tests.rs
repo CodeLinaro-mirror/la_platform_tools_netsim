@@ -42,8 +42,8 @@ async fn test_tcp_transport_echo() {
     .unwrap()
     .unwrap();
 
-    let (_name, (mut server_stream, mut server_sink, _)) =
-        timeout(Duration::from_secs(5), streams.accept_any()).await.unwrap().unwrap();
+    let (_name, (mut server_stream, mut server_sink, _chip_info, _guid)) =
+        streams.accept_any().await.unwrap();
 
     let test_data = b"Hello PacketStream!";
     client_sink.send(Bytes::from_static(test_data)).await.unwrap();
@@ -74,8 +74,8 @@ async fn test_uds_transport_echo() {
     .unwrap()
     .unwrap();
 
-    let (_name, (mut server_stream, _, _)) =
-        timeout(Duration::from_secs(5), streams.accept_any()).await.unwrap().unwrap();
+    let (_name, (mut server_stream, _server_sink, chip_info, _guid)) =
+        streams.accept_any().await.unwrap();
 
     let test_data = Bytes::from(&b"Zero-copy test!"[..]);
     client_sink.send(test_data.clone()).await.unwrap();
@@ -104,7 +104,7 @@ async fn test_chip_info_protocol() {
     .unwrap()
     .unwrap();
 
-    let (_name, (_, _, received_chip_info)) =
+    let (_name, (_, _, received_chip_info, _guid)) =
         timeout(Duration::from_secs(5), streams.accept_any()).await.unwrap().unwrap();
 
     assert_eq!(received_chip_info.device_info.as_ref().unwrap().name, "specific-test-device");

@@ -9,10 +9,14 @@
 //!
 //! ```no_run
 //! use tokio;
+//! use netsim_api::devices::{DeviceClient, DeviceRequest};
+//! use tokio::sync::mpsc;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let (server, client) = bluetooth::Server::new();
+//!     let (device_tx, _device_rx) = mpsc::channel::<DeviceRequest>(10);
+//!     let device_client = DeviceClient::new(device_tx);
+//!     let (server, client) = bluetooth::Server::new(device_client);
 //!     tokio::spawn(async move {
 //!         server.run().await;
 //!     });
@@ -38,6 +42,7 @@ use bytes::Bytes;
 use log::{debug, error, info};
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{BluetoothMode, ChipClient, ChipId, ChipRequest, PacketStream};
+use netsim_api::devices::DeviceClient;
 use rootcanal::{Callbacks as RootcanalCallbacks, Idc, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -66,6 +71,7 @@ pub struct Server {
     // A map of all active packet streams, keyed by chip ID.
     pub(crate) streams: StreamMap<ChipId, StreamNotifyClose<PacketStream>>,
     pub(crate) sink_tasks: JoinSet<ChipId>,
+    pub(crate) device_client: DeviceClient,
 }
 
 struct RootcanalCallbacksImpl;
@@ -85,8 +91,12 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
 
 impl Server {
     /// Creates a new `Server` and returns a tuple containing the
-    /// server and a channel for sending commands to it.
-    pub fn new() -> (Self, ChipClient) {
+    /// server and a `ChipClient` for sending commands to it.
+    ///
+    /// # Arguments
+    ///
+    /// * `device_client`: A `DeviceClient` used to send notifications to the DeviceService.
+    pub fn new(device_client: DeviceClient) -> (Self, ChipClient) {
         let (command_tx, command_rx) = mpsc::channel(10);
         let server = Server {
             rootcanal: Rootcanal::new(Box::new(RootcanalCallbacksImpl {})),
@@ -94,6 +104,7 @@ impl Server {
             command_rx,
             streams: StreamMap::new(),
             sink_tasks: JoinSet::new(),
+            device_client,
         };
         (server, ChipClient::new(command_tx))
     }
@@ -148,6 +159,8 @@ impl Server {
             self.streams.remove(&id);
             self.rootcanal.remove_controller(id.into()).to_chip_error()?;
             debug!("Removed chip {id} by {res}");
+            // Notify DeviceServer asynchronously.
+            self.device_client.notify_chip_removed(id);
             Ok(true)
         } else {
             debug!("Chip already deleted");

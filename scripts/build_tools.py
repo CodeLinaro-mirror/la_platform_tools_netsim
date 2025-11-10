@@ -147,6 +147,18 @@ def main():
       action="store_true",
       help="Buildbot only. Whether to use Bazel to build.",
   )
+  parser.add_argument(
+      "--bazel_targets",
+      type=str,
+      nargs="+",
+      default=[],
+      help="The bazel targets to build.",
+  )
+  parser.add_argument(
+      "--hermetic",
+      action="store_true",
+      help="Whether to run a hermetic build.",
+  )
 
   args = parser.parse_args()
 

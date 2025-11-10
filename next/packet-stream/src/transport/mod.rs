@@ -19,6 +19,8 @@ pub mod windows;
 
 // Internal implementation modules
 pub(crate) mod adapters;
+pub mod grpc_adapter;
+pub mod grpc_converters;
 
 // Re-export public API only
 #[cfg(all(unix, feature = "dual_fd"))]
@@ -231,16 +233,18 @@ pub enum Listener {
     Uds(adapters::UdsTransportListener),
     #[cfg(all(unix, feature = "dual_fd"))]
     DualFd(DualFdListener),
+    Grpc(grpc_adapter::GrpcTransportListener),
 }
 
 #[async_trait]
 impl TransportListener for Listener {
-    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo)> {
+    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
         match self {
             Listener::Tcp(l) => l.accept().await,
             Listener::Uds(l) => l.accept().await,
             #[cfg(all(unix, feature = "dual_fd"))]
             Listener::DualFd(l) => l.accept().await,
+            Listener::Grpc(l) => l.accept().await,
         }
     }
 
@@ -250,6 +254,7 @@ impl TransportListener for Listener {
             Listener::Uds(l) => l.local_addr(),
             #[cfg(all(unix, feature = "dual_fd"))]
             Listener::DualFd(l) => l.local_addr(),
+            Listener::Grpc(l) => l.local_addr(),
         }
     }
 
@@ -259,6 +264,7 @@ impl TransportListener for Listener {
             Listener::Uds(l) => l.shutdown().await,
             #[cfg(all(unix, feature = "dual_fd"))]
             Listener::DualFd(l) => l.shutdown().await,
+            Listener::Grpc(l) => l.shutdown().await,
         }
     }
 }

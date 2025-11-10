@@ -1,0 +1,242 @@
+use crate::error::{PacketStreamError, Result};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use netsim_api::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
+use netsim_proto::common as proto_common;
+use netsim_proto::hci_packet::HCIPacket;
+use netsim_proto::packet_streamer::{self, PacketRequest, PacketResponse};
+use netsim_proto::startup as proto_startup;
+use protobuf::Message;
+
+pub(crate) const HCI_PACKET_TYPE: u8 = 0x01;
+
+pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {
+    match proto.enum_value_or_default() {
+        proto_common::ChipKind::UNSPECIFIED => ChipKind::UNSPECIFIED,
+        proto_common::ChipKind::BLUETOOTH => ChipKind::BLUETOOTH,
+        proto_common::ChipKind::WIFI => ChipKind::WIFI,
+        proto_common::ChipKind::UWB => ChipKind::UWB,
+        // proto_common::ChipKind::CELLULAR => ChipKind::CELL,
+        proto_common::ChipKind::BLUETOOTH_BEACON => ChipKind::UNSPECIFIED, // Or map to a suitable netsim_api::ChipKind
+    }
+}
+
+pub fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
+    Chip {
+        kind: proto_to_chip_kind(proto.kind),
+        id: proto.id,
+        name: "".to_string(), // Not available in proto Chip
+        manufacturer: proto.manufacturer,
+        product_name: proto.product_name,
+    }
+}
+
+pub fn proto_to_device_info(proto: proto_startup::DeviceInfo) -> DeviceInfo {
+    DeviceInfo {
+        name: proto.name,
+        id: "".to_string(), // Not available in proto DeviceInfo
+    }
+}
+
+pub fn proto_to_chip_info(proto: proto_startup::ChipInfo) -> ChipInfo {
+    ChipInfo {
+        name: proto.name,
+        chip: proto.chip.into_option().map(proto_to_chip),
+        device_info: proto.device_info.into_option().map(proto_to_device_info),
+    }
+}
+
+// Convert Bytes to PacketRequest
+pub fn bytes_to_packet_request(mut bytes: Bytes) -> Result<PacketRequest> {
+    if bytes.is_empty() {
+        return Err(PacketStreamError::InvalidConfig("Empty bytes".to_string()));
+    }
+    let mut req = PacketRequest::new();
+    // Peek at the first byte without consuming to check type
+    let packet_type = bytes[0];
+
+    if packet_type == HCI_PACKET_TYPE {
+        bytes.advance(1); // Consume the type byte
+        let hci_packet = HCIPacket::parse_from_bytes(&bytes)?;
+        req.set_hci_packet(hci_packet);
+    } else {
+        // Assume raw packet if type byte doesn't match
+        req.set_packet(bytes.to_vec());
+    }
+    Ok(req)
+}
+
+// Convert Bytes to PacketResponse
+pub fn bytes_to_packet_response(mut bytes: Bytes) -> Result<PacketResponse> {
+    if bytes.is_empty() {
+        return Err(PacketStreamError::InvalidConfig("Empty bytes".to_string()));
+    }
+    let mut res = PacketResponse::new();
+    // Peek at the first byte without consuming to check type
+    let packet_type = bytes[0];
+
+    if packet_type == HCI_PACKET_TYPE {
+        bytes.advance(1); // Consume the type byte
+        let hci_packet = HCIPacket::parse_from_bytes(&bytes)?;
+        res.set_hci_packet(hci_packet);
+    } else {
+        // Assume raw packet if type byte doesn't match
+        res.set_packet(bytes.to_vec());
+    }
+    Ok(res)
+}
+
+// Convert PacketRequest to Bytes
+pub fn packet_request_to_bytes(value: PacketRequest) -> Result<Bytes> {
+    match value.request_type {
+        Some(packet_streamer::packet_request::Request_type::HciPacket(hci)) => {
+            let mut bytes = BytesMut::new();
+            bytes.put_u8(HCI_PACKET_TYPE);
+            let hci_bytes = hci.write_to_bytes()?;
+            bytes.put_slice(&hci_bytes);
+            Ok(bytes.freeze())
+        }
+        Some(packet_streamer::packet_request::Request_type::Packet(packet)) => {
+            Ok(Bytes::from(packet))
+        }
+        _ => Err(PacketStreamError::InvalidConfig(
+            "PacketRequest does not contain a supported packet type".to_string(),
+        )),
+    }
+}
+
+// Convert PacketResponse to Bytes
+pub fn packet_response_to_bytes(value: PacketResponse) -> Result<Bytes> {
+    match value.response_type {
+        Some(packet_streamer::packet_response::Response_type::HciPacket(hci)) => {
+            let mut bytes = BytesMut::new();
+            bytes.put_u8(HCI_PACKET_TYPE);
+            let hci_bytes = hci.write_to_bytes()?;
+            bytes.put_slice(&hci_bytes);
+            Ok(bytes.freeze())
+        }
+        Some(packet_streamer::packet_response::Response_type::Packet(packet)) => {
+            Ok(Bytes::from(packet))
+        }
+        _ => Err(PacketStreamError::InvalidConfig(
+            "PacketResponse does not contain a supported packet type".to_string(),
+        )),
+    }
+}
+
+// Helper to convert ChipInfo to proto
+pub fn chip_info_to_proto(chip_info: ChipInfo) -> proto_startup::ChipInfo {
+    let mut proto = proto_startup::ChipInfo::new();
+    proto.name = chip_info.name;
+    if let Some(chip) = chip_info.chip {
+        let mut chip_proto = proto_startup::Chip::new();
+        chip_proto.kind = match chip.kind {
+            ChipKind::UNSPECIFIED => proto_common::ChipKind::UNSPECIFIED,
+            ChipKind::BLUETOOTH => proto_common::ChipKind::BLUETOOTH,
+            ChipKind::WIFI => proto_common::ChipKind::WIFI,
+            ChipKind::UWB => proto_common::ChipKind::UWB,
+            ChipKind::CELL => proto_common::ChipKind::UNSPECIFIED, // Or map to a suitable netsim_api::ChipKind
+        }
+        .into();
+        chip_proto.id = chip.id;
+        chip_proto.manufacturer = chip.manufacturer;
+        chip_proto.product_name = chip.product_name;
+        proto.chip = Some(chip_proto).into();
+    }
+    if let Some(device_info) = chip_info.device_info {
+        let mut device_proto = proto_startup::DeviceInfo::new();
+        device_proto.name = device_info.name;
+        proto.device_info = Some(device_proto).into();
+    }
+    proto
+}
+
+impl From<protobuf::Error> for PacketStreamError {
+    fn from(err: protobuf::Error) -> Self {
+        PacketStreamError::InvalidConfig(format!("Protobuf error: {err}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use netsim_proto::hci_packet::HCIPacket;
+    use netsim_proto::startup::ChipInfo as ProtoChipInfo;
+    use protobuf::Message;
+
+    #[test]
+    fn test_hci_request_conversion() {
+        let mut hci = HCIPacket::new();
+        hci.packet = vec![0x01, 0x02, 0x03, 0x04];
+        let mut req = PacketRequest::new();
+        req.set_hci_packet(hci.clone());
+
+        let bytes = packet_request_to_bytes(req).unwrap();
+        assert_eq!(bytes[0], HCI_PACKET_TYPE);
+        assert_eq!(bytes.len(), hci.write_to_bytes().unwrap().len() + 1);
+
+        let req2 = bytes_to_packet_request(bytes).unwrap();
+        assert!(req2.has_hci_packet());
+        assert_eq!(req2.hci_packet(), &hci);
+    }
+
+    #[test]
+    fn test_hci_response_conversion() {
+        let mut hci = HCIPacket::new();
+        hci.packet = vec![0x05, 0x06, 0x07, 0x08];
+        let mut res = PacketResponse::new();
+        res.set_hci_packet(hci.clone());
+
+        let bytes = packet_response_to_bytes(res).unwrap();
+        assert_eq!(bytes[0], HCI_PACKET_TYPE);
+        assert_eq!(bytes.len(), hci.write_to_bytes().unwrap().len() + 1);
+
+        let res2 = bytes_to_packet_response(bytes).unwrap();
+        assert!(res2.has_hci_packet());
+        assert_eq!(res2.hci_packet(), &hci);
+    }
+
+    #[test]
+    fn test_raw_packet_request() {
+        let raw = Bytes::from_static(&[0xAA, 0xBB, 0xCC]);
+        let mut req = PacketRequest::new();
+        req.set_packet(raw.to_vec());
+        let bytes = packet_request_to_bytes(req).unwrap();
+        assert_eq!(bytes, raw); // No type byte prepended
+
+        let req2 = bytes_to_packet_request(bytes).unwrap();
+        assert!(req2.has_packet());
+        assert_eq!(req2.packet(), raw.as_ref());
+        assert!(!req2.has_hci_packet());
+    }
+
+    #[test]
+    fn test_raw_packet_response() {
+        let raw = Bytes::from_static(&[0xDD, 0xEE, 0xFF]);
+        let mut res = PacketResponse::new();
+        res.set_packet(raw.to_vec());
+        let bytes = packet_response_to_bytes(res).unwrap();
+        assert_eq!(bytes, raw); // No type byte prepended
+
+        let res2 = bytes_to_packet_response(bytes).unwrap();
+        assert!(res2.has_packet());
+        assert_eq!(res2.packet(), raw.as_ref());
+        assert!(!res2.has_hci_packet());
+    }
+
+    #[test]
+    fn test_packet_request_to_bytes_error() {
+        let mut req = PacketRequest::new();
+        req.set_initial_info(ProtoChipInfo::new());
+        let result = packet_request_to_bytes(req);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_packet_response_to_bytes_error() {
+        let mut res = PacketResponse::new();
+        res.set_error("Test Error".to_string());
+        let result = packet_response_to_bytes(res);
+        assert!(result.is_err());
+    }
+}
