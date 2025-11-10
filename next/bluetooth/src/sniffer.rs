@@ -34,6 +34,7 @@ pub(crate) fn create(
 }
 
 #[allow(dead_code)]
+/// NOTE: This function is a stub and not fully implemented.
 pub fn update_chip(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
@@ -44,6 +45,7 @@ pub fn update_chip(
 }
 
 #[allow(dead_code)]
+/// NOTE: This function is a stub and not fully implemented.
 pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<Chip, ChipError> {
     Ok(Chip::default())
 }

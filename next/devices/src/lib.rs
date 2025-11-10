@@ -63,14 +63,14 @@
 //! `DeviceClient` provides a convenient method for each command variant.
 //!
 //! The following commands are supported:
-//! - [`PsCreate`][netsim_api::devices::DeviceClient::ps_create]: Creates a new device from packet streamer parameters.
-//! - [`Create`][netsim_api::devices::DeviceRequest::Create]: Creates a new device.
-//! - [`List`][netsim_api::devices::DeviceClient::list]: Retrieves information about all devices.
-//! - [`Update`][netsim_api::devices::DeviceRequest::Update]: Updates an existing device.
-//! - [`Delete`][netsim_api::devices::DeviceRequest::Delete]: Deletes a device.
-//! - [`Reset`][netsim_api::devices::DeviceRequest::Reset]: Resets all devices.
-//! - [`GetChipStatistics`][netsim_api::devices::DeviceRequest::GetChipStatistics]: Retrieves statistics for all chips.
-//! - [`Shutdown`][netsim_api::devices::DeviceRequest::Shutdown]: Shuts down the `Server`.
+//! - [`PsCreate`](netsim_api::devices::DeviceClient::ps_create): Creates a new device from packet streamer parameters.
+//! - [`Create`](netsim_api::devices::DeviceClient::create): Creates a new device.
+//! - [`List`](netsim_api::devices::DeviceClient::list): Retrieves information about all devices.
+//! - [`Update`](netsim_api::devices::DeviceClient::update): Updates an existing device.
+//! - [`Delete`](netsim_api::devices::DeviceClient::delete): Deletes a device.
+//! - [`Reset`](netsim_api::devices::DeviceRequest::Reset): Resets all devices.
+//! - [`GetChipStatistics`](netsim_api::devices::DeviceRequest::GetChipStatistics): Retrieves statistics for all chips.
+//! - [`Shutdown`](netsim_api::devices::DeviceRequest::Shutdown): Shuts down the `Server`.
 //!
 //! # Features
 //!

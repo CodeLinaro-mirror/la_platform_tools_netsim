@@ -181,10 +181,15 @@ async fn setup_grpc_listener(
 /// and handles incoming connections using the `packet_stream` crate.
 #[derive(Debug)]
 pub struct NetsimDaemon {
+    /// Set of spawned Tokio tasks, including the chip and device servers.
     join_set: JoinSet<()>,
+    /// Manages the network listeners (UDS, gRPC) for incoming connections.
     streams: Streams,
+    /// Client for interacting with the Device Service.
     device_client: DeviceClient,
+    /// Addresses of the active listeners.
     listener_addresses: HashMap<String, StreamAddress>,
+    /// Command line arguments passed to the daemon.
     args: Args,
 }
 
