@@ -37,6 +37,7 @@ rust_library(
         "@futures-util",
         "@grpcio",
         "@libc",
+        "@log",
         "@protobuf-rust",
         "@rand",
         "@serde",

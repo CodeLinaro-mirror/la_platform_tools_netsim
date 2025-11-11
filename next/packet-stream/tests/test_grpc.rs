@@ -151,11 +151,19 @@ async fn test_grpc_transport_echo() {
     let test_packet = bytes::Bytes::from_static(&[0xaa, 0xbb, 0xcc, 0xdd]);
     futures::SinkExt::send(&mut app_sink, test_packet.clone()).await.unwrap();
     let received = futures::StreamExt::next(&mut app_stream).await.unwrap().unwrap();
-    assert_eq!(received, test_packet);
+
+    // Construct the expected HCIPacket and serialize it
+    let mut expected_hci = netsim_proto::hci_packet::HCIPacket::new();
+    expected_hci.packet = test_packet.to_vec();
+    expected_hci.packet_type = netsim_proto::hci_packet::hcipacket::PacketType::EVENT.into();
+    let mut expected_res = PacketResponse::new();
+    expected_res.set_hci_packet(expected_hci);
+    let expected_bytes = grpc_converters::packet_response_to_bytes(expected_res).unwrap();
+
+    assert_eq!(received, expected_bytes);
 
     // Close and shutdown
     drop(app_sink);
-    let _ = futures::StreamExt::next(&mut app_stream).await;
     server_task.await.unwrap();
     drop(client); // Drop the client to close the connection
 }
