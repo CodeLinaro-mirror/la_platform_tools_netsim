@@ -19,5 +19,5 @@ bazel_dep(name = "netsim", version = "0.0.1")
 bazel_dep(name = "protobuf", version = "32.1")
 
 custom_toolchains = use_extension("@goldfish_build//extensions:toolchain.bzl", "toolchain")
-custom_toolchains.clang(root_path = "prebuilts_bazel/clang/host")
+custom_toolchains.clang(root_path = "prebuilts/clang/host")
 custom_toolchains.rust(root_path = "prebuilts_bazel/rust")
