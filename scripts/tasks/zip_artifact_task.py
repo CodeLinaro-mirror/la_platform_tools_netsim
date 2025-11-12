@@ -45,13 +45,13 @@ class ZipArtifactTask(Task):
         self.dist
         / f"netsim-{platform_to_cmake_target(self.target)}-{self.build_id}.zip"
     )
-    if self.bazel:
-      search_dir = AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
-      search_glob = list((search_dir / "netsim-ui").glob("**/*"))
-      search_glob.extend([search_dir / "netsim", search_dir / "netsimd"])
-    else:
-      search_dir = self.out / "distribution" / "emulator"
-      search_glob = search_dir.glob("**/*")
+    search_dir = self.out / "distribution" / "emulator"
+    if not search_dir.is_dir():
+      logging.warning(
+          f"Artifact directory not found: {search_dir}. Skipping zip."
+      )
+      return True
+    search_glob = search_dir.glob("**/*")
 
     logging.info("Creating zip file: %s", zip_fname)
     with zipfile.ZipFile(
