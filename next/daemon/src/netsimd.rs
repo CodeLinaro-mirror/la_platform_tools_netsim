@@ -9,7 +9,7 @@ use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use netsim_api::chips::{
     BluetoothMode, BluetoothParams, ChipConfig, DeviceParams, NetworkKind, NetworkParams,
-    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
+    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbParams, WifiParams,
 };
 use netsim_api::devices::{DeviceClient, DeviceConfig, DevicePsCreate};
 use netsim_api::initial_info::{ChipInfo, ChipKind};
@@ -60,7 +60,6 @@ async fn handle_new_connection(
     device_guid: String,
 ) {
     info!("Handling new connection for {:?}, device {}", chip_info.name, chip_info.device_name());
-
     let device_config = DeviceConfig {
         name: chip_info
             .device_info
@@ -85,6 +84,8 @@ async fn handle_new_connection(
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
         }),
+        ChipKind::UWB => NetworkParams::Uwb(UwbParams {}),
+        ChipKind::WIFI => NetworkParams::Wifi(WifiParams {}),
         _ => {
             error!("Unsupported chip kind: {:?}", chip.kind);
             return;
