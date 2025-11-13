@@ -37,6 +37,9 @@ pub(crate) struct HciCallbacks {
     ll_tx: Option<mpsc::Sender<Bytes>>,
 }
 
+/// Use a Tokio channel to send the message synchronously to an async task that will
+/// write to the Sink. This has less overhead than spawning a task for each packet,
+/// as Sink doesn't have a synchronous send method like Sender::try_send().
 impl ControllerCallbacks for HciCallbacks {
     fn send_hci(&self, _source_id: Id, _idc: Idc, hci_packet: &[u8]) {
         let packet = Bytes::copy_from_slice(hci_packet);

@@ -58,7 +58,7 @@ impl Server {
         let guid = &request.device_guid;
 
         let network_kind: NetworkKind = (&request.chip_config.network_params).into();
-        if network_kind == NetworkKind::Uwb || network_kind == NetworkKind::Wifi {
+        if network_kind == NetworkKind::Wifi {
             self.streams.push((request.packet_stream, request.packet_sink));
             return Ok(());
         }

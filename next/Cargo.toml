@@ -23,6 +23,7 @@ members = [
   "rootcanal",
   "modem-rs",
   "modem-rs-derive",
+  "uwb",
 ]
 
 [workspace.doc]
