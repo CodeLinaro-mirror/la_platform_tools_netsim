@@ -75,9 +75,10 @@ impl DeviceClient {
 }
 
 // Generate client methods.
-client_method!(DeviceClient => fn create(device: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
-client_method!(DeviceClient => fn ps_create(params: CreateDeviceParams) -> () as DeviceRequest::PsCreate);
+client_method!(DeviceClient => fn create(request: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
+client_method!(DeviceClient => fn ps_create(request: DevicePsCreate) -> () as DeviceRequest::PsCreate);
 client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
+client_method!(DeviceClient => fn update(update: api::DeviceUpdate) -> () as DeviceRequest::Update);
 client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
 
 #[allow(dead_code)]
@@ -87,7 +88,7 @@ pub struct GetVersionMessage {
 
 pub mod api {
     use crate::chips::BleBeacon;
-    use crate::devices::{Device, DeviceConfig};
+    use crate::devices::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
 
     // TODO: Revisit the APIs to separate the Api from the Domain.
@@ -98,20 +99,25 @@ pub mod api {
     }
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-    pub struct PatchDeviceRequest {
-        pub device: Option<Device>,
+    pub struct DeviceUpdate {
+        pub id: u32,
+        pub name: Option<String>,
+        pub visible: Option<bool>,
+        pub position: Option<Position>,
+        pub orientation: Option<Orientation>,
+        // TODO: Consider adding fields/struct for chip-level updates (e.g., Vec<ChipPatch>)
     }
 
     /// The top-level parameters for creating any kind of chip.
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
     pub struct DeviceCreate {
-        pub config: DeviceConfig,
-        pub chip: ChipCreate,
+        pub device_config: DeviceConfig,
+        pub chip: ChipConfig,
     }
 
     // External API for chip creation.
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-    pub struct ChipCreate {
+    pub struct ChipConfig {
         /// The name of the chip.
         pub name: String,
         /// The manufacturer of the chip.
@@ -121,14 +127,14 @@ pub mod api {
         pub chip: Chip,
     }
 
-    impl ChipCreate {
+    impl ChipConfig {
         pub fn new(
             name: impl Into<String>,
             manufacturer: impl Into<String>,
             product_name: impl Into<String>,
             chip: Chip,
-        ) -> ChipCreate {
-            ChipCreate {
+        ) -> ChipConfig {
+            ChipConfig {
                 name: name.into(),
                 manufacturer: manufacturer.into(),
                 product_name: product_name.into(),
@@ -183,16 +189,16 @@ impl DeviceConfig {
     }
 }
 
-pub struct CreateDeviceParams {
+pub struct DevicePsCreate {
     pub device_guid: String,
     pub packet_stream: Option<PacketStream>,
     pub packet_sink: Option<PacketSink>,
     pub device_config: DeviceConfig,
     pub chip_config: ChipConfig,
 }
-impl fmt::Debug for CreateDeviceParams {
+impl fmt::Debug for DevicePsCreate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CreateDeviceParams")
+        f.debug_struct("DevicePsCreate")
             .field("device_guid", &self.device_guid)
             .field("device_config", &self.device_config)
             .field("chip_config", &self.chip_config)
@@ -204,11 +210,11 @@ impl fmt::Debug for CreateDeviceParams {
 /// Defines the message protocol for the device service actor.
 pub enum DeviceRequest {
     /// Create a new device from PacketStream.
-    PsCreate { params: CreateDeviceParams, respond_to: Responder<()> },
+    PsCreate { request: DevicePsCreate, respond_to: Responder<()> },
     /// Create a new device.
     Create {
         /// The parameters for the new device.
-        device: Box<api::DeviceCreate>,
+        request: Box<api::DeviceCreate>,
         /// The channel to send the device ID back on.
         respond_to: Responder<DeviceId>,
     },
@@ -219,8 +225,10 @@ pub enum DeviceRequest {
     },
     /// Update an existing device.
     Update {
-        /// The patch to apply to the device.
-        request: api::PatchDeviceRequest,
+        /// The update to apply to the device.
+        update: api::DeviceUpdate,
+        /// The channel to send the operation result back on.
+        respond_to: Responder<()>,
     },
     /// Delete the chip, removing the device if no other chips are attached.
     Delete {
