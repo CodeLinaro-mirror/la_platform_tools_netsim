@@ -1,7 +1,7 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use crate::args::Args;
-use crate::config::IniFile;
+use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
 use devices::Server as DeviceServer;
@@ -21,13 +21,20 @@ use std::io;
 use std::path::PathBuf;
 use tokio::task::JoinSet;
 
-const INI_FILENAME: &str = "netsim-next.ini";
-
 #[derive(Debug, PartialEq)]
 pub enum RunResult {
-    AlreadyRunning,
     ExitedNormally,
     InitializationError(String),
+}
+
+fn init_error<E: std::fmt::Display>(e: E) -> RunResult {
+    RunResult::InitializationError(e.to_string())
+}
+
+#[derive(Debug)]
+pub enum StartUpMode {
+    Owner(NetsimDaemon, IniFileGuard),
+    Client(NetsimConfig),
 }
 
 // Initialization for linux cuttlefish environment. Cuttelfish passes
@@ -120,10 +127,59 @@ async fn handle_new_connection(
     }
 }
 
+#[cfg(unix)]
+async fn setup_uds_listener(
+    streams: &mut Streams,
+    listener_addresses: &mut HashMap<String, StreamAddress>,
+) -> Result<(), RunResult> {
+    let uds_path = platform::get_runtime_dir().join("netsim.sock");
+    if uds_path.exists() {
+        fs::remove_file(&uds_path).map_err(init_error)?;
+    }
+    if let Some(uds_path_str) = uds_path.to_str() {
+        streams
+            .start_listener("netsim_uds", TransportType::uds(uds_path_str))
+            .await
+            .map_err(init_error)?;
+        info!("Started UDS listener at {}", uds_path.display());
+        if let Some(addr) = streams.listener_address("netsim_uds") {
+            listener_addresses.insert("netsim_uds".to_string(), addr.clone());
+        } else {
+            return Err(RunResult::InitializationError(
+                "Failed to get UDS listener address after creation".to_string(),
+            ));
+        }
+        Ok(())
+    } else {
+        Err(RunResult::InitializationError(format!("Invalid UDS path: {}", uds_path.display())))
+    }
+}
+
+async fn setup_grpc_listener(
+    streams: &mut Streams,
+    listener_addresses: &mut HashMap<String, StreamAddress>,
+    requested_port: u16,
+) -> Result<u16, RunResult> {
+    streams
+        .start_listener("netsim_grpc", TransportType::grpc("0.0.0.0", requested_port))
+        .await
+        .map_err(init_error)?;
+
+    let grpc_addr = streams.listener_address("netsim_grpc").unwrap();
+    let actual_grpc_port = match grpc_addr {
+        StreamAddress::Grpc(addr) => addr.port(),
+        _ => return Err(RunResult::InitializationError("Failed to get gRPC port".to_string())),
+    };
+    info!("Started gRPC listener on port {}", actual_grpc_port);
+    listener_addresses.insert("netsim_grpc".to_string(), grpc_addr.clone());
+    Ok(actual_grpc_port)
+}
+
 /// The main daemon for netsim-next.
 ///
 /// This struct manages the lifecycle of various servers (Bluetooth, Device),
 /// and handles incoming connections using the `packet_stream` crate.
+#[derive(Debug)]
 pub struct NetsimDaemon {
     join_set: JoinSet<()>,
     streams: Streams,
@@ -133,13 +189,13 @@ pub struct NetsimDaemon {
 }
 
 impl NetsimDaemon {
-    /// Creates a new `NetsimDaemon` instance.
+    /// Creates a new `NetsimDaemon` instance or returns config for forwarding.
     ///
-    /// Initializes the logger, acquires a lock file to ensure a single instance,
-    /// sets up listeners for UDS and TCP, and starts the Bluetooth and Device servers.
-    ///
-    /// Returns a `Result` with the `NetsimDaemon` or an error string if initialization fails.
-    pub async fn new() -> Result<(Self, IniFile), RunResult> {
+    /// Returns:
+    /// - `Ok(StartUpMode::Owner)`: Daemon instance, lock acquired.
+    /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not acquired.
+    /// - `Err(RunResult::InitializationError)`: Fatal error.
+    pub async fn new() -> Result<StartUpMode, RunResult> {
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
 
@@ -148,60 +204,66 @@ impl NetsimDaemon {
         info!("netsim startup");
 
         let args = Args::parse();
+        let mut ini_file = IniFile::new().map_err(init_error)?;
 
-        let mut ini_file = IniFile::new(&platform::get_runtime_dir(), INI_FILENAME);
-
-        // 1. Lock: Attempt to acquire the lock.
-        ini_file.try_lock().map_err(|_e| {
-            error!(
-                "Failed to acquire lock on {}. Another instance may be running.",
-                ini_file.path().display()
-            );
-            RunResult::AlreadyRunning
-        })?;
-        info!("Successfully acquired lock on {}", ini_file.path().display());
-
-        // Write initial data to INI file
-        let mut ini_data = HashMap::new();
-        ini_data.insert("daemon_pid".to_string(), std::process::id().to_string());
-        ini_data.insert("status".to_string(), "running".to_string());
-
-        if let Err(e) = ini_file.write(&ini_data) {
-            error!("Failed to write to INI file {}: {}", ini_file.path().display(), e);
-            return Err(RunResult::InitializationError(format!("Failed to write INI file: {}", e)));
+        // Attempt to acquire the singleton lock for the netsim daemon.
+        // The lock file (netsim.ini.lock) is managed by the `named_lock` crate
+        // in a system-wide temporary directory.
+        match ini_file.try_acquire().map_err(init_error)? {
+            // This instance is the Writer (the primary daemon).
+            IniFileAccess::Writer(ini_guard) => {
+                Self::initialize_primary_daemon(ini_guard, args).await
+            }
+            // This instance is a Reader, another daemon is already running.
+            IniFileAccess::Reader(config) => {
+                info!("Lock held by another process. Reading config: {:?}", config);
+                Ok(StartUpMode::Client(config))
+            }
         }
-        info!("Successfully wrote to INI file {}", ini_file.path().display());
+    }
 
+    async fn initialize_primary_daemon(
+        ini_guard: IniFileGuard,
+        args: Args,
+    ) -> Result<StartUpMode, RunResult> {
+        info!("Successfully acquired lock. This instance is the Owner.");
+        let ini_path = ini_guard.path();
+        info!("INI file path: {}", ini_path.display());
+
+        // Remove any potential stale INI file from a previous unclean shutdown.
+        if ini_path.exists() {
+            if let Err(e) = fs::remove_file(ini_path) {
+                log::warn!("Failed to remove stale INI file: {}", e);
+                // Continue anyway, as we will overwrite it
+            }
+        }
+
+        // Initialize listeners (UDS, gRPC).
         let mut listener_addresses = HashMap::new();
         let mut streams = Streams::new();
 
-        // Start UDS listener
         #[cfg(unix)]
-        {
-            let uds_path = platform::get_runtime_dir().join("netsim.sock");
-            if uds_path.exists() {
-                fs::remove_file(&uds_path)
-                    .map_err(|e| RunResult::InitializationError(e.to_string()))?;
-            }
-            if let Some(uds_path_str) = uds_path.to_str() {
-                streams
-                    .start_listener("netsim_uds", TransportType::uds(uds_path_str))
-                    .await
-                    .map_err(|e| RunResult::InitializationError(e.to_string()))?;
-                info!("Started UDS listener at {}", uds_path.display());
-                listener_addresses.insert(
-                    "netsim_uds".to_string(),
-                    streams.listener_address("netsim_uds").unwrap().clone(),
-                );
-            } else {
-                return Err(RunResult::InitializationError(format!(
-                    "Invalid UDS path: {}",
-                    uds_path.display()
-                )));
-            }
+        setup_uds_listener(&mut streams, &mut listener_addresses).await?;
+
+        // gRPC port is determined after the listener starts.
+        let actual_grpc_port =
+            setup_grpc_listener(&mut streams, &mut listener_addresses, args.grpc_port.unwrap_or(0))
+                .await?;
+
+        // Write the current daemon's information to the INI file.
+        // Clients will use this to connect.
+        let mut ini_data = HashMap::from([
+            ("pid".to_string(), std::process::id().to_string()),
+            ("grpc.port".to_string(), actual_grpc_port.to_string()),
+        ]);
+        if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
+            ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
 
-        // TODO: Start TCP listener and add to listener_addresses
+        // Even if stale file removal failed, we can proceed as ini_guard.write will overwrite.
+        ini_guard.write(&ini_data).map_err(init_error)?;
+        info!("Successfully wrote to INI file {}", ini_path.display());
+        // Setup Device Server first to get the client
 
         // Setup Device Server first to get the client
         let (device_server, device_client) = DeviceServer::new(args.no_shutdown);
@@ -222,8 +284,10 @@ impl NetsimDaemon {
         info!("Bluetooth server started");
         join_set.spawn(device_server.run(chip_clients));
         info!("Device server started");
-
-        Ok((Self { join_set, streams, device_client, listener_addresses, args }, ini_file))
+        Ok(StartUpMode::Owner(
+            NetsimDaemon { join_set, streams, device_client, listener_addresses, args },
+            ini_guard,
+        ))
     }
 
     /// Gets the path to the Unix Domain Socket, if one is active.
@@ -235,13 +299,7 @@ impl NetsimDaemon {
     }
 
     /// Runs the main event loop for the daemon.
-    ///
-    /// This function concurrently:
-    /// 1. Listens for and accepts new connections on the configured transports.
-    /// 2. Monitors the health and completion of the spawned server tasks (Bluetooth, Device).
-    ///
-    /// The loop terminates when all essential server tasks in the `JoinSet` have completed.
-    pub async fn run(mut self) {
+    pub async fn run_daemon(mut self) {
         let dc = self.device_client.clone();
         let mut streams = self.streams;
 
@@ -264,8 +322,6 @@ impl NetsimDaemon {
                         }
                         Err(e) => {
                             error!("Error accepting connection: {}. Stopping new connections.", e);
-                            // Optional: Could break here if accept errors are fatal to the whole daemon
-                            // break;
                         }
                     }
                 }
@@ -274,17 +330,14 @@ impl NetsimDaemon {
                 join_result = self.join_set.join_next() => {
                     match join_result {
                         Some(Ok(_)) => {
-                            // A task completed successfully. Keep looping.
                             info!("A server task completed.");
                         }
                         Some(Err(e)) => {
                             error!("A server task panicked: {}", e);
-                            // Optional: Decide if a panicking task should shut down the daemon
-                            // break;
                         }
                         None => {
                             info!("All server tasks in JoinSet have completed. Shutting down.");
-                            break; // Exit the main loop
+                            break;
                         }
                     }
                 }
@@ -294,17 +347,17 @@ impl NetsimDaemon {
     }
 }
 
-/// Runs the netsim daemon.
-///
-/// This is the main entry point for starting the daemon. It creates and runs
-/// the `NetsimDaemon` instance.
-/// Returns `RunResult` indicating the outcome.
 pub async fn run() -> RunResult {
     match NetsimDaemon::new().await {
-        Ok((daemon, _ini_file)) => {
-            // _ini_file is kept in scope to hold the lock
-            daemon.run().await;
+        Ok(StartUpMode::Owner(daemon, _ini_guard)) => {
+            daemon.run_daemon().await;
             RunResult::ExitedNormally
+        }
+        Ok(StartUpMode::Client(config)) => {
+            info!("Another netsimd is running. Will use its config: {:?}", config);
+            info!("Target gRPC port: {}", config.grpc_port);
+            // TODO: Implement client/forwarder logic here for cuttlefish case
+            RunResult::ExitedNormally // Placeholder
         }
         Err(e) => {
             error!("Failed to initialize NetsimDaemon: {:?}", e);

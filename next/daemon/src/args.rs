@@ -37,6 +37,10 @@ pub struct Args {
     /// Print Netsimd version information
     #[arg(long)]
     pub version: bool,
+
+    /// gRPC port for the netsim service
+    #[arg(long, alias = "grpc_port")]
+    pub grpc_port: Option<u16>,
 }
 
 impl Args {

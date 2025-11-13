@@ -24,7 +24,7 @@ rust_library(
     name = "daemon-lib",
     srcs = [
         "src/args.rs",
-        "src/config.rs",
+        "src/ini_file.rs",
         "src/lib.rs",
         "src/logger.rs",
         "src/netsimd.rs",
@@ -67,7 +67,7 @@ rust_binary(
 rust_test(
     name = "tests",
     srcs = [
-        "tests/config_test.rs",
+        "tests/ini_file_test.rs",
         "tests/integration_test.rs",
         "tests/tests.rs",
     ],
