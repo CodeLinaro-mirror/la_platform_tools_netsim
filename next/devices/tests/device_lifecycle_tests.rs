@@ -135,9 +135,9 @@ async fn test_list_devices_inner() {
     let device_config =
         DeviceConfig::new("test_device", true, Default::default(), Default::default());
     assert_eq!(device.name, "test_guid");
-    assert_eq!(device.visible, Some(device_config.visible));
-    assert_eq!(device.position.as_ref(), Some(&device_config.position));
-    assert_eq!(device.orientation.as_ref(), Some(&device_config.orientation));
+    assert_eq!(device.visible, device_config.visible);
+    assert_eq!(device.position, device_config.position);
+    assert_eq!(device.orientation, device_config.orientation);
 
     // TODO: Verify device.chips once the field is populated.
 }

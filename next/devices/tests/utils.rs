@@ -67,7 +67,7 @@ pub fn create_chip_config(mode: BluetoothMode) -> ChipConfig {
         "ps_product",
         NetworkParams::Bluetooth(BluetoothParams {
             address: "11:22:33:44:55:66".to_string(),
-            bt_properties: netsim_proto::configuration::Controller::default(),
+            bt_properties: netsim_api::bluetooth::Controller::default(),
             mode,
         }),
     )
@@ -84,17 +84,12 @@ pub async fn mock_chip_service_response(
 }
 
 pub fn get_test_create_device_request(device_name: String) -> api::DeviceCreate {
-    let chip_create = api::ChipCreate::new(
-        "test-bt-chip",
-        "Netsim",
-        "Netsim BT",
-        api::Chip::Beacon(BleBeacon {
-            address: "00:11:22:33:44:55".to_string(),
-            settings: Default::default(),
-            adv_data: Default::default(),
-            scan_response: Default::default(),
-        }),
-    );
+    let chip_create = api::ChipCreate {
+        name: "beacon".to_string(),
+        manufacturer: "Netsim".to_string(),
+        product_name: "NetsimBeacon".to_string(),
+        chip: api::Chip::Beacon(BleBeacon::default()),
+    };
 
     api::DeviceCreate {
         config: DeviceConfig::new(device_name, true, Default::default(), Default::default()),
