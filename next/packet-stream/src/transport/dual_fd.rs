@@ -115,9 +115,10 @@ impl DualFdListener {
 
 #[async_trait]
 impl TransportListener for DualFdListener {
-    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo)> {
+    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
         match self.pending_streams.pop_front() {
             Some((device_serial, chip_kind, (in_fd, out_fd))) => {
+                let guid = format!("dualfd-{}-{}", device_serial, chip_kind);
                 let chip_info = ChipInfo {
                     device_info: Some(DeviceInfo {
                         name: device_serial.clone(),
@@ -145,7 +146,7 @@ impl TransportListener for DualFdListener {
                     stream.map(|item| item.map(|b| b.freeze()).map_err(PacketStreamError::Io));
                 let sink = sink.sink_map_err(PacketStreamError::Io);
 
-                Ok((Box::pin(stream), Box::pin(sink), chip_info))
+                Ok((Box::pin(stream), Box::pin(sink), chip_info, guid))
             }
             None => std::future::pending().await,
         }

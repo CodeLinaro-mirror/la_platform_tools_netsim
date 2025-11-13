@@ -1,5 +1,6 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+use crate::args::Args;
 use crate::config::IniFile;
 use crate::logger;
 use crate::platform;
@@ -7,7 +8,7 @@ use devices::Server as DeviceServer;
 use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use netsim_api::chips::{
-    BluetoothMode, BluetoothParams, ChipConfig, DeviceParams, NetworkParams,
+    BluetoothMode, BluetoothParams, ChipConfig, DeviceParams, NetworkKind, NetworkParams,
     PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
 };
 use netsim_api::devices::{DeviceClient, DeviceConfig, DevicePsCreate};
@@ -49,11 +50,10 @@ async fn handle_new_connection(
     stream: PacketStream,
     sink: PacketSink,
     chip_info: ChipInfo,
+    device_guid: String,
 ) {
     info!("Handling new connection for {:?}, device {}", chip_info.name, chip_info.device_name());
 
-    let device_guid =
-        chip_info.device_info.as_ref().map_or("unknown_device".to_string(), |d| d.id.clone());
     let device_config = DeviceConfig {
         name: chip_info
             .device_info
@@ -129,6 +129,7 @@ pub struct NetsimDaemon {
     streams: Streams,
     device_client: DeviceClient,
     listener_addresses: HashMap<String, StreamAddress>,
+    args: Args,
 }
 
 impl NetsimDaemon {
@@ -146,6 +147,8 @@ impl NetsimDaemon {
 
         info!("netsim startup");
 
+        let args = Args::parse();
+
         let mut ini_file = IniFile::new(&platform::get_runtime_dir(), INI_FILENAME);
 
         // 1. Lock: Attempt to acquire the lock.
@@ -157,6 +160,17 @@ impl NetsimDaemon {
             RunResult::AlreadyRunning
         })?;
         info!("Successfully acquired lock on {}", ini_file.path().display());
+
+        // Write initial data to INI file
+        let mut ini_data = HashMap::new();
+        ini_data.insert("daemon_pid".to_string(), std::process::id().to_string());
+        ini_data.insert("status".to_string(), "running".to_string());
+
+        if let Err(e) = ini_file.write(&ini_data) {
+            error!("Failed to write to INI file {}: {}", ini_file.path().display(), e);
+            return Err(RunResult::InitializationError(format!("Failed to write INI file: {}", e)));
+        }
+        info!("Successfully wrote to INI file {}", ini_file.path().display());
 
         let mut listener_addresses = HashMap::new();
         let mut streams = Streams::new();
@@ -189,18 +203,27 @@ impl NetsimDaemon {
 
         // TODO: Start TCP listener and add to listener_addresses
 
+        // Setup Device Server first to get the client
+        let (device_server, device_client) = DeviceServer::new(args.no_shutdown);
+        info!("Device server created");
+
         // Setup Bluetooth Server
-        let (bt_server, bt_client) = bluetooth::Server::new();
+        let (bt_server, bt_client) = bluetooth::Server::new(device_client.clone());
+        info!("Bluetooth server created");
+
+        // Prepare chip clients map for DeviceServer
+        let mut chip_clients = HashMap::new();
+        chip_clients.insert(NetworkKind::Bluetooth, bt_client);
+        // TODO: Add other chip clients (WiFi, Cell, etc.) here
+
+        // Spawn server tasks
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_server.run());
         info!("Bluetooth server started");
-
-        // Setup Device Server
-        let (device_server, device_client) = DeviceServer::new(bt_client);
-        join_set.spawn(device_server.run());
+        join_set.spawn(device_server.run(chip_clients));
         info!("Device server started");
 
-        Ok((Self { join_set, streams, device_client, listener_addresses }, ini_file))
+        Ok((Self { join_set, streams, device_client, listener_addresses, args }, ini_file))
     }
 
     /// Gets the path to the Unix Domain Socket, if one is active.
@@ -222,12 +245,14 @@ impl NetsimDaemon {
         let dc = self.device_client.clone();
         let mut streams = self.streams;
 
+        info!("Netsimd started {}", if self.args.no_shutdown { "--no-shutdown" } else { "" });
+
         loop {
             tokio::select! {
                 // Branch 1: Wait for a new connection
                 accept_result = streams.accept_any() => {
                     match accept_result {
-                        Ok((listener_name, (stream, sink, chip_info))) => {
+                        Ok((listener_name, (stream, sink, chip_info, guid))) => {
                             info!(
                                 "Accepted connection on {}: from {}",
                                 listener_name,
@@ -235,7 +260,7 @@ impl NetsimDaemon {
                             );
                             let device_client = dc.clone();
                             // Await connection handling directly in the main loop
-                            handle_new_connection(device_client, stream, sink, chip_info).await;
+                            handle_new_connection(device_client, stream, sink, chip_info, guid).await;
                         }
                         Err(e) => {
                             error!("Error accepting connection: {}. Stopping new connections.", e);
@@ -266,13 +291,6 @@ impl NetsimDaemon {
             }
         }
         info!("NetsimDaemon main loop exited.");
-
-        let (bt_server, bt_client) = bluetooth::Server::new();
-        let (devices_server, _devices_client) = devices::Server::new(bt_client);
-        self.join_set.spawn(bt_server.run());
-        info!("bluetooth server started");
-        self.join_set.spawn(devices_server.run());
-        info!("devices server started");
     }
 }
 

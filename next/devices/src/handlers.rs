@@ -2,6 +2,7 @@
 
 use crate::server::{DeviceInfo, Server};
 use log::info;
+use netsim_api::chips::ChipId;
 use netsim_api::{
     chips::{
         BeaconParams, BluetoothMode, BluetoothParams, ChipConfig, CreateParams as ChipCreateParams,
@@ -30,6 +31,14 @@ impl Server {
             }
             DeviceRequest::Delete { id, respond_to } => {
                 respond_to.send(self.handle_delete(id).await).ok();
+            }
+            DeviceRequest::NotifyChipRemoved { chip_id, respond_to } => {
+                if let Err(e) = self.handle_notify_chip_removed(chip_id) {
+                    log::error!("Failed to handle NotifyChipRemoved: {}", e);
+                }
+                if let Some(r) = respond_to {
+                    r.send(()).ok();
+                }
             }
             DeviceRequest::Reset {} => {}
             DeviceRequest::GetChipStatistics { respond_to: _ } => {}
@@ -181,23 +190,66 @@ impl Server {
         info!("Updated device {:?} to config: {:?}", device_id, device_info.device_config);
         Ok(())
     }
-
+    /// Starts the deletion process for a user-created device.
+    ///
+    /// Sends delete commands to all associated chip services. The device is fully
+    /// removed only after all chips confirm deletion via `NotifyChipRemoved`.
+    ///
+    /// Returns an error if the device ID is not found or if it's a system-managed
+    /// device (e.g., created via `PsCreate`, has a GUID).
+    ///
+    /// TODO: Implement a timeout mechanism here. If NotifyChipRemoved isn't
+    /// received within a certain period for any chip, forcefully clean up the
+    /// device state to prevent hangs.
     async fn handle_delete(&mut self, id: DeviceId) -> Result<(), DeviceError> {
-        let mut device_info = self
+        let device_info = self
             .devices_by_id
-            .remove(&id)
+            .get(&id)
             .ok_or(DeviceError::InvalidArguments(format!("Device {id} not found")))?;
-        for chip_id in device_info.chips.drain() {
+
+        if device_info.guid.is_some() {
+            return Err(DeviceError::InvalidArguments(format!(
+                "Device {id} is a PsCreate device and cannot be deleted directly."
+            )));
+        }
+
+        // Clone the chip IDs to avoid borrowing issues while iterating and calling async functions.
+        let chip_ids: Vec<ChipId> = device_info.chips.iter().cloned().collect();
+
+        for chip_id in chip_ids {
             let chip_info = self
                 .chip_info_map
-                .remove(&chip_id)
+                .get(&chip_id)
                 .ok_or(DeviceError::Internal(format!("Chip {chip_id} not found")))?;
 
             self.get_chip_client(chip_info.kind)?.delete(chip_id).await?;
         }
-        info!("Deleted device {:?}", id);
+        info!("Initiated deletion for all chips on device {:?}", id);
+        Ok(())
+    }
+
+    fn handle_notify_chip_removed(&mut self, chip_id: ChipId) -> Result<(), DeviceError> {
+        let device_id = match self.chip_info_map.remove(&chip_id) {
+            Some(chip_info) => chip_info.device_id,
+            None => {
+                log::warn!("Chip {chip_id} not in map");
+                return Ok(());
+            }
+        };
+
+        if let Some(device_info) = self.devices_by_id.get_mut(&device_id) {
+            if !device_info.chips.remove(&chip_id) {
+                log::warn!("Chip {chip_id} device {device_id} mismatch");
+            } else if device_info.chips.is_empty() {
+                info!("Device {:?} became empty, removing.", device_id);
+                self.delete_device(device_id);
+            }
+        } else {
+            log::warn!("Device {device_id} for chip {chip_id} not found");
+        }
 
         if self.chip_info_map.is_empty() {
+            info!("No chips left, starting idle alarm.");
             self.start_idle_alarm();
         }
         Ok(())

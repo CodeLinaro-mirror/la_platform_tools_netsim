@@ -27,8 +27,8 @@ pub struct Streams {
     listener_tasks: HashMap<String, JoinHandle<()>>,
     listener_addresses: HashMap<String, StreamAddress>,
     shutdown_tx: broadcast::Sender<()>,
-    connection_rx: mpsc::UnboundedReceiver<(String, (PacketStream, PacketSink, ChipInfo))>,
-    connection_tx: mpsc::UnboundedSender<(String, (PacketStream, PacketSink, ChipInfo))>,
+    connection_rx: mpsc::UnboundedReceiver<(String, (PacketStream, PacketSink, ChipInfo, String))>,
+    connection_tx: mpsc::UnboundedSender<(String, (PacketStream, PacketSink, ChipInfo, String))>,
 }
 
 impl Default for Streams {
@@ -113,7 +113,9 @@ impl Streams {
         Ok(())
     }
 
-    pub async fn accept_any(&mut self) -> Result<(String, (PacketStream, PacketSink, ChipInfo))> {
+    pub async fn accept_any(
+        &mut self,
+    ) -> Result<(String, (PacketStream, PacketSink, ChipInfo, String))> {
         match self.connection_rx.recv().await {
             Some((listener_name, stream_tuple)) => Ok((listener_name, stream_tuple)),
             None => Err(crate::error::PacketStreamError::ConnectionClosed),

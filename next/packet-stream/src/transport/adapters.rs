@@ -13,6 +13,7 @@ use futures::SinkExt;
 use netsim_api::initial_info::ChipInfo;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, UnixListener};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
@@ -34,8 +35,9 @@ impl TcpTransportListener {
 
 #[async_trait]
 impl TransportListener for TcpTransportListener {
-    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo)> {
-        let (stream, _) = self.inner.accept().await?;
+    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
+        let (stream, peer_addr) = self.inner.accept().await?;
+        let guid = peer_addr.to_string();
         let framed = Framed::new(stream, LengthDelimitedCodec::new());
         let (sink, mut stream) = framed.split();
 
@@ -50,7 +52,7 @@ impl TransportListener for TcpTransportListener {
         let stream = stream.map(|item| item.map(|b| b.freeze()).map_err(PacketStreamError::Io));
         let sink = sink.sink_map_err(PacketStreamError::Io);
 
-        Ok((Box::pin(stream), Box::pin(sink), init_info.chip_info))
+        Ok((Box::pin(stream), Box::pin(sink), init_info.chip_info, guid))
     }
 
     fn local_addr(&self) -> Result<StreamAddress> {
@@ -66,6 +68,7 @@ impl TransportListener for TcpTransportListener {
 pub struct UdsTransportListener {
     inner: UnixListener,
     path: PathBuf,
+    conn_counter: Arc<Mutex<u64>>,
 }
 
 impl UdsTransportListener {
@@ -75,13 +78,13 @@ impl UdsTransportListener {
             std::fs::remove_file(&path_buf)?;
         }
         let listener = UnixListener::bind(&path_buf)?;
-        Ok(Self { inner: listener, path: path_buf })
+        Ok(Self { inner: listener, path: path_buf, conn_counter: Arc::new(Mutex::new(0)) })
     }
 }
 
 #[async_trait]
 impl TransportListener for UdsTransportListener {
-    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo)> {
+    async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
         let (stream, _) = self.inner.accept().await?;
         let framed = Framed::new(stream, LengthDelimitedCodec::new());
         let (sink, mut stream) = framed.split();
@@ -97,7 +100,11 @@ impl TransportListener for UdsTransportListener {
         let stream = stream.map(|item| item.map(|b| b.freeze()).map_err(PacketStreamError::Io));
         let sink = sink.sink_map_err(PacketStreamError::Io);
 
-        Ok((Box::pin(stream), Box::pin(sink), init_info.chip_info))
+        let mut count = self.conn_counter.lock().unwrap();
+        let guid = format!("uds-{}", *count);
+        *count += 1;
+
+        Ok((Box::pin(stream), Box::pin(sink), init_info.chip_info, guid))
     }
 
     fn local_addr(&self) -> Result<StreamAddress> {

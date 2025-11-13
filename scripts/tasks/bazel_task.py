@@ -81,15 +81,15 @@ class BazelTask(Task):
 
     build_configs = [f"--config={c}" for c in configs]
 
-    def _run_bazel(action, targets):
+    def _run_bazel(action, targets, extra_args=[]):
       run(
-          [self.path, action] + targets + build_configs,
+          [self.path, action] + targets + build_configs + extra_args,
           self.env,
           f"bazel {action}",
           AOSP_ROOT,
       )
 
     _run_bazel("build", self.targets)
-    _run_bazel("test", self.targets)
+    _run_bazel("test", self.targets, extra_args=["--test_output=streamed"])
 
     return True

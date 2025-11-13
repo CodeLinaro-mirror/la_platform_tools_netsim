@@ -43,7 +43,7 @@ async fn test_graceful_client_disconnect() {
     .unwrap()
     .unwrap();
 
-    let (_name, (mut server_stream, _, _)) =
+    let (_name, (mut server_stream, _, _, _guid)) =
         timeout(Duration::from_secs(5), streams.accept_any()).await.unwrap().unwrap();
 
     let test_data = b"Connection established";
@@ -75,7 +75,7 @@ async fn test_abrupt_client_disconnect() {
     .unwrap()
     .unwrap();
 
-    let (_name, (mut server_stream, _, _)) =
+    let (_name, (mut server_stream, _, _, _guid)) =
         timeout(Duration::from_secs(5), streams.accept_any()).await.unwrap().unwrap();
 
     let test_data = b"Before disconnect";
@@ -138,9 +138,9 @@ async fn test_multiple_client_disconnect() {
     .unwrap()
     .unwrap();
 
-    let (_name1, (mut server1_stream, _, _)) =
+    let (_name1, (mut server1_stream, _, _, _guid1)) =
         timeout(Duration::from_secs(5), streams.accept_any()).await.unwrap().unwrap();
-    let (_name2, (mut server2_stream, _, _)) =
+    let (_name2, (mut server2_stream, _, _, _guid2)) =
         timeout(Duration::from_secs(5), streams.accept_any()).await.unwrap().unwrap();
 
     client1_sink.send(Bytes::from_static(b"Client 1 message")).await.unwrap();
@@ -213,7 +213,7 @@ async fn test_connection_resource_cleanup() {
         .unwrap()
         .unwrap();
 
-        let (_name, (server_stream, server_sink, _)) =
+        let (_name, (server_stream, server_sink, _, _guid)) =
             timeout(Duration::from_secs(5), streams.accept_any()).await.unwrap().unwrap();
 
         drop(client_stream);

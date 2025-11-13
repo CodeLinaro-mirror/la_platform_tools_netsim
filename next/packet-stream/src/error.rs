@@ -3,6 +3,7 @@
 // src/error.rs - Custom error types for better error handling
 //=============================================================================
 
+use grpcio;
 use std::fmt;
 
 /// Main error type for the PacketStream framework
@@ -16,6 +17,8 @@ pub enum PacketStreamError {
     InvalidConfig(String),
     /// IO errors from underlying streams
     Io(std::io::Error),
+    /// gRPC-related errors
+    Grpc(grpcio::Error),
     /// Connection was closed unexpectedly
     ConnectionClosed,
     /// Operation timed out
@@ -57,6 +60,7 @@ impl fmt::Display for PacketStreamError {
             PacketStreamError::Protocol(e) => write!(f, "Protocol error: {e}"),
             PacketStreamError::InvalidConfig(e) => write!(f, "Invalid configuration: {e}"),
             PacketStreamError::Io(e) => write!(f, "IO error: {e}"),
+            PacketStreamError::Grpc(e) => write!(f, "gRPC error: {e}"),
             PacketStreamError::ConnectionClosed => write!(f, "Connection closed"),
             PacketStreamError::Timeout => write!(f, "Operation timed out"),
         }
@@ -126,6 +130,12 @@ impl From<tokio::time::error::Elapsed> for PacketStreamError {
     }
 }
 
+impl From<tokio::task::JoinError> for PacketStreamError {
+    fn from(err: tokio::task::JoinError) -> Self {
+        PacketStreamError::Io(std::io::Error::new(std::io::ErrorKind::Other, err.to_string()))
+    }
+}
+
 impl<T> From<tokio::sync::mpsc::error::SendError<T>> for PacketStreamError {
     fn from(err: tokio::sync::mpsc::error::SendError<T>) -> Self {
         PacketStreamError::Io(std::io::Error::new(std::io::ErrorKind::BrokenPipe, err.to_string()))
@@ -141,6 +151,12 @@ impl From<SocketError> for PacketStreamError {
 impl From<ProtocolError> for PacketStreamError {
     fn from(err: ProtocolError) -> Self {
         PacketStreamError::Protocol(err)
+    }
+}
+
+impl From<grpcio::Error> for PacketStreamError {
+    fn from(err: grpcio::Error) -> Self {
+        PacketStreamError::Grpc(err)
     }
 }
 

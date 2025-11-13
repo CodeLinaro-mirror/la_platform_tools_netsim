@@ -10,38 +10,47 @@ use netsim_api::{
     chip_error::ChipError,
     chips::{
         BleBeacon, BluetoothMode, BluetoothParams, ChipClient, ChipConfig, ChipRequest,
-        DeviceParams, NetworkParams,
+        DeviceParams, NetworkKind, NetworkParams,
     },
     devices::{api, DeviceClient, DeviceConfig, DevicePsCreate},
 };
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::{sync::mpsc, task::JoinHandle};
 
 /// Encapsulates the common setup for a test environment.
 pub struct TestFixture {
     pub client: DeviceClient,
-    pub server_task: JoinHandle<()>,
     pub chip_rx: mpsc::Receiver<ChipRequest>,
+    pub server_task: JoinHandle<()>,
+}
+
+// TODO: Simplify tests by using a mock that records the messages
+// received by the server and has a method to fetch those messages
+fn mock_chip_client() -> (ChipClient, mpsc::Receiver<ChipRequest>) {
+    let (chip_tx, chip_rx) = mpsc::channel(10);
+    (ChipClient::new(chip_tx), chip_rx)
 }
 
 /// Sets up a test environment with a running server and a client.
 pub fn setup() -> TestFixture {
-    let (chip_tx, chip_rx) = mpsc::channel(10);
-    // TODO: Replace with MockChipServer to reduce boilerplate. It could remember the last command received.
-    let bt_client = ChipClient::new(chip_tx);
-    let (server, client) = Server::new(bt_client);
-    let server_task = tokio::spawn(server.run());
-    TestFixture { client, server_task, chip_rx }
+    let (server, device_client) = Server::new(false);
+    let (bt_client, chip_rx) = mock_chip_client();
+    let mut chip_clients = HashMap::new();
+    chip_clients.insert(NetworkKind::Bluetooth, bt_client.clone());
+    let server_task = tokio::spawn(server.run(chip_clients));
+    TestFixture { client: device_client, chip_rx, server_task }
 }
 
 /// Sets up a test environment for idle shutdown tests with custom timeouts.
 pub fn setup_for_idle_test() -> TestFixture {
-    let (chip_tx, chip_rx) = mpsc::channel(10);
-    let bt_client = ChipClient::new(chip_tx);
-    let (server, client) =
-        Server::new_with_timeouts(bt_client, Duration::from_millis(10), Duration::from_millis(10));
-    let server_task = tokio::spawn(server.run());
-    TestFixture { client, server_task, chip_rx }
+    let (server, device_client) =
+        Server::new_with_timeouts(Duration::from_millis(10), Duration::from_millis(10));
+    let (bt_client, chip_rx) = mock_chip_client();
+    let mut chip_clients = HashMap::new();
+    chip_clients.insert(NetworkKind::Bluetooth, bt_client.clone());
+    let server_task = tokio::spawn(server.run(chip_clients));
+    TestFixture { client: device_client, chip_rx, server_task }
 }
 
 /// Helper to create a default `DevicePsCreate` for tests.
@@ -56,7 +65,7 @@ pub fn create_test_ps_device_params() -> DevicePsCreate {
             Default::default(),
             Default::default(),
         ),
-        chip_config: create_chip_config(BluetoothMode::Device(DeviceParams {})),
+        chip_config: create_chip_config(BluetoothMode::Device(DeviceParams::default())),
     }
 }
 
@@ -73,13 +82,17 @@ pub fn create_chip_config(mode: BluetoothMode) -> ChipConfig {
     )
 }
 
-/// Helper to mock the chip service's response for a single `Create` request.
+/// Helper to mock the chip service's response for a single request.
 pub async fn mock_chip_service_response(
     mut chip_rx: mpsc::Receiver<ChipRequest>,
     response: Result<(), ChipError>,
 ) {
-    if let Some(ChipRequest::Create { respond_to, .. }) = chip_rx.recv().await {
-        respond_to.send(response).unwrap();
+    if let Some(msg) = chip_rx.recv().await {
+        match msg {
+            ChipRequest::Create { respond_to, .. } => respond_to.send(response).unwrap(),
+            ChipRequest::Delete { respond_to, .. } => respond_to.send(response).unwrap(),
+            _ => panic!("Unexpected ChipRequest variant in mock"),
+        }
     }
 }
 
