@@ -48,6 +48,8 @@ fi
 REPO="$(dirname "$0")/../../.."
 OS=$(uname | tr '[:upper:]' '[:lower:]')
 
+DESIRED_TAPLO_VERSION="0.10.0"
+
 # Function to run a formatter in the background
 format() {
   local name="$1"
@@ -55,12 +57,37 @@ format() {
   shift 2
   local files=("$@")
 
+  local executable
+  executable=$(echo "$cmd" | awk '{print $1}')
+  if ! command -v "$executable" &> /dev/null; then
+    echo "Error: '$executable' not found, skipping $name file formatting."
+    return 0
+  fi
+
   if [ ${#files[@]} -gt 0 ]; then
     echo "Formatting ${#files[@]} $name files..."
     $cmd "${files[@]}" &
     pids+=($!)
   fi
 }
+
+# Function to check taplo-cli installation and version
+check_taplo_version() {
+
+  if ! command -v taplo &> /dev/null; then
+    echo "Error: 'taplo' not found. Install with: cargo install taplo-cli --version ${DESIRED_TAPLO_VERSION} --locked"
+    exit 1
+  fi
+
+  local INSTALLED_VERSION=$(taplo --version | awk '{print $2}')
+  if [ "$INSTALLED_VERSION" != "$DESIRED_TAPLO_VERSION" ]; then
+    echo "Error: Found taplo version ${INSTALLED_VERSION}, but ${DESIRED_TAPLO_VERSION} is required for consistent formatting."
+    echo "Please install the correct version by running: cargo install taplo-cli --version ${DESIRED_TAPLO_VERSION} --locked --force"
+    exit 1
+  fi
+}
+
+check_taplo_version
 
 # Populate file lists based on mode
 if $FORMAT_ALL; then
@@ -72,6 +99,7 @@ if $FORMAT_ALL; then
   mapfile -d '' cmake_files < <(find . -type f \( -name 'CMakeLists.txt' -o -name '*.cmake' \) -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
   mapfile -d '' bp_files < <(find . -maxdepth 1 -type f -name "Android.bp" -print0)
   mapfile -d '' bazel_files < <(find . -type f \( -name "BUILD" -o -name "MODULE.bazel" -o -name "BUILD.bazel" \) -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
+  mapfile -d '' toml_files < <(find rust next -type f -name 'Cargo.toml' -not -path "*/target/*" -not -path "*/bazel-bin/*" -not -path "*/bazel-netsim/*" -not -path "*/bazel-out/*" -not -path "*/objs/*" -print0)
 else
   echo "Gathering changed files to format..."
   mapfile -t files < <(git diff --name-only --diff-filter=ACMRTUXB HEAD && git ls-files --others --exclude-standard)
@@ -81,6 +109,14 @@ else
     exit 0
   fi
 
+  clang_files=()
+  rust_files=()
+  java_files=()
+  py_files=()
+  cmake_files=()
+  bp_files=()
+  bazel_files=()
+  toml_files=()
   for f in "${files[@]}"; do
     [[ "$f" =~ \.(cc|h|proto|ts)$ ]] && clang_files+=("$f")
     [[ "$f" =~ \.rs$ ]] && rust_files+=("$f")
@@ -89,8 +125,11 @@ else
     [[ "$f" =~ CMakeLists\.txt$|\.cmake$ ]] && cmake_files+=("$f")
     [[ "$f" =~ Android\.bp$ ]] && bp_files+=("$f")
     [[ "$f" =~ BUILD$|MODULE\.bazel$|BUILD\.bazel$ ]] && bazel_files+=("$f")
+    [[ "$f" =~ Cargo\.toml$ ]] && toml_files+=("$f")
   done
 fi
+
+check_taplo_version
 
 # Run formatters in parallel
 pids=()
@@ -102,16 +141,9 @@ format "Rust" "$RUSTFMT --files-with-diff" "${rust_files[@]}"
 format "Java" "google-java-format -i" "${java_files[@]}"
 format "Python" "pyformat --in_place --alsologtostderr --noshowprefixforinfo" "${py_files[@]}"
 format "CMake" "cmake-format -i" "${cmake_files[@]}"
-
-if [ -f "$BPFMT" ]; then
-  format "Android.bp" "$BPFMT -w" "${bp_files[@]}"
-fi
-
-if command -v buildifier &> /dev/null; then
-  format "Bazel" "buildifier -lint=fix" "${bazel_files[@]}"
-else
-  echo "buildifier not found, skipping Bazel file formatting."
-fi
+format "Android.bp" "$BPFMT -w" "${bp_files[@]}"
+format "Bazel" "buildifier -lint=fix" "${bazel_files[@]}"
+format "TOML" "taplo fmt" "${toml_files[@]}"
 
 echo "Waiting for formatters to finish..."
 for pid in "${pids[@]}"; do

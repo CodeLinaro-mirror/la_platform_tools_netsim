@@ -6,7 +6,9 @@ name = "netsim-proto"
 
 [dependencies]
 protobuf = "=3.2.0"
-grpcio =  {version= "0.13.0", default-features = false, features = ["protobufv3-codec"]}
+grpcio = { version = "0.13.0", default-features = false, features = [
+  "protobufv3-codec",
+] }
 
 [build-dependencies]
 ##protobuf = "=3.2.0"
@@ -14,5 +16,5 @@ grpcio =  {version= "0.13.0", default-features = false, features = ["protobufv3-
 
 [lib]
 path = "src/lib.rs"
-crate-type = ["staticlib","lib"]
+crate-type = ["staticlib", "lib"]
 doctest = false
