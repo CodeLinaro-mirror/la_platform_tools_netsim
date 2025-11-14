@@ -38,6 +38,7 @@ rust_library(
         "//next/netsim-api",
         "//next/packet-stream",
         "//next/uwb",
+        "//next/wifi",
         "@chrono",
         "@clap",
         "@env_logger",
