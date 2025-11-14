@@ -15,7 +15,7 @@ use crate::utils::ToChipError;
 use log::debug;
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{Chip, ChipId, SnifferParams};
-use rootcanal::{controller::Idc, Rootcanal};
+use rootcanal::Rootcanal;
 
 /// A stateless struct that provides the behavior for a Bluetooth sniffer.
 pub(crate) fn create(
@@ -26,10 +26,10 @@ pub(crate) fn create(
     debug!("[{chip_id}] Setting up sniffer chip");
     // Enable scanning on the new controller.
     debug!("[{chip_id}] Enabling scanning");
-    let scan_params = vec![0x12, 0x20, 7, 0x01, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00];
-    rootcanal.receive_hci(chip_id.into(), Idc::Cmd, &scan_params).to_chip_error()?;
-    let scan_enable = vec![0x0c, 0x20, 2, 0x01, 0x00];
-    rootcanal.receive_hci(chip_id.into(), Idc::Cmd, &scan_enable).to_chip_error()?;
+    let scan_params = vec![0x1, 0x12, 0x20, 7, 0x01, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00];
+    rootcanal.receive_hci(chip_id.into(), scan_params.into()).to_chip_error()?;
+    let scan_enable = vec![0x01, 0x0c, 0x20, 2, 0x01, 0x00];
+    rootcanal.receive_hci(chip_id.into(), scan_enable.into()).to_chip_error()?;
     Ok(())
 }
 

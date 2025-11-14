@@ -6,7 +6,8 @@ use crate::controller::Callbacks as ControllerCallbacks;
 use crate::controller::Id as ControllerId;
 use crate::controller::{BtOps, Controller, ControllerImpl, Stats};
 use crate::error::{Error, Result};
-use crate::types::{Address, Idc, Phy};
+use crate::types::{Address, Phy};
+use bytes::Bytes;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
 
@@ -159,13 +160,13 @@ impl Rootcanal {
     }
 
     /// Receives an HCI packet from the host for a specific controller.
-    pub fn receive_hci(&self, controller_id: ControllerId, idc: Idc, data: &[u8]) -> Result<()> {
+    pub fn receive_hci(&self, controller_id: ControllerId, h4_packet: Bytes) -> Result<()> {
         self.controllers
             .lock()
             .unwrap()
             .get(&controller_id)
             .ok_or(Error::ControllerNotFound(controller_id))
-            .map(|controller| controller.receive_hci(idc, data))
+            .map(|controller| controller.receive_hci(h4_packet))
     }
 
     /// Returns the address of a specific controller.
@@ -208,7 +209,7 @@ impl Default for Rootcanal {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::types::{Address, Idc};
+    use crate::types::Address;
     use std::ffi::c_int;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -258,7 +259,7 @@ pub(crate) mod tests {
 
     struct MockControllerCallbacks;
     impl ControllerCallbacks for MockControllerCallbacks {
-        fn send_hci(&self, _source_id: ControllerId, _idc: Idc, _data: &[u8]) {}
+        fn send_hci(&self, _source_id: ControllerId, _h4_packet: &[u8]) {}
         fn on_receive_ll(&self, _sender_id: ControllerId, _packet: &[u8], _phy: Phy, _rssi: i32) {}
         fn invalid_packet_received(
             &self,
@@ -399,7 +400,7 @@ pub(crate) mod tests {
         let bluetooth = Bluetooth::new(callbacks);
         setup_bluetooth_with_controllers(&bluetooth, 1);
 
-        let result = bluetooth.receive_hci(2, Idc::Cmd, &[1, 2, 3]);
+        let result = bluetooth.receive_hci(2, &[1, 1, 2, 3]);
         assert!(result.is_err());
         match result.err().unwrap() {
             Error::ControllerNotFound(id) => assert_eq!(id, 2),
