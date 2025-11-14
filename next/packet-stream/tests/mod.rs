@@ -3,7 +3,8 @@
 // tests/mod.rs - Integration test suite entry point
 //=============================================================================
 
-pub mod integration_tests;
-pub mod test_connection_lifecycle;
-pub mod test_dual_fd_final;
-pub mod test_init_info;
+mod integration_tests;
+mod test_connection_lifecycle;
+mod test_dual_fd_final;
+mod test_grpc;
+mod test_init_info;

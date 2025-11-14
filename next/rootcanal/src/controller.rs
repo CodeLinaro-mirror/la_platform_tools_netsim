@@ -1,6 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-//! This module defines the [`Controller`] struct, which represents a Bluetooth
+//! This module defines the `Controller` struct, which represents a Bluetooth
 //! controller.
 
 pub use crate::types::Idc;

@@ -33,6 +33,8 @@ pub enum StreamAddress {
     Uds(PathBuf),
     /// Raw file descriptors (from cuttlefish)
     Fd { in_fd: i32, out_fd: Option<i32> },
+    /// gRPC endpoint address
+    Grpc(SocketAddr),
 }
 
 impl std::fmt::Display for StreamAddress {
@@ -44,6 +46,7 @@ impl std::fmt::Display for StreamAddress {
                 Some(out_fd) => write!(f, "fd://{in_fd}:{out_fd}"),
                 None => write!(f, "fd://{in_fd}"),
             },
+            StreamAddress::Grpc(addr) => write!(f, "grpc://{addr}"),
         }
     }
 }

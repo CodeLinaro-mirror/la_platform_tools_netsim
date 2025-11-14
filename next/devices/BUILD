@@ -19,7 +19,6 @@ package(default_visibility = ["//visibility:public"])
 DEVICES_DEPS = [
     "//next/bluetooth",
     "//next/netsim-api",
-    "//next/proto",
     "@bytes",
     "@chrono",
     "@futures",

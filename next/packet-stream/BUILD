@@ -31,9 +31,13 @@ rust_library(
     ],
     deps = [
         "//next/netsim-api",
+        "//next/proto",
         "@bytes",
         "@futures",
+        "@futures-util",
+        "@grpcio",
         "@libc",
+        "@protobuf-rust",
         "@rand",
         "@serde",
         "@serde_json",
@@ -48,9 +52,13 @@ rust_library(
 )
 
 rust_test(
-    name = "unit_tests",
+    name = "unit-tests",
     crate = ":packet-stream",
     edition = "2021",
+    rustc_flags = [
+        "-C",
+        "link-arg=-lc",
+    ],
     tags = ["general_tests"],
     deps = [
         "@bytes",
@@ -64,17 +72,36 @@ rust_test(
 
 rust_test(
     name = "tests",
-    srcs = glob(["tests/**/*.rs"]),
+    srcs = [
+        "tests/integration_tests.rs",
+        "tests/mod.rs",
+        "tests/test_connection_lifecycle.rs",
+        "tests/test_dual_fd_final.rs",
+        "tests/test_grpc.rs",
+        "tests/test_init_info.rs",
+    ],
     crate_root = "tests/mod.rs",
     edition = "2021",
     proc_macro_deps = ["@async-trait"],
-    tags = ["general_tests"],
+    rustc_flags = [
+        "-C",
+        "link-arg=-lc",
+    ],
+    tags = [
+        "general_tests",
+        "requires-network",
+    ],
     deps = [
         ":packet-stream",
+        ":unit-tests",
+        "//next/netsim-api",
+        "//next/proto",
         "@bytes",
         "@futures",
+        "@grpcio",
         "@serde_json",
         "@tokio",
+        "@tokio-stream",
     ] + select({
         "@platforms//os:linux": ["@rustutils"],
         "//conditions:default": [],

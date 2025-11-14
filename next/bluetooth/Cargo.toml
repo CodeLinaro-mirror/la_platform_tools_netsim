@@ -5,16 +5,20 @@ edition = "2021"
 
 [lib]
 path = "src/lib.rs"
-crate-type = ["staticlib","lib"]
+crate-type = ["staticlib", "lib"]
 
 [dependencies]
 netsim-api = { path = "../netsim-api" }
 rootcanal = { path = "../rootcanal" }
 protobuf = "3.6.0"
 thiserror = "1.0"
-tokio = { version = "1.32.0", default-features = false, features = ["rt", "time", "sync", "macros"] }
+tokio = { version = "1.32.0", default-features = false, features = [
+  "rt",
+  "time",
+  "sync",
+  "macros",
+] }
 zerocopy = "0.8.25"
-netsim-proto = { path = "../proto" }
 hex = "0.4.3"
 bytes = "1.4.0"
 log = "0.4.17"

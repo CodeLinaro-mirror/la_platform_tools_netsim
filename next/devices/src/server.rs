@@ -38,6 +38,7 @@ use tokio::time::{self, Instant, Sleep};
 
 const DEFAULT_START_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_TIMEOUT: Duration = Duration::from_secs(u32::MAX as u64);
 
 /// The `Server` is the central actor in the device service, responsible for
 /// managing the state of all simulated devices and their associated chips.
@@ -46,8 +47,9 @@ const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 /// manner. This design ensures that all state modifications are thread-safe
 /// without requiring locks or other synchronization primitives.
 pub struct Server {
-    /// A client for interacting with the Bluetooth chip service.
-    pub bt_client: ChipClient,
+    // TODO: change pub to pub(crate) everywhere. Actors only export a message API.
+    /// A map of clients for interacting with technology-specific chip services.
+    pub chip_clients: HashMap<NetworkKind, ChipClient>,
     /// The next available `ChipId`.
     next_chip_id: AtomicU32,
     /// The next available `DeviceId`.
@@ -100,20 +102,23 @@ pub struct ChipInfo {
 
 impl Server {
     /// Creates a new `Server` and a corresponding `DeviceClient` with default timeouts.
-    pub fn new(bt_client: ChipClient) -> (Self, DeviceClient) {
-        Self::new_with_timeouts(bt_client, DEFAULT_START_TIMEOUT, DEFAULT_IDLE_TIMEOUT)
+    pub fn new(no_shutdown: bool) -> (Self, DeviceClient) {
+        if no_shutdown {
+            Self::new_with_timeouts(MAX_TIMEOUT, MAX_TIMEOUT)
+        } else {
+            Self::new_with_timeouts(DEFAULT_START_TIMEOUT, DEFAULT_IDLE_TIMEOUT)
+        }
     }
 
     /// Creates a new `Server` and a corresponding `DeviceClient` with custom timeouts.
     pub fn new_with_timeouts(
-        bt_client: ChipClient,
         start_timeout: Duration,
         idle_timeout: Duration,
     ) -> (Self, DeviceClient) {
         let (command_tx, request_rx) = mpsc::channel(10);
 
         let server = Server {
-            bt_client,
+            chip_clients: HashMap::new(),
             next_chip_id: AtomicU32::new(0),
             next_device_id: AtomicU32::new(0),
             request_rx,
@@ -132,7 +137,8 @@ impl Server {
     ///
     /// The server will listen for incoming requests and handle them accordingly.
     /// It will shut down if it remains idle for the configured timeout.
-    pub async fn run(mut self) {
+    pub async fn run(mut self, chip_clients: HashMap<NetworkKind, ChipClient>) {
+        self.chip_clients = chip_clients;
         self.set_alarm(self.start_timeout);
         while !self.shutdown {
             tokio::select! {
@@ -142,7 +148,15 @@ impl Server {
                 _ = &mut self.shutdown_alarm => break,
             }
         }
-        info!("Device server is shutdown");
+        info!("Device server is shutting down");
+        for (kind, client) in self.chip_clients.iter() {
+            if let Err(e) = client.shutdown().await {
+                log::error!("Failed to send shutdown to {:?} chip service: {}", kind, e);
+            }
+        }
+        // TODO: We might need to wait for chip services to confirm shutdown
+        // if DeviceService needs to ensure they are down before it fully exits.
+        info!("Device server has shut down");
     }
 
     fn set_alarm(&mut self, duration: Duration) {
@@ -156,7 +170,7 @@ impl Server {
 
     pub fn stop_idle_alarm(&mut self) {
         // Effectively disable the shutdown alarm by setting a very large duration.
-        self.set_alarm(Duration::from_secs(u32::MAX as u64));
+        self.set_alarm(MAX_TIMEOUT);
     }
 
     /// Generates a new, unique `ChipId`.
@@ -181,6 +195,13 @@ impl Server {
             .ok_or_else(|| DeviceError::Internal(format!("Device {id}'s info not found")))
     }
 
+    /// Retrieves the appropriate `ChipClient` for the given `NetworkKind`.
+    pub(crate) fn get_chip_client(&self, kind: NetworkKind) -> Result<&ChipClient, DeviceError> {
+        self.chip_clients.get(&kind).ok_or_else(|| {
+            DeviceError::Internal(format!("ChipClient for {:?} not supported", kind))
+        })
+    }
+
     pub(crate) fn add_chip_to_device(
         &mut self,
         device_id: DeviceId,
@@ -192,5 +213,17 @@ impl Server {
         device_info.chips.insert(chip_id);
         self.chip_info_map.insert(chip_id, ChipInfo { kind: chip_kind, device_id, name });
         Ok(())
+    }
+
+    /// Removes a device and its associated GUID from the server's state.
+    pub(crate) fn delete_device(&mut self, device_id: DeviceId) {
+        if let Some(device_info) = self.devices_by_id.remove(&device_id) {
+            info!("Removed device {:?}", device_id);
+            if let Some(guid) = device_info.guid {
+                self.device_ids_by_guid.remove(&guid);
+            }
+        } else {
+            log::warn!("Delete failed: Device {device_id} not found");
+        }
     }
 }

@@ -8,8 +8,9 @@ use futures::{
     task::{Context, Poll},
     Future,
 };
+use netsim_api::bluetooth::Controller as RootcanalController;
 use netsim_api::chips::{BluetoothMode, BluetoothParams, ChipClient, ChipConfig, NetworkParams};
-use netsim_proto::configuration::Controller as RootcanalController;
+use netsim_api::devices::DeviceClient;
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -22,7 +23,8 @@ pub struct TestFixture {
 
 /// Sets up a test environment with a running server and a client.
 pub fn setup() -> TestFixture {
-    let (server, client) = Server::new();
+    let (device_tx, _device_rx) = mpsc::channel(10);
+    let (server, client) = Server::new(DeviceClient::new(device_tx));
     let server_task = tokio::spawn(async move {
         server.run().await;
     });
