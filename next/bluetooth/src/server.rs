@@ -125,7 +125,16 @@ impl Server {
     fn streams_next(&mut self, id: ChipId, val: Option<Bytes>) {
         match val {
             Some(packet) => {
-                self.rootcanal.receive_hci(id.into(), Idc::Cmd, &packet).expect("Receive HCI error")
+                if packet.is_empty() {
+                    error!("Received empty HCI packet from stream for chip {id}");
+                    return;
+                }
+                let idc = Idc::from(packet[0] as i32);
+                let data = &packet[1..];
+                self.rootcanal
+                    .receive_hci(id.into(), idc, data)
+                    .to_chip_error()
+                    .expect("Receive HCI error");
             }
             None => {
                 if let Err(e) = self.remove_chip(id, "stream_closed") {

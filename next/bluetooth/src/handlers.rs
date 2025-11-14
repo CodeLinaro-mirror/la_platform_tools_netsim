@@ -9,7 +9,7 @@
 use crate::server::ChipEntry;
 use crate::utils::ToChipError;
 use crate::Server;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use futures::SinkExt;
 use log::{debug, error, info, warn};
 use netsim_api::chips::Chip;
@@ -41,10 +41,12 @@ pub(crate) struct HciCallbacks {
 /// write to the Sink. This has less overhead than spawning a task for each packet,
 /// as Sink doesn't have a synchronous send method like Sender::try_send().
 impl ControllerCallbacks for HciCallbacks {
-    fn send_hci(&self, _source_id: Id, _idc: Idc, hci_packet: &[u8]) {
-        let packet = Bytes::copy_from_slice(hci_packet);
+    fn send_hci(&self, _source_id: Id, idc: Idc, hci_packet: &[u8]) {
+        let mut h4_packet = BytesMut::with_capacity(1 + hci_packet.len());
+        h4_packet.put_u8(idc as u8);
+        h4_packet.extend_from_slice(hci_packet);
         if let Some(hci_tx) = self.hci_tx.as_ref() {
-            if let Err(e) = hci_tx.try_send(packet) {
+            if let Err(e) = hci_tx.try_send(h4_packet.into()) {
                 error!("Failed to send HCI packet: {e}, dropping.");
             }
         }

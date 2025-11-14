@@ -292,7 +292,7 @@ mod tests {
     use bytes::{BufMut, Bytes, BytesMut};
     use netsim_proto::hci_packet::HCIPacket;
     use netsim_proto::startup::ChipInfo;
-    use protobuf::Message;
+    use protobuf::{Enum, Message};
 
     #[test]
     fn test_hci_request_conversion() {
@@ -302,14 +302,15 @@ mod tests {
         req.set_hci_packet(hci.clone());
 
         let bytes = packet_request_to_bytes(req).unwrap();
-        assert_eq!(bytes.len(), hci.packet.len());
-        assert_eq!(bytes, hci.packet.as_slice());
+        assert_eq!(bytes.len(), hci.packet.len() + 1);
+        assert_eq!(bytes[0], hci.packet_type.value() as u8);
+        assert_eq!(&bytes[1..], hci.packet.as_slice());
 
-        // Test bytes_to_packet_request with the type prefix
-        let mut bytes_with_prefix = BytesMut::new();
-        bytes_with_prefix.put_u8(HCI_PACKET_TYPE);
-        bytes_with_prefix.put_slice(&hci.write_to_bytes().unwrap());
-        let req2 = bytes_to_packet_request(bytes_with_prefix.freeze()).unwrap();
+        // Test bytes_to_packet_request with is_bt = true (H4 format)
+        let mut h4_bytes = BytesMut::new();
+        h4_bytes.put_u8(hci.packet_type.value() as u8);
+        h4_bytes.put_slice(&hci.packet);
+        let req2 = bytes_to_packet_request(h4_bytes.freeze(), true).unwrap();
         assert!(req2.has_hci_packet());
         assert_eq!(req2.hci_packet(), &hci);
     }
@@ -328,7 +329,10 @@ mod tests {
         assert_eq!(bytes_with_prefix.len(), hci.write_to_bytes().unwrap().len() + 1);
 
         // Test bytes_to_packet_response with is_bt = true
-        let res2 = bytes_to_packet_response(Bytes::from(packet_data.clone()), true).unwrap();
+        let mut h4_packet = BytesMut::new();
+        h4_packet.put_u8(netsim_proto::hci_packet::hcipacket::PacketType::EVENT.value() as u8);
+        h4_packet.put_slice(&packet_data);
+        let res2 = bytes_to_packet_response(h4_packet.freeze(), true).unwrap();
         assert!(res2.has_hci_packet());
         let expected_hci = HCIPacket {
             packet_type: netsim_proto::hci_packet::hcipacket::PacketType::EVENT.into(),
@@ -351,7 +355,7 @@ mod tests {
         let bytes = packet_request_to_bytes(req).unwrap();
         assert_eq!(bytes, raw); // No type byte prepended
 
-        let req2 = bytes_to_packet_request(bytes).unwrap();
+        let req2 = bytes_to_packet_request(bytes, false).unwrap();
         assert!(req2.has_packet());
         assert_eq!(req2.packet(), raw.as_ref());
         assert!(!req2.has_hci_packet());

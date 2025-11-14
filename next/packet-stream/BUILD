@@ -100,6 +100,7 @@ rust_test(
         "@bytes",
         "@futures",
         "@grpcio",
+        "@protobuf-rust",
         "@serde_json",
         "@tokio",
         "@tokio-stream",
