@@ -27,7 +27,6 @@ class BazelInstallTask(Task):
 
   def __init__(self, args, env):
     super().__init__("BazelInstall")
-    self.enabled = is_bazel_build(args)
     self.out = Path(args.out_dir)
 
   def do_run(self):
@@ -49,7 +48,7 @@ class BazelInstallTask(Task):
         )
         src_file = search_dir / binary_name
         logging.info(f"Copying {src_file} to {dest_dir}")
-        shutil.copy(src_file, dest_dir / binary_name)
+        shutil.copyfile(src_file, dest_dir / binary_name)
 
       # Copy netsim-ui
       ui_src_dir = search_dir / "netsim-ui"
