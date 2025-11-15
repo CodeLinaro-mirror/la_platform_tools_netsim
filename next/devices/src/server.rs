@@ -26,7 +26,7 @@
 //! timeout period, the service will shut down to conserve resources.
 
 use log::info;
-use netsim_api::chips::{ChipClient, ChipId, NetworkKind, PacketSink, PacketStream};
+use netsim_api::chips::{ChipClient, ChipId, NetworkKind};
 use netsim_api::device_error::DeviceError;
 use netsim_api::devices::{DeviceClient, DeviceConfig, DeviceId, DeviceRequest};
 use std::collections::{HashMap, HashSet};
@@ -76,9 +76,6 @@ pub struct Server {
     pub idle_timeout: Duration,
     /// Flag to signal the server to shut down.
     pub(crate) shutdown: bool,
-    /// A temporary structure to hold PacketStream and PacketSink of Wi-Fi and Uwb so the connection won't drop.
-    // TODO: Deprecate self.streams once PacketStream and PacketSink of Wi-Fi and Uwb are handled by Wi-Fi and Uwb servers.
-    pub(crate) streams: Vec<(Option<PacketStream>, Option<PacketSink>)>,
 }
 
 /// `DeviceInfo` holds the state of a single simulated device, including its
@@ -132,7 +129,6 @@ impl Server {
             start_timeout,
             idle_timeout,
             shutdown: false,
-            streams: Vec::new(),
         };
         (server, DeviceClient::new(command_tx))
     }

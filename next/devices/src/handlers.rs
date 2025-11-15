@@ -57,12 +57,6 @@ impl Server {
         let chip_id = self.new_chip_id();
         let guid = &request.device_guid;
 
-        let network_kind: NetworkKind = (&request.chip_config.network_params).into();
-        if network_kind == NetworkKind::Wifi {
-            self.streams.push((request.packet_stream, request.packet_sink));
-            return Ok(());
-        }
-
         let device_id = self.device_ids_by_guid.get(guid).copied().unwrap_or_else(|| {
             let id = self.new_device_id();
             self.device_ids_by_guid.insert(guid.clone(), id);
@@ -78,6 +72,7 @@ impl Server {
             id
         });
 
+        let network_kind: NetworkKind = (&request.chip_config.network_params).into();
         self.add_chip_to_device(
             device_id,
             chip_id,

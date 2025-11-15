@@ -279,6 +279,10 @@ impl NetsimDaemon {
         let (bt_server, bt_client) = bluetooth::Server::new(device_client.clone());
         info!("Bluetooth server created");
 
+        // Setup Wifi Server
+        let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
+        info!("Wifi server created");
+
         // Setup Uwb Server
         let (uwb_server, uwb_client) = uwb::Server::new(device_client.clone());
         info!("Uwb server created");
@@ -286,6 +290,7 @@ impl NetsimDaemon {
         // Prepare chip clients map for DeviceServer
         let mut chip_clients = HashMap::new();
         chip_clients.insert(NetworkKind::Bluetooth, bt_client);
+        chip_clients.insert(NetworkKind::Wifi, wifi_client);
         chip_clients.insert(NetworkKind::Uwb, uwb_client);
         // TODO: Add other chip clients (WiFi, Cell, etc.) here
 
@@ -293,6 +298,8 @@ impl NetsimDaemon {
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_server.run());
         info!("Bluetooth server started");
+        join_set.spawn(wifi_server.run());
+        info!("Wifi server started");
         join_set.spawn(uwb_server.run());
         info!("Uwb server started");
         join_set.spawn(device_server.run(chip_clients));
