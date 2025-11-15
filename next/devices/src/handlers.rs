@@ -5,8 +5,8 @@ use log::info;
 use netsim_api::chips::ChipId;
 use netsim_api::{
     chips::{
-        BeaconParams, BluetoothMode, BluetoothParams, ChipConfig, CreateParams as ChipCreateParams,
-        NetworkKind, NetworkParams,
+        BeaconParams, BluetoothMode, BluetoothParams, ChipConfig, ChipPatch,
+        CreateParams as ChipCreateParams, NetworkKind, NetworkParams,
     },
     device_error::DeviceError,
     devices::{api, Device, DeviceId, DevicePsCreate, DeviceRequest},
@@ -174,22 +174,34 @@ impl Server {
     /// Handles the `Update` command to modify an existing device's properties.
     async fn handle_update(&mut self, update: api::DeviceUpdate) -> Result<(), DeviceError> {
         let device_id = DeviceId(update.id);
-        let device_info = self.get_device_info(&device_id)?;
+        let mut chip_patch = ChipPatch::default();
 
-        if let Some(name) = update.name {
-            device_info.device_config.name = name;
-        }
-        if let Some(visible) = update.visible {
-            device_info.device_config.visible = visible;
-        }
-        if let Some(position) = update.position {
-            device_info.device_config.position = position;
-        }
-        if let Some(orientation) = update.orientation {
-            device_info.device_config.orientation = orientation;
-        }
+        // 1. Acquire Lock, Perform Updates, and Extract Chip IDs inside a Scope
+        let chip_ids: Vec<ChipId> = {
+            let device_info = self.get_device_info(&device_id)?;
 
-        info!("Updated device {:?} to config: {:?}", device_id, device_info.device_config);
+            if let Some(name) = update.name {
+                device_info.device_config.name = name;
+            }
+            if let Some(visible) = update.visible {
+                device_info.device_config.visible = visible;
+            }
+            if let Some(position) = update.position {
+                device_info.device_config.position = position.clone();
+                chip_patch.position = Some(position);
+            }
+            if let Some(orientation) = update.orientation {
+                device_info.device_config.orientation = orientation.clone();
+                chip_patch.orientation = Some(orientation);
+            }
+            info!("Updated device {:?} to config: {:?}", device_id, device_info.device_config);
+            // Clone the Chip IDs before the lock is released
+            device_info.chips.iter().cloned().collect()
+        };
+        // propagate changes to the chip servers (without device_info lock held)
+        for chip_id in chip_ids {
+            self.get_chip_client_by_id(chip_id)?.update(chip_id, chip_patch.clone()).await?;
+        }
         Ok(())
     }
     /// Starts the deletion process for a user-created device.
@@ -219,12 +231,7 @@ impl Server {
         let chip_ids: Vec<ChipId> = device_info.chips.iter().cloned().collect();
 
         for chip_id in chip_ids {
-            let chip_info = self
-                .chip_info_map
-                .get(&chip_id)
-                .ok_or(DeviceError::Internal(format!("Chip {chip_id} not found")))?;
-
-            self.get_chip_client(chip_info.kind)?.delete(chip_id).await?;
+            self.get_chip_client_by_id(chip_id)?.delete(chip_id).await?;
         }
         info!("Initiated deletion for all chips on device {:?}", id);
         Ok(())

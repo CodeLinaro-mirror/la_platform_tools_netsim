@@ -41,22 +41,17 @@ use crate::utils::ToChipError;
 use bytes::Bytes;
 use log::{debug, error, info};
 use netsim_api::chip_error::ChipError;
-use netsim_api::chips::{BluetoothMode, ChipClient, ChipId, ChipRequest, PacketStream};
+use netsim_api::chips::{Chip, ChipClient, ChipId, ChipRequest, PacketStream};
 use netsim_api::devices::DeviceClient;
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::{interval, Duration};
 use tokio_stream::{StreamExt, StreamMap, StreamNotifyClose};
 
-/// Represents an entry for a chip managed by the `Server`.
-pub(crate) struct ChipEntry {
-    /// The mode of operation for the Bluetooth chip.
-    #[allow(dead_code)]
-    pub(crate) bluetooth_mode: BluetoothMode,
-}
+type ChipMap = Arc<Mutex<HashMap<ChipId, Chip>>>;
 
 /// The `Server` is the central component of the Bluetooth simulation.
 ///
@@ -70,7 +65,7 @@ pub struct Server {
     /// The Rootcanal emulator instance.
     pub(crate) rootcanal: Arc<Rootcanal>,
     /// A map of all active chips, keyed by chip ID.
-    pub(crate) chips: HashMap<ChipId, ChipEntry>,
+    pub(crate) chips: ChipMap,
     /// Receiver for incoming `ChipRequest` commands.
     command_rx: mpsc::Receiver<ChipRequest>,
     /// A map of all active packet streams, keyed by chip ID.
@@ -82,17 +77,25 @@ pub struct Server {
 }
 
 /// Implementation of `RootcanalCallbacks` for the Bluetooth `Server`.
-struct RootcanalCallbacksImpl;
+/// We need to wrap this in a Mutex even though Rootcanal runs on
+/// the same thread because RootcanalCallbacks is not sync.
+struct RootcanalCallbacksImpl {
+    chips: ChipMap,
+}
 
 impl RootcanalCallbacks for RootcanalCallbacksImpl {
     fn on_send_ll(
         &self,
-        _source_id: u32,
-        _destination_id: u32,
+        source_id: u32,
+        destination_id: u32,
         _packet: &[u8],
         _phy: Phy,
         tx_power: i32,
     ) -> Option<i32> {
+        let src_id = source_id.into();
+        let dst_id = destination_id.into();
+        let _src_position = self.chips.lock().unwrap().get(&src_id).map(|c| c.position.clone());
+        let _dst_position = self.chips.lock().unwrap().get(&dst_id).map(|c| c.position.clone());
         Some(tx_power)
     }
 }
@@ -106,9 +109,10 @@ impl Server {
     /// * `device_client`: A `DeviceClient` used to send notifications to the DeviceService.
     pub fn new(device_client: DeviceClient) -> (Self, ChipClient) {
         let (command_tx, command_rx) = mpsc::channel(10);
+        let chips = Arc::new(Mutex::new(HashMap::new()));
         let server = Server {
-            rootcanal: Rootcanal::new(Box::new(RootcanalCallbacksImpl {})),
-            chips: HashMap::new(),
+            rootcanal: Rootcanal::new(Box::new(RootcanalCallbacksImpl { chips: chips.clone() })),
+            chips: chips.clone(),
             command_rx,
             streams: StreamMap::new(),
             sink_tasks: JoinSet::new(),
@@ -186,7 +190,7 @@ impl Server {
     // Return false if the chip doesn't exist.
     pub(crate) fn remove_chip(&mut self, id: ChipId, res: &str) -> Result<bool, ChipError> {
         debug!("Removing chip {id} by {res}");
-        if self.chips.remove(&id).is_some() {
+        if self.chips.lock().unwrap().remove(&id).is_some() {
             // A chip might not have a stream (e.g. Beacon)
             self.streams.remove(&id);
             self.rootcanal.remove_controller(id.into()).to_chip_error()?;

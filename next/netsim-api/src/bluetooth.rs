@@ -75,31 +75,21 @@ pub mod beacon {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     pub enum AdvertiseMode {
+        #[default]
         LowPower = 0,
         Balanced = 1,
         LowLatency = 2,
     }
 
-    impl Default for AdvertiseMode {
-        fn default() -> Self {
-            AdvertiseMode::LowPower
-        }
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     pub enum AdvertiseTxPower {
+        #[default]
         UltraLow = 0,
         Low = 1,
         Medium = 2,
         High = 3,
-    }
-
-    impl Default for AdvertiseTxPower {
-        fn default() -> Self {
-            AdvertiseTxPower::UltraLow
-        }
     }
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

@@ -6,17 +6,16 @@
 //! `ChipRequest` messages, managing the lifecycle of Bluetooth chips, and
 //! interacting with the `rootcanal` Bluetooth emulator.
 
-use crate::server::ChipEntry;
 use crate::utils::ToChipError;
 use crate::Server;
 use bytes::Bytes;
 use futures::SinkExt;
 use log::{debug, error, info, warn};
-use netsim_api::chips::Chip;
 use netsim_api::{
     chip_error::ChipError,
     chips::{
-        BluetoothMode, ChipId, ChipInfo, ChipRequest, CreateParams, NetworkParams, PacketSink,
+        BluetoothMode, Chip, ChipId, ChipPatch, ChipRequest, CreateParams, NetworkParams,
+        PacketSink,
     },
 };
 use rootcanal::{
@@ -83,10 +82,10 @@ impl Server {
                 respond_to.send(self.create_chip(create_params)).ok();
             }
             ChipRequest::Read { id, respond_to } => {
-                respond_to.send(self.get_chip(id).map(ChipInfo::Bluetooth)).ok();
+                respond_to.send(self.get_chip(id)).ok();
             }
-            ChipRequest::Update { id, chip, respond_to } => {
-                respond_to.send(self.update_chip(id, chip)).ok();
+            ChipRequest::Update { id, patch, respond_to } => {
+                respond_to.send(self.patch_chip(id, patch)).ok();
             }
             ChipRequest::Delete { id, respond_to } => {
                 respond_to.send(self.delete_chip(id)).ok();
@@ -98,7 +97,7 @@ impl Server {
                 respond_to.send(Ok(Vec::new())).ok();
             }
             ChipRequest::GetCountForTesting { respond_to } => {
-                respond_to.send(Ok(self.chips.len())).ok();
+                respond_to.send(Ok(self.chips.lock().unwrap().len())).ok();
             }
             ChipRequest::Shutdown => {
                 *shutdown = true;
@@ -167,28 +166,38 @@ impl Server {
 
         rootcanal.new_controller(id.into(), address, Box::new(callback)).to_chip_error()?;
 
-        match &bluetooth_params.mode {
+        let chip_info = match &bluetooth_params.mode {
             BluetoothMode::Beacon(params) => crate::beacon::create(rootcanal, id, params)?,
             BluetoothMode::Device(params) => crate::device::create(rootcanal, id, params)?,
             BluetoothMode::Sniffer(params) => crate::sniffer::create(rootcanal, id, params)?,
-        }
-        self.chips.insert(id, ChipEntry { bluetooth_mode: bluetooth_params.mode });
+        };
+        self.chips.lock().unwrap().insert(id, chip_info);
         Ok(())
     }
 
     /// Updates an existing Bluetooth chip.
     ///
-    /// NOTE: This function is a stub and not fully implemented.
-    fn update_chip(&mut self, _id: ChipId, _chip: Chip) -> Result<Chip, ChipError> {
-        Ok(Chip::default())
+    fn patch_chip(&mut self, id: ChipId, mut patch: ChipPatch) -> Result<Chip, ChipError> {
+        // Currently nothing in patch.variant
+        let mut binding = self.chips.lock().unwrap();
+        let chip = binding.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
+        if let Some(position) = patch.position.take() {
+            chip.position = position;
+        }
+        if let Some(orientation) = patch.orientation.take() {
+            chip.orientation = orientation;
+        }
+        Ok(chip.clone())
     }
 
     /// Retrieves information about a specific Bluetooth chip.
     ///
     /// NOTE: This function is a stub and not fully implemented.
     fn get_chip(&self, id: ChipId) -> Result<Chip, ChipError> {
-        let _ = &self.chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-        Ok(Chip::default())
+        match self.chips.lock().unwrap().get(&id) {
+            Some(chip) => Ok(chip.clone()),
+            None => Err(ChipError::ChipNotFound(id)),
+        }
     }
 
     /// Deletes a Bluetooth chip from the simulation.
