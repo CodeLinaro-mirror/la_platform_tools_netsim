@@ -2,6 +2,7 @@
 
 //! Test for verifying the exchange of link layer packets with the rootcanal controller.
 
+use bytes::Bytes;
 use env_logger;
 use log::error;
 use netsim_packets::link_layer::{
@@ -9,7 +10,7 @@ use netsim_packets::link_layer::{
 };
 use pdl_runtime::Packet;
 use rootcanal::{
-    controller::{Callbacks as ControllerCallbacks, Id, Idc},
+    controller::{Callbacks as ControllerCallbacks, Id},
     rootcanal::{Callbacks as RootcanalCallbacks, Rootcanal},
     types::{Address, Phy},
 };
@@ -48,7 +49,7 @@ struct SnifferCallbacks {
 }
 
 impl ControllerCallbacks for SnifferCallbacks {
-    fn send_hci(&self, _source_id: Id, _idc: Idc, _data: &[u8]) {}
+    fn send_hci(&self, _source_id: Id, _data: Bytes) {}
     fn on_receive_ll(&self, _source_id: Id, packet: &[u8], _phy: Phy, _tx_power: i32) {
         let _ = self.sender.try_send(packet.to_vec());
     }
@@ -63,7 +64,7 @@ impl ControllerCallbacks for SnifferCallbacks {
 /// Callbacks for the dummy controller, which takes no action.
 struct DummyCallbacks;
 impl ControllerCallbacks for DummyCallbacks {
-    fn send_hci(&self, _source_id: Id, _idc: Idc, _data: &[u8]) {}
+    fn send_hci(&self, _source_id: Id, _data: Bytes) {}
     fn on_receive_ll(&self, _source_id: Id, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
     fn invalid_packet_received(&self, source_id: Id, reason: i32, message: &str, data: &[u8]) {
         error!(

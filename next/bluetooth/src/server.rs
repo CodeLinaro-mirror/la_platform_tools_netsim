@@ -43,7 +43,7 @@ use log::{debug, error, info};
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{BluetoothMode, ChipClient, ChipId, ChipRequest, PacketStream};
 use netsim_api::devices::DeviceClient;
-use rootcanal::{Callbacks as RootcanalCallbacks, Idc, Phy, Rootcanal};
+use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -129,12 +129,7 @@ impl Server {
                     error!("Received empty HCI packet from stream for chip {id}");
                     return;
                 }
-                let idc = Idc::from(packet[0] as i32);
-                let data = &packet[1..];
-                self.rootcanal
-                    .receive_hci(id.into(), idc, data)
-                    .to_chip_error()
-                    .expect("Receive HCI error");
+                self.rootcanal.receive_hci(id.into(), packet).expect("Receive HCI error")
             }
             None => {
                 if let Err(e) = self.remove_chip(id, "stream_closed") {

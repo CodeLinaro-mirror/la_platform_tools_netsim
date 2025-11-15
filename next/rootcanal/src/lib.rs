@@ -29,12 +29,12 @@ pub mod types;
 
 pub use controller::{Id, Stats};
 pub use rootcanal::{Callbacks, Rootcanal};
-pub use types::{Address, Idc, Phy};
+pub use types::{Address, Phy};
 
 #[cfg(test)]
 mod tests {
     use crate::controller::Callbacks as ControllerCallbacks;
-    use crate::types::{Address, Idc};
+    use crate::types::Address;
     use std::ffi::c_int;
     use std::str::FromStr;
 
@@ -54,7 +54,7 @@ mod tests {
 
     struct MockControllerCallbacks;
     impl ControllerCallbacks for MockControllerCallbacks {
-        fn send_hci(&self, _source_id: Id, _idc: Idc, _data: &[u8]) {}
+        fn send_hci(&self, _source_id: Id, _data: &[u8]) {}
         fn send_ll(&self, _source_id: Id, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
         fn invalid_packet_received(
             &self,
