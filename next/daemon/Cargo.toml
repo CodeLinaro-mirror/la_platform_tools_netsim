@@ -20,6 +20,7 @@ netsim-api = { path = "../netsim-api" }
 bluetooth = { path = "../bluetooth" }
 devices = { path = "../devices" }
 packet-stream = { path = "../packet-stream" }
+uwb = { path = "../uwb" }
 tokio = { version = "1.28.2", features = ["full"] }
 named-lock = "0.4.1"
 

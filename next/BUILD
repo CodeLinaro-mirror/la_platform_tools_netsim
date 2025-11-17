@@ -25,6 +25,7 @@ rustfmt_test(
         "//next/packets",
         "//next/proto",
         "//next/rootcanal",
+        "//next/uwb",
         "//next/wifi",
     ],
 )

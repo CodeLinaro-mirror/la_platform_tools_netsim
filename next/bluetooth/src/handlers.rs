@@ -20,24 +20,30 @@ use netsim_api::{
     },
 };
 use rootcanal::{
-    controller::{Callbacks as ControllerCallbacks, Id, Idc},
+    controller::{Callbacks as ControllerCallbacks, Id},
     types::{Address, Phy},
 };
 use std::ffi::c_int;
 use tokio::sync::mpsc;
 use tokio_stream::StreamNotifyClose;
 
+/// Callbacks for handling events from the Rootcanal controller.
 pub(crate) struct HciCallbacks {
+    /// The ID of the chip associated with these callbacks.
     id: ChipId,
+    /// Sender for HCI packets to be sent to the host.
     hci_tx: Option<mpsc::Sender<Bytes>>,
+    /// Sender for Link Layer packets (for sniffer mode).
     ll_tx: Option<mpsc::Sender<Bytes>>,
 }
 
+/// Use a Tokio channel to send the message synchronously to an async task that will
+/// write to the Sink. This has less overhead than spawning a task for each packet,
+/// as Sink doesn't have a synchronous send method like Sender::try_send().
 impl ControllerCallbacks for HciCallbacks {
-    fn send_hci(&self, _source_id: Id, _idc: Idc, hci_packet: &[u8]) {
-        let packet = Bytes::copy_from_slice(hci_packet);
+    fn send_hci(&self, _source_id: Id, h4_packet: Bytes) {
         if let Some(hci_tx) = self.hci_tx.as_ref() {
-            if let Err(e) = hci_tx.try_send(packet) {
+            if let Err(e) = hci_tx.try_send(h4_packet) {
                 error!("Failed to send HCI packet: {e}, dropping.");
             }
         }
@@ -62,6 +68,15 @@ impl ControllerCallbacks for HciCallbacks {
 }
 
 impl Server {
+    /// Handles a single `ChipRequest` command.
+    ///
+    /// This method dispatches the command to the appropriate handler function
+    /// based on the command type.
+    ///
+    /// # Arguments
+    ///
+    /// * `cmd`: The `ChipRequest` to handle.
+    /// * `shutdown`: A mutable boolean flag to signal server shutdown.
     pub(super) async fn handle_command(&mut self, cmd: ChipRequest, shutdown: &mut bool) {
         match cmd {
             ChipRequest::Create { params: create_params, respond_to } => {
@@ -91,10 +106,18 @@ impl Server {
         }
     }
 
+    /// Resets the state of a chip.
+    ///
+    /// NOTE: This function is not yet implemented.
     fn reset_chip(&mut self, _id: ChipId) {
         warn!("Not implemented");
     }
 
+    /// Task to forward packets from a channel to a `PacketSink`.
+    ///
+    /// This task runs in the background for each chip that has a `PacketSink`.
+    /// It continuously receives packets from the `receiver` and sends them
+    /// to the `sink`.
     async fn run_sink_task(
         mut sink: PacketSink,
         mut receiver: mpsc::Receiver<Bytes>,
@@ -112,6 +135,11 @@ impl Server {
         id
     }
 
+    /// Creates a new Bluetooth chip based on the provided `CreateParams`.
+    ///
+    /// This function sets up the chip in the `rootcanal` emulator, configures
+    /// its mode (Device, Beacon, or Sniffer), and establishes packet
+    /// stream/sink connections if provided.
     fn create_chip(&mut self, mut create_params: CreateParams) -> Result<(), ChipError> {
         let bluetooth_params = match create_params.config.network_params {
             NetworkParams::Bluetooth(params) => params,
@@ -148,15 +176,25 @@ impl Server {
         Ok(())
     }
 
+    /// Updates an existing Bluetooth chip.
+    ///
+    /// NOTE: This function is a stub and not fully implemented.
     fn update_chip(&mut self, _id: ChipId, _chip: Chip) -> Result<Chip, ChipError> {
         Ok(Chip::default())
     }
 
+    /// Retrieves information about a specific Bluetooth chip.
+    ///
+    /// NOTE: This function is a stub and not fully implemented.
     fn get_chip(&self, id: ChipId) -> Result<Chip, ChipError> {
         let _ = &self.chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
         Ok(Chip::default())
     }
 
+    /// Deletes a Bluetooth chip from the simulation.
+    ///
+    /// This function removes the chip from the `rootcanal` emulator and
+    /// cleans up any associated resources.
     fn delete_chip(&mut self, id: ChipId) -> Result<(), ChipError> {
         // TODO: decide if sink task needs to be shutdown
         match self.remove_chip(id, "handler") {

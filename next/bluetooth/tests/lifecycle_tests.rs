@@ -25,7 +25,7 @@ async fn test_hci_reset_command() {
     };
     client.create(create_chip_config).await.expect("creating chip");
     // 2. Send an HCI Reset command.
-    let hci_reset_cmd = Bytes::from(vec![0x03, 0x0c, 0x00]);
+    let hci_reset_cmd = Bytes::from(vec![0x01, 0x03, 0x0c, 0x00]);
     stream_tx.send(hci_reset_cmd).await.map_err(|e| info!("err:{:?}", e.0)).expect("sending");
 
     // 3. Wait for the HCI Command Complete event.
@@ -33,7 +33,7 @@ async fn test_hci_reset_command() {
 
     // 4. Verify the response.
     // Expected: Command Complete for Reset, status OK.
-    let expected_response = vec![0x0e, 0x04, 0x01, 0x03, 0x0c, 0x00];
+    let expected_response = vec![0x04, 0x0e, 0x04, 0x01, 0x03, 0x0c, 0x00];
     assert_eq!(response, expected_response);
 }
 

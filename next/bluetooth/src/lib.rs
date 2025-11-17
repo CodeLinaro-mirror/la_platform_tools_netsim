@@ -44,14 +44,14 @@
 //! `ChipClient` provides a convenient method for each command variant.
 //!
 //! The following commands are supported:
-//! - [`Create`][netsim_api::chips::ChipClient::create]: Creates a new Bluetooth chip.
-//! - [`Read`][netsim_api::chips::ChipClient::read]: Retrieves information about a Bluetooth chip.
-//! - [`Update`][netsim_api::chips::ChipClient::update]: Updates an existing Bluetooth chip.
-//! - [`Delete`][netsim_api::chips::ChipClient::delete]: Deletes a Bluetooth chip.
-//! - [`Reset`][netsim_api::chips::ChipClient::reset]: Resets a Bluetooth chip.
-//! - [`Read Statistics`][netsim_api::chips::ChipClient::read_statistics]: Retrieves statistics for all Bluetooth chips.
-//! - [`Get Count For Testing`][netsim_api::chips::ChipClient::read_count_for_testing]: Retrieves the total number of chips for testing purposes.
-//! - [`Shutdown`][netsim_api::chips::ChipClient::shutdown]: Shuts down the `Server`.
+//! - [`Create`](netsim_api::chips::ChipClient::create): Creates a new Bluetooth chip.
+//! - [`Read`](netsim_api::chips::ChipClient::read): Retrieves information about a Bluetooth chip.
+//! - [`Update`](netsim_api::chips::ChipClient::update): Updates an existing Bluetooth chip.
+//! - [`Delete`](netsim_api::chips::ChipClient::delete): Deletes a Bluetooth chip.
+//! - [`Reset`](netsim_api::chips::ChipClient::reset): Resets a Bluetooth chip.
+//! - [`GetStatistics`](netsim_api::chips::ChipRequest::GetStatistics): Retrieves statistics for all Bluetooth chips.
+//! - [`GetCountForTesting`](netsim_api::chips::ChipRequest::GetCountForTesting): Retrieves the total number of chips for testing purposes.
+//! - [`Shutdown`](netsim_api::chips::ChipClient::shutdown): Shuts down the `Server`.
 //!
 //! # Chip Modes
 //!
