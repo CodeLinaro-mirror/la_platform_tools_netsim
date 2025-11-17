@@ -198,7 +198,7 @@ cc_library(
     copts = select({
         # The CMake logic excludes Windows and Linux AArch64.
         # This is a simplification; for more complex logic, use custom config_settings.
-        "@bazel_tools//src/conditions:windows": [],
+        "@platforms//os:macos": [],
         "//conditions:default": [
             "-Wall",
             "-Werror",
@@ -207,7 +207,7 @@ cc_library(
             "-Wno-unused-variable",
             "-Wno-macro-redefined",
             "-Wno-error=maybe-uninitialized",
-            "-Wno-deprecated-declarations",  # <-- ADD THIS LINE
+            "-Wno-deprecated-declarations",
         ],
     }),
     deps = [
