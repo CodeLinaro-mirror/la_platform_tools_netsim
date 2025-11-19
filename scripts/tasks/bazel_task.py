@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+from pathlib import Path
 import platform
 
 from tasks.task import Task
@@ -30,7 +32,11 @@ class BazelTask(Task):
 
   def __init__(self, args, env):
     super().__init__("Bazel")
+    self.out = Path(args.out_dir)
     self.env = env
+    self.env.tmp_dir = (
+        Path(os.environ.get("TMPDIR")) if os.environ.get("TMPDIR") else None
+    )
     self.buildbot = args.buildbot
     self.hermetic = args.hermetic
     # TODO(b/320434273): Include next/... for windows once dependent crates are imported
@@ -81,15 +87,27 @@ class BazelTask(Task):
 
     build_configs = [f"--config={c}" for c in configs]
 
-    def _run_bazel(action, targets, extra_args=[]):
+    startup_options = []
+    if self.env.tmp_dir:
+      startup_options += [
+          f"--output_base={self.env.tmp_dir / 'output'}",
+          f"--install_base={self.env.tmp_dir / 'install'}",
+      ]
+
+    def _run_bazel(action: list[str], targets, extra_args=[]):
       run(
-          [self.path, action] + targets + build_configs + extra_args,
+          [self.path]
+          + startup_options
+          + action
+          + targets
+          + build_configs
+          + extra_args,
           self.env,
-          f"bazel {action}",
+          f"bazel {' '.join(action)}",
           AOSP_ROOT,
       )
 
-    _run_bazel("build", self.targets)
-    _run_bazel("test", self.targets, extra_args=["--test_output=streamed"])
+    _run_bazel(["build"], self.targets)
+    _run_bazel(["test"], self.targets, extra_args=["--test_output=streamed"])
 
     return True

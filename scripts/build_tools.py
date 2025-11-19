@@ -202,6 +202,7 @@ def main():
 
   # Bazel
   tasks.get("Bazel").run()
+  tasks.get("BazelInstall").run()
 
   # Configure
   tasks.get("Configure").run()

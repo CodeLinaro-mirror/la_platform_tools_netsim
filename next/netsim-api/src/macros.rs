@@ -1,5 +1,8 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+//! This module defines helper macros, particularly for reducing boilerplate
+//! in client implementations for sending requests to actor services.
+
 // =============================================================================
 // CLIENT METHOD MACRO
 // =============================================================================

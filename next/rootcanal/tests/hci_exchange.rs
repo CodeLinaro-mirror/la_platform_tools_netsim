@@ -2,10 +2,11 @@
 
 //! Test for verifying the exchange of HCI packets with the rootcanal controller.
 
+use bytes::Bytes;
 use env_logger;
 use log::error;
 use rootcanal::{
-    controller::{Callbacks as ControllerCallbacks, Id, Idc},
+    controller::{Callbacks as ControllerCallbacks, Id},
     rootcanal::{Callbacks as RootcanalCallbacks, Rootcanal},
     types::{Address, Phy},
 };
@@ -43,7 +44,7 @@ struct SnifferCallbacks {
 }
 
 impl ControllerCallbacks for SnifferCallbacks {
-    fn send_hci(&self, _source_id: Id, _idc: Idc, _data: &[u8]) {}
+    fn send_hci(&self, _source_id: Id, _data: Bytes) {}
     fn on_receive_ll(&self, _source_id: Id, packet: &[u8], _phy: Phy, _tx_power: i32) {
         let _ = self.sender.try_send(packet.to_vec());
     }
@@ -61,10 +62,8 @@ struct DummyCallbacks {
 }
 
 impl ControllerCallbacks for DummyCallbacks {
-    fn send_hci(&self, _source_id: Id, idc: Idc, data: &[u8]) {
-        if idc == Idc::Evt {
-            let _ = self.sender.try_send(data.to_vec());
-        }
+    fn send_hci(&self, _source_id: Id, data: Bytes) {
+        let _ = self.sender.try_send(data.to_vec());
     }
     fn on_receive_ll(&self, _source_id: Id, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
     fn invalid_packet_received(&self, source_id: Id, reason: i32, message: &str, data: &[u8]) {
@@ -80,13 +79,13 @@ async fn get_hci_event(receiver: &mut mpsc::Receiver<Vec<u8>>) -> Vec<u8> {
     timeout(Duration::from_secs(1), receiver.recv()).await.unwrap().unwrap()
 }
 
-/// Assert that a Command Complete event is received for the given opcode.
 async fn assert_command_complete(receiver: &mut mpsc::Receiver<Vec<u8>>, lsb: u8, msb: u8) {
     let event = get_hci_event(receiver).await;
-    assert_eq!(event[0], 0x0e); // Command Complete
-    assert_eq!(event[3], lsb); // OpCode LSB
-    assert_eq!(event[4], msb); // OpCode MSB
-    assert_eq!(event[5], 0x00); // Status OK
+    assert_eq!(event[0], 0x04); // HCI Event
+    assert_eq!(event[1], 0x0e); // Command Complete Event Code
+    assert_eq!(event[4], lsb); // OpCode LSB
+    assert_eq!(event[5], msb); // OpCode MSB
+    assert_eq!(event[6], 0x00); // Status OK
 }
 
 /// Test case for sending a sequence of HCI commands to the rootcanal controller
@@ -105,6 +104,10 @@ async fn assert_command_complete(receiver: &mut mpsc::Receiver<Vec<u8>>, lsb: u8
 //    configured via HCI.
 #[tokio::test]
 async fn test_hci_exchange() {
+    test_hci_exchange_internal().await
+}
+
+async fn test_hci_exchange_internal() {
     setup();
     let rootcanal = Arc::new(Rootcanal::new(Box::new(TestCallbacks)));
     let (ll_sender, mut ll_receiver) = mpsc::channel(10);
@@ -137,29 +140,29 @@ async fn test_hci_exchange() {
         .expect("new controller failed");
 
     // Reset the controller first.
-    let reset_cmd = vec![0x03, 0x0c, 0x00];
-    rootcanal.receive_hci(sender_id, Idc::Cmd, &reset_cmd).unwrap();
+    let reset_cmd = vec![0x01, 0x03, 0x0c, 0x00];
+    rootcanal.receive_hci(sender_id, reset_cmd.into()).unwrap();
     assert_command_complete(&mut hci_receiver, 0x03, 0x0c).await;
 
     // LE Set Advertising Parameters
     let adv_params = vec![
-        0x06, 0x20, 15, 0xA0, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x07, 0x00,
+        0x01, 0x06, 0x20, 15, 0xA0, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x07, 0x00,
     ];
-    rootcanal.receive_hci(sender_id, Idc::Cmd, &adv_params).unwrap();
+    rootcanal.receive_hci(sender_id, adv_params.into()).unwrap();
     assert_command_complete(&mut hci_receiver, 0x06, 0x20).await;
 
     // LE Set Advertising Data
-    let mut adv_data = vec![0x08, 0x20, 32];
+    let mut adv_data = vec![0x01, 0x08, 0x20, 32];
     adv_data.push(3); // Advertising_Data_Length
     adv_data.extend_from_slice(&[0x02, 0x01, 0x06]); // Advertising_Data
-    adv_data.resize(3 + 32, 0); // Pad to 32 bytes of parameters
-    rootcanal.receive_hci(sender_id, Idc::Cmd, &adv_data).unwrap();
+    adv_data.resize(4 + 32, 0); // Pad to 32 bytes of parameters
+    rootcanal.receive_hci(sender_id, adv_data.into()).unwrap();
     assert_command_complete(&mut hci_receiver, 0x08, 0x20).await;
 
     // LE Set Advertising Enable
-    let adv_enable = vec![0x0A, 0x20, 0x01, 0x01];
-    rootcanal.receive_hci(sender_id, Idc::Cmd, &adv_enable).unwrap();
+    let adv_enable = vec![0x01, 0x0A, 0x20, 0x01, 0x01];
+    rootcanal.receive_hci(sender_id, adv_enable.into()).unwrap();
     assert_command_complete(&mut hci_receiver, 0x0A, 0x20).await;
 
     // Check for advertising packet

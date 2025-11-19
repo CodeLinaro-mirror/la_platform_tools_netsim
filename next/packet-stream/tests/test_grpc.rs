@@ -1,10 +1,10 @@
 // tests/test_grpc.rs
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use futures::stream::{StreamExt, TryStreamExt};
 use futures::SinkExt;
 use grpcio::{ClientDuplexReceiver, ClientDuplexSender, Error as GrpcError, WriteFlags};
 use netsim_api::initial_info::{ChipInfo, ChipKind};
-use netsim_proto::packet_streamer::{PacketRequest, PacketResponse};
+use netsim_proto::packet_streamer::{self, PacketRequest, PacketResponse};
 use packet_stream::error::{PacketStreamError, Result};
 use packet_stream::transport::grpc_converters;
 use packet_stream::transport::traits::TransportListener;
@@ -31,19 +31,21 @@ async fn run_client_bidi_bridge(
             grpc_msg = grpc_rx.next() => {
                 match grpc_msg {
                     Some(Ok(packet_response)) => {
-                        match grpc_converters::packet_response_to_bytes(packet_response) {
-                            Ok(bytes) => {
-                                if mpsc_tx.send(Ok(bytes)).await.is_err() {
-                                    eprintln!("Client Bridge: mpsc_tx.send failed after packet_response_to_bytes");
-                                    return Err(PacketStreamError::ConnectionClosed);
-                                }
+                        let bytes_result = match packet_response.response_type {
+                            Some(packet_streamer::packet_response::Response_type::HciPacket(hci)) => {
+                                let mut bytes = BytesMut::new();
+                                bytes.put_u8(hci.packet_type.value() as u8);
+                                bytes.put_slice(&hci.packet);
+                                Ok(bytes.freeze())
                             }
-                            Err(e) => {
-                                if mpsc_tx.send(Err(e)).await.is_err() {
-                                    eprintln!("Client Bridge: mpsc_tx.send failed after packet_response_to_bytes error");
-                                    return Err(PacketStreamError::ConnectionClosed);
-                                }
+                            Some(packet_streamer::packet_response::Response_type::Packet(packet)) => {
+                                Ok(Bytes::from(packet))
                             }
+                            _ => Err(PacketStreamError::InvalidConfig("Unknown response type".to_string())),
+                        };
+                        if mpsc_tx.send(bytes_result).await.is_err() {
+                            eprintln!("Client Bridge: mpsc_tx.send failed");
+                            return Err(PacketStreamError::ConnectionClosed);
                         }
                     }
                     Some(Err(e)) => {
@@ -57,7 +59,7 @@ async fn run_client_bidi_bridge(
             mpsc_msg = mpsc_rx.recv() => {
                 match mpsc_msg {
                     Some(bytes) => {
-                        match grpc_converters::bytes_to_packet_request(bytes) {
+                        match grpc_converters::bytes_to_packet_request(bytes, true /*is_bt*/) {
                             Ok(packet_request) => {
                                 if let Err(e) = grpc_tx.send(packet_request).await {
                                     eprintln!("Client Bridge: grpc_tx.send error: {:?}", e);
@@ -98,7 +100,11 @@ async fn test_grpc_transport_echo() {
         let (mut stream, mut sink, chip_info, _guid) =
             listener.accept().await.expect("Server accept failed");
         assert_eq!(chip_info.name, "test_chip");
+        let is_bt = chip_info.chip.as_ref().map_or(false, |c| c.kind == ChipKind::BLUETOOTH);
         while let Some(Ok(packet)) = futures::StreamExt::next(&mut stream).await {
+            // The packet received from the client bridge is the H4 packet.
+            // The server-side pump_grpc_messages would receive this, and pass it to the app.
+            // The app (in this test, the echo) sends it back.
             futures::SinkExt::send(&mut sink, packet).await.expect("Server send failed");
         }
         listener.shutdown().await.expect("Server shutdown failed");
@@ -148,14 +154,14 @@ async fn test_grpc_transport_echo() {
     }));
 
     // Test sending and receiving
-    let test_packet = bytes::Bytes::from_static(&[0xaa, 0xbb, 0xcc, 0xdd]);
-    futures::SinkExt::send(&mut app_sink, test_packet.clone()).await.unwrap();
+    let test_h4_packet = bytes::Bytes::from_static(&[0x04, 0xaa, 0xbb, 0xcc, 0xdd]); // Event IDC + payload
+    futures::SinkExt::send(&mut app_sink, test_h4_packet.clone()).await.unwrap();
     let received = futures::StreamExt::next(&mut app_stream).await.unwrap().unwrap();
-    assert_eq!(received, test_packet);
+    eprintln!("Test Echo Received: {:?}", received);
+    assert_eq!(test_h4_packet, received);
 
     // Close and shutdown
     drop(app_sink);
-    let _ = futures::StreamExt::next(&mut app_stream).await;
     server_task.await.unwrap();
     drop(client); // Drop the client to close the connection
 }
