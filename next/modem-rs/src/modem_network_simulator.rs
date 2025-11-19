@@ -5,7 +5,7 @@ use crate::modem_network::{ModemCallbacks, ModemError as NetworkError, ModemNetw
 use crate::time::{Clock, SystemClock};
 use crate::types::{Callbacks, CallbacksExt, CommandAction, ModemError, ModemId, NetworkCallbacks};
 use log;
-use netsim_api::chips::{ChipId, ChipInfo};
+use netsim_api::chips::{Chip, ChipId};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::sync::atomic::Ordering as AtomicOrdering;
@@ -309,7 +309,7 @@ impl ModemNetworkInterface for ModemNetworkSimulator {
     fn tick(&self) {
         unimplemented!();
     }
-    fn get_modem_info(&self, chip_id: ChipId) -> Result<ChipInfo, NetworkError> {
+    fn get_modem_info(&self, chip_id: ChipId) -> Result<Chip, NetworkError> {
         unimplemented!();
     }
 }

@@ -21,7 +21,7 @@ pub fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
     params: &BeaconParams,
-) -> Result<(), ChipError> {
+) -> Result<Chip, ChipError> {
     // Reset the controller first.
     let reset_cmd = vec![0x01, 0x03, 0x0c, 0x00];
     rootcanal.receive_hci(chip_id.into(), reset_cmd.into()).to_chip_error()?;
@@ -54,22 +54,5 @@ pub fn create(
     let adv_enable = vec![0x01, 0x0A, 0x20, 0x01, 0x01];
     rootcanal.receive_hci(chip_id.into(), adv_enable.into()).to_chip_error()?;
 
-    Ok(())
-}
-
-#[allow(dead_code)]
-/// NOTE: This function is a stub and not fully implemented.
-pub fn update_chip(
-    rootcanal: &Rootcanal,
-    chip_id: ChipId,
-    _old_params: &BeaconParams,
-    _new_params: &BeaconParams,
-) -> Result<Chip, ChipError> {
-    get_chip(rootcanal, chip_id)
-}
-
-#[allow(dead_code)]
-/// NOTE: This function is a stub and not fully implemented.
-pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<Chip, ChipError> {
     Ok(Chip::default())
 }

@@ -195,6 +195,17 @@ impl Server {
             .ok_or_else(|| DeviceError::Internal(format!("Device {id}'s info not found")))
     }
 
+    pub(crate) fn get_chip_client_by_id(
+        &self,
+        chip_id: ChipId,
+    ) -> Result<&ChipClient, DeviceError> {
+        let chip_info = self
+            .chip_info_map
+            .get(&chip_id)
+            .ok_or(DeviceError::Internal(format!("Chip {chip_id} not found")))?;
+        self.get_chip_client(chip_info.kind)
+    }
+
     /// Retrieves the appropriate `ChipClient` for the given `NetworkKind`.
     pub(crate) fn get_chip_client(&self, kind: NetworkKind) -> Result<&ChipClient, DeviceError> {
         self.chip_clients.get(&kind).ok_or_else(|| {

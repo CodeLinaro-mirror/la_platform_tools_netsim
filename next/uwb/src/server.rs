@@ -5,7 +5,7 @@ use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{
-    Chip, ChipClient, ChipId, ChipInfo, ChipRequest, CreateParams, PacketSink, PacketStream,
+    Chip, ChipClient, ChipId, ChipRequest, CreateParams, PacketSink, PacketStream,
 };
 use netsim_api::devices::DeviceClient;
 use std::collections::{HashMap, HashSet};
@@ -100,7 +100,7 @@ impl Server {
                     let _ = respond_to.send(Err(ChipError::ChipNotFound(id)));
                     return Ok(());
                 }
-                let _ = respond_to.send(Ok(ChipInfo::Uwb(Chip::default())));
+                let _ = respond_to.send(Ok(Chip::default()));
             }
             ChipRequest::Shutdown => {
                 *shutdown = true;

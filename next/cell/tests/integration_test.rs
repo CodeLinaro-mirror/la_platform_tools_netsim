@@ -5,8 +5,8 @@ use env_logger;
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt, stream::StreamExt};
 use netsim_api::chip_error::ChipError as NetsimChipError;
 use netsim_api::chips::{
-    CellParams, ChipClient, ChipConfig, ChipDiedParams, ChipId, CreateParams as CreateChipParams,
-    NetworkParams, PacketSink, PacketStream,
+    CellParams, ChipClient, ChipConfig, ChipDiedParams, ChipId, ChipVariant,
+    CreateParams as CreateChipParams, NetworkParams, PacketSink, PacketStream,
 };
 
 use std::io::Error as IoError;
@@ -144,6 +144,10 @@ async fn test_stream_to_controller_echo() {
 // T028: Test GetChip message
 #[tokio::test]
 async fn test_get_chip() {
+    test_get_chip_internal().await;
+}
+
+async fn test_get_chip_internal() {
     let harness = setup_test_harness().await;
     let chip_id = ChipId(1);
     let (stream, sink, _stream_tx, _sink_rx) = create_dummy_stream_sink(); // Keep _stream_tx and _sink_rx in scope
@@ -153,14 +157,11 @@ async fn test_get_chip() {
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    let get_chip_response = harness.client.read(chip_id).await;
-    match get_chip_response {
-        Ok(netsim_api::chips::ChipInfo::Cell(cell_info)) => {
-            assert_eq!(cell_info.chip_id, chip_id);
-            assert_eq!(cell_info.state, "FAKE_ACTIVE");
-        }
-        Ok(other) => panic!("Expected ChipInfo::Cell, got {:?}", other),
-        Err(e) => panic!("GetChip failed for existing chip: {:?}", e),
+    let chip = harness.client.read(chip_id).await.unwrap();
+    if let Some(ChipVariant::Cell(cell_chip)) = &chip.variant {
+        assert_eq!(cell_chip.state, "FAKE_ACTIVE");
+    } else {
+        panic!("GetChip failed for existing chip");
     }
 
     // Test non-existent chip

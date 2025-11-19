@@ -1,7 +1,7 @@
 // src/controller.rs
 use bytes::Bytes;
 use modem_rs::modem_network::{ModemCallbacks, ModemError, ModemNetworkInterface};
-use netsim_api::chips::{CellChipInfo, ChipId, ChipInfo};
+use netsim_api::chips::{CellChip, Chip, ChipId, ChipVariant};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -70,13 +70,17 @@ impl ModemNetworkInterface for FakeModemNetwork {
         // log::debug!("[Fake] CellularController tick");
     }
 
-    fn get_modem_info(&self, chip_id: ChipId) -> Result<ChipInfo, ModemError> {
+    fn get_modem_info(&self, chip_id: ChipId) -> Result<Chip, ModemError> {
         log::info!("[Fake] get_modem_info called for {}", chip_id);
         let controllers = self.controllers.lock().unwrap();
         log::info!("[Fake] Current controllers in map: {:?}", controllers.keys());
         if controllers.contains_key(&chip_id) {
             log::info!("[Fake] Controller {} FOUND", chip_id);
-            Ok(ChipInfo::Cell(CellChipInfo { chip_id, state: "FAKE_ACTIVE".to_string() }))
+            let chip = Chip {
+                variant: Some(ChipVariant::Cell(CellChip { state: "FAKE_ACTIVE".to_string() })),
+                ..Default::default()
+            };
+            Ok(chip)
         } else {
             log::warn!("[Fake] Controller {} NOT FOUND", chip_id);
             Err(ModemError::NotFound)

@@ -12,8 +12,7 @@
 //! included.
 
 use netsim_api::chip_error::ChipError;
-use netsim_api::chips::Chip;
-use netsim_api::chips::{ChipId, DeviceParams};
+use netsim_api::chips::{Chip, ChipId, DeviceParams};
 use rootcanal::Rootcanal;
 
 /// Creates a new `DeviceChip` and registers it with the `rootcanal` emulator.
@@ -21,24 +20,7 @@ pub fn create(
     _rootcanal: &Rootcanal,
     _chip_id: ChipId,
     _params: &DeviceParams,
-) -> Result<(), ChipError> {
-    // Validate mode parameters
-    Ok(())
-}
-
-#[allow(dead_code)]
-/// NOTE: This function is a stub and not fully implemented.
-pub fn update_chip(
-    rootcanal: &Rootcanal,
-    chip_id: ChipId,
-    _old_params: &DeviceParams,
-    _new_params: &DeviceParams,
 ) -> Result<Chip, ChipError> {
-    get_chip(rootcanal, chip_id)
-}
-
-#[allow(dead_code)]
-/// NOTE: This function is a stub and not fully implemented.
-pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<Chip, ChipError> {
+    // Validate mode parameters
     Ok(Chip::default())
 }
