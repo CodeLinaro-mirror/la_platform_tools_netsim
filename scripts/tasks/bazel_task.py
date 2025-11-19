@@ -51,18 +51,37 @@ class BazelTask(Task):
 
   def _run_gcloud_auth(self):
     # This is required for hermetic builds to access GCS for dependencies.
-    run(
-        [
-            "gcloud",
-            "auth",
-            "application-default",
-            "login",
-            "--project=emulator-builds",
-        ],
-        self.env,
-        "gcloud auth",
-        AOSP_ROOT,
-    )
+    # Check if we already have credentials to avoid browser popup
+    if (
+        run(
+            [
+                "gcloud",
+                "auth",
+                "application-default",
+                "print-access-token",
+            ],
+            self.env,
+            "gcloud auth check",
+            AOSP_ROOT,
+            throw_on_failure=False,
+            log_output=False,
+        )
+        == 0
+    ):
+      print("Gcloud already authenticated, skipping login")
+    else:
+      run(
+          [
+              "gcloud",
+              "auth",
+              "application-default",
+              "login",
+              "--project=emulator-builds",
+          ],
+          self.env,
+          "gcloud auth",
+          AOSP_ROOT,
+      )
     # This is required to access the quota project for GCS dependencies.
     run(
         [
