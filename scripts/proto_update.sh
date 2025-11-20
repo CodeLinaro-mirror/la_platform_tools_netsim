@@ -197,9 +197,3 @@ if [ -f "rust/Cargo.lock" ]; then
     rm rust/Cargo.lock
     echo "Removed rust/Cargo.lock"
 fi
-
-# --- Step 5. Copy generated files to next/proto ---
-echo "[Step 5] Copying generated files to next/proto..."
-NEXT_PROTO_SRC_DIR="$REPO_NETSIM/next/proto/src"
-mkdir -p "$NEXT_PROTO_SRC_DIR"
-cp "$PROTO_CF_SRC_DIR"/* "$NEXT_PROTO_SRC_DIR/"

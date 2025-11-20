@@ -84,6 +84,8 @@ message DeviceInfo {
   string variant = 6;
   // CPU architecture e.g. x86_64, arm64-v8a, etc
   string arch = 7;
+  // AVD ini filepath
+  string avd_path = 8;
 }
 
 message Chip {
