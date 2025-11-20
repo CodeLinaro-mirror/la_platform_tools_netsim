@@ -1,16 +1,16 @@
+use super::grpc_converters;
 use crate::error::{PacketStreamError, Result};
 use crate::transport::traits::{PacketSink, PacketStream, TransportListener};
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use futures::SinkExt;
+use log::warn;
 use netsim_api::initial_info::ChipInfo;
 use netsim_proto::packet_streamer::{self, PacketRequest, PacketResponse};
 use netsim_proto::packet_streamer_grpc::{create_packet_streamer, PacketStreamer};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-
-use super::grpc_converters;
 
 #[derive(Clone)]
 pub struct PacketStreamerService {
@@ -85,6 +85,7 @@ async fn pump_grpc_messages(
     mut sink: ::grpcio::DuplexSink<PacketResponse>,
     grpc_to_app_tx: mpsc::Sender<Result<Bytes>>,
     mut app_to_grpc_rx: mpsc::Receiver<Bytes>,
+    is_bt: bool,
 ) -> Result<()> {
     loop {
         tokio::select! {
@@ -108,14 +109,14 @@ async fn pump_grpc_messages(
             mpsc_msg = app_to_grpc_rx.recv() => {
                 match mpsc_msg {
                     Some(bytes) => {
-                        match grpc_converters::bytes_to_packet_response(bytes) {
+                        match grpc_converters::bytes_to_packet_response(bytes, is_bt) {
                             Ok(packet_response) => {
                                 if sink.send((packet_response, grpcio::WriteFlags::default())).await.is_err() {
                                     break; // gRPC client closed
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Error converting bytes to packet response: {:?}", e);
+                                warn!("Error converting bytes to packet response: {:?}", e);
                                 // Consider propagating this error to the app
                             }
                         }
@@ -152,19 +153,23 @@ impl PacketStreamer for PacketStreamerService {
                 let (app_to_grpc_tx, app_to_grpc_rx) = mpsc::channel::<Bytes>(100);
 
                 // Send the new connection's channels to the listener's accept loop
+                let is_bt = chip_info
+                    .chip
+                    .as_ref()
+                    .map_or(false, |c| c.kind == netsim_api::initial_info::ChipKind::BLUETOOTH);
                 if new_connection_tx
                     .send((chip_info, peer_addr, grpc_to_app_rx, app_to_grpc_tx))
                     .await
                     .is_err()
                 {
-                    eprintln!("Failed to send new connection to listener. Dropping connection.");
+                    warn!("Failed to send new connection to listener. Dropping connection.");
                     return;
                 }
 
                 if let Err(e) =
-                    pump_grpc_messages(stream, sink, grpc_to_app_tx, app_to_grpc_rx).await
+                    pump_grpc_messages(stream, sink, grpc_to_app_tx, app_to_grpc_rx, is_bt).await
                 {
-                    eprintln!("gRPC message pump error: {:?}", e);
+                    warn!("gRPC message pump error: {:?}", e);
                 }
             });
         });
@@ -284,10 +289,10 @@ pub async fn connect(
 mod tests {
     use super::*;
     use crate::transport::grpc_converters::*;
-    use bytes::Bytes;
+    use bytes::{BufMut, Bytes, BytesMut};
     use netsim_proto::hci_packet::HCIPacket;
     use netsim_proto::startup::ChipInfo;
-    use protobuf::Message;
+    use protobuf::{Enum, Message};
 
     #[test]
     fn test_hci_request_conversion() {
@@ -297,28 +302,49 @@ mod tests {
         req.set_hci_packet(hci.clone());
 
         let bytes = packet_request_to_bytes(req).unwrap();
-        assert_eq!(bytes[0], HCI_PACKET_TYPE);
-        assert_eq!(bytes.len(), hci.write_to_bytes().unwrap().len() + 1);
+        assert_eq!(bytes.len(), hci.packet.len() + 1);
+        assert_eq!(bytes[0], hci.packet_type.value() as u8);
+        assert_eq!(&bytes[1..], hci.packet.as_slice());
 
-        let req2 = bytes_to_packet_request(bytes).unwrap();
+        // Test bytes_to_packet_request with is_bt = true (H4 format)
+        let mut h4_bytes = BytesMut::new();
+        h4_bytes.put_u8(hci.packet_type.value() as u8);
+        h4_bytes.put_slice(&hci.packet);
+        let req2 = bytes_to_packet_request(h4_bytes.freeze(), true).unwrap();
         assert!(req2.has_hci_packet());
         assert_eq!(req2.hci_packet(), &hci);
     }
 
     #[test]
     fn test_hci_response_conversion() {
+        let packet_data = vec![0x05, 0x06, 0x07, 0x08];
         let mut hci = HCIPacket::new();
-        hci.packet = vec![0x05, 0x06, 0x07, 0x08];
+        hci.packet = packet_data.clone();
+
+        // Test packet_response_to_bytes
         let mut res = PacketResponse::new();
         res.set_hci_packet(hci.clone());
+        let bytes_with_prefix = packet_response_to_bytes(res).unwrap();
+        assert_eq!(bytes_with_prefix[0], HCI_PACKET_TYPE);
+        assert_eq!(bytes_with_prefix.len(), hci.write_to_bytes().unwrap().len() + 1);
 
-        let bytes = packet_response_to_bytes(res).unwrap();
-        assert_eq!(bytes[0], HCI_PACKET_TYPE);
-        assert_eq!(bytes.len(), hci.write_to_bytes().unwrap().len() + 1);
-
-        let res2 = bytes_to_packet_response(bytes).unwrap();
+        // Test bytes_to_packet_response with is_bt = true
+        let mut h4_packet = BytesMut::new();
+        h4_packet.put_u8(netsim_proto::hci_packet::hcipacket::PacketType::EVENT.value() as u8);
+        h4_packet.put_slice(&packet_data);
+        let res2 = bytes_to_packet_response(h4_packet.freeze(), true).unwrap();
         assert!(res2.has_hci_packet());
-        assert_eq!(res2.hci_packet(), &hci);
+        let expected_hci = HCIPacket {
+            packet_type: netsim_proto::hci_packet::hcipacket::PacketType::EVENT.into(),
+            packet: packet_data.clone(),
+            ..Default::default()
+        };
+        assert_eq!(res2.hci_packet(), &expected_hci);
+
+        // Test bytes_to_packet_response with is_bt = false
+        let res3 = bytes_to_packet_response(Bytes::from(packet_data.clone()), false).unwrap();
+        assert!(res3.has_packet());
+        assert_eq!(res3.packet(), packet_data.as_slice());
     }
 
     #[test]
@@ -329,7 +355,7 @@ mod tests {
         let bytes = packet_request_to_bytes(req).unwrap();
         assert_eq!(bytes, raw); // No type byte prepended
 
-        let req2 = bytes_to_packet_request(bytes).unwrap();
+        let req2 = bytes_to_packet_request(bytes, false).unwrap();
         assert!(req2.has_packet());
         assert_eq!(req2.packet(), raw.as_ref());
         assert!(!req2.has_hci_packet());
@@ -343,7 +369,7 @@ mod tests {
         let bytes = packet_response_to_bytes(res).unwrap();
         assert_eq!(bytes, raw); // No type byte prepended
 
-        let res2 = bytes_to_packet_response(bytes).unwrap();
+        let res2 = bytes_to_packet_response(bytes, false).unwrap();
         assert!(res2.has_packet());
         assert_eq!(res2.packet(), raw.as_ref());
         assert!(!res2.has_hci_packet());

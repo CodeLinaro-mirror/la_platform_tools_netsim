@@ -72,7 +72,7 @@ impl Server {
             id
         });
 
-        let network_kind = (&request.chip_config.network_params).into();
+        let network_kind: NetworkKind = (&request.chip_config.network_params).into();
         self.add_chip_to_device(
             device_id,
             chip_id,
@@ -125,6 +125,7 @@ impl Server {
         Ok(id)
     }
 
+    /// Creates the `ChipCreateParams` for a new chip from the API `ChipConfig`.
     fn create_chip_params(
         id: netsim_api::chips::ChipId,
         chip_create: &api::ChipConfig,
@@ -170,6 +171,7 @@ impl Server {
         Ok(api::ListDeviceResponse { devices })
     }
 
+    /// Handles the `Update` command to modify an existing device's properties.
     async fn handle_update(&mut self, update: api::DeviceUpdate) -> Result<(), DeviceError> {
         let device_id = DeviceId(update.id);
         let device_info = self.get_device_info(&device_id)?;
@@ -228,6 +230,10 @@ impl Server {
         Ok(())
     }
 
+    /// Handles the `NotifyChipRemoved` command from a chip service.
+    ///
+    /// This function removes the chip from the device's chip set. If the device
+    /// becomes empty, it is also removed.
     fn handle_notify_chip_removed(&mut self, chip_id: ChipId) -> Result<(), DeviceError> {
         let device_id = match self.chip_info_map.remove(&chip_id) {
             Some(chip_info) => chip_info.device_id,

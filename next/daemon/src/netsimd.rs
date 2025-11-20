@@ -9,7 +9,7 @@ use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use netsim_api::chips::{
     BluetoothMode, BluetoothParams, ChipConfig, DeviceParams, NetworkKind, NetworkParams,
-    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
+    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbParams, WifiParams,
 };
 use netsim_api::devices::{DeviceClient, DeviceConfig, DevicePsCreate};
 use netsim_api::initial_info::{ChipInfo, ChipKind};
@@ -60,7 +60,6 @@ async fn handle_new_connection(
     device_guid: String,
 ) {
     info!("Handling new connection for {:?}, device {}", chip_info.name, chip_info.device_name());
-
     let device_config = DeviceConfig {
         name: chip_info
             .device_info
@@ -85,6 +84,8 @@ async fn handle_new_connection(
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
         }),
+        ChipKind::UWB => NetworkParams::Uwb(UwbParams {}),
+        ChipKind::WIFI => NetworkParams::Wifi(WifiParams {}),
         _ => {
             error!("Unsupported chip kind: {:?}", chip.kind);
             return;
@@ -181,10 +182,15 @@ async fn setup_grpc_listener(
 /// and handles incoming connections using the `packet_stream` crate.
 #[derive(Debug)]
 pub struct NetsimDaemon {
+    /// Set of spawned Tokio tasks, including the chip and device servers.
     join_set: JoinSet<()>,
+    /// Manages the network listeners (UDS, gRPC) for incoming connections.
     streams: Streams,
+    /// Client for interacting with the Device Service.
     device_client: DeviceClient,
+    /// Addresses of the active listeners.
     listener_addresses: HashMap<String, StreamAddress>,
+    /// Command line arguments passed to the daemon.
     args: Args,
 }
 
@@ -273,15 +279,29 @@ impl NetsimDaemon {
         let (bt_server, bt_client) = bluetooth::Server::new(device_client.clone());
         info!("Bluetooth server created");
 
+        // Setup Wifi Server
+        let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
+        info!("Wifi server created");
+
+        // Setup Uwb Server
+        let (uwb_server, uwb_client) = uwb::Server::new(device_client.clone());
+        info!("Uwb server created");
+
         // Prepare chip clients map for DeviceServer
         let mut chip_clients = HashMap::new();
         chip_clients.insert(NetworkKind::Bluetooth, bt_client);
+        chip_clients.insert(NetworkKind::Wifi, wifi_client);
+        chip_clients.insert(NetworkKind::Uwb, uwb_client);
         // TODO: Add other chip clients (WiFi, Cell, etc.) here
 
         // Spawn server tasks
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_server.run());
         info!("Bluetooth server started");
+        join_set.spawn(wifi_server.run());
+        info!("Wifi server started");
+        join_set.spawn(uwb_server.run());
+        info!("Uwb server started");
         join_set.spawn(device_server.run(chip_clients));
         info!("Device server started");
         Ok(StartUpMode::Owner(

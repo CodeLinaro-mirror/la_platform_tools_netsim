@@ -43,7 +43,7 @@ use log::{debug, error, info};
 use netsim_api::chip_error::ChipError;
 use netsim_api::chips::{BluetoothMode, ChipClient, ChipId, ChipRequest, PacketStream};
 use netsim_api::devices::DeviceClient;
-use rootcanal::{Callbacks as RootcanalCallbacks, Idc, Phy, Rootcanal};
+use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -51,7 +51,9 @@ use tokio::task::{JoinError, JoinSet};
 use tokio::time::{interval, Duration};
 use tokio_stream::{StreamExt, StreamMap, StreamNotifyClose};
 
+/// Represents an entry for a chip managed by the `Server`.
 pub(crate) struct ChipEntry {
+    /// The mode of operation for the Bluetooth chip.
     #[allow(dead_code)]
     pub(crate) bluetooth_mode: BluetoothMode,
 }
@@ -65,15 +67,21 @@ pub(crate) struct ChipEntry {
 /// - Interacting with the `rootcanal` Bluetooth emulator.
 pub struct Server {
     // TODO: reduce visibility of fields
+    /// The Rootcanal emulator instance.
     pub(crate) rootcanal: Arc<Rootcanal>,
+    /// A map of all active chips, keyed by chip ID.
     pub(crate) chips: HashMap<ChipId, ChipEntry>,
+    /// Receiver for incoming `ChipRequest` commands.
     command_rx: mpsc::Receiver<ChipRequest>,
-    // A map of all active packet streams, keyed by chip ID.
+    /// A map of all active packet streams, keyed by chip ID.
     pub(crate) streams: StreamMap<ChipId, StreamNotifyClose<PacketStream>>,
+    /// A set of tasks for handling packet sinks.
     pub(crate) sink_tasks: JoinSet<ChipId>,
+    /// Client for sending notifications to the DeviceService.
     pub(crate) device_client: DeviceClient,
 }
 
+/// Implementation of `RootcanalCallbacks` for the Bluetooth `Server`.
 struct RootcanalCallbacksImpl;
 
 impl RootcanalCallbacks for RootcanalCallbacksImpl {
@@ -109,10 +117,19 @@ impl Server {
         (server, ChipClient::new(command_tx))
     }
 
+    /// Processes the next packet from the a stream in `self.streams`.
+    ///
+    /// This function is called when a packet is received from one of the active
+    /// packet streams. It forwards the packet to the `rootcanal` emulator.
+    /// If the stream is closed, it removes the chip.
     fn streams_next(&mut self, id: ChipId, val: Option<Bytes>) {
         match val {
             Some(packet) => {
-                self.rootcanal.receive_hci(id.into(), Idc::Cmd, &packet).expect("Receive HCI error")
+                if packet.is_empty() {
+                    error!("Received empty HCI packet from stream for chip {id}");
+                    return;
+                }
+                self.rootcanal.receive_hci(id.into(), packet).expect("Receive HCI error")
             }
             None => {
                 if let Err(e) = self.remove_chip(id, "stream_closed") {
@@ -122,6 +139,10 @@ impl Server {
         }
     }
 
+    /// Processes the result of a completed sink task.
+    ///
+    /// This function is called when a task in `self.sink_tasks` finishes.
+    /// It removes the chip associated with the completed sink task.
     fn join_next(&mut self, res: Result<ChipId, JoinError>) {
         match res {
             Ok(id) => {
@@ -151,6 +172,17 @@ impl Server {
         info!("Bluetooth is shutdown");
     }
 
+    /// Removes a chip from the simulation.
+    ///
+    /// # Arguments
+    ///
+    /// * `id`: The ID of the chip to remove.
+    /// * `res`: A string indicating the reason for removal.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(true)` if the chip was removed, `Ok(false)` if the chip
+    /// was not found, or an error if removal failed.
     // Return false if the chip doesn't exist.
     pub(crate) fn remove_chip(&mut self, id: ChipId, res: &str) -> Result<bool, ChipError> {
         debug!("Removing chip {id} by {res}");

@@ -14,6 +14,7 @@ rust_library(
     visibility = ["//next:__subpackages__"],
     deps = [
         "//next/packets",
+        "@bytes",
         "@cxx.rs//:cxx",
         "@log",
         "@rootcanal//:lib_rootcanal_ffi",
@@ -34,6 +35,7 @@ rust_test_suite(
     deps = [
         ":rootcanal",
         "//next/packets",
+        "@bytes",
         "@cxx.rs//:cxx",
         "@env_logger",
         "@log",

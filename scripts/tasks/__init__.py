@@ -18,6 +18,7 @@ import logging
 import platform
 from typing import Mapping
 
+from tasks.bazel_install_task import BazelInstallTask
 from tasks.bazel_task import BazelTask
 from tasks.compile_install_task import CompileInstallTask
 from tasks.compile_task import CompileTask
@@ -31,6 +32,7 @@ from utils import is_bazel_build
 
 TASK_LIST = [
     "Bazel",
+    "BazelInstall",
     "Configure",
     "Compile",
     "CompileInstall",
@@ -55,6 +57,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
   # Mapping of tasks
   tasks = {
       "Bazel": BazelTask(args, env),
+      "BazelInstall": BazelInstallTask(args, env),
       "Configure": ConfigureTask(args, env),
       "Compile": CompileTask(args, env),
       "CompileInstall": CompileInstallTask(args, env),
@@ -69,6 +72,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
     if args.bazel:
       for task_name in [
           "Bazel",
+          "BazelInstall",
           "ZipArtifact",
           "InstallEmulator",
           "RunPyTest",
@@ -96,9 +100,10 @@ def get_tasks(args, env) -> Mapping[str, Task]:
       "installemulator": ["InstallEmulator"],
       "runpytest": ["RunPyTest"],
       "bazel": ["Bazel"],
+      "bazelinstall": ["BazelInstall"],
       "fullbuild": ["Configure", "Compile", "InstallEmulator"],
       "localrunall": (
-          ["Bazel", "InstallEmulator", "RunPyTest"]
+          ["Bazel", "BazelInstall", "InstallEmulator", "RunPyTest"]
           if is_bazel_build(args)
           else [
               "Configure",

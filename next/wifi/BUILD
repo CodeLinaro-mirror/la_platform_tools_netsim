@@ -13,18 +13,21 @@ rust_library(
         "//next/hostapd-rs",
         "//next/http-proxy",
         "//next/libslirp-rs",
+        "//next/netsim-api",
         "//next/packets",
         "//next/proto",
         "@bytes",
+        "@futures",
         "@log",
         "@pdl-runtime",
         "@socket2",
         "@tokio",
+        "@tokio-stream",
     ],
 )
 
 rust_test(
-    name = "tests",
+    name = "unit_tests",
     compile_data = [
         "src/test_packets/hwsim_cmd_frame.csv",
         "src/test_packets/hwsim_cmd_frame_mdns.csv",
@@ -45,5 +48,23 @@ rust_test(
     tags = ["general_tests"],
     deps = [
         "@wpa_supplicant_8//:hostapd_c_lib",
+    ],
+)
+
+rust_test(
+    name = "tests",
+    srcs = glob(["tests/**/*.rs"]),
+    crate_root = "tests/mod.rs",
+    edition = "2021",
+    proc_macro_deps = [
+        "@async-trait",
+    ],
+    deps = [
+        ":wifi",
+        "//next/netsim-api",
+        "@env_logger",
+        "@futures",
+        "@tokio",
+        "@tokio-stream",
     ],
 )
