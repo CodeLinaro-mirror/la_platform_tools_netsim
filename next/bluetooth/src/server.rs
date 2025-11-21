@@ -37,6 +37,7 @@
 //! * **RSSI Management:** Manage Received Signal Strength Indication (RSSI) based on chip location.
 //! * **Link Layer Capture:** Sniffer functionality to convert Rootcanal LL packets to standard Bluetooth LL packets.
 //! * **HCI-based Beacon:** Implement Beacon functionality via HCI commands, allowing common Android-like advertisement parameters.
+use crate::ranging;
 use crate::utils::ToChipError;
 use bytes::Bytes;
 use log::{debug, error, info};
@@ -94,9 +95,19 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
     ) -> Option<i32> {
         let src_id = source_id.into();
         let dst_id = destination_id.into();
-        let _src_position = self.chips.lock().unwrap().get(&src_id).map(|c| c.position.clone());
-        let _dst_position = self.chips.lock().unwrap().get(&dst_id).map(|c| c.position.clone());
-        Some(tx_power)
+        let chips = self.chips.lock().unwrap();
+        let src_chip = chips.get(&src_id);
+        let dst_chip = chips.get(&dst_id);
+
+        if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
+            let dist = ranging::distance(&src.position, &dst.position);
+            let rssi = ranging::distance_to_rssi(tx_power as i8, dist);
+            Some(rssi as i32)
+        } else {
+            // If one of the chips is missing, default to tx_power.
+            // This can happen during startup/shutdown or if a chip is not yet fully registered.
+            Some(tx_power)
+        }
     }
 }
 
