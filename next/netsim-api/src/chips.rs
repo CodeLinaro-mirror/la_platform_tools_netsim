@@ -212,6 +212,17 @@ impl From<&NetworkParams> for NetworkKind {
     }
 }
 
+impl From<NetworkKind> for ChipKind {
+    fn from(kind: NetworkKind) -> Self {
+        match kind {
+            NetworkKind::Bluetooth => ChipKind::BLUETOOTH,
+            NetworkKind::Wifi => ChipKind::WIFI,
+            NetworkKind::Uwb => ChipKind::UWB,
+            NetworkKind::Cell => ChipKind::CELLULAR,
+        }
+    }
+}
+
 /// An enum holding the parameters for a specific chip technology.
 #[derive(Debug, Clone)]
 pub enum NetworkParams {

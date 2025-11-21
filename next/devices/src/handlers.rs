@@ -40,7 +40,9 @@ impl Server {
                     r.send(()).ok();
                 }
             }
-            DeviceRequest::Reset {} => {}
+            DeviceRequest::Reset { respond_to } => {
+                respond_to.send(Ok(())).ok();
+            }
             DeviceRequest::GetChipStatistics { respond_to: _ } => {}
             DeviceRequest::Shutdown => {
                 self.shutdown = true;
@@ -78,6 +80,8 @@ impl Server {
             chip_id,
             network_kind,
             request.chip_config.name.clone(),
+            request.chip_config.manufacturer.clone(),
+            request.chip_config.product_name.clone(),
         )?;
 
         self.get_chip_client(network_kind)?
@@ -116,7 +120,14 @@ impl Server {
         // Insert device info after successful chip creation
         self.devices_by_id.insert(id, device_info.clone());
 
-        self.add_chip_to_device(id, chip_id, chip_kind, chip_create.name.clone())?;
+        self.add_chip_to_device(
+            id,
+            chip_id,
+            chip_kind,
+            chip_create.name.clone(),
+            chip_create.manufacturer.clone(),
+            chip_create.product_name.clone(),
+        )?;
         info!("Created chip {:?} for device {:?}, name {}", chip_id, id, chip_create.name);
 
         if self.chip_info_map.len() == 1 {
@@ -156,14 +167,32 @@ impl Server {
         let devices: Vec<Device> = self
             .devices_by_id
             .values()
-            .map(|device_info| Device {
-                id: device_info.id.into(),
-                name: device_info.device_config.name.clone(),
-                visible: device_info.device_config.visible,
-                position: device_info.device_config.position.clone(),
-                orientation: device_info.device_config.orientation.clone(),
-                // TODO: Populate chip info.
-                chips: Vec::new(),
+            .map(|device_info| {
+                let chips = device_info
+                    .chips
+                    .iter()
+                    .filter_map(|chip_id| {
+                        self.chip_info_map.get(chip_id).map(|info| netsim_api::chips::Chip {
+                            id: chip_id.0,
+                            kind: info.kind.into(),
+                            name: Some(info.name.clone()),
+                            manufacturer: Some(info.manufacturer.clone()),
+                            product_name: Some(info.product_name.clone()),
+                            position: device_info.device_config.position.clone(),
+                            orientation: device_info.device_config.orientation.clone(),
+                            variant: None, // TODO: Fetch variant details if needed
+                        })
+                    })
+                    .collect();
+
+                Device {
+                    id: device_info.id.into(),
+                    name: device_info.device_config.name.clone(),
+                    visible: device_info.device_config.visible,
+                    position: device_info.device_config.position.clone(),
+                    orientation: device_info.device_config.orientation.clone(),
+                    chips,
+                }
             })
             .collect();
 

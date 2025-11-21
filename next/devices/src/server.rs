@@ -98,6 +98,8 @@ pub struct ChipInfo {
     pub kind: NetworkKind,
     pub device_id: DeviceId,
     pub name: String,
+    pub manufacturer: String,
+    pub product_name: String,
 }
 
 impl Server {
@@ -219,10 +221,15 @@ impl Server {
         chip_id: ChipId,
         chip_kind: NetworkKind,
         name: String,
+        manufacturer: String,
+        product_name: String,
     ) -> Result<(), DeviceError> {
         let device_info = self.get_device_info(&device_id)?;
         device_info.chips.insert(chip_id);
-        self.chip_info_map.insert(chip_id, ChipInfo { kind: chip_kind, device_id, name });
+        self.chip_info_map.insert(
+            chip_id,
+            ChipInfo { kind: chip_kind, device_id, name, manufacturer, product_name },
+        );
         Ok(())
     }
 

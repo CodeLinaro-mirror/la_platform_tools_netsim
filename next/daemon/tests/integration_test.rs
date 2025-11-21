@@ -13,8 +13,13 @@ const HCI_RESET_COMMAND: [u8; 3] = [0x03, 0x0c, 0x00]; // OpCode, Length
 
 #[tokio::test]
 async fn test_bluetooth_hci_reset() {
+    let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
+    std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
+
     // Setup netsimd
-    let startup_mode = NetsimDaemon::new().await.expect("Failed to create daemon");
+    let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), temp_dir.clone())
+        .await
+        .expect("Failed to create daemon");
     let (daemon, _ini_guard) = match startup_mode {
         StartUpMode::Owner(daemon, ini_guard) => (daemon, ini_guard),
         _ => panic!("Expected to start as Owner"),

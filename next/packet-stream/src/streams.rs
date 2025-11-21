@@ -107,6 +107,49 @@ impl Streams {
         Ok(())
     }
 
+    pub fn add_listener(
+        &mut self,
+        name: impl Into<String>,
+        mut listener: Box<dyn TransportListener + Send>,
+    ) -> Result<()> {
+        let name = name.into();
+        let addr = listener.local_addr()?;
+        println!("Adding {name} listener on {addr}");
+
+        self.listener_addresses.insert(name.clone(), addr.clone());
+
+        let listener_name = name.clone();
+        let connection_tx = self.connection_tx.clone();
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
+
+        let task = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = shutdown_rx.recv() => {
+                        println!("Shutting down {listener_name} listener");
+                        let _ = listener.shutdown().await;
+                        break;
+                    }
+                    result = listener.accept() => {
+                        match result {
+                            Ok(stream_tuple) => {
+                                if connection_tx.send((listener_name.clone(), stream_tuple)).is_err() {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Listener {listener_name} accept error: {e}");
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        self.listener_tasks.insert(name.clone(), task);
+        Ok(())
+    }
+
     pub async fn start_from_config(&mut self, config: &ListenerConfig) -> Result<()> {
         for (name, transport) in &config.listeners {
             self.start_listener(name, transport.clone()).await?;

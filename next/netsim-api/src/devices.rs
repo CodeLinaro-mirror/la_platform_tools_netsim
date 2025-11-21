@@ -104,6 +104,7 @@ client_method!(DeviceClient => fn ps_create(request: DevicePsCreate) -> () as De
 client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
 client_method!(DeviceClient => fn update(update: api::DeviceUpdate) -> () as DeviceRequest::Update);
 client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
+client_method!(DeviceClient => fn reset() -> () as DeviceRequest::Reset);
 
 #[allow(dead_code)]
 pub struct GetVersionMessage {
@@ -262,7 +263,7 @@ pub enum DeviceRequest {
         respond_to: Responder<()>,
     },
     /// Reset all devices.
-    Reset {},
+    Reset { respond_to: Responder<()> },
     GetChipStatistics {
         /// The channel to send the list of devices back on.
         respond_to: Responder<()>,

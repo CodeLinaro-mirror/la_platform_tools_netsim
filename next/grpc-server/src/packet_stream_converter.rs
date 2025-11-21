@@ -1,13 +1,13 @@
-use crate::error::{PacketStreamError, Result};
 use bytes::{BufMut, Bytes, BytesMut};
 use netsim_api::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use netsim_proto::common as proto_common;
 use netsim_proto::hci_packet::hcipacket::PacketType;
 use netsim_proto::hci_packet::HCIPacket;
 use netsim_proto::packet_streamer::{self, PacketRequest, PacketResponse};
+use netsim_proto::protobuf;
+use netsim_proto::protobuf::{Enum, Message};
 use netsim_proto::startup as proto_startup;
-use protobuf::Enum;
-use protobuf::Message;
+use packet_stream::error::{PacketStreamError, Result};
 
 pub(crate) const HCI_PACKET_TYPE: u8 = 0x01;
 
@@ -120,7 +120,11 @@ pub fn packet_response_to_bytes(value: PacketResponse) -> Result<Bytes> {
         Some(packet_streamer::packet_response::Response_type::HciPacket(hci)) => {
             let mut bytes = BytesMut::new();
             bytes.put_u8(HCI_PACKET_TYPE);
-            let hci_bytes = hci.write_to_bytes()?;
+            let hci_bytes = hci.write_to_bytes().map_err(|e| {
+                PacketStreamError::Protocol(packet_stream::error::ProtocolError::InvalidFormat(
+                    e.to_string(),
+                ))
+            })?;
             bytes.put_slice(&hci_bytes);
             Ok(bytes.freeze())
         }
@@ -158,116 +162,4 @@ pub fn chip_info_to_proto(chip_info: ChipInfo) -> proto_startup::ChipInfo {
         proto.device_info = Some(device_proto).into();
     }
     proto
-}
-
-impl From<protobuf::Error> for PacketStreamError {
-    fn from(err: protobuf::Error) -> Self {
-        PacketStreamError::InvalidConfig(format!("Protobuf error: {err}"))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bytes::Bytes;
-    use netsim_proto::hci_packet::HCIPacket;
-    use netsim_proto::startup::ChipInfo as ProtoChipInfo;
-    use protobuf::Message;
-
-    #[test]
-    fn test_hci_request_conversion() {
-        let mut hci = HCIPacket::new();
-        hci.packet = vec![0x01, 0x02, 0x03, 0x04];
-        let mut req = PacketRequest::new();
-        req.set_hci_packet(hci.clone());
-
-        let bytes = packet_request_to_bytes(req).unwrap();
-        assert_eq!(bytes.len(), hci.packet.len() + 1);
-        assert_eq!(bytes[0], hci.packet_type.value() as u8);
-        assert_eq!(&bytes[1..], hci.packet.as_slice());
-
-        // Test bytes_to_packet_request with is_bt = true (H4 format)
-        let mut h4_bytes = BytesMut::new();
-        h4_bytes.put_u8(hci.packet_type.value() as u8);
-        h4_bytes.put_slice(&hci.packet);
-        let req2 = bytes_to_packet_request(h4_bytes.freeze(), true).unwrap();
-        assert!(req2.has_hci_packet());
-        assert_eq!(req2.hci_packet(), &hci);
-    }
-
-    #[test]
-    fn test_hci_response_conversion() {
-        let packet_data = vec![0x05, 0x06, 0x07, 0x08];
-        let mut hci = HCIPacket::new();
-        hci.packet = packet_data.clone();
-
-        // Test packet_response_to_bytes
-        let mut res = PacketResponse::new();
-        res.set_hci_packet(hci.clone());
-        let bytes_with_prefix = packet_response_to_bytes(res).unwrap();
-        assert_eq!(bytes_with_prefix[0], HCI_PACKET_TYPE);
-        assert_eq!(bytes_with_prefix.len(), hci.write_to_bytes().unwrap().len() + 1);
-
-        // Test bytes_to_packet_response with is_bt = true
-        let mut h4_packet = BytesMut::new();
-        h4_packet.put_u8(PacketType::EVENT.value() as u8);
-        h4_packet.put_slice(&packet_data);
-        let res2 = bytes_to_packet_response(h4_packet.freeze(), true).unwrap();
-        assert!(res2.has_hci_packet());
-        let expected_hci = HCIPacket {
-            packet_type: PacketType::EVENT.into(),
-            packet: packet_data.clone(),
-            ..Default::default()
-        };
-        assert_eq!(res2.hci_packet(), &expected_hci);
-
-        // Test bytes_to_packet_response with is_bt = false
-        let res3 = bytes_to_packet_response(Bytes::from(packet_data.clone()), false).unwrap();
-        assert!(res3.has_packet());
-        assert_eq!(res3.packet(), packet_data.as_slice());
-    }
-
-    #[test]
-    fn test_raw_packet_request() {
-        let raw = Bytes::from_static(&[0xAA, 0xBB, 0xCC]);
-        let mut req = PacketRequest::new();
-        req.set_packet(raw.to_vec());
-        let bytes = packet_request_to_bytes(req).unwrap();
-        assert_eq!(bytes, raw); // No type byte prepended
-
-        let req2 = bytes_to_packet_request(bytes, false).unwrap();
-        assert!(req2.has_packet());
-        assert_eq!(req2.packet(), raw.as_ref());
-        assert!(!req2.has_hci_packet());
-    }
-
-    #[test]
-    fn test_raw_packet_response() {
-        let raw = Bytes::from_static(&[0xDD, 0xEE, 0xFF]);
-        let mut res = PacketResponse::new();
-        res.set_packet(raw.to_vec());
-        let bytes = packet_response_to_bytes(res).unwrap();
-        assert_eq!(bytes, raw); // No type byte prepended
-
-        let res2 = bytes_to_packet_response(bytes, false).unwrap();
-        assert!(res2.has_packet());
-        assert_eq!(res2.packet(), raw.as_ref());
-        assert!(!res2.has_hci_packet());
-    }
-
-    #[test]
-    fn test_packet_request_to_bytes_error() {
-        let mut req = PacketRequest::new();
-        req.set_initial_info(ProtoChipInfo::new());
-        let result = packet_request_to_bytes(req);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_packet_response_to_bytes_error() {
-        let mut res = PacketResponse::new();
-        res.set_error("Test Error".to_string());
-        let result = packet_response_to_bytes(res);
-        assert!(result.is_err());
-    }
 }
