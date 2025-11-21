@@ -34,6 +34,7 @@ rust_library(
     edition = "2021",
     deps = [
         "//next/bluetooth",
+        "//next/cell",
         "//next/devices",
         "//next/netsim-api",
         "//next/packet-stream",
