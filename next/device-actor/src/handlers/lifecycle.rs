@@ -60,6 +60,7 @@ pub async fn on_create(
                 device_id: DeviceId(entity.device.id),
                 variant: None,
             });
+            //TODO: Send create request to Link Actor
         } else {
             // Log warning or return error if no client for this network kind
             return Err(DeviceError::ActorCommunicationError(format!(
@@ -83,6 +84,7 @@ pub async fn on_update(
     if let Some(visible) = update.visible {
         entity.device.visible = visible;
     }
+    //TODO: check if chip_id is valid
     if let Some(pos) = update.position {
         entity.device.position = pos;
     }
@@ -102,6 +104,7 @@ pub async fn on_update(
                 .update(netsim_model::chip::ChipId(chip.id), chip_update)
                 .await
                 .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
+            //TODO: overwrite chip links if update.links is Some
         }
     }
     Ok(())
@@ -115,6 +118,7 @@ pub async fn on_delete(entity: &DeviceEntity, ctx: &mut DeviceContext) -> Result
                 .delete(netsim_model::chip::ChipId(chip.id))
                 .await
                 .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
+            //TODO: Send delete request to Link Actor
         }
     }
     Ok(())

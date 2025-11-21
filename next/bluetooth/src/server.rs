@@ -103,6 +103,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
 
         if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
             let dist = ranging::distance(&src.position, &dst.position);
+            //TODO: check for src_chip's link to dst_chip's RSSI override
             let rssi = ranging::distance_to_rssi(tx_power as i8, dist);
             Some(rssi as i32)
         } else {
