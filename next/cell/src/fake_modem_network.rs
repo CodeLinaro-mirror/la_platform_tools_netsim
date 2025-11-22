@@ -1,7 +1,7 @@
 // Copyright 2024-2025 The Android Open Source Project
 use bytes::Bytes;
 use modem_rs::modem_network::{ModemCallbacks, ModemError, ModemNetworkInterface};
-use netsim_api::chips::{CellChip, Chip, ChipId, ChipVariant};
+use netsim_model::chip::{CellChip, Chip, ChipId, ChipVariant};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

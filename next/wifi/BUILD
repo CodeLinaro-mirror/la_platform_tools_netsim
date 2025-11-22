@@ -13,7 +13,7 @@ rust_library(
         "//next/hostapd-rs",
         "//next/http-proxy",
         "//next/libslirp-rs",
-        "//next/netsim-api",
+        "//next/model",
         "//next/packets",
         "//next/proto",
         "@bytes",
@@ -61,7 +61,7 @@ rust_test(
     ],
     deps = [
         ":wifi",
-        "//next/netsim-api",
+        "//next/model",
         "@env_logger",
         "@futures",
         "@tokio",

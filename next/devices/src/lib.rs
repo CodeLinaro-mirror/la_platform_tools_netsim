@@ -21,8 +21,8 @@
 //! use bluetooth;
 //! use devices::Server;
 //! use tokio;
-//! use netsim_api::chips::{ChipClient, NetworkKind};
-//! use netsim_api::devices::{DeviceClient, DeviceRequest};
+//! use netsim_model::chip::{ChipClient, NetworkKind};
+//! use netsim_model::device::{DeviceClient, DeviceRequest};
 //! use std::collections::HashMap;
 //! use tokio::sync::mpsc;
 //!
@@ -59,18 +59,18 @@
 //! # Commands
 //!
 //! The `Server` processes commands sent via the `DeviceClient`. The available
-//! commands are defined in the [`netsim_api::devices::DeviceRequest`] enum. The
+//! commands are defined in the [`netsim_model::device::DeviceRequest`] enum. The
 //! `DeviceClient` provides a convenient method for each command variant.
 //!
 //! The following commands are supported:
-//! - [`PsCreate`](netsim_api::devices::DeviceClient::ps_create): Creates a new device from packet streamer parameters.
-//! - [`Create`](netsim_api::devices::DeviceClient::create): Creates a new device.
-//! - [`List`](netsim_api::devices::DeviceClient::list): Retrieves information about all devices.
-//! - [`Update`](netsim_api::devices::DeviceClient::update): Updates an existing device.
-//! - [`Delete`](netsim_api::devices::DeviceClient::delete): Deletes a device.
-//! - [`Reset`](netsim_api::devices::DeviceRequest::Reset): Resets all devices.
-//! - [`GetChipStatistics`](netsim_api::devices::DeviceRequest::GetChipStatistics): Retrieves statistics for all chips.
-//! - [`Shutdown`](netsim_api::devices::DeviceRequest::Shutdown): Shuts down the `Server`.
+//! - [`PsCreate`](netsim_model::device::DeviceClient::ps_create): Creates a new device from packet streamer parameters.
+//! - [`Create`](netsim_model::device::DeviceClient::create): Creates a new device.
+//! - [`List`](netsim_model::device::DeviceClient::list): Retrieves information about all devices.
+//! - [`Update`](netsim_model::device::DeviceClient::update): Updates an existing device.
+//! - [`Delete`](netsim_model::device::DeviceClient::delete): Deletes a device.
+//! - [`Reset`](netsim_model::device::DeviceRequest::Reset): Resets all devices.
+//! - [`GetChipStatistics`](netsim_model::device::DeviceRequest::GetChipStatistics): Retrieves statistics for all chips.
+//! - [`Shutdown`](netsim_model::device::DeviceRequest::Shutdown): Shuts down the `Server`.
 //!
 //! # Features
 //!

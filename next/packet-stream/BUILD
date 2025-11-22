@@ -30,7 +30,7 @@ rust_library(
         "@serde_derive",
     ],
     deps = [
-        "//next/netsim-api",
+        "//next/model",
         "@bytes",
         "@futures",
         "@futures-util",
@@ -91,7 +91,7 @@ rust_test(
     deps = [
         ":packet-stream",
         ":unit-tests",
-        "//next/netsim-api",
+        "//next/model",
         "//next/proto",
         "@bytes",
         "@futures",

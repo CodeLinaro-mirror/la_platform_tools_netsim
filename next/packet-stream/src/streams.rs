@@ -9,7 +9,7 @@ use crate::transport::{ListenerConfig, TransportType};
 use crate::types::StreamAddress;
 use bytes::Bytes;
 use futures::SinkExt;
-use netsim_api::initial_info::ChipInfo;
+use netsim_model::initial_info::ChipInfo;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::{broadcast, mpsc};

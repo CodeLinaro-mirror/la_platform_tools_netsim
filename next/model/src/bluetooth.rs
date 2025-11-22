@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Bluetooth {
-    pub low_energy: Option<Box<super::chips::Radio>>,
-    pub classic: Option<Box<super::chips::Radio>>,
+    pub low_energy: Option<Box<super::chip::Radio>>,
+    pub classic: Option<Box<super::chip::Radio>>,
     pub address: String,
     pub bt_properties: Option<Controller>,
 }

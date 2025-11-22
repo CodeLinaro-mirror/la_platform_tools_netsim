@@ -1,0 +1,23 @@
+[package]
+name = "grpc-server"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+bytes = "1.0"
+futures = "0.3"
+grpcio = "0.13"
+log = "0.4"
+netsim-model = { path = "../netsim-model" }
+netsim-proto = { path = "../proto" }
+packet-stream = { path = "../packet-stream" }
+protobuf = "3"
+tokio = { version = "1", features = [
+  "macros",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }
+tokio-stream = "0.1"

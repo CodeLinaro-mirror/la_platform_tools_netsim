@@ -2,14 +2,14 @@
 
 use crate::server::{DeviceInfo, Server};
 use log::info;
-use netsim_api::chips::ChipId;
-use netsim_api::{
-    chips::{
-        BeaconParams, BluetoothMode, BluetoothParams, ChipConfig, ChipPatch,
-        CreateParams as ChipCreateParams, NetworkKind, NetworkParams,
+use netsim_model::chip::ChipId;
+use netsim_model::{
+    chip::{
+        BeaconParams, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate as ChipChipCreate,
+        ChipUpdate, NetworkKind, NetworkParams,
     },
+    device::{api, Device, DeviceId, DevicePsCreate, DeviceRequest},
     device_error::DeviceError,
-    devices::{api, Device, DeviceId, DevicePsCreate, DeviceRequest},
 };
 use std::collections::HashSet;
 
@@ -85,7 +85,7 @@ impl Server {
         )?;
 
         self.get_chip_client(network_kind)?
-            .create(ChipCreateParams {
+            .create(ChipChipCreate {
                 id: chip_id,
                 packet_stream: request.packet_stream,
                 packet_sink: request.packet_sink,
@@ -136,20 +136,20 @@ impl Server {
         Ok(id)
     }
 
-    /// Creates the `ChipCreateParams` for a new chip from the API `ChipConfig`.
+    /// Creates the `ChipChipCreate` for a new chip from the API `ChipConfig`.
     fn create_chip_params(
-        id: netsim_api::chips::ChipId,
+        id: netsim_model::chip::ChipId,
         chip_create: &api::ChipConfig,
-    ) -> Result<ChipCreateParams, DeviceError> {
+    ) -> Result<ChipChipCreate, DeviceError> {
         let network_params = match &chip_create.chip {
-            api::Chip::Beacon(beacon) => NetworkParams::Bluetooth(BluetoothParams {
+            api::Chip::Beacon(beacon) => NetworkParams::Bluetooth(BluetoothCreate {
                 address: beacon.address.clone(),
                 bt_properties: Default::default(),
                 mode: BluetoothMode::Beacon(Box::new(BeaconParams { ble_beacon: beacon.clone() })),
             }),
         };
 
-        Ok(ChipCreateParams {
+        Ok(ChipChipCreate {
             id,
             packet_stream: None,
             packet_sink: None,
@@ -172,7 +172,7 @@ impl Server {
                     .chips
                     .iter()
                     .filter_map(|chip_id| {
-                        self.chip_info_map.get(chip_id).map(|info| netsim_api::chips::Chip {
+                        self.chip_info_map.get(chip_id).map(|info| netsim_model::chip::Chip {
                             id: chip_id.0,
                             kind: info.kind.into(),
                             name: Some(info.name.clone()),
@@ -203,7 +203,7 @@ impl Server {
     /// Handles the `Update` command to modify an existing device's properties.
     async fn handle_update(&mut self, update: api::DeviceUpdate) -> Result<(), DeviceError> {
         let device_id = DeviceId(update.id);
-        let mut chip_patch = ChipPatch::default();
+        let mut chip_patch = ChipUpdate::default();
 
         // 1. Acquire Lock, Perform Updates, and Extract Chip IDs inside a Scope
         let chip_ids: Vec<ChipId> = {

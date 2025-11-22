@@ -9,6 +9,7 @@ crate-type = ["staticlib", "lib"]
 
 [dependencies]
 netsim-api = { path = "../netsim-api" }
+netsim-model = { path = "../netsim-model" }
 rootcanal = { path = "../rootcanal" }
 protobuf = "3.6.0"
 thiserror = "1.0"

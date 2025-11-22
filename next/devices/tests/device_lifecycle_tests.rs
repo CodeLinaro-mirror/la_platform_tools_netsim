@@ -21,13 +21,13 @@
 //! - `test_notify_chip_removed_leaves_device`: Tests handle_notify_chip_removed when other chips remain.
 //! - `test_notify_chip_removed_nonexistent_chip`: Tests handle_notify_chip_removed with a non-existent chip.
 
-use crate::utils::*;
-use netsim_api::{
+use crate::utils::*; // touch
+use netsim_model::{
+    chip::{ChipId, ChipRequest},
     chip_error::ChipError,
-    chips::{Chip, ChipId, ChipRequest},
     client_error::ClientError,
+    device::{DeviceConfig, DeviceId},
     device_error::DeviceError,
-    devices::{api, DeviceConfig, DeviceId, Orientation, Position},
 };
 use std::time::Duration;
 use tokio::sync::oneshot;
@@ -310,47 +310,6 @@ async fn test_server_shutdown_on_last_chip_delete_inner() -> Result<(), Box<dyn 
 async fn test_update_device() {
     // TODO: Make a ChipClient mock that handles different return types
     //    test_update_device_inner().await;
-}
-
-async fn test_update_device_inner() {
-    let TestFixture { client, chip_rx, .. } = setup();
-
-    // Mock the chip service to respond with success for create.
-    // TODO: Make a ChipClient mock that handles different return types
-    //    tokio::spawn(mock_chip_service_response(chip_rx, Ok(Chip::default())));
-
-    // 1. Create a device
-    let device_name = "initial_name".to_string();
-    let request = get_test_create_device_request(device_name.clone());
-    let created_device_id = client.create(Box::new(request)).await.unwrap();
-
-    // 2. Prepare an update request
-    let new_name = "updated_name".to_string();
-    let new_position = Position { x: 1.0, y: 2.0, z: 3.0 };
-    let new_orientation = Orientation { yaw: 10.0, pitch: 20.0, roll: 30.0 };
-    let device_update = api::DeviceUpdate {
-        id: created_device_id.into(),
-        name: Some(new_name.clone()),
-        visible: Some(false),
-        position: Some(new_position.clone()),
-        orientation: Some(new_orientation.clone()),
-    };
-
-    // 3. Send the update request
-    client.update(device_update).await.unwrap();
-
-    // 4. List devices and verify the updates
-    let list_response = client.list().await.unwrap();
-    let listed_device = list_response
-        .devices
-        .iter()
-        .find(|d| d.id == created_device_id.0)
-        .expect("Updated device not found in list");
-
-    assert_eq!(listed_device.name, new_name);
-    assert_eq!(listed_device.visible, false);
-    assert_eq!(listed_device.position, new_position);
-    assert_eq!(listed_device.orientation, new_orientation);
 }
 
 /// Tests the handle_notify_chip_removed logic for the last chip, which should remove the device.

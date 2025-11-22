@@ -1,14 +1,14 @@
-// next/cell/tests/integration_test.rs
+// next/cell/tests/integration_test.rs // touch
 use bytes::Bytes;
 use cell::server::CellServer;
 use env_logger;
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
-use netsim_api::chip_error::ChipError as NetsimChipError;
-use netsim_api::chips::{
-    CellParams, ChipClient, ChipConfig, ChipId, ChipVariant, CreateParams as CreateChipParams,
+use netsim_model::chip::{
+    CellCreate, ChipClient, ChipConfig, ChipCreate as CreateChipParams, ChipId, ChipVariant,
     NetworkParams, PacketSink, PacketStream,
 };
-use netsim_api::devices::{DeviceClient, DeviceRequest};
+use netsim_model::chip_error::ChipError as NetsimChipError;
+use netsim_model::device::{DeviceClient, DeviceRequest};
 
 use std::io::Error as IoError;
 use std::io::ErrorKind;
@@ -66,7 +66,7 @@ fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> Cre
             name: format!("cell-{}", chip_id),
             manufacturer: "Netsim".to_string(),
             product_name: "CellEmulator".to_string(),
-            network_params: NetworkParams::Cell(CellParams::default()),
+            network_params: NetworkParams::Cell(CellCreate::default()),
         },
     }
 }
@@ -172,7 +172,7 @@ async fn test_get_chip_internal() {
     // Test non-existent chip
     let bad_chip_id = ChipId(99);
     match harness.client.read(bad_chip_id).await {
-        Err(netsim_api::client_error::ClientError::Chip(NetsimChipError::ChipNotFound(id))) => {
+        Err(netsim_model::client_error::ClientError::Chip(NetsimChipError::ChipNotFound(id))) => {
             assert_eq!(id, bad_chip_id);
         }
         other => panic!("Expected ChipNotFound error, got {:?}", other),

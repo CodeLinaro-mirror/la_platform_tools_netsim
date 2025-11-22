@@ -5,7 +5,7 @@ use crate::bluetooth::Controller as RootcanalController;
 use crate::chip_error::ChipError;
 use crate::client_error::ClientError;
 use crate::client_method;
-use crate::devices::{Orientation, Position};
+use crate::device::{Orientation, Position};
 use crate::stats::NetsimRadioStats;
 use bytes::Bytes;
 use futures::Sink;
@@ -88,7 +88,7 @@ pub enum ChipRequest {
     /// Create a new chip.
     Create {
         /// The parameters for the new chip.
-        params: CreateParams,
+        params: ChipCreate,
         /// The channel to send the result.
         respond_to: Responder<()>,
     },
@@ -104,7 +104,7 @@ pub enum ChipRequest {
         /// The ID of the chip to patch.
         id: ChipId,
         /// The patch to apply to the chip.
-        patch: ChipPatch,
+        patch: ChipUpdate,
         /// The channel to send the updated chip state back on.
         respond_to: Responder<Chip>,
     },
@@ -140,7 +140,7 @@ pub enum ChipRequest {
 /// simulated chip, including its ID, packet transport, and technology-specific
 /// configurations. It is used in the [`ChipRequest::Create`] variant and
 /// passed to the chip service through the [`ChipClient::create`] method.
-pub struct CreateParams {
+pub struct ChipCreate {
     // TODO: This could be inside Chip
     /// A unique identifier for the new chip.
     pub id: ChipId,
@@ -153,9 +153,9 @@ pub struct CreateParams {
     pub config: ChipConfig,
 }
 
-impl fmt::Debug for CreateParams {
+impl fmt::Debug for ChipCreate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CreateParams")
+        f.debug_struct("ChipCreate")
             .field("id", &self.id)
             .field("config", &self.config)
             .finish_non_exhaustive()
@@ -227,23 +227,23 @@ impl From<NetworkKind> for ChipKind {
 #[derive(Debug, Clone)]
 pub enum NetworkParams {
     /// Bluetooth parameters.
-    Bluetooth(BluetoothParams),
+    Bluetooth(BluetoothCreate),
     /// Wi-Fi parameters.
-    Wifi(WifiParams),
+    Wifi(WifiCreate),
     /// UWB parameters.
-    Uwb(UwbParams),
+    Uwb(UwbCreate),
     /// Cellular parameters.
-    Cell(CellParams),
+    Cell(CellCreate),
 }
 
 /// Parameters for creating a Bluetooth chip.
 ///
 /// This struct holds all the necessary parameters for creating a Bluetooth chip,
 /// including its address, controller properties, and operational mode. It is
-/// nested within [`CreateParams`] when the chip being created is a
+/// nested within [`ChipCreate`] when the chip being created is a
 /// Bluetooth chip.
 #[derive(Debug, Clone)]
-pub struct BluetoothParams {
+pub struct BluetoothCreate {
     /// The Bluetooth address of the device.
     pub address: String,
     /// Rootcanal controller properties.
@@ -256,7 +256,7 @@ pub struct BluetoothParams {
 ///
 /// This enum differentiates between the various operational modes of a
 /// Bluetooth chip, such as Device, Beacon, and Sniffer. It is used within
-/// [`BluetoothParams`] to specify the chip's behavior.
+/// [`BluetoothCreate`] to specify the chip's behavior.
 #[derive(Debug, Clone)]
 pub enum BluetoothMode {
     /// A full, virtual Bluetooth controller that can be paired with.
@@ -283,6 +283,7 @@ pub struct BleBeacon {
 ///
 /// This struct holds parameters for creating a virtual Bluetooth device and is
 /// used when the [`BluetoothMode`] is [`BluetoothMode::Device`].
+// TODO: Rename to BluetoothDeviceParams to avoid confusion with DeviceConfig
 #[derive(Debug, Clone, Default)]
 pub struct DeviceParams {}
 
@@ -307,19 +308,19 @@ pub struct SnifferParams {
 
 /// Parameters for creating a Wi-Fi chip.
 #[derive(Debug, Default, Clone)]
-pub struct WifiParams {
+pub struct WifiCreate {
     // Future Wi-Fi specific properties.
 }
 
 /// Parameters for creating a UWB chip.
 #[derive(Debug, Default, Clone)]
-pub struct UwbParams {
+pub struct UwbCreate {
     // Future UWB specific properties.
 }
 
 /// Parameters for creating a Cellular chip.
 #[derive(Debug, Default, Clone)]
-pub struct CellParams {
+pub struct CellCreate {
     // Future Cellular specific properties.
 }
 
@@ -369,33 +370,33 @@ pub struct CellChip {
 }
 
 // ======================================================================
-// ChipPatch - All patchable fields for a chip
+// ChipUpdate - All patchable fields for a chip
 // ======================================================================
 
 /// This struct represents the partial, optional set of changes to a
 /// Chip provided by the client.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct ChipPatch {
+pub struct ChipUpdate {
     pub name: Option<String>,
     pub manufacturer: Option<String>,
     pub product_name: Option<String>,
     pub position: Option<Position>,
     pub orientation: Option<Orientation>,
-    pub variant: Option<ChipVariantPatch>,
+    pub variant: Option<ChipVariantUpdate>,
 }
 
 /// The techbology variant specific fields
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ChipVariantPatch {
+pub enum ChipVariantUpdate {
     Bluetooth,
     Wifi,
     Uwb,
-    Cell(CellPatch),
+    Cell(CellUpdate),
 }
 
 /// Cellular technology specific chip information.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CellPatch {
+pub struct CellUpdate {
     /// A string representing the current state of the modem.
     pub state: Option<String>,
 }
@@ -453,9 +454,9 @@ impl ChipClient {
 }
 
 // Generate client methods.
-client_method!(ChipClient => fn create(params: CreateParams) -> () as ChipRequest::Create);
+client_method!(ChipClient => fn create(params: ChipCreate) -> () as ChipRequest::Create);
 client_method!(ChipClient => fn read(id: ChipId) -> Chip as ChipRequest::Read);
-client_method!(ChipClient => fn update(id: ChipId, patch: ChipPatch) -> Chip as ChipRequest::Update);
+client_method!(ChipClient => fn update(id: ChipId, patch: ChipUpdate) -> Chip as ChipRequest::Update);
 client_method!(ChipClient => fn delete(id: ChipId) -> () as ChipRequest::Delete);
 client_method!(ChipClient => fn read_statistics() -> Vec<NetsimRadioStats> as ChipRequest::GetStatistics);
 client_method!(ChipClient => fn read_count_for_testing() -> usize as ChipRequest::GetCountForTesting);
@@ -490,7 +491,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(1);
         let client = ChipClient::new(tx);
 
-        let params = CreateParams {
+        let params = ChipCreate {
             id: ChipId(2),
             packet_stream: None,
             packet_sink: None,
@@ -498,7 +499,7 @@ mod tests {
                 "test_chip",
                 "test_manufacturer",
                 "test_product",
-                NetworkParams::Bluetooth(BluetoothParams {
+                NetworkParams::Bluetooth(BluetoothCreate {
                     address: "00:11:22:33:44:55".to_string(),
                     bt_properties: RootcanalController::default(),
                     mode: BluetoothMode::Device(DeviceParams {}),

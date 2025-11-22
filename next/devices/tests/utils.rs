@@ -6,13 +6,13 @@
 //! creating test data, and mocking responses for device server tests.
 
 use devices::server::Server;
-use netsim_api::{
-    chip_error::ChipError,
-    chips::{
-        BleBeacon, BluetoothMode, BluetoothParams, ChipClient, ChipConfig, ChipRequest,
+use netsim_model::{
+    chip::{
+        BleBeacon, BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, ChipRequest,
         DeviceParams, NetworkKind, NetworkParams,
     },
-    devices::{api, DeviceClient, DeviceConfig, DevicePsCreate},
+    chip_error::ChipError,
+    device::{api, DeviceClient, DeviceConfig, DevicePsCreate},
 };
 use std::collections::HashMap;
 use std::time::Duration;
@@ -74,9 +74,9 @@ pub fn create_chip_config(mode: BluetoothMode) -> ChipConfig {
         "ps_chip",
         "ps_manufacturer",
         "ps_product",
-        NetworkParams::Bluetooth(BluetoothParams {
+        NetworkParams::Bluetooth(BluetoothCreate {
             address: "11:22:33:44:55:66".to_string(),
-            bt_properties: netsim_api::bluetooth::Controller::default(),
+            bt_properties: netsim_model::bluetooth::Controller::default(),
             mode,
         }),
     )

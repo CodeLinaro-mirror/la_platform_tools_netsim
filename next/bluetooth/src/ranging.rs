@@ -2,7 +2,7 @@
 
 //! Ranging library for Bluetooth RSSI calculation.
 
-use netsim_api::devices::Position;
+use netsim_model::device::Position;
 
 /// The Free Space Path Loss (FSPL) model is considered as the standard
 /// under the ideal scenario.

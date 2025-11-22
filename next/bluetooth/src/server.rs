@@ -9,7 +9,7 @@
 //!
 //! ```no_run
 //! use tokio;
-//! use netsim_api::devices::{DeviceClient, DeviceRequest};
+//! use netsim_model::device::{DeviceClient, DeviceRequest};
 //! use tokio::sync::mpsc;
 //!
 //! #[tokio::main]
@@ -41,9 +41,9 @@ use crate::ranging;
 use crate::utils::ToChipError;
 use bytes::Bytes;
 use log::{debug, error, info};
-use netsim_api::chip_error::ChipError;
-use netsim_api::chips::{Chip, ChipClient, ChipId, ChipRequest, PacketStream};
-use netsim_api::devices::DeviceClient;
+use netsim_model::chip::{Chip, ChipClient, ChipId, ChipRequest, PacketStream};
+use netsim_model::chip_error::ChipError;
+use netsim_model::device::DeviceClient;
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

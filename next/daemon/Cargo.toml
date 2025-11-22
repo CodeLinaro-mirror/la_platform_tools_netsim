@@ -16,7 +16,7 @@ chrono = { version = "0.4", features = ["now"] }
 env_logger = "0.10"
 futures = "0.3.21"
 log = "0.4"
-netsim-api = { path = "../netsim-api" }
+netsim-model = { path = "../netsim-model" }
 bluetooth = { path = "../bluetooth" }
 devices = { path = "../devices" }
 packet-stream = { path = "../packet-stream" }

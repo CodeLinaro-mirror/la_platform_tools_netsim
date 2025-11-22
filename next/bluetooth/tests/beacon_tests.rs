@@ -1,7 +1,7 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use crate::test_utils::{self, TestFixture};
-use netsim_api::chips::{BeaconParams, BleBeacon, BluetoothMode, ChipId, CreateParams};
+use netsim_model::chip::{BeaconParams, BleBeacon, BluetoothMode, ChipCreate, ChipId};
 
 /// Tests that a chip can be successfully added to the server.
 #[tokio::test]
@@ -13,7 +13,7 @@ async fn test_add_chip_inner() {
     let TestFixture { client, _server_task } = test_utils::setup();
 
     let chip_id = ChipId(1);
-    let create_chip_params = CreateParams {
+    let create_chip_params = ChipCreate {
         id: chip_id,
         packet_stream: None,
         packet_sink: None,

@@ -1,4 +1,4 @@
-// Copyright 2023-2025 The Android Open Source Project
+// Copyright 2023-2025 The Android Open Source Project // touch
 
 use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
@@ -8,13 +8,13 @@ use devices::Server as DeviceServer;
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info};
-use netsim_api::chips::{
-    BluetoothMode, BluetoothParams, CellParams, ChipConfig, DeviceParams, NetworkKind,
-    NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbParams,
-    WifiParams,
+use netsim_model::chip::{
+    BluetoothCreate, BluetoothMode, CellCreate, ChipConfig, DeviceParams, NetworkKind,
+    NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
+    WifiCreate,
 };
-use netsim_api::devices::{DeviceClient, DeviceConfig, DevicePsCreate};
-use netsim_api::initial_info::{ChipInfo, ChipKind};
+use netsim_model::device::{DeviceClient, DeviceConfig, DevicePsCreate};
+use netsim_model::initial_info::{ChipInfo, ChipKind};
 use packet_stream::transport::traits::{PacketSink, PacketStream};
 use packet_stream::{StreamAddress, Streams, TransportType};
 use std::collections::HashMap;
@@ -82,14 +82,14 @@ async fn handle_new_connection(
     };
 
     let network_params = match chip.kind {
-        ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothParams {
+        ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothCreate {
             address: "".to_string(), // TODO: Get address from ChipInfo
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
         }),
-        ChipKind::UWB => NetworkParams::Uwb(UwbParams {}),
-        ChipKind::WIFI => NetworkParams::Wifi(WifiParams {}),
-        ChipKind::CELL => NetworkParams::Cell(CellParams {}),
+        ChipKind::UWB => NetworkParams::Uwb(UwbCreate::default()),
+        ChipKind::WIFI => NetworkParams::Wifi(WifiCreate::default()),
+        ChipKind::CELL => NetworkParams::Cell(CellCreate::default()),
         _ => {
             error!("Unsupported chip kind: {:?}", chip.kind);
             return;
@@ -103,7 +103,7 @@ async fn handle_new_connection(
         network_params,
     };
 
-    // Convert packet_stream types to netsim_api types
+    // Convert packet_stream types to netsim_model types
     let api_stream: ApiPacketStream = Box::new(stream.filter_map(|item| {
         Box::pin(async move {
             match item {

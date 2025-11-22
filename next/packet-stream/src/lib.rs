@@ -70,7 +70,7 @@ pub mod types; // Core data types
 
 // Core public API - only expose what users actually need
 pub use error::{PacketStreamError, ProtocolError, SocketError};
-pub use netsim_api::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
+pub use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 pub use transport::{CrossPlatformListener, CrossPlatformStream, SocketConfig, SocketType};
 // Core streaming types - public API only (transport internals hidden)
 pub use transport::TransportType;

@@ -26,9 +26,9 @@
 //! timeout period, the service will shut down to conserve resources.
 
 use log::info;
-use netsim_api::chips::{ChipClient, ChipId, NetworkKind};
-use netsim_api::device_error::DeviceError;
-use netsim_api::devices::{DeviceClient, DeviceConfig, DeviceId, DeviceRequest};
+use netsim_model::chip::{ChipClient, ChipId, NetworkKind};
+use netsim_model::device::{DeviceClient, DeviceConfig, DeviceId, DeviceRequest};
+use netsim_model::device_error::DeviceError;
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};

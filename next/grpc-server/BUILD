@@ -11,7 +11,7 @@ rust_library(
         "@async-trait",
     ],
     deps = [
-        "//next/netsim-api",
+        "//next/model",
         "//next/packet-stream",
         "//next/proto",
         "@anyhow",

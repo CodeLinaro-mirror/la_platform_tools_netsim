@@ -1,5 +1,5 @@
 use bytes::{BufMut, Bytes, BytesMut};
-use netsim_api::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
+use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use netsim_proto::common as proto_common;
 use netsim_proto::hci_packet::hcipacket::PacketType;
 use netsim_proto::hci_packet::HCIPacket;
@@ -18,7 +18,7 @@ pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>
         proto_common::ChipKind::WIFI => ChipKind::WIFI,
         proto_common::ChipKind::UWB => ChipKind::UWB,
         // proto_common::ChipKind::CELLULAR => ChipKind::CELL,
-        proto_common::ChipKind::BLUETOOTH_BEACON => ChipKind::UNSPECIFIED, // Or map to a suitable netsim_api::ChipKind
+        proto_common::ChipKind::BLUETOOTH_BEACON => ChipKind::UNSPECIFIED, // Or map to a suitable netsim_model::ChipKind
     }
 }
 
@@ -148,7 +148,7 @@ pub fn chip_info_to_proto(chip_info: ChipInfo) -> proto_startup::ChipInfo {
             ChipKind::BLUETOOTH => proto_common::ChipKind::BLUETOOTH,
             ChipKind::WIFI => proto_common::ChipKind::WIFI,
             ChipKind::UWB => proto_common::ChipKind::UWB,
-            ChipKind::CELL => proto_common::ChipKind::UNSPECIFIED, // Or map to a suitable netsim_api::ChipKind
+            ChipKind::CELL => proto_common::ChipKind::UNSPECIFIED, // Or map to a suitable netsim_model::ChipKind
         }
         .into();
         chip_proto.id = chip.id;

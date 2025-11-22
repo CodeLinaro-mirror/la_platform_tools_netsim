@@ -38,7 +38,7 @@ rust_library(
         "//next/cell",
         "//next/devices",
         "//next/grpc-server",
-        "//next/netsim-api",
+        "//next/model",
         "//next/packet-stream",
         "//next/uwb",
         "//next/wifi",
@@ -88,7 +88,7 @@ rust_test(
     ],
     deps = [
         ":daemon-lib",
-        "//next/netsim-api",
+        "//next/model",
         "//next/packet-stream",
         "//next/proto",
         "@bytes",

@@ -6,7 +6,7 @@ use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
 use log::{error, info, warn};
-use netsim_api::devices::DeviceClient;
+use netsim_model::device::DeviceClient;
 use netsim_proto::frontend_grpc::create_frontend_service;
 use netsim_proto::packet_streamer_grpc::create_packet_streamer;
 use std::sync::Arc;

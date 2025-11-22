@@ -1,4 +1,4 @@
-use crate::chips::{ChipConfig, ChipId, PacketSink, PacketStream};
+use crate::chip::{ChipConfig, ChipId, PacketSink, PacketStream};
 use crate::client_error::ClientError;
 use crate::client_method;
 use crate::device_error::DeviceError;
@@ -112,8 +112,8 @@ pub struct GetVersionMessage {
 }
 
 pub mod api {
-    use crate::chips::BleBeacon;
-    use crate::devices::{Device, DeviceConfig, Orientation, Position};
+    use crate::chip::BleBeacon;
+    use crate::device::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
 
     // TODO: Revisit the APIs to separate the Api from the Domain.
@@ -130,7 +130,7 @@ pub mod api {
         pub visible: Option<bool>,
         pub position: Option<Position>,
         pub orientation: Option<Orientation>,
-        // TODO: Consider adding fields/struct for chip-level updates (e.g., Vec<ChipPatch>)
+        // TODO: Consider adding fields/struct for chip-level updates (e.g., Vec<ChipUpdate>)
     }
 
     /// The top-level parameters for creating any kind of chip.
@@ -187,7 +187,7 @@ pub struct Device {
     pub visible: bool,
     pub position: Position,
     pub orientation: Orientation,
-    pub chips: Vec<crate::chips::Chip>,
+    pub chips: Vec<crate::chip::Chip>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

@@ -29,7 +29,7 @@ use crate::error::{PacketStreamError, Result, SocketError};
 use async_trait::async_trait;
 use futures::SinkExt;
 use futures::StreamExt;
-use netsim_api::initial_info::ChipInfo;
+use netsim_model::initial_info::ChipInfo;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};

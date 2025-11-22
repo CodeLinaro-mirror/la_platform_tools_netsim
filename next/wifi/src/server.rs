@@ -3,11 +3,11 @@
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
-use netsim_api::chip_error::ChipError;
-use netsim_api::chips::{
-    Chip, ChipClient, ChipId, ChipRequest, CreateParams, PacketSink, PacketStream,
+use netsim_model::chip::{
+    Chip, ChipClient, ChipCreate, ChipId, ChipRequest, PacketSink, PacketStream,
 };
-use netsim_api::devices::DeviceClient;
+use netsim_model::chip_error::ChipError;
+use netsim_model::device::DeviceClient;
 use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -148,7 +148,7 @@ impl Server {
         id
     }
 
-    fn handle_create(&mut self, mut params: CreateParams) -> Result<(), ChipError> {
+    fn handle_create(&mut self, mut params: ChipCreate) -> Result<(), ChipError> {
         let chip_id = params.id;
         log::info!("WifiServer: CreateChip received for chip_id: {}", chip_id);
 

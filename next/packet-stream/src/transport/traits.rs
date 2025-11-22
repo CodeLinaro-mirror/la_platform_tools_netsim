@@ -7,7 +7,7 @@ use crate::types::StreamAddress;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{Sink, Stream};
-use netsim_api::initial_info::ChipInfo;
+use netsim_model::initial_info::ChipInfo;
 use std::pin::Pin;
 
 pub type PacketStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + Sync>>;

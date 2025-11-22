@@ -3,7 +3,7 @@
 use bytes::Bytes;
 use daemon::netsimd::{NetsimDaemon, StartUpMode};
 use futures::{SinkExt, StreamExt};
-use netsim_api::initial_info::{ChipInfo, ChipKind};
+use netsim_model::initial_info::{ChipInfo, ChipKind};
 use packet_stream::{Streams, TransportType};
 use std::time::Duration;
 use tokio::time::timeout;

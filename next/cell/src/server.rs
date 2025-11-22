@@ -1,12 +1,12 @@
-// Copyright 2024-2025 The Android Open Source Project
+// Copyright 2024-2025 The Android Open Source Project // touch
 
 use crate::error::CellError;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use modem_rs::modem_network::{ModemCallbacks, ModemNetworkInterface};
-use netsim_api::chip_error::ChipError as NetsimChipError;
-use netsim_api::chips::{ChipClient, ChipId, ChipRequest, PacketSink, PacketStream};
-use netsim_api::devices::DeviceClient;
+use netsim_model::chip::{ChipClient, ChipId, ChipRequest, PacketSink, PacketStream};
+use netsim_model::chip_error::ChipError as NetsimChipError;
+use netsim_model::device::DeviceClient;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc;

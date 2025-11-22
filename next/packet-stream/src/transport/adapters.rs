@@ -10,7 +10,7 @@ use crate::types::StreamAddress;
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 use futures::SinkExt;
-use netsim_api::initial_info::ChipInfo;
+use netsim_model::initial_info::ChipInfo;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

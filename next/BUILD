@@ -19,7 +19,7 @@ rustfmt_test(
         "//next/libslirp-rs",
         "//next/modem-rs-derive",
         # "//next/modem-rs",
-        "//next/netsim-api",
+        "//next/model",
         "//next/daemon",
         "//next/packet-stream",
         "//next/packets",

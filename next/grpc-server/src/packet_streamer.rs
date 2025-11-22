@@ -3,7 +3,7 @@ use bytes::Bytes;
 use futures::stream::StreamExt;
 use futures::SinkExt;
 use log::warn;
-use netsim_api::initial_info::ChipInfo;
+use netsim_model::initial_info::ChipInfo;
 use netsim_proto::packet_streamer::{self, PacketRequest, PacketResponse};
 use netsim_proto::packet_streamer_grpc::{self, PacketStreamer};
 use packet_stream::error::{PacketStreamError, Result};
@@ -160,7 +160,7 @@ impl PacketStreamer for PacketStreamerService {
                 let is_bt = chip_info
                     .chip
                     .as_ref()
-                    .map_or(false, |c| c.kind == netsim_api::initial_info::ChipKind::BLUETOOTH);
+                    .map_or(false, |c| c.kind == netsim_model::initial_info::ChipKind::BLUETOOTH);
                 if new_connection_tx
                     .send((chip_info, peer_addr, grpc_to_app_rx, app_to_grpc_tx))
                     .await

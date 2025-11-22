@@ -8,9 +8,9 @@ use futures::{
     task::{Context, Poll},
     Future,
 };
-use netsim_api::bluetooth::Controller as RootcanalController;
-use netsim_api::chips::{BluetoothMode, BluetoothParams, ChipClient, ChipConfig, NetworkParams};
-use netsim_api::devices::DeviceClient;
+use netsim_model::bluetooth::Controller as RootcanalController;
+use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, NetworkParams};
+use netsim_model::device::DeviceClient;
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -85,7 +85,7 @@ pub fn create_chip_config(mode: BluetoothMode) -> ChipConfig {
         "test_chip",
         "test_manufacturer",
         "test_product",
-        NetworkParams::Bluetooth(BluetoothParams {
+        NetworkParams::Bluetooth(BluetoothCreate {
             address: "AB:CD:EF:11:22:33".to_string(),
             bt_properties: RootcanalController::default(),
             mode,

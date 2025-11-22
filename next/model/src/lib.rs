@@ -5,14 +5,14 @@
 
 /// Bluetooth related definitions.
 pub mod bluetooth;
+/// Chip actor definitions.
+pub mod chip;
 /// Chip error definitions.
 pub mod chip_error;
-/// Chip actor definitions.
-pub mod chips;
 pub mod client_error;
-pub mod device_error;
 /// Device actor definitions.
-pub mod devices;
+pub mod device;
+pub mod device_error;
 /// Structs for initial connection handshake.
 pub mod initial_info;
 /// Macros for the client methods.

@@ -1,5 +1,5 @@
-use netsim_api::chips::ChipKind as ApiChipKind;
-use netsim_api::devices::{
+use netsim_model::chip::ChipKind as ApiChipKind;
+use netsim_model::device::{
     Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition,
 };
 use netsim_proto::common::ChipKind as ProtoChipKind;
@@ -39,14 +39,14 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
     }
 }
 
-pub fn to_proto_chip(c: netsim_api::chips::Chip) -> ProtoChip {
+pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
     let mut chip = ProtoChip::new();
     chip.id = c.id;
     chip.kind = EnumOrUnknown::new(to_proto_chip_kind(c.kind));
     chip.name = c.name.unwrap_or_default();
     chip.manufacturer = c.manufacturer.unwrap_or_default();
     chip.product_name = c.product_name.unwrap_or_default();
-    // Note: netsim_api Chip has position, but netsim_proto Chip has offset (Position)
+    // Note: netsim_model Chip has position, but netsim_proto Chip has offset (Position)
     chip.offset = MessageField::some(to_proto_position(c.position));
 
     // TODO: Handle chip variant conversion if needed (e.g. Bluetooth details)
@@ -68,9 +68,9 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
     device
 }
 
-use netsim_api::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
-use netsim_api::chips::BleBeacon;
-use netsim_api::devices::api::{Chip, ChipConfig};
+use netsim_model::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
+use netsim_model::chip::BleBeacon;
+use netsim_model::device::api::{Chip, ChipConfig};
 use netsim_proto::model::ChipCreate;
 
 pub fn from_proto_chip_create(c: ChipCreate) -> Option<ChipConfig> {
@@ -98,7 +98,7 @@ pub fn from_proto_chip_create(c: ChipCreate) -> Option<ChipConfig> {
 fn from_proto_advertise_settings(
     s: &netsim_proto::model::chip::ble_beacon::AdvertiseSettings,
 ) -> AdvertiseSettings {
-    use netsim_api::bluetooth::beacon::{AdvertiseMode, AdvertiseTxPower, Interval, TxPower};
+    use netsim_model::bluetooth::beacon::{AdvertiseMode, AdvertiseTxPower, Interval, TxPower};
     use netsim_proto::model::chip::ble_beacon::advertise_settings::Interval as ProtoInterval;
     use netsim_proto::model::chip::ble_beacon::advertise_settings::Tx_power as ProtoTxPower;
 
@@ -152,7 +152,7 @@ fn from_proto_advertise_data(
         services: d
             .services
             .iter()
-            .map(|s| netsim_api::bluetooth::beacon::Service {
+            .map(|s| netsim_model::bluetooth::beacon::Service {
                 uuid: s.uuid.clone(),
                 data: s.data.clone(),
             })

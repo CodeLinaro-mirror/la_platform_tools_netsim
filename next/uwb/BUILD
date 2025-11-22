@@ -8,7 +8,7 @@ UWB_DEPS = [
     "@log",
     "@tokio-stream",
     "@tokio",
-    "//next/netsim-api",
+    "//next/model",
 ]
 
 rust_library(

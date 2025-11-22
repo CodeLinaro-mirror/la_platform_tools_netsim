@@ -2,7 +2,7 @@
 
 //! This module defines the error types for the chip service.
 
-use crate::chips::ChipId;
+use crate::chip::ChipId;
 use crate::packet_streamer::PsError;
 use thiserror::Error;
 

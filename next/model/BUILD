@@ -28,9 +28,9 @@ NETSIM_API_DEPS = [
 ]
 
 rust_library(
-    name = "netsim-api",
+    name = "model",
     srcs = glob(["src/**/*.rs"]),
-    crate_name = "netsim_api",
+    crate_name = "netsim_model",
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
@@ -54,15 +54,15 @@ rust_test(
 
 rust_clippy(
     name = "clippy",
-    deps = [":netsim-api"],
+    deps = [":model"],
 )
 
 rust_doc(
     name = "doc",
-    crate = ":netsim-api",
+    crate = ":model",
 )
 
 rust_doc_test(
     name = "doc_test",
-    crate = ":netsim-api",
+    crate = ":model",
 )
