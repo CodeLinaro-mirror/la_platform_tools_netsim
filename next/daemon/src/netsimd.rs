@@ -8,8 +8,9 @@ use devices::Server as DeviceServer;
 use futures::{SinkExt, StreamExt};
 use log::{error, info};
 use netsim_api::chips::{
-    BluetoothMode, BluetoothParams, ChipConfig, DeviceParams, NetworkKind, NetworkParams,
-    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbParams, WifiParams,
+    BluetoothMode, BluetoothParams, CellParams, ChipConfig, DeviceParams, NetworkKind,
+    NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbParams,
+    WifiParams,
 };
 use netsim_api::devices::{DeviceClient, DeviceConfig, DevicePsCreate};
 use netsim_api::initial_info::{ChipInfo, ChipKind};
@@ -86,6 +87,7 @@ async fn handle_new_connection(
         }),
         ChipKind::UWB => NetworkParams::Uwb(UwbParams {}),
         ChipKind::WIFI => NetworkParams::Wifi(WifiParams {}),
+        ChipKind::CELL => NetworkParams::Cell(CellParams {}),
         _ => {
             error!("Unsupported chip kind: {:?}", chip.kind);
             return;
@@ -287,12 +289,18 @@ impl NetsimDaemon {
         let (uwb_server, uwb_client) = uwb::Server::new(device_client.clone());
         info!("Uwb server created");
 
+        // Setup Cell Server
+        // TODO: Replace with real modem network.
+        let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
+        let (cell_server, cell_client) = cell::Server::new(device_client.clone(), cell_controller);
+        info!("Cell server created");
+
         // Prepare chip clients map for DeviceServer
         let mut chip_clients = HashMap::new();
         chip_clients.insert(NetworkKind::Bluetooth, bt_client);
         chip_clients.insert(NetworkKind::Wifi, wifi_client);
         chip_clients.insert(NetworkKind::Uwb, uwb_client);
-        // TODO: Add other chip clients (WiFi, Cell, etc.) here
+        chip_clients.insert(NetworkKind::Cell, cell_client);
 
         // Spawn server tasks
         let mut join_set = JoinSet::new();
@@ -302,6 +310,8 @@ impl NetsimDaemon {
         info!("Wifi server started");
         join_set.spawn(uwb_server.run());
         info!("Uwb server started");
+        join_set.spawn(cell_server.run());
+        info!("Cell server started");
         join_set.spawn(device_server.run(chip_clients));
         info!("Device server started");
         Ok(StartUpMode::Owner(

@@ -48,7 +48,11 @@ class BazelInstallTask(Task):
         )
         src_file = search_dir / binary_name
         logging.info(f"Copying {src_file} to {dest_dir}")
-        shutil.copyfile(src_file, dest_dir / binary_name)
+        dest_file = dest_dir / binary_name
+        # Remove the file if it exists to avoid permission errors on overwrite.
+        if dest_file.is_file():
+          dest_file.unlink()
+        shutil.copy(src_file, dest_file)
 
       # Copy netsim-ui
       ui_src_dir = search_dir / "netsim-ui"
