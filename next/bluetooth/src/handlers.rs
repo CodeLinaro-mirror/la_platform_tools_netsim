@@ -165,14 +165,13 @@ impl Server {
 
         rootcanal.new_controller(id.into(), address, Box::new(callback)).to_chip_error()?;
 
-        let chip_info = match &bluetooth_params.mode {
+        let mut chip_info = match &bluetooth_params.mode {
             BluetoothMode::Beacon(params) => crate::beacon::create(rootcanal, id, params)?,
             BluetoothMode::Device(params) => crate::device::create(rootcanal, id, params)?,
             BluetoothMode::Sniffer(params) => crate::sniffer::create(rootcanal, id, params)?,
         };
-        let chip =
-            crate::server::BluetoothChip { chip: chip_info, device_id: create_params.device_id };
-        self.chips.lock().unwrap().insert(id, chip);
+        chip_info.device_id = create_params.device_id;
+        self.chips.lock().unwrap().insert(id, chip_info);
         Ok(())
     }
 
@@ -183,12 +182,12 @@ impl Server {
         let mut binding = self.chips.lock().unwrap();
         let chip = binding.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
         if let Some(position) = patch.position.take() {
-            chip.chip.position = position;
+            chip.position = position;
         }
         if let Some(orientation) = patch.orientation.take() {
-            chip.chip.orientation = orientation;
+            chip.orientation = orientation;
         }
-        Ok(chip.chip.clone())
+        Ok(chip.clone())
     }
 
     /// Retrieves information about a specific Bluetooth chip.
@@ -196,7 +195,7 @@ impl Server {
     /// NOTE: This function is a stub and not fully implemented.
     fn get_chip(&self, id: ChipId) -> Result<Chip, ChipError> {
         match self.chips.lock().unwrap().get(&id) {
-            Some(chip) => Ok(chip.chip.clone()),
+            Some(chip) => Ok(chip.clone()),
             None => Err(ChipError::ChipNotFound(id)),
         }
     }

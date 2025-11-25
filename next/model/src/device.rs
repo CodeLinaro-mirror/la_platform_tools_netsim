@@ -22,7 +22,7 @@ pub struct Orientation {
 }
 
 /// A unique identifier for a simulated device, represented as a u32.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct DeviceId(pub u32);
 
 impl From<DeviceId> for u32 {

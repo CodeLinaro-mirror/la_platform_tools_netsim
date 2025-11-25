@@ -110,6 +110,7 @@ impl ActorEntity for DeviceEntity {
                     product_name: Some(chip_create.product_name),
                     position: self.device.position.clone(),
                     orientation: self.device.orientation.clone(),
+                    device_id: DeviceId(self.device.id),
                     variant: None,
                 });
             } else {
@@ -184,6 +185,7 @@ impl ActorEntity for DeviceEntity {
                         product_name: Some(chip_config.product_name),
                         position: self.device.position.clone(),
                         orientation: self.device.orientation.clone(),
+                        device_id: DeviceId(self.device.id),
                         variant: None,
                     });
                     Ok(DeviceActionResult::ChipId(chip_id))

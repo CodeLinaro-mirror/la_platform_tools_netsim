@@ -54,16 +54,7 @@ use tokio::task::{JoinError, JoinSet};
 use tokio::time::{interval, Duration};
 use tokio_stream::{StreamExt, StreamMap, StreamNotifyClose};
 
-/// Represents a simulated Bluetooth chip.
-#[derive(Debug, Clone)]
-pub struct BluetoothChip {
-    /// The underlying chip state.
-    pub chip: Chip,
-    /// The ID of the device this chip belongs to.
-    pub device_id: DeviceId,
-}
-
-type ChipMap = Arc<Mutex<HashMap<ChipId, BluetoothChip>>>;
+type ChipMap = Arc<Mutex<HashMap<ChipId, Chip>>>;
 
 /// The `Server` is the central component of the Bluetooth simulation.
 ///
@@ -111,7 +102,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
         let dst_chip = chips.get(&dst_id);
 
         if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
-            let dist = ranging::distance(&src.chip.position, &dst.chip.position);
+            let dist = ranging::distance(&src.position, &dst.position);
             let rssi = ranging::distance_to_rssi(tx_power as i8, dist);
             Some(rssi as i32)
         } else {

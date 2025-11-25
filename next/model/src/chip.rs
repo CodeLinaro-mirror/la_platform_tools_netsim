@@ -352,6 +352,7 @@ pub struct Chip {
     pub product_name: Option<String>,
     pub position: Position,
     pub orientation: Orientation,
+    pub device_id: DeviceId,
     pub variant: Option<ChipVariant>,
 }
 

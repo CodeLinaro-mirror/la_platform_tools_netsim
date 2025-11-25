@@ -15,7 +15,7 @@ use tokio::task::JoinSet;
 use tokio_stream::{StreamMap, StreamNotifyClose};
 
 pub struct Server {
-    active_chips: HashMap<ChipId, DeviceId>,
+    active_chips: HashMap<ChipId, Chip>,
     streams: StreamMap<ChipId, StreamNotifyClose<PacketStream>>,
     /// Receiver for incoming `ChipRequest` commands.
     command_rx: mpsc::Receiver<ChipRequest>,
@@ -72,7 +72,7 @@ impl Server {
             }
             None => {
                 log::info!("StreamMap indicated closure for chip {}", chip_id);
-                let device_id = self.active_chips.get(&chip_id).cloned();
+                let device_id = self.active_chips.get(&chip_id).map(|c| c.device_id);
                 if let Some(device_id) = device_id {
                     self.send_chip_died_notification(chip_id, device_id).await;
                 }
@@ -104,7 +104,8 @@ impl Server {
                     let _ = respond_to.send(Err(ChipError::ChipNotFound(id)));
                     return Ok(());
                 }
-                let _ = respond_to.send(Ok(Chip::default()));
+                let chip = self.active_chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
+                let _ = respond_to.send(Ok(chip.clone()));
             }
             ChipRequest::Shutdown => {
                 *shutdown = true;
@@ -118,7 +119,7 @@ impl Server {
 
     async fn cleanup_chip(&mut self, chip_id: ChipId, reason: &str) {
         log::info!("Cleaning up chip_id: {} due to: {}", chip_id, reason);
-        if let Some(device_id) = self.active_chips.remove(&chip_id) {
+        if let Some(chip) = self.active_chips.remove(&chip_id) {
             log::info!("Chip {} removed from active set.", chip_id);
             // Remove from StreamMap
             self.streams.remove(&chip_id);
@@ -129,7 +130,7 @@ impl Server {
             // TODO: Remove from pica
 
             // We rely on the JoinSet to clean up the completed sink task.
-            self.send_chip_died_notification(chip_id, device_id).await;
+            self.send_chip_died_notification(chip_id, chip.device_id).await;
         } else {
             log::warn!("cleanup_chip called for non-active chip_id: {}", chip_id);
         }
@@ -173,7 +174,11 @@ impl Server {
         self.sink_tasks.spawn(async move { Self::run_sink_task(sink, uci_rx, chip_id).await });
 
         log::info!("UwbServer: Inserting chip {} into active_chips", chip_id);
-        self.active_chips.insert(chip_id, params.device_id);
+        let mut chip = Chip::default();
+        chip.id = chip_id.0;
+        chip.device_id = params.device_id;
+        // TODO: Populate other fields if available in params
+        self.active_chips.insert(chip_id, chip);
         self.streams.insert(chip_id, StreamNotifyClose::new(stream));
         Ok(())
     }
