@@ -56,4 +56,7 @@ pub enum ResourceRequest<T: ActorEntity> {
         action: T::Action,
         respond_to: Response<T::ActionResult>,
     },
+    List {
+        respond_to: Response<T::ListResponse>,
+    },
 }

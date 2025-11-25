@@ -6,7 +6,6 @@ use netsim_model::device::Position;
 
 /// The Free Space Path Loss (FSPL) model is considered as the standard
 /// under the ideal scenario.
-
 /// (dBm) PATH_LOSS at 1m for isotropic antenna transmitting BLE.
 const PATH_LOSS_AT_1M: f32 = 40.20;
 

@@ -4,6 +4,7 @@ use crate::test_utils::{self, mock_sink, TestFixture};
 use netsim_model::chip::{
     BeaconParams, BleBeacon, BluetoothMode, ChipCreate, ChipId, SnifferParams,
 };
+use netsim_model::device::DeviceId;
 use tokio::time::{timeout, Duration};
 
 #[tokio::test]
@@ -23,6 +24,7 @@ async fn test_sniffer_receives_advertisement_inner() {
         config: test_utils::create_chip_config(BluetoothMode::Beacon(Box::new(BeaconParams {
             ble_beacon: BleBeacon::default(),
         }))),
+        device_id: DeviceId(1),
     };
     client.create(create_chip_params).await.ok();
 
@@ -34,6 +36,7 @@ async fn test_sniffer_receives_advertisement_inner() {
         packet_stream: None,
         packet_sink: Some(sink),
         config: test_utils::create_chip_config(BluetoothMode::Sniffer(SnifferParams {})),
+        device_id: DeviceId(1),
     };
     client.create(create_chip_params).await.ok();
 

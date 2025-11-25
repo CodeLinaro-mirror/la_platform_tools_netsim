@@ -8,6 +8,7 @@ UWB_DEPS = [
     "@log",
     "@tokio-stream",
     "@tokio",
+    "//next/client",
     "//next/model",
 ]
 

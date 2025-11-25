@@ -2,6 +2,7 @@
 
 use crate::test_utils::{self, TestFixture};
 use netsim_model::chip::{BeaconParams, BleBeacon, BluetoothMode, ChipCreate, ChipId};
+use netsim_model::device::DeviceId;
 
 /// Tests that a chip can be successfully added to the server.
 #[tokio::test]
@@ -20,6 +21,7 @@ async fn test_add_chip_inner() {
         config: test_utils::create_chip_config(BluetoothMode::Beacon(Box::new(BeaconParams {
             ble_beacon: BleBeacon::default(),
         }))),
+        device_id: DeviceId(1),
     };
     client.create(create_chip_params).await.expect("creating chip");
 

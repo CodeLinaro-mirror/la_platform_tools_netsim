@@ -22,7 +22,7 @@ pub struct Orientation {
 }
 
 /// A unique identifier for a simulated device, represented as a u32.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DeviceId(pub u32);
 
 impl From<DeviceId> for u32 {
@@ -74,11 +74,12 @@ impl DeviceClient {
     }
 
     /// Sends a non-blocking notification to the device service that a chip has been removed.
-    pub fn notify_chip_removed(&self, chip_id: ChipId) {
+    pub fn notify_chip_removed(&self, device_id: DeviceId, chip_id: ChipId) {
         let sender = self.sender.clone();
         tokio::spawn(async move {
-            if let Err(e) =
-                sender.send(DeviceRequest::NotifyChipRemoved { chip_id, respond_to: None }).await
+            if let Err(e) = sender
+                .send(DeviceRequest::NotifyChipRemoved { device_id, chip_id, respond_to: None })
+                .await
             {
                 log::error!("Failed to send NotifyChipRemoved for chip {chip_id}: {e}");
             }
@@ -87,10 +88,14 @@ impl DeviceClient {
 
     /// Sends a notification and waits for the server to acknowledge processing.
     /// Primarily intended for test synchronization.
-    pub async fn notify_chip_removed_block(&self, chip_id: ChipId) -> Result<(), ClientError> {
+    pub async fn notify_chip_removed_block(
+        &self,
+        device_id: DeviceId,
+        chip_id: ChipId,
+    ) -> Result<(), ClientError> {
         let (tx, rx) = oneshot::channel();
         self.sender
-            .send(DeviceRequest::NotifyChipRemoved { chip_id, respond_to: Some(tx) })
+            .send(DeviceRequest::NotifyChipRemoved { device_id, chip_id, respond_to: Some(tx) })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
         rx.await.map_err(|e| ClientError::Recv(e.to_string()))?;
@@ -100,7 +105,7 @@ impl DeviceClient {
 
 // Generate client methods.
 client_method!(DeviceClient => fn create(request: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
-client_method!(DeviceClient => fn ps_create(request: DevicePsCreate) -> () as DeviceRequest::PsCreate);
+client_method!(DeviceClient => fn add_chip(request: DeviceAddChip) -> () as DeviceRequest::AddChip);
 client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
 client_method!(DeviceClient => fn update(update: api::DeviceUpdate) -> () as DeviceRequest::Update);
 client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
@@ -136,13 +141,16 @@ pub mod api {
     /// The top-level parameters for creating any kind of chip.
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
     pub struct DeviceCreate {
+        /// TODO: Consider adding an optional device_guid here.
+        /// If set, the server could check if the device exists and add the chip to it,
+        /// skipping creation. This would move the logic from Client to Server.
         pub device_config: DeviceConfig,
-        pub chip: ChipConfig,
+        pub chip: DeviceChipCreate,
     }
 
     // External API for chip creation.
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-    pub struct ChipConfig {
+    pub struct DeviceChipCreate {
         /// The name of the chip.
         pub name: String,
         /// The manufacturer of the chip.
@@ -152,14 +160,14 @@ pub mod api {
         pub chip: Chip,
     }
 
-    impl ChipConfig {
+    impl DeviceChipCreate {
         pub fn new(
             name: impl Into<String>,
             manufacturer: impl Into<String>,
             product_name: impl Into<String>,
             chip: Chip,
-        ) -> ChipConfig {
-            ChipConfig {
+        ) -> DeviceChipCreate {
+            DeviceChipCreate {
                 name: name.into(),
                 manufacturer: manufacturer.into(),
                 product_name: product_name.into(),
@@ -214,16 +222,20 @@ impl DeviceConfig {
     }
 }
 
-pub struct DevicePsCreate {
+pub struct DeviceAddChip {
     pub device_guid: String,
     pub packet_stream: Option<PacketStream>,
     pub packet_sink: Option<PacketSink>,
+    /// TODO: Group device_guid, packet_stream, and packet_sink into a single struct
+    /// (e.g., PacketStreamInfo) since they always go together.
+    /// TODO: Consider if DeviceConfig is needed here. If the device is already created,
+    /// this might be redundant. We should explore separating device creation from adding a chip.
     pub device_config: DeviceConfig,
     pub chip_config: ChipConfig,
 }
-impl fmt::Debug for DevicePsCreate {
+impl fmt::Debug for DeviceAddChip {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DevicePsCreate")
+        f.debug_struct("DeviceAddChip")
             .field("device_guid", &self.device_guid)
             .field("device_config", &self.device_config)
             .field("chip_config", &self.chip_config)
@@ -235,7 +247,7 @@ impl fmt::Debug for DevicePsCreate {
 /// Defines the message protocol for the device service actor.
 pub enum DeviceRequest {
     /// Create a new device from PacketStream.
-    PsCreate { request: DevicePsCreate, respond_to: Responder<()> },
+    AddChip { request: DeviceAddChip, respond_to: Responder<()> },
     /// Create a new device.
     Create {
         /// The parameters for the new device.
@@ -270,7 +282,11 @@ pub enum DeviceRequest {
     },
     /// Notification from a ChipService that a chip has been removed.
     /// Includes an optional oneshot sender for test synchronization.
-    NotifyChipRemoved { chip_id: ChipId, respond_to: Option<oneshot::Sender<()>> },
+    NotifyChipRemoved {
+        device_id: DeviceId,
+        chip_id: ChipId,
+        respond_to: Option<oneshot::Sender<()>>,
+    },
     /// Shutdown device server.
     Shutdown,
 }

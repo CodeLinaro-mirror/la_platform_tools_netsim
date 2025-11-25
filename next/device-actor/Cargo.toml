@@ -1,0 +1,15 @@
+[package]
+name = "device-actor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actor-framework = { path = "../actor-framework" }
+netsim-model = { path = "../model" }
+tokio = { version = "1.41", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+async-trait = "0.1"
+thiserror = "1.0"
+[dev-dependencies]
+client = { path = "../client" }

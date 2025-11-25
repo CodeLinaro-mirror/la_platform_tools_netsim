@@ -16,8 +16,7 @@
 members = [
   "actor-framework",
   "bluetooth",
-  "devices",
-  "netsim-api",
+  "model",
   "daemon",
   "proto",
   "packet-stream",
@@ -25,6 +24,8 @@ members = [
   "modem-rs",
   "modem-rs-derive",
   "uwb",
+  "device-actor",
+  "client",
 ]
 
 [workspace.doc]

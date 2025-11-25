@@ -13,7 +13,6 @@ rustfmt_test(
     targets = [
         "//next/bluetooth",
         "//next/common",
-        "//next/devices",
         "//next/hostapd-rs",
         "//next/http-proxy",
         "//next/libslirp-rs",

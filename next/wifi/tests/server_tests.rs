@@ -1,13 +1,14 @@
 // Copyright 2024-2025 The Android Open Source Project
 
-use netsim_model::{
-    chip::ChipId, chip_error::ChipError, client_error::ClientError, device::DeviceClient,
-};
+use netsim_model::device::DeviceId;
+use netsim_model::{chip::ChipId, chip_error::ChipError, client_error::ClientError};
 use tokio::sync::mpsc;
 use wifi::Server;
 
 async fn setup() -> (Server, netsim_model::chip::ChipClient) {
-    let device_client = DeviceClient::new(mpsc::channel(10).0);
+    let (device_tx, _) = mpsc::channel(10);
+    let resource_client = actor_framework::ResourceClient::new(device_tx);
+    let device_client = client::DeviceClient::new(resource_client);
     Server::new(device_client)
 }
 

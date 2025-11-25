@@ -1,7 +1,9 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+use actor_framework::ResourceClient;
 use bluetooth::server::Server;
 use bytes::Bytes;
+use client::DeviceClient;
 use futures::{
     sink::Sink,
     stream::Stream,
@@ -9,8 +11,10 @@ use futures::{
     Future,
 };
 use netsim_model::bluetooth::Controller as RootcanalController;
-use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, NetworkParams};
-use netsim_model::device::DeviceClient;
+use netsim_model::chip::{
+    BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, ChipCreate, NetworkParams,
+};
+use netsim_model::device::DeviceId;
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -24,7 +28,8 @@ pub struct TestFixture {
 /// Sets up a test environment with a running server and a client.
 pub fn setup() -> TestFixture {
     let (device_tx, _device_rx) = mpsc::channel(10);
-    let (server, client) = Server::new(DeviceClient::new(device_tx));
+    let resource_client = ResourceClient::new(device_tx);
+    let (server, client) = Server::new(DeviceClient::new(resource_client));
     let server_task = tokio::spawn(async move {
         server.run().await;
     });
@@ -86,7 +91,7 @@ pub fn create_chip_config(mode: BluetoothMode) -> ChipConfig {
         "test_manufacturer",
         "test_product",
         NetworkParams::Bluetooth(BluetoothCreate {
-            address: "AB:CD:EF:11:22:33".to_string(),
+            address: "00:11:22:33:44:55".to_string(),
             bt_properties: RootcanalController::default(),
             mode,
         }),

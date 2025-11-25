@@ -1,8 +1,9 @@
 // Copyright 2024-2025 The Android Open Source Project
 
 use netsim_model::{
+    chip::{ChipCreate, ChipId, ChipKind, NetworkParams, UwbCreate},
     chip_error::ChipError,
-    chips::{ChipCreate, ChipId, ChipInfo, ChipKind, ChipModel, NetworkParams, UwbCreate},
+    device::DeviceId,
     devices::DeviceClient,
 };
 use tokio::sync::mpsc;
@@ -31,6 +32,7 @@ fn create_uwb_params(id: u32) -> ChipCreate {
             },
             network_params: NetworkParams::Uwb(UwbCreate {}),
         },
+        device_id: DeviceId(1),
     }
 }
 

@@ -1,14 +1,18 @@
 // next/cell/tests/integration_test.rs // touch
+use actor_framework::{ResourceClient, ResourceRequest};
 use bytes::Bytes;
 use cell::server::CellServer;
+use client::DeviceClient;
+use device_actor::actions::{DeviceAction, DeviceActionResult};
+use device_actor::entity::DeviceEntity;
 use env_logger;
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
 use netsim_model::chip::{
-    CellCreate, ChipClient, ChipConfig, ChipCreate as CreateChipParams, ChipId, ChipVariant,
-    NetworkParams, PacketSink, PacketStream,
+    CellCreate, ChipClient, ChipConfig, ChipCreate, ChipId, ChipVariant, NetworkParams, PacketSink,
+    PacketStream,
 };
 use netsim_model::chip_error::ChipError as NetsimChipError;
-use netsim_model::device::{DeviceClient, DeviceRequest};
+use netsim_model::device::DeviceId;
 
 use std::io::Error as IoError;
 use std::io::ErrorKind;
@@ -33,7 +37,7 @@ fn create_dummy_stream_sink(
 
 struct TestHarness {
     client: ChipClient,
-    device_server_rx: mpsc::Receiver<DeviceRequest>,
+    device_server_rx: mpsc::Receiver<ResourceRequest<DeviceEntity>>,
     server_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -41,7 +45,8 @@ async fn setup_test_harness() -> TestHarness {
     let _ = env_logger::try_init();
     // let (command_tx, command_rx) = mpsc::channel(100);
     let (device_server_tx, device_server_rx) = mpsc::channel(100);
-    let device_client = DeviceClient::new(device_server_tx);
+    let resource_client = ResourceClient::new(device_server_tx);
+    let device_client = DeviceClient::new(resource_client);
 
     let fake_controller = cell::fake_modem_network::FakeModemNetwork::new();
     let (server, client) = CellServer::new(device_client, fake_controller);
@@ -57,8 +62,8 @@ impl Drop for TestHarness {
     }
 }
 
-fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> CreateChipParams {
-    CreateChipParams {
+fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> ChipCreate {
+    ChipCreate {
         id: chip_id,
         packet_stream: Some(stream),
         packet_sink: Some(sink),
@@ -68,6 +73,7 @@ fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> Cre
             product_name: "CellEmulator".to_string(),
             network_params: NetworkParams::Cell(CellCreate::default()),
         },
+        device_id: DeviceId(1),
     }
 }
 
@@ -91,14 +97,39 @@ async fn test_delete_chip() {
     let params = create_params(chip_id, stream, sink);
     harness.client.create(params).await.unwrap();
 
-    let response = harness.client.delete(chip_id).await;
-    assert!(response.is_ok(), "DeleteChip failed: {:?}", response);
+    let client = harness.client.clone();
+    let delete_handle = tokio::spawn(async move { client.delete(chip_id).await });
 
-    match tokio::time::timeout(std::time::Duration::from_secs(1), harness.device_server_rx.recv())
+    let notification_future = async {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            harness.device_server_rx.recv(),
+        )
         .await
-    {
-        Ok(Some(DeviceRequest::NotifyChipRemoved { chip_id: id, .. })) => assert_eq!(id, chip_id),
-        _ => panic!("Did not receive NotifyChipRemoved message"),
+        {
+            Ok(Some(ResourceRequest::Action {
+                action: DeviceAction::NotifyChipRemoved(_device_id, id),
+                respond_to,
+                ..
+            })) => {
+                assert_eq!(id, chip_id);
+                let _ = respond_to.send(Ok(DeviceActionResult::Success));
+            }
+            Ok(Some(msg)) => panic!("Received unexpected message: {:?}", msg),
+            Ok(None) => panic!("Stream closed"),
+            Err(_) => panic!("Timed out waiting for NotifyChipRemoved message"),
+        }
+    };
+
+    tokio::select! {
+        res = delete_handle => {
+            let response = res.unwrap();
+            assert!(response.is_ok(), "DeleteChip failed: {:?}", response);
+        }
+        _ = notification_future => {}
+        _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+            panic!("Test timed out");
+        }
     }
 }
 
@@ -117,8 +148,17 @@ async fn test_stream_error_triggers_delete() {
     match tokio::time::timeout(std::time::Duration::from_secs(2), harness.device_server_rx.recv())
         .await
     {
-        Ok(Some(DeviceRequest::NotifyChipRemoved { chip_id: id, .. })) => assert_eq!(id, chip_id),
-        _ => panic!("Did not receive NotifyChipRemoved message on stream error"),
+        Ok(Some(ResourceRequest::Action {
+            action: DeviceAction::NotifyChipRemoved(_device_id, id),
+            respond_to,
+            ..
+        })) => {
+            assert_eq!(id, chip_id);
+            let _ = respond_to.send(Ok(DeviceActionResult::Success));
+        }
+        Ok(Some(msg)) => panic!("Received unexpected message: {:?}", msg),
+        Ok(None) => panic!("Stream closed"),
+        Err(_) => panic!("Timed out waiting for NotifyChipRemoved message on stream error"),
     }
 }
 

@@ -40,9 +40,14 @@ impl ActorEntity for SimpleUser {
     type ActionResult = bool;
     type Context = ();
     type Error = SimpleUserError;
+    type ListResponse = Vec<SimpleUser>;
 
     fn from_create_params(id: u32, params: SimpleUserCreate) -> Result<Self, Self::Error> {
         Ok(Self { id, name: params.name, is_admin: false })
+    }
+
+    fn on_list(entities: &std::collections::HashMap<Self::Id, Self>) -> Self::ListResponse {
+        entities.values().cloned().collect()
     }
 
     async fn on_update(

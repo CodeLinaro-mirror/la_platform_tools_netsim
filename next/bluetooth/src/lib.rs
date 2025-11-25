@@ -22,8 +22,9 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let (device_tx, _device_rx) = mpsc::channel::<DeviceRequest>(10);
-//!     let device_client = DeviceClient::new(device_tx);
+//!     let (device_tx, _device_rx) = mpsc::channel(10);
+//!     let resource_client = actor_framework::ResourceClient::new(device_tx);
+//!     let device_client = client::DeviceClient::new(resource_client);
 //!     let (server, client) = bluetooth::Server::new(device_client);
 //!     tokio::spawn(async move {
 //!         server.run().await;

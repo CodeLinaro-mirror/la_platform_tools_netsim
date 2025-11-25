@@ -5,7 +5,7 @@ use crate::bluetooth::Controller as RootcanalController;
 use crate::chip_error::ChipError;
 use crate::client_error::ClientError;
 use crate::client_method;
-use crate::device::{Orientation, Position};
+use crate::device::{DeviceId, Orientation, Position};
 use crate::stats::NetsimRadioStats;
 use bytes::Bytes;
 use futures::Sink;
@@ -151,6 +151,8 @@ pub struct ChipCreate {
     // TODO: Use Chip instead
     /// Chip config.
     pub config: ChipConfig,
+    /// The ID of the device this chip belongs to.
+    pub device_id: DeviceId,
 }
 
 impl fmt::Debug for ChipCreate {
@@ -163,7 +165,7 @@ impl fmt::Debug for ChipCreate {
 }
 
 // TODO: use Chip instead
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Chip configuration
 pub struct ChipConfig {
     /// The name of the chip.
@@ -505,6 +507,7 @@ mod tests {
                     mode: BluetoothMode::Device(DeviceParams {}),
                 }),
             ),
+            device_id: DeviceId(1),
         };
 
         tokio::spawn(async move {

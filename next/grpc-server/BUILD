@@ -11,6 +11,8 @@ rust_library(
         "@async-trait",
     ],
     deps = [
+        "//next/actor-framework",
+        "//next/client",
         "//next/model",
         "//next/packet-stream",
         "//next/proto",

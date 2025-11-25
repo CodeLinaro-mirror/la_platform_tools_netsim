@@ -70,10 +70,10 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
 
 use netsim_model::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
 use netsim_model::chip::BleBeacon;
-use netsim_model::device::api::{Chip, ChipConfig};
+use netsim_model::device::api::{Chip, DeviceChipCreate};
 use netsim_proto::model::ChipCreate;
 
-pub fn from_proto_chip_create(c: ChipCreate) -> Option<ChipConfig> {
+pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
     // Currently only supports BLE Beacon
     if c.kind.enum_value_or_default() == ProtoChipKind::BLUETOOTH_BEACON {
         let beacon_create = c.ble_beacon();
@@ -84,7 +84,7 @@ pub fn from_proto_chip_create(c: ChipCreate) -> Option<ChipConfig> {
         let beacon =
             BleBeacon { address: beacon_create.address.clone(), settings, adv_data, scan_response };
 
-        Some(ChipConfig {
+        Some(DeviceChipCreate {
             name: c.name,
             manufacturer: c.manufacturer,
             product_name: c.product_name,

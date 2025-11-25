@@ -4,7 +4,7 @@ use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
-use devices::Server as DeviceServer;
+use client::DeviceClient;
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info};
@@ -13,7 +13,7 @@ use netsim_model::chip::{
     NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
     WifiCreate,
 };
-use netsim_model::device::{DeviceClient, DeviceConfig, DevicePsCreate};
+use netsim_model::device::{DeviceAddChip, DeviceConfig};
 use netsim_model::initial_info::{ChipInfo, ChipKind};
 use packet_stream::transport::traits::{PacketSink, PacketStream};
 use packet_stream::{StreamAddress, Streams, TransportType};
@@ -119,7 +119,7 @@ async fn handle_new_connection(
     let api_sink: ApiPacketSink =
         Box::pin(sink.sink_map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
 
-    let request = DevicePsCreate {
+    let request = DeviceAddChip {
         device_guid,
         packet_stream: Some(api_stream),
         packet_sink: Some(api_sink),
@@ -127,7 +127,7 @@ async fn handle_new_connection(
         chip_config,
     };
 
-    if let Err(e) = device_client.ps_create(request).await {
+    if let Err(e) = device_client.add_chip(request).await {
         error!("Failed to register stream for {}: {}", chip_info.name, e);
     }
 }
@@ -289,8 +289,16 @@ impl NetsimDaemon {
         #[cfg(unix)]
         setup_uds_listener(&mut streams, &mut listener_addresses, &runtime_dir).await?;
 
-        // Setup Device Server first to get the client
-        let (device_server, device_client) = DeviceServer::new(args.no_shutdown);
+        // Setup Device Server
+        info!("Using new device-actor framework");
+        let (actor, generic_client) = device_actor::new();
+        let device_client = client::device_client::DeviceClient::new(generic_client);
+
+        let context = device_actor::DeviceContext {
+            chip_clients: HashMap::new(), // Will be filled later
+            next_chip_id: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
+        };
+        let device_actor_components = Some((actor, context));
         info!("Device server created");
 
         // gRPC port is determined after the listener starts.
@@ -356,7 +364,10 @@ impl NetsimDaemon {
         info!("Uwb server started");
         join_set.spawn(cell_server.run());
         info!("Cell server started");
-        join_set.spawn(device_server.run(chip_clients));
+        if let Some((actor, mut context)) = device_actor_components {
+            context.chip_clients = chip_clients;
+            join_set.spawn(actor.run(context));
+        }
         info!("Device server started");
         Ok(StartUpMode::Owner(
             NetsimDaemon {

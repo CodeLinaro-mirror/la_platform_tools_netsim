@@ -237,6 +237,10 @@ impl<T: ActorEntity> ResourceActor<T> {
                         let _ = respond_to.send(Err(FrameworkError::NotFound(id.to_string())));
                     }
                 }
+                ResourceRequest::List { respond_to } => {
+                    let response = T::on_list(&self.store);
+                    let _ = respond_to.send(Ok(response));
+                }
             }
         }
 

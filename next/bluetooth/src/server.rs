@@ -3,47 +3,49 @@
 //! This module provides the Bluetooth `Server` which is the central component for managing Bluetooth
 //! simulation.
 //!
-//! To use the `Server`:
-//! 1. Create a new instance using `Server::new()` which returns the `Server` and a `ChipClient`.
-//! 2. Spawn the `Server::run()` method into a Tokio task to start its event loop.
-//!
-//! ```no_run
-//! use tokio;
-//! use netsim_model::device::{DeviceClient, DeviceRequest};
-//! use tokio::sync::mpsc;
-//!
-//! #[tokio::main]
-//! async fn main() {
-//!     let (device_tx, _device_rx) = mpsc::channel::<DeviceRequest>(10);
-//!     let device_client = DeviceClient::new(device_tx);
-//!     let (server, client) = bluetooth::Server::new(device_client);
-//!     tokio::spawn(async move {
-//!         server.run().await;
-//!     });
-//!     // Use the client to interact with the server.
-//! }
-//! ```
-//!
-//! Features:
-//! * **Actor-Based State Management:** Implements the actor model, with the `Server` as a central
-//!   actor that serializes all operations to safely manage the state of multiple Bluetooth
-//!   chips (Device, Beacon, and Sniffer modes).
-//! * **HCI Stream/Sink Bridging:** For each chip, bridges a `PacketStream` (for incoming HCI
-//!   commands) and a `PacketSink` (for outgoing HCI events), routing packets between the host
-//!   and the `rootcanal` simulation.
-//! * **Rootcanal Integration:** Simulates the Bluetooth controller logic using `rootcanal`.
-//!
-//! Future Features:
-//! * **RSSI Management:** Manage Received Signal Strength Indication (RSSI) based on chip location.
-//! * **Link Layer Capture:** Sniffer functionality to convert Rootcanal LL packets to standard Bluetooth LL packets.
-//! * **HCI-based Beacon:** Implement Beacon functionality via HCI commands, allowing common Android-like advertisement parameters.
+// To use the `Server`:
+// 1. Create a new instance using `Server::new()` which returns the `Server` and a `ChipClient`.
+// 2. Spawn the `Server::run()` method into a Tokio task to start its event loop.
+//
+// ```no_run
+// use tokio;
+// use netsim_model::device::DeviceRequest;
+// use client::DeviceClient;
+// use tokio::sync::mpsc;
+//
+// #[tokio::main]
+// async fn main() {
+//     let (device_tx, _device_rx) = mpsc::channel::<DeviceRequest>(10);
+//     let device_client = DeviceClient::new(device_tx);
+//     let (server, client) = bluetooth::Server::new(device_client);
+//     tokio::spawn(async move {
+//         server.run().await;
+//     });
+//     // Use the client to interact with the server.
+// }
+// ```
+//
+// Features:
+// * **Actor-Based State Management:** Implements the actor model, with the `Server` as a central
+//   actor that serializes all operations to safely manage the state of multiple Bluetooth
+//   chips (Device, Beacon, and Sniffer modes).
+// * **HCI Stream/Sink Bridging:** For each chip, bridges a `PacketStream` (for incoming HCI
+//   commands) and a `PacketSink` (for outgoing HCI events), routing packets between the host
+//   and the `rootcanal` simulation.
+// * **Rootcanal Integration:** Simulates the Bluetooth controller logic using `rootcanal`.
+//
+// Future Features:
+// * **RSSI Management:** Manage Received Signal Strength Indication (RSSI) based on chip location.
+// * **Link Layer Capture:** Sniffer functionality to convert Rootcanal LL packets to standard Bluetooth LL packets.
+// * **HCI-based Beacon:** Implement Beacon functionality via HCI commands, allowing common Android-like advertisement parameters.
 use crate::ranging;
 use crate::utils::ToChipError;
 use bytes::Bytes;
+use client::DeviceClient;
 use log::{debug, error, info};
 use netsim_model::chip::{Chip, ChipClient, ChipId, ChipRequest, PacketStream};
 use netsim_model::chip_error::ChipError;
-use netsim_model::device::DeviceClient;
+use netsim_model::device::DeviceId;
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -52,7 +54,16 @@ use tokio::task::{JoinError, JoinSet};
 use tokio::time::{interval, Duration};
 use tokio_stream::{StreamExt, StreamMap, StreamNotifyClose};
 
-type ChipMap = Arc<Mutex<HashMap<ChipId, Chip>>>;
+/// Represents a simulated Bluetooth chip.
+#[derive(Debug, Clone)]
+pub struct BluetoothChip {
+    /// The underlying chip state.
+    pub chip: Chip,
+    /// The ID of the device this chip belongs to.
+    pub device_id: DeviceId,
+}
+
+type ChipMap = Arc<Mutex<HashMap<ChipId, BluetoothChip>>>;
 
 /// The `Server` is the central component of the Bluetooth simulation.
 ///
@@ -100,7 +111,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
         let dst_chip = chips.get(&dst_id);
 
         if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
-            let dist = ranging::distance(&src.position, &dst.position);
+            let dist = ranging::distance(&src.chip.position, &dst.chip.position);
             let rssi = ranging::distance_to_rssi(tx_power as i8, dist);
             Some(rssi as i32)
         } else {
@@ -201,13 +212,16 @@ impl Server {
     // Return false if the chip doesn't exist.
     pub(crate) fn remove_chip(&mut self, id: ChipId, res: &str) -> Result<bool, ChipError> {
         debug!("Removing chip {id} by {res}");
-        if self.chips.lock().unwrap().remove(&id).is_some() {
+        if let Some(chip) = self.chips.lock().unwrap().remove(&id) {
             // A chip might not have a stream (e.g. Beacon)
             self.streams.remove(&id);
             self.rootcanal.remove_controller(id.into()).to_chip_error()?;
             debug!("Removed chip {id} by {res}");
             // Notify DeviceServer asynchronously.
-            self.device_client.notify_chip_removed(id);
+            let dc = self.device_client.clone();
+            tokio::spawn(async move {
+                let _ = dc.notify_chip_removed(chip.device_id, id).await;
+            });
             Ok(true)
         } else {
             debug!("Chip already deleted");

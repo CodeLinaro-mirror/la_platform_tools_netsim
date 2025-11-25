@@ -76,6 +76,7 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
     /// allows `ErrorY` to be returned from `ActionA`. In practice, this theoretical loss of precision is worth
     /// the massive reduction in code complexity.
     type Error: std::error::Error + Send + Sync + 'static;
+    type ListResponse: Send + Sync + Debug;
 
     /// Construct the full Entity from the ID and Payload.
     /// This is called synchronously before `on_create`.
@@ -85,19 +86,21 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
 
     /// Called immediately after the entity is created and initialized.
     /// Use this hook to perform validation or side effects (e.g., checking other actors).
-    async fn on_create(&mut self, _ctx: &Self::Context) -> Result<(), Self::Error> {
+    async fn on_create(&mut self, _context: &Self::Context) -> Result<(), Self::Error> {
         Ok(())
     }
 
     /// Called when an update request is received.
     async fn on_update(
         &mut self,
-        update: Self::Update,
-        _ctx: &Self::Context,
-    ) -> Result<(), Self::Error>;
+        _update: Self::Update,
+        _context: &Self::Context,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     /// Called immediately before the entity is removed from the system.
-    async fn on_delete(&self, _ctx: &Self::Context) -> Result<(), Self::Error> {
+    async fn on_delete(&self, _context: &Self::Context) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -106,7 +109,21 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
     /// Handle a custom resource-specific action.
     async fn handle_action(
         &mut self,
-        action: Self::Action,
-        _ctx: &Self::Context,
+        _action: Self::Action,
+        _context: &Self::Context,
     ) -> Result<Self::ActionResult, Self::Error>;
+
+    /// Called when a list request is received.
+    /// Provides a snapshot of all entities currently managed by the actor.
+    ///
+    /// # Design Note: List Response Flexibility
+    ///
+    /// The framework requires implementing `on_list` because it cannot provide a default
+    /// implementation that satisfies all use cases.
+    ///
+    /// **Why?**
+    /// - **Return Type Flexibility**: Different entities need different list formats (e.g., `Vec<Entity>`, `Vec<Id>`, or a custom DTO).
+    /// - **Rust Limitations**: Default Associated Types are not yet stable, so we cannot default `ListResponse` to `Vec<Self>`.
+    /// - **Performance**: Explicit implementation allows entities to choose efficient representations (e.g., avoiding clones of heavy entities).
+    fn on_list(entities: &std::collections::HashMap<Self::Id, Self>) -> Self::ListResponse;
 }

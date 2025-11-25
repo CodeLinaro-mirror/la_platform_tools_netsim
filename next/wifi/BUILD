@@ -9,6 +9,7 @@ rust_library(
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
     deps = [
+        "//next/client",
         "//next/common",
         "//next/hostapd-rs",
         "//next/http-proxy",
@@ -61,6 +62,9 @@ rust_test(
     ],
     deps = [
         ":wifi",
+        "//next/actor-framework",
+        "//next/client",
+        "//next/device-actor",
         "//next/model",
         "@env_logger",
         "@futures",

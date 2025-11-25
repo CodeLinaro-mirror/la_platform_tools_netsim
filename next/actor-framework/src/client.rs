@@ -20,6 +20,12 @@ pub struct ResourceClient<T: ActorEntity> {
     sender: mpsc::Sender<ResourceRequest<T>>,
 }
 
+impl<T: ActorEntity> std::fmt::Debug for ResourceClient<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResourceClient").field("sender", &"mpsc::Sender").finish()
+    }
+}
+
 impl<T: ActorEntity> ResourceClient<T> {
     pub fn new(sender: mpsc::Sender<ResourceRequest<T>>) -> Self {
         Self { sender }
@@ -70,6 +76,15 @@ impl<T: ActorEntity> ResourceClient<T> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::Action { id, action, respond_to })
+            .await
+            .map_err(|_| FrameworkError::ActorClosed)?;
+        response.await.map_err(|_| FrameworkError::ActorDropped)?
+    }
+
+    pub async fn list(&self) -> Result<T::ListResponse, FrameworkError> {
+        let (respond_to, response) = oneshot::channel();
+        self.sender
+            .send(ResourceRequest::List { respond_to })
             .await
             .map_err(|_| FrameworkError::ActorClosed)?;
         response.await.map_err(|_| FrameworkError::ActorDropped)?

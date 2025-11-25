@@ -34,9 +34,11 @@ rust_library(
     edition = "2021",
     proc_macro_deps = ["@async-trait"],
     deps = [
+        "//next/actor-framework",
         "//next/bluetooth",
         "//next/cell",
-        "//next/devices",
+        "//next/client",
+        "//next/device-actor",
         "//next/grpc-server",
         "//next/model",
         "//next/packet-stream",
