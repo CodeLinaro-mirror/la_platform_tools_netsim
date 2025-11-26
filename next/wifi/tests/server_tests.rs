@@ -1,6 +1,5 @@
 // Copyright 2024-2025 The Android Open Source Project
 
-use netsim_model::device::DeviceId;
 use netsim_model::{chip::ChipId, chip_error::ChipError, client_error::ClientError};
 use tokio::sync::mpsc;
 use wifi::Server;

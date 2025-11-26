@@ -45,7 +45,7 @@ use client::DeviceClient;
 use log::{debug, error, info};
 use netsim_model::chip::{Chip, ChipClient, ChipId, ChipRequest, PacketStream};
 use netsim_model::chip_error::ChipError;
-use netsim_model::device::DeviceId;
+
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
