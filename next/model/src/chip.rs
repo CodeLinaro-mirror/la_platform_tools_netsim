@@ -1,5 +1,11 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+//! Chip model and management.
+//!
+//! This module defines the core data structures for representing chips in Netsim,
+//! including their types, state, and communication channels. It handles the lifecycle
+//! of chips, including creation, updates, and deletion.
+
 use crate::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
 use crate::bluetooth::Controller as RootcanalController;
 use crate::chip_error::ChipError;
@@ -15,6 +21,10 @@ use std::pin::Pin;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::Stream;
 
+/// The kind of network technology the chip supports.
+///
+/// This enumeration is used to distinguish between different types of simulated
+/// radios and to route packets to the correct handlers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum ChipKind {
     #[default]
@@ -47,7 +57,7 @@ pub enum ChipType {
 /// A stream of packets from the chip.
 pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Sync + Unpin>;
 /// A sink for packets to the chip.
-pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>;
+pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send + Sync>>;
 
 // CHIP SERVICE
 //

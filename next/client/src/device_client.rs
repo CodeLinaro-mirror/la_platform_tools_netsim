@@ -20,14 +20,16 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
 pub struct DeviceClient {
-    inner: ResourceClient<DeviceEntity>,
-    state: Arc<Mutex<DeviceClientState>>,
+    pub(crate) inner: ResourceClient<DeviceEntity>,
+    pub(crate) state: Arc<Mutex<DeviceClientState>>,
 }
 
 #[derive(Default, Debug)]
-struct DeviceClientState {
-    guid_to_id: HashMap<String, DeviceId>,
+pub(crate) struct DeviceClientState {
+    pub(crate) guid_to_id: HashMap<String, DeviceId>,
 }
+
+mod device_add_chip;
 
 impl DeviceClient {
     pub fn new(inner: ResourceClient<DeviceEntity>) -> Self {
@@ -114,75 +116,5 @@ impl DeviceClient {
             }
             Err(e) => Err(DeviceError::ActorCommunicationError(e.to_string())),
         }
-    }
-
-    /// Creates or updates a device based on PacketStream parameters.
-    ///
-    /// This method handles the logic for PacketStream-based device creation, which
-    /// includes checking for existing devices by GUID to support multi-chip devices.
-    ///
-    /// # How it works
-    /// 1. Checks if a device with the given `device_guid` already exists in the local state.
-    /// 2. If it exists, it adds a new chip to that device using `DeviceAction::AddChip`.
-    /// 3. If it doesn't exist, it creates a new device and stores the mapping from GUID to the new Device ID.
-    ///
-    /// This ensures that multiple PacketStream connections with the same GUID are grouped under a single device.
-    pub async fn add_chip(
-        &self,
-        params: netsim_model::device::DeviceAddChip,
-    ) -> Result<DeviceId, DeviceError> {
-        debug!("Processing add_chip for GUID {}", params.device_guid);
-
-        let existing_id = {
-            let state = self
-                .state
-                .lock()
-                .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
-            state.guid_to_id.get(&params.device_guid).copied()
-        };
-
-        if let Some(device_id) = existing_id {
-            // If device already existed, add a new chip
-            debug!("Adding chip to existing device {}", device_id);
-            match self
-                .inner
-                .perform_action(
-                    device_id,
-                    DeviceAction::AddChip(convert_chip_config(&params.chip_config)),
-                )
-                .await
-            {
-                Ok(DeviceActionResult::ChipId(_)) => Ok(device_id),
-                Ok(_) => Err(DeviceError::ActorCommunicationError(
-                    "Unexpected action result".to_string(),
-                )),
-                Err(e) => Err(DeviceError::ActorCommunicationError(e.to_string())),
-            }
-        } else {
-            // Create new device
-            let create_params = DeviceCreate {
-                device_config: params.device_config.clone(),
-                chip: convert_chip_config(&params.chip_config),
-            };
-            let id = self.create_device(create_params).await?;
-
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
-            state.guid_to_id.insert(params.device_guid, id);
-            Ok(id)
-        }
-    }
-}
-
-fn convert_chip_config(
-    c: &netsim_model::chip::ChipConfig,
-) -> netsim_model::device::api::DeviceChipCreate {
-    netsim_model::device::api::DeviceChipCreate {
-        name: c.name.clone(),
-        manufacturer: c.manufacturer.clone(),
-        product_name: c.product_name.clone(),
-        chip: netsim_model::device::api::Chip::default(), // TODO: Proper conversion if needed
     }
 }

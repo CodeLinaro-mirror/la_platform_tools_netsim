@@ -149,7 +149,7 @@ impl<T: ActorEntity> ResourceActor<T> {
     /// The `context` argument is injected into every entity hook. This allows entities
     /// to access external dependencies (like other clients) that were created *after*
     /// the actor was instantiated but *before* the loop started.
-    pub async fn run(mut self, context: T::Context) {
+    pub async fn run(mut self, mut context: T::Context) {
         // Extract just the type name (e.g., "User" instead of "actor_recipe::model::user::User")
         let _entity_type = std::any::type_name::<T>().split("::").last().unwrap_or("Unknown");
         // info!(entity_type, "Actor started");
@@ -164,7 +164,7 @@ impl<T: ActorEntity> ResourceActor<T> {
                     match T::from_create_params(id.clone(), params) {
                         Ok(mut item) => {
                             // Await the async hook
-                            if let Err(e) = item.on_create(&context).await {
+                            if let Err(e) = item.on_create(&mut context).await {
                                 // warn!(entity_type, error = %e, "on_create failed");
                                 let _ =
                                     respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
@@ -190,7 +190,7 @@ impl<T: ActorEntity> ResourceActor<T> {
                     // debug!(entity_type, %id, ?update, "Update");
                     if let Some(item) = self.store.get_mut(&id) {
                         // Await the async hook
-                        if let Err(e) = item.on_update(update, &context).await {
+                        if let Err(e) = item.on_update(update, &mut context).await {
                             // warn!(entity_type, %id, error = %e, "Update failed");
                             let _ = respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
                             continue;
@@ -206,7 +206,7 @@ impl<T: ActorEntity> ResourceActor<T> {
                     // debug!(entity_type, %id, "Delete");
                     if let Some(item) = self.store.get(&id) {
                         // Await the async hook
-                        if let Err(e) = item.on_delete(&context).await {
+                        if let Err(e) = item.on_delete(&mut context).await {
                             // warn!(entity_type, %id, error = %e, "on_delete failed");
                             let _ = respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
                             continue;
@@ -224,7 +224,7 @@ impl<T: ActorEntity> ResourceActor<T> {
                     if let Some(item) = self.store.get_mut(&id) {
                         // Await the async hook
                         let result = item
-                            .handle_action(action, &context)
+                            .handle_action(action, &mut context)
                             .await
                             .map_err(|e| FrameworkError::EntityError(Box::new(e)));
                         match &result {
@@ -238,7 +238,7 @@ impl<T: ActorEntity> ResourceActor<T> {
                     }
                 }
                 ResourceRequest::List { respond_to } => {
-                    let response = T::on_list(&self.store);
+                    let response = T::on_list(&self.store, &mut context);
                     let _ = respond_to.send(Ok(response));
                 }
             }

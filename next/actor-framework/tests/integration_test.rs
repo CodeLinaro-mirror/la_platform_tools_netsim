@@ -46,14 +46,17 @@ impl ActorEntity for SimpleUser {
         Ok(Self { id, name: params.name, is_admin: false })
     }
 
-    fn on_list(entities: &std::collections::HashMap<Self::Id, Self>) -> Self::ListResponse {
+    fn on_list(
+        entities: &std::collections::HashMap<Self::Id, Self>,
+        _context: &mut Self::Context,
+    ) -> Self::ListResponse {
         entities.values().cloned().collect()
     }
 
     async fn on_update(
         &mut self,
         update: SimpleUserUpdate,
-        _ctx: &Self::Context,
+        _context: &mut Self::Context,
     ) -> Result<(), Self::Error> {
         if let Some(name) = update.name {
             self.name = name;
@@ -63,10 +66,10 @@ impl ActorEntity for SimpleUser {
 
     async fn handle_action(
         &mut self,
-        action: UserAction,
-        _ctx: &Self::Context,
-    ) -> Result<bool, Self::Error> {
-        match action {
+        _action: Self::Action,
+        _context: &mut Self::Context,
+    ) -> Result<Self::ActionResult, Self::Error> {
+        match _action {
             UserAction::PromoteToAdmin => {
                 if self.is_admin {
                     Ok(false)

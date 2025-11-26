@@ -86,7 +86,7 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
 
     /// Called immediately after the entity is created and initialized.
     /// Use this hook to perform validation or side effects (e.g., checking other actors).
-    async fn on_create(&mut self, _context: &Self::Context) -> Result<(), Self::Error> {
+    async fn on_create(&mut self, _context: &mut Self::Context) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -94,13 +94,13 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
     async fn on_update(
         &mut self,
         _update: Self::Update,
-        _context: &Self::Context,
+        _context: &mut Self::Context,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     /// Called immediately before the entity is removed from the system.
-    async fn on_delete(&self, _context: &Self::Context) -> Result<(), Self::Error> {
+    async fn on_delete(&self, _context: &mut Self::Context) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -110,7 +110,7 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
     async fn handle_action(
         &mut self,
         _action: Self::Action,
-        _context: &Self::Context,
+        _context: &mut Self::Context,
     ) -> Result<Self::ActionResult, Self::Error>;
 
     /// Called when a list request is received.
@@ -125,5 +125,8 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
     /// - **Return Type Flexibility**: Different entities need different list formats (e.g., `Vec<Entity>`, `Vec<Id>`, or a custom DTO).
     /// - **Rust Limitations**: Default Associated Types are not yet stable, so we cannot default `ListResponse` to `Vec<Self>`.
     /// - **Performance**: Explicit implementation allows entities to choose efficient representations (e.g., avoiding clones of heavy entities).
-    fn on_list(entities: &std::collections::HashMap<Self::Id, Self>) -> Self::ListResponse;
+    fn on_list(
+        entities: &std::collections::HashMap<Self::Id, Self>,
+        _context: &mut Self::Context,
+    ) -> Self::ListResponse;
 }

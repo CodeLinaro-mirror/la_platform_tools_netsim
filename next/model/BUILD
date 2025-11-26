@@ -17,10 +17,13 @@ load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_doc_test", "
 package(default_visibility = ["//visibility:public"])
 
 NETSIM_API_DEPS = [
+    "@anyhow",
     "@bytes",
     "@chrono",
     "@futures",
     "@log",
+    "//next/packet-stream",
+    "//next/types:netsim-types",
     "@serde",
     "@thiserror",
     "@tokio",

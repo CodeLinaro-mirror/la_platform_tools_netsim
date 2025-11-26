@@ -4,10 +4,11 @@ use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
-use client::DeviceClient;
+use client::{CaptureClient, DeviceClient};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info};
+use netsim_model::capture::CaptureCreate;
 use netsim_model::chip::{
     BluetoothCreate, BluetoothMode, CellCreate, ChipConfig, DeviceParams, NetworkKind,
     NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
@@ -21,6 +22,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
@@ -57,6 +60,8 @@ fn cuttlefish_init() {
 
 async fn handle_new_connection(
     device_client: DeviceClient,
+    _capture_client: CaptureClient,
+    _next_chip_id: Arc<AtomicU32>,
     stream: PacketStream,
     sink: PacketSink,
     chip_info: ChipInfo,
@@ -213,6 +218,10 @@ pub struct NetsimDaemon {
     streams: Streams,
     /// Client for interacting with the Device Service.
     device_client: DeviceClient,
+    /// Client for interacting with the Capture Service.
+    capture_client: CaptureClient,
+    /// Shared counter for generating ChipIds.
+    next_chip_id: Arc<AtomicU32>,
     /// Addresses of the active listeners.
     listener_addresses: HashMap<String, StreamAddress>,
     /// Command line arguments passed to the daemon.
@@ -294,9 +303,17 @@ impl NetsimDaemon {
         let (actor, generic_client) = device_actor::new();
         let device_client = client::device_client::DeviceClient::new(generic_client);
 
+        // Setup Capture Server
+        let (capture_actor, capture_generic_client) = capture_actor::new();
+        let capture_client = client::CaptureClient::new(capture_generic_client);
+        let capture_context = capture_actor::context::CaptureContext::default();
+
+        let next_chip_id = Arc::new(AtomicU32::new(0));
+
         let context = device_actor::DeviceContext {
             chip_clients: HashMap::new(), // Will be filled later
-            next_chip_id: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            next_chip_id: next_chip_id.clone(),
+            capture_client: Some(Arc::new(capture_client.clone())),
         };
         let device_actor_components = Some((actor, context));
         info!("Device server created");
@@ -369,11 +386,15 @@ impl NetsimDaemon {
             join_set.spawn(actor.run(context));
         }
         info!("Device server started");
+        join_set.spawn(capture_actor.run(capture_context));
+        info!("Capture server started");
         Ok(StartUpMode::Owner(
             NetsimDaemon {
                 join_set,
                 streams,
                 device_client,
+                capture_client,
+                next_chip_id,
                 listener_addresses,
                 args,
                 _grpc_server: Some(grpc_server),
@@ -401,6 +422,8 @@ impl NetsimDaemon {
     /// Runs the main event loop for the daemon.
     pub async fn run_daemon(mut self) {
         let dc = self.device_client.clone();
+        let cc = self.capture_client.clone();
+        let nci = self.next_chip_id.clone();
         let mut streams = self.streams;
 
         info!("Netsimd started {}", if self.args.no_shutdown { "--no-shutdown" } else { "" });
@@ -417,8 +440,10 @@ impl NetsimDaemon {
                                 chip_info.device_name()
                             );
                             let device_client = dc.clone();
+                            let capture_client = cc.clone();
+                            let next_chip_id = nci.clone();
                             // Await connection handling directly in the main loop
-                            handle_new_connection(device_client, stream, sink, chip_info, guid).await;
+                            handle_new_connection(device_client, capture_client, next_chip_id, stream, sink, chip_info, guid).await;
                         }
                         Err(e) => {
                             error!("Error accepting connection: {}. Stopping new connections.", e);

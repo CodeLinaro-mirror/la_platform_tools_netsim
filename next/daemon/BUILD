@@ -36,6 +36,7 @@ rust_library(
     deps = [
         "//next/actor-framework",
         "//next/bluetooth",
+        "//next/capture-actor",
         "//next/cell",
         "//next/client",
         "//next/device-actor",

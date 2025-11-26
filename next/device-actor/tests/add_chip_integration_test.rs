@@ -56,7 +56,7 @@ async fn test_add_chip_success() {
 
     let params = create_add_chip_params("guid-1", "chip-1");
     let result = client.add_chip(params).await;
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "Add chip failed: {:?}", result.err());
     let device_id = result.unwrap();
 
     let device = client.get(device_id).await.unwrap().unwrap();
