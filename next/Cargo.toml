@@ -15,6 +15,7 @@
 [workspace]
 members = [
   "actor-framework",
+  "capture-actor",
   "bluetooth",
   "model",
   "daemon",
@@ -24,6 +25,7 @@ members = [
   "modem-rs",
   "modem-rs-derive",
   "uwb",
+  "types",
   "device-actor",
   "client",
 ]

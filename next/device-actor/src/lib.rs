@@ -36,11 +36,15 @@
 //! - **Type-safe results**: Actions return strongly-typed [`DeviceActionResult`]
 
 pub mod actions;
+pub mod actor_impl;
+pub mod capture_helper;
+pub mod context;
 pub mod entity;
 pub mod error;
+pub mod handlers;
 
 pub use actions::*;
-pub use entity::DeviceContext;
+pub use context::DeviceContext;
 pub use error::*;
 
 pub use crate::entity::DeviceEntity;

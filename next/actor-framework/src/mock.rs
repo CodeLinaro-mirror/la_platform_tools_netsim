@@ -508,18 +508,25 @@ mod tests {
         }
         async fn on_update(
             &mut self,
-            _update: UserUpdate,
-            _ctx: &Self::Context,
+            _update: Self::Update,
+            _context: &mut Self::Context,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
 
         async fn handle_action(
             &mut self,
-            _action: UserAction,
-            _ctx: &Self::Context,
-        ) -> Result<(), Self::Error> {
+            action: Self::Action,
+            _context: &mut Self::Context,
+        ) -> Result<Self::ActionResult, Self::Error> {
             Ok(())
+        }
+
+        fn on_list(
+            entities: &std::collections::HashMap<Self::Id, Self>,
+            _context: &mut Self::Context,
+        ) -> Self::ListResponse {
+            vec![]
         }
     }
 

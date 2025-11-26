@@ -24,7 +24,11 @@ pub async fn setup() -> TestFixture {
     let mut chip_clients = HashMap::new();
     chip_clients.insert(NetworkKind::Bluetooth, chip_client);
 
-    let context = DeviceContext { chip_clients, next_chip_id: Arc::new(AtomicU32::new(0)) };
+    let context = DeviceContext {
+        chip_clients,
+        next_chip_id: Arc::new(AtomicU32::new(0)),
+        capture_client: None,
+    };
 
     let actor_task = tokio::spawn(actor.run(context));
 

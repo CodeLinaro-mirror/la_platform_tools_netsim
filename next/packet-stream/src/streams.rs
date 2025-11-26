@@ -6,10 +6,10 @@
 use crate::error::{PacketStreamError, Result};
 use crate::transport::traits::{PacketSink, PacketStream, TransportListener};
 use crate::transport::{ListenerConfig, TransportType};
+use crate::types::ChipInfo;
 use crate::types::StreamAddress;
 use bytes::Bytes;
 use futures::SinkExt;
-use netsim_model::initial_info::ChipInfo;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::{broadcast, mpsc};
