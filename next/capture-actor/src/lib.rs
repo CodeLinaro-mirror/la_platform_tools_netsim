@@ -41,7 +41,7 @@ mod tests {
     use crate::writer::CaptureWriter;
     use actor_framework::ActorEntity;
     use bytes::Bytes;
-    use netsim_model::capture::Direction;
+    use capture_api::Direction;
     use netsim_model::chip::{ChipId, ChipKind};
     use std::collections::HashMap;
     use std::fs;

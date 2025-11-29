@@ -3,13 +3,14 @@ load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 package(default_visibility = ["//visibility:public"])
 
 UWB_DEPS = [
+    "//next/client",
+    "//next/device-api",
+    "//next/model",
     "@bytes",
     "@futures",
     "@log",
-    "@tokio-stream",
     "@tokio",
-    "//next/client",
-    "//next/model",
+    "@tokio-stream",
 ]
 
 rust_library(

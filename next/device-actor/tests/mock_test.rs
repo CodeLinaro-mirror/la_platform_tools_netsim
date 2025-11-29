@@ -11,9 +11,9 @@
 use actor_framework::mock::MockClient;
 use client::DeviceClient;
 use device_actor::{DeviceActionResult, DeviceEntity};
+use device_api::api::{Chip, DeviceChipCreate, DeviceCreate};
+use device_api::{DeviceConfig, DeviceId};
 use netsim_model::chip::{BleBeacon, ChipId};
-use netsim_model::device::api::{Chip, DeviceChipCreate, DeviceCreate};
-use netsim_model::device::{DeviceConfig, DeviceId};
 
 #[tokio::test]
 async fn test_device_client_mock() {
@@ -78,8 +78,8 @@ async fn test_device_client_add_chip() {
     mock.verify();
 }
 
-fn create_add_chip_params(guid: &str, chip_name: &str) -> netsim_model::device::DeviceAddChip {
-    netsim_model::device::DeviceAddChip {
+fn create_add_chip_params(guid: &str, chip_name: &str) -> device_api::DeviceAddChip {
+    device_api::DeviceAddChip {
         device_guid: guid.to_string(),
         packet_stream: None,
         packet_sink: None,

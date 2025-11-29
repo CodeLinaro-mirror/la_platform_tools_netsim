@@ -3,11 +3,11 @@
 use crate::error::CellError;
 use bytes::Bytes;
 use client::DeviceClient;
+use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use modem_rs::modem_network::{ModemCallbacks, ModemNetworkInterface};
 use netsim_model::chip::{ChipClient, ChipId, ChipRequest, PacketSink, PacketStream};
 use netsim_model::chip_error::ChipError as NetsimChipError;
-use netsim_model::device::DeviceId;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;

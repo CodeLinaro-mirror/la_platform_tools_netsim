@@ -12,9 +12,9 @@ mod common;
 // - `test_delete_add_chip_device_fails`: Verifies constraints on deleting AddChip devices (currently failing/not implemented).
 
 use actor_framework::ActorClient;
+use device_api::api::{Chip, DeviceChipCreate, DeviceCreate};
+use device_api::DeviceConfig;
 use netsim_model::chip::{BleBeacon, ChipRequest};
-use netsim_model::device::api::{Chip, DeviceChipCreate, DeviceCreate};
-use netsim_model::device::DeviceConfig;
 
 use common::{setup, TestFixture};
 
@@ -71,7 +71,7 @@ async fn test_delete_add_chip_device_fails() {
         }
     });
 
-    let params = netsim_model::device::DeviceAddChip {
+    let params = device_api::DeviceAddChip {
         device_guid: "guid-1".to_string(),
         packet_stream: None,
         packet_sink: None,

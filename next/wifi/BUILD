@@ -11,6 +11,7 @@ rust_library(
     deps = [
         "//next/client",
         "//next/common",
+        "//next/device-api",
         "//next/hostapd-rs",
         "//next/http-proxy",
         "//next/libslirp-rs",
