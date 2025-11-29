@@ -36,7 +36,6 @@
 //! - **Type-safe results**: Actions return strongly-typed [`DeviceActionResult`]
 
 pub mod actor_impl;
-pub mod capture_helper;
 pub mod context;
 pub mod entity;
 pub mod error;
