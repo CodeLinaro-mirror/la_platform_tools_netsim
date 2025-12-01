@@ -6,10 +6,10 @@
 use crate::error::{PacketStreamError, Result};
 use crate::transport::traits::{PacketSink, PacketStream, TransportListener};
 use crate::transport::{ListenerConfig, TransportType};
+use crate::types::ChipInfo;
 use crate::types::StreamAddress;
 use bytes::Bytes;
 use futures::SinkExt;
-use netsim_api::initial_info::ChipInfo;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::{broadcast, mpsc};
@@ -72,6 +72,49 @@ impl Streams {
         let mut listener = transport_type.create_listener().await?;
         let addr = listener.local_addr()?;
         println!("Starting {name} listener on {addr}");
+
+        self.listener_addresses.insert(name.clone(), addr.clone());
+
+        let listener_name = name.clone();
+        let connection_tx = self.connection_tx.clone();
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
+
+        let task = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = shutdown_rx.recv() => {
+                        println!("Shutting down {listener_name} listener");
+                        let _ = listener.shutdown().await;
+                        break;
+                    }
+                    result = listener.accept() => {
+                        match result {
+                            Ok(stream_tuple) => {
+                                if connection_tx.send((listener_name.clone(), stream_tuple)).is_err() {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Listener {listener_name} accept error: {e}");
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        self.listener_tasks.insert(name.clone(), task);
+        Ok(())
+    }
+
+    pub fn add_listener(
+        &mut self,
+        name: impl Into<String>,
+        mut listener: Box<dyn TransportListener + Send>,
+    ) -> Result<()> {
+        let name = name.into();
+        let addr = listener.local_addr()?;
+        println!("Adding {name} listener on {addr}");
 
         self.listener_addresses.insert(name.clone(), addr.clone());
 

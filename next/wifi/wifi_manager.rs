@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::devices::chip::ChipIdentifier;
+use crate::device::chip::ChipIdentifier;
 use crate::error::{WifiError, WifiResult};
 use crate::get_runtime;
 use crate::hostapd;
@@ -21,7 +21,7 @@ use crate::libslirp;
 use crate::mdns_forwarder;
 use crate::medium::Medium;
 use crate::stats::WifiStats;
-use crate::wireless::wifi_chip::{CreateParams, WifiChip};
+use crate::wireless::wifi_chip::{ChipCreate, WifiChip};
 use crate::wireless::{packet::handle_response, WirelessChipImpl};
 use crate::DebugArgs;
 use bytes::Bytes;
@@ -313,7 +313,7 @@ fn get_wifi_manager() -> Arc<WifiManager> {
 /// Create a new Emulated Wifi Chip
 /// allow(dead_code) due to not being used in unit tests
 #[allow(dead_code)]
-pub fn add_chip(_params: &CreateParams, chip_id: ChipIdentifier) -> WirelessChipImpl {
+pub fn add_chip(_params: &ChipCreate, chip_id: ChipIdentifier) -> WirelessChipImpl {
     let wifi_manager = get_wifi_manager();
     wifi_manager.medium.add(chip_id.0);
     info!("WiFi WirelessChip created chip_id: {chip_id}");

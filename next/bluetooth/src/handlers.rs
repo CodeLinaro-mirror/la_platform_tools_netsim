@@ -11,12 +11,11 @@ use crate::Server;
 use bytes::Bytes;
 use futures::SinkExt;
 use log::{debug, error, info, warn};
-use netsim_api::{
-    chip_error::ChipError,
-    chips::{
-        BluetoothMode, Chip, ChipId, ChipPatch, ChipRequest, CreateParams, NetworkParams,
-        PacketSink,
+use netsim_model::{
+    chip::{
+        BluetoothMode, Chip, ChipCreate, ChipId, ChipRequest, ChipUpdate, NetworkParams, PacketSink,
     },
+    chip_error::ChipError,
 };
 use rootcanal::{
     controller::{Callbacks as ControllerCallbacks, Id},
@@ -134,12 +133,12 @@ impl Server {
         id
     }
 
-    /// Creates a new Bluetooth chip based on the provided `CreateParams`.
+    /// Creates a new Bluetooth chip based on the provided `ChipCreate`.
     ///
     /// This function sets up the chip in the `rootcanal` emulator, configures
     /// its mode (Device, Beacon, or Sniffer), and establishes packet
     /// stream/sink connections if provided.
-    fn create_chip(&mut self, mut create_params: CreateParams) -> Result<(), ChipError> {
+    fn create_chip(&mut self, mut create_params: ChipCreate) -> Result<(), ChipError> {
         let bluetooth_params = match create_params.config.network_params {
             NetworkParams::Bluetooth(params) => params,
             _ => return Err(ChipError::InvalidArguments("Unsupported chip kind".to_string())),
@@ -166,18 +165,19 @@ impl Server {
 
         rootcanal.new_controller(id.into(), address, Box::new(callback)).to_chip_error()?;
 
-        let chip_info = match &bluetooth_params.mode {
+        let mut chip_info = match &bluetooth_params.mode {
             BluetoothMode::Beacon(params) => crate::beacon::create(rootcanal, id, params)?,
             BluetoothMode::Device(params) => crate::device::create(rootcanal, id, params)?,
             BluetoothMode::Sniffer(params) => crate::sniffer::create(rootcanal, id, params)?,
         };
+        chip_info.device_id = create_params.device_id;
         self.chips.lock().unwrap().insert(id, chip_info);
         Ok(())
     }
 
     /// Updates an existing Bluetooth chip.
     ///
-    fn patch_chip(&mut self, id: ChipId, mut patch: ChipPatch) -> Result<Chip, ChipError> {
+    fn patch_chip(&mut self, id: ChipId, mut patch: ChipUpdate) -> Result<Chip, ChipError> {
         // Currently nothing in patch.variant
         let mut binding = self.chips.lock().unwrap();
         let chip = binding.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;

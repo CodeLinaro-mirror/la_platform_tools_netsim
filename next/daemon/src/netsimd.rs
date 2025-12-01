@@ -1,25 +1,30 @@
-// Copyright 2023-2025 The Android Open Source Project
+// Copyright 2023-2025 The Android Open Source Project // touch
 
 use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
-use devices::Server as DeviceServer;
+use client::{CaptureClient, DeviceClient};
 use futures::{SinkExt, StreamExt};
+use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info};
-use netsim_api::chips::{
-    BluetoothMode, BluetoothParams, CellParams, ChipConfig, DeviceParams, NetworkKind,
-    NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbParams,
-    WifiParams,
+use netsim_model::capture::CaptureCreate;
+use netsim_model::chip::{
+    BluetoothCreate, BluetoothMode, CellCreate, ChipConfig, DeviceParams, NetworkKind,
+    NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
+    WifiCreate,
 };
-use netsim_api::devices::{DeviceClient, DeviceConfig, DevicePsCreate};
-use netsim_api::initial_info::{ChipInfo, ChipKind};
+use netsim_model::device::{DeviceAddChip, DeviceConfig};
+use netsim_model::initial_info::{ChipInfo, ChipKind};
 use packet_stream::transport::traits::{PacketSink, PacketStream};
 use packet_stream::{StreamAddress, Streams, TransportType};
 use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
+use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
 #[derive(Debug, PartialEq)]
@@ -55,6 +60,8 @@ fn cuttlefish_init() {
 
 async fn handle_new_connection(
     device_client: DeviceClient,
+    _capture_client: CaptureClient,
+    _next_chip_id: Arc<AtomicU32>,
     stream: PacketStream,
     sink: PacketSink,
     chip_info: ChipInfo,
@@ -80,14 +87,14 @@ async fn handle_new_connection(
     };
 
     let network_params = match chip.kind {
-        ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothParams {
+        ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothCreate {
             address: "".to_string(), // TODO: Get address from ChipInfo
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
         }),
-        ChipKind::UWB => NetworkParams::Uwb(UwbParams {}),
-        ChipKind::WIFI => NetworkParams::Wifi(WifiParams {}),
-        ChipKind::CELL => NetworkParams::Cell(CellParams {}),
+        ChipKind::UWB => NetworkParams::Uwb(UwbCreate::default()),
+        ChipKind::WIFI => NetworkParams::Wifi(WifiCreate::default()),
+        ChipKind::CELL => NetworkParams::Cell(CellCreate::default()),
         _ => {
             error!("Unsupported chip kind: {:?}", chip.kind);
             return;
@@ -101,7 +108,7 @@ async fn handle_new_connection(
         network_params,
     };
 
-    // Convert packet_stream types to netsim_api types
+    // Convert packet_stream types to netsim_model types
     let api_stream: ApiPacketStream = Box::new(stream.filter_map(|item| {
         Box::pin(async move {
             match item {
@@ -117,7 +124,7 @@ async fn handle_new_connection(
     let api_sink: ApiPacketSink =
         Box::pin(sink.sink_map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
 
-    let request = DevicePsCreate {
+    let request = DeviceAddChip {
         device_guid,
         packet_stream: Some(api_stream),
         packet_sink: Some(api_sink),
@@ -125,7 +132,7 @@ async fn handle_new_connection(
         chip_config,
     };
 
-    if let Err(e) = device_client.ps_create(request).await {
+    if let Err(e) = device_client.add_chip(request).await {
         error!("Failed to register stream for {}: {}", chip_info.name, e);
     }
 }
@@ -134,10 +141,14 @@ async fn handle_new_connection(
 async fn setup_uds_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
+    runtime_dir: &PathBuf,
 ) -> Result<(), RunResult> {
-    let uds_path = platform::get_runtime_dir().join("netsim.sock");
+    let uds_path = runtime_dir.join("netsim.sock");
     if uds_path.exists() {
         fs::remove_file(&uds_path).map_err(init_error)?;
+    }
+    if let Some(parent) = uds_path.parent() {
+        fs::create_dir_all(parent).map_err(init_error)?;
     }
     if let Some(uds_path_str) = uds_path.to_str() {
         streams
@@ -162,20 +173,37 @@ async fn setup_grpc_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
-) -> Result<u16, RunResult> {
-    streams
-        .start_listener("netsim_grpc", TransportType::grpc("0.0.0.0", requested_port))
-        .await
-        .map_err(init_error)?;
+    device_client: DeviceClient,
+) -> Result<(u16, grpcio::Server), RunResult> {
+    // Create a channel to bridge PacketStreamerService connections to Streams
+    let (new_connection_tx, new_connection_rx) = mpsc::channel(100);
+    let packet_streamer_service = PacketStreamerService::new(new_connection_tx);
 
-    let grpc_addr = streams.listener_address("netsim_grpc").unwrap();
-    let actual_grpc_port = match grpc_addr {
-        StreamAddress::Grpc(addr) => addr.port(),
-        _ => return Err(RunResult::InitializationError("Failed to get gRPC port".to_string())),
+    // Start the gRPC server
+    let (server, port) =
+        grpc_server::server::start(requested_port.into(), device_client, packet_streamer_service)
+            .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
+
+    let listener = grpc_server::packet_streamer::ChannelTransportListener {
+        rx: new_connection_rx,
+        local_addr: StreamAddress::Grpc(std::net::SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
+            port,
+        )),
     };
-    info!("Started gRPC listener on port {}", actual_grpc_port);
-    listener_addresses.insert("netsim_grpc".to_string(), grpc_addr.clone());
-    Ok(actual_grpc_port)
+
+    let _ = streams.add_listener("netsim_grpc", Box::new(listener));
+
+    info!("Started gRPC listener on port {}", port);
+    listener_addresses.insert(
+        "netsim_grpc".to_string(),
+        StreamAddress::Grpc(std::net::SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
+            port,
+        )),
+    );
+
+    Ok((port, server))
 }
 
 /// The main daemon for netsim-next.
@@ -190,10 +218,16 @@ pub struct NetsimDaemon {
     streams: Streams,
     /// Client for interacting with the Device Service.
     device_client: DeviceClient,
+    /// Client for interacting with the Capture Service.
+    capture_client: CaptureClient,
+    /// Shared counter for generating ChipIds.
+    next_chip_id: Arc<AtomicU32>,
     /// Addresses of the active listeners.
     listener_addresses: HashMap<String, StreamAddress>,
     /// Command line arguments passed to the daemon.
     args: Args,
+    /// The gRPC server instance (kept alive).
+    _grpc_server: Option<grpcio::Server>,
 }
 
 impl NetsimDaemon {
@@ -204,6 +238,16 @@ impl NetsimDaemon {
     /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not acquired.
     /// - `Err(RunResult::InitializationError)`: Fatal error.
     pub async fn new() -> Result<StartUpMode, RunResult> {
+        let discovery_dir = crate::ini_file::get_discovery_directory();
+        let runtime_dir = platform::get_runtime_dir();
+        Self::new_with_dirs(discovery_dir, runtime_dir).await
+    }
+
+    /// Creates a new `NetsimDaemon` instance with custom directories.
+    pub async fn new_with_dirs(
+        discovery_dir: PathBuf,
+        runtime_dir: PathBuf,
+    ) -> Result<StartUpMode, RunResult> {
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
 
@@ -212,7 +256,7 @@ impl NetsimDaemon {
         info!("netsim startup");
 
         let args = Args::parse();
-        let mut ini_file = IniFile::new().map_err(init_error)?;
+        let mut ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
 
         // Attempt to acquire the singleton lock for the netsim daemon.
         // The lock file (netsim.ini.lock) is managed by the `named_lock` crate
@@ -220,7 +264,7 @@ impl NetsimDaemon {
         match ini_file.try_acquire().map_err(init_error)? {
             // This instance is the Writer (the primary daemon).
             IniFileAccess::Writer(ini_guard) => {
-                Self::initialize_primary_daemon(ini_guard, args).await
+                Self::initialize_primary_daemon(ini_guard, args, runtime_dir).await
             }
             // This instance is a Reader, another daemon is already running.
             IniFileAccess::Reader(config) => {
@@ -233,6 +277,7 @@ impl NetsimDaemon {
     async fn initialize_primary_daemon(
         ini_guard: IniFileGuard,
         args: Args,
+        runtime_dir: PathBuf,
     ) -> Result<StartUpMode, RunResult> {
         info!("Successfully acquired lock. This instance is the Owner.");
         let ini_path = ini_guard.path();
@@ -251,12 +296,41 @@ impl NetsimDaemon {
         let mut streams = Streams::new();
 
         #[cfg(unix)]
-        setup_uds_listener(&mut streams, &mut listener_addresses).await?;
+        setup_uds_listener(&mut streams, &mut listener_addresses, &runtime_dir).await?;
+
+        // Setup Device Server
+        info!("Using new device-actor framework");
+        let (actor, generic_client) = device_actor::new();
+        let device_client = client::device_client::DeviceClient::new(generic_client);
+
+        // Setup Capture Server
+        let (capture_actor, capture_generic_client) = capture_actor::new();
+        let capture_client = client::CaptureClient::new(capture_generic_client);
+        let capture_context = capture_actor::context::CaptureContext::default();
+
+        let next_chip_id = Arc::new(AtomicU32::new(0));
+
+        let context = device_actor::DeviceContext {
+            chip_clients: HashMap::new(), // Will be filled later
+            next_chip_id: next_chip_id.clone(),
+            capture_client: Some(Arc::new(capture_client.clone())),
+        };
+        let device_actor_components = Some((actor, context));
+        info!("Device server created");
 
         // gRPC port is determined after the listener starts.
-        let actual_grpc_port =
-            setup_grpc_listener(&mut streams, &mut listener_addresses, args.grpc_port.unwrap_or(0))
-                .await?;
+        let (actual_grpc_port, grpc_server) = setup_grpc_listener(
+            &mut streams,
+            &mut listener_addresses,
+            args.grpc_port.unwrap_or(0),
+            device_client.clone(),
+        )
+        .await?;
+
+        listener_addresses.insert(
+            "netsim_grpc".to_string(),
+            StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], actual_grpc_port))),
+        );
 
         // Write the current daemon's information to the INI file.
         // Clients will use this to connect.
@@ -271,11 +345,6 @@ impl NetsimDaemon {
         // Even if stale file removal failed, we can proceed as ini_guard.write will overwrite.
         ini_guard.write(&ini_data).map_err(init_error)?;
         info!("Successfully wrote to INI file {}", ini_path.display());
-        // Setup Device Server first to get the client
-
-        // Setup Device Server first to get the client
-        let (device_server, device_client) = DeviceServer::new(args.no_shutdown);
-        info!("Device server created");
 
         // Setup Bluetooth Server
         let (bt_server, bt_client) = bluetooth::Server::new(device_client.clone());
@@ -312,10 +381,24 @@ impl NetsimDaemon {
         info!("Uwb server started");
         join_set.spawn(cell_server.run());
         info!("Cell server started");
-        join_set.spawn(device_server.run(chip_clients));
+        if let Some((actor, mut context)) = device_actor_components {
+            context.chip_clients = chip_clients;
+            join_set.spawn(actor.run(context));
+        }
         info!("Device server started");
+        join_set.spawn(capture_actor.run(capture_context));
+        info!("Capture server started");
         Ok(StartUpMode::Owner(
-            NetsimDaemon { join_set, streams, device_client, listener_addresses, args },
+            NetsimDaemon {
+                join_set,
+                streams,
+                device_client,
+                capture_client,
+                next_chip_id,
+                listener_addresses,
+                args,
+                _grpc_server: Some(grpc_server),
+            },
             ini_guard,
         ))
     }
@@ -328,9 +411,19 @@ impl NetsimDaemon {
         })
     }
 
+    /// Gets the gRPC port, if the server is running.
+    pub fn grpc_port(&self) -> Option<u16> {
+        self.listener_addresses.get("netsim_grpc").and_then(|addr| match addr {
+            StreamAddress::Tcp(socket_addr) => Some(socket_addr.port()),
+            _ => None,
+        })
+    }
+
     /// Runs the main event loop for the daemon.
     pub async fn run_daemon(mut self) {
         let dc = self.device_client.clone();
+        let cc = self.capture_client.clone();
+        let nci = self.next_chip_id.clone();
         let mut streams = self.streams;
 
         info!("Netsimd started {}", if self.args.no_shutdown { "--no-shutdown" } else { "" });
@@ -347,8 +440,10 @@ impl NetsimDaemon {
                                 chip_info.device_name()
                             );
                             let device_client = dc.clone();
+                            let capture_client = cc.clone();
+                            let next_chip_id = nci.clone();
                             // Await connection handling directly in the main loop
-                            handle_new_connection(device_client, stream, sink, chip_info, guid).await;
+                            handle_new_connection(device_client, capture_client, next_chip_id, stream, sink, chip_info, guid).await;
                         }
                         Err(e) => {
                             error!("Error accepting connection: {}. Stopping new connections.", e);

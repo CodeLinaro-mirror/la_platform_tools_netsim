@@ -170,6 +170,10 @@ cc_binary(
     }),
     defines = ["NETSIM_ANDROID_EMULATOR"],
     includes = ["src"],
+    linkopts = select({
+        "@platforms//os:windows": ["ntdll.lib"],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:public"],
     deps = [
         ":netsimd_cc_proto",
