@@ -21,6 +21,7 @@ bluetooth = { path = "../bluetooth" }
 devices = { path = "../devices" }
 packet-stream = { path = "../packet-stream" }
 uwb = { path = "../uwb" }
+cell = { path = "../cell" }
 tokio = { version = "1.28.2", features = ["full"] }
 named-lock = "0.4.1"
 

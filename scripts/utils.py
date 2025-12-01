@@ -237,7 +237,9 @@ def log_system_info():
   )
 
 
-def run(cmd, env, log_prefix, cwd=AOSP_ROOT, throw_on_failure=True):
+def run(
+    cmd, env, log_prefix, cwd=AOSP_ROOT, throw_on_failure=True, log_output=True
+):
   currentThread().setName(log_prefix)
   cmd_env = os.environ.copy()
   cmd_env.update(env)
@@ -249,19 +251,28 @@ def run(cmd, env, log_prefix, cwd=AOSP_ROOT, throw_on_failure=True):
   logging.info("%s $> %s", cwd, " ".join(cmd))
   # logging.info("=" * 140)
 
+  if log_output:
+    stdout = subprocess.PIPE
+    stderr = subprocess.PIPE
+  else:
+    stdout = subprocess.DEVNULL
+    stderr = subprocess.DEVNULL
+
   proc = subprocess.Popen(
       cmd,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.PIPE,
+      stdout=stdout,
+      stderr=stderr,
       shell=is_windows,  # Make sure windows propagates ENV vars properly.
       cwd=cwd,
       env=cmd_env,
   )
 
-  _log_proc(proc, log_prefix)
+  if log_output:
+    _log_proc(proc, log_prefix)
   proc.wait()
   if proc.returncode != 0 and throw_on_failure:
     raise Exception("Failed to run %s - %s" % (" ".join(cmd), proc.returncode))
+  return proc.returncode
 
 
 def log_to_queue(q, line):
