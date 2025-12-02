@@ -3,7 +3,6 @@
 // src/error.rs - Custom error types for better error handling
 //=============================================================================
 
-use grpcio;
 use std::fmt;
 
 /// Main error type for the PacketStream framework
@@ -17,8 +16,7 @@ pub enum PacketStreamError {
     InvalidConfig(String),
     /// IO errors from underlying streams
     Io(std::io::Error),
-    /// gRPC-related errors
-    Grpc(grpcio::Error),
+
     /// Connection was closed unexpectedly
     ConnectionClosed,
     /// Operation timed out
@@ -60,7 +58,7 @@ impl fmt::Display for PacketStreamError {
             PacketStreamError::Protocol(e) => write!(f, "Protocol error: {e}"),
             PacketStreamError::InvalidConfig(e) => write!(f, "Invalid configuration: {e}"),
             PacketStreamError::Io(e) => write!(f, "IO error: {e}"),
-            PacketStreamError::Grpc(e) => write!(f, "gRPC error: {e}"),
+
             PacketStreamError::ConnectionClosed => write!(f, "Connection closed"),
             PacketStreamError::Timeout => write!(f, "Operation timed out"),
         }
@@ -151,12 +149,6 @@ impl From<SocketError> for PacketStreamError {
 impl From<ProtocolError> for PacketStreamError {
     fn from(err: ProtocolError) -> Self {
         PacketStreamError::Protocol(err)
-    }
-}
-
-impl From<grpcio::Error> for PacketStreamError {
-    fn from(err: grpcio::Error) -> Self {
-        PacketStreamError::Grpc(err)
     }
 }
 

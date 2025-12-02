@@ -11,8 +11,8 @@
 //! Placeholder functions for updating and retrieving chip information are also
 //! included.
 
-use netsim_api::chip_error::ChipError;
-use netsim_api::chips::{Chip, ChipId, DeviceParams};
+use netsim_model::chip::{Chip, ChipId, DeviceParams};
+use netsim_model::chip_error::ChipError;
 use rootcanal::Rootcanal;
 
 /// Creates a new `DeviceChip` and registers it with the `rootcanal` emulator.

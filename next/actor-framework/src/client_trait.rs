@@ -1,0 +1,105 @@
+//! # ActorClient Trait
+//!
+//! Provides a common interface for resource‑specific clients, adding default `get` and `delete` methods built on top of a generic `ResourceClient`.
+use crate::{ActorEntity, FrameworkError, ResourceClient};
+use async_trait::async_trait;
+
+/// Trait for resource-specific clients to inherit standard CRUD operations.
+///
+/// This trait reduces boilerplate by providing default implementations for
+/// common operations like `get` and `delete`.
+///
+/// # Example
+///
+/// ```rust
+/// use actor_framework::{ActorClient, ActorEntity, FrameworkError, ResourceClient};
+/// use async_trait::async_trait;
+///
+/// // 1. Define Entity
+/// #[derive(Clone, Debug)]
+/// struct User { id: u32 }
+/// #[derive(Debug)] struct UserCreate;
+/// #[derive(Debug)] struct UserUpdate;
+/// #[derive(Debug)] enum UserAction {}
+/// #[derive(Debug)] struct UserError(String);
+///
+/// // Error must implement Display + Error + From<String> + Send + Sync
+/// impl std::fmt::Display for UserError {
+///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "{}", self.0)
+///     }
+/// }
+/// impl std::error::Error for UserError {}
+///
+/// impl From<String> for UserError {
+///     fn from(s: String) -> Self { UserError(s) }
+/// }
+///
+/// #[async_trait]
+/// impl ActorEntity for User {
+///     type Id = u32;
+///     type Create = UserCreate;
+///     type Update = UserUpdate;
+///     type Action = UserAction;
+///     type ActionResult = ();
+///     type Context = ();
+///     type Error = UserError;
+///
+///     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> {
+///         Ok(Self { id })
+///     }
+///     async fn on_update(&mut self, _: UserUpdate, _: &()) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_action(&mut self, _: UserAction, _: &()) -> Result<(), Self::Error> { Ok(()) }
+/// }
+///
+/// // 2. Define Client Wrapper
+/// struct UserClient {
+///     inner: ResourceClient<User>,
+/// }
+///
+/// // 3. Implement ActorClient
+/// #[async_trait]
+/// impl ActorClient<User> for UserClient {
+///     type Error = UserError;
+///
+///     fn inner(&self) -> &ResourceClient<User> {
+///         &self.inner
+///     }
+///
+///     fn map_error(e: FrameworkError) -> Self::Error {
+///         UserError(e.to_string())
+///     }
+/// }
+///
+/// // 4. Usage
+/// async fn usage(client: UserClient) {
+///     // get() and delete() are provided automatically!
+///     let _ = client.get(1).await;
+///     let _ = client.delete(1).await;
+/// }
+/// ```
+#[async_trait]
+pub trait ActorClient<T: ActorEntity>: Send + Sync {
+    /// The resource-specific error type.
+    type Error: From<String> + Send + Sync;
+
+    /// Access the inner generic ResourceClient.
+    fn inner(&self) -> &ResourceClient<T>;
+
+    /// Map framework errors to the specific resource error type.
+    fn map_error(e: FrameworkError) -> Self::Error;
+
+    /// Fetch an entity by ID.
+    // #[tracing::instrument(skip(self))]
+    async fn get(&self, id: T::Id) -> Result<Option<T>, Self::Error> {
+        // tracing::debug!("Sending request");
+        self.inner().get(id).await.map_err(Self::map_error)
+    }
+
+    /// Delete an entity by ID.
+    // #[tracing::instrument(skip(self))]
+    async fn delete(&self, id: T::Id) -> Result<(), Self::Error> {
+        // tracing::debug!("Sending request");
+        self.inner().delete(id).await.map_err(Self::map_error)
+    }
+}

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -295,7 +296,7 @@ impl Medium {
                 processor.hostapd = true;
             } else if ieee80211.is_to_ap() {
                 // Don't forward Null Data frames to slirp because they are used to maintain an active connection and carry no user data.
-                if ieee80211.stype() != DataSubType::Nodata.into() {
+                if ieee80211.stype() != u8::from(DataSubType::Nodata) {
                     processor.network = if self.debug.debug_no_network
                         || self.debug.debug_no_guest_to_host_mdns && dest_addr.is_mdns()
                     {

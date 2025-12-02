@@ -3,15 +3,14 @@
 // src/transport/traits.rs - Transport traits
 //=============================================================================
 use crate::error::{PacketStreamError, Result};
-use crate::types::StreamAddress;
+use crate::types::{ChipInfo, StreamAddress};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{Sink, Stream};
-use netsim_api::initial_info::ChipInfo;
 use std::pin::Pin;
 
 pub type PacketStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send + Sync>>;
-pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = PacketStreamError> + Send>>;
+pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = PacketStreamError> + Send + Sync>>;
 
 #[async_trait]
 pub trait TransportListener: Send {

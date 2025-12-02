@@ -23,7 +23,7 @@ rust_library(
     srcs = glob(["**/*.rs"]),
     crate_name = "bytes",
     crate_root = "src/lib.rs",
-    edition = "2018",
+    edition = "2021",
     rustc_flags = [
         "--cfg=feature=\"default\"",
         "--cfg=feature=\"serde\"",

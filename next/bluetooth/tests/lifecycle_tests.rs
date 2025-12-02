@@ -3,7 +3,8 @@
 use crate::test_utils::{self, mock_sink, mock_stream, TestFixture};
 use bytes::Bytes;
 use log::info;
-use netsim_api::chips::{BluetoothMode, ChipId, CreateParams, DeviceParams};
+use netsim_model::chip::{BluetoothMode, ChipCreate, ChipId, DeviceParams};
+use netsim_model::device::DeviceId;
 use tokio::time::{timeout, Duration};
 
 #[tokio::test]
@@ -16,12 +17,13 @@ async fn test_hci_reset_command() {
     // 1. Create a virtual device chip.
     let id = ChipId(1);
 
-    let create_chip_config = CreateParams {
+    let create_chip_config = ChipCreate {
         id,
         packet_stream: Some(stream),
         packet_sink: Some(sink),
 
         config: test_utils::create_chip_config(BluetoothMode::Device(DeviceParams {})),
+        device_id: DeviceId(1),
     };
     client.create(create_chip_config).await.expect("creating chip");
     // 2. Send an HCI Reset command.
@@ -46,12 +48,13 @@ async fn test_chip_dies_on_packet_stream_error() {
 
     // 1. Create a virtual device chip.
     let id = ChipId(1);
-    let create_chip_spec = CreateParams {
+    let create_chip_spec = ChipCreate {
         id,
         packet_stream: Some(stream),
         packet_sink: Some(sink),
 
         config: test_utils::create_chip_config(BluetoothMode::Device(DeviceParams {})),
+        device_id: DeviceId(1),
     };
     client.create(create_chip_spec).await.expect("creating chip");
 
@@ -79,12 +82,12 @@ async fn test_delete_chip_shuts_down_task() {
 
     // 1. Create a virtual device chip.
     let id = ChipId(1);
-    let create_chip_params = CreateParams {
+    let create_chip_params = ChipCreate {
         id,
         packet_stream: Some(stream),
         packet_sink: Some(sink),
-
         config: test_utils::create_chip_config(BluetoothMode::Device(DeviceParams {})),
+        device_id: DeviceId(1),
     };
     client.create(create_chip_params).await.expect("creating chip");
 
