@@ -60,6 +60,9 @@ pub enum ChipError {
     /// Error indicating an internal error.
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Wrong Chip Variant")]
+    WrongVariantError,
 }
 
 impl PartialEq for ChipError {

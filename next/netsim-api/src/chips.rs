@@ -5,6 +5,7 @@ use crate::bluetooth::Controller as RootcanalController;
 use crate::chip_error::ChipError;
 use crate::client_error::ClientError;
 use crate::client_method;
+use crate::devices::{Orientation, Position};
 use crate::stats::NetsimRadioStats;
 use bytes::Bytes;
 use futures::Sink;
@@ -14,8 +15,9 @@ use std::pin::Pin;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::Stream;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum ChipKind {
+    #[default]
     UNSPECIFIED = 0,
     BLUETOOTH = 1,
     WIFI = 2,
@@ -25,29 +27,12 @@ pub enum ChipKind {
     CELLULAR = 6,
 }
 
-impl Default for ChipKind {
-    fn default() -> Self {
-        ChipKind::UNSPECIFIED
-    }
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Radio {
     pub state: Option<bool>,
     pub range: f32,
     pub tx_count: i32,
     pub rx_count: i32,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct Chip {
-    pub kind: ChipKind,
-    pub id: u32,
-    pub name: String,
-    pub manufacturer: String,
-    pub product_name: String,
-    // pub offset: Option<Position>,
-    pub chip: Option<ChipType>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -76,7 +61,7 @@ pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>;
 // of the system to send messages to it.
 
 /// A unique identifier for a simulated chip, represented as a u32.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ChipId(pub u32);
 
 impl From<ChipId> for u32 {
@@ -112,14 +97,14 @@ pub enum ChipRequest {
         /// The ID of the chip to retrieve.
         id: ChipId,
         /// The channel to send the chip's state back on.
-        respond_to: Responder<ChipInfo>,
+        respond_to: Responder<Chip>,
     },
     /// Update an existing chip.
     Update {
         /// The ID of the chip to patch.
         id: ChipId,
         /// The patch to apply to the chip.
-        chip: Chip,
+        patch: ChipPatch,
         /// The channel to send the updated chip state back on.
         respond_to: Responder<Chip>,
     },
@@ -156,12 +141,14 @@ pub enum ChipRequest {
 /// configurations. It is used in the [`ChipRequest::Create`] variant and
 /// passed to the chip service through the [`ChipClient::create`] method.
 pub struct CreateParams {
+    // TODO: This could be inside Chip
     /// A unique identifier for the new chip.
     pub id: ChipId,
     /// The transport for packet input.
     pub packet_stream: Option<PacketStream>,
     /// The transport for packet output.
     pub packet_sink: Option<PacketSink>,
+    // TODO: Use Chip instead
     /// Chip config.
     pub config: ChipConfig,
 }
@@ -175,6 +162,7 @@ impl fmt::Debug for CreateParams {
     }
 }
 
+// TODO: use Chip instead
 #[derive(Debug)]
 /// Chip configuration
 pub struct ChipConfig {
@@ -337,23 +325,68 @@ impl fmt::Display for ChipId {
     }
 }
 
+// ======================================================================
+// Chip - All stateful fields for a chip
+// ======================================================================
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Chip {
+    pub id: u32,
+    pub kind: ChipKind,
+    pub name: Option<String>,
+    pub manufacturer: Option<String>,
+    pub product_name: Option<String>,
+    pub position: Position,
+    pub orientation: Orientation,
+    pub variant: Option<ChipVariant>,
+}
+
 /// Information about a chip, including technology-specific details.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ChipInfo {
-    Bluetooth(Chip),
-    Wifi(Chip),
-    Uwb(Chip),
-    Cell(CellChipInfo),
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ChipVariant {
+    Bluetooth,
+    Wifi,
+    Uwb,
+    Cell(CellChip),
 }
 
 /// Cellular technology specific chip information.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CellChipInfo {
-    /// The unique identifier for the chip.
-    pub chip_id: ChipId,
-    /// A string representing the current state of the modem.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CellChip {
+    /// A string representing the current state of the cellular modem.
     pub state: String,
-    // TODO: Add more fields like signal strength, network registration, etc.
+}
+
+// ======================================================================
+// ChipPatch - All patchable fields for a chip
+// ======================================================================
+
+/// This struct represents the partial, optional set of changes to a
+/// Chip provided by the client.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ChipPatch {
+    pub name: Option<String>,
+    pub manufacturer: Option<String>,
+    pub product_name: Option<String>,
+    pub position: Option<Position>,
+    pub orientation: Option<Orientation>,
+    pub variant: Option<ChipVariantPatch>,
+}
+
+/// The techbology variant specific fields
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ChipVariantPatch {
+    Bluetooth,
+    Wifi,
+    Uwb,
+    Cell(CellPatch),
+}
+
+/// Cellular technology specific chip information.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CellPatch {
+    /// A string representing the current state of the modem.
+    pub state: Option<String>,
 }
 
 // =============================================================================
@@ -410,8 +443,8 @@ impl ChipClient {
 
 // Generate client methods.
 client_method!(ChipClient => fn create(params: CreateParams) -> () as ChipRequest::Create);
-client_method!(ChipClient => fn read(id: ChipId) -> ChipInfo as ChipRequest::Read);
-client_method!(ChipClient => fn update(id: ChipId, chip: Chip) -> Chip as ChipRequest::Update);
+client_method!(ChipClient => fn read(id: ChipId) -> Chip as ChipRequest::Read);
+client_method!(ChipClient => fn update(id: ChipId, patch: ChipPatch) -> Chip as ChipRequest::Update);
 client_method!(ChipClient => fn delete(id: ChipId) -> () as ChipRequest::Delete);
 client_method!(ChipClient => fn read_statistics() -> Vec<NetsimRadioStats> as ChipRequest::GetStatistics);
 client_method!(ChipClient => fn read_count_for_testing() -> usize as ChipRequest::GetCountForTesting);
