@@ -20,6 +20,7 @@ rust_library(
         "@log",
         "@pdl-runtime",
         "@tokio",
+        "@wpa_supplicant_8//:hostapd_c_lib",
     ],
 )
 
@@ -42,6 +43,5 @@ rust_test(
         "@log",
         "@pdl-runtime",
         "@tokio",
-        "@wpa_supplicant_8//:hostapd_c_lib",
     ],
 )
