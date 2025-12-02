@@ -1,20 +1,21 @@
 // Copyright 2024-2025 The Android Open Source Project
 
 use bytes::Bytes;
+use client::DeviceClient;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
-use netsim_api::chip_error::ChipError;
-use netsim_api::chips::{
-    Chip, ChipClient, ChipId, ChipRequest, CreateParams, PacketSink, PacketStream,
+use netsim_model::chip::{
+    Chip, ChipClient, ChipCreate, ChipId, ChipRequest, PacketSink, PacketStream,
 };
-use netsim_api::devices::DeviceClient;
-use std::collections::{HashMap, HashSet};
+use netsim_model::chip_error::ChipError;
+use netsim_model::device::DeviceId;
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tokio_stream::{StreamMap, StreamNotifyClose};
 
 pub struct Server {
-    active_chips: HashSet<ChipId>,
+    active_chips: HashMap<ChipId, Chip>,
     streams: StreamMap<ChipId, StreamNotifyClose<PacketStream>>,
     /// Receiver for incoming `ChipRequest` commands.
     command_rx: mpsc::Receiver<ChipRequest>,
@@ -31,7 +32,7 @@ impl Server {
     pub fn new(device_client: DeviceClient) -> (Self, ChipClient) {
         let (command_tx, command_rx) = mpsc::channel(10);
         let server = Server {
-            active_chips: HashSet::new(),
+            active_chips: HashMap::new(),
             streams: StreamMap::new(),
             command_rx,
             sink_tasks: JoinSet::new(),
@@ -71,7 +72,10 @@ impl Server {
             }
             None => {
                 log::info!("StreamMap indicated closure for chip {}", chip_id);
-                self.send_chip_died_notification(chip_id).await;
+                let device_id = self.active_chips.get(&chip_id).map(|c| c.device_id);
+                if let Some(device_id) = device_id {
+                    self.send_chip_died_notification(chip_id, device_id).await;
+                }
             }
         }
     }
@@ -96,11 +100,12 @@ impl Server {
                     id,
                     self.active_chips
                 );
-                if !self.active_chips.contains(&id) {
+                if !self.active_chips.contains_key(&id) {
                     let _ = respond_to.send(Err(ChipError::ChipNotFound(id)));
                     return Ok(());
                 }
-                let _ = respond_to.send(Ok(Chip::default()));
+                let chip = self.active_chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
+                let _ = respond_to.send(Ok(chip.clone()));
             }
             ChipRequest::Shutdown => {
                 *shutdown = true;
@@ -114,18 +119,18 @@ impl Server {
 
     async fn cleanup_chip(&mut self, chip_id: ChipId, reason: &str) {
         log::info!("Cleaning up chip_id: {} due to: {}", chip_id, reason);
-        if self.active_chips.remove(&chip_id) {
+        if let Some(chip) = self.active_chips.remove(&chip_id) {
             log::info!("Chip {} removed from active set.", chip_id);
             // Remove from StreamMap
             self.streams.remove(&chip_id);
             log::info!("Stream for chip {} removed.", chip_id);
             // Drop the sender, signalling the sink task to exit.
             self.senders.remove(&chip_id);
-            log::info!("sender for chip {} removed.", chip_id);
-            // TODO: Remove from pica
+            log::info!("Sender for chip {} removed.", chip_id);
+            // TODO: Remove from hostapd
 
             // We rely on the JoinSet to clean up the completed sink task.
-            self.send_chip_died_notification(chip_id).await;
+            self.send_chip_died_notification(chip_id, chip.device_id).await;
         } else {
             log::warn!("cleanup_chip called for non-active chip_id: {}", chip_id);
         }
@@ -148,11 +153,11 @@ impl Server {
         id
     }
 
-    fn handle_create(&mut self, mut params: CreateParams) -> Result<(), ChipError> {
+    fn handle_create(&mut self, mut params: ChipCreate) -> Result<(), ChipError> {
         let chip_id = params.id;
         log::info!("WifiServer: CreateChip received for chip_id: {}", chip_id);
 
-        if self.active_chips.contains(&chip_id) {
+        if self.active_chips.contains_key(&chip_id) {
             log::error!("Chip {} already exists", chip_id);
             return Err(ChipError::ChipExists(chip_id.into()));
         }
@@ -169,13 +174,20 @@ impl Server {
         self.sink_tasks.spawn(async move { Self::run_sink_task(sink, uci_rx, chip_id).await });
 
         log::info!("WifiServer: Inserting chip {} into active_chips", chip_id);
-        self.active_chips.insert(chip_id);
+        let mut chip = Chip::default();
+        chip.id = chip_id.0;
+        chip.device_id = params.device_id;
+        // TODO: Populate other fields if available in params
+        self.active_chips.insert(chip_id, chip);
         self.streams.insert(chip_id, StreamNotifyClose::new(stream));
         Ok(())
     }
 
-    async fn send_chip_died_notification(&self, chip_id: ChipId) {
+    async fn send_chip_died_notification(&self, chip_id: ChipId, device_id: DeviceId) {
         log::info!("Sending ChipDied notification for chip_id: {}", chip_id);
-        self.device_client.notify_chip_removed(chip_id);
+        let dc = self.device_client.clone();
+        tokio::spawn(async move {
+            let _ = dc.notify_chip_removed(device_id, chip_id).await;
+        });
     }
 }

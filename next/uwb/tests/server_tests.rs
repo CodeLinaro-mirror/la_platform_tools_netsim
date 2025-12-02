@@ -1,19 +1,20 @@
 // Copyright 2024-2025 The Android Open Source Project
 
-use netsim_api::{
+use netsim_model::{
+    chip::{ChipCreate, ChipId, ChipKind, NetworkParams, UwbCreate},
     chip_error::ChipError,
-    chips::{ChipId, ChipInfo, ChipKind, ChipModel, CreateParams, NetworkParams, UwbParams},
+    device::DeviceId,
     devices::DeviceClient,
 };
 use tokio::sync::mpsc;
 use uwb::Server;
 
-// Helper to create a default CreateParams for UWB
-fn create_uwb_params(id: u32) -> CreateParams {
+// Helper to create a default ChipCreate for UWB
+fn create_uwb_params(id: u32) -> ChipCreate {
     let (packet_tx, packet_rx) = mpsc::unbounded_channel();
     let (sink_tx, sink_rx) = mpsc::unbounded_channel();
 
-    CreateParams {
+    ChipCreate {
         id: ChipId(id),
         packet_stream: Some(Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(
             packet_rx,
@@ -23,18 +24,19 @@ fn create_uwb_params(id: u32) -> CreateParams {
                 .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "send error"))?;
             Ok(tx)
         }))),
-        config: netsim_api::chips::ChipConfig {
+        config: netsim_model::chip::ChipConfig {
             model: ChipModel {
                 name: format!("uwb_chip_{}", id),
                 manufacturer: "Netsim".to_string(),
                 product_name: "TestUwb".to_string(),
             },
-            network_params: NetworkParams::Uwb(UwbParams {}),
+            network_params: NetworkParams::Uwb(UwbCreate {}),
         },
+        device_id: DeviceId(1),
     }
 }
 
-async fn setup() -> (Server, netsim_api::chips::ChipClient) {
+async fn setup() -> (Server, netsim_model::chip::ChipClient) {
     let device_client = DeviceClient::new(mpsc::channel(10).0);
     Server::new(device_client)
 }

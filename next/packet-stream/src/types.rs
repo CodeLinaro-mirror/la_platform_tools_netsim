@@ -3,6 +3,7 @@
 // src/types.rs - Core data types for PacketStream
 //=============================================================================
 
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -40,13 +41,15 @@ pub enum StreamAddress {
 impl std::fmt::Display for StreamAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StreamAddress::Tcp(addr) => write!(f, "tcp://{addr}"),
-            StreamAddress::Uds(path) => write!(f, "unix://{}", path.display()),
+            StreamAddress::Uds(path) => write!(f, "UDS:{}", path.display()),
+            StreamAddress::Tcp(addr) => write!(f, "TCP:{}", addr),
             StreamAddress::Fd { in_fd, out_fd } => match out_fd {
                 Some(out_fd) => write!(f, "fd://{in_fd}:{out_fd}"),
                 None => write!(f, "fd://{in_fd}"),
             },
-            StreamAddress::Grpc(addr) => write!(f, "grpc://{addr}"),
+            StreamAddress::Grpc(addr) => write!(f, "GRPC:{}", addr),
         }
     }
 }
+
+pub use netsim_types::{Chip, ChipInfo, ChipKind, DeviceInfo};

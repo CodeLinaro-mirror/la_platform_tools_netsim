@@ -11,9 +11,9 @@
 //! `BeaconParams` into the appropriate HCI commands for full configuration.
 
 use crate::utils::ToChipError;
-use netsim_api::chip_error::ChipError;
-use netsim_api::chips::Chip;
-use netsim_api::chips::{BeaconParams, ChipId};
+use netsim_model::chip::Chip;
+use netsim_model::chip::{BeaconParams, ChipId};
+use netsim_model::chip_error::ChipError;
 use rootcanal::Rootcanal;
 
 /// Creates a new `BeaconChip`.

@@ -3,7 +3,8 @@ load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 package(default_visibility = ["//visibility:public"])
 
 CELL_DEPS = [
-    "//next/netsim-api",
+    "//next/client",
+    "//next/model",
     "//next/modem-rs",
     "//next/packet-stream",
     "//next/proto",
@@ -36,6 +37,8 @@ rust_test(
     ],
     deps = CELL_DEPS + [
         ":cell",
+        "//next/actor-framework",
+        "//next/device-actor",
         "@env_logger",
     ],
 )
