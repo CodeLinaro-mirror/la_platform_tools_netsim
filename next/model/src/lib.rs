@@ -6,7 +6,7 @@
 /// Bluetooth related definitions.
 pub mod bluetooth;
 pub mod capture;
-pub mod capture_io;
+
 /// Chip actor definitions.
 pub mod chip;
 /// Chip error definitions.

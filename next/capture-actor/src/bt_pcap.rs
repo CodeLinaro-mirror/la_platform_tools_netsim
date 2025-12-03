@@ -4,7 +4,7 @@
 
 use crate::writer::{CaptureWriter, PcapWriter, DLT_BLUETOOTH_H4};
 use anyhow::Result;
-use netsim_model::capture::Direction;
+use capture_api::Direction;
 use std::path::Path;
 use std::time::SystemTime;
 

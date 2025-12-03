@@ -4,6 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 CELL_DEPS = [
     "//next/client",
+    "//next/device-api",
     "//next/model",
     "//next/modem-rs",
     "//next/packet-stream",

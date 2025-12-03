@@ -3,8 +3,8 @@ use actor_framework::{ResourceClient, ResourceRequest};
 use bytes::Bytes;
 use cell::server::CellServer;
 use client::DeviceClient;
-use device_actor::actions::{DeviceAction, DeviceActionResult};
 use device_actor::entity::DeviceEntity;
+use device_api::{DeviceAction, DeviceActionResult};
 use env_logger;
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
 use netsim_model::chip::{

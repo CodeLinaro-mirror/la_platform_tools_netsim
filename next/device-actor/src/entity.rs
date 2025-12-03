@@ -1,5 +1,5 @@
-use netsim_model::device::api::DeviceCreate;
-use netsim_model::device::Device;
+use device_api::api::DeviceCreate;
+use device_api::Device;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

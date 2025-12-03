@@ -7,10 +7,10 @@
 //! needing to reconstruct the stream pipeline. This is crucial for performance, as we
 //! only want to incur the cost of capturing when it is actually enabled.
 
-use crate::capture::Direction;
-use crate::chip::{ChipId, PacketSink, PacketStream};
+use crate::Direction;
 use bytes::Bytes;
 use futures::{Sink, Stream};
+use netsim_model::chip::{ChipId, PacketSink, PacketStream};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

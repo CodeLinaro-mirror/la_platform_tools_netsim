@@ -13,6 +13,7 @@ rust_library(
     deps = [
         "//next/actor-framework",
         "//next/client",
+        "//next/device-api",
         "//next/model",
         "//next/packet-stream",
         "//next/proto",
