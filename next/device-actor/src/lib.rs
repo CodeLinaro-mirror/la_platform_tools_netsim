@@ -18,7 +18,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use device_actor;
+
 //! use netsim_model::device::api::DeviceCreate;
 //!
 //! #[tokio::main]

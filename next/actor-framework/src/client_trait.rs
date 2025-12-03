@@ -44,12 +44,14 @@ use async_trait::async_trait;
 ///     type ActionResult = ();
 ///     type Context = ();
 ///     type Error = UserError;
+///     type ListResponse = Vec<User>;
 ///
 ///     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> {
 ///         Ok(Self { id })
 ///     }
-///     async fn on_update(&mut self, _: UserUpdate, _: &()) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_action(&mut self, _: UserAction, _: &()) -> Result<(), Self::Error> { Ok(()) }
+///     async fn on_update(&mut self, _: UserUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_action(&mut self, _: UserAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+///     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
 /// }
 ///
 /// // 2. Define Client Wrapper
