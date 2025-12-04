@@ -1,0 +1,63 @@
+// Copyright 2023-2025 The Android Open Source Project
+
+use crate::utils::ToChipError;
+use netsim_api::chip_error::ChipError;
+use netsim_api::chips::{BeaconParams, ChipId};
+use netsim_proto::model::Chip as ProtoChip;
+use rootcanal::{bluetooth::Bluetooth as Rootcanal, controller::Idc};
+
+/// Creates a new `BeaconChip`.
+pub fn create(
+    rootcanal: &Rootcanal,
+    chip_id: ChipId,
+    params: &BeaconParams,
+) -> Result<(), ChipError> {
+    // Reset the controller first.
+    let reset_cmd = vec![0x03, 0x0c, 0x00];
+    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &reset_cmd).to_chip_error()?;
+
+    // LE Set Advertising Parameters
+    let adv_params = vec![
+        0x06, 0x20, 15, 0xA0, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x07, 0x00,
+    ];
+    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_params).to_chip_error()?;
+
+    // LE Set Advertising Data
+    let mut adv_data_cmd = vec![0x08, 0x20, 32];
+    if let Some(adv_data) = params.ble_beacon.adv_data.as_ref() {
+        if !adv_data.manufacturer_data.is_empty() {
+            adv_data_cmd.push(adv_data.manufacturer_data.len() as u8);
+            adv_data_cmd.extend_from_slice(&adv_data.manufacturer_data);
+        } else {
+            adv_data_cmd.push(3); // Advertising_Data_Length
+            adv_data_cmd.extend_from_slice(&[0x02, 0x01, 0x06]); // Advertising_Data
+        }
+    } else {
+        adv_data_cmd.push(3); // Advertising_Data_Length
+        adv_data_cmd.extend_from_slice(&[0x02, 0x01, 0x06]); // Advertising_Data
+    }
+    adv_data_cmd.resize(3 + 32, 0);
+    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_data_cmd).to_chip_error()?;
+
+    // LE Set Advertising Enable
+    let adv_enable = vec![0x0A, 0x20, 0x01, 0x01];
+    rootcanal.receive_hci(chip_id.as_u32(), Idc::Cmd, &adv_enable).to_chip_error()?;
+
+    Ok(())
+}
+
+#[allow(dead_code)]
+pub fn update_chip(
+    rootcanal: &Rootcanal,
+    chip_id: ChipId,
+    _old_params: &BeaconParams,
+    _new_params: &BeaconParams,
+) -> Result<ProtoChip, ChipError> {
+    get_chip(rootcanal, chip_id)
+}
+
+#[allow(dead_code)]
+pub fn get_chip(_rootcanal: &Rootcanal, _chip_id: ChipId) -> Result<ProtoChip, ChipError> {
+    Ok(ProtoChip::default())
+}

@@ -1,16 +1,4 @@
-// Copyright 2025 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2025 The Android Open Source Project
 
 //! This module defines the [`Controller`] struct, which represents a Bluetooth
 //! controller.
@@ -32,14 +20,20 @@ use std::sync::{
 
 /// Callbacks for the Bluetooth controller.
 pub trait Callbacks: Send + Sync {
-    /// Sends an HCI packet to the host.
+    /// Request from rootcanal to send an HCI packet to the host.
     fn send_hci(&self, source_id: Id, idc: Idc, data: &[u8]);
 
-    /// Forwards a link layer packet to the peer.
-    fn send_ll(&self, source_id: Id, packet: &[u8], phy: Phy, tx_power: i32);
+    /// Called when the controller is receiving a packet
+    fn on_receive_ll(&self, sender_id: Id, packet: &[u8], phy: Phy, rssi: i32);
 
     /// Called when an invalid packet is received.
     fn invalid_packet_received(&self, source_id: Id, reason: c_int, message: &str, data: &[u8]);
+}
+
+/// Trait used by the controller to call the Bluetooth manager.
+pub trait BtOps: Send + Sync {
+    /// Controller received a LL packet from rootcanal that needs to be broadcasted
+    fn broadcast_rootcanal_ll_packet(&self, send_id: Id, packet: &[u8], phy: Phy, tx_power: i32);
 }
 
 // A wrapper around the raw C++ controller pointer.
@@ -54,7 +48,8 @@ pub(crate) struct ControllerImpl {
     controller: Mutex<FfiController>,
     id: Id,
     address: Address,
-    callbacks: Box<dyn Callbacks>,
+    pub(crate) callbacks: Box<dyn Callbacks>,
+    bt_ops: Box<dyn BtOps>,
     hci_commands_in: AtomicU64,
     hci_events_out: AtomicU64,
     invalid_packets: AtomicU64,
@@ -87,7 +82,12 @@ pub struct Stats {
 type CallbackContext = Weak<ControllerImpl>;
 
 impl ControllerImpl {
-    pub(crate) fn new(id: Id, address: Address, callbacks: Box<dyn Callbacks>) -> Controller {
+    pub(crate) fn new(
+        id: Id,
+        address: Address,
+        callbacks: Box<dyn Callbacks>,
+        bt_ops: Box<dyn BtOps>,
+    ) -> Controller {
         // The initialization process is carefully ordered to manage lifetimes
         // across the FFI boundary and avoid memory leaks or reference cycles.
         // 1. A placeholder `ControllerImpl` is created with a null pointer.
@@ -106,6 +106,7 @@ impl ControllerImpl {
             id,
             address,
             callbacks,
+            bt_ops,
             hci_commands_in: AtomicU64::new(0),
             hci_events_out: AtomicU64::new(0),
             invalid_packets: AtomicU64::new(0),
@@ -308,7 +309,13 @@ extern "C" fn send_ll_trampoline(
         // least `data_len` bytes that is valid for the duration of this call.
         let data_slice = unsafe { std::slice::from_raw_parts(data, data_len as ffi::size_t) };
         controller.ll_packets_out.fetch_add(1, Ordering::Relaxed);
-        controller.callbacks.send_ll(controller.get_id(), data_slice, Phy::from(phy), tx_power);
+        // rootcanal request to send ll through bluetooth medium
+        controller.bt_ops.broadcast_rootcanal_ll_packet(
+            controller.get_id(),
+            data_slice,
+            Phy::from(phy),
+            tx_power,
+        );
     }
 }
 
