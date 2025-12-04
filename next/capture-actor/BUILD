@@ -4,6 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 DEPS = [
     "//next/actor-framework",
+    "//next/capture-api",
     "//next/model",
     "@anyhow",
     "@bytes",

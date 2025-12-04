@@ -11,10 +11,7 @@ use futures::{
     Future,
 };
 use netsim_model::bluetooth::Controller as RootcanalController;
-use netsim_model::chip::{
-    BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, ChipCreate, NetworkParams,
-};
-use netsim_model::device::DeviceId;
+use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, NetworkParams};
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;

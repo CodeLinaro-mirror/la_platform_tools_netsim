@@ -24,6 +24,7 @@ package(default_visibility = ["//visibility:public"])
 
 BLUETOOTH_DEPS = [
     "//next/client",
+    "//next/device-api",
     "//next/model",
     "//next/rootcanal",
     "@bytes",

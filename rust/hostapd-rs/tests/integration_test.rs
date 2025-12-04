@@ -23,7 +23,6 @@ use std::{
     env,
     time::{Duration, Instant},
 };
-use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, timeout};
 /// Initializes a `Hostapd` instance for testing.

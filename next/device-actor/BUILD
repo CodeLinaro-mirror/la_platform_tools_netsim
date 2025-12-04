@@ -4,6 +4,8 @@ package(default_visibility = ["//visibility:public"])
 
 DEPS = [
     "//next/actor-framework",
+    "//next/capture-api",
+    "//next/device-api",
     "//next/model",
     "@futures",
     "@tokio",

@@ -4,17 +4,17 @@ use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
+use capture_api::CaptureCreate;
 use client::{CaptureClient, DeviceClient};
+use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info};
-use netsim_model::capture::CaptureCreate;
 use netsim_model::chip::{
     BluetoothCreate, BluetoothMode, CellCreate, ChipConfig, DeviceParams, NetworkKind,
     NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
     WifiCreate,
 };
-use netsim_model::device::{DeviceAddChip, DeviceConfig};
 use netsim_model::initial_info::{ChipInfo, ChipKind};
 use packet_stream::transport::traits::{PacketSink, PacketStream};
 use packet_stream::{StreamAddress, Streams, TransportType};

@@ -51,20 +51,10 @@ pub struct DeviceClient {
 }
 
 impl DeviceClient {
-    /// Creates a new `DeviceClient` handle.
-    ///
-    /// This function connects the client to the service's message channel.
-    ///
-    /// # Arguments
-    ///
-    /// * `sender` - The `mpsc` sender half of the channel for sending `DeviceRequest`s.
     pub fn new(sender: mpsc::Sender<DeviceRequest>) -> Self {
         Self { sender }
     }
 
-    /// Sends a shutdown command to the device service.
-    ///
-    /// This is a fire-and-forget command; it does not wait for a response.
     pub async fn shutdown(&self) -> Result<(), ClientError> {
         self.sender
             .send(DeviceRequest::Shutdown)
@@ -73,7 +63,6 @@ impl DeviceClient {
         Ok(())
     }
 
-    /// Sends a non-blocking notification to the device service that a chip has been removed.
     pub fn notify_chip_removed(&self, device_id: DeviceId, chip_id: ChipId) {
         let sender = self.sender.clone();
         tokio::spawn(async move {
@@ -86,8 +75,6 @@ impl DeviceClient {
         });
     }
 
-    /// Sends a notification and waits for the server to acknowledge processing.
-    /// Primarily intended for test synchronization.
     pub async fn notify_chip_removed_block(
         &self,
         device_id: DeviceId,
@@ -103,7 +90,6 @@ impl DeviceClient {
     }
 }
 
-// Generate client methods.
 client_method!(DeviceClient => fn create(request: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
 client_method!(DeviceClient => fn add_chip(request: DeviceAddChip) -> () as DeviceRequest::AddChip);
 client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
@@ -121,8 +107,6 @@ pub mod api {
     use crate::device::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
 
-    // TODO: Revisit the APIs to separate the Api from the Domain.
-
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
     pub struct ListDeviceResponse {
         pub devices: Vec<Device>,
@@ -135,27 +119,18 @@ pub mod api {
         pub visible: Option<bool>,
         pub position: Option<Position>,
         pub orientation: Option<Orientation>,
-        // TODO: Consider adding fields/struct for chip-level updates (e.g., Vec<ChipUpdate>)
     }
 
-    /// The top-level parameters for creating any kind of chip.
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
     pub struct DeviceCreate {
-        /// TODO: Consider adding an optional device_guid here.
-        /// If set, the server could check if the device exists and add the chip to it,
-        /// skipping creation. This would move the logic from Client to Server.
         pub device_config: DeviceConfig,
         pub chip: DeviceChipCreate,
     }
 
-    // External API for chip creation.
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
     pub struct DeviceChipCreate {
-        /// The name of the chip.
         pub name: String,
-        /// The manufacturer of the chip.
         pub manufacturer: String,
-        /// The product name of the chip.
         pub product_name: String,
         pub chip: Chip,
     }
@@ -200,14 +175,9 @@ pub struct Device {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DeviceConfig {
-    /// The name of the device.
-    /// TODO: Decide if we should support device and chip name for accessories.
     pub name: String,
-    /// Whether the device is visible in the UI.
     pub visible: bool,
-    /// The position of the device in the simulated world.
     pub position: Position,
-    /// The orientation of the device.
     pub orientation: Orientation,
 }
 
@@ -226,10 +196,6 @@ pub struct DeviceAddChip {
     pub device_guid: String,
     pub packet_stream: Option<PacketStream>,
     pub packet_sink: Option<PacketSink>,
-    /// TODO: Group device_guid, packet_stream, and packet_sink into a single struct
-    /// (e.g., PacketStreamInfo) since they always go together.
-    /// TODO: Consider if DeviceConfig is needed here. If the device is already created,
-    /// this might be redundant. We should explore separating device creation from adding a chip.
     pub device_config: DeviceConfig,
     pub chip_config: ChipConfig,
 }
@@ -244,49 +210,36 @@ impl fmt::Debug for DeviceAddChip {
 }
 
 #[derive(Debug)]
-/// Defines the message protocol for the device service actor.
 pub enum DeviceRequest {
-    /// Create a new device from PacketStream.
-    AddChip { request: DeviceAddChip, respond_to: Responder<()> },
-    /// Create a new device.
+    AddChip {
+        request: DeviceAddChip,
+        respond_to: Responder<()>,
+    },
     Create {
-        /// The parameters for the new device.
         request: Box<api::DeviceCreate>,
-        /// The channel to send the device ID back on.
         respond_to: Responder<DeviceId>,
     },
-    /// List all devices.
     List {
-        /// The channel to send the list of devices back on.
         respond_to: Responder<api::ListDeviceResponse>,
     },
-    /// Update an existing device.
     Update {
-        /// The update to apply to the device.
         update: api::DeviceUpdate,
-        /// The channel to send the operation result back on.
         respond_to: Responder<()>,
     },
-    /// Delete the chip, removing the device if no other chips are attached.
     Delete {
-        /// Device Identifier
         id: DeviceId,
-        /// The channel to send the list of devices back on.
         respond_to: Responder<()>,
     },
-    /// Reset all devices.
-    Reset { respond_to: Responder<()> },
+    Reset {
+        respond_to: Responder<()>,
+    },
     GetChipStatistics {
-        /// The channel to send the list of devices back on.
         respond_to: Responder<()>,
     },
-    /// Notification from a ChipService that a chip has been removed.
-    /// Includes an optional oneshot sender for test synchronization.
     NotifyChipRemoved {
         device_id: DeviceId,
         chip_id: ChipId,
         respond_to: Option<oneshot::Sender<()>>,
     },
-    /// Shutdown device server.
     Shutdown,
 }

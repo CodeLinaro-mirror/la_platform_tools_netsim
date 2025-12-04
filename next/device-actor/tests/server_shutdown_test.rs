@@ -12,9 +12,9 @@ mod common;
 // - `test_server_shutdown_on_last_chip_delete`: Verifies server shuts down after last chip is deleted.
 
 use actor_framework::ActorClient;
+use device_api::api::{Chip, DeviceChipCreate, DeviceCreate};
+use device_api::DeviceConfig;
 use netsim_model::chip::{BleBeacon, ChipRequest};
-use netsim_model::device::api::{Chip, DeviceChipCreate, DeviceCreate};
-use netsim_model::device::DeviceConfig;
 use std::time::Duration;
 
 use common::{setup, TestFixture};

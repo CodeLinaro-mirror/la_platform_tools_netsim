@@ -1,4 +1,4 @@
-use netsim_model::capture::CaptureSender;
+use capture_api::CaptureSender;
 use netsim_model::chip::{ChipClient, NetworkKind};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;

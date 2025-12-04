@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use capture_actor::entity::CaptureEntity;
 use capture_actor::error::CaptureError;
-use netsim_model::capture::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
+use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
 use netsim_model::device_error::DeviceError;
 use packet_stream::transport::traits::{PacketSink, PacketStream};
@@ -107,12 +107,7 @@ impl CaptureClient {
     /// * `chip_id` - The ID of the chip.
     /// * `direction` - The direction of the packet.
     /// * `bytes` - The packet data.
-    pub fn capture_packet(
-        &self,
-        chip_id: ChipId,
-        direction: netsim_model::capture::Direction,
-        bytes: Bytes,
-    ) {
+    pub fn capture_packet(&self, chip_id: ChipId, direction: capture_api::Direction, bytes: Bytes) {
         let inner = self.inner.clone();
         // TODO(b/312345678): Consider using a sync channel and a single background task
         // instead of spawning a new task for every packet if performance becomes an issue.
@@ -136,7 +131,7 @@ impl CaptureClient {
         stream: PacketStream,
         sink: PacketSink,
         enabled: Arc<AtomicBool>,
-    ) -> (netsim_model::capture_io::CapturedStream, netsim_model::capture_io::CapturedSink) {
+    ) -> (capture_api::io::CapturedStream, capture_api::io::CapturedSink) {
         let client = self.clone();
         let capture_callback = Box::new(move |chip_id, direction, bytes| {
             client.capture_packet(chip_id, direction, bytes);
@@ -160,13 +155,13 @@ impl CaptureClient {
             Box::pin(sink.sink_map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)));
 
         (
-            netsim_model::capture_io::CapturedStream::new(
+            capture_api::io::CapturedStream::new(
                 stream_unpinned,
                 capture_callback,
                 chip_id,
                 enabled.clone(),
             ),
-            netsim_model::capture_io::CapturedSink::new(
+            capture_api::io::CapturedSink::new(
                 sink_mapped,
                 capture_callback_sink,
                 chip_id,
@@ -176,11 +171,8 @@ impl CaptureClient {
     }
 }
 #[async_trait]
-impl netsim_model::capture::CaptureSender for CaptureClient {
-    async fn create_capture(
-        &self,
-        create: netsim_model::capture::CaptureCreate,
-    ) -> anyhow::Result<()> {
+impl capture_api::CaptureSender for CaptureClient {
+    async fn create_capture(&self, create: capture_api::CaptureCreate) -> anyhow::Result<()> {
         self.create_capture(
             create.chip_id,
             create.chip_kind,
@@ -190,12 +182,7 @@ impl netsim_model::capture::CaptureSender for CaptureClient {
         .await
         .map_err(|e| anyhow::anyhow!(e))
     }
-    fn capture_packet(
-        &self,
-        chip_id: ChipId,
-        direction: netsim_model::capture::Direction,
-        packet: Bytes,
-    ) {
+    fn capture_packet(&self, chip_id: ChipId, direction: capture_api::Direction, packet: Bytes) {
         self.capture_packet(chip_id, direction, packet);
     }
 }

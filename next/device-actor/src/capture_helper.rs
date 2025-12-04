@@ -11,9 +11,9 @@
 //! 3. Wraps the original `PacketStream` and `PacketSink` with capturing versions.
 //! 4. Returns the wrapped streams to be used by the chip.
 
+use capture_api::io::{CapturedSink, CapturedStream};
+use capture_api::{CaptureCreate, CaptureSender};
 use futures::{SinkExt, StreamExt};
-use netsim_model::capture::{CaptureCreate, CaptureSender};
-use netsim_model::capture_io::{CapturedSink, CapturedStream};
 use netsim_model::chip::{ChipId, NetworkKind, PacketSink, PacketStream};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
