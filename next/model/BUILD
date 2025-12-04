@@ -23,7 +23,7 @@ NETSIM_API_DEPS = [
     "@futures",
     "@log",
     "//next/packet-stream",
-    "//next/types:netsim-types",
+    "//next/types",
     "@serde",
     "@thiserror",
     "@tokio",
