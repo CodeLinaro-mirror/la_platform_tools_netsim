@@ -278,6 +278,7 @@ impl Hostapd {
     /// Retrieve the current active GTK or PTK key data from Hostapd
     #[cfg(not(test))]
     fn get_key(&self, ieee80211: &Ieee80211) -> (KeyData, usize, u8) {
+        // Determine key (GTK for multicast/broadcast, PTK for unicast)
         let key = if ieee80211.is_multicast() || ieee80211.is_broadcast() {
             // SAFETY: get_active_gtk requires no input and returns a virtio_wifi_key_data struct
             unsafe { get_active_gtk() }
@@ -291,7 +292,8 @@ impl Hostapd {
     }
 
     /// Attempt to encrypt the given IEEE 802.11 frame.
-    pub fn try_encrypt(&self, ieee80211: &Ieee80211) -> Option<Ieee80211> {
+    pub fn try_encrypt(&self, ieee80211: &Ieee80211) -> Option<Vec<u8>> {
+        // Check if encryption is needed
         if !ieee80211.needs_encryption() {
             return None;
         }
@@ -309,26 +311,25 @@ impl Hostapd {
         let nonce_binding = &ieee80211.get_nonce(&pn);
         let nonce = GenericArray::from_slice(nonce_binding);
 
-        // Encryption payload offset at header length - frame control (2) - duration id (2)
-        let payload_offset = ieee80211.hdr_length() - 4;
         // Encrypt the data with nonce and aad
-        let ciphertext = match cipher.encrypt(
-            nonce,
-            Payload { msg: &ieee80211.payload[payload_offset..], aad: &ieee80211.get_aad() },
-        ) {
-            Ok(ciphertext) => ciphertext,
-            Err(e) => {
-                warn!("Encryption error: {:?}", e);
-                return None;
-            }
-        };
+        let payload = ieee80211.get_payload();
+        let ciphertext =
+            match cipher.encrypt(nonce, Payload { msg: &payload, aad: &ieee80211.get_aad() }) {
+                Ok(ciphertext) => ciphertext,
+                Err(e) => {
+                    warn!("Encryption error: {:?}", e);
+                    return None;
+                }
+            };
 
-        // Prepare the new encrypted frame with new payload size
-        let mut encrypted_ieee80211 = ieee80211.clone();
-        encrypted_ieee80211.payload.resize(payload_offset + CCMP_HDR_LEN + ciphertext.len(), 0);
+        // We want to construct:
+        // Header (up to hdr_length) + CCMP Header (8 bytes) + Ciphertext.
+        let mut new_packet =
+            Vec::with_capacity(ieee80211.hdr_length() + CCMP_HDR_LEN + ciphertext.len());
+        new_packet.extend_from_slice(&ieee80211.as_bytes()[..ieee80211.hdr_length()]);
 
-        // Fill in the CCMP header using the pn and key ID
-        encrypted_ieee80211.payload[payload_offset..payload_offset + 8].copy_from_slice(&[
+        // CCMP Header
+        new_packet.extend_from_slice(&[
             pn[5],
             pn[4],
             0,                    // Reserved
@@ -339,15 +340,17 @@ impl Hostapd {
             pn[0],
         ]);
 
-        // Fill in the encrypted data and set protected bit
-        encrypted_ieee80211.payload[payload_offset + CCMP_HDR_LEN..].copy_from_slice(&ciphertext);
-        encrypted_ieee80211.set_protected(true);
+        new_packet.extend_from_slice(&ciphertext);
 
-        Some(encrypted_ieee80211)
+        // Set protected bit in Frame Control (byte 1, bit 6 i.e. 0x40)
+        // Frame Control is at offset 0.
+        new_packet[1] |= 0x40;
+
+        Some(new_packet)
     }
 
     /// Attempt to decrypt the given IEEE 802.11 frame.
-    pub fn try_decrypt(&self, ieee80211: &Ieee80211) -> Option<Ieee80211> {
+    pub fn try_decrypt(&self, ieee80211: &Ieee80211) -> Option<Vec<u8>> {
         if !ieee80211.needs_decryption() {
             return None;
         }
@@ -365,12 +368,18 @@ impl Hostapd {
         let nonce_binding = &ieee80211.get_nonce(pn);
         let nonce = GenericArray::from_slice(nonce_binding);
 
-        // Calculate header position and extract data and AAD
-        let hdr_pos = ieee80211.hdr_length() - 4;
-        let data = &ieee80211.payload[(hdr_pos + CCMP_HDR_LEN)..];
+        // Extract data (Ciphertext)
+        // Data starts after Header + CCMP Header.
+        let hdr_len = ieee80211.hdr_length();
+        let data_offset = hdr_len + CCMP_HDR_LEN;
+        if ieee80211.as_bytes().len() < data_offset {
+            return None;
+        }
+        let data = &ieee80211.as_bytes()[data_offset..];
         let aad = ieee80211.get_aad();
 
         // Decrypt the data
+
         let plaintext = match cipher.decrypt(nonce, Payload { msg: data, aad: &aad }) {
             Ok(plaintext) => plaintext,
             Err(e) => {
@@ -380,14 +389,15 @@ impl Hostapd {
         };
 
         // Construct the decrypted frame
-        let mut decrypted_ieee80211 = ieee80211.clone();
-        decrypted_ieee80211.payload.truncate(hdr_pos); // Keep only the 802.11 header
-        decrypted_ieee80211.payload.extend_from_slice(&plaintext); // Append the decrypted data
+        // Header + Plaintext
+        let mut new_packet = Vec::with_capacity(hdr_len + plaintext.len());
+        new_packet.extend_from_slice(&ieee80211.as_bytes()[..hdr_len]);
+        new_packet.extend_from_slice(&plaintext);
 
         // Reset protected bit
-        decrypted_ieee80211.set_protected(false);
+        new_packet[1] &= !0x40;
 
-        Some(decrypted_ieee80211)
+        Some(new_packet)
     }
 
     /// Inputs data packet bytes from netsim to `hostapd`.
@@ -582,10 +592,7 @@ fn c_string_to_bytes(c_string: &[u8]) -> &[u8] {
 mod tests {
     use super::*;
     use netsim_packets::ieee80211::{parse_mac_address, FrameType, Ieee80211, Ieee80211ToAp};
-    use pdl_runtime::Packet;
     use std::env;
-    use std::sync::OnceLock;
-    use tokio::runtime::Runtime;
 
     /// Initializes a basic Hostapd instance for testing.
     fn init_hostapd() -> Hostapd {
@@ -605,7 +612,7 @@ mod tests {
             source: parse_mac_address("1:1:1:1:1:1").unwrap(),
             bssid: parse_mac_address("0:0:0:0:0:0").unwrap(),
             seq_ctrl: 0,
-            protected: 0,
+            protected: 1,
             order: 0,
             more_frags: 0,
             retry: 0,
@@ -621,33 +628,25 @@ mod tests {
 
         // Encrypt and then decrypt the frame.
         let encrypted_frame = hostapd.try_encrypt(&ieee80211).expect("Encryption failed");
-        let decrypted_frame = hostapd.try_decrypt(&encrypted_frame).expect("Decryption failed");
+        let encrypted_view =
+            Ieee80211::decode(&encrypted_frame).expect("Failed to decode encrypted frame");
+        let decrypted_frame = hostapd.try_decrypt(&encrypted_view).expect("Decryption failed");
 
-        // Verify that the decrypted frame is identical to the original frame.
+        // Create an expected frame with the protected bit cleared for comparison.
+        let mut expected_frame_bytes = ieee80211.encode_to_vec().unwrap();
+        // Clear the protected bit (byte 1, bit 6 i.e. 0x40)
+        expected_frame_bytes[1] &= !0x40;
+
+        // Verify that the decrypted frame is identical to the original frame (with protected bit cleared).
         assert_eq!(
-            decrypted_frame.encode_to_bytes().unwrap(),
-            ieee80211.encode_to_bytes().unwrap(),
-            "Decrypted frame does not match original frame" // More descriptive assertion message
+            decrypted_frame, expected_frame_bytes,
+            "Decrypted frame does not match original frame (protected bit cleared)" // More descriptive assertion message
         );
-    }
-
-    // Implementation block for Hostapd specific to tests.
-    impl Hostapd {
-        /// Test-specific get_key: returns a fixed key for predictable encryption/decryption.
-        pub fn get_key(&self, _ieee80211: &Ieee80211) -> (KeyData, usize, u8) {
-            let mut key = [0u8; 32];
-            const TEST_KEY: [u8; 16] = [
-                // Defined test key as const for clarity
-                202, 238, 127, 166, 61, 206, 22, 214, 17, 180, 130, 229, 4, 249, 255, 122,
-            ];
-            key[..16].copy_from_slice(&TEST_KEY);
-            (key, 16, 0)
-        }
     }
 
     #[tokio::test]
     async fn test_decrypt_encrypt_golden_frame() {
-        // Test vectors from C implementation for golden frame test.
+        // Decode the encrypted frame from bytes.
         const ENCRYPTED_FRAME_BYTES: [u8; 120] = [
             // Corrected array size to 120
             8, 65, 58, 1, 0, 19, 16, 133, 254, 1, 2, 21, 178, 0, 0, 0, 51, 51, 255, 197, 140, 97,
@@ -667,10 +666,9 @@ mod tests {
             97, 14, 1, 27, 50, 219, 39, 89, 3,
         ];
 
-        // Decode the encrypted frame from bytes.
         let encrypted_ieee80211 = Ieee80211::decode(&ENCRYPTED_FRAME_BYTES)
-            .expect("Failed to decode encrypted Ieee80211 frame")
-            .0;
+            .expect("Failed to decode encrypted Ieee80211 frame");
+
         let hostapd = init_hostapd();
 
         // Decrypt the golden encrypted frame.
@@ -679,29 +677,53 @@ mod tests {
 
         // Verify decryption against expected decrypted bytes.
         assert_eq!(
-            decrypted_ieee80211.encode_to_bytes().unwrap().to_vec(), // Changed to .to_vec() for direct Vec<u8> comparison
-            EXPECTED_DECRYPTED_FRAME_BYTES.to_vec(), // Changed to .to_vec() for direct Vec<u8> comparison
-            "Decrypted golden frame does not match expected bytes" // More descriptive assertion message
+            decrypted_ieee80211,
+            EXPECTED_DECRYPTED_FRAME_BYTES.to_vec(),
+            "Decrypted golden frame does not match expected bytes"
         );
 
         // Re-encrypt the decrypted frame to verify round-trip.
+        // We must re-enable the protected bit for try_encrypt to process it.
+        let mut frame_to_encrypt = decrypted_ieee80211.clone();
+        frame_to_encrypt[1] |= 0x40; // Set protected bit
+        let decrypted_frame_view =
+            Ieee80211::decode(&frame_to_encrypt).expect("Failed to decode decrypted frame");
+
         let reencrypted_frame = hostapd
-            .try_encrypt(&decrypted_ieee80211)
+            .try_encrypt(&decrypted_frame_view)
             .expect("Re-encryption of decrypted frame failed");
+
         assert_eq!(
-            reencrypted_frame.encode_to_bytes().unwrap().to_vec(), // Changed to .to_vec()
-            ENCRYPTED_FRAME_BYTES.to_vec(),                        // Changed to .to_vec()
-            "Re-encrypted frame does not match original encrypted frame" // More descriptive assertion message
+            reencrypted_frame,
+            ENCRYPTED_FRAME_BYTES.to_vec(),
+            "Re-encrypted frame does not match original encrypted frame"
         );
 
         // Re-decrypt again to ensure consistent round-trip decryption.
+        let reencrypted_frame_view =
+            Ieee80211::decode(&reencrypted_frame).expect("Failed to decode re-encrypted frame");
+
         let redecrypted_frame = hostapd
-            .try_decrypt(&reencrypted_frame)
+            .try_decrypt(&reencrypted_frame_view)
             .expect("Re-decryption of re-encrypted frame failed");
+
         assert_eq!(
-            redecrypted_frame.encode_to_bytes().unwrap().to_vec(), // Changed to .to_vec()
-            EXPECTED_DECRYPTED_FRAME_BYTES.to_vec(),               // Changed to .to_vec()
-            "Re-decrypted frame does not match expected bytes after re-encryption" // More descriptive assertion message
+            redecrypted_frame,
+            EXPECTED_DECRYPTED_FRAME_BYTES.to_vec(),
+            "Re-decrypted frame does not match expected bytes after re-encryption"
         );
+    }
+    // Implementation block for Hostapd specific to tests.
+    impl Hostapd {
+        /// Test-specific get_key: returns a fixed key for predictable encryption/decryption.
+        pub fn get_key(&self, _ieee80211: &Ieee80211) -> (KeyData, usize, u8) {
+            let mut key = [0u8; 32];
+            const TEST_KEY: [u8; 16] = [
+                // Defined test key as const for clarity
+                202, 238, 127, 166, 61, 206, 22, 214, 17, 180, 130, 229, 4, 249, 255, 122,
+            ];
+            key[..16].copy_from_slice(&TEST_KEY);
+            (key, 16, 0)
+        }
     }
 }

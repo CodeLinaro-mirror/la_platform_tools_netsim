@@ -1,0 +1,66 @@
+// Copyright 2024 The Android Open Source Project
+
+//! Defines structures for ICMPv6 (Internet Control Message Protocol for IPv6) headers using `zerocopy`.
+
+use crate::utils::general::ParseResult;
+use zerocopy::{
+    byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
+};
+
+/// Represents the ICMPv6 header.
+#[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable)]
+#[repr(C)]
+pub struct Icmpv6Header {
+    /// The type of the ICMPv6 message.
+    pub icmpv6_type: u8,
+    /// The code of the ICMPv6 message, providing more specific information about the message type.
+    pub icmpv6_code: u8,
+    /// The checksum of the ICMPv6 header and data.
+    pub icmpv6_checksum: U16<NetworkEndian>,
+    /// The rest of the header, which varies depending on the message type.
+    pub rest: [u8; 4],
+}
+
+impl Icmpv6Header {
+    /// Parses an `Icmpv6Header` from the beginning of the given byte slice.
+    ///
+    /// Returns a reference to the header and a slice for the remaining bytes.
+    pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, Icmpv6Header>> {
+        Ref::from_prefix(bytes).ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_icmpv6_header_parsing() {
+        // Echo Request: type=128, code=0
+        let bytes: [u8; 8] = [128, 0x00, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC];
+        let (header, rest) = Icmpv6Header::parse(&bytes).expect("Failed to parse ICMPv6 header");
+
+        assert_eq!(header.icmpv6_type, 128);
+        assert_eq!(header.icmpv6_code, 0);
+        assert_eq!(header.icmpv6_checksum.get(), 0x1234);
+        assert_eq!(header.rest, [0x56, 0x78, 0x9A, 0xBC]);
+        assert_eq!(rest.len(), 0);
+    }
+
+    #[test]
+    fn test_icmpv6_header_parsing_with_payload() {
+        let bytes: [u8; 12] =
+            [128, 0x00, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x12, 0x34];
+        let (header, rest) = Icmpv6Header::parse(&bytes).expect("Failed to parse ICMPv6 header");
+
+        assert_eq!(header.icmpv6_type, 128);
+        assert_eq!(rest.len(), 4);
+        assert_eq!(rest, &[0xDE, 0xF0, 0x12, 0x34]);
+    }
+
+    #[test]
+    fn test_icmpv6_header_parsing_too_short() {
+        let bytes: [u8; 7] = [128, 0x00, 0x12, 0x34, 0x56, 0x78, 0x9A];
+        assert!(Icmpv6Header::parse(&bytes).is_none());
+    }
+}

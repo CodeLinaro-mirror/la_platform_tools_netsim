@@ -22,6 +22,7 @@ members = [
   "model",
   "daemon",
   "proto",
+  "packets",
   "packet-stream",
   "link-actor",
   "link-api",
