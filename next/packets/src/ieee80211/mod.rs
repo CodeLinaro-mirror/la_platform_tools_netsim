@@ -1,8 +1,10 @@
 pub mod frame;
+pub mod ie;
 pub mod json;
 pub mod util;
 
 pub use frame::*;
+pub use ie::*;
 pub use json::*;
 pub use util::*;
 
