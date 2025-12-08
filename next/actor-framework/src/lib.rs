@@ -87,18 +87,23 @@
 //!     type ActionResult = ();
 //!     type Context = ();
 //!     type Error = UserError;
+//!     type ListResponse = Vec<User>;
 //!
 //!     fn from_create_params(id: u32, params: UserCreate) -> Result<Self, Self::Error> {
 //!         Ok(Self { id, name: params.name })
 //!     }
 //!
-//!     async fn on_update(&mut self, update: UserUpdate, _ctx: &Self::Context) -> Result<(), Self::Error> {
+//!     async fn on_update(&mut self, update: UserUpdate, _ctx: &mut Self::Context) -> Result<(), Self::Error> {
 //!         if let Some(name) = update.name { self.name = name; }
 //!         Ok(())
 //!     }
 //!
-//!     async fn handle_action(&mut self, _: UserAction, _: &Self::Context) -> Result<(), Self::Error> {
+//!     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context) -> Result<(), Self::Error> {
 //!         Ok(())
+//!     }
+//!
+//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context) -> Self::ListResponse {
+//!         vec![]
 //!     }
 //! }
 //!
@@ -140,10 +145,11 @@
 //! #[async_trait]
 //! impl ActorEntity for User {
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate; type Action = UserAction;
-//!     type ActionResult = (); type Context = (); type Error = UserError;
+//!     type ActionResult = (); type Context = (); type Error = UserError; type ListResponse = Vec<User>;
 //!     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//!     async fn on_update(&mut self, _: UserUpdate, _: &()) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: UserAction, _: &()) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn on_update(&mut self, _: UserUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: UserAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
 //! }
 //!
 //! #[derive(Clone, Debug)] struct Product { id: u32 }
@@ -158,10 +164,11 @@
 //! # #[async_trait]
 //! # impl ActorEntity for Product {
 //! #     type Id = u32; type Create = ProductCreate; type Update = ProductUpdate; type Action = ProductAction;
-//! #     type ActionResult = (); type Context = (); type Error = ProductError;
+//! #     type ActionResult = (); type Context = (); type Error = ProductError; type ListResponse = Vec<Product>;
 //! #     fn from_create_params(id: u32, _: ProductCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//! #     async fn on_update(&mut self, _: ProductUpdate, _: &()) -> Result<(), Self::Error> { Ok(()) }
-//! #     async fn handle_action(&mut self, _: ProductAction, _: &()) -> Result<(), Self::Error> { Ok(()) }
+//! #     async fn on_update(&mut self, _: ProductUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+//! #     async fn handle_action(&mut self, _: ProductAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+//! #     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
 //! # }
 //!
 //! #[derive(Clone, Debug)] struct Order { id: u32 }
@@ -179,11 +186,12 @@
 //! #[async_trait]
 //! impl ActorEntity for Order {
 //!     type Id = u32; type Create = OrderCreate; type Update = OrderUpdate; type Action = OrderAction;
-//!     type ActionResult = (); type Context = OrderContext; type Error = OrderError;
+//!     type ActionResult = (); type Context = OrderContext; type Error = OrderError; type ListResponse = Vec<Order>;
 //!
 //!     fn from_create_params(id: u32, _: OrderCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//!     async fn on_update(&mut self, _: OrderUpdate, _: &OrderContext) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: OrderAction, _: &OrderContext) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn on_update(&mut self, _: OrderUpdate, _: &mut OrderContext) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: OrderAction, _: &mut OrderContext) -> Result<(), Self::Error> { Ok(()) }
+//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut OrderContext) -> Self::ListResponse { vec![] }
 //!     // In a real app, on_create would use the context to validate user/product
 //! }
 //!
