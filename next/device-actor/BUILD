@@ -1,9 +1,11 @@
-load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
 DEPS = [
     "//next/actor-framework",
+    "//next/capture-api",
+    "//next/device-api",
     "//next/model",
     "@futures",
     "@tokio",
@@ -23,6 +25,18 @@ rust_library(
         "@async-trait",
     ],
     deps = DEPS,
+)
+
+rust_doc(
+    name = "doc",
+    crate = ":device-actor",
+)
+
+rust_doc_test(
+    name = "doc_test",
+    crate = ":device-actor",
+    # TODO: Enable on macOS. Disabled due to missing C++ linker wrapper in pure Rust sandbox. See tools/netsim/README.md.
+    target_compatible_with = ["@platforms//os:linux"],
 )
 
 [

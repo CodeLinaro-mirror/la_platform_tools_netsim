@@ -10,10 +10,11 @@
 use actor_framework::{ActorClient, FrameworkError, ResourceClient};
 use async_trait::async_trait;
 use device_actor::entity::DeviceEntity;
-use device_actor::{DeviceAction, DeviceActionResult, DeviceError};
+use device_actor::DeviceError;
+use device_api::api::DeviceCreate;
+use device_api::DeviceId;
+use device_api::{DeviceAction, DeviceActionResult};
 use log::debug;
-use netsim_model::device::api::DeviceCreate;
-use netsim_model::device::DeviceId;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -63,7 +64,7 @@ impl DeviceClient {
             .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
     }
 
-    pub async fn list(&self) -> Result<netsim_model::device::api::ListDeviceResponse, DeviceError> {
+    pub async fn list(&self) -> Result<device_api::api::ListDeviceResponse, DeviceError> {
         debug!("Sending list devices request");
         self.inner.list().await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
     }
@@ -76,7 +77,7 @@ impl DeviceClient {
     pub async fn update(
         &self,
         id: DeviceId,
-        update: netsim_model::device::api::DeviceUpdate,
+        update: device_api::api::DeviceUpdate,
     ) -> Result<(), DeviceError> {
         debug!("Sending update request for device {}", id);
         self.inner

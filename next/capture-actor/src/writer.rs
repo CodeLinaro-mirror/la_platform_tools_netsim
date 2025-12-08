@@ -4,7 +4,7 @@
 //! Currently supports PCAP format with Bluetooth H4 encapsulation.
 
 use anyhow::Result;
-use netsim_model::capture::Direction;
+use capture_api::Direction;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;

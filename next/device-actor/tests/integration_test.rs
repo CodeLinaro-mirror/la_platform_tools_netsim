@@ -14,9 +14,9 @@ mod common;
 // - `test_notify_chip_removed`: Verifies that removing a chip updates the device state.
 
 use actor_framework::ActorClient;
+use device_api::api::{Chip, DeviceChipCreate, DeviceCreate, DeviceUpdate};
+use device_api::DeviceConfig;
 use netsim_model::chip::{BleBeacon, ChipId, ChipRequest};
-use netsim_model::device::api::{Chip, DeviceChipCreate, DeviceCreate, DeviceUpdate};
-use netsim_model::device::DeviceConfig;
 
 use common::{setup, TestFixture};
 
@@ -125,9 +125,8 @@ async fn test_update_device_propagates_to_chips() {
     let device_id = client.create_device(params).await.unwrap();
 
     let mut update = DeviceUpdate::default();
-    update.position = Some(netsim_model::device::Position { x: 10.0, y: 10.0, z: 0.0 });
-    update.orientation =
-        Some(netsim_model::device::Orientation { yaw: 1.0, pitch: 0.0, roll: 0.0 });
+    update.position = Some(device_api::Position { x: 10.0, y: 10.0, z: 0.0 });
+    update.orientation = Some(device_api::Orientation { yaw: 1.0, pitch: 0.0, roll: 0.0 });
     update.name = Some("updated-name".to_string());
 
     client.update(device_id, update).await.unwrap();

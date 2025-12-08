@@ -3,25 +3,18 @@ load("@rules_rust//rust:defs.bzl", "rust_library")
 package(default_visibility = ["//visibility:public"])
 
 DEPS = [
-    "//next/actor-framework",
-    "//next/capture-api",
-    "//next/device-api",
     "//next/model",
-    "//next/device-actor",
-    "//next/capture-actor",
     "@anyhow",
     "@bytes",
     "@futures",
-    "//next/packet-stream",
+    "@serde",
     "@tokio",
-    "@log",
 ]
 
 rust_library(
-    name = "client",
+    name = "capture-api",
     srcs = glob(["src/**/*.rs"]),
-    crate_features = [],
-    crate_name = "client",
+    crate_name = "capture_api",
     crate_root = "src/lib.rs",
     edition = "2021",
     proc_macro_deps = [

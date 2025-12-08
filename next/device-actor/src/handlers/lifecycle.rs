@@ -2,12 +2,12 @@ use crate::context::DeviceContext;
 use crate::entity::DeviceEntity;
 use crate::error::DeviceError;
 use crate::handlers::utils::chip_kind_to_network_kind;
+use device_api::api::Chip as ApiChip;
+use device_api::DeviceId;
 use netsim_model::chip::{
     BeaconParams, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId, NetworkKind,
     NetworkParams,
 };
-use netsim_model::device::api::Chip as ApiChip;
-use netsim_model::device::DeviceId;
 use std::sync::atomic::Ordering;
 
 pub async fn on_create(
@@ -73,7 +73,7 @@ pub async fn on_create(
 
 pub async fn on_update(
     entity: &mut DeviceEntity,
-    update: netsim_model::device::api::DeviceUpdate,
+    update: device_api::api::DeviceUpdate,
     ctx: &mut DeviceContext,
 ) -> Result<(), DeviceError> {
     // Update local state

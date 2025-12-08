@@ -38,12 +38,13 @@
 //! #[async_trait]
 //! impl ActorEntity for User {
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate;
-//!     type Action = UserAction; type ActionResult = (); type Context = (); type Error = UserError;
+//!     type Action = UserAction; type ActionResult = (); type Context = (); type Error = UserError; type ListResponse = Vec<User>;
 //!     fn from_create_params(id: u32, params: UserCreate) -> Result<Self, Self::Error> {
 //!         Ok(Self { id, email: params.email })
 //!     }
-//!     async fn on_update(&mut self, _: UserUpdate, _: &()) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: UserAction, _: &()) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn on_update(&mut self, _: UserUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: UserAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+//!     fn on_list(entities: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { entities.values().cloned().collect() }
 //! }
 //!
 //! // --- Define a minimal Client Wrapper ---
@@ -96,14 +97,15 @@
 //! #[async_trait]
 //! impl ActorEntity for Product {
 //!     type Id = u32; type Create = ProductCreate; type Update = ProductUpdate;
-//!     type Action = ProductAction; type ActionResult = u32; type Context = (); type Error = ProductError;
+//!     type Action = ProductAction; type ActionResult = u32; type Context = (); type Error = ProductError; type ListResponse = Vec<Product>;
 //!     fn from_create_params(id: u32, params: ProductCreate) -> Result<Self, Self::Error> {
 //!         Ok(Self { id, stock: params.stock })
 //!     }
-//!     async fn on_update(&mut self, _: ProductUpdate, _: &()) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, action: ProductAction, _: &()) -> Result<u32, Self::Error> {
+//!     async fn on_update(&mut self, _: ProductUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, action: ProductAction, _: &mut ()) -> Result<u32, Self::Error> {
 //!         match action { ProductAction::CheckStock => Ok(self.stock) }
 //!     }
+//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
 //! }
 //!
 //! #[tokio::main]
@@ -157,10 +159,11 @@
 //! #[async_trait]
 //! impl ActorEntity for User {
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate;
-//!     type Action = UserAction; type ActionResult = (); type Context = (); type Error = UserError;
+//!     type Action = UserAction; type ActionResult = (); type Context = (); type Error = UserError; type ListResponse = Vec<User>;
 //!     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//!     async fn on_update(&mut self, _: UserUpdate, _: &()) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: UserAction, _: &()) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn on_update(&mut self, _: UserUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: UserAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+//!     fn on_list(entities: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { entities.values().cloned().collect() }
 //! }
 //!
 //! #[tokio::main]
@@ -502,6 +505,7 @@ mod tests {
         type ActionResult = ();
         type Context = ();
         type Error = UserError;
+        type ListResponse = Vec<User>;
 
         fn from_create_params(id: u32, params: UserCreate) -> Result<Self, Self::Error> {
             Ok(Self { id, name: params.name, email: params.email })

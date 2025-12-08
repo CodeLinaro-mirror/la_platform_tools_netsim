@@ -1,11 +1,11 @@
-use crate::actions::{DeviceAction, DeviceActionResult};
 use crate::context::DeviceContext;
 use crate::entity::DeviceEntity;
 use crate::error::DeviceError;
 use actor_framework::ActorEntity;
 use async_trait::async_trait;
-use netsim_model::device::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse};
-use netsim_model::device::DeviceId;
+use device_api::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse};
+use device_api::DeviceId;
+use device_api::{DeviceAction, DeviceActionResult};
 
 #[async_trait]
 impl ActorEntity for DeviceEntity {
@@ -21,7 +21,7 @@ impl ActorEntity for DeviceEntity {
     /// Creates a new Device from creation parameters.
     fn from_create_params(id: Self::Id, params: Self::Create) -> Result<Self, Self::Error> {
         Ok(DeviceEntity {
-            device: netsim_model::device::Device {
+            device: device_api::Device {
                 id: id.0,
                 name: params.device_config.name.clone(),
                 visible: params.device_config.visible,

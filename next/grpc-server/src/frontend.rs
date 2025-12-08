@@ -1,8 +1,8 @@
 use actor_framework::ActorClient;
 use client::DeviceClient;
+use device_api::DeviceId;
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
-use netsim_model::device::DeviceId;
 use netsim_proto::empty::Empty;
 use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend_grpc::FrontendService;
@@ -80,7 +80,7 @@ impl FrontendService for FrontendClient {
             // For now, we require ID or fail if not present (or maybe 0 is invalid?)
             let id = req.id.unwrap_or(0); // 0 might be valid?
 
-            let update = netsim_model::device::api::DeviceUpdate {
+            let update = device_api::api::DeviceUpdate {
                 id,
                 name: req.device.name.clone(),
                 visible: req.device.visible,
@@ -149,7 +149,7 @@ impl FrontendService for FrontendClient {
                 if let Some(chip_config) =
                     crate::frontend_converter::from_proto_chip_create(proto_chip.clone())
                 {
-                    let device_config = netsim_model::device::DeviceConfig {
+                    let device_config = device_api::DeviceConfig {
                         name: req.device.name.clone(),
                         visible: true, // Default to true as proto doesn't have this field
                         position: crate::frontend_converter::from_proto_position(
@@ -160,7 +160,7 @@ impl FrontendService for FrontendClient {
                         ),
                     };
 
-                    let device_create = netsim_model::device::api::DeviceCreate {
+                    let device_create = device_api::api::DeviceCreate {
                         device_config: device_config.clone(),
                         chip: chip_config,
                     };
@@ -228,7 +228,7 @@ impl FrontendService for FrontendClient {
             // Proto DeleteChipRequest has `id` which is documented as Device Identifier.
             // So this actually deletes the device?
             // netsim-api has `delete(DeviceId)`.
-            match client.delete(netsim_model::device::DeviceId(req.id)).await {
+            match client.delete(device_api::DeviceId(req.id)).await {
                 Ok(_) => sink.success(Empty::new()).await,
                 Err(e) => {
                     sink.fail(RpcStatus::with_message(

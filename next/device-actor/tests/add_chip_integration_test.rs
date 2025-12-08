@@ -11,9 +11,10 @@ mod common;
 // - `test_add_chip_chip_failure`: Verifies proper error handling when chip creation fails during AddChip.
 
 use actor_framework::ActorClient;
+use device_api::DeviceAddChip;
+use device_api::DeviceConfig;
 use netsim_model::chip::ChipRequest;
 use netsim_model::chip_error::ChipError;
-use netsim_model::device::{DeviceAddChip, DeviceConfig};
 
 use common::{setup, TestFixture};
 

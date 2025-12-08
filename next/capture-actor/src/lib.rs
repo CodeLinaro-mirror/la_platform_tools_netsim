@@ -5,6 +5,12 @@
 //!
 //! The actor uses the `actor-framework` to manage its lifecycle and state.
 //! It relies on `CaptureWriter`s to handle the actual writing of packets to different formats (e.g., PCAP).
+//!
+//! ## Capture Actions
+//!
+//! The actions supported by the `CaptureActor` are defined in the `capture-api` crate.
+//! These actions include creating, deleting, and patching captures, as well as capturing packets.
+//! See `capture_api::CaptureAction` for details.
 
 //! Capture Actor
 //!
@@ -12,7 +18,6 @@
 //! starting and stopping captures, writing to PCAP files, and managing
 //! capture state for different chips.
 
-pub mod actions;
 pub mod actor_impl;
 pub mod bt_pcap;
 pub mod context;
@@ -34,14 +39,14 @@ pub fn new() -> (ResourceActor<CaptureEntity>, ResourceClient<CaptureEntity>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::actions::{CaptureAction, CaptureActionResult};
     use crate::bt_pcap::BluetoothH4Writer;
     use crate::context::CaptureContext;
     use crate::entity::CaptureEntity;
     use crate::writer::CaptureWriter;
     use actor_framework::ActorEntity;
     use bytes::Bytes;
-    use netsim_model::capture::Direction;
+    use capture_api::Direction;
+    use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate};
     use netsim_model::chip::{ChipId, ChipKind};
     use std::collections::HashMap;
     use std::fs;
@@ -69,10 +74,11 @@ mod tests {
         let ctx = CaptureContext::default();
 
         let enabled_flag = Arc::new(AtomicBool::new(false));
-        let create_params = crate::actions::CaptureCreate {
+        let create_params = CaptureCreate {
             chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device".to_string(),
+            default_enabled: false,
             enabled_flag: enabled_flag.clone(),
         };
         let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap();
@@ -140,7 +146,7 @@ mod tests {
         let ctx = CaptureContext::default();
         let chip_id = ChipId(2);
         let enabled_flag = Arc::new(AtomicBool::new(false));
-        let create_params = crate::actions::CaptureCreate {
+        let create_params = CaptureCreate {
             chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_default".to_string(),
@@ -175,7 +181,7 @@ mod tests {
         let ctx = CaptureContext::default();
         let chip_id = ChipId(3);
         let enabled_flag = Arc::new(AtomicBool::new(false));
-        let create_params = crate::actions::CaptureCreate {
+        let create_params = CaptureCreate {
             chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_dir".to_string(),

@@ -6,11 +6,11 @@
 //! (specifically, packet capture statistics from the `CaptureWriter`) which is not
 //! part of the standard `CaptureEntity` state.
 
-use crate::actions::{CaptureAction, CaptureActionResult, CaptureInfo};
 use crate::context::CaptureContext;
 use crate::entity::CaptureEntity;
 use crate::error::CaptureError;
 use actor_framework::ActorEntity;
+use capture_api::{CaptureAction, CaptureActionResult, CaptureInfo};
 use netsim_model::chip::ChipId;
 use std::time::SystemTime;
 

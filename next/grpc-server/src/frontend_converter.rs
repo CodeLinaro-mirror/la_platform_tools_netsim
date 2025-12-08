@@ -1,7 +1,5 @@
+use device_api::{Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition};
 use netsim_model::chip::ChipKind as ApiChipKind;
-use netsim_model::device::{
-    Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition,
-};
 use netsim_proto::common::ChipKind as ProtoChipKind;
 use netsim_proto::model::{
     Chip as ProtoChip, Device as ProtoDevice, Orientation as ProtoOrientation,
@@ -68,9 +66,9 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
     device
 }
 
+use device_api::api::{Chip, DeviceChipCreate};
 use netsim_model::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
 use netsim_model::chip::BleBeacon;
-use netsim_model::device::api::{Chip, DeviceChipCreate};
 use netsim_proto::model::ChipCreate;
 
 pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {

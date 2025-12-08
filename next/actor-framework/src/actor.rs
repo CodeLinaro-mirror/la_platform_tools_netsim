@@ -65,10 +65,12 @@ use tokio::sync::mpsc;
 ///     type ActionResult = ();
 ///     type Context = (); // No dependencies in this example
 ///     type Error = MyError;
+///     type ListResponse = Vec<MyEntity>;
 ///
 ///     fn from_create_params(id: u32, _: MyCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-///     async fn on_update(&mut self, _: MyUpdate, _: &()) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_action(&mut self, _: MyAction, _: &()) -> Result<(), Self::Error> { Ok(()) }
+///     async fn on_update(&mut self, _: MyUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_action(&mut self, _: MyAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
+///     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
 /// }
 ///
 /// #[tokio::main]
