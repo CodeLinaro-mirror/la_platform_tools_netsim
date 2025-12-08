@@ -1,7 +1,7 @@
 use crate::context::DeviceContext;
 use crate::entity::DeviceEntity;
 use crate::error::DeviceError;
-use actor_framework::ActorEntity;
+use actor_framework::{ActorEntity, Runtime};
 use async_trait::async_trait;
 use device_api::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse};
 use device_api::DeviceId;
@@ -35,17 +35,22 @@ impl ActorEntity for DeviceEntity {
 
     /// Called after the entity is created.
     /// This is where we handle side effects of creation, like creating associated chips.
-    async fn on_create(&mut self, ctx: &mut Self::Context) -> Result<(), Self::Error> {
-        crate::handlers::on_create(self, ctx).await
+    async fn on_create(
+        &mut self,
+        context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
+    ) -> Result<(), Self::Error> {
+        crate::handlers::on_create(self, context).await
     }
 
     /// Handles custom actions for the Device actor.
     async fn handle_action(
         &mut self,
         action: Self::Action,
-        ctx: &mut Self::Context,
+        context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
     ) -> Result<Self::ActionResult, Self::Error> {
-        crate::handlers::handle_action(self, action, ctx).await
+        crate::handlers::handle_action(self, action, context).await
     }
 
     /// Called when the entity is updated.
@@ -53,22 +58,27 @@ impl ActorEntity for DeviceEntity {
     async fn on_update(
         &mut self,
         update: Self::Update,
-        ctx: &mut Self::Context,
+        context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
     ) -> Result<(), Self::Error> {
-        crate::handlers::on_update(self, update, ctx).await
+        crate::handlers::on_update(self, update, context).await
     }
 
     /// Called when the entity is deleted.
     /// Ensures all associated chips are also deleted.
-    async fn on_delete(&self, ctx: &mut Self::Context) -> Result<(), Self::Error> {
-        crate::handlers::on_delete(self, ctx).await
+    async fn on_delete(
+        &self,
+        context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
+    ) -> Result<(), Self::Error> {
+        crate::handlers::on_delete(self, context).await
     }
 
     fn on_list(
         entities: &std::collections::HashMap<Self::Id, Self>,
-        _ctx: &mut Self::Context,
+        _context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
     ) -> Self::ListResponse {
-        let devices = entities.values().map(|e| e.device.clone()).collect();
-        ListDeviceResponse { devices }
+        crate::handlers::on_list(entities)
     }
 }

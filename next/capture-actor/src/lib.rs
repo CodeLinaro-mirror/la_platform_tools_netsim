@@ -71,7 +71,7 @@ mod tests {
     #[tokio::test]
     async fn test_capture_entity_lifecycle() {
         let chip_id = ChipId(1);
-        let ctx = CaptureContext::default();
+        let mut ctx = CaptureContext::default();
 
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
@@ -81,12 +81,19 @@ mod tests {
             default_enabled: false,
             enabled_flag: enabled_flag.clone(),
         };
-        let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap();
+        let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap().entity;
         assert_eq!(entity.enabled, false);
         assert_eq!(enabled_flag.load(Ordering::SeqCst), false);
 
+        // Dummy runtime
+        let mut interval = None;
+        let mut streams = tokio_stream::StreamMap::new();
+        let mut shutdown = None;
+        let mut runtime =
+            Runtime { interval: &mut interval, streams: &mut streams, shutdown: &mut shutdown };
+
         // Enable capture
-        entity.on_update(true, &ctx).await.unwrap();
+        entity.on_update(true, &mut ctx, &mut runtime).await.unwrap();
         assert_eq!(entity.enabled, true);
         assert_eq!(enabled_flag.load(Ordering::SeqCst), true);
 
@@ -105,7 +112,8 @@ mod tests {
                     direction: Direction::Sent,
                     bytes: Bytes::from(packet.clone()),
                 },
-                &ctx,
+                &mut ctx,
+                &mut runtime,
             )
             .await
             .unwrap();
@@ -113,7 +121,7 @@ mod tests {
         // Verify stats
         let action_get = CaptureAction::Get { chip_id };
         if let CaptureActionResult::Get(Some(info)) =
-            entity.handle_action(action_get, &ctx).await.unwrap()
+            entity.handle_action(action_get, &mut ctx, &mut runtime).await.unwrap()
         {
             assert_eq!(info.records_written, 1);
             assert_eq!(info.bytes_written, 4);
@@ -122,13 +130,13 @@ mod tests {
         }
 
         // Disable capture
-        entity.on_update(false, &ctx).await.unwrap();
+        entity.on_update(false, &mut ctx, &mut runtime).await.unwrap();
         assert_eq!(entity.enabled, false);
         // Writer stays in context but is not used, or we could remove it.
         // Current implementation keeps it but we don't write to it if disabled.
 
         // Delete
-        entity.on_delete(&ctx).await.unwrap();
+        entity.on_delete(&mut ctx, &mut runtime).await.unwrap();
         {
             let writers = ctx.writers.lock().unwrap();
             assert!(!writers.contains_key(&chip_id));
@@ -143,7 +151,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_default_capture_enabled() {
-        let ctx = CaptureContext::default();
+        let mut ctx = CaptureContext::default();
         let chip_id = ChipId(2);
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
@@ -155,10 +163,18 @@ mod tests {
         };
 
         // Set default capture to true in context
-        ctx.default_capture_enabled.store(true, Ordering::SeqCst);
+        ctx.default_capture_enabled = true;
 
-        let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap();
-        entity.on_create(&ctx).await.unwrap();
+        let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap().entity;
+
+        // Dummy runtime
+        let mut interval = None;
+        let mut streams = tokio_stream::StreamMap::new();
+        let mut shutdown = None;
+        let mut runtime =
+            Runtime { interval: &mut interval, streams: &mut streams, shutdown: &mut shutdown };
+
+        entity.on_create(&mut ctx, &mut runtime).await.unwrap();
 
         // Should be enabled because of context default
         assert_eq!(entity.enabled, true);
@@ -169,7 +185,7 @@ mod tests {
         }
 
         // Clean up
-        entity.on_delete(&ctx).await.unwrap();
+        entity.on_delete(&mut ctx, &mut runtime).await.unwrap();
         let filename = format!("capture_test_device_default_{}.pcap", chip_id.0);
         if fs::metadata(&filename).is_ok() {
             fs::remove_file(&filename).unwrap();
@@ -178,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_capture_directory() {
-        let ctx = CaptureContext::default();
+        let mut ctx = CaptureContext::default();
         let chip_id = ChipId(3);
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
@@ -192,17 +208,25 @@ mod tests {
         // Create a temp directory
         let temp_dir = std::env::temp_dir().join("netsim_capture_test");
         fs::create_dir_all(&temp_dir).unwrap();
-        *ctx.capture_dir.lock().unwrap() = Some(temp_dir.clone());
+        *ctx.capture_dir = Some(temp_dir.clone());
 
-        let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap();
-        entity.on_create(&ctx).await.unwrap();
+        let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap().entity;
+
+        // Dummy runtime
+        let mut interval = None;
+        let mut streams = tokio_stream::StreamMap::new();
+        let mut shutdown = None;
+        let mut runtime =
+            Runtime { interval: &mut interval, streams: &mut streams, shutdown: &mut shutdown };
+
+        entity.on_create(&mut ctx, &mut runtime).await.unwrap();
 
         // Verify writer created in temp dir
         let expected_path = temp_dir.join(format!("capture_test_device_dir_{}.pcap", chip_id.0));
         assert!(expected_path.exists());
 
         // Clean up
-        entity.on_delete(&ctx).await.unwrap();
+        entity.on_delete(&mut ctx, &mut runtime).await.unwrap();
         if expected_path.exists() {
             fs::remove_file(&expected_path).unwrap();
         }

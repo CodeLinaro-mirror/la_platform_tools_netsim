@@ -1,4 +1,6 @@
 use crate::writer::CaptureWriter;
+use actor_framework::ActorContext;
+use async_trait::async_trait;
 use netsim_model::chip::ChipId;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -31,4 +33,9 @@ impl Default for CaptureContext {
             capture_dir: None,
         }
     }
+}
+
+#[async_trait]
+impl ActorContext for CaptureContext {
+    type Error = crate::error::CaptureError;
 }

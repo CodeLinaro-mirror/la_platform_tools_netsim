@@ -12,7 +12,7 @@ use async_trait::async_trait;
 /// # Example
 ///
 /// ```rust
-/// use actor_framework::{ActorClient, ActorEntity, FrameworkError, ResourceClient};
+/// use actor_framework::{ActorClient, ActorEntity, Runtime, BoxStream, ResourceActor, FrameworkError, ResourceClient};
 /// use async_trait::async_trait;
 ///
 /// // 1. Define Entity
@@ -49,9 +49,9 @@ use async_trait::async_trait;
 ///     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> {
 ///         Ok(Self { id })
 ///     }
-///     async fn on_update(&mut self, _: UserUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_action(&mut self, _: UserAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-///     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
+///     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+///     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { vec![] }
 /// }
 ///
 /// // 2. Define Client Wrapper

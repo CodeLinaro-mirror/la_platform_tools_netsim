@@ -22,9 +22,72 @@
 //! You do **not** need to implement these methods unless you want to customize behavior.
 //! The default implementation does nothing (`Ok(())`).
 
+use crate::runtime::Runtime;
 use async_trait::async_trait;
+use bytes::Bytes;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
+use std::pin::Pin;
+use tokio_stream::Stream;
+
+pub type StreamMessage = Bytes;
+pub type BoxStream = Pin<Box<dyn Stream<Item = StreamMessage> + Send>>;
+
+/// The context trait that defines the lifecycle hooks for an actor entity.
+///
+/// This trait allows the entity to interact with the actor runtime (timers, streams, shutdown)
+/// and handle asynchronous events.
+#[async_trait]
+pub trait ActorContext: Send + Sync + 'static {
+    /// The error type returned by context methods.
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Called when the actor starts, before processing any messages.
+    ///
+    /// Use this hook to:
+    /// - Schedule initial timers.
+    /// - Register initial streams.
+    async fn on_start(&mut self, _runtime: &mut impl Runtime) {}
+
+    /// Called on every tick of the actor's interval.
+    async fn on_tick(&mut self, _runtime: &mut impl Runtime) {}
+
+    /// Called when a stream produces a message.
+    async fn on_stream(
+        &mut self,
+        _id: usize,
+        _message: StreamMessage,
+        _runtime: &mut impl Runtime,
+    ) {
+    }
+
+    /// Called when a registered stream closes.
+    ///
+    /// Returns `Ok(true)` if the entity associated with the stream ID should be deleted.
+    /// This is useful for entities that are 1:1 with a stream (e.g., a chip connected to a packet stream).
+    async fn on_stream_closed(&mut self, _id: usize) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
+    /// Called when the actor receives a shutdown signal.
+    async fn on_shutdown(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct EmptyError;
+impl std::fmt::Display for EmptyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EmptyError")
+    }
+}
+impl std::error::Error for EmptyError {}
+
+#[async_trait]
+impl ActorContext for () {
+    type Error = EmptyError;
+}
 
 /// Trait that any resource entity must implement to be managed by ResourceActor.
 ///
@@ -56,7 +119,7 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
 
     /// The runtime context (dependencies) injected into the actor.
     /// Use `()` if no dependencies are needed.
-    type Context: Send + Sync;
+    type Context: ActorContext + Send + Sync;
 
     /// The error type for this entity.
     /// Must implement std::error::Error for proper error propagation.
@@ -86,7 +149,13 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
 
     /// Called immediately after the entity is created and initialized.
     /// Use this hook to perform validation or side effects (e.g., checking other actors).
-    async fn on_create(&mut self, _context: &mut Self::Context) -> Result<(), Self::Error> {
+    /// Called immediately after the entity is created and initialized.
+    /// Use this hook to perform validation or side effects (e.g., checking other actors).
+    async fn on_create(
+        &mut self,
+        _context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -95,38 +164,35 @@ pub trait ActorEntity: Clone + Send + Sync + 'static {
         &mut self,
         _update: Self::Update,
         _context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     /// Called immediately before the entity is removed from the system.
-    async fn on_delete(&self, _context: &mut Self::Context) -> Result<(), Self::Error> {
+    async fn on_delete(
+        &self,
+        _context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     // --- Action Handler (Async) ---
 
-    /// Handle a custom resource-specific action.
+    /// Called when a custom action is received.
     async fn handle_action(
         &mut self,
         _action: Self::Action,
         _context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
     ) -> Result<Self::ActionResult, Self::Error>;
 
     /// Called when a list request is received.
-    /// Provides a snapshot of all entities currently managed by the actor.
-    ///
-    /// # Design Note: List Response Flexibility
-    ///
-    /// The framework requires implementing `on_list` because it cannot provide a default
-    /// implementation that satisfies all use cases.
-    ///
-    /// **Why?**
-    /// - **Return Type Flexibility**: Different entities need different list formats (e.g., `Vec<Entity>`, `Vec<Id>`, or a custom DTO).
-    /// - **Rust Limitations**: Default Associated Types are not yet stable, so we cannot default `ListResponse` to `Vec<Self>`.
-    /// - **Performance**: Explicit implementation allows entities to choose efficient representations (e.g., avoiding clones of heavy entities).
+    /// This method is static because it operates on the collection of entities.
     fn on_list(
         entities: &std::collections::HashMap<Self::Id, Self>,
-        _context: &mut Self::Context,
+        context: &mut Self::Context,
+        runtime: &mut impl Runtime,
     ) -> Self::ListResponse;
 }
