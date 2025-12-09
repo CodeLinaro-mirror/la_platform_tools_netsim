@@ -1,3 +1,8 @@
+//! # Device Actor Action Handlers
+//!
+//! This module contains the handlers for actions performed on the device actor,
+//! such as adding chips and resetting the device.
+
 use crate::context::DeviceContext;
 use crate::entity::DeviceEntity;
 use crate::error::DeviceError;
@@ -43,7 +48,7 @@ pub async fn handle_action(
 
             // 2. Handle Capture Creation and Stream Wrapping
             let (packet_stream, packet_sink) = if let Some(capture_client) = &ctx.capture_client {
-                crate::capture_helper::create_capture_and_wrap_streams(
+                crate::handlers::utils::create_capture_and_wrap_streams(
                     capture_client.clone(),
                     chip_id,
                     chip_kind,

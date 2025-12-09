@@ -3,41 +3,36 @@
 //! This crate defines the public API for the Netsim device service.
 //! It includes the behavioral contract (actions) for the `device-actor`.
 //!
-//! ## Rationale
-//!
-//! Prior to this refactoring, the device service's API was tightly coupled with its implementation. This led to several issues:
-//! - **Circular Dependencies**: Crates needing to interact with the device service often had to depend on the entire `device-actor` or `netsim-model` in a way that created complex dependency graphs.
-//! - **Lack of Encapsulation**: Internal implementation details of the device service were sometimes exposed to consumers.
-//! - **Testing Difficulty**: Mocking the device service for integration tests was more difficult than necessary due to the coupled nature of the API.
-//!
-//! By introducing a dedicated `device-api` crate, we create a clear boundary between the service's contract and its implementation.
-//!
 //! ## Architecture
 //!
-//! ### New Structure
+//! ### Structure
 //!
-//! The refactoring introduces the following structure:
+//! The device service is structured as follows:
 //!
 //! - **`netsim-model`**: Remains the base layer for data models (e.g., `Device`, `Chip`, `Position`). It does not depend on `device-api`.
-//! - **`device-api` (New)**: Defines the behavioral contract for the device service.
+//! - **`device-api`**: Defines the behavioral contract for the device service.
 //!     - Depends on: `netsim-model`
 //!     - Contains: `DeviceAction` (enum of supported operations), `DeviceActionResult`, and re-exports of relevant models from `netsim-model` for convenience.
 //! - **`device-actor`**: Implements the device service.
 //!     - Depends on: `device-api`, `netsim-model`, and other service crates.
 //!     - Implements the handling logic for `DeviceAction`.
-//! - **Consumer Crates** (e.g., `wifi`, `cell`, `bluetooth`, `netsim-client`):
-//!     - Depend on: `device-api` (and `netsim-model` if needed).
+//! - **`netsim-client`**: Provides a client-side wrapper for the device service.
+//!     - Depends on: `device-api`, `netsim-model`.
+//! - **Consumer Crates** (e.g., `wifi`, `cell`, `bluetooth`):
+//!     - Depend on: `device-api`, `netsim-client` (and `netsim-model` if needed).
 //!     - Do not depend directly on `device-actor` for API definitions.
 //!
 //! ### Dependency Graph (Simplified)
 //!
 //! ```text
 //! graph TD
-//!     ConsumerCrates[Consumer Crates<br>(wifi, cell, bluetooth, client)] --> DeviceAPI[device-api]
-//!     ConsumerCrates --> NetsimModel[netsim-model]
+//!     ConsumerCrates[Consumer Crates<br>(wifi, cell, bluetooth)] --> NetsimClient[netsim-client]
+//!     ConsumerCrates --> DeviceAPI[device-api]
+//!     NetsimClient --> DeviceAPI
 //!     DeviceActor[device-actor] --> DeviceAPI
-//!     DeviceActor --> NetsimModel
+//!     DeviceActor --> NetsimModel[netsim-model]
 //!     DeviceAPI --> NetsimModel
+//!     NetsimClient --> NetsimModel
 //! ```
 //!
 //! ## API Definition

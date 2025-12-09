@@ -4,9 +4,56 @@
 //! It includes the core data structures, traits, and actions necessary for
 //! interacting with the `capture-actor`.
 //!
-//! By separating the API from the implementation, this crate allows other
-//! components to depend on the capture system's contract without needing to
-//! know about the implementation details, thus preventing circular dependencies.
+//! ## Architecture
+//!
+//! ### Structure
+//!
+//! The capture system is structured as follows:
+//!
+//! - **`netsim-model`**: Remains the base layer for data models (e.g., `ChipId`, `ChipKind`). It does not depend on `capture-api`.
+//! - **`capture-api`**: Defines the behavioral contract for the capture service.
+//!     - Depends on: `netsim-model`
+//!     - Contains: `CaptureAction` (enum of supported operations), `CaptureActionResult`, `CaptureSender` trait, and re-exports of relevant models.
+//! - **`capture-actor`**: Implements the capture service.
+//!     - Depends on: `capture-api`, `netsim-model`.
+//!     - Implements the handling logic for `CaptureAction`.
+//! - **`netsim-client`**: Provides a client-side wrapper for the capture service.
+//!     - Depends on: `capture-api`, `netsim-model`.
+//! - **Consumer Crates** (e.g., `device-actor`, `daemon`):
+//!     - Depend on: `capture-api`, `netsim-client` (and `netsim-model` if needed).
+//!     - Do not depend directly on `capture-actor` for API definitions.
+//!
+//! ### Dependency Graph (Simplified)
+//!
+//! ```text
+//! graph TD
+//!     ConsumerCrates[Consumer Crates<br>(device-actor, daemon)] --> NetsimClient[netsim-client]
+//!     ConsumerCrates --> CaptureAPI[capture-api]
+//!     NetsimClient --> CaptureAPI
+//!     CaptureActor[capture-actor] --> CaptureAPI
+//!     CaptureActor --> NetsimModel[netsim-model]
+//!     CaptureAPI --> NetsimModel
+//!     NetsimClient --> NetsimModel
+//! ```
+//!
+//! ## API Definition
+//!
+//! The `capture-api` crate defines the following key components:
+//!
+//! ### `CaptureAction`
+//!
+//! An enum representing the actions that can be performed on the capture service. This serves as the primary interface for consumers.
+//!
+//! ### `CaptureSender`
+//!
+//! A trait defining the interface for sending packets to the capture system. This allows for dependency injection and easier testing.
+//!
+//! ## Benefits
+//!
+//! 1.  **Clearer Boundaries**: The separation between API and implementation is now explicit.
+//! 2.  **Reduced Coupling**: Consumer crates only depend on the API, not the implementation.
+//! 3.  **Improved Build Times**: Changes to the `capture-actor` implementation do not require recompiling consumer crates, as long as the API remains stable.
+//! 4.  **Easier Testing**: Mocking the capture service is now a matter of implementing the `CaptureAction` contract or the `CaptureSender` trait.
 
 pub mod io;
 

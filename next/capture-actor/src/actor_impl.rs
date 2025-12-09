@@ -1,4 +1,10 @@
-use crate::actions::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
+//! # Capture Actor Implementation
+//!
+//! This module implements the `ActorEntity` trait for `CaptureEntity`.
+//! It handles the lifecycle of the capture entity, including creation,
+//! updates (enabling/disabling capture), and deletion.
+//! It also delegates action handling to the `handlers` module.
+
 use crate::bt_pcap::BluetoothH4Writer;
 use crate::context::CaptureContext;
 use crate::entity::CaptureEntity;
@@ -6,6 +12,7 @@ use crate::error::CaptureError;
 use crate::writer::CaptureWriter;
 use actor_framework::ActorEntity;
 use async_trait::async_trait;
+use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
