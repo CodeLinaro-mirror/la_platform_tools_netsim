@@ -5,11 +5,14 @@
 //! messages sequentially and ensuring exclusive access to the entity store.
 
 use crate::client::ResourceClient;
-use crate::entity::ActorEntity;
+use crate::entity::{ActorContext, ActorEntity, StreamMessage};
 use crate::error::FrameworkError;
 use crate::message::ResourceRequest;
+use crate::runtime::Runtime;
+use log::error;
 use std::collections::HashMap;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
+use tokio_stream::{StreamExt, StreamMap};
 // use tracing::{debug, info, warn};
 
 /// The generic actor that manages a collection of entities.
@@ -40,7 +43,7 @@ use tokio::sync::mpsc;
 /// 3.  **Run**: Spawn the actor's run loop in a background task.
 ///
 /// ```rust
-/// use actor_framework::{ActorEntity, ResourceActor};
+/// use actor_framework::{ActorEntity, Runtime, ResourceActor};
 /// use async_trait::async_trait;
 ///
 /// // Minimal Entity Definition
@@ -67,10 +70,12 @@ use tokio::sync::mpsc;
 ///     type Error = MyError;
 ///     type ListResponse = Vec<MyEntity>;
 ///
-///     fn from_create_params(id: u32, _: MyCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-///     async fn on_update(&mut self, _: MyUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_action(&mut self, _: MyAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-///     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
+///     fn from_create_params(id: u32, _: MyCreate) -> Result<Self, Self::Error> {
+///         Ok(Self { id })
+///     }
+///     async fn on_update(&mut self, _: MyUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_action(&mut self, _: MyAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+///     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { vec![] }
 /// }
 ///
 /// #[tokio::main]
@@ -123,6 +128,8 @@ pub struct ResourceActor<T: ActorEntity> {
     receiver: mpsc::Receiver<ResourceRequest<T>>,
     store: HashMap<T::Id, T>,
     next_id: u32,
+    shutdown_rx: oneshot::Receiver<()>,
+    runtime: crate::runtime::StandardRuntime,
 }
 
 impl<T: ActorEntity> ResourceActor<T> {
@@ -140,7 +147,8 @@ impl<T: ActorEntity> ResourceActor<T> {
     /// 2. The `ResourceClient` instance, which can be cloned and shared to send requests.
     pub fn new(buffer_size: usize) -> (Self, ResourceClient<T>) {
         let (sender, receiver) = mpsc::channel(buffer_size);
-        let actor = Self { receiver, store: HashMap::new(), next_id: 1 };
+        let (runtime, shutdown_rx) = crate::runtime::StandardRuntime::new();
+        let actor = Self { receiver, store: HashMap::new(), next_id: 1, shutdown_rx, runtime };
         let client = ResourceClient::new(sender);
         (actor, client)
     }
@@ -152,100 +160,135 @@ impl<T: ActorEntity> ResourceActor<T> {
     /// to access external dependencies (like other clients) that were created *after*
     /// the actor was instantiated but *before* the loop started.
     pub async fn run(mut self, mut context: T::Context) {
-        // Extract just the type name (e.g., "User" instead of "actor_recipe::model::user::User")
-        let _entity_type = std::any::type_name::<T>().split("::").last().unwrap_or("Unknown");
-        // info!(entity_type, "Actor started");
+        context.on_start(&mut self.runtime).await;
 
-        while let Some(msg) = self.receiver.recv().await {
-            match msg {
-                ResourceRequest::Create { params, respond_to } => {
-                    // debug!(entity_type, ?params, "Create");
-                    let id = T::Id::from(self.next_id);
-                    self.next_id += 1;
-
-                    match T::from_create_params(id.clone(), params) {
-                        Ok(mut item) => {
-                            // Await the async hook
-                            if let Err(e) = item.on_create(&mut context).await {
-                                // warn!(entity_type, error = %e, "on_create failed");
-                                let _ =
-                                    respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
-                                continue;
-                            }
-                            self.store.insert(id.clone(), item);
-                            // info!(entity_type, %id, size = self.store.len(), "Created");
-                            let _ = respond_to.send(Ok(id));
-                        }
-                        Err(e) => {
-                            // warn!(entity_type, error = %e, "Create failed");
-                            let _ = respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
-                        }
-                    }
+        loop {
+            // Move out of select! to avoid borrow conflicts
+            let stream_fut = self.runtime.streams.next();
+            tokio::select! {
+                Some(msg) = self.receiver.recv() => {
+                    Self::handle_message(&mut self.store, &mut self.next_id, msg, &mut context, &mut self.runtime).await;
                 }
-                ResourceRequest::Get { id, respond_to } => {
-                    let item = self.store.get(&id).cloned();
-                    let _found = item.is_some();
-                    // debug!(entity_type, %id, found, "Get");
-                    let _ = respond_to.send(Ok(item));
+                _ = self.runtime.interval.tick() => {
+                    context.on_tick(&mut self.runtime).await;
                 }
-                ResourceRequest::Update { id, update, respond_to } => {
-                    // debug!(entity_type, %id, ?update, "Update");
-                    if let Some(item) = self.store.get_mut(&id) {
-                        // Await the async hook
-                        if let Err(e) = item.on_update(update, &mut context).await {
-                            // warn!(entity_type, %id, error = %e, "Update failed");
-                            let _ = respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
-                            continue;
-                        }
-                        // info!(entity_type, %id, "Updated");
-                        let _ = respond_to.send(Ok(item.clone()));
-                    } else {
-                        // warn!(entity_type, %id, "Not found");
-                        let _ = respond_to.send(Err(FrameworkError::NotFound(id.to_string())));
-                    }
+                Some((id, msg_opt)) = stream_fut => {
+                    Self::handle_stream_event(&mut self.store, id, msg_opt, &mut context, &mut self.runtime).await;
                 }
-                ResourceRequest::Delete { id, respond_to } => {
-                    // debug!(entity_type, %id, "Delete");
-                    if let Some(item) = self.store.get(&id) {
-                        // Await the async hook
-                        if let Err(e) = item.on_delete(&mut context).await {
-                            // warn!(entity_type, %id, error = %e, "on_delete failed");
-                            let _ = respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
-                            continue;
-                        }
-                        self.store.remove(&id);
-                        // info!(entity_type, %id, size = self.store.len(), "Deleted");
-                        let _ = respond_to.send(Ok(()));
-                    } else {
-                        // warn!(entity_type, %id, "Not found");
-                        let _ = respond_to.send(Err(FrameworkError::NotFound(id.to_string())));
-                    }
-                }
-                ResourceRequest::Action { id, action, respond_to } => {
-                    // debug!(entity_type, %id, ?action, "Action");
-                    if let Some(item) = self.store.get_mut(&id) {
-                        // Await the async hook
-                        let result = item
-                            .handle_action(action, &mut context)
-                            .await
-                            .map_err(|e| FrameworkError::EntityError(Box::new(e)));
-                        match &result {
-                            Ok(_) => {}
-                            Err(_) => {}
-                        }
-                        let _ = respond_to.send(result);
-                    } else {
-                        // warn!(entity_type, %id, "Not found");
-                        let _ = respond_to.send(Err(FrameworkError::NotFound(id.to_string())));
-                    }
-                }
-                ResourceRequest::List { respond_to } => {
-                    let response = T::on_list(&self.store, &mut context);
-                    let _ = respond_to.send(Ok(response));
+                _ = &mut self.shutdown_rx => {
+                    Self::handle_shutdown(&mut context).await;
+                    break;
                 }
             }
         }
+    }
 
-        // info!(entity_type, size = self.store.len(), "Shutdown");
+    async fn handle_stream_event(
+        store: &mut HashMap<T::Id, T>,
+        id: usize,
+        msg_opt: Option<StreamMessage>,
+        context: &mut T::Context,
+        runtime: &mut impl Runtime,
+    ) {
+        match msg_opt {
+            Some(msg) => context.on_stream(id, msg, runtime).await,
+            Option::None => {
+                // Stream closed
+                if let Ok(true) = context.on_stream_closed(id).await {
+                    // Delete entity
+                    let entity_id = T::Id::from(id as u32);
+                    if let Some(item) = store.get(&entity_id) {
+                        if let Err(_e) = item.on_delete(context, runtime).await {}
+                        store.remove(&entity_id);
+                    }
+                }
+            }
+        }
+    }
+
+    async fn handle_shutdown(context: &mut T::Context) {
+        if let Err(_e) = context.on_shutdown().await {
+            error!("on_shutdown failed: {}", _e);
+        }
+    }
+
+    async fn handle_message(
+        store: &mut HashMap<T::Id, T>,
+        next_id: &mut u32,
+        msg: ResourceRequest<T>,
+        context: &mut T::Context,
+        runtime: &mut impl Runtime,
+    ) {
+        match msg {
+            ResourceRequest::Create { params, respond_to } => {
+                let id = T::Id::from(*next_id);
+                *next_id += 1;
+
+                match T::from_create_params(id.clone(), params) {
+                    Ok(mut item) => {
+                        // Await the async hook
+                        if let Err(e) = item.on_create(context, runtime).await {
+                            let _ = respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
+                            return;
+                        }
+                        store.insert(id.clone(), item);
+                        let _ = respond_to.send(Ok(id));
+                    }
+                    Err(e) => {
+                        let _ = respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
+                    }
+                }
+            }
+            ResourceRequest::Get { id, respond_to } => {
+                let item = store.get(&id).cloned();
+                let _found = item.is_some();
+                let _ = respond_to.send(Ok(item));
+            }
+            ResourceRequest::Update { id, update, respond_to } => {
+                if let Some(item) = store.get_mut(&id) {
+                    // Await the async hook
+                    if let Err(e) = item.on_update(update, context, runtime).await {
+                        let _ = respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
+                        return;
+                    }
+                    let _ = respond_to.send(Ok(item.clone()));
+                } else {
+                    let _ = respond_to.send(Err(FrameworkError::NotFound(id.to_string())));
+                }
+            }
+            ResourceRequest::Delete { id, respond_to } => {
+                if let Some(item) = store.get(&id) {
+                    // Await the async hook
+                    if let Err(e) = item.on_delete(context, runtime).await {
+                        let _ = respond_to.send(Err(FrameworkError::EntityError(Box::new(e))));
+                        return;
+                    }
+                    store.remove(&id);
+                    let _ = respond_to.send(Ok(()));
+                } else {
+                    let _ = respond_to.send(Err(FrameworkError::NotFound(id.to_string())));
+                }
+            }
+            ResourceRequest::Action { id, action, respond_to } => {
+                if let Some(item) = store.get_mut(&id) {
+                    // Await the async hook
+                    let result = item
+                        .handle_action(action, context, runtime)
+                        .await
+                        .map_err(|e| FrameworkError::EntityError(Box::new(e)));
+                    match &result {
+                        Ok(_) => {}
+                        Err(_) => {}
+                    }
+                    let _ = respond_to.send(result);
+                } else {
+                    let _ = respond_to.send(Err(FrameworkError::NotFound(id.to_string())));
+                }
+            }
+            ResourceRequest::List { respond_to } => {
+                let response = T::on_list(&store, context, runtime);
+                let _ = respond_to.send(Ok(response));
+            }
+        }
     }
 }
