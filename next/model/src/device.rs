@@ -117,8 +117,10 @@ pub mod api {
         pub id: u32,
         pub name: Option<String>,
         pub visible: Option<bool>,
+        //TODO: pub chip_id: Option<ChipId>,
         pub position: Option<Position>,
         pub orientation: Option<Orientation>,
+        //TODO: pub links: Option<Vec<Link>,
     }
 
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
