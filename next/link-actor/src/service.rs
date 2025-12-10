@@ -10,7 +10,7 @@ use link_api::LinkAction;
 impl ActorService for LinkActor {
     type Id = link_api::LinkId;
     type Create = link_api::LinkCreate;
-    type Update = ();
+    type Update = link_api::LinkPatch;
     type Action = LinkAction;
     type ActionResult = ();
     type Error = LinkError;
@@ -28,24 +28,14 @@ impl ActorService for LinkActor {
             id
         });
 
-        // Create Entity (Link)
-        let mut link = link_api::Link {
-            id,
-            sender: params.sender,
-            receiver: params.receiver,
-            kind: netsim_model::chip::ChipKind::UNSPECIFIED,
-            rssi: params.rssi,
-        };
-
         // Validate chips exist and have matching kinds
         let sender_kind = self
             .chip_kind_map
-            .get(&link.sender)
-            .ok_or(LinkError::InvalidParam(format!("Sender chip {} not found", link.sender)))?;
-        let receiver_kind = self
-            .chip_kind_map
-            .get(&link.receiver)
-            .ok_or(LinkError::InvalidParam(format!("Receiver chip {} not found", link.receiver)))?;
+            .get(&params.sender)
+            .ok_or(LinkError::InvalidParam(format!("Sender chip {} not found", &params.sender)))?;
+        let receiver_kind = self.chip_kind_map.get(&params.receiver).ok_or(
+            LinkError::InvalidParam(format!("Receiver chip {} not found", &params.receiver)),
+        )?;
 
         if sender_kind != receiver_kind {
             return Err(LinkError::InvalidParam(format!(
@@ -54,8 +44,20 @@ impl ActorService for LinkActor {
             )));
         }
 
-        link.kind = *sender_kind;
-        self.lookup.insert((link.sender, link.receiver), link.id);
+        if self.chip_pairs.contains_key(&(params.sender, params.receiver)) {
+            return Err(LinkError::AlreadyExists(id.to_string()));
+        }
+
+        // Create Entity (Link)
+        let link = link_api::Link {
+            id,
+            sender: params.sender,
+            receiver: params.receiver,
+            kind: *sender_kind,
+            rssi: params.rssi,
+        };
+
+        self.chip_pairs.insert((link.sender, link.receiver), link.id);
 
         // TODO: Forward to radio client
         self.links.insert(id, link);
@@ -73,10 +75,14 @@ impl ActorService for LinkActor {
     async fn handle_update(
         &mut self,
         id: Self::Id,
-        _update: Self::Update,
+        update: Self::Update,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
-        if let Some(link) = self.links.get(&id) {
+        if let Some(link) = self.links.get_mut(&id) {
+            if let Some(rssi) = update.rssi {
+                link.rssi = rssi;
+                // TODO: Forward update to radio client
+            }
             Ok(link.clone())
         } else {
             Err(LinkError::NotFound(id.to_string()))
@@ -89,7 +95,7 @@ impl ActorService for LinkActor {
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
         if let Some(link) = self.links.remove(&id) {
-            self.lookup.remove(&(link.sender, link.receiver));
+            self.chip_pairs.remove(&(link.sender, link.receiver));
             // TODO: Forward delete to radio client
             Ok(())
         } else {
@@ -111,6 +117,20 @@ impl ActorService for LinkActor {
             LinkAction::NotifyChipRemoved(chip_id) => {
                 log::info!("NotifyChipRemoved: {}", chip_id);
                 self.chip_kind_map.remove(&chip_id);
+
+                // Remove links and lookup entries with this chip
+                // and keep track of chip "senders" that need to be updated
+                let mut deleted_senders = std::collections::HashSet::new();
+                self.links.retain(|_, link| {
+                    if link.sender == chip_id || link.receiver == chip_id {
+                        self.chip_pairs.remove(&(link.sender, link.receiver));
+                        deleted_senders.insert(link.sender); // senders will be updated
+                        return false;
+                    }
+                    true
+                });
+
+                // TODO: Forward delete to chip client using deleted_senders
             }
         }
         Ok(())
