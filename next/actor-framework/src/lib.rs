@@ -58,7 +58,7 @@
 //! Define what your actor manages and how it behaves:
 //!
 //! ```rust
-//! use actor_framework::{ActorEntity, ResourceActor, ResourceClient};
+//! use actor_framework::{ActorContext, ActorEntity, Runtime, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
 //!
 //! // 1. Define the Entity
@@ -93,16 +93,16 @@
 //!         Ok(Self { id, name: params.name })
 //!     }
 //!
-//!     async fn on_update(&mut self, update: UserUpdate, _ctx: &mut Self::Context) -> Result<(), Self::Error> {
+//!     async fn on_update(&mut self, update: UserUpdate, _ctx: &mut Self::Context, _rt: &mut impl Runtime) -> Result<(), Self::Error> {
 //!         if let Some(name) = update.name { self.name = name; }
 //!         Ok(())
 //!     }
 //!
-//!     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context) -> Result<(), Self::Error> {
+//!     async fn handle_action(&mut self, _: UserAction, _ctx: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> {
 //!         Ok(())
 //!     }
 //!
-//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context) -> Self::ListResponse {
+//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _ctx: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse {
 //!         vec![]
 //!     }
 //! }
@@ -129,7 +129,7 @@
 //! This "late binding" pattern solves circular dependencies:
 //!
 //! ```rust
-//! use actor_framework::{ActorEntity, ResourceActor, ResourceClient};
+//! use actor_framework::{ActorContext, ActorEntity, Runtime, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
 //!
 //! // --- Define Minimal Entities ---
@@ -147,9 +147,9 @@
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate; type Action = UserAction;
 //!     type ActionResult = (); type Context = (); type Error = UserError; type ListResponse = Vec<User>;
 //!     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//!     async fn on_update(&mut self, _: UserUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: UserAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
+//!     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { vec![] }
 //! }
 //!
 //! #[derive(Clone, Debug)] struct Product { id: u32 }
@@ -166,14 +166,18 @@
 //! #     type Id = u32; type Create = ProductCreate; type Update = ProductUpdate; type Action = ProductAction;
 //! #     type ActionResult = (); type Context = (); type Error = ProductError; type ListResponse = Vec<Product>;
 //! #     fn from_create_params(id: u32, _: ProductCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//! #     async fn on_update(&mut self, _: ProductUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-//! #     async fn handle_action(&mut self, _: ProductAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-//! #     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
+//! #     async fn on_update(&mut self, _: ProductUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//! #     async fn handle_action(&mut self, _: ProductAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//! #     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { vec![] }
 //! # }
 //!
 //! #[derive(Clone, Debug)] struct Order { id: u32 }
 //! // Order depends on UserClient and ProductClient
-//! type OrderContext = (ResourceClient<User>, ResourceClient<Product>);
+//! #[derive(Clone)]
+//! struct OrderContext {
+//!     user_client: ResourceClient<User>,
+//!     product_client: ResourceClient<Product>,
+//! }
 //!
 //! #[derive(Debug)] struct OrderCreate;
 //! #[derive(Debug)] struct OrderUpdate;
@@ -184,14 +188,19 @@
 //! impl From<String> for OrderError { fn from(_: String) -> Self { OrderError } }
 //!
 //! #[async_trait]
+//! impl ActorContext for OrderContext {
+//!     type Error = OrderError;
+//! }
+//!
+//! #[async_trait]
 //! impl ActorEntity for Order {
 //!     type Id = u32; type Create = OrderCreate; type Update = OrderUpdate; type Action = OrderAction;
 //!     type ActionResult = (); type Context = OrderContext; type Error = OrderError; type ListResponse = Vec<Order>;
 //!
 //!     fn from_create_params(id: u32, _: OrderCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//!     async fn on_update(&mut self, _: OrderUpdate, _: &mut OrderContext) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: OrderAction, _: &mut OrderContext) -> Result<(), Self::Error> { Ok(()) }
-//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut OrderContext) -> Self::ListResponse { vec![] }
+//!     async fn on_update(&mut self, _: OrderUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: OrderAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { vec![] }
 //!     // In a real app, on_create would use the context to validate user/product
 //! }
 //!
@@ -206,7 +215,8 @@
 //!     tokio::spawn(user_actor.run(()));
 //!     tokio::spawn(product_actor.run(()));
 //!     // Order actor gets the clients it needs
-//!     tokio::spawn(order_actor.run((user_client, product_client)));
+//!     let context = OrderContext { user_client, product_client };
+//!     tokio::spawn(order_actor.run(context));
 //!
 //!     // 3. Use the actor (keeps main alive)
 //!     let _ = order_client.create(OrderCreate).await;
@@ -242,12 +252,14 @@ pub mod entity;
 pub mod error;
 pub mod message;
 pub mod mock;
+pub mod runtime;
 // pub mod tracing;
 
 // Re-export core types for convenience
 pub use actor::ResourceActor;
 pub use client::ResourceClient;
 pub use client_trait::ActorClient;
-pub use entity::ActorEntity;
+pub use entity::{ActorContext, ActorEntity, BoxStream, StreamMessage};
 pub use error::FrameworkError;
 pub use message::{ResourceRequest, Response};
+pub use runtime::Runtime;

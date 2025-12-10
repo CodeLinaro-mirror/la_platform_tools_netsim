@@ -24,7 +24,7 @@
 //! **Example**:
 //! ```rust
 //! use actor_framework::mock::MockClient;
-//! use actor_framework::{ActorEntity, ResourceClient, ResourceRequest};
+//! use actor_framework::{ActorEntity, Runtime, ResourceClient, ResourceRequest};
 //! use async_trait::async_trait;
 //!
 //! // --- Define a minimal Entity for the test ---
@@ -42,9 +42,9 @@
 //!     fn from_create_params(id: u32, params: UserCreate) -> Result<Self, Self::Error> {
 //!         Ok(Self { id, email: params.email })
 //!     }
-//!     async fn on_update(&mut self, _: UserUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: UserAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-//!     fn on_list(entities: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { entities.values().cloned().collect() }
+//!     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//!     fn on_list(entities: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { entities.values().cloned().collect() }
 //! }
 //!
 //! // --- Define a minimal Client Wrapper ---
@@ -84,7 +84,7 @@
 //!
 //! **Example**:
 //! ```rust
-//! use actor_framework::{ActorEntity, ResourceActor, ResourceClient};
+//! use actor_framework::{ActorEntity, Runtime, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
 //!
 //! // --- Define Entity ---
@@ -101,11 +101,11 @@
 //!     fn from_create_params(id: u32, params: ProductCreate) -> Result<Self, Self::Error> {
 //!         Ok(Self { id, stock: params.stock })
 //!     }
-//!     async fn on_update(&mut self, _: ProductUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, action: ProductAction, _: &mut ()) -> Result<u32, Self::Error> {
+//!     async fn on_update(&mut self, _: ProductUpdate, _: &mut (), _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, action: ProductAction, _: &mut (), _: &mut impl Runtime) -> Result<u32, Self::Error> {
 //!         match action { ProductAction::CheckStock => Ok(self.stock) }
 //!     }
-//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { vec![] }
+//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut (), _: &mut impl Runtime) -> Self::ListResponse { vec![] }
 //! }
 //!
 //! #[tokio::main]
@@ -147,7 +147,7 @@
 //!
 //! ```rust
 //! use actor_framework::mock::MockClient;
-//! use actor_framework::{ActorEntity, FrameworkError};
+//! use actor_framework::{ActorEntity, Runtime, FrameworkError};
 //! use async_trait::async_trait;
 //!
 //! #[derive(Clone, Debug)] struct User { id: u32 }
@@ -161,9 +161,9 @@
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate;
 //!     type Action = UserAction; type ActionResult = (); type Context = (); type Error = UserError; type ListResponse = Vec<User>;
 //!     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//!     async fn on_update(&mut self, _: UserUpdate, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: UserAction, _: &mut ()) -> Result<(), Self::Error> { Ok(()) }
-//!     fn on_list(entities: &std::collections::HashMap<Self::Id, Self>, _: &mut ()) -> Self::ListResponse { entities.values().cloned().collect() }
+//!     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
+//!     fn on_list(entities: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { entities.values().cloned().collect() }
 //! }
 //!
 //! #[tokio::main]
@@ -470,7 +470,9 @@ pub async fn expect_action<T: ActorEntity>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::*;
     use crate::entity::ActorEntity;
+    use crate::runtime::Runtime;
     use async_trait::async_trait;
 
     #[derive(Clone, Debug, PartialEq)]
@@ -510,25 +512,44 @@ mod tests {
         fn from_create_params(id: u32, params: UserCreate) -> Result<Self, Self::Error> {
             Ok(Self { id, name: params.name, email: params.email })
         }
+        async fn on_create(
+            &mut self,
+            _context: &mut Self::Context,
+            _runtime: &mut impl Runtime,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
         async fn on_update(
             &mut self,
             _update: Self::Update,
             _context: &mut Self::Context,
+            _runtime: &mut impl Runtime,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        async fn on_delete(
+            &self,
+            _context: &mut Self::Context,
+            _runtime: &mut impl Runtime,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
 
         async fn handle_action(
             &mut self,
-            action: Self::Action,
+            _action: Self::Action,
             _context: &mut Self::Context,
+            _runtime: &mut impl Runtime,
         ) -> Result<Self::ActionResult, Self::Error> {
             Ok(())
         }
 
         fn on_list(
-            entities: &std::collections::HashMap<Self::Id, Self>,
+            _entities: &std::collections::HashMap<Self::Id, Self>,
             _context: &mut Self::Context,
+            _runtime: &mut impl Runtime,
         ) -> Self::ListResponse {
             vec![]
         }

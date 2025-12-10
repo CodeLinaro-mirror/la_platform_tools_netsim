@@ -119,3 +119,11 @@ pub async fn on_delete(entity: &DeviceEntity, ctx: &mut DeviceContext) -> Result
     }
     Ok(())
 }
+
+pub fn on_list(
+    entities: &std::collections::HashMap<DeviceId, DeviceEntity>,
+) -> device_api::api::ListDeviceResponse {
+    device_api::api::ListDeviceResponse {
+        devices: entities.values().map(|e| e.device.clone()).collect(),
+    }
+}

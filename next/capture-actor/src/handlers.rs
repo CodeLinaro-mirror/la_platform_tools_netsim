@@ -9,7 +9,7 @@
 use crate::context::CaptureContext;
 use crate::entity::CaptureEntity;
 use crate::error::CaptureError;
-use actor_framework::ActorEntity;
+use actor_framework::{ActorEntity, Runtime};
 use capture_api::{CaptureAction, CaptureActionResult, CaptureInfo};
 use netsim_model::chip::ChipId;
 use std::time::SystemTime;
@@ -26,6 +26,7 @@ pub async fn handle_action(
     entity: &mut CaptureEntity,
     action: CaptureAction,
     ctx: &mut CaptureContext,
+    runtime: &mut impl Runtime,
 ) -> Result<CaptureActionResult, CaptureError> {
     match action {
         CaptureAction::CapturePacket { chip_id, direction, bytes } => {
@@ -56,7 +57,7 @@ pub async fn handle_action(
             if entity.chip_id != chip_id {
                 return Ok(CaptureActionResult::Success);
             }
-            entity.on_update(enabled, ctx).await?;
+            entity.on_update(enabled, ctx, runtime).await?;
             Ok(CaptureActionResult::Success)
         }
         CaptureAction::Create { chip_id: _, chip_kind: _, device_name: _ } => {
@@ -69,7 +70,7 @@ pub async fn handle_action(
             if entity.chip_id != chip_id {
                 return Ok(CaptureActionResult::Success);
             }
-            entity.on_delete(ctx).await?;
+            entity.on_delete(ctx, runtime).await?;
             // Note: The entity itself is not deleted from the actor here,
             // the caller should call delete on the actor.
             Ok(CaptureActionResult::Success)

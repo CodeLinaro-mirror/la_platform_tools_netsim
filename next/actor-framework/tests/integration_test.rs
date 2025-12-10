@@ -1,4 +1,4 @@
-use actor_framework::{ActorEntity, ResourceActor};
+use actor_framework::{ActorEntity, ResourceActor, Runtime};
 use async_trait::async_trait;
 
 // --- Test Entity ---
@@ -49,6 +49,7 @@ impl ActorEntity for SimpleUser {
     fn on_list(
         entities: &std::collections::HashMap<Self::Id, Self>,
         _context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
     ) -> Self::ListResponse {
         entities.values().cloned().collect()
     }
@@ -57,6 +58,7 @@ impl ActorEntity for SimpleUser {
         &mut self,
         update: SimpleUserUpdate,
         _context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
     ) -> Result<(), Self::Error> {
         if let Some(name) = update.name {
             self.name = name;
@@ -64,10 +66,19 @@ impl ActorEntity for SimpleUser {
         Ok(())
     }
 
+    async fn on_delete(
+        &self,
+        _context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     async fn handle_action(
         &mut self,
         _action: Self::Action,
         _context: &mut Self::Context,
+        _runtime: &mut impl Runtime,
     ) -> Result<Self::ActionResult, Self::Error> {
         match _action {
             UserAction::PromoteToAdmin => {
