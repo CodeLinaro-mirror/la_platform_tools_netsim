@@ -6,7 +6,7 @@ use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
 use netsim_model::chip::{
-    Chip, ChipClient, ChipCreate, ChipId, ChipRequest, PacketSink, PacketStream,
+    Chip, ChipCreate, ChipId, ChipRequest, LegacyChipClient as ChipClient, PacketSink, PacketStream,
 };
 use netsim_model::chip_error::ChipError;
 use std::collections::HashMap;
