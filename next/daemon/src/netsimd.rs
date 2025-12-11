@@ -388,6 +388,7 @@ impl NetsimDaemon {
         info!("Device server started");
         join_set.spawn(capture_actor.run(capture_context));
         info!("Capture server started");
+        //TODO: Add Link server with chip_clients
         Ok(StartUpMode::Owner(
             NetsimDaemon {
                 join_set,

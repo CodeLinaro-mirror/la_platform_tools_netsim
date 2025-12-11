@@ -205,7 +205,7 @@ impl ChipConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NetworkKind {
     Bluetooth,
     Wifi,
@@ -364,6 +364,7 @@ pub struct Chip {
     pub orientation: Orientation,
     pub device_id: DeviceId,
     pub variant: Option<ChipVariant>,
+    //TODO: Add link vector
 }
 
 /// Information about a chip, including technology-specific details.
