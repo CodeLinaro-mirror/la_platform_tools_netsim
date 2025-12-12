@@ -21,13 +21,15 @@ members = [
   "daemon",
   "proto",
   "packet-stream",
-  "rootcanal",
+  "link-actor",
+  "link-api",
   "modem-rs",
   "modem-rs-derive",
   "uwb",
   "types",
   "device-actor",
   "client",
+  "rootcanal",
 ]
 
 [workspace.doc]
