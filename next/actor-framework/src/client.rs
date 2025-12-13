@@ -8,7 +8,12 @@ use crate::service::ActorService;
 use tokio::sync::{mpsc, oneshot};
 
 /// A type-safe client for interacting with a `ResourceActor`.
-#[derive(Clone)]
+// ResourceClient manual Clone implementation to avoid T: Clone bound
+impl<T: ActorService> Clone for ResourceClient<T> {
+    fn clone(&self) -> Self {
+        Self { sender: self.sender.clone() }
+    }
+}
 /// ## ResourceClient
 ///
 /// The `ResourceClient<T>` provides a type‑safe, async API for interacting with a `ResourceActor<T>`. It forwards CRUD + Action requests over a Tokio mpsc channel and returns results via oneshot channels. The client is cheap to clone and can be shared across tasks.
@@ -32,15 +37,32 @@ impl<T: ActorService> ResourceClient<T> {
     }
 
     pub async fn create(&self, params: T::Create) -> Result<T::Id, FrameworkError> {
+        self.create_internal(params, None).await
+    }
+
+    pub async fn create_with_id(
+        &self,
+        id: T::Id,
+        params: T::Create,
+    ) -> Result<T::Id, FrameworkError> {
+        self.create_internal(params, Some(id)).await
+    }
+
+    async fn create_internal(
+        &self,
+        params: T::Create,
+        id: Option<T::Id>,
+    ) -> Result<T::Id, FrameworkError> {
         let (respond_to, response) = oneshot::channel();
+        // Construct the Create message with or without ID depending on message.rs availability.
         self.sender
-            .send(ResourceRequest::Create { params, respond_to })
+            .send(ResourceRequest::Create { params, id, respond_to })
             .await
             .map_err(|_| FrameworkError::ActorClosed)?;
         response.await.map_err(|_| FrameworkError::ActorDropped)?
     }
 
-    pub async fn get(&self, id: T::Id) -> Result<Option<T>, FrameworkError> {
+    pub async fn get(&self, id: T::Id) -> Result<Option<T::Entity>, FrameworkError> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::Get { id, respond_to })
@@ -49,7 +71,7 @@ impl<T: ActorService> ResourceClient<T> {
         response.await.map_err(|_| FrameworkError::ActorDropped)?
     }
 
-    pub async fn update(&self, id: T::Id, update: T::Update) -> Result<T, FrameworkError> {
+    pub async fn update(&self, id: T::Id, update: T::Update) -> Result<T::Entity, FrameworkError> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::Update { id, update, respond_to })
@@ -70,7 +92,7 @@ impl<T: ActorService> ResourceClient<T> {
 
     pub async fn perform_action(
         &self,
-        id: T::Id,
+        id: Option<T::Id>,
         action: T::Action,
     ) -> Result<T::ActionResult, FrameworkError> {
         let (respond_to, response) = oneshot::channel();
@@ -81,7 +103,8 @@ impl<T: ActorService> ResourceClient<T> {
         response.await.map_err(|_| FrameworkError::ActorDropped)?
     }
 
-    pub async fn list(&self) -> Result<T::ListResponse, FrameworkError> {
+    /// List all entities.
+    pub async fn list(&self) -> Result<Vec<T::Entity>, FrameworkError> {
         let (respond_to, response) = oneshot::channel();
         self.sender
             .send(ResourceRequest::List { respond_to })

@@ -43,16 +43,15 @@ use async_trait::async_trait;
 ///     type Update = UserUpdate;
 ///     type Action = UserAction;
 ///     type ActionResult = ();
-///     type Context = ();
 ///     type Error = UserError;
-///     type ListResponse = Vec<User>;
+///     type Entity = User;
 ///
-///     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> {
-///         Ok(Self { id })
-///     }
-///     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-///     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Context) -> Self::ListResponse { vec![] }
+///     async fn handle_create(&mut self, id: Option<u32>, _: UserCreate, _: &mut impl Context) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
+///     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+///     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+///     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_action(&mut self, _id: Option<Self::Id>, _: UserAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
 /// }
 ///
 /// // 2. Define Client Wrapper
@@ -94,7 +93,7 @@ pub trait ActorClient<T: ActorService>: Send + Sync {
 
     /// Fetch a resource by ID.
     // #[tracing::instrument(skip(self))]
-    async fn get(&self, id: T::Id) -> Result<Option<T>, Self::Error> {
+    async fn get(&self, id: T::Id) -> Result<Option<T::Entity>, Self::Error> {
         // tracing::debug!("Sending request");
         self.inner().get(id).await.map_err(Self::map_error)
     }

@@ -1,16 +1,12 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::error::BluetoothError;
-use crate::handlers::events::on_stream;
 use crate::ranging;
-use actor_framework::{ActorLifecycle, Context, StreamMessage};
-use async_trait::async_trait;
+
 use client::DeviceClient;
 use netsim_model::chip::{Chip, ChipId};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 /// A thread-safe map of chip states.
 pub type ChipMap = Arc<Mutex<HashMap<ChipId, Chip>>>;
@@ -57,49 +53,25 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
 /// `DeviceClient` for interacting with other devices.
 pub struct BluetoothActor {
     /// The Rootcanal simulation instance.
-    pub rootcanal: Arc<Rootcanal>,
+    pub(crate) rootcanal: Arc<Rootcanal>,
     /// A map of active Bluetooth chips, protected by a mutex.
-    pub chips: ChipMap,
+    pub(crate) chips: ChipMap,
     /// The client for interacting with the device actor.
-    pub device_client: DeviceClient,
-    /// Client to send actions/delete requests to the actor itself.
-    pub client: Option<actor_framework::ResourceClient<crate::service::BluetoothEntity>>,
+    pub(crate) device_client: DeviceClient,
+
+    /// Map of active Bluetooth Entities (actor state).
+    pub(crate) entities: HashMap<ChipId, crate::internal_chip::InternalChip>,
+
+    /// The self-reference client (for calling actions on itself if needed).
+    #[allow(dead_code)]
+    pub(crate) client: Option<crate::BluetoothClient>,
 }
 
 impl BluetoothActor {
     /// Creates a new BluetoothActor context.
-    pub fn new(device_client: DeviceClient) -> Self {
+    pub fn new(device_client: DeviceClient, client: crate::BluetoothClient) -> Self {
         let chips = Arc::new(Mutex::new(HashMap::new()));
         let rootcanal = Rootcanal::new(Box::new(RootcanalCallbacksImpl { chips: chips.clone() }));
-        Self { rootcanal, chips, device_client, client: None }
-    }
-}
-
-#[async_trait]
-impl ActorLifecycle for BluetoothActor {
-    type Error = BluetoothError;
-
-    async fn on_start(&mut self, runtime: &mut impl Context) {
-        // Tick every 10ms to drive Rootcanal
-        runtime.set_interval(Duration::from_millis(10));
-    }
-
-    async fn on_tick(&mut self, _runtime: &mut impl Context) {
-        self.rootcanal.tick();
-    }
-
-    // TODO: Check if these can be consolidated.
-    async fn on_stream(&mut self, id: usize, message: StreamMessage, runtime: &mut impl Context) {
-        on_stream(self, id, message, runtime).await;
-    }
-
-    async fn on_stream_closed(&mut self, id: usize) -> Result<bool, Self::Error> {
-        log::info!("Stream closed for chip {id}");
-        Ok(true)
-    }
-
-    async fn on_task_closed(&mut self, id: usize) -> Result<bool, Self::Error> {
-        log::info!("Task closed for chip {id}");
-        Ok(true) // Request deletion of the chip
+        Self { rootcanal, chips, device_client, entities: HashMap::new(), client: Some(client) }
     }
 }

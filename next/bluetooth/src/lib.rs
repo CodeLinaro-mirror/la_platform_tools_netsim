@@ -23,10 +23,14 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let (device_tx, _device_rx) = mpsc::channel(10);
-//!     let resource_client = client::DeviceClient::new(actor_framework::ResourceClient::new(device_tx));
-//!     let (actor, context, client) = bluetooth::new(resource_client.clone());
+//!     let resource_client = actor_framework::ResourceClient::new(device_tx);
+//!     // device_client creation depends on where DeviceClient comes from.
+//!     // Assuming client::DeviceClient is correct based on bluetooth_actor.rs usage.
+//!     let device_client = client::DeviceClient::new(resource_client);
+//!     let (actor, client) = bluetooth::new();
+//!     let bluetooth_actor = bluetooth::BluetoothActor::new(device_client, client.clone());
 //!     tokio::spawn(async move {
-//!         actor.run(context).await;
+//!         actor.run(bluetooth_actor).await;
 //!     });
 //!
 //!     // Use the client to interact with the actor, e.g., create chips.
@@ -93,48 +97,37 @@
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 
-/// Actions for the Bluetooth actor.
 mod actions;
-/// The Bluetooth actor implementation.
-mod actor;
-/// Beacon functionality.
 mod beacon;
-/// Device client handling.
+mod bluetooth_actor; // Renamed from actor
 mod device;
-/// Error types for the Bluetooth actor.
 mod error;
-mod handlers;
+mod hci_callbacks; // Added
+mod internal_chip; // Added
+mod lifecycle; // Added
 mod ranging;
-mod server;
-/// The Bluetooth entity service.
 mod service;
 mod sniffer;
 mod utils;
 
 pub use actions::{BluetoothAction, BluetoothActionResult};
-pub use actor::BluetoothActor;
+pub use bluetooth_actor::BluetoothActor;
 pub use error::BluetoothError;
-pub use service::BluetoothEntity;
+/// The entity type managed by the Bluetooth ResourceActor.
+pub type BluetoothEntity = BluetoothActor;
 
 use actor_framework::{ResourceActor, ResourceClient};
-use client::DeviceClient;
+
 use netsim_model::chip::{ChipClient, ChipCreate, ChipId};
 
 /// A client for the Bluetooth actor.
 #[derive(Clone)]
 pub struct BluetoothClient(pub ResourceClient<BluetoothEntity>);
 
-/// Creates a new Bluetooth actor, its context, and its client.
-pub fn new(
-    device_client: DeviceClient,
-) -> (ResourceActor<BluetoothEntity>, BluetoothActor, BluetoothClient) {
+/// Creates a new Bluetooth actor and its client.
+pub fn new() -> (ResourceActor<BluetoothEntity>, BluetoothClient) {
     let (actor, resource_client) = ResourceActor::new(32);
-
-    // Create Context and inject client
-    let mut context = BluetoothActor::new(device_client);
-    context.client = Some(resource_client.clone());
-
-    (actor, context, BluetoothClient(resource_client))
+    (actor, BluetoothClient(resource_client))
 }
 
 // TODO: Consider generic impl<T> ChipClient for ResourceClient<T>.
@@ -162,7 +155,6 @@ impl ChipClient for BluetoothClient {
             .ok_or(netsim_model::client_error::ClientError::Chip(
                 netsim_model::chip_error::ChipError::ChipNotFound(id),
             ))
-            .map(|e| e.chip)
     }
 
     async fn update(
@@ -173,7 +165,6 @@ impl ChipClient for BluetoothClient {
         self.0
             .update(id, patch)
             .await
-            .map(|e| e.chip)
             .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))
     }
 
@@ -200,7 +191,7 @@ impl ChipClient for BluetoothClient {
             return Ok(Vec::new());
         }
         let first_id = chips[0].id;
-        match self.0.perform_action(ChipId(first_id), BluetoothAction::GetStatistics).await {
+        match self.0.perform_action(Some(ChipId(first_id)), BluetoothAction::GetStatistics).await {
             Ok(BluetoothActionResult::Statistics(stats)) => Ok(stats),
             Ok(_) => Err(netsim_model::client_error::ClientError::Recv(
                 "Unexpected action result".into(),
@@ -227,7 +218,7 @@ impl ChipClient for BluetoothClient {
 
     async fn reset(&self, id: ChipId) -> Result<(), netsim_model::client_error::ClientError> {
         self.0
-            .perform_action(id, BluetoothAction::Reset { id })
+            .perform_action(Some(id), BluetoothAction::Reset { id })
             .await
             .map(|_| ())
             .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))

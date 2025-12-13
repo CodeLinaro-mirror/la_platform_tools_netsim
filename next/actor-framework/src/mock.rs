@@ -1,3 +1,5 @@
+// Copyright 2025 The Android Open Source Project
+
 //! # Mock Framework & Testing Guide
 //!
 //! The `MockClient<T>` type implements the same `ResourceClient<T>` API as the production client but operates entirely in‑memory. It lets you set expectations and return values for unit tests, enabling fast, deterministic testing of client logic without spawning any actors.
@@ -38,13 +40,19 @@
 //! #[async_trait]
 //! impl ActorService for User {
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate;
-//!     type Action = UserAction; type ActionResult = (); type Context = (); type Error = UserError; type ListResponse = Vec<User>;
-//!     fn from_create_params(id: u32, params: UserCreate) -> Result<Self, Self::Error> {
-//!         Ok(Self { id, email: params.email })
+//!     type Action = UserAction; type ActionResult = (); type Error = UserError; type Entity = User;
+//!
+//!     async fn handle_create(&mut self, id: Option<u32>, params: UserCreate, _: &mut impl Context) -> Result<u32, Self::Error> {
+//!         let id = id.unwrap_or(0);
+//!         self.id = id;
+//!         self.email = params.email;
+//!         Ok(id)
 //!     }
-//!     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     fn on_list(entities: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Context) -> Self::ListResponse { entities.values().cloned().collect() }
+//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
 //!
 //! // --- Define a minimal Client Wrapper ---
@@ -84,7 +92,7 @@
 //!
 //! **Example**:
 //! ```rust
-//! use actor_framework::{ActorService, Context, ResourceActor, ResourceClient};
+//! use actor_framework::{ActorLifecycle, ActorService, Context, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
 //!
 //! // --- Define Service ---
@@ -97,25 +105,42 @@
 //! #[async_trait]
 //! impl ActorService for Product {
 //!     type Id = u32; type Create = ProductCreate; type Update = ProductUpdate;
-//!     type Action = ProductAction; type ActionResult = u32; type Context = (); type Error = ProductError; type ListResponse = Vec<Product>;
-//!     fn from_create_params(id: u32, params: ProductCreate) -> Result<Self, Self::Error> {
-//!         Ok(Self { id, stock: params.stock })
+//!     type Action = ProductAction; type ActionResult = u32; type Error = ProductError; type Entity = Product;
+//!
+//!     async fn handle_create(&mut self, id: Option<u32>, params: ProductCreate, _: &mut impl Context) -> Result<u32, Self::Error> {
+//!         let id = id.unwrap_or(0);
+//!         self.id = id;
+//!         self.stock = params.stock;
+//!         Ok(id)
 //!     }
-//!     async fn on_update(&mut self, _: ProductUpdate, _: &mut (), _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, action: ProductAction, _: &mut (), _: &mut impl Context) -> Result<u32, Self::Error> {
+//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: ProductUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, action: ProductAction, _: &mut impl Context) -> Result<u32, Self::Error> {
 //!         match action { ProductAction::CheckStock => Ok(self.stock) }
 //!     }
-//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut (), _: &mut impl Context) -> Self::ListResponse { vec![] }
+//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<Product>, Self::Error> { Ok(vec![self.clone()]) }
+//! }
+//!
+//! #[async_trait]
+//! impl ActorLifecycle for Product {
+//!     type Error = ProductError;
+//!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
+//!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
+//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
+//!     async fn on_stream_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
+//!     async fn on_task_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
 //! }
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let (actor, client) = ResourceActor::<Product>::new(10);
-//!     tokio::spawn(actor.run(()));
+//!     let product = Product { id: 0, stock: 0 };
+//!     let (actor, client) = ResourceActor::new(10);
+//!     tokio::spawn(actor.run(product));
 //!
 //!     let params = ProductCreate { stock: 100 };
 //!     let id = client.create(params).await.unwrap();
-//!     let stock = client.perform_action(id, ProductAction::CheckStock).await.unwrap();
+//!     let stock = client.perform_action(Some(id), ProductAction::CheckStock).await.unwrap();
 //!     assert_eq!(stock, 100);
 //! }
 //! ```
@@ -159,11 +184,14 @@
 //! #[async_trait]
 //! impl ActorService for User {
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate;
-//!     type Action = UserAction; type ActionResult = (); type Context = (); type Error = UserError; type ListResponse = Vec<User>;
-//!     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//!     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     fn on_list(entities: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Context) -> Self::ListResponse { entities.values().cloned().collect() }
+//!     type Action = UserAction; type ActionResult = (); type Error = UserError; type Entity = User;
+//!
+//!     async fn handle_create(&mut self, id: Option<u32>, _: UserCreate, _: &mut impl Context) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
+//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
 //!
 //! #[tokio::main]
@@ -226,9 +254,9 @@ use tokio::sync::mpsc;
 /// are expected and what responses should be returned.
 #[allow(dead_code)] // Future features: Update, Delete, Action expectations
 enum Expectation<T: ActorService> {
-    Get { id: T::Id, response: Result<Option<T>, FrameworkError> },
+    Get { id: T::Id, response: Result<Option<T::Entity>, FrameworkError> },
     Create { response: Result<T::Id, FrameworkError> },
-    Update { id: T::Id, response: Result<T, FrameworkError> },
+    Update { id: T::Id, response: Result<T::Entity, FrameworkError> },
     Delete { id: T::Id, response: Result<(), FrameworkError> },
     Action { id: T::Id, response: Result<T::ActionResult, FrameworkError> },
 }
@@ -293,7 +321,7 @@ where
                         let _ = respond_to.send(response);
                     }
                     (
-                        ResourceRequest::Create { params: _, respond_to },
+                        ResourceRequest::Create { params: _, respond_to, id: _ },
                         Some(Expectation::Create { response }),
                     ) => {
                         let _ = respond_to.send(response);
@@ -363,7 +391,7 @@ pub struct GetExpectationBuilder<T: ActorService> {
 
 impl<T: ActorService> GetExpectationBuilder<T> {
     /// Sets the expectation to return a successful result.
-    pub fn return_ok(self, value: Option<T>) {
+    pub fn return_ok(self, value: Option<T::Entity>) {
         let mut exps = self.expectations.lock().unwrap();
         exps.push_back(Expectation::Get { id: self.id, response: Ok(value) });
     }
@@ -441,7 +469,7 @@ pub async fn expect_create<T: ActorService>(
     receiver: &mut mpsc::Receiver<ResourceRequest<T>>,
 ) -> Option<(T::Create, tokio::sync::oneshot::Sender<Result<T::Id, FrameworkError>>)> {
     match receiver.recv().await {
-        Some(ResourceRequest::Create { params, respond_to }) => Some((params, respond_to)),
+        Some(ResourceRequest::Create { params, respond_to, id: _ }) => Some((params, respond_to)),
         _ => None,
     }
 }
@@ -449,7 +477,7 @@ pub async fn expect_create<T: ActorService>(
 /// Helper to verify that the next message is a Get request
 pub async fn expect_get<T: ActorService>(
     receiver: &mut mpsc::Receiver<ResourceRequest<T>>,
-) -> Option<(T::Id, tokio::sync::oneshot::Sender<Result<Option<T>, FrameworkError>>)> {
+) -> Option<(T::Id, tokio::sync::oneshot::Sender<Result<Option<T::Entity>, FrameworkError>>)> {
     match receiver.recv().await {
         Some(ResourceRequest::Get { id, respond_to }) => Some((id, respond_to)),
         _ => None,
@@ -459,8 +487,11 @@ pub async fn expect_get<T: ActorService>(
 /// Helper to verify that the next message is an Action request
 pub async fn expect_action<T: ActorService>(
     receiver: &mut mpsc::Receiver<ResourceRequest<T>>,
-) -> Option<(T::Id, T::Action, tokio::sync::oneshot::Sender<Result<T::ActionResult, FrameworkError>>)>
-{
+) -> Option<(
+    Option<T::Id>,
+    T::Action,
+    tokio::sync::oneshot::Sender<Result<T::ActionResult, FrameworkError>>,
+)> {
     match receiver.recv().await {
         Some(ResourceRequest::Action { id, action, respond_to }) => Some((id, action, respond_to)),
         _ => None,
@@ -505,53 +536,58 @@ mod tests {
         type Update = UserUpdate;
         type Action = UserAction;
         type ActionResult = ();
-        type Context = ();
         type Error = UserError;
-        type ListResponse = Vec<User>;
+        type Entity = User;
 
         fn from_create_params(id: u32, params: UserCreate) -> Result<Self, Self::Error> {
             Ok(Self { id, name: params.name, email: params.email })
         }
-        async fn on_create(
+
+        async fn handle_create(
             &mut self,
-            _context: &mut Self::Context,
-            _context: &mut impl Context,
-        ) -> Result<(), Self::Error> {
-            Ok(())
+            id: Option<Self::Id>,
+            _params: Self::Create,
+            _ctx: &mut impl Context,
+        ) -> Result<Self::Id, Self::Error> {
+            Ok(id.unwrap_or(0))
         }
 
-        async fn on_update(
-            &mut self,
-            _update: Self::Update,
-            _context: &mut Self::Context,
-            _context: &mut impl Context,
-        ) -> Result<(), Self::Error> {
-            Ok(())
-        }
-
-        async fn on_delete(
+        async fn handle_get(
             &self,
-            _context: &mut Self::Context,
-            _runtime: &mut impl Runtime,
+            _id: Self::Id,
+            _ctx: &mut impl Context,
+        ) -> Result<Option<Self::Entity>, Self::Error> {
+            Ok(None)
+        }
+
+        async fn handle_update(
+            &mut self,
+            _id: Self::Id,
+            _update: Self::Update,
+            _ctx: &mut impl Context,
+        ) -> Result<Self::Entity, Self::Error> {
+            Ok(self.clone())
+        }
+
+        async fn handle_delete(
+            &mut self,
+            _id: Self::Id,
+            _ctx: &mut impl Context,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
 
         async fn handle_action(
             &mut self,
+            _id: Option<Self::Id>,
             _action: Self::Action,
-            _context: &mut Self::Context,
-            _runtime: &mut impl Runtime,
+            _ctx: &mut impl Context,
         ) -> Result<Self::ActionResult, Self::Error> {
             Ok(())
         }
 
-        fn on_list(
-            _entities: &std::collections::HashMap<Self::Id, Self>,
-            _context: &mut Self::Context,
-            _runtime: &mut impl Runtime,
-        ) -> Self::ListResponse {
-            vec![]
+        async fn handle_list(&mut self, _ctx: &mut impl Context) -> Result<Vec<User>, Self::Error> {
+            Ok(vec![])
         }
     }
 
@@ -560,6 +596,8 @@ mod tests {
             Self { id, name: "Test User".to_string(), email: email.to_string() }
         }
     }
+
+    // Note: MockClient tests rely on ActorService for types, but intercept messages.
 
     #[tokio::test]
     async fn test_mock_client() {

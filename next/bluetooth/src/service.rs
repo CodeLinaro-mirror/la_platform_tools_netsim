@@ -1,121 +1,191 @@
 // Copyright 2025 The Android Open Source Project
 
 use crate::actions::{BluetoothAction, BluetoothActionResult};
-use crate::actor::BluetoothActor;
+use crate::bluetooth_actor::BluetoothActor;
 use crate::error::BluetoothError;
-use crate::handlers::actions::handle_action;
-use crate::handlers::lifecycle::{on_create, on_delete, on_update};
+use crate::hci_callbacks::{run_sink_task, HciCallbacks};
+use crate::utils::ToChipError;
 use actor_framework::{ActorService, Context};
 use async_trait::async_trait;
-use netsim_model::chip::{
-    BluetoothCreate, Chip, ChipCreate, ChipId, ChipUpdate, NetworkParams, PacketSink, PacketStream,
-};
+use netsim_model::chip::{BluetoothMode, Chip, ChipCreate, ChipId, ChipUpdate};
 use netsim_model::chip_error::ChipError;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
-#[derive(Clone)]
-/// The entity representing a Bluetooth chip.
-pub struct BluetoothEntity {
-    /// The underlying chip state.
-    pub chip: Chip,
-    /// Temporary storage for the packet stream, moved to runtime in `on_create`.
-    pub packet_stream: Arc<Mutex<Option<PacketStream>>>,
-    /// Temporary storage for the packet sink, moved to a task in `on_create`.
-    pub packet_sink: Arc<Mutex<Option<PacketSink>>>,
-    /// Creation parameters preserved for debugging or restart.
-    pub create_params: Option<BluetoothCreate>,
-}
-
-impl std::fmt::Debug for BluetoothEntity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BluetoothEntity")
-            .field("chip", &self.chip)
-            .field("packet_stream", &"PacketStream")
-            .field("packet_sink", &"PacketSink")
-            .field("create_params", &self.create_params)
-            .finish()
-    }
-}
+use crate::internal_chip::InternalChip;
 
 #[async_trait]
-impl ActorService for BluetoothEntity {
+impl ActorService for BluetoothActor {
     type Id = ChipId;
     type Create = ChipCreate;
     type Update = ChipUpdate;
     type Action = BluetoothAction;
     type ActionResult = BluetoothActionResult;
-    type Context = BluetoothActor;
     type Error = BluetoothError;
-    type ListResponse = Vec<Chip>;
+    type Entity = Chip;
 
-    fn from_create_params(id: Self::Id, mut params: Self::Create) -> Result<Self, Self::Error> {
-        let chip = Chip {
-            id: id.0,
-            device_id: params.device_id,
-            name: Some(params.config.name),
-            manufacturer: Some(params.config.manufacturer),
-            product_name: Some(params.config.product_name),
-            kind: netsim_model::chip::ChipKind::BLUETOOTH,
-            ..Default::default()
+    async fn handle_create(
+        &mut self,
+        _id: Option<Self::Id>,
+        params: Self::Create,
+        ctx: &mut impl Context,
+    ) -> Result<Self::Id, Self::Error> {
+        let id = params.id;
+        let mut entity = InternalChip::from_create_params(id, params)?;
+
+        let chip_id = ChipId(entity.chip.id);
+
+        // 1. Register Stream
+        if let Some(stream) = entity.packet_stream.take() {
+            ctx.add_stream(chip_id.0, Box::pin(stream));
+        }
+
+        // 2. Setup Sink and Callbacks
+        let callback = if let Some(sink) = entity.packet_sink.take() {
+            // Create a channel to send HCI packets from the callback to the sink task.
+            let (hci_tx, hci_rx) = tokio::sync::mpsc::channel(10);
+
+            // Spawn the sink task which forwards packets from the channel to the sink.
+            let sink_id = chip_id;
+            ctx.add_task(
+                sink_id.0,
+                Box::pin(async move {
+                    run_sink_task(sink, hci_rx, sink_id).await;
+                }),
+            );
+
+            HciCallbacks { id: chip_id, hci_tx: Some(hci_tx), ll_tx: None }
+        } else {
+            HciCallbacks { id: chip_id, hci_tx: None, ll_tx: None }
         };
 
-        let create_params = match params.config.network_params {
-            NetworkParams::Bluetooth(p) => Some(p),
-            _ => {
-                return Err(BluetoothError::Chip(ChipError::InvalidArguments(
-                    "Expected Bluetooth network params".into(),
-                )));
+        // 3. Create Rootcanal Controller
+        let create_params = entity.create_params.take().ok_or(BluetoothError::Chip(
+            ChipError::InvalidArguments("Missing Bluetooth params".into()),
+        ))?;
+
+        let address =
+            create_params.address.parse().unwrap_or_else(|_| "00:00:00:00:00:00".parse().unwrap());
+
+        self.rootcanal
+            .new_controller(chip_id.0.into(), address, Box::new(callback))
+            .to_chip_error()?;
+
+        // 4. Create Chip Info in Context
+        // Initialize the chip info based on the mode (Beacon, Device, or Sniffer).
+
+        let mut chip_info = match &create_params.mode {
+            BluetoothMode::Beacon(params) => {
+                crate::beacon::create(&self.rootcanal, chip_id, params)?
+            }
+            BluetoothMode::Device(params) => {
+                crate::device::create(&self.rootcanal, chip_id, params)?
+            }
+            BluetoothMode::Sniffer(params) => {
+                crate::sniffer::create(&self.rootcanal, chip_id, params)?
             }
         };
-
-        Ok(Self {
-            chip,
-            packet_stream: Arc::new(Mutex::new(params.packet_stream.take())),
-            packet_sink: Arc::new(Mutex::new(params.packet_sink.take())),
-            create_params,
-        })
+        chip_info.device_id = entity.chip.device_id;
+        self.chips.lock().unwrap().insert(chip_id, chip_info);
+        self.chips.lock().unwrap().insert(id, entity.chip.clone());
+        self.entities.insert(id, entity);
+        Ok(id)
     }
 
-    async fn on_create(
-        &mut self,
-        actor: &mut Self::Context,
-        ctx: &mut impl Context,
-    ) -> Result<(), Self::Error> {
-        on_create(self, actor, ctx).await
-    }
-
-    async fn on_update(
-        &mut self,
-        update: Self::Update,
-        actor: &mut Self::Context,
-        ctx: &mut impl Context,
-    ) -> Result<(), Self::Error> {
-        on_update(self, update, actor, ctx).await
-    }
-
-    async fn on_delete(
+    async fn handle_get(
         &self,
-        actor: &mut Self::Context,
+        id: Self::Id,
+        _ctx: &mut impl Context,
+    ) -> Result<Option<Self::Entity>, Self::Error> {
+        Ok(self.entities.get(&id).map(|e| e.chip.clone()))
+    }
+
+    async fn handle_update(
+        &mut self,
+        id: Self::Id,
+        update: Self::Update,
+        ctx: &mut impl Context,
+    ) -> Result<Self::Entity, Self::Error> {
+        if let Some(mut entity) = self.entities.remove(&id) {
+            let mut chips = self.chips.lock().unwrap();
+            if let Some(chip) = chips.get_mut(&ChipId(entity.chip.id)) {
+                if let Some(pos) = update.position {
+                    chip.position = pos.clone();
+                    entity.chip.position = pos;
+                }
+                if let Some(orient) = update.orientation {
+                    chip.orientation = orient.clone();
+                    entity.chip.orientation = orient;
+                }
+                // TODO: Handle other fields
+            }
+
+            self.chips.lock().unwrap().insert(id, entity.chip.clone());
+            self.entities.insert(id, entity);
+            Ok(self.chips.lock().unwrap().get(&id).unwrap().clone())
+        } else {
+            Err(BluetoothError::Chip(ChipError::ChipNotFound(id)))
+        }
+    }
+
+    async fn handle_delete(
+        &mut self,
+        id: Self::Id,
         ctx: &mut impl Context,
     ) -> Result<(), Self::Error> {
-        on_delete(self, actor, ctx).await
+        if let Some(entity) = self.entities.remove(&id) {
+            let chip_id = ChipId(entity.chip.id);
+            log::info!("Deleting chip {chip_id}");
+            self.chips.lock().unwrap().remove(&chip_id);
+            self.rootcanal.remove_controller(chip_id.0.into()).to_chip_error()?;
+
+            // Notify DeviceService
+            let dc = self.device_client.clone();
+            let device_id = entity.chip.device_id;
+            tokio::spawn(async move {
+                let _ = dc.notify_chip_removed(device_id, chip_id).await;
+            });
+            self.chips.lock().unwrap().remove(&id);
+            Ok(())
+        } else {
+            Err(BluetoothError::Chip(ChipError::ChipNotFound(id)))
+        }
     }
 
     async fn handle_action(
         &mut self,
+        _id: Option<Self::Id>,
         action: Self::Action,
-        actor: &mut Self::Context,
-        ctx: &mut impl Context,
+        _ctx: &mut impl Context,
     ) -> Result<Self::ActionResult, Self::Error> {
-        handle_action(self, action, actor, ctx).await
+        match action {
+            BluetoothAction::Reset { id } => {
+                // TODO: Implement reset
+                log::warn!("Reset chip {id} not implemented");
+                let _ = self.rootcanal.clear_stats(id.0.into());
+                Ok(BluetoothActionResult::Success)
+            }
+            BluetoothAction::GetStatistics => {
+                let mut stats_list = Vec::new();
+                let chips = self.chips.lock().unwrap();
+                for (id, chip) in chips.iter() {
+                    if let Ok(stats) = self.rootcanal.get_stats(id.0.into()) {
+                        stats_list.push(netsim_model::stats::NetsimRadioStats {
+                            id: id.0,
+                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
+                            tx_bytes: stats.ll_packets_out,
+                            rx_bytes: stats.ll_packets_in,
+                        });
+                    }
+                }
+                Ok(BluetoothActionResult::Statistics(stats_list))
+            }
+            BluetoothAction::GetCountForTesting => {
+                let count = self.chips.lock().unwrap().len();
+                Ok(BluetoothActionResult::Count(count))
+            }
+        }
     }
 
-    fn on_list(
-        entities: &HashMap<Self::Id, Self>,
-        _context: &mut Self::Context,
-        _ctx: &mut impl Context,
-    ) -> Self::ListResponse {
-        entities.values().map(|e| e.chip.clone()).collect()
+    async fn handle_list(&mut self, _ctx: &mut impl Context) -> Result<Vec<Chip>, Self::Error> {
+        Ok(actor_framework::utils::handle_list_map(&self.entities, |e| e.chip.clone()))
     }
 }

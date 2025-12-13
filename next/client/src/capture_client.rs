@@ -2,7 +2,7 @@ use actor_framework::{ActorClient, FrameworkError, ResourceClient};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use capture_actor::{CaptureEntity, CaptureError};
+use capture_actor::{CaptureActor, CaptureError};
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
 use netsim_model::device_error::DeviceError;
@@ -16,12 +16,12 @@ use std::sync::Arc;
 /// including creating, deleting, listing, and patching captures.
 #[derive(Clone, Debug)]
 pub struct CaptureClient {
-    inner: ResourceClient<CaptureEntity>,
+    inner: ResourceClient<CaptureActor>,
 }
 
 impl CaptureClient {
     /// Creates a new CaptureClient.
-    pub fn new(inner: ResourceClient<CaptureEntity>) -> Self {
+    pub fn new(inner: ResourceClient<CaptureActor>) -> Self {
         Self { inner }
     }
 
@@ -70,16 +70,7 @@ impl CaptureClient {
     /// # Arguments
     /// * `chip_id` - The ID of the chip to get capture info for.
     pub async fn get_capture(&self, chip_id: ChipId) -> Result<Option<CaptureInfo>> {
-        let result = self
-            .inner
-            .perform_action(chip_id, CaptureAction::Get { chip_id })
-            .await
-            .map_err(|e| anyhow!(e))?;
-        if let CaptureActionResult::Get(capture) = result {
-            Ok(capture)
-        } else {
-            Err(anyhow!("Unexpected result from Get"))
-        }
+        self.inner.get(chip_id).await.map_err(|e| anyhow!(e))
     }
 
     /// Patches a capture, e.g., enabling or disabling it.
@@ -90,7 +81,7 @@ impl CaptureClient {
     pub async fn patch_capture(&self, chip_id: ChipId, enabled: bool) -> Result<()> {
         let result = self
             .inner
-            .perform_action(chip_id, CaptureAction::Patch { chip_id, enabled })
+            .perform_action(Some(chip_id), CaptureAction::Patch { chip_id, enabled })
             .await
             .map_err(|e| anyhow!(e))?;
         if let CaptureActionResult::Success = result {
@@ -112,7 +103,10 @@ impl CaptureClient {
         // instead of spawning a new task for every packet if performance becomes an issue.
         tokio::spawn(async move {
             let _ = inner
-                .perform_action(chip_id, CaptureAction::CapturePacket { chip_id, direction, bytes })
+                .perform_action(
+                    Some(chip_id),
+                    CaptureAction::CapturePacket { chip_id, direction, bytes },
+                )
                 .await;
         });
     }
@@ -189,10 +183,10 @@ impl capture_api::CaptureSender for CaptureClient {
 // Removed CapturedStream and CapturedSink definitions as they are now in netsim-model::capture_io
 
 #[async_trait]
-impl ActorClient<CaptureEntity> for CaptureClient {
+impl ActorClient<CaptureActor> for CaptureClient {
     type Error = CaptureError;
 
-    fn inner(&self) -> &ResourceClient<CaptureEntity> {
+    fn inner(&self) -> &ResourceClient<CaptureActor> {
         &self.inner
     }
 

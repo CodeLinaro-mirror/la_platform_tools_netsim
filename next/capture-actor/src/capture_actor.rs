@@ -1,6 +1,4 @@
 use crate::writer::CaptureWriter;
-use actor_framework::ActorLifecycle;
-use async_trait::async_trait;
 use netsim_model::chip::ChipId;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -16,14 +14,18 @@ use std::sync::Arc;
 pub struct CaptureActor {
     /// Map of ChipId to CaptureWriter.
     /// Writers are created when capture is enabled for a chip.
-    pub writers: HashMap<ChipId, Box<dyn CaptureWriter>>,
+    pub(crate) writers: HashMap<ChipId, Box<dyn CaptureWriter>>,
     /// Map of ChipId to enabled flag.
     /// Flags are created when the entity is created.
-    pub flags: HashMap<ChipId, Arc<AtomicBool>>,
+    pub(crate) flags: HashMap<ChipId, Arc<AtomicBool>>,
     /// Default capture state for new captures.
-    pub default_capture_enabled: bool,
+    pub(crate) default_capture_enabled: bool,
     /// Default capture directory.
-    pub capture_dir: Option<PathBuf>,
+    pub(crate) capture_dir: Option<PathBuf>,
+    /// Map of active Capture Entities.
+    pub(crate) entities: HashMap<ChipId, crate::service::InternalCaptureInfo>,
+    /// Next available ChipId.
+    pub(crate) next_id: u32,
 }
 
 impl Default for CaptureActor {
@@ -33,11 +35,8 @@ impl Default for CaptureActor {
             flags: HashMap::new(),
             default_capture_enabled: false,
             capture_dir: None,
+            entities: HashMap::new(),
+            next_id: 1,
         }
     }
-}
-
-#[async_trait]
-impl ActorLifecycle for CaptureActor {
-    type Error = crate::error::CaptureError;
 }

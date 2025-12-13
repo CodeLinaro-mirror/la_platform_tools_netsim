@@ -22,28 +22,28 @@ pub trait Context: Send {
     fn set_interval(&mut self, duration: Duration);
 
     /// Adds a new stream to be managed by the actor.
-    fn add_stream(&mut self, id: usize, stream: BoxStream);
+    fn add_stream(&mut self, id: u32, stream: BoxStream);
 
     /// Adds a background task to be managed by the runtime.
     ///
     /// The task is identified by `id`. When it completes, the actor's `on_task_closed` hook will be called.
-    fn add_task(&mut self, id: usize, task: BoxFuture<'static, ()>);
+    fn add_task(&mut self, id: u32, task: BoxFuture<'static, ()>);
 
     /// Signals the actor to stop processing messages and exit its run loop.
     fn shutdown(&mut self);
 }
 
-pub struct FrameworkContext {
+pub(crate) struct FrameworkContext {
     pub(crate) interval: tokio::time::Interval,
-    pub(crate) streams: StreamMap<usize, StreamNotifyClose<BoxStream>>,
+    pub(crate) streams: StreamMap<u32, StreamNotifyClose<BoxStream>>,
     pub(crate) shutdown_tx: Option<oneshot::Sender<()>>,
-    pub(crate) tasks: tokio::task::JoinSet<usize>,
+    pub(crate) tasks: tokio::task::JoinSet<u32>,
 }
 
 impl FrameworkContext {
     /// Creates a new FrameworkContext with default settings.
     /// Returns the FrameworkContext and a shutdown receiver.
-    pub fn new() -> (Self, oneshot::Receiver<()>) {
+    pub(crate) fn new() -> (Self, oneshot::Receiver<()>) {
         // Default interval is effectively "never" (10 years)
         let mut interval =
             tokio::time::interval(std::time::Duration::from_secs(365 * 10 * 24 * 60 * 60));
@@ -70,13 +70,13 @@ impl Context for FrameworkContext {
         self.interval = interval;
     }
 
-    fn add_stream(&mut self, id: usize, stream: BoxStream) {
+    fn add_stream(&mut self, id: u32, stream: BoxStream) {
         self.streams.insert(id, StreamNotifyClose::new(stream));
     }
 
     fn add_task(
         &mut self,
-        id: usize,
+        id: u32,
         task: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
     ) {
         self.tasks.spawn(async move {

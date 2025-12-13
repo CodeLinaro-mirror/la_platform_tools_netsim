@@ -35,16 +35,17 @@ pub type Response<T> = oneshot::Sender<Result<T, FrameworkError>>;
 pub enum ResourceRequest<T: ActorService> {
     Create {
         params: T::Create,
+        id: Option<T::Id>,
         respond_to: Response<T::Id>,
     },
     Get {
         id: T::Id,
-        respond_to: Response<Option<T>>,
+        respond_to: Response<Option<T::Entity>>,
     },
     Update {
         id: T::Id,
         update: T::Update,
-        respond_to: Response<T>,
+        respond_to: Response<T::Entity>,
     },
     #[allow(dead_code)]
     Delete {
@@ -52,11 +53,11 @@ pub enum ResourceRequest<T: ActorService> {
         respond_to: Response<()>,
     },
     Action {
-        id: T::Id,
+        id: Option<T::Id>,
         action: T::Action,
         respond_to: Response<T::ActionResult>,
     },
     List {
-        respond_to: Response<T::ListResponse>,
+        respond_to: Response<Vec<T::Entity>>,
     },
 }
