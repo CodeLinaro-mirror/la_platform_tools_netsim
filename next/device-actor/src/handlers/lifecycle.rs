@@ -1,7 +1,8 @@
-use crate::context::DeviceContext;
-use crate::entity::DeviceEntity;
+use crate::actor::DeviceActor;
 use crate::error::DeviceError;
 use crate::handlers::utils::chip_kind_to_network_kind;
+use crate::service::DeviceEntity;
+use actor_framework::Context;
 use device_api::api::Chip as ApiChip;
 use device_api::DeviceId;
 use netsim_model::chip::{
@@ -12,10 +13,11 @@ use std::sync::atomic::Ordering;
 
 pub async fn on_create(
     entity: &mut DeviceEntity,
-    ctx: &mut DeviceContext,
+    actor: &mut DeviceActor,
+    _ctx: &mut impl Context,
 ) -> Result<(), DeviceError> {
     if let Some(params) = entity.create_params.take() {
-        let chip_id = ChipId(ctx.next_chip_id.fetch_add(1, Ordering::SeqCst));
+        let chip_id = ChipId(actor.next_chip_id.fetch_add(1, Ordering::SeqCst));
         let chip_create = params.chip;
 
         // 1. Create Chip parameters
@@ -42,7 +44,7 @@ pub async fn on_create(
         };
 
         // 2. Send create request to Chip Actor
-        if let Some(chip_client) = ctx.chip_clients.get(&chip_kind) {
+        if let Some(chip_client) = actor.chip_clients.get(&chip_kind) {
             chip_client
                 .create(chip_params)
                 .await
@@ -75,7 +77,8 @@ pub async fn on_create(
 pub async fn on_update(
     entity: &mut DeviceEntity,
     update: device_api::api::DeviceUpdate,
-    ctx: &mut DeviceContext,
+    actor: &mut DeviceActor,
+    _ctx: &mut impl Context,
 ) -> Result<(), DeviceError> {
     // Update local state
     if let Some(name) = update.name {
@@ -95,7 +98,7 @@ pub async fn on_update(
     // Propagate updates to chips
     for chip in &entity.device.chips {
         let network_kind = chip_kind_to_network_kind(&chip.kind);
-        if let Some(chip_client) = ctx.chip_clients.get(&network_kind) {
+        if let Some(chip_client) = actor.chip_clients.get(&network_kind) {
             let mut chip_update = netsim_model::chip::ChipUpdate::default();
             chip_update.position = Some(entity.device.position.clone());
             chip_update.orientation = Some(entity.device.orientation.clone());
@@ -110,10 +113,14 @@ pub async fn on_update(
     Ok(())
 }
 
-pub async fn on_delete(entity: &DeviceEntity, ctx: &mut DeviceContext) -> Result<(), DeviceError> {
+pub async fn on_delete(
+    entity: &DeviceEntity,
+    actor: &mut DeviceActor,
+    _ctx: &mut impl Context,
+) -> Result<(), DeviceError> {
     for chip in &entity.device.chips {
         let network_kind = chip_kind_to_network_kind(&chip.kind);
-        if let Some(chip_client) = ctx.chip_clients.get(&network_kind) {
+        if let Some(chip_client) = actor.chip_clients.get(&network_kind) {
             chip_client
                 .delete(netsim_model::chip::ChipId(chip.id))
                 .await

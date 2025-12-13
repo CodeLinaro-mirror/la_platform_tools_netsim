@@ -4,7 +4,7 @@ use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
-use capture_api::CaptureCreate;
+
 use client::{CaptureClient, DeviceClient};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
@@ -306,11 +306,11 @@ impl NetsimDaemon {
         // Setup Capture Server
         let (capture_actor, capture_generic_client) = capture_actor::new();
         let capture_client = client::CaptureClient::new(capture_generic_client);
-        let capture_context = capture_actor::context::CaptureContext::default();
+        let capture_context = capture_actor::CaptureActor::default();
 
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
-        let context = device_actor::DeviceContext {
+        let context = device_actor::DeviceActor {
             chip_clients: HashMap::new(), // Will be filled later
             next_chip_id: next_chip_id.clone(),
             capture_client: Some(Arc::new(capture_client.clone())),
@@ -351,17 +351,17 @@ impl NetsimDaemon {
         info!("Bluetooth server created");
 
         // Setup Wifi Server
-        let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
+        let (wifi_server, _wifi_client) = wifi::Server::new(device_client.clone());
         info!("Wifi server created");
 
         // Setup Uwb Server
-        let (uwb_server, uwb_client) = uwb::Server::new(device_client.clone());
+        let (uwb_server, _uwb_client) = uwb::Server::new(device_client.clone());
         info!("Uwb server created");
 
         // Setup Cell Server
         // TODO: Replace with real modem network.
         let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
-        let (cell_server, cell_client) = cell::Server::new(device_client.clone(), cell_controller);
+        let (cell_server, _cell_client) = cell::Server::new(device_client.clone(), cell_controller);
         info!("Cell server created");
 
         // Prepare chip clients map for DeviceServer

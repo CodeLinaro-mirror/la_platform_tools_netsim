@@ -9,7 +9,7 @@
 
 use actor_framework::{ActorClient, FrameworkError, ResourceClient};
 use async_trait::async_trait;
-use device_actor::entity::DeviceEntity;
+use device_actor::DeviceEntity;
 use device_actor::DeviceError;
 use device_api::api::DeviceCreate;
 use device_api::DeviceId;

@@ -3,7 +3,7 @@
 use crate::error::BluetoothError;
 use crate::handlers::events::on_stream;
 use crate::ranging;
-use actor_framework::{ActorContext, Runtime, StreamMessage};
+use actor_framework::{ActorLifecycle, Context, StreamMessage};
 use async_trait::async_trait;
 use client::DeviceClient;
 use netsim_model::chip::{Chip, ChipId};
@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// A thread-safe map of chip states.
 pub type ChipMap = Arc<Mutex<HashMap<ChipId, Chip>>>;
 
 /// Implementation of `RootcanalCallbacks` for the Bluetooth Actor.
@@ -54,7 +55,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
 /// This struct holds the shared state required by the actor, including the
 /// `Rootcanal` instance for simulation, the map of active chips, and the
 /// `DeviceClient` for interacting with other devices.
-pub struct BluetoothContext {
+pub struct BluetoothActor {
     /// The Rootcanal simulation instance.
     pub rootcanal: Arc<Rootcanal>,
     /// A map of active Bluetooth chips, protected by a mutex.
@@ -62,10 +63,11 @@ pub struct BluetoothContext {
     /// The client for interacting with the device actor.
     pub device_client: DeviceClient,
     /// Client to send actions/delete requests to the actor itself.
-    pub client: Option<actor_framework::ResourceClient<crate::entity::BluetoothEntity>>,
+    pub client: Option<actor_framework::ResourceClient<crate::service::BluetoothEntity>>,
 }
 
-impl BluetoothContext {
+impl BluetoothActor {
+    /// Creates a new BluetoothActor context.
     pub fn new(device_client: DeviceClient) -> Self {
         let chips = Arc::new(Mutex::new(HashMap::new()));
         let rootcanal = Rootcanal::new(Box::new(RootcanalCallbacksImpl { chips: chips.clone() }));
@@ -74,20 +76,20 @@ impl BluetoothContext {
 }
 
 #[async_trait]
-impl ActorContext for BluetoothContext {
+impl ActorLifecycle for BluetoothActor {
     type Error = BluetoothError;
 
-    async fn on_start(&mut self, runtime: &mut impl Runtime) {
+    async fn on_start(&mut self, runtime: &mut impl Context) {
         // Tick every 10ms to drive Rootcanal
         runtime.set_interval(Duration::from_millis(10));
     }
 
-    async fn on_tick(&mut self, _runtime: &mut impl Runtime) {
+    async fn on_tick(&mut self, _runtime: &mut impl Context) {
         self.rootcanal.tick();
     }
 
     // TODO: Check if these can be consolidated.
-    async fn on_stream(&mut self, id: usize, message: StreamMessage, runtime: &mut impl Runtime) {
+    async fn on_stream(&mut self, id: usize, message: StreamMessage, runtime: &mut impl Context) {
         on_stream(self, id, message, runtime).await;
     }
 

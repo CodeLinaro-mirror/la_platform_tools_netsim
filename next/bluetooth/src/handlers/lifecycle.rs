@@ -1,11 +1,11 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::context::BluetoothContext;
-use crate::entity::BluetoothEntity;
+use crate::actor::BluetoothActor;
 use crate::error::BluetoothError;
 use crate::handlers::events::HciCallbacks;
+use crate::service::BluetoothEntity;
 use crate::utils::ToChipError;
-use actor_framework::Runtime;
+use actor_framework::Context;
 use netsim_model::chip::{BluetoothMode, ChipId, ChipUpdate};
 use netsim_model::chip_error::ChipError;
 
@@ -15,14 +15,14 @@ use netsim_model::chip_error::ChipError;
 
 pub async fn on_create(
     entity: &mut BluetoothEntity,
-    context: &mut BluetoothContext,
-    runtime: &mut impl Runtime,
+    actor: &mut BluetoothActor,
+    ctx: &mut impl Context,
 ) -> Result<(), BluetoothError> {
     let id = ChipId(entity.chip.id);
 
     // 1. Register Stream
     if let Some(stream) = entity.packet_stream.lock().unwrap().take() {
-        runtime.add_stream(id.0 as usize, Box::pin(stream));
+        ctx.add_stream(id.0 as usize, Box::pin(stream));
     }
 
     // 2. Setup Sink and Callbacks
@@ -32,7 +32,7 @@ pub async fn on_create(
 
         // Spawn the sink task which forwards packets from the channel to the sink.
         let sink_id = id;
-        runtime.add_task(
+        ctx.add_task(
             sink_id.0 as usize,
             Box::pin(async move {
                 run_sink_task(sink, hci_rx, sink_id).await;
@@ -52,18 +52,18 @@ pub async fn on_create(
     let address =
         create_params.address.parse().unwrap_or_else(|_| "00:00:00:00:00:00".parse().unwrap());
 
-    context.rootcanal.new_controller(id.0.into(), address, Box::new(callback)).to_chip_error()?;
+    actor.rootcanal.new_controller(id.0.into(), address, Box::new(callback)).to_chip_error()?;
 
     // 4. Create Chip Info in Context
     // Initialize the chip info based on the mode (Beacon, Device, or Sniffer).
 
     let mut chip_info = match &create_params.mode {
-        BluetoothMode::Beacon(params) => crate::beacon::create(&context.rootcanal, id, params)?,
-        BluetoothMode::Device(params) => crate::device::create(&context.rootcanal, id, params)?,
-        BluetoothMode::Sniffer(params) => crate::sniffer::create(&context.rootcanal, id, params)?,
+        BluetoothMode::Beacon(params) => crate::beacon::create(&actor.rootcanal, id, params)?,
+        BluetoothMode::Device(params) => crate::device::create(&actor.rootcanal, id, params)?,
+        BluetoothMode::Sniffer(params) => crate::sniffer::create(&actor.rootcanal, id, params)?,
     };
     chip_info.device_id = entity.chip.device_id;
-    context.chips.lock().unwrap().insert(id, chip_info);
+    actor.chips.lock().unwrap().insert(id, chip_info);
 
     Ok(())
 }
@@ -86,10 +86,10 @@ async fn run_sink_task(
 pub async fn on_update(
     entity: &mut BluetoothEntity,
     update: ChipUpdate,
-    context: &mut BluetoothContext,
-    _runtime: &mut impl Runtime,
+    actor: &mut BluetoothActor,
+    _ctx: &mut impl Context,
 ) -> Result<(), BluetoothError> {
-    let mut chips = context.chips.lock().unwrap();
+    let mut chips = actor.chips.lock().unwrap();
     if let Some(chip) = chips.get_mut(&ChipId(entity.chip.id)) {
         if let Some(pos) = update.position {
             chip.position = pos.clone();
@@ -106,16 +106,16 @@ pub async fn on_update(
 
 pub async fn on_delete(
     entity: &BluetoothEntity,
-    context: &mut BluetoothContext,
-    _runtime: &mut impl Runtime,
+    actor: &mut BluetoothActor,
+    _ctx: &mut impl Context,
 ) -> Result<(), BluetoothError> {
     let id = ChipId(entity.chip.id);
     log::info!("Deleting chip {id}");
-    context.chips.lock().unwrap().remove(&id);
-    context.rootcanal.remove_controller(id.0.into()).to_chip_error()?;
+    actor.chips.lock().unwrap().remove(&id);
+    actor.rootcanal.remove_controller(id.0.into()).to_chip_error()?;
 
     // Notify DeviceService
-    let dc = context.device_client.clone();
+    let dc = actor.device_client.clone();
     let device_id = entity.chip.device_id;
     tokio::spawn(async move {
         let _ = dc.notify_chip_removed(device_id, id).await;

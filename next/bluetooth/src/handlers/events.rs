@@ -1,8 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::context::BluetoothContext;
-use crate::error::BluetoothError;
-use actor_framework::Runtime;
+use crate::actor::BluetoothActor;
+
+use actor_framework::Context;
 use bytes::Bytes;
 use netsim_model::chip::ChipId;
 use rootcanal::controller::{Callbacks as ControllerCallbacks, Id};
@@ -44,10 +44,10 @@ impl ControllerCallbacks for HciCallbacks {
 }
 
 pub async fn on_stream(
-    context: &mut BluetoothContext,
+    context: &mut BluetoothActor,
     id: usize,
     message: Bytes,
-    _runtime: &mut impl Runtime,
+    _runtime: &mut impl Context,
 ) {
     if message.is_empty() {
         log::error!("Received empty HCI packet from stream for chip {id}");

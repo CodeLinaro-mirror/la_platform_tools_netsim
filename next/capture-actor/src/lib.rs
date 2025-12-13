@@ -18,15 +18,17 @@
 //! starting and stopping captures, writing to PCAP files, and managing
 //! capture state for different chips.
 
-pub mod actor_impl;
-pub mod bt_pcap;
-pub mod context;
-pub mod entity;
-pub mod error;
-pub mod handlers;
-pub mod writer;
+mod actor;
+mod actor_impl;
+mod bt_pcap;
+mod error;
+mod service;
+pub use actor::CaptureActor;
+pub use error::CaptureError;
+pub use service::CaptureEntity;
+mod handlers;
+mod writer;
 
-use crate::entity::CaptureEntity;
 use actor_framework::{ResourceActor, ResourceClient};
 
 /// Creates a new Capture actor and its client.
@@ -40,10 +42,10 @@ pub fn new() -> (ResourceActor<CaptureEntity>, ResourceClient<CaptureEntity>) {
 mod tests {
     use super::*;
     use crate::bt_pcap::BluetoothH4Writer;
-    use crate::context::CaptureContext;
+    use crate::context::CaptureActor;
     use crate::entity::CaptureEntity;
     use crate::writer::CaptureWriter;
-    use actor_framework::ActorEntity;
+    use actor_framework::ActorService;
     use bytes::Bytes;
     use capture_api::Direction;
     use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate};
@@ -71,7 +73,7 @@ mod tests {
     #[tokio::test]
     async fn test_capture_entity_lifecycle() {
         let chip_id = ChipId(1);
-        let mut ctx = CaptureContext::default();
+        let mut ctx = CaptureActor::default();
 
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
@@ -151,7 +153,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_default_capture_enabled() {
-        let mut ctx = CaptureContext::default();
+        let mut ctx = CaptureActor::default();
         let chip_id = ChipId(2);
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
@@ -194,7 +196,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_capture_directory() {
-        let mut ctx = CaptureContext::default();
+        let mut ctx = CaptureActor::default();
         let chip_id = ChipId(3);
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {

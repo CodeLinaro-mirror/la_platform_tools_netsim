@@ -1,7 +1,7 @@
-use actor_framework::{ActorEntity, ResourceActor, Runtime};
+use actor_framework::{ActorService, Context, ResourceActor};
 use async_trait::async_trait;
 
-// --- Test Entity ---
+// --- Test Service ---
 
 #[derive(Clone, Debug, PartialEq)]
 struct SimpleUser {
@@ -32,7 +32,7 @@ enum UserAction {
 struct SimpleUserError;
 
 #[async_trait]
-impl ActorEntity for SimpleUser {
+impl ActorService for SimpleUser {
     type Id = u32;
     type Create = SimpleUserCreate;
     type Update = SimpleUserUpdate;
@@ -49,7 +49,7 @@ impl ActorEntity for SimpleUser {
     fn on_list(
         entities: &std::collections::HashMap<Self::Id, Self>,
         _context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        _runtime: &mut impl Context,
     ) -> Self::ListResponse {
         entities.values().cloned().collect()
     }
@@ -58,7 +58,7 @@ impl ActorEntity for SimpleUser {
         &mut self,
         update: SimpleUserUpdate,
         _context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        _runtime: &mut impl Context,
     ) -> Result<(), Self::Error> {
         if let Some(name) = update.name {
             self.name = name;
@@ -69,7 +69,7 @@ impl ActorEntity for SimpleUser {
     async fn on_delete(
         &self,
         _context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        _runtime: &mut impl Context,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -78,7 +78,7 @@ impl ActorEntity for SimpleUser {
         &mut self,
         _action: Self::Action,
         _context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        _runtime: &mut impl Context,
     ) -> Result<Self::ActionResult, Self::Error> {
         match _action {
             UserAction::PromoteToAdmin => {

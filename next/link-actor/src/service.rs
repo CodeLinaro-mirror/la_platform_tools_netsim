@@ -28,7 +28,7 @@ impl LinkEntity {
 /// - `chip_kind_map`: Maps ChipId to ChipKind for validation.
 
 #[derive(Default)]
-pub struct LinkContext {
+pub struct LinkActor {
     /// Index for fast lookup/upsert: (Sender, Receiver) -> LinkId
     pub lookup: HashMap<(ChipId, ChipId), LinkId>,
     /// Map of ChipId to ChipKind for validation
@@ -37,10 +37,10 @@ pub struct LinkContext {
 }
 
 use crate::error::LinkError;
-use actor_framework::ActorContext;
+use actor_framework::ActorLifecycle;
 use async_trait::async_trait;
 
 #[async_trait]
-impl ActorContext for LinkContext {
+impl ActorLifecycle for LinkActor {
     type Error = LinkError;
 }

@@ -1,16 +1,16 @@
 //! # Capture Actor Implementation
 //!
-//! This module implements the `ActorEntity` trait for `CaptureEntity`.
+//! This module implements the `ActorService` trait for `CaptureEntity`.
 //! It handles the lifecycle of the capture entity, including creation,
 //! updates (enabling/disabling capture), and deletion.
 //! It also delegates action handling to the `handlers` module.
 
+use crate::actor::CaptureActor;
 use crate::bt_pcap::BluetoothH4Writer;
-use crate::context::CaptureContext;
-use crate::entity::CaptureEntity;
 use crate::error::CaptureError;
 use crate::writer::CaptureWriter;
-use actor_framework::{ActorEntity, Runtime};
+use crate::CaptureEntity;
+use actor_framework::{ActorService, Context};
 use async_trait::async_trait;
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
@@ -18,13 +18,13 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
 #[async_trait]
-impl ActorEntity for CaptureEntity {
+impl ActorService for CaptureEntity {
     type Id = ChipId;
     type Create = CaptureCreate;
     type Update = bool; // Enabled status
     type Action = CaptureAction;
     type ActionResult = CaptureActionResult;
-    type Context = CaptureContext;
+    type Context = CaptureActor;
     type Error = CaptureError;
     type ListResponse = Vec<CaptureInfo>;
 
@@ -40,20 +40,20 @@ impl ActorEntity for CaptureEntity {
 
     async fn on_create(
         &mut self,
-        context: &mut Self::Context,
-        runtime: &mut impl Runtime,
+        actor: &mut Self::Context,
+        ctx: &mut impl Context,
     ) -> Result<(), Self::Error> {
         // Register the enabled flag in the context so streams can access it.
         {
-            context.flags.insert(self.chip_id, self.enabled_flag.clone());
+            actor.flags.insert(self.chip_id, self.enabled_flag.clone());
         }
 
         // If enabled by default (either via params or context), set up the writer
-        let default_enabled = self.enabled || context.default_capture_enabled;
+        let default_enabled = self.enabled || actor.default_capture_enabled;
         if default_enabled {
             self.enabled = true;
             self.enabled_flag.store(true, Ordering::SeqCst);
-            self.on_update(true, context, runtime).await?;
+            self.on_update(true, actor, ctx).await?;
         }
         Ok(())
     }
@@ -61,8 +61,8 @@ impl ActorEntity for CaptureEntity {
     async fn on_update(
         &mut self,
         update: Self::Update,
-        context: &mut Self::Context,
-        runtime: &mut impl Runtime,
+        actor: &mut Self::Context,
+        ctx: &mut impl Context,
     ) -> Result<(), Self::Error> {
         if self.enabled == update {
             return Ok(());
@@ -71,7 +71,7 @@ impl ActorEntity for CaptureEntity {
         self.enabled_flag.store(update, Ordering::SeqCst); // Update the atomic flag
 
         if self.enabled {
-            if !context.writers.contains_key(&self.chip_id) {
+            if !actor.writers.contains_key(&self.chip_id) {
                 // Create writer when capture is first enabled
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -79,7 +79,7 @@ impl ActorEntity for CaptureEntity {
                     .as_secs();
                 let filename =
                     format!("capture_{}_{}_{}.pcap", self.device_name, self.chip_id.0, timestamp);
-                let filepath = if let Some(dir) = context.capture_dir.as_ref() {
+                let filepath = if let Some(dir) = actor.capture_dir.as_ref() {
                     dir.join(&filename)
                 } else {
                     PathBuf::from(&filename)
@@ -94,40 +94,40 @@ impl ActorEntity for CaptureEntity {
                         Box::new(BluetoothH4Writer::new(&filepath)?)
                     }
                 };
-                context.writers.insert(self.chip_id, writer);
+                actor.writers.insert(self.chip_id, writer);
             }
         } else {
             // Disable capture: remove the writer to close the file
-            context.writers.remove(&self.chip_id);
+            actor.writers.remove(&self.chip_id);
         }
         Ok(())
     }
 
     async fn on_delete(
         &self,
-        context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        actor: &mut Self::Context,
+        _ctx: &mut impl Context,
     ) -> Result<(), Self::Error> {
         // Clean up resources when the entity is deleted.
-        context.writers.remove(&self.chip_id);
-        context.flags.remove(&self.chip_id);
+        actor.writers.remove(&self.chip_id);
+        actor.flags.remove(&self.chip_id);
         Ok(())
     }
 
     async fn handle_action(
         &mut self,
         action: Self::Action,
-        context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        actor: &mut Self::Context,
+        ctx: &mut impl Context,
     ) -> Result<Self::ActionResult, Self::Error> {
-        crate::handlers::handle_action(self, action, context, _runtime).await
+        crate::handlers::handle_action(self, action, actor, ctx).await
     }
 
     fn on_list(
         entities: &std::collections::HashMap<Self::Id, Self>,
-        context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        actor: &mut Self::Context,
+        _ctx: &mut impl Context,
     ) -> Self::ListResponse {
-        crate::handlers::on_list(entities, context)
+        crate::handlers::on_list(entities, actor)
     }
 }

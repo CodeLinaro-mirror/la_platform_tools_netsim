@@ -3,10 +3,11 @@
 //! This module contains the handlers for actions performed on the device actor,
 //! such as adding chips and resetting the device.
 
-use crate::context::DeviceContext;
-use crate::entity::DeviceEntity;
+use crate::actor::DeviceActor;
 use crate::error::DeviceError;
-use crate::handlers::utils::chip_kind_to_network_kind;
+use crate::service::DeviceEntity;
+// use crate::handlers::utils::chip_kind_to_network_kind;
+use actor_framework::Context;
 use device_api::{DeviceAction, DeviceActionResult};
 use netsim_model::chip::{
     BeaconParams, BluetoothCreate, BluetoothMode, ChipCreate, ChipId, NetworkKind, NetworkParams,
@@ -18,7 +19,8 @@ use std::sync::atomic::Ordering;
 pub async fn handle_action(
     entity: &mut DeviceEntity,
     action: DeviceAction,
-    ctx: &mut DeviceContext,
+    actor: &mut DeviceActor,
+    _ctx: &mut impl Context,
 ) -> Result<DeviceActionResult, DeviceError> {
     match action {
         DeviceAction::Reset => {
@@ -32,7 +34,7 @@ pub async fn handle_action(
             Ok(DeviceActionResult::Success)
         }
         DeviceAction::AddChip { chip_config, packet_stream, packet_sink } => {
-            let chip_id = ChipId(ctx.next_chip_id.fetch_add(1, Ordering::SeqCst));
+            let chip_id = ChipId(actor.next_chip_id.fetch_add(1, Ordering::SeqCst));
 
             // 1. Create Chip parameters
             let network_params = match &chip_config.chip {
@@ -47,7 +49,7 @@ pub async fn handle_action(
             let chip_kind = NetworkKind::from(&network_params);
 
             // 2. Handle Capture Creation and Stream Wrapping
-            let (packet_stream, packet_sink) = if let Some(capture_client) = &ctx.capture_client {
+            let (packet_stream, packet_sink) = if let Some(capture_client) = &actor.capture_client {
                 crate::handlers::utils::create_capture_and_wrap_streams(
                     capture_client.clone(),
                     chip_id,
@@ -75,7 +77,7 @@ pub async fn handle_action(
             };
 
             // 2. Send create request to Chip Actor
-            if let Some(chip_client) = ctx.chip_clients.get(&chip_kind) {
+            if let Some(chip_client) = actor.chip_clients.get(&chip_kind) {
                 chip_client
                     .create(chip_params)
                     .await

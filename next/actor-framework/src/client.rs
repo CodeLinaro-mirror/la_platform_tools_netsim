@@ -2,9 +2,9 @@
 //!
 //! This module defines the generic client for communicating with actors.
 
-use crate::entity::ActorEntity;
 use crate::error::FrameworkError;
 use crate::message::ResourceRequest;
+use crate::service::ActorService;
 use tokio::sync::{mpsc, oneshot};
 
 /// A type-safe client for interacting with a `ResourceActor`.
@@ -15,18 +15,18 @@ use tokio::sync::{mpsc, oneshot};
 ///
 /// * **Cloneable** – holds only a sender, so cloning is inexpensive.
 /// * **Async API** – all methods return `Future`s that resolve to `Result<…, FrameworkError>`.
-/// * **Generic** – works with any entity that implements `ActorEntity`.
-pub struct ResourceClient<T: ActorEntity> {
+/// * **Generic** – works with any resource that implements `ActorService`.
+pub struct ResourceClient<T: ActorService> {
     sender: mpsc::Sender<ResourceRequest<T>>,
 }
 
-impl<T: ActorEntity> std::fmt::Debug for ResourceClient<T> {
+impl<T: ActorService> std::fmt::Debug for ResourceClient<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ResourceClient").field("sender", &"mpsc::Sender").finish()
     }
 }
 
-impl<T: ActorEntity> ResourceClient<T> {
+impl<T: ActorService> ResourceClient<T> {
     pub fn new(sender: mpsc::Sender<ResourceRequest<T>>) -> Self {
         Self { sender }
     }

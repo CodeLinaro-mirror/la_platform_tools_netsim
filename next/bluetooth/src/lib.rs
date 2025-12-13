@@ -93,21 +93,28 @@
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 
+/// Actions for the Bluetooth actor.
 mod actions;
+/// The Bluetooth actor implementation.
+mod actor;
+/// Beacon functionality.
 mod beacon;
-pub mod context;
+/// Device client handling.
 mod device;
-pub mod entity;
-pub mod error;
-pub(crate) mod handlers;
-pub mod ranging;
+/// Error types for the Bluetooth actor.
+mod error;
+mod handlers;
+mod ranging;
+mod server;
+/// The Bluetooth entity service.
+mod service;
 mod sniffer;
 mod utils;
 
 pub use actions::{BluetoothAction, BluetoothActionResult};
-pub use context::BluetoothContext;
-pub use entity::BluetoothEntity;
+pub use actor::BluetoothActor;
 pub use error::BluetoothError;
+pub use service::BluetoothEntity;
 
 use actor_framework::{ResourceActor, ResourceClient};
 use client::DeviceClient;
@@ -120,11 +127,11 @@ pub struct BluetoothClient(pub ResourceClient<BluetoothEntity>);
 /// Creates a new Bluetooth actor, its context, and its client.
 pub fn new(
     device_client: DeviceClient,
-) -> (ResourceActor<BluetoothEntity>, BluetoothContext, BluetoothClient) {
+) -> (ResourceActor<BluetoothEntity>, BluetoothActor, BluetoothClient) {
     let (actor, resource_client) = ResourceActor::new(32);
 
     // Create Context and inject client
-    let mut context = BluetoothContext::new(device_client);
+    let mut context = BluetoothActor::new(device_client);
     context.client = Some(resource_client.clone());
 
     (actor, context, BluetoothClient(resource_client))

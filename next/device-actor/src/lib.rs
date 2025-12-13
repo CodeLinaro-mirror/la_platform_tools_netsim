@@ -6,9 +6,10 @@
 //!
 //! ## Structure
 //!
-//! - [`entity`] - [`ActorEntity`](actor_framework::ActorEntity) implementation for [`DeviceEntity`]
+// Link to external crate types properly or use full paths
+//! - [`service`] - [`ActorService`](actor_framework::ActorService) implementation for [`DeviceEntity`]
 //! - [`error`] - [`DeviceError`] type for type-safe error handling
-//! - [`actions`] - [`DeviceAction`] and [`DeviceActionResult`]
+//! - [`handlers`] - internal request handlers
 //! - [`new()`] - Factory function that creates the actor and client
 //!
 //! ## Custom Actions
@@ -17,35 +18,34 @@
 //!
 //! ## Usage
 //!
-//! ```rust
-
-//! use netsim_model::device::api::DeviceCreate;
+//! ```text
+//! // use netsim_model::device::api::DeviceCreate;
 //!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Create actor and client
-//!     let (actor, generic_client) = device_actor::new();
-//!     // ...
-//!     Ok(())
-//! }
+//! // #[tokio::main]
+//! // async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! //     // Create actor and client
+//! //     // let (actor, generic_client) = device_actor::new();
+//! //     // ...
+//! //     // Ok(())
+//! // }
 //! ```
 //!
 //! ## Key Features
 //!
-//! - **Custom actions**: Supported via [`DeviceAction`]
-//! - **Type-safe results**: Actions return strongly-typed [`DeviceActionResult`]
+//! - **Custom actions**: Supported via `DeviceAction` (from `device_api`)
+//! - **Type-safe results**: Actions return strongly-typed `DeviceActionResult`
 
-pub mod actor_impl;
-pub mod context;
-pub mod entity;
-pub mod error;
-pub mod handlers;
+mod actor;
+mod actor_impl;
+mod error;
+mod handlers;
+mod service;
 
-pub use context::DeviceContext;
+pub use actor::DeviceActor;
 pub use error::*;
 
-pub use crate::entity::DeviceEntity;
 use actor_framework::{ResourceActor, ResourceClient};
+pub use service::DeviceEntity;
 
 /// Creates a new Device actor and its client.
 pub fn new() -> (ResourceActor<DeviceEntity>, ResourceClient<DeviceEntity>) {

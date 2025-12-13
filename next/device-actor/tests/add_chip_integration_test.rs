@@ -16,7 +16,7 @@ use device_api::DeviceConfig;
 use netsim_model::chip::ChipRequest;
 use netsim_model::chip_error::ChipError;
 
-use common::{setup, TestFixture};
+use common::TestFixture;
 
 fn create_add_chip_params(guid: &str, chip_name: &str) -> DeviceAddChip {
     DeviceAddChip {

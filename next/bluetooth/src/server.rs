@@ -42,12 +42,19 @@ use crate::ranging;
 use crate::utils::ToChipError;
 use bytes::Bytes;
 use client::DeviceClient;
-use device_api::DeviceId;
+
+use crate::handlers::events::HciCallbacks;
+use futures::SinkExt;
 use log::{debug, error, info};
-use netsim_model::chip::{Chip, ChipClient, ChipId, ChipRequest, PacketStream};
+use netsim_model::chip::{Chip, ChipId, ChipRequest, PacketStream};
+use netsim_model::chip::{
+    ChipCreate, ChipKind, ChipUpdate, ChipVariant, LegacyChipClient, NetworkParams,
+};
 use netsim_model::chip_error::ChipError;
+use rootcanal::types::Address;
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio::task::{JoinError, JoinSet};
@@ -121,7 +128,7 @@ impl Server {
     /// # Arguments
     ///
     /// * `device_client`: A `DeviceClient` used to send notifications to the DeviceService.
-    pub fn new(device_client: DeviceClient) -> (Self, ChipClient) {
+    pub fn new(device_client: DeviceClient) -> (Self, LegacyChipClient) {
         let (command_tx, command_rx) = mpsc::channel(10);
         let chips = Arc::new(Mutex::new(HashMap::new()));
         let server = Server {
@@ -132,7 +139,7 @@ impl Server {
             sink_tasks: JoinSet::new(),
             device_client,
         };
-        (server, ChipClient::new(command_tx))
+        (server, LegacyChipClient::new(command_tx))
     }
 
     /// Processes the next packet from the a stream in `self.streams`.
@@ -188,6 +195,127 @@ impl Server {
             }
         }
         info!("Bluetooth is shutdown");
+    }
+
+    async fn handle_command(&mut self, cmd: ChipRequest, shutdown: &mut bool) {
+        match cmd {
+            ChipRequest::Create { params, respond_to } => {
+                let result = self.create_chip(params).await;
+                let _ = respond_to.send(result);
+            }
+            ChipRequest::Read { id, respond_to } => {
+                let chips = self.chips.lock().unwrap();
+                let result = chips.get(&id).cloned().ok_or(ChipError::ChipNotFound(id));
+                let _ = respond_to.send(result);
+            }
+            ChipRequest::Update { id, patch, respond_to } => {
+                let result = self.update_chip(id, patch);
+                let _ = respond_to.send(result);
+            }
+            ChipRequest::Delete { id, respond_to } => {
+                let result = self.remove_chip(id, "command").map(|_| ());
+                let _ = respond_to.send(result);
+            }
+            ChipRequest::Reset { id } => {
+                // TODO: Implement reset
+                log::warn!("Reset chip {id} not implemented");
+                let _ = self.rootcanal.clear_stats(id.0.into());
+            }
+            ChipRequest::GetStatistics { respond_to } => {
+                let mut stats = Vec::new();
+                for id in self.chips.lock().unwrap().keys() {
+                    if let Ok(s) = self.rootcanal.get_stats(id.0.into()) {
+                        stats.push(netsim_model::stats::NetsimRadioStats {
+                            id: id.0,
+                            name: format!("chip-{}", id.0), // TODO: store name in map
+                            tx_bytes: s.ll_packets_out,
+                            rx_bytes: s.ll_packets_in,
+                        });
+                    }
+                }
+                let _ = respond_to.send(Ok(stats));
+            }
+            ChipRequest::GetCountForTesting { respond_to } => {
+                let count = self.chips.lock().unwrap().len();
+                let _ = respond_to.send(Ok(count));
+            }
+            ChipRequest::Shutdown => {
+                *shutdown = true;
+            }
+        }
+    }
+
+    async fn create_chip(&mut self, mut params: ChipCreate) -> Result<(), ChipError> {
+        let id = params.id;
+        if self.chips.lock().unwrap().contains_key(&id) {
+            return Err(ChipError::ChipExists(id.0));
+        }
+
+        let address_str = match &params.config.network_params {
+            NetworkParams::Bluetooth(bt) => bt.address.clone(),
+            _ => {
+                return Err(ChipError::InvalidInput(format!(
+                    "Invalid chip type: {:?}",
+                    params.config.network_params
+                )))
+            }
+        };
+        let address = Address::from_str(&address_str)
+            .map_err(|e| ChipError::InvalidInput(format!("Invalid address: {}", e)))?;
+
+        // Packet Sink handling
+        let callbacks: Box<dyn rootcanal::controller::Callbacks>;
+        if let Some(mut sink) = params.packet_sink.take() {
+            let (hci_tx, mut hci_rx) = mpsc::channel::<Bytes>(10);
+            self.sink_tasks.spawn(async move {
+                while let Some(packet) = hci_rx.recv().await {
+                    if let Err(e) = sink.send(packet).await {
+                        error!("Sink error: {}", e);
+                        break;
+                    }
+                }
+                id
+            });
+            callbacks = Box::new(HciCallbacks { id, hci_tx: Some(hci_tx), ll_tx: None });
+        } else {
+            callbacks = Box::new(HciCallbacks { id, hci_tx: None, ll_tx: None });
+        }
+
+        self.rootcanal.add_controller(id.0.into(), address, callbacks).to_chip_error()?;
+
+        if let Some(stream) = params.packet_stream.take() {
+            self.streams.insert(id, StreamNotifyClose::new(stream));
+        }
+
+        let chip = Chip {
+            id: id.0,
+            kind: ChipKind::BLUETOOTH,
+            name: Some(params.config.name),
+            manufacturer: Some(params.config.manufacturer),
+            product_name: Some(params.config.product_name),
+            position: Default::default(),
+            orientation: Default::default(),
+            device_id: params.device_id,
+            variant: Some(ChipVariant::Bluetooth),
+        };
+        self.chips.lock().unwrap().insert(id, chip);
+        Ok(())
+    }
+
+    fn update_chip(&mut self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ChipError> {
+        let mut chips = self.chips.lock().unwrap();
+        let chip = chips.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
+        if let Some(name) = patch.name {
+            chip.name = Some(name);
+        }
+        if let Some(position) = patch.position {
+            chip.position = position;
+        }
+        if let Some(orientation) = patch.orientation {
+            chip.orientation = orientation;
+        }
+        // Patch other fields if needed
+        Ok(chip.clone())
     }
 
     /// Removes a chip from the simulation.

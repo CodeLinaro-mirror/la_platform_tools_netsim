@@ -2,15 +2,16 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::entity::{LinkContext, LinkEntity};
-    use actor_framework::{ActorEntity, BoxStream, Runtime};
+    use crate::service::{LinkActor, LinkEntity};
+    use actor_framework::{ActorService, BoxStream, Context};
+
     use link_api::{LinkCreate, LinkId};
     use netsim_model::chip::{ChipId, ChipKind};
     use std::time::Duration;
 
     struct MockRuntime;
 
-    impl Runtime for MockRuntime {
+    impl Context for MockRuntime {
         fn set_interval(&mut self, _duration: Duration) {}
         fn add_stream(&mut self, _id: usize, _stream: BoxStream) {}
         fn shutdown(&mut self) {}
@@ -25,7 +26,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_link_entity_lifecycle() {
-        let mut ctx = LinkContext::default();
+        let mut ctx = LinkActor::default();
         let sender = ChipId(1);
         let receiver = ChipId(2);
 
@@ -59,7 +60,7 @@ mod tests {
     async fn test_handle_action() {
         use link_api::LinkAction;
 
-        let mut ctx = LinkContext::default();
+        let mut ctx = LinkActor::default();
         let chip_id = ChipId(1);
         let chip_kind = ChipKind::BLUETOOTH;
 

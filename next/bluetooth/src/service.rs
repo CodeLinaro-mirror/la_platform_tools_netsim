@@ -1,11 +1,11 @@
 // Copyright 2025 The Android Open Source Project
 
 use crate::actions::{BluetoothAction, BluetoothActionResult};
-use crate::context::BluetoothContext;
+use crate::actor::BluetoothActor;
 use crate::error::BluetoothError;
 use crate::handlers::actions::handle_action;
 use crate::handlers::lifecycle::{on_create, on_delete, on_update};
-use actor_framework::{ActorEntity, Runtime};
+use actor_framework::{ActorService, Context};
 use async_trait::async_trait;
 use netsim_model::chip::{
     BluetoothCreate, Chip, ChipCreate, ChipId, ChipUpdate, NetworkParams, PacketSink, PacketStream,
@@ -15,12 +15,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
+/// The entity representing a Bluetooth chip.
 pub struct BluetoothEntity {
+    /// The underlying chip state.
     pub chip: Chip,
     /// Temporary storage for the packet stream, moved to runtime in `on_create`.
     pub packet_stream: Arc<Mutex<Option<PacketStream>>>,
     /// Temporary storage for the packet sink, moved to a task in `on_create`.
     pub packet_sink: Arc<Mutex<Option<PacketSink>>>,
+    /// Creation parameters preserved for debugging or restart.
     pub create_params: Option<BluetoothCreate>,
 }
 
@@ -36,13 +39,13 @@ impl std::fmt::Debug for BluetoothEntity {
 }
 
 #[async_trait]
-impl ActorEntity for BluetoothEntity {
+impl ActorService for BluetoothEntity {
     type Id = ChipId;
     type Create = ChipCreate;
     type Update = ChipUpdate;
     type Action = BluetoothAction;
     type ActionResult = BluetoothActionResult;
-    type Context = BluetoothContext;
+    type Context = BluetoothActor;
     type Error = BluetoothError;
     type ListResponse = Vec<Chip>;
 
@@ -76,42 +79,42 @@ impl ActorEntity for BluetoothEntity {
 
     async fn on_create(
         &mut self,
-        context: &mut Self::Context,
-        runtime: &mut impl Runtime,
+        actor: &mut Self::Context,
+        ctx: &mut impl Context,
     ) -> Result<(), Self::Error> {
-        on_create(self, context, runtime).await
+        on_create(self, actor, ctx).await
     }
 
     async fn on_update(
         &mut self,
         update: Self::Update,
-        context: &mut Self::Context,
-        runtime: &mut impl Runtime,
+        actor: &mut Self::Context,
+        ctx: &mut impl Context,
     ) -> Result<(), Self::Error> {
-        on_update(self, update, context, runtime).await
+        on_update(self, update, actor, ctx).await
     }
 
     async fn on_delete(
         &self,
-        context: &mut Self::Context,
-        runtime: &mut impl Runtime,
+        actor: &mut Self::Context,
+        ctx: &mut impl Context,
     ) -> Result<(), Self::Error> {
-        on_delete(self, context, runtime).await
+        on_delete(self, actor, ctx).await
     }
 
     async fn handle_action(
         &mut self,
         action: Self::Action,
-        context: &mut Self::Context,
-        runtime: &mut impl Runtime,
+        actor: &mut Self::Context,
+        ctx: &mut impl Context,
     ) -> Result<Self::ActionResult, Self::Error> {
-        handle_action(self, action, context, runtime).await
+        handle_action(self, action, actor, ctx).await
     }
 
     fn on_list(
         entities: &HashMap<Self::Id, Self>,
         _context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        _ctx: &mut impl Context,
     ) -> Self::ListResponse {
         entities.values().map(|e| e.chip.clone()).collect()
     }

@@ -1,5 +1,5 @@
 use crate::writer::CaptureWriter;
-use actor_framework::ActorContext;
+use actor_framework::ActorLifecycle;
 use async_trait::async_trait;
 use netsim_model::chip::ChipId;
 use std::collections::HashMap;
@@ -7,11 +7,13 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-/// Context for the CaptureActor, holding shared resources.
+/// The context for the Capture actor.
 ///
+/// This struct holds the shared state required by the actor, including the
+/// `CaptureWriter` instance for writing packet captures.
 /// Since multiple components need access to the writers and flags,
 /// they are stored in the context and protected by mutexes.
-pub struct CaptureContext {
+pub struct CaptureActor {
     /// Map of ChipId to CaptureWriter.
     /// Writers are created when capture is enabled for a chip.
     pub writers: HashMap<ChipId, Box<dyn CaptureWriter>>,
@@ -24,7 +26,7 @@ pub struct CaptureContext {
     pub capture_dir: Option<PathBuf>,
 }
 
-impl Default for CaptureContext {
+impl Default for CaptureActor {
     fn default() -> Self {
         Self {
             writers: HashMap::new(),
@@ -36,6 +38,6 @@ impl Default for CaptureContext {
 }
 
 #[async_trait]
-impl ActorContext for CaptureContext {
+impl ActorLifecycle for CaptureActor {
     type Error = crate::error::CaptureError;
 }

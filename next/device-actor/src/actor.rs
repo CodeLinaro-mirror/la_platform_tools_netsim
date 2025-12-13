@@ -1,4 +1,4 @@
-use actor_framework::ActorContext;
+use actor_framework::ActorLifecycle;
 use async_trait::async_trait;
 use capture_api::CaptureSender;
 use netsim_model::chip::{ChipClient, NetworkKind};
@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
-pub struct DeviceContext {
+pub struct DeviceActor {
     pub chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>>,
     pub next_chip_id: Arc<AtomicU32>,
     pub capture_client: Option<Arc<dyn CaptureSender>>, // Optional for now to avoid breaking tests
@@ -14,6 +14,6 @@ pub struct DeviceContext {
 }
 
 #[async_trait]
-impl ActorContext for DeviceContext {
+impl ActorLifecycle for DeviceActor {
     type Error = crate::error::DeviceError;
 }

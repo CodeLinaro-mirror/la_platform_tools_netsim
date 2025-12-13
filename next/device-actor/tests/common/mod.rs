@@ -1,7 +1,7 @@
 // Copyright (C) 2025 The Android Open Source Project
 
 use client::device_client::DeviceClient;
-use device_actor::DeviceContext;
+use device_actor::DeviceActor;
 use netsim_model::chip::{ChipRequest, LegacyChipClient as ChipClient, NetworkKind};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
@@ -24,7 +24,7 @@ pub async fn setup() -> TestFixture {
         HashMap::new();
     chip_clients.insert(NetworkKind::Bluetooth, Box::new(chip_client));
 
-    let context = DeviceContext {
+    let context = DeviceActor {
         chip_clients,
         next_chip_id: Arc::new(AtomicU32::new(0)),
         capture_client: None,

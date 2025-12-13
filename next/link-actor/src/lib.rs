@@ -17,14 +17,14 @@
 //! - `LinkContext`: Shared state, including chip mappings and lookup tables.
 //! - `handlers`: Implements the logic for processing `LinkAction`s.
 
-pub mod actor_impl;
-pub mod entity;
-pub mod error;
-pub mod handlers;
+mod actor_impl;
+mod error;
+mod handlers;
+mod service;
 mod tests;
 
-pub use entity::LinkEntity;
 pub use error::LinkError;
+pub use service::LinkEntity;
 
 use actor_framework::{ResourceActor, ResourceClient};
 

@@ -1,16 +1,16 @@
 // Copyright 2025 The Android Open Source Project
 
 use crate::actions::{BluetoothAction, BluetoothActionResult};
-use crate::context::BluetoothContext;
-use crate::entity::BluetoothEntity;
+use crate::actor::BluetoothActor;
 use crate::error::BluetoothError;
-use actor_framework::Runtime;
+use crate::service::BluetoothEntity;
+use actor_framework::Context;
 
 pub async fn handle_action(
-    entity: &mut BluetoothEntity,
+    _entity: &mut BluetoothEntity,
     action: BluetoothAction,
-    context: &mut BluetoothContext,
-    _runtime: &mut impl Runtime,
+    actor: &mut BluetoothActor,
+    _ctx: &mut impl Context,
 ) -> Result<BluetoothActionResult, BluetoothError> {
     match action {
         BluetoothAction::Reset { id: _ } => {
@@ -19,9 +19,9 @@ pub async fn handle_action(
         }
         BluetoothAction::GetStatistics => {
             let mut stats_list = Vec::new();
-            let chips = context.chips.lock().unwrap();
+            let chips = actor.chips.lock().unwrap();
             for (id, chip) in chips.iter() {
-                if let Ok(stats) = context.rootcanal.get_stats(id.0.into()) {
+                if let Ok(stats) = actor.rootcanal.get_stats(id.0.into()) {
                     stats_list.push(netsim_model::stats::NetsimRadioStats {
                         id: id.0,
                         name: chip.name.clone().unwrap_or("Unknown".to_string()),
@@ -33,7 +33,7 @@ pub async fn handle_action(
             Ok(BluetoothActionResult::Statistics(stats_list))
         }
         BluetoothAction::GetCountForTesting => {
-            let count = context.chips.lock().unwrap().len();
+            let count = actor.chips.lock().unwrap().len();
             Ok(BluetoothActionResult::Count(count))
         }
     }

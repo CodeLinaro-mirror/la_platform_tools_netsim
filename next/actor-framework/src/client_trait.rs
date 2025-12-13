@@ -1,7 +1,7 @@
 //! # ActorClient Trait
 //!
 //! Provides a common interface for resource‑specific clients, adding default `get` and `delete` methods built on top of a generic `ResourceClient`.
-use crate::{ActorEntity, FrameworkError, ResourceClient};
+use crate::{ActorService, FrameworkError, ResourceClient};
 use async_trait::async_trait;
 
 /// Trait for resource-specific clients to inherit standard CRUD operations.
@@ -12,10 +12,11 @@ use async_trait::async_trait;
 /// # Example
 ///
 /// ```rust
-/// use actor_framework::{ActorClient, ActorEntity, Runtime, BoxStream, ResourceActor, FrameworkError, ResourceClient};
+/// use actor_framework::{ActorClient, ActorService, BoxStream, ResourceActor, FrameworkError, ResourceClient};
+/// use actor_framework::Context;
 /// use async_trait::async_trait;
 ///
-/// // 1. Define Entity
+/// // 1. Define Service
 /// #[derive(Clone, Debug)]
 /// struct User { id: u32 }
 /// #[derive(Debug)] struct UserCreate;
@@ -36,7 +37,7 @@ use async_trait::async_trait;
 /// }
 ///
 /// #[async_trait]
-/// impl ActorEntity for User {
+/// impl ActorService for User {
 ///     type Id = u32;
 ///     type Create = UserCreate;
 ///     type Update = UserUpdate;
@@ -49,9 +50,9 @@ use async_trait::async_trait;
 ///     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> {
 ///         Ok(Self { id })
 ///     }
-///     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
-///     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { vec![] }
+///     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
+///     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Context) -> Self::ListResponse { vec![] }
 /// }
 ///
 /// // 2. Define Client Wrapper
@@ -81,7 +82,7 @@ use async_trait::async_trait;
 /// }
 /// ```
 #[async_trait]
-pub trait ActorClient<T: ActorEntity>: Send + Sync {
+pub trait ActorClient<T: ActorService>: Send + Sync {
     /// The resource-specific error type.
     type Error: From<String> + Send + Sync;
 
@@ -91,14 +92,14 @@ pub trait ActorClient<T: ActorEntity>: Send + Sync {
     /// Map framework errors to the specific resource error type.
     fn map_error(e: FrameworkError) -> Self::Error;
 
-    /// Fetch an entity by ID.
+    /// Fetch a resource by ID.
     // #[tracing::instrument(skip(self))]
     async fn get(&self, id: T::Id) -> Result<Option<T>, Self::Error> {
         // tracing::debug!("Sending request");
         self.inner().get(id).await.map_err(Self::map_error)
     }
 
-    /// Delete an entity by ID.
+    /// Delete a resource by ID.
     // #[tracing::instrument(skip(self))]
     async fn delete(&self, id: T::Id) -> Result<(), Self::Error> {
         // tracing::debug!("Sending request");

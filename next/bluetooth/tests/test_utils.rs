@@ -2,7 +2,6 @@
 
 use actor_framework::ResourceClient;
 use bytes::Bytes;
-use client::DeviceClient;
 use futures::{
     sink::Sink,
     stream::Stream,
@@ -10,7 +9,7 @@ use futures::{
     Future,
 };
 use netsim_model::bluetooth::Controller as RootcanalController;
-use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, NetworkParams};
+use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipConfig, NetworkParams};
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
