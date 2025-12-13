@@ -8,6 +8,7 @@ pub struct StandardRuntime {
     pub(crate) interval: tokio::time::Interval,
     pub(crate) streams: StreamMap<usize, StreamNotifyClose<BoxStream>>,
     pub(crate) shutdown_tx: Option<oneshot::Sender<()>>,
+    pub(crate) tasks: tokio::task::JoinSet<usize>,
 }
 
 impl StandardRuntime {
@@ -21,7 +22,15 @@ impl StandardRuntime {
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
-        (Self { interval, streams: StreamMap::new(), shutdown_tx: Some(shutdown_tx) }, shutdown_rx)
+        (
+            Self {
+                interval,
+                streams: StreamMap::new(),
+                shutdown_tx: Some(shutdown_tx),
+                tasks: tokio::task::JoinSet::new(),
+            },
+            shutdown_rx,
+        )
     }
 }
 
@@ -36,9 +45,21 @@ impl Runtime for StandardRuntime {
         self.streams.insert(id, StreamNotifyClose::new(stream));
     }
 
+    fn add_task(
+        &mut self,
+        id: usize,
+        task: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
+    ) {
+        self.tasks.spawn(async move {
+            task.await;
+            id
+        });
+    }
+
     fn shutdown(&mut self) {
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
         }
+        self.tasks.shutdown();
     }
 }

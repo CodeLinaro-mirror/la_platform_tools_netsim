@@ -6,7 +6,9 @@ use client::DeviceClient;
 use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use modem_rs::modem_network::{ModemCallbacks, ModemNetworkInterface};
-use netsim_model::chip::{ChipClient, ChipId, ChipRequest, PacketSink, PacketStream};
+use netsim_model::chip::{
+    ChipId, ChipRequest, LegacyChipClient as ChipClient, PacketSink, PacketStream,
+};
 use netsim_model::chip_error::ChipError as NetsimChipError;
 use std::collections::HashMap;
 use std::sync::Arc;

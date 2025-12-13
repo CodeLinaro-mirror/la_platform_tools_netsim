@@ -16,7 +16,7 @@ use device_api::api::{Chip, DeviceChipCreate, DeviceCreate};
 use device_api::DeviceConfig;
 use netsim_model::chip::{BleBeacon, ChipRequest};
 
-use common::{setup, TestFixture};
+use common::TestFixture;
 
 #[tokio::test]
 async fn test_list_devices_explicit() {
