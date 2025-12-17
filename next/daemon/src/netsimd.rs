@@ -347,7 +347,7 @@ impl NetsimDaemon {
         info!("Successfully wrote to INI file {}", ini_path.display());
 
         // Setup Bluetooth Server
-        let (bt_server, bt_client) = bluetooth::Server::new(device_client.clone());
+        let (bt_actor, bt_context, bt_client) = bluetooth::new(device_client.clone());
         info!("Bluetooth server created");
 
         // Setup Wifi Server
@@ -365,15 +365,13 @@ impl NetsimDaemon {
         info!("Cell server created");
 
         // Prepare chip clients map for DeviceServer
-        let mut chip_clients = HashMap::new();
-        chip_clients.insert(NetworkKind::Bluetooth, bt_client);
-        chip_clients.insert(NetworkKind::Wifi, wifi_client);
-        chip_clients.insert(NetworkKind::Uwb, uwb_client);
-        chip_clients.insert(NetworkKind::Cell, cell_client);
+        let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =
+            HashMap::new();
+        chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client));
 
         // Spawn server tasks
         let mut join_set = JoinSet::new();
-        join_set.spawn(bt_server.run());
+        join_set.spawn(bt_actor.run(bt_context));
         info!("Bluetooth server started");
         join_set.spawn(wifi_server.run());
         info!("Wifi server started");

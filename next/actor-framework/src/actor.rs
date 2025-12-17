@@ -175,6 +175,12 @@ impl<T: ActorEntity> ResourceActor<T> {
                 Some((id, msg_opt)) = stream_fut => {
                     Self::handle_stream_event(&mut self.store, id, msg_opt, &mut context, &mut self.runtime).await;
                 }
+                Some(res) = self.runtime.tasks.join_next() => {
+                    match res {
+                        Ok(id) => Self::handle_task_closed(&mut self.store, id, &mut context, &mut self.runtime).await,
+                        Err(e) => error!("Monitored task failed: {e}"),
+                    }
+                }
                 _ = &mut self.shutdown_rx => {
                     Self::handle_shutdown(&mut context).await;
                     break;
@@ -202,6 +208,22 @@ impl<T: ActorEntity> ResourceActor<T> {
                         store.remove(&entity_id);
                     }
                 }
+            }
+        }
+    }
+
+    async fn handle_task_closed(
+        store: &mut HashMap<T::Id, T>,
+        id: usize,
+        context: &mut T::Context,
+        runtime: &mut impl Runtime,
+    ) {
+        if let Ok(true) = context.on_task_closed(id).await {
+            // Delete entity
+            let entity_id = T::Id::from(id as u32);
+            if let Some(item) = store.get(&entity_id) {
+                if let Err(_e) = item.on_delete(context, runtime).await {}
+                store.remove(&entity_id);
             }
         }
     }

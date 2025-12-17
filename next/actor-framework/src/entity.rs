@@ -61,6 +61,14 @@ pub trait ActorContext: Send + Sync + 'static {
     ) {
     }
 
+    /// Called when a background task completes.
+    ///
+    /// The `id` matches the one passed to `runtime.add_task`.
+    /// Returns `Ok(true)` if the entity associated with the task ID should be deleted.
+    async fn on_task_closed(&mut self, _id: usize) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
     /// Called when a registered stream closes.
     ///
     /// Returns `Ok(true)` if the entity associated with the stream ID should be deleted.

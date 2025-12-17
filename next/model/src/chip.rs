@@ -425,15 +425,33 @@ pub struct CellUpdate {
 /// This client provides a high-level API for sending `ChipRequest` messages to
 /// the server over an `mpsc` channel. It abstracts away the channel and
 /// `oneshot` responder boilerplate for each command.
+/// A client handle for interacting with the chip server actor.
+///
+/// There is one chip server actor for each network type (Bluetooth, UWB, Wi-Fi).
+/// This client provides a high-level API for sending `ChipRequest` messages to
+/// the server over an `mpsc` channel. It abstracts away the channel and
+/// `oneshot` responder boilerplate for each command.
+#[async_trait::async_trait]
+pub trait ChipClient: Send + Sync {
+    async fn create(&self, params: ChipCreate) -> Result<(), ClientError>;
+    async fn read(&self, id: ChipId) -> Result<Chip, ClientError>;
+    async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError>;
+    async fn delete(&self, id: ChipId) -> Result<(), ClientError>;
+    async fn read_statistics(&self) -> Result<Vec<NetsimRadioStats>, ClientError>;
+    async fn read_count_for_testing(&self) -> Result<usize, ClientError>;
+    async fn shutdown(&self) -> Result<(), ClientError>;
+    async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
+}
+
 #[derive(Clone)]
-pub struct ChipClient {
+pub struct LegacyChipClient {
     /// The sender half of the `mpsc` channel for sending `ChipRequest`s to the
     /// chip service.
     sender: mpsc::Sender<ChipRequest>,
 }
 
-impl ChipClient {
-    /// Creates a new `ChipClient` handle.
+impl LegacyChipClient {
+    /// Creates a new `LegacyChipClient` handle.
     ///
     /// This function connects the client to the service's message channel.
     ///
@@ -443,11 +461,65 @@ impl ChipClient {
     pub fn new(sender: mpsc::Sender<ChipRequest>) -> Self {
         Self { sender }
     }
+}
 
-    /// Sends a shutdown command to the chip service.
-    ///
-    /// This is a fire-and-forget command; it does not wait for a response.
-    pub async fn shutdown(&self) -> Result<(), ClientError> {
+#[async_trait::async_trait]
+impl ChipClient for LegacyChipClient {
+    async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(ChipRequest::Create { params, respond_to: tx })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
+    }
+
+    async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(ChipRequest::Read { id, respond_to: tx })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
+    }
+
+    async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(ChipRequest::Update { id, patch, respond_to: tx })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
+    }
+
+    async fn delete(&self, id: ChipId) -> Result<(), ClientError> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(ChipRequest::Delete { id, respond_to: tx })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
+    }
+
+    async fn read_statistics(&self) -> Result<Vec<NetsimRadioStats>, ClientError> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(ChipRequest::GetStatistics { respond_to: tx })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
+    }
+
+    async fn read_count_for_testing(&self) -> Result<usize, ClientError> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(ChipRequest::GetCountForTesting { respond_to: tx })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
+    }
+
+    async fn shutdown(&self) -> Result<(), ClientError> {
         self.sender
             .send(ChipRequest::Shutdown)
             .await
@@ -455,10 +527,7 @@ impl ChipClient {
         Ok(())
     }
 
-    /// Sends a reset command to the chip service.
-    ///
-    /// This is a fire-and-forget command; it does not wait for a response.
-    pub async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
+    async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
         self.sender
             .send(ChipRequest::Reset { id })
             .await
@@ -467,14 +536,6 @@ impl ChipClient {
     }
 }
 
-// Generate client methods.
-client_method!(ChipClient => fn create(params: ChipCreate) -> () as ChipRequest::Create);
-client_method!(ChipClient => fn read(id: ChipId) -> Chip as ChipRequest::Read);
-client_method!(ChipClient => fn update(id: ChipId, patch: ChipUpdate) -> Chip as ChipRequest::Update);
-client_method!(ChipClient => fn delete(id: ChipId) -> () as ChipRequest::Delete);
-client_method!(ChipClient => fn read_statistics() -> Vec<NetsimRadioStats> as ChipRequest::GetStatistics);
-client_method!(ChipClient => fn read_count_for_testing() -> usize as ChipRequest::GetCountForTesting);
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,7 +543,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_chip() {
         let (tx, mut rx) = mpsc::channel(1);
-        let client = ChipClient::new(tx);
+        let client = LegacyChipClient::new(tx);
 
         // Spawn a task to handle the client call
         tokio::spawn(async move {
@@ -503,7 +564,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_chip() {
         let (tx, mut rx) = mpsc::channel(1);
-        let client = ChipClient::new(tx);
+        let client = LegacyChipClient::new(tx);
 
         let params = ChipCreate {
             id: ChipId(2),
@@ -544,7 +605,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_chip_statistics() {
         let (tx, mut rx) = mpsc::channel(1);
-        let client = ChipClient::new(tx);
+        let client = LegacyChipClient::new(tx);
 
         tokio::spawn(async move {
             let _ = client.read_statistics().await;

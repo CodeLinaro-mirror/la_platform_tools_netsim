@@ -14,6 +14,13 @@ mod tests {
         fn set_interval(&mut self, _duration: Duration) {}
         fn add_stream(&mut self, _id: usize, _stream: BoxStream) {}
         fn shutdown(&mut self) {}
+        fn add_task(
+            &mut self,
+            _id: usize,
+            task: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
+        ) {
+            tokio::spawn(task);
+        }
     }
 
     #[tokio::test]

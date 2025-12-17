@@ -8,8 +8,8 @@ use device_api::{DeviceAction, DeviceActionResult};
 use env_logger;
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
 use netsim_model::chip::{
-    CellCreate, ChipClient, ChipConfig, ChipCreate, ChipId, ChipVariant, NetworkParams, PacketSink,
-    PacketStream,
+    CellCreate, ChipClient, ChipConfig, ChipCreate, ChipId, ChipVariant, LegacyChipClient,
+    NetworkParams, PacketSink, PacketStream,
 };
 use netsim_model::chip_error::ChipError as NetsimChipError;
 use netsim_model::device::DeviceId;
@@ -36,7 +36,7 @@ fn create_dummy_stream_sink(
 }
 
 struct TestHarness {
-    client: ChipClient,
+    client: LegacyChipClient,
     device_server_rx: mpsc::Receiver<ResourceRequest<DeviceEntity>>,
     server_handle: tokio::task::JoinHandle<()>,
 }

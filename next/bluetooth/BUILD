@@ -23,6 +23,7 @@ load(
 package(default_visibility = ["//visibility:public"])
 
 BLUETOOTH_DEPS = [
+    "//next/actor-framework",
     "//next/client",
     "//next/device-api",
     "//next/model",
@@ -34,6 +35,7 @@ BLUETOOTH_DEPS = [
     "@log",
     "@protobuf-rust",
     "@rand",
+    "@serde",
     "@thiserror",
     "@tokio",
     "@tokio-stream",
@@ -69,7 +71,6 @@ rust_test(
     ],
     tags = ["general_tests"],
     deps = [":bluetooth"] + BLUETOOTH_DEPS + [
-        "//next/actor-framework",
         "//next/device-actor",
         "@rootcanal//:lib_rootcanal_ffi",
     ],

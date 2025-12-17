@@ -2,14 +2,13 @@
 
 use client::device_client::DeviceClient;
 use device_actor::DeviceContext;
-use netsim_model::chip::{ChipClient, ChipRequest, NetworkKind};
+use netsim_model::chip::{ChipRequest, LegacyChipClient as ChipClient, NetworkKind};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub struct TestFixture {
-    pub actor_task: tokio::task::JoinHandle<()>,
     pub client: DeviceClient,
     pub chip_rx: mpsc::Receiver<ChipRequest>,
 }
@@ -21,8 +20,9 @@ pub async fn setup() -> TestFixture {
     let (chip_tx, chip_rx) = mpsc::channel(10);
     let chip_client = ChipClient::new(chip_tx);
 
-    let mut chip_clients = HashMap::new();
-    chip_clients.insert(NetworkKind::Bluetooth, chip_client);
+    let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =
+        HashMap::new();
+    chip_clients.insert(NetworkKind::Bluetooth, Box::new(chip_client));
 
     let context = DeviceContext {
         chip_clients,
@@ -30,7 +30,7 @@ pub async fn setup() -> TestFixture {
         capture_client: None,
     };
 
-    let actor_task = tokio::spawn(actor.run(context));
+    tokio::spawn(actor.run(context));
 
-    TestFixture { actor_task, client, chip_rx }
+    TestFixture { client, chip_rx }
 }
