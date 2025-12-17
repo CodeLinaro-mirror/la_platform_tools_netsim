@@ -1,6 +1,6 @@
 use crate::bluetooth_actor::BluetoothActor;
 use crate::error::BluetoothError;
-use actor_framework::{ActorLifecycle, Context};
+use actor_framework::{ActorLifecycle, ActorService, Context};
 use async_trait::async_trait;
 use std::time::Duration;
 
@@ -18,22 +18,22 @@ impl ActorLifecycle for BluetoothActor {
     }
 
     async fn on_stream(&mut self, id: u32, message: bytes::Bytes, _ctx: &mut impl Context) {
-        if message.is_empty() {
-            log::error!("Received empty HCI packet from stream for chip {id}");
-            return;
-        }
         if let Err(e) = self.rootcanal.receive_hci(id, message) {
             log::error!("Receive HCI error for chip {id}: {e}");
         }
     }
 
-    async fn on_stream_closed(&mut self, id: u32) -> Result<bool, Self::Error> {
+    async fn on_stream_closed(&mut self, id: u32, ctx: &mut impl Context) {
         log::info!("Stream closed for chip {id}");
-        Ok(true)
+        if let Err(e) = self.handle_delete(netsim_model::chip::ChipId(id), ctx).await {
+            log::error!("Failed to delete chip {id} after stream closed: {e}");
+        }
     }
 
-    async fn on_task_closed(&mut self, id: u32) -> Result<bool, Self::Error> {
+    async fn on_task_closed(&mut self, id: u32, ctx: &mut impl Context) {
         log::info!("Sink task closed for chip {id}");
-        Ok(true)
+        if let Err(e) = self.handle_delete(netsim_model::chip::ChipId(id), ctx).await {
+            log::error!("Failed to delete chip {id} after sink task closed: {e}");
+        }
     }
 }

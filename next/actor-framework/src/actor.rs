@@ -85,8 +85,8 @@ use tokio_stream::StreamExt;
 ///     async fn on_start(&mut self, _ctx: &mut impl Context) {}
 ///     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
 ///     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-///     async fn on_stream_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
-///     async fn on_task_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
+///     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
+///     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
 /// }
 ///
 /// #[tokio::main]
@@ -174,28 +174,13 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
         let stream_id: u32 = id.try_into().unwrap_or(0);
         match msg_opt {
             Some(msg) => actor.on_stream(stream_id, msg, ctx).await,
-            Option::None => {
-                // Stream closed
-                if let Ok(true) = actor.on_stream_closed(stream_id).await {
-                    let entity_id = T::Id::from(stream_id);
-                    if let Err(e) = actor.handle_delete(entity_id, ctx).await {
-                        error!("Failed to auto-delete entity {}: {}", id, e);
-                    }
-                }
-            }
+            Option::None => actor.on_stream_closed(stream_id, ctx).await,
         }
     }
 
     async fn handle_task_closed(actor: &mut T, id: usize, ctx: &mut impl Context) {
         let task_id: u32 = id.try_into().unwrap_or(0);
-        if let Ok(should_delete) = actor.on_task_closed(task_id).await {
-            if should_delete {
-                let entity_id = T::Id::from(task_id);
-                if let Err(e) = actor.handle_delete(entity_id, ctx).await {
-                    error!("Failed to auto-delete entity {}: {}", id, e);
-                }
-            }
-        }
+        actor.on_task_closed(task_id, ctx).await;
     }
 
     async fn handle_shutdown(actor: &mut T) {

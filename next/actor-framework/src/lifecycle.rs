@@ -37,19 +37,13 @@ pub trait ActorLifecycle: Send + Sync + 'static {
     /// Called when a background task completes.
     ///
     /// The `id` matches the one passed to `runtime.add_task`.
-    /// Returns `Ok(true)` if the entity associated with the task ID should be deleted.
-    async fn on_task_closed(&mut self, id: u32) -> Result<bool, Self::Error> {
+    async fn on_task_closed(&mut self, id: u32, _ctx: &mut impl Context) {
         log::debug!("Task closed: {}", id);
-        Ok(false)
     }
 
     /// Called when a registered stream closes.
-    ///
-    /// Returns `Ok(true)` if the entity associated with the stream ID should be deleted.
-    /// This is useful for entities that are 1:1 with a stream (e.g., a chip connected to a packet stream).
-    async fn on_stream_closed(&mut self, id: u32) -> Result<bool, Self::Error> {
+    async fn on_stream_closed(&mut self, id: u32, _ctx: &mut impl Context) {
         log::debug!("Stream closed: {}", id);
-        Ok(false)
     }
 
     /// Called when the actor receives a shutdown signal.

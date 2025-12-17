@@ -107,8 +107,8 @@
 //!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
 //!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
 //!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-//!     async fn on_stream_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
-//!     async fn on_task_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
+//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
+//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
 //! }
 //!
 //! // 2. Use the Actor
@@ -166,8 +166,8 @@
 //!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
 //!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
 //!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-//!     async fn on_stream_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
-//!     async fn on_task_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
+//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
+//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
 //! }
 //!
 //! #[derive(Clone, Debug)] struct Product { id: u32 }
@@ -195,8 +195,8 @@
 //!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
 //!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
 //!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-//!     async fn on_stream_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
-//!     async fn on_task_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
+//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
+//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
 //! }
 //!
 //! #[derive(Clone, Debug)] struct Order { id: u32 }
@@ -234,8 +234,8 @@
 //!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
 //!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
 //!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-//!     async fn on_stream_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
-//!     async fn on_task_closed(&mut self, _id: u32) -> Result<bool, Self::Error> { Ok(false) }
+//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
+//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
 //! }
 //!
 //! #[tokio::main]
