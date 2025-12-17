@@ -12,8 +12,7 @@ use async_trait::async_trait;
 /// # Example
 ///
 /// ```rust
-/// use actor_framework::{ActorClient, ActorService, BoxStream, ResourceActor, FrameworkError, ResourceClient};
-/// use actor_framework::Context;
+/// use actor_framework::{ActorClient, ActorLifecycle, ActorService, BoxStream, Context, DynContext, FrameworkError, ResourceActor, ResourceClient};
 /// use async_trait::async_trait;
 ///
 /// // 1. Define Service
@@ -46,12 +45,18 @@ use async_trait::async_trait;
 ///     type Error = UserError;
 ///     type Entity = User;
 ///
-///     async fn handle_create(&mut self, id: Option<u32>, _: UserCreate, _: &mut impl Context) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
-///     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
-///     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
-///     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_action(&mut self, _id: Option<Self::Id>, _: UserAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
+///     async fn handle_create(
+///         &mut self,
+///         id: Option<u32>,
+///         _: UserCreate,
+///         _: &mut DynContext<Self::Id>,
+///     ) -> Result<u32, Self::Error> {
+///  self.id = id.unwrap_or(0); Ok(self.id) }
+///     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+///     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+///     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_action(&mut self, _id: Option<Self::Id>, _: UserAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+///     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
 /// }
 ///
 /// // 2. Define Client Wrapper

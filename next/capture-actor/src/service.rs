@@ -2,7 +2,7 @@ use crate::bt_pcap::BluetoothH4Writer;
 use crate::capture_actor::CaptureActor;
 use crate::error::CaptureError;
 use crate::writer::CaptureWriter;
-use actor_framework::{ActorService, Context};
+use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
@@ -48,7 +48,7 @@ impl CaptureActor {
     pub(crate) async fn create_entity(
         &mut self,
         entity: &mut InternalCaptureInfo,
-        ctx: &mut impl Context,
+        ctx: &mut DynContext<ChipId>,
     ) -> Result<(), CaptureError> {
         // Register the enabled flag in the context so streams can access it.
         self.flags.insert(entity.info.chip_id, entity.enabled_flag.clone());
@@ -66,7 +66,7 @@ impl CaptureActor {
         &mut self,
         entity: &mut InternalCaptureInfo,
         enabled: bool,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<ChipId>,
     ) -> Result<(), CaptureError> {
         if entity.info.enabled == enabled {
             // Even if enabled matches, we might need to create writer if it is missing (e.g. from create flow)
@@ -97,7 +97,7 @@ impl CaptureActor {
     pub(crate) async fn delete_entity(
         &mut self,
         entity: &InternalCaptureInfo,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<ChipId>,
     ) -> Result<(), CaptureError> {
         // Clean up resources when the entity is deleted.
         self.writers.remove(&entity.info.chip_id);
@@ -151,7 +151,7 @@ impl CaptureActor {
         &mut self,
         entity: &mut InternalCaptureInfo,
         action: CaptureAction,
-        ctx: &mut impl Context,
+        ctx: &mut DynContext<ChipId>,
     ) -> Result<CaptureActionResult, CaptureError> {
         match action {
             CaptureAction::CapturePacket { chip_id, direction, ref bytes } => {
@@ -214,7 +214,7 @@ impl ActorService for CaptureActor {
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
-        ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
         let id = id.unwrap_or_else(|| {
             let id = ChipId(self.next_id);
@@ -223,7 +223,7 @@ impl ActorService for CaptureActor {
         });
         let mut entity = InternalCaptureInfo::from_create_params(id, params)?;
         // Initialize the entity logic (e.g. set up writers based on flags)
-        self.create_entity(&mut entity, ctx).await?;
+        self.create_entity(&mut entity, &mut *_ctx).await?;
 
         // 3. Store the entity
         self.entities.insert(id, entity);
@@ -233,7 +233,7 @@ impl ActorService for CaptureActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(self.entities.get(&id).map(|entity| {
             let (records_written, bytes_written) =
@@ -249,10 +249,10 @@ impl ActorService for CaptureActor {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(mut entity) = self.entities.remove(&id) {
-            let _ = self.update_entity(&mut entity, update, ctx).await?;
+            let _ = self.update_entity(&mut entity, update, &mut *_ctx).await?;
             let (records_written, bytes_written) =
                 self.writers.get(&id).map(|w| w.get_stats()).unwrap_or((0, 0));
             let mut info = entity.info.clone();
@@ -268,10 +268,10 @@ impl ActorService for CaptureActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
         if let Some(entity) = self.entities.remove(&id) {
-            self.delete_entity(&entity, ctx).await
+            self.delete_entity(&entity, &mut *_ctx).await
             // Don't re-insert
         } else {
             Err(CaptureError::ChipNotFound(id))
@@ -282,7 +282,7 @@ impl ActorService for CaptureActor {
         &mut self,
         id: Option<Self::Id>,
         action: Self::Action,
-        ctx: &mut impl Context,
+        ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
         let Some(id) = id else {
             // Global action
@@ -314,8 +314,8 @@ impl ActorService for CaptureActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut impl Context,
-    ) -> Result<Vec<CaptureInfo>, Self::Error> {
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.list_entities())
     }
 }

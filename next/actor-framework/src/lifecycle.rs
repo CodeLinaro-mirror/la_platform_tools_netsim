@@ -3,7 +3,7 @@
 //! The `ActorLifecycle` trait defines the contract for an actor's lifecycle hooks.
 //! This allows the Actor Implementation to perform operations outside of ActorService handlers.
 
-use crate::Context;
+use crate::DynContext;
 use async_trait::async_trait;
 use bytes::Bytes;
 
@@ -17,33 +17,38 @@ pub type StreamMessage = Bytes;
 ///
 /// This allows the Actor Implementation to perform operations outside of ActorService handlers.
 #[async_trait]
-pub trait ActorLifecycle: Send + Sync + 'static {
+pub trait ActorLifecycle<Id>: Send + 'static
+where
+    Id: Send + Copy + From<u32> + Into<u32> + 'static,
+{
     /// The error type returned by context methods.
-    type Error: std::error::Error + Send + Sync + 'static;
+    type Error;
 
     /// Called when the actor starts, before processing any messages.
     ///
     /// Use this hook to:
     /// - Schedule initial timers.
     /// - Register initial streams.
-    async fn on_start(&mut self, _runtime: &mut impl Context) {}
+    async fn on_start(&mut self, _ctx: &mut DynContext<Id>) {}
 
     /// Called on every tick of the actor's interval.
-    async fn on_tick(&mut self, _runtime: &mut impl Context) {}
+    async fn on_tick(&mut self, _ctx: &mut DynContext<Id>) {}
 
     /// Called when a stream produces a message.
-    async fn on_stream(&mut self, _id: u32, _message: StreamMessage, ctx: &mut impl Context) {}
+    async fn on_stream(&mut self, _id: Id, _message: StreamMessage, _ctx: &mut DynContext<Id>) {}
 
-    /// Called when a background task completes.
+    /// Hook called when a background task managed by `spawn` completes.
     ///
-    /// The `id` matches the one passed to `runtime.add_task`.
-    async fn on_task_closed(&mut self, id: u32, _ctx: &mut impl Context) {
-        log::debug!("Task closed: {}", id);
+    /// # Arguments
+    ///
+    /// * `id` - The ID of the task that completed.
+    async fn on_task_closed(&mut self, id: Id, _ctx: &mut DynContext<Id>) {
+        log::debug!("Task closed: {}", id.into());
     }
 
     /// Called when a registered stream closes.
-    async fn on_stream_closed(&mut self, id: u32, _ctx: &mut impl Context) {
-        log::debug!("Stream closed: {}", id);
+    async fn on_stream_closed(&mut self, id: Id, _ctx: &mut DynContext<Id>) {
+        log::debug!("Stream closed: {}", id.into());
     }
 
     /// Called when the actor receives a shutdown signal.
@@ -60,6 +65,6 @@ impl std::fmt::Display for EmptyError {
 impl std::error::Error for EmptyError {}
 
 #[async_trait]
-impl ActorLifecycle for () {
+impl ActorLifecycle<u32> for () {
     type Error = EmptyError;
 }

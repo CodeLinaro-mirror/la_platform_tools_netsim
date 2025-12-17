@@ -16,31 +16,45 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio_stream::{StreamMap, StreamNotifyClose};
 
-/// The runtime environment for an actor, providing access to capabilities.
-pub trait Context: Send {
-    /// Sets the interval for the actor's tick loop.
+/// The runtime environment for an actor, providing access to time, streams, and lifecycle.
+pub type DynContext<Id> = dyn Context<Id> + Send;
+
+/// The runtime environment for an actor. The ID type must be `Send + Copy + 'static`.
+pub trait Context<Id>: Send + 'static {
+    /// Schedule a message to be sent to the actor after a delay.oop.
     fn set_interval(&mut self, duration: Duration);
 
     /// Adds a new stream to be managed by the actor.
-    fn add_stream(&mut self, id: u32, stream: BoxStream);
+    fn add_stream(&mut self, id: Id, stream: BoxStream);
 
-    /// Adds a background task to be managed by the runtime.
+    /// Removes a managed stream by its ID.
+    fn remove_stream(&mut self, id: Id);
+
+    /// Spawns a background task to be managed by the runtime.
     ///
-    /// The task is identified by `id`. When it completes, the actor's `on_task_closed` hook will be called.
-    fn add_task(&mut self, id: u32, task: BoxFuture<'static, ()>);
+    /// The task is identified by `id`. When it completes, the actor's `on_task_closed` hook will be called
+    /// with the value returned by the task (which must be its `id`).
+    fn spawn(&mut self, id: Id, task: BoxFuture<'static, Id>);
+
+    /// Aborts a background task by its ID.
+    fn abort(&mut self, id: Id);
 
     /// Signals the actor to stop processing messages and exit its run loop.
     fn shutdown(&mut self);
 }
 
-pub(crate) struct FrameworkContext {
+pub(crate) struct FrameworkContext<Id> {
     pub(crate) interval: tokio::time::Interval,
-    pub(crate) streams: StreamMap<u32, StreamNotifyClose<BoxStream>>,
+    pub(crate) streams: StreamMap<Id, StreamNotifyClose<BoxStream>>,
     pub(crate) shutdown_tx: Option<oneshot::Sender<()>>,
-    pub(crate) tasks: tokio::task::JoinSet<u32>,
+    pub(crate) tasks: tokio::task::JoinSet<Id>,
+    pub(crate) task_handles: std::collections::HashMap<Id, tokio::task::AbortHandle>,
 }
 
-impl FrameworkContext {
+impl<Id> FrameworkContext<Id>
+where
+    Id: std::hash::Hash + Eq + Copy + Send + 'static,
+{
     /// Creates a new FrameworkContext with default settings.
     /// Returns the FrameworkContext and a shutdown receiver.
     pub(crate) fn new() -> (Self, oneshot::Receiver<()>) {
@@ -57,32 +71,40 @@ impl FrameworkContext {
                 streams: StreamMap::new(),
                 shutdown_tx: Some(shutdown_tx),
                 tasks: tokio::task::JoinSet::new(),
+                task_handles: std::collections::HashMap::new(),
             },
             shutdown_rx,
         )
     }
 }
 
-impl Context for FrameworkContext {
+impl<Id> Context<Id> for FrameworkContext<Id>
+where
+    Id: std::hash::Hash + Eq + Copy + Send + 'static,
+{
     fn set_interval(&mut self, duration: Duration) {
         let mut interval = tokio::time::interval(duration);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         self.interval = interval;
     }
 
-    fn add_stream(&mut self, id: u32, stream: BoxStream) {
+    fn add_stream(&mut self, id: Id, stream: BoxStream) {
         self.streams.insert(id, StreamNotifyClose::new(stream));
     }
 
-    fn add_task(
-        &mut self,
-        id: u32,
-        task: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
-    ) {
-        self.tasks.spawn(async move {
-            task.await;
-            id
-        });
+    fn remove_stream(&mut self, id: Id) {
+        self.streams.remove(&id);
+    }
+
+    fn spawn(&mut self, id: Id, task: BoxFuture<'static, Id>) {
+        let handle = self.tasks.spawn(async move { task.await });
+        self.task_handles.insert(id, handle);
+    }
+
+    fn abort(&mut self, id: Id) {
+        if let Some(handle) = self.task_handles.remove(&id) {
+            handle.abort();
+        }
     }
 
     fn shutdown(&mut self) {
@@ -90,5 +112,6 @@ impl Context for FrameworkContext {
             let _ = tx.send(());
         }
         self.tasks.abort_all();
+        self.task_handles.clear();
     }
 }

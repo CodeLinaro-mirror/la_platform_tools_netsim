@@ -26,7 +26,7 @@
 //! **Example**:
 //! ```rust
 //! use actor_framework::mock::MockClient;
-//! use actor_framework::{ActorService, Context, ResourceClient, ResourceRequest};
+//! use actor_framework::{ActorService, Context, DynContext, ResourceClient, ResourceRequest};
 //! use async_trait::async_trait;
 //!
 //! // --- Define a minimal Service for the test ---
@@ -42,17 +42,22 @@
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate;
 //!     type Action = UserAction; type ActionResult = (); type Error = UserError; type Entity = User;
 //!
-//!     async fn handle_create(&mut self, id: Option<u32>, params: UserCreate, _: &mut impl Context) -> Result<u32, Self::Error> {
+//!     async fn handle_create(
+//!         &mut self,
+//!         id: Option<u32>,
+//!         params: UserCreate,
+//!         _: &mut DynContext<Self::Id>,
+//!     ) -> Result<u32, Self::Error> {
 //!         let id = id.unwrap_or(0);
 //!         self.id = id;
 //!         self.email = params.email;
 //!         Ok(id)
 //!     }
-//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
-//!     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
-//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
 //!
 //! // --- Define a minimal Client Wrapper ---
@@ -92,7 +97,7 @@
 //!
 //! **Example**:
 //! ```rust
-//! use actor_framework::{ActorLifecycle, ActorService, Context, ResourceActor, ResourceClient};
+//! use actor_framework::{ActorId, ActorLifecycle, ActorService, BoxStream, Context, DynContext, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
 //!
 //! // --- Define Service ---
@@ -107,29 +112,49 @@
 //!     type Id = u32; type Create = ProductCreate; type Update = ProductUpdate;
 //!     type Action = ProductAction; type ActionResult = u32; type Error = ProductError; type Entity = Product;
 //!
-//!     async fn handle_create(&mut self, id: Option<u32>, params: ProductCreate, _: &mut impl Context) -> Result<u32, Self::Error> {
+//!     async fn handle_create(&mut self, id: Option<u32>, params: ProductCreate, _: &mut DynContext<Self::Id>) -> Result<u32, Self::Error> {
 //!         let id = id.unwrap_or(0);
 //!         self.id = id;
 //!         self.stock = params.stock;
 //!         Ok(id)
 //!     }
-//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
-//!     async fn handle_update(&mut self, _: u32, _: ProductUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
-//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: Option<u32>, action: ProductAction, _: &mut impl Context) -> Result<u32, Self::Error> {
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: ProductUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, action: ProductAction, _: &mut DynContext<Self::Id>) -> Result<u32, Self::Error> {
 //!         match action { ProductAction::CheckStock => Ok(self.stock) }
 //!     }
-//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<Product>, Self::Error> { Ok(vec![self.clone()]) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<Product>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
 //!
 //! #[async_trait]
-//! impl ActorLifecycle for Product {
+//! impl ActorLifecycle<u32> for Product {
 //!     type Error = ProductError;
-//!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
-//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
+//!     async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//! }
+//!
+//! // --- MockContext for testing ---
+//! struct MockContext<Id>(std::marker::PhantomData<Id>);
+//!
+//! impl<Id> Context<Id> for MockContext<Id>
+//! where
+//!     Id: Send + 'static,
+//! {
+//!     fn set_interval(&mut self, _duration: std::time::Duration) {}
+//!
+//!     fn add_stream(&mut self, _id: Id, _stream: BoxStream) {}
+//!
+//!     fn remove_stream(&mut self, _id: Id) {}
+//!
+//!     fn spawn(&mut self, _id: Id, _task: std::pin::Pin<Box<dyn std::future::Future<Output = Id> + Send>>) {}
+//!
+//!     fn abort(&mut self, _id: Id) {}
+//!
+//!     fn shutdown(&mut self) {}
 //! }
 //!
 //! #[tokio::main]
@@ -172,7 +197,7 @@
 //!
 //! ```rust
 //! use actor_framework::mock::MockClient;
-//! use actor_framework::{ActorService, Context, FrameworkError};
+//! use actor_framework::{ActorService, Context, DynContext, FrameworkError};
 //! use async_trait::async_trait;
 //!
 //! #[derive(Clone, Debug)] struct User { id: u32 }
@@ -186,12 +211,12 @@
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate;
 //!     type Action = UserAction; type ActionResult = (); type Error = UserError; type Entity = User;
 //!
-//!     async fn handle_create(&mut self, id: Option<u32>, _: UserCreate, _: &mut impl Context) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
-//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
-//!     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
-//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
+//!     async fn handle_create(&mut self, id: Option<u32>, _: UserCreate, _: &mut DynContext<Self::Id>) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
 //!
 //! #[tokio::main]
@@ -503,7 +528,7 @@ mod tests {
     use super::*;
     use super::*;
     use crate::service::ActorService;
-    use crate::Context;
+    use crate::{Context, DynContext};
     use async_trait::async_trait;
 
     #[derive(Clone, Debug, PartialEq)]
@@ -546,16 +571,16 @@ mod tests {
         async fn handle_create(
             &mut self,
             id: Option<Self::Id>,
-            _params: Self::Create,
-            _ctx: &mut impl Context,
+            params: Self::Create,
+            _ctx: &mut DynContext<Self::Id>,
         ) -> Result<Self::Id, Self::Error> {
             Ok(id.unwrap_or(0))
         }
 
         async fn handle_get(
             &self,
-            _id: Self::Id,
-            _ctx: &mut impl Context,
+            id: Self::Id,
+            _ctx: &mut DynContext<Self::Id>,
         ) -> Result<Option<Self::Entity>, Self::Error> {
             Ok(None)
         }
@@ -564,7 +589,7 @@ mod tests {
             &mut self,
             _id: Self::Id,
             _update: Self::Update,
-            _ctx: &mut impl Context,
+            _ctx: &mut DynContext<Self::Id>,
         ) -> Result<Self::Entity, Self::Error> {
             Ok(self.clone())
         }
@@ -572,7 +597,7 @@ mod tests {
         async fn handle_delete(
             &mut self,
             _id: Self::Id,
-            _ctx: &mut impl Context,
+            _ctx: &mut DynContext<Self::Id>,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -581,12 +606,15 @@ mod tests {
             &mut self,
             _id: Option<Self::Id>,
             _action: Self::Action,
-            _ctx: &mut impl Context,
+            _ctx: &mut DynContext<Self::Id>,
         ) -> Result<Self::ActionResult, Self::Error> {
             Ok(())
         }
 
-        async fn handle_list(&mut self, _ctx: &mut impl Context) -> Result<Vec<User>, Self::Error> {
+        async fn handle_list(
+            &mut self,
+            _ctx: &mut DynContext<Self::Id>,
+        ) -> Result<Vec<Self::Entity>, Self::Error> {
             Ok(vec![])
         }
     }
@@ -603,7 +631,7 @@ mod tests {
     async fn test_mock_client() {
         let (client, mut receiver) = create_mock_client::<User>(10);
 
-        // Test Create
+        // Test logic uses tokio::spawn directly, bypassing client.spawn.
         let create_task = tokio::spawn(async move {
             let user =
                 UserCreate { name: "Test".to_string(), email: "test@example.com".to_string() };

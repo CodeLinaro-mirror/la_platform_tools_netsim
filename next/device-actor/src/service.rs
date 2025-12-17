@@ -1,9 +1,9 @@
 use crate::device_actor::DeviceActor;
 use crate::error::DeviceError;
 use crate::utils::{chip_kind_to_network_kind, create_capture_and_wrap_streams};
-use actor_framework::{ActorService, Context};
+use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
-use device_api::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse};
+use device_api::api::{DeviceCreate, DeviceUpdate};
 use device_api::{DeviceAction, DeviceActionResult, DeviceId};
 use netsim_model::chip::{
     BeaconParams, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId, NetworkKind,
@@ -49,7 +49,7 @@ impl ActorService for DeviceActor {
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
-        _ctx: &mut impl Context,
+        ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
         let id = id.unwrap_or_else(|| {
             let id = DeviceId(self.next_device_id);
@@ -122,7 +122,7 @@ impl ActorService for DeviceActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(self.devices.get(&id).map(|e| e.device.clone()))
     }
@@ -131,7 +131,7 @@ impl ActorService for DeviceActor {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(entity) = self.devices.get_mut(&id) {
             // Update local state
@@ -173,7 +173,7 @@ impl ActorService for DeviceActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
         if let Some(entity) = self.devices.remove(&id) {
             for chip in &entity.device.chips {
@@ -196,7 +196,7 @@ impl ActorService for DeviceActor {
         &mut self,
         id: Option<Self::Id>,
         action: Self::Action,
-        _ctx: &mut impl Context,
+        ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
         if let Some(id) = id {
             if let Some(mut entity) = self.devices.remove(&id) {
@@ -304,8 +304,8 @@ impl ActorService for DeviceActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut impl Context,
-    ) -> Result<Vec<device_api::Device>, Self::Error> {
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.devices.values().map(|e| e.device.clone()).collect())
     }
 }

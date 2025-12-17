@@ -3,9 +3,9 @@
 use crate::actions::{BluetoothAction, BluetoothActionResult};
 use crate::bluetooth_actor::BluetoothActor;
 use crate::error::BluetoothError;
-use crate::hci_callbacks::{run_sink_task, HciCallbacks};
+use crate::hci_callbacks::HciCallbacks;
 use crate::utils::ToChipError;
-use actor_framework::{ActorService, Context};
+use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use netsim_model::chip::{BluetoothMode, Chip, ChipCreate, ChipId, ChipUpdate};
 use netsim_model::chip_error::ChipError;
@@ -24,9 +24,9 @@ impl ActorService for BluetoothActor {
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         params: Self::Create,
-        ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
         let id = params.id;
         let mut entity = InternalChip::from_create_params(id, params)?;
@@ -35,7 +35,7 @@ impl ActorService for BluetoothActor {
 
         // 1. Register Stream
         if let Some(stream) = entity.packet_stream.take() {
-            ctx.add_stream(chip_id.0, Box::pin(stream));
+            _ctx.add_stream(chip_id, Box::pin(stream));
         }
 
         // 2. Setup Sink and Callbacks
@@ -45,12 +45,7 @@ impl ActorService for BluetoothActor {
 
             // Spawn the sink task which forwards packets from the channel to the sink.
             let sink_id = chip_id;
-            ctx.add_task(
-                sink_id.0,
-                Box::pin(async move {
-                    run_sink_task(sink, hci_rx, sink_id).await;
-                }),
-            );
+            _ctx.spawn(sink_id, Box::pin(crate::hci_callbacks::sink_loop(sink, hci_rx, sink_id)));
 
             HciCallbacks { id: chip_id, hci_tx: Some(hci_tx), ll_tx: None }
         } else {
@@ -62,8 +57,11 @@ impl ActorService for BluetoothActor {
             ChipError::InvalidArguments("Missing Bluetooth params".into()),
         ))?;
 
-        let address =
-            create_params.address.parse().unwrap_or_else(|_| "00:00:00:00:00:00".parse().unwrap());
+        let address = create_params.address.parse().map_err(|_| {
+            BluetoothError::Chip(ChipError::InvalidArguments("Invalid address".into()))
+        })?;
+        // Note: There is no specific enforcement for a "blue" address type.
+        // The current check only validates if the address string is parsable.
 
         self.rootcanal
             .new_controller(chip_id.0.into(), address, Box::new(callback))
@@ -93,7 +91,7 @@ impl ActorService for BluetoothActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(self.entities.get(&id).map(|e| e.chip.clone()))
     }
@@ -102,7 +100,7 @@ impl ActorService for BluetoothActor {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(mut entity) = self.entities.remove(&id) {
             let mut chips = self.chips.lock().unwrap();
@@ -129,7 +127,7 @@ impl ActorService for BluetoothActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
         if let Some(entity) = self.entities.remove(&id) {
             let chip_id = ChipId(entity.chip.id);
@@ -153,10 +151,10 @@ impl ActorService for BluetoothActor {
     async fn handle_action(
         &mut self,
         _id: Option<Self::Id>,
-        action: Self::Action,
-        _ctx: &mut impl Context,
+        _action: Self::Action,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
-        match action {
+        match _action {
             BluetoothAction::Reset { id } => {
                 // TODO: Implement reset
                 log::warn!("Reset chip {id} not implemented");
@@ -185,7 +183,10 @@ impl ActorService for BluetoothActor {
         }
     }
 
-    async fn handle_list(&mut self, _ctx: &mut impl Context) -> Result<Vec<Chip>, Self::Error> {
+    async fn handle_list(
+        &mut self,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(actor_framework::utils::handle_list_map(&self.entities, |e| e.chip.clone()))
     }
 }
