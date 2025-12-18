@@ -13,7 +13,6 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
     enable_clippy = False,
-    enable_fmt = False,
     enable_unit_test = False,
     visibility = ["//next:__subpackages__"],
     deps = [
