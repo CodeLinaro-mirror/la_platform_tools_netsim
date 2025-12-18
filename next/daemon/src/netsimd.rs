@@ -346,23 +346,26 @@ impl NetsimDaemon {
         info!("Bluetooth server created");
 
         // Setup Wifi Server
-        let (wifi_server, _wifi_client) = wifi::Server::new(device_client.clone());
+        let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
         info!("Wifi server created");
 
         // Setup Uwb Server
-        let (uwb_server, _uwb_client) = uwb::Server::new(device_client.clone());
+        let (uwb_server, uwb_client) = uwb::Server::new(device_client.clone());
         info!("Uwb server created");
 
         // Setup Cell Server
         // TODO: Replace with real modem network.
         let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
-        let (cell_server, _cell_client) = cell::Server::new(device_client.clone(), cell_controller);
+        let (cell_server, cell_client) = cell::Server::new(device_client.clone(), cell_controller);
         info!("Cell server created");
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =
             HashMap::new();
         chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client));
+        chip_clients.insert(NetworkKind::Wifi, Box::new(wifi_client));
+        chip_clients.insert(NetworkKind::Uwb, Box::new(uwb_client));
+        chip_clients.insert(NetworkKind::Cell, Box::new(cell_client));
 
         let device_actor_state = device_actor::new(
             chip_clients,
