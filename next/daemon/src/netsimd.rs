@@ -387,6 +387,10 @@ impl NetsimDaemon {
         info!("Device server started");
         join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
         info!("Capture server started");
+        // TODO: Pass this to the capture actor constructor, as it comes from a CLI flag and is static at startup.
+        if args.pcap {
+            capture_client.set_default_capture(true).await.expect("Failed to set default capture");
+        }
         //TODO: Add Link server with chip_clients
         // Link server usage:
         // let (link_runner, link_client) = link_actor::new();
