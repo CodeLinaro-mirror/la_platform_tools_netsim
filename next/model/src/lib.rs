@@ -44,6 +44,7 @@ pub mod device;
 pub mod device_error;
 /// Structs for initial connection handshake.
 pub mod initial_info;
+pub mod link;
 /// Macros for the client methods.
 pub(crate) mod macros;
 /// Packet streamer definitions.

@@ -149,6 +149,6 @@ async fn test_chip_removal_deletes_links() {
 
     // 4. Verify we can't get it by ID (if we had a get method, but list is enough)
     // Also verify we can't update it
-    let update_result = client.update(link_id, link_api::LinkPatch { rssi: Some(-60) }).await;
+    let update_result = client.update(link_id, link_api::LinkUpdate { rssi: Some(-60) }).await;
     assert!(update_result.is_err(), "Should not be able to update deleted link");
 }
