@@ -20,7 +20,7 @@ members = [
   "capture-api",
   "bluetooth",
   "model",
-  #  "daemon",
+  "daemon",
   "proto",
   "packet-stream",
   "link-actor",

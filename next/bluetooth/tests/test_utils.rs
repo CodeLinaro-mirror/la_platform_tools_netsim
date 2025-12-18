@@ -2,7 +2,6 @@
 
 use actor_framework::ResourceClient;
 use bytes::Bytes;
-use client::DeviceClient;
 use futures::{
     sink::Sink,
     stream::Stream,
@@ -10,7 +9,7 @@ use futures::{
     Future,
 };
 use netsim_model::bluetooth::Controller as RootcanalController;
-use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, NetworkParams};
+use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipConfig, NetworkParams};
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -25,7 +24,8 @@ pub struct TestFixture {
 pub fn setup() -> TestFixture {
     let (device_tx, _device_rx) = mpsc::channel(10);
     let resource_client = client::device_client::DeviceClient::new(ResourceClient::new(device_tx));
-    let (actor, context, client) = bluetooth::new(resource_client.clone());
+    let (actor, client) = bluetooth::new();
+    let context = bluetooth::BluetoothActor::new(resource_client.clone(), client.clone());
     let actor_task = tokio::spawn(async move {
         actor.run(context).await;
     });

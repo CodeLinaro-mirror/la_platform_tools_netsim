@@ -4,7 +4,7 @@ use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
-use capture_api::CaptureCreate;
+
 use client::{CaptureClient, DeviceClient};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
@@ -298,25 +298,18 @@ impl NetsimDaemon {
         #[cfg(unix)]
         setup_uds_listener(&mut streams, &mut listener_addresses, &runtime_dir).await?;
 
-        // Setup Device Server
+        // Setup Device Server Channel
         info!("Using new device-actor framework");
-        let (actor, generic_client) = device_actor::new();
-        let device_client = client::device_client::DeviceClient::new(generic_client);
+        // Create the runner (owns receiver) and client (wraps sender)
+        let (device_runner, resource_client) =
+            actor_framework::ResourceActor::<device_actor::DeviceActor>::new(32);
+        let device_client = client::device_client::DeviceClient::new(resource_client);
 
         // Setup Capture Server
-        let (capture_actor, capture_generic_client) = capture_actor::new();
+        let (capture_runner, capture_generic_client) = capture_actor::new();
         let capture_client = client::CaptureClient::new(capture_generic_client);
-        let capture_context = capture_actor::context::CaptureContext::default();
 
         let next_chip_id = Arc::new(AtomicU32::new(0));
-
-        let context = device_actor::DeviceContext {
-            chip_clients: HashMap::new(), // Will be filled later
-            next_chip_id: next_chip_id.clone(),
-            capture_client: Some(Arc::new(capture_client.clone())),
-        };
-        let device_actor_components = Some((actor, context));
-        info!("Device server created");
 
         // gRPC port is determined after the listener starts.
         let (actual_grpc_port, grpc_server) = setup_grpc_listener(
@@ -347,21 +340,23 @@ impl NetsimDaemon {
         info!("Successfully wrote to INI file {}", ini_path.display());
 
         // Setup Bluetooth Server
-        let (bt_actor, bt_context, bt_client) = bluetooth::new(device_client.clone());
+        let (bt_runner, bt_client) = bluetooth::new();
+        let bt_actor_state =
+            bluetooth::BluetoothActor::new(device_client.clone(), bt_client.clone());
         info!("Bluetooth server created");
 
         // Setup Wifi Server
-        let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
+        let (wifi_server, _wifi_client) = wifi::Server::new(device_client.clone());
         info!("Wifi server created");
 
         // Setup Uwb Server
-        let (uwb_server, uwb_client) = uwb::Server::new(device_client.clone());
+        let (uwb_server, _uwb_client) = uwb::Server::new(device_client.clone());
         info!("Uwb server created");
 
         // Setup Cell Server
         // TODO: Replace with real modem network.
         let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
-        let (cell_server, cell_client) = cell::Server::new(device_client.clone(), cell_controller);
+        let (cell_server, _cell_client) = cell::Server::new(device_client.clone(), cell_controller);
         info!("Cell server created");
 
         // Prepare chip clients map for DeviceServer
@@ -369,9 +364,15 @@ impl NetsimDaemon {
             HashMap::new();
         chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client));
 
+        let device_actor_state = device_actor::new(
+            chip_clients,
+            next_chip_id.clone(),
+            Some(Arc::new(capture_client.clone())),
+        );
+
         // Spawn server tasks
         let mut join_set = JoinSet::new();
-        join_set.spawn(bt_actor.run(bt_context));
+        join_set.spawn(bt_runner.run(bt_actor_state));
         info!("Bluetooth server started");
         join_set.spawn(wifi_server.run());
         info!("Wifi server started");
@@ -379,14 +380,14 @@ impl NetsimDaemon {
         info!("Uwb server started");
         join_set.spawn(cell_server.run());
         info!("Cell server started");
-        if let Some((actor, mut context)) = device_actor_components {
-            context.chip_clients = chip_clients;
-            join_set.spawn(actor.run(context));
-        }
+        join_set.spawn(device_runner.run(device_actor_state));
         info!("Device server started");
-        join_set.spawn(capture_actor.run(capture_context));
+        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
         info!("Capture server started");
         //TODO: Add Link server with chip_clients
+        // Link server usage:
+        // let (link_runner, link_client) = link_actor::new();
+        // join_set.spawn(link_runner.run(link_actor::LinkActor::default()));
         Ok(StartUpMode::Owner(
             NetsimDaemon {
                 join_set,
