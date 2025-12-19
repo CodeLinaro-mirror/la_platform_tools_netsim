@@ -59,8 +59,10 @@ impl ActorService for LinkActor {
 
         self.chip_pairs.insert((link.sender, link.receiver), link.id);
 
-        // TODO: Forward to radio client
+        let sender = link.sender;
+        let receiver = link.receiver;
         self.links.insert(id, link);
+        self.update_chip_links(sender).await;
         Ok(id)
     }
 
@@ -78,15 +80,21 @@ impl ActorService for LinkActor {
         update: Self::Update,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
-        if let Some(link) = self.links.get_mut(&id) {
+        let link_clone = {
+            let Some(link) = self.links.get_mut(&id) else {
+                return Err(LinkError::NotFound(id.to_string()));
+            };
+
             if let Some(rssi) = update.rssi {
                 link.rssi = rssi;
-                // TODO: Forward update to radio client
             }
-            Ok(link.clone())
-        } else {
-            Err(LinkError::NotFound(id.to_string()))
+            link.clone()
+        };
+
+        if update.rssi.is_some() {
+            self.update_chip_links(link_clone.sender).await;
         }
+        Ok(link_clone)
     }
 
     async fn handle_delete(
@@ -95,8 +103,10 @@ impl ActorService for LinkActor {
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
         if let Some(link) = self.links.remove(&id) {
-            self.chip_pairs.remove(&(link.sender, link.receiver));
-            // TODO: Forward delete to radio client
+            let sender = link.sender;
+            let receiver = link.receiver;
+            self.chip_pairs.remove(&(sender, receiver));
+            self.update_chip_links(sender).await;
             Ok(())
         } else {
             Err(LinkError::NotFound(id.to_string()))
@@ -118,19 +128,22 @@ impl ActorService for LinkActor {
                 log::info!("NotifyChipRemoved: {}", chip_id);
                 self.chip_kind_map.remove(&chip_id);
 
-                // Remove links and lookup entries with this chip
-                // and keep track of chip "senders" that need to be updated
                 let mut deleted_senders = std::collections::HashSet::new();
+                let chip_pairs = &mut self.chip_pairs;
                 self.links.retain(|_, link| {
                     if link.sender == chip_id || link.receiver == chip_id {
-                        self.chip_pairs.remove(&(link.sender, link.receiver));
-                        deleted_senders.insert(link.sender); // senders will be updated
+                        chip_pairs.remove(&(link.sender, link.receiver));
+                        if link.sender != chip_id {
+                            deleted_senders.insert(link.sender);
+                        }
                         return false;
                     }
                     true
                 });
 
-                // TODO: Forward delete to chip client using deleted_senders
+                for sender in deleted_senders {
+                    self.update_chip_links(sender).await;
+                }
             }
         }
         Ok(())
