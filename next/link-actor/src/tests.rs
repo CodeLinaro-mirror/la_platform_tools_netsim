@@ -11,16 +11,23 @@ mod tests {
 
     struct MockContext;
 
-    impl Context for MockContext {
+    impl<Id> Context<Id> for MockContext
+    where
+        Id: Into<u32> + Send + 'static,
+    {
         fn set_interval(&mut self, _duration: Duration) {}
-        fn add_stream(&mut self, _id: u32, _stream: BoxStream) {}
+        fn add_stream(&mut self, _id: Id, _stream: BoxStream) {}
+        fn remove_stream(&mut self, _id: Id) {}
         fn shutdown(&mut self) {}
-        fn add_task(
+        fn abort(&mut self, _id: Id) {}
+        fn spawn(
             &mut self,
-            _id: u32,
-            _task: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
+            _id: Id,
+            _task: std::pin::Pin<Box<dyn std::future::Future<Output = Id> + Send>>,
         ) {
-            tokio::spawn(_task);
+            tokio::spawn(async move {
+                let _ = _task.await;
+            });
         }
     }
 

@@ -6,6 +6,6 @@ use actor_framework::ActorLifecycle;
 use async_trait::async_trait;
 
 #[async_trait]
-impl ActorLifecycle for LinkActor {
+impl ActorLifecycle<link_api::LinkId> for LinkActor {
     type Error = LinkError;
 }

@@ -1,4 +1,4 @@
-use actor_framework::{ActorService, Context, ResourceActor};
+use actor_framework::{ActorService, DynContext, ResourceActor};
 use async_trait::async_trait;
 use std::collections::HashMap;
 
@@ -39,8 +39,8 @@ struct UserActor {
 }
 
 #[async_trait]
-impl actor_framework::ActorLifecycle for UserActor {
-    async fn on_start(&mut self, _ctx: &mut impl Context) {
+impl actor_framework::ActorLifecycle<u32> for UserActor {
+    async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {
         if self.next_id == 0 {
             self.next_id = 1;
         }
@@ -61,15 +61,15 @@ impl ActorService for UserActor {
     async fn handle_create(
         &mut self,
         id: Option<Self::Id>,
-        params: Self::Create,
-        _ctx: &mut impl Context,
+        _params: Self::Create,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
         let id = id.unwrap_or_else(|| {
             let id = self.next_id;
             self.next_id += 1;
             id
         });
-        let user = SimpleUser { id, name: params.name, is_admin: false };
+        let user = SimpleUser { id, name: _params.name, is_admin: false };
         self.users.insert(id, user);
         Ok(id)
     }
@@ -77,7 +77,7 @@ impl ActorService for UserActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(self.users.get(&id).cloned())
     }
@@ -85,11 +85,11 @@ impl ActorService for UserActor {
     async fn handle_update(
         &mut self,
         id: Self::Id,
-        update: Self::Update,
-        _ctx: &mut impl Context,
+        _update: Self::Update,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(user) = self.users.get_mut(&id) {
-            if let Some(name) = update.name {
+            if let Some(name) = _update.name {
                 user.name = name;
             }
             Ok(user.clone())
@@ -101,7 +101,7 @@ impl ActorService for UserActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
         self.users.remove(&id);
         Ok(())
@@ -111,7 +111,7 @@ impl ActorService for UserActor {
         &mut self,
         id: Option<Self::Id>,
         action: Self::Action,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
         if let Some(id) = id {
             if let Some(user) = self.users.get_mut(&id) {
@@ -139,8 +139,8 @@ impl ActorService for UserActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut impl Context,
-    ) -> Result<Vec<SimpleUser>, Self::Error> {
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.users.values().cloned().collect())
     }
 }

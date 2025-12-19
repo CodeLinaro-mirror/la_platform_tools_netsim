@@ -54,7 +54,7 @@
 //! Define what your actor manages and how it behaves:
 //!
 //! ```rust
-//! use actor_framework::{ActorLifecycle, ActorService, Context, ResourceActor, ResourceClient};
+//! use actor_framework::{ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
 //!
 //! // 1. Define the Service and Lifecycle
@@ -85,30 +85,30 @@
 //!     type Error = UserError;
 //!     type Entity = User;
 //!
-//!     async fn handle_create(&mut self, id: Option<u32>, params: UserCreate, _: &mut impl Context) -> Result<u32, Self::Error> {
+//!     async fn handle_create(&mut self, id: Option<u32>, params: UserCreate, _: &mut DynContext<Self::Id>) -> Result<u32, Self::Error> {
 //!         let id = id.unwrap_or(0);
 //!         self.id = id;
 //!         self.name = params.name;
 //!         Ok(id)
 //!     }
-//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
-//!     async fn handle_update(&mut self, _: u32, update: UserUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> {
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, update: UserUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> {
 //!         if let Some(name) = update.name { self.name = name; }
 //!         Ok(self.clone())
 //!     }
-//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<Self::Entity>, Self::Error> { Ok(vec![self.clone()]) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<Self::Entity>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
 //!
 //! #[async_trait]
-//! impl ActorLifecycle for User {
+//! impl ActorLifecycle<u32> for User {
 //!     type Error = UserError;
-//!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
-//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
+//!     async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
 //! }
 //!
 //! // 2. Use the Actor
@@ -134,7 +134,7 @@
 //! Wait, `ResourceActor::new` takes `actor`. Dependencies should be in the `actor` struct.
 //!
 //! ```rust
-//! use actor_framework::{ActorLifecycle, ActorService, Context, ResourceActor, ResourceClient};
+//! use actor_framework::{ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
 //!
 //! // --- Define Minimal Services ---
@@ -152,22 +152,30 @@
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate; type Action = UserAction;
 //!     type ActionResult = (); type Error = UserError; type Entity = User;
 //!
-//!     async fn handle_create(&mut self, id: Option<u32>, _: UserCreate, _: &mut impl Context) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
-//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
-//!     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
-//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<User>, Self::Error> { Ok(vec![self.clone()]) }
+//!     async fn handle_create(
+//!         &mut self,
+//!         id: Option<u32>,
+//!         _: UserCreate,
+//!         _: &mut DynContext<Self::Id>,
+//!     ) -> Result<u32, Self::Error> {
+//!         self.id = id.unwrap_or(0);
+//!         Ok(self.id)
+//!     }
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<Self::Entity>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
 //!
 //! #[async_trait]
-//! impl ActorLifecycle for User {
+//! impl ActorLifecycle<u32> for User {
 //!     type Error = UserError;
-//!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
-//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
+//!     async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
 //! }
 //!
 //! #[derive(Clone, Debug)] struct Product { id: u32 }
@@ -182,22 +190,22 @@
 //! impl ActorService for Product {
 //!     type Id = u32; type Create = ProductCreate; type Update = ProductUpdate; type Action = ProductAction;
 //!     type ActionResult = (); type Error = ProductError; type Entity = Product;
-//!     async fn handle_create(&mut self, id: Option<u32>, _: ProductCreate, _: &mut impl Context) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
-//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
-//!     async fn handle_update(&mut self, _: u32, _: ProductUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
-//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: Option<u32>, _: ProductAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<Product>, Self::Error> { Ok(vec![self.clone()]) }
+//!     async fn handle_create(&mut self, id: Option<u32>, _: ProductCreate, _: &mut DynContext<Self::Id>) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: ProductUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: ProductAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<Product>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
-//! #[async_trait]
-//! impl ActorLifecycle for Product {
-//!     type Error = ProductError;
-//!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
-//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
-//! }
+//!    #[async_trait]
+//!     impl ActorLifecycle<u32> for Product {
+//!         type Error = ProductError;
+//!         async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!     }
 //!
 //! #[derive(Clone, Debug)] struct Order { id: u32 }
 //! // Order depends on UserClient and ProductClient
@@ -220,23 +228,23 @@
 //!     type Id = u32; type Create = OrderCreate; type Update = OrderUpdate; type Action = OrderAction;
 //!     type ActionResult = (); type Error = OrderError; type Entity = Order;
 //!
-//!     async fn handle_create(&mut self, id: Option<u32>, _: OrderCreate, _: &mut impl Context) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
-//!     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
-//!     async fn handle_update(&mut self, _: u32, _: OrderUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
-//!     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: Option<u32>, _: OrderAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<Order>, Self::Error> { Ok(vec![self.clone()]) }
+//!     async fn handle_create(&mut self, id: Option<u32>, _: OrderCreate, _: &mut DynContext<Self::Id>) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: OrderUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: OrderAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<Order>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
 //!
-//! #[async_trait]
-//! impl ActorLifecycle for Order {
-//!     type Error = OrderError;
-//!     async fn on_start(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
-//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
-//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
-//! }
+//!    #[async_trait]
+//!     impl ActorLifecycle<u32> for Order {
+//!         type Error = OrderError;
+//!         async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!     }
 //!
 //! #[tokio::main]
 //! async fn main() {
@@ -301,8 +309,8 @@ pub mod utils;
 pub use actor::ResourceActor;
 pub use client::ResourceClient;
 pub use client_trait::ActorClient;
-pub use context::Context;
+pub use context::{Context, DynContext};
 pub use error::FrameworkError;
 pub use lifecycle::ActorLifecycle;
 pub use message::{ResourceRequest, Response};
-pub use service::{ActorService, BoxStream, StreamMessage};
+pub use service::{ActorId, ActorService, BoxStream, StreamMessage};

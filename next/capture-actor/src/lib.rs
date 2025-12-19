@@ -66,10 +66,15 @@ mod tests {
     }
 
     struct MockContext;
-    impl actor_framework::Context for MockContext {
+    impl<Id> actor_framework::Context<Id> for MockContext
+    where
+        Id: Into<u32> + Send + 'static,
+    {
         fn set_interval(&mut self, _duration: std::time::Duration) {}
-        fn add_stream(&mut self, _id: u32, _stream: actor_framework::BoxStream) {}
-        fn add_task(&mut self, _id: u32, _task: futures::future::BoxFuture<'static, ()>) {}
+        fn add_stream(&mut self, _id: Id, _stream: actor_framework::BoxStream) {}
+        fn remove_stream(&mut self, _id: Id) {}
+        fn spawn(&mut self, _id: Id, _task: futures::future::BoxFuture<'static, Id>) {}
+        fn abort(&mut self, _id: Id) {}
         fn shutdown(&mut self) {}
     }
 

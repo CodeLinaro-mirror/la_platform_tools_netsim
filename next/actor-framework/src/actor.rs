@@ -7,10 +7,8 @@
 use crate::client::ResourceClient;
 use crate::context::FrameworkContext;
 use crate::error::FrameworkError;
-use crate::lifecycle::ActorLifecycle;
 use crate::message::ResourceRequest;
-use crate::service::{ActorService, StreamMessage};
-use crate::Context;
+use crate::{ActorLifecycle, ActorService, DynContext, StreamMessage};
 use log::error;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
@@ -42,7 +40,7 @@ use tokio_stream::StreamExt;
 /// 3.  **Run**: Spawn the actor's run loop in a background task.
 ///
 /// ```rust
-/// use actor_framework::{ActorService, ActorLifecycle, Context, ResourceActor};
+/// use actor_framework::{ActorLifecycle, ActorService, BoxStream, Context, DynContext, ResourceActor};
 /// use async_trait::async_trait;
 ///
 /// // Minimal Actor Definition
@@ -68,25 +66,62 @@ use tokio_stream::StreamExt;
 ///     type Error = MyError;
 ///     type Entity = MyActor;
 ///
-///     async fn handle_create(&mut self, id: Option<u32>, _: MyCreate, _: &mut impl Context) -> Result<u32, Self::Error> {
+///     async fn handle_create(
+///         &mut self,
+///         id: Option<u32>,
+///         _: MyCreate,
+///         _: &mut DynContext<Self::Id>,
+///     ) -> Result<u32, Self::Error> {
 ///         self.id = id.unwrap_or(0);
 ///         Ok(self.id)
 ///     }
-///     async fn handle_get(&self, _: u32, _: &mut impl Context) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
-///     async fn handle_update(&mut self, _: u32, _: MyUpdate, _: &mut impl Context) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
-///     async fn handle_delete(&mut self, _: u32, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_action(&mut self, _: Option<u32>, _: MyAction, _: &mut impl Context) -> Result<(), Self::Error> { Ok(()) }
-///     async fn handle_list(&mut self, _: &mut impl Context) -> Result<Vec<MyActor>, Self::Error> { Ok(vec![self.clone()]) }
+///     async fn handle_get(
+///         &self,
+///         _: u32,
+///         _: &mut DynContext<Self::Id>,
+///     ) -> Result<Option<Self::Entity>, Self::Error> {
+///         Ok(Some(self.clone()))
+///     }
+///     async fn handle_update(
+///         &mut self,
+///         _: u32,
+///         _: MyUpdate,
+///         _: &mut DynContext<Self::Id>,
+///     ) -> Result<Self::Entity, Self::Error> {
+///         Ok(self.clone())
+///     }
+///     async fn handle_delete(
+///         &mut self,
+///         _: u32,
+///         _: &mut DynContext<Self::Id>,
+///     ) -> Result<(), Self::Error> {
+///         Ok(())
+///     }
+///     async fn handle_action(
+///         &mut self,
+///         _: Option<u32>,
+///         _: MyAction,
+///         _: &mut DynContext<Self::Id>,
+///     ) -> Result<(), Self::Error> {
+///         Ok(())
+///     }
+///     async fn handle_list(
+///         &mut self,
+///         _: &mut DynContext<Self::Id>,
+///     ) -> Result<Vec<MyActor>, Self::Error> {
+///         Ok(vec![self.clone()])
+///     }
 /// }
 ///
 /// #[async_trait]
-/// impl ActorLifecycle for MyActor {
+/// impl ActorLifecycle<u32> for MyActor {
 ///     type Error = MyError;
-///     async fn on_start(&mut self, _ctx: &mut impl Context) {}
-///     async fn on_tick(&mut self, _ctx: &mut impl Context) {}
-///     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut impl Context) {}
-///     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
-///     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut impl Context) {}
+///     async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+///     async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+///     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+///     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+///     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+///     async fn on_shutdown(&mut self) {}
 /// }
 ///
 /// #[tokio::main]
@@ -105,10 +140,10 @@ use tokio_stream::StreamExt;
 pub struct ResourceActor<T: ActorService> {
     receiver: mpsc::Receiver<ResourceRequest<T>>,
     shutdown_rx: oneshot::Receiver<()>,
-    ctx: FrameworkContext,
+    ctx: FrameworkContext<T::Id>,
 }
 
-impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
+impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
     /// Creates a new `ResourceActor` and its associated `ResourceClient`.
     ///
     /// # Arguments
@@ -149,11 +184,11 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
                     actor.on_tick(&mut self.ctx).await;
                 }
                 Some((id, msg_opt)) = stream_fut => {
-                    Self::handle_stream_event(&mut actor, id.try_into().unwrap(), msg_opt, &mut self.ctx).await;
+                    Self::handle_stream_event(&mut actor, id, msg_opt, &mut self.ctx).await;
                 }
                 Some(res) = self.ctx.tasks.join_next() => {
                     match res {
-                        Ok(id) => Self::handle_task_closed(&mut actor, id.try_into().unwrap(), &mut self.ctx).await,
+                        Ok(id) => Self::handle_task_closed(&mut actor, id, &mut self.ctx).await,
                         Err(e) => error!("Monitored task failed: {e}"),
                     }
                 }
@@ -167,27 +202,33 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
 
     async fn handle_stream_event(
         actor: &mut T,
-        id: usize,
+        id: T::Id,
         msg_opt: Option<StreamMessage>,
-        ctx: &mut impl Context,
+        ctx: &mut DynContext<<T as ActorService>::Id>,
     ) {
-        let stream_id: u32 = id.try_into().unwrap_or(0);
         match msg_opt {
-            Some(msg) => actor.on_stream(stream_id, msg, ctx).await,
-            Option::None => actor.on_stream_closed(stream_id, ctx).await,
+            Some(msg) => actor.on_stream(id, msg, ctx).await,
+            Option::None => actor.on_stream_closed(id, ctx).await,
         }
     }
 
-    async fn handle_task_closed(actor: &mut T, id: usize, ctx: &mut impl Context) {
-        let task_id: u32 = id.try_into().unwrap_or(0);
-        actor.on_task_closed(task_id, ctx).await;
+    async fn handle_task_closed(
+        actor: &mut T,
+        id: T::Id,
+        ctx: &mut DynContext<<T as ActorService>::Id>,
+    ) {
+        actor.on_task_closed(id, ctx).await;
     }
 
     async fn handle_shutdown(actor: &mut T) {
         actor.on_shutdown().await;
     }
 
-    async fn handle_message(actor: &mut T, msg: ResourceRequest<T>, ctx: &mut impl Context) {
+    async fn handle_message(
+        actor: &mut T,
+        msg: ResourceRequest<T>,
+        ctx: &mut DynContext<<T as ActorService>::Id>,
+    ) {
         match msg {
             ResourceRequest::Create { params, id, respond_to } => {
                 // Pass the optional ID to the service handle_create method

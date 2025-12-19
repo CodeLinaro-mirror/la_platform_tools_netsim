@@ -2,7 +2,7 @@
 
 use crate::error::LinkError;
 use crate::link_actor::LinkActor;
-use actor_framework::{ActorService, Context};
+use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use link_api::LinkAction;
 
@@ -20,7 +20,7 @@ impl ActorService for LinkActor {
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
         let id = id.unwrap_or_else(|| {
             let id = link_api::LinkId(self.next_id);
@@ -65,7 +65,7 @@ impl ActorService for LinkActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(actor_framework::utils::handle_get_default(&self.links, &id))
     }
@@ -74,7 +74,7 @@ impl ActorService for LinkActor {
         &mut self,
         id: Self::Id,
         _update: Self::Update,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(link) = self.links.get(&id) {
             Ok(link.clone())
@@ -86,7 +86,7 @@ impl ActorService for LinkActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
         if let Some(link) = self.links.remove(&id) {
             self.lookup.remove(&(link.sender, link.receiver));
@@ -101,7 +101,7 @@ impl ActorService for LinkActor {
         &mut self,
         _id: Option<Self::Id>,
         action: Self::Action,
-        _ctx: &mut impl Context,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             LinkAction::NotifyChipAdded(chip_id, chip_kind) => {
@@ -118,8 +118,8 @@ impl ActorService for LinkActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut impl Context,
-    ) -> Result<Vec<link_api::Link>, Self::Error> {
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(actor_framework::utils::handle_list_map(&self.links, |e| e.clone()))
     }
 }
