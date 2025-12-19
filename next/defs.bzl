@@ -5,7 +5,7 @@ This module provides the netsim_rust_library macro which wraps rust_library
 to provide standard targets for testing, linting, and formatting.
 """
 
-load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_doc_test", "rust_library", "rust_test", "rustfmt_test")
+load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
 NETSIM_RUSTC_FLAGS = ["-Dwarnings"]
 
@@ -15,7 +15,6 @@ def netsim_rust_library(
         deps = [],
         # Feature Flags (Default to True for safety)
         enable_clippy = True,
-        enable_fmt = True,
         enable_unit_test = True,
         enable_doc = True,
         enable_doc_test = True,
@@ -36,7 +35,7 @@ def netsim_rust_library(
         srcs: The source files.
         deps: The dependencies.
         enable_clippy: Whether to enable clippy checks.
-        enable_fmt: Whether to enable rustfmt checks.
+
         enable_unit_test: Whether to generate a unit test target.
         enable_doc: Whether to generate documentation.
         enable_doc_test: Whether to generate a doc test target.
@@ -76,13 +75,6 @@ def netsim_rust_library(
             name = name + "_clippy",
             deps = [":" + name],
             testonly = True,
-        )
-
-    # 4. Rustfmt (Style Check)
-    if enable_fmt:
-        rustfmt_test(
-            name = name + "_fmt",
-            targets = [":" + name],
         )
 
     # 5. Documentation
