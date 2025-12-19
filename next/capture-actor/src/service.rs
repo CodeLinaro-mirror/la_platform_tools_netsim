@@ -114,20 +114,27 @@ impl CaptureActor {
             .unwrap_or_default()
             .as_secs();
         let filename = format!(
-            "capture_{}_{}_{}.pcap",
-            entity.info.device_name, entity.info.chip_id.0, timestamp
+            "netsim-{:?}-{:}-{:?}.pcap",
+            entity.info.chip_id, entity.info.device_name, entity.info.chip_kind
         );
         let filepath = if let Some(dir) = self.capture_dir.as_ref() {
             dir.join(&filename)
         } else {
-            PathBuf::from(&filename)
+            let mut path = netsim_common::system::netsimd_temp_dir();
+            path.push("pcaps");
+            if let Err(e) = std::fs::create_dir_all(&path) {
+                log::warn!("Failed to create default pcap directory {}: {}", path.display(), e);
+            }
+            path.join(&filename)
         };
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
             ChipKind::BLUETOOTH | ChipKind::BleBeacon => {
+                log::info!("Creating capture file: {}", filepath.display());
                 Box::new(BluetoothH4Writer::new(&filepath)?)
             }
             _ => {
                 // Fallback
+                log::info!("Creating capture file: {}", filepath.display());
                 Box::new(BluetoothH4Writer::new(&filepath)?)
             }
         };
