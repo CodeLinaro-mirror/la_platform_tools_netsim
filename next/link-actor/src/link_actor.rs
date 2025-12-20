@@ -14,20 +14,22 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct LinkActor {
     /// Index for fast lookup/upsert: (Sender, Receiver) -> LinkId
-    /// Index for fast lookup/upsert: (Sender, Receiver) -> LinkId
-    pub(crate) lookup: HashMap<(ChipId, ChipId), link_api::LinkId>,
+    pub(crate) chip_pairs: HashMap<(ChipId, ChipId), link_api::LinkId>,
     /// Map of ChipId to ChipKind for validation
     pub(crate) chip_kind_map: HashMap<ChipId, ChipKind>,
-    // TODO: Add radio_clients (e.g., bt_client) here
+    /// Map of ChipKind to ChipClient for forwarding updates
+    #[allow(dead_code)]
+    pub(crate) chip_clients: HashMap<ChipKind, Box<dyn netsim_model::chip::ChipClient>>,
     pub(crate) links: HashMap<link_api::LinkId, Link>,
     pub(crate) next_id: u32,
 }
 
 impl LinkActor {
-    pub fn default() -> Self {
+    pub fn new() -> Self {
         Self {
-            lookup: HashMap::new(),
+            chip_pairs: HashMap::new(),
             chip_kind_map: HashMap::new(),
+            chip_clients: HashMap::new(),
             links: HashMap::new(),
             next_id: 1,
         }
