@@ -10,7 +10,7 @@ use crate::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
 use crate::bluetooth::Controller as RootcanalController;
 use crate::chip_error::ChipError;
 use crate::client_error::ClientError;
-use crate::client_method;
+
 use crate::device::{DeviceId, Orientation, Position};
 use crate::stats::NetsimRadioStats;
 use bytes::Bytes;
@@ -364,7 +364,7 @@ pub struct Chip {
     pub orientation: Orientation,
     pub device_id: DeviceId,
     pub variant: Option<ChipVariant>,
-    //TODO: Add link vector
+    pub links: Vec<(ChipId, i8)>,
 }
 
 /// Information about a chip, including technology-specific details.
@@ -397,6 +397,7 @@ pub struct ChipUpdate {
     pub position: Option<Position>,
     pub orientation: Option<Orientation>,
     pub variant: Option<ChipVariantUpdate>,
+    pub links: Option<Vec<(ChipId, i8)>>,
 }
 
 /// The techbology variant specific fields
@@ -440,6 +441,7 @@ pub trait ChipClient: Send + Sync {
     async fn read_statistics(&self) -> Result<Vec<NetsimRadioStats>, ClientError>;
     async fn read_count_for_testing(&self) -> Result<usize, ClientError>;
     async fn shutdown(&self) -> Result<(), ClientError>;
+    /// Resets the state of the specified chip.
     async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
 }
 

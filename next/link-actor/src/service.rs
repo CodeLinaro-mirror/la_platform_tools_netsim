@@ -10,7 +10,7 @@ use link_api::LinkAction;
 impl ActorService for LinkActor {
     type Id = link_api::LinkId;
     type Create = link_api::LinkCreate;
-    type Update = link_api::LinkPatch;
+    type Update = link_api::LinkUpdate;
     type Action = LinkAction;
     type ActionResult = ();
     type Error = LinkError;

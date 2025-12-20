@@ -3,7 +3,6 @@
 use client::LinkClient;
 use link_actor::LinkActor;
 use netsim_model::chip::{ChipId, ChipKind};
-use std::collections::HashMap;
 
 pub struct TestFixture {
     pub actor_task: tokio::task::JoinHandle<()>,

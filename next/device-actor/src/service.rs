@@ -105,6 +105,7 @@ impl ActorService for DeviceActor {
                     orientation: entity.device.orientation.clone(),
                     device_id: DeviceId(entity.device.id),
                     variant: None,
+                    links: vec![],
                 });
                 //TODO: Send create request to Link Actor
             } else {
@@ -274,6 +275,7 @@ impl ActorService for DeviceActor {
                                 orientation: entity.device.orientation.clone(),
                                 device_id: DeviceId(entity.device.id),
                                 variant: None,
+                                links: vec![],
                             });
                             Ok(DeviceActionResult::ChipId(chip_id))
                         } else {
