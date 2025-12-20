@@ -1,5 +1,6 @@
 #[path = "common/mod.rs"]
 mod common;
+mod propagation_test;
 
 use common::{setup, TestFixture};
 use link_api::{LinkAction, LinkCreate};

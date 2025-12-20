@@ -34,4 +34,34 @@ impl LinkActor {
             next_id: 1,
         }
     }
+
+    pub fn set_chip_clients(
+        &mut self,
+        clients: HashMap<ChipKind, Box<dyn netsim_model::chip::ChipClient>>,
+    ) {
+        self.chip_clients = clients;
+    }
+
+    pub async fn update_chip_links(&self, chip_id: ChipId) {
+        let Some(kind) = self.chip_kind_map.get(&chip_id) else {
+            return;
+        };
+
+        let Some(client) = self.chip_clients.get(kind) else {
+            return;
+        };
+
+        let links: Vec<_> = self
+            .links
+            .values()
+            .filter(|l| l.sender == chip_id)
+            .map(|l| (l.receiver, l.rssi as i8))
+            .collect();
+
+        let update = netsim_model::chip::ChipUpdate { links: Some(links), ..Default::default() };
+
+        if let Err(e) = client.update(chip_id, update).await {
+            log::error!("Failed to update links for chip {}: {:?}", chip_id, e);
+        }
+    }
 }
