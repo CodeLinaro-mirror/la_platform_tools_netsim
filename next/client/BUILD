@@ -9,6 +9,8 @@ DEPS = [
     "//next/model",
     "//next/device-actor",
     "//next/capture-actor",
+    "//next/link-actor",
+    "//next/link-api",
     "@anyhow",
     "@bytes",
     "@futures",

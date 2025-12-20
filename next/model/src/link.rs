@@ -1,6 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-use netsim_model::chip::{ChipId, ChipKind};
+use crate::chip::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
 
 /// A unique identifier for a link, represented as a u32.
@@ -32,7 +32,7 @@ impl Default for LinkId {
 }
 
 /// Internal representation of a Link.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Link {
     pub id: LinkId,
     pub sender: ChipId,
@@ -41,9 +41,9 @@ pub struct Link {
     pub rssi: i8,
 }
 
-/// Patch for a Link.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct LinkPatch {
+/// Update for a Link.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct LinkUpdate {
     pub rssi: Option<i8>,
 }
 

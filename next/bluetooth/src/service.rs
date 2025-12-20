@@ -113,6 +113,10 @@ impl ActorService for BluetoothActor {
                     chip.orientation = orient.clone();
                     entity.chip.orientation = orient;
                 }
+                if let Some(links) = update.links {
+                    chip.links = links.clone();
+                    entity.chip.links = links;
+                }
                 // TODO: Handle other fields
             }
 
