@@ -14,12 +14,12 @@ use rootcanal::{
 //use rootcanal_rs::packets::link_layer::{
 //    Address as LlAddress, AddressType, LeLegacyAdvertisingPdu, LegacyAdvertisingType,
 //};
-use std::convert::TryFrom;
+
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Once;
 use tokio::sync::mpsc;
-use tokio::time::{sleep, timeout, Duration};
+use tokio::time::{sleep, Duration};
 
 static INIT: Once = Once::new();
 
@@ -96,7 +96,7 @@ async fn test_ll_exchange() {
 async fn test_ll_exchange_internal() {
     setup();
     let rootcanal = Arc::new(Rootcanal::new(Box::new(TestCallbacks)));
-    let (sender, mut receiver) = mpsc::channel(10);
+    let (sender, mut _receiver) = mpsc::channel(10);
 
     let rootcanal_clone = rootcanal.clone();
     tokio::spawn(async move {
@@ -121,7 +121,7 @@ async fn test_ll_exchange_internal() {
         .expect("new controller failed");
 
     // Construct a valid ADV_IND packet.
-    let advertising_data = vec![
+    let _advertising_data = vec![
         0x02, 0x01, 0x06, // Flags
         0x03, 0x03, 0xaa, 0xfe, // Service UUID
     ];

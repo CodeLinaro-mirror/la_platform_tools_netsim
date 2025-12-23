@@ -17,7 +17,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use chrono::{DateTime, Datelike, NaiveDateTime, Timelike, Utc};
+use chrono::{DateTime, Datelike, Timelike, Utc};
 
 /// A simple class that contains information required to display time
 pub struct TimeDisplay {
@@ -44,8 +44,8 @@ impl TimeDisplay {
     ///
     /// `String` display of utc time.
     pub fn utc_display(&self) -> String {
-        if let Some(datetime) = NaiveDateTime::from_timestamp_opt(self.secs, self.nsecs) {
-            let current_datetime = DateTime::<Utc>::from_naive_utc_and_offset(datetime, Utc);
+        if let Some(datetime) = DateTime::from_timestamp(self.secs, self.nsecs) {
+            let current_datetime = datetime.with_timezone(&Utc);
             return format!(
                 "{}-{:02}-{:02}-{:02}-{:02}-{:02}",
                 current_datetime.year(),
@@ -65,8 +65,8 @@ impl TimeDisplay {
     ///
     /// `Ok(String)` if the display was successful, `Error` otherwise.
     pub fn utc_display_hms(&self) -> String {
-        if let Some(datetime) = NaiveDateTime::from_timestamp_opt(self.secs, self.nsecs) {
-            let current_datetime = DateTime::<Utc>::from_naive_utc_and_offset(datetime, Utc);
+        if let Some(datetime) = DateTime::from_timestamp(self.secs, self.nsecs) {
+            let current_datetime = datetime.with_timezone(&Utc);
             return format!(
                 "{:02}:{:02}:{:02}",
                 current_datetime.hour(),
@@ -79,8 +79,8 @@ impl TimeDisplay {
 
     /// Displays time in UTC for logs
     fn utc_display_log(&self) -> String {
-        if let Some(datetime) = NaiveDateTime::from_timestamp_opt(self.secs, self.nsecs) {
-            let current_datetime = DateTime::<Utc>::from_naive_utc_and_offset(datetime, Utc);
+        if let Some(datetime) = DateTime::from_timestamp(self.secs, self.nsecs) {
+            let current_datetime = datetime.with_timezone(&Utc);
             return format!(
                 "{:02}-{:02} {:02}:{:02}:{:02}.{:.3}",
                 current_datetime.month(),

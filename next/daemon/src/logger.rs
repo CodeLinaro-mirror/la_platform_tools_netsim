@@ -8,11 +8,7 @@
 use chrono::Utc;
 use env_logger::{Builder, Env};
 use log::{Level, Record};
-use std::{
-    ffi::OsStr,
-    io::Write,
-    path::{Path, MAIN_SEPARATOR},
-};
+use std::{io::Write, path::Path};
 
 /// Formats the current time for logging.
 fn log_current_time() -> String {
@@ -48,14 +44,7 @@ pub fn init(prefix: &'static str, is_verbose: bool) {
 fn format_file<'a>(record: &'a Record<'a>) -> &'a str {
     match record.file() {
         Some(filepath) => {
-            let file = Path::new(filepath);
-            let netsim_path = format!("tools{MAIN_SEPARATOR}netsim");
-            // If file path includes tools/netsim, only print the file name
-            if file.to_str().is_some_and(|f| f.contains(&netsim_path)) {
-                return file.file_name().unwrap_or(OsStr::new("N/A")).to_str().unwrap();
-            }
-            // Print full path for all dependent crates
-            file.to_str().unwrap()
+            Path::new(filepath).file_name().map(|s| s.to_str().unwrap_or("N/A")).unwrap_or("N/A")
         }
         None => "N/A",
     }
@@ -97,5 +86,18 @@ mod tests {
         // but the actual logger will only be set up once.
         // This test primarily checks that the init function itself doesn't panic.
         init("TEST_PREFIX", false);
+    }
+
+    #[test]
+    fn test_format_file_shortens_paths() {
+        let record = log::Record::builder()
+            .file(Some("./external/netsim+/next/daemon/src/netsimd.rs"))
+            .build();
+        assert_eq!(format_file(&record), "netsimd.rs");
+
+        let record2 = log::Record::builder()
+            .file(Some("external/netsim+/next/daemon/src/netsimd.rs"))
+            .build();
+        assert_eq!(format_file(&record2), "netsimd.rs");
     }
 }
