@@ -920,4 +920,24 @@ mod tests {
         build_tx_info_and_compare(&frame_bytes, &tx_info_expected_bytes)?;
         Ok(())
     }
+
+    #[test]
+    fn test_tx_info_pcap() {
+        let pcap_bytes = include_bytes!("test_packets/tx_info.pcap");
+
+        let mut reader = netsim_packets::pcap::PcapReader::new(std::io::Cursor::new(pcap_bytes))
+            .expect("Failed to create PcapReader");
+
+        let (header, data) =
+            reader.next_record().expect("Failed to read record").expect("No record found");
+        assert_eq!(header.incl_len.get(), 72);
+        assert_eq!(data.len(), 72);
+
+        let decoded = HwsimMsg::decode_full(&data).expect("Failed to decode HwsimMsg from pcap");
+
+        let len = decoded.nl_hdr.nlmsg_len;
+        assert_eq!(len, 72);
+        let cmd = decoded.hwsim_hdr.hwsim_cmd;
+        assert_eq!(cmd, HwsimCmd::TxInfoFrame);
+    }
 }
