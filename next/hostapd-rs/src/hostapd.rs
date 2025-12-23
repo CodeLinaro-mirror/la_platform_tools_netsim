@@ -646,17 +646,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_decrypt_encrypt_golden_frame() {
-        // Decode the encrypted frame from bytes.
-        const ENCRYPTED_FRAME_BYTES: [u8; 120] = [
-            // Corrected array size to 120
-            8, 65, 58, 1, 0, 19, 16, 133, 254, 1, 2, 21, 178, 0, 0, 0, 51, 51, 255, 197, 140, 97,
-            192, 70, 1, 0, 0, 32, 0, 0, 0, 0, 119, 72, 195, 215, 149, 122, 79, 220, 238, 60, 113,
-            167, 129, 55, 206, 110, 94, 178, 141, 180, 240, 63, 37, 182, 166, 61, 249, 112, 74, 78,
-            132, 238, 161, 210, 196, 91, 135, 234, 60, 234, 87, 75, 245, 43, 158, 205, 127, 101,
-            66, 180, 91, 220, 148, 42, 230, 210, 117, 207, 94, 106, 241, 213, 122, 104, 231, 25,
-            185, 174, 25, 5, 197, 116, 5, 168, 53, 71, 77, 26, 77, 94, 65, 159, 97, 218, 14, 238,
-            220, 157,
-        ];
+        // Read Golden Frame from shared test data (exported by packets crate via public API)
+        // This relies on include_bytes! inside the packets crate, ensuring consistent access.
+        let pcap_bytes = netsim_packets::ieee80211::get_golden_ccmp_pcap();
+
+        // Skip PCAP Header (24) + Packet Header (16) = 40 bytes
+        // Note: Our generated pcap has exactly one packet.
+        let encrypted_frame_bytes = &pcap_bytes[40..];
         const EXPECTED_DECRYPTED_FRAME_BYTES: [u8; 104] = [
             // Corrected array size to 104
             8, 1, 58, 1, 0, 19, 16, 133, 254, 1, 2, 21, 178, 0, 0, 0, 51, 51, 255, 197, 140, 97,
@@ -666,7 +662,7 @@ mod tests {
             97, 14, 1, 27, 50, 219, 39, 89, 3,
         ];
 
-        let encrypted_ieee80211 = Ieee80211::decode(&ENCRYPTED_FRAME_BYTES)
+        let encrypted_ieee80211 = Ieee80211::decode(&encrypted_frame_bytes)
             .expect("Failed to decode encrypted Ieee80211 frame");
 
         let hostapd = init_hostapd();
@@ -695,7 +691,7 @@ mod tests {
 
         assert_eq!(
             reencrypted_frame,
-            ENCRYPTED_FRAME_BYTES.to_vec(),
+            encrypted_frame_bytes.to_vec(),
             "Re-encrypted frame does not match original encrypted frame"
         );
 
