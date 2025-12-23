@@ -3,7 +3,7 @@
 use clap::Parser;
 use std::env;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Default)]
 pub struct Args {
     /// File descriptor start up info proto
     #[arg(short = 's', long, alias = "fd_startup_str")]

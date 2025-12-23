@@ -17,7 +17,9 @@ async fn test_bluetooth_hci_reset() {
     std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
 
     // Setup netsimd
-    let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), temp_dir.clone())
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true; // Disable log redirection to avoid segfaults in tests
+    let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), temp_dir.clone(), args)
         .await
         .expect("Failed to create daemon");
     let (daemon, _ini_guard) = match startup_mode {
