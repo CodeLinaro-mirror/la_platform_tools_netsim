@@ -254,7 +254,7 @@ pub enum NetworkParams {
 /// including its address, controller properties, and operational mode. It is
 /// nested within [`ChipCreate`] when the chip being created is a
 /// Bluetooth chip.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BluetoothCreate {
     /// The Bluetooth address of the device.
     pub address: String,
@@ -269,7 +269,7 @@ pub struct BluetoothCreate {
 /// This enum differentiates between the various operational modes of a
 /// Bluetooth chip, such as Device, Beacon, and Sniffer. It is used within
 /// [`BluetoothCreate`] to specify the chip's behavior.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum BluetoothMode {
     /// A full, virtual Bluetooth controller that can be paired with.
     Device(DeviceParams),
@@ -296,14 +296,14 @@ pub struct BleBeacon {
 /// This struct holds parameters for creating a virtual Bluetooth device and is
 /// used when the [`BluetoothMode`] is [`BluetoothMode::Device`].
 // TODO: Rename to BluetoothDeviceParams to avoid confusion with DeviceConfig
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DeviceParams {}
 
 /// Parameters for creating a BLE beacon.
 ///
 /// This struct holds parameters for creating a BLE beacon and is used when the
 /// [`BluetoothMode`] is [`BluetoothMode::Beacon`].
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct BeaconParams {
     /// The BLE beacon's configuration.
     pub ble_beacon: BleBeacon,
@@ -313,25 +313,25 @@ pub struct BeaconParams {
 ///
 /// This struct holds parameters for a Bluetooth sniffer and is used when the
 /// [`BluetoothMode`] is [`BluetoothMode::Sniffer`].
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SnifferParams {
     // Future sniffer-specific properties can be added here.
 }
 
 /// Parameters for creating a Wi-Fi chip.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WifiCreate {
     // Future Wi-Fi specific properties.
 }
 
 /// Parameters for creating a UWB chip.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UwbCreate {
     // Future UWB specific properties.
 }
 
 /// Parameters for creating a Cellular chip.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CellCreate {
     // Future Cellular specific properties.
 }

@@ -8,7 +8,7 @@ use client::{CaptureClient, DeviceClient};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
-use log::{error, info};
+use log::{error, info, warn};
 use netsim_common::system::netsimd_temp_dir;
 use netsim_common::util::os_utils::{get_instance_name, redirect_std_stream};
 use netsim_model::chip::{
@@ -80,17 +80,26 @@ async fn handle_new_connection(
         orientation: Default::default(),
     };
 
-    let chip = match chip_info.chip {
+    let mut chip = match chip_info.chip {
         Some(chip) => chip,
         None => {
-            error!("ChipInfo missing chip details for {}", chip_info.name);
+            warn!("ChipInfo missing 'chip' field for {}. Dropping connection.", chip_info.name);
             return;
         }
     };
 
+    if let Some(device_info) = chip_info.device_info.as_ref().filter(|d| !d.avd_path.is_empty()) {
+        chip.address =
+            crate::avd_config::resolve_bluetooth_mac(&device_info.avd_path, &chip.address);
+    }
+
+    if chip.address.is_empty() && chip.id.len() == 17 {
+        chip.address = chip.id.clone();
+    }
+
     let network_params = match chip.kind {
         ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothCreate {
-            address: "".to_string(), // TODO: Get address from ChipInfo
+            address: chip.address.clone(),
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
         }),
