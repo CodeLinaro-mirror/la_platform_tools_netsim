@@ -32,16 +32,18 @@ rust_test(
 )
 
 rust_test(
-    name = "hostapd_rs_integration_test",
+    name = "test",
     srcs = ["tests/integration_test.rs"],
     edition = "2021",
     tags = ["general_tests"],
     deps = [
         ":hostapd-rs",
         "//next/packets",
+        "@anyhow",
         "@bytes",
         "@log",
         "@pdl-runtime",
         "@tokio",
+        "@zerocopy",
     ],
 )

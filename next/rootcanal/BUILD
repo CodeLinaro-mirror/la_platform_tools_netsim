@@ -21,6 +21,7 @@ netsim_rust_library(
         "@cxx.rs//:cxx",
         "@log",
         "@rootcanal//:lib_rootcanal_ffi",
+        "@rootcanal//:rootcanal_rs",
         "@thiserror",
     ],
 )
@@ -43,6 +44,7 @@ rust_test_suite(
         "@env_logger",
         "@log",
         "@pdl-runtime",
+        "@rootcanal//:rootcanal_rs",
         "@tokio",
     ],
 )

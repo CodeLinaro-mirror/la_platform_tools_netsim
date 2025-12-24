@@ -47,6 +47,7 @@ rust_library(
         "//next/packet-stream",
         "//next/uwb",
         "//next/wifi",
+        "//rust/common:netsim_common",
         "@bytes",
         "@chrono",
         "@clap",
