@@ -8,7 +8,7 @@ use client::{CaptureClient, DeviceClient};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
-use log::{error, info};
+use log::{error, info, warn};
 use netsim_common::system::netsimd_temp_dir;
 use netsim_common::util::os_utils::{get_instance_name, redirect_std_stream};
 use netsim_model::chip::{
@@ -80,17 +80,26 @@ async fn handle_new_connection(
         orientation: Default::default(),
     };
 
-    let chip = match chip_info.chip {
+    let mut chip = match chip_info.chip {
         Some(chip) => chip,
         None => {
-            error!("ChipInfo missing chip details for {}", chip_info.name);
+            warn!("ChipInfo missing 'chip' field for {}. Dropping connection.", chip_info.name);
             return;
         }
     };
 
+    if let Some(device_info) = chip_info.device_info.as_ref().filter(|d| !d.avd_path.is_empty()) {
+        chip.address =
+            crate::avd_config::resolve_bluetooth_mac(&device_info.avd_path, &chip.address);
+    }
+
+    if chip.address.is_empty() && chip.id.len() == 17 {
+        chip.address = chip.id.clone();
+    }
+
     let network_params = match chip.kind {
         ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothCreate {
-            address: "".to_string(), // TODO: Get address from ChipInfo
+            address: chip.address.clone(),
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
         }),
@@ -157,7 +166,7 @@ async fn setup_uds_listener(
             .start_listener("netsim_uds", TransportType::uds(uds_path_str))
             .await
             .map_err(init_error)?;
-        info!("Started UDS listener at {}", uds_path.display());
+        info!("UDS listener: {}", uds_path.display());
         if let Some(addr) = streams.listener_address("netsim_uds") {
             listener_addresses.insert("netsim_uds".to_string(), addr.clone());
         } else {
@@ -196,7 +205,7 @@ async fn setup_grpc_listener(
 
     let _ = streams.add_listener("netsim_grpc", Box::new(listener));
 
-    info!("Started gRPC listener on port {}", port);
+    info!("gRPC port: {}", port);
     listener_addresses.insert(
         "netsim_grpc".to_string(),
         StreamAddress::Grpc(std::net::SocketAddr::new(
@@ -262,7 +271,7 @@ impl NetsimDaemon {
         env::set_var("RUST_BACKTRACE", "full");
 
         // Log where netsim artifacts are located
-        info!("netsim artifacts path: {:?}", netsimd_temp_dir());
+        info!("Artifacts: {:?}", netsimd_temp_dir());
         // Log all args
         info!("{args:#?}");
 
@@ -301,7 +310,7 @@ impl NetsimDaemon {
         args: Args,
         runtime_dir: PathBuf,
     ) -> Result<StartUpMode, RunResult> {
-        info!("Successfully acquired lock. This instance is the Owner.");
+        info!("Acquired lock (Owner)");
         let ini_path = ini_guard.path();
         info!("INI file path: {}", ini_path.display());
 
@@ -321,7 +330,6 @@ impl NetsimDaemon {
         setup_uds_listener(&mut streams, &mut listener_addresses, &runtime_dir).await?;
 
         // Setup Device Server Channel
-        info!("Using new device-actor framework");
         // Create the runner (owns receiver) and client (wraps sender)
         let (device_runner, resource_client) =
             actor_framework::ResourceActor::<device_actor::DeviceActor>::new(32);
@@ -359,27 +367,23 @@ impl NetsimDaemon {
 
         // Even if stale file removal failed, we can proceed as ini_guard.write will overwrite.
         ini_guard.write(&ini_data).map_err(init_error)?;
-        info!("Successfully wrote to INI file {}", ini_path.display());
+        info!("Wrote to INI file {}", ini_path.display());
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth::new();
         let bt_actor_state =
             bluetooth::BluetoothActor::new(device_client.clone(), bt_client.clone());
-        info!("Bluetooth server created");
 
         // Setup Wifi Server
         let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
-        info!("Wifi server created");
 
         // Setup Uwb Server
         let (uwb_server, uwb_client) = uwb::Server::new(device_client.clone());
-        info!("Uwb server created");
 
         // Setup Cell Server
         // TODO: Replace with real modem network.
         let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
         let (cell_server, cell_client) = cell::Server::new(device_client.clone(), cell_controller);
-        info!("Cell server created");
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =

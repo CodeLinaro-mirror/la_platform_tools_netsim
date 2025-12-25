@@ -54,6 +54,8 @@ pub struct Chip {
     pub manufacturer: String,
     /// Product name of the chip.
     pub product_name: String,
+    /// Address of the chip (e.g. MAC address).
+    pub address: String,
 }
 
 impl Chip {
@@ -65,6 +67,7 @@ impl Chip {
             name,
             manufacturer: "Netsim".to_string(),
             product_name: "Virtual Chip".to_string(),
+            address: "".to_string(),
         }
     }
 }
@@ -76,11 +79,13 @@ pub struct DeviceInfo {
     pub name: String,
     /// Unique identifier for the device.
     pub id: String,
+    /// Path to the AVD directory, if applicable.
+    pub avd_path: String,
 }
 
 impl DeviceInfo {
     pub fn new<S1: Into<String>, S2: Into<String>>(name: S1, id: S2) -> Self {
-        DeviceInfo { name: name.into(), id: id.into() }
+        DeviceInfo { name: name.into(), id: id.into(), avd_path: "".to_string() }
     }
 }
 

@@ -24,6 +24,7 @@ rust_library(
     name = "daemon-lib",
     srcs = [
         "src/args.rs",
+        "src/avd_config.rs",
         "src/ini_file.rs",
         "src/lib.rs",
         "src/logger.rs",

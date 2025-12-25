@@ -12,6 +12,7 @@
 //! ![Internal Module Graph](modules.png)
 
 pub mod args;
+pub mod avd_config;
 pub mod ini_file;
 pub mod logger;
 pub mod netsimd;

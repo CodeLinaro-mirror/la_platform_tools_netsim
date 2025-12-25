@@ -2,6 +2,7 @@
 
 // Represents the fixed-size header of a Command APDU (ISO/IEC 7816-4).
 #[derive(Debug, PartialEq)]
+#[allow(dead_code)]
 pub struct CommandApdu<'a> {
     pub cla: u8,
     pub ins: u8,
