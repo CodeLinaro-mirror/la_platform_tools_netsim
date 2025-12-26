@@ -26,11 +26,12 @@ export CARGO=$SCRIPT/../rust/daemon/Cargo.toml
 export CARGO_CLI=$SCRIPT/../rust/cli/Cargo.toml
 export CARGO_COMMON=$SCRIPT/../rust/common/Cargo.toml
 export VERSION=$SCRIPT/../rust/daemon/src/version.rs
-python <<EOF
+NEW_VERSION=$(python <<EOF
 import re
 import os
 
 m = None
+new_version = ""
 for cargo in [os.environ["CARGO_COMMON"], os.environ["CARGO_CLI"], os.environ["CARGO"]]:
     with open(cargo, "r+") as f:
 
@@ -42,7 +43,8 @@ for cargo in [os.environ["CARGO_COMMON"], os.environ["CARGO_CLI"], os.environ["C
             # and replace
             m = version.match(line)
             if m:
-                lines[i] = 'version = "{0}.{1}.{2}"\n'.format(m[1], m[2], int(m[3]) + 1)
+                new_version = "{0}.{1}.{2}".format(m[1], m[2], int(m[3]) + 1)
+                lines[i] = 'version = "{}"\n'.format(new_version)
                 break
 
         f.seek(0)
@@ -52,11 +54,19 @@ with open(os.environ["VERSION"], "r+") as f:
         lines = f.readlines()
         for i, line in enumerate(lines):
             if line.startswith("pub const VERSION"):
-               lines[i] = 'pub const VERSION: &str = "{0}.{1}.{2}";\n'.format(
-                          m[1], m[2], (int(m[3]) + 1))
+               lines[i] = 'pub const VERSION: &str = "{}";\n'.format(new_version)
                break
 
         f.seek(0)
         f.writelines(lines)
-
+print(new_version)
 EOF
+)
+
+echo "Bumping to version $NEW_VERSION"
+
+# Create a CL
+cd "$SCRIPT/.."
+repo start "version_bump_$NEW_VERSION" .
+git commit -m "Version Bump to $NEW_VERSION" "$CARGO" "$CARGO_CLI" "$CARGO_COMMON" "$VERSION"
+repo upload -y --cbr -o nokeycheck --label Presubmit-Ready+1 --re=formosa@google.com,shuohsu@google.com --cc=schilit@google.com .

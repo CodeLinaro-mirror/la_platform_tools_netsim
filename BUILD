@@ -63,7 +63,10 @@ genrule(
     outs = ["netlink_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
@@ -72,7 +75,10 @@ genrule(
     outs = ["mac80211_hwsim_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
@@ -81,7 +87,10 @@ genrule(
     outs = ["ieee80211_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
@@ -90,7 +99,10 @@ genrule(
     outs = ["llc_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
@@ -99,7 +111,10 @@ genrule(
     outs = ["link_layer_packets.rs"],
     cmd = "$(location @pdl-compiler//:pdlc) --output-format rust $(SRCS) > $(OUTS)",
     tools = ["@pdl-compiler//:pdlc"],
-    visibility = ["//rust/packets:__pkg__"],
+    visibility = [
+        "//next/packets:__pkg__",
+        "//rust/packets:__pkg__",
+    ],
 )
 
 genrule(
@@ -139,19 +154,28 @@ cc_binary(
         ":netsim_daemon_h",
         "//rust:cxx-bridge-header",
         "//rust:netsimd.cc",
-    ],
-    copts = ["-I include"],
+    ] + select({
+        "@platforms//os:windows": ["src/hci/async_manager.cc"],
+        "//conditions:default": [],
+    }),
     defines = ["NETSIM_ANDROID_EMULATOR"],
-    includes = [
-        "include",
-        "src/",
-    ],
+    includes = ["src"],
     deps = [
         ":netsimd_cc_proto",
-        "//rust/daemon:netsim_daemon",
+        "@aemu//base:aemu-base",
+        "@aemu//base:aemu-base-socket-utils",
+        "@c-ares//:ares",
+        "@glib//glib",
         "@rootcanal//:libbt-rootcanal",
         "@wpa_supplicant_8//:hostapd_c_lib",
-    ],
+    ] + select({
+        "@platforms//os:windows": [
+            "//rust/daemon:netsim_daemon_windows",
+        ],
+        "//conditions:default": [
+            "//rust/daemon:netsim_daemon",
+        ],
+    }),
 )
 
 genrule(
@@ -180,5 +204,12 @@ genrule(
         "netsim-ui/assets/polar-background.svg",
         "netsim-ui/assets/hexagonal-background.png",
     ],
-    cmd = "for f in $(locations //ui:netsim_ui_files); do dest=$(@D)/netsim-ui/$${f#ui/dist/}; mkdir -p $$(dirname $$dest); cp -f $$f $$dest; done",
+    cmd = """
+      set -e
+      mkdir -p $(@D)/netsim-ui
+      # Use a sample path from the source list to find the root 'dist' directory
+      source_path=$$(echo $(locations //ui:netsim_ui_files) | cut -d' ' -f1)
+      dist_dir=$${source_path%/dist/*}/dist
+      cp -r $${dist_dir}/. $(@D)/netsim-ui/
+    """,
 )

@@ -1,0 +1,46 @@
+[package]
+name = "packet-stream"
+version = "0.1.0"
+edition = "2021"
+description = "Simplified cross-platform packet streaming framework - core library"
+repository = "https://github.com/schilit/packetstream"
+license = "MIT"
+keywords = ["ipc", "networking", "packets", "cross-platform", "performance"]
+categories = ["network-programming", "api-bindings"]
+
+[features]
+default = []
+dual_fd = [] # "dep:rustutils"]
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+bytes = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+rand = "0.8"
+async-trait = "0.1"
+futures = "0.3"
+tokio-util = { version = "0.7", features = ["codec"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+serde_json = "1.0.143"
+netsim-api = { path = "../netsim-api" }
+protobuf = "=3.7.2"
+grpcio = { version = "0.13.0", default-features = false, features = [
+  "protobufv3-codec",
+] }
+netsim-proto = { path = "../proto" }
+futures-util = "0.3"
+
+# Optional dependency for dual_fd feature
+# rustutils = { git = "https://github.com/google/rustutils", branch = "main", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["namedpipeapi", "winbase"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+nix = { version = "0.27", features = ["fs", "socket"] }
+
+[dev-dependencies]
+tokio-test = "0.4.3"
+hmac = "0.12.1"
+sha2 = "0.10.8"

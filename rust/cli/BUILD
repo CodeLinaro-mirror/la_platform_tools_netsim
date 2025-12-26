@@ -8,6 +8,7 @@ rust_library(
     name = "netsim_cli",
     srcs = glob(["src/*.rs"]),
     crate_name = "netsim_cli",
+    edition = "2021",
     deps = [
         "//rust/common:netsim_common",
         "//rust/proto-cf",

@@ -1,0 +1,501 @@
+// Copyright 2023-2025 The Android Open Source Project
+
+use crate::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
+use crate::bluetooth::Controller as RootcanalController;
+use crate::chip_error::ChipError;
+use crate::client_error::ClientError;
+use crate::client_method;
+use crate::stats::NetsimRadioStats;
+use bytes::Bytes;
+use futures::Sink;
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::pin::Pin;
+use tokio::sync::{mpsc, oneshot};
+use tokio_stream::Stream;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ChipKind {
+    UNSPECIFIED = 0,
+    BLUETOOTH = 1,
+    WIFI = 2,
+    UWB = 3,
+    NFC = 4,
+    BleBeacon = 5,
+    CELLULAR = 6,
+}
+
+impl Default for ChipKind {
+    fn default() -> Self {
+        ChipKind::UNSPECIFIED
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Radio {
+    pub state: Option<bool>,
+    pub range: f32,
+    pub tx_count: i32,
+    pub rx_count: i32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Chip {
+    pub kind: ChipKind,
+    pub id: u32,
+    pub name: String,
+    pub manufacturer: String,
+    pub product_name: String,
+    // pub offset: Option<Position>,
+    pub chip: Option<ChipType>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ChipType {
+    Bt(crate::bluetooth::Bluetooth),
+    BleBeacon(crate::bluetooth::beacon::BleBeacon),
+    Uwb(Radio),
+    Wifi(Radio),
+}
+
+// The only error from PacketStream occurs when source closes connection.
+/// A stream of packets from the chip.
+pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Sync + Unpin>;
+/// A sink for packets to the chip.
+pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>;
+
+// CHIP SERVICE
+//
+// This module implements the actor model for managing simulated chips.
+// There is one chip service actor for each network type (Bluetooth, UWB, Wi-Fi).
+//
+// The "service" is the actor's message-processing loop, which would be
+// implemented in a separate task that owns the `mpsc::Receiver<ChipRequest>`.
+//
+// The "client" (`ChipClient`) is a handle to the actor that allows other parts
+// of the system to send messages to it.
+
+/// A unique identifier for a simulated chip, represented as a u32.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ChipId(pub u32);
+
+impl From<ChipId> for u32 {
+    fn from(id: ChipId) -> Self {
+        id.0
+    }
+}
+
+impl From<u32> for ChipId {
+    fn from(id: u32) -> Self {
+        ChipId(id)
+    }
+}
+/// A reply channel for sending the result of an operation back to the caller.
+pub type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
+
+/// Defines the message protocol for the chip service actor.
+///
+/// Each variant corresponds to a specific command that can be sent to the
+/// service. For commands that require a response, a `Responder` channel is
+/// included.
+#[derive(Debug)]
+pub enum ChipRequest {
+    /// Create a new chip.
+    Create {
+        /// The parameters for the new chip.
+        params: CreateParams,
+        /// The channel to send the result.
+        respond_to: Responder<()>,
+    },
+    /// Get the state of a chip.
+    Read {
+        /// The ID of the chip to retrieve.
+        id: ChipId,
+        /// The channel to send the chip's state back on.
+        respond_to: Responder<ChipInfo>,
+    },
+    /// Update an existing chip.
+    Update {
+        /// The ID of the chip to patch.
+        id: ChipId,
+        /// The patch to apply to the chip.
+        chip: Chip,
+        /// The channel to send the updated chip state back on.
+        respond_to: Responder<Chip>,
+    },
+    /// Delete a chip.
+    Delete {
+        /// The ID of the chip to delete.
+        id: ChipId,
+        /// The channel to send the operation result back on.
+        respond_to: Responder<()>,
+    },
+    /// Reset all event counters for a chip.
+    Reset {
+        /// The ID of the chip to reset.
+        id: ChipId,
+    },
+    /// Get radio statistics for all chips.
+    GetStatistics {
+        /// The channel to send the statistics back on.
+        respond_to: Responder<Vec<NetsimRadioStats>>,
+    },
+    /// Get the total number of chips for testing purposes.
+    GetCountForTesting {
+        /// The channel to send the count back on.
+        respond_to: Responder<usize>,
+    },
+    /// Command the service to shut down gracefully.
+    Shutdown,
+}
+
+/// The top-level parameters for creating any kind of chip.
+///
+/// This struct provides all the necessary information for creating a new
+/// simulated chip, including its ID, packet transport, and technology-specific
+/// configurations. It is used in the [`ChipRequest::Create`] variant and
+/// passed to the chip service through the [`ChipClient::create`] method.
+pub struct CreateParams {
+    /// A unique identifier for the new chip.
+    pub id: ChipId,
+    /// The transport for packet input.
+    pub packet_stream: Option<PacketStream>,
+    /// The transport for packet output.
+    pub packet_sink: Option<PacketSink>,
+    /// Chip config.
+    pub config: ChipConfig,
+}
+
+impl fmt::Debug for CreateParams {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CreateParams")
+            .field("id", &self.id)
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
+/// Chip configuration
+pub struct ChipConfig {
+    /// The name of the chip.
+    pub name: String,
+    /// The manufacturer of the chip.
+    pub manufacturer: String,
+    /// The product name of the chip.
+    pub product_name: String,
+    /// Technology-specific parameters.
+    pub network_params: NetworkParams,
+}
+
+impl ChipConfig {
+    /// Creates a new `ChipConfig`.
+    pub fn new(
+        name: impl Into<String>,
+        manufacturer: impl Into<String>,
+        product_name: impl Into<String>,
+        network_params: NetworkParams,
+    ) -> Self {
+        ChipConfig {
+            name: name.into(),
+            manufacturer: manufacturer.into(),
+            product_name: product_name.into(),
+            network_params,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NetworkKind {
+    Bluetooth,
+    Wifi,
+    Uwb,
+    Cell,
+}
+
+impl From<&NetworkParams> for NetworkKind {
+    fn from(params: &NetworkParams) -> Self {
+        match params {
+            NetworkParams::Bluetooth(_) => NetworkKind::Bluetooth,
+            NetworkParams::Wifi(_) => NetworkKind::Wifi,
+            NetworkParams::Uwb(_) => NetworkKind::Uwb,
+            NetworkParams::Cell(_) => NetworkKind::Cell,
+        }
+    }
+}
+
+/// An enum holding the parameters for a specific chip technology.
+#[derive(Debug, Clone)]
+pub enum NetworkParams {
+    /// Bluetooth parameters.
+    Bluetooth(BluetoothParams),
+    /// Wi-Fi parameters.
+    Wifi(WifiParams),
+    /// UWB parameters.
+    Uwb(UwbParams),
+    /// Cellular parameters.
+    Cell(CellParams),
+}
+
+/// Parameters for creating a Bluetooth chip.
+///
+/// This struct holds all the necessary parameters for creating a Bluetooth chip,
+/// including its address, controller properties, and operational mode. It is
+/// nested within [`CreateParams`] when the chip being created is a
+/// Bluetooth chip.
+#[derive(Debug, Clone)]
+pub struct BluetoothParams {
+    /// The Bluetooth address of the device.
+    pub address: String,
+    /// Rootcanal controller properties.
+    pub bt_properties: RootcanalController,
+    /// The operational mode of the Bluetooth chip.
+    pub mode: BluetoothMode,
+}
+
+/// An enum to differentiate between the kinds of Bluetooth chips.
+///
+/// This enum differentiates between the various operational modes of a
+/// Bluetooth chip, such as Device, Beacon, and Sniffer. It is used within
+/// [`BluetoothParams`] to specify the chip's behavior.
+#[derive(Debug, Clone)]
+pub enum BluetoothMode {
+    /// A full, virtual Bluetooth controller that can be paired with.
+    Device(DeviceParams),
+    /// A simple, non-interactive BLE beacon that broadcasts advertisements.
+    Beacon(Box<BeaconParams>),
+    /// A passive Bluetooth sniffer to capture nearby traffic.
+    Sniffer(SnifferParams),
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BleBeacon {
+    // BD_ADDR address
+    pub address: String,
+    // Settings on how beacon functions
+    pub settings: Option<AdvertiseSettings>,
+    // Advertising Data
+    pub adv_data: Option<AdvertiseData>,
+    // Scan Response Data
+    pub scan_response: Option<AdvertiseData>,
+}
+
+/// Parameters for creating a virtual Bluetooth device.
+///
+/// This struct holds parameters for creating a virtual Bluetooth device and is
+/// used when the [`BluetoothMode`] is [`BluetoothMode::Device`].
+#[derive(Debug, Clone, Default)]
+pub struct DeviceParams {}
+
+/// Parameters for creating a BLE beacon.
+///
+/// This struct holds parameters for creating a BLE beacon and is used when the
+/// [`BluetoothMode`] is [`BluetoothMode::Beacon`].
+#[derive(Debug, Clone, Default)]
+pub struct BeaconParams {
+    /// The BLE beacon's configuration.
+    pub ble_beacon: BleBeacon,
+}
+
+/// Parameters for a Bluetooth sniffer.
+///
+/// This struct holds parameters for a Bluetooth sniffer and is used when the
+/// [`BluetoothMode`] is [`BluetoothMode::Sniffer`].
+#[derive(Debug, Default, Clone)]
+pub struct SnifferParams {
+    // Future sniffer-specific properties can be added here.
+}
+
+/// Parameters for creating a Wi-Fi chip.
+#[derive(Debug, Default, Clone)]
+pub struct WifiParams {
+    // Future Wi-Fi specific properties.
+}
+
+/// Parameters for creating a UWB chip.
+#[derive(Debug, Default, Clone)]
+pub struct UwbParams {
+    // Future UWB specific properties.
+}
+
+/// Parameters for creating a Cellular chip.
+#[derive(Debug, Default, Clone)]
+pub struct CellParams {
+    // Future Cellular specific properties.
+}
+
+/// Parameters for the ChipDied message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ChipDiedParams {
+    /// The ID of the chip that died.
+    pub id: ChipId,
+}
+
+impl fmt::Display for ChipId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Information about a chip, including technology-specific details.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChipInfo {
+    Bluetooth(Chip),
+    Wifi(Chip),
+    Uwb(Chip),
+    Cell(CellChipInfo),
+}
+
+/// Cellular technology specific chip information.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CellChipInfo {
+    /// The unique identifier for the chip.
+    pub chip_id: ChipId,
+    /// A string representing the current state of the modem.
+    pub state: String,
+    // TODO: Add more fields like signal strength, network registration, etc.
+}
+
+// =============================================================================
+// Chip Actor CLIENT
+// =============================================================================
+
+/// A client handle for interacting with the chip server actor.
+///
+/// There is one chip server actor for each network type (Bluetooth, UWB, Wi-Fi).
+/// This client provides a high-level API for sending `ChipRequest` messages to
+/// the server over an `mpsc` channel. It abstracts away the channel and
+/// `oneshot` responder boilerplate for each command.
+#[derive(Clone)]
+pub struct ChipClient {
+    /// The sender half of the `mpsc` channel for sending `ChipRequest`s to the
+    /// chip service.
+    sender: mpsc::Sender<ChipRequest>,
+}
+
+impl ChipClient {
+    /// Creates a new `ChipClient` handle.
+    ///
+    /// This function connects the client to the service's message channel.
+    ///
+    /// # Arguments
+    ///
+    /// * `sender` - The `mpsc` sender half of the channel for sending `ChipRequest`s.
+    pub fn new(sender: mpsc::Sender<ChipRequest>) -> Self {
+        Self { sender }
+    }
+
+    /// Sends a shutdown command to the chip service.
+    ///
+    /// This is a fire-and-forget command; it does not wait for a response.
+    pub async fn shutdown(&self) -> Result<(), ClientError> {
+        self.sender
+            .send(ChipRequest::Shutdown)
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Sends a reset command to the chip service.
+    ///
+    /// This is a fire-and-forget command; it does not wait for a response.
+    pub async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
+        self.sender
+            .send(ChipRequest::Reset { id })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        Ok(())
+    }
+}
+
+// Generate client methods.
+client_method!(ChipClient => fn create(params: CreateParams) -> () as ChipRequest::Create);
+client_method!(ChipClient => fn read(id: ChipId) -> ChipInfo as ChipRequest::Read);
+client_method!(ChipClient => fn update(id: ChipId, chip: Chip) -> Chip as ChipRequest::Update);
+client_method!(ChipClient => fn delete(id: ChipId) -> () as ChipRequest::Delete);
+client_method!(ChipClient => fn read_statistics() -> Vec<NetsimRadioStats> as ChipRequest::GetStatistics);
+client_method!(ChipClient => fn read_count_for_testing() -> usize as ChipRequest::GetCountForTesting);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_chip() {
+        let (tx, mut rx) = mpsc::channel(1);
+        let client = ChipClient::new(tx);
+
+        // Spawn a task to handle the client call
+        tokio::spawn(async move {
+            let chip_id = ChipId(1);
+            let _ = client.read(chip_id).await;
+        });
+
+        // Receive the message and assert
+        let received = rx.recv().await.unwrap();
+        match received {
+            ChipRequest::Read { id, respond_to: _ } => {
+                assert_eq!(id, ChipId(1));
+            }
+            _ => panic!("Received incorrect ChipRequest variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_chip() {
+        let (tx, mut rx) = mpsc::channel(1);
+        let client = ChipClient::new(tx);
+
+        let params = CreateParams {
+            id: ChipId(2),
+            packet_stream: None,
+            packet_sink: None,
+            config: ChipConfig::new(
+                "test_chip",
+                "test_manufacturer",
+                "test_product",
+                NetworkParams::Bluetooth(BluetoothParams {
+                    address: "00:11:22:33:44:55".to_string(),
+                    bt_properties: RootcanalController::default(),
+                    mode: BluetoothMode::Device(DeviceParams {}),
+                }),
+            ),
+        };
+
+        tokio::spawn(async move {
+            let _ = client.create(params).await;
+        });
+
+        let received = rx.recv().await.unwrap();
+        match received {
+            ChipRequest::Create { params, respond_to: _ } => {
+                assert_eq!(params.id, ChipId(2));
+                match params.config.network_params {
+                    NetworkParams::Bluetooth(bt_params) => {
+                        assert_eq!(bt_params.address, "00:11:22:33:44:55");
+                    }
+                    _ => panic!("Received incorrect NetworkParams variant"),
+                }
+            }
+            _ => panic!("Received incorrect ChipRequest variant"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_chip_statistics() {
+        let (tx, mut rx) = mpsc::channel(1);
+        let client = ChipClient::new(tx);
+
+        tokio::spawn(async move {
+            let _ = client.read_statistics().await;
+        });
+
+        let received = rx.recv().await.unwrap();
+        match received {
+            ChipRequest::GetStatistics { respond_to: _ } => {
+                // Correct variant received, nothing else to check
+            }
+            _ => panic!("Received incorrect ChipRequest variant"),
+        }
+    }
+}

@@ -14,14 +14,14 @@
 
 [workspace]
 members = [
-    "proto",
-    "cli",
-    "common",
-    "daemon",
-    "http-proxy",
-    "libslirp-rs",
-    "hostapd-rs",
-    "packets",
-    "capture",
-    "packets-zc",
+  "proto",
+  "cli",
+  "common",
+  "daemon",
+  "http-proxy",
+  "libslirp-rs",
+  "hostapd-rs",
+  "packets",
+  "capture",
+  "packets-zc",
 ]

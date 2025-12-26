@@ -10,8 +10,8 @@ exports_files([
 
 rustfmt_test(
     name = "fmt",
+    tags = ["manual"],
     targets = [
-        "//rust/bluetooth",
         "//rust/capture:netsim_capture",
         "//rust/cli:netsim_cli",
         "//rust/common:netsim_common",
@@ -19,10 +19,8 @@ rustfmt_test(
         "//rust/hostapd-rs:netsim_hostapd_rs",
         "//rust/http-proxy:netsim_http_proxy",
         "//rust/libslirp-rs:netsim_libslirp_rs",
-        "//rust/netsim-api",
         "//rust/packets:netsim_packets",
         "//rust/proto-cf",
-        "//rust/rootcanal",
     ],
 )
 

@@ -1,0 +1,5 @@
+# Non-Volatile RAM State for the Modem
+
+operator_numeric = "311740"
+network_selection_mode = "Automatic"
+emergency_mode = false

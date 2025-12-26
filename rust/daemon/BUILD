@@ -1,10 +1,10 @@
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load(":netsimd.bzl", "netsimd_rust_library")
 
 package(default_visibility = ["//:__subpackages__"])
 
 exports_files(["src/ffi.rs"])
 
-rust_library(
+netsimd_rust_library(
     name = "netsim_daemon",
     srcs = glob(["src/**/*.rs"]),
     aliases = {
@@ -30,6 +30,7 @@ rust_library(
         "//rust/proto-cf",
         "@anyhow",
         "@bytes",
+        "@c-ares//:ares",
         "@clap",
         "@cxx.rs//:cxx",
         "@data-encoding",

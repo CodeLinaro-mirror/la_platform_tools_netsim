@@ -22,35 +22,74 @@ from utils import AOSP_ROOT, run
 
 class BazelTask(Task):
 
+  DEFAULT_TARGETS = [
+      "@netsim//:all",
+      "@netsim//rust/...",
+      "@netsim//next/...",
+  ]
+
   def __init__(self, args, env):
     super().__init__("Bazel")
     self.env = env
+    self.buildbot = args.buildbot
+    self.hermetic = args.hermetic
+    # TODO(b/320434273): Include next/... for windows once dependent crates are imported
+    if platform.system().lower() == "windows":
+      self.DEFAULT_TARGETS = [
+          "@netsim//:all",
+          "@netsim//rust/...",
+      ]
+    self.targets = args.bazel_targets or self.DEFAULT_TARGETS
     system = f"{platform.system().lower()}-x86_64"
     self.path = AOSP_ROOT / "prebuilts" / "bazel" / system / "bazel"
 
+  def _run_gcloud_auth(self):
+    # This is required for hermetic builds to access GCS for dependencies.
+    run(
+        [
+            "gcloud",
+            "auth",
+            "application-default",
+            "login",
+            "--project=emulator-builds",
+        ],
+        self.env,
+        "gcloud auth",
+        AOSP_ROOT,
+    )
+    # This is required to access the quota project for GCS dependencies.
+    run(
+        [
+            "gcloud",
+            "auth",
+            "application-default",
+            "set-quota-project",
+            "emulator-builds",
+        ],
+        self.env,
+        "gcloud auth",
+        AOSP_ROOT,
+    )
+
   def do_run(self):
-    if platform.system().lower() == "darwin":
-      if platform.machine() == "x86_64":
-        config = "macos_x86_64"
-      else:
-        config = "macos"
-    else:
-      config = "linux"
+    configs = ["release"]
+    if self.buildbot:
+      configs.append("ci")
+    elif self.hermetic:
+      self._run_gcloud_auth()
+      configs.append("hermetic")
 
-    # Build
-    run(
-        [self.path, "build", ":all", "--config=" + config],
-        self.env,
-        "bazel build",
-        AOSP_ROOT / "tools" / "netsim",
-    )
+    build_configs = [f"--config={c}" for c in configs]
 
-    # Test
-    run(
-        [self.path, "test", ":all", "//rust/...", "--config=" + config],
-        self.env,
-        "bazel test",
-        AOSP_ROOT / "tools" / "netsim",
-    )
+    def _run_bazel(action, targets, extra_args=[]):
+      run(
+          [self.path, action] + targets + build_configs + extra_args,
+          self.env,
+          f"bazel {action}",
+          AOSP_ROOT,
+      )
+
+    _run_bazel("build", self.targets)
+    _run_bazel("test", self.targets, extra_args=["--test_output=streamed"])
 
     return True

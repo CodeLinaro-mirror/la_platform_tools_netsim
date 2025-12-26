@@ -1,0 +1,30 @@
+[package]
+name = "daemon"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.1.8", default-features = false, features = [
+  "derive",
+  "error-context",
+  "help",
+  "std",
+  "usage",
+  "env",
+] }
+chrono = { version = "0.4", features = ["now"] }
+env_logger = "0.10"
+futures = "0.3.21"
+log = "0.4"
+netsim-api = { path = "../netsim-api" }
+bluetooth = { path = "../bluetooth" }
+devices = { path = "../devices" }
+packet-stream = { path = "../packet-stream" }
+tokio = { version = "1.28.2", features = ["full"] }
+named-lock = "0.4.1"
+
+[dev-dependencies]
+
+[features]
+default = []
+cuttlefish = []

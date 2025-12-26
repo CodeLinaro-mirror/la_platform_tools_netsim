@@ -1,0 +1,14 @@
+[package]
+name = "cell"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+netsim-api = { path = "../netsim-api" }
+modem-rs = { path = "../modem-rs" }
+log = "0.4"
+bytes = "1"
+futures = "0.3"
+tokio-stream = "0.1"
+thiserror = "1"
