@@ -1,4 +1,4 @@
-load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_library", "rust_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -15,27 +15,19 @@ DEPS = [
     "@thiserror",
 ]
 
-rust_library(
+netsim_rust_library(
     name = "link-actor",
     srcs = glob(["src/**/*.rs"]),
     crate_features = [],
     crate_name = "link_actor",
     crate_root = "src/lib.rs",
     edition = "2021",
+    enable_clippy = False,
+    enable_doc_test = False,
+    enable_fmt = False,
     proc_macro_deps = [
         "@async-trait",
         "@thiserror-impl",
     ],
     deps = DEPS,
-)
-
-rust_test(
-    name = "link-actor_test",
-    crate = ":link-actor",
-    deps = DEPS,
-)
-
-rust_clippy(
-    name = "clippy",
-    deps = [":link-actor"],
 )

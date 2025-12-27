@@ -1,6 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-use netsim_model::chip::{ChipId, ChipKind};
+use netsim_model::chip::ChipId;
 
 /// Parameters for creating a Link.
 #[derive(Debug, Clone)]

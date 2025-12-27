@@ -51,8 +51,8 @@ async fn test_create_device_succeeds() {
     let device_id = client.create_device(params).await.unwrap();
     let device = client.get(device_id).await.unwrap().unwrap();
 
-    assert_eq!(device.device.name, device_name);
-    assert_eq!(device.device.chips.len(), 1);
+    assert_eq!(device.name, device_name);
+    assert_eq!(device.chips.len(), 1);
 }
 
 #[tokio::test]
@@ -132,9 +132,9 @@ async fn test_update_device_propagates_to_chips() {
     client.update(device_id, update).await.unwrap();
 
     let device = client.get(device_id).await.unwrap().unwrap();
-    assert_eq!(device.device.position.x, 10.0);
-    assert_eq!(device.device.orientation.yaw, 1.0);
-    assert_eq!(device.device.name, "updated-name");
+    assert_eq!(device.position.x, 10.0);
+    assert_eq!(device.orientation.yaw, 1.0);
+    assert_eq!(device.name, "updated-name");
 }
 
 #[tokio::test]
@@ -165,10 +165,10 @@ async fn test_notify_chip_removed() {
 
     let device_id = client.create_device(params).await.unwrap();
     let device = client.get(device_id).await.unwrap().unwrap();
-    let chip_id = ChipId(device.device.chips[0].id);
+    let chip_id = ChipId(device.chips[0].id);
 
     client.notify_chip_removed(device_id, chip_id).await.unwrap();
 
     let device = client.get(device_id).await.unwrap().unwrap();
-    assert_eq!(device.device.chips.len(), 0);
+    assert_eq!(device.chips.len(), 0);
 }

@@ -2,8 +2,8 @@
 
 #[derive(Debug, thiserror::Error)]
 pub enum LinkError {
-    #[error("Link not found")]
-    NotFound,
+    #[error("Link not found: {0}")]
+    NotFound(String),
     #[error("Invalid parameter: {0}")]
     InvalidParam(String),
     #[error("Internal error: {0}")]

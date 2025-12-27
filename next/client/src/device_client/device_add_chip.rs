@@ -37,7 +37,7 @@ impl DeviceClient {
             match self
                 .inner
                 .perform_action(
-                    device_id,
+                    Some(device_id),
                     DeviceAction::AddChip {
                         chip_config: convert_chip_config(&params.chip_config),
                         packet_stream: params.packet_stream,
