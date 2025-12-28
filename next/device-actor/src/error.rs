@@ -12,6 +12,8 @@ use thiserror::Error;
 pub enum DeviceError {
     #[error("Device not found: {0}")]
     NotFound(String),
+    #[error("Device not found (explicit): {0}")]
+    DeviceNotFound(String),
     #[error("Actor communication error: {0}")]
     ActorCommunicationError(String),
 }

@@ -19,6 +19,12 @@ impl From<u32> for LinkId {
     }
 }
 
+impl From<LinkId> for u32 {
+    fn from(id: LinkId) -> Self {
+        id.0
+    }
+}
+
 impl Default for LinkId {
     fn default() -> Self {
         LinkId(0)

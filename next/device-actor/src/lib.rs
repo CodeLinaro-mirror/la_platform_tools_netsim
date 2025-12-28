@@ -1,53 +1,37 @@
-// Copyright (C) 2025 The Android Open Source Project
+// Copyright 2025 The Android Open Source Project
 
-//! # Device Actor
+//! Device Actor
 //!
-//! This module implements the Device resource actor.
-//!
-//! ## Structure
-//!
-//! - [`entity`] - [`ActorEntity`](actor_framework::ActorEntity) implementation for [`DeviceEntity`]
-//! - [`error`] - [`DeviceError`] type for type-safe error handling
-//! - [`actions`] - [`DeviceAction`] and [`DeviceActionResult`]
-//! - [`new()`] - Factory function that creates the actor and client
-//!
-//! ## Custom Actions
-//!
-//! The Device actor showcases the Action pattern for domain-specific operations.
-//!
-//! ## Usage
-//!
-//! ```rust
+//! This crate provides the `DeviceActor` which manages the lifecycle of devices
+//! and their associated chips.
 
-//! use netsim_model::device::api::DeviceCreate;
-//!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Create actor and client
-//!     let (actor, generic_client) = device_actor::new();
-//!     // ...
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ## Key Features
-//!
-//! - **Custom actions**: Supported via [`DeviceAction`]
-//! - **Type-safe results**: Actions return strongly-typed [`DeviceActionResult`]
+mod device_actor;
+mod error;
+mod lifecycle;
+mod service;
+mod utils;
 
-pub mod actor_impl;
-pub mod context;
-pub mod entity;
-pub mod error;
-pub mod handlers;
+pub use device_actor::DeviceActor;
+pub use error::DeviceError;
 
-pub use context::DeviceContext;
-pub use error::*;
-
-pub use crate::entity::DeviceEntity;
-use actor_framework::{ResourceActor, ResourceClient};
+pub use actor_framework::{ResourceActor, ResourceClient};
+use capture_api::CaptureSender;
+use netsim_model::chip::{ChipClient, NetworkKind};
+use std::collections::HashMap;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 
 /// Creates a new Device actor and its client.
-pub fn new() -> (ResourceActor<DeviceEntity>, ResourceClient<DeviceEntity>) {
-    ResourceActor::new(32)
+pub fn new(
+    chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>>,
+    next_chip_id: Arc<AtomicU32>,
+    capture_client: Option<Arc<dyn CaptureSender>>,
+) -> DeviceActor {
+    DeviceActor {
+        chip_clients,
+        next_chip_id,
+        capture_client,
+        devices: HashMap::new(),
+        next_device_id: 1,
+    }
 }

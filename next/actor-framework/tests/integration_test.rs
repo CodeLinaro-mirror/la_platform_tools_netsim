@@ -1,7 +1,8 @@
-use actor_framework::{ActorEntity, ResourceActor, Runtime};
+use actor_framework::{ActorService, DynContext, ResourceActor};
 use async_trait::async_trait;
+use std::collections::HashMap;
 
-// --- Test Entity ---
+// --- Test Service ---
 
 #[derive(Clone, Debug, PartialEq)]
 struct SimpleUser {
@@ -31,69 +32,116 @@ enum UserAction {
 #[error("Simple user error")]
 struct SimpleUserError;
 
+#[derive(Default)]
+struct UserActor {
+    users: HashMap<u32, SimpleUser>,
+    next_id: u32,
+}
+
 #[async_trait]
-impl ActorEntity for SimpleUser {
+impl actor_framework::ActorLifecycle<u32> for UserActor {
+    async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {
+        if self.next_id == 0 {
+            self.next_id = 1;
+        }
+    }
+    type Error = SimpleUserError;
+}
+
+#[async_trait]
+impl ActorService for UserActor {
     type Id = u32;
     type Create = SimpleUserCreate;
     type Update = SimpleUserUpdate;
     type Action = UserAction;
     type ActionResult = bool;
-    type Context = ();
     type Error = SimpleUserError;
-    type ListResponse = Vec<SimpleUser>;
+    type Entity = SimpleUser;
 
-    fn from_create_params(id: u32, params: SimpleUserCreate) -> Result<Self, Self::Error> {
-        Ok(Self { id, name: params.name, is_admin: false })
-    }
-
-    fn on_list(
-        entities: &std::collections::HashMap<Self::Id, Self>,
-        _context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
-    ) -> Self::ListResponse {
-        entities.values().cloned().collect()
-    }
-
-    async fn on_update(
+    async fn handle_create(
         &mut self,
-        update: SimpleUserUpdate,
-        _context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
-    ) -> Result<(), Self::Error> {
-        if let Some(name) = update.name {
-            self.name = name;
-        }
-        Ok(())
+        id: Option<Self::Id>,
+        _params: Self::Create,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Self::Id, Self::Error> {
+        let id = id.unwrap_or_else(|| {
+            let id = self.next_id;
+            self.next_id += 1;
+            id
+        });
+        let user = SimpleUser { id, name: _params.name, is_admin: false };
+        self.users.insert(id, user);
+        Ok(id)
     }
 
-    async fn on_delete(
+    async fn handle_get(
         &self,
-        _context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        id: Self::Id,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Option<Self::Entity>, Self::Error> {
+        Ok(self.users.get(&id).cloned())
+    }
+
+    async fn handle_update(
+        &mut self,
+        id: Self::Id,
+        _update: Self::Update,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Self::Entity, Self::Error> {
+        if let Some(user) = self.users.get_mut(&id) {
+            if let Some(name) = _update.name {
+                user.name = name;
+            }
+            Ok(user.clone())
+        } else {
+            Err(SimpleUserError)
+        }
+    }
+
+    async fn handle_delete(
+        &mut self,
+        id: Self::Id,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
+        self.users.remove(&id);
         Ok(())
     }
 
     async fn handle_action(
         &mut self,
-        _action: Self::Action,
-        _context: &mut Self::Context,
-        _runtime: &mut impl Runtime,
+        id: Option<Self::Id>,
+        action: Self::Action,
+        _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
-        match _action {
-            UserAction::PromoteToAdmin => {
-                if self.is_admin {
-                    Ok(false)
-                } else {
-                    self.is_admin = true;
-                    Ok(true)
+        if let Some(id) = id {
+            if let Some(user) = self.users.get_mut(&id) {
+                match action {
+                    UserAction::PromoteToAdmin => {
+                        if user.is_admin {
+                            Ok(false)
+                        } else {
+                            user.is_admin = true;
+                            Ok(true)
+                        }
+                    }
+                    UserAction::Rename(new_name) => {
+                        user.name = new_name;
+                        Ok(true)
+                    }
                 }
+            } else {
+                Err(SimpleUserError)
             }
-            UserAction::Rename(new_name) => {
-                self.name = new_name;
-                Ok(true)
-            }
+        } else {
+            Err(SimpleUserError) // Global actions not implemented
         }
+    }
+
+    async fn handle_list(
+        &mut self,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Vec<Self::Entity>, Self::Error> {
+        Ok(self.users.values().cloned().collect())
     }
 }
 
@@ -103,7 +151,7 @@ impl ActorEntity for SimpleUser {
 async fn test_framework_full_lifecycle() {
     // Start Actor
     let (actor, client) = ResourceActor::new(10);
-    tokio::spawn(actor.run(()));
+    tokio::spawn(actor.run(UserActor::default()));
 
     // 1. Create
     let payload = SimpleUserCreate { name: "Alice".into() };
@@ -112,7 +160,7 @@ async fn test_framework_full_lifecycle() {
 
     // 2. Perform Action: Promote
     let changed: bool =
-        client.perform_action(id.clone(), UserAction::PromoteToAdmin).await.unwrap();
+        client.perform_action(Some(id.clone()), UserAction::PromoteToAdmin).await.unwrap();
     assert!(changed);
 
     // Verify state
@@ -121,12 +169,16 @@ async fn test_framework_full_lifecycle() {
 
     // 3. Perform Action: Promote again (should return false)
     let changed_again: bool =
-        client.perform_action(id.clone(), UserAction::PromoteToAdmin).await.unwrap();
+        client.perform_action(Some(id.clone()), UserAction::PromoteToAdmin).await.unwrap();
     assert!(!changed_again);
 
     // 4. Update
+    // 4. Update
     let update = SimpleUserUpdate { name: Some("Bob".into()) };
-    let updated_user = client.update(id.clone(), update).await.unwrap();
+    let updated_entity = client.update(id.clone(), update).await.unwrap();
+    assert_eq!(updated_entity.name, "Bob");
+
+    let updated_user = client.get(id.clone()).await.unwrap().unwrap();
     assert_eq!(updated_user.name, "Bob");
 
     // 5. Delete

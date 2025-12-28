@@ -1,8 +1,8 @@
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//:__subpackages__"])
 
-rust_library(
+netsim_rust_library(
     name = "packets",
     srcs = glob(["src/*.rs"]) + [
         "//:netsim_ieee80211_rust_gen",
@@ -13,6 +13,11 @@ rust_library(
     ],
     crate_name = "netsim_packets",
     edition = "2021",
+    enable_clippy = False,
+    enable_doc = False,
+    enable_doc_test = False,
+    enable_fmt = False,
+    enable_unit_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
