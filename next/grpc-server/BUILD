@@ -26,7 +26,7 @@ netsim_rust_library(
         "@futures",
         "@grpcio",
         "@log",
-        "@protobuf",
+        "@protobuf-rust",
         "@tokio",
         "@tokio-stream",
     ],

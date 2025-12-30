@@ -46,7 +46,7 @@ impl ActorService for LinkActor {
 
         if params.sender == params.receiver {
             return Err(LinkError::InvalidParam(format!(
-                "Self-link not allowed: chip {}",
+                "Self-link not allowed: chip={}",
                 params.sender
             )));
         }

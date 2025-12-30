@@ -301,7 +301,11 @@ message Link {
   // Receiver chip identifier. 0 acts as a wildcard, matching any chip.
   uint32 receiver_id = 2;
   // Radio kind of link (i.e. BLE, WiFi, etc)
-  PhyKind link_kind = 3;
+  PhyKind link_kind = 3 [deprecated = true];
   // Received Signal Strength Indicator (RSSI) value in dBm
   int32 rssi = 4;
+  // Chip Kind (Bluetooth, WiFi, UWB, etc.)
+  netsim.common.ChipKind kind = 5;
+  // Link Identifier
+  uint32 id = 6;
 }

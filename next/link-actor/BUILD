@@ -29,6 +29,7 @@ netsim_rust_library(
         "@async-trait",
         "@thiserror-impl",
     ],
+    test_deps = ["//next/client"],
     deps = DEPS,
 )
 
