@@ -10,3 +10,4 @@ netsim-proto = { path = "../proto" }
 bytes = "1.0"
 thiserror = "1.0"
 anyhow = "1.0"
+actor-framework = { path = "../actor-framework" }

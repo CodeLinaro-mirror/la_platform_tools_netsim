@@ -128,4 +128,12 @@ impl DeviceClient {
             Err(e) => Err(DeviceError::ActorCommunicationError(e.to_string())),
         }
     }
+    /// Deletes a device.
+    ///
+    /// # Arguments
+    /// * `id` - The ID of the device to delete.
+    pub async fn delete(&self, id: DeviceId) -> Result<(), DeviceError> {
+        debug!("Sending delete request for device {}", id);
+        self.inner.delete(id).await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
+    }
 }

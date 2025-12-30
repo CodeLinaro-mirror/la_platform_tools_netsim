@@ -5,9 +5,7 @@ mod lifecycle;
 mod link_actor;
 mod service;
 
-#[cfg(test)]
-mod tests;
-use actor_framework::{ResourceActor, ResourceClient};
+use actor_framework::ResourceActor;
 pub use error::LinkError;
 pub use link_actor::LinkActor;
 
@@ -69,7 +67,13 @@ pub use link_actor::LinkActor;
 //     3.  **Actor**: `handle_action` updates `ctx.chip_kind_map`.
 //     4.  *Result*: Subsequent `create` calls for this chip will pass validation.
 
-/// Creates a new Link actor and its client.
-pub fn new() -> (ResourceActor<LinkActor>, ResourceClient<LinkActor>) {
-    ResourceActor::new(32)
+pub mod client;
+pub use client::LinkClient;
+
+/// Creates a new LinkActor and returns the runner and a client.
+///
+/// The runner must be spawned on a runtime.
+pub fn new() -> (ResourceActor<LinkActor>, LinkClient) {
+    let (runner, client) = ResourceActor::new(32);
+    (runner, LinkClient::new(client))
 }

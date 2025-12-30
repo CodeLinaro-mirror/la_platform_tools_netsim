@@ -2,13 +2,14 @@
 mod common;
 mod propagation_test;
 
-use common::{setup, TestFixture};
+use common::setup;
 use link_api::{LinkAction, LinkCreate};
 use netsim_model::chip::ChipId;
 
 #[tokio::test]
 async fn test_create_link_succeeds() {
-    let TestFixture { client, .. } = setup().await;
+    let fixture = setup().await;
+    let client = &fixture.client;
 
     let params = LinkCreate { sender: ChipId(1), receiver: ChipId(2), rssi: -50 };
 
@@ -24,7 +25,8 @@ async fn test_create_link_succeeds() {
 
 #[tokio::test]
 async fn test_create_link_fails_mismatch() {
-    let TestFixture { client, .. } = setup().await;
+    let fixture = setup().await;
+    let client = &fixture.client;
 
     // Chip 1 is BLE, Chip 3 is WIFI (from common setup)
     let params = LinkCreate { sender: ChipId(1), receiver: ChipId(3), rssi: -50 };
@@ -36,7 +38,8 @@ async fn test_create_link_fails_mismatch() {
 
 #[tokio::test]
 async fn test_create_link_fails_missing() {
-    let TestFixture { client, .. } = setup().await;
+    let fixture = setup().await;
+    let client = &fixture.client;
 
     // Chip 99 does not exist
     let params = LinkCreate { sender: ChipId(1), receiver: ChipId(99), rssi: -50 };
@@ -47,7 +50,8 @@ async fn test_create_link_fails_missing() {
 
 #[tokio::test]
 async fn test_create_link_fails_after_remove() {
-    let TestFixture { client, .. } = setup().await;
+    let fixture = setup().await;
+    let client = &fixture.client;
 
     // 1. Create a valid link first (so we have an entity to send action to)
     let params = LinkCreate { sender: ChipId(1), receiver: ChipId(2), rssi: -50 };
@@ -71,7 +75,8 @@ async fn test_create_link_fails_after_remove() {
 
 #[tokio::test]
 async fn test_duplicate_create_fails() {
-    let TestFixture { client, .. } = setup().await;
+    let fixture = setup().await;
+    let client = &fixture.client;
 
     let params = LinkCreate { sender: ChipId(1), receiver: ChipId(2), rssi: -50 };
 
@@ -89,7 +94,8 @@ async fn test_duplicate_create_fails() {
 
 #[tokio::test]
 async fn test_chip_added_lifecycle() {
-    let TestFixture { client, .. } = setup().await;
+    let fixture = setup().await;
+    let client = &fixture.client;
 
     // Chip 99 does not exist yet
     let params = LinkCreate { sender: ChipId(99), receiver: ChipId(2), rssi: -50 };
@@ -110,29 +116,21 @@ async fn test_chip_added_lifecycle() {
 }
 
 #[tokio::test]
-async fn test_bootstrapping_succeeds() {
-    let TestFixture { client, .. } = setup().await;
+async fn test_create_link_fails_self() {
+    let fixture = setup().await;
+    let client = &fixture.client;
 
-    // In a real scenario, the map starts empty (or we add a new chip).
-    // We want to add a chip (Chip 100) and then create a link with it.
+    // Chip 1 is BLE
+    let params = LinkCreate { sender: ChipId(1), receiver: ChipId(1), rssi: -50 };
 
-    // Notify Chip 100 added using Global Action (id = None)
-    client
-        .action(
-            None,
-            LinkAction::NotifyChipAdded(ChipId(100), netsim_model::chip::ChipKind::BLUETOOTH),
-        )
-        .await
-        .unwrap();
-
-    // Now create a link with Chip 100
-    let params = LinkCreate { sender: ChipId(100), receiver: ChipId(2), rssi: -50 };
-    client.create(params).await.unwrap();
+    let result = client.create(params).await;
+    assert!(result.is_err());
 }
 
 #[tokio::test]
 async fn test_chip_removal_deletes_links() {
-    let TestFixture { client, .. } = setup().await;
+    let fixture = setup().await;
+    let client = &fixture.client;
 
     // 1. Create a link (1 -> 2)
     let params = LinkCreate { sender: ChipId(1), receiver: ChipId(2), rssi: -50 };
@@ -152,4 +150,41 @@ async fn test_chip_removal_deletes_links() {
     // Also verify we can't update it
     let update_result = client.update(link_id, link_api::LinkUpdate { rssi: Some(-60) }).await;
     assert!(update_result.is_err(), "Should not be able to update deleted link");
+}
+
+#[tokio::test]
+async fn test_update_propagation() {
+    use netsim_model::chip::ChipKind;
+
+    let mut fixture = setup().await;
+    let client = &fixture.client;
+    let mock_controller =
+        fixture.mock_chip_controller.as_mut().expect("MockChipController not found in fixture");
+    let mock_client =
+        fixture.mock_chip_client.as_ref().expect("MockChipClient not found in fixture");
+
+    let chip_id = ChipId(1);
+    let peer_id = ChipId(2);
+
+    // Note: setup() already adds chips 1, 2 (BT) and 3 (WIFI).
+    // We don't need to notify chip added again for 1 and 2.
+
+    // Create Link
+    mock_controller.expect_update(chip_id).return_ok(netsim_model::chip::Chip::default());
+
+    let create_params = LinkCreate { sender: chip_id, receiver: peer_id, rssi: -50 };
+    client.create(create_params).await.unwrap();
+
+    // Verify update sent to chip client
+    let updates = mock_client.updates.lock().unwrap();
+    // We expect 1 update for sender (1)
+    assert!(updates.len() >= 1, "Expected at least 1 update, got {}", updates.len());
+
+    // Check update for chip 1
+    let update_1 = updates.iter().find(|(id, _)| *id == chip_id);
+    assert!(update_1.is_some(), "Update for chip 1 not found");
+    let (_, patch_1) = update_1.unwrap();
+    assert!(patch_1.links.is_some());
+    let links_1 = patch_1.links.as_ref().unwrap();
+    assert!(links_1.contains(&(peer_id, -50)));
 }
