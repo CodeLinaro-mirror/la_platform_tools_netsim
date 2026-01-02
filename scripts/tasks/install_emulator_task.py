@@ -99,9 +99,10 @@ class InstallEmulatorManager:
     self.target = target
     self.local_emulator_dir = local_emulator_dir
     self.build_id = build_id
-    self.local_netsim_dir = OBJS_DIR
-    if not self.buildbot and is_bazel_build:
-      self.local_netsim_dir = BAZEL_OUT_DIR
+    # For both Bazel and CMake, we use the distribution directory for local runs
+    # to ensure all artifacts (netsim + emulator) are in one place.
+    # OBJS_DIR is usually args.out_dir.
+    self.local_netsim_dir = Path(self.out_dir) / "distribution" / "emulator"
     self.is_bazel_build = is_bazel_build
 
   def __os_name_fetch(self):
@@ -132,7 +133,7 @@ class InstallEmulatorManager:
         return False
     else:
       # Without buildbots, this scripts is only runnable on Linux
-      # TODO: support local builds for Mac and Windows
+      # TODO: support local builds for Mac and Windows (if needed beyond local_emulator_dir)
       if PLATFORM_SYSTEM != "Linux" and not self.local_emulator_dir:
         logging.info(
             "The local case only works for Linux if you don't have"
