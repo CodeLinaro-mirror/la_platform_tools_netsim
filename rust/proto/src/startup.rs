@@ -488,6 +488,8 @@ pub struct DeviceInfo {
     pub variant: ::std::string::String,
     // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.arch)
     pub arch: ::std::string::String,
+    // @@protoc_insertion_point(field:netsim.startup.DeviceInfo.avd_path)
+    pub avd_path: ::std::string::String,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.startup.DeviceInfo.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -505,7 +507,7 @@ impl DeviceInfo {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(7);
+        let mut fields = ::std::vec::Vec::with_capacity(8);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "name",
@@ -541,6 +543,11 @@ impl DeviceInfo {
             "arch",
             |m: &DeviceInfo| { &m.arch },
             |m: &mut DeviceInfo| { &mut m.arch },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "avd_path",
+            |m: &DeviceInfo| { &m.avd_path },
+            |m: &mut DeviceInfo| { &mut m.avd_path },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<DeviceInfo>(
             "DeviceInfo",
@@ -581,6 +588,9 @@ impl ::protobuf::Message for DeviceInfo {
                 58 => {
                     self.arch = is.read_string()?;
                 },
+                66 => {
+                    self.avd_path = is.read_string()?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -614,6 +624,9 @@ impl ::protobuf::Message for DeviceInfo {
         if !self.arch.is_empty() {
             my_size += ::protobuf::rt::string_size(7, &self.arch);
         }
+        if !self.avd_path.is_empty() {
+            my_size += ::protobuf::rt::string_size(8, &self.avd_path);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -641,6 +654,9 @@ impl ::protobuf::Message for DeviceInfo {
         if !self.arch.is_empty() {
             os.write_string(7, &self.arch)?;
         }
+        if !self.avd_path.is_empty() {
+            os.write_string(8, &self.avd_path)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -665,6 +681,7 @@ impl ::protobuf::Message for DeviceInfo {
         self.build_id.clear();
         self.variant.clear();
         self.arch.clear();
+        self.avd_path.clear();
         self.special_fields.clear();
     }
 
@@ -677,6 +694,7 @@ impl ::protobuf::Message for DeviceInfo {
             build_id: ::std::string::String::new(),
             variant: ::std::string::String::new(),
             arch: ::std::string::String::new(),
+            avd_path: ::std::string::String::new(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -997,22 +1015,23 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x89\x01\n\x08ChipInfo\x12\x16\n\x04name\x18\x01\x20\x01(\tR\x04nameB\
     \x02\x18\x01\x12(\n\x04chip\x18\x02\x20\x01(\x0b2\x14.netsim.startup.Chi\
     pR\x04chip\x12;\n\x0bdevice_info\x18\x03\x20\x01(\x0b2\x1a.netsim.startu\
-    p.DeviceInfoR\ndeviceInfo\"\xb8\x01\n\nDeviceInfo\x12\x12\n\x04name\x18\
+    p.DeviceInfoR\ndeviceInfo\"\xd3\x01\n\nDeviceInfo\x12\x12\n\x04name\x18\
     \x01\x20\x01(\tR\x04name\x12\x12\n\x04kind\x18\x02\x20\x01(\tR\x04kind\
     \x12\x18\n\x07version\x18\x03\x20\x01(\tR\x07version\x12\x1f\n\x0bsdk_ve\
     rsion\x18\x04\x20\x01(\tR\nsdkVersion\x12\x19\n\x08build_id\x18\x05\x20\
     \x01(\tR\x07buildId\x12\x18\n\x07variant\x18\x06\x20\x01(\tR\x07variant\
-    \x12\x12\n\x04arch\x18\x07\x20\x01(\tR\x04arch\"\xf6\x02\n\x04Chip\x12+\
-    \n\x04kind\x18\x01\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\
-    \x0e\n\x02id\x18\x02\x20\x01(\tR\x02id\x12\"\n\x0cmanufacturer\x18\x03\
-    \x20\x01(\tR\x0cmanufacturer\x12!\n\x0cproduct_name\x18\x04\x20\x01(\tR\
-    \x0bproductName\x12\x13\n\x05fd_in\x18\x05\x20\x01(\x05R\x04fdIn\x12\x15\
-    \n\x06fd_out\x18\x06\x20\x01(\x05R\x05fdOut\x12\x1a\n\x08loopback\x18\
-    \x07\x20\x01(\x08R\x08loopback\x12H\n\rbt_properties\x18\x08\x20\x01(\
-    \x0b2#.rootcanal.configuration.ControllerR\x0cbtProperties\x12\x18\n\x07\
-    address\x18\t\x20\x01(\tR\x07address\x123\n\x06offset\x18\n\x20\x01(\x0b\
-    2\x16.netsim.model.PositionH\0R\x06offset\x88\x01\x01B\t\n\x07_offsetB#\
-    \n\x1fcom.android.emulation.bluetoothP\x01b\x06proto3\
+    \x12\x12\n\x04arch\x18\x07\x20\x01(\tR\x04arch\x12\x19\n\x08avd_path\x18\
+    \x08\x20\x01(\tR\x07avdPath\"\xf6\x02\n\x04Chip\x12+\n\x04kind\x18\x01\
+    \x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x0e\n\x02id\x18\
+    \x02\x20\x01(\tR\x02id\x12\"\n\x0cmanufacturer\x18\x03\x20\x01(\tR\x0cma\
+    nufacturer\x12!\n\x0cproduct_name\x18\x04\x20\x01(\tR\x0bproductName\x12\
+    \x13\n\x05fd_in\x18\x05\x20\x01(\x05R\x04fdIn\x12\x15\n\x06fd_out\x18\
+    \x06\x20\x01(\x05R\x05fdOut\x12\x1a\n\x08loopback\x18\x07\x20\x01(\x08R\
+    \x08loopback\x12H\n\rbt_properties\x18\x08\x20\x01(\x0b2#.rootcanal.conf\
+    iguration.ControllerR\x0cbtProperties\x12\x18\n\x07address\x18\t\x20\x01\
+    (\tR\x07address\x123\n\x06offset\x18\n\x20\x01(\x0b2\x16.netsim.model.Po\
+    sitionH\0R\x06offset\x88\x01\x01B\t\n\x07_offsetB#\n\x1fcom.android.emul\
+    ation.bluetoothP\x01b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

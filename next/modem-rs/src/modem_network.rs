@@ -1,6 +1,6 @@
 // modem-rs/src/controller.rs
 use bytes::Bytes;
-use netsim_api::chips::{ChipId, ChipInfo};
+use netsim_model::chip::{Chip, ChipId};
 use std::fmt;
 use std::sync::Arc;
 
@@ -36,5 +36,5 @@ pub trait ModemNetworkInterface: Send + Sync {
     fn remove_modem(&self, chip_id: ChipId) -> Result<(), ModemError>;
     fn send_data(&self, chip_id: ChipId, data: &[u8]) -> Result<(), ModemError>;
     fn tick(&self);
-    fn get_modem_info(&self, chip_id: ChipId) -> Result<ChipInfo, ModemError>;
+    fn get_modem_info(&self, chip_id: ChipId) -> Result<Chip, ModemError>;
 }

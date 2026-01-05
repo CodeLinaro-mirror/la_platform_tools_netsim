@@ -13,16 +13,17 @@ default = []
 dual_fd = [] # "dep:rustutils"]
 
 [dependencies]
+netsim-types = { path = "../types" }
 tokio = { version = "1.0", features = ["full"] }
 bytes = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.8"
+log = "0.4"
 async-trait = "0.1"
 futures = "0.3"
 tokio-util = { version = "0.7", features = ["codec"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 serde_json = "1.0.143"
-netsim-api = { path = "../netsim-api" }
 protobuf = "=3.7.2"
 grpcio = { version = "0.13.0", default-features = false, features = [
   "protobufv3-codec",

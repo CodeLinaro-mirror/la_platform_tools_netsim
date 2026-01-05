@@ -1,4 +1,4 @@
-// src/error.rs
+// Copyright 2024-2025 The Android Open Source Project
 use thiserror::Error;
 
 #[derive(Error, Debug)]

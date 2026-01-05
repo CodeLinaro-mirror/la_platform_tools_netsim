@@ -6,38 +6,42 @@
 //! `ChipRequest` messages, managing the lifecycle of Bluetooth chips, and
 //! interacting with the `rootcanal` Bluetooth emulator.
 
-use crate::server::ChipEntry;
 use crate::utils::ToChipError;
 use crate::Server;
 use bytes::Bytes;
 use futures::SinkExt;
 use log::{debug, error, info, warn};
-use netsim_api::chips::Chip;
-use netsim_api::{
-    chip_error::ChipError,
-    chips::{
-        BluetoothMode, ChipId, ChipInfo, ChipRequest, CreateParams, NetworkParams, PacketSink,
+use netsim_model::{
+    chip::{
+        BluetoothMode, Chip, ChipCreate, ChipId, ChipRequest, ChipUpdate, NetworkParams, PacketSink,
     },
+    chip_error::ChipError,
 };
 use rootcanal::{
-    controller::{Callbacks as ControllerCallbacks, Id, Idc},
+    controller::{Callbacks as ControllerCallbacks, Id},
     types::{Address, Phy},
 };
 use std::ffi::c_int;
 use tokio::sync::mpsc;
 use tokio_stream::StreamNotifyClose;
 
+/// Callbacks for handling events from the Rootcanal controller.
 pub(crate) struct HciCallbacks {
+    /// The ID of the chip associated with these callbacks.
     id: ChipId,
+    /// Sender for HCI packets to be sent to the host.
     hci_tx: Option<mpsc::Sender<Bytes>>,
+    /// Sender for Link Layer packets (for sniffer mode).
     ll_tx: Option<mpsc::Sender<Bytes>>,
 }
 
+/// Use a Tokio channel to send the message synchronously to an async task that will
+/// write to the Sink. This has less overhead than spawning a task for each packet,
+/// as Sink doesn't have a synchronous send method like Sender::try_send().
 impl ControllerCallbacks for HciCallbacks {
-    fn send_hci(&self, _source_id: Id, _idc: Idc, hci_packet: &[u8]) {
-        let packet = Bytes::copy_from_slice(hci_packet);
+    fn send_hci(&self, _source_id: Id, h4_packet: Bytes) {
         if let Some(hci_tx) = self.hci_tx.as_ref() {
-            if let Err(e) = hci_tx.try_send(packet) {
+            if let Err(e) = hci_tx.try_send(h4_packet) {
                 error!("Failed to send HCI packet: {e}, dropping.");
             }
         }
@@ -62,16 +66,25 @@ impl ControllerCallbacks for HciCallbacks {
 }
 
 impl Server {
+    /// Handles a single `ChipRequest` command.
+    ///
+    /// This method dispatches the command to the appropriate handler function
+    /// based on the command type.
+    ///
+    /// # Arguments
+    ///
+    /// * `cmd`: The `ChipRequest` to handle.
+    /// * `shutdown`: A mutable boolean flag to signal server shutdown.
     pub(super) async fn handle_command(&mut self, cmd: ChipRequest, shutdown: &mut bool) {
         match cmd {
             ChipRequest::Create { params: create_params, respond_to } => {
                 respond_to.send(self.create_chip(create_params)).ok();
             }
             ChipRequest::Read { id, respond_to } => {
-                respond_to.send(self.get_chip(id).map(ChipInfo::Bluetooth)).ok();
+                respond_to.send(self.get_chip(id)).ok();
             }
-            ChipRequest::Update { id, chip, respond_to } => {
-                respond_to.send(self.update_chip(id, chip)).ok();
+            ChipRequest::Update { id, patch, respond_to } => {
+                respond_to.send(self.patch_chip(id, patch)).ok();
             }
             ChipRequest::Delete { id, respond_to } => {
                 respond_to.send(self.delete_chip(id)).ok();
@@ -83,7 +96,7 @@ impl Server {
                 respond_to.send(Ok(Vec::new())).ok();
             }
             ChipRequest::GetCountForTesting { respond_to } => {
-                respond_to.send(Ok(self.chips.len())).ok();
+                respond_to.send(Ok(self.chips.lock().unwrap().len())).ok();
             }
             ChipRequest::Shutdown => {
                 *shutdown = true;
@@ -91,10 +104,18 @@ impl Server {
         }
     }
 
+    /// Resets the state of a chip.
+    ///
+    /// NOTE: This function is not yet implemented.
     fn reset_chip(&mut self, _id: ChipId) {
         warn!("Not implemented");
     }
 
+    /// Task to forward packets from a channel to a `PacketSink`.
+    ///
+    /// This task runs in the background for each chip that has a `PacketSink`.
+    /// It continuously receives packets from the `receiver` and sends them
+    /// to the `sink`.
     async fn run_sink_task(
         mut sink: PacketSink,
         mut receiver: mpsc::Receiver<Bytes>,
@@ -112,7 +133,12 @@ impl Server {
         id
     }
 
-    fn create_chip(&mut self, mut create_params: CreateParams) -> Result<(), ChipError> {
+    /// Creates a new Bluetooth chip based on the provided `ChipCreate`.
+    ///
+    /// This function sets up the chip in the `rootcanal` emulator, configures
+    /// its mode (Device, Beacon, or Sniffer), and establishes packet
+    /// stream/sink connections if provided.
+    fn create_chip(&mut self, mut create_params: ChipCreate) -> Result<(), ChipError> {
         let bluetooth_params = match create_params.config.network_params {
             NetworkParams::Bluetooth(params) => params,
             _ => return Err(ChipError::InvalidArguments("Unsupported chip kind".to_string())),
@@ -139,24 +165,45 @@ impl Server {
 
         rootcanal.new_controller(id.into(), address, Box::new(callback)).to_chip_error()?;
 
-        match &bluetooth_params.mode {
+        let mut chip_info = match &bluetooth_params.mode {
             BluetoothMode::Beacon(params) => crate::beacon::create(rootcanal, id, params)?,
             BluetoothMode::Device(params) => crate::device::create(rootcanal, id, params)?,
             BluetoothMode::Sniffer(params) => crate::sniffer::create(rootcanal, id, params)?,
-        }
-        self.chips.insert(id, ChipEntry { bluetooth_mode: bluetooth_params.mode });
+        };
+        chip_info.device_id = create_params.device_id;
+        self.chips.lock().unwrap().insert(id, chip_info);
         Ok(())
     }
 
-    fn update_chip(&mut self, _id: ChipId, _chip: Chip) -> Result<Chip, ChipError> {
-        Ok(Chip::default())
+    /// Updates an existing Bluetooth chip.
+    ///
+    fn patch_chip(&mut self, id: ChipId, mut patch: ChipUpdate) -> Result<Chip, ChipError> {
+        // Currently nothing in patch.variant
+        let mut binding = self.chips.lock().unwrap();
+        let chip = binding.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
+        if let Some(position) = patch.position.take() {
+            chip.position = position;
+        }
+        if let Some(orientation) = patch.orientation.take() {
+            chip.orientation = orientation;
+        }
+        Ok(chip.clone())
     }
 
+    /// Retrieves information about a specific Bluetooth chip.
+    ///
+    /// NOTE: This function is a stub and not fully implemented.
     fn get_chip(&self, id: ChipId) -> Result<Chip, ChipError> {
-        let _ = &self.chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
-        Ok(Chip::default())
+        match self.chips.lock().unwrap().get(&id) {
+            Some(chip) => Ok(chip.clone()),
+            None => Err(ChipError::ChipNotFound(id)),
+        }
     }
 
+    /// Deletes a Bluetooth chip from the simulation.
+    ///
+    /// This function removes the chip from the `rootcanal` emulator and
+    /// cleans up any associated resources.
     fn delete_chip(&mut self, id: ChipId) -> Result<(), ChipError> {
         // TODO: decide if sink task needs to be shutdown
         match self.remove_chip(id, "handler") {

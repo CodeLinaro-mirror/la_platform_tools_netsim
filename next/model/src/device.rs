@@ -1,0 +1,245 @@
+use crate::chip::{ChipConfig, ChipId, PacketSink, PacketStream};
+use crate::client_error::ClientError;
+use crate::client_method;
+use crate::device_error::DeviceError;
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use tokio::sync::{mpsc, oneshot};
+
+// DEVICE SERVICE
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Position {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Orientation {
+    pub yaw: f32,
+    pub pitch: f32,
+    pub roll: f32,
+}
+
+/// A unique identifier for a simulated device, represented as a u32.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub struct DeviceId(pub u32);
+
+impl From<DeviceId> for u32 {
+    fn from(id: DeviceId) -> Self {
+        id.0
+    }
+}
+
+impl From<u32> for DeviceId {
+    fn from(id: u32) -> Self {
+        DeviceId(id)
+    }
+}
+
+impl fmt::Display for DeviceId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+pub type Responder<T> = oneshot::Sender<Result<T, DeviceError>>;
+
+#[derive(Clone, Debug)]
+pub struct DeviceClient {
+    sender: mpsc::Sender<DeviceRequest>,
+}
+
+impl DeviceClient {
+    pub fn new(sender: mpsc::Sender<DeviceRequest>) -> Self {
+        Self { sender }
+    }
+
+    pub async fn shutdown(&self) -> Result<(), ClientError> {
+        self.sender
+            .send(DeviceRequest::Shutdown)
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn notify_chip_removed(&self, device_id: DeviceId, chip_id: ChipId) {
+        let sender = self.sender.clone();
+        tokio::spawn(async move {
+            if let Err(e) = sender
+                .send(DeviceRequest::NotifyChipRemoved { device_id, chip_id, respond_to: None })
+                .await
+            {
+                log::error!("Failed to send NotifyChipRemoved for chip {chip_id}: {e}");
+            }
+        });
+    }
+
+    pub async fn notify_chip_removed_block(
+        &self,
+        device_id: DeviceId,
+        chip_id: ChipId,
+    ) -> Result<(), ClientError> {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(DeviceRequest::NotifyChipRemoved { device_id, chip_id, respond_to: Some(tx) })
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))?;
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?;
+        Ok(())
+    }
+}
+
+client_method!(DeviceClient => fn create(request: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
+client_method!(DeviceClient => fn add_chip(request: DeviceAddChip) -> () as DeviceRequest::AddChip);
+client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
+client_method!(DeviceClient => fn update(update: api::DeviceUpdate) -> () as DeviceRequest::Update);
+client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
+client_method!(DeviceClient => fn reset() -> () as DeviceRequest::Reset);
+
+#[allow(dead_code)]
+pub struct GetVersionMessage {
+    response: oneshot::Sender<String>,
+}
+
+pub mod api {
+    use crate::chip::BleBeacon;
+    use crate::device::{Device, DeviceConfig, Orientation, Position};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+    pub struct ListDeviceResponse {
+        pub devices: Vec<Device>,
+    }
+
+    #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+    pub struct DeviceUpdate {
+        pub id: u32,
+        pub name: Option<String>,
+        pub visible: Option<bool>,
+        pub position: Option<Position>,
+        pub orientation: Option<Orientation>,
+    }
+
+    #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+    pub struct DeviceCreate {
+        pub device_config: DeviceConfig,
+        pub chip: DeviceChipCreate,
+    }
+
+    #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+    pub struct DeviceChipCreate {
+        pub name: String,
+        pub manufacturer: String,
+        pub product_name: String,
+        pub chip: Chip,
+    }
+
+    impl DeviceChipCreate {
+        pub fn new(
+            name: impl Into<String>,
+            manufacturer: impl Into<String>,
+            product_name: impl Into<String>,
+            chip: Chip,
+        ) -> DeviceChipCreate {
+            DeviceChipCreate {
+                name: name.into(),
+                manufacturer: manufacturer.into(),
+                product_name: product_name.into(),
+                chip,
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub enum Chip {
+        Beacon(BleBeacon),
+    }
+
+    impl Default for Chip {
+        fn default() -> Self {
+            Chip::Beacon(BleBeacon::default())
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Device {
+    pub id: u32,
+    pub name: String,
+    pub visible: bool,
+    pub position: Position,
+    pub orientation: Orientation,
+    pub chips: Vec<crate::chip::Chip>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DeviceConfig {
+    pub name: String,
+    pub visible: bool,
+    pub position: Position,
+    pub orientation: Orientation,
+}
+
+impl DeviceConfig {
+    pub fn new(
+        name: impl Into<String>,
+        visible: bool,
+        position: Position,
+        orientation: Orientation,
+    ) -> DeviceConfig {
+        DeviceConfig { name: name.into(), visible, position, orientation }
+    }
+}
+
+pub struct DeviceAddChip {
+    pub device_guid: String,
+    pub packet_stream: Option<PacketStream>,
+    pub packet_sink: Option<PacketSink>,
+    pub device_config: DeviceConfig,
+    pub chip_config: ChipConfig,
+}
+impl fmt::Debug for DeviceAddChip {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DeviceAddChip")
+            .field("device_guid", &self.device_guid)
+            .field("device_config", &self.device_config)
+            .field("chip_config", &self.chip_config)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug)]
+pub enum DeviceRequest {
+    AddChip {
+        request: DeviceAddChip,
+        respond_to: Responder<()>,
+    },
+    Create {
+        request: Box<api::DeviceCreate>,
+        respond_to: Responder<DeviceId>,
+    },
+    List {
+        respond_to: Responder<api::ListDeviceResponse>,
+    },
+    Update {
+        update: api::DeviceUpdate,
+        respond_to: Responder<()>,
+    },
+    Delete {
+        id: DeviceId,
+        respond_to: Responder<()>,
+    },
+    Reset {
+        respond_to: Responder<()>,
+    },
+    GetChipStatistics {
+        respond_to: Responder<()>,
+    },
+    NotifyChipRemoved {
+        device_id: DeviceId,
+        chip_id: ChipId,
+        respond_to: Option<oneshot::Sender<()>>,
+    },
+    Shutdown,
+}

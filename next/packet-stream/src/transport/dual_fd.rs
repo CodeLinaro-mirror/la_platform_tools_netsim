@@ -4,7 +4,7 @@ use crate::types::StreamAddress;
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 use futures::SinkExt;
-use netsim_api::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
+use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File as StdFile;

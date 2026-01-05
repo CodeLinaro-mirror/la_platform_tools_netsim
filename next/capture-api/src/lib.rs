@@ -1,0 +1,146 @@
+//! # Netsim Capture API
+//!
+//! This crate defines the public API for the Netsim packet capture system.
+//! It includes the core data structures, traits, and actions necessary for
+//! interacting with the `capture-actor`.
+//!
+//! ## Architecture
+//!
+//! ### Structure
+//!
+//! The capture system is structured as follows:
+//!
+//! - **`netsim-model`**: Remains the base layer for data models (e.g., `ChipId`, `ChipKind`). It does not depend on `capture-api`.
+//! - **`capture-api`**: Defines the behavioral contract for the capture service.
+//!     - Depends on: `netsim-model`
+//!     - Contains: `CaptureAction` (enum of supported operations), `CaptureActionResult`, `CaptureSender` trait, and re-exports of relevant models.
+//! - **`capture-actor`**: Implements the capture service.
+//!     - Depends on: `capture-api`, `netsim-model`.
+//!     - Implements the handling logic for `CaptureAction`.
+//! - **`netsim-client`**: Provides a client-side wrapper for the capture service.
+//!     - Depends on: `capture-api`, `netsim-model`.
+//! - **Consumer Crates** (e.g., `device-actor`, `daemon`):
+//!     - Depend on: `capture-api`, `netsim-client` (and `netsim-model` if needed).
+//!     - Do not depend directly on `capture-actor` for API definitions.
+//!
+//! ### Dependency Graph (Simplified)
+//!
+//! ```text
+//! graph TD
+//!     ConsumerCrates[Consumer Crates<br>(device-actor, daemon)] --> NetsimClient[netsim-client]
+//!     ConsumerCrates --> CaptureAPI[capture-api]
+//!     NetsimClient --> CaptureAPI
+//!     CaptureActor[capture-actor] --> CaptureAPI
+//!     CaptureActor --> NetsimModel[netsim-model]
+//!     CaptureAPI --> NetsimModel
+//!     NetsimClient --> NetsimModel
+//! ```
+//!
+//! ## API Definition
+//!
+//! The `capture-api` crate defines the following key components:
+//!
+//! ### `CaptureAction`
+//!
+//! An enum representing the actions that can be performed on the capture service. This serves as the primary interface for consumers.
+//!
+//! ### `CaptureSender`
+//!
+//! A trait defining the interface for sending packets to the capture system. This allows for dependency injection and easier testing.
+//!
+//! ## Benefits
+//!
+//! 1.  **Clearer Boundaries**: The separation between API and implementation is now explicit.
+//! 2.  **Reduced Coupling**: Consumer crates only depend on the API, not the implementation.
+//! 3.  **Improved Build Times**: Changes to the `capture-actor` implementation do not require recompiling consumer crates, as long as the API remains stable.
+//! 4.  **Easier Testing**: Mocking the capture service is now a matter of implementing the `CaptureAction` contract or the `CaptureSender` trait.
+
+pub mod io;
+
+use async_trait::async_trait;
+use bytes::Bytes;
+use netsim_model::chip::{ChipId, ChipKind};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+
+#[async_trait]
+pub trait CaptureSender: Send + Sync {
+    async fn create_capture(&self, create: CaptureCreate) -> anyhow::Result<()>;
+    fn capture_packet(&self, chip_id: ChipId, direction: Direction, packet: Bytes);
+}
+
+/// Direction of the packet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Direction {
+    /// Packet was sent from the device.
+    Sent,
+    /// Packet was received by the device.
+    Received,
+    /// Direction is unknown.
+    Unknown,
+}
+
+/// Parameters for creating a new capture.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaptureCreate {
+    /// The ID of the chip to capture.
+    pub chip_id: ChipId,
+    /// The kind of chip.
+    pub chip_kind: ChipKind,
+    /// The name of the device.
+    pub device_name: String,
+    /// Whether capture should be enabled by default.
+    pub default_enabled: bool,
+    /// Optional flag to be updated when capture status changes.
+    #[serde(skip)]
+    pub enabled_flag: Arc<AtomicBool>,
+}
+
+/// Actions that can be performed on a capture.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CaptureAction {
+    /// Capture a packet.
+    CapturePacket { chip_id: ChipId, direction: Direction, bytes: Bytes },
+    /// Get a specific capture.
+    Get { chip_id: ChipId },
+    /// Patch a capture (e.g., enable/disable).
+    Patch { chip_id: ChipId, enabled: bool },
+    /// Create a new capture.
+    Create { chip_id: ChipId, chip_kind: ChipKind, device_name: String },
+    /// Delete a capture.
+    Delete { chip_id: ChipId },
+    /// Set default capture state for new captures.
+    SetDefaultCapture { enabled: bool },
+    /// Set default capture directory.
+    SetCaptureDirectory { path: PathBuf },
+}
+
+/// Result of a capture action.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CaptureActionResult {
+    /// Action was successful.
+    Success,
+    /// Result of a Get action.
+    Get(Option<CaptureInfo>),
+    /// An error occurred.
+    Error(String),
+}
+
+/// Information about a capture.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CaptureInfo {
+    /// The ID of the chip.
+    pub chip_id: ChipId,
+    /// The kind of chip.
+    pub chip_kind: ChipKind,
+    /// The name of the device.
+    pub device_name: String,
+    /// Whether capture is enabled.
+    pub enabled: bool,
+    /// Number of records written.
+    pub records_written: u64,
+    /// Number of bytes written.
+    pub bytes_written: u64,
+}

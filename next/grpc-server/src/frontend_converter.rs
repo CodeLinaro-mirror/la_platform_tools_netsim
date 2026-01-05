@@ -1,0 +1,167 @@
+use device_api::{Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition};
+use netsim_model::chip::ChipKind as ApiChipKind;
+use netsim_proto::common::ChipKind as ProtoChipKind;
+use netsim_proto::model::{
+    Chip as ProtoChip, Device as ProtoDevice, Orientation as ProtoOrientation,
+    Position as ProtoPosition,
+};
+use netsim_proto::protobuf::EnumOrUnknown;
+use netsim_proto::protobuf::MessageField;
+
+pub fn to_proto_position(p: ApiPosition) -> ProtoPosition {
+    let mut pos = ProtoPosition::new();
+    pos.x = p.x;
+    pos.y = p.y;
+    pos.z = p.z;
+    pos
+}
+
+pub fn to_proto_orientation(o: ApiOrientation) -> ProtoOrientation {
+    let mut orient = ProtoOrientation::new();
+    orient.yaw = o.yaw;
+    orient.pitch = o.pitch;
+    orient.roll = o.roll;
+    orient
+}
+
+pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
+    match k {
+        ApiChipKind::UNSPECIFIED => ProtoChipKind::UNSPECIFIED,
+        ApiChipKind::BLUETOOTH => ProtoChipKind::BLUETOOTH,
+        ApiChipKind::WIFI => ProtoChipKind::WIFI,
+        ApiChipKind::UWB => ProtoChipKind::UWB,
+        ApiChipKind::BleBeacon => ProtoChipKind::BLUETOOTH_BEACON,
+        // Map unknown/new types to UNSPECIFIED for now
+        ApiChipKind::NFC => ProtoChipKind::UNSPECIFIED,
+        ApiChipKind::CELLULAR => ProtoChipKind::UNSPECIFIED,
+    }
+}
+
+pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
+    let mut chip = ProtoChip::new();
+    chip.id = c.id;
+    chip.kind = EnumOrUnknown::new(to_proto_chip_kind(c.kind));
+    chip.name = c.name.unwrap_or_default();
+    chip.manufacturer = c.manufacturer.unwrap_or_default();
+    chip.product_name = c.product_name.unwrap_or_default();
+    // Note: netsim_model Chip has position, but netsim_proto Chip has offset (Position)
+    chip.offset = MessageField::some(to_proto_position(c.position));
+
+    // TODO: Handle chip variant conversion if needed (e.g. Bluetooth details)
+    // For now we just set the common fields.
+
+    chip
+}
+
+pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
+    let mut device = ProtoDevice::new();
+    device.id = d.id;
+    device.name = d.name;
+    device.visible = Some(d.visible);
+    device.position = MessageField::some(to_proto_position(d.position));
+    device.orientation = MessageField::some(to_proto_orientation(d.orientation));
+    for chip in d.chips {
+        device.chips.push(to_proto_chip(chip));
+    }
+    device
+}
+
+use device_api::api::{Chip, DeviceChipCreate};
+use netsim_model::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
+use netsim_model::chip::BleBeacon;
+use netsim_proto::model::ChipCreate;
+
+pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
+    // Currently only supports BLE Beacon
+    if c.kind.enum_value_or_default() == ProtoChipKind::BLUETOOTH_BEACON {
+        let beacon_create = c.ble_beacon();
+        let settings = beacon_create.settings.as_ref().map(from_proto_advertise_settings);
+        let adv_data = beacon_create.adv_data.as_ref().map(from_proto_advertise_data);
+        let scan_response = beacon_create.scan_response.as_ref().map(from_proto_advertise_data);
+
+        let beacon =
+            BleBeacon { address: beacon_create.address.clone(), settings, adv_data, scan_response };
+
+        Some(DeviceChipCreate {
+            name: c.name,
+            manufacturer: c.manufacturer,
+            product_name: c.product_name,
+            chip: Chip::Beacon(beacon),
+        })
+    } else {
+        None
+    }
+}
+
+fn from_proto_advertise_settings(
+    s: &netsim_proto::model::chip::ble_beacon::AdvertiseSettings,
+) -> AdvertiseSettings {
+    use netsim_model::bluetooth::beacon::{AdvertiseMode, AdvertiseTxPower, Interval, TxPower};
+    use netsim_proto::model::chip::ble_beacon::advertise_settings::Interval as ProtoInterval;
+    use netsim_proto::model::chip::ble_beacon::advertise_settings::Tx_power as ProtoTxPower;
+
+    let interval = match s.interval {
+        Some(ProtoInterval::AdvertiseMode(mode)) => match mode.enum_value_or_default() {
+            netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseMode::LOW_POWER => {
+                Some(Interval::AdvertiseMode(AdvertiseMode::LowPower))
+            }
+            netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseMode::BALANCED => {
+                Some(Interval::AdvertiseMode(AdvertiseMode::Balanced))
+            }
+            netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseMode::LOW_LATENCY => {
+                Some(Interval::AdvertiseMode(AdvertiseMode::LowLatency))
+            }
+        },
+        Some(ProtoInterval::Milliseconds(ms)) => Some(Interval::Milliseconds(ms)),
+        None => Some(Interval::AdvertiseMode(AdvertiseMode::LowPower)), // Default
+        Some(_) => Some(Interval::AdvertiseMode(AdvertiseMode::LowPower)), // Unknown/Future variant
+    };
+
+    let tx_power = match s.tx_power {
+        Some(ProtoTxPower::TxPowerLevel(level)) => match level.enum_value_or_default() {
+            netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseTxPower::ULTRA_LOW => {
+                Some(TxPower::TxPowerLevel(AdvertiseTxPower::UltraLow))
+            }
+            netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseTxPower::LOW => {
+                Some(TxPower::TxPowerLevel(AdvertiseTxPower::Low))
+            }
+            netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseTxPower::MEDIUM => {
+                Some(TxPower::TxPowerLevel(AdvertiseTxPower::Medium))
+            }
+            netsim_proto::model::chip::ble_beacon::advertise_settings::AdvertiseTxPower::HIGH => {
+                Some(TxPower::TxPowerLevel(AdvertiseTxPower::High))
+            }
+        },
+        Some(ProtoTxPower::Dbm(dbm)) => Some(TxPower::Dbm(dbm)),
+        None => Some(TxPower::TxPowerLevel(AdvertiseTxPower::Low)), // Default
+        Some(_) => Some(TxPower::TxPowerLevel(AdvertiseTxPower::Low)), // Unknown/Future variant
+    };
+
+    AdvertiseSettings { interval, tx_power, scannable: s.scannable, timeout: s.timeout }
+}
+
+fn from_proto_advertise_data(
+    d: &netsim_proto::model::chip::ble_beacon::AdvertiseData,
+) -> AdvertiseData {
+    AdvertiseData {
+        include_device_name: d.include_device_name,
+        include_tx_power_level: d.include_tx_power_level,
+        manufacturer_data: d.manufacturer_data.clone(),
+        services: d
+            .services
+            .iter()
+            .map(|s| netsim_model::bluetooth::beacon::Service {
+                uuid: s.uuid.clone(),
+                data: s.data.clone(),
+            })
+            .collect(),
+    }
+}
+
+pub fn from_proto_position(p: ProtoPosition) -> ApiPosition {
+    ApiPosition { x: p.x, y: p.y, z: p.z }
+}
+
+pub fn from_proto_orientation(o: ProtoOrientation) -> ApiOrientation {
+    ApiOrientation { yaw: o.yaw, pitch: o.pitch, roll: o.roll }
+}

@@ -1,0 +1,22 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actor-framework = { path = "../actor-framework" }
+netsim-model = { path = "../model" }
+device-actor = { path = "../device-actor" }
+capture-actor = { path = "../capture-actor" }
+tokio = { version = "1.32.0", default-features = false, features = [
+  "rt",
+  "time",
+  "sync",
+  "macros",
+] }
+async-trait = "0.1"
+log = "0.4"
+anyhow = "1.0"
+packet-stream = { path = "../packet-stream" }
+futures = "0.3"
+bytes = { version = "1.10.1", features = ["serde"] }

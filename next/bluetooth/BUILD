@@ -23,7 +23,9 @@ load(
 package(default_visibility = ["//visibility:public"])
 
 BLUETOOTH_DEPS = [
-    "//next/netsim-api",
+    "//next/client",
+    "//next/device-api",
+    "//next/model",
     "//next/rootcanal",
     "@bytes",
     "@env_logger",
@@ -67,6 +69,8 @@ rust_test(
     ],
     tags = ["general_tests"],
     deps = [":bluetooth"] + BLUETOOTH_DEPS + [
+        "//next/actor-framework",
+        "//next/device-actor",
         "@rootcanal//:lib_rootcanal_ffi",
     ],
 )
@@ -84,4 +88,5 @@ rust_doc(
 rust_doc_test(
     name = "doc_test",
     crate = ":bluetooth",
+    deps = ["//next/actor-framework"],
 )

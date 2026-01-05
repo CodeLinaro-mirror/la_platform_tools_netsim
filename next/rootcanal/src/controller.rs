@@ -3,8 +3,6 @@
 //! This module defines the `Controller` struct, which represents a Bluetooth
 //! controller.
 
-pub use crate::types::Idc;
-
 /// A unique ID for the Controller
 pub type Id = u32;
 
@@ -12,6 +10,7 @@ use crate::{
     ffi,
     types::{Address, Phy},
 };
+use bytes::{BufMut, Bytes, BytesMut};
 use std::ffi::{c_int, c_void};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -21,7 +20,7 @@ use std::sync::{
 /// Callbacks for the Bluetooth controller.
 pub trait Callbacks: Send + Sync {
     /// Request from rootcanal to send an HCI packet to the host.
-    fn send_hci(&self, source_id: Id, idc: Idc, data: &[u8]);
+    fn send_hci(&self, source_id: Id, h4_packet: Bytes);
 
     /// Called when the controller is receiving a packet
     fn on_receive_ll(&self, sender_id: Id, packet: &[u8], phy: Phy, rssi: i32);
@@ -147,16 +146,18 @@ impl ControllerImpl {
     }
 
     /// Receives an HCI packet from the host.
-    pub(crate) fn receive_hci(&self, idc: Idc, data: &[u8]) {
+    pub(crate) fn receive_hci(&self, data: Bytes) {
         self.hci_commands_in.fetch_add(1, Ordering::Relaxed);
         let controller = self.controller.lock().unwrap();
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
         // as long as `self` exists. `data` is a valid slice, and we provide its
         // length to ensure the C++ side does not read out of bounds.
+        let idc = data[0] as c_int;
+        let data: &[u8] = &data[1..];
         unsafe {
             ffi::ffi_controller_receive_hci(
                 controller.0,
-                idc as c_int,
+                idc,
                 data.as_ptr(),
                 data.len() as ffi::size_t,
             )
@@ -262,7 +263,10 @@ extern "C" fn send_hci_trampoline(
         // least `data_len` bytes that is valid for the duration of this call.
         let data_slice = unsafe { std::slice::from_raw_parts(data, data_len as ffi::size_t) };
         controller.hci_events_out.fetch_add(1, Ordering::Relaxed);
-        controller.callbacks.send_hci(controller.get_id(), Idc::from(idc), data_slice);
+        let mut h4_buffer = BytesMut::with_capacity(data_len + 1);
+        h4_buffer.put_u8(idc as u8);
+        h4_buffer.extend_from_slice(data_slice);
+        controller.callbacks.send_hci(controller.get_id(), h4_buffer.into());
     }
 }
 
@@ -341,7 +345,7 @@ mod tests {
 
     struct MockControllerCallbacks;
     impl Callbacks for MockControllerCallbacks {
-        fn send_hci(&self, _source_id: Id, _idc: Idc, _data: &[u8]) {}
+        fn send_hci(&self, _source_id: Id, _data: &[u8]) {}
         fn send_ll(&self, _source_id: Id, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
         fn invalid_packet_received(
             &self,
@@ -383,7 +387,7 @@ mod tests {
         let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
 
         assert_eq!(controller.get_stats().hci_commands_in, 0);
-        controller.receive_hci(Idc::Cmd, &[1, 2, 3]);
+        controller.receive_hci(&[1, 1, 2, 3]);
         assert_eq!(controller.get_stats().hci_commands_in, 1);
     }
 

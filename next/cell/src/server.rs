@@ -1,26 +1,29 @@
-// src/server.rs
+// Copyright 2024-2025 The Android Open Source Project // touch
 
 use crate::error::CellError;
 use bytes::Bytes;
+use client::DeviceClient;
+use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use modem_rs::modem_network::{ModemCallbacks, ModemNetworkInterface};
-use netsim_api::chip_error::ChipError as NetsimChipError;
-use netsim_api::chips::{ChipDiedParams, ChipId, ChipRequest, PacketSink, PacketStream};
-use std::collections::HashSet;
+use netsim_model::chip::{ChipClient, ChipId, ChipRequest, PacketSink, PacketStream};
+use netsim_model::chip_error::ChipError as NetsimChipError;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 use tokio_stream::{StreamMap, StreamNotifyClose};
 
 pub struct CellServer {
-    device_server_tx: mpsc::Sender<ChipDiedParams>,
+    device_client: DeviceClient,
     receiver: mpsc::Receiver<ChipRequest>,
-    controller_service: Arc<dyn ModemNetworkInterface>,
-    active_chips: HashSet<ChipId>,
+    controller: Arc<dyn ModemNetworkInterface>,
+    active_chips: HashMap<ChipId, DeviceId>,
+    senders: HashMap<ChipId, mpsc::Sender<Bytes>>,
     streams: StreamMap<ChipId, StreamNotifyClose<PacketStream>>,
-    internal_shutdown_tx: mpsc::Sender<ChipId>,
-    internal_shutdown_rx: mpsc::Receiver<ChipId>,
     sink_tasks: JoinSet<ChipId>,
+    // Keep callbacks alive
+    callbacks: HashMap<ChipId, Arc<CellModemCallbacks>>,
 }
 
 struct CellModemCallbacks {
@@ -63,27 +66,26 @@ async fn run_sink_task(
 
 impl CellServer {
     pub fn new(
-        device_server_tx: mpsc::Sender<ChipDiedParams>,
-        receiver: mpsc::Receiver<ChipRequest>,
-        controller_service: Arc<dyn ModemNetworkInterface>,
-    ) -> Self {
-        let (internal_shutdown_tx, internal_shutdown_rx) = mpsc::channel(100);
-        CellServer {
-            device_server_tx,
-            receiver,
-            controller_service,
-            active_chips: HashSet::new(),
+        device_client: DeviceClient,
+        controller: Arc<dyn ModemNetworkInterface>,
+    ) -> (Self, ChipClient) {
+        let (command_tx, command_rx) = mpsc::channel(10);
+
+        let server = CellServer {
+            device_client,
+            receiver: command_rx,
+            controller,
+            active_chips: HashMap::new(),
+            senders: HashMap::new(),
             streams: StreamMap::new(),
-            internal_shutdown_tx,
-            internal_shutdown_rx,
             sink_tasks: JoinSet::new(),
-        }
+            callbacks: HashMap::new(),
+        };
+        (server, ChipClient::new(command_tx))
     }
 
     pub async fn run(mut self) {
         log::info!("CellServer started");
-        let mut tick_interval = tokio::time::interval(std::time::Duration::from_millis(100));
-
         loop {
             tokio::select! {
                 Some(msg) = self.receiver.recv() => {
@@ -91,27 +93,11 @@ impl CellServer {
                         log::error!("Error handling message: {:?}", e);
                     }
                 }
-                Some(chip_id) = self.internal_shutdown_rx.recv() => {
-                    log::info!("Received internal shutdown for chip {}", chip_id);
-                    self.cleanup_chip(chip_id, "internal_shutdown").await;
-                }
-                _ = tick_interval.tick() => {
-                    self.controller_service.tick();
-                }
                 Some((chip_id, packet)) = self.streams.next() => {
                     self.handle_stream_data(chip_id, packet).await;
                 }
                 Some(res) = self.sink_tasks.join_next() => {
-                    match res {
-                        Ok(id) => {
-                            log::info!("Sink task for chip {} finished", id);
-                            // Request cleanup for this chip
-                            if self.internal_shutdown_tx.send(id).await.is_err() {
-                                log::error!("Failed to send internal shutdown for chip {} after sink task exit", id);
-                            }
-                        }
-                        Err(e) => log::error!("Sink task join error: {}", e),
-                    }
+                    self.handle_join_result(res).await;
                 }
                 else => {
                     log::info!("CellServer channels closed, stopping.");
@@ -127,9 +113,7 @@ impl CellServer {
             Some(data) => {
                 if data.is_empty() {
                     log::info!("Stream closed for chip {}", chip_id);
-                    if self.internal_shutdown_tx.send(chip_id).await.is_err() {
-                        log::error!("Failed to send internal shutdown for chip {}", chip_id);
-                    }
+                    self.cleanup_chip(chip_id, "stream_closed").await;
                     return;
                 }
                 log::debug!(
@@ -138,19 +122,27 @@ impl CellServer {
                     chip_id,
                     &data
                 );
-                if let Err(e) = self.controller_service.send_data(chip_id, &data) {
-                    log::error!("Error sending data to controller {}: {}, cleaning up", chip_id, e);
-                    if self.internal_shutdown_tx.send(chip_id).await.is_err() {
-                        log::error!("Failed to send internal shutdown for chip {}", chip_id);
-                    }
+                if let Err(e) = self.controller.send_data(chip_id, &data) {
+                    log::error!("Failed to send data to controller for chip {}: {:?}", chip_id, e);
                 }
             }
             None => {
                 log::info!("StreamMap indicated closure for chip {}", chip_id);
-                if self.internal_shutdown_tx.send(chip_id).await.is_err() {
-                    log::error!("Failed to send internal shutdown for chip {}", chip_id);
+                let device_id = self.active_chips.get(&chip_id).cloned();
+                if let Some(device_id) = device_id {
+                    self.send_chip_died_notification(chip_id, device_id).await;
                 }
             }
+        }
+    }
+
+    async fn handle_join_result(&mut self, res: Result<ChipId, JoinError>) {
+        match res {
+            Ok(id) => {
+                log::info!("Sink task for chip {} finished", id);
+                self.cleanup_chip(id, "sink_task_exited").await;
+            }
+            Err(e) => log::error!("Sink task join error: {}", e),
         }
     }
 
@@ -162,8 +154,9 @@ impl CellServer {
 
                 let stream = params.packet_stream.take().ok_or(CellError::MissingStreamSink)?;
                 let sink = params.packet_sink.take().ok_or(CellError::MissingStreamSink)?;
+                let device_id = params.device_id;
 
-                if self.active_chips.contains(&chip_id) {
+                if self.active_chips.contains_key(&chip_id) {
                     let err_msg = format!("Chip {} already exists", chip_id);
                     log::error!("{}", err_msg);
                     let _ = respond_to.send(Err(NetsimChipError::Internal(err_msg)));
@@ -173,14 +166,19 @@ impl CellServer {
                 let (tx, rx) = mpsc::channel(100); // Channel for on_data_received
 
                 self.sink_tasks.spawn(run_sink_task(sink, rx, chip_id));
+                self.senders.insert(chip_id, tx.clone());
 
                 let callbacks = Arc::new(CellModemCallbacks { chip_id, tx });
+                if let Err(e) = self.controller.add_modem(chip_id, callbacks.clone()) {
+                    log::error!("Failed to add modem to controller: {:?}", e);
+                    let _ = respond_to
+                        .send(Err(NetsimChipError::Internal(format!("Controller error: {:?}", e))));
+                    return Ok(());
+                }
+                self.callbacks.insert(chip_id, callbacks);
 
-                self.controller_service
-                    .add_modem(chip_id, callbacks)
-                    .map_err(|e| CellError::ModemError(e.to_string()))?;
                 log::info!("CellServer: Inserting chip {} into active_chips", chip_id);
-                self.active_chips.insert(chip_id);
+                self.active_chips.insert(chip_id, device_id);
                 self.streams.insert(chip_id, StreamNotifyClose::new(stream));
 
                 let _ = respond_to.send(Ok(()));
@@ -196,16 +194,21 @@ impl CellServer {
                     id,
                     self.active_chips
                 );
-                if !self.active_chips.contains(&id) {
+                if !self.active_chips.contains_key(&id) {
                     let _ = respond_to.send(Err(NetsimChipError::ChipNotFound(id)));
                     return Ok(());
                 }
-                match self.controller_service.get_modem_info(id) {
-                    Ok(info) => {
-                        let _ = respond_to.send(Ok(info));
+
+                match self.controller.get_modem_info(id) {
+                    Ok(chip) => {
+                        let _ = respond_to.send(Ok(chip));
                     }
                     Err(e) => {
-                        let _ = respond_to.send(Err(NetsimChipError::Internal(e.to_string())));
+                        log::error!("Failed to get modem info for chip {}: {:?}", id, e);
+                        let _ = respond_to.send(Err(NetsimChipError::Internal(format!(
+                            "Controller error: {:?}",
+                            e
+                        ))));
                     }
                 }
             }
@@ -218,27 +221,27 @@ impl CellServer {
 
     async fn cleanup_chip(&mut self, chip_id: ChipId, reason: &str) {
         log::info!("Cleaning up chip_id: {} due to: {}", chip_id, reason);
-        if self.active_chips.remove(&chip_id) {
+        if let Some(device_id) = self.active_chips.remove(&chip_id) {
             log::info!("Chip {} removed from active set.", chip_id);
-            if let Err(e) = self.controller_service.remove_modem(chip_id) {
-                log::error!("Error removing controller {}: {}", chip_id, e);
+            if let Err(e) = self.controller.remove_modem(chip_id) {
+                log::error!("Failed to remove modem from controller: {:?}", e);
             }
+            self.callbacks.remove(&chip_id);
+            self.senders.remove(&chip_id);
             // Remove from StreamMap
             self.streams.remove(&chip_id);
             log::info!("Stream for chip {} removed.", chip_id);
-            // SINK_TASK: The sink task will exit when the sender is dropped.
-            // We rely on the JoinSet to clean up.
-            self.send_chip_died_notification(chip_id).await;
+            self.send_chip_died_notification(chip_id, device_id).await;
         } else {
             log::warn!("cleanup_chip called for non-active chip_id: {}", chip_id);
         }
     }
 
-    async fn send_chip_died_notification(&self, chip_id: ChipId) {
+    async fn send_chip_died_notification(&self, chip_id: ChipId, device_id: DeviceId) {
         log::info!("Sending ChipDied notification for chip_id: {}", chip_id);
-        let msg = ChipDiedParams { id: chip_id };
-        if let Err(e) = self.device_server_tx.send(msg).await {
-            log::error!("Failed to send ChipDied notification for chip {}: {}", chip_id, e);
-        }
+        let dc = self.device_client.clone();
+        tokio::spawn(async move {
+            let _ = dc.notify_chip_removed(device_id, chip_id).await;
+        });
     }
 }

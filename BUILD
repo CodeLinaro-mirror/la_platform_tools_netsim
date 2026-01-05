@@ -1,6 +1,7 @@
 # Copyright 2025 The Android Open Source Project
 """netsim bazel build rule."""
 
+load("@grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
 load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_proto//proto:defs.bzl", "proto_library")
@@ -19,6 +20,7 @@ proto_library(
         "proto/netsim/stats.proto",
     ],
     strip_import_prefix = "proto",
+    visibility = ["//visibility:public"],
     deps = [
         "@protobuf//:empty_proto",
         "@protobuf//:timestamp_proto",
@@ -29,6 +31,14 @@ proto_library(
 cc_proto_library(
     name = "netsimd_cc_proto",
     deps = [":netsimd-proto"],
+)
+
+cc_grpc_library(
+    name = "netsimd_cc_grpc",
+    srcs = ["@netsim//:netsimd-proto"],
+    grpc_only = True,
+    visibility = ["//visibility:public"],
+    deps = [":netsimd_cc_proto"],
 )
 
 rust_binary(
@@ -160,6 +170,11 @@ cc_binary(
     }),
     defines = ["NETSIM_ANDROID_EMULATOR"],
     includes = ["src"],
+    linkopts = select({
+        "@platforms//os:windows": ["ntdll.lib"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
     deps = [
         ":netsimd_cc_proto",
         "@aemu//base:aemu-base",

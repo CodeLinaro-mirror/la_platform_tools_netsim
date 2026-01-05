@@ -63,14 +63,25 @@
 //! - **Containers**: Volume mounts or port forwarding
 
 // Benchmark module moved to packetstream-bins crate
-pub mod error;
+//! Netsim Packet Stream
+//!
+//! This crate provides the core transport and streaming abstractions for Netsim.
+//! It handles the connection handshake, packet framing, and multiplexing of
+//! packet streams over various transports (TCP, UDS, gRPC, etc.).
+//!
+//! The main entry points are:
+//! - `CrossPlatformListener`: For listening for incoming connections.
+//! - `CrossPlatformStream`: For connecting to a remote endpoint.
+//! - `PacketStream` / `PacketSink`: Traits for reading and writing packets.
+
+pub mod error; // Error types
 pub mod streams; // High-level connection management
 pub mod transport; // Transport implementations (includes socket)
 pub mod types; // Core data types
 
 // Core public API - only expose what users actually need
+pub use crate::types::{Chip, ChipInfo, ChipKind, DeviceInfo};
 pub use error::{PacketStreamError, ProtocolError, SocketError};
-pub use netsim_api::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 pub use transport::{CrossPlatformListener, CrossPlatformStream, SocketConfig, SocketType};
 // Core streaming types - public API only (transport internals hidden)
 pub use transport::TransportType;

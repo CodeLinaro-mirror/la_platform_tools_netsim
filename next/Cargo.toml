@@ -14,15 +14,20 @@
 
 [workspace]
 members = [
+  "actor-framework",
+  "capture-actor",
   "bluetooth",
-  "devices",
-  "netsim-api",
+  "model",
   "daemon",
   "proto",
   "packet-stream",
   "rootcanal",
   "modem-rs",
   "modem-rs-derive",
+  "uwb",
+  "types",
+  "device-actor",
+  "client",
 ]
 
 [workspace.doc]

@@ -2,10 +2,10 @@ use crate::constants::CALL_RING_TIMEOUT;
 use crate::metrics::{Metrics, MetricsSnapshot};
 use crate::modem::{Modem, ModemEvent};
 use crate::modem_network::{ModemCallbacks, ModemError as NetworkError, ModemNetworkInterface};
-use crate::time::{Clock, SystemClock};
+use crate::time::{Clock, SystemClock}; // touch
 use crate::types::{Callbacks, CallbacksExt, CommandAction, ModemError, ModemId, NetworkCallbacks};
 use log;
-use netsim_api::chips::{ChipId, ChipInfo};
+use netsim_model::chip::{Chip, ChipId};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::sync::atomic::Ordering as AtomicOrdering;
@@ -295,21 +295,21 @@ impl ModemNetworkSimulator {
 impl ModemNetworkInterface for ModemNetworkSimulator {
     fn add_modem(
         &self,
-        chip_id: ChipId,
-        callbacks: Arc<dyn ModemCallbacks>,
+        _chip_id: ChipId,
+        _callbacks: Arc<dyn ModemCallbacks>,
     ) -> Result<(), NetworkError> {
         unimplemented!();
     }
-    fn remove_modem(&self, chip_id: ChipId) -> Result<(), NetworkError> {
+    fn remove_modem(&self, _chip_id: ChipId) -> Result<(), NetworkError> {
         unimplemented!();
     }
-    fn send_data(&self, chip_id: ChipId, data: &[u8]) -> Result<(), NetworkError> {
+    fn send_data(&self, _chip_id: ChipId, _data: &[u8]) -> Result<(), NetworkError> {
         unimplemented!();
     }
     fn tick(&self) {
         unimplemented!();
     }
-    fn get_modem_info(&self, chip_id: ChipId) -> Result<ChipInfo, NetworkError> {
+    fn get_modem_info(&self, _chip_id: ChipId) -> Result<Chip, NetworkError> {
         unimplemented!();
     }
 }

@@ -40,7 +40,7 @@ tokio = { version = "1.32.0", features = [
 etherparse = { version = "0.16" }
 
 [dev-dependencies]
-capture = { path = "../capture" }
+# capture = { path = "../capture" }
 
 [[bench]]
 name = "dns_benchmark"

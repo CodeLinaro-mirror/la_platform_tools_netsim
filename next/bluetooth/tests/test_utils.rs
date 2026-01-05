@@ -1,16 +1,17 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+use actor_framework::ResourceClient;
 use bluetooth::server::Server;
 use bytes::Bytes;
+use client::DeviceClient;
 use futures::{
     sink::Sink,
     stream::Stream,
     task::{Context, Poll},
     Future,
 };
-use netsim_api::bluetooth::Controller as RootcanalController;
-use netsim_api::chips::{BluetoothMode, BluetoothParams, ChipClient, ChipConfig, NetworkParams};
-use netsim_api::devices::DeviceClient;
+use netsim_model::bluetooth::Controller as RootcanalController;
+use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, NetworkParams};
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -24,7 +25,8 @@ pub struct TestFixture {
 /// Sets up a test environment with a running server and a client.
 pub fn setup() -> TestFixture {
     let (device_tx, _device_rx) = mpsc::channel(10);
-    let (server, client) = Server::new(DeviceClient::new(device_tx));
+    let resource_client = ResourceClient::new(device_tx);
+    let (server, client) = Server::new(DeviceClient::new(resource_client));
     let server_task = tokio::spawn(async move {
         server.run().await;
     });
@@ -65,7 +67,7 @@ impl Sink<Bytes> for MockSink {
 
 /// Creates a mock packet sink and a receiver to check the captured packets.
 pub fn mock_sink(
-) -> (Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send>>, mpsc::Receiver<Vec<u8>>) {
+) -> (Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send + Sync>>, mpsc::Receiver<Vec<u8>>) {
     let (packet_tx, packet_rx) = mpsc::channel(10);
     let sink = Box::pin(MockSink { tx: packet_tx });
     (sink, packet_rx)
@@ -85,8 +87,8 @@ pub fn create_chip_config(mode: BluetoothMode) -> ChipConfig {
         "test_chip",
         "test_manufacturer",
         "test_product",
-        NetworkParams::Bluetooth(BluetoothParams {
-            address: "AB:CD:EF:11:22:33".to_string(),
+        NetworkParams::Bluetooth(BluetoothCreate {
+            address: "00:11:22:33:44:55".to_string(),
             bt_properties: RootcanalController::default(),
             mode,
         }),

@@ -51,35 +51,6 @@ impl Address {
     }
 }
 
-/// The indicator of the packet type.
-#[repr(C)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Idc {
-    /// Host to controller command.
-    Cmd = 1,
-    /// Bidirectional ACL data.
-    Acl = 2,
-    /// Bidirectional synchronous data.
-    Sco = 3,
-    /// Controller to host event.
-    Evt = 4,
-    /// Bidirectional isochronous data.
-    Iso = 5,
-}
-
-impl From<c_int> for Idc {
-    fn from(item: c_int) -> Self {
-        match item {
-            1 => Idc::Cmd,
-            2 => Idc::Acl,
-            3 => Idc::Sco,
-            4 => Idc::Evt,
-            5 => Idc::Iso,
-            _ => panic!("Unknown IDC value"),
-        }
-    }
-}
-
 /// The physical layer.
 #[repr(C)]
 #[derive(Debug, PartialEq, Clone, Copy)]

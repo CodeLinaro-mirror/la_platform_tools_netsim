@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,8 +26,11 @@ pub(crate) mod libslirp;
 #[cfg(not(feature = "cuttlefish"))]
 pub(crate) mod mdns_forwarder;
 pub(crate) mod medium;
-pub(crate) mod radiotap;
+pub(crate) mod radiotap; // touch
+pub(crate) mod server;
 pub(crate) mod stats;
+
+pub use server::Server;
 
 // TODO: Replace with global runtime
 use std::sync::OnceLock;
