@@ -141,3 +141,5 @@ pub mod device_client;
 pub use device_client::*;
 pub mod capture_client;
 pub use capture_client::*;
+pub(crate) mod link_client;
+pub use link_client::LinkClient;

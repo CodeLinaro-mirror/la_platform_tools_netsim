@@ -35,9 +35,14 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
 
         if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
             let dist = ranging::distance(&src.position, &dst.position);
-            // TODO: check for src_chip's link to dst_chip's RSSI override
-            let rssi = ranging::distance_to_rssi(tx_power as i8, dist);
-            Some(rssi as i32)
+
+            // Check for link override
+            let rssi = src
+                .links
+                .iter()
+                .find_map(|(id, rssi)| (*id == ChipId(dst.id)).then_some(*rssi as i32))
+                .unwrap_or_else(|| ranging::distance_to_rssi(tx_power as i8, dist) as i32);
+            Some(rssi)
         } else {
             // If one of the chips is missing, default to tx_power.
             // This can happen during startup/shutdown or if a chip is not yet fully registered.
@@ -73,5 +78,46 @@ impl BluetoothActor {
         let chips = Arc::new(Mutex::new(HashMap::new()));
         let rootcanal = Rootcanal::new(Box::new(RootcanalCallbacksImpl { chips: chips.clone() }));
         Self { rootcanal, chips, device_client, entities: HashMap::new(), client: Some(client) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use netsim_model::chip::{Chip, ChipId};
+    use rootcanal::Phy;
+
+    #[test]
+    fn test_on_send_ll_link_override() {
+        let chips = Arc::new(Mutex::new(HashMap::new()));
+        let callbacks = RootcanalCallbacksImpl { chips: chips.clone() };
+
+        let chip1_id = ChipId(1);
+        let chip2_id = ChipId(2);
+
+        let mut chip1 = Chip::default();
+        chip1.id = 1;
+        // Position at (0,0,0)
+
+        let mut chip2 = Chip::default();
+        chip2.id = 2;
+        // Position at (0,0,0) - distance 0
+
+        chips.lock().unwrap().insert(chip1_id, chip1.clone());
+        chips.lock().unwrap().insert(chip2_id, chip2.clone());
+
+        // Test without link (should use distance-based RSSI)
+        // Distance 0 -> RSSI should be close to tx_power (or whatever the model says)
+        // Let's just check it returns *something*
+        let rssi_default = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
+        assert!(rssi_default.is_some());
+
+        // Add link override
+        chip1.links.push((chip2_id, -50));
+        chips.lock().unwrap().insert(chip1_id, chip1);
+
+        // Test with link
+        let rssi_override = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
+        assert_eq!(rssi_override, Some(-50));
     }
 }
