@@ -81,12 +81,11 @@ mod tests {
 
         let mut reader =
             crate::pcap::PcapReader::new(std::io::Cursor::new(pcap_bytes)).expect("PcapReader");
-        let (header, data) = reader.next_record().expect("next_record").expect("some record");
+        let (_header, data) = reader.next_record().expect("next_record").expect("some record");
 
         // This is 802.11 frame (raw)
         // Parse it using Ieee80211
         use crate::ieee80211::frame::BeaconFrameHeader;
-        use zerocopy::FromBytes;
 
         // Beacon Header is 24 bytes
         let hdr = zerocopy::Ref::<&[u8], BeaconFrameHeader>::from_bytes(&data[..24])

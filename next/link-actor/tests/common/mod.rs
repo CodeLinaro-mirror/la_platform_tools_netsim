@@ -5,7 +5,7 @@ use link_actor::LinkActor;
 use netsim_model::chip::{ChipId, ChipKind};
 
 pub struct TestFixture {
-    pub actor_task: tokio::task::JoinHandle<()>,
+    pub _actor_task: tokio::task::JoinHandle<()>,
     pub client: LinkClient,
     // Add mock radio channels if needed
 }
@@ -32,5 +32,5 @@ pub async fn setup() -> TestFixture {
         .await
         .unwrap();
 
-    TestFixture { actor_task, client }
+    TestFixture { _actor_task: actor_task, client }
 }

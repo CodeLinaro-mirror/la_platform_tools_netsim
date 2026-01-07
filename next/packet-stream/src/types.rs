@@ -3,7 +3,6 @@
 // src/types.rs - Core data types for PacketStream
 //=============================================================================
 
-use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 

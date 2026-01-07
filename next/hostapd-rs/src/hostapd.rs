@@ -86,9 +86,11 @@ use tokio::net::{
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
 
+#[cfg(not(test))]
+use crate::hostapd_sys::{get_active_gtk, get_active_ptk};
 use crate::hostapd_sys::{
-    get_active_gtk, get_active_ptk, run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock,
-    VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG, VIRTIO_WIFI_CTRL_CMD_TERMINATE,
+    run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock, VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG,
+    VIRTIO_WIFI_CTRL_CMD_TERMINATE,
 };
 use std::time::Duration;
 use tokio::fs::File;

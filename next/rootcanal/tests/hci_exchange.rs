@@ -166,7 +166,7 @@ async fn test_hci_exchange_internal() {
     assert_command_complete(&mut hci_receiver, 0x0A, 0x20).await;
 
     // Check for advertising packet
-    let packet = timeout(Duration::from_secs(5), ll_receiver.recv()).await.unwrap().unwrap();
+    let _packet = timeout(Duration::from_secs(5), ll_receiver.recv()).await.unwrap().unwrap();
 
     // Parse the packet using netsim_packets
     // TODO: Include LinkLayer packets

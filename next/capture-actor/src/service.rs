@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -109,7 +109,7 @@ impl CaptureActor {
         &self,
         entity: &InternalCaptureInfo,
     ) -> Result<Box<dyn CaptureWriter>, CaptureError> {
-        let timestamp = std::time::SystemTime::now()
+        let _timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
