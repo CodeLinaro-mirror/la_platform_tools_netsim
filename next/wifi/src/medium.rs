@@ -14,16 +14,17 @@
 // limitations under the License.
 
 use crate::error::{WifiError, WifiResult};
-use crate::frame::Frame;
 use crate::hostapd::Hostapd;
-use crate::hwsim_attr_set::HwsimAttrSet;
 use crate::stats::WifiStats;
 use crate::DebugArgs;
 use bytes::Bytes;
 use log::{debug, info, warn};
 use netsim_packets::ieee80211::{DataSubType, Ieee80211, MacAddress};
-use netsim_packets::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr};
-use pdl_runtime::Packet;
+use netsim_packets::netlink::hwsim_attr_set::HwsimAttrSet;
+use netsim_packets::netlink::hwsim_frame::HwsimFrame;
+use netsim_packets::netlink::NlMsgHdr;
+use netsim_packets::netlink::{HwsimCmd, HwsimMsg, HwsimMsgHdr};
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
@@ -40,7 +41,7 @@ pub struct Processor {
     pub hostapd: bool,
     pub network: bool,
     pub wmedium: bool,
-    pub frame: Frame,
+    pub frame: HwsimFrame,
     pub plaintext_ieee80211: Option<Ieee80211>,
 }
 
@@ -181,7 +182,7 @@ impl Medium {
             .ok_or_else(|| WifiError::Client(format!("Station not found for address: {addr}")))
     }
 
-    fn upsert_station(&self, client_id: u32, frame: &Frame) -> WifiResult<()> {
+    fn upsert_station(&self, client_id: u32, frame: &HwsimFrame) -> WifiResult<()> {
         let src_addr = frame.ieee80211.get_source();
         let hwsim_addr = frame.transmitter.ok_or(WifiError::Frame(format!(
             "Missing transmitter attribute in frame for client: {client_id}"
@@ -201,8 +202,9 @@ impl Medium {
     }
 
     /// Send Ack frame (TX_INFO_FRAME) back to source.
-    pub fn ack_frame(&self, client_id: u32, frame: &Frame) -> WifiResult<()> {
-        let hwsim_msg_tx_info = build_tx_info(&frame.hwsim_msg)?.encode_to_vec()?;
+    pub fn ack_frame(&self, client_id: u32, frame: &HwsimFrame) -> WifiResult<()> {
+        let hwsim_msg_tx_info =
+            build_tx_info(&frame.hwsim_msg)?.encode_to_vec().map_err(WifiError::Frame)?;
         (self.callback)(client_id, &hwsim_msg_tx_info.into());
         self.incr_tx(client_id)
     }
@@ -242,7 +244,10 @@ impl Medium {
             WifiError::Frame(format!("error upsert station for client {client_id}: {e}"))
         })?;
 
-        let plaintext_ieee80211 = self.hostapd.try_decrypt(&frame.ieee80211);
+        let plaintext_ieee80211 = self
+            .hostapd
+            .try_decrypt(&frame.ieee80211)
+            .and_then(|bytes| Ieee80211::decode(&bytes).ok());
 
         let mut processor = Processor {
             hostapd: false,
@@ -321,14 +326,15 @@ impl Medium {
         Ok(processor)
     }
 
-    fn validate(&self, client_id: u32, packet: &Bytes) -> WifiResult<Frame> {
-        let hwsim_msg = HwsimMsg::decode_full(packet)?;
+    fn validate(&self, client_id: u32, packet: &Bytes) -> WifiResult<HwsimFrame> {
+        let hwsim_msg = HwsimMsg::decode_full(packet).map_err(WifiError::Frame)?;
 
         // The virtio handler only accepts HWSIM_CMD_FRAME, HWSIM_CMD_TX_INFO_FRAME and HWSIM_CMD_REPORT_PMSR
         // in https://source.corp.google.com/h/kernel/pub/scm/linux/kernel/git/torvalds/linux/+/master:drivers/net/wireless/virtual/mac80211_hwsim.c
         match hwsim_msg.hwsim_hdr.hwsim_cmd {
             HwsimCmd::Frame => {
-                let frame = Frame::parse(&hwsim_msg)?;
+                let frame =
+                    HwsimFrame::parse(&hwsim_msg).map_err(|e| WifiError::Frame(e.to_string()))?;
                 // Incoming frame must contain transmitter, flag, cookie, and tx_info fields.
                 if frame.transmitter.is_none()
                     || frame.flags.is_none()
@@ -385,8 +391,9 @@ impl Medium {
 
     /// Determine the client id based on destination and send to client.
     fn handle_ieee80211_response(&self, mut ieee80211: Ieee80211) -> WifiResult<()> {
-        if let Some(encrypted_ieee80211) = self.hostapd.try_encrypt(&ieee80211) {
-            ieee80211 = encrypted_ieee80211;
+        if let Some(encrypted_bytes) = self.hostapd.try_encrypt(&ieee80211) {
+            ieee80211 = Ieee80211::decode(&encrypted_bytes)
+                .map_err(|e| WifiError::Frame(format!("Failed to decode encrypted frame: {e}")))?;
         }
         let dest_addr = ieee80211.get_destination();
         if let Ok(destination) = self.get_station(&dest_addr) {
@@ -421,7 +428,10 @@ impl Medium {
 
         let hwsim_msg = self.create_hwsim_msg_from_ieee80211(ieee80211, destination)?;
         self.wifi_stats.incr_hwsim_frames_tx();
-        (self.callback)(destination.client_id, &hwsim_msg.encode_to_vec()?.into());
+        (self.callback)(
+            destination.client_id,
+            &hwsim_msg.encode_to_vec().map_err(WifiError::Frame)?.into(),
+        );
         self.incr_rx(destination.client_id)?;
         Ok(())
     }
@@ -433,15 +443,16 @@ impl Medium {
     ) -> WifiResult<HwsimMsg> {
         let mut builder = HwsimAttrSet::builder();
         // Attributes required by mac80211_hwsim.
-        builder.receiver(&destination.hwsim_addr.to_vec());
-        let frame_bytes = ieee80211.encode_to_vec()?;
+        builder.receiver(&destination.hwsim_addr.bytes);
+        let frame_bytes = ieee80211.encode_to_vec().map_err(WifiError::Frame)?;
         builder.frame(&frame_bytes);
         builder.rx_rate(RX_RATE);
         builder.signal(SIGNAL);
         builder.freq(destination.freq.load(Ordering::Relaxed));
         let attributes = builder.build()?.attributes;
         let hwsim_hdr = HwsimMsgHdr { hwsim_cmd: HwsimCmd::Frame, hwsim_version: 0, reserved: 0 };
-        let nlmsg_len = (NL_MSG_HDR_LEN + hwsim_hdr.encoded_len() + attributes.len()) as u32;
+        let nlmsg_len =
+            (NL_MSG_HDR_LEN + hwsim_hdr.encoded_len() as usize + attributes.len()) as u32;
         let nl_hdr = NlMsgHdr {
             nlmsg_len,
             nlmsg_type: NLMSG_MIN_TYPE,
@@ -493,7 +504,7 @@ impl Medium {
     // Simulates transmission through hostapd.
     fn send_from_sta_frame(
         &self,
-        frame: &Frame,
+        frame: &HwsimFrame,
         ieee80211: &Ieee80211,
         source: &Station,
         destination: &Station,
@@ -507,7 +518,10 @@ impl Medium {
                     self.wifi_stats.incr_wmedium_frames_tx();
                     self.wifi_stats.incr_hwsim_frames_tx();
                     self.incr_rx(destination.client_id)?;
-                    (self.callback)(destination.client_id, &packet.encode_to_vec()?.into());
+                    (self.callback)(
+                        destination.client_id,
+                        &packet.encode_to_vec().map_err(WifiError::Frame)?.into(),
+                    );
                     log_hwsim_msg(frame, source.client_id, destination.client_id);
                 }
                 Err(e) => self.wifi_stats.log_and_incr_err_count(&e),
@@ -520,7 +534,7 @@ impl Medium {
     // TODO: Compare with the implementations in mac80211_hwsim.c and wmediumd.c.
     fn broadcast_from_sta_frame(
         &self,
-        frame: &Frame,
+        frame: &HwsimFrame,
         ieee80211: &Ieee80211,
         source: &Station,
     ) -> WifiResult<()> {
@@ -539,7 +553,7 @@ impl Medium {
     /// Queues the frame for sending to medium.
     ///
     /// The `frame` contains an `ieee80211` field, but it might be encrypted. This function uses the provided `ieee80211` parameter directly, as it's expected to be decrypted if necessary.
-    pub fn queue_frame(&self, frame: Frame, ieee80211: Ieee80211) -> WifiResult<()> {
+    pub fn queue_frame(&self, frame: HwsimFrame, ieee80211: Ieee80211) -> WifiResult<()> {
         let source = self.get_station(&ieee80211.get_source())?;
         let dest_addr = ieee80211.get_destination();
         if self.contains_station(&dest_addr) {
@@ -569,7 +583,7 @@ impl Medium {
     // and hostapd_bssid to frames with FromDS set.
     fn create_hwsim_attr(
         &self,
-        frame: &Frame,
+        frame: &HwsimFrame,
         ieee80211: &Ieee80211,
         dest_hwsim_addr: &MacAddress,
     ) -> WifiResult<Vec<u8>> {
@@ -586,15 +600,16 @@ impl Medium {
                 .map_err(|e| WifiError::Frame(format!("{e}")))?,
             false => ieee80211.clone(),
         };
-        if let Some(encrypted_ieee80211) = self.hostapd.try_encrypt(&ieee80211_response) {
-            ieee80211_response = encrypted_ieee80211;
+        if let Some(encrypted_bytes) = self.hostapd.try_encrypt(&ieee80211_response) {
+            ieee80211_response = Ieee80211::decode(&encrypted_bytes)
+                .map_err(|e| WifiError::Frame(format!("Failed to decode encrypted frame: {e}")))?;
         }
-        let frame_bytes = ieee80211_response.encode_to_vec()?;
+        let frame_bytes = ieee80211_response.encode_to_vec().map_err(WifiError::Frame)?;
 
         let mut builder = HwsimAttrSet::builder();
 
         // Attributes required by mac80211_hwsim.
-        builder.receiver(&dest_hwsim_addr.to_vec());
+        builder.receiver(&dest_hwsim_addr.bytes);
         builder.frame(&frame_bytes);
         // Incoming HwsimMsg don't have rx_rate and signal.
         builder.rx_rate(attrs.rx_rate_idx.unwrap_or(RX_RATE));
@@ -611,7 +626,7 @@ impl Medium {
     // Simulates transmission through hostapd.
     fn create_hwsim_msg(
         &self,
-        frame: &Frame,
+        frame: &HwsimFrame,
         ieee80211: &Ieee80211,
         dest_hwsim_addr: &MacAddress,
     ) -> WifiResult<HwsimMsg> {
@@ -638,7 +653,7 @@ impl Medium {
     }
 }
 
-fn log_hwsim_msg(frame: &Frame, client_id: u32, dest_client_id: u32) {
+fn log_hwsim_msg(frame: &HwsimFrame, client_id: u32, dest_client_id: u32) {
     debug!(
         "Sent hwsim_msg from client {} to {}. flags {:?}, ieee80211 {}",
         client_id, dest_client_id, frame.flags, frame.ieee80211,
@@ -649,7 +664,8 @@ fn log_hwsim_msg(frame: &Frame, client_id: u32, dest_client_id: u32) {
 ///
 /// Reference to ackLocalFrame() in external/qemu/android-qemu2-glue/emulation/VirtioWifiForwarder.cpp
 fn build_tx_info(hwsim_msg: &HwsimMsg) -> WifiResult<HwsimMsg> {
-    let attrs = HwsimAttrSet::parse(&hwsim_msg.attributes)?;
+    let attrs =
+        HwsimAttrSet::parse(&hwsim_msg.attributes).map_err(|e| WifiError::Frame(e.to_string()))?;
 
     let hwsim_hdr = &hwsim_msg.hwsim_hdr;
     let nl_hdr = &hwsim_msg.nl_hdr;
@@ -676,9 +692,9 @@ fn build_tx_info(hwsim_msg: &HwsimMsg) -> WifiResult<HwsimMsg> {
                 .as_slice(),
         );
 
-    let new_attr = new_attr_builder.build()?;
-    let nlmsg_len =
-        nl_hdr.nlmsg_len + new_attr.attributes.len() as u32 - attrs.attributes.len() as u32;
+    let new_attr = new_attr_builder.build().map_err(|e| WifiError::Frame(e.to_string()))?;
+    // Header size: NlMsgHdr + HwsimMsgHdr
+    let nlmsg_len = (NlMsgHdr::SIZE + HwsimMsgHdr::SIZE + new_attr.attributes.len()) as u32;
     let new_hwsim_msg = HwsimMsg {
         attributes: new_attr.attributes,
         hwsim_hdr: HwsimMsgHdr {
@@ -731,8 +747,8 @@ mod tests {
 
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame_mdns.csv");
         let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
-        let frame1 = Frame::parse(&hwsim_msg).unwrap();
-        let frame2 = Frame::parse(&hwsim_msg).unwrap();
+        let frame1 = HwsimFrame::parse(&hwsim_msg).unwrap();
+        let frame2 = HwsimFrame::parse(&hwsim_msg).unwrap();
 
         // Case 1: plaintext_ieee80211 is None
         let processor = Processor {
@@ -742,7 +758,7 @@ mod tests {
             frame: frame1,
             plaintext_ieee80211: None,
         };
-        assert_eq!(processor.get_ieee80211(), &processor.frame.ieee80211);
+        assert_eq!(processor.get_ieee80211().as_bytes(), processor.frame.ieee80211.as_bytes());
         assert_eq!(processor.get_ieee80211_bytes(), Bytes::from(processor.frame.data.clone()));
 
         // Case 2: plaintext_ieee80211 has a value
@@ -753,7 +769,10 @@ mod tests {
             frame: frame2,
             plaintext_ieee80211: Some(ieee80211),
         };
-        assert_eq!(processor.get_ieee80211(), processor.plaintext_ieee80211.as_ref().unwrap());
+        assert_eq!(
+            processor.get_ieee80211().as_bytes(),
+            processor.plaintext_ieee80211.as_ref().unwrap().as_bytes()
+        );
         assert_eq!(
             processor.get_ieee80211_bytes(),
             Bytes::from(processor.plaintext_ieee80211.as_ref().unwrap().encode_to_vec().unwrap())
@@ -821,7 +840,7 @@ mod tests {
     fn test_is_mdns_packet() {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_frame_mdns.csv");
         let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
-        let mdns_frame_result = Frame::parse(&hwsim_msg);
+        let mdns_frame_result = HwsimFrame::parse(&hwsim_msg);
         assert!(mdns_frame_result.is_ok());
         let mdns_frame = mdns_frame_result.unwrap();
         assert!(!mdns_frame.ieee80211.get_source().is_multicast());
@@ -834,7 +853,7 @@ mod tests {
     fn test_build_tx_info_reconstruct() -> WifiResult<()> {
         let packet: Vec<u8> = include!("test_packets/hwsim_cmd_tx_info.csv");
         let hwsim_msg = HwsimMsg::decode_full(&packet).unwrap();
-        assert_eq!(hwsim_msg.hwsim_hdr().hwsim_cmd, HwsimCmd::TxInfoFrame);
+        assert_eq!(hwsim_msg.hwsim_hdr.hwsim_cmd, HwsimCmd::TxInfoFrame);
 
         let new_hwsim_msg_result = build_tx_info(&hwsim_msg);
         assert!(new_hwsim_msg_result.is_ok());
@@ -850,7 +869,7 @@ mod tests {
         let hwsim_msg_tx_info_result = build_tx_info(&hwsim_msg);
         assert!(hwsim_msg_tx_info_result.is_ok());
         let hwsim_msg_tx_info = hwsim_msg_tx_info_result.unwrap();
-        assert_eq!(hwsim_msg_tx_info.hwsim_hdr().hwsim_cmd, HwsimCmd::TxInfoFrame);
+        assert_eq!(hwsim_msg_tx_info.hwsim_hdr.hwsim_cmd, HwsimCmd::TxInfoFrame);
         Ok(())
     }
 
@@ -865,13 +884,13 @@ mod tests {
 
         let tx_info_expected = HwsimMsg::decode_full(tx_info_expected_bytes).unwrap();
 
-        assert_eq!(tx_info.hwsim_hdr(), tx_info_expected.hwsim_hdr());
-        assert_eq!(tx_info.nl_hdr(), tx_info_expected.nl_hdr());
+        assert_eq!(tx_info.hwsim_hdr, tx_info_expected.hwsim_hdr);
+        assert_eq!(tx_info.nl_hdr, tx_info_expected.nl_hdr);
 
-        let attrs_result = HwsimAttrSet::parse(tx_info.attributes());
+        let attrs_result = HwsimAttrSet::parse(&tx_info.attributes);
         assert!(attrs_result.is_ok());
         let attrs = attrs_result.unwrap();
-        let attrs_expected_result = HwsimAttrSet::parse(tx_info_expected.attributes());
+        let attrs_expected_result = HwsimAttrSet::parse(&tx_info_expected.attributes);
         assert!(attrs_expected_result.is_ok());
         let attrs_expected = attrs_expected_result.unwrap();
 
@@ -900,5 +919,25 @@ mod tests {
             Bytes::from(include!("test_packets/hwsim_cmd_tx_info_response_mdns.csv"));
         build_tx_info_and_compare(&frame_bytes, &tx_info_expected_bytes)?;
         Ok(())
+    }
+
+    #[test]
+    fn test_tx_info_pcap() {
+        let pcap_bytes = include_bytes!("test_packets/tx_info.pcap");
+
+        let mut reader = netsim_packets::pcap::PcapReader::new(std::io::Cursor::new(pcap_bytes))
+            .expect("Failed to create PcapReader");
+
+        let (header, data) =
+            reader.next_record().expect("Failed to read record").expect("No record found");
+        assert_eq!(header.incl_len.get(), 72);
+        assert_eq!(data.len(), 72);
+
+        let decoded = HwsimMsg::decode_full(&data).expect("Failed to decode HwsimMsg from pcap");
+
+        let len = decoded.nl_hdr.nlmsg_len;
+        assert_eq!(len, 72);
+        let cmd = decoded.hwsim_hdr.hwsim_cmd;
+        assert_eq!(cmd, HwsimCmd::TxInfoFrame);
     }
 }

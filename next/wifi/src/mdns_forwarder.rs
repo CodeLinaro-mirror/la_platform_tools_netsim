@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 // Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,143 +15,25 @@
 use crate::error::{WifiError, WifiResult};
 use bytes::Bytes;
 use log::{debug, warn};
+use netsim_packets::ethernet::{ether_type, EthernetFrame, MacAddr};
+use netsim_packets::ip::frame::{Ipv4Header, IP_P_UDP};
+use netsim_packets::transport::udp::UdpHeader;
 use socket2::{Protocol, Socket};
 use std::mem::MaybeUninit;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::mpsc;
+use zerocopy::{IntoBytes, U16};
 
 const MDNS_IP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MDNS_PORT: u16 = 5353;
 
-struct MacAddress(u64);
-
-impl MacAddress {
-    fn to_be_bytes(&self) -> [u8; 6] {
-        // NOTE: mac address is le
-        self.0.to_le_bytes()[0..6].try_into().unwrap()
-    }
-}
-
-impl From<MacAddress> for [u8; 6] {
-    fn from(MacAddress(addr): MacAddress) -> Self {
-        let bytes = u64::to_le_bytes(addr);
-        bytes[0..6].try_into().unwrap()
-    }
-}
-
-impl From<&[u8; 6]> for MacAddress {
-    fn from(bytes: &[u8; 6]) -> Self {
-        Self(u64::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], 0, 0]))
-    }
-}
-
-#[repr(C, packed)]
-struct Ipv4Header {
-    version_ihl: u8, // 4 bits Version, 4 bits Internet Header Length
-    dscp_ecn: u8, // 6 bits Differentiated Services Code Point, 2 bits Explicit Congestion Notification
-    total_length: u16,
-    identification: u16,
-    flags_fragment_offset: u16, // 3 bits Flags, 13 bits Fragment Offset
-    time_to_live: u8,
-    protocol: u8,
-    header_checksum: u16,
-    source_ip: [u8; 4],
-    destination_ip: [u8; 4],
-}
-
-macro_rules! be_vec {
-    ( $( $x:expr ),* ) => {
-         Vec::<u8>::new().iter().copied()
-         $( .chain($x.to_be_bytes()) )*
-         .collect()
-       };
-    }
-
-impl Ipv4Header {
-    fn calculate_checksum(&self) -> u16 {
-        let mut sum: u32 = 0;
-
-        // Process fixed-size fields (first 20 bytes)
-        let fixed_bytes: [u8; 20] = self.to_be_bytes();
-        for i in 0..10 {
-            let word = ((fixed_bytes[i * 2] as u16) << 8) | (fixed_bytes[i * 2 + 1] as u16);
-            sum += word as u32;
-        }
-
-        // Handle carries (fold the carry into the sum)
-        while (sum >> 16) > 0 {
-            sum = (sum & 0xFFFF) + (sum >> 16);
-        }
-
-        // One's complement
-        !sum as u16
-    }
-
-    fn update_checksum(&mut self) {
-        self.header_checksum = 0; // Reset checksum before calculation
-        self.header_checksum = self.calculate_checksum();
-    }
-
-    fn to_be_bytes(&self) -> [u8; 20] {
-        let mut v: Vec<u8> = be_vec![
-            self.version_ihl,
-            self.dscp_ecn,
-            self.total_length,
-            self.identification,
-            self.flags_fragment_offset,
-            self.time_to_live,
-            self.protocol,
-            self.header_checksum
-        ];
-        v.extend(Ipv4Addr::from(self.source_ip).octets());
-        v.extend(Ipv4Addr::from(self.destination_ip).octets());
-        v.try_into().unwrap()
-    }
-}
-
-#[repr(C, packed)]
-struct UdpHeader {
-    source_port: u16,
-    destination_port: u16,
-    length: u16,
-    checksum: u16,
-}
-
-impl UdpHeader {
-    fn to_be_bytes(&self) -> [u8; 8] {
-        let v: Vec<u8> =
-            be_vec![self.source_port, self.destination_port, self.length, self.checksum];
-        v.try_into().unwrap()
-    }
-}
-
-/* 10Mb/s ethernet header */
-
-#[repr(C, packed)]
-struct EtherHeader {
-    ether_dhost: [u8; 6],
-    ether_shost: [u8; 6],
-    ether_type: u16,
-}
-
-/* Ethernet protocol ID's */
-const ETHER_TYPE_IP: u16 = 0x0800;
-
-impl EtherHeader {
-    fn to_be_bytes(&self) -> [u8; 14] {
-        let v: Vec<u8> = be_vec![
-            MacAddress::from(&self.ether_dhost),
-            MacAddress::from(&self.ether_shost),
-            self.ether_type
-        ];
-        v.try_into().unwrap()
-    }
-}
+// Protocol numbers
+const IP_P_UDP_U8: u8 = IP_P_UDP;
 
 // Define constants for header sizes (bytes)
 const UDP_HEADER_LEN: usize = std::mem::size_of::<UdpHeader>();
 const IPV4_HEADER_LEN: usize = std::mem::size_of::<Ipv4Header>();
-const ETHER_HEADER_LEN: usize = std::mem::size_of::<EtherHeader>();
+const ETHER_HEADER_LEN: usize = std::mem::size_of::<EthernetFrame>();
 
 /// Creates a new UDP socket to bind to `port` with REUSEPORT option.
 /// `non_block` indicates whether to set O_NONBLOCK for the socket.
@@ -194,46 +75,65 @@ fn new_socket(addr: SocketAddr, non_block: bool) -> WifiResult<Socket> {
     Ok(socket)
 }
 
+fn calculate_ipv4_checksum(header: &mut Ipv4Header) {
+    header.header_checksum = U16::new(0); // Reset checksum
+    let bytes = header.as_bytes();
+    let mut sum: u32 = 0;
+    // Process 16-bit words
+    // Ipv4 header is multiple of 4 bytes (20 bytes), so it's even.
+    for i in 0..bytes.len() / 2 {
+        let word = ((bytes[i * 2] as u16) << 8) | (bytes[i * 2 + 1] as u16);
+        sum += word as u32;
+    }
+
+    // Handle carries
+    while (sum >> 16) > 0 {
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+
+    // One's complement
+    header.header_checksum = U16::new(!sum as u16);
+}
+
 fn create_ethernet_frame(packet: &[u8], ip_addr: &Ipv4Addr) -> WifiResult<Vec<u8>> {
-    // TODO: Use the etherparse crate
-    let ether_header = EtherHeader {
+    let ether_header = EthernetFrame {
         // mDNS multicast IP address
-        ether_dhost: [0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb],
-        ether_shost: [0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb],
-        ether_type: ETHER_TYPE_IP,
+        dst_addr: MacAddr::new([0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb]),
+        src_addr: MacAddr::new([0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb]),
+        ethertype: U16::new(ether_type::IPV4),
     };
 
     // Create UDP Header
     let udp_header = UdpHeader {
-        source_port: MDNS_PORT,
-        destination_port: MDNS_PORT,
-        length: (packet.len() + UDP_HEADER_LEN) as u16,
+        source_port: U16::new(MDNS_PORT),
+        dest_port: U16::new(MDNS_PORT),
+        length: U16::new((packet.len() + UDP_HEADER_LEN) as u16),
         // Usually 0 for mDNS
-        checksum: 0,
+        checksum: U16::new(0),
     };
 
     // Create IPv4 Header
     let mut ipv4_header = Ipv4Header {
-        version_ihl: 0x45,
+        version_ihl: 0x45, // Version 4, IHL 5
         dscp_ecn: 0,
-        total_length: (packet.len() + UDP_HEADER_LEN + IPV4_HEADER_LEN) as u16,
-        identification: 0,
-        flags_fragment_offset: 0,
-        time_to_live: 64,
-        protocol: 17,
-        header_checksum: 0,
-        source_ip: ip_addr.octets(),
+        total_length: U16::new((packet.len() + UDP_HEADER_LEN + IPV4_HEADER_LEN) as u16),
+        identification: U16::new(0),
+        flags_fragment_offset: U16::new(0),
+        ttl: 64,
+        protocol: IP_P_UDP_U8,
+        header_checksum: U16::new(0),
+        source_addr: ip_addr.octets(),
         // mDNS multicast
-        destination_ip: MDNS_IP.octets(),
+        dest_addr: MDNS_IP.octets(),
     };
-    ipv4_header.update_checksum();
+    calculate_ipv4_checksum(&mut ipv4_header);
 
     // Combine Headers and Payload (Safely using Vec)
     let mut response_packet =
         Vec::with_capacity(ETHER_HEADER_LEN + IPV4_HEADER_LEN + UDP_HEADER_LEN + packet.len());
-    response_packet.extend_from_slice(&ether_header.to_be_bytes());
-    response_packet.extend_from_slice(&ipv4_header.to_be_bytes());
-    response_packet.extend_from_slice(&udp_header.to_be_bytes());
+    response_packet.extend_from_slice(ether_header.as_bytes());
+    response_packet.extend_from_slice(ipv4_header.as_bytes());
+    response_packet.extend_from_slice(udp_header.as_bytes());
     response_packet.extend_from_slice(packet);
 
     Ok(response_packet)

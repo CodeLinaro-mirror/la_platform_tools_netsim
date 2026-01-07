@@ -4,12 +4,13 @@ use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
-
 use client::{CaptureClient, DeviceClient};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info};
+use netsim_common::system::netsimd_temp_dir;
+use netsim_common::util::os_utils::{get_instance_name, redirect_std_stream};
 use netsim_model::chip::{
     BluetoothCreate, BluetoothMode, CellCreate, ChipConfig, DeviceParams, NetworkKind,
     NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
@@ -19,6 +20,7 @@ use netsim_model::initial_info::{ChipInfo, ChipKind};
 use packet_stream::transport::traits::{PacketSink, PacketStream};
 use packet_stream::{StreamAddress, Streams, TransportType};
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -240,13 +242,14 @@ impl NetsimDaemon {
     pub async fn new() -> Result<StartUpMode, RunResult> {
         let discovery_dir = crate::ini_file::get_discovery_directory();
         let runtime_dir = platform::get_runtime_dir();
-        Self::new_with_dirs(discovery_dir, runtime_dir).await
+        Self::new_with_dirs(discovery_dir, runtime_dir, Args::parse()).await
     }
 
     /// Creates a new `NetsimDaemon` instance with custom directories.
     pub async fn new_with_dirs(
         discovery_dir: PathBuf,
         runtime_dir: PathBuf,
+        args: Args,
     ) -> Result<StartUpMode, RunResult> {
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
@@ -255,7 +258,26 @@ impl NetsimDaemon {
 
         info!("netsim startup");
 
-        let args = Args::parse();
+        // enable Rust backtrace by setting env RUST_BACKTRACE=full
+        env::set_var("RUST_BACKTRACE", "full");
+
+        // Log where netsim artifacts are located
+        info!("netsim artifacts path: {:?}", netsimd_temp_dir());
+        // Log all args
+        info!("{args:#?}");
+
+        if !args.logtostderr {
+            if let Err(err) =
+                redirect_std_stream(&get_instance_name(args.instance, args.connector_instance))
+            {
+                error!("{err:?}");
+            }
+
+            // Duplicating the previous two logs to be included in netsim_stderr.log
+            info!("netsim artifacts path: {:?}", netsimd_temp_dir());
+            info!("{args:#?}");
+        }
+
         let mut ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
 
         // Attempt to acquire the singleton lock for the netsim daemon.
