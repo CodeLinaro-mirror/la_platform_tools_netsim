@@ -91,6 +91,22 @@ impl CaptureClient {
         }
     }
 
+    /// Sets the default capture enabled state for new devices.
+    ///
+    /// # Arguments
+    /// * `enabled` - Whether to enable packet capture by default.
+    pub async fn set_default_capture(&self, enabled: bool) -> Result<()> {
+        let result = self
+            .inner
+            .perform_action(None, CaptureAction::SetDefaultCapture { enabled })
+            .await
+            .map_err(|e| anyhow!(e))?;
+        match result {
+            CaptureActionResult::Success => Ok(()),
+            _ => Err(anyhow!("Unexpected result from SetDefaultCapture")),
+        }
+    }
+
     /// Captures a single packet.
     ///
     /// # Arguments

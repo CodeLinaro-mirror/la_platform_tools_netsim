@@ -30,6 +30,10 @@ pub struct Args {
     #[arg(long, alias = "no_shutdown")]
     pub no_shutdown: bool,
 
+    /// Enable packet capture
+    #[arg(long)]
+    pub pcap: bool,
+
     /// Entering Verbose mode
     #[arg(short = 'v', long)]
     pub verbose: bool,
