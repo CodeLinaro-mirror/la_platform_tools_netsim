@@ -131,6 +131,7 @@ impl ControllerImpl {
                     Some(send_hci_trampoline),
                     Some(send_ll_trampoline),
                     Some(invalid_packet_trampoline),
+                    None,
                     context_ptr as *mut c_void,
                 )
             };

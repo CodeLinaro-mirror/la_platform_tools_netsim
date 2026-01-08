@@ -42,6 +42,9 @@ extern "C" {
                 data_len: size_t,
             ),
         >,
+        ranging_estimator: Option<
+            unsafe extern "C" fn(cookie1: *mut c_void, cookie2: *mut c_void) -> u32,
+        >,
         cookie: *mut c_void,
     ) -> *mut c_void;
 
