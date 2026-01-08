@@ -30,7 +30,7 @@ from utils import (
 
 PYTEST_DIR = AOSP_ROOT / "external" / "adt-infra" / "pytest" / "test_embedded"
 OBJS_DIR = AOSP_ROOT / "tools" / "netsim" / "objs"
-BAZEL_OUT_DIR = AOSP_ROOT / "tools" / "netsim" / "bazel-bin"
+BAZEL_OUT_DIR = AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
 
 
 class RunPyTestTask(Task):
