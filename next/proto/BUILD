@@ -8,7 +8,6 @@ netsim_rust_library(
     crate_name = "netsim_proto",
     edition = "2021",
     enable_clippy = False,
-    enable_fmt = False,
     enable_unit_test = False,
     strict_warnings = False,
     deps = [

@@ -33,7 +33,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_link_entity_lifecycle() {
-        let mut actor = LinkActor::default();
+        let mut actor = LinkActor::new();
         let sender = ChipId(1);
         let receiver = ChipId(2);
 
@@ -50,7 +50,7 @@ mod tests {
         actor.handle_create(Some(link_id), params.clone(), &mut runtime).await.unwrap();
 
         // Verify lookup
-        assert_eq!(actor.lookup.get(&(params.sender, params.receiver)), Some(&link_id));
+        assert_eq!(actor.chip_pairs.get(&(params.sender, params.receiver)), Some(&link_id));
 
         // Verify kind set from params (in store)
         let link = actor.handle_get(link_id, &mut runtime).await.unwrap().unwrap();
@@ -60,14 +60,14 @@ mod tests {
         actor.handle_delete(link_id, &mut runtime).await.unwrap();
 
         // Verify lookup removed
-        assert!(actor.lookup.get(&(params.sender, params.receiver)).is_none());
+        assert!(actor.chip_pairs.get(&(params.sender, params.receiver)).is_none());
     }
 
     #[tokio::test]
     async fn test_handle_action() {
         use link_api::LinkAction;
 
-        let mut actor = LinkActor::default();
+        let mut actor = LinkActor::new();
         let chip_id = ChipId(1);
         let chip_kind = ChipKind::BLUETOOTH;
 

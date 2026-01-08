@@ -13,7 +13,6 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
     enable_clippy = False,
-    enable_fmt = False,
     enable_unit_test = False,
     visibility = ["//next:__subpackages__"],
     deps = [
@@ -22,6 +21,7 @@ netsim_rust_library(
         "@cxx.rs//:cxx",
         "@log",
         "@rootcanal//:lib_rootcanal_ffi",
+        "@rootcanal//:rootcanal_rs",
         "@thiserror",
     ],
 )
@@ -44,6 +44,7 @@ rust_test_suite(
         "@env_logger",
         "@log",
         "@pdl-runtime",
+        "@rootcanal//:rootcanal_rs",
         "@tokio",
     ],
 )

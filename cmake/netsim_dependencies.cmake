@@ -212,10 +212,8 @@ add_subdirectory(${EXTERNAL_QEMU}/android/third_party/re2 re2)
 add_subdirectory(${EXTERNAL}/cares cares)
 add_subdirectory(${EXTERNAL}/glib/glib glib2)
 
-
 set(_gRPC_RE2_LIBRARIES re2)
 set(_gRPC_RE2_INCLUDE_DIR "${ANDROID_QEMU}/android/third_party/re2")
-
 
 add_subdirectory(${EXTERNAL}/grpc/emulator grpc)
 add_subdirectory(${EXTERNAL}/qemu/android/android-emu-base android-emu-base)

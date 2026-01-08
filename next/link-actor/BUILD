@@ -1,3 +1,4 @@
+load("@rules_rust//rust:defs.bzl", "rust_test")
 load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -24,10 +25,22 @@ netsim_rust_library(
     edition = "2021",
     enable_clippy = False,
     enable_doc_test = False,
-    enable_fmt = False,
     proc_macro_deps = [
         "@async-trait",
         "@thiserror-impl",
     ],
     deps = DEPS,
+)
+
+rust_test(
+    name = "integration_test",
+    srcs = glob(["tests/**/*.rs"]),
+    edition = "2021",
+    proc_macro_deps = [
+        "@async-trait",
+    ],
+    deps = DEPS + [
+        ":link-actor",
+        "//next/client",
+    ],
 )

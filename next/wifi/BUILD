@@ -25,6 +25,7 @@ rust_library(
         "@socket2",
         "@tokio",
         "@tokio-stream",
+        "@zerocopy",
     ],
 )
 
@@ -34,6 +35,8 @@ rust_test(
         "src/test_packets/hwsim_cmd_frame.csv",
         "src/test_packets/hwsim_cmd_frame_mdns.csv",
         "src/test_packets/hwsim_cmd_tx_info.csv",
+        "src/test_packets/tx_info.pcap",
+        "src/test_packets/tx_info.json",
         "src/test_packets/hwsim_cmd_frame_request.csv",
         "src/test_packets/hwsim_cmd_tx_info_response.csv",
         "src/test_packets/hwsim_cmd_frame_request_mdns.csv",

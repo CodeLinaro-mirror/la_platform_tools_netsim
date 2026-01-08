@@ -1,6 +1,13 @@
+use device_api::api::{Chip, DeviceChipCreate};
 use device_api::{Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition};
+use link_api::Link as ApiLink;
+use netsim_model::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
+use netsim_model::chip::BleBeacon;
 use netsim_model::chip::ChipKind as ApiChipKind;
 use netsim_proto::common::ChipKind as ProtoChipKind;
+use netsim_proto::model::ChipCreate;
+use netsim_proto::model::Link as ProtoLink;
+use netsim_proto::model::PhyKind as ProtoPhyKind;
 use netsim_proto::model::{
     Chip as ProtoChip, Device as ProtoDevice, Orientation as ProtoOrientation,
     Position as ProtoPosition,
@@ -65,11 +72,6 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
     }
     device
 }
-
-use device_api::api::{Chip, DeviceChipCreate};
-use netsim_model::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
-use netsim_model::chip::BleBeacon;
-use netsim_proto::model::ChipCreate;
 
 pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
     // Currently only supports BLE Beacon
@@ -164,4 +166,18 @@ pub fn from_proto_position(p: ProtoPosition) -> ApiPosition {
 
 pub fn from_proto_orientation(o: ProtoOrientation) -> ApiOrientation {
     ApiOrientation { yaw: o.yaw, pitch: o.pitch, roll: o.roll }
+}
+
+pub fn to_proto_link(l: ApiLink) -> ProtoLink {
+    let mut link = ProtoLink::new();
+    link.sender_id = l.sender.0;
+    link.receiver_id = l.receiver.0;
+    link.rssi = l.rssi as i32;
+    link.link_kind = EnumOrUnknown::new(match l.kind {
+        ApiChipKind::BLUETOOTH => ProtoPhyKind::BLUETOOTH_LOW_ENERGY,
+        ApiChipKind::WIFI => ProtoPhyKind::WIFI,
+        ApiChipKind::UWB => ProtoPhyKind::UWB,
+        _ => ProtoPhyKind::NONE,
+    });
+    link
 }

@@ -14,22 +14,54 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct LinkActor {
     /// Index for fast lookup/upsert: (Sender, Receiver) -> LinkId
-    /// Index for fast lookup/upsert: (Sender, Receiver) -> LinkId
-    pub(crate) lookup: HashMap<(ChipId, ChipId), link_api::LinkId>,
+    pub(crate) chip_pairs: HashMap<(ChipId, ChipId), link_api::LinkId>,
     /// Map of ChipId to ChipKind for validation
     pub(crate) chip_kind_map: HashMap<ChipId, ChipKind>,
-    // TODO: Add radio_clients (e.g., bt_client) here
+    /// Map of ChipKind to ChipClient for forwarding updates
+    #[allow(dead_code)]
+    pub(crate) chip_clients: HashMap<ChipKind, Box<dyn netsim_model::chip::ChipClient>>,
     pub(crate) links: HashMap<link_api::LinkId, Link>,
     pub(crate) next_id: u32,
 }
 
 impl LinkActor {
-    pub fn default() -> Self {
+    pub fn new() -> Self {
         Self {
-            lookup: HashMap::new(),
+            chip_pairs: HashMap::new(),
             chip_kind_map: HashMap::new(),
+            chip_clients: HashMap::new(),
             links: HashMap::new(),
             next_id: 1,
+        }
+    }
+
+    pub fn set_chip_clients(
+        &mut self,
+        clients: HashMap<ChipKind, Box<dyn netsim_model::chip::ChipClient>>,
+    ) {
+        self.chip_clients = clients;
+    }
+
+    pub async fn update_chip_links(&self, chip_id: ChipId) {
+        let Some(kind) = self.chip_kind_map.get(&chip_id) else {
+            return;
+        };
+
+        let Some(client) = self.chip_clients.get(kind) else {
+            return;
+        };
+
+        let links: Vec<_> = self
+            .links
+            .values()
+            .filter(|l| l.sender == chip_id)
+            .map(|l| (l.receiver, l.rssi as i8))
+            .collect();
+
+        let update = netsim_model::chip::ChipUpdate { links: Some(links), ..Default::default() };
+
+        if let Err(e) = client.update(chip_id, update).await {
+            log::error!("Failed to update links for chip {}: {:?}", chip_id, e);
         }
     }
 }

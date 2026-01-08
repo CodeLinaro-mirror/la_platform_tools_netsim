@@ -63,15 +63,7 @@ impl ActorService for DeviceActor {
             let chip_create = params.chip;
 
             // 1. Create Chip parameters
-            let network_params = match &chip_create.chip {
-                ApiChip::Beacon(beacon) => NetworkParams::Bluetooth(BluetoothCreate {
-                    address: beacon.address.clone(),
-                    bt_properties: Default::default(),
-                    mode: BluetoothMode::Beacon(Box::new(BeaconParams {
-                        ble_beacon: beacon.clone(),
-                    })),
-                }),
-            };
+            let network_params: NetworkParams = chip_create.chip.into();
             let chip_kind = NetworkKind::from(&network_params);
 
             let chip_params = ChipCreate {
@@ -105,6 +97,7 @@ impl ActorService for DeviceActor {
                     orientation: entity.device.orientation.clone(),
                     device_id: DeviceId(entity.device.id),
                     variant: None,
+                    links: vec![],
                 });
                 //TODO: Send create request to Link Actor
             } else {
@@ -216,15 +209,7 @@ impl ActorService for DeviceActor {
                         let chip_id = ChipId(self.next_chip_id.fetch_add(1, Ordering::SeqCst));
 
                         // 1. Create Chip parameters
-                        let network_params = match &chip_config.chip {
-                            ApiChip::Beacon(beacon) => NetworkParams::Bluetooth(BluetoothCreate {
-                                address: beacon.address.clone(),
-                                bt_properties: Default::default(),
-                                mode: BluetoothMode::Beacon(Box::new(BeaconParams {
-                                    ble_beacon: beacon.clone(),
-                                })),
-                            }),
-                        };
+                        let network_params: NetworkParams = chip_config.chip.into();
                         let chip_kind = NetworkKind::from(&network_params);
 
                         // 2. Handle Capture Creation and Stream Wrapping
@@ -274,6 +259,7 @@ impl ActorService for DeviceActor {
                                 orientation: entity.device.orientation.clone(),
                                 device_id: DeviceId(entity.device.id),
                                 variant: None,
+                                links: vec![],
                             });
                             Ok(DeviceActionResult::ChipId(chip_id))
                         } else {

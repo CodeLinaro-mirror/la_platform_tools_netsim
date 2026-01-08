@@ -103,7 +103,7 @@ pub struct GetVersionMessage {
 }
 
 pub mod api {
-    use crate::chip::BleBeacon;
+    use crate::chip::{BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate};
     use crate::device::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
 
@@ -156,11 +156,51 @@ pub mod api {
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     pub enum Chip {
         Beacon(BleBeacon),
+        Bluetooth(BluetoothCreate),
+        Wifi(WifiCreate),
+        Uwb(UwbCreate),
+        Cell(CellCreate),
     }
 
     impl Default for Chip {
         fn default() -> Self {
             Chip::Beacon(BleBeacon::default())
+        }
+    }
+
+    impl From<crate::chip::NetworkParams> for Chip {
+        fn from(params: crate::chip::NetworkParams) -> Self {
+            match params {
+                crate::chip::NetworkParams::Bluetooth(bt) => match bt.mode {
+                    crate::chip::BluetoothMode::Beacon(beacon_params) => {
+                        Chip::Beacon(beacon_params.ble_beacon)
+                    }
+                    _ => Chip::Bluetooth(bt),
+                },
+                crate::chip::NetworkParams::Wifi(wifi) => Chip::Wifi(wifi),
+                crate::chip::NetworkParams::Uwb(uwb) => Chip::Uwb(uwb),
+                crate::chip::NetworkParams::Cell(cell) => Chip::Cell(cell),
+            }
+        }
+    }
+
+    impl From<Chip> for crate::chip::NetworkParams {
+        fn from(chip: Chip) -> Self {
+            match chip {
+                Chip::Beacon(beacon) => {
+                    crate::chip::NetworkParams::Bluetooth(crate::chip::BluetoothCreate {
+                        address: beacon.address.clone(),
+                        bt_properties: Default::default(),
+                        mode: crate::chip::BluetoothMode::Beacon(Box::new(
+                            crate::chip::BeaconParams { ble_beacon: beacon },
+                        )),
+                    })
+                }
+                Chip::Bluetooth(bt) => crate::chip::NetworkParams::Bluetooth(bt),
+                Chip::Wifi(wifi) => crate::chip::NetworkParams::Wifi(wifi),
+                Chip::Uwb(uwb) => crate::chip::NetworkParams::Uwb(uwb),
+                Chip::Cell(cell) => crate::chip::NetworkParams::Cell(cell),
+            }
         }
     }
 }

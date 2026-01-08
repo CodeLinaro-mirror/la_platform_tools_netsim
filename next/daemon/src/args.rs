@@ -3,7 +3,7 @@
 use clap::Parser;
 use std::env;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Default)]
 pub struct Args {
     /// File descriptor start up info proto
     #[arg(short = 's', long, alias = "fd_startup_str")]
@@ -29,6 +29,10 @@ pub struct Args {
     /// WARNING: This flag is for development purpose. netsimd will not shutdown without SIGKILL.
     #[arg(long, alias = "no_shutdown")]
     pub no_shutdown: bool,
+
+    /// Enable packet capture
+    #[arg(long)]
+    pub pcap: bool,
 
     /// Entering Verbose mode
     #[arg(short = 'v', long)]

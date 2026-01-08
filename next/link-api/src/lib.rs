@@ -27,8 +27,6 @@
 
 pub mod action;
 pub mod create;
-pub mod link;
-
 pub use action::LinkAction;
 pub use create::LinkCreate;
-pub use link::{Link, LinkId, LinkPatch};
+pub use netsim_model::link::{Link, LinkId, LinkUpdate};

@@ -24,6 +24,7 @@ rust_library(
     name = "daemon-lib",
     srcs = [
         "src/args.rs",
+        "src/avd_config.rs",
         "src/ini_file.rs",
         "src/lib.rs",
         "src/logger.rs",
@@ -47,6 +48,7 @@ rust_library(
         "//next/packet-stream",
         "//next/uwb",
         "//next/wifi",
+        "//rust/common:netsim_common",
         "@bytes",
         "@chrono",
         "@clap",

@@ -9,7 +9,6 @@ netsim_rust_library(
     edition = "2021",
     enable_clippy = False,
     enable_doc_test = False,
-    enable_fmt = False,
     proc_macro_deps = [
         "@async-trait",
     ],
@@ -17,6 +16,7 @@ netsim_rust_library(
         "//next/actor-framework",
         "//next/client",
         "//next/device-api",
+        "//next/link-api",
         "//next/model",
         "//next/packet-stream",
         "//next/proto",

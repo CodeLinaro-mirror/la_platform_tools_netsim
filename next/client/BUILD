@@ -9,6 +9,8 @@ DEPS = [
     "//next/model",
     "//next/device-actor",
     "//next/capture-actor",
+    "//next/link-actor",
+    "//next/link-api",
     "@anyhow",
     "@bytes",
     "@futures",
@@ -26,7 +28,6 @@ netsim_rust_library(
     edition = "2021",
     enable_clippy = False,
     enable_doc_test = False,
-    enable_fmt = False,
     proc_macro_deps = [
         "@async-trait",
     ],
