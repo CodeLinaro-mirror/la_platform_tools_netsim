@@ -17,6 +17,7 @@ DEPS = [
     "//next/packet-stream",
     "@tokio",
     "@log",
+    "@thiserror",
 ]
 
 netsim_rust_library(

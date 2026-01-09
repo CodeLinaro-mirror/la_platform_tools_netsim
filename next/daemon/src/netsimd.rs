@@ -185,15 +185,20 @@ async fn setup_grpc_listener(
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
     device_client: DeviceClient,
+    link_client: client::LinkClient,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
     let (new_connection_tx, new_connection_rx) = mpsc::channel(100);
     let packet_streamer_service = PacketStreamerService::new(new_connection_tx);
 
     // Start the gRPC server
-    let (server, port) =
-        grpc_server::server::start(requested_port.into(), device_client, packet_streamer_service)
-            .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
+    let (server, port) = grpc_server::server::start(
+        requested_port.into(),
+        device_client,
+        link_client,
+        packet_streamer_service,
+    )
+    .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
 
     let listener = grpc_server::packet_streamer::ChannelTransportListener {
         rx: new_connection_rx,
@@ -242,6 +247,11 @@ pub struct NetsimDaemon {
 }
 
 impl NetsimDaemon {
+    /// Returns a reference to the DeviceClient.
+    pub fn device_client(&self) -> &DeviceClient {
+        &self.device_client
+    }
+
     /// Creates a new `NetsimDaemon` instance or returns config for forwarding.
     ///
     /// Returns:
@@ -329,6 +339,9 @@ impl NetsimDaemon {
         #[cfg(unix)]
         setup_uds_listener(&mut streams, &mut listener_addresses, &runtime_dir).await?;
 
+        // Setup Link Server
+        let (link_runner, link_client) = link_actor::new();
+
         // Setup Device Server Channel
         // Create the runner (owns receiver) and client (wraps sender)
         let (device_runner, resource_client) =
@@ -347,6 +360,7 @@ impl NetsimDaemon {
             &mut listener_addresses,
             args.grpc_port.unwrap_or(0),
             device_client.clone(),
+            link_client.clone(),
         )
         .await?;
 
@@ -388,15 +402,23 @@ impl NetsimDaemon {
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =
             HashMap::new();
-        chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client));
-        chip_clients.insert(NetworkKind::Wifi, Box::new(wifi_client));
-        chip_clients.insert(NetworkKind::Uwb, Box::new(uwb_client));
-        chip_clients.insert(NetworkKind::Cell, Box::new(cell_client));
+        chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client.clone()));
+        chip_clients.insert(NetworkKind::Wifi, Box::new(wifi_client.clone()));
+        chip_clients.insert(NetworkKind::Uwb, Box::new(uwb_client.clone()));
+        chip_clients.insert(NetworkKind::Cell, Box::new(cell_client.clone()));
+
+        // Setup Link Actor State
+        // Create a new map for LinkActor.
+        // We need to inject ChipClients into LinkActor so it can propagate link changes
+        // (like RSSI updates) to the underlying radio actors (e.g., BluetoothActor).
+        let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k.into(), v.clone())).collect();
+        let link_actor_state = link_actor::LinkActor::new(link_chip_clients);
 
         let device_actor_state = device_actor::new(
             chip_clients,
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
+            Box::new(link_client.clone()),
         );
 
         // Spawn server tasks
@@ -413,14 +435,11 @@ impl NetsimDaemon {
         info!("Device server started");
         join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
         info!("Capture server started");
-        // TODO: Pass this to the capture actor constructor, as it comes from a CLI flag and is static at startup.
         if args.pcap {
             capture_client.set_default_capture(true).await.expect("Failed to set default capture");
         }
-        //TODO: Add Link server with chip_clients
-        // Link server usage:
-        // let (link_runner, link_client) = link_actor::new();
-        // join_set.spawn(link_runner.run(link_actor::LinkActor::default()));
+        join_set.spawn(link_runner.run(link_actor_state));
+        info!("Link server started");
         Ok(StartUpMode::Owner(
             NetsimDaemon {
                 join_set,
@@ -475,8 +494,10 @@ impl NetsimDaemon {
                             let device_client = dc.clone();
                             let capture_client = cc.clone();
                             let next_chip_id = nci.clone();
-                            // Await connection handling directly in the main loop
-                            handle_new_connection(device_client, capture_client, next_chip_id, stream, sink, chip_info, guid).await;
+                            // Spawn connection handling to avoid blocking the main loop
+                            // handle_new_connection performs async operations (like device_client.add_chip)
+                            // which could delay accepting other connections if awaited directly.
+                            tokio::spawn(handle_new_connection(device_client, capture_client, next_chip_id, stream, sink, chip_info, guid));
                         }
                         Err(e) => {
                             error!("Error accepting connection: {}. Stopping new connections.", e);

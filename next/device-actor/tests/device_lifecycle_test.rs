@@ -20,7 +20,10 @@ use common::TestFixture;
 
 #[tokio::test]
 async fn test_list_devices_explicit() {
-    let TestFixture { mut chip_rx, client, .. } = common::setup().await;
+    let TestFixture { mut chip_rx, client, mut mock_link_controller, .. } = common::setup().await;
+
+    // Expect NotifyChipAdded
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
     // Mock chip service
     tokio::spawn(async move {
@@ -57,7 +60,11 @@ async fn test_list_devices_explicit() {
 // that AddChip devices cannot be deleted directly. This test will verify the current behavior.
 #[tokio::test]
 async fn test_delete_add_chip_device_fails() {
-    let TestFixture { mut chip_rx, client, .. } = common::setup().await;
+    let TestFixture { mut chip_rx, client, mut mock_link_controller, .. } = common::setup().await;
+
+    // Expect NotifyChipAdded then NotifyChipRemoved
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
     // Mock chip service
     tokio::spawn(async move {

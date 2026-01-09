@@ -5,11 +5,8 @@ use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use device_api::api::{DeviceCreate, DeviceUpdate};
 use device_api::{DeviceAction, DeviceActionResult, DeviceId};
-use netsim_model::chip::{
-    BeaconParams, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId, NetworkKind,
-    NetworkParams,
-};
-use netsim_model::device::api::Chip as ApiChip;
+use link_api::LinkAction;
+use netsim_model::chip::{ChipConfig, ChipCreate, ChipId, NetworkKind, NetworkParams};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 
@@ -51,6 +48,7 @@ impl ActorService for DeviceActor {
         params: Self::Create,
         ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
+        log::info!("DeviceActor: handle_create for device {}", params.device_config.name);
         let id = id.unwrap_or_else(|| {
             let id = DeviceId(self.next_device_id);
             self.next_device_id += 1;
@@ -99,7 +97,14 @@ impl ActorService for DeviceActor {
                     variant: None,
                     links: vec![],
                 });
-                //TODO: Send create request to Link Actor
+                // Send create request to Link Actor
+                // This ensures the LinkActor is aware of the new chip and can manage its links.
+                self.link_client
+                    .action(None, LinkAction::NotifyChipAdded(chip_id, chip_kind.into()))
+                    .await
+                    .expect("Failed to notify LinkActor of new chip");
+                // TODO: Expose a helper method on LinkClient for this action (e.g. notify_chip_added)
+                // for correctness, brevity and clarity.
             } else {
                 // Log warning or return error if no client for this network kind
                 return Err(DeviceError::ActorCommunicationError(format!(
@@ -176,7 +181,15 @@ impl ActorService for DeviceActor {
                         .delete(netsim_model::chip::ChipId(chip.id))
                         .await
                         .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
-                    //TODO: Send delete request to Link Actor
+                    // Send delete request to Link Actor
+                    self.link_client
+                        .action(
+                            None,
+                            LinkAction::NotifyChipRemoved(netsim_model::chip::ChipId(chip.id)),
+                        )
+                        .await
+                        .expect("Failed to notify LinkActor of chip remove");
+                    // TODO: Expose a helper method on LinkClient for this action (e.g. notify_chip_removed)
                 }
             }
             Ok(())
@@ -201,11 +214,19 @@ impl ActorService for DeviceActor {
                     }
                     DeviceAction::NotifyChipRemoved(_device_id, chip_id) => {
                         entity.device.chips.retain(|c| c.id != chip_id.0);
-                        // TODO: If entity.device.chips.is_empty(), remove the device itself.
-                        // This requires a way to trigger a self-delete from within the actor.
+                        if entity.device.chips.is_empty() {
+                            // TODO: If entity.device.chips.is_empty(), remove the device itself.
+                            // This requires a way to trigger a self-delete from within the actor.
+                        }
+                        self.link_client
+                            .action(None, LinkAction::NotifyChipRemoved(chip_id))
+                            .await
+                            .expect("Failed to notify LinkActor of chip remove");
+                        // TODO: Expose a helper method on LinkClient for this action (e.g. notify_chip_removed)
                         Ok(DeviceActionResult::Success)
                     }
                     DeviceAction::AddChip { chip_config, packet_stream, packet_sink } => {
+                        log::info!("DeviceActor: AddChip for chip {}", chip_config.name);
                         let chip_id = ChipId(self.next_chip_id.fetch_add(1, Ordering::SeqCst));
 
                         // 1. Create Chip parameters
@@ -261,6 +282,14 @@ impl ActorService for DeviceActor {
                                 variant: None,
                                 links: vec![],
                             });
+                            self.link_client
+                                .action(
+                                    None,
+                                    LinkAction::NotifyChipAdded(chip_id, chip_kind.into()),
+                                )
+                                .await
+                                .expect("Failed to notify LinkActor of chip add");
+                            // TODO: Expose a helper method on LinkClient for this action (e.g. notify_chip_added)
                             Ok(DeviceActionResult::ChipId(chip_id))
                         } else {
                             Err(DeviceError::ActorCommunicationError(format!(

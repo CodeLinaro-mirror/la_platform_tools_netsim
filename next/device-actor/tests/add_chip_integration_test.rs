@@ -46,7 +46,10 @@ fn create_add_chip_params(guid: &str, chip_name: &str) -> DeviceAddChip {
 
 #[tokio::test]
 async fn test_add_chip_success() {
-    let TestFixture { mut chip_rx, client, .. } = common::setup().await;
+    let TestFixture { mut chip_rx, client, mut mock_link_controller, .. } = common::setup().await;
+
+    // Expect NotifyChipAdded
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
     // Mock chip service
     tokio::spawn(async move {

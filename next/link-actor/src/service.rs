@@ -44,6 +44,13 @@ impl ActorService for LinkActor {
             )));
         }
 
+        if params.sender == params.receiver {
+            return Err(LinkError::InvalidParam(format!(
+                "Self-link not allowed: chip {}",
+                params.sender
+            )));
+        }
+
         if self.chip_pairs.contains_key(&(params.sender, params.receiver)) {
             return Err(LinkError::AlreadyExists(id.to_string()));
         }
@@ -121,15 +128,15 @@ impl ActorService for LinkActor {
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             LinkAction::NotifyChipAdded(chip_id, chip_kind) => {
-                log::info!("NotifyChipAdded: {} {:?}", chip_id, chip_kind);
+                // LinkActor needs to know about all chips to validate link creation requests.
                 self.chip_kind_map.insert(chip_id, chip_kind);
             }
             LinkAction::NotifyChipRemoved(chip_id) => {
-                log::info!("NotifyChipRemoved: {}", chip_id);
                 self.chip_kind_map.remove(&chip_id);
 
                 let mut deleted_senders = std::collections::HashSet::new();
                 let chip_pairs = &mut self.chip_pairs;
+                // Remove all links associated with the removed chip
                 self.links.retain(|_, link| {
                     if link.sender == chip_id || link.receiver == chip_id {
                         chip_pairs.remove(&(link.sender, link.receiver));
@@ -141,6 +148,7 @@ impl ActorService for LinkActor {
                     true
                 });
 
+                // Update the remaining chips that were connected to the removed chip
                 for sender in deleted_senders {
                     self.update_chip_links(sender).await;
                 }
