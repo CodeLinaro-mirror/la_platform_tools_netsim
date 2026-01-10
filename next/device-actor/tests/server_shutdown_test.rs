@@ -1,33 +1,57 @@
-#[path = "common/mod.rs"]
-mod common;
 // Copyright (C) 2025 The Android Open Source Project
 
-// Tests for Server Shutdown behavior.
+// Feature: Server Shutdown
 //
-// This module tests the server's ability to shut down on idle or when all chips are removed.
-// Note: These tests are expected to fail currently as the actor framework does not yet support auto-shutdown.
+//   As a system administrator or developer
+//   I want the device actor server to shut down when idle or when requested
+//   So that resources are released when not in use
 //
-// List of tests:
-// - `test_server_shutdown_on_idle`: Verifies server shuts down after idle timeout.
-// - `test_server_shutdown_on_last_chip_delete`: Verifies server shuts down after last chip is deleted.
+//   Scenario: Server shuts down after idle timeout
+//     Given a running Device Actor
+//     When the server is idle for a duration
+//     Then the server shuts down automatically
+//
+//   Scenario: Server shuts down when last chip is deleted
+//     Given a running Device Actor with one chip
+//     When I delete the last chip
+//     Then the server shuts down automatically
 
-use actor_framework::ActorClient;
+use device_actor::DeviceActor;
 use device_api::api::{Chip, DeviceChipCreate, DeviceCreate};
 use device_api::DeviceConfig;
-use netsim_model::chip::{BleBeacon, ChipRequest};
+use netsim_model::chip::BleBeacon;
+use netsim_model::chip::{ChipClient, MockChipClient, NetworkKind};
+use std::collections::HashMap;
+use std::sync::atomic::AtomicU32;
+use std::sync::Arc;
 use std::time::Duration;
-
-use common::TestFixture;
 
 #[tokio::test]
 #[ignore = "Auto-shutdown not yet implemented in actor framework"]
 async fn test_server_shutdown_on_idle() {
-    let TestFixture { mut chip_rx, client, .. } = common::setup().await;
+    // Given a running Device Actor
+    let (mut mock_link_controller, mock_link_client) = link_api::mock::MockLinkClient::new();
+    // Expect generic action if needed, or none
+    // mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
-    // Wait for a short period. In a real scenario, this would be the idle timeout.
-    // Since we don't have an idle timeout implemented yet, we just wait a bit.
+    // Inline setup
+    let mut chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();
+    let chip_client = MockChipClient::new();
+    chip_clients.insert(NetworkKind::Bluetooth, Box::new(chip_client));
+
+    let (runner, client) = device_actor::new();
+    let actor = DeviceActor::new(
+        chip_clients,
+        Arc::new(AtomicU32::new(0)),
+        None,
+        Box::new(mock_link_client),
+    );
+    tokio::spawn(runner.run(actor));
+
+    // When the server is idle for a duration
     tokio::time::sleep(Duration::from_millis(100)).await;
 
+    // Then the server shuts down automatically
     // If idle timeout was implemented, actor_task should be finished.
     // assert!(actor_task.is_finished(), "Server should have shut down on idle");
 
@@ -39,21 +63,29 @@ async fn test_server_shutdown_on_idle() {
 #[tokio::test]
 #[ignore = "Auto-shutdown not yet implemented in actor framework"]
 async fn test_server_shutdown_on_last_chip_delete() {
-    let TestFixture { mut chip_rx, client, mut mock_link_controller, .. } = common::setup().await;
-
-    // Expect NotifyChipAdded then NotifyChipRemoved
+    // Given a running Device Actor with one chip
+    let (mut mock_link_controller, mock_link_client) = link_api::mock::MockLinkClient::new();
+    // Expect NotifyChipAdded
     mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
+    // Expect NotifyChipRemoved
     mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
-    // Mock chip service for create and delete
-    tokio::spawn(async move {
-        if let Some(ChipRequest::Create { respond_to, .. }) = chip_rx.recv().await {
-            respond_to.send(Ok(())).unwrap();
-        }
-        if let Some(ChipRequest::Delete { respond_to, .. }) = chip_rx.recv().await {
-            respond_to.send(Ok(())).unwrap();
-        }
-    });
+    // Inline setup
+    let mut chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();
+    let mut chip_client = MockChipClient::new();
+    chip_client.expect_create().returning(|_| Ok(()));
+    chip_client.expect_delete().returning(|_| Ok(()));
+
+    chip_clients.insert(NetworkKind::Bluetooth, Box::new(chip_client));
+
+    let (runner, client) = device_actor::new();
+    let actor = DeviceActor::new(
+        chip_clients,
+        Arc::new(AtomicU32::new(0)),
+        None,
+        Box::new(mock_link_client),
+    );
+    tokio::spawn(runner.run(actor));
 
     let params = DeviceCreate {
         device_config: DeviceConfig::new(
@@ -71,8 +103,11 @@ async fn test_server_shutdown_on_last_chip_delete() {
     };
 
     let device_id = client.create_device(params).await.unwrap();
+
+    // When I delete the last chip
     client.delete(device_id).await.unwrap();
 
+    // Then the server shuts down automatically
     // Wait for potential shutdown
     tokio::time::sleep(Duration::from_millis(100)).await;
 

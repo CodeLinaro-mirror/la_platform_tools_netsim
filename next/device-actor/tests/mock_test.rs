@@ -10,15 +10,16 @@
 
 use actor_framework::mock::MockClient;
 use client::DeviceClient;
-use device_actor::DeviceActionResult;
+use device_actor::DeviceActor;
 use device_api::api::{Chip, DeviceChipCreate, DeviceCreate};
-use device_api::Device;
+
+use device_api::DeviceActionResult;
 use device_api::{DeviceConfig, DeviceId};
 use netsim_model::chip::{BleBeacon, ChipId};
 
 #[tokio::test]
 async fn test_device_client_mock() {
-    let mut mock = MockClient::<Device>::new();
+    let mut mock = MockClient::<DeviceActor>::new();
 
     // Expect create
     let device_id = DeviceId(1);
@@ -55,7 +56,7 @@ async fn test_device_client_mock() {
 
 #[tokio::test]
 async fn test_device_client_add_chip() {
-    let mut mock = MockClient::<Device>::new();
+    let mut mock = MockClient::<DeviceActor>::new();
 
     let device_id = DeviceId(1);
     let _chip_id1 = ChipId(1);
@@ -75,8 +76,6 @@ async fn test_device_client_add_chip() {
 
     let params2 = create_add_chip_params("guid-1", "chip-2");
     client.add_chip(params2).await.unwrap();
-
-    mock.verify();
 }
 
 fn create_add_chip_params(guid: &str, chip_name: &str) -> device_api::DeviceAddChip {

@@ -5,9 +5,7 @@ use client::DeviceClient;
 use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
-use netsim_model::chip::{
-    Chip, ChipCreate, ChipId, ChipRequest, LegacyChipClient as ChipClient, PacketSink, PacketStream,
-};
+use netsim_model::chip::{Chip, ChipCreate, ChipId, ChipRequest, PacketSink, PacketStream};
 use netsim_model::chip_error::ChipError;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -29,7 +27,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(device_client: DeviceClient) -> (Self, ChipClient) {
+    pub fn new(device_client: DeviceClient) -> (Self, netsim_model::chip::RadioChipClient) {
         let (command_tx, command_rx) = mpsc::channel(10);
         let server = Server {
             active_chips: HashMap::new(),
@@ -39,7 +37,7 @@ impl Server {
             device_client,
             uci_senders: HashMap::new(),
         };
-        (server, ChipClient::new(command_tx))
+        (server, netsim_model::chip::RadioChipClient::new(command_tx))
     }
 
     pub async fn run(mut self) {

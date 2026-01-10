@@ -68,7 +68,7 @@ impl ActorService for MockLinkEntity {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self::Id>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(vec![])
     }

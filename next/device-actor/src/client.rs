@@ -7,11 +7,9 @@
 //! interacting with Device actors, including methods for standard operations
 //! and custom actions.
 
-use actor_framework::{ActorClient, FrameworkError, ResourceClient};
-use async_trait::async_trait;
-use device_actor::DeviceActor;
-
-use device_actor::DeviceError;
+use crate::DeviceActor;
+use crate::DeviceError;
+use actor_framework::ResourceClient;
 use device_api::api::DeviceCreate;
 use device_api::DeviceId;
 use device_api::{DeviceAction, DeviceActionResult};
@@ -39,19 +37,6 @@ impl DeviceClient {
     }
 }
 
-#[async_trait]
-impl ActorClient<DeviceActor> for DeviceClient {
-    type Error = DeviceError;
-
-    fn inner(&self) -> &ResourceClient<DeviceActor> {
-        &self.inner
-    }
-
-    fn map_error(e: FrameworkError) -> Self::Error {
-        DeviceError::ActorCommunicationError(e.to_string())
-    }
-}
-
 impl DeviceClient {
     /// Creates a new device with the given parameters.
     ///
@@ -63,6 +48,12 @@ impl DeviceClient {
             .create(params)
             .await
             .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
+    }
+
+    /// Gets a device by ID.
+    pub async fn get(&self, id: DeviceId) -> Result<Option<device_api::Device>, DeviceError> {
+        debug!("Sending get request for device {}", id);
+        self.inner.get(id).await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
     }
 
     pub async fn list(&self) -> Result<device_api::api::ListDeviceResponse, DeviceError> {
