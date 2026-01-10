@@ -29,4 +29,14 @@ pub mod action;
 pub mod create;
 pub use action::LinkAction;
 pub use create::LinkCreate;
+pub mod mock;
 pub use netsim_model::link::{Link, LinkId, LinkUpdate};
+
+#[async_trait::async_trait]
+pub trait LinkClient: Send + Sync {
+    async fn list(&self) -> Result<Vec<Link>, String>;
+    async fn create(&self, params: LinkCreate) -> Result<LinkId, String>;
+    async fn update(&self, id: LinkId, patch: LinkUpdate) -> Result<(), String>;
+    async fn delete(&self, id: LinkId) -> Result<(), String>;
+    async fn action(&self, id: Option<LinkId>, action: LinkAction) -> Result<(), String>;
+}

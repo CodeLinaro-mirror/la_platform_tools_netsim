@@ -103,6 +103,7 @@ impl ActorService for BluetoothActor {
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(mut entity) = self.entities.remove(&id) {
+            // Lock chips once and reuse the guard to avoid deadlock.
             let mut chips = self.chips.lock().unwrap();
             if let Some(chip) = chips.get_mut(&ChipId(entity.chip.id)) {
                 if let Some(pos) = update.position {
@@ -120,9 +121,9 @@ impl ActorService for BluetoothActor {
                 // TODO: Handle other fields
             }
 
-            self.chips.lock().unwrap().insert(id, entity.chip.clone());
+            chips.insert(id, entity.chip.clone());
             self.entities.insert(id, entity);
-            Ok(self.chips.lock().unwrap().get(&id).unwrap().clone())
+            Ok(chips.get(&id).unwrap().clone())
         } else {
             Err(BluetoothError::Chip(ChipError::ChipNotFound(id)))
         }

@@ -6,8 +6,8 @@
 //! around the generic [`ResourceClient`]. It provides a convenient API for
 //! interacting with Link actors.
 
+use crate::LinkActor;
 use actor_framework::ResourceClient;
-use link_actor::LinkActor;
 use std::ops::Deref;
 
 /// A client for interacting with the Link Actor.
@@ -72,6 +72,37 @@ impl LinkClient {
         action: link_api::LinkAction,
     ) -> Result<(), actor_framework::FrameworkError> {
         self.inner.perform_action(id, action).await
+    }
+}
+
+#[async_trait::async_trait]
+impl link_api::LinkClient for LinkClient {
+    async fn list(&self) -> Result<Vec<link_api::Link>, String> {
+        self.inner.list().await.map_err(|e| e.to_string())
+    }
+
+    async fn create(&self, params: link_api::LinkCreate) -> Result<link_api::LinkId, String> {
+        self.inner.create(params).await.map_err(|e| e.to_string())
+    }
+
+    async fn update(
+        &self,
+        id: link_api::LinkId,
+        patch: link_api::LinkUpdate,
+    ) -> Result<(), String> {
+        self.inner.update(id, patch).await.map(|_| ()).map_err(|e| e.to_string())
+    }
+
+    async fn delete(&self, id: link_api::LinkId) -> Result<(), String> {
+        self.inner.delete(id).await.map_err(|e| e.to_string())
+    }
+
+    async fn action(
+        &self,
+        id: Option<link_api::LinkId>,
+        action: link_api::LinkAction,
+    ) -> Result<(), String> {
+        self.inner.perform_action(id, action).await.map(|_| ()).map_err(|e| e.to_string())
     }
 }
 

@@ -8,6 +8,7 @@ DEPS = [
     "//next/capture-api",
     "//next/device-api",
     "//next/model",
+    "//next/link-api",
     "@futures",
     "@tokio",
     "@serde",

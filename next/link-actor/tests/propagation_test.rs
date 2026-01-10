@@ -1,66 +1,19 @@
-use async_trait::async_trait;
-use client::LinkClient;
-use link_actor::LinkActor;
+use client::MockChipClient;
 use link_api::{LinkAction, LinkCreate};
-use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, ChipKind, ChipUpdate};
-use netsim_model::client_error::ClientError;
-use netsim_model::stats::NetsimRadioStats;
+use netsim_model::chip::{ChipClient, ChipId, ChipKind};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
-#[derive(Clone)]
-struct MockChipClient {
-    updates: Arc<Mutex<Vec<(ChipId, ChipUpdate)>>>,
-}
-
-impl MockChipClient {
-    fn new() -> Self {
-        Self { updates: Arc::new(Mutex::new(Vec::new())) }
-    }
-}
-
-#[async_trait]
-impl ChipClient for MockChipClient {
-    async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
-        self.updates.lock().unwrap().push((id, patch));
-        Ok(Chip::default())
-    }
-    async fn create(&self, _params: ChipCreate) -> Result<(), ClientError> {
-        Ok(())
-    }
-    async fn read(&self, _id: ChipId) -> Result<Chip, ClientError> {
-        Ok(Chip::default())
-    }
-    async fn delete(&self, _id: ChipId) -> Result<(), ClientError> {
-        Ok(())
-    }
-    async fn shutdown(&self) -> Result<(), ClientError> {
-        Ok(())
-    }
-    async fn reset(&self, _id: ChipId) -> Result<(), ClientError> {
-        Ok(())
-    }
-    async fn read_statistics(&self) -> Result<Vec<NetsimRadioStats>, ClientError> {
-        Ok(vec![])
-    }
-    async fn read_count_for_testing(&self) -> Result<usize, ClientError> {
-        Ok(0)
-    }
-}
+use crate::common::setup_actor;
 
 #[tokio::test]
 async fn test_link_propagation() {
-    let mut actor_state = LinkActor::new();
-    let client = MockChipClient::new();
+    let (_mock_controller, client) = MockChipClient::new();
 
     let mut clients = HashMap::new();
     clients.insert(ChipKind::BLUETOOTH, Box::new(client.clone()) as Box<dyn ChipClient>);
-    actor_state.set_chip_clients(clients);
 
-    let (actor, resource_client) = link_actor::new();
-    let actor_task = tokio::spawn(actor.run(actor_state));
-
-    let link_client = LinkClient::new(resource_client);
+    let fixture = setup_actor(clients).await;
+    let link_client = &fixture.client;
 
     // Add chips
     link_client
@@ -87,5 +40,5 @@ async fn test_link_propagation() {
     assert_eq!(links.len(), 1);
     assert_eq!(links[0], (ChipId(2), -50));
 
-    actor_task.abort();
+    // actor_task is dropped and aborted automatically when TestFixture is dropped
 }

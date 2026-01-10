@@ -399,6 +399,16 @@ where
         ActionExpectationBuilder { id, expectations: self.expectations.clone() }
     }
 
+    /// Expects an `update` operation.
+    pub fn expect_update(&mut self, id: T::Id) -> UpdateExpectationBuilder<T> {
+        UpdateExpectationBuilder { id, expectations: self.expectations.clone() }
+    }
+
+    /// Expects a `delete` operation.
+    pub fn expect_delete(&mut self, id: T::Id) -> DeleteExpectationBuilder<T> {
+        DeleteExpectationBuilder { id, expectations: self.expectations.clone() }
+    }
+
     /// Verifies that all expectations were met.
     pub fn verify(&self) {
         let exps = self.expectations.lock().unwrap();
@@ -464,6 +474,46 @@ impl<T: ActorService> ActionExpectationBuilder<T> {
     pub fn return_err(self, error: FrameworkError) {
         let mut exps = self.expectations.lock().unwrap();
         exps.push_back(Expectation::Action { id: self.id, response: Err(error) });
+    }
+}
+
+/// Builder for `update` expectations.
+pub struct UpdateExpectationBuilder<T: ActorService> {
+    id: T::Id,
+    expectations: Arc<Mutex<VecDeque<Expectation<T>>>>,
+}
+
+impl<T: ActorService> UpdateExpectationBuilder<T> {
+    /// Sets the expectation to return a successful result.
+    pub fn return_ok(self, entity: T::Entity) {
+        let mut exps = self.expectations.lock().unwrap();
+        exps.push_back(Expectation::Update { id: self.id, response: Ok(entity) });
+    }
+
+    /// Sets the expectation to return an error.
+    pub fn return_err(self, error: FrameworkError) {
+        let mut exps = self.expectations.lock().unwrap();
+        exps.push_back(Expectation::Update { id: self.id, response: Err(error) });
+    }
+}
+
+/// Builder for `delete` expectations.
+pub struct DeleteExpectationBuilder<T: ActorService> {
+    id: T::Id,
+    expectations: Arc<Mutex<VecDeque<Expectation<T>>>>,
+}
+
+impl<T: ActorService> DeleteExpectationBuilder<T> {
+    /// Sets the expectation to return a successful result.
+    pub fn return_ok(self) {
+        let mut exps = self.expectations.lock().unwrap();
+        exps.push_back(Expectation::Delete { id: self.id, response: Ok(()) });
+    }
+
+    /// Sets the expectation to return an error.
+    pub fn return_err(self, error: FrameworkError) {
+        let mut exps = self.expectations.lock().unwrap();
+        exps.push_back(Expectation::Delete { id: self.id, response: Err(error) });
     }
 }
 

@@ -25,21 +25,14 @@ pub struct LinkActor {
 }
 
 impl LinkActor {
-    pub fn new() -> Self {
+    pub fn new(chip_clients: HashMap<ChipKind, Box<dyn netsim_model::chip::ChipClient>>) -> Self {
         Self {
             chip_pairs: HashMap::new(),
             chip_kind_map: HashMap::new(),
-            chip_clients: HashMap::new(),
+            chip_clients,
             links: HashMap::new(),
             next_id: 1,
         }
-    }
-
-    pub fn set_chip_clients(
-        &mut self,
-        clients: HashMap<ChipKind, Box<dyn netsim_model::chip::ChipClient>>,
-    ) {
-        self.chip_clients = clients;
     }
 
     pub async fn update_chip_links(&self, chip_id: ChipId) {

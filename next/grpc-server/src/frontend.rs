@@ -1,5 +1,4 @@
-use actor_framework::ActorClient;
-use client::DeviceClient;
+use client::{DeviceClient, LinkClient};
 use device_api::DeviceId;
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
@@ -13,11 +12,13 @@ use crate::frontend_converter::to_proto_device;
 #[derive(Clone)]
 pub struct FrontendClient {
     device_client: DeviceClient,
+    #[allow(dead_code)]
+    link_client: LinkClient,
 }
 
 impl FrontendClient {
-    pub fn new(device_client: DeviceClient) -> Self {
-        Self { device_client }
+    pub fn new(device_client: DeviceClient, link_client: LinkClient) -> Self {
+        Self { device_client, link_client }
     }
 }
 
@@ -225,9 +226,6 @@ impl FrontendService for FrontendClient {
     ) {
         let client = self.device_client.clone();
         let f = async move {
-            // Proto DeleteChipRequest has `id` which is documented as Device Identifier.
-            // So this actually deletes the device?
-            // netsim-api has `delete(DeviceId)`.
             match client.delete(device_api::DeviceId(req.id)).await {
                 Ok(_) => sink.success(Empty::new()).await,
                 Err(e) => {

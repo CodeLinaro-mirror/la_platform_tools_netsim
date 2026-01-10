@@ -10,6 +10,7 @@ pub struct DeviceActor {
     pub capture_client: Option<Arc<dyn CaptureSender>>,
     pub(crate) devices: HashMap<device_api::DeviceId, crate::service::InternalDevice>,
     pub next_device_id: u32,
+    pub link_client: Box<dyn link_api::LinkClient>,
 }
 
 impl std::fmt::Debug for DeviceActor {

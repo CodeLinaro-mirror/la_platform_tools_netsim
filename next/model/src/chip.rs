@@ -443,6 +443,13 @@ pub trait ChipClient: Send + Sync {
     async fn shutdown(&self) -> Result<(), ClientError>;
     /// Resets the state of the specified chip.
     async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
+    fn clone_box(&self) -> Box<dyn ChipClient>;
+}
+
+impl Clone for Box<dyn ChipClient> {
+    fn clone(&self) -> Box<dyn ChipClient> {
+        self.clone_box()
+    }
 }
 
 #[derive(Clone)]
@@ -535,6 +542,10 @@ impl ChipClient for LegacyChipClient {
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
         Ok(())
+    }
+
+    fn clone_box(&self) -> Box<dyn ChipClient> {
+        Box::new(self.clone())
     }
 }
 
