@@ -25,66 +25,9 @@
 //!
 //! ## Usage
 //!
-//! ```
-//! use bytes::Bytes;
-//! use libslirp_rs::libslirp_config::SlirpConfig;
-//! use libslirp_rs::libslirp::LibSlirp;
-//! use std::net::Ipv4Addr;
-//! use std::sync::mpsc;
-//!
-//! let (tx_cmds, _) = mpsc::channel();
-//! // Create a LibSlirp instance with default configuration
-//! let libslirp = LibSlirp::new(
-//!     SlirpConfig::default(),
-//!     tx_cmds,
-//!     None
-//! );
-//!
-//! let data = vec![0x01, 0x02, 0x03];
-//! // Input network data into libslirp
-//! libslirp.input(Bytes::from(data));
-//!
-//! // ... other operations ...
-//!
-//! // Shutdown libslirp
-//! libslirp.shutdown();
-//! ```
 //!
 //! ## Example with Proxy
 //!
-//! ```
-//! use libslirp_rs::libslirp::LibSlirp;
-//! use libslirp_rs::libslirp_config::SlirpConfig;
-//! use libslirp_rs::libslirp::{ProxyManager, ProxyConnect};
-//! use std::sync::mpsc;
-//! use std::net::SocketAddr;
-//! // Implement the ProxyManager trait for your proxy logic
-//! struct MyProxyManager;
-//!
-//! impl ProxyManager for MyProxyManager {
-//!     // ... implementation ...
-//!     fn try_connect(
-//!         &self,
-//!         sockaddr: SocketAddr,
-//!         connect_id: usize,
-//!         connect_func: Box<dyn ProxyConnect + Send>,
-//!     ) -> bool {
-//!         todo!()
-//!     }
-//!     fn remove(&self, connect_id: usize) {
-//!         todo!()
-//!     }
-//! }
-//! let (tx_cmds, _) = mpsc::channel();
-//! // Create a LibSlirp instance with a proxy manager
-//! let libslirp = LibSlirp::new(
-//!     SlirpConfig::default(),
-//!     tx_cmds,
-//!     Some(Box::new(MyProxyManager)),
-//! );
-//!
-//! // ...
-//! ```
 //!
 //! This module abstracts away the complexities of interacting with the libslirp C library,
 //! providing a more convenient and reliable way to use it in your Rust projects.
