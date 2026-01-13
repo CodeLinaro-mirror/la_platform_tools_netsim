@@ -2,14 +2,14 @@
 
 //! Device Client
 //!
-//! This module provides the [`DeviceClient`] struct, which is a type-safe wrapper
-//! around the generic [`ResourceClient`]. It provides a convenient API for
-//! interacting with Device actors, including methods for standard operations
-//! and custom actions.
+//! This module provides the [`DeviceClient`] struct, which is a
+//! `Box<dyn ActorClient<DeviceActor>>`.
+//! It provides a convenient API for interacting with Device actors,
+//! including methods for standard operations and custom actions.
 
 use crate::DeviceActor;
 use crate::DeviceError;
-use actor_framework::ResourceClient;
+use actor_framework::ActorClient;
 use device_api::api::DeviceCreate;
 use device_api::DeviceId;
 use device_api::{DeviceAction, DeviceActionResult};
@@ -18,10 +18,16 @@ use log::debug;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DeviceClient {
-    pub(crate) inner: ResourceClient<DeviceActor>,
+    pub(crate) inner: Box<dyn ActorClient<DeviceActor>>,
     pub(crate) state: Arc<Mutex<DeviceClientState>>,
+}
+
+impl std::fmt::Debug for DeviceClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeviceClient").field("state", &self.state).finish_non_exhaustive()
+    }
 }
 
 #[derive(Default, Debug)]
@@ -32,7 +38,7 @@ pub(crate) struct DeviceClientState {
 mod device_add_chip;
 
 impl DeviceClient {
-    pub fn new(inner: ResourceClient<DeviceActor>) -> Self {
+    pub fn new(inner: Box<dyn ActorClient<DeviceActor>>) -> Self {
         Self { inner, state: Arc::new(Mutex::new(DeviceClientState::default())) }
     }
 }

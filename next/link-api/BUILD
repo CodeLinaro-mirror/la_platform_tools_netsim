@@ -9,6 +9,7 @@ DEPS = [
     "@bytes",
     "@serde",
     "@thiserror",
+    "@mockall",
 ]
 
 netsim_rust_library(

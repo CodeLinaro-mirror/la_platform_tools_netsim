@@ -20,5 +20,5 @@ pub use error::DeviceError;
 /// Creates a new Device actor runner and its client.
 pub fn new() -> (ResourceActor<DeviceActor>, DeviceClient) {
     let (runner, client) = ResourceActor::new(32);
-    (runner, DeviceClient::new(client))
+    (runner, DeviceClient::new(Box::new(client)))
 }

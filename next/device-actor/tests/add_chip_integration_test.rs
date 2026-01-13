@@ -33,11 +33,11 @@ use std::sync::Arc;
 #[tokio::test]
 async fn test_add_chip_success() {
     // Given a mock Link Client expecting a NotifyChipAdded event
-    let (mut mock_link_controller, mock_link_client) = link_api::mock::MockLinkClient::new();
-    // Expect NotifyChipAdded
-    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
-
-    // Wrap Link Mock
+    let mut mock_link_client = link_api::MockLinkClient::new();
+    mock_link_client
+        .expect_action()
+        .withf(|_, action| matches!(action, link_api::LinkAction::NotifyChipAdded(_, _)))
+        .returning(|_, _| Ok(())); // Correct signature for action result
 
     // And a mock Chip Client expecting a Create call
     let mut mock_chip_client = netsim_model::chip::MockChipClient::new();
@@ -97,7 +97,7 @@ async fn test_add_chip_success() {
 #[tokio::test]
 async fn test_add_chip_chip_failure() {
     // Given a mock Link Client expecting NO action
-    let (mut mock_link_controller, mock_link_client) = link_api::mock::MockLinkClient::new();
+    let mock_link_client = link_api::MockLinkClient::new();
     // No expectations pushed = expects 0 calls
 
     // And a mock Chip Client that fails to create a chip

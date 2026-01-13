@@ -30,9 +30,8 @@ use std::time::Duration;
 #[ignore = "Auto-shutdown not yet implemented in actor framework"]
 async fn test_server_shutdown_on_idle() {
     // Given a running Device Actor
-    let (mut mock_link_controller, mock_link_client) = link_api::mock::MockLinkClient::new();
+    let mock_link_client = link_api::MockLinkClient::new();
     // Expect generic action if needed, or none
-    // mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
     // Inline setup
     let mut chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();
@@ -64,11 +63,15 @@ async fn test_server_shutdown_on_idle() {
 #[ignore = "Auto-shutdown not yet implemented in actor framework"]
 async fn test_server_shutdown_on_last_chip_delete() {
     // Given a running Device Actor with one chip
-    let (mut mock_link_controller, mock_link_client) = link_api::mock::MockLinkClient::new();
-    // Expect NotifyChipAdded
-    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
-    // Expect NotifyChipRemoved
-    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
+    let mut mock_link_client = link_api::MockLinkClient::new();
+    mock_link_client
+        .expect_action()
+        .withf(|_, action| matches!(action, link_api::LinkAction::NotifyChipAdded(_, _)))
+        .returning(|_, _| Ok(()));
+    mock_link_client
+        .expect_action()
+        .withf(|_, action| matches!(action, link_api::LinkAction::NotifyChipRemoved(_)))
+        .returning(|_, _| Ok(()));
 
     // Inline setup
     let mut chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();

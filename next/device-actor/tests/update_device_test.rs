@@ -32,9 +32,11 @@ use std::sync::Arc;
 #[tokio::test]
 async fn test_update_device_propagates_to_chips() {
     // Given the Link Client expecting a NotifyChipAdded event
-    let (mut mock_link_controller, mock_link_client) = link_api::mock::MockLinkClient::new();
-    // Expect NotifyChipAdded
-    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
+    let mut mock_link_client = link_api::MockLinkClient::new();
+    mock_link_client
+        .expect_action()
+        .withf(|_, action| matches!(action, link_api::LinkAction::NotifyChipAdded(_, _)))
+        .returning(|_, _| Ok(()));
 
     // And the Chip Client expecting Create and Update calls
     let mut mock_chip_client = netsim_model::chip::MockChipClient::new();
@@ -96,11 +98,15 @@ async fn test_update_device_propagates_to_chips() {
 #[tokio::test]
 async fn test_notify_chip_removed() {
     // Given the Link Client expecting NotifyChipAdded and NotifyChipRemoved
-    let (mut mock_link_controller, mock_link_client) = link_api::mock::MockLinkClient::new();
-    // Expect NotifyChipAdded
-    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
-    // Expect NotifyChipRemoved
-    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
+    let mut mock_link_client = link_api::MockLinkClient::new();
+    mock_link_client
+        .expect_action()
+        .withf(|_, action| matches!(action, link_api::LinkAction::NotifyChipAdded(_, _)))
+        .returning(|_, _| Ok(()));
+    mock_link_client
+        .expect_action()
+        .withf(|_, action| matches!(action, link_api::LinkAction::NotifyChipRemoved(_))) // Use single underscore
+        .returning(|_, _| Ok(()));
 
     // And the Chip Client expecting a Create call
     let mut mock_chip_client = netsim_model::chip::MockChipClient::new();
