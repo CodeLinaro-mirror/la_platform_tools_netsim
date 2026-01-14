@@ -1,0 +1,84 @@
+// Copyright 2026 The Android Open Source Project
+
+use crate::uwb_actor::UwbActor;
+use actor_framework::{ActorService, DynContext};
+use async_trait::async_trait;
+use netsim_model::chip::{Chip, ChipCreate, ChipId, ChipRequest, ChipUpdate};
+use netsim_model::chip_error::ChipError;
+
+#[async_trait]
+impl ActorService for UwbActor {
+    type Id = ChipId;
+    type Create = ChipCreate;
+    type Update = ChipUpdate;
+    type Action = ChipRequest;
+    type ActionResult = ();
+    type Error = ChipError;
+    type Entity = Chip;
+
+    async fn handle_create(
+        &mut self,
+        id: Option<Self::Id>,
+        params: Self::Create,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Self::Id, Self::Error> {
+        let chip_id = id.unwrap_or(params.id);
+        self.create_chip(params)?;
+        Ok(chip_id)
+    }
+
+    async fn handle_get(
+        &self,
+        id: Self::Id,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Option<Self::Entity>, Self::Error> {
+        Ok(self.active_chips.get(&id).cloned())
+    }
+
+    async fn handle_update(
+        &mut self,
+        _id: Self::Id,
+        _update: Self::Update,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Self::Entity, Self::Error> {
+        // TODO: Implement update logic
+        Err(ChipError::Internal("Update not implemented".into()))
+    }
+
+    async fn handle_delete(
+        &mut self,
+        id: Self::Id,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<(), Self::Error> {
+        let device_id = if let Some(chip) = self.active_chips.get(&id) {
+            chip.device_id
+        } else {
+            return Err(ChipError::ChipNotFound(id));
+        };
+        let device_client = self.device_client.clone();
+        self.cleanup_chip(id, "handle_delete", &device_client).await;
+        Ok(())
+    }
+
+    async fn handle_action(
+        &mut self,
+        id: Option<Self::Id>,
+        action: Self::Action,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Self::ActionResult, Self::Error> {
+        match action {
+            ChipRequest::Reset { id: _ } => {
+                // TODO: Implement reset
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
+    async fn handle_list(
+        &mut self,
+        _ctx: &mut DynContext<Self::Id>,
+    ) -> Result<Vec<Self::Entity>, Self::Error> {
+        Ok(self.active_chips.values().cloned().collect())
+    }
+}

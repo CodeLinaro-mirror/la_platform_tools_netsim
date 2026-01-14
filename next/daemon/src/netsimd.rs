@@ -389,7 +389,8 @@ impl NetsimDaemon {
         let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
 
         // Setup Uwb Server
-        let (uwb_server, uwb_client) = uwb::Server::new(device_client.clone());
+        let (uwb_runner, uwb_client) = uwb::new();
+        let uwb_actor = uwb::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
         // TODO: Replace with real modem network.
@@ -427,7 +428,7 @@ impl NetsimDaemon {
         info!("Bluetooth server started");
         join_set.spawn(wifi_server.run());
         info!("Wifi server started");
-        join_set.spawn(uwb_server.run());
+        join_set.spawn(uwb_runner.run(uwb_actor));
         info!("Uwb server started");
         join_set.spawn(cell_runner.run(cell_server));
         info!("Cell server started");
