@@ -395,7 +395,7 @@ impl NetsimDaemon {
         // TODO: Replace with real modem network.
         let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
         let (cell_runner, cell_client) = cell::new();
-        let (cell_server) = cell::Server::new(device_client.clone(), cell_controller);
+        let cell_server = cell::Server::new(device_client.clone(), cell_controller);
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =
@@ -417,6 +417,8 @@ impl NetsimDaemon {
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
             Box::new(link_client.clone()),
+            None,
+            Some(std::time::Duration::from_secs(15)),
         );
 
         // Spawn server tasks
