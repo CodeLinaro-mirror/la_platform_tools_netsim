@@ -1,6 +1,5 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use actor_framework::ResourceClient;
 use bytes::Bytes;
 use futures::{
     sink::Sink,
@@ -8,29 +7,8 @@ use futures::{
     task::{Context, Poll},
     Future,
 };
-use netsim_model::bluetooth::Controller as RootcanalController;
-use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipConfig, NetworkParams};
 use std::pin::Pin;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
-
-/// Encapsulates the common setup for a test environment.
-pub struct TestFixture {
-    pub client: bluetooth::BluetoothClient,
-    pub _actor_task: JoinHandle<()>, // Keep the task handle to ensure the actor runs
-}
-
-/// Sets up a test environment with a running actor and a client.
-pub fn setup() -> TestFixture {
-    let (device_tx, _device_rx) = mpsc::channel(10);
-    let resource_client = client::DeviceClient::new(Box::new(ResourceClient::new(device_tx)));
-    let (actor, client) = bluetooth::new();
-    let context = bluetooth::BluetoothActor::new(resource_client.clone(), client.clone());
-    let actor_task = tokio::spawn(async move {
-        actor.run(context).await;
-    });
-    TestFixture { client, _actor_task: actor_task }
-}
 
 /// A mock Sink that captures packets into an mpsc channel.
 struct MockSink {
@@ -79,17 +57,4 @@ pub fn mock_stream() -> (Box<dyn Stream<Item = Bytes> + Send + Sync + Unpin>, mp
     let (packet_tx, packet_rx) = mpsc::channel(10);
     let stream = Box::new(ReceiverStream::new(packet_rx));
     (stream, packet_tx)
-}
-
-pub fn create_chip_config(mode: BluetoothMode) -> ChipConfig {
-    ChipConfig::new(
-        "test_chip",
-        "test_manufacturer",
-        "test_product",
-        NetworkParams::Bluetooth(BluetoothCreate {
-            address: "00:11:22:33:44:55".to_string(),
-            bt_properties: RootcanalController::default(),
-            mode,
-        }),
-    )
 }

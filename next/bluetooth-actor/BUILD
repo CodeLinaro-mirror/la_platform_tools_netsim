@@ -24,7 +24,7 @@ BLUETOOTH_DEPS = [
 ]
 
 netsim_rust_library(
-    name = "bluetooth",
+    name = "bluetooth-actor",
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
     enable_clippy = False,
@@ -50,7 +50,7 @@ rust_test(
         "link-arg=-lc",
     ],
     tags = ["general_tests"],
-    deps = [":bluetooth"] + BLUETOOTH_DEPS + [
+    deps = [":bluetooth-actor"] + BLUETOOTH_DEPS + [
         "//next/device-actor",
         "@rootcanal//:lib_rootcanal_ffi",
     ],
