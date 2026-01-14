@@ -1,4 +1,5 @@
 use crate::world::ApWorld;
+use ap_actor::ApClientTrait;
 
 // ============================================================================
 // Feature: System Resilience and Lifecycle Management

@@ -365,6 +365,12 @@ pub struct Chip {
     pub device_id: DeviceId,
     pub variant: Option<ChipVariant>,
     pub links: Vec<(ChipId, i8)>,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+fn default_enabled() -> bool {
+    true
 }
 
 /// Information about a chip, including technology-specific details.
@@ -418,6 +424,7 @@ pub struct ChipUpdate {
     pub orientation: Option<Orientation>,
     pub variant: Option<ChipVariantUpdate>,
     pub links: Option<Vec<(ChipId, i8)>>,
+    pub enabled: Option<bool>,
 }
 
 /// The techbology variant specific fields

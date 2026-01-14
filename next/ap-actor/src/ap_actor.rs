@@ -69,8 +69,10 @@ pub struct ApUpdate {
 
 pub enum ApReq {
     Register {
-        stream: tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
         sink: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
+        shared_keys: std::sync::Arc<shared::SharedKeyStore>,
+        beacon_interval: std::time::Duration,
     },
 }
 
@@ -97,6 +99,7 @@ pub struct ApActor {
     pub(crate) next_ap_id: ApId,
     pub(crate) manager: Ieee80211Manager,
     pub shared_keys: std::sync::Arc<shared::SharedKeyStore>,
+    pub beacon_interval: Option<u16>, // In TUs (1024us)
 }
 
 #[derive(Clone, Debug)]
@@ -109,14 +112,14 @@ pub struct ApState {
 }
 
 impl ApActor {
-    pub fn new(shared_keys: Option<std::sync::Arc<shared::SharedKeyStore>>) -> Self {
+    pub fn new() -> Self {
         Self {
             sink: None,
             aps: HashMap::new(),
             next_ap_id: 1,
             manager: Ieee80211Manager::new(),
-            shared_keys: shared_keys
-                .unwrap_or_else(|| std::sync::Arc::new(shared::SharedKeyStore::new())),
+            shared_keys: std::sync::Arc::new(shared::SharedKeyStore::new()),
+            beacon_interval: None,
         }
     }
 }

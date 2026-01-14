@@ -18,7 +18,7 @@ pub mod sae;
 pub mod wpa_auth;
 
 pub use ap_actor::{ApActor, ApConfig, ApReq, ApResponse, ApState};
-pub use ap_client::ApClient;
+pub use ap_client::{ApClient, ApClientTrait};
 pub use error::ApError;
 pub use netsim_model::device::Position;
 

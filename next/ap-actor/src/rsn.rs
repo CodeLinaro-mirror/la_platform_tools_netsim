@@ -49,9 +49,7 @@ pub fn build_gtk_kde(gtk: &[u8], key_id: u8) -> Vec<u8> {
     body.push(0x01);
 
     // Key ID (bits 0-1), Tx (bit 2), Reserved (3-7)
-    // We usually set Tx=1 (bit 2) if we are transmitting this key to be used?
-    // standard says: "Tx bit shall be set".
-    // Key ID fits in 2 bits (typically 1 or 2).
+    // Tx bit (bit 2) shall be set. Key ID (bits 0-1).
     let ky_bits = (key_id & 0x03) | (1 << 2);
     body.push(ky_bits);
 
@@ -60,7 +58,7 @@ pub fn build_gtk_kde(gtk: &[u8], key_id: u8) -> Vec<u8> {
     // GTK
     body.extend_from_slice(gtk);
 
-    // Pad to 8 bytes? No, KDE doesn't require padding itself, but Key Data needs padding before encryption.
+    // Key Data padding is handled during encryption (AES Key Wrap).
 
     kde.push(body.len() as u8);
     kde.extend_from_slice(&body);

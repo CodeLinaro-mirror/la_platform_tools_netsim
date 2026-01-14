@@ -16,6 +16,8 @@
 resolver = "3"
 members = [
   "actor-framework",
+  "ap-actor",
+  "slirp-actor",
   "capture-actor",
   "capture-api",
   "bluetooth-actor",

@@ -225,3 +225,142 @@ fn compare_values(n_val: &serde_json::Value, t_val: &serde_json::Value) -> bool 
         (n, t) => n == t,
     }
 }
+
+/// A simple packet builder for creating test packets.
+pub struct PacketBuilder {
+    buffer: Vec<u8>,
+    src_ip: Option<[u8; 4]>,
+    dst_ip: Option<[u8; 4]>,
+}
+
+impl PacketBuilder {
+    /// Creates a new PacketBuilder with Ethernet header.
+    pub fn new(dst_mac: [u8; 6], src_mac: [u8; 6], ethertype: u16) -> Self {
+        use crate::ethernet::{EthernetFrame, MacAddr};
+        use zerocopy::IntoBytes;
+
+        let eth_header =
+            EthernetFrame::new(MacAddr::new(dst_mac), MacAddr::new(src_mac), ethertype);
+        let mut buffer = Vec::new();
+        buffer.extend_from_slice(eth_header.as_bytes());
+        Self { buffer, src_ip: None, dst_ip: None }
+    }
+
+    /// Adds an IPv4 header.
+    pub fn ipv4(
+        mut self,
+        src_ip: [u8; 4],
+        dst_ip: [u8; 4],
+        protocol: u8,
+        payload_len: usize,
+    ) -> Self {
+        use crate::ip::frame::Ipv4Header;
+        use zerocopy::{IntoBytes, U16};
+
+        self.src_ip = Some(src_ip);
+        self.dst_ip = Some(dst_ip);
+
+        let total_len = (20 + payload_len) as u16;
+        let mut ip_header = Ipv4Header {
+            version_ihl: 0x45, // Ver 4, IHL 5
+            dscp_ecn: 0,
+            total_length: U16::new(total_len),
+            identification: U16::new(1),
+            flags_fragment_offset: U16::new(0),
+            ttl: 64,
+            protocol,
+            header_checksum: U16::new(0),
+            source_addr: src_ip,
+            dest_addr: dst_ip,
+        };
+        ip_header.update_checksum();
+        self.buffer.extend_from_slice(ip_header.as_bytes());
+        self
+    }
+
+    /// Adds a UDP header.
+    pub fn udp(mut self, src_port: u16, dst_port: u16, payload_len: usize) -> Self {
+        use crate::transport::udp::UdpHeader;
+        use zerocopy::{IntoBytes, U16};
+
+        let udp_len = (8 + payload_len) as u16;
+        let udp_header = UdpHeader {
+            source_port: U16::new(src_port),
+            dest_port: U16::new(dst_port),
+            length: U16::new(udp_len),
+            checksum: U16::new(0), // Optional in IPv4
+        };
+        self.buffer.extend_from_slice(udp_header.as_bytes());
+        self
+    }
+
+    /// Adds a TCP header.
+    pub fn tcp(
+        mut self,
+        src_port: u16,
+        dst_port: u16,
+        seq: u32,
+        ack: u32,
+        flags: u16,
+        window: u16,
+        payload: &[u8],
+    ) -> Self {
+        use crate::transport::tcp::TcpHeader;
+        use zerocopy::{IntoBytes, U16, U32};
+
+        let data_offset = 5; // 5 * 32-bit words = 20 bytes
+        let data_offset_reserved_flags = (data_offset << 12) | (flags & 0x1FF);
+
+        let mut tcp_header = TcpHeader {
+            source_port: U16::new(src_port),
+            dest_port: U16::new(dst_port),
+            sequence_num: U32::new(seq),
+            ack_num: U32::new(ack),
+            data_offset_reserved_flags: U16::new(data_offset_reserved_flags),
+            window_size: U16::new(window),
+            checksum: U16::new(0),
+            urgent_ptr: U16::new(0),
+        };
+
+        if let (Some(src), Some(dst)) = (self.src_ip, self.dst_ip) {
+            tcp_header.update_checksum(src, dst, payload);
+        }
+
+        self.buffer.extend_from_slice(tcp_header.as_bytes());
+        // NOTE: The payload is used here for checksum calculation but is NOT added to the buffer.
+        // The caller must ensure the same payload is passed to `.payload()` subsequently.
+        self
+    }
+
+    /// Adds an ARP header.
+    pub fn arp(
+        mut self,
+        opcode: u16,
+        sender_mac: [u8; 6],
+        sender_ip: [u8; 4],
+        target_mac: [u8; 6],
+        target_ip: [u8; 4],
+    ) -> Self {
+        use crate::ethernet::arp::ArpHeader;
+        use zerocopy::{IntoBytes, U16};
+
+        let arp_header = ArpHeader {
+            hardware_type: U16::new(1),      // Ethernet
+            protocol_type: U16::new(0x0800), // IPv4
+            hardware_len: 6,
+            protocol_len: 4,
+            opcode: U16::new(opcode),
+            sender_mac,
+            sender_ip,
+            target_mac,
+            target_ip,
+        };
+        self.buffer.extend_from_slice(arp_header.as_bytes());
+        self
+    }
+
+    pub fn payload(mut self, payload: &[u8]) -> Vec<u8> {
+        self.buffer.extend_from_slice(payload);
+        self.buffer
+    }
+}

@@ -96,6 +96,7 @@ impl ActorService for DeviceActor {
                 device_id: DeviceId(entity.device.id),
                 variant: Some(netsim_model::chip::ChipVariant::from(chip_kind)),
                 links: vec![],
+                enabled: true,
             });
             // Send create request to Link Actor
             // This ensures the LinkActor is aware of the new chip and can manage its links.
@@ -110,6 +111,7 @@ impl ActorService for DeviceActor {
                 chip_kind
             )));
         }
+
         self.devices.insert(id, entity);
         Ok(id)
     }
@@ -278,6 +280,7 @@ impl ActorService for DeviceActor {
                                 device_id: DeviceId(entity.device.id),
                                 variant: Some(netsim_model::chip::ChipVariant::from(chip_kind)),
                                 links: vec![],
+                                enabled: true,
                             });
                             self.link_client
                                 .notify_chip_added(chip_id, chip_kind.into())

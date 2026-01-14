@@ -17,7 +17,7 @@ use zerocopy::{IntoBytes, U16};
 /// Handles 802.11 Management Frames
 #[derive(Clone, Debug)]
 pub struct Ieee80211Manager {
-    // We might need some state here, or pass it in
+    // Stateless for now, state passed in methods
 }
 
 impl Ieee80211Manager {
@@ -25,7 +25,11 @@ impl Ieee80211Manager {
         Self {}
     }
 
-    pub fn generate_beacon(&self, ap: &ApState) -> Result<Vec<bytes::Bytes>, ApError> {
+    pub fn generate_beacon(
+        &self,
+        ap: &ApState,
+        beacon_interval: u16,
+    ) -> Result<Vec<bytes::Bytes>, ApError> {
         // Beacon Header
         let header = BeaconFrameHeader {
             frame_control: FrameControl::new(0x0080), // Mgmt (00), Beacon (1000) -> 0x0080 (LE: 80 00)
@@ -41,7 +45,7 @@ impl Ieee80211Manager {
         // Fixed Fields
         let fixed = BeaconFixedFields {
             timestamp: [0; 8],
-            beacon_interval: U16::new(ap.config.beacon_interval),
+            beacon_interval: U16::new(beacon_interval),
             capabilities: U16::new(0x0001), // ESS
         };
         frame.extend_from_slice(fixed.as_bytes());
@@ -125,6 +129,7 @@ impl Ieee80211Manager {
         ap: &mut ApState,
         frame: &[u8],
         shared_keys: &SharedKeyStore,
+        beacon_interval: u16,
         _ctx: &mut DynContext<u32>,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let ieee80211_frame = match Ieee80211::decode(frame) {
@@ -148,7 +153,9 @@ impl Ieee80211Manager {
         match ieee80211_frame.stype() {
             management_subtype::AUTHENTICATION => self.handle_auth(ap, &ieee80211_frame, frame),
             management_subtype::ASSOCIATION_REQUEST => self.handle_assoc(ap, &ieee80211_frame),
-            management_subtype::PROBE_REQUEST => self.handle_probe_req(ap, &ieee80211_frame, frame),
+            management_subtype::PROBE_REQUEST => {
+                self.handle_probe_req(ap, &ieee80211_frame, frame, beacon_interval)
+            }
             management_subtype::DEAUTHENTICATION => {
                 self.handle_deauth(ap, &ieee80211_frame, shared_keys)
             }
@@ -434,8 +441,7 @@ impl Ieee80211Manager {
 
         // Init WPA if configured
         if let Some(passphrase) = &ap.config.wpa_passphrase {
-            // Assume passphrase usage for now (PSK derived?)
-            // We need to implement proper key derivation later.
+            // TODO: Implement proper key derivation (PBKDF2)
             let rsn_ie = crate::rsn::build_rsn_ie(&ap.config);
             let mut authenticator = crate::wpa_auth::WpaAuthenticator::new(
                 ap.config.bssid,
@@ -459,6 +465,7 @@ impl Ieee80211Manager {
         ap: &mut ApState,
         frame: &Ieee80211,
         raw_frame: &[u8],
+        beacon_interval: u16,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         // Filter by Destination Address (DA)
         // Must be Broadcast (FF:...) or match our BSSID.
@@ -516,7 +523,7 @@ impl Ieee80211Manager {
         // Fixed Fields (Same as Beacon)
         let fixed = BeaconFixedFields {
             timestamp: [0; 8],
-            beacon_interval: U16::new(ap.config.beacon_interval),
+            beacon_interval: U16::new(beacon_interval),
             capabilities: U16::new(0x0001), // ESS
         };
         resp.extend_from_slice(fixed.as_bytes());

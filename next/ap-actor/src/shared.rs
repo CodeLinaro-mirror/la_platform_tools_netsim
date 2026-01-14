@@ -93,7 +93,7 @@ impl SharedKeyStore {
         // AAD
         let aad = ieee80211.get_aad();
 
-        let payload = ieee80211.get_payload(); // Assuming get_payload
+        let payload = ieee80211.get_payload();
 
         let ciphertext = match cipher.encrypt(nonce_ga, Payload { msg: &payload, aad: &aad }) {
             Ok(c) => c,

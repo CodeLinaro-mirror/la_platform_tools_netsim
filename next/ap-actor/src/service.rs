@@ -87,24 +87,24 @@ impl ActorService for ApActor {
         ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
-            ApReq::Register { stream, sink } => {
+            ApReq::Register { stream, sink, shared_keys, beacon_interval } => {
                 if self.sink.is_some() {
                     panic!("ApActor: Register called more than once!");
                 }
-                log::info!("Registering AP singleton stream/sink");
+                log::info!(
+                    "Registering AP singleton stream/sink with interval: {:?}",
+                    beacon_interval
+                );
                 self.sink = Some(sink);
+                self.shared_keys = shared_keys;
+                // Convert duration to TUs (1024us units) approximately
+                let tus = (beacon_interval.as_micros() / 1024) as u16;
+                self.beacon_interval = Some(tus);
 
                 let stream_id = WIFI_STREAM_ID;
-
-                // Create a Send-capable Stream from the UnboundedReceiver
-                let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(stream);
-                let stream: std::pin::Pin<
-                    Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>,
-                > = Box::pin(stream);
-
                 ctx.add_stream(stream_id, stream);
 
-                ctx.set_interval(std::time::Duration::from_millis(100));
+                ctx.set_interval(beacon_interval);
                 Ok(ApResponse::Ok)
             }
         }

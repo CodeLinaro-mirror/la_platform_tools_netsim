@@ -1,7 +1,7 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::ResourceActor;
-use ap_actor::{ApActor, ApClient, ApConfig};
+use ap_actor::{ApActor, ApClient, ApClientTrait, ApConfig};
 use netsim_packets::ethernet::MacAddr;
 use netsim_packets::ieee80211::{
     AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader, FrameControl, Ieee80211,
@@ -28,7 +28,7 @@ pub struct ApWorld {
 impl ApWorld {
     pub async fn new() -> Self {
         let _ = env_logger::builder().try_init();
-        let ap_actor_impl = ApActor::new(None);
+        let ap_actor_impl = ApActor::new();
         let (runner, client_base) = ResourceActor::new(32);
         let client = ApClient::new(client_base);
 
@@ -44,7 +44,16 @@ impl ApWorld {
         if self.tx_to_ap.is_none() {
             let (tx_to_ap, rx_for_ap) = mpsc::unbounded_channel();
             let (tx_from_ap, rx_from_ap) = mpsc::unbounded_channel();
-            self.client.register(rx_for_ap, tx_from_ap).await.expect("Failed to register");
+            let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx_for_ap));
+            self.client
+                .register(
+                    stream,
+                    tx_from_ap,
+                    std::sync::Arc::new(ap_actor::shared::SharedKeyStore::new()),
+                    Duration::from_millis(100),
+                )
+                .await
+                .expect("Failed to register");
             self.tx_to_ap = Some(tx_to_ap);
             self.rx_from_ap = Some(rx_from_ap);
         }
