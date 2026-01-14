@@ -11,3 +11,4 @@ bytes = "1.0"
 thiserror = "1.0"
 anyhow = "1.0"
 actor-framework = { path = "../actor-framework" }
+async-trait = "0.1"

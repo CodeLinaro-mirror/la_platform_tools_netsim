@@ -8,7 +8,7 @@ use netsim_model::{
 use tokio::sync::mpsc;
 use wifi::Server;
 
-async fn setup() -> (Server, netsim_model::chip::LegacyChipClient) {
+async fn setup() -> (Server, netsim_model::chip::RadioChipClient) {
     let (device_tx, _) = mpsc::channel(10);
     let resource_client = actor_framework::ResourceClient::new(device_tx);
     let device_client = client::DeviceClient::new(resource_client);

@@ -33,25 +33,20 @@ netsim_rust_library(
 )
 
 rust_test(
-    name = "integration_test",
+    name = "integration-test",
     srcs = glob(["tests/**/*.rs"]),
+    crate_root = "tests/mod.rs",
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
     ],
-    deps = DEPS + [
-        ":link-actor",
-        "//next/client",
-    ],
-)
-
-rust_test(
-    name = "tests",
-    crate = ":link-actor",
-    proc_macro_deps = [
-        "@async-trait",
-    ],
     deps = [
-        "//next/client",
+        ":testing",
+        "//next/actor-framework:testing",
+        "//next/client:testing",
+        "//next/link-api:testing",
+        "//next/model:testing",
+        "@log",
+        "@tokio",
     ],
 )

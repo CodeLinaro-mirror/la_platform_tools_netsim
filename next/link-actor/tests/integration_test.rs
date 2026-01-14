@@ -1,6 +1,4 @@
-#[path = "common/mod.rs"]
-mod common;
-mod propagation_test;
+use crate::common;
 
 use common::setup;
 use link_api::{LinkAction, LinkCreate};
@@ -154,37 +152,41 @@ async fn test_chip_removal_deletes_links() {
 
 #[tokio::test]
 async fn test_update_propagation() {
+    use crate::common::setup_actor;
     use netsim_model::chip::ChipKind;
+    use std::collections::HashMap;
 
-    let mut fixture = setup().await;
-    let client = &fixture.client;
-    let mock_controller =
-        fixture.mock_chip_controller.as_mut().expect("MockChipController not found in fixture");
-    let mock_client =
-        fixture.mock_chip_client.as_ref().expect("MockChipClient not found in fixture");
+    // We manually set up the actor with our own mock so we can set expectations
+    let mut clients = HashMap::new();
+    let mut mock_client = netsim_model::chip::MockChipClient::new();
 
     let chip_id = ChipId(1);
     let peer_id = ChipId(2);
 
-    // Note: setup() already adds chips 1, 2 (BT) and 3 (WIFI).
-    // We don't need to notify chip added again for 1 and 2.
+    mock_client
+        .expect_update()
+        .withf(move |id, patch| {
+            *id == ChipId(1)
+                && patch.links.is_some()
+                && patch.links.as_ref().unwrap().contains(&(ChipId(2), -50))
+        })
+        .times(1)
+        .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
 
-    // Create Link
-    mock_controller.expect_update(chip_id).return_ok(netsim_model::chip::Chip::default());
+    clients.insert(
+        ChipKind::BLUETOOTH,
+        Box::new(mock_client) as Box<dyn netsim_model::chip::ChipClient>,
+    );
+
+    let fixture = setup_actor(clients).await;
+    let client = &fixture.client;
+
+    // Bootstrap chips (since we are not using common::setup which adds them)
+    client.action(None, LinkAction::NotifyChipAdded(chip_id, ChipKind::BLUETOOTH)).await.unwrap();
+    client.action(None, LinkAction::NotifyChipAdded(peer_id, ChipKind::BLUETOOTH)).await.unwrap();
 
     let create_params = LinkCreate { sender: chip_id, receiver: peer_id, rssi: -50 };
     client.create(create_params).await.unwrap();
 
-    // Verify update sent to chip client
-    let updates = mock_client.updates.lock().unwrap();
-    // We expect 1 update for sender (1)
-    assert!(updates.len() >= 1, "Expected at least 1 update, got {}", updates.len());
-
-    // Check update for chip 1
-    let update_1 = updates.iter().find(|(id, _)| *id == chip_id);
-    assert!(update_1.is_some(), "Update for chip 1 not found");
-    let (_, patch_1) = update_1.unwrap();
-    assert!(patch_1.links.is_some());
-    let links_1 = patch_1.links.as_ref().unwrap();
-    assert!(links_1.contains(&(peer_id, -50)));
+    // Verification happens on drop of `mock_client` (which was moved into actor, which is dropped when fixture drops)
 }

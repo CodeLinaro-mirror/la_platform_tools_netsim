@@ -294,7 +294,6 @@
 
 mod actor;
 mod client;
-mod client_trait;
 mod context;
 mod error;
 mod lifecycle;
@@ -308,7 +307,6 @@ pub mod utils;
 // Re-export core types for convenience
 pub use actor::ResourceActor;
 pub use client::ResourceClient;
-pub use client_trait::ActorClient;
 pub use context::{Context, DynContext};
 pub use error::FrameworkError;
 pub use lifecycle::ActorLifecycle;

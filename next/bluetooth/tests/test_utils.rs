@@ -23,7 +23,7 @@ pub struct TestFixture {
 /// Sets up a test environment with a running actor and a client.
 pub fn setup() -> TestFixture {
     let (device_tx, _device_rx) = mpsc::channel(10);
-    let resource_client = client::device_client::DeviceClient::new(ResourceClient::new(device_tx));
+    let resource_client = client::DeviceClient::new(ResourceClient::new(device_tx));
     let (actor, client) = bluetooth::new();
     let context = bluetooth::BluetoothActor::new(resource_client.clone(), client.clone());
     let actor_task = tokio::spawn(async move {

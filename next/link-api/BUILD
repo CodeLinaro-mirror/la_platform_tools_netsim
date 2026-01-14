@@ -23,6 +23,5 @@ netsim_rust_library(
     proc_macro_deps = [
         "@async-trait",
     ],
-    strict_warnings = False,
     deps = DEPS,
 )

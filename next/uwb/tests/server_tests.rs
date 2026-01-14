@@ -36,7 +36,7 @@ fn create_uwb_params(id: u32) -> ChipCreate {
     }
 }
 
-async fn setup() -> (Server, netsim_model::chip::ChipClient) {
+async fn setup() -> (Server, netsim_model::chip::RadioChipClient) {
     let device_client = DeviceClient::new(mpsc::channel(10).0);
     Server::new(device_client)
 }
