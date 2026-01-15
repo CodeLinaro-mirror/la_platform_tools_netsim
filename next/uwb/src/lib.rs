@@ -1,10 +1,12 @@
 // Copyright 2026 The Android Open Source Project
 
+pub mod actions;
 pub mod client;
 pub mod lifecycle;
 pub mod service;
 pub mod uwb_actor;
 
+pub use actions::{UwbAction, UwbActionResult};
 pub use actor_framework::ResourceActor;
 pub use client::UwbClient;
 pub use uwb_actor::UwbActor;

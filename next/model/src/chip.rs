@@ -133,7 +133,7 @@ pub enum ChipRequest {
     /// Get radio statistics for all chips.
     GetStatistics {
         /// The channel to send the statistics back on.
-        respond_to: Responder<Vec<NetsimRadioStats>>,
+        respond_to: Responder<Box<[NetsimRadioStats]>>,
     },
     /// Get the total number of chips for testing purposes.
     GetCountForTesting {
@@ -483,7 +483,7 @@ impl ChipClient for RadioChipClient {
         rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
     }
 
-    async fn read_statistics(&self) -> Result<Vec<NetsimRadioStats>, ClientError> {
+    async fn read_statistics(&self) -> Result<Box<[NetsimRadioStats]>, ClientError> {
         let (tx, rx) = oneshot::channel();
         self.sender
             .send(ChipRequest::GetStatistics { respond_to: tx })
@@ -535,7 +535,7 @@ pub trait ChipClient: Send + Sync {
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError>;
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError>;
     async fn delete(&self, id: ChipId) -> Result<(), ClientError>;
-    async fn read_statistics(&self) -> Result<Vec<NetsimRadioStats>, ClientError>;
+    async fn read_statistics(&self) -> Result<Box<[NetsimRadioStats]>, ClientError>;
     async fn read_count_for_testing(&self) -> Result<usize, ClientError>;
     async fn shutdown(&self) -> Result<(), ClientError>;
     /// Resets the state of the specified chip.
