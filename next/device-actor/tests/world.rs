@@ -84,6 +84,8 @@ impl World {
         mock.expect_update().returning(|_, _| Ok(())); // update returns Result<(), String>
         mock.expect_delete().returning(|_| Ok(())); // delete returns Result<(), String>
         mock.expect_list().returning(|| Ok(vec![])); // list returns Result<Vec<Link>, String>
+        mock.expect_notify_chip_added().returning(|_, _| Ok(()));
+        mock.expect_notify_chip_removed().returning(|_| Ok(()));
         mock
     }
 
