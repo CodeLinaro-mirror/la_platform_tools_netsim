@@ -130,9 +130,6 @@
 //!
 //! ## Context Injection Pattern
 //!
-//! Dependencies are injected at **runtime** via the `run()` method (if supported by `run` args, but currently `run` takes no args, dependencies are passed to `new` or `handle_create`).
-//! Wait, `ResourceActor::new` takes `actor`. Dependencies should be in the `actor` struct.
-//!
 //! ```rust
 //! use actor_framework::{ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
@@ -294,21 +291,19 @@
 
 mod actor;
 mod client;
-mod client_trait;
 mod context;
 mod error;
 mod lifecycle;
 mod message;
-pub mod mock;
 mod service;
-// pub mod tracing;
 
 pub mod utils;
 
 // Re-export core types for convenience
 pub use actor::ResourceActor;
-pub use client::ResourceClient;
-pub use client_trait::ActorClient;
+#[cfg(feature = "testing")]
+pub use client::MockActorClient;
+pub use client::{ActorClient, ResourceClient};
 pub use context::{Context, DynContext};
 pub use error::FrameworkError;
 pub use lifecycle::ActorLifecycle;

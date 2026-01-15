@@ -1,5 +1,5 @@
 use super::DeviceClient;
-use device_actor::DeviceError;
+use crate::DeviceError;
 use device_api::{DeviceAction, DeviceActionResult};
 use log::debug;
 use netsim_model::device::api::DeviceCreate;

@@ -9,6 +9,7 @@ DEPS = [
     "@bytes",
     "@serde",
     "@thiserror",
+    "@mockall",
 ]
 
 netsim_rust_library(
@@ -23,6 +24,5 @@ netsim_rust_library(
     proc_macro_deps = [
         "@async-trait",
     ],
-    strict_warnings = False,
     deps = DEPS,
 )

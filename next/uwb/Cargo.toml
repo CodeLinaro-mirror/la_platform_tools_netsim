@@ -12,3 +12,4 @@ netsim-model = { path = "../model" }
 client = { path = "../client" }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
+async-trait = "0.1"

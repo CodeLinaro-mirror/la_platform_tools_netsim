@@ -343,10 +343,7 @@ impl NetsimDaemon {
         let (link_runner, link_client) = link_actor::new();
 
         // Setup Device Server Channel
-        // Create the runner (owns receiver) and client (wraps sender)
-        let (device_runner, resource_client) =
-            actor_framework::ResourceActor::<device_actor::DeviceActor>::new(32);
-        let device_client = client::device_client::DeviceClient::new(resource_client);
+        let (device_runner, device_client) = device_actor::new();
 
         // Setup Capture Server
         let (capture_runner, capture_generic_client) = capture_actor::new();
@@ -397,7 +394,8 @@ impl NetsimDaemon {
         // Setup Cell Server
         // TODO: Replace with real modem network.
         let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
-        let (cell_server, cell_client) = cell::Server::new(device_client.clone(), cell_controller);
+        let (cell_runner, cell_client) = cell::new();
+        let (cell_server) = cell::Server::new(device_client.clone(), cell_controller);
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =
@@ -414,7 +412,7 @@ impl NetsimDaemon {
         let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k.into(), v.clone())).collect();
         let link_actor_state = link_actor::LinkActor::new(link_chip_clients);
 
-        let device_actor_state = device_actor::new(
+        let device_actor_state = device_actor::DeviceActor::new(
             chip_clients,
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
@@ -429,7 +427,7 @@ impl NetsimDaemon {
         info!("Wifi server started");
         join_set.spawn(uwb_server.run());
         info!("Uwb server started");
-        join_set.spawn(cell_server.run());
+        join_set.spawn(cell_runner.run(cell_server));
         info!("Cell server started");
         join_set.spawn(device_runner.run(device_actor_state));
         info!("Device server started");

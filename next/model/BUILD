@@ -28,6 +28,7 @@ NETSIM_API_DEPS = [
     "@thiserror",
     "@tokio",
     "@tokio-stream",
+    "@mockall",
 ]
 
 netsim_rust_library(

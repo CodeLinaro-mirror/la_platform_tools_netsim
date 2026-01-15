@@ -26,7 +26,7 @@
 //!     let resource_client = actor_framework::ResourceClient::new(device_tx);
 //!     // device_client creation depends on where DeviceClient comes from.
 //!     // Assuming client::DeviceClient is correct based on bluetooth_actor.rs usage.
-//!     let device_client = client::DeviceClient::new(resource_client);
+//!     let device_client = client::DeviceClient::new(Box::new(resource_client));
 //!     let (actor, client) = bluetooth::new();
 //!     let bluetooth_actor = bluetooth::BluetoothActor::new(device_client, client.clone());
 //!     tokio::spawn(async move {

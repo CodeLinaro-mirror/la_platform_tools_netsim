@@ -8,26 +8,31 @@
 //! - `test_device_client_mock`: Verifies standard creation and action handling via mocks.
 //! - `test_device_client_add_chip`: Verifies AddChip logic, including GUID mapping and chip addition.
 
-use actor_framework::mock::MockClient;
+// use actor_framework::mock::MockClient; (Removed)
 use client::DeviceClient;
-use device_actor::DeviceActionResult;
+use device_actor::DeviceActor;
 use device_api::api::{Chip, DeviceChipCreate, DeviceCreate};
-use device_api::Device;
+
+use device_api::DeviceActionResult;
 use device_api::{DeviceConfig, DeviceId};
 use netsim_model::chip::{BleBeacon, ChipId};
 
 #[tokio::test]
 async fn test_device_client_mock() {
-    let mut mock = MockClient::<Device>::new();
+    let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();
 
     // Expect create
     let device_id = DeviceId(1);
-    mock.expect_create().return_ok(device_id);
+    mock.expect_create().returning(move |_| Ok(device_id));
 
     // Expect action (Reset)
-    mock.expect_action(device_id).return_ok(DeviceActionResult::Success);
+    mock.expect_perform_action()
+        .withf(move |id, action| {
+            *id == Some(device_id) && matches!(action, device_api::DeviceAction::Reset)
+        })
+        .returning(|_, _| Ok(DeviceActionResult::Success));
 
-    let client = DeviceClient::new(mock.client());
+    let client = DeviceClient::new(Box::new(mock));
 
     // Test Create
     let params = DeviceCreate {
@@ -49,13 +54,11 @@ async fn test_device_client_mock() {
 
     // Test Reset (Action)
     client.reset(id).await.unwrap();
-
-    mock.verify();
 }
 
 #[tokio::test]
 async fn test_device_client_add_chip() {
-    let mut mock = MockClient::<Device>::new();
+    let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();
 
     let device_id = DeviceId(1);
     let _chip_id1 = ChipId(1);
@@ -63,20 +66,22 @@ async fn test_device_client_add_chip() {
 
     // 1. First add_chip (new device)
     // Expect create
-    mock.expect_create().return_ok(device_id);
+    mock.expect_create().returning(move |_| Ok(device_id));
 
-    let client = DeviceClient::new(mock.client());
+    // 2. Second add_chip (same GUID, should add chip)
+    mock.expect_perform_action()
+        .withf(move |id, action| {
+            *id == Some(device_id) && matches!(action, device_api::DeviceAction::AddChip { .. })
+        })
+        .returning(move |_, _| Ok(DeviceActionResult::ChipId(chip_id2)));
+
+    let client = DeviceClient::new(Box::new(mock));
 
     let params1 = create_add_chip_params("guid-1", "chip-1");
     client.add_chip(params1).await.unwrap();
 
-    // 2. Second add_chip (same GUID, should add chip)
-    mock.expect_action(device_id).return_ok(DeviceActionResult::ChipId(chip_id2));
-
     let params2 = create_add_chip_params("guid-1", "chip-2");
     client.add_chip(params2).await.unwrap();
-
-    mock.verify();
 }
 
 fn create_add_chip_params(guid: &str, chip_name: &str) -> device_api::DeviceAddChip {
