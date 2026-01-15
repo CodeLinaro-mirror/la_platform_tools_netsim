@@ -8,6 +8,7 @@
 
 use crate::LinkActor;
 use actor_framework::ResourceClient;
+use netsim_model::chip::{ChipId, ChipKind};
 use std::ops::Deref;
 
 /// A client for interacting with the Link Actor.
@@ -53,8 +54,8 @@ impl LinkClient {
     /// TODO: Optimize this with a custom action or lookup map in the actor.
     pub async fn get_link_id(
         &self,
-        sender: netsim_model::chip::ChipId,
-        receiver: netsim_model::chip::ChipId,
+        sender: ChipId,
+        receiver: ChipId,
     ) -> Result<Option<link_api::LinkId>, actor_framework::FrameworkError> {
         let links = self.list().await?;
         for link in links {
@@ -72,6 +73,23 @@ impl LinkClient {
         action: link_api::LinkAction,
     ) -> Result<(), actor_framework::FrameworkError> {
         self.inner.perform_action(id, action).await
+    }
+
+    /// Notifies the link actor that a chip has been added.
+    pub async fn notify_chip_added(
+        &self,
+        chip_id: ChipId,
+        kind: ChipKind,
+    ) -> Result<(), actor_framework::FrameworkError> {
+        self.action(None, link_api::LinkAction::NotifyChipAdded(chip_id, kind)).await
+    }
+
+    /// Notifies the link actor that a chip has been removed.
+    pub async fn notify_chip_removed(
+        &self,
+        chip_id: ChipId,
+    ) -> Result<(), actor_framework::FrameworkError> {
+        self.action(None, link_api::LinkAction::NotifyChipRemoved(chip_id)).await
     }
 }
 
@@ -103,6 +121,22 @@ impl link_api::LinkClient for LinkClient {
         action: link_api::LinkAction,
     ) -> Result<(), String> {
         self.inner.perform_action(id, action).await.map(|_| ()).map_err(|e| e.to_string())
+    }
+
+    async fn notify_chip_added(&self, chip_id: ChipId, kind: ChipKind) -> Result<(), String> {
+        self.inner
+            .perform_action(None, link_api::LinkAction::NotifyChipAdded(chip_id, kind))
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    async fn notify_chip_removed(&self, chip_id: ChipId) -> Result<(), String> {
+        self.inner
+            .perform_action(None, link_api::LinkAction::NotifyChipRemoved(chip_id))
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 }
 

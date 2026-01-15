@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use device_api::api::{DeviceCreate, DeviceUpdate};
 use device_api::{DeviceAction, DeviceActionResult, DeviceId};
 use link_api::LinkAction;
-use netsim_model::chip::{ChipConfig, ChipCreate, ChipId, NetworkKind, NetworkParams};
+use netsim_model::chip::{ChipConfig, ChipCreate, ChipId, ChipKind, NetworkKind, NetworkParams};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 
@@ -89,7 +89,7 @@ impl ActorService for DeviceActor {
                 // 3. Update local device state with the new chip
                 entity.device.chips.push(netsim_model::chip::Chip {
                     id: chip_id.0,
-                    kind: netsim_model::chip::ChipKind::from(chip_kind),
+                    kind: ChipKind::from(chip_kind),
                     name: Some(chip_create.name),
                     manufacturer: Some(chip_create.manufacturer),
                     product_name: Some(chip_create.product_name),
@@ -102,11 +102,9 @@ impl ActorService for DeviceActor {
                 // Send create request to Link Actor
                 // This ensures the LinkActor is aware of the new chip and can manage its links.
                 self.link_client
-                    .action(None, LinkAction::NotifyChipAdded(chip_id, chip_kind.into()))
+                    .notify_chip_added(chip_id, chip_kind.into())
                     .await
                     .expect("Failed to notify LinkActor of new chip");
-                // TODO: Expose a helper method on LinkClient for this action (e.g. notify_chip_added)
-                // for correctness, brevity and clarity.
             } else {
                 // Log warning or return error if no client for this network kind
                 return Err(DeviceError::ActorCommunicationError(format!(
@@ -187,13 +185,9 @@ impl ActorService for DeviceActor {
                         .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
                     // Send delete request to Link Actor
                     self.link_client
-                        .action(
-                            None,
-                            LinkAction::NotifyChipRemoved(netsim_model::chip::ChipId(chip.id)),
-                        )
+                        .notify_chip_removed(ChipId(chip.id))
                         .await
                         .expect("Failed to notify LinkActor of chip remove");
-                    // TODO: Expose a helper method on LinkClient for this action (e.g. notify_chip_removed)
                 }
             }
             if self.devices.is_empty() {
@@ -226,10 +220,9 @@ impl ActorService for DeviceActor {
                             // This requires a way to trigger a self-delete from within the actor.
                         }
                         self.link_client
-                            .action(None, LinkAction::NotifyChipRemoved(chip_id))
+                            .notify_chip_removed(chip_id)
                             .await
                             .expect("Failed to notify LinkActor of chip remove");
-                        // TODO: Expose a helper method on LinkClient for this action (e.g. notify_chip_removed)
                         Ok(DeviceActionResult::Success)
                     }
                     DeviceAction::AddChip { chip_config, packet_stream, packet_sink } => {
@@ -279,7 +272,7 @@ impl ActorService for DeviceActor {
                             // 3. Update local device state with the new chip
                             entity.device.chips.push(netsim_model::chip::Chip {
                                 id: chip_id.0,
-                                kind: netsim_model::chip::ChipKind::from(chip_kind),
+                                kind: ChipKind::from(chip_kind),
                                 name: Some(chip_config.name),
                                 manufacturer: Some(chip_config.manufacturer),
                                 product_name: Some(chip_config.product_name),
@@ -290,13 +283,9 @@ impl ActorService for DeviceActor {
                                 links: vec![],
                             });
                             self.link_client
-                                .action(
-                                    None,
-                                    LinkAction::NotifyChipAdded(chip_id, chip_kind.into()),
-                                )
+                                .notify_chip_added(chip_id, chip_kind.into())
                                 .await
                                 .expect("Failed to notify LinkActor of chip add");
-                            // TODO: Expose a helper method on LinkClient for this action (e.g. notify_chip_added)
                             Ok(DeviceActionResult::ChipId(chip_id))
                         } else {
                             Err(DeviceError::ActorCommunicationError(format!(
