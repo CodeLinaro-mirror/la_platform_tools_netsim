@@ -8,7 +8,10 @@ anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1.0"
 futures = "0.3"
-grpcio = "0.13"
+grpcio = { version = "0.13", default-features = false, features = [
+  "protobufv3-codec",
+  "openssl",
+] }
 log = "0.4"
 netsim-model = { path = "../model" }
 netsim-proto = { path = "../proto" }
