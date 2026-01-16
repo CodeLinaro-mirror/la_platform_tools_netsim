@@ -117,12 +117,8 @@ impl FrontendService for FrontendClient {
     fn reset(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<Empty>) {
         let client = self.device_client.clone();
         let f = async move {
-            // TODO: reset might need a DeviceId if it's per-device, or we need a global reset.
-            // For now, we assume it's per-device and we don't have the ID here?
-            // Actually, the old API had a global reset. If the new one is per-device, this is a breaking change.
-            // Given the error, it expects a DeviceId. We'll use a placeholder or fix the API.
-            // For now, let's use a placeholder ID 0 to satisfy compilation, but this needs review.
-            match client.reset(DeviceId(0)).await {
+            // We assume it's a global reset if no ID is provided (which is the case for Empty request).
+            match client.reset(None).await {
                 Ok(_) => sink.success(Empty::new()).await,
                 Err(e) => {
                     sink.fail(RpcStatus::with_message(

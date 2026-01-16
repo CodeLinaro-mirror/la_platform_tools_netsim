@@ -19,30 +19,19 @@ use netsim_model::chip::{BleBeacon, ChipId};
 //   I want to verify the implementation of the Device Client
 //   So that I can ensure it correctly communicates with the actor
 //
-//   Scenario: Client correctly serializes Create and Reset requests
-//     Given a mock Actor Client expecting Create and Reset calls
-//     When I call create_device on the client
-//     Then the mock receives the Create request
-//     When I call reset on the client
-//     Then the mock receives the PerformAction(Reset) request
+// Scenario: Client correctly serializes Create requests
+//   Given a mock Actor Client expecting a Create call
+//   When I call create_device on the client
+//   Then the mock receives the Create request
 #[tokio::test]
-async fn test_device_client_mock() {
+async fn test_device_client_create() {
     let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();
-
-    // Expect create
     let device_id = DeviceId(1);
-    mock.expect_create().returning(move |_| Ok(device_id));
 
-    // Expect action (Reset)
-    mock.expect_perform_action()
-        .withf(move |id, action| {
-            *id == Some(device_id) && matches!(action, device_api::DeviceAction::Reset)
-        })
-        .returning(|_, _| Ok(DeviceActionResult::Success));
+    mock.expect_create().returning(move |_| Ok(device_id));
 
     let client = DeviceClient::new(Box::new(mock));
 
-    // Test Create
     let params = DeviceCreate {
         device_config: DeviceConfig::new(
             "test".to_string(),
@@ -59,30 +48,72 @@ async fn test_device_client_mock() {
     };
     let id = client.create_device(params).await.unwrap();
     assert_eq!(id, device_id);
-
-    // Test Reset (Action)
-    client.reset(id).await.unwrap();
 }
 
-// Scenario: client.add_chip manages device lifecycle
-//   Given a mock Actor Client
-//   When I call add_chip with a new device GUID
-//   Then the client calls Create on the actor
-//   When I call add_chip again with the SAME device GUID
-//   Then the client calls PerformAction(AddChip) on the actor (reusing the device)
+// Scenario: Client correctly serializes Reset requests
+//   Given a mock Actor Client expecting a PerformAction(Reset) call with a specific ID
+//   When I call reset on the client with a device ID
+//   Then the mock receives the PerformAction(Reset) request with that ID
 #[tokio::test]
-async fn test_device_client_add_chip() {
+async fn test_device_client_reset() {
+    let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();
+    let device_id = DeviceId(1);
+
+    mock.expect_perform_action()
+        .withf(move |id, action| {
+            *id == Some(device_id) && matches!(action, device_api::DeviceAction::Reset)
+        })
+        .returning(|_, _| Ok(DeviceActionResult::Success));
+
+    let client = DeviceClient::new(Box::new(mock));
+    client.reset(Some(device_id)).await.unwrap();
+}
+
+// Scenario: Client correctly serializes Global Reset requests
+//   Given a mock Actor Client expecting a PerformAction(Reset) call with None ID
+//   When I call reset on the client with None
+//   Then the mock receives the PerformAction(Reset) request with None
+#[tokio::test]
+async fn test_device_client_global_reset() {
     let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();
 
-    let device_id = DeviceId(1);
-    let _chip_id1 = ChipId(1);
-    let chip_id2 = ChipId(2);
+    mock.expect_perform_action()
+        .withf(move |id, action| id.is_none() && matches!(action, device_api::DeviceAction::Reset))
+        .returning(|_, _| Ok(DeviceActionResult::Success));
 
-    // 1. First add_chip (new device)
-    // Expect create
+    let client = DeviceClient::new(Box::new(mock));
+    client.reset(None).await.unwrap();
+}
+
+// Scenario: client.add_chip creates a new device when GUID is unknown
+//   Given a mock Actor Client expecting a Create call
+//   When I call add_chip with a new device GUID
+//   Then the client calls Create on the actor
+#[tokio::test]
+async fn test_device_client_add_chip_new_device() {
+    let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();
+    let device_id = DeviceId(1);
+
     mock.expect_create().returning(move |_| Ok(device_id));
 
-    // 2. Second add_chip (same GUID, should add chip)
+    let client = DeviceClient::new(Box::new(mock));
+    let params = create_add_chip_params("guid-1", "chip-1");
+
+    client.add_chip(params).await.unwrap();
+}
+
+// Scenario: client.add_chip adds a chip to an existing device when GUID is known
+//   Given a mock Actor Client that has already created a device for GUID X
+//   When I call add_chip again with the SAME device GUID X
+//   Then the client calls PerformAction(AddChip) on the actor
+#[tokio::test]
+async fn test_device_client_add_chip_existing_device() {
+    let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();
+    let device_id = DeviceId(1);
+    let chip_id2 = ChipId(2);
+
+    mock.expect_create().returning(move |_| Ok(device_id));
+
     mock.expect_perform_action()
         .withf(move |id, action| {
             *id == Some(device_id) && matches!(action, device_api::DeviceAction::AddChip { .. })
