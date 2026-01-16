@@ -5,12 +5,12 @@ use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
 use client::{CaptureClient, DeviceClient};
+use common::system::netsimd_temp_dir;
+use common::util::os_utils::{get_instance_name, redirect_std_stream};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info, warn};
-use netsim_common::system::netsimd_temp_dir;
-use netsim_common::util::os_utils::{get_instance_name, redirect_std_stream};
 use netsim_model::chip::{
     BluetoothCreate, BluetoothMode, CellCreate, ChipConfig, DeviceParams, NetworkKind,
     NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
