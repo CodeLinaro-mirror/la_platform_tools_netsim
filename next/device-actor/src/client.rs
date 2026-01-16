@@ -93,9 +93,10 @@ impl DeviceClient {
     /// Resets a device to its default state.
     ///
     /// This sends a `DeviceAction::Reset` to the device actor.
-    pub async fn reset(&self, id: DeviceId) -> Result<(), DeviceError> {
-        debug!("Sending reset request for device {}", id);
-        match self.inner.perform_action(Some(id), DeviceAction::Reset).await {
+    /// If `id` is `None`, it performs a global reset.
+    pub async fn reset(&self, id: Option<DeviceId>) -> Result<(), DeviceError> {
+        debug!("Sending reset request for device {:?}", id);
+        match self.inner.perform_action(id, DeviceAction::Reset).await {
             Ok(DeviceActionResult::Success) => Ok(()),
             Ok(_) => {
                 Err(DeviceError::ActorCommunicationError("Unexpected action result".to_string()))
