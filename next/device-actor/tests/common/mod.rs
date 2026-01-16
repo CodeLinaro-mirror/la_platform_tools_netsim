@@ -10,6 +10,8 @@ use tokio::sync::mpsc;
 pub struct TestFixture {
     pub client: DeviceClient,
     pub chip_rx: mpsc::Receiver<ChipRequest>,
+    pub mock_link_controller: actor_framework::mock::MockClient<link_api::mock::MockLinkEntity>,
+    pub mock_link_client: link_api::mock::MockLinkClient,
 }
 
 pub async fn setup() -> TestFixture {
@@ -20,12 +22,19 @@ pub async fn setup() -> TestFixture {
         HashMap::new();
     chip_clients.insert(NetworkKind::Bluetooth, Box::new(chip_client));
 
-    let actor_impl = device_actor::new(chip_clients, Arc::new(AtomicU32::new(0)), None);
+    let (mock_link_controller, mock_link_client) = link_api::mock::MockLinkClient::new();
+
+    let actor_impl = device_actor::new(
+        chip_clients,
+        Arc::new(AtomicU32::new(0)),
+        None,
+        Box::new(mock_link_client.clone()),
+    );
 
     let (actor, generic_client) = actor_framework::ResourceActor::new(32);
     let client = DeviceClient::new(generic_client);
 
     tokio::spawn(actor.run(actor_impl));
 
-    TestFixture { client, chip_rx }
+    TestFixture { client, chip_rx, mock_link_controller, mock_link_client }
 }

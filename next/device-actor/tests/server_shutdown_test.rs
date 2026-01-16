@@ -39,7 +39,11 @@ async fn test_server_shutdown_on_idle() {
 #[tokio::test]
 #[ignore = "Auto-shutdown not yet implemented in actor framework"]
 async fn test_server_shutdown_on_last_chip_delete() {
-    let TestFixture { mut chip_rx, client, .. } = common::setup().await;
+    let TestFixture { mut chip_rx, client, mut mock_link_controller, .. } = common::setup().await;
+
+    // Expect NotifyChipAdded then NotifyChipRemoved
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
     // Mock chip service for create and delete
     tokio::spawn(async move {

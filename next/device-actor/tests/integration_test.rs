@@ -22,7 +22,10 @@ use common::{setup, TestFixture};
 
 #[tokio::test]
 async fn test_create_device_succeeds() {
-    let TestFixture { mut chip_rx, client, .. } = common::setup().await;
+    let TestFixture { mut chip_rx, client, mut mock_link_controller, .. } = common::setup().await;
+
+    // Expect NotifyChipAdded
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
     // Mock chip service
     tokio::spawn(async move {
@@ -57,7 +60,11 @@ async fn test_create_device_succeeds() {
 
 #[tokio::test]
 async fn test_delete_device_removes_chips() {
-    let TestFixture { mut chip_rx, client, .. } = setup().await;
+    let TestFixture { mut chip_rx, client, mut mock_link_controller, .. } = setup().await;
+
+    // Expect NotifyChipAdded then NotifyChipRemoved
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
     // Mock chip service for create and delete
     tokio::spawn(async move {
@@ -93,7 +100,10 @@ async fn test_delete_device_removes_chips() {
 
 #[tokio::test]
 async fn test_update_device_propagates_to_chips() {
-    let TestFixture { mut chip_rx, client, .. } = setup().await;
+    let TestFixture { mut chip_rx, client, mut mock_link_controller, .. } = setup().await;
+
+    // Expect NotifyChipAdded
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
     // Mock chip service for create and update
     tokio::spawn(async move {
@@ -139,7 +149,11 @@ async fn test_update_device_propagates_to_chips() {
 
 #[tokio::test]
 async fn test_notify_chip_removed() {
-    let TestFixture { mut chip_rx, client, .. } = setup().await;
+    let TestFixture { mut chip_rx, client, mut mock_link_controller, .. } = setup().await;
+
+    // Expect NotifyChipAdded then NotifyChipRemoved
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
+    mock_link_controller.expect_action(link_api::LinkId(0)).return_ok(());
 
     // Mock chip service for create
     tokio::spawn(async move {
