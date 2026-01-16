@@ -44,6 +44,7 @@ rust_library(
         "//next/device-actor",
         "//next/device-api",
         "//next/grpc-server",
+        "//next/link-actor",
         "//next/model",
         "//next/packet-stream",
         "//next/uwb",
@@ -95,6 +96,9 @@ rust_test(
     ],
     deps = [
         ":daemon-lib",
+        "//next/client",
+        "//next/device-api",
+        "//next/link-api",
         "//next/model",
         "//next/packet-stream",
         "//next/proto",

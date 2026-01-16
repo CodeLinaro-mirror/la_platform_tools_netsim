@@ -223,4 +223,8 @@ impl ChipClient for BluetoothClient {
             .map(|_| ())
             .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))
     }
+
+    fn clone_box(&self) -> Box<dyn ChipClient> {
+        Box::new(self.clone())
+    }
 }

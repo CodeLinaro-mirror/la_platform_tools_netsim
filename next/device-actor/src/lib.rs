@@ -26,6 +26,7 @@ pub fn new(
     chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>>,
     next_chip_id: Arc<AtomicU32>,
     capture_client: Option<Arc<dyn CaptureSender>>,
+    link_client: Box<dyn link_api::LinkClient>,
 ) -> DeviceActor {
     DeviceActor {
         chip_clients,
@@ -33,5 +34,6 @@ pub fn new(
         capture_client,
         devices: HashMap::new(),
         next_device_id: 1,
+        link_client,
     }
 }

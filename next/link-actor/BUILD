@@ -44,3 +44,14 @@ rust_test(
         "//next/client",
     ],
 )
+
+rust_test(
+    name = "tests",
+    crate = ":link-actor",
+    proc_macro_deps = [
+        "@async-trait",
+    ],
+    deps = [
+        "//next/client",
+    ],
+)
