@@ -7,6 +7,7 @@ use crate::platform;
 use client::{CaptureClient, DeviceClient};
 use common::system::netsimd_temp_dir;
 use common::util::os_utils::{get_instance_name, redirect_std_stream};
+use common::version::get_version;
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
@@ -270,6 +271,11 @@ impl NetsimDaemon {
         runtime_dir: PathBuf,
         args: Args,
     ) -> Result<StartUpMode, RunResult> {
+        if args.version {
+            println!("Netsim version: {}", get_version());
+            return Err(RunResult::ExitedNormally);
+        }
+
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
 
@@ -540,7 +546,9 @@ pub async fn run() -> RunResult {
             RunResult::ExitedNormally // Placeholder
         }
         Err(e) => {
-            error!("Failed to initialize NetsimDaemon: {:?}", e);
+            if e != RunResult::ExitedNormally {
+                error!("Failed to initialize NetsimDaemon: {:?}", e);
+            }
             e
         }
     }
