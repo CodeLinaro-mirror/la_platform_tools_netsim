@@ -1,14 +1,10 @@
 // Copyright (C) 2025 The Android Open Source Project
 
-//! Mock tests for Device Client.
+//! Device Client Logic Tests.
 //!
-//! This module uses a mock actor client to test DeviceClient logic without running a full actor.
-//!
-//! List of tests:
-//! - `test_device_client_mock`: Verifies standard creation and action handling via mocks.
-//! - `test_device_client_add_chip`: Verifies AddChip logic, including GUID mapping and chip addition.
+//! This module uses a mock actor client to verify the `DeviceClient` wrapper logic,
+//! ensuring correct serialization and state management without a full actor runtime.
 
-// use actor_framework::mock::MockClient; (Removed)
 use client::DeviceClient;
 use device_actor::DeviceActor;
 use device_api::api::{Chip, DeviceChipCreate, DeviceCreate};
@@ -17,6 +13,18 @@ use device_api::DeviceActionResult;
 use device_api::{DeviceConfig, DeviceId};
 use netsim_model::chip::{BleBeacon, ChipId};
 
+// Feature: Device Client Logic
+//
+//   As a developer
+//   I want to verify the implementation of the Device Client
+//   So that I can ensure it correctly communicates with the actor
+//
+//   Scenario: Client correctly serializes Create and Reset requests
+//     Given a mock Actor Client expecting Create and Reset calls
+//     When I call create_device on the client
+//     Then the mock receives the Create request
+//     When I call reset on the client
+//     Then the mock receives the PerformAction(Reset) request
 #[tokio::test]
 async fn test_device_client_mock() {
     let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();
@@ -56,6 +64,12 @@ async fn test_device_client_mock() {
     client.reset(id).await.unwrap();
 }
 
+// Scenario: client.add_chip manages device lifecycle
+//   Given a mock Actor Client
+//   When I call add_chip with a new device GUID
+//   Then the client calls Create on the actor
+//   When I call add_chip again with the SAME device GUID
+//   Then the client calls PerformAction(AddChip) on the actor (reusing the device)
 #[tokio::test]
 async fn test_device_client_add_chip() {
     let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();

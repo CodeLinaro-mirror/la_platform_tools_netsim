@@ -110,121 +110,19 @@ mod service;
 mod sniffer;
 mod utils;
 
+pub mod client;
+
 pub use actions::{BluetoothAction, BluetoothActionResult};
 pub use bluetooth_actor::BluetoothActor;
+pub use client::BluetoothClient;
 pub use error::BluetoothError;
 /// The entity type managed by the Bluetooth ResourceActor.
 pub type BluetoothEntity = BluetoothActor;
 
-use actor_framework::{ResourceActor, ResourceClient};
-
-use netsim_model::chip::{ChipClient, ChipCreate, ChipId};
-
-/// A client for the Bluetooth actor.
-#[derive(Clone)]
-pub struct BluetoothClient(pub ResourceClient<BluetoothEntity>);
+use actor_framework::ResourceActor;
 
 /// Creates a new Bluetooth actor and its client.
 pub fn new() -> (ResourceActor<BluetoothEntity>, BluetoothClient) {
     let (actor, resource_client) = ResourceActor::new(32);
     (actor, BluetoothClient(resource_client))
-}
-
-// TODO: Consider generic impl<T> ChipClient for ResourceClient<T>.
-#[async_trait::async_trait]
-impl ChipClient for BluetoothClient {
-    async fn create(
-        &self,
-        params: ChipCreate,
-    ) -> Result<(), netsim_model::client_error::ClientError> {
-        self.0
-            .create(params)
-            .await
-            .map(|_| ())
-            .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))
-    }
-
-    async fn read(
-        &self,
-        id: ChipId,
-    ) -> Result<netsim_model::chip::Chip, netsim_model::client_error::ClientError> {
-        self.0
-            .get(id)
-            .await
-            .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))?
-            .ok_or(netsim_model::client_error::ClientError::Chip(
-                netsim_model::chip_error::ChipError::ChipNotFound(id),
-            ))
-    }
-
-    async fn update(
-        &self,
-        id: ChipId,
-        patch: netsim_model::chip::ChipUpdate,
-    ) -> Result<netsim_model::chip::Chip, netsim_model::client_error::ClientError> {
-        self.0
-            .update(id, patch)
-            .await
-            .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))
-    }
-
-    async fn delete(&self, id: ChipId) -> Result<(), netsim_model::client_error::ClientError> {
-        self.0
-            .delete(id)
-            .await
-            .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))
-    }
-
-    async fn read_statistics(
-        &self,
-    ) -> Result<Vec<netsim_model::stats::NetsimRadioStats>, netsim_model::client_error::ClientError>
-    {
-        // Workaround: GetStatistics is an action, but requires an ID.
-        // We list chips first. If empty, return empty stats.
-        // If not empty, use the first chip ID to invoke the action (which returns global stats).
-        let chips = self
-            .0
-            .list()
-            .await
-            .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))?;
-        if chips.is_empty() {
-            return Ok(Vec::new());
-        }
-        let first_id = chips[0].id;
-        match self.0.perform_action(Some(ChipId(first_id)), BluetoothAction::GetStatistics).await {
-            Ok(BluetoothActionResult::Statistics(stats)) => Ok(stats),
-            Ok(_) => Err(netsim_model::client_error::ClientError::Recv(
-                "Unexpected action result".into(),
-            )),
-            Err(e) => Err(netsim_model::client_error::ClientError::Send(e.to_string())),
-        }
-    }
-
-    async fn read_count_for_testing(
-        &self,
-    ) -> Result<usize, netsim_model::client_error::ClientError> {
-        self.0
-            .list()
-            .await
-            .map(|chips| chips.len())
-            .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))
-    }
-
-    async fn shutdown(&self) -> Result<(), netsim_model::client_error::ClientError> {
-        // ResourceClient does not support explicit shutdown.
-        // Dropping the client will eventually shut down the actor if it's the last one.
-        Ok(())
-    }
-
-    async fn reset(&self, id: ChipId) -> Result<(), netsim_model::client_error::ClientError> {
-        self.0
-            .perform_action(Some(id), BluetoothAction::Reset { id })
-            .await
-            .map(|_| ())
-            .map_err(|e| netsim_model::client_error::ClientError::Send(e.to_string()))
-    }
-
-    fn clone_box(&self) -> Box<dyn ChipClient> {
-        Box::new(self.clone())
-    }
 }

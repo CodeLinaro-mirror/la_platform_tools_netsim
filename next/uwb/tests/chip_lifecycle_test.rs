@@ -1,0 +1,59 @@
+// Copyright 2026 The Android Open Source Project
+
+use crate::world::World;
+use netsim_model::chip::ChipId;
+use netsim_model::chip_error::ChipError;
+
+// Feature: UWB Chip Lifecycle
+//
+//   As a client
+//   I want to manage the lifecycle of UWB chips
+//   So that I can simulate chips appearing and disappearing
+
+// Scenario: Retrieve non-existent chip fails
+//
+//   Given the UWB actor is running
+//   When request to get a chip that does not exist
+//   Then the retrieval fails with ChipNotFound error
+#[tokio::test]
+async fn test_get_chip_not_found() {
+    // Given
+    let world = World::new().await;
+    let chip_id = 99;
+
+    // When
+    let result = world.when_get_chip(chip_id).await;
+
+    // Then
+    match result {
+        Err(ChipError::ChipNotFound(id)) => {
+            assert_eq!(id, ChipId(chip_id));
+        }
+        _ => panic!("Expected ChipNotFound error, got {:?}", result),
+    }
+}
+
+// Scenario: Delete chip successfully
+//
+//   Given a chip exists
+//   When request to delete the chip
+//   Then the chip is deleted and cannot be retrieved
+#[tokio::test]
+async fn test_delete_chip() {
+    // Given
+    let world = World::new().await;
+    let chip_id = 3;
+    world.when_create_chip(chip_id).await.unwrap();
+
+    // When
+    world.when_delete_chip(chip_id).await.unwrap();
+
+    // Then
+    let result = world.when_get_chip(chip_id).await;
+    match result {
+        Err(ChipError::ChipNotFound(id)) => {
+            assert_eq!(id, ChipId(chip_id));
+        }
+        _ => panic!("Expected ChipNotFound error after delete, got {:?}", result),
+    }
+}

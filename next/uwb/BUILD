@@ -1,8 +1,10 @@
-load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
-UWB_DEPS = [
+DEPS = [
+    "//next/actor-framework",
     "//next/client",
     "//next/device-api",
     "//next/model",
@@ -13,27 +15,41 @@ UWB_DEPS = [
     "@tokio-stream",
 ]
 
-rust_library(
+netsim_rust_library(
     name = "uwb",
     srcs = glob(["src/**/*.rs"]),
+    crate_features = [],
     crate_name = "uwb",
+    crate_root = "src/lib.rs",
     edition = "2021",
+    enable_clippy = False,
+    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
-    deps = UWB_DEPS,
+    strict_warnings = False,
+    deps = DEPS,
 )
 
 rust_test(
-    name = "tests",
+    name = "integration-test",
     srcs = glob(["tests/**/*.rs"]),
     crate_root = "tests/mod.rs",
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
     ],
-    deps = UWB_DEPS + [
-        ":uwb",
+    deps = [
+        ":testing",
+        "//next/actor-framework:testing",
+        "//next/client:testing",
+        "//next/device-api:testing",
+        "//next/model:testing",
+        "@bytes",
         "@env_logger",
+        "@futures",
+        "@log",
+        "@tokio",
+        "@tokio-stream",
     ],
 )

@@ -381,21 +381,22 @@ impl NetsimDaemon {
         info!("Wrote to INI file {}", ini_path.display());
 
         // Setup Bluetooth Server
-        let (bt_runner, bt_client) = bluetooth::new();
+        let (bt_runner, bt_client) = bluetooth_actor::new();
         let bt_actor_state =
-            bluetooth::BluetoothActor::new(device_client.clone(), bt_client.clone());
+            bluetooth_actor::BluetoothActor::new(device_client.clone(), bt_client.clone());
 
         // Setup Wifi Server
         let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
 
         // Setup Uwb Server
-        let (uwb_server, uwb_client) = uwb::Server::new(device_client.clone());
+        let (uwb_runner, uwb_client) = uwb::new();
+        let uwb_actor = uwb::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
         // TODO: Replace with real modem network.
         let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
         let (cell_runner, cell_client) = cell::new();
-        let (cell_server) = cell::Server::new(device_client.clone(), cell_controller);
+        let cell_server = cell::Server::new(device_client.clone(), cell_controller);
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =
@@ -417,6 +418,8 @@ impl NetsimDaemon {
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
             Box::new(link_client.clone()),
+            None,
+            Some(std::time::Duration::from_secs(15)),
         );
 
         // Spawn server tasks
@@ -425,7 +428,7 @@ impl NetsimDaemon {
         info!("Bluetooth server started");
         join_set.spawn(wifi_server.run());
         info!("Wifi server started");
-        join_set.spawn(uwb_server.run());
+        join_set.spawn(uwb_runner.run(uwb_actor));
         info!("Uwb server started");
         join_set.spawn(cell_runner.run(cell_server));
         info!("Cell server started");

@@ -89,7 +89,7 @@
 //!
 //! 1. **Type Safety** - Compile-time guarantees for domain operations
 //! 2. **Encapsulation** - Hide framework details from consumers
-//! 3. **Testability** - Easy to mock with [`MockClient`](actor_framework::mock::MockClient)
+//! 3. **Testability** - Easy to mock with `mockall`
 //! 4. **Maintainability** - Domain logic lives in one place
 //! 5. **Discoverability** - IDE autocomplete shows domain methods
 
