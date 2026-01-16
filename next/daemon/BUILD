@@ -30,6 +30,7 @@ rust_library(
         "src/logger.rs",
         "src/netsimd.rs",
         "src/platform.rs",
+        "src/version.rs",
     ],
     crate_name = "daemon",
     edition = "2021",

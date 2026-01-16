@@ -4,10 +4,10 @@ use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
+use crate::version::get_version;
 use client::{CaptureClient, DeviceClient};
 use common::system::netsimd_temp_dir;
 use common::util::os_utils::{get_instance_name, redirect_std_stream};
-use common::version::get_version;
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
@@ -187,6 +187,7 @@ async fn setup_grpc_listener(
     requested_port: u16,
     device_client: DeviceClient,
     link_client: client::LinkClient,
+    version: String,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
     let (new_connection_tx, new_connection_rx) = mpsc::channel(100);
@@ -198,6 +199,7 @@ async fn setup_grpc_listener(
         device_client,
         link_client,
         packet_streamer_service,
+        version,
     )
     .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
 
@@ -303,6 +305,13 @@ impl NetsimDaemon {
             info!("{args:#?}");
         }
 
+        info!(
+            "Netsim Version: {}, OS: {}, Arch: {}",
+            get_version(),
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        );
+
         let mut ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
 
         // Attempt to acquire the singleton lock for the netsim daemon.
@@ -364,6 +373,7 @@ impl NetsimDaemon {
             args.grpc_port.unwrap_or(0),
             device_client.clone(),
             link_client.clone(),
+            get_version(),
         )
         .await?;
 
