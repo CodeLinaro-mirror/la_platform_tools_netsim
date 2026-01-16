@@ -1,6 +1,5 @@
 use crate::frontend_converter::to_proto_device;
 use client::{DeviceClient, LinkClient};
-use common::version::get_version;
 use device_api::DeviceId;
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
@@ -14,11 +13,12 @@ pub struct FrontendClient {
     device_client: DeviceClient,
     #[allow(dead_code)]
     link_client: LinkClient,
+    version: String,
 }
 
 impl FrontendClient {
-    pub fn new(device_client: DeviceClient, link_client: LinkClient) -> Self {
-        Self { device_client, link_client }
+    pub fn new(device_client: DeviceClient, link_client: LinkClient, version: String) -> Self {
+        Self { device_client, link_client, version }
     }
 }
 
@@ -30,7 +30,7 @@ impl FrontendService for FrontendClient {
         sink: UnarySink<netsim_proto::frontend::VersionResponse>,
     ) {
         let mut response = netsim_proto::frontend::VersionResponse::new();
-        response.version = get_version();
+        response.version = self.version.clone();
         let f = sink.success(response).map(|_| ());
         ctx.spawn(f)
     }
