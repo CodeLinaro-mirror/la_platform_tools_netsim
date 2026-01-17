@@ -25,6 +25,26 @@ pub struct Args {
     #[arg(short, long)]
     pub dev: bool,
 
+    /// Disable grpc server for CLI
+    /// TODO: Not implemented yet
+    #[arg(long, alias = "no_cli_ui")]
+    pub no_cli_ui: bool,
+
+    /// Disable web server
+    /// TODO: Not implemented yet
+    #[arg(long, alias = "no_web_ui")]
+    pub no_web_ui: bool,
+
+    /// Redirect all TCP connections through the specified HTTP/HTTPS proxy.
+    /// Can be one of the following:
+    ///     http://<server>:<port>
+    ///     http://<username>:<password>@<server>:<port>
+    ///     (the 'http://' prefix can be omitted)
+    /// TODO: Not implemented yet
+    #[arg(long, verbatim_doc_comment)]
+    #[cfg_attr(not(feature = "cuttlefish"), arg(env = "http_proxy"))]
+    pub http_proxy: Option<String>,
+
     /// Disable netsimd from shutting down automatically.
     /// WARNING: This flag is for development purpose. netsimd will not shutdown without SIGKILL.
     #[arg(long, alias = "no_shutdown")]
@@ -45,6 +65,11 @@ pub struct Args {
     /// gRPC port for the netsim service
     #[arg(long, alias = "grpc_port")]
     pub grpc_port: Option<u16>,
+
+    /// DNS server for the host
+    /// TODO: Not implemented yet
+    #[arg(long, alias = "host-dns")]
+    pub host_dns: Option<String>,
 }
 
 impl Args {

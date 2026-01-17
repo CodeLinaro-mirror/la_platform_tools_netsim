@@ -46,7 +46,7 @@ async fn setup_test_harness() -> TestHarness {
     // let (command_tx, command_rx) = mpsc::channel(100);
     let (device_server_tx, device_server_rx) = mpsc::channel(100);
     let resource_client = ResourceClient::new(device_server_tx);
-    let device_client = DeviceClient::new(resource_client);
+    let device_client = DeviceClient::new(Box::new(resource_client));
 
     let fake_controller = cell::fake_modem_network::FakeModemNetwork::new();
     let (server, client) = CellServer::new(device_client, fake_controller);

@@ -1,8 +1,8 @@
-use actor_framework::{ActorClient, FrameworkError, ResourceClient};
+use actor_framework::ResourceClient;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use capture_actor::{CaptureActor, CaptureError};
+use capture_actor::CaptureActor;
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
 use netsim_model::device_error::DeviceError;
@@ -193,20 +193,5 @@ impl capture_api::CaptureSender for CaptureClient {
     }
     fn capture_packet(&self, chip_id: ChipId, direction: capture_api::Direction, packet: Bytes) {
         self.capture_packet(chip_id, direction, packet);
-    }
-}
-
-// Removed CapturedStream and CapturedSink definitions as they are now in netsim-model::capture_io
-
-#[async_trait]
-impl ActorClient<CaptureActor> for CaptureClient {
-    type Error = CaptureError;
-
-    fn inner(&self) -> &ResourceClient<CaptureActor> {
-        &self.inner
-    }
-
-    fn map_error(e: FrameworkError) -> Self::Error {
-        CaptureError::Anyhow(anyhow!(e))
     }
 }

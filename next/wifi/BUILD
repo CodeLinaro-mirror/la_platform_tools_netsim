@@ -8,6 +8,9 @@ rust_library(
     name = "wifi",
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
+    proc_macro_deps = [
+        "@async-trait",
+    ],
     deps = [
         "//next/client",
         "//next/common",

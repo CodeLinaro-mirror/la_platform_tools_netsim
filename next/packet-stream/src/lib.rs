@@ -18,26 +18,6 @@
 //!
 //! ## Quick Start
 //!
-//! ```rust,no_run
-//! use packet_stream::{Streams, TransportType, ChipInfo};
-//! use bytes::Bytes;
-//!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Server: Accept connections with init_info protocol
-//!     let mut streams = Streams::new();
-//!     streams.start_listener("test", TransportType::uds("test.sock")).await?;
-//!
-//!     let (listener_name, mut stream) = streams.accept_any().await?;
-//!     println!("Connected: {}", stream.chip_info().device_name());
-//!
-//!     // Zero-copy packet communication
-//!     let packet = stream.recv_packet().await?;
-//!     stream.send_packet_bytes(Bytes::from("response")).await?;
-//!
-//!     Ok(())
-//! }
-//! ```
 //!
 //! ## Wire Format
 //!

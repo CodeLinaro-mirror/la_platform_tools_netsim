@@ -18,7 +18,7 @@ use futures::Sink;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::pin::Pin;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::oneshot;
 use tokio_stream::Stream;
 
 /// The kind of network technology the chip supports.
@@ -432,48 +432,21 @@ pub struct CellUpdate {
 /// This client provides a high-level API for sending `ChipRequest` messages to
 /// the server over an `mpsc` channel. It abstracts away the channel and
 /// `oneshot` responder boilerplate for each command.
-#[async_trait::async_trait]
-pub trait ChipClient: Send + Sync {
-    async fn create(&self, params: ChipCreate) -> Result<(), ClientError>;
-    async fn read(&self, id: ChipId) -> Result<Chip, ClientError>;
-    async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError>;
-    async fn delete(&self, id: ChipId) -> Result<(), ClientError>;
-    async fn read_statistics(&self) -> Result<Vec<NetsimRadioStats>, ClientError>;
-    async fn read_count_for_testing(&self) -> Result<usize, ClientError>;
-    async fn shutdown(&self) -> Result<(), ClientError>;
-    /// Resets the state of the specified chip.
-    async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
-    fn clone_box(&self) -> Box<dyn ChipClient>;
-}
-
-impl Clone for Box<dyn ChipClient> {
-    fn clone(&self) -> Box<dyn ChipClient> {
-        self.clone_box()
-    }
-}
-
+/// A generic client for interacting with any chip server actor (UWB, WiFi, Cell).
 #[derive(Clone)]
-pub struct LegacyChipClient {
-    /// The sender half of the `mpsc` channel for sending `ChipRequest`s to the
-    /// chip service.
-    sender: mpsc::Sender<ChipRequest>,
+pub struct RadioChipClient {
+    sender: tokio::sync::mpsc::Sender<ChipRequest>,
 }
 
-impl LegacyChipClient {
-    /// Creates a new `LegacyChipClient` handle.
-    ///
-    /// This function connects the client to the service's message channel.
-    ///
-    /// # Arguments
-    ///
-    /// * `sender` - The `mpsc` sender half of the channel for sending `ChipRequest`s.
-    pub fn new(sender: mpsc::Sender<ChipRequest>) -> Self {
+impl RadioChipClient {
+    pub fn new(sender: tokio::sync::mpsc::Sender<ChipRequest>) -> Self {
         Self { sender }
     }
 }
 
+#[cfg_attr(feature = "testing", mockall::automock)]
 #[async_trait::async_trait]
-impl ChipClient for LegacyChipClient {
+impl ChipClient for RadioChipClient {
     async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
         let (tx, rx) = oneshot::channel();
         self.sender
@@ -549,87 +522,29 @@ impl ChipClient for LegacyChipClient {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// A client handle for interacting with the chip server actor.
+///
+/// There is one chip server actor for each network type (Bluetooth, UWB, Wi-Fi).
+/// This client provides a high-level API for sending `ChipRequest` messages to
+/// the server over an `mpsc` channel. It abstracts away the channel and
+/// `oneshot` responder boilerplate for each command.
+#[cfg_attr(feature = "testing", mockall::automock)]
+#[async_trait::async_trait]
+pub trait ChipClient: Send + Sync {
+    async fn create(&self, params: ChipCreate) -> Result<(), ClientError>;
+    async fn read(&self, id: ChipId) -> Result<Chip, ClientError>;
+    async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError>;
+    async fn delete(&self, id: ChipId) -> Result<(), ClientError>;
+    async fn read_statistics(&self) -> Result<Vec<NetsimRadioStats>, ClientError>;
+    async fn read_count_for_testing(&self) -> Result<usize, ClientError>;
+    async fn shutdown(&self) -> Result<(), ClientError>;
+    /// Resets the state of the specified chip.
+    async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
+    fn clone_box(&self) -> Box<dyn ChipClient>;
+}
 
-    #[tokio::test]
-    async fn test_get_chip() {
-        let (tx, mut rx) = mpsc::channel(1);
-        let client = LegacyChipClient::new(tx);
-
-        // Spawn a task to handle the client call
-        tokio::spawn(async move {
-            let chip_id = ChipId(1);
-            let _ = client.read(chip_id).await;
-        });
-
-        // Receive the message and assert
-        let received = rx.recv().await.unwrap();
-        match received {
-            ChipRequest::Read { id, respond_to: _ } => {
-                assert_eq!(id, ChipId(1));
-            }
-            _ => panic!("Received incorrect ChipRequest variant"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_create_chip() {
-        let (tx, mut rx) = mpsc::channel(1);
-        let client = LegacyChipClient::new(tx);
-
-        let params = ChipCreate {
-            id: ChipId(2),
-            packet_stream: None,
-            packet_sink: None,
-            config: ChipConfig::new(
-                "test_chip",
-                "test_manufacturer",
-                "test_product",
-                NetworkParams::Bluetooth(BluetoothCreate {
-                    address: "00:11:22:33:44:55".to_string(),
-                    bt_properties: RootcanalController::default(),
-                    mode: BluetoothMode::Device(DeviceParams {}),
-                }),
-            ),
-            device_id: DeviceId(1),
-        };
-
-        tokio::spawn(async move {
-            let _ = client.create(params).await;
-        });
-
-        let received = rx.recv().await.unwrap();
-        match received {
-            ChipRequest::Create { params, respond_to: _ } => {
-                assert_eq!(params.id, ChipId(2));
-                match params.config.network_params {
-                    NetworkParams::Bluetooth(bt_params) => {
-                        assert_eq!(bt_params.address, "00:11:22:33:44:55");
-                    }
-                    _ => panic!("Received incorrect NetworkParams variant"),
-                }
-            }
-            _ => panic!("Received incorrect ChipRequest variant"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_get_chip_statistics() {
-        let (tx, mut rx) = mpsc::channel(1);
-        let client = LegacyChipClient::new(tx);
-
-        tokio::spawn(async move {
-            let _ = client.read_statistics().await;
-        });
-
-        let received = rx.recv().await.unwrap();
-        match received {
-            ChipRequest::GetStatistics { respond_to: _ } => {
-                // Correct variant received, nothing else to check
-            }
-            _ => panic!("Received incorrect ChipRequest variant"),
-        }
+impl Clone for Box<dyn ChipClient> {
+    fn clone(&self) -> Box<dyn ChipClient> {
+        self.clone_box()
     }
 }

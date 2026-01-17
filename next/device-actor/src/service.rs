@@ -49,6 +49,8 @@ impl ActorService for DeviceActor {
         ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
         log::info!("DeviceActor: handle_create for device {}", params.device_config.name);
+        self.has_seen_device = true;
+        self.last_empty_time = None;
         let id = id.unwrap_or_else(|| {
             let id = DeviceId(self.next_device_id);
             self.next_device_id += 1;
@@ -131,6 +133,7 @@ impl ActorService for DeviceActor {
         update: Self::Update,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
+        // Update does not affect device count, so no timeout logic change needed.
         if let Some(entity) = self.devices.get_mut(&id) {
             // Update local state
             if let Some(name) = update.name {
@@ -173,6 +176,7 @@ impl ActorService for DeviceActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
+        // self.last_activity = std::time::Instant::now(); // Removed
         if let Some(entity) = self.devices.remove(&id) {
             for chip in &entity.device.chips {
                 let network_kind = chip_kind_to_network_kind(&chip.kind);
@@ -191,6 +195,9 @@ impl ActorService for DeviceActor {
                         .expect("Failed to notify LinkActor of chip remove");
                     // TODO: Expose a helper method on LinkClient for this action (e.g. notify_chip_removed)
                 }
+            }
+            if self.devices.is_empty() {
+                self.last_empty_time = Some(std::time::Instant::now());
             }
             Ok(())
         } else {
@@ -301,6 +308,8 @@ impl ActorService for DeviceActor {
                 };
 
                 self.devices.insert(id, entity);
+                self.has_seen_device = true;
+                self.last_empty_time = None;
                 result
             } else {
                 Err(DeviceError::DeviceNotFound(id.to_string()))
