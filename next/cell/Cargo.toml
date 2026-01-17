@@ -13,3 +13,4 @@ bytes = "1"
 futures = "0.3"
 tokio-stream = "0.1"
 thiserror = "1"
+device-api = { path = "../device-api" }

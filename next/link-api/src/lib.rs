@@ -29,6 +29,7 @@ pub mod action;
 pub mod create;
 pub use action::LinkAction;
 pub use create::LinkCreate;
+pub use netsim_model::chip::{ChipId, ChipKind};
 pub use netsim_model::link::{Link, LinkId, LinkUpdate};
 
 #[cfg_attr(feature = "testing", mockall::automock)]
@@ -39,4 +40,6 @@ pub trait LinkClient: Send + Sync {
     async fn update(&self, id: LinkId, patch: LinkUpdate) -> Result<(), String>;
     async fn delete(&self, id: LinkId) -> Result<(), String>;
     async fn action(&self, id: Option<LinkId>, action: LinkAction) -> Result<(), String>;
+    async fn notify_chip_added(&self, chip_id: ChipId, kind: ChipKind) -> Result<(), String>;
+    async fn notify_chip_removed(&self, chip_id: ChipId) -> Result<(), String>;
 }
