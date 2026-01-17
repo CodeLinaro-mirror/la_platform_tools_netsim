@@ -13,6 +13,7 @@ DEPS = [
     "@log",
     "@tokio",
     "@tokio-stream",
+    "@serde",
 ]
 
 netsim_rust_library(

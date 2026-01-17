@@ -126,3 +126,6 @@ pub fn new() -> (ResourceActor<BluetoothEntity>, BluetoothClient) {
     let (actor, resource_client) = ResourceActor::new(32);
     (actor, BluetoothClient(resource_client))
 }
+
+// TODO: Consider generic impl<T> ChipClient for ResourceClient<T>.
+// Implementation moved to client.rs
