@@ -10,6 +10,7 @@ DEPS = [
     "@tokio",
     "@tokio-stream",
     "@thiserror",
+    "@mockall",
 ]
 
 netsim_rust_library(
@@ -30,13 +31,19 @@ netsim_rust_library(
 )
 
 rust_test(
-    name = "test",
+    name = "integration-test",
     srcs = glob(["tests/**/*.rs"]),
+    crate_root = "tests/mod.rs",
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
     ],
-    deps = [":actor-framework"] + DEPS,
+    deps = [
+        ":testing",
+        "@mockall",
+        "@thiserror",
+        "@tokio",
+    ],
 )
 
 rust_doc_test(

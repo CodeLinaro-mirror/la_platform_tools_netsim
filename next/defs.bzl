@@ -13,6 +13,8 @@ def netsim_rust_library(
         name,
         srcs,
         deps = [],
+        select_deps = [],
+        crate_features = [],
         # Feature Flags (Default to True for safety)
         enable_clippy = True,
         enable_unit_test = True,
@@ -34,6 +36,8 @@ def netsim_rust_library(
         name: The name of the library.
         srcs: The source files.
         deps: The dependencies.
+        select_deps: The part of deps that uses select()
+        crate_features: the crate features
         enable_clippy: Whether to enable clippy checks.
 
         enable_unit_test: Whether to generate a unit test target.
@@ -51,28 +55,45 @@ def netsim_rust_library(
     rust_library(
         name = name,
         srcs = srcs,
-        deps = deps,
+        deps = deps + select_deps,
         rustc_flags = rustc_flags,
+        crate_features = crate_features,
         **kwargs
     )
 
-    # 2. Automatic Unit Test
+    # 2. The Testing Library with "testing" feature (always created)
+    # All deps are //next/crate -> //next/crate:testing
+    testing_deps = [
+        d + ":testing" if d.startswith("//next") else d
+        for d in deps
+    ]
+    rust_library(
+        name = "testing",
+        srcs = srcs,
+        deps = testing_deps + select_deps,
+        rustc_flags = rustc_flags,
+        crate_features = ["testing"] + crate_features,
+        **kwargs
+    )
+
+    # 3. Automatic Unit Test (againt testing library)
     if enable_unit_test:
         test_flags = []
         if strict_warnings:
             test_flags = NETSIM_RUSTC_FLAGS
 
         rust_test(
-            name = name + "_test",
-            crate = ":" + name,
+            name = "test",
+            crate = ":testing",
             rustc_flags = test_flags,
+            deps = testing_deps + select_deps,
             testonly = True,
         )
 
-    # 3. Clippy Linter
+    # 4. Clippy Linter
     if enable_clippy:
         rust_clippy(
-            name = name + "_clippy",
+            name = "clippy",
             deps = [":" + name],
             testonly = True,
         )
@@ -80,7 +101,7 @@ def netsim_rust_library(
     # 5. Documentation
     if enable_doc:
         rust_doc(
-            name = name + "_doc",
+            name = "doc",
             crate = ":" + name,
             testonly = True,
         )
@@ -88,7 +109,7 @@ def netsim_rust_library(
     # 6. Documentation Test
     if enable_doc_test:
         rust_doc_test(
-            name = name + "_doc_test",
+            name = "doc-test",
             crate = ":" + name,
             testonly = True,
         )

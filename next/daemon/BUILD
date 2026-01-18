@@ -36,7 +36,7 @@ rust_library(
     proc_macro_deps = ["@async-trait"],
     deps = [
         "//next/actor-framework",
-        "//next/bluetooth",
+        "//next/bluetooth-actor",
         "//next/capture-actor",
         "//next/capture-api",
         "//next/cell",

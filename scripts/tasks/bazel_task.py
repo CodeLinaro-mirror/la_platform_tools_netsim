@@ -105,6 +105,9 @@ class BazelTask(Task):
       configs.append("hermetic")
 
     build_configs = [f"--config={c}" for c in configs]
+    if platform.system().lower() == "windows":
+      # Force Static CRT linking to avoid ABI mismatches with the Emulator's prebuilt DLLs.
+      build_configs.append("--features=static_link_msvcrt")
 
     startup_options = []
     if self.env.tmp_dir:

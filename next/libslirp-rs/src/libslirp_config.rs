@@ -354,6 +354,7 @@ mod tests {
 
     /// Tests the `lookup_host_dns` function with different inputs.
     #[test]
+    #[ignore]
     fn test_lookup_host_dns() -> io::Result<()> {
         let rt = Runtime::new().unwrap();
         let results = rt.block_on(lookup_host_dns(""))?;

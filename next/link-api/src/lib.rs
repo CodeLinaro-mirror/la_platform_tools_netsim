@@ -29,9 +29,9 @@ pub mod action;
 pub mod create;
 pub use action::LinkAction;
 pub use create::LinkCreate;
-pub mod mock;
 pub use netsim_model::link::{Link, LinkId, LinkUpdate};
 
+#[cfg_attr(feature = "testing", mockall::automock)]
 #[async_trait::async_trait]
 pub trait LinkClient: Send + Sync {
     async fn list(&self) -> Result<Vec<Link>, String>;
