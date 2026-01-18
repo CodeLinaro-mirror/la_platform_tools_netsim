@@ -3,7 +3,7 @@
 use crate::uwb_actor::UwbActor;
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
-use netsim_model::chip::{Chip, ChipCreate, ChipId, ChipRequest, ChipUpdate};
+use netsim_model::chip::{Chip, ChipCreate, ChipId, ChipUpdate};
 use netsim_model::chip_error::ChipError;
 
 #[async_trait]
@@ -11,8 +11,8 @@ impl ActorService for UwbActor {
     type Id = ChipId;
     type Create = ChipCreate;
     type Update = ChipUpdate;
-    type Action = ChipRequest;
-    type ActionResult = ();
+    type Action = crate::UwbAction;
+    type ActionResult = crate::UwbActionResult;
     type Error = ChipError;
     type Entity = Chip;
 
@@ -62,16 +62,36 @@ impl ActorService for UwbActor {
 
     async fn handle_action(
         &mut self,
-        id: Option<Self::Id>,
+        _id: Option<Self::Id>,
         action: Self::Action,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
-            ChipRequest::Reset { id: _ } => {
+            crate::UwbAction::Reset { id: _ } => {
                 // TODO: Implement reset
-                Ok(())
+                Ok(crate::UwbActionResult::Success)
             }
-            _ => Ok(()),
+            crate::UwbAction::GetStatistics => {
+                let stats = self
+                    .active_chips
+                    .values()
+                    .filter_map(|chip| {
+                        // All chips in active_chips are UWB, but check variant just in case or use kind
+                        match &chip.variant {
+                            Some(netsim_model::chip::ChipVariant::Uwb) => {
+                                Some(netsim_model::stats::NetsimRadioStats {
+                                    id: chip.id,
+                                    name: chip.name.clone().unwrap_or_default(),
+                                    tx_bytes: 0,
+                                    rx_bytes: 0,
+                                })
+                            }
+                            _ => None,
+                        }
+                    })
+                    .collect();
+                Ok(crate::UwbActionResult::Statistics(stats))
+            }
         }
     }
 

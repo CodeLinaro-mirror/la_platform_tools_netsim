@@ -55,16 +55,8 @@ impl ChipClient for BluetoothClient {
 
     async fn read_statistics(
         &self,
-    ) -> Result<Vec<netsim_model::stats::NetsimRadioStats>, ClientError> {
-        // Workaround: GetStatistics is an action, but requires an ID.
-        // We list chips first. If empty, return empty stats.
-        // If not empty, use the first chip ID to invoke the action (which returns global stats).
-        let chips = self.0.list().await.map_err(|e| ClientError::Send(e.to_string()))?;
-        if chips.is_empty() {
-            return Ok(Vec::new());
-        }
-        let first_id = chips[0].id;
-        match self.0.perform_action(Some(ChipId(first_id)), BluetoothAction::GetStatistics).await {
+    ) -> Result<Box<[netsim_model::stats::NetsimRadioStats]>, ClientError> {
+        match self.0.perform_action(None, BluetoothAction::GetStatistics).await {
             Ok(BluetoothActionResult::Statistics(stats)) => Ok(stats),
             Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
             Err(e) => Err(ClientError::Send(e.to_string())),
