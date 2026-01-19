@@ -244,6 +244,27 @@ pub struct MacHeader3Addr {
     // HT Control would be after Addr4/QoS if present
 }
 
+impl MacHeader3Addr {
+    /// Creates a new generic 3-address MAC header.
+    pub fn new(
+        frame_control: FrameControl,
+        duration_id: u16,
+        addr1: MacAddr,
+        addr2: MacAddr,
+        addr3: MacAddr,
+        sequence_control: SequenceControl,
+    ) -> Self {
+        Self {
+            frame_control,
+            duration_id: U16::new(duration_id),
+            addr1,
+            addr2,
+            addr3,
+            sequence_control,
+        }
+    }
+}
+
 /// Represents an IEEE 802.11 Data frame header (basic, no QoS, 3 addresses).
 /// This is a common structure for simple data transmissions.
 #[repr(C)]
@@ -265,25 +286,71 @@ pub struct DataFrameHeader {
     // HT Control (4 bytes) might follow if it's an HT frame.
 }
 
-/// Represents an IEEE 802.11 Beacon frame header.
-/// Management frames like Beacon typically have 3 addresses.
+impl DataFrameHeader {
+    /// Creates a new Data Frame Header.
+    pub fn new(
+        frame_control: FrameControl,
+        duration_id: u16,
+        addr1: MacAddr,
+        addr2: MacAddr,
+        addr3: MacAddr,
+        sequence_control: SequenceControl,
+    ) -> Self {
+        Self {
+            frame_control,
+            duration_id: U16::new(duration_id),
+            addr1,
+            addr2,
+            addr3,
+            sequence_control,
+        }
+    }
+}
+
+/// CCMP Header (8 bytes).
 #[repr(C)]
-#[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Debug)]
-pub struct BeaconFrameHeader {
-    /// Frame Control field. Type=MGMT, Subtype=BEACON.
-    pub frame_control: FrameControl,
-    /// Duration field.
-    pub duration: U16<LittleEndian>,
-    /// Address 1: Destination MAC Address (typically broadcast FF:FF:FF:FF:FF:FF).
-    pub da: MacAddr,
-    /// Address 2: Source MAC Address (Transmitter Address / BSSID).
-    pub sa: MacAddr,
-    /// Address 3: BSSID.
-    pub bssid: MacAddr,
-    /// Sequence Control field.
-    pub sequence_control: SequenceControl,
-    // Followed by fixed parameters (Timestamp, Beacon Interval, Capability Info)
-    // and then tagged parameters (SSID, Rates, etc.).
+#[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Debug, Copy, Clone)]
+pub struct CcmpHeader {
+    pub pn0: u8,
+    pub pn1: u8,
+    pub rsvd: u8,
+    pub key_id: u8, // Key ID (bits 6-7) | ExtIV (bit 5) | Rsvd (0-4)
+    pub pn2: u8,
+    pub pn3: u8,
+    pub pn4: u8,
+    pub pn5: u8,
+}
+
+/// Fixed parameters in an Association Request frame.
+#[repr(C)]
+#[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Debug, Copy, Clone)]
+pub struct AssociationRequestFixedFields {
+    pub capabilities: U16<LittleEndian>,
+    pub listen_interval: U16<LittleEndian>,
+}
+
+/// Fixed parameters in an Authentication frame (6 bytes).
+#[repr(C)]
+#[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Debug, Copy, Clone)]
+pub struct AuthenticationFixedFields {
+    /// Authentication Algorithm Number (2 bytes).
+    pub algorithm: U16<LittleEndian>,
+    /// Authentication Transaction Sequence Number (2 bytes).
+    pub sequence: U16<LittleEndian>,
+    /// Status Code (2 bytes).
+    pub status: U16<LittleEndian>,
+}
+
+/// Fixed parameters in an Association Response frame (6 bytes).
+#[repr(C)]
+#[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Debug, Copy, Clone)]
+pub struct AssociationResponseFixedFields {
+    /// Capability Information (2 bytes).
+    pub capabilities: U16<LittleEndian>,
+    /// Status Code (2 bytes).
+    pub status: U16<LittleEndian>,
+    /// Association ID (AID) (2 bytes).
+    pub aid: U16<LittleEndian>,
 }
 
 /// IEEE 802.11 Frame Type Enum
@@ -686,6 +753,8 @@ impl TryFrom<Ieee80211ToAp> for Ieee80211 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ieee80211::BeaconFrameHeader;
+    use crate::ieee80211::{data_subtype, frame_type, management_subtype};
     use core::mem::size_of;
     use zerocopy::Ref;
 
