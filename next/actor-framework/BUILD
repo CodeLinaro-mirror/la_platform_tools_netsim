@@ -20,12 +20,9 @@ netsim_rust_library(
     crate_name = "actor_framework",
     crate_root = "src/lib.rs",
     edition = "2021",
-    enable_clippy = False,
-    enable_unit_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
-    strict_warnings = False,
     deps = DEPS,
 )
 
