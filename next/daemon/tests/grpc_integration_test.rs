@@ -16,19 +16,7 @@ use tokio::time::timeout;
 
 #[tokio::test]
 async fn test_grpc_frontend_lifecycle() {
-    let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
-    std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
-
-    // Setup netsimd with isolated directories
-    let mut args = daemon::args::Args::default();
-    args.logtostderr = true; // Disable log redirection to avoid segfaults in tests
-    let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), temp_dir.clone(), args)
-        .await
-        .expect("Failed to create daemon");
-    let (daemon, _ini_guard) = match startup_mode {
-        StartUpMode::Owner(daemon, ini_guard) => (daemon, ini_guard),
-        _ => panic!("Expected to start as Owner"),
-    };
+    let (daemon, _ini_guard) = setup_daemon().await;
 
     // Get gRPC port
     let grpc_port = daemon.grpc_port().expect("NetsimDaemon has no gRPC port");
@@ -118,19 +106,7 @@ async fn test_grpc_frontend_lifecycle() {
 
 #[tokio::test]
 async fn test_packet_streamer_lifecycle() {
-    let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
-    std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
-
-    // Setup netsimd with isolated directories
-    let mut args = daemon::args::Args::default();
-    args.logtostderr = true; // Disable log redirection to avoid segfaults in tests
-    let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), temp_dir.clone(), args)
-        .await
-        .expect("Failed to create daemon");
-    let (daemon, _ini_guard) = match startup_mode {
-        StartUpMode::Owner(daemon, ini_guard) => (daemon, ini_guard),
-        _ => panic!("Expected to start as Owner"),
-    };
+    let (daemon, _ini_guard) = setup_daemon().await;
 
     let grpc_port = daemon.grpc_port().expect("NetsimDaemon has no gRPC port");
 
@@ -191,5 +167,206 @@ async fn test_packet_streamer_lifecycle() {
     {
         Ok(_) => {}
         Err(_) => panic!("Test timed out"),
+    }
+}
+
+#[tokio::test]
+async fn test_patch_device_resolution() {
+    let (daemon, _ini_guard) = setup_daemon().await;
+    let grpc_port = daemon.grpc_port().expect("NetsimDaemon has no gRPC port");
+
+    let client_task = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let env = Arc::new(EnvBuilder::new().build());
+        let ch = ChannelBuilder::new(env).connect(&format!("127.0.0.1:{}", grpc_port));
+        let client = FrontendServiceClient::new(ch);
+
+        // 1. Create Device "Resolution-Device"
+        let mut create_req = CreateDeviceRequest::new();
+        let mut device_create = DeviceCreate::new();
+        device_create.name = "Resolution-Device".to_string();
+        // Add a dummy chip to satisfy creation requirements
+        let mut beacon = ChipCreate::new();
+        beacon.name = "beacon".to_string();
+        beacon.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH_BEACON);
+        device_create.chips.push(beacon);
+
+        create_req.device = MessageField::some(device_create);
+        let create_resp = client
+            .create_device_async(&create_req)
+            .expect("Failed create")
+            .await
+            .expect("RPC failed");
+        let device_id = create_resp.device.id;
+        assert!(device_id > 0);
+
+        // 2. Patch Device by Name (ID = 0/None)
+        let mut patch_req = netsim_proto::frontend::PatchDeviceRequest::new();
+        let mut patch_fields =
+            netsim_proto::frontend::patch_device_request::PatchDeviceFields::new();
+        patch_fields.name = Some("Resolution-Device".to_string());
+        patch_fields.position = MessageField::some(netsim_proto::model::Position {
+            x: 10.0,
+            y: 10.0,
+            z: 0.0,
+            ..Default::default()
+        });
+        patch_req.device = MessageField::some(patch_fields);
+
+        client
+            .patch_device_async(&patch_req)
+            .expect("Failed patch name")
+            .await
+            .expect("RPC failed");
+
+        // Verify position update (Name patch)
+        let list_resp = client
+            .list_device_async(&netsim_proto::empty::Empty::new())
+            .expect("List failed")
+            .await
+            .expect("RPC failed");
+        let device = list_resp
+            .devices
+            .iter()
+            .find(|d| d.name == "Resolution-Device")
+            .expect("Device missing");
+        let pos = device.position.as_ref().unwrap();
+        assert!((pos.x - 10.0).abs() < 0.001);
+
+        // 3. Patch Device by Explicit ID
+        let mut patch_req_id = netsim_proto::frontend::PatchDeviceRequest::new();
+        patch_req_id.id = Some(device_id);
+        let mut patch_fields_id =
+            netsim_proto::frontend::patch_device_request::PatchDeviceFields::new();
+        patch_fields_id.position = MessageField::some(netsim_proto::model::Position {
+            x: 20.0,
+            y: 20.0,
+            z: 0.0,
+            ..Default::default()
+        });
+        patch_req_id.device = MessageField::some(patch_fields_id);
+        client
+            .patch_device_async(&patch_req_id)
+            .expect("Failed patch ID")
+            .await
+            .expect("RPC failed");
+
+        // Verify position update (ID patch)
+        let list_resp_final = client
+            .list_device_async(&netsim_proto::empty::Empty::new())
+            .expect("List failed")
+            .await
+            .expect("RPC failed");
+        let device_id_patch =
+            list_resp_final.devices.iter().find(|d| d.id == device_id).expect("Device missing");
+        let pos_id = device_id_patch.position.as_ref().unwrap();
+        assert!((pos_id.x - 20.0).abs() < 0.001);
+    });
+
+    let daemon_task = daemon.run_daemon();
+    match timeout(Duration::from_secs(10), async move {
+        tokio::select! { _ = client_task => {}, _ = daemon_task => {} }
+    })
+    .await
+    {
+        Ok(_) => {}
+        Err(_) => panic!("Test timed out"),
+    }
+}
+
+#[tokio::test]
+async fn test_chip_updates() {
+    let (daemon, _ini_guard) = setup_daemon().await;
+    let grpc_port = daemon.grpc_port().expect("NetsimDaemon has no gRPC port");
+
+    let client_task = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let env = Arc::new(EnvBuilder::new().build());
+        let ch = ChannelBuilder::new(env).connect(&format!("127.0.0.1:{}", grpc_port));
+        let client = FrontendServiceClient::new(ch);
+
+        // 1. Create Device with UWB, WiFi, and Bluetooth
+        let mut create_req = CreateDeviceRequest::new();
+        let mut device_create = DeviceCreate::new();
+        device_create.name = "Chip-Update-Device".to_string();
+
+        let mut uwb_chip = ChipCreate::new();
+        uwb_chip.name = "uwb0".to_string();
+        uwb_chip.kind = EnumOrUnknown::new(ChipKind::UWB);
+        device_create.chips.push(uwb_chip);
+
+        let mut wifi_chip = ChipCreate::new();
+        wifi_chip.name = "wifi0".to_string();
+        wifi_chip.kind = EnumOrUnknown::new(ChipKind::WIFI);
+        device_create.chips.push(wifi_chip);
+
+        let mut bt_chip = ChipCreate::new();
+        bt_chip.name = "bt0".to_string();
+        bt_chip.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
+        bt_chip.address = "00:11:22:33:44:55".to_string(); // Requires valid address
+        device_create.chips.push(bt_chip);
+
+        create_req.device = MessageField::some(device_create);
+        let create_resp = client
+            .create_device_async(&create_req)
+            .expect("Failed create")
+            .await
+            .expect("RPC failed");
+        let device_id = create_resp.device.id;
+        assert!(device_id > 0);
+
+        // 2. Patch Device Position (should trigger updates on all chips)
+        let mut patch_req = netsim_proto::frontend::PatchDeviceRequest::new();
+        patch_req.id = Some(device_id);
+        let mut patch_fields =
+            netsim_proto::frontend::patch_device_request::PatchDeviceFields::new();
+        patch_fields.position = MessageField::some(netsim_proto::model::Position {
+            x: 50.0,
+            y: 50.0,
+            z: 0.0,
+            ..Default::default()
+        });
+        patch_req.device = MessageField::some(patch_fields);
+
+        match client.patch_device_async(&patch_req).expect("Failed patch").await {
+            Ok(_) => {}
+            Err(e) => panic!("Patch failed (likely due to missing update handler): {}", e),
+        }
+
+        // Verify position update reflected in device list
+        let list_resp = client
+            .list_device_async(&netsim_proto::empty::Empty::new())
+            .expect("List failed")
+            .await
+            .expect("RPC failed");
+        let device = list_resp.devices.iter().find(|d| d.id == device_id).expect("Device missing");
+        let pos = device.position.as_ref().unwrap();
+        assert!((pos.x - 50.0).abs() < 0.001);
+    });
+
+    let daemon_task = daemon.run_daemon();
+    match timeout(Duration::from_secs(10), async move {
+        tokio::select! { _ = client_task => {}, _ = daemon_task => {} }
+    })
+    .await
+    {
+        Ok(_) => {}
+        Err(_) => panic!("Test timed out"),
+    }
+}
+
+async fn setup_daemon() -> (NetsimDaemon, daemon::ini_file::IniFileGuard) {
+    let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
+    std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
+
+    // Setup netsimd with isolated directories
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true; // Disable log redirection to avoid segfaults in tests
+    let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), temp_dir.clone(), args)
+        .await
+        .expect("Failed to create daemon");
+    match startup_mode {
+        StartUpMode::Owner(daemon, ini_guard) => (daemon, ini_guard),
+        _ => panic!("Expected to start as Owner"),
     }
 }
