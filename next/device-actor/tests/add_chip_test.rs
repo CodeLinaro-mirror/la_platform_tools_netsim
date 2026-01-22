@@ -52,6 +52,7 @@ async fn test_add_chip_to_existing_device() {
     let mut mock_link_client = link_api::MockLinkClient::new();
     mock_link_client.expect_action().returning(|_, _| Ok(()));
     mock_link_client.expect_create().returning(|_| Ok(link_api::LinkId(0)));
+    mock_link_client.expect_notify_chip_added().returning(|_, _| Ok(()));
 
     let world = World::with_clients(chip_clients, mock_link_client).await;
 

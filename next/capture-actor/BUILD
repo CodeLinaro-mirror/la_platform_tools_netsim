@@ -6,7 +6,7 @@ package(default_visibility = ["//visibility:public"])
 DEPS = [
     "//next/actor-framework",
     "//next/capture-api",
-    "//rust/common:netsim_common",
+    "//next/common",
     "//next/model",
     "@anyhow",
     "@bytes",
