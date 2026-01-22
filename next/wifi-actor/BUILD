@@ -25,6 +25,7 @@ netsim_rust_library(
         "@thiserror",
         "@tokio",
         "@tokio-stream",
+        "@zerocopy",
     ],
 )
 
@@ -111,6 +112,18 @@ rust_test(
         "@futures",
         "@tokio",
         "@tokio-stream",
+        "@zerocopy",
+    ],
+)
+
+rust_test(
+    name = "ftm_test",
+    srcs = ["tests/ftm_test.rs"],
+    edition = "2021",
+    deps = [
+        ":testing",
+        "//next/model:testing",
+        "//next/packets:testing",
         "@zerocopy",
     ],
 )

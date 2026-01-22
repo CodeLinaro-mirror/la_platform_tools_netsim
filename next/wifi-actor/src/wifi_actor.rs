@@ -83,9 +83,7 @@ impl WifiActor {
             // Notify DeviceService
             let dc = self.device_client.clone();
             let device_id = chip.device_id;
-            // Spawn notification to avoid blocking Actor action loop?
-            // Actually handle_delete is async, we can await if acceptable or spawn.
-            // BluetoothActor spawns.
+            // Notify DeviceService asynchronously
             tokio::spawn(async move {
                 let _ = dc.notify_chip_removed(device_id, id).await;
             });
@@ -128,7 +126,47 @@ impl WifiActor {
                             }
                         }
                     }
-                    crate::medium::tx_packet_state::InfraTarget::None => {}
+                    crate::medium::tx_packet_state::InfraTarget::None => {
+                        // Check for FTM Request (Peer-to-Peer Ranging)
+                        if tx_state.stations {
+                            // Check matching FTM Request
+                            // TODO: Avoid parsing if possible, but we need to check Frame payload.
+                            let frame_bytes = tx_state.get_ieee80211_bytes();
+                            // Decode to check content
+                            if let Ok(frame) =
+                                netsim_packets::ieee80211::Ieee80211::decode(&frame_bytes)
+                            {
+                                let da = frame.get_destination();
+                                if let Some(peer_id) = self.medium.get_station_chip_id(&da) {
+                                    // We found the target chip. Now get positions.
+                                    // Initiator: chip_id
+                                    // Responder: peer_id
+                                    if let (Some(initiator), Some(responder)) = (
+                                        self.active_chips.get(&ChipId(chip_id)),
+                                        self.active_chips.get(&ChipId(peer_id)),
+                                    ) {
+                                        if let Some(responses) = crate::ftm::handle_ftm_request(
+                                            &frame,
+                                            &initiator.position,
+                                            &responder.position,
+                                        ) {
+                                            log::info!(
+                                                "Simulated FTM Response from {} to {}",
+                                                peer_id,
+                                                chip_id
+                                            );
+                                            for resp in responses {
+                                                self.out_queue.push((chip_id, resp));
+                                            }
+                                            // Suppress generic transmission.
+                                            // Act as a Hardware Offload/Medium Interception to ensure ONLY the simulated FTM response is sent.
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // 3. Stations (Loopback/Peers)

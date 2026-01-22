@@ -97,6 +97,9 @@ impl ActorService for WifiActor {
             if let Some(enabled) = update.enabled {
                 self.medium.set_enabled(id.0, enabled);
             }
+            if let Some(pos) = update.position {
+                chip.position = pos;
+            }
             // Update the chip state properly
             use crate::medium::types::WifiResult;
             if let Ok(enabled) = self.medium.enabled(id.0) {

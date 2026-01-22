@@ -81,6 +81,10 @@ impl Medium {
         self.stations.contains_key(addr)
     }
 
+    pub fn get_station_chip_id(&self, addr: &MacAddress) -> Option<u32> {
+        self.stations.get(addr).map(|s| s.client_id)
+    }
+
     pub(crate) fn get_station(&self, addr: &MacAddress) -> WifiResult<&Station> {
         self.stations
             .get(addr)

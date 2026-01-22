@@ -2,6 +2,7 @@
 
 pub mod client;
 pub mod error;
+pub mod ftm;
 pub mod lifecycle;
 pub mod medium;
 pub mod service;
