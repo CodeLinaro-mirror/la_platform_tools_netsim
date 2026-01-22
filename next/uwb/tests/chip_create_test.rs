@@ -27,7 +27,7 @@ async fn test_create_and_get_chip() {
     // Then
     let chip_info = world.when_get_chip(chip_id).await.unwrap();
     match chip_info.variant {
-        Some(netsim_model::chip::ChipVariant::Uwb) => {
+        Some(netsim_model::chip::ChipVariant::Uwb(_)) => {
             assert_eq!(chip_info.id, chip_id);
             assert_eq!(chip_info.kind, ChipKind::UWB);
             assert_eq!(chip_info.name, Some(format!("uwb_chip_{}", chip_id)));

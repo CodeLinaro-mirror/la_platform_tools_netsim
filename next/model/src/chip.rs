@@ -370,10 +370,16 @@ pub struct Chip {
 /// Information about a chip, including technology-specific details.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChipVariant {
-    Bluetooth,
-    Wifi,
-    Uwb,
+    Bluetooth(Bluetooth),
+    Wifi(Radio),
+    Uwb(Radio),
     Cell(CellChip),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Bluetooth {
+    pub low_energy: Radio,
+    pub classic: Radio,
 }
 
 /// Cellular technology specific chip information.
@@ -381,6 +387,20 @@ pub enum ChipVariant {
 pub struct CellChip {
     /// A string representing the current state of the cellular modem.
     pub state: String,
+}
+
+impl From<NetworkKind> for ChipVariant {
+    fn from(kind: NetworkKind) -> Self {
+        match kind {
+            NetworkKind::Bluetooth => ChipVariant::Bluetooth(Bluetooth {
+                low_energy: Default::default(),
+                classic: Default::default(),
+            }),
+            NetworkKind::Wifi => ChipVariant::Wifi(Default::default()),
+            NetworkKind::Uwb => ChipVariant::Uwb(Default::default()),
+            NetworkKind::Cell => ChipVariant::Cell(CellChip { state: "unknown".into() }),
+        }
+    }
 }
 
 // ======================================================================
@@ -403,9 +423,9 @@ pub struct ChipUpdate {
 /// The techbology variant specific fields
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChipVariantUpdate {
-    Bluetooth,
-    Wifi,
-    Uwb,
+    Bluetooth(Radio),
+    Wifi(Radio),
+    Uwb(Radio),
     Cell(CellUpdate),
 }
 
