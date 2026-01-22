@@ -19,4 +19,12 @@ def netsimd_rust_library(name, **kwargs):
         }),
         **kwargs
     )
-    rust_static_library(name = name + "_windows", target_compatible_with = ["@platforms//os:windows"], **kwargs)
+    windows_kwargs = dict(kwargs)
+    windows_flags = windows_kwargs.pop("rustc_flags", [])
+    rust_static_library(
+        name = name + "_windows",
+        target_compatible_with = ["@platforms//os:windows"],
+        # Force Static CRT linking (+crt-static) to avoid ABI mismatches with the Emulator's prebuilt DLLs.
+        rustc_flags = windows_flags + ["-C", "target-feature=+crt-static"],
+        **windows_kwargs
+    )

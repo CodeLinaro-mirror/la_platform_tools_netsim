@@ -16,50 +16,6 @@
 //! 3. **Business logic** - Validation, transformation, orchestration
 //! 4. **Better API ergonomics** - Hide framework details from consumers
 //!
-//! ## Example: UserClient
-//!
-//! ```rust
-//! use actor_framework::ResourceClient;
-//! use actor_sample::model::{User, UserCreate, UserId};
-//! use actor_sample::user_actor::UserError;
-//!
-//! #[derive(Clone)]
-//! pub struct UserClient {
-//!     inner: ResourceClient<User>,
-//! }
-//!
-//! impl UserClient {
-//!     pub fn new(inner: ResourceClient<User>) -> Self {
-//!         Self { inner }
-//!     }
-//!
-//!     // Domain-specific method with type-safe errors
-//!     pub async fn create_user(&self, params: UserCreate) -> Result<UserId, UserError> {
-//!         self.inner.create(params).await
-//!             .map_err(|e| UserError::ActorCommunicationError(e.to_string()))
-//!     }
-//! }
-//! ```
-//!
-//! ## The ActorClient Trait
-//!
-//! The [`crate::actor_client::ActorClient`] trait provides a common interface for all clients,
-//! automatically implementing `get()` and `delete()` methods:
-//!
-//! ```rust,ignore
-//! #[async_trait]
-//! impl ActorClient<User> for UserClient {
-//!     type Error = UserError;
-//!
-//!     fn inner(&self) -> &ResourceClient<User> {
-//!         &self.inner
-//!     }
-//!
-//!     fn map_error(e: FrameworkError) -> Self::Error {
-//!         UserError::ActorCommunicationError(e.to_string())
-//!     }
-//! }
-//! ```
 //!
 //! Now `UserClient` automatically gets:
 //! - `async fn get(&self, id: String) -> Result<Option<User>, UserError>`
@@ -133,13 +89,11 @@
 //!
 //! 1. **Type Safety** - Compile-time guarantees for domain operations
 //! 2. **Encapsulation** - Hide framework details from consumers
-//! 3. **Testability** - Easy to mock with [`MockClient`](actor_framework::mock::MockClient)
+//! 3. **Testability** - Easy to mock with `mockall`
 //! 4. **Maintainability** - Domain logic lives in one place
 //! 5. **Discoverability** - IDE autocomplete shows domain methods
 
-pub mod device_client;
-pub use device_client::*;
+pub use device_actor::{DeviceClient, DeviceError};
 pub mod capture_client;
 pub use capture_client::*;
-pub(crate) mod link_client;
-pub use link_client::LinkClient;
+pub use link_actor::LinkClient;

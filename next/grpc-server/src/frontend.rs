@@ -1,6 +1,6 @@
-use actor_framework::ActorClient;
-use client::DeviceClient;
-use device_api::DeviceId;
+use crate::frontend_converter::to_proto_device;
+use client::{DeviceClient, DeviceError, LinkClient};
+use device_api::api::DeviceUpdate;
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use netsim_proto::empty::Empty;
@@ -8,16 +8,17 @@ use netsim_proto::frontend::ListDeviceResponse;
 use netsim_proto::frontend_grpc::FrontendService;
 use netsim_proto::protobuf;
 
-use crate::frontend_converter::to_proto_device;
-
 #[derive(Clone)]
 pub struct FrontendClient {
     device_client: DeviceClient,
+    #[allow(dead_code)]
+    link_client: LinkClient,
+    version: String,
 }
 
 impl FrontendClient {
-    pub fn new(device_client: DeviceClient) -> Self {
-        Self { device_client }
+    pub fn new(device_client: DeviceClient, link_client: LinkClient, version: String) -> Self {
+        Self { device_client, link_client, version }
     }
 }
 
@@ -29,7 +30,7 @@ impl FrontendService for FrontendClient {
         sink: UnarySink<netsim_proto::frontend::VersionResponse>,
     ) {
         let mut response = netsim_proto::frontend::VersionResponse::new();
-        response.version = "0.0.1-next".to_string();
+        response.version = self.version.clone();
         let f = sink.success(response).map(|_| ());
         ctx.spawn(f)
     }
@@ -76,12 +77,8 @@ impl FrontendService for FrontendClient {
     ) {
         let client = self.device_client.clone();
         let f = async move {
-            // TODO: Handle case where req.id is missing but name is provided?
-            // For now, we require ID or fail if not present (or maybe 0 is invalid?)
-            let id = req.id.unwrap_or(0); // 0 might be valid?
-
-            let update = device_api::api::DeviceUpdate {
-                id,
+            let update = DeviceUpdate {
+                id: req.id.unwrap_or(0),
                 name: req.device.name.clone(),
                 visible: req.device.visible,
                 position: req
@@ -98,14 +95,23 @@ impl FrontendService for FrontendClient {
                     .map(crate::frontend_converter::from_proto_orientation),
             };
 
-            match client.update(DeviceId(id), update).await {
+            let name_opt = req.device.name.as_deref();
+            match client.patch(req.id, name_opt, update).await {
                 Ok(_) => sink.success(Empty::new()).await,
                 Err(e) => {
-                    sink.fail(RpcStatus::with_message(
-                        RpcStatusCode::INTERNAL,
-                        format!("Failed to patch device: {}", e),
-                    ))
-                    .await
+                    let status = match e {
+                        DeviceError::NotFound(_) | DeviceError::DeviceNotFound(_) => {
+                            RpcStatus::with_message(
+                                RpcStatusCode::NOT_FOUND,
+                                format!("Device not found or patch failed: {}", e),
+                            )
+                        }
+                        _ => RpcStatus::with_message(
+                            RpcStatusCode::INTERNAL,
+                            format!("Failed to patch device: {}", e),
+                        ),
+                    };
+                    sink.fail(status).await
                 }
             }
         }
@@ -116,12 +122,8 @@ impl FrontendService for FrontendClient {
     fn reset(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<Empty>) {
         let client = self.device_client.clone();
         let f = async move {
-            // TODO: reset might need a DeviceId if it's per-device, or we need a global reset.
-            // For now, we assume it's per-device and we don't have the ID here?
-            // Actually, the old API had a global reset. If the new one is per-device, this is a breaking change.
-            // Given the error, it expects a DeviceId. We'll use a placeholder or fix the API.
-            // For now, let's use a placeholder ID 0 to satisfy compilation, but this needs review.
-            match client.reset(DeviceId(0)).await {
+            // We assume it's a global reset if no ID is provided (which is the case for Empty request).
+            match client.reset(None).await {
                 Ok(_) => sink.success(Empty::new()).await,
                 Err(e) => {
                     sink.fail(RpcStatus::with_message(
@@ -225,9 +227,6 @@ impl FrontendService for FrontendClient {
     ) {
         let client = self.device_client.clone();
         let f = async move {
-            // Proto DeleteChipRequest has `id` which is documented as Device Identifier.
-            // So this actually deletes the device?
-            // netsim-api has `delete(DeviceId)`.
             match client.delete(device_api::DeviceId(req.id)).await {
                 Ok(_) => sink.success(Empty::new()).await,
                 Err(e) => {

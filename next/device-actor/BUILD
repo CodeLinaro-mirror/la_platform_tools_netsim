@@ -8,11 +8,13 @@ DEPS = [
     "//next/capture-api",
     "//next/device-api",
     "//next/model",
+    "//next/link-api",
     "@futures",
     "@tokio",
     "@serde",
     "@log",
     "@thiserror",
+    "@mockall",
 ]
 
 netsim_rust_library(
@@ -31,28 +33,21 @@ netsim_rust_library(
     deps = DEPS,
 )
 
-[
-    rust_test(
-        name = test_file.replace("tests/", "").replace(".rs", ""),
-        srcs = [
-            test_file,
-            "tests/common/mod.rs",
-        ],
-        edition = "2021",
-        # enable_clippy = False,
-        # enable_doc_test = False,
-        proc_macro_deps = [
-            "@async-trait",
-        ],
-        deps = [
-            ":device-actor",
-            "//next/client",
-        ] + DEPS,
-    )
-    for test_file in [
-        "tests/add_chip_integration_test.rs",
-        "tests/device_lifecycle_test.rs",
-        "tests/integration_test.rs",
-        "tests/server_shutdown_test.rs",
-    ]
-]
+rust_test(
+    name = "integration-test",
+    srcs = glob(["tests/**/*.rs"]),
+    crate_root = "tests/mod.rs",
+    edition = "2021",
+    proc_macro_deps = [
+        "@async-trait",
+    ],
+    deps = [
+        ":testing",
+        "//next/actor-framework:testing",
+        "//next/client:testing",
+        "//next/device-api:testing",
+        "//next/link-api:testing",
+        "//next/model:testing",
+        "@tokio",
+    ],
+)

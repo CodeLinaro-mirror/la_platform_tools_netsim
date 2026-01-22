@@ -11,18 +11,14 @@
 # Run the linter (uses bazel test):
 #   bazel test //next/modem-rs:clippy
 
-load(
-    "@rules_rust//rust:defs.bzl",
-    "rust_doc",
-    "rust_library",
-    "rust_test",
-)
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
-rust_library(
+netsim_rust_library(
     name = "modem-rs",
     srcs = glob(["src/**/*.rs"]),
+    crate_name = "modem_rs",
     edition = "2021",
     features = ["test-utils"],
     proc_macro_deps = [
@@ -33,41 +29,10 @@ rust_library(
     deps = [
         "//next/model",
         "@bytes",
-        "@tokio",
-        "@serde",
-        # "@toml",
+        "@hex",
+        "@log",
         "@nom",
-        "@hex",
-        "@log",
-    ],
-)
-
-# rust_clippy(
-#     name = "clippy",
-#     deps = [":modem-rs"],
-# )
-
-rust_doc(
-    name = "doc",
-    crate = ":modem-rs",
-)
-
-# rust_doc_test(
-#     name = "doc_test",
-#     crate = ":modem-rs",
-# )
-
-rust_test(
-    name = "tests",
-    srcs = glob(["tests/**/*.rs"]),
-    crate_root = "tests/mod.rs",
-    edition = "2021",
-    proc_macro_deps = ["@async-trait"],
-    tags = ["general_tests"],
-    deps = [
-        ":modem-rs",
-        "@env_logger",
-        "@hex",
-        "@log",
+        "@serde",
+        "@tokio",
     ],
 )

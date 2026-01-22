@@ -117,7 +117,7 @@ def get_tasks(args, env) -> Mapping[str, Task]:
 
   # Handle the default case and convert to a set for efficient lookup.
   # If `localrunall` is present, it becomes the only task.
-  user_tasks = {t.lower() for t in (args.task or ["configure"])}
+  user_tasks = {t.lower() for t in args.task or ["configure"]}
   if "localrunall" in user_tasks:
     user_tasks = {"localrunall"}
 

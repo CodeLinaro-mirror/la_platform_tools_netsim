@@ -5,11 +5,8 @@ use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use device_api::api::{DeviceCreate, DeviceUpdate};
 use device_api::{DeviceAction, DeviceActionResult, DeviceId};
-use netsim_model::chip::{
-    BeaconParams, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId, NetworkKind,
-    NetworkParams,
-};
-use netsim_model::device::api::Chip as ApiChip;
+use link_api::LinkAction;
+use netsim_model::chip::{ChipConfig, ChipCreate, ChipId, ChipKind, NetworkKind, NetworkParams};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 
@@ -51,6 +48,9 @@ impl ActorService for DeviceActor {
         params: Self::Create,
         ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
+        log::info!("DeviceActor: handle_create for device {}", params.device_config.name);
+        self.has_seen_device = true;
+        self.last_empty_time = None;
         let id = id.unwrap_or_else(|| {
             let id = DeviceId(self.next_device_id);
             self.next_device_id += 1;
@@ -89,7 +89,7 @@ impl ActorService for DeviceActor {
                 // 3. Update local device state with the new chip
                 entity.device.chips.push(netsim_model::chip::Chip {
                     id: chip_id.0,
-                    kind: netsim_model::chip::ChipKind::from(chip_kind),
+                    kind: ChipKind::from(chip_kind),
                     name: Some(chip_create.name),
                     manufacturer: Some(chip_create.manufacturer),
                     product_name: Some(chip_create.product_name),
@@ -99,7 +99,12 @@ impl ActorService for DeviceActor {
                     variant: None,
                     links: vec![],
                 });
-                //TODO: Send create request to Link Actor
+                // Send create request to Link Actor
+                // This ensures the LinkActor is aware of the new chip and can manage its links.
+                self.link_client
+                    .notify_chip_added(chip_id, chip_kind.into())
+                    .await
+                    .expect("Failed to notify LinkActor of new chip");
             } else {
                 // Log warning or return error if no client for this network kind
                 return Err(DeviceError::ActorCommunicationError(format!(
@@ -126,6 +131,7 @@ impl ActorService for DeviceActor {
         update: Self::Update,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
+        // Update does not affect device count, so no timeout logic change needed.
         if let Some(entity) = self.devices.get_mut(&id) {
             // Update local state
             if let Some(name) = update.name {
@@ -168,6 +174,7 @@ impl ActorService for DeviceActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
+        // self.last_activity = std::time::Instant::now(); // Removed
         if let Some(entity) = self.devices.remove(&id) {
             for chip in &entity.device.chips {
                 let network_kind = chip_kind_to_network_kind(&chip.kind);
@@ -176,8 +183,15 @@ impl ActorService for DeviceActor {
                         .delete(netsim_model::chip::ChipId(chip.id))
                         .await
                         .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
-                    //TODO: Send delete request to Link Actor
+                    // Send delete request to Link Actor
+                    self.link_client
+                        .notify_chip_removed(ChipId(chip.id))
+                        .await
+                        .expect("Failed to notify LinkActor of chip remove");
                 }
+            }
+            if self.devices.is_empty() {
+                self.last_empty_time = Some(std::time::Instant::now());
             }
             Ok(())
         } else {
@@ -201,11 +215,18 @@ impl ActorService for DeviceActor {
                     }
                     DeviceAction::NotifyChipRemoved(_device_id, chip_id) => {
                         entity.device.chips.retain(|c| c.id != chip_id.0);
-                        // TODO: If entity.device.chips.is_empty(), remove the device itself.
-                        // This requires a way to trigger a self-delete from within the actor.
+                        if entity.device.chips.is_empty() {
+                            // TODO: If entity.device.chips.is_empty(), remove the device itself.
+                            // This requires a way to trigger a self-delete from within the actor.
+                        }
+                        self.link_client
+                            .notify_chip_removed(chip_id)
+                            .await
+                            .expect("Failed to notify LinkActor of chip remove");
                         Ok(DeviceActionResult::Success)
                     }
                     DeviceAction::AddChip { chip_config, packet_stream, packet_sink } => {
+                        log::info!("DeviceActor: AddChip for chip {}", chip_config.name);
                         let chip_id = ChipId(self.next_chip_id.fetch_add(1, Ordering::SeqCst));
 
                         // 1. Create Chip parameters
@@ -251,7 +272,7 @@ impl ActorService for DeviceActor {
                             // 3. Update local device state with the new chip
                             entity.device.chips.push(netsim_model::chip::Chip {
                                 id: chip_id.0,
-                                kind: netsim_model::chip::ChipKind::from(chip_kind),
+                                kind: ChipKind::from(chip_kind),
                                 name: Some(chip_config.name),
                                 manufacturer: Some(chip_config.manufacturer),
                                 product_name: Some(chip_config.product_name),
@@ -261,6 +282,10 @@ impl ActorService for DeviceActor {
                                 variant: None,
                                 links: vec![],
                             });
+                            self.link_client
+                                .notify_chip_added(chip_id, chip_kind.into())
+                                .await
+                                .expect("Failed to notify LinkActor of chip add");
                             Ok(DeviceActionResult::ChipId(chip_id))
                         } else {
                             Err(DeviceError::ActorCommunicationError(format!(
@@ -272,6 +297,8 @@ impl ActorService for DeviceActor {
                 };
 
                 self.devices.insert(id, entity);
+                self.has_seen_device = true;
+                self.last_empty_time = None;
                 result
             } else {
                 Err(DeviceError::DeviceNotFound(id.to_string()))

@@ -42,6 +42,8 @@ pub struct ControllerFeatures {
     pub le_connected_isochronous_stream: ::std::option::Option<bool>,
     // @@protoc_insertion_point(field:rootcanal.configuration.ControllerFeatures.le_connection_subrating)
     pub le_connection_subrating: ::std::option::Option<bool>,
+    // @@protoc_insertion_point(field:rootcanal.configuration.ControllerFeatures.le_channel_sounding)
+    pub le_channel_sounding: ::std::option::Option<bool>,
     // special fields
     // @@protoc_insertion_point(special_field:rootcanal.configuration.ControllerFeatures.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -191,8 +193,27 @@ impl ControllerFeatures {
         self.le_connection_subrating = ::std::option::Option::Some(v);
     }
 
+    // optional bool le_channel_sounding = 8;
+
+    pub fn le_channel_sounding(&self) -> bool {
+        self.le_channel_sounding.unwrap_or(false)
+    }
+
+    pub fn clear_le_channel_sounding(&mut self) {
+        self.le_channel_sounding = ::std::option::Option::None;
+    }
+
+    pub fn has_le_channel_sounding(&self) -> bool {
+        self.le_channel_sounding.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_le_channel_sounding(&mut self, v: bool) {
+        self.le_channel_sounding = ::std::option::Option::Some(v);
+    }
+
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(7);
+        let mut fields = ::std::vec::Vec::with_capacity(8);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "le_extended_advertising",
@@ -228,6 +249,11 @@ impl ControllerFeatures {
             "le_connection_subrating",
             |m: &ControllerFeatures| { &m.le_connection_subrating },
             |m: &mut ControllerFeatures| { &mut m.le_connection_subrating },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "le_channel_sounding",
+            |m: &ControllerFeatures| { &m.le_channel_sounding },
+            |m: &mut ControllerFeatures| { &mut m.le_channel_sounding },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<ControllerFeatures>(
             "ControllerFeatures",
@@ -268,6 +294,9 @@ impl ::protobuf::Message for ControllerFeatures {
                 56 => {
                     self.le_connection_subrating = ::std::option::Option::Some(is.read_bool()?);
                 },
+                64 => {
+                    self.le_channel_sounding = ::std::option::Option::Some(is.read_bool()?);
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -301,6 +330,9 @@ impl ::protobuf::Message for ControllerFeatures {
         if let Some(v) = self.le_connection_subrating {
             my_size += 1 + 1;
         }
+        if let Some(v) = self.le_channel_sounding {
+            my_size += 1 + 1;
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -328,6 +360,9 @@ impl ::protobuf::Message for ControllerFeatures {
         if let Some(v) = self.le_connection_subrating {
             os.write_bool(7, v)?;
         }
+        if let Some(v) = self.le_channel_sounding {
+            os.write_bool(8, v)?;
+        }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
     }
@@ -352,6 +387,7 @@ impl ::protobuf::Message for ControllerFeatures {
         self.le_coded_phy = ::std::option::Option::None;
         self.le_connected_isochronous_stream = ::std::option::Option::None;
         self.le_connection_subrating = ::std::option::Option::None;
+        self.le_channel_sounding = ::std::option::Option::None;
         self.special_fields.clear();
     }
 
@@ -364,6 +400,7 @@ impl ::protobuf::Message for ControllerFeatures {
             le_coded_phy: ::std::option::Option::None,
             le_connected_isochronous_stream: ::std::option::Option::None,
             le_connection_subrating: ::std::option::Option::None,
+            le_channel_sounding: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -1387,19 +1424,20 @@ impl ControllerPreset {
 }
 
 static file_descriptor_proto_data: &'static [u8] = b"\
-    \n\x1drootcanal/configuration.proto\x12\x17rootcanal.configuration\"\xe0\
-    \x02\n\x12ControllerFeatures\x126\n\x17le_extended_advertising\x18\x01\
+    \n\x1drootcanal/configuration.proto\x12\x17rootcanal.configuration\"\x90\
+    \x03\n\x12ControllerFeatures\x126\n\x17le_extended_advertising\x18\x01\
     \x20\x01(\x08R\x15leExtendedAdvertising\x126\n\x17le_periodic_advertisin\
     g\x18\x02\x20\x01(\x08R\x15lePeriodicAdvertising\x12\x1d\n\nll_privacy\
     \x18\x03\x20\x01(\x08R\tllPrivacy\x12\x1a\n\tle_2m_phy\x18\x04\x20\x01(\
     \x08R\x07le2mPhy\x12\x20\n\x0cle_coded_phy\x18\x05\x20\x01(\x08R\nleCode\
     dPhy\x12E\n\x1fle_connected_isochronous_stream\x18\x06\x20\x01(\x08R\x1c\
     leConnectedIsochronousStream\x126\n\x17le_connection_subrating\x18\x07\
-    \x20\x01(\x08R\x15leConnectionSubrating\"\xe5\x01\n\x10ControllerQuirks\
-    \x12U\n(send_acl_data_before_connection_complete\x18\x01\x20\x01(\x08R#s\
-    endAclDataBeforeConnectionComplete\x12;\n\x1ahas_default_random_address\
-    \x18\x02\x20\x01(\x08R\x17hasDefaultRandomAddress\x12=\n\x1bhardware_err\
-    or_before_reset\x18\x03\x20\x01(\x08R\x18hardwareErrorBeforeReset\"<\n\
+    \x20\x01(\x08R\x15leConnectionSubrating\x12.\n\x13le_channel_sounding\
+    \x18\x08\x20\x01(\x08R\x11leChannelSounding\"\xe5\x01\n\x10ControllerQui\
+    rks\x12U\n(send_acl_data_before_connection_complete\x18\x01\x20\x01(\x08\
+    R#sendAclDataBeforeConnectionComplete\x12;\n\x1ahas_default_random_addre\
+    ss\x18\x02\x20\x01(\x08R\x17hasDefaultRandomAddress\x12=\n\x1bhardware_e\
+    rror_before_reset\x18\x03\x20\x01(\x08R\x18hardwareErrorBeforeReset\"<\n\
     \x0eVendorFeatures\x12\x10\n\x03csr\x18\x01\x20\x01(\x08R\x03csr\x12\x18\
     \n\x07android\x18\x02\x20\x01(\x08R\x07android\"\xb4\x02\n\nController\
     \x12A\n\x06preset\x18\x01\x20\x01(\x0e2).rootcanal.configuration.Control\

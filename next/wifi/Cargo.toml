@@ -14,5 +14,15 @@ tokio-stream = "0.1"
 thiserror = "1"
 netsim-packets = { path = "../packets" }
 pdl-runtime = "0.4.2"
-socket2 = "0.5"
+hostapd-rs = { path = "../hostapd-rs" }
+common = { package = "netsim-common", path = "../common" }
+zerocopy = { version = "0.8", features = ["derive"] }
+netsim-proto = { path = "../proto" }
+device-api = { path = "../device-api" }
+libslirp-rs = { path = "../libslirp-rs" }
+socket2 = { version = "0.5", features = ["all"] }
 http-proxy = { path = "../http-proxy" }
+async-trait = "0.1"
+
+[features]
+cuttlefish = []

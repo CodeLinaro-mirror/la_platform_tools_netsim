@@ -1,0 +1,40 @@
+[package]
+name = "bluetooth"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+netsim-model = { path = "../model" }
+device-api = { path = "../device-api" }
+client = { path = "../client" }
+rootcanal = { path = "../rootcanal" }
+protobuf = "3.6.0"
+thiserror = "1.0"
+tokio = { version = "1.32.0", default-features = false, features = [
+  "rt",
+  "time",
+  "sync",
+  "macros",
+] }
+zerocopy = "0.8.25"
+hex = "0.4.3"
+bytes = "1.4.0"
+log = "0.4.17"
+async-trait = "0.1.68"
+env_logger = { version = "0.10.0", default-features = false }
+rand = "0.8.5"
+tokio-stream = "0.1.17"
+futures = "0.3.31"
+actor-framework = { path = "../actor-framework" }
+serde = { version = "1.0", features = ["derive"] }
+
+[features]
+default = []
+test-utils = []
+
+[dev-dependencies]
+rootcanal = { path = "../rootcanal" }

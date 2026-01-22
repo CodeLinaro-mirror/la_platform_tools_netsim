@@ -45,5 +45,5 @@ pub fn slirp_run(opt: ProtoSlirpOptions, tx_bytes: mpsc::Sender<Bytes>) -> WifiR
         config.host_dns = get_runtime().block_on(lookup_host_dns(&opt.host_dns))?;
     }
 
-    Ok(LibSlirp::new(config, tx_bytes, proxy_manager, tx_proxy_bytes))
+    Ok(LibSlirp::new(config, Box::new(tx_bytes), proxy_manager, tx_proxy_bytes))
 }
