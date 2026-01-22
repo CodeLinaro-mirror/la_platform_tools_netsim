@@ -27,7 +27,7 @@ impl ActorService for ApActor {
         self.next_ap_id += 1;
 
         self.shared_keys.set_bssid(config.bssid);
-        self.aps.insert(id, ApState { config, wpa: None });
+        self.aps.insert(id, ApState::new(config));
 
         log::info!("Created AP with ID: {}", id);
         Ok(id)
@@ -51,7 +51,9 @@ impl ActorService for ApActor {
             if let Some(ssid) = update.ssid {
                 ap.config.ssid = ssid;
             }
-            // For now only SSID update supported
+            if let Some(position) = update.position {
+                ap.config.position = position;
+            }
             Ok(ap.clone())
         } else {
             Err(ApError::ApNotFound(id))

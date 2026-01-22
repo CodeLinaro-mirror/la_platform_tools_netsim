@@ -51,7 +51,7 @@ pub fn build_gtk_kde(gtk: &[u8], key_id: u8) -> Vec<u8> {
     // Key ID (bits 0-1), Tx (bit 2), Reserved (3-7)
     // We usually set Tx=1 (bit 2) if we are transmitting this key to be used?
     // standard says: "Tx bit shall be set".
-    // Key ID is typically 1 or 2. Let's assume key_id fits in 2 bits.
+    // Key ID fits in 2 bits (typically 1 or 2).
     let ky_bits = (key_id & 0x03) | (1 << 2);
     body.push(ky_bits);
 

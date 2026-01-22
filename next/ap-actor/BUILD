@@ -80,6 +80,7 @@ rust_test(
     deps = [
         ":testing",
         "//next/actor-framework:testing",
+        "//next/model",
         "//next/packets:testing",
         "@bytes",
         "@env_logger",

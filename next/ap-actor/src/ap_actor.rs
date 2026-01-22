@@ -24,15 +24,47 @@ pub struct ApConfig {
     pub wpa_passphrase: Option<String>,
     #[serde(default = "default_beacon_interval")]
     pub beacon_interval: u16,
+    pub country_code: Option<String>,
+    #[serde(default = "default_dtim_period")]
+    pub dtim_period: u8,
+    #[serde(default)]
+    pub hidden_ssid: bool,
+    #[serde(default)]
+    pub sae: bool,
+    #[serde(default = "default_wmm_enabled")]
+    pub wmm_enabled: bool,
+    #[serde(default)]
+    pub enterprise_enabled: bool,
+    #[serde(default)]
+    pub mac_acl_mode: u8, // 0=Disable, 1=Deny, 2=Allow
+    #[serde(default)]
+    pub mac_acl_list: Vec<MacAddr>,
+    #[serde(default = "default_ftm_responder_enabled")]
+    pub ftm_responder_enabled: bool,
+    #[serde(default)]
+    pub position: netsim_model::device::Position,
+}
+
+fn default_ftm_responder_enabled() -> bool {
+    true
+}
+
+fn default_wmm_enabled() -> bool {
+    true
 }
 
 fn default_beacon_interval() -> u16 {
     100
 }
 
+fn default_dtim_period() -> u8 {
+    2
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ApUpdate {
     pub ssid: Option<String>,
+    pub position: Option<netsim_model::device::Position>,
 }
 
 pub enum ApReq {
@@ -72,6 +104,8 @@ pub struct ApActor {
 pub struct ApState {
     pub config: ApConfig,
     pub wpa: Option<wpa_auth::WpaAuthenticator>,
+    pub sae_sessions: HashMap<MacAddr, crate::sae::SaeStateMachine>,
+    pub eap_sessions: HashMap<MacAddr, crate::eap_auth::EapAuthenticator>,
 }
 
 impl ApActor {
@@ -84,5 +118,11 @@ impl ApActor {
             shared_keys: shared_keys
                 .unwrap_or_else(|| std::sync::Arc::new(shared::SharedKeyStore::new())),
         }
+    }
+}
+
+impl ApState {
+    pub fn new(config: ApConfig) -> Self {
+        Self { config, wpa: None, sae_sessions: HashMap::new(), eap_sessions: HashMap::new() }
     }
 }

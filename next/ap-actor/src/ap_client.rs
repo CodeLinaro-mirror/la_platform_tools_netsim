@@ -46,9 +46,10 @@ impl ApClient {
         &self,
         id: u32,
         ssid: Option<String>,
+        position: Option<netsim_model::device::Position>,
     ) -> Result<super::ApState, ClientError> {
         self.client
-            .update(id, crate::ap_actor::ApUpdate { ssid })
+            .update(id, crate::ap_actor::ApUpdate { ssid, position })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))
     }

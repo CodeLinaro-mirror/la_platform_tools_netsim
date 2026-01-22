@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use zerocopy::{IntoBytes, Ref, U16};
 
-fn generate_random_mac() -> [u8; 6] {
+pub fn generate_random_mac() -> [u8; 6] {
     use rand::Rng;
     let mut rng = rand::rng();
     [0x02, 0x00, 0x00, 0x00, rng.random(), rng.random()]
@@ -66,6 +66,16 @@ impl ApWorld {
 
             wpa_passphrase,
             beacon_interval: 100,
+            country_code: None,
+            dtim_period: 2,
+            hidden_ssid: false,
+            sae: false,
+            wmm_enabled: true,
+            enterprise_enabled: false,
+            mac_acl_mode: 0,
+            mac_acl_list: vec![],
+            ftm_responder_enabled: true,
+            position: ap_actor::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }
@@ -80,6 +90,16 @@ impl ApWorld {
 
             wpa_passphrase: None,
             beacon_interval: 100,
+            country_code: None,
+            dtim_period: 2,
+            hidden_ssid: false,
+            sae: false,
+            wmm_enabled: true,
+            enterprise_enabled: false,
+            mac_acl_mode: 0,
+            mac_acl_list: vec![],
+            ftm_responder_enabled: true,
+            position: ap_actor::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }

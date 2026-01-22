@@ -84,10 +84,8 @@ impl SharedKeyStore {
         nonce[10] = pn_bytes[2];
         nonce[11] = pn_bytes[1];
         nonce[12] = pn_bytes[0];
-        // Wait, to_le_bytes puts LSB at index 0.
-        // If pn=1, bytes=[1,0,0,0,0,0,0,0].
-        // nonce[12] = 1, nonce[7] = 0.
-        // Seems correct order for nonce construction if it matches hostapd-rs.
+        // PN is Little Endian from to_le_bytes (LSB at index 0).
+        // We map to Nonce bytes [7..13] matching legacy hostapd logic.
 
         let nonce_ga = ccm::aead::generic_array::GenericArray::from_slice(&nonce);
 
