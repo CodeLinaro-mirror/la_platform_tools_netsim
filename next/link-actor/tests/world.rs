@@ -2,7 +2,7 @@
 
 use client::LinkClient;
 use link_actor::LinkActor;
-use link_api::{Link, LinkAction, LinkCreate, LinkId, LinkUpdate};
+use link_api::{Link, LinkCreate, LinkId, LinkUpdate};
 use netsim_model::chip::{ChipClient, ChipId, ChipKind, MockChipClient};
 use std::collections::HashMap;
 
@@ -50,7 +50,7 @@ impl World {
         mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
         mock.expect_create().returning(|_| Ok(()));
         mock.expect_delete().returning(|_| Ok(()));
-        mock.expect_read_statistics().returning(|| Ok(vec![]));
+        mock.expect_read_statistics().returning(|| Ok(Box::from([])));
         mock.expect_reset().returning(|_| Ok(()));
         mock.expect_clone_box().returning(|| Box::new(Self::create_default_mock()));
         mock
@@ -58,18 +58,9 @@ impl World {
 
     /// BDD Step: Given default chips are added to the actor.
     pub async fn given_default_chips(&self) {
-        self.client
-            .action(None, LinkAction::NotifyChipAdded(ChipId(1), ChipKind::BLUETOOTH))
-            .await
-            .unwrap();
-        self.client
-            .action(None, LinkAction::NotifyChipAdded(ChipId(2), ChipKind::BLUETOOTH))
-            .await
-            .unwrap();
-        self.client
-            .action(None, LinkAction::NotifyChipAdded(ChipId(3), ChipKind::WIFI))
-            .await
-            .unwrap();
+        self.client.notify_chip_added(ChipId(1), ChipKind::BLUETOOTH).await.unwrap();
+        self.client.notify_chip_added(ChipId(2), ChipKind::BLUETOOTH).await.unwrap();
+        self.client.notify_chip_added(ChipId(3), ChipKind::WIFI).await.unwrap();
     }
 
     /// BDD Step: When a link is created.
@@ -85,12 +76,12 @@ impl World {
 
     /// BDD Step: When a chip is added (notification).
     pub async fn when_notify_chip_added(&self, chip_id: ChipId, kind: ChipKind) {
-        self.client.action(None, LinkAction::NotifyChipAdded(chip_id, kind)).await.unwrap();
+        self.client.notify_chip_added(chip_id, kind).await.unwrap();
     }
 
     /// BDD Step: When a chip is removed (notification).
     pub async fn when_notify_chip_removed(&self, chip_id: ChipId) {
-        self.client.action(None, LinkAction::NotifyChipRemoved(chip_id)).await.unwrap();
+        self.client.notify_chip_removed(chip_id).await.unwrap();
     }
 
     /// BDD Step: When a link is updated.

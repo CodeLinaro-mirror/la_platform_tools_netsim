@@ -29,6 +29,8 @@ env_logger = { version = "0.10.0", default-features = false }
 rand = "0.8.5"
 tokio-stream = "0.1.17"
 futures = "0.3.31"
+actor-framework = { path = "../actor-framework" }
+serde = { version = "1.0", features = ["derive"] }
 
 [features]
 default = []

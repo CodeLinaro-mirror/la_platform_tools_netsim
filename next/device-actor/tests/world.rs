@@ -71,7 +71,7 @@ impl World {
         mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
         mock.expect_create().returning(|_| Ok(()));
         mock.expect_delete().returning(|_| Ok(()));
-        mock.expect_read_statistics().returning(|| Ok(vec![]));
+        mock.expect_read_statistics().returning(|| Ok(Box::from([])));
         mock.expect_reset().returning(|_| Ok(()));
         mock.expect_clone_box().returning(|| Box::new(Self::create_default_mock_chip()));
         mock
@@ -84,6 +84,8 @@ impl World {
         mock.expect_update().returning(|_, _| Ok(())); // update returns Result<(), String>
         mock.expect_delete().returning(|_| Ok(())); // delete returns Result<(), String>
         mock.expect_list().returning(|| Ok(vec![])); // list returns Result<Vec<Link>, String>
+        mock.expect_notify_chip_added().returning(|_, _| Ok(()));
+        mock.expect_notify_chip_removed().returning(|_| Ok(()));
         mock
     }
 

@@ -3,7 +3,7 @@
 use crate::uwb_actor::UwbActor;
 use actor_framework::{FrameworkError, ResourceClient};
 use async_trait::async_trait;
-use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, ChipRequest, ChipUpdate};
+use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate};
 use netsim_model::client_error::ClientError;
 use netsim_model::stats::NetsimRadioStats;
 
@@ -49,9 +49,12 @@ impl ChipClient for UwbClient {
         self.0.delete(id).await.map_err(map_framework_error_smart)
     }
 
-    async fn read_statistics(&self) -> Result<Vec<NetsimRadioStats>, ClientError> {
-        // TODO: Implement statistics action
-        Ok(Vec::new())
+    async fn read_statistics(&self) -> Result<Box<[NetsimRadioStats]>, ClientError> {
+        match self.0.perform_action(None, crate::UwbAction::GetStatistics).await {
+            Ok(crate::UwbActionResult::Statistics(stats)) => Ok(stats),
+            Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
+            Err(e) => Err(map_framework_error_smart(e)),
+        }
     }
 
     async fn read_count_for_testing(&self) -> Result<usize, ClientError> {
@@ -63,9 +66,8 @@ impl ChipClient for UwbClient {
     }
 
     async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
-        // TODO: Implement reset action
         self.0
-            .perform_action(Some(id), ChipRequest::Reset { id })
+            .perform_action(Some(id), crate::UwbAction::Reset { id })
             .await
             .map(|_| ())
             .map_err(map_framework_error_smart)

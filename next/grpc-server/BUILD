@@ -15,6 +15,7 @@ netsim_rust_library(
     deps = [
         "//next/actor-framework",
         "//next/client",
+        "//next/common",
         "//next/device-api",
         "//next/link-api",
         "//next/model",

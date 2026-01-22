@@ -33,7 +33,7 @@
 //!
 //! **Further Reading**:
 //! - [Actor Model (Wikipedia)](https://en.wikipedia.org/wiki/Actor_model) - Foundational concurrency pattern by Carl Hewitt
-//! - [Resource-Oriented Architecture](https://www.ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm) - Roy Fielding's dissertation on REST/ROA principles
+//! - [Resource-Oriented Architecture](https://en.wikipedia.org/wiki/Resource-oriented_architecture#cite_note-Fielding-Ch5-1) - Roy Fielding's dissertation on REST/ROA principles
 //! - [Actors in Rust](https://ryhl.io/blog/actors-with-tokio/) - Practical guide to implementing actors with Tokio
 //!
 //! ## Architecture Overview

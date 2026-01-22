@@ -179,7 +179,7 @@ impl ActorService for BluetoothActor {
                         });
                     }
                 }
-                Ok(BluetoothActionResult::Statistics(stats_list))
+                Ok(BluetoothActionResult::Statistics(stats_list.into_boxed_slice()))
             }
             BluetoothAction::GetCountForTesting => {
                 let count = self.chips.lock().unwrap().len();

@@ -4,13 +4,14 @@ use crate::args::Args;
 use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
 use crate::logger;
 use crate::platform;
+use crate::version::get_version;
 use client::{CaptureClient, DeviceClient};
+use common::system::netsimd_temp_dir;
+use common::util::os_utils::{get_instance_name, redirect_std_stream};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info, warn};
-use netsim_common::system::netsimd_temp_dir;
-use netsim_common::util::os_utils::{get_instance_name, redirect_std_stream};
 use netsim_model::chip::{
     BluetoothCreate, BluetoothMode, CellCreate, ChipConfig, DeviceParams, NetworkKind,
     NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
@@ -186,6 +187,7 @@ async fn setup_grpc_listener(
     requested_port: u16,
     device_client: DeviceClient,
     link_client: client::LinkClient,
+    version: String,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
     let (new_connection_tx, new_connection_rx) = mpsc::channel(100);
@@ -197,6 +199,7 @@ async fn setup_grpc_listener(
         device_client,
         link_client,
         packet_streamer_service,
+        version,
     )
     .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
 
@@ -270,6 +273,11 @@ impl NetsimDaemon {
         runtime_dir: PathBuf,
         args: Args,
     ) -> Result<StartUpMode, RunResult> {
+        if args.version {
+            println!("Netsim version: {}", get_version());
+            return Err(RunResult::ExitedNormally);
+        }
+
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
 
@@ -296,6 +304,13 @@ impl NetsimDaemon {
             info!("netsim artifacts path: {:?}", netsimd_temp_dir());
             info!("{args:#?}");
         }
+
+        info!(
+            "Netsim Version: {}, OS: {}, Arch: {}",
+            get_version(),
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        );
 
         let mut ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
 
@@ -358,6 +373,7 @@ impl NetsimDaemon {
             args.grpc_port.unwrap_or(0),
             device_client.clone(),
             link_client.clone(),
+            get_version(),
         )
         .await?;
 
@@ -540,7 +556,9 @@ pub async fn run() -> RunResult {
             RunResult::ExitedNormally // Placeholder
         }
         Err(e) => {
-            error!("Failed to initialize NetsimDaemon: {:?}", e);
+            if e != RunResult::ExitedNormally {
+                error!("Failed to initialize NetsimDaemon: {:?}", e);
+            }
             e
         }
     }
