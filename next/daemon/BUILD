@@ -83,18 +83,14 @@ rust_binary(
 
 rust_test(
     name = "tests",
-    srcs = [
-        "tests/grpc_integration_test.rs",
-        "tests/ini_file_test.rs",
-        "tests/integration_test.rs",
-        "tests/tests.rs",
-    ],
+    srcs = glob(["tests/**/*.rs"]),
     crate_root = "tests/tests.rs",
     edition = "2021",
     rustc_flags = [
         "-C",
         "link-arg=-lc",
     ],
+    tags = ["requires-network"],
     deps = [
         ":daemon-lib",
         "//next/client",
