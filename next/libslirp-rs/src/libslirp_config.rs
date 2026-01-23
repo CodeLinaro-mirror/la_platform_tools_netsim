@@ -26,6 +26,7 @@ use tokio;
 const MAX_DNS_SERVERS: usize = SLIRP_MAX_DNS_SERVERS as usize;
 
 /// Configuration options for the Slirp network stack.
+#[derive(Clone)]
 pub struct SlirpConfig {
     /// Slirp version.
     pub version: u32,
