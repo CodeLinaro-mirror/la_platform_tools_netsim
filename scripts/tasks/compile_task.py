@@ -19,18 +19,71 @@ import platform
 import shutil
 
 from tasks.task import Task
-from utils import (CMAKE, WINDOWS_TMP_OBJS_PATH, move_contents, run)
+from utils import (
+    AOSP_ROOT,
+    CMAKE,
+    WINDOWS_TMP_OBJS_PATH,
+    get_bazel_path,
+    move_contents,
+    run,
+    run_gcloud_auth,
+)
 
 
 class CompileTask(Task):
 
   def __init__(self, args, env):
     super().__init__("Compile")
+    self.args = args
     self.out = Path(args.out_dir)
     self.env = env
 
   def do_run(self):
-    # Build
+    if self.args.cmake:
+      return self._run_cmake()
+    return self._run_bazel()
+
+  def _run_bazel(self):
+    bazel = get_bazel_path()
+    configs = ["release"]
+    if self.args.buildbot:
+      configs.append("ci")
+    elif self.args.hermetic:
+      run_gcloud_auth(self.env)
+      configs.append("hermetic")
+
+    build_configs = [f"--config={c}" for c in configs]
+
+    startup_options = []
+    tmp_dir = getattr(self.env, "tmp_dir", None)
+    if tmp_dir:
+      startup_options += [
+          f"--output_base={tmp_dir / 'output'}",
+          f"--install_base={tmp_dir / 'install'}",
+      ]
+
+    # Default targets
+    targets = self.args.bazel_targets or [
+        "@netsim//:all",
+        "@netsim//rust/...",
+        "@netsim//next/...",
+    ]
+    # TODO(b/320434273): Include next/... for windows once dependent crates are imported
+    if platform.system().lower() == "windows":
+      targets = self.args.bazel_targets or [
+          "@netsim//:all",
+          "@netsim//rust/...",
+      ]
+
+    run(
+        [bazel] + startup_options + ["build"] + targets + build_configs,
+        self.env,
+        "bazel build",
+        AOSP_ROOT,
+    )
+    return True
+
+  def _run_cmake(self):
     if platform.system() == "Windows":
       try:
         # Use mkdir() with parents=True and exist_ok=True
