@@ -20,7 +20,7 @@
 // //! ## What Gets Traced
 // //!
 // //! - **Actor Lifecycle**: Startup, shutdown, and final state
-// //! - **Entity Operations**: Create, Get, Update, Delete, and custom Actions
+// //! - **Resource Operations**: Create, Get, Update, Delete, and custom Actions
 // //! - **Request Flow**: Hierarchical spans showing the complete request path
 // //! - **Errors**: Detailed error context with entity IDs and failure reasons
 // //!

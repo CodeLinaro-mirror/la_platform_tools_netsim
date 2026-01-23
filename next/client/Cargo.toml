@@ -7,7 +7,11 @@ edition = "2021"
 actor-framework = { path = "../actor-framework" }
 netsim-model = { path = "../model" }
 device-actor = { path = "../device-actor" }
+device-api = { path = "../device-api" }
 capture-actor = { path = "../capture-actor" }
+link-actor = { path = "../link-actor" }
+link-api = { path = "../link-api" }
+capture-api = { path = "../capture-api" }
 tokio = { version = "1.32.0", default-features = false, features = [
   "rt",
   "time",

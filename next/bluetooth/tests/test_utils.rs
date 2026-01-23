@@ -1,9 +1,7 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use actor_framework::ResourceClient;
-use bluetooth::server::Server;
 use bytes::Bytes;
-use client::DeviceClient;
 use futures::{
     sink::Sink,
     stream::Stream,
@@ -11,26 +9,27 @@ use futures::{
     Future,
 };
 use netsim_model::bluetooth::Controller as RootcanalController;
-use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, NetworkParams};
+use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipConfig, NetworkParams};
 use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 /// Encapsulates the common setup for a test environment.
 pub struct TestFixture {
-    pub client: ChipClient,
-    pub _server_task: JoinHandle<()>, // Keep the task handle to ensure the server runs
+    pub client: bluetooth::BluetoothClient,
+    pub _actor_task: JoinHandle<()>, // Keep the task handle to ensure the actor runs
 }
 
-/// Sets up a test environment with a running server and a client.
+/// Sets up a test environment with a running actor and a client.
 pub fn setup() -> TestFixture {
     let (device_tx, _device_rx) = mpsc::channel(10);
-    let resource_client = ResourceClient::new(device_tx);
-    let (server, client) = Server::new(DeviceClient::new(resource_client));
-    let server_task = tokio::spawn(async move {
-        server.run().await;
+    let resource_client = client::device_client::DeviceClient::new(ResourceClient::new(device_tx));
+    let (actor, client) = bluetooth::new();
+    let context = bluetooth::BluetoothActor::new(resource_client.clone(), client.clone());
+    let actor_task = tokio::spawn(async move {
+        actor.run(context).await;
     });
-    TestFixture { client, _server_task: server_task }
+    TestFixture { client, _actor_task: actor_task }
 }
 
 /// A mock Sink that captures packets into an mpsc channel.

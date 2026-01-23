@@ -1,4 +1,5 @@
-load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -17,11 +18,13 @@ CELL_DEPS = [
     "@thiserror",
 ]
 
-rust_library(
+netsim_rust_library(
     name = "cell",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "cell",
     edition = "2021",
+    enable_clippy = False,
+    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],

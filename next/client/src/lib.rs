@@ -43,7 +43,7 @@
 //!
 //! ## The ActorClient Trait
 //!
-//! The [`actor_client::ActorClient`] trait provides a common interface for all clients,
+//! The [`crate::actor_client::ActorClient`] trait provides a common interface for all clients,
 //! automatically implementing `get()` and `delete()` methods:
 //!
 //! ```rust,ignore
@@ -141,3 +141,5 @@ pub mod device_client;
 pub use device_client::*;
 pub mod capture_client;
 pub use capture_client::*;
+pub(crate) mod link_client;
+pub use link_client::LinkClient;

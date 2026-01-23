@@ -37,7 +37,7 @@ impl DeviceClient {
             match self
                 .inner
                 .perform_action(
-                    device_id,
+                    Some(device_id),
                     DeviceAction::AddChip {
                         chip_config: convert_chip_config(&params.chip_config),
                         packet_stream: params.packet_stream,
@@ -77,6 +77,6 @@ fn convert_chip_config(
         name: c.name.clone(),
         manufacturer: c.manufacturer.clone(),
         product_name: c.product_name.clone(),
-        chip: netsim_model::device::api::Chip::default(), // TODO: Proper conversion if needed
+        chip: c.network_params.clone().into(),
     }
 }

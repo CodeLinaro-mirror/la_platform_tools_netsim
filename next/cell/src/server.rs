@@ -6,7 +6,9 @@ use client::DeviceClient;
 use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use modem_rs::modem_network::{ModemCallbacks, ModemNetworkInterface};
-use netsim_model::chip::{ChipClient, ChipId, ChipRequest, PacketSink, PacketStream};
+use netsim_model::chip::{
+    ChipId, ChipRequest, LegacyChipClient as ChipClient, PacketSink, PacketStream,
+};
 use netsim_model::chip_error::ChipError as NetsimChipError;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -88,9 +90,17 @@ impl CellServer {
         log::info!("CellServer started");
         loop {
             tokio::select! {
-                Some(msg) = self.receiver.recv() => {
-                    if let Err(e) = self.handle_message(msg).await {
-                        log::error!("Error handling message: {:?}", e);
+                msg = self.receiver.recv() => {
+                    match msg {
+                        Some(msg) => {
+                            if let Err(e) = self.handle_message(msg).await {
+                                log::error!("Error handling message: {:?}", e);
+                            }
+                        }
+                        None => {
+                            log::info!("CellServer channels closed, stopping.");
+                            break;
+                        }
                     }
                 }
                 Some((chip_id, packet)) = self.streams.next() => {
@@ -98,10 +108,6 @@ impl CellServer {
                 }
                 Some(res) = self.sink_tasks.join_next() => {
                     self.handle_join_result(res).await;
-                }
-                else => {
-                    log::info!("CellServer channels closed, stopping.");
-                    break;
                 }
             }
         }

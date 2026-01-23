@@ -13,21 +13,28 @@
 # limitations under the License.
 
 [workspace]
+resolver = "3"
 members = [
   "actor-framework",
   "capture-actor",
+  "capture-api",
   "bluetooth",
   "model",
   "daemon",
   "proto",
+  "packets",
   "packet-stream",
-  "rootcanal",
+  "link-actor",
+  "link-api",
   "modem-rs",
   "modem-rs-derive",
+  #  "packets",
   "uwb",
   "types",
   "device-actor",
+  "device-api",
   "client",
+  "rootcanal",
 ]
 
 [workspace.doc]

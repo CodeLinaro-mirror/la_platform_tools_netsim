@@ -103,8 +103,6 @@ pub struct CaptureCreate {
 pub enum CaptureAction {
     /// Capture a packet.
     CapturePacket { chip_id: ChipId, direction: Direction, bytes: Bytes },
-    /// Get a specific capture.
-    Get { chip_id: ChipId },
     /// Patch a capture (e.g., enable/disable).
     Patch { chip_id: ChipId, enabled: bool },
     /// Create a new capture.
@@ -122,10 +120,10 @@ pub enum CaptureAction {
 pub enum CaptureActionResult {
     /// Action was successful.
     Success,
-    /// Result of a Get action.
-    Get(Option<CaptureInfo>),
     /// An error occurred.
     Error(String),
+    /// The action resulted in an update and returns the new state.
+    Updated(CaptureInfo),
 }
 
 /// Information about a capture.

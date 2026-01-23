@@ -1,10 +1,12 @@
-load("@rules_rust//rust:defs.bzl", "rust_doc", "rust_doc_test", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_doc_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
 DEPS = [
     "//next/actor-framework",
     "//next/capture-api",
+    "//rust/common:netsim_common",
     "//next/model",
     "@anyhow",
     "@bytes",
@@ -16,22 +18,21 @@ DEPS = [
     "@zerocopy",
 ]
 
-rust_library(
+netsim_rust_library(
     name = "capture-actor",
     srcs = glob(["src/**/*.rs"]),
     crate_features = [],
     crate_name = "capture_actor",
     crate_root = "src/lib.rs",
     edition = "2021",
+    enable_clippy = False,
+    enable_doc_test = False,
+    enable_unit_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
+    strict_warnings = False,
     deps = DEPS,
-)
-
-rust_doc(
-    name = "doc",
-    crate = ":capture-actor",
 )
 
 rust_doc_test(

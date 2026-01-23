@@ -1,17 +1,17 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 use crate::test_utils::{self, TestFixture};
-use netsim_model::chip::{BeaconParams, BleBeacon, BluetoothMode, ChipCreate, ChipId};
+use netsim_model::chip::{BeaconParams, BleBeacon, BluetoothMode, ChipClient, ChipCreate, ChipId};
 use netsim_model::device::DeviceId;
 
-/// Tests that a chip can be successfully added to the server.
+/// Tests that a chip can be successfully added to the actor.
 #[tokio::test]
 async fn test_add_chip() {
     test_add_chip_inner().await;
 }
 
 async fn test_add_chip_inner() {
-    let TestFixture { client, _server_task } = test_utils::setup();
+    let TestFixture { client, _actor_task } = test_utils::setup();
 
     let chip_id = ChipId(1);
     let create_chip_params = ChipCreate {

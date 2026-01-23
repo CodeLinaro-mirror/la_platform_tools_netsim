@@ -29,6 +29,7 @@ pub fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
         name: "".to_string(), // Not available in proto Chip
         manufacturer: proto.manufacturer,
         product_name: proto.product_name,
+        address: proto.address,
     }
 }
 
@@ -36,6 +37,7 @@ pub fn proto_to_device_info(proto: proto_startup::DeviceInfo) -> DeviceInfo {
     DeviceInfo {
         name: proto.name,
         id: "".to_string(), // Not available in proto DeviceInfo
+        avd_path: proto.avd_path,
     }
 }
 
@@ -154,11 +156,13 @@ pub fn chip_info_to_proto(chip_info: ChipInfo) -> proto_startup::ChipInfo {
         chip_proto.id = chip.id;
         chip_proto.manufacturer = chip.manufacturer;
         chip_proto.product_name = chip.product_name;
+        chip_proto.address = chip.address;
         proto.chip = Some(chip_proto).into();
     }
     if let Some(device_info) = chip_info.device_info {
         let mut device_proto = proto_startup::DeviceInfo::new();
         device_proto.name = device_info.name;
+        device_proto.avd_path = device_info.avd_path;
         proto.device_info = Some(device_proto).into();
     }
     proto

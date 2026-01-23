@@ -9,7 +9,8 @@
 
 use actor_framework::{ActorClient, FrameworkError, ResourceClient};
 use async_trait::async_trait;
-use device_actor::entity::DeviceEntity;
+use device_actor::DeviceActor;
+
 use device_actor::DeviceError;
 use device_api::api::DeviceCreate;
 use device_api::DeviceId;
@@ -21,7 +22,7 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
 pub struct DeviceClient {
-    pub(crate) inner: ResourceClient<DeviceEntity>,
+    pub(crate) inner: ResourceClient<DeviceActor>,
     pub(crate) state: Arc<Mutex<DeviceClientState>>,
 }
 
@@ -33,16 +34,16 @@ pub(crate) struct DeviceClientState {
 mod device_add_chip;
 
 impl DeviceClient {
-    pub fn new(inner: ResourceClient<DeviceEntity>) -> Self {
+    pub fn new(inner: ResourceClient<DeviceActor>) -> Self {
         Self { inner, state: Arc::new(Mutex::new(DeviceClientState::default())) }
     }
 }
 
 #[async_trait]
-impl ActorClient<DeviceEntity> for DeviceClient {
+impl ActorClient<DeviceActor> for DeviceClient {
     type Error = DeviceError;
 
-    fn inner(&self) -> &ResourceClient<DeviceEntity> {
+    fn inner(&self) -> &ResourceClient<DeviceActor> {
         &self.inner
     }
 
@@ -66,7 +67,12 @@ impl DeviceClient {
 
     pub async fn list(&self) -> Result<device_api::api::ListDeviceResponse, DeviceError> {
         debug!("Sending list devices request");
-        self.inner.list().await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
+        let devices = self
+            .inner
+            .list()
+            .await
+            .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
+        Ok(device_api::api::ListDeviceResponse { devices })
     }
 
     /// Updates an existing device's properties.
@@ -92,7 +98,7 @@ impl DeviceClient {
     /// This sends a `DeviceAction::Reset` to the device actor.
     pub async fn reset(&self, id: DeviceId) -> Result<(), DeviceError> {
         debug!("Sending reset request for device {}", id);
-        match self.inner.perform_action(id, DeviceAction::Reset).await {
+        match self.inner.perform_action(Some(id), DeviceAction::Reset).await {
             Ok(DeviceActionResult::Success) => Ok(()),
             Ok(_) => {
                 Err(DeviceError::ActorCommunicationError("Unexpected action result".to_string()))
@@ -110,7 +116,11 @@ impl DeviceClient {
         chip_id: netsim_model::chip::ChipId,
     ) -> Result<(), DeviceError> {
         debug!("Sending notify_chip_removed request for device {} chip {}", id, chip_id);
-        match self.inner.perform_action(id, DeviceAction::NotifyChipRemoved(id, chip_id)).await {
+        match self
+            .inner
+            .perform_action(Some(id), DeviceAction::NotifyChipRemoved(id, chip_id))
+            .await
+        {
             Ok(DeviceActionResult::Success) => Ok(()),
             Ok(_) => {
                 Err(DeviceError::ActorCommunicationError("Unexpected action result".to_string()))

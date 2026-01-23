@@ -1,28 +1,10 @@
-# Copyright 2025 - The Android Open Source Project
-#
-# Common Bazel commands for this package:
-#
-# Build the library:
-#   bazel build //next/bluetooth
-#
-# Run all tests:
-#   bazel test //next/bluetooth:tests
-#
-# Run the linter (uses bazel test):
-#   bazel test //next/bluetooth:clippy
-
-load(
-    "@rules_rust//rust:defs.bzl",
-    "rust_clippy",
-    "rust_doc",
-    "rust_doc_test",
-    "rust_library",
-    "rust_test",
-)
+load("@rules_rust//rust:defs.bzl", "rust_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
 BLUETOOTH_DEPS = [
+    "//next/actor-framework",
     "//next/client",
     "//next/device-api",
     "//next/model",
@@ -34,27 +16,25 @@ BLUETOOTH_DEPS = [
     "@log",
     "@protobuf-rust",
     "@rand",
+    "@serde",
     "@thiserror",
     "@tokio",
     "@tokio-stream",
     "@zerocopy",
 ]
 
-rust_library(
+netsim_rust_library(
     name = "bluetooth",
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
+    enable_clippy = False,
+    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
         "@zerocopy-derive",
     ],
+    strict_warnings = False,
     deps = BLUETOOTH_DEPS,
-)
-
-rust_test(
-    name = "unit_tests",
-    crate = ":bluetooth",
-    tags = ["general_tests"],
 )
 
 rust_test(
@@ -62,6 +42,8 @@ rust_test(
     srcs = glob(["tests/**/*.rs"]),
     crate_root = "tests/mod.rs",
     edition = "2021",
+    # enable_clippy = False,
+    # enable_doc_test = False,
     proc_macro_deps = ["@async-trait"],
     rustc_flags = [
         "-C",
@@ -69,24 +51,7 @@ rust_test(
     ],
     tags = ["general_tests"],
     deps = [":bluetooth"] + BLUETOOTH_DEPS + [
-        "//next/actor-framework",
         "//next/device-actor",
         "@rootcanal//:lib_rootcanal_ffi",
     ],
-)
-
-rust_clippy(
-    name = "clippy",
-    deps = [":bluetooth"],
-)
-
-rust_doc(
-    name = "doc",
-    crate = ":bluetooth",
-)
-
-rust_doc_test(
-    name = "doc_test",
-    crate = ":bluetooth",
-    deps = ["//next/actor-framework"],
 )

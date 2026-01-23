@@ -6,7 +6,7 @@ use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
 use netsim_model::chip::{
-    Chip, ChipClient, ChipCreate, ChipId, ChipRequest, PacketSink, PacketStream,
+    Chip, ChipCreate, ChipId, ChipRequest, LegacyChipClient as ChipClient, PacketSink, PacketStream,
 };
 use netsim_model::chip_error::ChipError;
 use std::collections::HashMap;
@@ -46,11 +46,19 @@ impl Server {
         let mut shutdown = false;
         while !shutdown {
             tokio::select! {
-                    Some(cmd) = self.command_rx.recv() => {
-                        if let Err(e) = self.handle_command(cmd, &mut shutdown).await {
-                            log::error!("Error handling message: {:?}", e);
+                cmd = self.command_rx.recv() => {
+                    match cmd {
+                        Some(cmd) => {
+                            if let Err(e) = self.handle_command(cmd, &mut shutdown).await {
+                                log::error!("Error handling message: {:?}", e);
+                            }
+                        }
+                        None => {
+                            log::info!("Command channel closed");
+                            break;
                         }
                     }
+                }
                     Some((chip_id, packet)) = self.streams.next() => {
                         self.handle_stream_data(chip_id, packet).await;
                     }

@@ -1,27 +1,61 @@
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//:__subpackages__"])
 
-rust_library(
+netsim_rust_library(
     name = "packets",
-    srcs = glob(["src/*.rs"]) + [
-        "//:netsim_ieee80211_rust_gen",
-        "//:netsim_link_layer_packets_rust_gen",
-        "//:netsim_llc_rust_gen",
-        "//:netsim_mac80211_hwsim_rust_gen",
-        "//:netsim_netlink_rust_gen",
-    ],
+    srcs = glob(["src/**/*.rs"]),
+    compile_data = glob([
+        "tests/test_data/**",
+        "src/**/test_data/**",
+    ]),
     crate_name = "netsim_packets",
     edition = "2021",
+    enable_clippy = False,
+    enable_doc = False,
+    enable_doc_test = False,
+    enable_unit_test = False,
     proc_macro_deps = [
         "@async-trait",
+        "@num-derive",
     ],
-    rustc_env = {
-        "OUT_DIR": "../../..",
-    },
     deps = [
         "@anyhow",
         "@bytes",
-        "@pdl-runtime",
+        "@hex",
+        "@num-traits",
+        "@serde",
+        "@serde_json",
+        "@zerocopy",
+    ],
+)
+
+rust_test(
+    name = "packets_test",
+    crate = ":packets",
+    data = glob(["src/**/test_data/**"]),
+    proc_macro_deps = [
+        "@async-trait",
+        "@num-derive",
+    ],
+    deps = [
+        "@anyhow",
+        "@bytes",
+        "@num-traits",
+        "@zerocopy",
+    ],
+)
+
+rust_test(
+    name = "tests",
+    srcs = ["tests/integration_tests.rs"],
+    edition = "2021",
+    deps = [
+        ":packets",
+        "@anyhow",
+        "@bytes",
+        "@num-traits",
+        "@zerocopy",
     ],
 )

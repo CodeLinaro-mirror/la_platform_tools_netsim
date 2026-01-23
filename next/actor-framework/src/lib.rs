@@ -2,7 +2,7 @@
 //!
 //! This crate provides the foundational building blocks for creating type-safe, concurrent
 //! actor systems in Rust. It implements a **Resource-Oriented Architecture (ROA)** pattern
-//! on top of the **Actor Model**, providing a clean abstraction for managing stateful entities.
+//! on top of the **Actor Model**, providing a clean abstraction for managing stateful resources.
 //!
 //! ## Why ROA + Actor Model?
 //!
@@ -40,28 +40,24 @@
 //!
 //! The framework separates concerns into three layers:
 //!
-//! 1. **Entity Layer** ([`ActorEntity`]) - Your business logic and domain models
-//! 2. **Runtime Layer** ([`ResourceActor`]) - Message processing and concurrency
+//! 1. **Service Layer** ([`ActorService`]) - Business logic and domain models
+//! 2. **Lifecycle Layer** ([`ActorLifecycle`]) - State management and dependencies
 //! 3. **Interface Layer** ([`ResourceClient`]) - Type-safe communication
 //!
-//! This separation means you write your business logic **once** in the entity trait,
+//! This separation means you write your business logic **once** in the service trait,
 //! and the framework handles all the async message passing, error handling, and state management.
 //!
 //! ## Core Abstractions
 //!
-//! ### [`ActorEntity`] - The Business Logic
-//!
-//! Define what your actor manages and how it behaves:
-//!
-//! ### [`ActorEntity`] - The Business Logic
+//! ### [`ActorService`] - The Business Logic
 //!
 //! Define what your actor manages and how it behaves:
 //!
 //! ```rust
-//! use actor_framework::{ActorContext, ActorEntity, Runtime, ResourceActor, ResourceClient};
+//! use actor_framework::{ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
 //!
-//! // 1. Define the Entity
+//! // 1. Define the Service and Lifecycle
 //! #[derive(Clone, Debug)]
 //! struct User {
 //!     id: u32,
@@ -77,44 +73,53 @@
 //!     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", self.0) }
 //! }
 //! impl std::error::Error for UserError {}
+//! impl From<String> for UserError { fn from(s: String) -> Self { UserError(s) } }
 //!
 //! #[async_trait]
-//! impl ActorEntity for User {
+//! impl ActorService for User {
 //!     type Id = u32;
 //!     type Create = UserCreate;
 //!     type Update = UserUpdate;
 //!     type Action = UserAction;
 //!     type ActionResult = ();
-//!     type Context = ();
 //!     type Error = UserError;
-//!     type ListResponse = Vec<User>;
+//!     type Entity = User;
 //!
-//!     fn from_create_params(id: u32, params: UserCreate) -> Result<Self, Self::Error> {
-//!         Ok(Self { id, name: params.name })
+//!     async fn handle_create(&mut self, id: Option<u32>, params: UserCreate, _: &mut DynContext<Self::Id>) -> Result<u32, Self::Error> {
+//!         let id = id.unwrap_or(0);
+//!         self.id = id;
+//!         self.name = params.name;
+//!         Ok(id)
 //!     }
-//!
-//!     async fn on_update(&mut self, update: UserUpdate, _ctx: &mut Self::Context, _rt: &mut impl Runtime) -> Result<(), Self::Error> {
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, update: UserUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> {
 //!         if let Some(name) = update.name { self.name = name; }
-//!         Ok(())
+//!         Ok(self.clone())
 //!     }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<Self::Entity>, Self::Error> { Ok(vec![self.clone()]) }
+//! }
 //!
-//!     async fn handle_action(&mut self, _: UserAction, _ctx: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> {
-//!         Ok(())
-//!     }
-//!
-//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _ctx: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse {
-//!         vec![]
-//!     }
+//! #[async_trait]
+//! impl ActorLifecycle<u32> for User {
+//!     type Error = UserError;
+//!     async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
 //! }
 //!
 //! // 2. Use the Actor
 //! #[tokio::main]
 //! async fn main() {
 //!     // Create actor and client
-//!     let (actor, client) = ResourceActor::<User>::new(10);
+//!     let user = User { id: 0, name: "".into() };
+//!     let (actor, client) = ResourceActor::new(10);
 //!
 //!     // Spawn the actor
-//!     tokio::spawn(actor.run(()));
+//!     tokio::spawn(actor.run(user));
 //!
 //!     // Use the client
 //!     let id = client.create(UserCreate { name: "Alice".into() }).await.unwrap();
@@ -125,14 +130,14 @@
 //!
 //! ## Context Injection Pattern
 //!
-//! Dependencies are injected at **runtime** via the `run()` method, not at construction time.
-//! This "late binding" pattern solves circular dependencies:
+//! Dependencies are injected at **runtime** via the `run()` method (if supported by `run` args, but currently `run` takes no args, dependencies are passed to `new` or `handle_create`).
+//! Wait, `ResourceActor::new` takes `actor`. Dependencies should be in the `actor` struct.
 //!
 //! ```rust
-//! use actor_framework::{ActorContext, ActorEntity, Runtime, ResourceActor, ResourceClient};
+//! use actor_framework::{ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient};
 //! use async_trait::async_trait;
 //!
-//! // --- Define Minimal Entities ---
+//! // --- Define Minimal Services ---
 //! #[derive(Clone, Debug)] struct User { id: u32 }
 //! #[derive(Debug)] struct UserCreate;
 //! #[derive(Debug)] struct UserUpdate;
@@ -143,33 +148,64 @@
 //! impl From<String> for UserError { fn from(_: String) -> Self { UserError } }
 //!
 //! #[async_trait]
-//! impl ActorEntity for User {
+//! impl ActorService for User {
 //!     type Id = u32; type Create = UserCreate; type Update = UserUpdate; type Action = UserAction;
-//!     type ActionResult = (); type Context = (); type Error = UserError; type ListResponse = Vec<User>;
-//!     fn from_create_params(id: u32, _: UserCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//!     async fn on_update(&mut self, _: UserUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: UserAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
-//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { vec![] }
+//!     type ActionResult = (); type Error = UserError; type Entity = User;
+//!
+//!     async fn handle_create(
+//!         &mut self,
+//!         id: Option<u32>,
+//!         _: UserCreate,
+//!         _: &mut DynContext<Self::Id>,
+//!     ) -> Result<u32, Self::Error> {
+//!         self.id = id.unwrap_or(0);
+//!         Ok(self.id)
+//!     }
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: UserUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: UserAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<Self::Entity>, Self::Error> { Ok(vec![self.clone()]) }
+//! }
+//!
+//! #[async_trait]
+//! impl ActorLifecycle<u32> for User {
+//!     type Error = UserError;
+//!     async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
 //! }
 //!
 //! #[derive(Clone, Debug)] struct Product { id: u32 }
-//! // ... (impl ActorEntity for Product similar to User) ...
-//! # #[derive(Debug)] struct ProductCreate;
-//! # #[derive(Debug)] struct ProductUpdate;
-//! # #[derive(Debug)] enum ProductAction {}
-//! # #[derive(Debug)] struct ProductError;
-//! # impl std::fmt::Display for ProductError { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "Err") } }
-//! # impl std::error::Error for ProductError {}
-//! # impl From<String> for ProductError { fn from(_: String) -> Self { ProductError } }
-//! # #[async_trait]
-//! # impl ActorEntity for Product {
-//! #     type Id = u32; type Create = ProductCreate; type Update = ProductUpdate; type Action = ProductAction;
-//! #     type ActionResult = (); type Context = (); type Error = ProductError; type ListResponse = Vec<Product>;
-//! #     fn from_create_params(id: u32, _: ProductCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//! #     async fn on_update(&mut self, _: ProductUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
-//! #     async fn handle_action(&mut self, _: ProductAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
-//! #     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { vec![] }
-//! # }
+//! #[derive(Debug)] struct ProductCreate;
+//! #[derive(Debug)] struct ProductUpdate;
+//! #[derive(Debug)] enum ProductAction {}
+//! #[derive(Debug)] struct ProductError;
+//! impl std::fmt::Display for ProductError { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "Err") } }
+//! impl std::error::Error for ProductError {}
+//! impl From<String> for ProductError { fn from(_: String) -> Self { ProductError } }
+//! #[async_trait]
+//! impl ActorService for Product {
+//!     type Id = u32; type Create = ProductCreate; type Update = ProductUpdate; type Action = ProductAction;
+//!     type ActionResult = (); type Error = ProductError; type Entity = Product;
+//!     async fn handle_create(&mut self, id: Option<u32>, _: ProductCreate, _: &mut DynContext<Self::Id>) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: ProductUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: ProductAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<Product>, Self::Error> { Ok(vec![self.clone()]) }
+//! }
+//!    #[async_trait]
+//!     impl ActorLifecycle<u32> for Product {
+//!         type Error = ProductError;
+//!         async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!     }
 //!
 //! #[derive(Clone, Debug)] struct Order { id: u32 }
 //! // Order depends on UserClient and ProductClient
@@ -188,35 +224,46 @@
 //! impl From<String> for OrderError { fn from(_: String) -> Self { OrderError } }
 //!
 //! #[async_trait]
-//! impl ActorContext for OrderContext {
-//!     type Error = OrderError;
-//! }
-//!
-//! #[async_trait]
-//! impl ActorEntity for Order {
+//! impl ActorService for Order {
 //!     type Id = u32; type Create = OrderCreate; type Update = OrderUpdate; type Action = OrderAction;
-//!     type ActionResult = (); type Context = OrderContext; type Error = OrderError; type ListResponse = Vec<Order>;
+//!     type ActionResult = (); type Error = OrderError; type Entity = Order;
 //!
-//!     fn from_create_params(id: u32, _: OrderCreate) -> Result<Self, Self::Error> { Ok(Self { id }) }
-//!     async fn on_update(&mut self, _: OrderUpdate, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
-//!     async fn handle_action(&mut self, _: OrderAction, _: &mut Self::Context, _: &mut impl Runtime) -> Result<(), Self::Error> { Ok(()) }
-//!     fn on_list(_: &std::collections::HashMap<Self::Id, Self>, _: &mut Self::Context, _: &mut impl Runtime) -> Self::ListResponse { vec![] }
-//!     // In a real app, on_create would use the context to validate user/product
+//!     async fn handle_create(&mut self, id: Option<u32>, _: OrderCreate, _: &mut DynContext<Self::Id>) -> Result<u32, Self::Error> { self.id = id.unwrap_or(0); Ok(self.id) }
+//!     async fn handle_get(&self, _: u32, _: &mut DynContext<Self::Id>) -> Result<Option<Self::Entity>, Self::Error> { Ok(Some(self.clone())) }
+//!     async fn handle_update(&mut self, _: u32, _: OrderUpdate, _: &mut DynContext<Self::Id>) -> Result<Self::Entity, Self::Error> { Ok(self.clone()) }
+//!     async fn handle_delete(&mut self, _: u32, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_action(&mut self, _: Option<u32>, _: OrderAction, _: &mut DynContext<Self::Id>) -> Result<(), Self::Error> { Ok(()) }
+//!     async fn handle_list(&mut self, _: &mut DynContext<Self::Id>) -> Result<Vec<Order>, Self::Error> { Ok(vec![self.clone()]) }
 //! }
+//!
+//!    #[async_trait]
+//!     impl ActorLifecycle<u32> for Order {
+//!         type Error = OrderError;
+//!         async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!         async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+//!     }
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     // 1. Create all actors (no dependencies yet)
-//!     let (user_actor, user_client) = ResourceActor::<User>::new(10);
-//!     let (product_actor, product_client) = ResourceActor::<Product>::new(10);
-//!     let (order_actor, order_client) = ResourceActor::<Order>::new(10);
+//!     // 1. Create all actors
+//!     let user_actor = User { id: 0 };
+//!     let (user_runner, user_client) = ResourceActor::new(10);
+//!
+//!     let product_actor = Product { id: 0 };
+//!     let (product_runner, product_client) = ResourceActor::new(10);
+//!
+//!     let order_actor = Order { id: 0 };
+//!     let (order_runner, order_client) = ResourceActor::new(10);
 //!
 //!     // 2. Wire dependencies when starting actors
-//!     tokio::spawn(user_actor.run(()));
-//!     tokio::spawn(product_actor.run(()));
-//!     // Order actor gets the clients it needs
-//!     let context = OrderContext { user_client, product_client };
-//!     tokio::spawn(order_actor.run(context));
+//!     tokio::spawn(user_runner.run(user_actor));
+//!     tokio::spawn(product_runner.run(product_actor));
+//!     // In a real app we'd pass clients to run if supported, or configure them via action/update
+//!     // For this simple example we just run them.
+//!     tokio::spawn(order_runner.run(order_actor));
 //!
 //!     // 3. Use the actor (keeps main alive)
 //!     let _ = order_client.create(OrderCreate).await;
@@ -231,7 +278,7 @@
 //! The framework leverages Rust's type system to eliminate entire classes of runtime errors:
 //!
 //! - **Compile-time guarantees**: Can't send wrong message types to actors
-//! - **Type-safe errors**: Each entity defines its own error type
+//! - **Type-safe errors**: Each service defines its own error type
 //! - **No stringly-typed APIs**: IDs, actions, and results are all strongly typed
 //!
 //! ## Concurrency Model
@@ -245,21 +292,25 @@
 //!
 //! The framework provides a **MockClient** type that implements the same `ResourceClient<T>` API as the real client but operates entirely in‑memory. It lets you write fast, deterministic unit tests for client logic (e.g. `OrderClient`) without spawning any actors. See the [`mock`] module for the full API and usage patterns.
 
-pub mod actor;
-pub mod client;
-pub mod client_trait;
-pub mod entity;
-pub mod error;
-pub mod message;
+mod actor;
+mod client;
+mod client_trait;
+mod context;
+mod error;
+mod lifecycle;
+mod message;
 pub mod mock;
-pub mod runtime;
+mod service;
 // pub mod tracing;
+
+pub mod utils;
 
 // Re-export core types for convenience
 pub use actor::ResourceActor;
 pub use client::ResourceClient;
 pub use client_trait::ActorClient;
-pub use entity::{ActorContext, ActorEntity, BoxStream, StreamMessage};
+pub use context::{Context, DynContext};
 pub use error::FrameworkError;
+pub use lifecycle::ActorLifecycle;
 pub use message::{ResourceRequest, Response};
-pub use runtime::Runtime;
+pub use service::{ActorId, ActorService, BoxStream, StreamMessage};

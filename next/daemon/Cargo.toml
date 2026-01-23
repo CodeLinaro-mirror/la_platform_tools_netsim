@@ -26,7 +26,8 @@ cell = { path = "../cell" }
 actor-framework = { path = "../actor-framework" }
 grpc-server = { path = "../grpc-server" }
 wifi = { path = "../wifi" }
-grpcio = "0.12"
+grpcio = "0.13"
+link-actor = { path = "../link-actor" }
 tokio = { version = "1.28.2", features = ["full"] }
 named-lock = "0.4.1"
 

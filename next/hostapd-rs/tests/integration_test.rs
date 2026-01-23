@@ -17,15 +17,15 @@
 use bytes::Bytes;
 use hostapd_rs::hostapd::Hostapd;
 use log::warn;
-use netsim_packets::ieee80211::Ieee80211;
-use pdl_runtime::Packet;
+use netsim_packets::ieee80211::{util::is_beacon_frame, MacHeader3Addr};
 use std::{
     env,
     time::{Duration, Instant},
 };
-use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, timeout};
+use zerocopy::Ref;
+
 /// Initializes a `Hostapd` instance for testing.
 ///
 /// Returns a tuple containing the `Hostapd` instance and a receiver for
@@ -86,13 +86,60 @@ async fn test_receive_beacon_frame(receiver: &mut mpsc::Receiver<Bytes>) {
     let timeout_duration = Duration::from_secs(10);
     match timeout(timeout_duration, receiver.recv()).await {
         // Using tokio::time::timeout
-        Ok(Some(packet)) if Ieee80211::decode_full(&packet).unwrap().is_beacon() => {}
-        Ok(Some(_)) => assert!(false, "Received a non beacon packet within timeout"),
+        Ok(Some(packet)) => {
+            if let Ok((header, _)) = Ref::<&[u8], MacHeader3Addr>::from_prefix(packet.as_ref()) {
+                if is_beacon_frame(header.frame_control) {
+                    return;
+                }
+            }
+            assert!(false, "Received a non beacon packet within timeout");
+        }
         Ok(None) => {
             assert!(false, "Sender closed unexpectedly before beacon received within timeout")
         }
         Err(_timeout_err) => assert!(false, "Did not receive beacon frame in 10s timeout"),
     }
+}
+
+/// Parses the SSID from a beacon frame's payload.
+fn get_ssid_from_beacon_frame(packet: &[u8]) -> Result<String, &'static str> {
+    // The 802.11 header for a beacon is 24 bytes.
+    // The beacon frame body starts after the header.
+    const BEACON_HEADER_LEN: usize = 24;
+    if packet.len() <= BEACON_HEADER_LEN {
+        return Err("Packet too short for a beacon frame header");
+    }
+    let body = &packet[BEACON_HEADER_LEN..];
+
+    // Beacon frame body consists of fixed parameters (12 bytes) followed by tagged parameters.
+    const FIXED_PARAMS_LEN: usize = 12;
+    if body.len() <= FIXED_PARAMS_LEN {
+        return Err("Beacon body too short for fixed parameters");
+    }
+    let mut tagged_params = &body[FIXED_PARAMS_LEN..];
+
+    // Iterate through tagged parameters to find the SSID.
+    while !tagged_params.is_empty() {
+        if tagged_params.len() < 2 {
+            return Err("Malformed tagged parameter");
+        }
+        let tag_number = tagged_params[0];
+        let tag_len = tagged_params[1] as usize;
+
+        if tagged_params.len() < 2 + tag_len {
+            return Err("Tagged parameter length exceeds remaining packet size");
+        }
+
+        if tag_number == 0 {
+            // SSID tag
+            let ssid_bytes = &tagged_params[2..2 + tag_len];
+            return Ok(String::from_utf8_lossy(ssid_bytes).to_string());
+        }
+
+        tagged_params = &tagged_params[2 + tag_len..];
+    }
+
+    Err("SSID not found in beacon frame")
 }
 
 /// Checks if the receiver receives a beacon frame with the specified SSID within 10 seconds.
@@ -101,9 +148,7 @@ async fn verify_beacon_frame_ssid(receiver: &mut mpsc::Receiver<Bytes>, ssid: &s
     match timeout(timeout_duration, receiver.recv()).await {
         // Using tokio::time::timeout
         Ok(Some(packet)) => {
-            if let Ok(beacon_ssid) =
-                Ieee80211::decode_full(&packet).unwrap().get_ssid_from_beacon_frame()
-            {
+            if let Ok(beacon_ssid) = get_ssid_from_beacon_frame(&packet) {
                 if beacon_ssid == ssid {
                     return; // Found expected beacon frame
                 }

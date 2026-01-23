@@ -13,6 +13,6 @@ pub enum FrameworkError {
     ActorDropped,
     #[error("Item not found: {0}")]
     NotFound(String),
-    #[error("Entity error: {0}")]
-    EntityError(Box<dyn std::error::Error + Send + Sync>),
+    #[error("Service error: {0}")]
+    ServiceError(Box<dyn std::error::Error + Send + Sync>),
 }

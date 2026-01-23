@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -30,42 +30,17 @@ NETSIM_API_DEPS = [
     "@tokio-stream",
 ]
 
-rust_library(
+netsim_rust_library(
     name = "model",
     srcs = glob(["src/**/*.rs"]),
     crate_name = "netsim_model",
     edition = "2021",
+    enable_clippy = False,
+    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
         "@thiserror-impl",
     ],
+    strict_warnings = False,
     deps = NETSIM_API_DEPS,
-)
-
-rust_test(
-    name = "tests",
-    srcs = glob(["src/**/*.rs"]),
-    crate_root = "src/lib.rs",
-    edition = "2021",
-    proc_macro_deps = [
-        "@async-trait",
-        "@thiserror-impl",
-    ],
-    tags = ["general_tests"],
-    deps = NETSIM_API_DEPS,
-)
-
-rust_clippy(
-    name = "clippy",
-    deps = [":model"],
-)
-
-rust_doc(
-    name = "doc",
-    crate = ":model",
-)
-
-rust_doc_test(
-    name = "doc_test",
-    crate = ":model",
 )

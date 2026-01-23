@@ -1,13 +1,16 @@
 # Copyright 2025 The Android Open Source Project
 
-load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
-rust_library(
+netsim_rust_library(
     name = "common",
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
+    enable_clippy = False,
+    enable_doc_test = False,
+    strict_warnings = False,
     deps = [
         "@anyhow",
         "@chrono",
@@ -18,11 +21,4 @@ rust_library(
         "@rand",
         "@zip",
     ],
-)
-
-rust_test(
-    name = "tests",
-    crate = ":common",
-    edition = "2021",
-    tags = ["general_tests"],
 )

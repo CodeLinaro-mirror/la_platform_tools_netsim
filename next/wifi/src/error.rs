@@ -76,4 +76,16 @@ impl From<EncodeError> for WifiError {
     }
 }
 
+impl From<String> for WifiError {
+    fn from(err: String) -> Self {
+        WifiError::Other(err)
+    }
+}
+
+impl From<netsim_packets::netlink::hwsim_attr_set::HwsimError> for WifiError {
+    fn from(err: netsim_packets::netlink::hwsim_attr_set::HwsimError) -> Self {
+        WifiError::Frame(format!("Hwsim error: {err}"))
+    }
+}
+
 pub type WifiResult<T> = Result<T, WifiError>;

@@ -18,10 +18,12 @@ fn create_test_chip_info() -> ChipInfo {
             name: "Test WiFi Chip".to_string(),
             manufacturer: "Test Corp".to_string(),
             product_name: "Test WiFi Chip".to_string(),
+            address: "".to_string(),
         }),
         device_info: Some(DeviceInfo {
             name: "test-device".to_string(),
             id: "test-device".to_string(),
+            avd_path: "".to_string(),
         }),
     }
 }

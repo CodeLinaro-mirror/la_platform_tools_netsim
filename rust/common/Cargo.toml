@@ -1,6 +1,6 @@
 [package]
 name = "netsim-common"
-version = "0.3.86"
+version = "0.3.88"
 edition = "2021"
 
 [lib]

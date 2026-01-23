@@ -16,7 +16,7 @@ use device_api::DeviceConfig;
 use netsim_model::chip::ChipRequest;
 use netsim_model::chip_error::ChipError;
 
-use common::{setup, TestFixture};
+use common::TestFixture;
 
 fn create_add_chip_params(guid: &str, chip_name: &str) -> DeviceAddChip {
     DeviceAddChip {
@@ -61,7 +61,7 @@ async fn test_add_chip_success() {
     let device_id = result.unwrap();
 
     let device = client.get(device_id).await.unwrap().unwrap();
-    assert_eq!(device.device.name, "test-dev");
+    assert_eq!(device.name, "test-dev");
 }
 
 #[tokio::test]

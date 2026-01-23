@@ -1,4 +1,5 @@
-load("@rules_rust//rust:defs.bzl", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -14,29 +15,20 @@ DEPS = [
     "@thiserror",
 ]
 
-rust_library(
+netsim_rust_library(
     name = "device-actor",
     srcs = glob(["src/**/*.rs"]),
     crate_features = [],
     crate_name = "device_actor",
     crate_root = "src/lib.rs",
     edition = "2021",
+    enable_clippy = False,
+    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
+    strict_warnings = False,
     deps = DEPS,
-)
-
-rust_doc(
-    name = "doc",
-    crate = ":device-actor",
-)
-
-rust_doc_test(
-    name = "doc_test",
-    crate = ":device-actor",
-    # TODO: Enable on macOS. Disabled due to missing C++ linker wrapper in pure Rust sandbox. See tools/netsim/README.md.
-    target_compatible_with = ["@platforms//os:linux"],
 )
 
 [
@@ -47,6 +39,8 @@ rust_doc_test(
             "tests/common/mod.rs",
         ],
         edition = "2021",
+        # enable_clippy = False,
+        # enable_doc_test = False,
         proc_macro_deps = [
             "@async-trait",
         ],

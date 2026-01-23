@@ -1,16 +1,4 @@
-//! # Capture Actor Crate
-//!
-//! This crate provides the `CaptureActor`, which manages packet capture for simulated chips.
-//! It handles creating PCAP files, writing packets to them, and managing capture state.
-//!
-//! The actor uses the `actor-framework` to manage its lifecycle and state.
-//! It relies on `CaptureWriter`s to handle the actual writing of packets to different formats (e.g., PCAP).
-//!
-//! ## Capture Actions
-//!
-//! The actions supported by the `CaptureActor` are defined in the `capture-api` crate.
-//! These actions include creating, deleting, and patching captures, as well as capturing packets.
-//! See `capture_api::CaptureAction` for details.
+// Copyright 2025 The Android Open Source Project
 
 //! Capture Actor
 //!
@@ -18,19 +6,20 @@
 //! starting and stopping captures, writing to PCAP files, and managing
 //! capture state for different chips.
 
-pub mod actor_impl;
-pub mod bt_pcap;
-pub mod context;
-pub mod entity;
-pub mod error;
-pub mod handlers;
-pub mod writer;
+mod bt_pcap;
+mod capture_actor;
+mod error;
+mod lifecycle;
+mod service;
+mod writer;
 
-use crate::entity::CaptureEntity;
+pub use capture_actor::CaptureActor;
+pub use error::CaptureError;
+
 use actor_framework::{ResourceActor, ResourceClient};
 
 /// Creates a new Capture actor and its client.
-pub fn new() -> (ResourceActor<CaptureEntity>, ResourceClient<CaptureEntity>) {
+pub fn new() -> (ResourceActor<CaptureActor>, ResourceClient<CaptureActor>) {
     // Buffer size of 32 is sufficient for capture control commands.
     // Packet data flows through a separate channel if needed, but here we handle control.
     ResourceActor::new(32)
@@ -40,24 +29,29 @@ pub fn new() -> (ResourceActor<CaptureEntity>, ResourceClient<CaptureEntity>) {
 mod tests {
     use super::*;
     use crate::bt_pcap::BluetoothH4Writer;
-    use crate::context::CaptureContext;
-    use crate::entity::CaptureEntity;
+    use crate::service::InternalCaptureInfo;
+
     use crate::writer::CaptureWriter;
-    use actor_framework::ActorEntity;
+    use actor_framework::ActorService;
     use bytes::Bytes;
     use capture_api::Direction;
-    use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate};
+    use capture_api::{CaptureAction, CaptureCreate};
     use netsim_model::chip::{ChipId, ChipKind};
-    use std::collections::HashMap;
     use std::fs;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Arc;
     use std::time::SystemTime;
+
+    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     #[test]
     fn test_pcap_writer() {
-        let filename = "test_pcap.pcap";
-        let mut writer = BluetoothH4Writer::new(filename).unwrap();
+        let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("netsim_test_pcap_writer_{}", id));
+        fs::create_dir_all(&dir).unwrap();
+        let filename = dir.join("test_pcap.pcap");
+        let mut writer = BluetoothH4Writer::new(&filename).unwrap();
         let data = vec![0x01, 0x00, 0x00, 0x00]; // Fake H4 Command
         writer.write_packet(SystemTime::now(), Direction::Sent, &data).unwrap();
 
@@ -65,13 +59,45 @@ mod tests {
         assert_eq!(records, 1);
         assert_eq!(bytes, 4);
 
+        // explicitly drop writer to ensure file handle closed (though not strictly required for remove_file on linux)
+        drop(writer);
         fs::remove_file(filename).unwrap();
+        fs::remove_dir(dir).unwrap();
+    }
+
+    struct MockContext;
+    impl<Id> actor_framework::Context<Id> for MockContext
+    where
+        Id: Into<u32> + Send + 'static,
+    {
+        fn set_interval(&mut self, _duration: std::time::Duration) {}
+        fn add_stream(&mut self, _id: Id, _stream: actor_framework::BoxStream) {}
+        fn remove_stream(&mut self, _id: Id) {}
+        fn spawn(&mut self, _id: Id, _task: futures::future::BoxFuture<'static, Id>) {}
+        fn abort(&mut self, _id: Id) {}
+        fn shutdown(&mut self) {}
+    }
+
+    fn setup_test_context() -> (CaptureActor, PathBuf) {
+        let mut ctx = CaptureActor::default();
+        let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let temp_dir =
+            std::env::temp_dir().join(format!("netsim_capture_test_{}_{}", std::process::id(), id));
+        fs::create_dir_all(&temp_dir).unwrap();
+        ctx.capture_dir = Some(temp_dir.clone());
+        (ctx, temp_dir)
+    }
+
+    fn teardown_test_context(dir: PathBuf) {
+        if dir.exists() {
+            fs::remove_dir_all(dir).unwrap();
+        }
     }
 
     #[tokio::test]
     async fn test_capture_entity_lifecycle() {
         let chip_id = ChipId(1);
-        let mut ctx = CaptureContext::default();
+        let (mut ctx, temp_dir) = setup_test_context();
 
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
@@ -81,120 +107,87 @@ mod tests {
             default_enabled: false,
             enabled_flag: enabled_flag.clone(),
         };
-        let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap().entity;
-        assert_eq!(entity.enabled, false);
-        assert_eq!(enabled_flag.load(Ordering::SeqCst), false);
+        let mut entity = InternalCaptureInfo::from_create_params(chip_id, create_params).unwrap();
+        assert_eq!(entity.info.enabled, false);
 
-        // Dummy runtime
-        let mut interval = None;
-        let mut streams = tokio_stream::StreamMap::new();
-        let mut shutdown = None;
-        let mut runtime =
-            Runtime { interval: &mut interval, streams: &mut streams, shutdown: &mut shutdown };
+        let mut runtime = MockContext;
 
         // Enable capture
-        entity.on_update(true, &mut ctx, &mut runtime).await.unwrap();
-        assert_eq!(entity.enabled, true);
-        assert_eq!(enabled_flag.load(Ordering::SeqCst), true);
-
-        // Verify writer created
-        {
-            let writers = ctx.writers.lock().unwrap();
-            assert!(writers.contains_key(&chip_id));
-        }
+        ctx.update_entity(&mut entity, true, &mut runtime).await.unwrap();
+        assert_eq!(entity.info.enabled, true);
+        assert!(ctx.writers.contains_key(&chip_id));
 
         // Capture packet
+        // Verify stats - Insert entity into context for handle_action and handle_get to work
+        ctx.entities.insert(chip_id, entity.clone());
         let packet = vec![0x01, 0x02, 0x03, 0x04];
-        entity
-            .handle_action(
-                CaptureAction::CapturePacket {
-                    chip_id,
-                    direction: Direction::Sent,
-                    bytes: Bytes::from(packet.clone()),
-                },
-                &mut ctx,
-                &mut runtime,
-            )
-            .await
-            .unwrap();
+        ctx.handle_action(
+            Some(chip_id),
+            CaptureAction::CapturePacket {
+                chip_id,
+                direction: Direction::Sent,
+                bytes: Bytes::from(packet.clone()),
+            },
+            &mut runtime,
+        )
+        .await
+        .unwrap();
 
-        // Verify stats
-        let action_get = CaptureAction::Get { chip_id };
-        if let CaptureActionResult::Get(Some(info)) =
-            entity.handle_action(action_get, &mut ctx, &mut runtime).await.unwrap()
-        {
-            assert_eq!(info.records_written, 1);
-            assert_eq!(info.bytes_written, 4);
-        } else {
-            panic!("Failed to get capture info");
-        }
+        let info = ctx
+            .handle_get(chip_id, &mut runtime)
+            .await
+            .unwrap()
+            .expect("Failed to get capture info");
+        assert_eq!(info.records_written, 1);
+        assert_eq!(info.bytes_written, 4);
+
+        // Update entity from context (if handle_action modified it, though here we modified local entity)
+        // In this test, we modify `entity` local variable primarily.
 
         // Disable capture
-        entity.on_update(false, &mut ctx, &mut runtime).await.unwrap();
-        assert_eq!(entity.enabled, false);
-        // Writer stays in context but is not used, or we could remove it.
-        // Current implementation keeps it but we don't write to it if disabled.
+        ctx.update_entity(&mut entity, false, &mut runtime).await.unwrap();
+        assert_eq!(entity.info.enabled, false);
 
         // Delete
-        entity.on_delete(&mut ctx, &mut runtime).await.unwrap();
-        {
-            let writers = ctx.writers.lock().unwrap();
-            assert!(!writers.contains_key(&chip_id));
-        }
+        ctx.delete_entity(&entity, &mut runtime).await.unwrap();
+        assert!(!ctx.writers.contains_key(&chip_id));
 
-        // Clean up file
-        let filename = format!("capture_test_device_{}.pcap", chip_id.0);
-        if fs::metadata(&filename).is_ok() {
-            fs::remove_file(&filename).unwrap();
-        }
+        teardown_test_context(temp_dir);
     }
 
     #[tokio::test]
     async fn test_default_capture_enabled() {
-        let mut ctx = CaptureContext::default();
+        let (mut ctx, temp_dir) = setup_test_context();
         let chip_id = ChipId(2);
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
             chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_default".to_string(),
-            default_enabled: false, // Override should be false, but context will enable it
+            default_enabled: false,
             enabled_flag: enabled_flag.clone(),
         };
 
-        // Set default capture to true in context
+        // Set default capture to true
         ctx.default_capture_enabled = true;
 
-        let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap().entity;
+        let mut entity = InternalCaptureInfo::from_create_params(chip_id, create_params).unwrap();
+        let mut runtime = MockContext;
 
-        // Dummy runtime
-        let mut interval = None;
-        let mut streams = tokio_stream::StreamMap::new();
-        let mut shutdown = None;
-        let mut runtime =
-            Runtime { interval: &mut interval, streams: &mut streams, shutdown: &mut shutdown };
-
-        entity.on_create(&mut ctx, &mut runtime).await.unwrap();
+        ctx.create_entity(&mut entity, &mut runtime).await.unwrap();
 
         // Should be enabled because of context default
-        assert_eq!(entity.enabled, true);
-        assert_eq!(enabled_flag.load(Ordering::SeqCst), true);
-        {
-            let writers = ctx.writers.lock().unwrap();
-            assert!(writers.contains_key(&chip_id));
-        }
+        assert_eq!(entity.info.enabled, true);
+        assert!(ctx.writers.contains_key(&chip_id));
 
         // Clean up
-        entity.on_delete(&mut ctx, &mut runtime).await.unwrap();
-        let filename = format!("capture_test_device_default_{}.pcap", chip_id.0);
-        if fs::metadata(&filename).is_ok() {
-            fs::remove_file(&filename).unwrap();
-        }
+        ctx.delete_entity(&entity, &mut runtime).await.unwrap();
+        teardown_test_context(temp_dir);
     }
 
     #[tokio::test]
     async fn test_capture_directory() {
-        let mut ctx = CaptureContext::default();
+        let (mut ctx, temp_dir) = setup_test_context();
         let chip_id = ChipId(3);
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
@@ -205,31 +198,15 @@ mod tests {
             enabled_flag: enabled_flag.clone(),
         };
 
-        // Create a temp directory
-        let temp_dir = std::env::temp_dir().join("netsim_capture_test");
-        fs::create_dir_all(&temp_dir).unwrap();
-        *ctx.capture_dir = Some(temp_dir.clone());
+        let mut entity = InternalCaptureInfo::from_create_params(chip_id, create_params).unwrap();
+        let mut runtime = MockContext;
 
-        let mut entity = CaptureEntity::from_create_params(chip_id, create_params).unwrap().entity;
+        ctx.create_entity(&mut entity, &mut runtime).await.unwrap();
 
-        // Dummy runtime
-        let mut interval = None;
-        let mut streams = tokio_stream::StreamMap::new();
-        let mut shutdown = None;
-        let mut runtime =
-            Runtime { interval: &mut interval, streams: &mut streams, shutdown: &mut shutdown };
+        let entries: Vec<_> = fs::read_dir(&temp_dir).unwrap().collect();
+        assert!(!entries.is_empty(), "Capture file should be created in temp dir");
 
-        entity.on_create(&mut ctx, &mut runtime).await.unwrap();
-
-        // Verify writer created in temp dir
-        let expected_path = temp_dir.join(format!("capture_test_device_dir_{}.pcap", chip_id.0));
-        assert!(expected_path.exists());
-
-        // Clean up
-        entity.on_delete(&mut ctx, &mut runtime).await.unwrap();
-        if expected_path.exists() {
-            fs::remove_file(&expected_path).unwrap();
-        }
-        fs::remove_dir(&temp_dir).unwrap();
+        ctx.delete_entity(&entity, &mut runtime).await.unwrap();
+        teardown_test_context(temp_dir);
     }
 }

@@ -1,4 +1,5 @@
-load("@rules_rust//rust:defs.bzl", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_doc_test", "rust_test")
+load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -11,16 +12,20 @@ DEPS = [
     "@thiserror",
 ]
 
-rust_library(
+netsim_rust_library(
     name = "actor-framework",
     srcs = glob(["src/**/*.rs"]),
     crate_features = [],
     crate_name = "actor_framework",
     crate_root = "src/lib.rs",
     edition = "2021",
+    enable_clippy = False,
+    enable_doc_test = False,
+    enable_unit_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
+    strict_warnings = False,
     deps = DEPS,
 )
 
@@ -32,11 +37,6 @@ rust_test(
         "@async-trait",
     ],
     deps = [":actor-framework"] + DEPS,
-)
-
-rust_doc(
-    name = "doc",
-    crate = ":actor-framework",
 )
 
 rust_doc_test(

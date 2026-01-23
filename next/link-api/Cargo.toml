@@ -1,0 +1,12 @@
+[package]
+name = "link-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+netsim-model = { path = "../model" }
+serde = { version = "1.0", features = ["derive"] }
+netsim-proto = { path = "../proto" }
+bytes = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"

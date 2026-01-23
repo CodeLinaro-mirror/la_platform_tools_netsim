@@ -2,7 +2,7 @@
 
 use crate::test_utils::{self, mock_sink, TestFixture};
 use netsim_model::chip::{
-    BeaconParams, BleBeacon, BluetoothMode, ChipCreate, ChipId, SnifferParams,
+    BeaconParams, BleBeacon, BluetoothMode, ChipClient, ChipCreate, ChipId, SnifferParams,
 };
 use netsim_model::device::DeviceId;
 use tokio::time::{timeout, Duration};
@@ -13,7 +13,7 @@ async fn test_sniffer_receives_advertisement() {
 }
 
 async fn test_sniffer_receives_advertisement_inner() {
-    let TestFixture { client, _server_task } = test_utils::setup();
+    let TestFixture { client, _actor_task } = test_utils::setup();
 
     // 1. Create a beacon.
     let id = ChipId(1);

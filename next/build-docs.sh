@@ -62,14 +62,14 @@ cargo doc --no-deps
 DOC_DIR="target/doc/daemon"
 
 echo "Generating module graph for daemon..."
-cargo modules dependencies \
-    --no-externs \
-    --no-sysroot \
-    --no-traits \
-    --no-types \
-    --no-uses \
-    --package daemon \
-    --lib | dot -Tpng > "${DOC_DIR}/modules.png"
+#cargo modules dependencies \
+#    --no-externs \
+#    --no-sysroot \
+#    --no-traits \
+#    --no-types \
+#    --no-uses \
+#    --package daemon \
+#    --lib | dot -Tpng > "${DOC_DIR}/modules.png"
 
 echo "Documentation build complete."
 echo "You can view the main page at: file://${SCRIPT_DIR}/${DOC_DIR}/index.html"

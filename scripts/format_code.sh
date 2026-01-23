@@ -98,7 +98,7 @@ if $FORMAT_ALL; then
   mapfile -d '' py_files < <(find . -type f -name '*.py' -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
   mapfile -d '' cmake_files < <(find . -type f \( -name 'CMakeLists.txt' -o -name '*.cmake' \) -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
   mapfile -d '' bp_files < <(find . -maxdepth 1 -type f -name "Android.bp" -print0)
-  mapfile -d '' bazel_files < <(find . -type f \( -name "BUILD" -o -name "MODULE.bazel" -o -name "BUILD.bazel" \) -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
+  mapfile -d '' bazel_files < <(find . -type f \( -name "BUILD" -o -name "MODULE.bazel" -o -name "BUILD.bazel" -o -name "*.bzl" \) -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
   mapfile -d '' toml_files < <(find rust next -type f -name 'Cargo.toml' -not -path "*/target/*" -not -path "*/bazel-bin/*" -not -path "*/bazel-netsim/*" -not -path "*/bazel-out/*" -not -path "*/objs/*" -print0)
 else
   echo "Gathering changed files to format..."
@@ -124,7 +124,7 @@ else
     [[ "$f" =~ \.py$ ]] && py_files+=("$f")
     [[ "$f" =~ CMakeLists\.txt$|\.cmake$ ]] && cmake_files+=("$f")
     [[ "$f" =~ Android\.bp$ ]] && bp_files+=("$f")
-    [[ "$f" =~ BUILD$|MODULE\.bazel$|BUILD\.bazel$ ]] && bazel_files+=("$f")
+    [[ "$f" =~ BUILD$|MODULE\.bazel$|BUILD\.bazel$|\.bzl$ ]] && bazel_files+=("$f")
     [[ "$f" =~ Cargo\.toml$ ]] && toml_files+=("$f")
   done
 fi

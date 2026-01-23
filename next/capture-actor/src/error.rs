@@ -13,6 +13,9 @@ pub enum CaptureError {
     /// Chip not found.
     #[error("Chip not found: {0:?}")]
     ChipNotFound(ChipId),
+    /// Chip Kind Mismatch
+    #[error("Chip Kind Mismatch: expected {0}, found {1}")]
+    ChipKindMismatch(String, String),
 }
 
 impl From<String> for CaptureError {
