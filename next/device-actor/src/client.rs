@@ -72,6 +72,44 @@ impl DeviceClient {
         Ok(device_api::api::ListDeviceResponse { devices })
     }
 
+    /// Resolves a device ID from a name.
+    ///
+    /// This method lists all devices and finds the one with the matching name.
+    /// If multiple devices have the same name, it returns the first one found.
+    pub async fn resolve_id_by_name(&self, name: &str) -> Result<DeviceId, DeviceError> {
+        debug!("Resolving device ID for name: {}", name);
+        let list_resp = self.list().await?;
+        list_resp
+            .devices
+            .into_iter()
+            .find(|d| d.name == name)
+            .map(|d| DeviceId(d.id))
+            .ok_or_else(|| DeviceError::NotFound(name.to_string()))
+    }
+
+    /// Patches a device by ID or Name.
+    ///
+    /// If `id` is provided (non-zero), it is used.
+    /// Otherwise, `name` is used to resolve the ID.
+    pub async fn patch(
+        &self,
+        id: Option<u32>,
+        name: Option<&str>,
+        mut update: device_api::api::DeviceUpdate,
+    ) -> Result<(), DeviceError> {
+        let device_id = if let Some(id) = id.filter(|&v| v != 0) {
+            DeviceId(id)
+        } else if let Some(name) = name {
+            self.resolve_id_by_name(name).await?
+        } else {
+            return Err(DeviceError::ActorCommunicationError(
+                "Device ID or Name must be provided".to_string(),
+            ));
+        };
+        update.id = device_id.0;
+        self.update(device_id, update).await
+    }
+
     /// Updates an existing device's properties.
     ///
     /// # Arguments

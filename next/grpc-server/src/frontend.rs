@@ -1,6 +1,6 @@
 use crate::frontend_converter::to_proto_device;
-use client::{DeviceClient, LinkClient};
-use device_api::DeviceId;
+use client::{DeviceClient, DeviceError, LinkClient};
+use device_api::api::DeviceUpdate;
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use netsim_proto::empty::Empty;
@@ -77,12 +77,8 @@ impl FrontendService for FrontendClient {
     ) {
         let client = self.device_client.clone();
         let f = async move {
-            // TODO: Handle case where req.id is missing but name is provided?
-            // For now, we require ID or fail if not present (or maybe 0 is invalid?)
-            let id = req.id.unwrap_or(0); // 0 might be valid?
-
-            let update = device_api::api::DeviceUpdate {
-                id,
+            let update = DeviceUpdate {
+                id: req.id.unwrap_or(0),
                 name: req.device.name.clone(),
                 visible: req.device.visible,
                 position: req
@@ -99,14 +95,23 @@ impl FrontendService for FrontendClient {
                     .map(crate::frontend_converter::from_proto_orientation),
             };
 
-            match client.update(DeviceId(id), update).await {
+            let name_opt = req.device.name.as_deref();
+            match client.patch(req.id, name_opt, update).await {
                 Ok(_) => sink.success(Empty::new()).await,
                 Err(e) => {
-                    sink.fail(RpcStatus::with_message(
-                        RpcStatusCode::INTERNAL,
-                        format!("Failed to patch device: {}", e),
-                    ))
-                    .await
+                    let status = match e {
+                        DeviceError::NotFound(_) | DeviceError::DeviceNotFound(_) => {
+                            RpcStatus::with_message(
+                                RpcStatusCode::NOT_FOUND,
+                                format!("Device not found or patch failed: {}", e),
+                            )
+                        }
+                        _ => RpcStatus::with_message(
+                            RpcStatusCode::INTERNAL,
+                            format!("Failed to patch device: {}", e),
+                        ),
+                    };
+                    sink.fail(status).await
                 }
             }
         }

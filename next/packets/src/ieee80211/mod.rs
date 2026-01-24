@@ -1,8 +1,12 @@
+pub mod beacon;
+pub mod eapol;
 pub mod frame;
 pub mod ie;
 pub mod json;
 pub mod util;
 
+pub use beacon::*;
+pub use eapol::*;
 pub use frame::*;
 pub use ie::*;
 pub use json::*;

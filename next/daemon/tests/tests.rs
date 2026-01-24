@@ -3,3 +3,4 @@
 pub mod grpc_integration_test;
 pub mod ini_file_test;
 pub mod integration_test;
+pub mod world;

@@ -1,0 +1,16 @@
+[package]
+name = "slirp-actor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+log = "0.4"
+anyhow = "1.0"
+netsim-packets = { path = "../packets" }
+actor-framework = { path = "../actor-framework" }
+libslirp-rs = { path = "../libslirp-rs" }
+bytes = "1.4"
+futures = "0.3"
+netsim-model = { path = "../model" }
+netsim-proto = { path = "../proto" }

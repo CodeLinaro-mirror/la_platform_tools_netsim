@@ -37,12 +37,22 @@ impl ActorService for UwbActor {
 
     async fn handle_update(
         &mut self,
-        _id: Self::Id,
-        _update: Self::Update,
+        id: Self::Id,
+        update: Self::Update,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
-        // TODO: Implement update logic
-        Err(ChipError::Internal("Update not implemented".into()))
+        if let Some(chip) = self.active_chips.get_mut(&id) {
+            if let Some(pos) = update.position {
+                chip.position = pos;
+            }
+            if let Some(orient) = update.orientation {
+                chip.orientation = orient;
+            }
+            // TODO: Implement update logic to pica
+            Ok(chip.clone())
+        } else {
+            Err(ChipError::ChipNotFound(id))
+        }
     }
 
     async fn handle_delete(

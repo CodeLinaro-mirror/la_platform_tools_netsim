@@ -93,7 +93,7 @@
 //! 4. **Maintainability** - Domain logic lives in one place
 //! 5. **Discoverability** - IDE autocomplete shows domain methods
 
-pub use device_actor::DeviceClient;
+pub use device_actor::{DeviceClient, DeviceError};
 pub mod capture_client;
 pub use capture_client::*;
 pub use link_actor::LinkClient;
