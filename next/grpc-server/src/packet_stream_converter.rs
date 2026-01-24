@@ -151,6 +151,7 @@ pub fn chip_info_to_proto(chip_info: ChipInfo) -> proto_startup::ChipInfo {
             ChipKind::WIFI => proto_common::ChipKind::WIFI,
             ChipKind::UWB => proto_common::ChipKind::UWB,
             ChipKind::CELL => proto_common::ChipKind::UNSPECIFIED, // Or map to a suitable netsim_model::ChipKind
+            ChipKind::AP => proto_common::ChipKind::UNSPECIFIED,
         }
         .into();
         chip_proto.id = chip.id;

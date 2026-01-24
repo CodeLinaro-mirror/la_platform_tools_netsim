@@ -35,6 +35,7 @@ pub enum ChipKind {
     NFC = 4,
     BleBeacon = 5,
     CELLULAR = 6,
+    AP = 7,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -211,6 +212,7 @@ pub enum NetworkKind {
     Wifi,
     Uwb,
     Cell,
+    Ap,
 }
 
 impl From<&NetworkParams> for NetworkKind {
@@ -220,6 +222,7 @@ impl From<&NetworkParams> for NetworkKind {
             NetworkParams::Wifi(_) => NetworkKind::Wifi,
             NetworkParams::Uwb(_) => NetworkKind::Uwb,
             NetworkParams::Cell(_) => NetworkKind::Cell,
+            NetworkParams::Ap(_) => NetworkKind::Ap,
         }
     }
 }
@@ -231,6 +234,7 @@ impl From<NetworkKind> for ChipKind {
             NetworkKind::Wifi => ChipKind::WIFI,
             NetworkKind::Uwb => ChipKind::UWB,
             NetworkKind::Cell => ChipKind::CELLULAR,
+            NetworkKind::Ap => ChipKind::AP,
         }
     }
 }
@@ -246,6 +250,8 @@ pub enum NetworkParams {
     Uwb(UwbCreate),
     /// Cellular parameters.
     Cell(CellCreate),
+    /// Access Point parameters.
+    Ap(ApCreate),
 }
 
 /// Parameters for creating a Bluetooth chip.
@@ -336,6 +342,26 @@ pub struct CellCreate {
     // Future Cellular specific properties.
 }
 
+/// Parameters for creating an Access Point chip.
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ApCreate {
+    pub ssid: String,
+    pub bssid: String,
+    pub channel: u8,
+    pub hw_mode: String,
+    pub wpa_passphrase: Option<String>,
+    pub beacon_interval: u16,
+    pub country_code: Option<String>,
+    pub dtim_period: u8,
+    pub hidden_ssid: bool,
+    pub sae: bool,
+    pub wmm_enabled: bool,
+    pub enterprise_enabled: bool,
+    pub mac_acl_mode: u8,
+    pub mac_acl_list: Vec<String>,
+    pub ftm_responder_enabled: bool,
+}
+
 /// Parameters for the ChipDied message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ChipDiedParams {
@@ -380,6 +406,7 @@ pub enum ChipVariant {
     Wifi(Radio),
     Uwb(Radio),
     Cell(CellChip),
+    Ap(ApChip),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -395,6 +422,14 @@ pub struct CellChip {
     pub state: String,
 }
 
+/// Access Point specific chip information.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ApChip {
+    pub config: ApCreate,
+    #[serde(default)]
+    pub associations: Vec<String>,
+}
+
 impl From<NetworkKind> for ChipVariant {
     fn from(kind: NetworkKind) -> Self {
         match kind {
@@ -405,6 +440,9 @@ impl From<NetworkKind> for ChipVariant {
             NetworkKind::Wifi => ChipVariant::Wifi(Default::default()),
             NetworkKind::Uwb => ChipVariant::Uwb(Default::default()),
             NetworkKind::Cell => ChipVariant::Cell(CellChip { state: "unknown".into() }),
+            NetworkKind::Ap => {
+                ChipVariant::Ap(ApChip { config: Default::default(), associations: Vec::new() })
+            }
         }
     }
 }
@@ -434,6 +472,7 @@ pub enum ChipVariantUpdate {
     Wifi(Radio),
     Uwb(Radio),
     Cell(CellUpdate),
+    Ap(ApUpdate),
 }
 
 /// Cellular technology specific chip information.
@@ -441,6 +480,15 @@ pub enum ChipVariantUpdate {
 pub struct CellUpdate {
     /// A string representing the current state of the modem.
     pub state: Option<String>,
+}
+
+/// Access Point specific chip update.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ApUpdate {
+    pub ssid: Option<String>,
+    pub channel: Option<u8>,
+    #[serde(default)]
+    pub force_disconnect: Vec<String>,
 }
 
 // =============================================================================
