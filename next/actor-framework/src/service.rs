@@ -55,10 +55,10 @@ pub trait ActorService: Send + Sync + 'static {
     type Update: Send + Sync + Debug;
 
     /// Enum representing resource-specific operations (e.g., `ReserveStock`).
-    type Action: Send + Sync + Debug;
+    type Action: Send + Debug;
 
     /// The result type returned by custom actions.
-    type ActionResult: Send + Sync + Debug;
+    type ActionResult: Send + Debug;
 
     /// The error type for this entity.
     /// Must implement std::error::Error for proper error propagation.

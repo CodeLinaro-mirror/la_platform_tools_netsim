@@ -13,7 +13,12 @@ impl ActorLifecycle<u32> for SlirpActor {
     }
 
     async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
-    async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
+
+    async fn on_stream(&mut self, _id: u32, msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {
+        if let Some(slirp) = &self.libslirp {
+            slirp.input(msg);
+        }
+    }
     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
 }

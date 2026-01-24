@@ -1,7 +1,7 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::ResourceActor;
-use ap_actor::{ApActor, ApClient, ApConfig};
+use ap_actor::{ApActor, ApClient, ApClientTrait, ApConfig};
 use netsim_packets::ethernet::MacAddr;
 use netsim_packets::ieee80211::{
     AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader, FrameControl, Ieee80211,
@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use zerocopy::{IntoBytes, Ref, U16};
 
-fn generate_random_mac() -> [u8; 6] {
+pub fn generate_random_mac() -> [u8; 6] {
     use rand::Rng;
     let mut rng = rand::rng();
     [0x02, 0x00, 0x00, 0x00, rng.random(), rng.random()]
@@ -28,7 +28,7 @@ pub struct ApWorld {
 impl ApWorld {
     pub async fn new() -> Self {
         let _ = env_logger::builder().try_init();
-        let ap_actor_impl = ApActor::new(None);
+        let ap_actor_impl = ApActor::new();
         let (runner, client_base) = ResourceActor::new(32);
         let client = ApClient::new(client_base);
 
@@ -44,7 +44,16 @@ impl ApWorld {
         if self.tx_to_ap.is_none() {
             let (tx_to_ap, rx_for_ap) = mpsc::unbounded_channel();
             let (tx_from_ap, rx_from_ap) = mpsc::unbounded_channel();
-            self.client.register(rx_for_ap, tx_from_ap).await.expect("Failed to register");
+            let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx_for_ap));
+            self.client
+                .register(
+                    stream,
+                    tx_from_ap,
+                    std::sync::Arc::new(ap_actor::shared::SharedKeyStore::new()),
+                    Duration::from_millis(100),
+                )
+                .await
+                .expect("Failed to register");
             self.tx_to_ap = Some(tx_to_ap);
             self.rx_from_ap = Some(rx_from_ap);
         }
@@ -66,6 +75,16 @@ impl ApWorld {
 
             wpa_passphrase,
             beacon_interval: 100,
+            country_code: None,
+            dtim_period: 2,
+            hidden_ssid: false,
+            sae: false,
+            wmm_enabled: true,
+            enterprise_enabled: false,
+            mac_acl_mode: 0,
+            mac_acl_list: vec![],
+            ftm_responder_enabled: true,
+            position: ap_actor::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }
@@ -80,6 +99,16 @@ impl ApWorld {
 
             wpa_passphrase: None,
             beacon_interval: 100,
+            country_code: None,
+            dtim_period: 2,
+            hidden_ssid: false,
+            sae: false,
+            wmm_enabled: true,
+            enterprise_enabled: false,
+            mac_acl_mode: 0,
+            mac_acl_list: vec![],
+            ftm_responder_enabled: true,
+            position: ap_actor::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }

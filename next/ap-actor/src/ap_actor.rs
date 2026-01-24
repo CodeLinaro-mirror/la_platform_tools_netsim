@@ -24,21 +24,55 @@ pub struct ApConfig {
     pub wpa_passphrase: Option<String>,
     #[serde(default = "default_beacon_interval")]
     pub beacon_interval: u16,
+    pub country_code: Option<String>,
+    #[serde(default = "default_dtim_period")]
+    pub dtim_period: u8,
+    #[serde(default)]
+    pub hidden_ssid: bool,
+    #[serde(default)]
+    pub sae: bool,
+    #[serde(default = "default_wmm_enabled")]
+    pub wmm_enabled: bool,
+    #[serde(default)]
+    pub enterprise_enabled: bool,
+    #[serde(default)]
+    pub mac_acl_mode: u8, // 0=Disable, 1=Deny, 2=Allow
+    #[serde(default)]
+    pub mac_acl_list: Vec<MacAddr>,
+    #[serde(default = "default_ftm_responder_enabled")]
+    pub ftm_responder_enabled: bool,
+    #[serde(default)]
+    pub position: netsim_model::device::Position,
+}
+
+fn default_ftm_responder_enabled() -> bool {
+    true
+}
+
+fn default_wmm_enabled() -> bool {
+    true
 }
 
 fn default_beacon_interval() -> u16 {
     100
 }
 
+fn default_dtim_period() -> u8 {
+    2
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ApUpdate {
     pub ssid: Option<String>,
+    pub position: Option<netsim_model::device::Position>,
 }
 
 pub enum ApReq {
     Register {
-        stream: tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
         sink: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
+        shared_keys: std::sync::Arc<shared::SharedKeyStore>,
+        beacon_interval: std::time::Duration,
     },
 }
 
@@ -65,6 +99,7 @@ pub struct ApActor {
     pub(crate) next_ap_id: ApId,
     pub(crate) manager: Ieee80211Manager,
     pub shared_keys: std::sync::Arc<shared::SharedKeyStore>,
+    pub beacon_interval: Option<u16>, // In TUs (1024us)
 }
 
 #[derive(Clone, Debug)]
@@ -72,17 +107,25 @@ pub struct ApActor {
 pub struct ApState {
     pub config: ApConfig,
     pub wpa: Option<wpa_auth::WpaAuthenticator>,
+    pub sae_sessions: HashMap<MacAddr, crate::sae::SaeStateMachine>,
+    pub eap_sessions: HashMap<MacAddr, crate::eap_auth::EapAuthenticator>,
 }
 
 impl ApActor {
-    pub fn new(shared_keys: Option<std::sync::Arc<shared::SharedKeyStore>>) -> Self {
+    pub fn new() -> Self {
         Self {
             sink: None,
             aps: HashMap::new(),
             next_ap_id: 1,
             manager: Ieee80211Manager::new(),
-            shared_keys: shared_keys
-                .unwrap_or_else(|| std::sync::Arc::new(shared::SharedKeyStore::new())),
+            shared_keys: std::sync::Arc::new(shared::SharedKeyStore::new()),
+            beacon_interval: None,
         }
+    }
+}
+
+impl ApState {
+    pub fn new(config: ApConfig) -> Self {
+        Self { config, wpa: None, sae_sessions: HashMap::new(), eap_sessions: HashMap::new() }
     }
 }

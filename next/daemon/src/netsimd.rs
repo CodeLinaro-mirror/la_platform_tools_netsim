@@ -401,8 +401,25 @@ impl NetsimDaemon {
         let bt_actor_state =
             bluetooth_actor::BluetoothActor::new(device_client.clone(), bt_client.clone());
 
-        // Setup Wifi Server
-        let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
+        // Setup Wifi Server (and dependencies: AP)
+        // Setup Slirp Actor
+        let (slirp_runner, slirp_client) = slirp_actor::new();
+        let slirp_actor_state = slirp_actor::SlirpActor::new(Default::default());
+
+        // Setup AP Actor
+        let (ap_runner, ap_client) = ap_actor::new();
+        let ap_actor_state = ap_actor::ApActor::new();
+
+        // Setup Wifi Actor
+        let (wifi_runner, wifi_client) = wifi_actor::new();
+        let wifi_actor_state = wifi_actor::WifiActor::new(
+            Some(Arc::new(ap_client) as Arc<dyn ap_actor::ApClientTrait>),
+            Some(slirp_client),
+            device_client.clone(),
+            true, // Create Default AP
+        );
+
+        wifi_client.debug_trait_check();
 
         // Setup Uwb Server
         let (uwb_runner, uwb_client) = uwb::new();
@@ -442,8 +459,12 @@ impl NetsimDaemon {
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_runner.run(bt_actor_state));
         info!("Bluetooth server started");
-        join_set.spawn(wifi_server.run());
+        join_set.spawn(wifi_runner.run(wifi_actor_state));
         info!("Wifi server started");
+        join_set.spawn(ap_runner.run(ap_actor_state));
+        info!("Ap server started");
+        join_set.spawn(slirp_runner.run(slirp_actor_state));
+        info!("Slirp server started");
         join_set.spawn(uwb_runner.run(uwb_actor));
         info!("Uwb server started");
         join_set.spawn(cell_runner.run(cell_server));

@@ -5,10 +5,21 @@ use tokio::sync::mpsc as tokio_mpsc;
 use netsim_model::chip::{PacketSink, PacketStream};
 use std::fmt;
 
-#[derive(Debug)]
 pub enum SlirpReq {
     SendPacket(bytes::Bytes),
-    RegisterSink(tokio_mpsc::UnboundedSender<bytes::Bytes>),
+    Register {
+        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
+        sink: tokio_mpsc::UnboundedSender<bytes::Bytes>,
+    },
+}
+
+impl std::fmt::Debug for SlirpReq {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SlirpReq::SendPacket(_) => write!(f, "SlirpReq::SendPacket(...)"),
+            SlirpReq::Register { .. } => write!(f, "SlirpReq::Register {{ ... }}"),
+        }
+    }
 }
 
 pub struct SlirpCreate {

@@ -23,6 +23,7 @@ netsim_rust_library(
         "@log",
         "@thiserror",
         "@tokio",
+        "@tokio-stream",
     ],
 )
 
@@ -41,5 +42,6 @@ rust_test(
         "@futures",
         "@log",
         "@tokio",
+        "@tokio-stream",
     ],
 )

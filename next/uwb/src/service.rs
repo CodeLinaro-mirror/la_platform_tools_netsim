@@ -88,7 +88,7 @@ impl ActorService for UwbActor {
                     .filter_map(|chip| {
                         // All chips in active_chips are UWB, but check variant just in case or use kind
                         match &chip.variant {
-                            Some(netsim_model::chip::ChipVariant::Uwb) => {
+                            Some(netsim_model::chip::ChipVariant::Uwb(_)) => {
                                 Some(netsim_model::stats::NetsimRadioStats {
                                     id: chip.id,
                                     name: chip.name.clone().unwrap_or_default(),
