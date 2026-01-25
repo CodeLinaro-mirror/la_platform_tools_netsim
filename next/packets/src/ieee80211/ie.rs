@@ -18,6 +18,20 @@ pub mod tags {
     pub const RSN: u8 = 48; // Robust Security Network
     pub const EXTENDED_SUPPORTED_RATES: u8 = 50;
     pub const VENDOR_SPECIFIC: u8 = 221;
+    pub const EXTENSION: u8 = 255;
+
+    /// Default supported rates for 802.11 b/g/n (all standard rates).
+    /// Values are in 500kbps units.
+    /// 0x02(1M), 0x04(2M), 0x0B(5.5M), 0x16(11M), 0x0C(6M), 0x12(9M), 0x18(12M), 0x24(18M), 0x30(24M), 0x48(36M), 0x60(48M), 0x6C(54M)
+    pub const SUPPORTED_RATES_DEFAULT: &[u8] =
+        &[0x02, 0x04, 0x0B, 0x16, 0x0C, 0x12, 0x18, 0x24, 0x30, 0x48, 0x60, 0x6C];
+
+    pub const HE_CAPABILITIES: u8 = 35;
+
+    // RSN Constants
+    pub const RSN_VER: u16 = 1;
+    pub const CIPHER_CCMP: &[u8] = &[0x00, 0x0F, 0xAC, 0x04];
+    pub const AKM_PSK: &[u8] = &[0x00, 0x0F, 0xAC, 0x02];
 }
 
 /// Represents a parsed Information Element.
@@ -75,4 +89,14 @@ impl<'a> Iterator for IeIterator<'a> {
         self.offset = end;
         Some(ie)
     }
+}
+
+/// Writes an Information Element to a byte vector.
+pub fn write_ie(buf: &mut Vec<u8>, id: u8, body: &[u8]) {
+    buf.push(id);
+    // Length is u8, so max 255 bytes.
+    // Ideally we should check body.len() <= 255 or panic/result.
+    // For now, simple truncation or cast (risky but matches current manual behavior).
+    buf.push(body.len() as u8);
+    buf.extend_from_slice(body);
 }

@@ -112,6 +112,20 @@ impl Server {
                 let chip = self.active_chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
                 let _ = respond_to.send(Ok(chip.clone()));
             }
+            ChipRequest::Update { id, patch, respond_to } => {
+                if let Some(chip) = self.active_chips.get_mut(&id) {
+                    if let Some(pos) = patch.position {
+                        chip.position = pos;
+                    }
+                    if let Some(orient) = patch.orientation {
+                        chip.orientation = orient;
+                    }
+                    let _ = respond_to.send(Ok(chip.clone()));
+                } else {
+                    let _ = respond_to.send(Err(ChipError::ChipNotFound(id)));
+                }
+                // TODO: Update Wifi service.
+            }
             ChipRequest::Shutdown => {
                 *shutdown = true;
             }

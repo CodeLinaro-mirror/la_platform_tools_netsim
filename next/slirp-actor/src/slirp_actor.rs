@@ -1,0 +1,51 @@
+use libslirp_rs::libslirp::LibSlirp;
+use log::info;
+use tokio::sync::mpsc as tokio_mpsc;
+
+use netsim_model::chip::{PacketSink, PacketStream};
+use std::fmt;
+
+#[derive(Debug)]
+pub enum SlirpReq {
+    SendPacket(bytes::Bytes),
+    RegisterSink(tokio_mpsc::UnboundedSender<bytes::Bytes>),
+}
+
+pub struct SlirpCreate {
+    pub packet_stream: Option<PacketStream>,
+    pub packet_sink: Option<PacketSink>,
+}
+
+impl fmt::Debug for SlirpCreate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SlirpCreate")
+            .field("packet_stream", &self.packet_stream.is_some())
+            .field("packet_sink", &self.packet_sink.is_some())
+            .finish()
+    }
+}
+
+pub struct SlirpActor {
+    pub(crate) libslirp: Option<LibSlirp>,
+    pub(crate) config: libslirp_rs::libslirp_config::SlirpConfig,
+}
+
+#[derive(Clone, Debug)]
+pub struct SlirpStatus {
+    pub initialized: bool,
+}
+
+impl SlirpActor {
+    pub fn new(config: libslirp_rs::libslirp_config::SlirpConfig) -> Self {
+        Self { libslirp: None, config }
+    }
+}
+
+impl Drop for SlirpActor {
+    fn drop(&mut self) {
+        if let Some(slirp) = self.libslirp.take() {
+            info!("Shutting down LibSlirp");
+            slirp.shutdown();
+        }
+    }
+}

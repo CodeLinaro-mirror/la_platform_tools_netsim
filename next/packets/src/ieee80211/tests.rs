@@ -85,7 +85,7 @@ mod tests {
 
         // This is 802.11 frame (raw)
         // Parse it using Ieee80211
-        use crate::ieee80211::frame::BeaconFrameHeader;
+        use crate::ieee80211::BeaconFrameHeader;
 
         // Beacon Header is 24 bytes
         let hdr = zerocopy::Ref::<&[u8], BeaconFrameHeader>::from_bytes(&data[..24])
