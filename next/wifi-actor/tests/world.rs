@@ -2,14 +2,14 @@
 
 use crate::hwsim_helper::wrap_ethernet_in_hwsim;
 use actor_framework::ResourceActor;
-use ap_actor::shared::SharedKeyStore;
-use ap_actor::{ApActor, ApClient, ApClientTrait};
+use ap_actor::{ApActor, ApClient};
 use bytes::Bytes;
 use device_actor::DeviceActor;
-use device_api::DeviceAction;
-use netsim_model::chip::{ChipClient, ChipConfig, ChipCreate, ChipId, WifiCreate};
+use device_api::{DeviceAction, DeviceId};
+use netsim_model::chip::{ChipClient, ChipConfig, ChipCreate, ChipId, NetworkParams, WifiCreate};
+use netsim_model::device::Position;
 use netsim_packets::ethernet::{ether_type, EthernetFrame, MacAddr};
-use netsim_packets::ieee80211::MacAddress;
+use netsim_packets::ieee80211::{FrameType, Ieee80211, Ieee80211ToAp, MacAddress};
 use slirp_actor::SlirpActor;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -46,7 +46,6 @@ impl World {
         let ap_actor_impl = ApActor::new();
 
         let (ap_runner, ap_client_base) = ResourceActor::new(32);
-        let ap_client = ApClient::new(ap_client_base);
         tokio::spawn(ap_runner.run(ap_actor_impl));
 
         // Test DeviceClient
@@ -103,20 +102,30 @@ impl World {
         });
 
         // Initialize the DeviceClient with the mock.
-        // Note: MockActorClient implements ActorClient via mockall.
         let device_client = client::DeviceClient::new(Box::new(mock_device));
 
-        // Create Spying ApClient to capture the downlink sink
+        // Create ApClient with interceptor to capture the downlink sink
         let (capture_tx, mut capture_rx) = mpsc::unbounded_channel();
-        let spying_ap_client =
-            SpyingApClient { inner: ap_client.clone(), capture_tx: Arc::new(capture_tx) };
+        let capture_tx_arc = Arc::new(capture_tx);
 
-        let wifi_actor_impl = WifiActor::new(
-            Some(Arc::new(spying_ap_client) as Arc<dyn ap_actor::ApClientTrait>),
-            Some(slirp_client),
-            device_client,
-            false, // Do not create default AP
-        );
+        // We need to pass ap_client to WifiActor.
+        // And we also want to keep it in World?
+        // Wait, WifiActor takes Arc<ApClient>.
+        // We can create one ApClient with interceptor.
+
+        let ap_client_interceptor = {
+            let capture_tx = capture_tx_arc.clone();
+            move |sink: &mpsc::UnboundedSender<Bytes>| {
+                let _ = capture_tx.send(sink.clone());
+            }
+        };
+
+        let spying_ap_client =
+            ApClient::new_with_interceptor(ap_client_base, ap_client_interceptor);
+        let spying_ap_client_arc = Arc::new(spying_ap_client.clone());
+
+        let wifi_actor_impl =
+            WifiActor::new(Some(spying_ap_client_arc.clone()), Some(slirp_client), device_client);
         let (wifi_runner, wifi_client) = wifi_actor::new();
         tokio::spawn(wifi_runner.run(wifi_actor_impl));
 
@@ -133,7 +142,13 @@ impl World {
             }
         };
 
-        Self { wifi_client, ap_client, chips: Vec::new(), ap_injector, device_action_rx: device_rx }
+        Self {
+            wifi_client,
+            ap_client: spying_ap_client,
+            chips: Vec::new(),
+            ap_injector,
+            device_action_rx: device_rx,
+        }
     }
 
     pub async fn given_an_ap(&mut self) -> u32 {
@@ -153,9 +168,10 @@ impl World {
             mac_acl_mode: 0,
             mac_acl_list: vec![],
             ftm_responder_enabled: true,
-            position: netsim_model::device::Position::default(),
+            position: Position::default(),
         };
-        let id = self.ap_client.create_ap(ap_config).await.expect("Failed to create AP");
+        let id = 1001; // WifiActor test AP ID
+        self.ap_client.create_ap(id, ap_config).await.expect("Failed to create AP");
         // Give it a moment to initialize
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         id
@@ -172,17 +188,13 @@ impl World {
                 Ok::<_, std::io::Error>(tx)
             }));
 
-        let config = ChipConfig::new(
-            "wifi",
-            "google",
-            "test",
-            netsim_model::chip::NetworkParams::Wifi(WifiCreate::default()),
-        );
+        let config =
+            ChipConfig::new("wifi", "google", "test", NetworkParams::Wifi(WifiCreate::default()));
         let id = ChipId(id_val);
 
         let params = ChipCreate {
             id,
-            device_id: device_api::DeviceId(1),
+            device_id: DeviceId(1),
             packet_stream: Some(packet_stream),
             packet_sink: Some(packet_sink),
             config,
@@ -278,7 +290,6 @@ impl World {
         receiver_idx: usize,
         payload: &str,
     ) {
-        use netsim_packets::ieee80211::{FrameType, Ieee80211ToAp};
         let sender_mac = self.chips[sender_idx].mac;
         let receiver_mac = self.chips[receiver_idx].mac;
         let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00]; // AP BSSID
@@ -326,7 +337,6 @@ impl World {
     }
 
     pub async fn when_chip_transmits_mgmt_to_ap(&mut self, sender_idx: usize) {
-        use netsim_packets::ieee80211::{FrameType, Ieee80211ToAp};
         let sender_mac = self.chips[sender_idx].mac;
         let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00]; // AP BSSID
 
@@ -349,7 +359,7 @@ impl World {
             payload: vec![0x11; 32], // Mgmt payload
         };
 
-        let ieee80211: netsim_packets::ieee80211::Ieee80211 = mgmt_frame.try_into().unwrap();
+        let ieee80211: Ieee80211 = mgmt_frame.try_into().unwrap();
 
         let msg = wifi_actor::medium::utils::create_hwsim_msg_from_frame(
             &ieee80211,
@@ -398,7 +408,6 @@ impl World {
 
     /// Simulates a Chip transmitting a Data Frame (ToDS=1) destined for the Internet Gateway (Slirp).
     pub async fn when_chip_transmits_data_to_slirp(&mut self, sender_idx: usize) {
-        use netsim_packets::ieee80211::{FrameType, Ieee80211ToAp};
         let sender_mac = self.chips[sender_idx].mac;
         let internet_gateway = [0x00, 0x00, 0x00, 0x00, 0x00, 0xFE]; // Dummy Gateway
         let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00]; // AP BSSID
@@ -422,7 +431,7 @@ impl World {
             payload: vec![0xAB; 64],
         };
 
-        let ieee80211: netsim_packets::ieee80211::Ieee80211 = to_ds_frame.try_into().unwrap();
+        let ieee80211: Ieee80211 = to_ds_frame.try_into().unwrap();
 
         let msg = wifi_actor::medium::utils::create_hwsim_msg_from_frame(
             &ieee80211,
@@ -503,58 +512,5 @@ impl World {
                 }
             }
         }
-    }
-}
-
-#[derive(Clone, Debug)]
-struct SpyingApClient {
-    inner: ApClient,
-    capture_tx: Arc<mpsc::UnboundedSender<mpsc::UnboundedSender<Bytes>>>,
-}
-
-#[async_trait::async_trait]
-impl ap_actor::ApClientTrait for SpyingApClient {
-    async fn register(
-        &self,
-        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Bytes> + Send>>,
-        sink: mpsc::UnboundedSender<Bytes>,
-        shared_keys: Arc<SharedKeyStore>,
-        beacon_interval: std::time::Duration,
-    ) -> Result<(), netsim_model::client_error::ClientError> {
-        let _ = self.capture_tx.send(sink.clone());
-        self.inner.register(stream, sink, shared_keys, beacon_interval).await
-    }
-
-    async fn create_ap(
-        &self,
-        config: ap_actor::ApConfig,
-    ) -> Result<u32, netsim_model::client_error::ClientError> {
-        self.inner.create_ap(config).await
-    }
-
-    async fn destroy_ap(&self, id: u32) -> Result<(), netsim_model::client_error::ClientError> {
-        self.inner.destroy_ap(id).await
-    }
-
-    async fn get_ap(
-        &self,
-        id: u32,
-    ) -> Result<Option<ap_actor::ApState>, netsim_model::client_error::ClientError> {
-        self.inner.get_ap(id).await
-    }
-
-    async fn list_aps(
-        &self,
-    ) -> Result<Vec<ap_actor::ApState>, netsim_model::client_error::ClientError> {
-        self.inner.list_aps().await
-    }
-
-    async fn update_ap(
-        &self,
-        id: u32,
-        ssid: Option<String>,
-        position: Option<netsim_model::device::Position>,
-    ) -> Result<ap_actor::ApState, netsim_model::client_error::ClientError> {
-        self.inner.update_ap(id, ssid, position).await
     }
 }

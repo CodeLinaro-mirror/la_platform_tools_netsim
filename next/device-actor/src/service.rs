@@ -78,39 +78,41 @@ impl ActorService for DeviceActor {
         };
 
         // 2. Send create request to Chip Actor
-        if let Some(chip_client) = self.chip_clients.get(&chip_kind) {
-            chip_client
-                .create(chip_params)
-                .await
-                .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
-
-            // 3. Update local device state with the new chip
-            entity.device.chips.push(netsim_model::chip::Chip {
-                id: chip_id.0,
-                kind: ChipKind::from(chip_kind),
-                name: Some(chip_create.name),
-                manufacturer: Some(chip_create.manufacturer),
-                product_name: Some(chip_create.product_name),
-                position: entity.device.position.clone(),
-                orientation: entity.device.orientation.clone(),
-                device_id: DeviceId(entity.device.id),
-                variant: Some(netsim_model::chip::ChipVariant::from(chip_kind)),
-                links: vec![],
-                enabled: true,
-            });
-            // Send create request to Link Actor
-            // This ensures the LinkActor is aware of the new chip and can manage its links.
-            self.link_client
-                .notify_chip_added(chip_id, chip_kind.into())
-                .await
-                .expect("Failed to notify LinkActor of new chip");
+        // 2. Send create request to Chip Actor
+        let chip_client = if let Some(client) = self.chip_clients.get(&chip_kind) {
+            client
         } else {
-            // Log warning or return error if no client for this network kind
             return Err(DeviceError::ActorCommunicationError(format!(
                 "No chip client for {:?}",
                 chip_kind
             )));
-        }
+        };
+
+        chip_client
+            .create(chip_params)
+            .await
+            .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
+
+        // 3. Update local device state with the new chip
+        entity.device.chips.push(netsim_model::chip::Chip {
+            id: chip_id.0,
+            kind: ChipKind::from(chip_kind),
+            name: Some(chip_create.name),
+            manufacturer: Some(chip_create.manufacturer),
+            product_name: Some(chip_create.product_name),
+            position: entity.device.position.clone(),
+            orientation: entity.device.orientation.clone(),
+            device_id: DeviceId(entity.device.id),
+            variant: Some(netsim_model::chip::ChipVariant::from(chip_kind)),
+            links: vec![],
+            enabled: true,
+        });
+        // Send create request to Link Actor
+        // This ensures the LinkActor is aware of the new chip and can manage its links.
+        self.link_client
+            .notify_chip_added(chip_id, chip_kind.into())
+            .await
+            .expect("Failed to notify LinkActor of new chip");
 
         self.devices.insert(id, entity);
         Ok(id)
@@ -262,37 +264,39 @@ impl ActorService for DeviceActor {
                         };
 
                         // 2. Send create request to Chip Actor
-                        if let Some(chip_client) = self.chip_clients.get(&chip_kind) {
-                            chip_client
-                                .create(chip_params)
-                                .await
-                                .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
-
-                            // 3. Update local device state with the new chip
-                            entity.device.chips.push(netsim_model::chip::Chip {
-                                id: chip_id.0,
-                                kind: ChipKind::from(chip_kind),
-                                name: Some(chip_config.name),
-                                manufacturer: Some(chip_config.manufacturer),
-                                product_name: Some(chip_config.product_name),
-                                position: entity.device.position.clone(),
-                                orientation: entity.device.orientation.clone(),
-                                device_id: DeviceId(entity.device.id),
-                                variant: Some(netsim_model::chip::ChipVariant::from(chip_kind)),
-                                links: vec![],
-                                enabled: true,
-                            });
-                            self.link_client
-                                .notify_chip_added(chip_id, chip_kind.into())
-                                .await
-                                .expect("Failed to notify LinkActor of chip add");
-                            Ok(DeviceActionResult::ChipId(chip_id))
+                        let chip_client = if let Some(client) = self.chip_clients.get(&chip_kind) {
+                            client
                         } else {
-                            Err(DeviceError::ActorCommunicationError(format!(
+                            return Err(DeviceError::ActorCommunicationError(format!(
                                 "No chip client for {:?}",
                                 chip_kind
-                            )))
-                        }
+                            )));
+                        };
+
+                        chip_client
+                            .create(chip_params)
+                            .await
+                            .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
+
+                        // 3. Update local device state with the new chip
+                        entity.device.chips.push(netsim_model::chip::Chip {
+                            id: chip_id.0,
+                            kind: ChipKind::from(chip_kind),
+                            name: Some(chip_config.name),
+                            manufacturer: Some(chip_config.manufacturer),
+                            product_name: Some(chip_config.product_name),
+                            position: entity.device.position.clone(),
+                            orientation: entity.device.orientation.clone(),
+                            device_id: DeviceId(entity.device.id),
+                            variant: Some(netsim_model::chip::ChipVariant::from(chip_kind)),
+                            links: vec![],
+                            enabled: true,
+                        });
+                        self.link_client
+                            .notify_chip_added(chip_id, chip_kind.into())
+                            .await
+                            .expect("Failed to notify LinkActor of chip add");
+                        Ok(DeviceActionResult::ChipId(chip_id))
                     }
                 };
 

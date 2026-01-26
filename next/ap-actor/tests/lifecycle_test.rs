@@ -1,5 +1,4 @@
 use crate::world::ApWorld;
-use ap_actor::ApClientTrait;
 
 // ============================================================================
 // Feature: System Resilience and Lifecycle Management
@@ -89,12 +88,13 @@ async fn test_create_duplicate_bssid() {
     };
 
     // Direct client usage as ApWorld helpers might mask IDs or return types
-    let id1 = world.client.create_ap(config1).await;
-    let id2 = world.client.create_ap(config2).await;
+    let id1 = 1001;
+    let id2 = 1002;
+    let res1 = world.client.create_ap(id1, config1).await;
+    let res2 = world.client.create_ap(id2, config2).await;
 
-    assert!(id1.is_ok(), "First AP creation failed");
-    assert!(id2.is_ok(), "Second AP creation with duplicate BSSID failed");
-    assert_ne!(id1.unwrap(), id2.unwrap(), "IDs should be distinct");
+    assert!(res1.is_ok(), "First AP creation failed");
+    assert!(res2.is_ok(), "Second AP creation with duplicate BSSID failed");
 }
 
 // Scenario: Delete Non-Existent AP

@@ -5,6 +5,7 @@ use crate::shared::SharedKeyStore;
 use crate::{ApError, ApState};
 use actor_framework::DynContext;
 
+use netsim_model::chip::ChipId;
 use netsim_packets::ieee80211::wmm::write_wmm_param_element;
 use netsim_packets::ieee80211::{
     ie::IeIterator, management_subtype, tags, write_ie, AssociationResponseFixedFields,
@@ -130,7 +131,8 @@ impl Ieee80211Manager {
         frame: &[u8],
         shared_keys: &SharedKeyStore,
         beacon_interval: u16,
-        _ctx: &mut DynContext<u32>,
+        source_id: ChipId,
+        _ctx: &mut DynContext<ChipId>,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let ieee80211_frame = match Ieee80211::decode(frame) {
             Ok(f) => f,
@@ -152,7 +154,9 @@ impl Ieee80211Manager {
 
         match ieee80211_frame.stype() {
             management_subtype::AUTHENTICATION => self.handle_auth(ap, &ieee80211_frame, frame),
-            management_subtype::ASSOCIATION_REQUEST => self.handle_assoc(ap, &ieee80211_frame),
+            management_subtype::ASSOCIATION_REQUEST => {
+                self.handle_assoc(ap, &ieee80211_frame, source_id)
+            }
             management_subtype::PROBE_REQUEST => {
                 self.handle_probe_req(ap, &ieee80211_frame, frame, beacon_interval)
             }
@@ -374,6 +378,27 @@ impl Ieee80211Manager {
         frame
     }
 
+    pub fn build_deauth_frame(
+        &self,
+        ap: &ApState,
+        dest: netsim_packets::ethernet::MacAddr,
+        reason_code: u16,
+    ) -> Vec<u8> {
+        let mut frame = Vec::new();
+        // Deauthentication (Subtype 12 = 1100b) -> 0xC0
+        let header = MacHeader3Addr {
+            frame_control: FrameControl::new(0x00C0),
+            duration_id: U16::new(0),
+            addr1: dest,            // DA
+            addr2: ap.config.bssid, // SA
+            addr3: ap.config.bssid, // BSSID
+            sequence_control: SequenceControl::new(0),
+        };
+        frame.extend_from_slice(header.as_bytes());
+        frame.extend_from_slice(&reason_code.to_le_bytes());
+        frame
+    }
+
     fn build_assoc_resp(
         &self,
         ap: &ApState,
@@ -412,6 +437,7 @@ impl Ieee80211Manager {
         &mut self,
         ap: &mut ApState,
         frame: &Ieee80211,
+        _source_id: ChipId,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let src = frame.get_source();
         log::info!("ApActor: Received Assoc Req from {}", src);
@@ -456,6 +482,10 @@ impl Ieee80211Manager {
                 msgs.push(bytes::Bytes::from(m1_frame));
             }
         }
+
+        // Track Association
+        ap.associations.insert(src);
+        log::info!("ApActor: Associated {}", src);
 
         Ok(msgs)
     }
@@ -551,6 +581,7 @@ impl Ieee80211Manager {
         }
 
         shared_keys.remove_session(&src);
+        ap.associations.remove(&src);
 
         Ok(vec![])
     }

@@ -95,11 +95,16 @@ async fn test_wpa_handshake_failure_wrong_password() {
     world.then_station_receives_assoc_resp(station_mac).await;
 
     // 2. Expect M1 (EAPOL Key)
-    let rx = world.rx_from_ap.as_mut().expect("AP registered");
-    let m1_msg = tokio::time::timeout(Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout waiting for M1")
-        .expect("Stream closed");
+    let m1_msg = world
+        .recv_frame(|frame, msg| {
+            // Ignore Beacons
+            if frame.stype() == management_subtype::BEACON {
+                return false;
+            }
+            // EAPOL Key check: Len > 32, Type 0x888E
+            msg.len() > 32 && msg[30] == 0x88 && msg[31] == 0x8E
+        })
+        .await;
 
     let m1_frame = Ieee80211::decode(&m1_msg).expect("M1 Decode");
     // Verify it is EAPOL
@@ -194,26 +199,33 @@ async fn test_wpa_handshake_failure_wrong_password() {
 
     // 4. Expect NO M3 (Timeout)
     log::info!("Then the AP does NOT send M3 (handshake fails)");
-    let result = tokio::time::timeout(Duration::from_secs(1), rx.recv()).await;
+    // 4. Expect NO M3 (Timeout)
+    log::info!("Then the AP does NOT send M3 (handshake fails)");
 
-    // We might get Beacons!
-    // We need to filter for EAPOL M3.
-    // If we only get beacons and timeout on EAPOL, that's success.
+    let start = std::time::Instant::now();
+    let mut rx = world.rx_from_ap.take().expect("AP registered"); // Take rx to ownership for polling if needed or just borrow
+                                                                  // Wait, rx is needed elsewhere? No, test ends here.
 
-    if let Ok(Some(msg)) = result {
-        // Decode
-        if let Ok(f) = Ieee80211::decode(&msg) {
-            if f.stype() == management_subtype::BEACON {
-                // Continue waiting?
-                // Actually if we just wait 1s and don't see M3, good.
-                // Loop:
-            } else if msg.len() > 32 && msg[30] == 0x88 && msg[31] == 0x8E {
-                // Is EAPOL
-                panic!("Received M3 but expected failure due to wrong password!");
+    while start.elapsed() < Duration::from_secs(1) {
+        let result = tokio::time::timeout(Duration::from_millis(100), rx.recv()).await;
+        match result {
+            Ok(Some(msg)) => {
+                if let Ok(f) = Ieee80211::decode(&msg) {
+                    if f.stype() == management_subtype::BEACON {
+                        continue;
+                    }
+                    if msg.len() > 32 && msg[30] == 0x88 && msg[31] == 0x8E {
+                        panic!("Received M3 but expected failure due to wrong password!");
+                    }
+                }
             }
+            Ok(None) => panic!("Stream closed"),
+            Err(_) => continue, // Timeout slice, keep waiting until total time
         }
     }
-    // If we timed out or got only beacons, passed.
+    // Success if we reach here
+    world.rx_from_ap = Some(rx); // Put it back just in case (though not needed)
+                                 // If we timed out or got only beacons, passed.
 }
 
 // Scenario: WPA Handshake Success
@@ -236,11 +248,16 @@ async fn test_wpa_handshake_success() {
     world.then_station_receives_assoc_resp(station_mac).await;
 
     // 2. Receive M1
-    let rx = world.rx_from_ap.as_mut().expect("AP registered");
-    let m1_msg = tokio::time::timeout(Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout waiting for M1")
-        .expect("Stream closed");
+    let m1_msg = world
+        .recv_frame(|frame, msg| {
+            // Ignore Beacons
+            if frame.stype() == management_subtype::BEACON {
+                return false;
+            }
+            // EAPOL Key check: Len > 32, Type 0x888E
+            msg.len() > 32 && msg[30] == 0x88 && msg[31] == 0x8E
+        })
+        .await;
 
     let eapol_payload = &m1_msg[32..];
     let (_, body) = EapolHeader::read_from_prefix(eapol_payload).expect("EAPOL Header");
@@ -302,26 +319,27 @@ async fn test_wpa_handshake_success() {
     frame.extend_from_slice(llc.as_bytes());
     frame.extend_from_slice(&final_m2);
 
-    let tx = world.tx_to_ap.as_mut().expect("AP registered");
+    let tx = world.tx_to_ap.as_ref().expect("AP registered").clone();
     tx.send(bytes::Bytes::from(frame)).expect("Send M2");
 
     // 4. Expect M3
     // We should receive M3 now.
     log::info!("Then the AP sends M3 (with Encrypted Key Data)");
-    let m3_msg = tokio::time::timeout(Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout waiting for M3")
-        .expect("Stream closed");
+    // 4. Expect M3
+    log::info!("Then the AP sends M3 (with Encrypted Key Data)");
 
-    // Filter Beacons (loop until M3)
-    // For test simplicity, assume M3 is next or close.
-    let eapol_payload_m3 = if m3_msg.len() > 32 && m3_msg[30] == 0x88 && m3_msg[31] == 0x8E {
-        &m3_msg[32..]
-    } else {
-        // Should loop really.
-        // Assume test env is quiet.
-        &m3_msg[32..] // panic if not eapol
-    };
+    let m3_msg = world
+        .recv_frame(|frame, msg| {
+            // Ignore Beacons
+            if frame.stype() == management_subtype::BEACON {
+                return false;
+            }
+            // Check for EAPOL Key
+            msg.len() > 32 && msg[30] == 0x88 && msg[31] == 0x8E
+        })
+        .await;
+
+    let eapol_payload_m3 = &m3_msg[32..];
 
     let (_, body_m3) = EapolHeader::read_from_prefix(eapol_payload_m3).expect("M3 EAPOL Header");
     let (key_frame_m3, _) = EapolKeyFrame::read_from_prefix(body_m3).expect("M3 Key Frame");
@@ -376,6 +394,4 @@ async fn test_wpa_handshake_success() {
     // 6. Verify AP does NOT resend M3 (which it would if it ignored M4 or failed)
     // And ideally logs "PTK Installed".
     log::info!("Then the AP installs the key (Handshake Complete)");
-
-    tokio::time::sleep(Duration::from_millis(200)).await;
 }

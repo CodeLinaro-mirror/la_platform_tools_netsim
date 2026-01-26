@@ -1,8 +1,10 @@
 use crate::error::WifiError;
 use crate::medium::Medium;
 use actor_framework::DynContext;
-use ap_actor::{shared::SharedKeyStore, ApClientTrait};
+use ap_actor::{shared::SharedKeyStore, ApClient};
 use netsim_model::chip::{Chip, ChipId};
+use netsim_model::stats::NetsimRadioStats;
+use netsim_packets::ieee80211::Ieee80211;
 use slirp_actor::SlirpClient;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -21,13 +23,13 @@ pub enum WifiReq {
 #[derive(Debug, Clone)]
 pub enum WifiResponse {
     Ok,
-    Statistics(Box<[netsim_model::stats::NetsimRadioStats]>),
+    Statistics(Box<[NetsimRadioStats]>),
     Error(String),
 }
 
 #[derive(Debug)]
 pub struct WifiActor {
-    pub(crate) ap_client: Option<Arc<dyn ApClientTrait>>, // Changed type here
+    pub(crate) ap_client: Option<Arc<ApClient>>,
     pub(crate) slirp_client: Option<SlirpClient>,
     pub(crate) medium: Medium,
     pub(crate) active_chips: HashMap<ChipId, Chip>,
@@ -36,7 +38,6 @@ pub struct WifiActor {
     // Output buffer for Medium to avoid allocations
     pub(crate) out_queue: Vec<(u32, bytes::Bytes)>,
     pub(crate) device_client: ::client::DeviceClient,
-    pub(crate) create_default_ap: bool,
     // Channel to send frames TO the AP Actor (registered via ApClient)
     pub(crate) to_ap: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
     // Channel to send frames TO the Slirp Actor (registered via SlirpClient)
@@ -45,10 +46,9 @@ pub struct WifiActor {
 
 impl WifiActor {
     pub fn new(
-        ap_client: Option<Arc<dyn ApClientTrait>>, // Changed type here
+        ap_client: Option<Arc<ApClient>>,
         slirp_client: Option<SlirpClient>,
         device_client: ::client::DeviceClient,
-        create_default_ap: bool,
     ) -> Self {
         let shared_keys = Arc::new(SharedKeyStore::new());
         let medium = Medium::new(
@@ -65,7 +65,6 @@ impl WifiActor {
             shared_keys,
             out_queue: Vec::new(),
             device_client,
-            create_default_ap,
             to_ap: None,
             to_slirp: None,
         }
@@ -133,9 +132,7 @@ impl WifiActor {
                             // TODO: Avoid parsing if possible, but we need to check Frame payload.
                             let frame_bytes = tx_state.get_ieee80211_bytes();
                             // Decode to check content
-                            if let Ok(frame) =
-                                netsim_packets::ieee80211::Ieee80211::decode(&frame_bytes)
-                            {
+                            if let Ok(frame) = Ieee80211::decode(&frame_bytes) {
                                 let da = frame.get_destination();
                                 if let Some(peer_id) = self.medium.get_station_chip_id(&da) {
                                     // We found the target chip. Now get positions.
@@ -195,14 +192,10 @@ impl WifiActor {
 
     pub(crate) fn process_slirp_packet(&mut self, packet: bytes::Bytes) {
         if let Some(bssid) = self.shared_keys.get_bssid() {
-            if let Ok(ieee80211) =
-                netsim_packets::ieee80211::Ieee80211::from_ieee8023(&packet, bssid)
-            {
+            if let Ok(ieee80211) = Ieee80211::from_ieee8023(&packet, bssid) {
                 if let Ok(from_ap) = ieee80211.into_from_ap() {
                     // TryInto is needed, ensure it is available or use strict path
-                    if let Ok(frame_converted) =
-                        TryInto::<netsim_packets::ieee80211::Ieee80211>::try_into(from_ap)
-                    {
+                    if let Ok(frame_converted) = TryInto::<Ieee80211>::try_into(from_ap) {
                         if let Ok(bytes) = frame_converted.encode_to_vec() {
                             let _ = self.medium.transmit_from_infra(
                                 &bytes::Bytes::from(bytes),

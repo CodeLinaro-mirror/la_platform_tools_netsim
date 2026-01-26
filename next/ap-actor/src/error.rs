@@ -11,4 +11,6 @@ pub enum ApError {
     ApAlreadyExists,
     #[error("Invalid Frame")]
     InvalidFrame,
+    #[error("Internal error: {0}")]
+    Internal(String),
 }

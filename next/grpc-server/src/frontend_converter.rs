@@ -41,6 +41,7 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
         // Map unknown/new types to UNSPECIFIED for now
         ApiChipKind::NFC => ProtoChipKind::UNSPECIFIED,
         ApiChipKind::CELLULAR => ProtoChipKind::UNSPECIFIED,
+        ApiChipKind::AP => ProtoChipKind::UNSPECIFIED,
     }
 }
 
@@ -70,6 +71,9 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
             }
             netsim_model::chip::ChipVariant::Cell(_) => {
                 // TODO: Add Cell support to proto if available
+            }
+            netsim_model::chip::ChipVariant::Ap(_) => {
+                // TODO: Add AP support to proto
             }
         }
     }
@@ -203,6 +207,7 @@ pub fn to_proto_link(l: ApiLink) -> ProtoLink {
         ApiChipKind::BLUETOOTH => ProtoPhyKind::BLUETOOTH_LOW_ENERGY,
         ApiChipKind::WIFI => ProtoPhyKind::WIFI,
         ApiChipKind::UWB => ProtoPhyKind::UWB,
+        ApiChipKind::AP => ProtoPhyKind::WIFI,
         _ => ProtoPhyKind::NONE,
     });
     link
