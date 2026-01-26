@@ -103,7 +103,9 @@ pub struct GetVersionMessage {
 }
 
 pub mod api {
-    use crate::chip::{ApCreate, BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate};
+    use crate::chip::{
+        ApCreate, BleBeacon, BluetoothCreate, CellCreate, ChipConfig, UwbCreate, WifiCreate,
+    };
     use crate::device::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
 
@@ -240,6 +242,28 @@ pub mod api {
                 Chip::Uwb(uwb) => crate::chip::NetworkParams::Uwb(uwb),
                 Chip::Cell(cell) => crate::chip::NetworkParams::Cell(cell),
                 Chip::Ap(ap) => crate::chip::NetworkParams::Ap(ap),
+            }
+        }
+    }
+
+    impl From<DeviceChipCreate> for ChipConfig {
+        fn from(create: DeviceChipCreate) -> Self {
+            ChipConfig {
+                name: create.name,
+                manufacturer: create.manufacturer,
+                product_name: create.product_name,
+                network_params: create.chip.into(),
+            }
+        }
+    }
+
+    impl From<ChipConfig> for DeviceChipCreate {
+        fn from(config: ChipConfig) -> Self {
+            DeviceChipCreate {
+                name: config.name,
+                manufacturer: config.manufacturer,
+                product_name: config.product_name,
+                chip: config.network_params.into(),
             }
         }
     }
