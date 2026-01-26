@@ -40,10 +40,11 @@ class RunPyTestTask(Task):
     self.buildbot = args.buildbot
     self.pytest_input_dir = args.pytest_input_dir
     self.is_bazel_build = is_bazel_build(args)
+    self.out = Path(args.out_dir)
 
   def do_run(self):
     run_pytest_manager = RunPytestManager(
-        self.buildbot, self.pytest_input_dir, self.is_bazel_build
+        self.buildbot, self.pytest_input_dir, self.is_bazel_build, self.out
     )
     return run_pytest_manager.process()
 
@@ -62,7 +63,7 @@ class RunPytestManager:
     Bots
   """
 
-  def __init__(self, buildbot, pytest_input_dir, is_bazel_build):
+  def __init__(self, buildbot, pytest_input_dir, is_bazel_build, out_dir):
     """Initializes the instances based on environment
 
     Args:
@@ -70,6 +71,8 @@ class RunPytestManager:
           self.dir as the directory of the emulator binary
         pytest_input_dir: Defined the directory that includes netsim and
           emulator binaries and libraries. Ignore if the string is empty.
+        is_bazel_build: Defines if it's a bazel build
+        out_dir: Defines the out directory of the build environment
     """
     if pytest_input_dir:
       try:
@@ -78,10 +81,9 @@ class RunPytestManager:
         logging.error(f"Invalid pytest_input_dir value: {e}")
     elif buildbot:
       self.dir = EMULATOR_ARTIFACT_PATH / "emulator"
-    elif is_bazel_build:
-      self.dir = BAZEL_OUT_DIR
     else:
-      self.dir = OBJS_DIR
+      # For both Bazel and CMake, we use the distribution directory for local runs
+      self.dir = out_dir / "distribution" / "emulator"
 
   def _run_with_n_attempts(cmd, n):
     for attempt in range(1, n + 1):

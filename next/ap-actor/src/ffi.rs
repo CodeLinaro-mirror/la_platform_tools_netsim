@@ -13,7 +13,7 @@ pub enum DigestType {
 }
 
 #[cxx::bridge(namespace = "netsim::hostap")]
-mod ffi {
+mod hostap_ffi {
     // SAFETY:
     // 1. Necessity: We use C++ FFI because the `bssl-crypto` Rust crate (and `bssl-sys` bindings)
     //    currently lack complete support for:
@@ -51,23 +51,33 @@ mod ffi {
             out_plain: &mut Vec<u8>,
         ) -> bool;
         fn RandBytes(len: usize) -> Vec<u8>;
+        // SAE / ECC P-256
+        fn EcP256CalculatePwe(
+            password: &Vec<u8>,
+            address1: &Vec<u8>,
+            address2: &Vec<u8>,
+        ) -> Vec<u8>;
+        fn EcP256PointMul(point_src: &Vec<u8>, scalar: &Vec<u8>) -> Vec<u8>;
+        fn EcP256PointAdd(point_a: &Vec<u8>, point_b: &Vec<u8>) -> Vec<u8>;
+        fn BnModAdd(a: &Vec<u8>, b: &Vec<u8>, m: &Vec<u8>) -> Vec<u8>;
+        fn BnModSub(a: &Vec<u8>, b: &Vec<u8>, m: &Vec<u8>) -> Vec<u8>;
     }
 }
 
 pub fn Hmac(digest_type: DigestType, key: &Vec<u8>, data: &Vec<u8>) -> Vec<u8> {
-    ffi::Hmac(digest_type as u8, key, data)
+    self::hostap_ffi::Hmac(digest_type as u8, key, data)
 }
 
 pub fn Sha(digest_type: DigestType, data: &Vec<u8>) -> Vec<u8> {
-    ffi::Sha(digest_type as u8, data)
+    self::hostap_ffi::Sha(digest_type as u8, data)
 }
 
 pub fn AesWrap(kek: &Vec<u8>, plain: &Vec<u8>) -> Vec<u8> {
-    ffi::AesWrap(kek, plain)
+    self::hostap_ffi::AesWrap(kek, plain)
 }
 
 pub fn AesUnwrap(kek: &Vec<u8>, cipher: &Vec<u8>) -> Vec<u8> {
-    ffi::AesUnwrap(kek, cipher)
+    self::hostap_ffi::AesUnwrap(kek, cipher)
 }
 
 pub fn AesCcmEncrypt(
@@ -79,7 +89,7 @@ pub fn AesCcmEncrypt(
     out_tag: &mut Vec<u8>,
     tag_len: usize,
 ) -> bool {
-    ffi::AesCcmEncrypt(key, nonce, aad, plain, out_cipher, out_tag, tag_len)
+    self::hostap_ffi::AesCcmEncrypt(key, nonce, aad, plain, out_cipher, out_tag, tag_len)
 }
 
 pub fn AesCcmDecrypt(
@@ -90,9 +100,29 @@ pub fn AesCcmDecrypt(
     tag: &Vec<u8>,
     out_plain: &mut Vec<u8>,
 ) -> bool {
-    ffi::AesCcmDecrypt(key, nonce, aad, cipher, tag, out_plain)
+    self::hostap_ffi::AesCcmDecrypt(key, nonce, aad, cipher, tag, out_plain)
 }
 
 pub fn RandBytes(len: usize) -> Vec<u8> {
-    ffi::RandBytes(len)
+    self::hostap_ffi::RandBytes(len)
+}
+
+pub fn EcP256CalculatePwe(password: &Vec<u8>, address1: &Vec<u8>, address2: &Vec<u8>) -> Vec<u8> {
+    self::hostap_ffi::EcP256CalculatePwe(password, address1, address2)
+}
+
+pub fn EcP256PointMul(point_src: &Vec<u8>, scalar: &Vec<u8>) -> Vec<u8> {
+    self::hostap_ffi::EcP256PointMul(point_src, scalar)
+}
+
+pub fn EcP256PointAdd(point_a: &Vec<u8>, point_b: &Vec<u8>) -> Vec<u8> {
+    self::hostap_ffi::EcP256PointAdd(point_a, point_b)
+}
+
+pub fn BnModAdd(a: &Vec<u8>, b: &Vec<u8>, m: &Vec<u8>) -> Vec<u8> {
+    self::hostap_ffi::BnModAdd(a, b, m)
+}
+
+pub fn BnModSub(a: &Vec<u8>, b: &Vec<u8>, m: &Vec<u8>) -> Vec<u8> {
+    self::hostap_ffi::BnModSub(a, b, m)
 }

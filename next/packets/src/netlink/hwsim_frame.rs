@@ -12,7 +12,7 @@ use crate::netlink::TxRate;
 ///
 /// The Frame command is sent by the kernel's mac80211_hwsim subsystem
 /// and contains the IEEE 802.11 frame along with hwsim attributes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HwsimFrame {
     /// Transmitter MAC address.
     pub transmitter: Option<MacAddr>,

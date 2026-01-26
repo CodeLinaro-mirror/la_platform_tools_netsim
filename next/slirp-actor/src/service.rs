@@ -58,7 +58,7 @@ impl ActorService for SlirpActor {
         &mut self,
         _id: Option<Self::Id>,
         action: Self::Action,
-        _: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             SlirpReq::SendPacket(data) => {
@@ -68,15 +68,21 @@ impl ActorService for SlirpActor {
                     panic!("SlirpActor: SendPacket called before RegisterSink");
                 }
             }
-            SlirpReq::RegisterSink(tx) => {
+            SlirpReq::Register { stream, sink } => {
                 if self.libslirp.is_some() {
-                    panic!("SlirpActor: RegisterSink called twice");
+                    panic!("SlirpActor: Register called twice");
                 } else {
                     let config = self.config.clone();
                     // Wrap tx in Box<dyn PacketSender>, effectively removing the bridge thread
                     let slirp =
-                        libslirp_rs::libslirp::LibSlirp::new(config, Box::new(tx), None, None);
+                        libslirp_rs::libslirp::LibSlirp::new(config, Box::new(sink), None, None);
                     self.libslirp = Some(slirp);
+
+                    // Add the stream to the context
+                    // We use 0 as the ID, or should we define a constant?
+                    // lifecycle.rs uses 0 for now as it ignores id.
+                    let stream_id = 0;
+                    ctx.add_stream(stream_id, stream);
                 }
             }
         }

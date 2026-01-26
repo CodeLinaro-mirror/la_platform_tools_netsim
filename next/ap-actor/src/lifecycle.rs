@@ -17,8 +17,9 @@ impl ActorLifecycle<u32> for ApActor {
     async fn on_tick(&mut self, ctx: &mut DynContext<u32>) {
         // Beacon generation logic
         if let Some(sink) = &self.sink {
+            let interval = self.beacon_interval.unwrap_or(100);
             for ap in self.aps.values() {
-                if let Ok(frames) = self.manager.generate_beacon(ap) {
+                if let Ok(frames) = self.manager.generate_beacon(ap, interval) {
                     for frame in frames {
                         if sink.send(frame).is_err() {
                             log::warn!("Sink closed, stopping ApActor");
@@ -53,8 +54,10 @@ impl ActorLifecycle<u32> for ApActor {
         // If broadcast, send to all APs
         if dest.is_broadcast() {
             if let Some(sink) = &self.sink {
+                let interval = self.beacon_interval.unwrap_or(100);
                 for ap in self.aps.values_mut() {
-                    if let Ok(frames) = self.manager.handle_frame(ap, &msg, &self.shared_keys, ctx)
+                    if let Ok(frames) =
+                        self.manager.handle_frame(ap, &msg, &self.shared_keys, interval, ctx)
                     {
                         for frame in frames {
                             let _ = sink.send(frame);
@@ -66,10 +69,11 @@ impl ActorLifecycle<u32> for ApActor {
             // Unicast - find matching AP by BSSID
             let mut handled = false;
             if let Some(sink) = &self.sink {
+                let interval = self.beacon_interval.unwrap_or(100);
                 for ap in self.aps.values_mut() {
                     if ap.config.bssid == dest {
                         if let Ok(frames) =
-                            self.manager.handle_frame(ap, &msg, &self.shared_keys, ctx)
+                            self.manager.handle_frame(ap, &msg, &self.shared_keys, interval, ctx)
                         {
                             for frame in frames {
                                 if sink.send(frame).is_err() {

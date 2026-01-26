@@ -652,6 +652,28 @@ impl Ieee80211 {
         Ok(Self { bytes: new_packet })
     }
 
+    pub fn to_ieee8023(&self) -> Result<Vec<u8>, String> {
+        let da = self.get_destination();
+        let sa = self.get_source();
+        let payload = self.get_payload();
+
+        // Check LLC/SNAP: AA AA 03 00 00 00
+        if payload.len() < 8 || payload[0..6] != [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00] {
+            return Err("Not LLC/SNAP encapsulated or unknown OUI".into());
+        }
+
+        // EtherType is at offset 6
+        let ethertype = &payload[6..8];
+        let data = &payload[8..];
+
+        let mut eth_frame = Vec::with_capacity(14 + data.len());
+        eth_frame.extend_from_slice(&da.bytes);
+        eth_frame.extend_from_slice(&sa.bytes);
+        eth_frame.extend_from_slice(ethertype);
+        eth_frame.extend_from_slice(data);
+        Ok(eth_frame)
+    }
+
     pub fn into_from_ap(&self) -> Result<Ieee80211ToAp, String> {
         let fc = self.get_fc();
         let ftype = match (fc & 0x000C) >> 2 {

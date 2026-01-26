@@ -54,7 +54,7 @@ pub struct HwsimAttrSetBuilder {
 }
 
 /// Set of parsed Hwsim attributes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HwsimAttrSet {
     /// Transmitter MAC address.
     pub transmitter: Option<MacAddr>,
