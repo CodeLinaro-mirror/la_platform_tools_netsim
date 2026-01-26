@@ -47,9 +47,26 @@ impl Ipv4Header {
         self.version_ihl & 0x0f
     }
 
-    /// Returns the total length of the header in bytes.
     pub fn header_length(&self) -> usize {
         (self.ihl() * 4) as usize
+    }
+
+    /// Calculates and updates the header checksum.
+    pub fn update_checksum(&mut self) {
+        self.header_checksum = U16::new(0);
+        let bytes = self.as_bytes();
+        let mut sum: u32 = 0;
+        for chunk in bytes.chunks(2) {
+            if chunk.len() == 2 {
+                sum += u16::from_be_bytes([chunk[0], chunk[1]]) as u32;
+            } else {
+                sum += (chunk[0] as u32) << 8;
+            }
+        }
+        while (sum >> 16) != 0 {
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        self.header_checksum = U16::new(!sum as u16);
     }
 }
 

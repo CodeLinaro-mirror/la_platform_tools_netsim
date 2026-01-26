@@ -5,7 +5,7 @@ use futures::{SinkExt, StreamExt};
 use netsim_proto::common::ChipKind;
 use netsim_proto::frontend::{CreateDeviceRequest, PatchDeviceRequest};
 use netsim_proto::hci_packet::hcipacket::PacketType;
-use netsim_proto::model::{ChipCreate, DeviceCreate};
+use netsim_proto::model::ChipCreate;
 use netsim_proto::protobuf::{EnumOrUnknown, MessageField};
 
 // Feature: gRPC Frontend Lifecycle

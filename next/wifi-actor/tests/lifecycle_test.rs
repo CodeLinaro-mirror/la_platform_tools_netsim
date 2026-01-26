@@ -1,0 +1,100 @@
+use device_api::DeviceAction;
+use netsim_model::chip::{ChipClient, ChipId};
+
+mod hwsim_helper;
+mod world;
+use wifi_actor::WifiClient;
+use world::World;
+
+// Feature: Chip Creation
+// Scenario: Create a new chip
+//
+//   Given a new world
+//   When we create a chip
+//   Then the chip exists in the wifi actor
+#[tokio::test]
+async fn test_create_chip() {
+    // Given
+    let mut world = World::new().await;
+
+    // When
+    let chip_id = world.given_a_chip(1).await;
+    assert_eq!(chip_id, 1);
+
+    // Then
+    let chip = world.wifi_client.read(ChipId(1)).await;
+    assert!(chip.is_ok());
+}
+
+// Feature: Chip Deletion
+// Scenario: Delete an existing chip
+//
+//   Given a world with a chip
+//   When we delete the chip
+//   Then the chip is removed from the wifi actor
+#[tokio::test]
+async fn test_delete_chip() {
+    // Given
+    let mut world = World::new().await;
+    let chip_id = world.given_a_chip(3).await;
+
+    // When
+    world.wifi_client.delete(ChipId(chip_id)).await.expect("Failed to delete chip");
+
+    // Then
+    let chip = world.wifi_client.read(ChipId(chip_id)).await;
+    assert!(chip.is_err());
+}
+
+// Feature: Sink Closure Notification
+// Scenario: Notify DeviceActor when a chip's sink closes
+//
+//   Given a world with a chip
+//   When the packet sink is closed (simulated by dropping the chip's channels)
+//   Then the device actor receives a NotifyChipRemoved action
+//   And the chip is removed from the WifiActor
+#[tokio::test]
+async fn test_sink_closure_notification() {
+    // Given
+    let mut world = World::new().await;
+    let _chip_id = world.given_a_chip(2).await;
+
+    // When
+    world.chips.retain(|c| c.id != 2);
+
+    // Then
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(1));
+    tokio::pin!(timeout);
+
+    let mut notification_received = false;
+    loop {
+        tokio::select! {
+             Some(action) = world.device_action_rx.recv() => {
+                 match action {
+                     DeviceAction::NotifyChipRemoved(_, id) => {
+                         if id.0 == 2 {
+                             notification_received = true;
+                             break;
+                         }
+                     }
+                     _ => {}
+                 }
+             }
+             _ = &mut timeout => {
+                 panic!("Timeout waiting for NotifyChipRemoved");
+             }
+        }
+    }
+
+    assert!(notification_received);
+
+    // And
+    let chip = world.wifi_client.read(ChipId(2)).await;
+    assert!(chip.is_err(), "Chip should be removed from WifiActor");
+}
+
+#[test]
+fn test_wifi_client_implements_chip_client() {
+    fn assert_chip_client<T: netsim_model::chip::ChipClient>() {}
+    assert_chip_client::<WifiClient>();
+}

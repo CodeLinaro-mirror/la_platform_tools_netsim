@@ -100,7 +100,7 @@ impl UwbActor {
         chip.id = chip_id.0;
         chip.device_id = params.device_id;
         chip.kind = netsim_model::chip::ChipKind::UWB;
-        chip.variant = Some(netsim_model::chip::ChipVariant::Uwb);
+        chip.variant = Some(netsim_model::chip::ChipVariant::Uwb(Default::default()));
         chip.name = Some(params.config.name);
         chip.manufacturer = Some(params.config.manufacturer);
         chip.product_name = Some(params.config.product_name);

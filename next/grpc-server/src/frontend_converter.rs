@@ -54,10 +54,36 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
     // Note: netsim_model Chip has position, but netsim_proto Chip has offset (Position)
     chip.offset = MessageField::some(to_proto_position(c.position));
 
-    // TODO: Handle chip variant conversion if needed (e.g. Bluetooth details)
-    // For now we just set the common fields.
+    if let Some(variant) = c.variant {
+        match variant {
+            netsim_model::chip::ChipVariant::Bluetooth(bt_model) => {
+                let mut bt = netsim_proto::model::chip::Bluetooth::new();
+                bt.low_energy = MessageField::some(to_proto_radio(&bt_model.low_energy));
+                bt.classic = MessageField::some(to_proto_radio(&bt_model.classic));
+                chip.chip = Some(netsim_proto::model::chip::Chip::Bt(bt));
+            }
+            netsim_model::chip::ChipVariant::Wifi(radio) => {
+                chip.chip = Some(netsim_proto::model::chip::Chip::Wifi(to_proto_radio(&radio)));
+            }
+            netsim_model::chip::ChipVariant::Uwb(radio) => {
+                chip.chip = Some(netsim_proto::model::chip::Chip::Uwb(to_proto_radio(&radio)));
+            }
+            netsim_model::chip::ChipVariant::Cell(_) => {
+                // TODO: Add Cell support to proto if available
+            }
+        }
+    }
 
     chip
+}
+
+fn to_proto_radio(r: &netsim_model::chip::Radio) -> netsim_proto::model::chip::Radio {
+    let mut radio = netsim_proto::model::chip::Radio::new();
+    radio.state = Some(r.state.unwrap_or(true));
+    radio.range = r.range;
+    radio.tx_count = r.tx_count;
+    radio.rx_count = r.rx_count;
+    radio
 }
 
 pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {

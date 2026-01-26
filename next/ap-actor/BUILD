@@ -41,6 +41,7 @@ netsim_rust_library(
         "@cxx.rs//:cxx",
         "@futures",
         "@log",
+        "@mockall",
         "@serde",
         "@thiserror",
         "@tokio",
@@ -74,12 +75,14 @@ cc_library(
 
 rust_test(
     name = "integration-test",
+    size = "small",
     srcs = glob(["tests/**/*.rs"]),
     crate_root = "tests/mod.rs",
     edition = "2021",
     deps = [
         ":testing",
         "//next/actor-framework:testing",
+        "//next/model",
         "//next/packets:testing",
         "@bytes",
         "@env_logger",

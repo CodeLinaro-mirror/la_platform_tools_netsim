@@ -25,3 +25,10 @@ cxx-build = "1.0"
 
 [dev-dependencies]
 tokio-stream = "0.1"
+
+[dependencies.mockall]
+version = "0.13"
+optional = true
+
+[features]
+testing = ["dep:mockall"]
