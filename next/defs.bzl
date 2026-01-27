@@ -108,8 +108,13 @@ def netsim_rust_library(
 
     # 6. Documentation Test
     if enable_doc_test:
+        # Restrict to Linux due to macOS toolchain issues:
+        # 1. The macOS `goldfish_build+` toolchain's C++ linker wrapper is missing from the sandbox for pure Rust targets.
+        # 2. Mixed C++ crates work (they pull the toolchain in), but pure Rust crates fail.
+        # 3. Linux provides sufficient CI validation.
         rust_doc_test(
             name = "doc-test",
             crate = ":" + name,
             testonly = True,
+            target_compatible_with = ["@platforms//os:linux"],
         )
