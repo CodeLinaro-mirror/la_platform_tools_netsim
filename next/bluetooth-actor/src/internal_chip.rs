@@ -41,6 +41,7 @@ impl InternalChip {
             manufacturer: Some(params.config.manufacturer),
             product_name: Some(params.config.product_name),
             kind: ChipKind::BLUETOOTH,
+            variant: Some(netsim_model::chip::ChipVariant::Bluetooth(Default::default())),
             ..Default::default()
         };
 
