@@ -97,10 +97,15 @@ async fn test_eap_mock_authentication_success() {
     tx.send(bytes::Bytes::from(start_frame)).expect("Send Start");
 
     // 2. Expect EAP-Request/Identity
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout")
-        .expect("Msg");
+    let msg = world
+        .recv_frame(|frame, msg| {
+            // EAPOL Packet (0x888E)
+            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+                return false;
+            }
+            msg.len() > 32 && msg[30] == 0x88 && msg[31] == 0x8E
+        })
+        .await;
 
     // Decode
     let frame = Ieee80211::decode(&msg).expect("Decode 802.11");
@@ -130,10 +135,15 @@ async fn test_eap_mock_authentication_success() {
     tx.send(bytes::Bytes::from(resp_frame)).expect("Send Response");
 
     // 4. Expect EAP-Success
-    let msg2 = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout")
-        .expect("Msg");
+    let msg2 = world
+        .recv_frame(|frame, msg| {
+            // EAPOL Packet (0x888E)
+            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+                return false;
+            }
+            msg.len() > 32 && msg[30] == 0x88 && msg[31] == 0x8E
+        })
+        .await;
 
     let payload2 = &msg2[32..];
     let eap_packet2 = &payload2[4..];

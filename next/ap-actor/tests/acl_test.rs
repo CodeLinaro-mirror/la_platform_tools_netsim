@@ -42,11 +42,14 @@ async fn test_acl_deny_mode() {
     world.send_auth(denied_mac).await;
 
     // Expect Auth Response with Failure (Status 1)
-    let rx = world.rx_from_ap.as_mut().unwrap();
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout")
-        .expect("Msg");
+    let msg = world
+        .recv_frame(|frame, _| {
+            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+                return false;
+            }
+            frame.stype() == netsim_packets::ieee80211::management_subtype::AUTHENTICATION
+        })
+        .await;
 
     let frame = Ieee80211::decode(&msg).expect("Decode");
     // Verify Status is Not Success (0)
@@ -90,11 +93,14 @@ async fn test_acl_allow_mode_reject() {
     world.send_auth(unknown_mac).await;
 
     // Expect Auth Response with Failure
-    let rx = world.rx_from_ap.as_mut().unwrap();
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout")
-        .expect("Msg");
+    let msg = world
+        .recv_frame(|frame, _| {
+            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+                return false;
+            }
+            frame.stype() == netsim_packets::ieee80211::management_subtype::AUTHENTICATION
+        })
+        .await;
 
     let frame = Ieee80211::decode(&msg).expect("Decode");
     let payload = &msg[24..];
@@ -133,12 +139,15 @@ async fn test_acl_allow_mode_accept() {
     // Send Auth
     world.send_auth(allowed_mac).await;
 
-    // Expect Auth Response with Success
-    let rx = world.rx_from_ap.as_mut().unwrap();
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout")
-        .expect("Msg");
+    // Expect Auth Response with Failure
+    let msg = world
+        .recv_frame(|frame, _| {
+            if frame.stype() == netsim_packets::ieee80211::management_subtype::BEACON {
+                return false;
+            }
+            frame.stype() == netsim_packets::ieee80211::management_subtype::AUTHENTICATION
+        })
+        .await;
 
     let payload = &msg[24..];
     let fixed = AuthenticationFixedFields::read_from_prefix(payload).unwrap();
