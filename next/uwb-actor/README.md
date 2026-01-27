@@ -17,8 +17,8 @@ Interaction with the `UwbServer` is done via the `ChipClient` from the `netsim-a
 
 ```bash
 # Build
-bazel build //next/uwb
+bazel build //next/uwb-actor
 
 # Test
-bazel test //next/uwb:tests
+bazel test //next/uwb-actor:tests
 ```

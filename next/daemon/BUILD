@@ -51,7 +51,7 @@ rust_library(
         "//next/model",
         "//next/packet-stream",
         "//next/slirp-actor",
-        "//next/uwb",
+        "//next/uwb-actor",
         "//next/wifi-actor",
         "@bytes",
         "@chrono",

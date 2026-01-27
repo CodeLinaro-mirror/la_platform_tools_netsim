@@ -6,7 +6,7 @@ use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, NetworkParams, Uw
 use netsim_model::chip_error::ChipError;
 use netsim_model::client_error::ClientError;
 use netsim_model::device::DeviceId;
-use uwb::{UwbActor, UwbClient};
+use uwb_actor::{UwbActor, UwbClient};
 
 /// The BDD World for UWB Actor tests.
 pub struct World {
@@ -23,7 +23,7 @@ impl Drop for World {
 
 impl World {
     pub async fn new() -> Self {
-        let (runner, client) = uwb::new();
+        let (runner, client) = uwb_actor::new();
 
         // Use MockActorClient for the DeviceClient
         let mut mock_device_client = actor_framework::MockActorClient::new();

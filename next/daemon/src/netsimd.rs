@@ -420,8 +420,8 @@ impl NetsimDaemon {
         );
 
         // Setup Uwb Server
-        let (uwb_runner, uwb_client) = uwb::new();
-        let uwb_actor = uwb::UwbActor::new(device_client.clone());
+        let (uwb_runner, uwb_client) = uwb_actor::new();
+        let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
         // TODO: Replace with real modem network.
