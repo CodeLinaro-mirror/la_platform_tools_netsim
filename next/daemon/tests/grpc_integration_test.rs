@@ -172,10 +172,11 @@ async fn test_patch_device_resolution() {
     let pos_id = device_id_patch.position.as_ref().unwrap();
     assert!((pos_id.x - 20.0).abs() < 0.001);
 }
+
 // Scenario: Chip Update
 //   Given a running Netsim Daemon
 //   When I create a device with a Bluetooth Beacon chip
-//   And I patch the device position
+//   And I patch the device position (which triggers a chip update)
 //   Then the device position is updated
 #[tokio::test]
 async fn test_chip_update() {
@@ -212,4 +213,54 @@ async fn test_chip_update() {
     let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
     let pos = device.position.as_ref().unwrap();
     assert!((pos.x - 50.0).abs() < 0.001);
+}
+
+// Scenario: Radio State Propagation
+//   Given a running Netsim Daemon
+//   When I create a device with a Bluetooth chip
+//   Then the initial radio state is TRUE (default)
+//   When I patch the device to turn the radio OFF
+//   Then the radio state becomes FALSE
+#[tokio::test]
+async fn test_radio_state_propagation() {
+    // Given a running Netsim Daemon
+    let mut world = World::new().await;
+    let _daemon_task = world.spawn_daemon();
+
+    // When I create a device with a Bluetooth chip
+    let bt_chip = World::make_bluetooth_chip("bt0", "00:11:22:33:44:55");
+    let device_id = world.when_create_device_with_chips("Radio-Test-Device", vec![bt_chip]).await;
+
+    // Resolve Chip ID
+    let devices = world.when_list_devices().await;
+    let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
+    let chip_id = device.chips[0].id;
+
+    // Then the initial radio state is TRUE (default)
+    world.then_radio_state_is(device_id, ChipKind::BLUETOOTH, true).await;
+
+    // When I patch the device to turn the radio OFF
+    world.when_patch_state(device_id, Some(chip_id), ChipKind::BLUETOOTH, false).await;
+
+    // Then the radio state becomes FALSE
+    world.then_radio_state_is(device_id, ChipKind::BLUETOOTH, false).await;
+}
+
+#[tokio::test]
+async fn test_chip_update_resolution_by_variant() {
+    let mut world = World::new().await;
+    let _daemon_task = world.spawn_daemon();
+
+    // 1. Create Device with multiple chips
+    let bt_chip = World::make_bluetooth_chip("bt-res", "00:11:22:33:44:55");
+    let uwb_chip = World::make_uwb_chip("uwb-res");
+
+    let device_id =
+        world.when_create_device_with_chips("Resolution-By-Variant", vec![bt_chip, uwb_chip]).await;
+
+    // 2. Patch Bluetooth Radio State *WITHOUT* Chip ID
+    world.when_patch_state(device_id, None, ChipKind::BLUETOOTH, false).await;
+
+    // 3. Verify
+    world.then_radio_state_is(device_id, ChipKind::BLUETOOTH, false).await;
 }
