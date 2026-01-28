@@ -45,6 +45,7 @@ rust_test(
         "//next/device-api:testing",
         "//next/link-api:testing",
         "//next/model:testing",
+        "@mockall",
         "@tokio",
     ],
 )
