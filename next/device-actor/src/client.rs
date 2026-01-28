@@ -15,31 +15,20 @@ use device_api::DeviceId;
 use device_api::{DeviceAction, DeviceActionResult};
 use log::debug;
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-
 #[derive(Clone)]
 pub struct DeviceClient {
     pub(crate) inner: Box<dyn ActorClient<DeviceActor>>,
-    pub(crate) state: Arc<Mutex<DeviceClientState>>,
 }
 
 impl std::fmt::Debug for DeviceClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DeviceClient").field("state", &self.state).finish_non_exhaustive()
+        f.debug_struct("DeviceClient").finish_non_exhaustive()
     }
 }
 
-#[derive(Default, Debug)]
-pub(crate) struct DeviceClientState {
-    pub(crate) guid_to_id: HashMap<String, DeviceId>,
-}
-
-mod device_add_chip;
-
 impl DeviceClient {
     pub fn new(inner: Box<dyn ActorClient<DeviceActor>>) -> Self {
-        Self { inner, state: Arc::new(Mutex::new(DeviceClientState::default())) }
+        Self { inner }
     }
 }
 
@@ -171,5 +160,30 @@ impl DeviceClient {
     pub async fn delete(&self, id: DeviceId) -> Result<(), DeviceError> {
         debug!("Sending delete request for device {}", id);
         self.inner.delete(id).await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
+    }
+
+    /// Creates or updates a device based on PacketStream parameters.
+    ///
+    /// This method uses the actor's `AddChipByGuid` action to atomically
+    /// find an existing device by GUID or create a new one, avoiding race conditions.
+    pub async fn add_chip(
+        &self,
+        params: netsim_model::device::DeviceAddChip,
+    ) -> Result<DeviceId, DeviceError> {
+        let result = self
+            .inner
+            .perform_action(
+                None, // Global action
+                DeviceAction::AddChipByGuid { params },
+            )
+            .await
+            .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
+
+        match result {
+            DeviceActionResult::AddChipByGuidSuccess { device_id, chip_id: _ } => Ok(device_id),
+            _ => Err(DeviceError::ActorCommunicationError(
+                "Unexpected action result for AddChipByGuid".to_string(),
+            )),
+        }
     }
 }

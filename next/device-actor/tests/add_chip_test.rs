@@ -74,3 +74,39 @@ async fn test_add_chip_to_existing_device() {
     assert!(names.contains(&"beacon-1".to_string()));
     assert!(names.contains(&"beacon-2".to_string()));
 }
+
+// Scenario: Concurrent Add Chip Race Condition
+//   Given a running Device Actor
+//   When I add two chips with the same device GUID concurrently
+//   Then only one device is created
+//   And duplicate devices are prevented
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_concurrent_add_chip_race_condition() {
+    // Given a running Device Actor with expectation for multiple Create calls on ChipClient
+    // We expect 2 chips to be created (one for each add_chip call)
+    let mut mock_chip_client = MockChipClient::new();
+    mock_chip_client.expect_create().times(2).returning(|_| Ok(()));
+    // Allow cleanup deletions
+    mock_chip_client.expect_delete().returning(|_| Ok(()));
+
+    let mut chip_clients = HashMap::new();
+    chip_clients.insert(
+        NetworkKind::Bluetooth,
+        Box::new(mock_chip_client) as Box<dyn netsim_model::chip::ChipClient>,
+    );
+
+    let mut mock_link_client = link_api::MockLinkClient::new();
+    mock_link_client.expect_action().returning(|_, _| Ok(()));
+    mock_link_client.expect_create().returning(|_| Ok(link_api::LinkId(0)));
+    mock_link_client.expect_notify_chip_added().returning(|_, _| Ok(()));
+
+    let world = World::with_clients(chip_clients, mock_link_client).await;
+    let client = world.client.clone();
+
+    // When I add two chips with the same device GUID concurrently
+    let device_guid = "concurrent-guid";
+    let (id1, id2) = world.when_concurrently_add_chips(device_guid, "beacon-1", "beacon-2").await;
+
+    // Then only one device is created (IDs must match)
+    assert_eq!(id1, id2, "Device IDs should match for the same GUID even with concurrent creation");
+}

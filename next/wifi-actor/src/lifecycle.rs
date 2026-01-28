@@ -6,6 +6,7 @@ use actor_framework::{ActorLifecycle, DynContext};
 use async_trait::async_trait;
 
 use netsim_model::chip::ChipId;
+
 /// ID for the AP infrastructure stream
 pub const AP_ID: ChipId = ChipId(u32::MAX);
 /// ID for the Slirp infrastructure stream
@@ -28,7 +29,10 @@ impl ActorLifecycle<ChipId> for WifiActor {
             let (ap_downlink_tx, ap_downlink_rx) = create_channel_stream();
 
             // Wire AP Downlink to Context
-            ctx.add_stream(AP_ID, ap_downlink_rx);
+            use tokio_stream::StreamExt;
+            let stream = ap_downlink_rx;
+            let stream = Box::pin(stream);
+            ctx.add_stream(AP_ID, stream);
 
             // Default beacon interval for now (100ms)
             if let Err(e) = ap_client
@@ -56,44 +60,15 @@ impl ActorLifecycle<ChipId> for WifiActor {
             let (slirp_downlink_tx, slirp_downlink_rx) = create_channel_stream();
 
             // Wire Slirp Downlink to Context
-            ctx.add_stream(SLIRP_ID, slirp_downlink_rx);
+            let stream = slirp_downlink_rx;
+            let stream = Box::pin(stream);
+            ctx.add_stream(SLIRP_ID, stream);
 
             // Register with SlirpActor
             if let Err(e) = client.register(slirp_uplink_rx, slirp_downlink_tx).await {
                 log::error!("Failed to register slirp client: {}", e);
             }
             self.to_slirp = Some(slirp_uplink_tx);
-        }
-
-        // Create Default AndroidAp
-        if self.create_default_ap {
-            if let Some(ap_client) = &self.ap_client {
-                log::info!("Creating default AndroidAp");
-                let config = ap_actor::ApConfig {
-                    ssid: "AndroidWifi".to_string(), // Default Android Hotspot SSID often "AndroidWifi" or "AndroidAP"
-                    bssid: netsim_packets::ethernet::MacAddr::from([
-                        0x02, 0x00, 0x00, 0x44, 0x55, 0x66,
-                    ]),
-                    channel: 6,
-                    hw_mode: "g".to_string(),
-                    wpa_passphrase: None,
-                    beacon_interval: 100,
-                    country_code: None,
-                    dtim_period: 2,
-                    hidden_ssid: false,
-                    sae: false,
-                    wmm_enabled: true,
-                    enterprise_enabled: false,
-                    mac_acl_mode: 0,
-                    mac_acl_list: vec![],
-                    ftm_responder_enabled: true,
-                    position: netsim_model::device::Position::default(),
-                };
-                match ap_client.create_ap(config).await {
-                    Ok(id) => log::info!("Created default AP with ID: {}", id),
-                    Err(e) => log::error!("Failed to create default AP: {}", e),
-                }
-            }
         }
     }
 

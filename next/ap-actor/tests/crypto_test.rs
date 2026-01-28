@@ -122,7 +122,7 @@ fn test_crypto_interop_boringssl_encrypt_rust_decrypt() {
     let mut frame_bytes = Vec::new();
     // FC: Type=Data(2), Subtype=Data(0), ToDS=0, FromDS=1, Protected=1
     // Type/Subtype = 0x08 (Data)
-    // Flags = 0x42 (FromDS | Protected) -> wait, little endian encoding of FC?
+    // Flags = 0x42 (FromDS | Protected) -> Little endian encoding of FC?
     // FC is u16.
     // Byte 0: Version(2)|Type(2)|Subtype(4). b0000 1000 = 0x08.
     // Byte 1: ToDS(1)|FromDS(1)|MoreFrag...|Protected(1)|...

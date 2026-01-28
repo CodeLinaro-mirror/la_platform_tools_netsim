@@ -79,23 +79,41 @@ async fn test_ftm_ranging_exchange() {
     req_frame.push(public_action::FTM_REQUEST);
     req_frame.push(1); // Trigger = 1
 
-    // Send
+    let src_id = netsim_model::chip::ChipId(100);
     world.tx_to_ap.as_ref().unwrap().send(bytes::Bytes::from(req_frame)).unwrap();
 
     // 3. Verify Response(s)
-    let rx = world.rx_from_ap.as_mut().unwrap();
-
     // Expect: FTM Initial Frame
-    let ftm_1 = rx.recv().await.expect("Expected FTM frame 1");
-    let ftm_1_parsed = Ieee80211::decode(&ftm_1).unwrap();
-    assert!(ftm_1_parsed.stype() == management_subtype::ACTION);
-    // Check Action Category/Code
-    // Offset 24
-    assert_eq!(ftm_1[24], category::PUBLIC);
-    assert_eq!(ftm_1[25], public_action::FINE_TIMING_MEASUREMENT);
+    let ftm_1 = world
+        .recv_frame(|frame, msg| {
+            if frame.stype() == management_subtype::BEACON {
+                return false;
+            }
+            frame.stype() == management_subtype::ACTION
+                && msg.len() > 25
+                && msg[24] == category::PUBLIC
+                && msg[25] == public_action::FINE_TIMING_MEASUREMENT
+        })
+        .await;
 
     // Expect: FTM Follow Up Frame (with timestamps)
-    let ftm_2 = rx.recv().await.expect("Expected FTM frame 2");
+    // For simplicity, we just look for another FTM Action frame.
+    // In a real scenario, we might want to check Dialog Token or other fields to differentiate.
+    // But since recv_frame returns a copy, we can call it again.
+    let ftm_2 = world
+        .recv_frame(|frame, msg| {
+            if frame.stype() == management_subtype::BEACON {
+                return false;
+            }
+            frame.stype() == management_subtype::ACTION
+                && msg.len() > 25
+                && msg[24] == category::PUBLIC
+                && msg[25] == public_action::FINE_TIMING_MEASUREMENT
+                && msg != ftm_1 // Ensure it's a new frame (though strictly recv_frame doesn't buffer past, it drains)
+                                // Actually recv_frame consumes from rx, so calling it again yields the next one.
+        })
+        .await;
+
     let ftm_2_parsed = Ieee80211::decode(&ftm_2).unwrap();
     assert!(ftm_2_parsed.stype() == management_subtype::ACTION);
     assert_eq!(ftm_2[24], category::PUBLIC);

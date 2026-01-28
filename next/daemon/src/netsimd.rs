@@ -13,9 +13,9 @@ use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info, warn};
 use netsim_model::chip::{
-    BluetoothCreate, BluetoothMode, CellCreate, ChipConfig, DeviceParams, NetworkKind,
-    NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
-    WifiCreate,
+    ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, DeviceParams,
+    NetworkKind, NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
+    UwbCreate, WifiCreate,
 };
 use netsim_model::initial_info::{ChipInfo, ChipKind};
 use packet_stream::transport::traits::{PacketSink, PacketStream};
@@ -106,6 +106,7 @@ async fn handle_new_connection(
         }),
         ChipKind::UWB => NetworkParams::Uwb(UwbCreate::default()),
         ChipKind::WIFI => NetworkParams::Wifi(WifiCreate::default()),
+        ChipKind::AP => NetworkParams::Ap(ApCreate::default()),
         ChipKind::CELL => NetworkParams::Cell(CellCreate::default()),
         _ => {
             error!("Unsupported chip kind: {:?}", chip.kind);
@@ -413,13 +414,10 @@ impl NetsimDaemon {
         // Setup Wifi Actor
         let (wifi_runner, wifi_client) = wifi_actor::new();
         let wifi_actor_state = wifi_actor::WifiActor::new(
-            Some(Arc::new(ap_client) as Arc<dyn ap_actor::ApClientTrait>),
+            Some(Arc::new(ap_client.clone())),
             Some(slirp_client),
             device_client.clone(),
-            true, // Create Default AP
         );
-
-        wifi_client.debug_trait_check();
 
         // Setup Uwb Server
         let (uwb_runner, uwb_client) = uwb::new();
@@ -432,12 +430,12 @@ impl NetsimDaemon {
         let cell_server = cell::Server::new(device_client.clone(), cell_controller);
 
         // Prepare chip clients map for DeviceServer
-        let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =
-            HashMap::new();
+        let mut chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();
         chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client.clone()));
         chip_clients.insert(NetworkKind::Wifi, Box::new(wifi_client.clone()));
         chip_clients.insert(NetworkKind::Uwb, Box::new(uwb_client.clone()));
         chip_clients.insert(NetworkKind::Cell, Box::new(cell_client.clone()));
+        chip_clients.insert(NetworkKind::Ap, Box::new(ap_client.clone()));
 
         // Setup Link Actor State
         // Create a new map for LinkActor.
@@ -458,33 +456,32 @@ impl NetsimDaemon {
         // Spawn server tasks
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_runner.run(bt_actor_state));
-        info!("Bluetooth server started");
         join_set.spawn(wifi_runner.run(wifi_actor_state));
-        info!("Wifi server started");
         join_set.spawn(ap_runner.run(ap_actor_state));
-        info!("Ap server started");
         join_set.spawn(slirp_runner.run(slirp_actor_state));
-        info!("Slirp server started");
         join_set.spawn(uwb_runner.run(uwb_actor));
-        info!("Uwb server started");
         join_set.spawn(cell_runner.run(cell_server));
-        info!("Cell server started");
         join_set.spawn(device_runner.run(device_actor_state));
-        info!("Device server started");
         join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
-        info!("Capture server started");
+        join_set.spawn(link_runner.run(link_actor_state));
+
+        // Create Default AP
+        device_client
+            .create_device(*Box::new(device_api::DeviceCreate::default_ap()))
+            .await
+            .expect("Failed to create default AP");
+
         if args.pcap {
             capture_client.set_default_capture(true).await.expect("Failed to set default capture");
         }
-        join_set.spawn(link_runner.run(link_actor_state));
-        info!("Link server started");
+
         Ok(StartUpMode::Owner(
             NetsimDaemon {
-                join_set,
-                streams,
                 device_client,
                 capture_client,
                 next_chip_id,
+                join_set,
+                streams,
                 listener_addresses,
                 args,
                 _grpc_server: Some(grpc_server),

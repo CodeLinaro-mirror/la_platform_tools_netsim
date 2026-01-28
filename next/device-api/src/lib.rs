@@ -74,6 +74,17 @@ pub enum DeviceAction {
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
     },
+    /// Adds a chip to a device identified by its GUID.
+    ///
+    /// If a device with the given GUID exists, the chip is added to it.
+    /// If no such device exists, a new device is created with the provided configuration,
+    /// and the chip is added to the new device.
+    ///
+    /// This operation is atomic regarding device creation, preventing race conditions
+    /// when multiple sources try to initialize the same device simultaneously.
+    AddChipByGuid {
+        params: DeviceAddChip,
+    },
 }
 
 impl fmt::Debug for DeviceAction {
@@ -89,6 +100,9 @@ impl fmt::Debug for DeviceAction {
                 .field("packet_stream", &"Option<PacketStream>")
                 .field("packet_sink", &"Option<PacketSink>")
                 .finish(),
+            DeviceAction::AddChipByGuid { params } => {
+                f.debug_struct("AddChipByGuid").field("params", params).finish()
+            }
         }
     }
 }
@@ -97,4 +111,10 @@ impl fmt::Debug for DeviceAction {
 pub enum DeviceActionResult {
     Success,
     ChipId(ChipId),
+    /// Result of an `AddChipByGuid` operation.
+    /// Returns both the `DeviceId` (found or created) and the `ChipId` (newly added).
+    AddChipByGuidSuccess {
+        device_id: DeviceId,
+        chip_id: ChipId,
+    },
 }

@@ -103,7 +103,9 @@ pub struct GetVersionMessage {
 }
 
 pub mod api {
-    use crate::chip::{BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate};
+    use crate::chip::{
+        ApCreate, BleBeacon, BluetoothCreate, CellCreate, ChipConfig, UwbCreate, WifiCreate,
+    };
     use crate::device::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
 
@@ -127,6 +129,43 @@ pub mod api {
     pub struct DeviceCreate {
         pub device_config: DeviceConfig,
         pub chip: DeviceChipCreate,
+    }
+
+    impl DeviceCreate {
+        pub fn default_ap() -> Self {
+            let ap_create = ApCreate {
+                ssid: "AndroidWifi".to_string(),
+                bssid: "02:00:00:44:55:66".to_string(),
+                channel: 6,
+                hw_mode: "g".to_string(),
+                wpa_passphrase: None,
+                beacon_interval: 100,
+                country_code: None,
+                dtim_period: 2,
+                hidden_ssid: false,
+                sae: false,
+                wmm_enabled: true,
+                enterprise_enabled: false,
+                mac_acl_mode: 0,
+                mac_acl_list: vec![],
+                ftm_responder_enabled: true,
+            };
+
+            Self {
+                device_config: DeviceConfig {
+                    name: "infra-device".to_string(),
+                    position: Default::default(),
+                    orientation: Default::default(),
+                    visible: false,
+                },
+                chip: DeviceChipCreate {
+                    name: "main-ap".to_string(),
+                    manufacturer: "Google".to_string(),
+                    product_name: "AccessPoint".to_string(),
+                    chip: Chip::Ap(ap_create),
+                },
+            }
+        }
     }
 
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -160,6 +199,7 @@ pub mod api {
         Wifi(WifiCreate),
         Uwb(UwbCreate),
         Cell(CellCreate),
+        Ap(ApCreate),
     }
 
     impl Default for Chip {
@@ -180,6 +220,7 @@ pub mod api {
                 crate::chip::NetworkParams::Wifi(wifi) => Chip::Wifi(wifi),
                 crate::chip::NetworkParams::Uwb(uwb) => Chip::Uwb(uwb),
                 crate::chip::NetworkParams::Cell(cell) => Chip::Cell(cell),
+                crate::chip::NetworkParams::Ap(ap) => Chip::Ap(ap),
             }
         }
     }
@@ -200,6 +241,29 @@ pub mod api {
                 Chip::Wifi(wifi) => crate::chip::NetworkParams::Wifi(wifi),
                 Chip::Uwb(uwb) => crate::chip::NetworkParams::Uwb(uwb),
                 Chip::Cell(cell) => crate::chip::NetworkParams::Cell(cell),
+                Chip::Ap(ap) => crate::chip::NetworkParams::Ap(ap),
+            }
+        }
+    }
+
+    impl From<DeviceChipCreate> for ChipConfig {
+        fn from(create: DeviceChipCreate) -> Self {
+            ChipConfig {
+                name: create.name,
+                manufacturer: create.manufacturer,
+                product_name: create.product_name,
+                network_params: create.chip.into(),
+            }
+        }
+    }
+
+    impl From<ChipConfig> for DeviceChipCreate {
+        fn from(config: ChipConfig) -> Self {
+            DeviceChipCreate {
+                name: config.name,
+                manufacturer: config.manufacturer,
+                product_name: config.product_name,
+                chip: config.network_params.into(),
             }
         }
     }
