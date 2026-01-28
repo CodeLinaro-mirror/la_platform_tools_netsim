@@ -9,7 +9,7 @@ use device_api::{DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId};
 use link_api::LinkClient;
 use netsim_model::chip::{
     Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
-    ChipVariantUpdate, NetworkKind, PacketSink, PacketStream,
+    NetworkKind, PacketSink, PacketStream,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
