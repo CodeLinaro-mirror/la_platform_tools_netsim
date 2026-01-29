@@ -9,8 +9,7 @@
 use crate::world::World;
 use device_api::api::DeviceUpdate;
 use netsim_model::chip::{
-    BluetoothUpdate, Chip, ChipClient, ChipId, ChipUpdate, ChipVariantUpdate, MockChipClient,
-    NetworkKind,
+    Chip, ChipClient, ChipId, ChipVariantUpdate, MockChipClient, NetworkKind,
 };
 use std::collections::HashMap;
 
@@ -34,10 +33,7 @@ async fn test_update_device_propagates_to_chips() {
     chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
 
     // Use default link mock
-    let mut mock_link_client = link_api::MockLinkClient::new();
-    mock_link_client.expect_action().returning(|_, _| Ok(()));
-    mock_link_client.expect_create().returning(|_| Ok(link_api::LinkId(0)));
-    mock_link_client.expect_notify_chip_added().returning(|_, _| Ok(()));
+    let mock_link_client = World::create_default_link_client();
 
     let world = World::with_clients(chip_clients, mock_link_client).await;
 
@@ -104,24 +100,139 @@ async fn test_update_device_propagates_by_variant() {
     chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
 
     // Use default link mock
-    let mut mock_link_client = link_api::MockLinkClient::new();
-    mock_link_client.expect_action().returning(|_, _| Ok(()));
-    mock_link_client.expect_create().returning(|_| Ok(link_api::LinkId(0)));
-    mock_link_client.expect_notify_chip_added().returning(|_, _| Ok(()));
+    let mock_link_client = World::create_default_link_client();
 
     let world = World::with_clients(chip_clients, mock_link_client).await;
 
-    // When I create a device
-    let device_name = "variant-test-dev";
+    // When I create a device and update it using a variant without Chip ID
+    let device_name = "test-dev";
     let device_id = world.when_create_device(device_name).await;
 
     // And I update it with a generic Bluetooth variant update (NO ID)
-    let mut update = DeviceUpdate::default();
-    update.id = device_id.0;
+    let chip_update = World::create_bluetooth_chip_update(None, None);
+    world.when_update_device_chip(device_id, chip_update).await;
+}
 
-    let mut chip_update = ChipUpdate::default();
-    chip_update.variant = Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate::default()));
-    update.chips = Some(vec![chip_update]);
+// Scenario: Update Chip Radio State via Device Update
+//   Given a running Device Actor with expectation for Chip Update
+//   When I create a device and update its Bluetooth Low Energy state to disabled
+//   Then the Chip Client receives the updates with the correct states
+//   And I update the device to enable the Bluetooth Low Energy state
+//   Then the Chip Client receives the updates with the correct states
+#[tokio::test]
+async fn test_update_chip_ble_radio_state() {
+    // Given a running Device Actor with expectation for Update call
+    let mut mock_chip_client = MockChipClient::new();
+    mock_chip_client.expect_create().times(1).returning(|_| Ok(()));
 
-    world.when_update_device(device_id, update).await;
+    let mut seq = mockall::Sequence::new();
+
+    mock_chip_client
+        .expect_update()
+        // Verify 1: Update to FALSE (Disabled)
+        .withf(|_, patch| {
+            if let Some(ChipVariantUpdate::Bluetooth(bt_update)) = &patch.variant {
+                return bt_update.low_energy.state == Some(false);
+            }
+            false
+        })
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| Ok(Chip::default()));
+
+    mock_chip_client
+        .expect_update()
+        // Verify 2: Update to TRUE (Enabled)
+        .withf(|_, patch| {
+            if let Some(ChipVariantUpdate::Bluetooth(bt_update)) = &patch.variant {
+                return bt_update.low_energy.state == Some(true);
+            }
+            false
+        })
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| Ok(Chip::default()));
+
+    let mut chip_clients = HashMap::new();
+    chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
+
+    // Use default link mock
+    let mock_link_client = World::create_default_link_client();
+
+    let world = World::with_clients(chip_clients, mock_link_client).await;
+
+    // When I create a device and update its Bluetooth Low Energy state to disabled
+    let device_name = "test-dev";
+    let device_id = world.when_create_device(device_name).await;
+
+    let chip_update = World::create_bluetooth_chip_update(Some(false), None);
+    world.when_update_device_chip(device_id, chip_update).await;
+
+    // Then the Chip Client receives the update with the correct state (verified by checkpoint)
+
+    // When I update the device again to ENABLE the Bluetooth Low Energy state
+    let chip_update_enable = World::create_bluetooth_chip_update(Some(true), None);
+    world.when_update_device_chip(device_id, chip_update_enable).await;
+}
+
+// Scenario: Update Chip Classic Radio State via Device Update
+//   Given a running Device Actor with expectation for Chip Update
+//   When I create a device and update its Bluetooth Classic state to disabled
+//   Then the Chip Client receives the update with the correct state
+//   And I update the device to enable the Bluetooth Classic state
+//   Then the Chip Client receives the update with the correct state
+#[tokio::test]
+async fn test_update_chip_classic_radio_state() {
+    // Given a running Device Actor with expectation for Chip Update
+    let mut mock_chip_client = MockChipClient::new();
+    mock_chip_client.expect_create().times(1).returning(|_| Ok(()));
+
+    let mut seq = mockall::Sequence::new();
+
+    mock_chip_client
+        .expect_update()
+        // Verify 1: Update to FALSE (Disabled)
+        .withf(|_, patch| {
+            if let Some(ChipVariantUpdate::Bluetooth(bt_update)) = &patch.variant {
+                return bt_update.classic.state == Some(false);
+            }
+            false
+        })
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| Ok(Chip::default()));
+
+    mock_chip_client
+        .expect_update()
+        // Verify 2: Update to TRUE (Enabled)
+        .withf(|_, patch| {
+            if let Some(ChipVariantUpdate::Bluetooth(bt_update)) = &patch.variant {
+                return bt_update.classic.state == Some(true);
+            }
+            false
+        })
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| Ok(Chip::default()));
+
+    let mut chip_clients = HashMap::new();
+    chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
+
+    // Use default link mock
+    let mock_link_client = World::create_default_link_client();
+
+    let world = World::with_clients(chip_clients, mock_link_client).await;
+
+    // When I create a device and update its Bluetooth Classic state to disabled
+    let device_name = "test-dev";
+    let device_id = world.when_create_device(device_name).await;
+
+    let chip_update = World::create_bluetooth_chip_update(None, Some(false));
+    world.when_update_device_chip(device_id, chip_update).await;
+
+    // Then the Chip Client receives the update with the correct state (verified by checkpoint)
+
+    // When I update the device again to ENABLE the Bluetooth Classic state
+    let chip_update_enable = World::create_bluetooth_chip_update(None, Some(true));
+    world.when_update_device_chip(device_id, chip_update_enable).await;
 }

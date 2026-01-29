@@ -3,7 +3,7 @@
 use crate::ranging;
 
 use client::DeviceClient;
-use netsim_model::chip::{Chip, ChipId};
+use netsim_model::chip::{Chip, ChipId, ChipVariant};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -24,7 +24,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
         source_id: u32,
         destination_id: u32,
         _packet: &[u8],
-        _phy: Phy,
+        phy: Phy,
         tx_power: i32,
     ) -> Option<i32> {
         let src_id = source_id.into();
@@ -34,6 +34,16 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
         let dst_chip = chips.get(&dst_id);
 
         if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
+            // Check nested variant radio state if available
+            if let Some(ChipVariant::Bluetooth(bt)) = &src.variant {
+                if let Some(false) = match phy {
+                    Phy::LowEnergy => bt.low_energy.state,
+                    _ => bt.classic.state,
+                } {
+                    return None;
+                }
+            }
+
             let dist = ranging::distance(&src.position, &dst.position);
 
             // Check for link override
