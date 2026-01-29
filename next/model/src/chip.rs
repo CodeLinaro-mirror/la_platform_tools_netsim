@@ -395,6 +395,22 @@ pub struct Chip {
     pub enabled: bool,
 }
 
+impl Chip {
+    pub fn is_le_enabled(&self) -> bool {
+        if let Some(ChipVariant::Bluetooth(bt)) = &self.variant {
+            return bt.low_energy.state.unwrap_or(true);
+        }
+        true
+    }
+
+    pub fn is_classic_enabled(&self) -> bool {
+        if let Some(ChipVariant::Bluetooth(bt)) = &self.variant {
+            return bt.classic.state.unwrap_or(true);
+        }
+        true
+    }
+}
+
 fn default_enabled() -> bool {
     true
 }
