@@ -27,12 +27,10 @@ netsim_rust_library(
     name = "bluetooth-actor",
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
-    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
         "@zerocopy-derive",
     ],
-    strict_warnings = False,
     deps = BLUETOOTH_DEPS,
 )
 

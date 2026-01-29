@@ -3,7 +3,7 @@
 use crate::ranging;
 
 use client::DeviceClient;
-use netsim_model::chip::{Chip, ChipId, ChipVariant};
+use netsim_model::chip::{Chip, ChipId};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -93,7 +93,7 @@ impl BluetoothActor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use netsim_model::chip::{Chip, ChipId};
+    use netsim_model::chip::{Chip, ChipId, ChipVariant};
     use rootcanal::Phy;
 
     #[test]
