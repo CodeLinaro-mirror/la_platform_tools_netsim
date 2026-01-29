@@ -39,10 +39,3 @@ To ensure consistent code style and quality, this project uses a pre-commit hook
 
 After this one-time setup, the formatting script will run automatically before each commit.
 
-## Known Issues
-
-### `rust_doc_test` on macOS
-`rust_doc_test` targets are currently disabled on macOS for pure Rust crates (e.g., `actor-framework`, `device-actor`).
-*   **Cause:** The `goldfish_build+` toolchain on macOS uses a C++ linker wrapper that is not included in the Bazel sandbox for pure Rust targets.
-*   **Workaround:** These tests are marked with `target_compatible_with = ["@platforms//os:linux"]` to skip them on macOS.
-*   **Exception:** Crates with C++ dependencies (like `bluetooth` -> `rootcanal`) work correctly because they pull the C++ toolchain into the sandbox.

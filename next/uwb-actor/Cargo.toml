@@ -1,5 +1,5 @@
 [package]
-name = "uwb"
+name = "uwb-actor"
 version = "0.1.0"
 edition = "2021"
 

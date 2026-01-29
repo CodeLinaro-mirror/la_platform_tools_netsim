@@ -8,7 +8,8 @@ use device_api::api::{DeviceCreate, DeviceUpdate};
 use device_api::{DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId};
 use link_api::LinkClient;
 use netsim_model::chip::{
-    ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, NetworkKind, PacketSink, PacketStream,
+    Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
+    NetworkKind, PacketSink, PacketStream,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -100,7 +101,7 @@ impl DeviceActor {
             .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
 
         // 5. Update Local Device State
-        entity.device.chips.push(netsim_model::chip::Chip {
+        entity.device.chips.push(Chip {
             id: chip_id.0,
             kind: ChipKind::from(chip_kind),
             name: Some(chip_config.name),
@@ -109,7 +110,7 @@ impl DeviceActor {
             position: entity.device.position.clone(),
             orientation: entity.device.orientation.clone(),
             device_id: DeviceId(entity.device.id),
-            variant: Some(netsim_model::chip::ChipVariant::from(chip_kind)),
+            variant: Some(ChipVariant::from(chip_kind)),
             links: vec![],
             enabled: true,
         });
@@ -249,41 +250,80 @@ impl ActorService for DeviceActor {
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
         // Update does not affect device count, so no timeout logic change needed.
-        if let Some(entity) = self.devices.get_mut(&id) {
-            // Update local state
-            if let Some(name) = update.name {
-                entity.device.name = name;
-            }
-            if let Some(visible) = update.visible {
-                entity.device.visible = visible;
-            }
-            //TODO: check if chip_id is valid
-            if let Some(pos) = update.position.clone() {
-                entity.device.position = pos;
-            }
-            if let Some(orient) = update.orientation.clone() {
-                entity.device.orientation = orient;
-            }
+        let Some(entity) = self.devices.get_mut(&id) else {
+            return Err(DeviceError::DeviceNotFound(id.to_string()));
+        };
+        // Update local state
+        if let Some(name) = update.name {
+            entity.device.name = name;
+        }
+        if let Some(visible) = update.visible {
+            entity.device.visible = visible;
+        }
+        //TODO: check if chip_id is valid
+        if let Some(pos) = update.position.clone() {
+            entity.device.position = pos;
+        }
+        if let Some(orient) = update.orientation.clone() {
+            entity.device.orientation = orient;
+        }
 
-            // Propagate updates to chips
-            for chip in &entity.device.chips {
-                let network_kind = chip_kind_to_network_kind(&chip.kind);
-                if let Some(chip_client) = self.chip_clients.get(&network_kind) {
-                    let mut chip_update = netsim_model::chip::ChipUpdate::default();
+        // Propagate updates to chips
+        for chip in entity.device.chips.iter_mut() {
+            let network_kind = chip_kind_to_network_kind(&chip.kind);
+            if let Some(chip_client) = self.chip_clients.get(&network_kind) {
+                let mut chip_update = ChipUpdate::default();
+
+                // 1. Propagate Device Position/Orientation if changed
+                if update.position.is_some() {
                     chip_update.position = Some(entity.device.position.clone());
+                }
+                if update.orientation.is_some() {
                     chip_update.orientation = Some(entity.device.orientation.clone());
+                }
 
-                    chip_client
-                        .update(netsim_model::chip::ChipId(chip.id), chip_update)
+                // 2. Start with ID-based matching
+                let mut specific_update = None;
+                if let Some(chips) = &update.chips {
+                    // Priority 1: Exact ID match
+                    specific_update = chips.iter().find(|u| u.id == Some(ChipId(chip.id)));
+
+                    // Priority 2: Variant match (if no ID match found)
+                    if specific_update.is_none() {
+                        specific_update = chips.iter().find(|u| {
+                            u.id.is_none()
+                                && u.variant.as_ref().map_or(false, |v| v.kind() == chip.kind)
+                        });
+                    }
+                }
+
+                // 3. Merge specific update fields
+                if let Some(u) = specific_update {
+                    if u.variant.is_some() {
+                        chip_update.variant = u.variant.clone();
+                    }
+                }
+
+                // 4. Send update if meaningful
+                if chip_update.position.is_some()
+                    || chip_update.orientation.is_some()
+                    || chip_update.variant.is_some()
+                {
+                    log::info!(
+                        "DeviceActor: Updating chip {} (kind {:?}) with {:?}",
+                        chip.id,
+                        chip.kind,
+                        chip_update
+                    );
+                    let updated_chip = chip_client
+                        .update(ChipId(chip.id), chip_update)
                         .await
                         .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
-                    //TODO: overwrite chip links if update.links is Some
+                    *chip = updated_chip;
                 }
             }
-            Ok(entity.device.clone())
-        } else {
-            Err(DeviceError::DeviceNotFound(id.to_string()))
         }
+        Ok(entity.device.clone())
     }
 
     async fn handle_delete(
@@ -300,7 +340,7 @@ impl ActorService for DeviceActor {
                 let network_kind = chip_kind_to_network_kind(&chip.kind);
                 if let Some(chip_client) = self.chip_clients.get(&network_kind) {
                     chip_client
-                        .delete(netsim_model::chip::ChipId(chip.id))
+                        .delete(ChipId(chip.id))
                         .await
                         .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
                     // Send delete request to Link Actor

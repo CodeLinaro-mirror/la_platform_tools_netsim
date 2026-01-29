@@ -93,6 +93,18 @@ impl FrontendService for FrontendClient {
                     .clone()
                     .into_option()
                     .map(crate::frontend_converter::from_proto_orientation),
+                chips: if !req.device.chips.is_empty() {
+                    Some(
+                        req.device
+                            .chips
+                            .iter()
+                            .cloned()
+                            .map(crate::frontend_converter::from_proto_chip_update)
+                            .collect(),
+                    )
+                } else {
+                    None
+                },
             };
 
             let name_opt = req.device.name.as_deref();

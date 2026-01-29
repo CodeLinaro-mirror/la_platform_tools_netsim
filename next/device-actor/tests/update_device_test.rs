@@ -8,7 +8,10 @@
 
 use crate::world::World;
 use device_api::api::DeviceUpdate;
-use netsim_model::chip::{ChipId, NetworkKind};
+use netsim_model::chip::{
+    BluetoothUpdate, Chip, ChipClient, ChipId, ChipUpdate, ChipVariantUpdate, MockChipClient,
+    NetworkKind,
+};
 use std::collections::HashMap;
 
 // Scenario: Update device properties propagates to chips
@@ -19,19 +22,16 @@ use std::collections::HashMap;
 #[tokio::test]
 async fn test_update_device_propagates_to_chips() {
     // Given a running Device Actor with expectation for Update call
-    let mut mock_chip_client = netsim_model::chip::MockChipClient::new();
+    let mut mock_chip_client = MockChipClient::new();
     mock_chip_client.expect_create().times(1).returning(|_| Ok(()));
     mock_chip_client
         .expect_update()
         .withf(|_, patch| patch.position.is_some() && patch.orientation.is_some())
         .times(1)
-        .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        .returning(|_, _| Ok(Chip::default()));
 
     let mut chip_clients = HashMap::new();
-    chip_clients.insert(
-        NetworkKind::Bluetooth,
-        Box::new(mock_chip_client) as Box<dyn netsim_model::chip::ChipClient>,
-    );
+    chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
 
     // Use default link mock
     let mut mock_link_client = link_api::MockLinkClient::new();
@@ -82,4 +82,46 @@ async fn test_notify_chip_removed() {
     // Then the device no longer contains the chip
     let device = world.client.get(device_id).await.unwrap().unwrap();
     assert_eq!(device.chips.len(), 0);
+}
+
+// Scenario: Update device propagates by variant when no ID is provided
+//   Given a running Device Actor with expectation for Update call
+//   When I create a device and update it using a variant (e.g. Bluetooth) without Chip ID
+//   Then the correct chip (Bluetooth) receives the update
+#[tokio::test]
+async fn test_update_device_propagates_by_variant() {
+    // Given a running Device Actor with expectation for Update call
+    let mut mock_chip_client = MockChipClient::new();
+    mock_chip_client.expect_create().times(1).returning(|_| Ok(()));
+    mock_chip_client
+        .expect_update()
+        // Verify that update is called despite NO ID being provided in the patch
+        .withf(|_, patch| patch.variant.is_some())
+        .times(1)
+        .returning(|_, _| Ok(Chip::default()));
+
+    let mut chip_clients = HashMap::new();
+    chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
+
+    // Use default link mock
+    let mut mock_link_client = link_api::MockLinkClient::new();
+    mock_link_client.expect_action().returning(|_, _| Ok(()));
+    mock_link_client.expect_create().returning(|_| Ok(link_api::LinkId(0)));
+    mock_link_client.expect_notify_chip_added().returning(|_, _| Ok(()));
+
+    let world = World::with_clients(chip_clients, mock_link_client).await;
+
+    // When I create a device
+    let device_name = "variant-test-dev";
+    let device_id = world.when_create_device(device_name).await;
+
+    // And I update it with a generic Bluetooth variant update (NO ID)
+    let mut update = DeviceUpdate::default();
+    update.id = device_id.0;
+
+    let mut chip_update = ChipUpdate::default();
+    chip_update.variant = Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate::default()));
+    update.chips = Some(vec![chip_update]);
+
+    world.when_update_device(device_id, update).await;
 }

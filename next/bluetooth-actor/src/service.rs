@@ -4,13 +4,14 @@ use crate::actions::{BluetoothAction, BluetoothActionResult};
 use crate::bluetooth_actor::BluetoothActor;
 use crate::error::BluetoothError;
 use crate::hci_callbacks::HciCallbacks;
+use crate::internal_chip::InternalChip;
 use crate::utils::ToChipError;
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
-use netsim_model::chip::{BluetoothMode, Chip, ChipCreate, ChipId, ChipUpdate};
+use netsim_model::chip::{
+    BluetoothMode, Chip, ChipCreate, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate,
+};
 use netsim_model::chip_error::ChipError;
-
-use crate::internal_chip::InternalChip;
 
 #[async_trait]
 impl ActorService for BluetoothActor {
@@ -96,37 +97,48 @@ impl ActorService for BluetoothActor {
         Ok(self.entities.get(&id).map(|e| e.chip.clone()))
     }
 
+    // TODO: keep track of the idea that enabled on the Chip should stop HCI/UCI/Wifi
+    // and state/enabled on the Phy of Bluetooth should stop transmission
     async fn handle_update(
         &mut self,
         id: Self::Id,
         update: Self::Update,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
-        if let Some(mut entity) = self.entities.remove(&id) {
-            // Lock chips once and reuse the guard to avoid deadlock.
-            let mut chips = self.chips.lock().unwrap();
-            if let Some(chip) = chips.get_mut(&ChipId(entity.chip.id)) {
-                if let Some(pos) = update.position {
-                    chip.position = pos.clone();
-                    entity.chip.position = pos;
-                }
-                if let Some(orient) = update.orientation {
-                    chip.orientation = orient.clone();
-                    entity.chip.orientation = orient;
-                }
-                if let Some(links) = update.links {
-                    chip.links = links.clone();
-                    entity.chip.links = links;
-                }
-                // TODO: Handle other fields
-            }
+        let mut entity = self
+            .entities
+            .remove(&id)
+            .ok_or_else(|| BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
 
-            chips.insert(id, entity.chip.clone());
-            self.entities.insert(id, entity);
-            Ok(chips.get(&id).unwrap().clone())
-        } else {
-            Err(BluetoothError::Chip(ChipError::ChipNotFound(id)))
+        // 1. Update the entity's chip data first
+        if let Some(pos) = update.position {
+            entity.chip.position = pos;
         }
+        if let Some(orient) = update.orientation {
+            entity.chip.orientation = orient;
+        }
+        if let Some(links) = update.links {
+            entity.chip.links = links;
+        }
+        if let Some(enabled) = update.enabled {
+            entity.chip.enabled = enabled;
+        }
+
+        // 2. Handle Variant logic
+        if let Some(ChipVariantUpdate::Bluetooth(bt_update)) = update.variant {
+            if let Some(ChipVariant::Bluetooth(bt_chip)) = &mut entity.chip.variant {
+                bt_update.classic.apply(&mut bt_chip.classic);
+                bt_update.low_energy.apply(&mut bt_chip.low_energy);
+            }
+        }
+
+        // 3. Sync the global chips map
+        let final_chip = entity.chip.clone();
+        self.chips.lock().unwrap().insert(id, final_chip.clone());
+
+        // 4. Put entity back and return the chip
+        self.entities.insert(id, entity);
+        Ok(final_chip)
     }
 
     async fn handle_delete(
