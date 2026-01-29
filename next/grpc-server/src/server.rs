@@ -2,7 +2,7 @@
 
 use crate::frontend::FrontendClient;
 use crate::packet_streamer::PacketStreamerService;
-use client::{DeviceClient, LinkClient};
+use client::DeviceClient;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
@@ -14,14 +14,14 @@ use std::sync::Arc;
 pub fn start(
     port: u32,
     device_client: DeviceClient,
-    link_client: LinkClient,
+    link_client: client::LinkClient,
     packet_streamer_service: PacketStreamerService,
     version: String,
 ) -> anyhow::Result<(Server, u16)> {
     let env = Arc::new(Environment::new(1));
     let backend_service = create_packet_streamer(packet_streamer_service);
     let frontend_service =
-        create_frontend_service(FrontendClient::new(device_client, link_client, version));
+        create_frontend_service(FrontendClient::new(device_client, Arc::new(link_client), version));
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
     let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota).reuse_port(false);
     let server_builder = ServerBuilder::new(env);

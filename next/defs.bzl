@@ -14,6 +14,7 @@ def netsim_rust_library(
         srcs,
         deps = [],
         select_deps = [],
+        test_deps = [],
         crate_features = [],
         # Feature Flags (Default to True for safety)
         enable_clippy = True,
@@ -37,6 +38,7 @@ def netsim_rust_library(
         srcs: The source files.
         deps: The dependencies.
         select_deps: The part of deps that uses select()
+        test_deps: Dependencies for the unit test target.
         crate_features: the crate features
         enable_clippy: Whether to enable clippy checks.
 
@@ -86,7 +88,7 @@ def netsim_rust_library(
             name = "test",
             crate = ":testing",
             rustc_flags = test_flags,
-            deps = testing_deps + select_deps,
+            deps = testing_deps + select_deps + test_deps,
             testonly = True,
         )
 
