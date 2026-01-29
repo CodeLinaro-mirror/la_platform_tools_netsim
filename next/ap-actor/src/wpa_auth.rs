@@ -42,8 +42,7 @@ const MIC_END: usize = MIC_OFFSET + MIC_LEN; // 97
 
 impl WpaAuthenticator {
     pub fn new(bssid: MacAddr, sta_addr: MacAddr, psk: &[u8], rsn_ie: &[u8]) -> Self {
-        // Assume PSK is PMK for now (or derived externally)
-        // Usually PMK = PBKDF2(passphrase, ssid, 4096, 32)
+        // TODO: Implement PBKDF2 for PMK derivation. Treating PSK as PMK for now.
         Self {
             bssid,
             sta_addr,
@@ -74,6 +73,15 @@ impl WpaAuthenticator {
             0,                        // Data Len 0
             &[],
         )
+    }
+
+    pub fn remove_session(&mut self, sta_addr: &MacAddr) {
+        if self.sta_addr == *sta_addr {
+            self.state = WpaState::Idle;
+            self.ptk.clear();
+            self.tk.clear();
+            self.replay_counter = 0;
+        }
     }
 }
 

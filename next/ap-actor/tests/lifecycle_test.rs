@@ -55,6 +55,16 @@ async fn test_create_duplicate_bssid() {
         hw_mode: "g".to_string(),
         wpa_passphrase: None,
         beacon_interval: 100,
+        country_code: None,
+        dtim_period: 2,
+        hidden_ssid: false,
+        sae: false,
+        wmm_enabled: true,
+        enterprise_enabled: false,
+        mac_acl_mode: 0,
+        mac_acl_list: vec![],
+        ftm_responder_enabled: true,
+        position: ap_actor::Position::default(),
     };
 
     // Create AP2 (Same BSSID)
@@ -65,15 +75,26 @@ async fn test_create_duplicate_bssid() {
         hw_mode: "g".to_string(),
         wpa_passphrase: None,
         beacon_interval: 100,
+        country_code: None,
+        dtim_period: 2,
+        hidden_ssid: false,
+        sae: false,
+        wmm_enabled: true,
+        enterprise_enabled: false,
+        mac_acl_mode: 0,
+        mac_acl_list: vec![],
+        ftm_responder_enabled: true,
+        position: ap_actor::Position::default(),
     };
 
     // Direct client usage as ApWorld helpers might mask IDs or return types
-    let id1 = world.client.create_ap(config1).await;
-    let id2 = world.client.create_ap(config2).await;
+    let id1 = 1001;
+    let id2 = 1002;
+    let res1 = world.client.create_ap(id1, config1).await;
+    let res2 = world.client.create_ap(id2, config2).await;
 
-    assert!(id1.is_ok(), "First AP creation failed");
-    assert!(id2.is_ok(), "Second AP creation with duplicate BSSID failed");
-    assert_ne!(id1.unwrap(), id2.unwrap(), "IDs should be distinct");
+    assert!(res1.is_ok(), "First AP creation failed");
+    assert!(res2.is_ok(), "Second AP creation with duplicate BSSID failed");
 }
 
 // Scenario: Delete Non-Existent AP
@@ -107,8 +128,11 @@ async fn test_ap_lifecycle_crud() {
     assert_eq!(ap_state.config.ssid, "CrudAP");
 
     // 3. Update
-    let updated_state =
-        world.client.update_ap(id, Some("UpdatedAP".to_string())).await.expect("Update failed");
+    let updated_state = world
+        .client
+        .update_ap(id, Some("UpdatedAP".to_string()), None)
+        .await
+        .expect("Update failed");
     assert_eq!(updated_state.config.ssid, "UpdatedAP");
 
     // Verify Update with Get

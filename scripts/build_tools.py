@@ -142,10 +142,16 @@ def main():
       choices=ALL_PACKAGES,
       help="The name of the crate(s) to run tests for.",
   )
+  # TODO: Remove --bazel argument in the future. It is now the default.
   parser.add_argument(
       "--bazel",
       action="store_true",
-      help="Buildbot only. Whether to use Bazel to build.",
+      help="Deprecated: Bazel is now the default build system.",
+  )
+  parser.add_argument(
+      "--cmake",
+      action="store_true",
+      help="Build with CMake instead of Bazel",
   )
   parser.add_argument(
       "--bazel_targets",
@@ -158,6 +164,11 @@ def main():
       "--hermetic",
       action="store_true",
       help="Whether to run a hermetic build.",
+  )
+  parser.add_argument(
+      "--clean",
+      action="store_true",
+      help="Clean the build directory before building.",
   )
 
   args = parser.parse_args()
@@ -175,7 +186,7 @@ def main():
 
   # Set Environment Variables
   os.environ["GIT_DISCOVERY_ACROSS_FILESYSTEM"] = "1"
-  if not args.buildbot:
+  if not args.buildbot and args.cmake:
     # Able to config C++ file in vscode.
     os.environ["CMAKE_EXPORT_COMPILE_COMMANDS"] = "1"
 
@@ -199,10 +210,6 @@ def main():
   # Turn on sccache?
   # if args.buildbot and cfg.sccache:
   #    launcher.append(f"-DOPTION_CCACHE=${cfg.sccache}")
-
-  # Bazel
-  tasks.get("Bazel").run()
-  tasks.get("BazelInstall").run()
 
   # Configure
   tasks.get("Configure").run()

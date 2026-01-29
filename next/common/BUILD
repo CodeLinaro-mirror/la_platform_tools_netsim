@@ -9,9 +9,6 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "common",
     edition = "2021",
-    enable_clippy = False,
-    enable_doc_test = False,
-    strict_warnings = False,
     deps = [
         "@anyhow",
         "@chrono",

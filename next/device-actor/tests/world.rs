@@ -2,7 +2,10 @@ use device_actor::{DeviceActor, DeviceClient};
 use device_api::api::{DeviceChipCreate, DeviceCreate};
 use device_api::{DeviceConfig, DeviceId};
 use link_api::MockLinkClient;
-use netsim_model::chip::{ChipClient, MockChipClient, NetworkKind};
+use netsim_model::chip::{
+    BluetoothUpdate, ChipClient, ChipUpdate, ChipVariantUpdate, MockChipClient, NetworkKind,
+    RadioUpdate,
+};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -110,29 +113,11 @@ impl World {
 
     /// BDD Step: When I add a chip (which creates a device).
     pub async fn when_add_chip(&self, device_guid: &str, chip_name: &str) -> DeviceId {
-        let params = device_api::DeviceAddChip {
-            device_guid: device_guid.to_string(),
-            packet_stream: None,
-            packet_sink: None,
-            device_config: DeviceConfig::new(
-                "test-dev".to_string(),
-                true,
-                Default::default(),
-                Default::default(),
-            ),
-            chip_config: netsim_model::chip::ChipConfig {
-                name: chip_name.to_string(),
-                manufacturer: "Netsim".to_string(),
-                product_name: "NetsimBeacon".to_string(),
-                network_params: netsim_model::chip::NetworkParams::Bluetooth(
-                    netsim_model::chip::BluetoothCreate {
-                        address: "00:00:00:00:00:00".to_string(),
-                        bt_properties: Default::default(),
-                        mode: netsim_model::chip::BluetoothMode::Device(Default::default()),
-                    },
-                ),
-            },
-        };
+        let params = Self::create_device_add_chip_params(
+            device_guid.to_string(),
+            chip_name.to_string(),
+            "00:00:00:00:00:00".to_string(),
+        );
         self.client.add_chip(params).await.unwrap()
     }
 
@@ -143,6 +128,14 @@ impl World {
         update: device_api::api::DeviceUpdate,
     ) {
         self.client.update(device_id, update).await.unwrap();
+    }
+
+    /// BDD Step: When I update the device with a specific chip update.
+    pub async fn when_update_device_chip(&self, device_id: DeviceId, chip_update: ChipUpdate) {
+        let mut update = device_api::api::DeviceUpdate::default();
+        update.id = device_id.0;
+        update.chips = Some(vec![chip_update]);
+        self.when_update_device(device_id, update).await;
     }
 
     /// BDD Step: When I notify that a chip was removed.
@@ -159,8 +152,82 @@ impl World {
         self.client.delete(id).await.unwrap();
     }
 
+    /// BDD Step: When I add two chips with the same device GUID concurrently
+    pub async fn when_concurrently_add_chips(
+        &self,
+        device_guid: &str,
+        chip_name_1: &str,
+        chip_name_2: &str,
+    ) -> (DeviceId, DeviceId) {
+        let client1 = self.client.clone();
+        let client2 = self.client.clone();
+        let guid1 = device_guid.to_string();
+        let guid2 = device_guid.to_string();
+        let name1 = chip_name_1.to_string();
+        let name2 = chip_name_2.to_string();
+
+        let t1 = tokio::spawn(async move {
+            let params =
+                Self::create_device_add_chip_params(guid1, name1, "00:00:00:00:00:01".to_string());
+            client1.add_chip(params).await.unwrap()
+        });
+
+        let t2 = tokio::spawn(async move {
+            let params =
+                Self::create_device_add_chip_params(guid2, name2, "00:00:00:00:00:02".to_string());
+            client2.add_chip(params).await.unwrap()
+        });
+
+        let (res1, res2) = tokio::join!(t1, t2);
+        (res1.unwrap(), res2.unwrap())
+    }
+
     /// Checks if the actor task has finished (e.g. due to shutdown).
     pub fn is_actor_finished(&self) -> bool {
         self._actor_task.is_finished()
+    }
+
+    /// Helper to create DeviceAddChip params with defaults.
+    pub fn create_device_add_chip_params(
+        device_guid: String,
+        chip_name: String,
+        chip_address: String,
+    ) -> device_api::DeviceAddChip {
+        device_api::DeviceAddChip {
+            device_guid,
+            packet_stream: None,
+            packet_sink: None,
+            device_config: DeviceConfig::new(
+                "test-dev".to_string(),
+                true,
+                Default::default(),
+                Default::default(),
+            ),
+            chip_config: netsim_model::chip::ChipConfig {
+                name: chip_name,
+                manufacturer: "Netsim".to_string(),
+                product_name: "NetsimBeacon".to_string(),
+                network_params: netsim_model::chip::NetworkParams::Bluetooth(
+                    netsim_model::chip::BluetoothCreate {
+                        address: chip_address,
+                        bt_properties: Default::default(),
+                        mode: netsim_model::chip::BluetoothMode::Device(Default::default()),
+                    },
+                ),
+            },
+        }
+    }
+    /// Creates a Bluetooth ChipUpdate with the specified Low Energy and Classic radio states.
+    pub fn create_bluetooth_chip_update(
+        le_state: Option<bool>,
+        classic_state: Option<bool>,
+    ) -> ChipUpdate {
+        ChipUpdate {
+            variant: Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate {
+                low_energy: RadioUpdate { state: le_state },
+                classic: RadioUpdate { state: classic_state },
+            })),
+            ..Default::default()
+        }
     }
 }

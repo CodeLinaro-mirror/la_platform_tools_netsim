@@ -13,9 +13,9 @@ use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info, warn};
 use netsim_model::chip::{
-    BluetoothCreate, BluetoothMode, CellCreate, ChipConfig, DeviceParams, NetworkKind,
-    NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, UwbCreate,
-    WifiCreate,
+    ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, DeviceParams,
+    NetworkKind, NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
+    UwbCreate, WifiCreate,
 };
 use netsim_model::initial_info::{ChipInfo, ChipKind};
 use packet_stream::transport::traits::{PacketSink, PacketStream};
@@ -106,6 +106,7 @@ async fn handle_new_connection(
         }),
         ChipKind::UWB => NetworkParams::Uwb(UwbCreate::default()),
         ChipKind::WIFI => NetworkParams::Wifi(WifiCreate::default()),
+        ChipKind::AP => NetworkParams::Ap(ApCreate::default()),
         ChipKind::CELL => NetworkParams::Cell(CellCreate::default()),
         _ => {
             error!("Unsupported chip kind: {:?}", chip.kind);
@@ -150,6 +151,7 @@ async fn handle_new_connection(
 }
 
 #[cfg(unix)]
+#[allow(dead_code)]
 async fn setup_uds_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
@@ -333,7 +335,7 @@ impl NetsimDaemon {
     async fn initialize_primary_daemon(
         ini_guard: IniFileGuard,
         args: Args,
-        runtime_dir: PathBuf,
+        _runtime_dir: PathBuf,
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
         let ini_path = ini_guard.path();
@@ -350,9 +352,6 @@ impl NetsimDaemon {
         // Initialize listeners (UDS, gRPC).
         let mut listener_addresses = HashMap::new();
         let mut streams = Streams::new();
-
-        #[cfg(unix)]
-        setup_uds_listener(&mut streams, &mut listener_addresses, &runtime_dir).await?;
 
         // Setup Link Server
         let (link_runner, link_client) = link_actor::new();
@@ -401,12 +400,26 @@ impl NetsimDaemon {
         let bt_actor_state =
             bluetooth_actor::BluetoothActor::new(device_client.clone(), bt_client.clone());
 
-        // Setup Wifi Server
-        let (wifi_server, wifi_client) = wifi::Server::new(device_client.clone());
+        // Setup Wifi Server (and dependencies: AP)
+        // Setup Slirp Actor
+        let (slirp_runner, slirp_client) = slirp_actor::new();
+        let slirp_actor_state = slirp_actor::SlirpActor::new(Default::default());
+
+        // Setup AP Actor
+        let (ap_runner, ap_client) = ap_actor::new();
+        let ap_actor_state = ap_actor::ApActor::new();
+
+        // Setup Wifi Actor
+        let (wifi_runner, wifi_client) = wifi_actor::new();
+        let wifi_actor_state = wifi_actor::WifiActor::new(
+            Some(Arc::new(ap_client.clone())),
+            Some(slirp_client),
+            device_client.clone(),
+        );
 
         // Setup Uwb Server
-        let (uwb_runner, uwb_client) = uwb::new();
-        let uwb_actor = uwb::UwbActor::new(device_client.clone());
+        let (uwb_runner, uwb_client) = uwb_actor::new();
+        let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
         // TODO: Replace with real modem network.
@@ -415,12 +428,12 @@ impl NetsimDaemon {
         let cell_server = cell::Server::new(device_client.clone(), cell_controller);
 
         // Prepare chip clients map for DeviceServer
-        let mut chip_clients: HashMap<NetworkKind, Box<dyn netsim_model::chip::ChipClient>> =
-            HashMap::new();
+        let mut chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();
         chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client.clone()));
         chip_clients.insert(NetworkKind::Wifi, Box::new(wifi_client.clone()));
         chip_clients.insert(NetworkKind::Uwb, Box::new(uwb_client.clone()));
         chip_clients.insert(NetworkKind::Cell, Box::new(cell_client.clone()));
+        chip_clients.insert(NetworkKind::Ap, Box::new(ap_client.clone()));
 
         // Setup Link Actor State
         // Create a new map for LinkActor.
@@ -441,29 +454,32 @@ impl NetsimDaemon {
         // Spawn server tasks
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_runner.run(bt_actor_state));
-        info!("Bluetooth server started");
-        join_set.spawn(wifi_server.run());
-        info!("Wifi server started");
+        join_set.spawn(wifi_runner.run(wifi_actor_state));
+        join_set.spawn(ap_runner.run(ap_actor_state));
+        join_set.spawn(slirp_runner.run(slirp_actor_state));
         join_set.spawn(uwb_runner.run(uwb_actor));
-        info!("Uwb server started");
         join_set.spawn(cell_runner.run(cell_server));
-        info!("Cell server started");
         join_set.spawn(device_runner.run(device_actor_state));
-        info!("Device server started");
         join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
-        info!("Capture server started");
+        join_set.spawn(link_runner.run(link_actor_state));
+
+        // Create Default AP
+        device_client
+            .create_device(*Box::new(device_api::DeviceCreate::default_ap()))
+            .await
+            .expect("Failed to create default AP");
+
         if args.pcap {
             capture_client.set_default_capture(true).await.expect("Failed to set default capture");
         }
-        join_set.spawn(link_runner.run(link_actor_state));
-        info!("Link server started");
+
         Ok(StartUpMode::Owner(
             NetsimDaemon {
-                join_set,
-                streams,
                 device_client,
                 capture_client,
                 next_chip_id,
+                join_set,
+                streams,
                 listener_addresses,
                 args,
                 _grpc_server: Some(grpc_server),

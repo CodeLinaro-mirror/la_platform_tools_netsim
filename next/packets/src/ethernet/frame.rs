@@ -7,8 +7,10 @@
 
 use crate::utils::general::ParseResult;
 use core::fmt;
-use serde::de::{self, Deserialize, Deserializer};
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::{
+    de::{self, Deserialize, Deserializer, Visitor},
+    ser::{Serialize, SerializeStruct, Serializer},
+};
 use std::str::FromStr;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
@@ -126,8 +128,24 @@ impl<'de> Deserialize<'de> for MacAddr {
     where
         D: Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
-        MacAddr::from_str(&s).map_err(de::Error::custom)
+        struct MacAddrVisitor;
+
+        impl<'de> Visitor<'de> for MacAddrVisitor {
+            type Value = MacAddr;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a MAC address string")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                MacAddr::from_str(value).map_err(E::custom)
+            }
+        }
+
+        deserializer.deserialize_str(MacAddrVisitor)
     }
 }
 

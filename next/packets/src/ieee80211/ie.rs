@@ -10,6 +10,7 @@ pub mod tags {
     pub const SUPPORTED_RATES: u8 = 1;
     pub const DS_PARAMETER_SET: u8 = 3;
     pub const TRAFFIC_INDICATION_MAP: u8 = 5;
+    pub const TIM: u8 = 5;
     pub const COUNTRY: u8 = 7;
     pub const IBSS_PARAMETER_SET: u8 = 6;
     pub const ERP_INFORMATION: u8 = 42;
@@ -32,6 +33,39 @@ pub mod tags {
     pub const RSN_VER: u16 = 1;
     pub const CIPHER_CCMP: &[u8] = &[0x00, 0x0F, 0xAC, 0x04];
     pub const AKM_PSK: &[u8] = &[0x00, 0x0F, 0xAC, 0x02];
+
+    pub const EXTENDED_CAPABILITIES: u8 = 127;
+    // Bit 70 is FTM Responder.
+    // This requires at least 9 bytes (70 / 8 = 8.75).
+    // Byte 0 (Bits 0-7), Byte 8 (Bits 64-71).
+    // FTM Responder is Bit 6 in Byte 8 (0-indexed byte).
+    // 8 * 8 = 64. 70 - 64 = 6. 1 << 6 = 0x40.
+    pub const EXTENDED_CAPABILITIES_FTM_RESPONDER_BIT: u8 = 70;
+
+    // Default Extended Caps (9 bytes) with just FTM Responder enabled for now (if requested)
+    // or a helper to build it.
+}
+
+/// Helper to check if a specific bit is set in Extended Capabilities
+pub fn is_ext_cap_set(body: &[u8], bit: u8) -> bool {
+    let byte_idx = (bit / 8) as usize;
+    let bit_idx = bit % 8;
+    if byte_idx < body.len() {
+        (body[byte_idx] & (1 << bit_idx)) != 0
+    } else {
+        false
+    }
+}
+
+/// Helper to set a specific bit in Extended Capabilities
+/// Resizes vec if needed.
+pub fn set_ext_cap(body: &mut Vec<u8>, bit: u8) {
+    let byte_idx = (bit / 8) as usize;
+    let bit_idx = bit % 8;
+    if byte_idx >= body.len() {
+        body.resize(byte_idx + 1, 0);
+    }
+    body[byte_idx] |= 1 << bit_idx;
 }
 
 /// Represents a parsed Information Element.

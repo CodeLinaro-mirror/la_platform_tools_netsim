@@ -143,11 +143,6 @@ def is_presubmit(build_id):
   return build_id.startswith("P")
 
 
-def is_bazel_build(args):
-  """Returns true if this is a bazel build."""
-  return args.bazel or "bazel" in [task.lower() for task in args.task or []]
-
-
 def get_host_and_ip():
   """Try to get my hostname and ip address."""
   st = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -309,3 +304,60 @@ def _log_proc(proc, log_prefix):
     t.start()
 
   return q
+
+
+def get_bazel_path():
+  """Returns the path to the bazel binary."""
+  os_name = platform.system().lower()
+  system = f"{os_name}-x86_64"
+  bazel_binary = "bazel.exe" if os_name == "windows" else "bazel"
+  return AOSP_ROOT / "prebuilts" / "bazel" / system / bazel_binary
+
+
+def run_gcloud_auth(env):
+  """Authenticates with gcloud for hermetic builds."""
+  # This is required for hermetic builds to access GCS for dependencies.
+  # Check if we already have credentials to avoid browser popup
+  if (
+      run(
+          [
+              "gcloud",
+              "auth",
+              "application-default",
+              "print-access-token",
+          ],
+          env,
+          "gcloud auth check",
+          AOSP_ROOT,
+          throw_on_failure=False,
+          log_output=False,
+      )
+      == 0
+  ):
+    print("Gcloud already authenticated, skipping login")
+  else:
+    run(
+        [
+            "gcloud",
+            "auth",
+            "application-default",
+            "login",
+            "--project=emulator-builds",
+        ],
+        env,
+        "gcloud auth",
+        AOSP_ROOT,
+    )
+  # This is required to access the quota project for GCS dependencies.
+  run(
+      [
+          "gcloud",
+          "auth",
+          "application-default",
+          "set-quota-project",
+          "emulator-builds",
+      ],
+      env,
+      "gcloud auth",
+      AOSP_ROOT,
+  )

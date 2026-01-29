@@ -98,4 +98,5 @@ pub enum ChipKind {
     WIFI,
     UWB,
     CELL,
+    AP,
 }

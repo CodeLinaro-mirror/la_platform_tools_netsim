@@ -52,3 +52,39 @@ async fn test_list_devices_populated() {
         assert!(response.devices.iter().any(|d| d.id == id.0));
     }
 }
+
+// Scenario: Create a device with a single Bluetooth chip
+//   Given a running Device Actor
+//   When I create a device with a Bluetooth chip
+//   And I list devices
+//   Then the device has exactly one chip
+#[tokio::test]
+async fn test_create_single_bluetooth_chip() {
+    // Given a running Device Actor
+    let world = World::new().await;
+
+    // When I create a device with a Bluetooth chip
+    // Using when_add_chip with a unique GUID to create a new device
+    let _id = world.when_add_chip("test-guid-1", "bt-chip").await;
+
+    // And I list devices
+    let response = world.client.list().await.unwrap();
+
+    // Then the device has exactly one chip
+    assert_eq!(response.devices.len(), 1);
+    let device = &response.devices[0];
+    assert_eq!(device.chips.len(), 1);
+
+    // Check that the chip kind is Bluetooth
+    let chip = &device.chips[0];
+    assert_eq!(chip.kind, netsim_model::chip::ChipKind::BLUETOOTH);
+
+    // Verify that the variant contains both BLE and Classic radios
+    assert_eq!(
+        chip.variant,
+        Some(netsim_model::chip::ChipVariant::Bluetooth(netsim_model::chip::Bluetooth {
+            low_energy: Default::default(),
+            classic: Default::default(),
+        }))
+    );
+}
