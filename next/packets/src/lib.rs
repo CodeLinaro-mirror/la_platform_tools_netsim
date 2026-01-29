@@ -67,18 +67,20 @@
 //! *   **High-Level Parsing**:
 //!     *   `packet::parse`: The main entry point for **Ethernet** frames. It parses the Ethernet header and recursively parses IP and Transport layers.
 //!     *   `ieee80211::Ieee80211::decode`: The entry point for **IEEE 802.11** frames.
-//!     *   `netlink::stream::NetlinkStream::decode`: The entry point for **Netlink** messages (often found in `NETLINK_ROUTE` or `NETLINK_GENERIC` sockets).
+//!     *   `netlink::stream::NetlinkStream::new`: The entry point for **Netlink** messages (often found in `NETLINK_ROUTE` or `NETLINK_GENERIC` sockets).
 //!
 //! ## Examples
 //!
 //! ### Parsing an Ethernet Packet
 //!
 //! ```rust
+//! use netsim_packets::ethernet::EthernetPacket;
 //! use netsim_packets::packet;
 //!
 //! let bytes = [ /* raw packet bytes */ ];
 //! if let Some(packet) = packet::parse(&bytes) {
-//!     println!("Ethernet Destination: {}", packet.ethernet.destination());
+//!     let (EthernetPacket::Untagged { frame, .. } | EthernetPacket::Vlan { frame, .. }) = packet.ethernet;
+//!     println!("Ethernet Destination: {}", frame.dst_addr);
 //!     if let Some(ip) = &packet.ip {
 //!         // Handle IP layer
 //!     }
@@ -91,11 +93,12 @@
 //! use netsim_packets::netlink::stream::NetlinkStream;
 //!
 //! let bytes = [ /* raw netlink bytes */ ];
-//! if let Ok(stream) = NetlinkStream::decode(&bytes) {
-//!     for msg in stream.messages {
-//!         println!("Netlink Message Type: {}", msg.header.message_type);
-//!         // Handle attributes...
+//! for res in NetlinkStream::new(&bytes) {
+//!     if let Ok(msg) = res {
+//!         let ty = msg.0.nlmsg_type;
+//!         println!("Netlink Message Type: {ty}");
 //!     }
+//!     // Handle attributes...
 //! }
 //! ```
 //!
