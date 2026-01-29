@@ -20,7 +20,7 @@ import platform
 import zipfile
 
 from tasks.task import Task
-from utils import AOSP_ROOT, is_bazel_build, platform_to_cmake_target
+from utils import AOSP_ROOT, platform_to_cmake_target
 
 
 class ZipArtifactTask(Task):
@@ -34,7 +34,6 @@ class ZipArtifactTask(Task):
     else:
       self.target = platform.system().lower()
     self.dist = Path(args.dist_dir).absolute()
-    self.bazel = is_bazel_build(args)
 
   def do_run(self):
     # Make sure the dist directory exists.
