@@ -1,11 +1,13 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::ResourceActor;
-use ap_actor::{ApActor, ApClient, ApClientTrait, ApConfig};
+use ap_actor::shared::SharedKeyStore;
+use ap_actor::{ApActor, ApClient, ApConfig};
+
 use netsim_packets::ethernet::MacAddr;
 use netsim_packets::ieee80211::{
-    AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader, FrameControl, Ieee80211,
-    MacHeader3Addr, SequenceControl,
+    management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
+    FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
 };
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -23,6 +25,7 @@ pub struct ApWorld {
     pub rx_from_ap: Option<mpsc::UnboundedReceiver<bytes::Bytes>>,
     pub ap_id: Option<u32>,
     pub actor_handle: Option<tokio::task::JoinHandle<()>>,
+    pub next_ap_id: u32,
 }
 
 impl ApWorld {
@@ -34,22 +37,33 @@ impl ApWorld {
 
         let handle = tokio::spawn(runner.run(ap_actor_impl));
 
-        Self { client, tx_to_ap: None, rx_from_ap: None, ap_id: None, actor_handle: Some(handle) }
+        Self {
+            client,
+            tx_to_ap: None,
+            rx_from_ap: None,
+            ap_id: None,
+            actor_handle: Some(handle),
+            next_ap_id: 1001,
+        }
     }
 
     pub async fn given_a_registered_ap_with_config(&mut self, config: ApConfig) {
         log::info!("Given a registered AP '{}'", config.ssid);
-        let id = self.client.create_ap(config).await.expect("Failed to create AP");
+        let id = self.next_ap_id;
+        self.next_ap_id += 1;
+        self.client.create_ap(id, config).await.expect("Failed to create AP");
         self.ap_id = Some(id);
+
         if self.tx_to_ap.is_none() {
-            let (tx_to_ap, rx_for_ap) = mpsc::unbounded_channel();
+            let (tx_to_ap, rx_for_ap) = mpsc::unbounded_channel::<bytes::Bytes>();
             let (tx_from_ap, rx_from_ap) = mpsc::unbounded_channel();
+
             let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx_for_ap));
             self.client
                 .register(
                     stream,
                     tx_from_ap,
-                    std::sync::Arc::new(ap_actor::shared::SharedKeyStore::new()),
+                    std::sync::Arc::new(SharedKeyStore::new()),
                     Duration::from_millis(100),
                 )
                 .await
@@ -210,9 +224,7 @@ impl ApWorld {
             match tokio::time::timeout(Duration::from_millis(200), rx.recv()).await {
                 Ok(Some(msg)) => {
                     if let Ok(frame) = Ieee80211::decode(&msg) {
-                        if frame.stype()
-                            == netsim_packets::ieee80211::management_subtype::ASSOCIATION_RESPONSE
-                        {
+                        if frame.stype() == management_subtype::ASSOCIATION_RESPONSE {
                             if frame.get_addr1() == dst_mac {
                                 // DA == Station
                                 return; // Success
@@ -264,5 +276,26 @@ impl ApWorld {
                 Err(_) => panic!("Actor did not shut down in time"),
             }
         }
+    }
+    pub async fn recv_frame<F>(&mut self, filter: F) -> Vec<u8>
+    where
+        F: Fn(&Ieee80211, &[u8]) -> bool,
+    {
+        let rx = self.rx_from_ap.as_mut().expect("AP not registered");
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_secs(2) {
+            let msg = match tokio::time::timeout(Duration::from_millis(200), rx.recv()).await {
+                Ok(Some(msg)) => msg,
+                _ => continue,
+            };
+
+            if let Ok(frame) = Ieee80211::decode(&msg) {
+                // Let the filter decide whether to accept the frame (including Beacons)
+                if filter(&frame, &msg) {
+                    return msg.to_vec();
+                }
+            }
+        }
+        panic!("Timed out waiting for frame");
     }
 }

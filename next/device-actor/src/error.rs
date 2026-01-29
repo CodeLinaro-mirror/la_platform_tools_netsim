@@ -16,6 +16,8 @@ pub enum DeviceError {
     DeviceNotFound(String),
     #[error("Actor communication error: {0}")]
     ActorCommunicationError(String),
+    #[error("Chip kind not supported: {0}")]
+    ChipKindNotSupported(String),
 }
 
 impl From<String> for DeviceError {

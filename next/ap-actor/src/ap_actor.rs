@@ -3,6 +3,8 @@
 use crate::ieee802_11::Ieee80211Manager;
 use crate::shared;
 use crate::wpa_auth;
+use netsim_model::chip::{ApCreate, ApUpdate as ModelApUpdate};
+use netsim_model::device::Position;
 use netsim_packets::ethernet::MacAddr;
 use serde::{Deserialize, Serialize};
 
@@ -42,7 +44,7 @@ pub struct ApConfig {
     #[serde(default = "default_ftm_responder_enabled")]
     pub ftm_responder_enabled: bool,
     #[serde(default)]
-    pub position: netsim_model::device::Position,
+    pub position: Position,
 }
 
 fn default_ftm_responder_enabled() -> bool {
@@ -54,17 +56,99 @@ fn default_wmm_enabled() -> bool {
 }
 
 fn default_beacon_interval() -> u16 {
-    100
+    200
 }
 
 fn default_dtim_period() -> u8 {
     2
 }
 
+impl Default for ApConfig {
+    fn default() -> Self {
+        Self {
+            ssid: "AndroidWifi".to_string(),
+            bssid: MacAddr::from([0; 6]),
+            channel: 6,
+            hw_mode: "g".to_string(),
+            wpa_passphrase: None,
+            beacon_interval: default_beacon_interval(),
+            country_code: Some("US".to_string()),
+            dtim_period: default_dtim_period(),
+            hidden_ssid: false,
+            sae: false,
+            wmm_enabled: default_wmm_enabled(),
+            enterprise_enabled: false,
+            mac_acl_mode: 0,
+            mac_acl_list: Vec::new(),
+            ftm_responder_enabled: default_ftm_responder_enabled(),
+            position: Default::default(),
+        }
+    }
+}
+
+impl From<ApConfig> for ApCreate {
+    fn from(val: ApConfig) -> Self {
+        Self {
+            ssid: val.ssid,
+            bssid: val.bssid.to_string(),
+            channel: val.channel,
+            hw_mode: val.hw_mode,
+            wpa_passphrase: val.wpa_passphrase,
+            beacon_interval: val.beacon_interval,
+            country_code: val.country_code,
+            dtim_period: val.dtim_period,
+            hidden_ssid: val.hidden_ssid,
+            sae: val.sae,
+            wmm_enabled: val.wmm_enabled,
+            enterprise_enabled: val.enterprise_enabled,
+            mac_acl_mode: val.mac_acl_mode,
+            mac_acl_list: val.mac_acl_list.into_iter().map(|s| s.to_string()).collect(),
+            ftm_responder_enabled: val.ftm_responder_enabled,
+        }
+    }
+}
+
+impl TryFrom<ApCreate> for ApConfig {
+    type Error = String;
+
+    fn try_from(val: ApCreate) -> Result<Self, Self::Error> {
+        Ok(Self {
+            ssid: val.ssid,
+            bssid: val.bssid.parse().map_err(|e| format!("Invalid BSSID: {}", e))?,
+            channel: val.channel,
+            hw_mode: val.hw_mode,
+            wpa_passphrase: val.wpa_passphrase,
+            beacon_interval: val.beacon_interval,
+            country_code: val.country_code,
+            dtim_period: val.dtim_period,
+            hidden_ssid: val.hidden_ssid,
+            sae: val.sae,
+            wmm_enabled: val.wmm_enabled,
+            enterprise_enabled: val.enterprise_enabled,
+            mac_acl_mode: val.mac_acl_mode,
+            mac_acl_list: val
+                .mac_acl_list
+                .into_iter()
+                .map(|s| s.parse().map_err(|e| format!("Invalid MAC in ACL: {}", e)))
+                .collect::<Result<Vec<_>, _>>()?,
+            ftm_responder_enabled: val.ftm_responder_enabled,
+            position: Default::default(),
+        })
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ApUpdate {
     pub ssid: Option<String>,
-    pub position: Option<netsim_model::device::Position>,
+    pub channel: Option<u8>,
+    #[serde(default)]
+    pub force_disconnect: Vec<String>,
+}
+
+impl From<ModelApUpdate> for ApUpdate {
+    fn from(val: ModelApUpdate) -> Self {
+        Self { ssid: val.ssid, channel: val.channel, force_disconnect: val.force_disconnect }
+    }
 }
 
 pub enum ApReq {
@@ -96,7 +180,6 @@ pub enum ApResponse {
 pub struct ApActor {
     pub(crate) sink: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
     pub(crate) aps: HashMap<ApId, ApState>,
-    pub(crate) next_ap_id: ApId,
     pub(crate) manager: Ieee80211Manager,
     pub shared_keys: std::sync::Arc<shared::SharedKeyStore>,
     pub beacon_interval: Option<u16>, // In TUs (1024us)
@@ -109,6 +192,8 @@ pub struct ApState {
     pub wpa: Option<wpa_auth::WpaAuthenticator>,
     pub sae_sessions: HashMap<MacAddr, crate::sae::SaeStateMachine>,
     pub eap_sessions: HashMap<MacAddr, crate::eap_auth::EapAuthenticator>,
+    pub associations: std::collections::HashSet<MacAddr>,
+    pub enabled: bool,
 }
 
 impl ApActor {
@@ -116,7 +201,6 @@ impl ApActor {
         Self {
             sink: None,
             aps: HashMap::new(),
-            next_ap_id: 1,
             manager: Ieee80211Manager::new(),
             shared_keys: std::sync::Arc::new(shared::SharedKeyStore::new()),
             beacon_interval: None,
@@ -126,6 +210,13 @@ impl ApActor {
 
 impl ApState {
     pub fn new(config: ApConfig) -> Self {
-        Self { config, wpa: None, sae_sessions: HashMap::new(), eap_sessions: HashMap::new() }
+        Self {
+            config,
+            wpa: None,
+            sae_sessions: HashMap::new(),
+            eap_sessions: HashMap::new(),
+            associations: std::collections::HashSet::new(),
+            enabled: true,
+        }
     }
 }

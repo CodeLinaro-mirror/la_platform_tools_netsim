@@ -16,6 +16,7 @@ pub struct DeviceActor {
     pub start_time: std::time::Instant,
     pub last_empty_time: Option<std::time::Instant>,
     pub has_seen_device: bool,
+    pub guid_to_id: HashMap<String, device_api::DeviceId>,
 }
 
 impl DeviceActor {
@@ -39,6 +40,7 @@ impl DeviceActor {
             start_time: std::time::Instant::now(),
             last_empty_time: Some(std::time::Instant::now()),
             has_seen_device: false,
+            guid_to_id: HashMap::new(),
         }
     }
 }

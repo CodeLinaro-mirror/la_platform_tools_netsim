@@ -2,7 +2,10 @@
 
 use crate::wifi_actor::WifiActor;
 use actor_framework::ResourceClient;
+use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate, ChipVariantUpdate};
+use netsim_model::chip_error::ChipError;
 use netsim_model::client_error::ClientError;
+use netsim_model::stats::NetsimRadioStats;
 
 #[derive(Clone, Debug)]
 pub struct WifiClient(ResourceClient<WifiActor>);
@@ -17,12 +20,7 @@ impl WifiClient {
         assert_send_sync::<Self>();
     }
 
-    pub async fn set_rf_state(
-        &self,
-        id: netsim_model::chip::ChipId,
-        enabled: bool,
-    ) -> Result<(), ClientError> {
-        use netsim_model::chip::{ChipUpdate, ChipVariantUpdate};
+    pub async fn set_rf_state(&self, id: ChipId, enabled: bool) -> Result<(), ClientError> {
         let patch = ChipUpdate {
             variant: Some(ChipVariantUpdate::Wifi(Default::default())),
             enabled: Some(enabled),
@@ -33,37 +31,28 @@ impl WifiClient {
 }
 
 #[async_trait::async_trait]
-impl netsim_model::chip::ChipClient for WifiClient {
-    async fn create(&self, params: netsim_model::chip::ChipCreate) -> Result<(), ClientError> {
+impl ChipClient for WifiClient {
+    async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
         self.0.create(params).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn read(
-        &self,
-        id: netsim_model::chip::ChipId,
-    ) -> Result<netsim_model::chip::Chip, ClientError> {
+    async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {
         self.0
             .get(id)
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?
-            .ok_or(ClientError::Chip(netsim_model::chip_error::ChipError::ChipNotFound(id)))
+            .ok_or(ClientError::Chip(ChipError::ChipNotFound(id)))
     }
 
-    async fn update(
-        &self,
-        id: netsim_model::chip::ChipId,
-        patch: netsim_model::chip::ChipUpdate,
-    ) -> Result<netsim_model::chip::Chip, ClientError> {
+    async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
         self.0.update(id, patch).await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn delete(&self, id: netsim_model::chip::ChipId) -> Result<(), ClientError> {
+    async fn delete(&self, id: ChipId) -> Result<(), ClientError> {
         self.0.delete(id).await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn read_statistics(
-        &self,
-    ) -> Result<Box<[netsim_model::stats::NetsimRadioStats]>, ClientError> {
+    async fn read_statistics(&self) -> Result<Box<[NetsimRadioStats]>, ClientError> {
         match self.0.perform_action(None, crate::wifi_actor::WifiReq::GetStatistics).await {
             Ok(crate::wifi_actor::WifiResponse::Statistics(stats)) => Ok(stats),
             Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
@@ -79,7 +68,7 @@ impl netsim_model::chip::ChipClient for WifiClient {
         Ok(())
     }
 
-    async fn reset(&self, id: netsim_model::chip::ChipId) -> Result<(), ClientError> {
+    async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
         self.0
             .perform_action(Some(id), crate::wifi_actor::WifiReq::Reset { id })
             .await
@@ -87,7 +76,7 @@ impl netsim_model::chip::ChipClient for WifiClient {
             .map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    fn clone_box(&self) -> Box<dyn netsim_model::chip::ChipClient> {
+    fn clone_box(&self) -> Box<dyn ChipClient> {
         Box::new(self.clone())
     }
 }

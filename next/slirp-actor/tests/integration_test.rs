@@ -27,6 +27,7 @@ async fn test_slirp_actor_lifecycle() {
 
     // Register Sink
     let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
+    use tokio_stream::StreamExt;
     let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx));
     let _ = actor.handle_action(None, SlirpReq::Register { stream, sink: tx_out }, &mut ctx).await;
 

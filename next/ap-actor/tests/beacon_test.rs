@@ -3,6 +3,7 @@
 use crate::world::ApWorld;
 use netsim_packets::ethernet::MacAddr;
 use netsim_packets::ieee80211::frame::{FrameControl, MacHeader3Addr, SequenceControl};
+use netsim_packets::ieee80211::management_subtype;
 use tokio;
 use zerocopy::IntoBytes;
 
@@ -62,6 +63,7 @@ async fn test_wifi6_beacon() {
     // When
     world.given_a_wifi6_ap("WiFi6_AP").await;
 
+    // Verify HE Element
     // Verify HE Element
     let rx = world.rx_from_ap.as_mut().expect("AP registered");
     let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
@@ -136,8 +138,7 @@ async fn test_create_two_aps() {
 async fn test_probe_response() {
     log::info!("Scenario: Active Discovery (Probe Response) - Generic/Wildcard");
     let mut world = ApWorld::new().await;
-    log::info!("Given a registered AP 'ProbeAP'"); // Keep this for now or remove? User said "Given" printed by helper.
-                                                   // Wait, given_a_registered_ap prints "Given ...".
+    log::info!("Given a registered AP 'ProbeAP'");
     world.given_a_registered_ap("ProbeAP").await;
 
     // Station sends Probe Req
@@ -159,16 +160,13 @@ async fn test_probe_response() {
     let mut frame = Vec::new();
     frame.extend_from_slice(header.as_bytes());
     // Body can be empty for our lax parser (Wildcard behavior)
-
+    let src_id = netsim_model::chip::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     // Verify Response
     log::info!("Then the AP responds with a Probe Response");
-    let rx = world.rx_from_ap.as_mut().expect("AP registered");
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout")
-        .expect("Stream closed");
+    let msg =
+        world.recv_frame(|frame, _| frame.stype() == management_subtype::PROBE_RESPONSE).await;
 
     // Check if it is Probe Response (0x50)
     // 0x50 = Mgmt(00) + Subtype(0101) = 5.
@@ -208,14 +206,12 @@ async fn test_probe_response_ssid_match() {
     frame.push(7);
     frame.extend_from_slice(b"MatchAP");
 
+    let src_id = netsim_model::chip::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     log::info!("Then the AP responds with a Probe Response");
-    let rx = world.rx_from_ap.as_mut().expect("AP registered");
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout")
-        .expect("Stream closed");
+    let msg =
+        world.recv_frame(|frame, _| frame.stype() == management_subtype::PROBE_RESPONSE).await;
     assert_eq!(msg[0], 0x50);
 }
 
@@ -248,6 +244,7 @@ async fn test_probe_response_ssid_mismatch() {
     frame.push(7);
     frame.extend_from_slice(b"OtherAP");
 
+    let src_id = netsim_model::chip::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     log::info!("Then the AP does NOT respond (ignores request)"); // No helper call
@@ -258,10 +255,15 @@ async fn test_probe_response_ssid_mismatch() {
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(1) {
         if let Ok(Some(msg)) =
-            tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await
+            tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if msg[0] == 0x50 {
-                panic!("Received Probe Response for mismatched SSID!");
+            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+                if f.stype() == management_subtype::BEACON {
+                    continue;
+                }
+                if f.stype() == management_subtype::PROBE_RESPONSE {
+                    panic!("Received Probe Response for mismatched SSID!");
+                }
             }
         }
     }
@@ -300,6 +302,7 @@ async fn test_probe_response_bssid_mismatch() {
     frame.push(10);
     frame.extend_from_slice(b"SpecificAP");
 
+    let src_id = netsim_model::chip::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     log::info!("Then the AP does NOT respond");
@@ -308,10 +311,15 @@ async fn test_probe_response_bssid_mismatch() {
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(1) {
         if let Ok(Some(msg)) =
-            tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await
+            tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if msg[0] == 0x50 {
-                panic!("Received Probe Response for mismatched BSSID!");
+            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+                if f.stype() == management_subtype::BEACON {
+                    continue;
+                }
+                if f.stype() == management_subtype::PROBE_RESPONSE {
+                    panic!("Received Probe Response for mismatched BSSID!");
+                }
             }
         }
     }
@@ -388,7 +396,6 @@ async fn test_create_ap_with_country_and_tim() {
 
         offset += 2 + len;
     }
-
     assert!(found_country, "Beacon missing Country IE");
     assert!(found_tim, "Beacon missing TIM IE");
 }
@@ -466,6 +473,7 @@ async fn test_hidden_ssid() {
     frame.push(0);
     frame.push(0);
 
+    let src_id = netsim_model::chip::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Wildcard Probe");
 
     // Drain rx for a moment to ensure NO Probe Resp (0x50)
@@ -474,8 +482,13 @@ async fn test_hidden_ssid() {
         if let Ok(Some(msg)) =
             tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if msg[0] == 0x50 {
-                panic!("Received Probe Response for Wildcard Probe on Hidden Network!");
+            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+                if f.stype() == management_subtype::BEACON {
+                    continue;
+                }
+                if f.stype() == management_subtype::PROBE_RESPONSE {
+                    panic!("Received Probe Response for Wildcard Probe on Hidden Network!");
+                }
             }
         }
     }
@@ -490,10 +503,8 @@ async fn test_hidden_ssid() {
 
     tx.send(bytes::Bytes::from(frame2)).expect("Send Specific Probe");
 
-    let resp = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout waiting for Specific Probe Response")
-        .expect("Stream closed");
+    let resp =
+        world.recv_frame(|frame, _| frame.stype() == management_subtype::PROBE_RESPONSE).await;
 
     assert_eq!(resp[0], 0x50, "Expected Probe Response");
 }
@@ -562,6 +573,5 @@ async fn test_wmm_ie_presence() {
         }
         offset += 2 + len;
     }
-
     assert!(found_wmm, "Beacon missing WMM IE");
 }
