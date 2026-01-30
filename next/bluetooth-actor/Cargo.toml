@@ -38,3 +38,4 @@ test-utils = []
 
 [dev-dependencies]
 rootcanal = { path = "../rootcanal" }
+netsim-testing = { path = "../testing", features = ["testing"] }

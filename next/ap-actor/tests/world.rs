@@ -30,7 +30,7 @@ pub struct ApWorld {
 
 impl ApWorld {
     pub async fn new() -> Self {
-        let _ = env_logger::builder().try_init();
+        netsim_testing::logger::setup(None);
         let ap_actor_impl = ApActor::new();
         let (runner, client_base) = ResourceActor::new(32);
         let client = ApClient::new(client_base);

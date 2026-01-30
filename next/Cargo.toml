@@ -36,6 +36,7 @@ members = [
   "device-api",
   "client",
   "rootcanal",
+  "testing",
 ]
 
 [workspace.doc]
