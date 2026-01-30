@@ -64,7 +64,7 @@ impl World {
 
         // Spawn actor
         let actor = UwbActor::new(device_client.clone());
-        let actor_task = tokio::spawn(async move { runner.run(actor).await });
+        let actor_task = tokio::spawn(runner.run(actor));
 
         World {
             client,
@@ -84,7 +84,7 @@ impl World {
             packet_stream: Some(stream),
             packet_sink: Some(sink),
             config: netsim_model::chip::ChipConfig {
-                name: format!("uwb_chip_{}", id),
+                name: format!("uwb_chip_{id}"),
                 manufacturer: "Netsim".to_string(),
                 product_name: "TestUwb".to_string(),
                 network_params: NetworkParams::Uwb(UwbCreate {}),
@@ -92,13 +92,15 @@ impl World {
             device_id: DeviceId(1),
         };
 
-        self.packet_txs.insert(id, packet_tx);
-        self.packet_rxs.insert(id, packet_rx);
-
         self.client.create(params).await.map_err(|e| match e {
             ClientError::Chip(err) => err,
             _ => ChipError::Internal(e.to_string()),
-        })
+        })?;
+
+        self.packet_txs.insert(id, packet_tx);
+        self.packet_rxs.insert(id, packet_rx);
+
+        Ok(())
     }
 
     pub async fn when_delete_chip(&self, chip_id: u32) -> Result<(), ChipError> {
@@ -125,16 +127,11 @@ impl World {
         self.packet_rxs.remove(&chip_id);
     }
 
-    pub async fn then_chip_is_deleted(&self, chip_id: u32) {
+    pub async fn then_chip_does_not_exist(&self, chip_id: u32) {
         // Yield to allow the actor to process the stream/sink closure.
         tokio::task::yield_now().await;
         let result = self.when_get_chip(chip_id).await;
-        match result {
-            Err(ChipError::ChipNotFound(id)) => {
-                assert_eq!(id, ChipId(chip_id));
-            }
-            _ => panic!("Expected ChipNotFound error, got {:?}", result),
-        }
+        assert_eq!(result, Err(ChipError::ChipNotFound(ChipId(chip_id))));
     }
 
     pub async fn when_packet_is_sent(&mut self, chip_id: u32, packet: &[u8]) {
