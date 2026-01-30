@@ -49,6 +49,7 @@ rust_test(
     tags = ["general_tests"],
     deps = [":bluetooth-actor"] + BLUETOOTH_DEPS + [
         "//next/device-actor",
+        "//next/testing",
         "@rootcanal//:lib_rootcanal_ffi",
     ],
 )
