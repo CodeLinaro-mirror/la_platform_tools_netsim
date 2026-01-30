@@ -26,7 +26,6 @@ from tasks.run_pytest_task import RunPyTestTask
 from tasks.run_test_task import RunTestTask
 from tasks.task import Task
 from tasks.zip_artifact_task import ZipArtifactTask
-from utils import is_bazel_build
 
 TASK_LIST = [
     "Configure",

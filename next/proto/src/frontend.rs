@@ -2032,6 +2032,252 @@ impl ::protobuf::reflect::ProtobufValue for GetCaptureResponse {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
+// @@protoc_insertion_point(message:netsim.frontend.CreateLinkRequest)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct CreateLinkRequest {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.frontend.CreateLinkRequest.link)
+    pub link: ::protobuf::MessageField<super::model::Link>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.frontend.CreateLinkRequest.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a CreateLinkRequest {
+    fn default() -> &'a CreateLinkRequest {
+        <CreateLinkRequest as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl CreateLinkRequest {
+    pub fn new() -> CreateLinkRequest {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::Link>(
+            "link",
+            |m: &CreateLinkRequest| { &m.link },
+            |m: &mut CreateLinkRequest| { &mut m.link },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<CreateLinkRequest>(
+            "CreateLinkRequest",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for CreateLinkRequest {
+    const NAME: &'static str = "CreateLinkRequest";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.link)?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.link.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.link.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> CreateLinkRequest {
+        CreateLinkRequest::new()
+    }
+
+    fn clear(&mut self) {
+        self.link.clear();
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static CreateLinkRequest {
+        static instance: CreateLinkRequest = CreateLinkRequest {
+            link: ::protobuf::MessageField::none(),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for CreateLinkRequest {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("CreateLinkRequest").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for CreateLinkRequest {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for CreateLinkRequest {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
+// @@protoc_insertion_point(message:netsim.frontend.CreateLinkResponse)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct CreateLinkResponse {
+    // message fields
+    // @@protoc_insertion_point(field:netsim.frontend.CreateLinkResponse.link)
+    pub link: ::protobuf::MessageField<super::model::Link>,
+    // special fields
+    // @@protoc_insertion_point(special_field:netsim.frontend.CreateLinkResponse.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a CreateLinkResponse {
+    fn default() -> &'a CreateLinkResponse {
+        <CreateLinkResponse as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl CreateLinkResponse {
+    pub fn new() -> CreateLinkResponse {
+        ::std::default::Default::default()
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::Link>(
+            "link",
+            |m: &CreateLinkResponse| { &m.link },
+            |m: &mut CreateLinkResponse| { &mut m.link },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<CreateLinkResponse>(
+            "CreateLinkResponse",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for CreateLinkResponse {
+    const NAME: &'static str = "CreateLinkResponse";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    ::protobuf::rt::read_singular_message_into_field(is, &mut self.link)?;
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        if let Some(v) = self.link.as_ref() {
+            let len = v.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        if let Some(v) = self.link.as_ref() {
+            ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> CreateLinkResponse {
+        CreateLinkResponse::new()
+    }
+
+    fn clear(&mut self) {
+        self.link.clear();
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static CreateLinkResponse {
+        static instance: CreateLinkResponse = CreateLinkResponse {
+            link: ::protobuf::MessageField::none(),
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for CreateLinkResponse {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("CreateLinkResponse").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for CreateLinkResponse {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for CreateLinkResponse {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
 // @@protoc_insertion_point(message:netsim.frontend.ListLinkResponse)
 #[derive(PartialEq,Clone,Default,Debug)]
 pub struct ListLinkResponse {
@@ -2161,6 +2407,8 @@ pub struct PatchLinkRequest {
     // message fields
     // @@protoc_insertion_point(field:netsim.frontend.PatchLinkRequest.link)
     pub link: ::protobuf::MessageField<super::model::Link>,
+    // @@protoc_insertion_point(field:netsim.frontend.PatchLinkRequest.id)
+    pub id: u32,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.frontend.PatchLinkRequest.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -2178,12 +2426,17 @@ impl PatchLinkRequest {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut fields = ::std::vec::Vec::with_capacity(2);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::Link>(
             "link",
             |m: &PatchLinkRequest| { &m.link },
             |m: &mut PatchLinkRequest| { &mut m.link },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "id",
+            |m: &PatchLinkRequest| { &m.id },
+            |m: &mut PatchLinkRequest| { &mut m.id },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<PatchLinkRequest>(
             "PatchLinkRequest",
@@ -2206,6 +2459,9 @@ impl ::protobuf::Message for PatchLinkRequest {
                 10 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.link)?;
                 },
+                16 => {
+                    self.id = is.read_uint32()?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -2222,6 +2478,9 @@ impl ::protobuf::Message for PatchLinkRequest {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         }
+        if self.id != 0 {
+            my_size += ::protobuf::rt::uint32_size(2, self.id);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -2230,6 +2489,9 @@ impl ::protobuf::Message for PatchLinkRequest {
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         if let Some(v) = self.link.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
+        }
+        if self.id != 0 {
+            os.write_uint32(2, self.id)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -2249,12 +2511,14 @@ impl ::protobuf::Message for PatchLinkRequest {
 
     fn clear(&mut self) {
         self.link.clear();
+        self.id = 0;
         self.special_fields.clear();
     }
 
     fn default_instance() -> &'static PatchLinkRequest {
         static instance: PatchLinkRequest = PatchLinkRequest {
             link: ::protobuf::MessageField::none(),
+            id: 0,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -2284,6 +2548,8 @@ pub struct DeleteLinkRequest {
     // message fields
     // @@protoc_insertion_point(field:netsim.frontend.DeleteLinkRequest.link)
     pub link: ::protobuf::MessageField<super::model::Link>,
+    // @@protoc_insertion_point(field:netsim.frontend.DeleteLinkRequest.id)
+    pub id: u32,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.frontend.DeleteLinkRequest.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -2301,12 +2567,17 @@ impl DeleteLinkRequest {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(1);
+        let mut fields = ::std::vec::Vec::with_capacity(2);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, super::model::Link>(
             "link",
             |m: &DeleteLinkRequest| { &m.link },
             |m: &mut DeleteLinkRequest| { &mut m.link },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "id",
+            |m: &DeleteLinkRequest| { &m.id },
+            |m: &mut DeleteLinkRequest| { &mut m.id },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<DeleteLinkRequest>(
             "DeleteLinkRequest",
@@ -2329,6 +2600,9 @@ impl ::protobuf::Message for DeleteLinkRequest {
                 10 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.link)?;
                 },
+                16 => {
+                    self.id = is.read_uint32()?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -2345,6 +2619,9 @@ impl ::protobuf::Message for DeleteLinkRequest {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         }
+        if self.id != 0 {
+            my_size += ::protobuf::rt::uint32_size(2, self.id);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -2353,6 +2630,9 @@ impl ::protobuf::Message for DeleteLinkRequest {
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         if let Some(v) = self.link.as_ref() {
             ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
+        }
+        if self.id != 0 {
+            os.write_uint32(2, self.id)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -2372,12 +2652,14 @@ impl ::protobuf::Message for DeleteLinkRequest {
 
     fn clear(&mut self) {
         self.link.clear();
+        self.id = 0;
         self.special_fields.clear();
     }
 
     fn default_instance() -> &'static DeleteLinkRequest {
         static instance: DeleteLinkRequest = DeleteLinkRequest {
             link: ::protobuf::MessageField::none(),
+            id: 0,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -2435,15 +2717,19 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x13ListCaptureResponse\x121\n\x08captures\x18\x01\x20\x03(\x0b2\x15.net\
     sim.model.CaptureR\x08captures\"#\n\x11GetCaptureRequest\x12\x0e\n\x02id\
     \x18\x01\x20\x01(\rR\x02id\";\n\x12GetCaptureResponse\x12%\n\x0ecapture_\
-    stream\x18\x01\x20\x01(\x0cR\rcaptureStream\"<\n\x10ListLinkResponse\x12\
-    (\n\x05links\x18\x01\x20\x03(\x0b2\x12.netsim.model.LinkR\x05links\":\n\
-    \x10PatchLinkRequest\x12&\n\x04link\x18\x01\x20\x01(\x0b2\x12.netsim.mod\
-    el.LinkR\x04link\";\n\x11DeleteLinkRequest\x12&\n\x04link\x18\x01\x20\
-    \x01(\x0b2\x12.netsim.model.LinkR\x04link2\x83\x08\n\x0fFrontendService\
-    \x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.fronten\
-    d.VersionResponse\x12[\n\x0cCreateDevice\x12$.netsim.frontend.CreateDevi\
-    ceRequest\x1a%.netsim.frontend.CreateDeviceResponse\x12H\n\nDeleteChip\
-    \x12\".netsim.frontend.DeleteChipRequest\x1a\x16.google.protobuf.Empty\
+    stream\x18\x01\x20\x01(\x0cR\rcaptureStream\";\n\x11CreateLinkRequest\
+    \x12&\n\x04link\x18\x01\x20\x01(\x0b2\x12.netsim.model.LinkR\x04link\"<\
+    \n\x12CreateLinkResponse\x12&\n\x04link\x18\x01\x20\x01(\x0b2\x12.netsim\
+    .model.LinkR\x04link\"<\n\x10ListLinkResponse\x12(\n\x05links\x18\x01\
+    \x20\x03(\x0b2\x12.netsim.model.LinkR\x05links\"J\n\x10PatchLinkRequest\
+    \x12&\n\x04link\x18\x01\x20\x01(\x0b2\x12.netsim.model.LinkR\x04link\x12\
+    \x0e\n\x02id\x18\x02\x20\x01(\rR\x02id\"O\n\x11DeleteLinkRequest\x12*\n\
+    \x04link\x18\x01\x20\x01(\x0b2\x12.netsim.model.LinkR\x04linkB\x02\x18\
+    \x01\x12\x0e\n\x02id\x18\x02\x20\x01(\rR\x02id2\xda\x08\n\x0fFrontendSer\
+    vice\x12F\n\nGetVersion\x12\x16.google.protobuf.Empty\x1a\x20.netsim.fro\
+    ntend.VersionResponse\x12[\n\x0cCreateDevice\x12$.netsim.frontend.Create\
+    DeviceRequest\x1a%.netsim.frontend.CreateDeviceResponse\x12H\n\nDeleteCh\
+    ip\x12\".netsim.frontend.DeleteChipRequest\x1a\x16.google.protobuf.Empty\
     \x12J\n\x0bPatchDevice\x12#.netsim.frontend.PatchDeviceRequest\x1a\x16.g\
     oogle.protobuf.Empty\x127\n\x05Reset\x12\x16.google.protobuf.Empty\x1a\
     \x16.google.protobuf.Empty\x12I\n\nListDevice\x12\x16.google.protobuf.Em\
@@ -2453,11 +2739,12 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     reRequest\x1a\x16.google.protobuf.Empty\x12K\n\x0bListCapture\x12\x16.go\
     ogle.protobuf.Empty\x1a$.netsim.frontend.ListCaptureResponse\x12W\n\nGet\
     Capture\x12\".netsim.frontend.GetCaptureRequest\x1a#.netsim.frontend.Get\
-    CaptureResponse0\x01\x12E\n\x08ListLink\x12\x16.google.protobuf.Empty\
-    \x1a!.netsim.frontend.ListLinkResponse\x12F\n\tPatchLink\x12!.netsim.fro\
-    ntend.PatchLinkRequest\x1a\x16.google.protobuf.Empty\x12H\n\nDeleteLink\
-    \x12\".netsim.frontend.DeleteLinkRequest\x1a\x16.google.protobuf.Emptyb\
-    \x06proto3\
+    CaptureResponse0\x01\x12U\n\nCreateLink\x12\".netsim.frontend.CreateLink\
+    Request\x1a#.netsim.frontend.CreateLinkResponse\x12E\n\x08ListLink\x12\
+    \x16.google.protobuf.Empty\x1a!.netsim.frontend.ListLinkResponse\x12F\n\
+    \tPatchLink\x12!.netsim.frontend.PatchLinkRequest\x1a\x16.google.protobu\
+    f.Empty\x12H\n\nDeleteLink\x12\".netsim.frontend.DeleteLinkRequest\x1a\
+    \x16.google.protobuf.Emptyb\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -2478,7 +2765,7 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             deps.push(::protobuf::well_known_types::empty::file_descriptor().clone());
             deps.push(::protobuf::well_known_types::timestamp::file_descriptor().clone());
             deps.push(super::model::file_descriptor().clone());
-            let mut messages = ::std::vec::Vec::with_capacity(17);
+            let mut messages = ::std::vec::Vec::with_capacity(19);
             messages.push(VersionResponse::generated_message_descriptor_data());
             messages.push(CreateDeviceRequest::generated_message_descriptor_data());
             messages.push(CreateDeviceResponse::generated_message_descriptor_data());
@@ -2491,6 +2778,8 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(ListCaptureResponse::generated_message_descriptor_data());
             messages.push(GetCaptureRequest::generated_message_descriptor_data());
             messages.push(GetCaptureResponse::generated_message_descriptor_data());
+            messages.push(CreateLinkRequest::generated_message_descriptor_data());
+            messages.push(CreateLinkResponse::generated_message_descriptor_data());
             messages.push(ListLinkResponse::generated_message_descriptor_data());
             messages.push(PatchLinkRequest::generated_message_descriptor_data());
             messages.push(DeleteLinkRequest::generated_message_descriptor_data());

@@ -215,11 +215,23 @@ pub fn from_proto_orientation(o: ProtoOrientation) -> ApiOrientation {
     ApiOrientation { yaw: o.yaw, pitch: o.pitch, roll: o.roll }
 }
 
+pub fn from_proto_chip_kind(k: ProtoChipKind) -> ApiChipKind {
+    match k {
+        ProtoChipKind::UNSPECIFIED => ApiChipKind::UNSPECIFIED,
+        ProtoChipKind::BLUETOOTH => ApiChipKind::BLUETOOTH,
+        ProtoChipKind::WIFI => ApiChipKind::WIFI,
+        ProtoChipKind::UWB => ApiChipKind::UWB,
+        ProtoChipKind::BLUETOOTH_BEACON => ApiChipKind::BleBeacon,
+    }
+}
+
 pub fn to_proto_link(l: ApiLink) -> ProtoLink {
     let mut link = ProtoLink::new();
+    link.id = l.id.0;
     link.sender_id = l.sender.0;
     link.receiver_id = l.receiver.0;
     link.rssi = l.rssi as i32;
+    link.kind = EnumOrUnknown::new(to_proto_chip_kind(l.kind));
     link.link_kind = EnumOrUnknown::new(match l.kind {
         ApiChipKind::BLUETOOTH => ProtoPhyKind::BLUETOOTH_LOW_ENERGY,
         ApiChipKind::WIFI => ProtoPhyKind::WIFI,
@@ -274,4 +286,25 @@ pub fn from_proto_radio_update(r: Option<netsim_proto::model::chip::Radio>) -> R
         Some(r) => RadioUpdate { state: r.state },
         None => RadioUpdate { state: None },
     }
+}
+
+pub fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
+    let sender = netsim_model::chip::ChipId(proto.sender_id);
+    let receiver = netsim_model::chip::ChipId(proto.receiver_id);
+    let rssi = proto.rssi as i8;
+
+    let kind = if proto.kind.enum_value_or_default() != ProtoChipKind::UNSPECIFIED {
+        from_proto_chip_kind(proto.kind.enum_value_or_default())
+    } else {
+        match proto.link_kind.enum_value_or_default() {
+            ProtoPhyKind::BLUETOOTH_CLASSIC | ProtoPhyKind::BLUETOOTH_LOW_ENERGY => {
+                ApiChipKind::BLUETOOTH
+            }
+            ProtoPhyKind::WIFI | ProtoPhyKind::WIFI_RTT => ApiChipKind::WIFI,
+            ProtoPhyKind::UWB => ApiChipKind::UWB,
+            _ => return None,
+        }
+    };
+
+    Some(ApiLink { id: netsim_model::link::LinkId(0), sender, receiver, kind, rssi })
 }

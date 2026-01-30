@@ -7,8 +7,6 @@ netsim_rust_library(
     srcs = glob(["src/*.rs"]),
     crate_name = "grpc_server",
     edition = "2021",
-    enable_clippy = False,
-    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
@@ -26,7 +24,7 @@ netsim_rust_library(
         "@futures",
         "@grpcio",
         "@log",
-        "@protobuf",
+        "@protobuf-rust",
         "@tokio",
         "@tokio-stream",
     ],
