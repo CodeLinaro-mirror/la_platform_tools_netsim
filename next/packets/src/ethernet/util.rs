@@ -13,8 +13,8 @@ use crate::ethernet::{ether_type, MacAddr};
 ///
 /// # Examples
 /// ```
-/// use packets_zc::ethernet::ether_type;
-/// use packets_zc::ethernet_util::ethertype_to_string;
+/// use netsim_packets::ethernet::ether_type;
+/// use netsim_packets::ethernet::ethertype_to_string;
 ///
 /// assert_eq!(ethertype_to_string(ether_type::IPV4), "IPv4");
 /// assert_eq!(ethertype_to_string(ether_type::ARP), "ARP");
