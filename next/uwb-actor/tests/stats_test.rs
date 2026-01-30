@@ -6,11 +6,11 @@ use crate::world::World;
 
 #[tokio::test]
 async fn test_read_statistics() {
-    let world = World::new().await;
+    let mut world = World::new().await;
 
     // Given: A UWB chip is created
     let chip_id = 1;
-    world.when_create_chip(chip_id).await.expect("Failed to create chip");
+    world.given_a_chip(chip_id).await;
 
     // When: client reads statistics
     let stats = world.client.read_statistics().await.expect("Failed to read statistics");

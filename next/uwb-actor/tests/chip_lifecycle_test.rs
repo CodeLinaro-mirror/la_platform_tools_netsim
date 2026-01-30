@@ -18,7 +18,7 @@ use netsim_model::chip_error::ChipError;
 #[tokio::test]
 async fn test_get_chip_not_found() {
     // Given
-    let world = World::new().await;
+    let mut world = World::new().await;
     let chip_id = 99;
 
     // When
@@ -41,19 +41,13 @@ async fn test_get_chip_not_found() {
 #[tokio::test]
 async fn test_delete_chip() {
     // Given
-    let world = World::new().await;
+    let mut world = World::new().await;
     let chip_id = 3;
-    world.when_create_chip(chip_id).await.unwrap();
+    world.given_a_chip(chip_id).await;
 
     // When
     world.when_delete_chip(chip_id).await.unwrap();
 
     // Then
-    let result = world.when_get_chip(chip_id).await;
-    match result {
-        Err(ChipError::ChipNotFound(id)) => {
-            assert_eq!(id, ChipId(chip_id));
-        }
-        _ => panic!("Expected ChipNotFound error after delete, got {:?}", result),
-    }
+    world.then_chip_is_deleted(chip_id).await;
 }

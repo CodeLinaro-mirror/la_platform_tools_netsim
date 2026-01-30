@@ -43,6 +43,7 @@ rust_test(
         "//next/client:testing",
         "//next/device-api:testing",
         "//next/model:testing",
+        "//next/testing",
         "@bytes",
         "@env_logger",
         "@futures",
