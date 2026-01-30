@@ -5,9 +5,49 @@ This module provides the netsim_rust_library macro which wraps rust_library
 to provide standard targets for testing, linting, and formatting.
 """
 
-load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
+load("@rules_rust//rust:defs.bzl", "rust_clippy", "rust_common", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
 NETSIM_RUSTC_FLAGS = ["-Dwarnings"]
+
+# Unfortunately, we can't use the rules_rust version because netsim is in external/.
+def _netsim_rustfmt_test_impl(ctx):
+    toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
+    rustfmt, config = toolchain.rustfmt, ctx.file.config
+
+    srcs = []
+    for t in ctx.attr.targets:
+        info = t[rust_common.crate_info] if rust_common.crate_info in t else getattr(t, "crate_info", None)
+        if info:
+            srcs.extend([s for s in info.srcs.to_list() if s.is_source])
+
+    if not srcs:
+        fail("No sources to format")
+
+    runner = ctx.actions.declare_file(ctx.label.name + ".sh")
+    ctx.actions.write(
+        output = runner,
+        is_executable = True,
+        content = "#!/bin/bash\n%s --check --config-path %s %s" % (
+            rustfmt.short_path,
+            config.short_path,
+            " ".join([s.short_path for s in srcs]),
+        ),
+    )
+
+    return [DefaultInfo(
+        executable = runner,
+        runfiles = ctx.runfiles(files = srcs + [rustfmt, config] + toolchain.all_files.to_list()),
+    )]
+
+netsim_rustfmt_test = rule(
+    implementation = _netsim_rustfmt_test_impl,
+    attrs = {
+        "targets": attr.label_list(providers = [[rust_common.crate_info]]),
+        "config": attr.label(allow_single_file = True, default = Label("//next:rustfmt.toml")),
+    },
+    test = True,
+    toolchains = ["@rules_rust//rust:toolchain_type"],
+)
 
 def netsim_rust_library(
         name,
@@ -18,6 +58,7 @@ def netsim_rust_library(
         crate_features = [],
         # Feature Flags (Default to True for safety)
         enable_clippy = True,
+        enable_rustfmt = True,
         enable_unit_test = True,
         enable_doc = True,
         enable_doc_test = True,
@@ -41,7 +82,7 @@ def netsim_rust_library(
         test_deps: Dependencies for the unit test target.
         crate_features: the crate features
         enable_clippy: Whether to enable clippy checks.
-
+        enable_rustfmt: Whether to enable rustfmt checks.
         enable_unit_test: Whether to generate a unit test target.
         enable_doc: Whether to generate documentation.
         enable_doc_test: Whether to generate a doc test target.
@@ -100,7 +141,17 @@ def netsim_rust_library(
             testonly = True,
         )
 
-    # 5. Documentation
+    # 5. Rustfmt Check
+    if enable_rustfmt:
+        netsim_rustfmt_test(
+            name = "rustfmt",
+            targets = [":" + name],
+            # Restrict to Linux for CI validation.
+            # Note: this fails on macOS because the librustc_driver dylib isn't available
+            target_compatible_with = ["@platforms//os:linux"],
+        )
+
+    # 6. Documentation
     if enable_doc:
         rust_doc(
             name = "doc",
@@ -108,7 +159,7 @@ def netsim_rust_library(
             testonly = True,
         )
 
-    # 6. Documentation Test
+    # 7. Documentation Test
     if enable_doc_test:
         # Restrict to Linux due to macOS toolchain issues:
         # 1. The macOS `goldfish_build+` toolchain's C++ linker wrapper is missing from the sandbox for pure Rust targets.
