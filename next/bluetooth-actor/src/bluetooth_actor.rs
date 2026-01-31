@@ -3,7 +3,7 @@
 use crate::ranging;
 
 use client::DeviceClient;
-use netsim_model::chip::{Chip, ChipId, ChipVariant};
+use netsim_model::chip::{Chip, ChipId};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -34,14 +34,13 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
         let dst_chip = chips.get(&dst_id);
 
         if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
-            // Check nested variant radio state if available
-            if let Some(ChipVariant::Bluetooth(bt)) = &src.variant {
-                if let Some(false) = match phy {
-                    Phy::LowEnergy => bt.low_energy.state,
-                    _ => bt.classic.state,
-                } {
-                    return None;
-                }
+            let is_enabled = |chip: &Chip| match phy {
+                Phy::LowEnergy => chip.is_le_enabled(),
+                _ => chip.is_classic_enabled(),
+            };
+
+            if !is_enabled(src) || !is_enabled(dst) {
+                return None;
             }
 
             let dist = ranging::distance(&src.position, &dst.position);
@@ -94,7 +93,7 @@ impl BluetoothActor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use netsim_model::chip::{Chip, ChipId};
+    use netsim_model::chip::{Chip, ChipId, ChipVariant};
     use rootcanal::Phy;
 
     #[test]
@@ -129,5 +128,40 @@ mod tests {
         // Test with link
         let rssi_override = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
         assert_eq!(rssi_override, Some(-50));
+    }
+
+    // Scenario: Block traffic when destination radio is disabled
+    //   Given a source chip with enabled radio
+    //   And a destination chip with disabled LE radio
+    //   When the source sends a packet
+    //   Then the packet is blocked (returns None)
+    #[test]
+    fn test_on_send_ll_disabled_destination() {
+        // Given a source chip with enabled radio
+        let chips = Arc::new(Mutex::new(HashMap::new()));
+        let callbacks = RootcanalCallbacksImpl { chips: chips.clone() };
+
+        let chip1_id = ChipId(1);
+        let chip2_id = ChipId(2);
+
+        let mut chip1 = Chip::default();
+        chip1.id = 1;
+
+        // And a destination chip with disabled LE radio
+        let mut chip2 = Chip::default();
+        chip2.id = 2;
+        chip2.variant = Some(ChipVariant::Bluetooth(netsim_model::chip::Bluetooth {
+            low_energy: netsim_model::chip::Radio { state: Some(false), ..Default::default() },
+            classic: Default::default(),
+        }));
+
+        chips.lock().unwrap().insert(chip1_id, chip1.clone());
+        chips.lock().unwrap().insert(chip2_id, chip2.clone());
+
+        // When the source sends an LE packet
+        let rssi = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
+
+        // Then the packet is blocked (returns None)
+        assert!(rssi.is_none());
     }
 }

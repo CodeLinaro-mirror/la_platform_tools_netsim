@@ -27,12 +27,10 @@ netsim_rust_library(
     name = "bluetooth-actor",
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
-    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
         "@zerocopy-derive",
     ],
-    strict_warnings = False,
     deps = BLUETOOTH_DEPS,
 )
 
@@ -49,6 +47,7 @@ rust_test(
     tags = ["general_tests"],
     deps = [":bluetooth-actor"] + BLUETOOTH_DEPS + [
         "//next/device-actor",
+        "//next/testing",
         "@rootcanal//:lib_rootcanal_ffi",
     ],
 )

@@ -3,7 +3,6 @@
 use crate::world::ApWorld;
 use netsim_packets::ethernet::MacAddr;
 use netsim_packets::ieee80211::{FrameControl, MacHeader3Addr, SequenceControl};
-use std::time::Duration;
 use zerocopy::IntoBytes;
 
 // Scenario: Station Deauthentication

@@ -2,8 +2,7 @@
 
 use crate::world::ApWorld;
 use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::{management_subtype, Ieee80211};
-use std::time::Duration;
+use netsim_packets::ieee80211::management_subtype;
 
 // ============================================================================
 // Feature: Hostapd CLI Command Support

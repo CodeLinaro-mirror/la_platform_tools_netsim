@@ -82,6 +82,7 @@ rust_test(
         "//next/actor-framework:testing",
         "//next/model",
         "//next/packets:testing",
+        "//next/testing",
         "@bytes",
         "@env_logger",
         "@futures",
