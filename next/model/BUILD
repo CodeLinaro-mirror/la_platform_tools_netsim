@@ -40,6 +40,5 @@ netsim_rust_library(
         "@async-trait",
         "@thiserror-impl",
     ],
-    strict_warnings = False,
     deps = NETSIM_API_DEPS,
 )

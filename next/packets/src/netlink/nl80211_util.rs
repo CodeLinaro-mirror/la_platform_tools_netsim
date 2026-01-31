@@ -87,8 +87,8 @@ pub fn is_attr_nested(nla_type: u16) -> bool {
 ///
 /// # Examples
 /// ```
-/// use packets_zc::nl80211::attr_id;
-/// use packets_zc::nl80211_util::attr_id_to_string;
+/// use netsim_packets::netlink::nl80211::attr_id;
+/// use netsim_packets::netlink::nl80211_util::attr_id_to_string;
 ///
 /// assert_eq!(attr_id_to_string(attr_id::IFACE_MAC), "IFACE_MAC");
 /// assert_eq!(attr_id_to_string(0xFFFF), "Unknown(0xFFFF)");

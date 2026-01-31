@@ -72,21 +72,14 @@ pub struct BluetoothActor {
     pub(crate) chips: ChipMap,
     /// The client for interacting with the device actor.
     pub(crate) device_client: DeviceClient,
-
-    /// Map of active Bluetooth Entities (actor state).
-    pub(crate) entities: HashMap<ChipId, crate::internal_chip::InternalChip>,
-
-    /// The self-reference client (for calling actions on itself if needed).
-    #[allow(dead_code)]
-    pub(crate) client: Option<crate::BluetoothClient>,
 }
 
 impl BluetoothActor {
     /// Creates a new BluetoothActor context.
-    pub fn new(device_client: DeviceClient, client: crate::BluetoothClient) -> Self {
+    pub fn new(device_client: DeviceClient) -> Self {
         let chips = Arc::new(Mutex::new(HashMap::new()));
         let rootcanal = Rootcanal::new(Box::new(RootcanalCallbacksImpl { chips: chips.clone() }));
-        Self { rootcanal, chips, device_client, entities: HashMap::new(), client: Some(client) }
+        Self { rootcanal, chips, device_client }
     }
 }
 
@@ -115,9 +108,8 @@ mod tests {
         chips.lock().unwrap().insert(chip1_id, chip1.clone());
         chips.lock().unwrap().insert(chip2_id, chip2.clone());
 
-        // Test without link (should use distance-based RSSI)
-        // Distance 0 -> RSSI should be close to tx_power (or whatever the model says)
-        // Let's just check it returns *something*
+        // Test without link (should use distance-based RSSI).
+        // Distance 0 should result in a valid RSSI value.
         let rssi_default = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
         assert!(rssi_default.is_some());
 
