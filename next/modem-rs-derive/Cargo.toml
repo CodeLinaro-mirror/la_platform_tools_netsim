@@ -7,10 +7,10 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-syn = { version = "2.0", features = ["full"] }
-quote = "1.0"
 nom = "7"
 proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
 
 [dev-dependencies]
 modem-rs = { path = "../modem-rs", features = ["test-utils"] }
