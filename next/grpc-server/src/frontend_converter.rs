@@ -110,7 +110,7 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
 
 pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
     // Currently only supports BLE Beacon
-    if c.kind.enum_value_or_default() == ProtoChipKind::BLUETOOTH_BEACON {
+    if c.kind.enum_value_or_default() == ProtoChipKind::BLUETOOTH_BEACON || c.has_ble_beacon() {
         let beacon_create = c.ble_beacon();
         let settings = beacon_create.settings.as_ref().map(from_proto_advertise_settings);
         let adv_data = beacon_create.adv_data.as_ref().map(from_proto_advertise_data);
