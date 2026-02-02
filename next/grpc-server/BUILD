@@ -18,7 +18,7 @@ netsim_rust_library(
         "//next/link-api",
         "//next/model",
         "//next/packet-stream",
-        "//next/proto",
+        "//proto",
         "@anyhow",
         "@bytes",
         "@futures",
