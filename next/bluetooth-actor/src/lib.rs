@@ -110,6 +110,8 @@ mod ranging;
 mod sniffer;
 mod utils;
 
+/// Utilities for Bluetooth Beacons and advertising data
+pub mod beacon_utils;
 pub mod client;
 
 pub use actions::{BluetoothAction, BluetoothActionResult};

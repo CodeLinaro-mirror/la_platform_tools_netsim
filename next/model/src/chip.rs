@@ -239,6 +239,21 @@ impl From<NetworkKind> for ChipKind {
     }
 }
 
+impl From<&NetworkParams> for ChipKind {
+    fn from(params: &NetworkParams) -> Self {
+        match params {
+            NetworkParams::Bluetooth(bt) => match bt.mode {
+                BluetoothMode::Beacon(_) => ChipKind::BleBeacon,
+                _ => ChipKind::BLUETOOTH,
+            },
+            NetworkParams::Wifi(_) => ChipKind::WIFI,
+            NetworkParams::Uwb(_) => ChipKind::UWB,
+            NetworkParams::Cell(_) => ChipKind::CELLULAR,
+            NetworkParams::Ap(_) => ChipKind::AP,
+        }
+    }
+}
+
 /// An enum holding the parameters for a specific chip technology.
 #[derive(Debug, Clone)]
 pub enum NetworkParams {
