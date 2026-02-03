@@ -27,7 +27,6 @@ netsim_rust_library(
         "@async-trait",
         "@thiserror-impl",
     ],
-    test_deps = ["//next/client"],
     deps = DEPS,
 )
 
@@ -42,7 +41,6 @@ rust_test(
     deps = [
         ":testing",
         "//next/actor-framework:testing",
-        "//next/client:testing",
         "//next/link-api:testing",
         "//next/model:testing",
         "@log",
