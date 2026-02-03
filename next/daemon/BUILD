@@ -100,7 +100,7 @@ rust_test(
         "//next/link-api",
         "//next/model",
         "//next/packet-stream",
-        "//next/proto",
+        "//proto",
         "@bytes",
         "@futures",
         "@grpcio",

@@ -7,7 +7,7 @@ DEPS = [
     "//next/actor-framework",
     "//next/link-api",
     "//next/model",
-    "//next/proto",
+    "//proto",
     "@anyhow",
     "@log",
     "@serde",
