@@ -8,7 +8,7 @@ trigger: always_on
 > Do not use cargo.
 
 To build all next components, use the following command:
-`./scripts/build_tools.py --task bazel`
+`./scripts/build_tools.py --task compile runtest`
 
 To build individual components, use the following command:
 `bazel build @netsim//next/<component_name>`

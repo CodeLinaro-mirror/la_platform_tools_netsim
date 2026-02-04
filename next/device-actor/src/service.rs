@@ -103,7 +103,7 @@ impl DeviceActor {
         // 5. Update Local Device State
         entity.device.chips.push(Chip {
             id: chip_id.0,
-            kind: ChipKind::from(chip_kind),
+            kind: ChipKind::from(&chip_config.network_params),
             name: Some(chip_config.name),
             manufacturer: Some(chip_config.manufacturer),
             product_name: Some(chip_config.product_name),

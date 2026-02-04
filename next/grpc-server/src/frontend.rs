@@ -125,9 +125,13 @@ impl FrontendClient {
         req: netsim_proto::frontend::CreateDeviceRequest,
     ) -> Result<netsim_proto::frontend::CreateDeviceResponse, RpcStatus> {
         // We only support creating a device with a single chip (Beacon) for now.
-        if let Some(proto_chip) = req.device.chips.first() {
-            if let Some(chip_config) =
-                crate::frontend_converter::from_proto_chip_create(proto_chip.clone())
+        if let Some(proto_chip_ref) = req.device.chips.first() {
+            let mut proto_chip = proto_chip_ref.clone();
+            // Fallback: Use device name if chip name is missing.
+            if proto_chip.name.is_empty() {
+                proto_chip.name = req.device.name.clone();
+            }
+            if let Some(chip_config) = crate::frontend_converter::from_proto_chip_create(proto_chip)
             {
                 let device_config = device_api::DeviceConfig {
                     name: req.device.name.clone(),

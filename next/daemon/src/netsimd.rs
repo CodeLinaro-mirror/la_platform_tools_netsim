@@ -283,7 +283,7 @@ impl NetsimDaemon {
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
 
-        logger::init("netsim", true);
+        logger::init("netsim", args.verbose);
 
         info!("netsim startup");
 

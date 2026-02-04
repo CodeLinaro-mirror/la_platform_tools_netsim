@@ -104,6 +104,13 @@ impl World {
 
     /// Creates a Bluetooth chip in Beacon mode.
     pub async fn given_bluetooth_beacon(&mut self, name: &str) {
+        let chip_id = self.next_chip_id().0;
+        self.given_bluetooth_beacon_with_address(name, &format!("00:00:00:00:00:{:02x}", chip_id))
+            .await
+    }
+
+    /// Creates a Bluetooth chip in Beacon mode with a specific address.
+    pub async fn given_bluetooth_beacon_with_address(&mut self, name: &str, address: &str) {
         let id = self.next_chip_id();
         let params = ChipCreate {
             id,
@@ -114,10 +121,13 @@ impl World {
                 "netsim",
                 name,
                 NetworkParams::Bluetooth(BluetoothCreate {
-                    address: format!("00:00:00:00:00:{:02x}", id.0),
+                    address: address.to_string(),
                     bt_properties: Default::default(),
                     mode: BluetoothMode::Beacon(Box::new(BeaconParams {
-                        ble_beacon: BleBeacon::default(),
+                        ble_beacon: BleBeacon {
+                            address: address.to_string(),
+                            ..Default::default()
+                        },
                     })),
                 }),
             ),
