@@ -17,18 +17,15 @@ DEPS = [
 ]
 
 netsim_rust_library(
-    name = "uwb",
+    name = "uwb-actor",
     srcs = glob(["src/**/*.rs"]),
     crate_features = [],
-    crate_name = "uwb",
+    crate_name = "uwb_actor",
     crate_root = "src/lib.rs",
     edition = "2021",
-    enable_clippy = False,
-    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
-    strict_warnings = False,
     deps = DEPS,
 )
 

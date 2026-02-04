@@ -36,8 +36,6 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "netsim_model",
     edition = "2021",
-    enable_clippy = False,
-    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
         "@thiserror-impl",

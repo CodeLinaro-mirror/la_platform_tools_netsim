@@ -287,7 +287,7 @@
 //!
 //! ## Testing
 //!
-//! The framework provides a **MockClient** type that implements the same `ResourceClient<T>` API as the real client but operates entirely in‑memory. It lets you write fast, deterministic unit tests for client logic (e.g. `OrderClient`) without spawning any actors. See the [`mock`] module for the full API and usage patterns.
+//! The framework provides a **MockActorClient** type (available with the `testing` feature) that implements the [`ActorClient`] trait. It lets you write fast, deterministic unit tests for client logic without spawning any actors.
 
 mod actor;
 mod client;

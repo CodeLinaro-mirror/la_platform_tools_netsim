@@ -151,6 +151,7 @@ async fn handle_new_connection(
 }
 
 #[cfg(unix)]
+#[allow(dead_code)]
 async fn setup_uds_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
@@ -334,7 +335,7 @@ impl NetsimDaemon {
     async fn initialize_primary_daemon(
         ini_guard: IniFileGuard,
         args: Args,
-        runtime_dir: PathBuf,
+        _runtime_dir: PathBuf,
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
         let ini_path = ini_guard.path();
@@ -351,9 +352,6 @@ impl NetsimDaemon {
         // Initialize listeners (UDS, gRPC).
         let mut listener_addresses = HashMap::new();
         let mut streams = Streams::new();
-
-        #[cfg(unix)]
-        setup_uds_listener(&mut streams, &mut listener_addresses, &runtime_dir).await?;
 
         // Setup Link Server
         let (link_runner, link_client) = link_actor::new();
@@ -420,8 +418,8 @@ impl NetsimDaemon {
         );
 
         // Setup Uwb Server
-        let (uwb_runner, uwb_client) = uwb::new();
-        let uwb_actor = uwb::UwbActor::new(device_client.clone());
+        let (uwb_runner, uwb_client) = uwb_actor::new();
+        let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
         // TODO: Replace with real modem network.

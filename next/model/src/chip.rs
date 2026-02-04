@@ -409,7 +409,7 @@ pub enum ChipVariant {
     Ap(ApChip),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Bluetooth {
     pub low_energy: Radio,
     pub classic: Radio,
@@ -455,6 +455,7 @@ impl From<NetworkKind> for ChipVariant {
 /// Chip provided by the client.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ChipUpdate {
+    pub id: Option<ChipId>,
     pub name: Option<String>,
     pub manufacturer: Option<String>,
     pub product_name: Option<String>,
@@ -465,14 +466,40 @@ pub struct ChipUpdate {
     pub enabled: Option<bool>,
 }
 
+/// Generic radio chip update (Bluetooth, Wi-Fi, UWB).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct RadioUpdate {
+    pub state: Option<bool>,
+}
+
+impl RadioUpdate {
+    pub fn apply(&self, radio: &mut Radio) {
+        if let Some(state) = self.state {
+            radio.state = Some(state);
+        }
+    }
+}
+
 /// The techbology variant specific fields
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChipVariantUpdate {
-    Bluetooth(Radio),
-    Wifi(Radio),
-    Uwb(Radio),
+    Bluetooth(BluetoothUpdate),
+    Wifi(RadioUpdate),
+    Uwb(RadioUpdate),
     Cell(CellUpdate),
     Ap(ApUpdate),
+}
+
+impl ChipVariantUpdate {
+    pub fn kind(&self) -> ChipKind {
+        match self {
+            ChipVariantUpdate::Bluetooth(_) => ChipKind::BLUETOOTH,
+            ChipVariantUpdate::Wifi(_) => ChipKind::WIFI,
+            ChipVariantUpdate::Uwb(_) => ChipKind::UWB,
+            ChipVariantUpdate::Cell(_) => ChipKind::CELLULAR,
+            ChipVariantUpdate::Ap(_) => ChipKind::AP,
+        }
+    }
 }
 
 /// Cellular technology specific chip information.
@@ -489,6 +516,12 @@ pub struct ApUpdate {
     pub channel: Option<u8>,
     #[serde(default)]
     pub force_disconnect: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BluetoothUpdate {
+    pub classic: RadioUpdate,
+    pub low_energy: RadioUpdate,
 }
 
 // =============================================================================

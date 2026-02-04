@@ -48,6 +48,11 @@ impl ActorService for UwbActor {
             if let Some(orient) = update.orientation {
                 chip.orientation = orient;
             }
+            if let Some(netsim_model::chip::ChipVariantUpdate::Uwb(radio_update)) = update.variant {
+                if let Some(netsim_model::chip::ChipVariant::Uwb(uwb_radio)) = &mut chip.variant {
+                    radio_update.apply(uwb_radio);
+                }
+            }
             // TODO: Implement update logic to pica
             Ok(chip.clone())
         } else {

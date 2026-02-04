@@ -123,6 +123,7 @@ pub mod api {
         pub position: Option<Position>,
         pub orientation: Option<Orientation>,
         //TODO: pub links: Option<Vec<Link>,
+        pub chips: Option<Vec<crate::chip::ChipUpdate>>,
     }
 
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
