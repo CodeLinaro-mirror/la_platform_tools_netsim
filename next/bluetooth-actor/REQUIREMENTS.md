@@ -16,7 +16,7 @@ It acts as the:
   RootCanal.
 - **Controller Lifecycle Manager**: Creating/Destroying `RootCanal` controllers.
 - **Simulation Facade**: Exposing high-level constructs like "Beacons" and
-  "Sniffers" that abstract complex RootCanal configuration.
+  "Scanners" that abstract complex RootCanal configuration.
 
 ### 1.2 Scope
 
@@ -28,7 +28,7 @@ The Bluetooth-Actor component handles the logic for:
 - **Specialized Chip Types**:
   - **External Device**: Standard HCI controller for AVD/Bumble.
   - **Beacon**: Simplified BLE Beacon (Tx only).
-  - **Sniffer**: Passive packet capture (Rx only).
+  - **Scanner**: Passive packet capture (Rx only).
 - **Telemetry**: Reporting Tx/Rx statistics from RootCanal.
 - **Spatial Updates**: Propagating position changes to RootCanal.
 
@@ -47,7 +47,7 @@ The following are **out of scope**:
 | **HCI**             | Host Controller Interface (Communication protocol between Host Stack and Controller).               |
 | **RootCanal**       | Google's reference Bluetooth Controller emulation library (simulates Link Layer and PHY).           |
 | **Beacon**          | A Bluetooth Low Energy (BLE) device that broadcasts advertisements but does not accept connections. |
-| **Sniffer**         | A passive device that listens to Over-the-Air (OTA) traffic for debugging/verification.             |
+| **Scanner**         | A passive device that listens to Over-the-Air (OTA) traffic for debugging/verification.             |
 | **Controller**      | The simulated Bluetooth radio implementation (RootCanal instance).                                  |
 | **AVD**             | Android Virtual Device (Emulator).                                                                  |
 | **Bumble**          | Python-based Bluetooth Host stack used for testing.                                                 |
@@ -81,7 +81,7 @@ Bluetooth-Actor sits between the **Device-Actor** (upstream) and **RootCanal**
 - **UN-002**: **Performance**: HCI transport must introduce minimal latency
   (<2ms) to prevent timeouts in the Host Stack.
 - **UN-003**: **Observability**: Users must be able to see packet counts and
-  inspect OTA traffic via Sniffers.
+  inspect OTA traffic via Scanners.
 
 ### 2.4 Constraints
 
@@ -114,7 +114,7 @@ Bluetooth-Actor sits between the **Device-Actor** (upstream) and **RootCanal**
   three distinct **types**:
   - **External Device**: Full HCI Controller (requires Packet Stream).
   - **Beacon**: Tx-only LE Advertiser (Configuration driven).
-  - **Sniffer**: Rx-only Packet Dump (Requires Sink).
+  - **Scanner**: Rx-only Packet Dump (Requires Sink).
 - **RQ-LIFE-02**: The system shall assign a unique `ChipId` provided by the
   Device-Actor.
 - **RQ-LIFE-03**: The system shall allow deleting a chip, which must clean up
@@ -142,10 +142,10 @@ Bluetooth-Actor sits between the **Device-Actor** (upstream) and **RootCanal**
 
 - **RQ-OBS-01**: **Statistics**: The system shall report `tx_bytes` and
   `rx_bytes` (Link Layer packets) for each chip via the `GetStatistics` action.
-- **RQ-OBS-02**: **Sniffer (Advertising)**: The system shall run in a passive
+- **RQ-OBS-02**: **Scanner (Advertising)**: The system shall run in a passive
   HCI Scanning mode to capture Over-the-Air (OTA) advertising packets and
   forward them as HCI events to the `PacketSink`.
-- **RQ-OBS-03** (Priority P2): **Sniffer (Link Layer)**: The system shall
+- **RQ-OBS-03** (Priority P2): **Scanner (Link Layer)**: The system shall
   capture raw Link Layer packets from `RootCanal` (Promiscuous Mode).
 - **RQ-OBS-04** (Priority P2): **Packet Conversion**: The system shall convert
   internal `RootCanal` Link Layer packets into a standard PCAP-friendly format
@@ -179,7 +179,7 @@ Bluetooth-Actor sits between the **Device-Actor** (upstream) and **RootCanal**
   - `update_chip_test.rs`: Verify position updates are applied.
 - **Integration Tests**:
   - `beacon_tests.rs`: Verify Beacon creation.
-  - `sniffer_tests.rs`: Verify Sniffer receives advertisements from a Beacon.
+  - `scanner_tests.rs`: Verify Scanner receives advertisements from a Beacon.
 
 ### 6.2 BDD Coverage Mapping
 
@@ -193,8 +193,8 @@ Bluetooth-Actor sits between the **Device-Actor** (upstream) and **RootCanal**
 | **RQ-SIG-01**   | Hybrid RSSI (Link > Spatial)        | `update_chip_test.rs` | `test_update_chip` (Verifies properties passed)                 | **PARTIAL** |
 | **RQ-SIG-02**   | Propagate Position                  | `update_chip_test.rs` | `test_update_chip`                                              | **Full**    |
 | **RQ-OBS-01**   | Get Statistics                      | `N/A`                 | **Missing**                                                     | **None**    |
-| **RQ-OBS-02**   | Sniffer (Advertising)                        | `sniffer_tests.rs`    | `test_sniffer_receives_advertisement`                                    | **Full**    |
-| **RQ-OBS-03**   | Sniffer (Link Layer - P2)                    | `N/A`                 | **Missing**                                                              | **None**    |
+| **RQ-OBS-02**   | Scanner (Advertising)                        | `scanner_tests.rs`    | `test_scanner_receives_advertisement`                                    | **Full**    |
+| **RQ-OBS-03**   | Scanner (Link Layer - P2)                    | `N/A`                 | **Missing**                                                              | **None**    |
 | **RQ-OBS-04**   | Packet Conversion (P2)                       | `N/A`                 | **Missing**                                                              | **None**    |
 | **RQ-CONF-01**  | Beacon Configuration                         | `beacon_tests.rs`     | `test_add_chip` (Only verifies creation, not parameters)                 | **PARTIAL** |
 
@@ -204,9 +204,9 @@ Bluetooth-Actor sits between the **Device-Actor** (upstream) and **RootCanal**
   `service.rs` but there is no explicit test verifying it.
 - **RQ-CONF-01 (Beacon Config)**: Requirements for Scan Response, Interval, and
   Tx Power are not currently implemented in `beacon.rs` (hardcoded values).
-- **Sniffer Configuration**: `sniffer.rs` hardcodes scanning parameters; no
+- **Scanner Configuration**: `scanner.rs` hardcodes scanning parameters; no
   support for filtering or specific channel scanning.
-- **RQ-OBS-03/04 (Link Layer Sniffer - P2)**: The advanced promiscuous mode and
+- **RQ-OBS-03/04 (Link Layer Scanner - P2)**: The advanced promiscuous mode and
   PCAP conversion logic are not currently implemented or tested.
 - **RQ-SIG-01 (Hybrid RSSI)**: Tests verify position propagation, but do not
   explicitly verify the *precedence* logic where a static link overrides the spatial calculation.

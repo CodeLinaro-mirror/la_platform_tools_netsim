@@ -3,7 +3,7 @@
 mod beacon_rssi_test;
 mod beacon_tests;
 mod lifecycle_tests;
-mod sniffer_tests;
+mod scanner_tests;
 mod test_utils;
 mod update_chip_test;
 mod world;

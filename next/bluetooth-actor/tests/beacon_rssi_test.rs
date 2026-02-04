@@ -23,11 +23,11 @@ async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create Scanner Device using World helper
     // Name "scanner" will be used to reference it.
-    world.given_bluetooth_device("scanner").await;
+    world.given_device("scanner").await;
 
     // Create Beacon Device at initial position (1, 0, 0)
     let beacon_address = "00:00:00:00:00:02";
-    world.given_bluetooth_beacon_with_address("beacon", beacon_address).await;
+    world.given_beacon_with_address("beacon", beacon_address).await;
 
     let beacon_id = *world.chips.get("beacon").expect("Beacon should exist");
 
