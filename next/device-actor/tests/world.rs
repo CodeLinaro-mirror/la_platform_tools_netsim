@@ -2,7 +2,10 @@ use device_actor::{DeviceActor, DeviceClient};
 use device_api::api::{DeviceChipCreate, DeviceCreate};
 use device_api::{DeviceConfig, DeviceId};
 use link_api::MockLinkClient;
-use netsim_model::chip::{ChipClient, MockChipClient, NetworkKind};
+use netsim_model::chip::{
+    BluetoothUpdate, ChipClient, ChipUpdate, ChipVariantUpdate, MockChipClient, NetworkKind,
+    RadioUpdate,
+};
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
@@ -127,6 +130,14 @@ impl World {
         self.client.update(device_id, update).await.unwrap();
     }
 
+    /// BDD Step: When I update the device with a specific chip update.
+    pub async fn when_update_device_chip(&self, device_id: DeviceId, chip_update: ChipUpdate) {
+        let mut update = device_api::api::DeviceUpdate::default();
+        update.id = device_id.0;
+        update.chips = Some(vec![chip_update]);
+        self.when_update_device(device_id, update).await;
+    }
+
     /// BDD Step: When I notify that a chip was removed.
     pub async fn when_notify_chip_removed(
         &self,
@@ -204,6 +215,19 @@ impl World {
                     },
                 ),
             },
+        }
+    }
+    /// Creates a Bluetooth ChipUpdate with the specified Low Energy and Classic radio states.
+    pub fn create_bluetooth_chip_update(
+        le_state: Option<bool>,
+        classic_state: Option<bool>,
+    ) -> ChipUpdate {
+        ChipUpdate {
+            variant: Some(ChipVariantUpdate::Bluetooth(BluetoothUpdate {
+                low_energy: RadioUpdate { state: le_state },
+                classic: RadioUpdate { state: classic_state },
+            })),
+            ..Default::default()
         }
     }
 }

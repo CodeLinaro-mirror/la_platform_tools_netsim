@@ -112,6 +112,16 @@ const METHOD_FRONTEND_SERVICE_GET_CAPTURE: ::grpcio::Method<
     resp_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
 };
 
+const METHOD_FRONTEND_SERVICE_CREATE_LINK: ::grpcio::Method<
+    super::frontend::CreateLinkRequest,
+    super::frontend::CreateLinkResponse,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/netsim.frontend.FrontendService/CreateLink",
+    req_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
+    resp_mar: ::grpcio::Marshaller { ser: ::grpcio::pb_ser, de: ::grpcio::pb_de },
+};
+
 const METHOD_FRONTEND_SERVICE_LIST_LINK: ::grpcio::Method<
     super::empty::Empty,
     super::frontend::ListLinkResponse,
@@ -440,6 +450,36 @@ impl FrontendServiceClient {
         self.get_capture_opt(req, ::grpcio::CallOption::default())
     }
 
+    pub fn create_link_opt(
+        &self,
+        req: &super::frontend::CreateLinkRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<super::frontend::CreateLinkResponse> {
+        self.client.unary_call(&METHOD_FRONTEND_SERVICE_CREATE_LINK, req, opt)
+    }
+
+    pub fn create_link(
+        &self,
+        req: &super::frontend::CreateLinkRequest,
+    ) -> ::grpcio::Result<super::frontend::CreateLinkResponse> {
+        self.create_link_opt(req, ::grpcio::CallOption::default())
+    }
+
+    pub fn create_link_async_opt(
+        &self,
+        req: &super::frontend::CreateLinkRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::frontend::CreateLinkResponse>> {
+        self.client.unary_call_async(&METHOD_FRONTEND_SERVICE_CREATE_LINK, req, opt)
+    }
+
+    pub fn create_link_async(
+        &self,
+        req: &super::frontend::CreateLinkRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::frontend::CreateLinkResponse>> {
+        self.create_link_async_opt(req, ::grpcio::CallOption::default())
+    }
+
     pub fn list_link_opt(
         &self,
         req: &super::empty::Empty,
@@ -618,6 +658,14 @@ pub trait FrontendService {
     ) {
         grpcio::unimplemented_call!(ctx, sink)
     }
+    fn create_link(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        _req: super::frontend::CreateLinkRequest,
+        sink: ::grpcio::UnarySink<super::frontend::CreateLinkResponse>,
+    ) {
+        grpcio::unimplemented_call!(ctx, sink)
+    }
     fn list_link(
         &mut self,
         ctx: ::grpcio::RpcContext,
@@ -697,6 +745,11 @@ pub fn create_frontend_service<S: FrontendService + Send + Clone + 'static>(
         &METHOD_FRONTEND_SERVICE_GET_CAPTURE,
         move |ctx, req, resp| instance.get_capture(ctx, req, resp),
     );
+    let mut instance = s.clone();
+    builder = builder
+        .add_unary_handler(&METHOD_FRONTEND_SERVICE_CREATE_LINK, move |ctx, req, resp| {
+            instance.create_link(ctx, req, resp)
+        });
     let mut instance = s.clone();
     builder = builder
         .add_unary_handler(&METHOD_FRONTEND_SERVICE_LIST_LINK, move |ctx, req, resp| {

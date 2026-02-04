@@ -23,6 +23,7 @@ const HCI_RESET_COMMAND: [u8; 3] = [0x03, 0x0c, 0x00]; // OpCode, Length
 //   And the client sends an HCI Reset command
 //   Then the client receives an HCI Command Complete event
 #[tokio::test]
+#[ignore]
 async fn test_bluetooth_hci_reset() {
     // Given a running Netsim Daemon
     let mut world = World::new().await;

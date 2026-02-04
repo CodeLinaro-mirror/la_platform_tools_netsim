@@ -143,11 +143,6 @@ def is_presubmit(build_id):
   return build_id.startswith("P")
 
 
-def is_bazel_build(args):
-  """Returns true if this is a bazel build."""
-  return args.bazel or "bazel" in [task.lower() for task in args.task or []]
-
-
 def get_host_and_ip():
   """Try to get my hostname and ip address."""
   st = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

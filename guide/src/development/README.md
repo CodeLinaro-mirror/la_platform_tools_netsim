@@ -110,14 +110,20 @@ repo sync -j8
 ```
 
 The `emulator` rebuild script does a complete clean build of all emulator components.
-For incrmental builds of the `netsimd` component, you can use the `build_tools.py` script.
-By default, it uses Bazel to build:
+For incremental builds of the `netsimd` component, you can use the `build_tools.py` script.
+
+By default, it uses **Bazel** to build:
 ```
 cd /repo/netsim-dev/tools/netsim
-scripts/build_tools.py
+scripts/build_tools.py --task compileinstall
 ```
 
-To build with CMake (legacy), use the `--cmake` flag:
+To clean the build artifacts (Bazel `clean --expunge`):
+```
+scripts/build_tools.py --clean
+```
+
+To build with **CMake** (legacy), use the `--cmake` flag:
 ```
 scripts/build_tools.py --cmake --task configure compileinstall
 ```

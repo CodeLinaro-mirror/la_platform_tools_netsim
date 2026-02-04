@@ -181,4 +181,92 @@ impl World {
             panic!("Daemon already running or not initialized");
         }
     }
+
+    /// Helper to create a Bluetooth chip configuration
+    pub fn make_bluetooth_chip(name: &str, address: &str) -> ChipCreate {
+        let mut chip = ChipCreate::new();
+        chip.name = name.to_string();
+        chip.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
+        chip.address = address.to_string();
+        chip
+    }
+
+    /// Helper to create a UWB chip configuration
+    pub fn make_uwb_chip(name: &str) -> ChipCreate {
+        let mut chip = ChipCreate::new();
+        chip.name = name.to_string();
+        chip.kind = EnumOrUnknown::new(ChipKind::UWB);
+        chip
+    }
+
+    /// When I patch the radio state of a chip
+    pub async fn when_patch_state(
+        &mut self,
+        device_id: u32,
+        chip_id: Option<u32>,
+        kind: ChipKind,
+        state: bool,
+    ) {
+        let mut patch_req = netsim_proto::frontend::PatchDeviceRequest::new();
+        patch_req.id = Some(device_id);
+
+        let mut patch_fields =
+            netsim_proto::frontend::patch_device_request::PatchDeviceFields::new();
+
+        let mut chip_patch = netsim_proto::model::Chip::new();
+        if let Some(id) = chip_id {
+            chip_patch.id = id;
+        }
+        chip_patch.kind = EnumOrUnknown::new(kind);
+
+        if kind == ChipKind::BLUETOOTH {
+            let mut bt_data = netsim_proto::model::chip::Bluetooth::new();
+            let mut classic = netsim_proto::model::chip::Radio::new();
+            classic.state = Some(state);
+            bt_data.classic = MessageField::some(classic);
+            chip_patch.set_bt(bt_data);
+        } else if kind == ChipKind::UWB {
+            let mut radio = netsim_proto::model::chip::Radio::new();
+            radio.state = Some(state);
+            chip_patch.set_uwb(radio);
+        }
+
+        patch_fields.chips.push(chip_patch);
+        patch_req.device = MessageField::some(patch_fields);
+
+        self.when_patch_device(&patch_req).await;
+    }
+
+    /// Then I verify the radio state of a chip
+    pub async fn then_radio_state_is(&mut self, device_id: u32, kind: ChipKind, expected: bool) {
+        let devices = self.when_list_devices().await;
+        let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
+
+        // Find the chips of the given kind
+        let chips: Vec<_> =
+            device.chips.iter().filter(|c| c.kind == EnumOrUnknown::new(kind)).collect();
+
+        assert!(!chips.is_empty(), "No chips of kind {:?} found", kind);
+
+        for chip in chips {
+            let state = match kind {
+                ChipKind::BLUETOOTH => {
+                    if let Some(netsim_proto::model::chip::Chip::Bt(bt)) = &chip.chip {
+                        bt.classic.as_ref().and_then(|r| r.state).unwrap_or(true)
+                    } else {
+                        panic!("Chip kind mismatch");
+                    }
+                }
+                ChipKind::UWB => {
+                    if let Some(netsim_proto::model::chip::Chip::Uwb(radio)) = &chip.chip {
+                        radio.state.unwrap_or(true)
+                    } else {
+                        panic!("Chip kind mismatch");
+                    }
+                }
+                _ => true, // Default to true for other kinds for now
+            };
+            assert_eq!(state, expected, "Radio state for chip {} should be {}", chip.id, expected);
+        }
+    }
 }

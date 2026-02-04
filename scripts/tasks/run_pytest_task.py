@@ -24,7 +24,6 @@ from utils import (
     AOSP_ROOT,
     EMULATOR_ARTIFACT_PATH,
     binary_extension,
-    is_bazel_build,
     run,
 )
 
@@ -39,12 +38,11 @@ class RunPyTestTask(Task):
     super().__init__("RunPyTest")
     self.buildbot = args.buildbot
     self.pytest_input_dir = args.pytest_input_dir
-    self.is_bazel_build = is_bazel_build(args)
     self.out = Path(args.out_dir)
 
   def do_run(self):
     run_pytest_manager = RunPytestManager(
-        self.buildbot, self.pytest_input_dir, self.is_bazel_build, self.out
+        self.buildbot, self.pytest_input_dir, self.out
     )
     return run_pytest_manager.process()
 
@@ -63,7 +61,7 @@ class RunPytestManager:
     Bots
   """
 
-  def __init__(self, buildbot, pytest_input_dir, is_bazel_build, out_dir):
+  def __init__(self, buildbot, pytest_input_dir, out_dir):
     """Initializes the instances based on environment
 
     Args:
@@ -71,7 +69,6 @@ class RunPytestManager:
           self.dir as the directory of the emulator binary
         pytest_input_dir: Defined the directory that includes netsim and
           emulator binaries and libraries. Ignore if the string is empty.
-        is_bazel_build: Defines if it's a bazel build
         out_dir: Defines the out directory of the build environment
     """
     if pytest_input_dir:
@@ -105,7 +102,7 @@ class RunPytestManager:
     emulator_bin = self.dir / binary_extension("emulator")
     if not (self.dir.exists() and emulator_bin.exists()):
       logging.info(
-          "Please run 'scripts/build_tools.sh --InstallEmulator' "
+          "Please run 'scripts/build_tools.py --task InstallEmulator' "
           "before running RunPyTest"
       )
       return False
