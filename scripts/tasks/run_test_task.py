@@ -20,9 +20,11 @@ import platform
 from tasks.task import Task
 from utils import (
     AOSP_ROOT,
+    get_bazel_build_configs,
     get_bazel_path,
+    get_bazel_startup_options,
+    get_bazel_targets,
     run,
-    run_gcloud_auth,
     rust_version,
 )
 
@@ -53,35 +55,9 @@ class RunTestTask(Task):
     if not self.args.cmake:
       # Bazel Test
       bazel = get_bazel_path()
-      configs = ["release"]
-      if self.buildbot:
-        configs.append("ci")
-      elif self.args.hermetic:
-        run_gcloud_auth(self.env)
-        configs.append("hermetic")
-
-      build_configs = [f"--config={c}" for c in configs]
-
-      startup_options = []
-      tmp_dir = getattr(self.env, "tmp_dir", None)
-      if tmp_dir:
-        startup_options += [
-            f"--output_base={tmp_dir / 'output'}",
-            f"--install_base={tmp_dir / 'install'}",
-        ]
-
-      # Default targets
-      targets = self.args.bazel_targets or [
-          "@netsim//:all",
-          "@netsim//rust/...",
-          "@netsim//next/...",
-      ]
-      # TODO(b/320434273): Include next/... for windows once dependent crates are imported
-      if platform.system().lower() == "windows":
-        targets = self.args.bazel_targets or [
-            "@netsim//:all",
-            "@netsim//rust/...",
-        ]
+      build_configs = get_bazel_build_configs(self.args, self.env)
+      startup_options = get_bazel_startup_options(self.env)
+      targets = get_bazel_targets(self.args)
 
       run(
           [bazel]
