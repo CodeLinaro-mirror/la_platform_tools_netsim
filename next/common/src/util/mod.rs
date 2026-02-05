@@ -19,5 +19,6 @@ pub mod ini_file;
 pub mod netsim_logger;
 pub mod os_utils;
 pub mod proto_print_options;
+pub mod scanner_util;
 pub mod time_display;
 pub mod zip_artifact;

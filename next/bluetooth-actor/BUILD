@@ -51,6 +51,7 @@ rust_test(
         ":testing",
         "//next/actor-framework:testing",
         "//next/client:testing",
+        "//next/common",
         "//next/device-actor:testing",
         "//next/device-api:testing",
         "//next/model:testing",
