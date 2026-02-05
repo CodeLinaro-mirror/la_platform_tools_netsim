@@ -9,7 +9,7 @@ use device_api::{DeviceAction, DeviceId};
 use netsim_model::chip::{ChipClient, ChipConfig, ChipCreate, ChipId, NetworkParams, WifiCreate};
 use netsim_model::device::Position;
 use netsim_packets::ethernet::{ether_type, EthernetFrame, MacAddr};
-use netsim_packets::ieee80211::{FrameType, Ieee80211, Ieee80211ToAp, MacAddress};
+use netsim_packets::ieee80211::{FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddress};
 use slirp_actor::SlirpActor;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -38,6 +38,7 @@ pub struct World {
 #[allow(dead_code)]
 impl World {
     pub async fn new() -> Self {
+        let _ = env_logger::builder().is_test(true).try_init();
         // Setup dependencies
         let slirp_actor_impl = SlirpActor::new(Default::default());
         let (slirp_runner, slirp_client) = slirp_actor::new();
@@ -263,7 +264,23 @@ impl World {
         let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
         let bssid = MacAddress::new(src_mac);
         let ieee80211 =
-            netsim_packets::ieee80211::Ieee80211::from_ieee8023(&Bytes::from(eth), bssid).unwrap();
+            Ieee80211::from_ieee8023(&Bytes::from(eth), bssid, FrameDirection::FromAp).unwrap();
+        let bytes = ieee80211.encode_to_vec().unwrap();
+
+        self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP packet");
+    }
+
+    pub async fn when_infra_transmits_unicast_to_mac(&mut self, dst_mac: [u8; 6], payload: &str) {
+        let src_mac = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00]; // AP
+
+        let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
+        let bssid = MacAddress::new(src_mac);
+        let ieee80211 = netsim_packets::ieee80211::Ieee80211::from_ieee8023(
+            &Bytes::from(eth),
+            bssid,
+            netsim_packets::ieee80211::FrameDirection::FromAp,
+        )
+        .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
 
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP packet");
@@ -275,8 +292,12 @@ impl World {
 
         let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
         let bssid = MacAddress::new(src_mac);
-        let ieee80211 =
-            netsim_packets::ieee80211::Ieee80211::from_ieee8023(&Bytes::from(eth), bssid).unwrap();
+        let ieee80211 = netsim_packets::ieee80211::Ieee80211::from_ieee8023(
+            &Bytes::from(eth),
+            bssid,
+            netsim_packets::ieee80211::FrameDirection::FromAp,
+        )
+        .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
 
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP multicast packet");
@@ -386,17 +407,55 @@ impl World {
         loop {
             tokio::select! {
                 Some(bytes) = chip.stream_rx.recv() => {
-                    println!("Chip {} received {} bytes", chip.id, bytes.len());
+                    log::info!("Chip {} received {} bytes", chip.id, bytes.len());
                     if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
                         // Check if the received payload matches the expected payload.
                          if eth.len() >= expected_bytes.len() && eth.windows(expected_bytes.len()).any(|w| w == expected_bytes) {
-                            println!("Chip {} received expected payload!", chip.id);
+                            log::info!("Chip {} received expected payload!", chip.id);
                             return;
                         } else {
-                            println!("Chip {} received payload mismatch", chip.id);
+                            log::warn!("Chip {} received payload mismatch", chip.id);
                         }
                     } else {
-                         println!("Chip {} received non-ethernet or invalid packet", chip.id);
+                         log::error!("Chip {} received non-ethernet or invalid packet", chip.id);
+                    }
+                }
+                _ = &mut timeout => {
+                    panic!("Timeout waiting for payload on chip {}", chip.id);
+                }
+            }
+        }
+    }
+
+    pub async fn then_chip_receives_payload_and_dst(
+        &mut self,
+        receiver_idx: usize,
+        expected_payload: &str,
+        expected_dst: [u8; 6],
+    ) {
+        let chip = &mut self.chips[receiver_idx];
+        let timeout = tokio::time::sleep(std::time::Duration::from_secs(3));
+        tokio::pin!(timeout);
+        let expected_bytes = expected_payload.as_bytes();
+
+        loop {
+            tokio::select! {
+                Some(bytes) = chip.stream_rx.recv() => {
+                    log::info!("Chip {} received {} bytes", chip.id, bytes.len());
+                    if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
+                         if eth.len() >= expected_bytes.len() && eth.windows(expected_bytes.len()).any(|w| w == expected_bytes) {
+                            // Check Destination MAC
+                            if eth.len() >= 6 && &eth[0..6] == expected_dst {
+                                log::info!("Chip {} received expected payload AND mac matches!", chip.id);
+                                return;
+                            } else {
+                                log::warn!("Chip {} received payload match but MAC mismatch. Got {:?}, expected {:?}", chip.id, &eth[0..6], expected_dst);
+                            }
+                        } else {
+                            log::warn!("Chip {} received payload mismatch", chip.id);
+                        }
+                    } else {
+                         log::error!("Chip {} received non-ethernet or invalid packet", chip.id);
                     }
                 }
                 _ = &mut timeout => {
@@ -498,7 +557,7 @@ impl World {
                      if packet.len() >= 6 {
                          let msg_type = u16::from_le_bytes([packet[4], packet[5]]);
                          if msg_type == 16 {
-                             println!("Ignored Netlink Control Packet (Type 16, len={})", packet.len());
+                             log::info!("Ignored Netlink Control Packet (Type 16, len={})", packet.len());
                              continue;
                          }
                      }

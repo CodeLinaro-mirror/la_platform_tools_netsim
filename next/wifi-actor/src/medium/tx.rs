@@ -6,7 +6,7 @@ use crate::medium::types::{Station, WifiResult};
 use crate::medium::utils::{self, build_tx_info};
 use bytes::Bytes;
 use log::debug;
-use netsim_packets::ieee80211::Ieee80211;
+use netsim_packets::ieee80211::{FrameDirection, Ieee80211};
 use netsim_packets::netlink::hwsim_frame::HwsimFrame;
 use netsim_packets::netlink::HwsimMsg;
 use std::collections::HashSet;
@@ -80,9 +80,10 @@ impl Medium {
             .get_bssid()
             .unwrap_or(netsim_packets::ieee80211::MacAddress::new([0, 0, 0, 0, 0, 0]));
 
-        let ieee80211 = Ieee80211::from_ieee8023(packet, bssid).map_err(|e| {
-            WifiError::Internal(format!("Failed to process IEEE 802.3 response: {e}"))
-        })?;
+        let ieee80211 =
+            Ieee80211::from_ieee8023(packet, bssid, FrameDirection::FromAp).map_err(|e| {
+                WifiError::Internal(format!("Failed to process IEEE 802.3 response: {e}"))
+            })?;
         self.route_infra_packet(ieee80211, out_queue)
     }
 
@@ -117,18 +118,43 @@ impl Medium {
             })?;
         }
         let dest_addr = ieee80211.get_destination();
-        let targets = self.resolve_targets(&dest_addr);
+        log::debug!(
+            "Medium: Routing Infra Packet. Dest: {}, Source: {}",
+            dest_addr,
+            ieee80211.get_source()
+        );
+        let mut targets = self.resolve_targets(&dest_addr);
 
         if targets.is_empty() && !dest_addr.is_multicast() {
-            return Err(WifiError::Internal(format!(
-                "Send frame response to unknown destination: {dest_addr}"
-            )));
+            // Unknown Unicast Flooding: Deliver to all enabled stations
+            debug!(
+                "Flooding frame to unknown destination: {dest_addr} (Potential DHCP CHADDR Trap)"
+            );
+            for station in self.stations.values() {
+                targets.push(station.clone());
+            }
         }
+
+        let is_flooding = targets.len() > 1 && !dest_addr.is_multicast();
 
         for dest in targets {
             if self.enabled(dest.client_id)? {
+                let mut frame_to_send = ieee80211.clone();
+                if is_flooding {
+                    // Rewrite Destination MAC to match station's MAC
+                    // ensuring the Guest kernel accepts the packet.
+                    let target_mac = netsim_packets::ieee80211::MacAddress::new(
+                        dest.addr.try_into().unwrap_or([0; 6]),
+                    );
+                    debug!(
+                        "Rewriting Destination MAC for flood: {} -> {} (Target: Client {})",
+                        dest_addr, target_mac, dest.client_id
+                    );
+                    frame_to_send.set_destination(&target_mac);
+                }
+
                 let msg = utils::create_hwsim_msg_from_frame(
-                    &ieee80211,
+                    &frame_to_send,
                     &dest.hwsim_addr,
                     dest.freq,
                     None,
