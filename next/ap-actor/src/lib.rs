@@ -20,6 +20,7 @@ pub mod wpa_auth;
 pub use ap_actor::{ApActor, ApConfig, ApReq, ApResponse, ApState, ApUpdate};
 pub use ap_client::ApClient;
 pub use error::ApError;
+pub use netsim_model;
 pub use netsim_model::device::Position;
 
 use actor_framework::ResourceActor;

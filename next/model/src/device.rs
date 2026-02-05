@@ -105,6 +105,7 @@ pub struct GetVersionMessage {
 pub mod api {
     use crate::chip::{
         ApCreate, BleBeacon, BluetoothCreate, CellCreate, ChipConfig, UwbCreate, WifiCreate,
+        WifiMode,
     };
     use crate::device::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
@@ -138,7 +139,7 @@ pub mod api {
                 ssid: "AndroidWifi".to_string(),
                 bssid: "02:00:00:44:55:66".to_string(),
                 channel: 6,
-                hw_mode: "g".to_string(),
+                hw_mode: WifiMode::G,
                 wpa_passphrase: None,
                 beacon_interval: 100,
                 country_code: None,

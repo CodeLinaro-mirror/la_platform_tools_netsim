@@ -1,6 +1,7 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use crate::world::ApWorld;
+use ap_actor::netsim_model::chip::WifiMode;
 use netsim_packets::ethernet::MacAddr;
 use netsim_packets::ieee80211::frame::{FrameControl, MacHeader3Addr, SequenceControl};
 use netsim_packets::ieee80211::management_subtype;
@@ -338,7 +339,7 @@ async fn test_create_ap_with_country_and_tim() {
         ssid: "CountryAP".to_string(),
         bssid: "02:00:00:00:01:00".parse().unwrap(),
         channel: 6,
-        hw_mode: "g".to_string(),
+        hw_mode: WifiMode::G,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: Some("US".to_string()),
@@ -409,7 +410,7 @@ async fn test_hidden_ssid() {
         ssid: "HiddenAP".to_string(),
         bssid: "02:00:00:00:00:99".parse().unwrap(),
         channel: 6,
-        hw_mode: "g".to_string(),
+        hw_mode: WifiMode::G,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,
@@ -518,7 +519,7 @@ async fn test_wmm_ie_presence() {
         ssid: "WmmAP".to_string(),
         bssid: "02:00:00:00:00:10".parse().unwrap(),
         channel: 36,
-        hw_mode: "ax".to_string(), // WiFi 6 implies WMM
+        hw_mode: WifiMode::Ax, // WiFi 6 implies WMM
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,

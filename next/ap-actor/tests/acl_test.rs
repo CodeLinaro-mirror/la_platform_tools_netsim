@@ -5,6 +5,7 @@ use netsim_packets::ieee80211::{AuthenticationFixedFields, Ieee80211};
 use zerocopy::FromBytes;
 
 mod world;
+use ap_actor::netsim_model::chip::WifiMode;
 use world::ApWorld;
 
 const DENY_MODE: u8 = 1;
@@ -21,7 +22,7 @@ async fn test_acl_deny_mode() {
         ssid: "DenyAP".to_string(),
         bssid: "02:00:00:00:00:10".parse().unwrap(),
         channel: 36,
-        hw_mode: "ax".to_string(),
+        hw_mode: WifiMode::Ax,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,
@@ -72,7 +73,7 @@ async fn test_acl_allow_mode_reject() {
         ssid: "AllowAP".to_string(),
         bssid: "02:00:00:00:00:10".parse().unwrap(),
         channel: 36,
-        hw_mode: "ax".to_string(),
+        hw_mode: WifiMode::Ax,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,
@@ -119,7 +120,7 @@ async fn test_acl_allow_mode_accept() {
         ssid: "AllowAP2".to_string(),
         bssid: "02:00:00:00:00:10".parse().unwrap(),
         channel: 36,
-        hw_mode: "ax".to_string(),
+        hw_mode: WifiMode::Ax,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,

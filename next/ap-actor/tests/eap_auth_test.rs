@@ -12,6 +12,7 @@ use netsim_packets::llc::{control_field, sap, LlcSnapHeader};
 use zerocopy::{IntoBytes, U16};
 
 mod world;
+use ap_actor::netsim_model::chip::WifiMode;
 use world::ApWorld;
 
 fn build_eapol_frame(
@@ -69,7 +70,7 @@ async fn test_eap_mock_authentication_success() {
         ssid: "EntAP".to_string(),
         bssid: "02:00:00:00:00:10".parse().unwrap(),
         channel: 36,
-        hw_mode: "ax".to_string(),
+        hw_mode: WifiMode::Ax,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,

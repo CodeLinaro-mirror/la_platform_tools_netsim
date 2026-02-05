@@ -1,5 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
+use ap_actor::netsim_model::chip::WifiMode;
 use ap_actor::sae::SaeStateMachine;
 use netsim_packets::ethernet::MacAddr;
 use netsim_packets::ieee80211::{
@@ -28,7 +29,7 @@ async fn test_sae_handshake_success() {
         ssid: "SaeAP".to_string(),
         bssid: "02:00:00:00:00:01".parse().unwrap(),
         channel: 36,
-        hw_mode: "ax".to_string(),
+        hw_mode: WifiMode::Ax,
         wpa_passphrase: Some("password123".to_string()),
         beacon_interval: 100,
         country_code: None,

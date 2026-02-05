@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::world;
+use ap_actor::netsim_model::chip::WifiMode;
 
 use netsim_packets::ieee80211::action::{category, public_action};
 use netsim_packets::ieee80211::{management_subtype, Ieee80211};
@@ -34,7 +35,7 @@ async fn test_ftm_ranging_exchange() {
         ssid: "ftm_test_ap".to_string(),
         bssid: netsim_packets::ethernet::MacAddr::new([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]),
         channel: 6,
-        hw_mode: "g".to_string(),
+        hw_mode: WifiMode::G,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,

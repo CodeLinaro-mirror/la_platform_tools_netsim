@@ -1,4 +1,5 @@
 use crate::world::ApWorld;
+use ap_actor::netsim_model::chip::WifiMode;
 
 // ============================================================================
 // Feature: System Resilience and Lifecycle Management
@@ -52,7 +53,7 @@ async fn test_create_duplicate_bssid() {
         ssid: "Dup1".to_string(),
         bssid: "02:AA:00:00:00:01".try_into().unwrap(),
         channel: 1,
-        hw_mode: "g".to_string(),
+        hw_mode: WifiMode::G,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,
@@ -72,7 +73,7 @@ async fn test_create_duplicate_bssid() {
         ssid: "Dup2".to_string(),
         bssid: "02:AA:00:00:00:01".try_into().unwrap(),
         channel: 6,
-        hw_mode: "g".to_string(),
+        hw_mode: WifiMode::G,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,

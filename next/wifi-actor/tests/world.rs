@@ -157,7 +157,7 @@ impl World {
             ssid: "TestAP".to_string(),
             bssid: netsim_packets::ethernet::MacAddr::from([0x02, 0x00, 0x00, 0x00, 0x00, 0x00]),
             channel: 6,
-            hw_mode: "g".to_string(),
+            hw_mode: netsim_model::chip::WifiMode::G,
             wpa_passphrase: None,
             beacon_interval: 100,
             country_code: None,
