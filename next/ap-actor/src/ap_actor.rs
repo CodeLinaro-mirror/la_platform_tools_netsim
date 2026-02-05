@@ -3,7 +3,7 @@
 use crate::ieee802_11::Ieee80211Manager;
 use crate::shared;
 use crate::wpa_auth;
-use netsim_model::chip::{ApCreate, ApUpdate as ModelApUpdate};
+use netsim_model::chip::{ApCreate, ApUpdate as ModelApUpdate, WifiMode};
 use netsim_model::device::Position;
 use netsim_packets::ethernet::MacAddr;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub struct ApConfig {
     pub ssid: String,
     pub bssid: MacAddr,
     pub channel: u8,
-    pub hw_mode: String, // "g", "a", "ad", "ax"
+    pub hw_mode: WifiMode,
     pub wpa_passphrase: Option<String>,
     #[serde(default = "default_beacon_interval")]
     pub beacon_interval: u16,
@@ -69,7 +69,7 @@ impl Default for ApConfig {
             ssid: "AndroidWifi".to_string(),
             bssid: MacAddr::from([0; 6]),
             channel: 6,
-            hw_mode: "g".to_string(),
+            hw_mode: WifiMode::G,
             wpa_passphrase: None,
             beacon_interval: default_beacon_interval(),
             country_code: Some("US".to_string()),

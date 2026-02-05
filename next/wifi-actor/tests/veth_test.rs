@@ -97,7 +97,7 @@ async fn test_udp_guest_to_host() {
         ssid: "TestAP".to_string(),
         bssid: netsim_packets::ethernet::MacAddr::from(HOSTAPD_BSSID),
         channel: 6,
-        hw_mode: "g".to_string(),
+        hw_mode: netsim_model::chip::WifiMode::G,
         wpa_passphrase: None,
     };
     use ap_actor::ApResponse;

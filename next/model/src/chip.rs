@@ -357,25 +357,7 @@ pub struct CellCreate {
     // Future Cellular specific properties.
 }
 
-/// Parameters for creating an Access Point chip.
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ApCreate {
-    pub ssid: String,
-    pub bssid: String,
-    pub channel: u8,
-    pub hw_mode: String,
-    pub wpa_passphrase: Option<String>,
-    pub beacon_interval: u16,
-    pub country_code: Option<String>,
-    pub dtim_period: u8,
-    pub hidden_ssid: bool,
-    pub sae: bool,
-    pub wmm_enabled: bool,
-    pub enterprise_enabled: bool,
-    pub mac_acl_mode: u8,
-    pub mac_acl_list: Vec<String>,
-    pub ftm_responder_enabled: bool,
-}
+pub use crate::ap::{ApCreate, ApUpdate, WifiMode};
 
 /// Parameters for the ChipDied message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -541,13 +523,6 @@ pub struct CellUpdate {
 }
 
 /// Access Point specific chip update.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ApUpdate {
-    pub ssid: Option<String>,
-    pub channel: Option<u8>,
-    #[serde(default)]
-    pub force_disconnect: Vec<String>,
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct BluetoothUpdate {
