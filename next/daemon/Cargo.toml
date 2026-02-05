@@ -21,11 +21,11 @@ bluetooth-actor = { package = "bluetooth", path = "../bluetooth-actor" }
 client = { path = "../client" }
 device-actor = { path = "../device-actor" }
 packet-stream = { path = "../packet-stream" }
-uwb = { path = "../uwb" }
+uwb-actor = { path = "../uwb-actor" }
 cell = { path = "../cell" }
 actor-framework = { path = "../actor-framework" }
 grpc-server = { path = "../grpc-server" }
-wifi = { path = "../wifi" }
+wifi-actor = { path = "../wifi-actor" }
 grpcio = { version = "0.13", default-features = false, features = [
   "protobufv3-codec",
   "openssl",
