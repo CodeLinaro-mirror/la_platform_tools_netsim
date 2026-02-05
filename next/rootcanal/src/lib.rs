@@ -33,8 +33,10 @@ pub use types::{Address, Phy};
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::controller::Callbacks as ControllerCallbacks;
     use crate::types::Address;
+    use bytes::Bytes;
     use std::ffi::c_int;
     use std::str::FromStr;
 
@@ -54,8 +56,8 @@ mod tests {
 
     struct MockControllerCallbacks;
     impl ControllerCallbacks for MockControllerCallbacks {
-        fn send_hci(&self, _source_id: Id, _data: &[u8]) {}
-        fn send_ll(&self, _source_id: Id, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
+        fn send_hci(&self, _source_id: Id, _data: Bytes) {}
+        fn on_receive_ll(&self, _sender_id: Id, _packet: &[u8], _phy: Phy, _rssi: i32) {}
         fn invalid_packet_received(
             &self,
             _source_id: Id,
@@ -72,11 +74,12 @@ mod tests {
     fn test_create_and_delete_controller() {
         let rootcanal = Rootcanal::new(Box::new(MockRootcanalCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let id = rootcanal.new_controller(address, Box::new(MockControllerCallbacks));
+        let id = 1;
+        rootcanal.new_controller(id, address, Box::new(MockControllerCallbacks)).unwrap();
 
         assert_eq!(rootcanal.len(), 1);
 
         rootcanal.remove_controller(id).unwrap();
-        assert_eq!(rootcanal.len(), 0);
+        assert!(rootcanal.is_empty());
     }
 }

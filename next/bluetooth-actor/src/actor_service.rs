@@ -1,15 +1,16 @@
 // Copyright 2025 The Android Open Source Project
 
 use crate::actions::{BluetoothAction, BluetoothActionResult};
+use crate::beacon_utils::generate_legacy_address;
 use crate::bluetooth_actor::BluetoothActor;
 use crate::error::BluetoothError;
 use crate::hci_callbacks::HciCallbacks;
-use crate::internal_chip::InternalChip;
 use crate::utils::ToChipError;
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use netsim_model::chip::{
-    BluetoothMode, Chip, ChipCreate, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate,
+    BluetoothMode, Chip, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant, ChipVariantUpdate,
+    NetworkParams,
 };
 use netsim_model::chip_error::ChipError;
 
@@ -29,18 +30,35 @@ impl ActorService for BluetoothActor {
         params: Self::Create,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
-        let id = params.id;
-        let mut entity = InternalChip::from_create_params(id, params)?;
+        let chip_id = params.id;
 
-        let chip_id = ChipId(entity.chip.id);
+        let create_params = match params.config.network_params {
+            NetworkParams::Bluetooth(p) => p,
+            _ => {
+                return Err(BluetoothError::Chip(ChipError::InvalidArguments(
+                    "Expected Bluetooth network params".into(),
+                )));
+            }
+        };
+
+        let chip = Chip {
+            id: chip_id.0,
+            device_id: params.device_id,
+            name: Some(params.config.name),
+            manufacturer: Some(params.config.manufacturer),
+            product_name: Some(params.config.product_name),
+            kind: ChipKind::BLUETOOTH,
+            variant: Some(netsim_model::chip::ChipVariant::Bluetooth(Default::default())),
+            ..Default::default()
+        };
 
         // 1. Register Stream
-        if let Some(stream) = entity.packet_stream.take() {
+        if let Some(stream) = params.packet_stream {
             _ctx.add_stream(chip_id, Box::pin(stream));
         }
 
         // 2. Setup Sink and Callbacks
-        let callback = if let Some(sink) = entity.packet_sink.take() {
+        let callback = if let Some(sink) = params.packet_sink {
             // Create a channel to send HCI packets from the callback to the sink task.
             let (hci_tx, hci_rx) = tokio::sync::mpsc::channel(10);
 
@@ -54,13 +72,16 @@ impl ActorService for BluetoothActor {
         };
 
         // 3. Create Rootcanal Controller
-        let create_params = entity.create_params.take().ok_or(BluetoothError::Chip(
-            ChipError::InvalidArguments("Missing Bluetooth params".into()),
-        ))?;
-
-        let address = create_params.address.parse().map_err(|_| {
-            BluetoothError::Chip(ChipError::InvalidArguments("Invalid address".into()))
-        })?;
+        let raw_address = if create_params.address.is_empty() {
+            // Legacy behavior: generate address from chip_id.
+            // Matches legacy C++ behavior where address is derived from the ID.
+            // Example: ID 1000 -> 00:00:00:00:03:e8
+            generate_legacy_address(chip_id.into())
+        } else {
+            create_params.address.clone()
+        };
+        let address =
+            raw_address.parse().map_err(|_| BluetoothError::invalid_arg("Invalid address"))?;
         // Note: There is no specific enforcement for a "blue" address type.
         // The current check only validates if the address string is parsable.
 
@@ -73,7 +94,7 @@ impl ActorService for BluetoothActor {
 
         let mut chip_info = match &create_params.mode {
             BluetoothMode::Beacon(params) => {
-                crate::beacon::create(&self.rootcanal, chip_id, params)?
+                crate::beacon::create(&self.rootcanal, chip_id, params, &chip.name)?
             }
             BluetoothMode::Device(params) => {
                 crate::device::create(&self.rootcanal, chip_id, params)?
@@ -82,11 +103,10 @@ impl ActorService for BluetoothActor {
                 crate::sniffer::create(&self.rootcanal, chip_id, params)?
             }
         };
-        chip_info.device_id = entity.chip.device_id;
+        chip_info.device_id = chip.device_id;
         self.chips.lock().unwrap().insert(chip_id, chip_info);
-        self.chips.lock().unwrap().insert(id, entity.chip.clone());
-        self.entities.insert(id, entity);
-        Ok(id)
+        self.chips.lock().unwrap().insert(id.unwrap_or(chip_id), chip);
+        Ok(chip_id)
     }
 
     async fn handle_get(
@@ -94,51 +114,47 @@ impl ActorService for BluetoothActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        Ok(self.entities.get(&id).map(|e| e.chip.clone()))
+        let chips = self.chips.lock().unwrap();
+        Ok(chips.get(&id).cloned())
     }
 
-    // TODO: keep track of the idea that enabled on the Chip should stop HCI/UCI/Wifi
-    // and state/enabled on the Phy of Bluetooth should stop transmission
+    // TODO: Implement radio state enforcement (stopping HCI/transmission when disabled).
     async fn handle_update(
         &mut self,
         id: Self::Id,
         update: Self::Update,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
-        let mut entity = self
-            .entities
-            .remove(&id)
-            .ok_or_else(|| BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
+        let mut chips = self.chips.lock().unwrap();
+        let mut chip =
+            chips.get(&id).cloned().ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
 
-        // 1. Update the entity's chip data first
+        // 1. Update the chip data first
         if let Some(pos) = update.position {
-            entity.chip.position = pos;
+            chip.position = pos;
         }
         if let Some(orient) = update.orientation {
-            entity.chip.orientation = orient;
+            chip.orientation = orient;
         }
         if let Some(links) = update.links {
-            entity.chip.links = links;
+            chip.links = links;
         }
         if let Some(enabled) = update.enabled {
-            entity.chip.enabled = enabled;
+            chip.enabled = enabled;
         }
 
         // 2. Handle Variant logic
         if let Some(ChipVariantUpdate::Bluetooth(bt_update)) = update.variant {
-            if let Some(ChipVariant::Bluetooth(bt_chip)) = &mut entity.chip.variant {
+            if let Some(ChipVariant::Bluetooth(bt_chip)) = &mut chip.variant {
                 bt_update.classic.apply(&mut bt_chip.classic);
                 bt_update.low_energy.apply(&mut bt_chip.low_energy);
             }
         }
 
         // 3. Sync the global chips map
-        let final_chip = entity.chip.clone();
-        self.chips.lock().unwrap().insert(id, final_chip.clone());
+        chips.insert(id, chip.clone());
 
-        // 4. Put entity back and return the chip
-        self.entities.insert(id, entity);
-        Ok(final_chip)
+        Ok(chip)
     }
 
     async fn handle_delete(
@@ -146,19 +162,21 @@ impl ActorService for BluetoothActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
-        if let Some(entity) = self.entities.remove(&id) {
-            let chip_id = ChipId(entity.chip.id);
+        let mut chips = self.chips.lock().unwrap();
+        if let Some(chip) = chips.remove(&id) {
+            let chip_id = ChipId(chip.id);
+            let device_id = chip.device_id;
+
             log::info!("Deleting chip {chip_id}");
-            self.chips.lock().unwrap().remove(&chip_id);
             self.rootcanal.remove_controller(chip_id.0.into()).to_chip_error()?;
 
             // Notify DeviceService
             let dc = self.device_client.clone();
-            let device_id = entity.chip.device_id;
-            tokio::spawn(async move {
-                let _ = dc.notify_chip_removed(device_id, chip_id).await;
-            });
-            self.chips.lock().unwrap().remove(&id);
+            if device_id.0 != 0 {
+                tokio::spawn(async move {
+                    let _ = dc.notify_chip_removed(device_id, chip_id).await;
+                });
+            }
             Ok(())
         } else {
             Err(BluetoothError::Chip(ChipError::ChipNotFound(id)))
@@ -204,6 +222,7 @@ impl ActorService for BluetoothActor {
         &mut self,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        Ok(actor_framework::utils::handle_list_map(&self.entities, |e| e.chip.clone()))
+        let chips = self.chips.lock().unwrap();
+        Ok(chips.values().cloned().collect())
     }
 }

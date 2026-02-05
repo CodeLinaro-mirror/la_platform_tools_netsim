@@ -283,7 +283,7 @@ impl NetsimDaemon {
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
 
-        logger::init("netsim", true);
+        logger::init("netsim", args.verbose);
 
         info!("netsim startup");
 
@@ -397,8 +397,7 @@ impl NetsimDaemon {
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
-        let bt_actor_state =
-            bluetooth_actor::BluetoothActor::new(device_client.clone(), bt_client.clone());
+        let bt_actor_state = bluetooth_actor::BluetoothActor::new(device_client.clone());
 
         // Setup Wifi Server (and dependencies: AP)
         // Setup Slirp Actor

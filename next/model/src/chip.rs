@@ -239,6 +239,21 @@ impl From<NetworkKind> for ChipKind {
     }
 }
 
+impl From<&NetworkParams> for ChipKind {
+    fn from(params: &NetworkParams) -> Self {
+        match params {
+            NetworkParams::Bluetooth(bt) => match bt.mode {
+                BluetoothMode::Beacon(_) => ChipKind::BleBeacon,
+                _ => ChipKind::BLUETOOTH,
+            },
+            NetworkParams::Wifi(_) => ChipKind::WIFI,
+            NetworkParams::Uwb(_) => ChipKind::UWB,
+            NetworkParams::Cell(_) => ChipKind::CELLULAR,
+            NetworkParams::Ap(_) => ChipKind::AP,
+        }
+    }
+}
+
 /// An enum holding the parameters for a specific chip technology.
 #[derive(Debug, Clone)]
 pub enum NetworkParams {
@@ -393,6 +408,22 @@ pub struct Chip {
     pub links: Vec<(ChipId, i8)>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+}
+
+impl Chip {
+    pub fn is_le_enabled(&self) -> bool {
+        if let Some(ChipVariant::Bluetooth(bt)) = &self.variant {
+            return bt.low_energy.state.unwrap_or(true);
+        }
+        true
+    }
+
+    pub fn is_classic_enabled(&self) -> bool {
+        if let Some(ChipVariant::Bluetooth(bt)) = &self.variant {
+            return bt.classic.state.unwrap_or(true);
+        }
+        true
+    }
 }
 
 fn default_enabled() -> bool {

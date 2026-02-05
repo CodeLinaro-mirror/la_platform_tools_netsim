@@ -1,17 +1,22 @@
 // Copyright 2026 The Android Open Source Project
 
+use bytes::Bytes;
 use client::DeviceClient;
-use futures::SinkExt;
 use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, NetworkParams, UwbCreate};
 use netsim_model::chip_error::ChipError;
 use netsim_model::client_error::ClientError;
 use netsim_model::device::DeviceId;
+use netsim_testing::mocks::{mock_sink, mock_stream};
+use std::collections::HashMap;
+use tokio::sync::mpsc::{Receiver, Sender};
 use uwb_actor::{UwbActor, UwbClient};
 
 /// The BDD World for UWB Actor tests.
 pub struct World {
     pub client: UwbClient,
     pub _device_client: DeviceClient, // Keep reference if we need to check notifications, or use a Mock
+    pub packet_txs: HashMap<ChipId, Sender<Bytes>>,
+    pub packet_rxs: HashMap<ChipId, Receiver<Vec<u8>>>,
     _actor_task: tokio::task::JoinHandle<()>,
 }
 
@@ -59,36 +64,43 @@ impl World {
 
         // Spawn actor
         let actor = UwbActor::new(device_client.clone());
-        let actor_task = tokio::spawn(async move { runner.run(actor).await });
+        let actor_task = tokio::spawn(runner.run(actor));
 
-        World { client, _device_client: device_client, _actor_task: actor_task }
+        World {
+            client,
+            _device_client: device_client,
+            packet_txs: HashMap::new(),
+            packet_rxs: HashMap::new(),
+            _actor_task: actor_task,
+        }
     }
 
-    pub fn create_uwb_params(id: u32) -> ChipCreate {
-        ChipCreate {
-            id: ChipId(id),
-            // Use empty stream for testing to avoid SyncStream boilerplate
-            packet_stream: Some(Box::new(futures::stream::empty())),
-            packet_sink: Some(Box::pin(
-                futures::sink::drain()
-                    .sink_map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "drain")),
-            )),
+    pub async fn when_create_chip(&mut self, chip_id: u32) -> Result<(), ChipError> {
+        let id = ChipId(chip_id);
+        let (stream, packet_tx) = mock_stream();
+        let (sink, packet_rx) = mock_sink();
+        let params = ChipCreate {
+            id,
+            packet_stream: Some(stream),
+            packet_sink: Some(sink),
             config: netsim_model::chip::ChipConfig {
-                name: format!("uwb_chip_{}", id),
+                name: format!("uwb_chip_{id}"),
                 manufacturer: "Netsim".to_string(),
                 product_name: "TestUwb".to_string(),
                 network_params: NetworkParams::Uwb(UwbCreate {}),
             },
             device_id: DeviceId(1),
-        }
-    }
+        };
 
-    pub async fn when_create_chip(&self, chip_id: u32) -> Result<(), ChipError> {
-        let params = Self::create_uwb_params(chip_id);
         self.client.create(params).await.map_err(|e| match e {
             ClientError::Chip(err) => err,
             _ => ChipError::Internal(e.to_string()),
-        })
+        })?;
+
+        self.packet_txs.insert(id, packet_tx);
+        self.packet_rxs.insert(id, packet_rx);
+
+        Ok(())
     }
 
     pub async fn when_delete_chip(&self, chip_id: u32) -> Result<(), ChipError> {
@@ -103,5 +115,45 @@ impl World {
             ClientError::Chip(err) => err,
             _ => ChipError::Internal(e.to_string()),
         })
+    }
+
+    pub fn and_packet_stream_is_closed(&mut self, chip_id: u32) {
+        let chip_id = ChipId(chip_id);
+        self.packet_txs.remove(&chip_id);
+    }
+
+    pub fn and_packet_sink_is_closed(&mut self, chip_id: u32) {
+        let chip_id = ChipId(chip_id);
+        self.packet_rxs.remove(&chip_id);
+    }
+
+    pub async fn then_chip_does_not_exist(&self, chip_id: u32) {
+        // Yield to allow the actor to process the stream/sink closure.
+        tokio::task::yield_now().await;
+        let result = self.when_get_chip(chip_id).await;
+        assert_eq!(result, Err(ChipError::ChipNotFound(ChipId(chip_id))));
+    }
+
+    pub async fn when_packet_is_sent(&mut self, chip_id: u32, packet: &[u8]) {
+        let chip_id = ChipId(chip_id);
+        let tx = self.packet_txs.get_mut(&chip_id).expect("Chip not found or already closed");
+        tx.send(Bytes::copy_from_slice(packet)).await.expect("Failed to send packet");
+    }
+
+    pub async fn then_packet_is_received(&mut self, chip_id: u32) -> Vec<u8> {
+        let chip_id = ChipId(chip_id);
+        let rx = self.packet_rxs.get_mut(&chip_id).expect("Chip not found or already closed");
+        tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+            .await
+            .expect("Timed out waiting for packet")
+            .expect("Packet stream closed unexpectedly")
+    }
+
+    pub async fn then_chip_exists(&self, chip_id: u32) {
+        self.when_get_chip(chip_id).await.expect("Chip should exist");
+    }
+
+    pub async fn given_a_chip(&mut self, chip_id: u32) {
+        self.when_create_chip(chip_id).await.expect("GIVEN: Failed to create chip");
     }
 }
