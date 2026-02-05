@@ -27,8 +27,8 @@
 //!     // device_client creation depends on where DeviceClient comes from.
 //!     // Assuming client::DeviceClient is correct based on bluetooth_actor.rs usage.
 //!     let device_client = client::DeviceClient::new(Box::new(resource_client));
-//!     let (actor, client) = bluetooth::new();
-//!     let bluetooth_actor = bluetooth::BluetoothActor::new(device_client, client.clone());
+//!     let (actor, client) = bluetooth_actor::new();
+//!     let bluetooth_actor = bluetooth_actor::BluetoothActor::new(device_client);
 //!     tokio::spawn(async move {
 //!         actor.run(bluetooth_actor).await;
 //!     });
@@ -103,10 +103,10 @@ mod bluetooth_actor; // Renamed from actor
 mod device;
 mod error;
 mod hci_callbacks; // Added
-mod internal_chip; // Added
+
+mod actor_service;
 mod lifecycle; // Added
 mod ranging;
-mod service;
 mod sniffer;
 mod utils;
 

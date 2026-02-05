@@ -18,7 +18,7 @@ use netsim_model::chip_error::ChipError;
 #[tokio::test]
 async fn test_create_and_get_chip() {
     // Given
-    let world = World::new().await;
+    let mut world = World::new().await;
     let chip_id = 1;
 
     // When
@@ -44,9 +44,9 @@ async fn test_create_and_get_chip() {
 #[tokio::test]
 async fn test_create_duplicate_chip() {
     // Given
-    let world = World::new().await;
+    let mut world = World::new().await;
     let chip_id = 2;
-    world.when_create_chip(chip_id).await.unwrap();
+    world.given_a_chip(chip_id).await;
 
     // When
     let result = world.when_create_chip(chip_id).await;

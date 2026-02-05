@@ -1,29 +1,57 @@
 // Copyright 2026 The Android Open Source Project
 
-use crate::uwb_actor::UwbActor;
+use crate::uwb_actor::{run_sink_task, UwbActor};
+use crate::{UwbAction, UwbActionResult};
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use netsim_model::chip::{Chip, ChipCreate, ChipId, ChipUpdate};
 use netsim_model::chip_error::ChipError;
+use tokio::sync::mpsc;
 
 #[async_trait]
 impl ActorService for UwbActor {
     type Id = ChipId;
     type Create = ChipCreate;
     type Update = ChipUpdate;
-    type Action = crate::UwbAction;
-    type ActionResult = crate::UwbActionResult;
+    type Action = UwbAction;
+    type ActionResult = UwbActionResult;
     type Error = ChipError;
     type Entity = Chip;
 
     async fn handle_create(
         &mut self,
-        id: Option<Self::Id>,
+        _id: Option<Self::Id>,
         params: Self::Create,
-        _ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = id.unwrap_or(params.id);
-        self.create_chip(params)?;
+        let chip_id = params.id;
+        if self.chips.contains_key(&chip_id) {
+            return Err(ChipError::ChipExists(chip_id.0));
+        }
+
+        let stream = params.packet_stream.expect("Packet stream is present");
+        let sink = params.packet_sink.expect("Packet sink is present");
+
+        let chip = Chip {
+            id: chip_id.0,
+            device_id: params.device_id,
+            kind: netsim_model::chip::ChipKind::UWB,
+            variant: Some(netsim_model::chip::ChipVariant::Uwb(Default::default())),
+            name: Some(params.config.name),
+            manufacturer: Some(params.config.manufacturer),
+            product_name: Some(params.config.product_name),
+            ..Default::default()
+        };
+        self.chips.insert(chip_id, chip);
+
+        // Spawn a task to handle the sink.
+        let (uci_tx, uci_rx) = mpsc::channel(10);
+        self.uci_senders.insert(chip_id, uci_tx);
+        ctx.spawn(chip_id, Box::pin(run_sink_task(sink, uci_rx, chip_id)));
+
+        // Register the stream with the actor's context to get lifecycle events.
+        ctx.add_stream(chip_id, Box::pin(stream));
+
         Ok(chip_id)
     }
 
@@ -32,7 +60,7 @@ impl ActorService for UwbActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        Ok(self.active_chips.get(&id).cloned())
+        Ok(self.chips.get(&id).cloned())
     }
 
     async fn handle_update(
@@ -41,40 +69,35 @@ impl ActorService for UwbActor {
         update: Self::Update,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
-        if let Some(chip) = self.active_chips.get_mut(&id) {
-            if let Some(pos) = update.position {
-                chip.position = pos;
-            }
-            if let Some(orient) = update.orientation {
-                chip.orientation = orient;
-            }
-            if let Some(netsim_model::chip::ChipVariantUpdate::Uwb(radio_update)) = update.variant {
-                if let Some(netsim_model::chip::ChipVariant::Uwb(uwb_radio)) = &mut chip.variant {
-                    radio_update.apply(uwb_radio);
-                }
-            }
-            // TODO: Implement update logic to pica
-            Ok(chip.clone())
-        } else {
-            Err(ChipError::ChipNotFound(id))
+        let chip = self.chips.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
+        if let Some(pos) = update.position {
+            chip.position = pos;
         }
+        if let Some(orient) = update.orientation {
+            chip.orientation = orient;
+        }
+        if let Some(netsim_model::chip::ChipVariantUpdate::Uwb(radio_update)) = update.variant {
+            if let Some(netsim_model::chip::ChipVariant::Uwb(uwb_radio)) = &mut chip.variant {
+                radio_update.apply(uwb_radio);
+            }
+        }
+        // TODO: Implement update logic to pica
+        Ok(chip.clone())
     }
 
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
-        let device_id = if let Some(chip) = self.active_chips.get(&id) {
-            chip.device_id
-        } else {
-            return Err(ChipError::ChipNotFound(id));
-        };
+        let chip = self.chips.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
+        self.uci_senders.remove(&id);
         let device_client = self.device_client.clone();
-        self.cleanup_chip(id, "handle_delete", &device_client).await;
+        tokio::spawn(async move {
+            let _ = device_client.notify_chip_removed(chip.device_id, id).await;
+        });
         Ok(())
     }
-
     async fn handle_action(
         &mut self,
         _id: Option<Self::Id>,
@@ -82,30 +105,22 @@ impl ActorService for UwbActor {
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
-            crate::UwbAction::Reset { id: _ } => {
+            UwbAction::Reset { id: _ } => {
                 // TODO: Implement reset
-                Ok(crate::UwbActionResult::Success)
+                Ok(UwbActionResult::Success)
             }
-            crate::UwbAction::GetStatistics => {
+            UwbAction::GetStatistics => {
                 let stats = self
-                    .active_chips
+                    .chips
                     .values()
-                    .filter_map(|chip| {
-                        // All chips in active_chips are UWB, but check variant just in case or use kind
-                        match &chip.variant {
-                            Some(netsim_model::chip::ChipVariant::Uwb(_)) => {
-                                Some(netsim_model::stats::NetsimRadioStats {
-                                    id: chip.id,
-                                    name: chip.name.clone().unwrap_or_default(),
-                                    tx_bytes: 0,
-                                    rx_bytes: 0,
-                                })
-                            }
-                            _ => None,
-                        }
+                    .map(|chip| netsim_model::stats::NetsimRadioStats {
+                        id: chip.id,
+                        name: chip.name.clone().unwrap_or_default(),
+                        tx_bytes: 0,
+                        rx_bytes: 0,
                     })
                     .collect();
-                Ok(crate::UwbActionResult::Statistics(stats))
+                Ok(UwbActionResult::Statistics(stats))
             }
         }
     }
@@ -114,6 +129,6 @@ impl ActorService for UwbActor {
         &mut self,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        Ok(self.active_chips.values().cloned().collect())
+        Ok(self.chips.values().cloned().collect())
     }
 }

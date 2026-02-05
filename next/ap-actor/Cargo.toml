@@ -25,6 +25,7 @@ cxx-build = "1.0"
 
 [dev-dependencies]
 tokio-stream = "0.1"
+netsim-testing = { path = "../testing", features = ["testing"] }
 
 [dependencies.mockall]
 version = "0.13"

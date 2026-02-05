@@ -3,17 +3,17 @@
 use actor_framework::ResourceClient;
 use bluetooth_actor::{BluetoothActor, BluetoothClient};
 use device_actor::client::DeviceClient;
-use futures::sink::Sink;
 use netsim_model::chip::{
-    BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode, ChipClient, ChipConfig, ChipCreate,
-    ChipId, DeviceParams, NetworkParams, SnifferParams,
+    BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId,
+    DeviceParams, NetworkParams, SnifferParams,
 };
 use netsim_model::device::DeviceId;
-use std::pin::Pin;
+use netsim_testing::logger;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 /// The BDD World for Bluetooth Actor tests.
+#[allow(dead_code)]
 pub struct World {
     /// The Bluetooth Client under test.
     pub client: BluetoothClient,
@@ -25,20 +25,27 @@ pub struct World {
     pub chip_id_counter: u32,
     /// The ID of the simulated device.
     pub device_id: DeviceId,
+    /// Map of chip names to their IDs.
+    pub chips: std::collections::HashMap<String, ChipId>,
+    /// Map of chip names to their stream senders (to inject packets).
+    pub streams: std::collections::HashMap<String, mpsc::Sender<bytes::Bytes>>,
+    /// Map of chip names to their sink receivers (to capture packets).
+    pub sinks: std::collections::HashMap<String, mpsc::Receiver<Vec<u8>>>,
 }
 
+#[allow(dead_code)]
 impl World {
     /// Creates a new World instance.
     pub fn new() -> Self {
+        logger::setup(None);
         let (device_tx, _device_rx) = mpsc::channel(10);
-        // We use a real ResourceClient for device_client since we don't need to mock it heavily yet,
-        // but we could mock it if needed.
+        // Use real DeviceClient for integration testing.
         let resource_client = DeviceClient::new(Box::new(ResourceClient::new(device_tx)));
         let (actor, client) = bluetooth_actor::new();
         let resource_client_clone = resource_client.clone();
-        let client_clone = client.clone();
+        let _client_clone = client.clone();
         let actor_task = tokio::spawn(async move {
-            actor.run(BluetoothActor::new(resource_client_clone, client_clone)).await;
+            actor.run(BluetoothActor::new(resource_client_clone)).await;
         });
 
         World {
@@ -47,6 +54,9 @@ impl World {
             _actor_task: actor_task,
             chip_id_counter: 0,
             device_id: DeviceId(1),
+            chips: std::collections::HashMap::new(),
+            streams: std::collections::HashMap::new(),
+            sinks: std::collections::HashMap::new(),
         }
     }
 
@@ -58,17 +68,25 @@ impl World {
 
     // --- Given Steps ---
 
-    /// Creates a Bluetooth chip in Device mode.
-    pub async fn given_bluetooth_device(&mut self) -> ChipId {
+    /// Creates a Bluetooth chip in Device mode with a given name.
+    /// The stream and sink are automatically created and managed by the World.
+    pub async fn given_bluetooth_device(&mut self, name: &str) {
+        if self.chips.contains_key(name) {
+            panic!("Chip with name '{}' already exists", name);
+        }
+
+        let (stream, stream_tx) = crate::test_utils::mock_stream();
+        let (sink, sink_rx) = crate::test_utils::mock_sink();
+
         let id = self.next_chip_id();
         let params = ChipCreate {
             id,
-            packet_stream: None,
-            packet_sink: None,
+            packet_stream: Some(stream),
+            packet_sink: Some(sink),
             config: ChipConfig::new(
                 "device_chip",
                 "netsim",
-                "test_device",
+                name,
                 NetworkParams::Bluetooth(BluetoothCreate {
                     address: format!("00:00:00:00:00:{:02x}", id.0),
                     bt_properties: Default::default(),
@@ -78,11 +96,14 @@ impl World {
             device_id: self.device_id,
         };
         self.client.0.create(params).await.expect("Failed to create device chip");
-        id
+
+        self.chips.insert(name.to_string(), id);
+        self.streams.insert(name.to_string(), stream_tx);
+        self.sinks.insert(name.to_string(), sink_rx);
     }
 
     /// Creates a Bluetooth chip in Beacon mode.
-    pub async fn given_bluetooth_beacon(&mut self) -> ChipId {
+    pub async fn given_bluetooth_beacon(&mut self, name: &str) {
         let id = self.next_chip_id();
         let params = ChipCreate {
             id,
@@ -91,7 +112,7 @@ impl World {
             config: ChipConfig::new(
                 "beacon_chip",
                 "netsim",
-                "test_beacon",
+                name,
                 NetworkParams::Bluetooth(BluetoothCreate {
                     address: format!("00:00:00:00:00:{:02x}", id.0),
                     bt_properties: Default::default(),
@@ -103,23 +124,26 @@ impl World {
             device_id: self.device_id,
         };
         self.client.0.create(params).await.expect("Failed to create beacon chip");
-        id
+        self.chips.insert(name.to_string(), id);
     }
 
     /// Creates a Bluetooth chip in Sniffer mode.
-    pub async fn given_bluetooth_sniffer(
-        &mut self,
-        sink: Option<Pin<Box<dyn Sink<bytes::Bytes, Error = std::io::Error> + Send + Sync>>>,
-    ) -> ChipId {
+    pub async fn given_bluetooth_sniffer(&mut self, name: &str) {
+        if self.chips.contains_key(name) {
+            panic!("Chip with name '{}' already exists", name);
+        }
+
+        let (sink, sink_rx) = crate::test_utils::mock_sink();
+
         let id = self.next_chip_id();
         let params = ChipCreate {
             id,
             packet_stream: None,
-            packet_sink: sink,
+            packet_sink: Some(sink),
             config: ChipConfig::new(
                 "sniffer_chip",
                 "netsim",
-                "test_sniffer",
+                name,
                 NetworkParams::Bluetooth(BluetoothCreate {
                     address: format!("00:00:00:00:00:{:02x}", id.0),
                     bt_properties: Default::default(),
@@ -129,7 +153,8 @@ impl World {
             device_id: self.device_id,
         };
         self.client.0.create(params).await.expect("Failed to create sniffer chip");
-        id
+        self.chips.insert(name.to_string(), id);
+        self.sinks.insert(name.to_string(), sink_rx);
     }
 
     // --- When Steps ---
@@ -143,26 +168,80 @@ impl World {
 
     pub async fn when_delete_chip(
         &self,
-        id: ChipId,
+        name: &str,
     ) -> Result<(), actor_framework::FrameworkError> {
+        let id = *self.chips.get(name).expect("Chip not found");
         self.client.0.delete(id).await
+    }
+
+    /// Drops the stream sender for the given chip, simulating a stream closure.
+    pub fn when_stream_dropped(&mut self, name: &str) {
+        self.streams.remove(name).expect("Stream not found for chip");
+    }
+
+    /// Drops the sink receiver for the given chip, simulating a sink closure.
+    pub fn when_sink_dropped(&mut self, name: &str) {
+        self.sinks.remove(name).expect("Sink not found for chip");
+    }
+
+    pub async fn when_update_chip_position(
+        &self,
+        name: &str,
+        position: netsim_model::device::Position,
+    ) {
+        let id = *self.chips.get(name).expect("Chip not found");
+        let update =
+            netsim_model::chip::ChipUpdate { position: Some(position), ..Default::default() };
+        self.client.0.update(id, update).await.expect("Failed to update chip");
     }
 
     // --- Then Steps ---
 
-    pub async fn then_chip_exists(&self, id: ChipId) {
-        let chip = self.client.0.get(id).await.expect("Failed to get chip");
-        assert!(chip.is_some(), "Chip {} should exist", id);
+    pub async fn then_chip_position_is(
+        &self,
+        name: &str,
+        expected: netsim_model::device::Position,
+    ) {
+        let id = *self.chips.get(name).expect("Chip not found");
+        let chip =
+            self.client.0.get(id).await.expect("Failed to get chip").expect("Chip should exist");
+        assert_eq!(chip.position, expected, "Chip position matches");
     }
 
-    pub async fn then_chip_does_not_exist(&self, id: ChipId) {
+    pub async fn then_chip_exists(&self, name: &str) {
+        let id = *self.chips.get(name).expect("Chip name tracked in World");
         let chip = self.client.0.get(id).await.expect("Failed to get chip");
-        assert!(chip.is_none(), "Chip {} should NOT exist", id);
+        assert!(chip.is_some(), "Chip {} ({}) should exist", name, id);
+    }
+
+    pub async fn then_chip_does_not_exist(&self, name: &str) {
+        if let Some(id) = self.chips.get(name) {
+            let chip = self.client.0.get(*id).await.expect("Failed to get chip");
+            assert!(chip.is_none(), "Chip {} ({}) should NOT exist", name, id);
+        }
     }
 
     pub async fn then_chip_count_is(&self, expected: usize) {
-        let count = self.client.read_count_for_testing().await.expect("Failed to read chip count");
+        let count = self.client.0.list().await.expect("Failed to list chips").len();
         assert_eq!(count, expected, "Chip count should be {}", expected);
+    }
+
+    pub async fn when_packet_sent(&mut self, name: &str, packet: bytes::Bytes) {
+        let tx = self.streams.get_mut(name).expect("Stream not found for chip");
+        tx.send(packet).await.expect("Failed to send packet");
+    }
+
+    pub async fn then_packet_received(&mut self, name: &str, expected: &[u8]) {
+        let actual = self.receive_packet(name).await;
+        assert_eq!(actual, expected, "Packet received by {} does not match expected", name);
+    }
+
+    pub async fn receive_packet(&mut self, name: &str) -> Vec<u8> {
+        let rx = self.sinks.get_mut(name).expect("Sink not found for chip");
+        tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+            .await
+            .expect("Timed out waiting for packet")
+            .expect("Packet stream closed unexpectedly")
     }
 
     /// Helper to create a ChipConfig.

@@ -18,11 +18,15 @@
 //! ## Usage
 //!
 //! ```rust
-//! use link_api::{LinkCreate, LinkAction};
+//! use link_api::{LinkCreate, LinkAction, ChipId, ChipKind};
 //! // Create a link
-//! let create_params = LinkCreate { ... };
+//! let create_params = LinkCreate {
+//!     sender: ChipId(0),
+//!     receiver: ChipId(1),
+//!     rssi: -50,
+//! };
 //! // Send an action
-//! let action = LinkAction::NotifyChipAdded(chip_id, network_kind);
+//! let action = LinkAction::NotifyChipAdded(ChipId(0), ChipKind::BLUETOOTH);
 //! ```
 
 pub mod action;
