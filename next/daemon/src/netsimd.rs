@@ -314,6 +314,30 @@ impl NetsimDaemon {
         // Log all args
         info!("{args:#?}");
 
+        // Resolve TAP configuration early to validate permissions/availability.
+        #[cfg(target_os = "linux")]
+        let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
+            if args.wifi.wifi_cvd_tap {
+                Some("cvd-etap-%02d".to_string())
+            } else {
+                None
+            }
+        });
+        #[cfg(not(target_os = "linux"))]
+        let wifi_tap: Option<String> = None;
+
+        // Pre-check TAP permissions if configured.
+        // We do this BEFORE redirection so the user can see the error in the console.
+        #[cfg(target_os = "linux")]
+        if let Some(ref tap_config) = wifi_tap {
+            if let Err(e) = wifi_actor::tap_gateway::TapGateway::preflight_check(tap_config) {
+                return Err(RunResult::InitializationError(format!(
+                    "TAP configuration failed: {}",
+                    e
+                )));
+            }
+        }
+
         if !args.logtostderr {
             if let Err(err) =
                 redirect_std_stream(&get_instance_name(args.instance, args.connector_instance))
@@ -430,10 +454,27 @@ impl NetsimDaemon {
 
         // Setup Wifi Actor
         let (wifi_runner, wifi_client) = wifi_actor::new();
+        // Initialize wifi_tap configuration.
+        // If --wifi-cvd-tap is set, it implies explicit "cvd-etap-%02d" pattern for
+        // pooling. If --wifi-tap is set, it overrides everything.
+        #[cfg(target_os = "linux")]
+        let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
+            if args.wifi.wifi_cvd_tap {
+                Some("cvd-etap-%02d".to_string())
+            } else {
+                None
+            }
+        });
+        #[cfg(not(target_os = "linux"))]
+        let wifi_tap: Option<String> = None;
+
+        // TAP preflight check is now done in `new_with_dirs` before lock acquisition.
+
         let wifi_actor_state = wifi_actor::WifiActor::new(
             Some(Arc::new(ap_client.clone())),
             Some(slirp_client.clone()),
             device_client.clone(),
+            wifi_tap,
         );
 
         // Setup Uwb Server
@@ -469,8 +510,8 @@ impl NetsimDaemon {
             None,
             if args.no_shutdown {
                 None
-            } else if let Some(secs) = args.idle_shutdown_timeout {
-                Some(Duration::from_secs(secs))
+            } else if let Some(millis) = args.idle_shutdown_timeout {
+                Some(Duration::from_millis(millis))
             } else {
                 Some(Duration::from_secs(15))
             },
@@ -650,16 +691,14 @@ pub async fn run() -> RunResult {
     match NetsimDaemon::new().await {
         Ok(StartUpMode::Owner(daemon, _ini_guard)) => daemon.run_daemon().await,
         Ok(StartUpMode::Client(config)) => {
+            // If we are just a client, we shouldn't necessarily fail, but if the user
+            // expected to start a NEW daemon, they might be confused.
+            // For now, valid behavior is to print info and exit normally (acting as a
+            // client/discovery).
             info!("Another netsimd is running. Will use its config: {:?}", config);
             info!("Target gRPC port: {}", config.grpc_port);
-            // TODO: Implement client/forwarder logic here for cuttlefish case
-            RunResult::ExitedNormally // Placeholder
+            RunResult::ExitedNormally
         }
-        Err(e) => {
-            if e != RunResult::ExitedNormally {
-                error!("Failed to initialize NetsimDaemon: {:?}", e);
-            }
-            e
-        }
+        Err(e) => e,
     }
 }

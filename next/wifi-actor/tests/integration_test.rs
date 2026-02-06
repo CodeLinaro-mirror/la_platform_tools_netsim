@@ -1,6 +1,11 @@
 // Copyright 2025 The Android Open Source Project
 
+mod ftm_test;
+mod gateway_test;
 mod hwsim_helper;
+mod lifecycle_test;
+mod packet_routing_test;
+// mod veth_test; // Broken/Outdated
 mod world;
 
 use world::World;

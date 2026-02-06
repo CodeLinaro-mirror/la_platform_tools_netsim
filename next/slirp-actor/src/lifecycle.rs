@@ -5,7 +5,6 @@ use log::info;
 use crate::slirp_actor::SlirpActor;
 
 #[async_trait]
-#[async_trait]
 impl ActorLifecycle for SlirpActor {
     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
         info!("SlirpActor starting");

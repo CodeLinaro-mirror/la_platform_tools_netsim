@@ -8,7 +8,6 @@ use netsim_model::chip::ChipId;
 use crate::uwb_actor::UwbActor;
 
 #[async_trait]
-#[async_trait]
 impl ActorLifecycle for UwbActor {
     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
         // No startup logic needed yet

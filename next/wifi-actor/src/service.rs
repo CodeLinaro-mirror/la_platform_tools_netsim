@@ -77,6 +77,9 @@ impl ActorService for WifiActor {
         // Notify Medium about new chip
         self.medium.add(id.0);
 
+        // Notify Gateway about new chip (e.g. attach TAP)
+        self.gateway.on_chip_create(id, _ctx).await;
+
         Ok(id)
     }
 
