@@ -8,6 +8,7 @@ use netsim_model::{
     stats::NetsimRadioStats,
 };
 use netsim_packets::ieee80211::Ieee80211;
+use netsim_proto::stats::WifiStats as ProtoWifiStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -26,6 +27,7 @@ pub type ChipIdType = u32;
 #[derive(Debug)]
 pub enum WifiReq {
     GetStatistics,
+    GetGlobalStats,
     Reset { id: ChipId },
 }
 
@@ -34,6 +36,7 @@ pub enum WifiReq {
 pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
+    GlobalStats(Box<ProtoWifiStats>),
     Error(String),
 }
 
