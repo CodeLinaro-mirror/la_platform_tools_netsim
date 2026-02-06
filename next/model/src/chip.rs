@@ -239,6 +239,21 @@ impl From<NetworkKind> for ChipKind {
     }
 }
 
+impl From<&NetworkParams> for ChipKind {
+    fn from(params: &NetworkParams) -> Self {
+        match params {
+            NetworkParams::Bluetooth(bt) => match bt.mode {
+                BluetoothMode::Beacon(_) => ChipKind::BleBeacon,
+                _ => ChipKind::BLUETOOTH,
+            },
+            NetworkParams::Wifi(_) => ChipKind::WIFI,
+            NetworkParams::Uwb(_) => ChipKind::UWB,
+            NetworkParams::Cell(_) => ChipKind::CELLULAR,
+            NetworkParams::Ap(_) => ChipKind::AP,
+        }
+    }
+}
+
 /// An enum holding the parameters for a specific chip technology.
 #[derive(Debug, Clone)]
 pub enum NetworkParams {
@@ -281,8 +296,8 @@ pub enum BluetoothMode {
     Device(DeviceParams),
     /// A simple, non-interactive BLE beacon that broadcasts advertisements.
     Beacon(Box<BeaconParams>),
-    /// A passive Bluetooth sniffer to capture nearby traffic.
-    Sniffer(SnifferParams),
+    /// A passive Bluetooth scanner to capture nearby traffic.
+    Scanner(ScannerParams),
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -315,13 +330,40 @@ pub struct BeaconParams {
     pub ble_beacon: BleBeacon,
 }
 
-/// Parameters for a Bluetooth sniffer.
+/// Parameters for a Bluetooth scanner.
 ///
-/// This struct holds parameters for a Bluetooth sniffer and is used when the
-/// [`BluetoothMode`] is [`BluetoothMode::Sniffer`].
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SnifferParams {
-    // Future sniffer-specific properties can be added here.
+/// This struct holds parameters for a Bluetooth scanner and is used when the
+/// [`BluetoothMode`] is [`BluetoothMode::Scanner`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScannerParams {
+    /// Scan mode (e.g., LOW_POWER, BALANCED, LOW_LATENCY). Default: LOW_POWER (0).
+    pub scan_mode: i32,
+    /// Callback type (e.g., ALL_MATCHES). Default: ALL_MATCHES (1).
+    pub callback_type: i32,
+    /// Report delay in milliseconds. Default: 0.
+    pub report_delay_millis: i64,
+    /// Match mode (e.g., AGGRESSIVE, STICKY). Default: AGGRESSIVE (1).
+    pub match_mode: i32,
+    /// Number of matches per filter. Default: MAX_ADVERTISEMENT (3).
+    pub num_of_matches: i32,
+    /// PHY configuration. Default: LE_ALL_SUPPORTED (255).
+    pub phy: i32,
+    /// Legacy scan mode. Default: true.
+    pub legacy: bool,
+}
+
+impl Default for ScannerParams {
+    fn default() -> Self {
+        Self {
+            scan_mode: 0,     // SCAN_MODE_LOW_POWER
+            callback_type: 1, // CALLBACK_TYPE_ALL_MATCHES
+            report_delay_millis: 0,
+            match_mode: 1,     // MATCH_MODE_AGGRESSIVE
+            num_of_matches: 3, // MATCH_NUM_MAX_ADVERTISEMENT
+            phy: 255,          // PHY_LE_ALL_SUPPORTED
+            legacy: true,
+        }
+    }
 }
 
 /// Parameters for creating a Wi-Fi chip.
@@ -342,25 +384,7 @@ pub struct CellCreate {
     // Future Cellular specific properties.
 }
 
-/// Parameters for creating an Access Point chip.
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ApCreate {
-    pub ssid: String,
-    pub bssid: String,
-    pub channel: u8,
-    pub hw_mode: String,
-    pub wpa_passphrase: Option<String>,
-    pub beacon_interval: u16,
-    pub country_code: Option<String>,
-    pub dtim_period: u8,
-    pub hidden_ssid: bool,
-    pub sae: bool,
-    pub wmm_enabled: bool,
-    pub enterprise_enabled: bool,
-    pub mac_acl_mode: u8,
-    pub mac_acl_list: Vec<String>,
-    pub ftm_responder_enabled: bool,
-}
+pub use crate::ap::{ApCreate, ApUpdate, WifiMode};
 
 /// Parameters for the ChipDied message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -526,13 +550,6 @@ pub struct CellUpdate {
 }
 
 /// Access Point specific chip update.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ApUpdate {
-    pub ssid: Option<String>,
-    pub channel: Option<u8>,
-    #[serde(default)]
-    pub force_disconnect: Vec<String>,
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct BluetoothUpdate {

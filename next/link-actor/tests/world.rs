@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-use client::LinkClient;
-use link_actor::LinkActor;
+use link_actor::{LinkActor, LinkClient};
 use link_api::{Link, LinkCreate, LinkId, LinkUpdate};
 use netsim_model::chip::{ChipClient, ChipId, ChipKind, MockChipClient};
 use std::collections::HashMap;

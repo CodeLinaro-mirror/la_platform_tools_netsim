@@ -74,16 +74,16 @@
 //! A chip that repeatedly broadcasts advertisement packets. This is configured
 //! using [`netsim_model::chip::BluetoothMode::Beacon`] with [`netsim_model::chip::BeaconParams`].
 //!
-//! ## Sniffer Mode
+//! ## Scanner Mode
 //!
 //! A chip that listens for and captures all nearby Bluetooth packets. This is
-//! configured using [`netsim_model::chip::BluetoothMode::Sniffer`].
+//! configured using [`netsim_model::chip::BluetoothMode::Scanner`].
 //!
 //! # Features
 //!
 //! * **Actor-Based State Management:** Implements the actor model, with the `ResourceActor` as a central
 //!   actor that serializes all operations to safely manage the state of multiple Bluetooth
-//!   chips (Device, Beacon, and Sniffer modes).
+//!   chips (Device, Beacon, and Scanner modes).
 //! * **HCI Stream/Sink Bridging:** For each chip, bridges a `PacketStream` (for incoming HCI
 //!   commands) and a `PacketSink` (for outgoing HCI events), routing packets between the host
 //!   and the `rootcanal` simulation.
@@ -92,7 +92,7 @@
 //! # Future Features
 //!
 //! * **RSSI Management:** Manage Received Signal Strength Indication (RSSI) based on chip location.
-//! * **Link Layer Capture:** Sniffer functionality to convert Rootcanal LL packets to standard Bluetooth LL packets.
+//! * **Link Layer Capture:** Scanner functionality to convert Rootcanal LL packets to standard Bluetooth LL packets.
 //! * **HCI-based Beacon:** Implement Beacon functionality via HCI commands, allowing common Android-like advertisement parameters.
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
@@ -107,9 +107,11 @@ mod hci_callbacks; // Added
 mod actor_service;
 mod lifecycle; // Added
 mod ranging;
-mod sniffer;
+mod scanner;
 mod utils;
 
+/// Utilities for Bluetooth Beacons and advertising data
+pub mod beacon_utils;
 pub mod client;
 
 pub use actions::{BluetoothAction, BluetoothActionResult};

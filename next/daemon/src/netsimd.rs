@@ -18,6 +18,7 @@ use netsim_model::chip::{
     UwbCreate, WifiCreate,
 };
 use netsim_model::initial_info::{ChipInfo, ChipKind};
+use netsim_model::set_if_some;
 use packet_stream::transport::traits::{PacketSink, PacketStream};
 use packet_stream::{StreamAddress, Streams, TransportType};
 use std::collections::HashMap;
@@ -283,7 +284,7 @@ impl NetsimDaemon {
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
 
-        logger::init("netsim", true);
+        logger::init("netsim", args.verbose);
 
         info!("netsim startup");
 
@@ -463,10 +464,18 @@ impl NetsimDaemon {
         join_set.spawn(link_runner.run(link_actor_state));
 
         // Create Default AP
-        device_client
-            .create_device(*Box::new(device_api::DeviceCreate::default_ap()))
-            .await
-            .expect("Failed to create default AP");
+        let mut device_create = device_api::DeviceCreate::default_ap();
+
+        // Apply overrides from args
+        if let device_api::api::Chip::Ap(ref mut ap) = device_create.chip.chip {
+            set_if_some!(ap.ssid, &args.wifi.wifi_ssid);
+            set_if_some!(ap.wpa_passphrase, args.wifi.wifi_password.clone(), Some);
+            set_if_some!(ap.channel, args.wifi.wifi_channel);
+            set_if_some!(ap.beacon_interval, args.wifi.wifi_beacon_interval);
+            set_if_some!(ap.hw_mode, args.wifi.wifi_mode, Into::into);
+        }
+
+        device_client.create_device(device_create).await.expect("Failed to create default AP");
 
         if args.pcap {
             capture_client.set_default_capture(true).await.expect("Failed to set default capture");

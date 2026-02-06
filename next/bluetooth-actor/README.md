@@ -18,7 +18,7 @@ All component lifecycle and configuration is handled through a message-passing s
 
 All high-frequency packet I/O is handled through a generic `PacketStreamerApi` trait, which abstracts the underlying transport protocol (e.g., gRPC, file descriptors).
 
--   Each worker component (`VirtualDeviceChip`, `SnifferChip`) takes ownership of a `Box<dyn PacketStreamerApi>`.
+-   Each worker component (`VirtualDeviceChip`, `ScannerChip`) takes ownership of a `Box<dyn PacketStreamerApi>`.
 -   This gives each chip a completely isolated data path, meaning a failure in one chip's stream does not affect any other.
 -   The worker's main loop is a simple `tokio::select!` that shuttles packets between the client stream and the `rootcanal` backend.
 
@@ -27,7 +27,7 @@ All high-frequency packet I/O is handled through a generic `PacketStreamerApi` t
 -   **`BluetoothManager`**: The central coordinator for all Bluetooth simulation. It is the main entry point for the crate.
 -   **`VirtualDeviceChip`**: A worker that represents the full Host Controller Interface (HCI) for a virtualized Android device. It bridges the client's packet stream with the `rootcanal` simulation backend.
 -   **`BeaconChip`**: A worker that emulates a simplified Bluetooth Low Energy (BLE) beacon, which only requires sending HCI commands to `rootcanal` to configure its advertising state.
--   **`SnifferChip`**: A worker that captures all nearby Bluetooth traffic and forwards it to the client over its packet stream.
+-   **`ScannerChip`**: A worker that captures all nearby Bluetooth traffic and forwards it to the client over its packet stream.
 
 ## Building the Crate
 

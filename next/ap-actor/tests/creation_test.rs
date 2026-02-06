@@ -1,4 +1,5 @@
 use crate::world::ApWorld;
+use ap_actor::netsim_model::chip::WifiMode;
 
 // ============================================================================
 // Feature: AP Creation and Configuration
@@ -57,7 +58,7 @@ async fn test_create_hidden_ap() {
         ssid: "HiddenNet".to_string(),
         bssid: "02:00:00:00:00:99".try_into().unwrap(),
         channel: 6,
-        hw_mode: "g".to_string(),
+        hw_mode: WifiMode::G,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,
@@ -93,6 +94,6 @@ async fn test_create_wifi6_ap() {
 
     // Then
     let ap_state = world.client.get_ap(id).await.expect("Get failed").expect("AP not found");
-    assert_eq!(ap_state.config.hw_mode, "ax");
+    assert_eq!(ap_state.config.hw_mode, WifiMode::Ax);
     assert_eq!(ap_state.config.channel, 36);
 }
