@@ -7,7 +7,7 @@ use device_actor::client::DeviceClient;
 use netsim_model::bluetooth::beacon::{AdvertiseSettings, AdvertiseTxPower, TxPower};
 use netsim_model::chip::{
     BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId,
-    DeviceParams, NetworkParams, PacketSink, PacketStream, ScannerParams,
+    ChipKindParams, DeviceParams, PacketSink, PacketStream, ScannerParams,
 };
 use netsim_model::device::DeviceId;
 use netsim_testing::logger;
@@ -92,7 +92,7 @@ impl World {
                 "test_chip",
                 "netsim",
                 name,
-                NetworkParams::Bluetooth(BluetoothCreate {
+                ChipKindParams::Bluetooth(BluetoothCreate {
                     address,
                     bt_properties: Default::default(),
                     mode,
@@ -369,7 +369,7 @@ impl World {
             "test_chip",
             "test_manufacturer",
             "test_product",
-            NetworkParams::Bluetooth(BluetoothCreate {
+            ChipKindParams::Bluetooth(BluetoothCreate {
                 address: format!("00:00:00:00:00:{:02x}", id.0),
                 bt_properties: Default::default(),
                 mode,

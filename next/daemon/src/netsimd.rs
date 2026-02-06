@@ -13,11 +13,11 @@ use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info, warn};
 use netsim_model::chip::{
-    ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, DeviceParams,
-    NetworkKind, NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
+    ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
+    ChipKindParams, DeviceParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
     UwbCreate, WifiCreate,
 };
-use netsim_model::initial_info::{ChipInfo, ChipKind};
+use netsim_model::initial_info::ChipInfo;
 use netsim_model::set_if_some;
 use packet_stream::transport::traits::{PacketSink, PacketStream};
 use packet_stream::{StreamAddress, Streams, TransportType};
@@ -99,18 +99,18 @@ async fn handle_new_connection(
         chip.address = chip.id.clone();
     }
 
-    let network_params = match chip.kind {
-        ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothCreate {
+    let chip_kind_params = match ChipKind::from(chip.kind) {
+        ChipKind::BLUETOOTH => ChipKindParams::Bluetooth(BluetoothCreate {
             address: chip.address.clone(),
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
         }),
-        ChipKind::UWB => NetworkParams::Uwb(UwbCreate::default()),
-        ChipKind::WIFI => NetworkParams::Wifi(WifiCreate::default()),
-        ChipKind::AP => NetworkParams::Ap(ApCreate::default()),
-        ChipKind::CELL => NetworkParams::Cell(CellCreate::default()),
-        _ => {
-            error!("Unsupported chip kind: {:?}", chip.kind);
+        ChipKind::UWB => ChipKindParams::Uwb(UwbCreate::default()),
+        ChipKind::WIFI => ChipKindParams::Wifi(WifiCreate::default()),
+        ChipKind::AP => ChipKindParams::Ap(ApCreate::default()),
+        ChipKind::CELLULAR => ChipKindParams::Cell(CellCreate::default()),
+        kind => {
+            error!("Unsupported chip kind: {:?}", kind);
             return;
         }
     };
@@ -119,7 +119,7 @@ async fn handle_new_connection(
         name: chip.name.clone(),
         manufacturer: chip.manufacturer.clone(),
         product_name: chip.product_name.clone(),
-        network_params,
+        chip_kind_params,
     };
 
     // Convert packet_stream types to netsim_model types
@@ -428,18 +428,18 @@ impl NetsimDaemon {
         let cell_server = cell::Server::new(device_client.clone(), cell_controller);
 
         // Prepare chip clients map for DeviceServer
-        let mut chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();
-        chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client.clone()));
-        chip_clients.insert(NetworkKind::Wifi, Box::new(wifi_client.clone()));
-        chip_clients.insert(NetworkKind::Uwb, Box::new(uwb_client.clone()));
-        chip_clients.insert(NetworkKind::Cell, Box::new(cell_client.clone()));
-        chip_clients.insert(NetworkKind::Ap, Box::new(ap_client.clone()));
+        let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
+        chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
+        chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
+        chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
+        chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
+        chip_clients.insert(ChipKind::AP, Box::new(ap_client.clone()));
 
         // Setup Link Actor State
         // Create a new map for LinkActor.
         // We need to inject ChipClients into LinkActor so it can propagate link changes
         // (like RSSI updates) to the underlying radio actors (e.g., BluetoothActor).
-        let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k.into(), v.clone())).collect();
+        let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k, v.clone())).collect();
         let link_actor_state = link_actor::LinkActor::new(link_chip_clients);
 
         let device_actor_state = device_actor::DeviceActor::new(

@@ -38,11 +38,9 @@ pub fn to_proto_orientation(o: ApiOrientation) -> ProtoOrientation {
 
 pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
     match k {
-        ApiChipKind::UNSPECIFIED => ProtoChipKind::UNSPECIFIED,
         ApiChipKind::BLUETOOTH => ProtoChipKind::BLUETOOTH,
         ApiChipKind::WIFI => ProtoChipKind::WIFI,
         ApiChipKind::UWB => ProtoChipKind::UWB,
-        ApiChipKind::BleBeacon => ProtoChipKind::BLUETOOTH_BEACON,
         // Map unknown/new types to UNSPECIFIED for now
         ApiChipKind::NFC => ProtoChipKind::UNSPECIFIED,
         ApiChipKind::CELLULAR => ProtoChipKind::UNSPECIFIED,
@@ -68,11 +66,12 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
                 bt.classic = MessageField::some(to_proto_radio(&bt_model.classic));
                 chip.chip = Some(netsim_proto::model::chip::Chip::Bt(bt));
             }
-            netsim_model::chip::ChipVariant::Wifi(radio) => {
-                chip.chip = Some(netsim_proto::model::chip::Chip::Wifi(to_proto_radio(&radio)));
+            netsim_model::chip::ChipVariant::Wifi(wifi) => {
+                chip.chip =
+                    Some(netsim_proto::model::chip::Chip::Wifi(to_proto_radio(&wifi.radio)));
             }
-            netsim_model::chip::ChipVariant::Uwb(radio) => {
-                chip.chip = Some(netsim_proto::model::chip::Chip::Uwb(to_proto_radio(&radio)));
+            netsim_model::chip::ChipVariant::Uwb(uwb) => {
+                chip.chip = Some(netsim_proto::model::chip::Chip::Uwb(to_proto_radio(&uwb.radio)));
             }
             netsim_model::chip::ChipVariant::Cell(_) => {
                 // TODO: Add Cell support to proto if available
@@ -110,7 +109,7 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
 
 pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
     // Currently only supports BLE Beacon
-    if c.kind.enum_value_or_default() == ProtoChipKind::BLUETOOTH_BEACON || c.has_ble_beacon() {
+    if c.has_ble_beacon() {
         let beacon_create = c.ble_beacon();
         let settings = beacon_create.settings.as_ref().map(from_proto_advertise_settings);
         let adv_data = beacon_create.adv_data.as_ref().map(from_proto_advertise_data);
@@ -215,13 +214,13 @@ pub fn from_proto_orientation(o: ProtoOrientation) -> ApiOrientation {
     ApiOrientation { yaw: o.yaw, pitch: o.pitch, roll: o.roll }
 }
 
-pub fn from_proto_chip_kind(k: ProtoChipKind) -> ApiChipKind {
+pub fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
     match k {
-        ProtoChipKind::UNSPECIFIED => ApiChipKind::UNSPECIFIED,
-        ProtoChipKind::BLUETOOTH => ApiChipKind::BLUETOOTH,
-        ProtoChipKind::WIFI => ApiChipKind::WIFI,
-        ProtoChipKind::UWB => ApiChipKind::UWB,
-        ProtoChipKind::BLUETOOTH_BEACON => ApiChipKind::BleBeacon,
+        ProtoChipKind::BLUETOOTH => Some(ApiChipKind::BLUETOOTH),
+        ProtoChipKind::WIFI => Some(ApiChipKind::WIFI),
+        ProtoChipKind::UWB => Some(ApiChipKind::UWB),
+
+        _ => None,
     }
 }
 
@@ -253,10 +252,14 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
             }
             netsim_proto::model::chip::Chip::BleBeacon(_) => None, // TODO
             netsim_proto::model::chip::Chip::Uwb(uwb) => {
-                Some(ChipVariantUpdate::Uwb(from_proto_radio_update(Some(uwb))))
+                Some(ChipVariantUpdate::Uwb(netsim_model::uwb::UwbUpdate {
+                    radio: from_proto_radio_update(Some(uwb)),
+                }))
             }
             netsim_proto::model::chip::Chip::Wifi(wifi) => {
-                Some(ChipVariantUpdate::Wifi(from_proto_radio_update(Some(wifi))))
+                Some(ChipVariantUpdate::Wifi(netsim_model::wifi::WifiUpdate {
+                    radio: from_proto_radio_update(Some(wifi)),
+                }))
             }
             _ => None,
         }
@@ -298,13 +301,17 @@ pub fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
     } else {
         match proto.link_kind.enum_value_or_default() {
             ProtoPhyKind::BLUETOOTH_CLASSIC | ProtoPhyKind::BLUETOOTH_LOW_ENERGY => {
-                ApiChipKind::BLUETOOTH
+                Some(ApiChipKind::BLUETOOTH)
             }
-            ProtoPhyKind::WIFI | ProtoPhyKind::WIFI_RTT => ApiChipKind::WIFI,
-            ProtoPhyKind::UWB => ApiChipKind::UWB,
-            _ => return None,
+            ProtoPhyKind::WIFI | ProtoPhyKind::WIFI_RTT => Some(ApiChipKind::WIFI),
+            ProtoPhyKind::UWB => Some(ApiChipKind::UWB),
+            _ => None,
         }
     };
 
-    Some(ApiLink { id: netsim_model::link::LinkId(0), sender, receiver, kind, rssi })
+    if let Some(kind) = kind {
+        Some(ApiLink { id: netsim_model::link::LinkId(0), sender, receiver, kind, rssi })
+    } else {
+        None
+    }
 }

@@ -17,7 +17,6 @@ pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>
         proto_common::ChipKind::BLUETOOTH => ChipKind::BLUETOOTH,
         proto_common::ChipKind::WIFI => ChipKind::WIFI,
         proto_common::ChipKind::UWB => ChipKind::UWB,
-        proto_common::ChipKind::BLUETOOTH_BEACON => ChipKind::UNSPECIFIED,
     }
 }
 

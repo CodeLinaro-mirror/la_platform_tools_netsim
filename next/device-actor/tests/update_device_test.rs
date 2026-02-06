@@ -8,9 +8,7 @@
 
 use crate::world::World;
 use device_api::api::DeviceUpdate;
-use netsim_model::chip::{
-    Chip, ChipClient, ChipId, ChipVariantUpdate, MockChipClient, NetworkKind,
-};
+use netsim_model::chip::{Chip, ChipClient, ChipId, ChipKind, ChipVariantUpdate, MockChipClient};
 use std::collections::HashMap;
 
 // Scenario: Update device properties propagates to chips
@@ -30,7 +28,7 @@ async fn test_update_device_propagates_to_chips() {
         .returning(|_, _| Ok(Chip::default()));
 
     let mut chip_clients = HashMap::new();
-    chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
+    chip_clients.insert(ChipKind::BLUETOOTH, Box::new(mock_chip_client) as Box<dyn ChipClient>);
 
     // Use default link mock
     let mock_link_client = World::create_default_link_client();
@@ -97,7 +95,7 @@ async fn test_update_device_propagates_by_variant() {
         .returning(|_, _| Ok(Chip::default()));
 
     let mut chip_clients = HashMap::new();
-    chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
+    chip_clients.insert(ChipKind::BLUETOOTH, Box::new(mock_chip_client) as Box<dyn ChipClient>);
 
     // Use default link mock
     let mock_link_client = World::create_default_link_client();
@@ -154,7 +152,7 @@ async fn test_update_chip_ble_radio_state() {
         .returning(|_, _| Ok(Chip::default()));
 
     let mut chip_clients = HashMap::new();
-    chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
+    chip_clients.insert(ChipKind::BLUETOOTH, Box::new(mock_chip_client) as Box<dyn ChipClient>);
 
     // Use default link mock
     let mock_link_client = World::create_default_link_client();
@@ -216,7 +214,7 @@ async fn test_update_chip_classic_radio_state() {
         .returning(|_, _| Ok(Chip::default()));
 
     let mut chip_clients = HashMap::new();
-    chip_clients.insert(NetworkKind::Bluetooth, Box::new(mock_chip_client) as Box<dyn ChipClient>);
+    chip_clients.insert(ChipKind::BLUETOOTH, Box::new(mock_chip_client) as Box<dyn ChipClient>);
 
     // Use default link mock
     let mock_link_client = World::create_default_link_client();

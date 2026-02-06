@@ -146,7 +146,7 @@ fn create_add_chip_params(guid: &str, chip_name: &str) -> device_api::DeviceAddC
             name: chip_name.to_string(),
             manufacturer: "man-1".to_string(),
             product_name: "prod-1".to_string(),
-            network_params: netsim_model::chip::NetworkParams::Bluetooth(
+            chip_kind_params: netsim_model::chip::ChipKindParams::Bluetooth(
                 netsim_model::chip::BluetoothCreate {
                     address: "00:00:00:00:00:00".to_string(),
                     bt_properties: Default::default(),

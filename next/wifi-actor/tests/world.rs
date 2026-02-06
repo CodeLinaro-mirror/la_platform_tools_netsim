@@ -6,7 +6,7 @@ use ap_actor::{ApActor, ApClient};
 use bytes::Bytes;
 use device_actor::DeviceActor;
 use device_api::{DeviceAction, DeviceId};
-use netsim_model::chip::{ChipClient, ChipConfig, ChipCreate, ChipId, NetworkParams, WifiCreate};
+use netsim_model::chip::{ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, WifiCreate};
 use netsim_model::device::Position;
 use netsim_packets::ethernet::{ether_type, EthernetFrame, MacAddr};
 use netsim_packets::ieee80211::{FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddress};
@@ -190,7 +190,7 @@ impl World {
             }));
 
         let config =
-            ChipConfig::new("wifi", "google", "test", NetworkParams::Wifi(WifiCreate::default()));
+            ChipConfig::new("wifi", "google", "test", ChipKindParams::Wifi(WifiCreate::default()));
         let id = ChipId(id_val);
 
         let params = ChipCreate {

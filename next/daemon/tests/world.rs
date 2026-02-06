@@ -104,7 +104,7 @@ impl World {
 
         let mut chip_create = ChipCreate::new();
         chip_create.name = chip_name.to_string();
-        chip_create.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH_BEACON);
+        chip_create.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
         chip_create.manufacturer = "TestMfg".to_string();
         chip_create.product_name = "TestProduct".to_string();
         chip_create.address = "11:22:33:44:55:66".to_string();

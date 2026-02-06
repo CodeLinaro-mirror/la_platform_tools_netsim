@@ -5,7 +5,7 @@ use crate::wifi_actor::{WifiActor, WifiReq, WifiResponse};
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use netsim_model::chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, Radio};
+use netsim_model::chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate};
 use tokio::sync::mpsc;
 
 #[async_trait]
@@ -63,12 +63,7 @@ impl ActorService for WifiActor {
             id: id.0,
             device_id: params.device_id,
             kind: netsim_model::chip::ChipKind::WIFI,
-            variant: Some(ChipVariant::Wifi(Radio {
-                state: Some(true),
-                range: 0.0,
-                tx_count: 0,
-                rx_count: 0,
-            })),
+            variant: Some(netsim_model::chip::ChipVariant::Wifi(Default::default())),
             name: Some(params.config.name),
             manufacturer: Some(params.config.manufacturer),
             product_name: Some(params.config.product_name),
@@ -98,7 +93,7 @@ impl ActorService for WifiActor {
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(chip) = self.active_chips.get_mut(&id) {
             if let Some(ChipVariantUpdate::Wifi(radio_update)) = update.variant {
-                if let Some(state) = radio_update.state {
+                if let Some(state) = radio_update.radio.state {
                     self.medium.set_enabled(id.0, state);
                 }
             }
@@ -111,7 +106,7 @@ impl ActorService for WifiActor {
             // Update the chip state properly
             if let Ok(enabled) = self.medium.enabled(id.0) {
                 if let Some(ChipVariant::Wifi(ref mut radio)) = chip.variant {
-                    radio.state = Some(enabled);
+                    radio.radio.state = Some(enabled);
                 }
                 chip.enabled = enabled;
             }

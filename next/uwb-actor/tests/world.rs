@@ -2,7 +2,7 @@
 
 use bytes::Bytes;
 use client::DeviceClient;
-use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, NetworkParams, UwbCreate};
+use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, ChipKindParams, UwbCreate};
 use netsim_model::chip_error::ChipError;
 use netsim_model::client_error::ClientError;
 use netsim_model::device::DeviceId;
@@ -87,7 +87,7 @@ impl World {
                 name: format!("uwb_chip_{id}"),
                 manufacturer: "Netsim".to_string(),
                 product_name: "TestUwb".to_string(),
-                network_params: NetworkParams::Uwb(UwbCreate {}),
+                chip_kind_params: ChipKindParams::Uwb(UwbCreate {}),
             },
             device_id: DeviceId(1),
         };

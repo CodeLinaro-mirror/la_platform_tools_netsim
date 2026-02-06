@@ -80,7 +80,7 @@ async fn test_udp_guest_to_host() {
         "wifi-chip",
         "google",
         "test",
-        netsim_model::chip::NetworkParams::Wifi(netsim_model::chip::WifiCreate::default()),
+        netsim_model::chip::ChipKindParams::Wifi(netsim_model::chip::WifiCreate::default()),
     );
     let chip_id = ChipId(1);
     let params = ChipCreate {

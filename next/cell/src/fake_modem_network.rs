@@ -1,7 +1,8 @@
 // Copyright 2024-2025 The Android Open Source Project
 use bytes::Bytes;
 use modem_rs::modem_network::{ModemCallbacks, ModemError, ModemNetworkInterface};
-use netsim_model::chip::{CellChip, Chip, ChipId, ChipVariant};
+use netsim_model::cell::Cell;
+use netsim_model::chip::{Chip, ChipId, ChipVariant};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -77,7 +78,7 @@ impl ModemNetworkInterface for FakeModemNetwork {
         if controllers.contains_key(&chip_id) {
             log::info!("[Fake] Controller {} FOUND", chip_id);
             let chip = Chip {
-                variant: Some(ChipVariant::Cell(CellChip { state: "FAKE_ACTIVE".to_string() })),
+                variant: Some(ChipVariant::Cell(Cell { state: "FAKE_ACTIVE".to_string() })),
                 ..Default::default()
             };
             Ok(chip)

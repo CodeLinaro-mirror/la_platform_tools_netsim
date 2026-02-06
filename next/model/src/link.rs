@@ -47,14 +47,4 @@ pub struct LinkUpdate {
     pub rssi: Option<i8>,
 }
 
-impl Default for Link {
-    fn default() -> Self {
-        Self {
-            id: LinkId::default(),
-            sender: ChipId(0),
-            receiver: ChipId(0),
-            kind: ChipKind::UNSPECIFIED,
-            rssi: 0,
-        }
-    }
-}
+// impl Default for Link removed as ChipKind::UNSPECIFIED is removed.

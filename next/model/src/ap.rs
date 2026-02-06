@@ -81,3 +81,13 @@ pub struct ApUpdate {
     #[serde(default)]
     pub force_disconnect: Vec<String>,
 }
+
+/// Access Point specific chip information.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Ap {
+    pub config: ApCreate,
+    // TODO: Add other state fields if needed
+    // Use ignore to skip serialization of fields that are not relevant to the model
+    #[serde(skip)]
+    pub associations: Vec<String>,
+}

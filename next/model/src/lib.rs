@@ -32,11 +32,10 @@
 //! By maintaining this structure, we ensure a stable foundation and prevent circular dependencies.
 
 /// Bluetooth related definitions.
-pub mod bluetooth;
-
 /// Chip configuration parameters.
 pub mod ap;
-/// Chip actor definitions.
+pub mod bluetooth;
+pub mod cell;
 pub mod chip;
 /// Chip error definitions.
 pub mod chip_error;
@@ -53,5 +52,7 @@ pub mod macros;
 pub mod packet_streamer;
 /// Statistics related definitions.
 pub mod stats;
+pub mod uwb;
+pub mod wifi;
 
 pub use initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};

@@ -7,7 +7,7 @@
 //   So that I can support multiple chips per device and dynamic attachment
 
 use crate::world::World;
-use netsim_model::chip::{MockChipClient, NetworkKind};
+use netsim_model::chip::{ChipKind, MockChipClient};
 use std::collections::HashMap;
 
 // Scenario: Add chip to new device
@@ -45,7 +45,7 @@ async fn test_add_chip_to_existing_device() {
 
     let mut chip_clients = HashMap::new();
     chip_clients.insert(
-        NetworkKind::Bluetooth,
+        ChipKind::BLUETOOTH,
         Box::new(mock_chip_client) as Box<dyn netsim_model::chip::ChipClient>,
     );
 
@@ -91,7 +91,7 @@ async fn test_concurrent_add_chip_race_condition() {
 
     let mut chip_clients = HashMap::new();
     chip_clients.insert(
-        NetworkKind::Bluetooth,
+        ChipKind::BLUETOOTH,
         Box::new(mock_chip_client) as Box<dyn netsim_model::chip::ChipClient>,
     );
 

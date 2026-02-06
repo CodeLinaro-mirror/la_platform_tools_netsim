@@ -9,8 +9,8 @@ use crate::utils::ToChipError;
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use netsim_model::chip::{
-    BluetoothMode, Chip, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant, ChipVariantUpdate,
-    NetworkParams,
+    BluetoothMode, Chip, ChipCreate, ChipId, ChipKind, ChipKindParams, ChipUpdate, ChipVariant,
+    ChipVariantUpdate,
 };
 use netsim_model::chip_error::ChipError;
 
@@ -32,8 +32,8 @@ impl ActorService for BluetoothActor {
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = params.id;
 
-        let create_params = match params.config.network_params {
-            NetworkParams::Bluetooth(p) => p,
+        let create_params = match params.config.chip_kind_params {
+            ChipKindParams::Bluetooth(p) => p,
             _ => {
                 return Err(BluetoothError::Chip(ChipError::InvalidArguments(
                     "Expected Bluetooth network params".into(),

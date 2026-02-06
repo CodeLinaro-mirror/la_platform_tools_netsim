@@ -124,9 +124,9 @@ impl Server {
                         chip.orientation = orient;
                     }
                     // TODO: Create helper function: radio_update(&mut radio: Radio, update: RadioUpdate) {};
-                    if let Some(ChipVariantUpdate::Wifi(radio_update)) = patch.variant {
+                    if let Some(ChipVariantUpdate::Wifi(wifi_update)) = patch.variant {
                         if let Some(ChipVariant::Wifi(wifi_radio)) = &mut chip.variant {
-                            radio_update.apply(wifi_radio);
+                            wifi_update.radio.apply(&mut wifi_radio.radio);
                         }
                     }
                     let _ = respond_to.send(Ok(chip.clone()));

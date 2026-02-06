@@ -128,7 +128,7 @@ impl CaptureActor {
             path.join(&filename)
         };
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
-            ChipKind::BLUETOOTH | ChipKind::BleBeacon => {
+            ChipKind::BLUETOOTH => {
                 log::info!("Creating capture file: {}", filepath.display());
                 Box::new(BluetoothH4Writer::new(&filepath)?)
             }

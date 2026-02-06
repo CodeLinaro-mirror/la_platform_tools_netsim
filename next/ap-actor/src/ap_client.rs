@@ -3,7 +3,7 @@
 use super::{ApActor, ApReq};
 use actor_framework::ResourceClient;
 use netsim_model::chip::{
-    Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipUpdate, ChipVariant, NetworkParams,
+    Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipUpdate, ChipVariant,
 };
 use netsim_model::chip_error::ChipError;
 use netsim_model::client_error::ClientError;
@@ -87,7 +87,7 @@ impl ApClient {
                 name: config.ssid.clone(),
                 manufacturer: "Netsim".into(),
                 product_name: "AccessPoint".into(),
-                network_params: NetworkParams::Ap(config.into()),
+                chip_kind_params: ChipKindParams::Ap(config.into()),
             },
         };
         self.client.create(params).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
