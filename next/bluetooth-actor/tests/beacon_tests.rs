@@ -18,7 +18,7 @@ async fn test_add_chip() {
     let mut world = world::World::new();
 
     // Given a Bluetooth beacon
-    world.given_bluetooth_beacon("Beacon").await;
+    world.given_beacon("Beacon").await;
 
     // Then the chip count should be 1
     world.then_chip_count_is(1).await;

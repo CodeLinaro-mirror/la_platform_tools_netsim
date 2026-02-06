@@ -31,11 +31,15 @@ impl Drop for World {
 impl World {
     /// Given a running Netsim Daemon
     pub async fn new() -> Self {
+        let mut args = daemon::args::Args::default();
+        args.logtostderr = true; // Disable log redirection
+        Self::new_with_args(args).await
+    }
+
+    pub async fn new_with_args(args: daemon::args::Args) -> Self {
         let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
         std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
 
-        let mut args = daemon::args::Args::default();
-        args.logtostderr = true; // Disable log redirection
         let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), temp_dir.clone(), args)
             .await
             .expect("Failed to create daemon");

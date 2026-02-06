@@ -230,3 +230,27 @@ async fn test_infra_multicast_stub() {
     world.then_chip_receives_payload(0, "Infra Multicast").await;
     world.then_chip_receives_payload(1, "Infra Multicast").await;
 }
+// Scenario: The Infrastructure (Slirp) sends a packet to an unknown MAC address (e.g. DHCP Offer to initial random MAC)
+// Given a Wifi Medium with multiple provisioned chips
+// When the Infra sends a Unicast Ethernet frame to an unknown MAC
+// Then ALL chips should receive the frame (Flooding) AND the destination MAC should be rewritten to match each chip's MAC
+#[tokio::test]
+async fn test_unknown_unicast_flooding() {
+    let mut world = World::new().await;
+    // Initialize AP
+    world.given_an_ap().await;
+    let _rx1 = world.given_a_chip(1).await;
+    let _rx2 = world.given_a_chip(2).await;
+
+    // Transmit to generic unknown MAC
+    let unknown_mac = [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01];
+    world.when_infra_transmits_unicast_to_mac(unknown_mac, "Unknown Unicast").await;
+
+    // Get actual MACs
+    let rx1_mac = world.chips[0].mac;
+    let rx2_mac = world.chips[1].mac;
+
+    // Verify both receive it with their own MAC as destination
+    world.then_chip_receives_payload_and_dst(0, "Unknown Unicast", rx1_mac).await;
+    world.then_chip_receives_payload_and_dst(1, "Unknown Unicast", rx2_mac).await;
+}

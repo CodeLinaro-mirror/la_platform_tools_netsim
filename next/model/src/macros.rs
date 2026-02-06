@@ -54,3 +54,22 @@ macro_rules! client_method {
         }
     };
 }
+
+/// Helper macro to update a field if an Option value is Some.
+///
+/// Usage:
+/// - `set_if_some!(dest, option)`: explicit clone
+/// - `set_if_some!(dest, option, map_fn)`: apply map_fn to inner value
+#[macro_export]
+macro_rules! set_if_some {
+    ($dest:expr, $opt:expr) => {
+        if let Some(val) = $opt {
+            $dest = val.clone();
+        }
+    };
+    ($dest:expr, $opt:expr, $map:expr) => {
+        if let Some(val) = $opt {
+            $dest = $map(val);
+        }
+    };
+}

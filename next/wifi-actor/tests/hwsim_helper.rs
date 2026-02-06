@@ -1,7 +1,7 @@
 // Copyright 2025 Google LLC
 
 use bytes::Bytes;
-use netsim_packets::ieee80211::{Ieee80211, MacAddress};
+use netsim_packets::ieee80211::{FrameDirection, Ieee80211, MacAddress};
 use netsim_packets::netlink::hwsim_frame::HwsimFrame;
 use netsim_packets::netlink::HwsimMsg;
 
@@ -15,8 +15,12 @@ pub fn wrap_ethernet_in_hwsim(
 ) -> Result<Vec<u8>, String> {
     // 1. Convert Ethernet to 802.11
     let bssid = MacAddress::new(*hostapd_bssid);
-    let ieee80211 = Ieee80211::from_ieee8023(&Bytes::copy_from_slice(ethernet_frame), bssid)
-        .map_err(|e| format!("Failed to convert Ethernet to 802.11: {}", e))?;
+    let ieee80211 = Ieee80211::from_ieee8023(
+        &Bytes::copy_from_slice(ethernet_frame),
+        bssid,
+        FrameDirection::ToAp,
+    )
+    .map_err(|e| format!("Failed to convert Ethernet to 802.11: {}", e))?;
     // 2. Build HwsimMsg using shared utility
     let src_addr = MacAddress::new(*src_hwsim_addr);
     let dest_addr = MacAddress::new(*dest_hwsim_addr);

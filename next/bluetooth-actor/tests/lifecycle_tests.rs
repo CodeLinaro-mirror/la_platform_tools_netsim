@@ -26,7 +26,7 @@ async fn test_hci_reset_command() {
     let mut world = World::new();
 
     // 1. Create a virtual device chip.
-    world.given_bluetooth_device("A").await;
+    world.given_device("A").await;
 
     // 2. Send an HCI Reset command.
     let hci_reset_cmd = Bytes::from(vec![0x01, 0x03, 0x0c, 0x00]);
@@ -48,7 +48,7 @@ async fn test_chip_dies_on_packet_stream_error() {
     let mut world = World::new();
 
     // 1. Create a virtual device chip.
-    world.given_bluetooth_device("A").await;
+    world.given_device("A").await;
 
     // A small delay to ensure the chip is registered before we check the count.
     tokio::time::sleep(Duration::from_millis(10)).await;
@@ -75,7 +75,7 @@ async fn test_delete_chip_shuts_down_task() {
     let mut world = World::new();
 
     // 1. Create a virtual device chip.
-    world.given_bluetooth_device("A").await;
+    world.given_device("A").await;
 
     let chip_count: usize = world.client.read_count_for_testing().await.expect("chip count");
     assert_eq!(chip_count, 1);
@@ -98,7 +98,7 @@ async fn test_chip_dies_on_packet_sink_error() {
     let mut world = World::new();
 
     // 1. Create a virtual device chip.
-    world.given_bluetooth_device("A").await;
+    world.given_device("A").await;
 
     // A small delay to ensure the chip is registered before we check the count.
     tokio::time::sleep(Duration::from_millis(10)).await;
