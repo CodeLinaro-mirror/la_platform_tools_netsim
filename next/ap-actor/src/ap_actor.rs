@@ -66,7 +66,7 @@ fn default_dtim_period() -> u8 {
 impl Default for ApConfig {
     fn default() -> Self {
         Self {
-            ssid: "AndroidWifi".to_string(),
+            ssid: netsim_model::ap::DEFAULT_WIFI_SSID.to_string(),
             bssid: MacAddr::from([0; 6]),
             channel: 6,
             hw_mode: WifiMode::G,

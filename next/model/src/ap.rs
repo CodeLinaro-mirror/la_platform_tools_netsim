@@ -8,6 +8,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+pub const DEFAULT_WIFI_SSID: &str = "AndroidWifi";
+
 /// Supported Wi-Fi 802.11 PHY modes.
 ///
 /// This enum maps 1:1 with the expected "hw_mode" configurations

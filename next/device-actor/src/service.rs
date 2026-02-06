@@ -304,6 +304,8 @@ impl ActorService for DeviceActor {
                     }
                 }
 
+                // TODO: Propagate SSID update to AP chips if the device name changes
+
                 // 4. Send update if meaningful
                 if chip_update.position.is_some()
                     || chip_update.orientation.is_some()
