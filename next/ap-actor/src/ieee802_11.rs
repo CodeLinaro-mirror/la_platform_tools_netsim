@@ -5,7 +5,7 @@ use crate::shared::SharedKeyStore;
 use crate::{ApError, ApState};
 use actor_framework::DynContext;
 
-use netsim_model::chip::ChipId;
+use netsim_model::chip::{ChipId, WifiMode};
 use netsim_packets::ieee80211::wmm::write_wmm_param_element;
 use netsim_packets::ieee80211::{
     ie::IeIterator, management_subtype, tags, write_ie, AssociationResponseFixedFields,
@@ -97,7 +97,7 @@ impl Ieee80211Manager {
         }
 
         // WiFi 6 (HE) Support
-        if ap.config.hw_mode == "ax" {
+        if ap.config.hw_mode == WifiMode::Ax {
             // HE Capabilities (ID 255, ExtID 35)
             // Body: ExtID(35) + Caps(00 00)
             write_ie(body, tags::EXTENSION, &[tags::HE_CAPABILITIES, 0x00, 0x00]);
@@ -106,8 +106,9 @@ impl Ieee80211Manager {
         // WMM IE
         // If 802.11n/ac/ax (HT/VHT/HE) is enabled, WMM is typically mandatory.
         // We also check wmm_enabled config.
-        let is_ht =
-            ap.config.hw_mode == "n" || ap.config.hw_mode == "ac" || ap.config.hw_mode == "ax";
+        let is_ht = ap.config.hw_mode == WifiMode::N
+            || ap.config.hw_mode == WifiMode::Ac
+            || ap.config.hw_mode == WifiMode::Ax;
         if ap.config.wmm_enabled || is_ht {
             // U-APSD enabled? Default false for now. Param Set Count 0.
             write_wmm_param_element(body, false, 0);
@@ -426,7 +427,10 @@ impl Ieee80211Manager {
         // Only append IEs on Success (Status 0)
         if status == 0 {
             write_ie(&mut resp, tags::SUPPORTED_RATES, tags::SUPPORTED_RATES_DEFAULT);
-            if ap.config.wmm_enabled || ap.config.hw_mode == "n" || ap.config.hw_mode == "ax" {
+            if ap.config.wmm_enabled
+                || ap.config.hw_mode == WifiMode::N
+                || ap.config.hw_mode == WifiMode::Ax
+            {
                 write_wmm_param_element(&mut resp, false, 0);
             }
         }

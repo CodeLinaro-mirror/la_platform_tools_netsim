@@ -2,9 +2,10 @@ use crate::error::WifiError;
 use crate::medium::Medium;
 use actor_framework::DynContext;
 use ap_actor::{shared::SharedKeyStore, ApClient};
+use log::{debug, warn};
 use netsim_model::chip::{Chip, ChipId};
 use netsim_model::stats::NetsimRadioStats;
-use netsim_packets::ieee80211::Ieee80211;
+use netsim_packets::ieee80211::{FrameDirection, Ieee80211};
 use slirp_actor::SlirpClient;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -103,25 +104,34 @@ impl WifiActor {
 
     // this is the input router
     pub(crate) async fn process_guest_packet(&mut self, chip_id: u32, packet: bytes::Bytes) {
+        debug!("WifiActor: Packet from Guest (Chip {}) len {}", chip_id, packet.len());
+
         match self.medium.resolve_tx_packet(chip_id, &packet) {
             Ok(tx_state) => {
                 // 1. Ack
                 if let Err(e) = self.medium.ack_frame(chip_id, &tx_state.frame, &mut self.out_queue)
                 {
-                    log::error!("Failed to ack frame: {:?}", e);
+                    warn!("Failed to ack frame: {:?}", e);
                 }
 
                 // 2. Infra (AP/Slirp) routing
                 match tx_state.infra_target {
                     crate::medium::tx_packet_state::InfraTarget::Ap => {
+                        debug!("ROUTING: Guest -> AP");
                         if let Some(to_ap) = &self.to_ap {
                             let _ = to_ap.send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()));
                         }
                     }
                     crate::medium::tx_packet_state::InfraTarget::Slirp => {
+                        debug!("ROUTING: Guest -> Slirp");
                         if let Some(to_slirp) = &self.to_slirp {
-                            if let Ok(eth_frame) = tx_state.get_ieee80211().to_ieee8023() {
-                                let _ = to_slirp.send(bytes::Bytes::from(eth_frame));
+                            match tx_state.get_ieee80211().to_ieee8023() {
+                                Ok(eth_frame) => {
+                                    let _ = to_slirp.send(bytes::Bytes::from(eth_frame));
+                                }
+                                Err(e) => {
+                                    warn!("WifiActor: Failed to convert to 802.3 for Slirp: {}", e);
+                                }
                             }
                         }
                     }
@@ -147,10 +157,9 @@ impl WifiActor {
                                             &initiator.position,
                                             &responder.position,
                                         ) {
-                                            log::info!(
+                                            debug!(
                                                 "Simulated FTM Response from {} to {}",
-                                                peer_id,
-                                                chip_id
+                                                peer_id, chip_id
                                             );
                                             for resp in responses {
                                                 self.out_queue.push((chip_id, resp));
@@ -174,16 +183,17 @@ impl WifiActor {
                         tx_state.get_ieee80211(),
                         &mut self.out_queue,
                     ) {
-                        log::error!("Error queuing frame: {:?}", e);
+                        warn!("Error queuing frame: {:?}", e);
                     }
                 }
             }
-            Err(e) => log::error!("Error processing packet: {:?}", e),
+            Err(e) => warn!("Error processing packet: {:?}", e),
         }
         self.flush_out_queue();
     }
 
     pub(crate) fn process_ap_packet(&mut self, packet: bytes::Bytes) {
+        debug!("AP_PKT: len {}", packet.len());
         if !packet.is_empty() {
             let _ = self.medium.transmit_from_infra(&packet, &mut self.out_queue);
         }
@@ -191,20 +201,21 @@ impl WifiActor {
     }
 
     pub(crate) fn process_slirp_packet(&mut self, packet: bytes::Bytes) {
+        debug!("SLIRP_PKT: len {}", packet.len());
+
         if let Some(bssid) = self.shared_keys.get_bssid() {
-            if let Ok(ieee80211) = Ieee80211::from_ieee8023(&packet, bssid) {
-                if let Ok(from_ap) = ieee80211.into_from_ap() {
-                    // TryInto is needed, ensure it is available or use strict path
-                    if let Ok(frame_converted) = TryInto::<Ieee80211>::try_into(from_ap) {
-                        if let Ok(bytes) = frame_converted.encode_to_vec() {
-                            let _ = self.medium.transmit_from_infra(
-                                &bytes::Bytes::from(bytes),
-                                &mut self.out_queue,
-                            );
-                        }
-                    }
+            if let Ok(ieee80211) = Ieee80211::from_ieee8023(&packet, bssid, FrameDirection::FromAp)
+            {
+                if let Ok(bytes) = ieee80211.encode_to_vec() {
+                    let _ = self
+                        .medium
+                        .transmit_from_infra(&bytes::Bytes::from(bytes), &mut self.out_queue);
                 }
+            } else {
+                warn!("Failed to convert Slirp packet to 802.11");
             }
+        } else {
+            warn!("No BSSID available for Slirp packet conversion");
         }
         self.flush_out_queue();
     }

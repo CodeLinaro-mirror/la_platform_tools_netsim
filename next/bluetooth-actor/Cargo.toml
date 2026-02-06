@@ -9,6 +9,7 @@ crate-type = ["staticlib", "lib"]
 
 [dependencies]
 netsim-model = { path = "../model" }
+netsim-common = { path = "../common" }
 device-api = { path = "../device-api" }
 client = { path = "../client" }
 rootcanal = { path = "../rootcanal" }

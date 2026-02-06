@@ -41,6 +41,12 @@ impl ActorService for BluetoothActor {
             }
         };
 
+        // Validate Scanner constraints: No PacketStream, Must have PacketSink.
+        if let BluetoothMode::Scanner(_) = &create_params.mode {
+            assert!(params.packet_stream.is_none(), "Scanner chip cannot have a packet stream");
+            assert!(params.packet_sink.is_some(), "Scanner chip must have a packet sink");
+        }
+
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
@@ -90,7 +96,7 @@ impl ActorService for BluetoothActor {
             .to_chip_error()?;
 
         // 4. Create Chip Info in Context
-        // Initialize the chip info based on the mode (Beacon, Device, or Sniffer).
+        // Initialize the chip info based on the mode (Beacon, Device, or Scanner).
 
         let mut chip_info = match &create_params.mode {
             BluetoothMode::Beacon(params) => {
@@ -99,8 +105,8 @@ impl ActorService for BluetoothActor {
             BluetoothMode::Device(params) => {
                 crate::device::create(&self.rootcanal, chip_id, params)?
             }
-            BluetoothMode::Sniffer(params) => {
-                crate::sniffer::create(&self.rootcanal, chip_id, params)?
+            BluetoothMode::Scanner(params) => {
+                crate::scanner::create(&self.rootcanal, chip_id, params)?
             }
         };
         chip_info.device_id = chip.device_id;

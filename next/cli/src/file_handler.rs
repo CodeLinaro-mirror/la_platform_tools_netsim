@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2022 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::empty_line_after_doc_comments)]
+use crate::grpc_client::ClientResponseReadable;
+use std::fs::File;
+/// Implements handler for pcap operations
+use std::io::Write;
+use std::path::PathBuf;
 
-/// Version library.
+pub struct FileHandler {
+    pub file: File,
+    pub path: PathBuf,
+}
 
-pub const VERSION: &str = "0.3.93";
-
-pub fn get_version() -> String {
-    VERSION.to_owned()
+impl ClientResponseReadable for FileHandler {
+    // function to handle writing each chunk to file
+    fn handle_chunk(&self, chunk: &[u8]) {
+        (&self.file)
+            .write_all(chunk)
+            .unwrap_or_else(|_| panic!("Unable to write to file: {}", self.path.display()));
+    }
 }

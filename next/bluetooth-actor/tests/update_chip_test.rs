@@ -19,7 +19,7 @@ async fn test_update_position() {
     let mut world = World::new();
 
     // Given a bluetooth chip
-    world.given_bluetooth_device("A").await;
+    world.given_device("A").await;
 
     // When the position is updated
     let new_pos = Position { x: 10.0, y: 20.0, z: 30.0 };
