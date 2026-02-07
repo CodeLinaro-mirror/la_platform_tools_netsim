@@ -1,14 +1,16 @@
 // Copyright 2026 The Android Open Source Project
 
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::{
-    eapol::{
-        EapHeader, EapolHeader, EAPOL_TYPE_PACKET, EAPOL_TYPE_START, EAP_CODE_REQUEST,
-        EAP_CODE_RESPONSE, EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        eapol::{
+            EapHeader, EapolHeader, EAPOL_TYPE_PACKET, EAPOL_TYPE_START, EAP_CODE_REQUEST,
+            EAP_CODE_RESPONSE, EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
+        },
+        FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
     },
-    FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
+    llc::{control_field, sap, LlcSnapHeader},
 };
-use netsim_packets::llc::{control_field, sap, LlcSnapHeader};
 use zerocopy::{IntoBytes, U16};
 
 mod world;

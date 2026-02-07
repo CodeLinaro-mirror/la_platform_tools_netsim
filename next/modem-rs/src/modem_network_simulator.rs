@@ -1,16 +1,21 @@
-use crate::constants::CALL_RING_TIMEOUT;
-use crate::metrics::{Metrics, MetricsSnapshot};
-use crate::modem::{Modem, ModemEvent};
-use crate::modem_network::{ModemCallbacks, ModemError as NetworkError, ModemNetworkInterface};
-use crate::time::{Clock, SystemClock}; // touch
-use crate::types::{Callbacks, CallbacksExt, CommandAction, ModemError, ModemId, NetworkCallbacks};
+use std::{
+    cmp::Ordering,
+    collections::{BinaryHeap, HashMap},
+    sync::{atomic::Ordering as AtomicOrdering, Arc, Mutex},
+    time::{Duration, Instant},
+};
+
 use log;
 use netsim_model::chip::{Chip, ChipId};
-use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
-use std::sync::atomic::Ordering as AtomicOrdering;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+
+use crate::time::{Clock, SystemClock}; // touch
+use crate::{
+    constants::CALL_RING_TIMEOUT,
+    metrics::{Metrics, MetricsSnapshot},
+    modem::{Modem, ModemEvent},
+    modem_network::{ModemCallbacks, ModemError as NetworkError, ModemNetworkInterface},
+    types::{Callbacks, CallbacksExt, CommandAction, ModemError, ModemId, NetworkCallbacks},
+};
 
 // Internal representation of a scheduled event
 #[derive(Debug)]
@@ -41,8 +46,9 @@ impl Ord for ScheduledEvent {
     }
 }
 
-/// The `ModemNetworkSimulator` is the main public entry point for the library. It is responsible for
-/// creating, managing, and communicating with modem instances.
+/// The `ModemNetworkSimulator` is the main public entry point for the library.
+/// It is responsible for creating, managing, and communicating with modem
+/// instances.
 pub struct ModemNetworkSimulator {
     modems: Mutex<HashMap<ModemId, Modem>>,
     pub(crate) callbacks: Arc<dyn NetworkCallbacks>,

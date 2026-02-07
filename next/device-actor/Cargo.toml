@@ -5,16 +5,16 @@ edition = "2024"
 
 [dependencies]
 actor-framework = { path = "../actor-framework" }
-device-api = { path = "../device-api" }
+async-trait = "0.1"
 capture-api = { path = "../capture-api" }
-netsim-model = { path = "../model" }
+device-api = { path = "../device-api" }
+futures = "0.3"
 link-actor = { path = "../link-actor" }
 link-api = { path = "../link-api" }
-tokio = { version = "1.0", features = ["full"] }
-futures = "0.3"
-serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-async-trait = "0.1"
+netsim-model = { path = "../model" }
+serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
+tokio = { version = "1.0", features = ["full"] }
 [dev-dependencies]
 client = { path = "../client" }

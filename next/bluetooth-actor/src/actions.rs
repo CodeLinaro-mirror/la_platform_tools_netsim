@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-use netsim_model::chip::ChipId;
-use netsim_model::stats::NetsimRadioStats;
+use netsim_model::{chip::ChipId, stats::NetsimRadioStats};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

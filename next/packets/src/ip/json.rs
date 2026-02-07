@@ -1,7 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::ip::{Ipv4Header, Ipv6Header};
 use std::collections::BTreeMap;
+
+use crate::ip::{Ipv4Header, Ipv6Header};
 
 fn format_ipv4_addr(addr: &[u8; 4]) -> String {
     format!("{}.{}.{}.{}", addr[0], addr[1], addr[2], addr[3])
@@ -38,9 +39,10 @@ pub fn ipv6_to_json(ipv6_packet: &Ipv6Header, _ipv6_payload: &[u8]) -> BTreeMap<
 
 #[cfg(test)]
 mod tests {
+    use zerocopy::byteorder::{U16, U32};
+
     use super::*;
     use crate::ip::Ipv4Header;
-    use zerocopy::byteorder::{U16, U32};
 
     #[test]
     fn test_ipv4_to_json() {

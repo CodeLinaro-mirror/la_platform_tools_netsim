@@ -1,12 +1,15 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::error::WifiError;
-use crate::wifi_actor::{WifiActor, WifiReq, WifiResponse};
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use netsim_model::chip::{Chip, ChipId};
+use netsim_model::chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate};
 use tokio::sync::mpsc;
+
+use crate::{
+    error::WifiError,
+    wifi_actor::{WifiActor, WifiReq, WifiResponse},
+};
 
 #[async_trait]
 impl ActorService for WifiActor {
@@ -63,6 +66,7 @@ impl ActorService for WifiActor {
             id: id.0,
             device_id: params.device_id,
             kind: netsim_model::chip::ChipKind::WIFI,
+            variant: Some(netsim_model::chip::ChipVariant::Wifi(Default::default())),
             name: Some(params.config.name),
             manufacturer: Some(params.config.manufacturer),
             product_name: Some(params.config.product_name),
@@ -91,8 +95,10 @@ impl ActorService for WifiActor {
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(chip) = self.active_chips.get_mut(&id) {
-            if let Some(netsim_model::chip::ChipVariantUpdate::Wifi(_)) = update.variant {
-                // No variant specific updates
+            if let Some(ChipVariantUpdate::Wifi(radio_update)) = update.variant {
+                if let Some(state) = radio_update.radio.state {
+                    self.medium.set_enabled(id.0, state);
+                }
             }
             if let Some(enabled) = update.enabled {
                 self.medium.set_enabled(id.0, enabled);
@@ -101,8 +107,10 @@ impl ActorService for WifiActor {
                 chip.position = pos;
             }
             // Update the chip state properly
-            use crate::medium::types::WifiResult;
             if let Ok(enabled) = self.medium.enabled(id.0) {
+                if let Some(ChipVariant::Wifi(ref mut radio)) = chip.variant {
+                    radio.radio.state = Some(enabled);
+                }
                 chip.enabled = enabled;
             }
             Ok(chip.clone())

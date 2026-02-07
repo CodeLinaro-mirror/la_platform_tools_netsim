@@ -3,15 +3,20 @@
 // src/transport/types.rs - Transport type enumeration and factories
 //=============================================================================
 
-use crate::error::{PacketStreamError, Result};
-use crate::transport::adapters::{TcpTransportListener, UdsTransportListener};
-use crate::transport::traits::{PacketSink, PacketStream};
-use futures::stream::StreamExt;
-use futures::SinkExt;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use futures::{stream::StreamExt, SinkExt};
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+
+use crate::{
+    error::{PacketStreamError, Result},
+    transport::{
+        adapters::{TcpTransportListener, UdsTransportListener},
+        traits::{PacketSink, PacketStream},
+    },
+};
 
 /// Transport configuration that supports multiple connection types.
 #[derive(Debug, Clone, Serialize, Deserialize)]

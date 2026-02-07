@@ -8,14 +8,14 @@ crate-type = ["staticlib", "lib"]
 doctest = false
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
 bytes = "1"
-netsim-model = { path = "../model" }
-toml = "0.8"
-nom = "7"
-modem-rs-derive = { path = "../modem-rs-derive" }
 hex = "0.4.3"
 log = "0.4"
+modem-rs-derive = { path = "../modem-rs-derive" }
+netsim-model = { path = "../model" }
+nom = "7"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
 
 [dev-dependencies]
 modem-rs = { path = ".", features = ["test-utils"] }

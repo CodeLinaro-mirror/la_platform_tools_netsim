@@ -2,8 +2,9 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::test_utils::validate_pcap_json;
     use std::path::PathBuf;
+
+    use crate::utils::test_utils::validate_pcap_json;
 
     #[test]
     fn test_icmp_pcap_json() {

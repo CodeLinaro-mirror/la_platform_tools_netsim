@@ -1,9 +1,12 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::ethernet::MacAddr;
-use crate::ieee80211::frame::{FrameControl, SequenceControl};
 use zerocopy::{
     byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16,
+};
+
+use crate::{
+    ethernet::MacAddr,
+    ieee80211::frame::{FrameControl, SequenceControl},
 };
 
 /// Represents an IEEE 802.11 Beacon frame header.
@@ -15,7 +18,8 @@ pub struct BeaconFrameHeader {
     pub frame_control: FrameControl,
     /// Duration field.
     pub duration: U16<LittleEndian>,
-    /// Address 1: Destination MAC Address (typically broadcast FF:FF:FF:FF:FF:FF).
+    /// Address 1: Destination MAC Address (typically broadcast
+    /// FF:FF:FF:FF:FF:FF).
     pub da: MacAddr,
     /// Address 2: Source MAC Address (Transmitter Address / BSSID).
     pub sa: MacAddr,

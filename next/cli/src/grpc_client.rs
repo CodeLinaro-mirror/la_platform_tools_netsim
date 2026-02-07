@@ -1,9 +1,9 @@
 //! gRPC frontend client library for netsim.
-use crate::error::Result;
 use futures_util::StreamExt;
-use netsim_proto::frontend;
-use netsim_proto::frontend_grpc::FrontendServiceClient;
+use netsim_proto::{frontend, frontend_grpc::FrontendServiceClient};
 use protobuf::well_known_types::empty;
+
+use crate::error::Result;
 
 /// Wrapper struct for application defined ClientResponseReader
 pub struct ClientResponseReader {

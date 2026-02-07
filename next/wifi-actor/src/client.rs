@@ -1,11 +1,14 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::wifi_actor::WifiActor;
 use actor_framework::ResourceClient;
-use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate, ChipVariantUpdate};
-use netsim_model::chip_error::ChipError;
-use netsim_model::client_error::ClientError;
-use netsim_model::stats::NetsimRadioStats;
+use netsim_model::{
+    chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate, ChipVariantUpdate},
+    chip_error::ChipError,
+    client_error::ClientError,
+    stats::NetsimRadioStats,
+};
+
+use crate::wifi_actor::WifiActor;
 
 #[derive(Clone, Debug)]
 pub struct WifiClient(ResourceClient<WifiActor>);

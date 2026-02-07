@@ -1,5 +1,16 @@
-# Android Format Style
+# Derived from Android Format Style
+#
+# Any changes here _must not_ conflict with the upstream in
+# build/soong/scripts/rustfmt.toml
 
 edition = "2021"
 use_small_heuristics = "Max"
 newline_style = "Unix"
+
+# Import organization
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+
+# Comment formatting
+wrap_comments = true
+format_code_in_doc_comments = true

@@ -1,8 +1,10 @@
 // Copyright 2025 Google LLC
 
-use crate::error::WifiError;
-use log::{debug, warn};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use log::{debug, warn};
+
+use crate::error::WifiError;
 
 /// Stats for the Wifi Actor.
 ///

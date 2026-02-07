@@ -1,15 +1,17 @@
 // Copyright 2025 Google LLC
 
-use crate::frontend::FrontendClient;
-use crate::packet_streamer::PacketStreamerService;
+use std::sync::Arc;
+
 use client::DeviceClient;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
 use log::{error, info, warn};
-use netsim_proto::frontend_grpc::create_frontend_service;
-use netsim_proto::packet_streamer_grpc::create_packet_streamer;
-use std::sync::Arc;
+use netsim_proto::{
+    frontend_grpc::create_frontend_service, packet_streamer_grpc::create_packet_streamer,
+};
+
+use crate::{frontend::FrontendClient, packet_streamer::PacketStreamerService};
 
 pub fn start(
     port: u32,

@@ -1,18 +1,23 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::actions::{BluetoothAction, BluetoothActionResult};
-use crate::beacon_utils::generate_legacy_address;
-use crate::bluetooth_actor::BluetoothActor;
-use crate::error::BluetoothError;
-use crate::hci_callbacks::HciCallbacks;
-use crate::utils::ToChipError;
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
-use netsim_model::chip::{
-    BluetoothMode, Chip, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant, ChipVariantUpdate,
-    NetworkParams,
+use netsim_model::{
+    chip::{
+        BluetoothMode, Chip, ChipCreate, ChipId, ChipKind, ChipKindParams, ChipUpdate, ChipVariant,
+        ChipVariantUpdate,
+    },
+    chip_error::ChipError,
 };
-use netsim_model::chip_error::ChipError;
+
+use crate::{
+    actions::{BluetoothAction, BluetoothActionResult},
+    beacon_utils::generate_legacy_address,
+    bluetooth_actor::BluetoothActor,
+    error::BluetoothError,
+    hci_callbacks::HciCallbacks,
+    utils::ToChipError,
+};
 
 #[async_trait]
 impl ActorService for BluetoothActor {
@@ -32,8 +37,8 @@ impl ActorService for BluetoothActor {
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = params.id;
 
-        let create_params = match params.config.network_params {
-            NetworkParams::Bluetooth(p) => p,
+        let create_params = match params.config.chip_kind_params {
+            ChipKindParams::Bluetooth(p) => p,
             _ => {
                 return Err(BluetoothError::Chip(ChipError::InvalidArguments(
                     "Expected Bluetooth network params".into(),
@@ -124,7 +129,8 @@ impl ActorService for BluetoothActor {
         Ok(chips.get(&id).cloned())
     }
 
-    // TODO: Implement radio state enforcement (stopping HCI/transmission when disabled).
+    // TODO: Implement radio state enforcement (stopping HCI/transmission when
+    // disabled).
     async fn handle_update(
         &mut self,
         id: Self::Id,

@@ -1,8 +1,8 @@
-use crate::error::SlirpError;
-use crate::slirp_actor::SlirpActor;
 use actor_framework::{ActorLifecycle, DynContext};
 use async_trait::async_trait;
 use log::info;
+
+use crate::{error::SlirpError, slirp_actor::SlirpActor};
 
 #[async_trait]
 impl ActorLifecycle<u32> for SlirpActor {

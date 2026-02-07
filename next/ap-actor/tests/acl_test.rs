@@ -1,7 +1,9 @@
 // Copyright 2026 The Android Open Source Project
 
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::{AuthenticationFixedFields, Ieee80211};
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{AuthenticationFixedFields, Ieee80211},
+};
 use zerocopy::FromBytes;
 
 mod world;

@@ -1,12 +1,15 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::ranging;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use client::DeviceClient;
 use netsim_model::chip::{Chip, ChipId};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+
+use crate::ranging;
 
 /// A thread-safe map of chip states.
 pub type ChipMap = Arc<Mutex<HashMap<ChipId, Chip>>>;
@@ -54,7 +57,8 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
             Some(rssi)
         } else {
             // If one of the chips is missing, default to tx_power.
-            // This can happen during startup/shutdown or if a chip is not yet fully registered.
+            // This can happen during startup/shutdown or if a chip is not yet fully
+            // registered.
             if src_chip.is_none() {
                 log::warn!("on_send_ll: Missing src chip {src_id}");
             } else {
@@ -90,9 +94,10 @@ impl BluetoothActor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use netsim_model::chip::{Chip, ChipId, ChipVariant};
     use rootcanal::Phy;
+
+    use super::*;
 
     #[test]
     fn test_on_send_ll_link_override() {

@@ -2,9 +2,9 @@
 
 //! This module defines the error types for the chip service.
 
-use crate::chip::ChipId;
-use crate::packet_streamer::PsError;
 use thiserror::Error;
+
+use crate::chip::ChipId;
 
 /// The error type for operations within the chip service.
 #[derive(Error, Debug)]
@@ -48,10 +48,6 @@ pub enum ChipError {
     /// A catch-all for errors originating from the simulation backend.
     #[error("Backend error: {0}")]
     BackendError(String),
-
-    /// Packet streamer error.
-    #[error("PacketStream error: {0}")]
-    PsError(#[from] PsError),
 
     /// Radio error.
     #[error("Radio error: {0}")]

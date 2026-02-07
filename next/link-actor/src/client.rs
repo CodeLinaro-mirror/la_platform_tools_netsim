@@ -6,10 +6,12 @@
 //! around the generic [`ResourceClient`]. It provides a convenient API for
 //! interacting with Link actors.
 
-use crate::LinkActor;
+use std::ops::Deref;
+
 use actor_framework::ResourceClient;
 use netsim_model::chip::{ChipId, ChipKind};
-use std::ops::Deref;
+
+use crate::LinkActor;
 
 /// A client for interacting with the Link Actor.
 ///
@@ -17,27 +19,29 @@ use std::ops::Deref;
 ///
 /// # Design Philosophy: Stateless Client
 ///
-/// To keep the implementation lightweight, this client is stateless and non-atomic.
-/// It does not internally track the existence of links or combine "check-and-create"
-/// operations into a single step.
+/// To keep the implementation lightweight, this client is stateless and
+/// non-atomic. It does not internally track the existence of links or combine
+/// "check-and-create" operations into a single step.
 ///
 /// # Recommended Usage Pattern
 ///
-/// To ensure a link exists with the correct configuration, consumers should use the
-/// **Look-then-Act** approach:
+/// To ensure a link exists with the correct configuration, consumers should use
+/// the **Look-then-Act** approach:
 ///
-/// 1.  **Find**: Query `list()` for an existing connection.
-/// 2.  **Path A (Exists)**: Use `update()` with the existing ID.
-/// 3.  **Path B (Missing)**: Use `create()` with your parameters.
+/// 1. **Find**: Query `list()` for an existing connection.
+/// 2. **Path A (Exists)**: Use `update()` with the existing ID.
+/// 3. **Path B (Missing)**: Use `create()` with your parameters.
 ///
 /// # Handling Race Conditions
 ///
-/// In environments where multiple scripts or processes may be acting on the same hardware
-/// simultaneously, your "Find" results may become stale before you can "Act."
+/// In environments where multiple scripts or processes may be acting on the
+/// same hardware simultaneously, your "Find" results may become stale before
+/// you can "Act."
 ///
-/// If you attempt to `create()` a link that was just created by another process, the server
-/// will return an `AlreadyExists` error. Robust applications should catch this error and
-/// treat it as a signal to re-fetch the link ID and perform an `update()` instead.
+/// If you attempt to `create()` a link that was just created by another
+/// process, the server will return an `AlreadyExists` error. Robust
+/// applications should catch this error and treat it as a signal to re-fetch
+/// the link ID and perform an `update()` instead.
 #[derive(Clone, Debug)]
 pub struct LinkClient {
     pub(crate) inner: ResourceClient<LinkActor>,

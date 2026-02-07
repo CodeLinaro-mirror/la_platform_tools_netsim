@@ -13,35 +13,37 @@ mod lifecycle;
 mod service;
 mod writer;
 
+use actor_framework::{ResourceActor, ResourceClient};
 pub use capture_actor::CaptureActor;
 pub use error::CaptureError;
-
-use actor_framework::{ResourceActor, ResourceClient};
 
 /// Creates a new Capture actor and its client.
 pub fn new() -> (ResourceActor<CaptureActor>, ResourceClient<CaptureActor>) {
     // Buffer size of 32 is sufficient for capture control commands.
-    // Packet data flows through a separate channel if needed, but here we handle control.
+    // Packet data flows through a separate channel if needed, but here we handle
+    // control.
     ResourceActor::new(32)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::bt_pcap::BluetoothH4Writer;
-    use crate::service::InternalCaptureInfo;
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::{
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+            Arc,
+        },
+        time::SystemTime,
+    };
 
-    use crate::writer::CaptureWriter;
     use actor_framework::ActorService;
     use bytes::Bytes;
-    use capture_api::Direction;
-    use capture_api::{CaptureAction, CaptureCreate};
+    use capture_api::{CaptureAction, CaptureCreate, Direction};
     use netsim_model::chip::{ChipId, ChipKind};
-    use std::fs;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    use std::sync::Arc;
-    use std::time::SystemTime;
+
+    use super::*;
+    use crate::{bt_pcap::BluetoothH4Writer, service::InternalCaptureInfo, writer::CaptureWriter};
 
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -59,7 +61,8 @@ mod tests {
         assert_eq!(records, 1);
         assert_eq!(bytes, 4);
 
-        // explicitly drop writer to ensure file handle closed (though not strictly required for remove_file on linux)
+        // explicitly drop writer to ensure file handle closed (though not strictly
+        // required for remove_file on linux)
         drop(writer);
         fs::remove_file(filename).unwrap();
         fs::remove_dir(dir).unwrap();
@@ -118,7 +121,8 @@ mod tests {
         assert!(ctx.writers.contains_key(&chip_id));
 
         // Capture packet
-        // Verify stats - Insert entity into context for handle_action and handle_get to work
+        // Verify stats - Insert entity into context for handle_action and handle_get to
+        // work
         ctx.entities.insert(chip_id, entity.clone());
         let packet = vec![0x01, 0x02, 0x03, 0x04];
         ctx.handle_action(
@@ -141,8 +145,9 @@ mod tests {
         assert_eq!(info.records_written, 1);
         assert_eq!(info.bytes_written, 4);
 
-        // Update entity from context (if handle_action modified it, though here we modified local entity)
-        // In this test, we modify `entity` local variable primarily.
+        // Update entity from context (if handle_action modified it, though here we
+        // modified local entity) In this test, we modify `entity` local
+        // variable primarily.
 
         // Disable capture
         ctx.update_entity(&mut entity, false, &mut runtime).await.unwrap();

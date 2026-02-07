@@ -1,18 +1,22 @@
 // Copyright 2025 The Android Open Source Project
 
-//! Provides JSON serialization and deserialization for `nl80211` Netlink attributes.
+//! Provides JSON serialization and deserialization for `nl80211` Netlink
+//! attributes.
 //!
-//! This module is designed to facilitate the debugging and logging of `nl80211` messages
-//! exchanged between a user space daemon and the `mac80211_hwsim` kernel module. By converting
-//! the binary Netlink attribute format to a human-readable JSON format (and back), it allows
-//! for easier inspection of the commands and data being sent to the simulated WiFi device.
+//! This module is designed to facilitate the debugging and logging of `nl80211`
+//! messages exchanged between a user space daemon and the `mac80211_hwsim`
+//! kernel module. By converting the binary Netlink attribute format to a
+//! human-readable JSON format (and back), it allows for easier inspection of
+//! the commands and data being sent to the simulated WiFi device.
 
-use crate::netlink::nl80211_attr::NlAttrHdr;
-use crate::netlink::nl80211_util;
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// A custom error type for JSON operations related to mac80211_hwsim Netlink attributes.
+use serde::{Deserialize, Serialize};
+
+use crate::netlink::{nl80211_attr::NlAttrHdr, nl80211_util};
+
+/// A custom error type for JSON operations related to mac80211_hwsim Netlink
+/// attributes.
 #[derive(Debug)]
 pub enum JsonError {
     SerdeJsonError(serde_json::Error),
@@ -112,7 +116,8 @@ impl JsonNlAttribute {
         }
     }
 
-    /// Tries to convert this `JsonNlAttribute` back to `NlAttrHdr` and payload `Vec<u8>`.
+    /// Tries to convert this `JsonNlAttribute` back to `NlAttrHdr` and payload
+    /// `Vec<u8>`.
     pub fn try_into_parts(&self) -> Result<(NlAttrHdr, Vec<u8>), JsonError> {
         let hdr = NlAttrHdr::try_from(&self.fields.header)?;
         let payload = hex::decode(&self.fields.payload_hex)?; // Use direct function call
@@ -153,8 +158,9 @@ pub fn packet_to_json(packet: &[u8]) -> serde_json::Value {
             "genl.cmd".to_string(),
             serde_json::Value::String(format!("0x{:02x}", nlmsg_type)),
         ); // Placeholder
-           // Tshark output for Netlink is complex and depends on protocol (Generic Netlink, Route, etc.)
-           // For our test, we might just want to dump the header fields and payload.
+           // Tshark output for Netlink is complex and depends on protocol (Generic
+           // Netlink, Route, etc.) For our test, we might just want to dump the
+           // header fields and payload.
 
         // Let's create a "netlink" layer
         let mut nl_map = serde_json::Map::new();
@@ -169,12 +175,13 @@ pub fn packet_to_json(packet: &[u8]) -> serde_json::Value {
 
         layers.insert("netlink".to_string(), serde_json::Value::Object(nl_map));
 
-        // If it's Generic Netlink (type >= 16 usually), we might have a Genl header.
-        // But for now, let's just dump attributes if we can parse them?
-        // Or just leave it as is.
+        // If it's Generic Netlink (type >= 16 usually), we might have a Genl
+        // header. But for now, let's just dump attributes if we can
+        // parse them? Or just leave it as is.
 
-        // We can try to parse attributes from payload if it looks like attributes.
-        // But without knowing the family, it's hard to interpret.
+        // We can try to parse attributes from payload if it looks like
+        // attributes. But without knowing the family, it's hard to
+        // interpret.
 
         // Let's rely on `build_packet_json` to wrap it.
     }
@@ -220,7 +227,8 @@ mod tests {
         assert_eq!(deserialized_hdr.attr_type(), original_hdr.attr_type());
         assert_eq!(deserialized_payload, original_payload.to_vec());
 
-        // Verify some fields in the JSON string itself (optional, but good for understanding)
+        // Verify some fields in the JSON string itself (optional, but good for
+        // understanding)
         let parsed_value: serde_json::Value = serde_json::from_str(&json_string).unwrap();
         let nl_attr_layer = parsed_value.get("nl_attr").expect("JSON should have 'nl_attr' key");
 

@@ -1,12 +1,17 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::world::ApWorld;
 use ap_actor::netsim_model::chip::WifiMode;
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::frame::{FrameControl, MacHeader3Addr, SequenceControl};
-use netsim_packets::ieee80211::management_subtype;
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        frame::{FrameControl, MacHeader3Addr, SequenceControl},
+        management_subtype,
+    },
+};
 use tokio;
 use zerocopy::IntoBytes;
+
+use crate::world::ApWorld;
 
 // ============================================================================
 // Feature: Wireless Network Visibility (Beacons)
@@ -252,7 +257,8 @@ async fn test_probe_response_ssid_mismatch() {
     let rx = world.rx_from_ap.as_mut().expect("AP registered");
 
     // Logic: We might receive Beacons!
-    // We need to filter out Beacons (0x80) and ensure NO Probe Resp (0x50) is received.
+    // We need to filter out Beacons (0x80) and ensure NO Probe Resp (0x50) is
+    // received.
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(1) {
         if let Ok(Some(msg)) =

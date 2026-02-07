@@ -7,11 +7,10 @@ mod slirp_actor;
 
 mod slirp_client;
 
+use actor_framework::ResourceActor;
 pub use error::SlirpError;
 pub use slirp_actor::{SlirpActor, SlirpCreate, SlirpReq, SlirpStatus};
 pub use slirp_client::SlirpClient;
-
-use actor_framework::ResourceActor;
 
 /// Creates a new SlirpActor and returns the runner and a client.
 pub fn new() -> (ResourceActor<SlirpActor>, SlirpClient) {

@@ -1,13 +1,15 @@
 // tests/integration_test.rs
 
-use crate::common::constants;
+use std::sync::Arc;
+
 use modem_rs::{
     test_utils::{MockModemHandler, MockNetworkHandler},
     time::MockClock,
     types::{ModemId, AT_OK},
     ModemNetworkSimulator,
 };
-use std::sync::Arc;
+
+use crate::common::constants;
 
 #[test]
 fn test_two_modem_end_to_end_scenario() {

@@ -23,24 +23,20 @@ mod grpc_client;
 mod requests;
 mod response;
 
-use common::util::ini_file::get_server_address;
-use common::util::os_utils::get_instance;
-use netsim_proto::frontend;
-
-use grpcio::{ChannelBuilder, EnvBuilder};
-use log::error;
-use std::env;
-use std::fs::File;
-use std::path::PathBuf;
-
-use crate::error::{Error, Result};
-use crate::grpc_client::{ClientResponseReader, GrpcRequest, GrpcResponse};
-use netsim_proto::frontend_grpc::FrontendServiceClient;
+use std::{env, fs::File, path::PathBuf};
 
 use args::{GetCapture, NetsimArgs};
 use clap::Parser;
-use common::util::netsim_logger;
+use common::util::{ini_file::get_server_address, netsim_logger, os_utils::get_instance};
 use file_handler::FileHandler;
+use grpcio::{ChannelBuilder, EnvBuilder};
+use log::error;
+use netsim_proto::{frontend, frontend_grpc::FrontendServiceClient};
+
+use crate::{
+    error::{Error, Result},
+    grpc_client::{ClientResponseReader, GrpcRequest, GrpcResponse},
+};
 
 // helper function to process streaming Grpc request
 fn perform_streaming_request(
@@ -70,7 +66,8 @@ fn perform_streaming_request(
     )
 }
 
-/// helper function to send the Grpc request(s) and handle the response(s) per the given command
+/// helper function to send the Grpc request(s) and handle the response(s) per
+/// the given command
 fn perform_command(
     command: &mut args::Command,
     client: FrontendServiceClient,
@@ -230,13 +227,12 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use crate::args::BeaconRemove;
     use netsim_proto::{
         frontend::ListDeviceResponse,
         model::{Chip as ChipProto, Device as DeviceProto},
     };
 
-    use crate::find_id_for_remove;
+    use crate::{args::BeaconRemove, find_id_for_remove};
 
     #[test]
     fn test_remove_device() {

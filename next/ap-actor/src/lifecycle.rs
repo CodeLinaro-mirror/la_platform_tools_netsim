@@ -1,11 +1,14 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::ap_actor::{ApActor, WIFI_STREAM_ID};
-use crate::error::ApError;
 use actor_framework::{ActorLifecycle, DynContext};
 use async_trait::async_trait;
 use netsim_model::chip::ChipId;
 use netsim_packets::ieee80211::Ieee80211;
+
+use crate::{
+    ap_actor::{ApActor, WIFI_STREAM_ID},
+    error::ApError,
+};
 
 #[async_trait]
 impl ActorLifecycle<ChipId> for ApActor {

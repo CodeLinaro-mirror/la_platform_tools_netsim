@@ -1,11 +1,13 @@
 // Copyright 2025 Google LLC
 
 use bytes::Bytes;
-use netsim_packets::ieee80211::{FrameDirection, Ieee80211, MacAddress};
-use netsim_packets::netlink::hwsim_frame::HwsimFrame;
-use netsim_packets::netlink::HwsimMsg;
+use netsim_packets::{
+    ieee80211::{FrameDirection, Ieee80211, MacAddress},
+    netlink::{hwsim_frame::HwsimFrame, HwsimMsg},
+};
 
-/// Wraps an Ethernet II frame (as bytes) into a HwsimMsg suitable for injection into the Wifi actor.
+/// Wraps an Ethernet II frame (as bytes) into a HwsimMsg suitable for injection
+/// into the Wifi actor.
 pub fn wrap_ethernet_in_hwsim(
     ethernet_frame: &[u8],
     hostapd_bssid: &[u8; 6],
@@ -37,8 +39,8 @@ pub fn wrap_ethernet_in_hwsim(
     msg.encode_to_vec().map_err(|e| format!("Failed to encode HwsimMsg: {}", e))
 }
 
-/// Unwraps a HwsimMsg (as bytes or struct) and extracts the Ethernet frame if present.
-/// Note: This assumes the payload is LLC SNAP encoded Ethernet II.
+/// Unwraps a HwsimMsg (as bytes or struct) and extracts the Ethernet frame if
+/// present. Note: This assumes the payload is LLC SNAP encoded Ethernet II.
 #[allow(dead_code)]
 pub fn unwrap_hwsim_to_ethernet(packet: &[u8]) -> Result<Vec<u8>, String> {
     // 1. Parse HwsimMsg
@@ -67,8 +69,9 @@ pub fn unwrap_hwsim_to_ethernet(packet: &[u8]) -> Result<Vec<u8>, String> {
 
     let dst = ieee80211.get_destination();
 
-    // For FromDS traffic (AP -> STA), Source might be stored in different addresses depending on mapping
-    // But usually Ieee80211::get_source() handles the ToDS/FromDS logic to return SA.
+    // For FromDS traffic (AP -> STA), Source might be stored in different addresses
+    // depending on mapping But usually Ieee80211::get_source() handles the
+    // ToDS/FromDS logic to return SA.
     let src = ieee80211.get_source();
 
     let mut eth_frame = Vec::new();

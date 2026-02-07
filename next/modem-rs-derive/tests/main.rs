@@ -1,9 +1,11 @@
-use modem_rs::parser::{parse_raw_data, parse_until_semicolon, QuotedString};
-use modem_rs::types::Parsable;
+use modem_rs::{
+    parser::{parse_raw_data, parse_until_semicolon, QuotedString},
+    types::Parsable,
+};
 use modem_rs_derive::CommandParser;
 
-// This Command enum is a direct translation of the one in `modem-rs/src/parser.rs`,
-// adapted to use the CommandParser derive macro.
+// This Command enum is a direct translation of the one in
+// `modem-rs/src/parser.rs`, adapted to use the CommandParser derive macro.
 #[derive(CommandParser, Debug, PartialEq)]
 pub enum Command<'a> {
     #[command(tag = "AT+CPIN?")]

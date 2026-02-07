@@ -1,35 +1,42 @@
 // Copyright 2023-2025 The Android Open Source Project // touch
 
-use crate::args::Args;
-use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
-use crate::logger;
-use crate::platform;
-use crate::version::get_version;
+use std::{
+    collections::HashMap,
+    env, fs, io,
+    path::PathBuf,
+    sync::{atomic::AtomicU32, Arc},
+};
+
 use client::{CaptureClient, DeviceClient};
-use common::system::netsimd_temp_dir;
-use common::util::os_utils::{get_instance_name, redirect_std_stream};
+use common::{
+    system::netsimd_temp_dir,
+    util::os_utils::{get_instance_name, redirect_std_stream},
+};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info, warn};
-use netsim_model::chip::{
-    ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, DeviceParams,
-    NetworkKind, NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
-    UwbCreate, WifiCreate,
+use netsim_model::{
+    chip::{
+        ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
+        ChipKindParams, DeviceParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
+        UwbCreate, WifiCreate,
+    },
+    initial_info::ChipInfo,
+    set_if_some,
 };
-use netsim_model::initial_info::{ChipInfo, ChipKind};
-use netsim_model::set_if_some;
-use packet_stream::transport::traits::{PacketSink, PacketStream};
-use packet_stream::{StreamAddress, Streams, TransportType};
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::task::JoinSet;
+use packet_stream::{
+    transport::traits::{PacketSink, PacketStream},
+    StreamAddress, Streams, TransportType,
+};
+use tokio::{sync::mpsc, task::JoinSet};
+
+use crate::{
+    args::Args,
+    ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig},
+    logger, platform,
+    version::get_version,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum RunResult {
@@ -53,10 +60,11 @@ pub enum StartUpMode {
 #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 fn cuttlefish_init() {
     use rustutils::inherited_fd;
-    // SAFETY: This function must be called before any other code that might take ownership of
-    // file descriptors. `init_once` takes ownership of all open file descriptors except for
-    // the stdio streams. Calling it after other parts of the program has already acquired
-    // ownership of file descriptors can lead to double-frees or other memory corruption issues.
+    // SAFETY: This function must be called before any other code that might take
+    // ownership of file descriptors. `init_once` takes ownership of all open
+    // file descriptors except for the stdio streams. Calling it after other
+    // parts of the program has already acquired ownership of file descriptors
+    // can lead to double-frees or other memory corruption issues.
     unsafe {
         inherited_fd::init_once().expect("inherited_fds");
     }
@@ -99,18 +107,18 @@ async fn handle_new_connection(
         chip.address = chip.id.clone();
     }
 
-    let network_params = match chip.kind {
-        ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothCreate {
+    let chip_kind_params = match ChipKind::from(chip.kind) {
+        ChipKind::BLUETOOTH => ChipKindParams::Bluetooth(BluetoothCreate {
             address: chip.address.clone(),
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
         }),
-        ChipKind::UWB => NetworkParams::Uwb(UwbCreate::default()),
-        ChipKind::WIFI => NetworkParams::Wifi(WifiCreate::default()),
-        ChipKind::AP => NetworkParams::Ap(ApCreate::default()),
-        ChipKind::CELL => NetworkParams::Cell(CellCreate::default()),
-        _ => {
-            error!("Unsupported chip kind: {:?}", chip.kind);
+        ChipKind::UWB => ChipKindParams::Uwb(UwbCreate::default()),
+        ChipKind::WIFI => ChipKindParams::Wifi(WifiCreate::default()),
+        ChipKind::AP => ChipKindParams::Ap(ApCreate::default()),
+        ChipKind::CELLULAR => ChipKindParams::Cell(CellCreate::default()),
+        kind => {
+            error!("Unsupported chip kind: {:?}", kind);
             return;
         }
     };
@@ -119,7 +127,7 @@ async fn handle_new_connection(
         name: chip.name.clone(),
         manufacturer: chip.manufacturer.clone(),
         product_name: chip.product_name.clone(),
-        network_params,
+        chip_kind_params,
     };
 
     // Convert packet_stream types to netsim_model types
@@ -262,7 +270,8 @@ impl NetsimDaemon {
     ///
     /// Returns:
     /// - `Ok(StartUpMode::Owner)`: Daemon instance, lock acquired.
-    /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not acquired.
+    /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not
+    ///   acquired.
     /// - `Err(RunResult::InitializationError)`: Fatal error.
     pub async fn new() -> Result<StartUpMode, RunResult> {
         let discovery_dir = crate::ini_file::get_discovery_directory();
@@ -392,7 +401,8 @@ impl NetsimDaemon {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
 
-        // Even if stale file removal failed, we can proceed as ini_guard.write will overwrite.
+        // Even if stale file removal failed, we can proceed as ini_guard.write will
+        // overwrite.
         ini_guard.write(&ini_data).map_err(init_error)?;
         info!("Wrote to INI file {}", ini_path.display());
 
@@ -428,18 +438,18 @@ impl NetsimDaemon {
         let cell_server = cell::Server::new(device_client.clone(), cell_controller);
 
         // Prepare chip clients map for DeviceServer
-        let mut chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();
-        chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client.clone()));
-        chip_clients.insert(NetworkKind::Wifi, Box::new(wifi_client.clone()));
-        chip_clients.insert(NetworkKind::Uwb, Box::new(uwb_client.clone()));
-        chip_clients.insert(NetworkKind::Cell, Box::new(cell_client.clone()));
-        chip_clients.insert(NetworkKind::Ap, Box::new(ap_client.clone()));
+        let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
+        chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
+        chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
+        chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
+        chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
+        chip_clients.insert(ChipKind::AP, Box::new(ap_client.clone()));
 
         // Setup Link Actor State
         // Create a new map for LinkActor.
         // We need to inject ChipClients into LinkActor so it can propagate link changes
         // (like RSSI updates) to the underlying radio actors (e.g., BluetoothActor).
-        let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k.into(), v.clone())).collect();
+        let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k, v.clone())).collect();
         let link_actor_state = link_actor::LinkActor::new(link_chip_clients);
 
         let device_actor_state = device_actor::DeviceActor::new(
@@ -464,11 +474,10 @@ impl NetsimDaemon {
         join_set.spawn(link_runner.run(link_actor_state));
 
         // Create Default AP
-        let mut device_create = device_api::DeviceCreate::default_ap();
+        let mut device_create = device_api::DeviceCreate::default_ap(args.wifi.wifi_ssid.clone());
 
         // Apply overrides from args
         if let device_api::api::Chip::Ap(ref mut ap) = device_create.chip.chip {
-            set_if_some!(ap.ssid, &args.wifi.wifi_ssid);
             set_if_some!(ap.wpa_passphrase, args.wifi.wifi_password.clone(), Some);
             set_if_some!(ap.channel, args.wifi.wifi_channel);
             set_if_some!(ap.beacon_interval, args.wifi.wifi_beacon_interval);

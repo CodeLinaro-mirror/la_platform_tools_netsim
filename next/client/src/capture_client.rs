@@ -1,14 +1,16 @@
+use std::sync::{atomic::AtomicBool, Arc};
+
 use actor_framework::ResourceClient;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
 use capture_actor::CaptureActor;
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
-use netsim_model::chip::{ChipId, ChipKind};
-use netsim_model::device_error::DeviceError;
+use netsim_model::{
+    chip::{ChipId, ChipKind},
+    device_error::DeviceError,
+};
 use packet_stream::transport::traits::{PacketSink, PacketStream};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 /// Client for interacting with the CaptureActor.
 ///
@@ -116,7 +118,8 @@ impl CaptureClient {
     pub fn capture_packet(&self, chip_id: ChipId, direction: capture_api::Direction, bytes: Bytes) {
         let inner = self.inner.clone();
         // TODO(b/312345678): Consider using a sync channel and a single background task
-        // instead of spawning a new task for every packet if performance becomes an issue.
+        // instead of spawning a new task for every packet if performance becomes an
+        // issue.
         tokio::spawn(async move {
             let _ = inner
                 .perform_action(

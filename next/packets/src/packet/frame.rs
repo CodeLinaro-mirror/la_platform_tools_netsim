@@ -8,15 +8,17 @@
 //! The main entry point is the `parse` function, which takes a raw byte
 //! slice and returns an `Option<Packet>`. The `Packet` struct contains
 
-use crate::ethernet::{ether_type, EthernetPacket};
-use crate::icmp::v6::Icmpv6Header;
-use crate::icmp::IcmpHeader;
-use crate::ip::{Ipv4Header, Ipv6Header, Ipv6HopByHopHeader, IP_P_HOPOPTS, IP_P_ICMP, IP_P_ICMPV6};
 use zerocopy::Ref;
 
-use crate::ip::{IP_P_TCP, IP_P_UDP};
-use crate::transport::tcp::TcpHeader;
-use crate::transport::udp::UdpHeader;
+use crate::{
+    ethernet::{ether_type, EthernetPacket},
+    icmp::{v6::Icmpv6Header, IcmpHeader},
+    ip::{
+        Ipv4Header, Ipv6Header, Ipv6HopByHopHeader, IP_P_HOPOPTS, IP_P_ICMP, IP_P_ICMPV6, IP_P_TCP,
+        IP_P_UDP,
+    },
+    transport::{tcp::TcpHeader, udp::UdpHeader},
+};
 
 /// Represents the IP layer of a packet, supporting both IPv4 and IPv6.
 /// It holds a reference to the header and a slice for the payload.
@@ -25,7 +27,8 @@ pub enum IpPacket<'a> {
     V6(Ref<&'a [u8], Ipv6Header>, &'a [u8]),
 }
 
-/// Represents the transport layer of a packet, currently supporting ICMP, ICMPv6, TCP, and UDP.
+/// Represents the transport layer of a packet, currently supporting ICMP,
+/// ICMPv6, TCP, and UDP.
 pub enum TransportPacket<'a> {
     Icmp(Ref<&'a [u8], IcmpHeader>, &'a [u8]),
     Icmpv6(Ref<&'a [u8], Icmpv6Header>, &'a [u8]),
@@ -311,7 +314,8 @@ mod tests {
         let packet = parse(&bytes).expect("Failed to parse packet");
         assert!(matches!(packet.ethernet, EthernetPacket::Vlan { .. }));
         assert!(packet.ip.is_some());
-        assert!(packet.transport.is_none()); // UDP parsing fails due to missing header
+        assert!(packet.transport.is_none()); // UDP parsing fails due to missing
+                                             // header
     }
 
     #[test]
