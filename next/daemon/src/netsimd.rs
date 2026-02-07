@@ -464,11 +464,10 @@ impl NetsimDaemon {
         join_set.spawn(link_runner.run(link_actor_state));
 
         // Create Default AP
-        let mut device_create = device_api::DeviceCreate::default_ap();
+        let mut device_create = device_api::DeviceCreate::default_ap(args.wifi.wifi_ssid.clone());
 
         // Apply overrides from args
         if let device_api::api::Chip::Ap(ref mut ap) = device_create.chip.chip {
-            set_if_some!(ap.ssid, &args.wifi.wifi_ssid);
             set_if_some!(ap.wpa_passphrase, args.wifi.wifi_password.clone(), Some);
             set_if_some!(ap.channel, args.wifi.wifi_channel);
             set_if_some!(ap.beacon_interval, args.wifi.wifi_beacon_interval);

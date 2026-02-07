@@ -10,6 +10,7 @@ use netsim_model::chip::{
     RadioUpdate,
 };
 use netsim_proto::common::ChipKind as ProtoChipKind;
+use netsim_proto::model::chip::Radio as ProtoRadio;
 use netsim_proto::model::ChipCreate;
 use netsim_proto::model::Link as ProtoLink;
 use netsim_proto::model::PhyKind as ProtoPhyKind;
@@ -44,7 +45,7 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
         // Map unknown/new types to UNSPECIFIED for now
         ApiChipKind::NFC => ProtoChipKind::UNSPECIFIED,
         ApiChipKind::CELLULAR => ProtoChipKind::UNSPECIFIED,
-        ApiChipKind::AP => ProtoChipKind::UNSPECIFIED,
+        ApiChipKind::AP => ProtoChipKind::WIFI,
     }
 }
 
@@ -77,7 +78,9 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
                 // TODO: Add Cell support to proto if available
             }
             netsim_model::chip::ChipVariant::Ap(_) => {
-                // TODO: Add AP support to proto
+                let mut radio = ProtoRadio::new();
+                radio.state = Some(true); //  AP radio is active by default
+                chip.chip = Some(netsim_proto::model::chip::Chip::Wifi(radio));
             }
         }
     }

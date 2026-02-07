@@ -129,9 +129,11 @@ pub mod api {
     }
 
     impl DeviceCreate {
-        pub fn default_ap() -> Self {
+        pub fn default_ap(ssid_override: Option<String>) -> Self {
+            let name = ssid_override.unwrap_or_else(|| crate::ap::DEFAULT_WIFI_SSID.to_string());
+
             let ap_create = ApCreate {
-                ssid: "AndroidWifi".to_string(),
+                ssid: name.clone(),
                 bssid: "02:00:00:44:55:66".to_string(),
                 channel: 6,
                 hw_mode: WifiMode::G,
@@ -150,7 +152,7 @@ pub mod api {
 
             Self {
                 device_config: DeviceConfig {
-                    name: "infra-device".to_string(),
+                    name,
                     position: Default::default(),
                     orientation: Default::default(),
                     visible: false,
