@@ -14,17 +14,21 @@
 
 use std::cmp::max;
 
-use crate::args::{
-    self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, LinkDelete, LinkPatch,
-    OnOffState,
-};
-use crate::display::{Displayer, LinkChipIdDisplay};
-use crate::grpc_client::GrpcResponse;
 use common::util::time_display::TimeDisplay;
 use netsim_proto::{common::ChipKind, frontend, model};
 
+use crate::{
+    args::{
+        self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, LinkDelete, LinkPatch,
+        OnOffState,
+    },
+    display::{Displayer, LinkChipIdDisplay},
+    grpc_client::GrpcResponse,
+};
+
 impl args::Command {
-    /// Format and print the response received from the frontend server for the command
+    /// Format and print the response received from the frontend server for the
+    /// command
     pub fn print_response(&self, response: &GrpcResponse, verbose: bool) {
         match self {
             Command::Version => {

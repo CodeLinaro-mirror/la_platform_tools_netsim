@@ -1,6 +1,5 @@
 use bytes::Bytes;
-use netsim_packets::ieee80211::Ieee80211;
-use netsim_packets::netlink::hwsim_frame::HwsimFrame;
+use netsim_packets::{ieee80211::Ieee80211, netlink::hwsim_frame::HwsimFrame};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum InfraTarget {

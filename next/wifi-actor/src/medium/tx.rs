@@ -1,21 +1,29 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::error::WifiError;
-use crate::medium::core::Medium;
-use crate::medium::types::{Station, WifiResult};
-use crate::medium::utils::{self, build_tx_info};
+use std::collections::HashSet;
+
 use bytes::Bytes;
 use log::debug;
-use netsim_packets::ieee80211::{FrameDirection, Ieee80211};
-use netsim_packets::netlink::hwsim_frame::HwsimFrame;
-use netsim_packets::netlink::HwsimMsg;
-use std::collections::HashSet;
+use netsim_packets::{
+    ieee80211::{FrameDirection, Ieee80211},
+    netlink::{hwsim_frame::HwsimFrame, HwsimMsg},
+};
+
+use crate::{
+    error::WifiError,
+    medium::{
+        core::Medium,
+        types::{Station, WifiResult},
+        utils::{self, build_tx_info},
+    },
+};
 
 // Packets flowing from Medium to Guest (Destination)
 impl Medium {
     /// Encodes a HwsimMsg and pushes it to the output queue.
     ///
-    /// This helper simplifies the error handling and queue management for outgoing packets.
+    /// This helper simplifies the error handling and queue management for
+    /// outgoing packets.
     fn push_packet(
         &mut self,
         client_id: u32,
@@ -60,7 +68,8 @@ impl Medium {
         self.incr_tx(client_id)
     }
 
-    /// Processes an IEEE 802.3 packet (Ethernet frame), typically from Slirp or a Tun interface.
+    /// Processes an IEEE 802.3 packet (Ethernet frame), typically from Slirp or
+    /// a Tun interface.
     ///
     /// Converts the Ethernet frame to an IEEE 802.11 frame and routes it.
     pub fn process_ieee8023_response(
@@ -73,8 +82,9 @@ impl Medium {
         }
         // TODO: Support multiple APs (BSSIDs).
         // Currently, we assume a single BSSID globally.
-        // To support multiple APs, we need to store which BSSID each Station is associated with
-        // (e.g. Map<StationMAC, BSSID>) and look it up here using the packet's Destination MAC.
+        // To support multiple APs, we need to store which BSSID each Station is
+        // associated with (e.g. Map<StationMAC, BSSID>) and look it up here
+        // using the packet's Destination MAC.
         let bssid = self
             .key_store
             .get_bssid()
@@ -87,7 +97,8 @@ impl Medium {
         self.route_infra_packet(ieee80211, out_queue)
     }
 
-    /// Entry point for transmitting raw IEEE 802.11 bytes from the infrastructure.
+    /// Entry point for transmitting raw IEEE 802.11 bytes from the
+    /// infrastructure.
     ///
     /// Decodes the packet and delegates to `route_infra_packet`.
     pub fn transmit_from_infra(
@@ -104,9 +115,11 @@ impl Medium {
         self.route_infra_packet(ieee80211, out_queue)
     }
 
-    /// Routes a decoded IEEE 802.11 frame from the infrastructure to the appropriate stations.
+    /// Routes a decoded IEEE 802.11 frame from the infrastructure to the
+    /// appropriate stations.
     ///
-    /// Handles encryption (if applicable), resolves targets, and delivers the packet.
+    /// Handles encryption (if applicable), resolves targets, and delivers the
+    /// packet.
     pub(crate) fn route_infra_packet(
         &mut self,
         mut ieee80211: Ieee80211,

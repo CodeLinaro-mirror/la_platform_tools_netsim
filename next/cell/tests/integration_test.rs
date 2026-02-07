@@ -1,4 +1,9 @@
 // next/cell/tests/integration_test.rs // touch
+use std::{
+    io::{Error as IoError, ErrorKind},
+    pin::Pin,
+};
+
 use actor_framework::{ResourceClient, ResourceRequest};
 use bytes::Bytes;
 use cell::server::CellServer;
@@ -7,16 +12,14 @@ use device_actor::DeviceActor;
 use device_api::{DeviceAction, DeviceActionResult};
 use env_logger;
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
-use netsim_model::chip::{
-    CellCreate, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipVariant,
-    LegacyChipClient, PacketSink, PacketStream,
+use netsim_model::{
+    chip::{
+        CellCreate, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipVariant,
+        LegacyChipClient, PacketSink, PacketStream,
+    },
+    chip_error::ChipError as NetsimChipError,
+    device::DeviceId,
 };
-use netsim_model::chip_error::ChipError as NetsimChipError;
-use netsim_model::device::DeviceId;
-
-use std::io::Error as IoError;
-use std::io::ErrorKind;
-use std::pin::Pin;
 use tokio::sync::mpsc;
 
 // Helper to create a dummy PacketStream and PacketSink
@@ -218,4 +221,5 @@ async fn test_get_chip_internal() {
         other => panic!("Expected ChipNotFound error, got {:?}", other),
     }
 }
-// T021 & T026 are implicitly tested by the echo in test_stream_to_controller_echo
+// T021 & T026 are implicitly tested by the echo in
+// test_stream_to_controller_echo

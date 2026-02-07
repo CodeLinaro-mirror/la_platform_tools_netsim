@@ -1,35 +1,42 @@
 // Copyright 2023-2025 The Android Open Source Project // touch
 
-use crate::args::Args;
-use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
-use crate::logger;
-use crate::platform;
-use crate::version::get_version;
+use std::{
+    collections::HashMap,
+    env, fs, io,
+    path::PathBuf,
+    sync::{atomic::AtomicU32, Arc},
+};
+
 use client::{CaptureClient, DeviceClient};
-use common::system::netsimd_temp_dir;
-use common::util::os_utils::{get_instance_name, redirect_std_stream};
+use common::{
+    system::netsimd_temp_dir,
+    util::os_utils::{get_instance_name, redirect_std_stream},
+};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use log::{error, info, warn};
-use netsim_model::chip::{
-    ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
-    ChipKindParams, DeviceParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
-    UwbCreate, WifiCreate,
+use netsim_model::{
+    chip::{
+        ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
+        ChipKindParams, DeviceParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
+        UwbCreate, WifiCreate,
+    },
+    initial_info::ChipInfo,
+    set_if_some,
 };
-use netsim_model::initial_info::ChipInfo;
-use netsim_model::set_if_some;
-use packet_stream::transport::traits::{PacketSink, PacketStream};
-use packet_stream::{StreamAddress, Streams, TransportType};
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::task::JoinSet;
+use packet_stream::{
+    transport::traits::{PacketSink, PacketStream},
+    StreamAddress, Streams, TransportType,
+};
+use tokio::{sync::mpsc, task::JoinSet};
+
+use crate::{
+    args::Args,
+    ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig},
+    logger, platform,
+    version::get_version,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum RunResult {
@@ -53,10 +60,11 @@ pub enum StartUpMode {
 #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 fn cuttlefish_init() {
     use rustutils::inherited_fd;
-    // SAFETY: This function must be called before any other code that might take ownership of
-    // file descriptors. `init_once` takes ownership of all open file descriptors except for
-    // the stdio streams. Calling it after other parts of the program has already acquired
-    // ownership of file descriptors can lead to double-frees or other memory corruption issues.
+    // SAFETY: This function must be called before any other code that might take
+    // ownership of file descriptors. `init_once` takes ownership of all open
+    // file descriptors except for the stdio streams. Calling it after other
+    // parts of the program has already acquired ownership of file descriptors
+    // can lead to double-frees or other memory corruption issues.
     unsafe {
         inherited_fd::init_once().expect("inherited_fds");
     }
@@ -262,7 +270,8 @@ impl NetsimDaemon {
     ///
     /// Returns:
     /// - `Ok(StartUpMode::Owner)`: Daemon instance, lock acquired.
-    /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not acquired.
+    /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not
+    ///   acquired.
     /// - `Err(RunResult::InitializationError)`: Fatal error.
     pub async fn new() -> Result<StartUpMode, RunResult> {
         let discovery_dir = crate::ini_file::get_discovery_directory();
@@ -392,7 +401,8 @@ impl NetsimDaemon {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
 
-        // Even if stale file removal failed, we can proceed as ini_guard.write will overwrite.
+        // Even if stale file removal failed, we can proceed as ini_guard.write will
+        // overwrite.
         ini_guard.write(&ini_data).map_err(init_error)?;
         info!("Wrote to INI file {}", ini_path.display());
 

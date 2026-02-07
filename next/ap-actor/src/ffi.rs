@@ -15,17 +15,23 @@ pub enum DigestType {
 #[cxx::bridge(namespace = "netsim::hostap")]
 mod hostap_ffi {
     // SAFETY:
-    // 1. Necessity: We use C++ FFI because the `bssl-crypto` Rust crate (and `bssl-sys` bindings)
-    //    currently lack complete support for:
-    //    - Generic AES-CCM (Required for WPA/EAPOL). `bssl-crypto` only supports GCM.
+    // 1. Necessity: We use C++ FFI because the `bssl-crypto` Rust crate (and
+    //    `bssl-sys` bindings) currently lack complete support for:
+    //    - Generic AES-CCM (Required for WPA/EAPOL). `bssl-crypto` only supports
+    //      GCM.
     //    - AES Key Wrap (RFC 3394). `AES_wrap_key` is not exposed in safe wrappers.
-    //    - Legacy HMAC-MD5/SHA1/SHA384. `bssl-crypto` only supports HMAC-SHA256/512.
-    //    Rewriting these using raw `bssl-sys` FFI is redundant given the existing C++ shim.
+    //    - Legacy HMAC-MD5/SHA1/SHA384. `bssl-crypto` only supports
+    //      HMAC-SHA256/512.
+    //    Rewriting these using raw `bssl-sys` FFI is redundant given the existing
+    // C++ shim.
     // 2. Soundness:
-    //    - The `cxx` crate handles ABI compatibility and type safety for `Vec<u8>` <-> `std::vector`.
-    //    - The C++ implementation (`crypto_ffi.cc`) checks all buffer sizes and OpenSSL return values,
-    //      returning empty vectors or `false` on failure rather than triggering undefined behavior.
-    //    - No raw pointers are exposed or manipulated without length checks in the C++ shim.
+    //    - The `cxx` crate handles ABI compatibility and type safety for `Vec<u8>`
+    //      <-> `std::vector`.
+    //    - The C++ implementation (`crypto_ffi.cc`) checks all buffer sizes and
+    //      OpenSSL return values, returning empty vectors or `false` on failure
+    //      rather than triggering undefined behavior.
+    //    - No raw pointers are exposed or manipulated without length checks in the
+    //      C++ shim.
     unsafe extern "C++" {
         include!("crypto_ffi.h");
 

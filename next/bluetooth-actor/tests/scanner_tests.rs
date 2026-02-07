@@ -103,7 +103,8 @@ async fn test_scanner_captures_duplicates() {
 async fn test_scanner_sees_multiple_beacons() {
     let mut world = World::new();
 
-    // 1. Create two beacons with different names/addresses managed by World (auto-assigned).
+    // 1. Create two beacons with different names/addresses managed by World
+    //    (auto-assigned).
     world.given_beacon("Beacon1").await;
     world.given_beacon("Beacon2").await;
 

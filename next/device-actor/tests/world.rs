@@ -1,14 +1,18 @@
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicU32, Arc},
+};
+
 use device_actor::{DeviceActor, DeviceClient};
-use device_api::api::{DeviceChipCreate, DeviceCreate};
-use device_api::{DeviceConfig, DeviceId};
+use device_api::{
+    api::{DeviceChipCreate, DeviceCreate},
+    DeviceConfig, DeviceId,
+};
 use link_api::MockLinkClient;
 use netsim_model::chip::{
     BluetoothUpdate, ChipClient, ChipKind, ChipUpdate, ChipVariantUpdate, MockChipClient,
     RadioUpdate,
 };
-use std::collections::HashMap;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
 
 /// The BDD World for Device Actor tests.
 pub struct World {
@@ -217,7 +221,8 @@ impl World {
             },
         }
     }
-    /// Creates a Bluetooth ChipUpdate with the specified Low Energy and Classic radio states.
+    /// Creates a Bluetooth ChipUpdate with the specified Low Energy and Classic
+    /// radio states.
     pub fn create_bluetooth_chip_update(
         le_state: Option<bool>,
         classic_state: Option<bool>,

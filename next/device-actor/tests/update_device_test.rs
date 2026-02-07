@@ -6,10 +6,12 @@
 //   I want to update device properties
 //   So that I can simulate dynamic changes in the environment
 
-use crate::world::World;
+use std::collections::HashMap;
+
 use device_api::api::DeviceUpdate;
 use netsim_model::chip::{Chip, ChipClient, ChipId, ChipKind, ChipVariantUpdate, MockChipClient};
-use std::collections::HashMap;
+
+use crate::world::World;
 
 // Scenario: Update device properties propagates to chips
 //   Given a running Device Actor with expectation for Update call
@@ -53,7 +55,8 @@ async fn test_update_device_propagates_to_chips() {
     assert_eq!(device.orientation.yaw, 1.0);
     assert_eq!(device.name, "updated-name");
 
-    // And the Chip Client received the expected Update call (verified by checkpoint)
+    // And the Chip Client received the expected Update call (verified by
+    // checkpoint)
 }
 
 // Scenario: Notify chip removed
@@ -80,8 +83,8 @@ async fn test_notify_chip_removed() {
 
 // Scenario: Update device propagates by variant when no ID is provided
 //   Given a running Device Actor with expectation for Update call
-//   When I create a device and update it using a variant (e.g. Bluetooth) without Chip ID
-//   Then the correct chip (Bluetooth) receives the update
+//   When I create a device and update it using a variant (e.g. Bluetooth)
+// without Chip ID   Then the correct chip (Bluetooth) receives the update
 #[tokio::test]
 async fn test_update_device_propagates_by_variant() {
     // Given a running Device Actor with expectation for Update call
@@ -113,8 +116,8 @@ async fn test_update_device_propagates_by_variant() {
 
 // Scenario: Update Chip Radio State via Device Update
 //   Given a running Device Actor with expectation for Chip Update
-//   When I create a device and update its Bluetooth Low Energy state to disabled
-//   Then the Chip Client receives the updates with the correct states
+//   When I create a device and update its Bluetooth Low Energy state to
+// disabled   Then the Chip Client receives the updates with the correct states
 //   And I update the device to enable the Bluetooth Low Energy state
 //   Then the Chip Client receives the updates with the correct states
 #[tokio::test]
@@ -166,7 +169,8 @@ async fn test_update_chip_ble_radio_state() {
     let chip_update = World::create_bluetooth_chip_update(Some(false), None);
     world.when_update_device_chip(device_id, chip_update).await;
 
-    // Then the Chip Client receives the update with the correct state (verified by checkpoint)
+    // Then the Chip Client receives the update with the correct state (verified by
+    // checkpoint)
 
     // When I update the device again to ENABLE the Bluetooth Low Energy state
     let chip_update_enable = World::create_bluetooth_chip_update(Some(true), None);
@@ -228,7 +232,8 @@ async fn test_update_chip_classic_radio_state() {
     let chip_update = World::create_bluetooth_chip_update(None, Some(false));
     world.when_update_device_chip(device_id, chip_update).await;
 
-    // Then the Chip Client receives the update with the correct state (verified by checkpoint)
+    // Then the Chip Client receives the update with the correct state (verified by
+    // checkpoint)
 
     // When I update the device again to ENABLE the Bluetooth Classic state
     let chip_update_enable = World::create_bluetooth_chip_update(None, Some(true));

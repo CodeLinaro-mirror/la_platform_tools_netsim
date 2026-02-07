@@ -5,8 +5,9 @@
 //! `WifiMode` for PHY layer configuration and `ApCreate`/`ApUpdate`
 //! for lifecycle management.
 
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_WIFI_SSID: &str = "AndroidWifi";
 

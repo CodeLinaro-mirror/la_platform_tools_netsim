@@ -1,10 +1,15 @@
 // Copyright 2024-2025 The Android Open Source Project
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
 use bytes::Bytes;
 use modem_rs::modem_network::{ModemCallbacks, ModemError, ModemNetworkInterface};
-use netsim_model::cell::Cell;
-use netsim_model::chip::{Chip, ChipId, ChipVariant};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use netsim_model::{
+    cell::Cell,
+    chip::{Chip, ChipId, ChipVariant},
+};
 
 struct ControllerState {
     callbacks: Arc<dyn ModemCallbacks>,

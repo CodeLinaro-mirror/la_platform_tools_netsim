@@ -1,10 +1,14 @@
-use crate::chip::{ChipConfig, ChipId, PacketSink, PacketStream};
-use crate::client_error::ClientError;
-use crate::client_method;
-use crate::device_error::DeviceError;
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
+
+use crate::{
+    chip::{ChipConfig, ChipId, PacketSink, PacketStream},
+    client_error::ClientError,
+    client_method,
+    device_error::DeviceError,
+};
 
 // DEVICE SERVICE
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -98,12 +102,15 @@ client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::D
 client_method!(DeviceClient => fn reset() -> () as DeviceRequest::Reset);
 
 pub mod api {
-    use crate::chip::{
-        ApCreate, BleBeacon, BluetoothCreate, CellCreate, ChipConfig, UwbCreate, WifiCreate,
-        WifiMode,
-    };
-    use crate::device::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
+
+    use crate::{
+        chip::{
+            ApCreate, BleBeacon, BluetoothCreate, CellCreate, ChipConfig, UwbCreate, WifiCreate,
+            WifiMode,
+        },
+        device::{Device, DeviceConfig, Orientation, Position},
+    };
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
     pub struct ListDeviceResponse {

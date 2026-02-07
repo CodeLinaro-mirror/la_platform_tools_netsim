@@ -1,14 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use crate::world::World;
 use futures::{SinkExt, StreamExt};
-use netsim_proto::common::ChipKind;
-use netsim_proto::frontend::{CreateDeviceRequest, PatchDeviceRequest};
-use netsim_proto::frontend_grpc::FrontendServiceClient;
-use netsim_proto::hci_packet::hcipacket::PacketType;
-use netsim_proto::model::ChipCreate;
-use netsim_proto::model::DeviceCreate;
-use netsim_proto::protobuf::{EnumOrUnknown, MessageField};
+use netsim_proto::{
+    common::ChipKind,
+    frontend::{CreateDeviceRequest, PatchDeviceRequest},
+    frontend_grpc::FrontendServiceClient,
+    hci_packet::hcipacket::PacketType,
+    model::{ChipCreate, DeviceCreate},
+    protobuf::{EnumOrUnknown, MessageField},
+};
+
+use crate::world::World;
 
 // Feature: gRPC Frontend Lifecycle
 //
@@ -332,7 +334,8 @@ async fn test_link_wiring_grpc() {
     assert_eq!(l.sender_id, chip1);
     assert_eq!(l.receiver_id, chip2);
     assert_eq!(l.rssi, -50);
-    // Internally, BleBeacon maps to Bluetooth ChipKind, so we expect BLUETOOTH here.
+    // Internally, BleBeacon maps to Bluetooth ChipKind, so we expect BLUETOOTH
+    // here.
     assert_eq!(l.kind.enum_value_or_default(), ChipKind::BLUETOOTH);
 
     // 4. Update Link (PatchLink)

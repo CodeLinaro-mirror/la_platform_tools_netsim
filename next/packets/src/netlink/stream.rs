@@ -2,8 +2,9 @@
 
 //! Netlink message stream iterator.
 
-use crate::netlink::frame::NlMsgHdr;
 use zerocopy::Ref;
+
+use crate::netlink::frame::NlMsgHdr;
 
 /// Alignment for Netlink messages.
 const NLMSG_ALIGNTO: usize = 4;
@@ -78,8 +79,9 @@ impl<'a> Iterator for NetlinkStream<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use zerocopy::IntoBytes;
+
+    use super::*;
 
     #[test]
     fn test_netlink_stream_single() {

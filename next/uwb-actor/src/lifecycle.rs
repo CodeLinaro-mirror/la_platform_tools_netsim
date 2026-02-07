@@ -1,12 +1,11 @@
 // Copyright 2026 The Android Open Source Project
 
-use crate::uwb_actor::UwbActor;
-
 use actor_framework::{ActorLifecycle, ActorService, DynContext};
 use async_trait::async_trait;
 use bytes::Bytes;
-use netsim_model::chip::ChipId;
-use netsim_model::chip_error::ChipError;
+use netsim_model::{chip::ChipId, chip_error::ChipError};
+
+use crate::uwb_actor::UwbActor;
 
 #[async_trait]
 impl ActorLifecycle<ChipId> for UwbActor {

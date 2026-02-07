@@ -1,9 +1,9 @@
 //! # Actor Framework Utilities
 //!
-//! This module provides helper functions to reduce boilerplate in `ActorService` implementations.
+//! This module provides helper functions to reduce boilerplate in
+//! `ActorService` implementations.
 
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::{collections::HashMap, hash::Hash};
 
 /// Default implementation for `handle_get`.
 ///

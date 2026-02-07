@@ -1,12 +1,13 @@
 // src/misc_service.rs
 
+use std::sync::Mutex;
+
 use crate::{
     modem::ModemImpl,
     parser::{Command, QuotedString},
     traits::CommandExecutor,
     types::{ExecutionResult, HandledCommand},
 };
-use std::sync::Mutex;
 
 pub struct MiscService {
     clock: Mutex<String>,

@@ -1,16 +1,16 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use actor_framework::ResourceActor;
-use ap_actor::shared::SharedKeyStore;
-use ap_actor::{ApActor, ApClient, ApConfig};
-
-use ap_actor::netsim_model::chip::WifiMode;
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::{
-    management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
-    FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
-};
 use std::time::Duration;
+
+use actor_framework::ResourceActor;
+use ap_actor::{netsim_model::chip::WifiMode, shared::SharedKeyStore, ApActor, ApClient, ApConfig};
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
+        FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
+    },
+};
 use tokio::sync::mpsc;
 use zerocopy::{IntoBytes, Ref, U16};
 

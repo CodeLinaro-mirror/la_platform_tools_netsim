@@ -85,7 +85,8 @@ impl SimFile {
     }
 }
 
-/// Represents a Dedicated File (DF), which is a directory in the SIM file system.
+/// Represents a Dedicated File (DF), which is a directory in the SIM file
+/// system.
 #[derive(Debug, Deserialize, Default, Clone)]
 pub struct DedicatedFile {
     pub file_id: String,

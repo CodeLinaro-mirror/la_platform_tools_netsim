@@ -1,8 +1,9 @@
-use crate::bluetooth_actor::BluetoothActor;
-use crate::error::BluetoothError;
+use std::time::Duration;
+
 use actor_framework::{ActorLifecycle, ActorService, DynContext};
 use async_trait::async_trait;
-use std::time::Duration;
+
+use crate::{bluetooth_actor::BluetoothActor, error::BluetoothError};
 
 #[async_trait]
 impl ActorLifecycle<netsim_model::chip::ChipId> for BluetoothActor {

@@ -2,20 +2,21 @@
 
 //! Chip model and management.
 //!
-//! This module defines the core data structures for representing chips in Netsim,
-//! including their types, state, and communication channels. It handles the lifecycle
-//! of chips, including creation, updates, and deletion.
+//! This module defines the core data structures for representing chips in
+//! Netsim, including their types, state, and communication channels. It handles
+//! the lifecycle of chips, including creation, updates, and deletion.
 
-use crate::chip_error::ChipError;
-use crate::client_error::ClientError;
-
-use crate::device::{DeviceId, Orientation, Position};
-use crate::stats::NetsimRadioStats;
-
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
+
+use crate::{
+    chip_error::ChipError,
+    client_error::ClientError,
+    device::{DeviceId, Orientation, Position},
+    stats::NetsimRadioStats,
+};
 
 /// The kind of network technology the chip supports.
 ///
@@ -45,7 +46,8 @@ pub use crate::packet_streamer::{PacketSink, PacketStream};
 // CHIP SERVICE
 //
 // This module implements the actor model for managing simulated chips.
-// There is one chip service actor for each network type (Bluetooth, UWB, Wi-Fi).
+// There is one chip service actor for each network type (Bluetooth, UWB,
+// Wi-Fi).
 //
 // The "service" is the actor's message-processing loop, which would be
 // implemented in a separate task that owns the `mpsc::Receiver<ChipRequest>`.
@@ -232,14 +234,16 @@ pub enum ChipKindParams {
     Ap(crate::ap::ApCreate),
 }
 
-pub use crate::ap::{Ap, ApCreate, ApUpdate, WifiMode};
-pub use crate::bluetooth::{
-    beacon::BleBeacon, BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode, BluetoothUpdate,
-    DeviceParams, ScannerParams,
+pub use crate::{
+    ap::{Ap, ApCreate, ApUpdate, WifiMode},
+    bluetooth::{
+        beacon::BleBeacon, BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode,
+        BluetoothUpdate, DeviceParams, ScannerParams,
+    },
+    cell::{Cell, CellCreate},
+    uwb::{Uwb, UwbCreate, UwbUpdate},
+    wifi::{Wifi, WifiCreate, WifiUpdate},
 };
-pub use crate::cell::{Cell, CellCreate};
-pub use crate::uwb::{Uwb, UwbCreate, UwbUpdate};
-pub use crate::wifi::{Wifi, WifiCreate, WifiUpdate};
 
 impl fmt::Display for ChipId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -261,13 +265,14 @@ impl fmt::Display for ChipId {
 ///
 /// The model follows a **Component - Variant** pattern:
 ///
-/// 1.  **`Chip` (The Entity)**: Contains generic fields common to all chips,
-///     such as `id`, `name`, `position`, and `device_id`.
-/// 2.  **`ChipVariant` (The Dispatcher)**: The `variant` field is an enum that
-///     strictly owns the technology-specific struct (e.g., `Bluetooth(Bluetooth)`).
+/// 1. **`Chip` (The Entity)**: Contains generic fields common to all chips,
+///    such as `id`, `name`, `position`, and `device_id`.
+/// 2. **`ChipVariant` (The Dispatcher)**: The `variant` field is an enum that
+///    strictly owns the technology-specific struct (e.g.,
+///    `Bluetooth(Bluetooth)`).
 ///
-/// Use `Chip` for generic operations (positioning, lifecycle) and access `variant`
-/// for technology-specific state.
+/// Use `Chip` for generic operations (positioning, lifecycle) and access
+/// `variant` for technology-specific state.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Chip {
     pub id: u32,
@@ -339,7 +344,8 @@ impl From<ChipKind> for ChipVariant {
                 associations: Vec::new(),
             }),
             // Use Bluetooth as fallback for generic/unknown types if necessary,
-            // or panic if this is unreachable. For now, default to Bluetooth for unimplemented types.
+            // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
+            // types.
             _ => ChipVariant::Bluetooth(Default::default()),
         }
     }
@@ -404,17 +410,18 @@ impl ChipVariantUpdate {
 
 /// A client handle for interacting with the chip server actor.
 ///
-/// There is one chip server actor for each network type (Bluetooth, UWB, Wi-Fi).
-/// This client provides a high-level API for sending `ChipRequest` messages to
-/// the server over an `mpsc` channel. It abstracts away the channel and
-/// `oneshot` responder boilerplate for each command.
+/// There is one chip server actor for each network type (Bluetooth, UWB,
+/// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
+/// messages to the server over an `mpsc` channel. It abstracts away the channel
+/// and `oneshot` responder boilerplate for each command.
 /// A client handle for interacting with the chip server actor.
 ///
-/// There is one chip server actor for each network type (Bluetooth, UWB, Wi-Fi).
-/// This client provides a high-level API for sending `ChipRequest` messages to
-/// the server over an `mpsc` channel. It abstracts away the channel and
-/// `oneshot` responder boilerplate for each command.
-/// A generic client for interacting with any chip server actor (UWB, WiFi, Cell).
+/// There is one chip server actor for each network type (Bluetooth, UWB,
+/// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
+/// messages to the server over an `mpsc` channel. It abstracts away the channel
+/// and `oneshot` responder boilerplate for each command.
+/// A generic client for interacting with any chip server actor (UWB, WiFi,
+/// Cell).
 #[derive(Clone)]
 pub struct RadioChipClient {
     sender: tokio::sync::mpsc::Sender<ChipRequest>,
@@ -506,10 +513,10 @@ impl ChipClient for RadioChipClient {
 
 /// A client handle for interacting with the chip server actor.
 ///
-/// There is one chip server actor for each network type (Bluetooth, UWB, Wi-Fi).
-/// This client provides a high-level API for sending `ChipRequest` messages to
-/// the server over an `mpsc` channel. It abstracts away the channel and
-/// `oneshot` responder boilerplate for each command.
+/// There is one chip server actor for each network type (Bluetooth, UWB,
+/// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
+/// messages to the server over an `mpsc` channel. It abstracts away the channel
+/// and `oneshot` responder boilerplate for each command.
 #[cfg_attr(feature = "testing", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ChipClient: Send + Sync {

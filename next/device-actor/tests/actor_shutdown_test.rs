@@ -6,8 +6,9 @@
 //   I want the device actor server to shut down when idle or when requested
 //   So that resources are released when not in use
 
-use crate::world::World;
 use std::time::Duration;
+
+use crate::world::World;
 
 // Scenario: Server shuts down after idle timeout
 //   Given a running Device Actor

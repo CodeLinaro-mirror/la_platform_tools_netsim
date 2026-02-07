@@ -6,9 +6,11 @@
 //   I want to add chips to devices via PacketStream
 //   So that I can support multiple chips per device and dynamic attachment
 
-use crate::world::World;
-use netsim_model::chip::{ChipKind, MockChipClient};
 use std::collections::HashMap;
+
+use netsim_model::chip::{ChipKind, MockChipClient};
+
+use crate::world::World;
 
 // Scenario: Add chip to new device
 //   Given a running Device Actor
@@ -39,7 +41,8 @@ async fn test_add_chip_creates_new_device() {
 //   Then the device contains both chips
 #[tokio::test]
 async fn test_add_chip_to_existing_device() {
-    // Given a running Device Actor with expectation for multiple Create calls on ChipClient
+    // Given a running Device Actor with expectation for multiple Create calls on
+    // ChipClient
     let mut mock_chip_client = MockChipClient::new();
     mock_chip_client.expect_create().times(2).returning(|_| Ok(()));
 
@@ -82,8 +85,8 @@ async fn test_add_chip_to_existing_device() {
 //   And duplicate devices are prevented
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_concurrent_add_chip_race_condition() {
-    // Given a running Device Actor with expectation for multiple Create calls on ChipClient
-    // We expect 2 chips to be created (one for each add_chip call)
+    // Given a running Device Actor with expectation for multiple Create calls on
+    // ChipClient We expect 2 chips to be created (one for each add_chip call)
     let mut mock_chip_client = MockChipClient::new();
     mock_chip_client.expect_create().times(2).returning(|_| Ok(()));
     // Allow cleanup deletions

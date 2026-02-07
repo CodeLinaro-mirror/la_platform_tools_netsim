@@ -1,9 +1,12 @@
-use crate::writer::CaptureWriter;
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
+};
+
 use netsim_model::chip::ChipId;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+
+use crate::writer::CaptureWriter;
 
 /// The context for the Capture actor.
 ///

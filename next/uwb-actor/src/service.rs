@@ -1,12 +1,17 @@
 // Copyright 2026 The Android Open Source Project
 
-use crate::uwb_actor::{run_sink_task, UwbActor};
-use crate::{UwbAction, UwbActionResult};
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
-use netsim_model::chip::{Chip, ChipCreate, ChipId, ChipUpdate};
-use netsim_model::chip_error::ChipError;
+use netsim_model::{
+    chip::{Chip, ChipCreate, ChipId, ChipUpdate},
+    chip_error::ChipError,
+};
 use tokio::sync::mpsc;
+
+use crate::{
+    uwb_actor::{run_sink_task, UwbActor},
+    UwbAction, UwbActionResult,
+};
 
 #[async_trait]
 impl ActorService for UwbActor {

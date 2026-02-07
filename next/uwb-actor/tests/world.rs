@@ -1,20 +1,24 @@
 // Copyright 2026 The Android Open Source Project
 
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use client::DeviceClient;
-use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, ChipKindParams, UwbCreate};
-use netsim_model::chip_error::ChipError;
-use netsim_model::client_error::ClientError;
-use netsim_model::device::DeviceId;
+use netsim_model::{
+    chip::{Chip, ChipClient, ChipCreate, ChipId, ChipKindParams, UwbCreate},
+    chip_error::ChipError,
+    client_error::ClientError,
+    device::DeviceId,
+};
 use netsim_testing::mocks::{mock_sink, mock_stream};
-use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
 use uwb_actor::{UwbActor, UwbClient};
 
 /// The BDD World for UWB Actor tests.
 pub struct World {
     pub client: UwbClient,
-    pub _device_client: DeviceClient, // Keep reference if we need to check notifications, or use a Mock
+    pub _device_client: DeviceClient, /* Keep reference if we need to check notifications, or
+                                       * use a Mock */
     pub packet_txs: HashMap<ChipId, Sender<Bytes>>,
     pub packet_rxs: HashMap<ChipId, Receiver<Vec<u8>>>,
     _actor_task: tokio::task::JoinHandle<()>,
@@ -40,8 +44,8 @@ impl World {
             new_mock
                 .expect_perform_action()
                 .returning(|_, _| Ok(device_api::DeviceActionResult::Success));
-            // Expect clone_box recursively if needed, but UwbActor probably doesn't clone it again?
-            // Better to be safe:
+            // Expect clone_box recursively if needed, but UwbActor probably doesn't clone
+            // it again? Better to be safe:
             new_mock.expect_clone_box().returning(|| {
                 let mut inner_mock = actor_framework::MockActorClient::new();
                 inner_mock

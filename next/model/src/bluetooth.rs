@@ -1,7 +1,9 @@
 // Rust definitions for Bluetooth related structures
-use crate::chip::{Radio, RadioUpdate};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+
+use crate::chip::{Radio, RadioUpdate};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Bluetooth {

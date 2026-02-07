@@ -2,10 +2,11 @@
 
 //! A minimal pcapng parser.
 
-use crate::utils::general::ParseResult;
 use zerocopy::{
     byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, U16, U32, U64,
 };
+
+use crate::utils::general::ParseResult;
 
 #[derive(FromBytes, IntoBytes, KnownLayout, Immutable, Debug, PartialEq, Eq)]
 #[repr(C)]
@@ -38,7 +39,8 @@ impl SectionHeaderBlock {
         }
     }
 
-    /// Parses a `SectionHeaderBlock` from the beginning of the given byte slice.
+    /// Parses a `SectionHeaderBlock` from the beginning of the given byte
+    /// slice.
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, SectionHeaderBlock>> {
         Ref::from_prefix(bytes).ok()
     }
@@ -78,7 +80,8 @@ impl EnhancedPacketBlock {
         }
     }
 
-    /// Parses an `EnhancedPacketBlock` from the beginning of the given byte slice.
+    /// Parses an `EnhancedPacketBlock` from the beginning of the given byte
+    /// slice.
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, EnhancedPacketBlock>> {
         Ref::from_prefix(bytes).ok()
     }

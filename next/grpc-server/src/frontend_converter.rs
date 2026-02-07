@@ -1,25 +1,24 @@
-use device_api::api::{Chip, DeviceChipCreate};
-use device_api::{Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition};
+use device_api::{
+    api::{Chip, DeviceChipCreate},
+    Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition,
+};
 use link_api::Link as ApiLink;
-use netsim_model::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
-use netsim_model::chip::BleBeacon;
-use netsim_model::chip::ChipId;
-use netsim_model::chip::ChipKind as ApiChipKind;
-use netsim_model::chip::{
-    BluetoothCreate, BluetoothMode, BluetoothUpdate, ChipUpdate, ChipVariantUpdate, Radio,
-    RadioUpdate,
+use netsim_model::{
+    bluetooth::beacon::{AdvertiseData, AdvertiseSettings},
+    chip::{
+        BleBeacon, BluetoothCreate, BluetoothMode, BluetoothUpdate, ChipId,
+        ChipKind as ApiChipKind, ChipUpdate, ChipVariantUpdate, Radio, RadioUpdate,
+    },
 };
-use netsim_proto::common::ChipKind as ProtoChipKind;
-use netsim_proto::model::chip::Radio as ProtoRadio;
-use netsim_proto::model::ChipCreate;
-use netsim_proto::model::Link as ProtoLink;
-use netsim_proto::model::PhyKind as ProtoPhyKind;
-use netsim_proto::model::{
-    Chip as ProtoChip, Device as ProtoDevice, Orientation as ProtoOrientation,
-    Position as ProtoPosition,
+use netsim_proto::{
+    common::ChipKind as ProtoChipKind,
+    model::{
+        chip::Radio as ProtoRadio, Chip as ProtoChip, ChipCreate, Device as ProtoDevice,
+        Link as ProtoLink, Orientation as ProtoOrientation, PhyKind as ProtoPhyKind,
+        Position as ProtoPosition,
+    },
+    protobuf::{EnumOrUnknown, MessageField},
 };
-use netsim_proto::protobuf::EnumOrUnknown;
-use netsim_proto::protobuf::MessageField;
 
 pub fn to_proto_position(p: ApiPosition) -> ProtoPosition {
     let mut pos = ProtoPosition::new();
@@ -56,7 +55,8 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
     chip.name = c.name.unwrap_or_default();
     chip.manufacturer = c.manufacturer.unwrap_or_default();
     chip.product_name = c.product_name.unwrap_or_default();
-    // Note: netsim_model Chip has position, but netsim_proto Chip has offset (Position)
+    // Note: netsim_model Chip has position, but netsim_proto Chip has offset
+    // (Position)
     chip.offset = MessageField::some(to_proto_position(c.position));
 
     if let Some(variant) = c.variant {
@@ -148,8 +148,9 @@ fn from_proto_advertise_settings(
     s: &netsim_proto::model::chip::ble_beacon::AdvertiseSettings,
 ) -> AdvertiseSettings {
     use netsim_model::bluetooth::beacon::{AdvertiseMode, AdvertiseTxPower, Interval, TxPower};
-    use netsim_proto::model::chip::ble_beacon::advertise_settings::Interval as ProtoInterval;
-    use netsim_proto::model::chip::ble_beacon::advertise_settings::Tx_power as ProtoTxPower;
+    use netsim_proto::model::chip::ble_beacon::advertise_settings::{
+        Interval as ProtoInterval, Tx_power as ProtoTxPower,
+    };
 
     let interval = match s.interval {
         Some(ProtoInterval::AdvertiseMode(mode)) => match mode.enum_value_or_default() {

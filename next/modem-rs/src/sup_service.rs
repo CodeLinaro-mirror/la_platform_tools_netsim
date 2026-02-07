@@ -1,12 +1,13 @@
 // src/sup_service.rs
 
+use std::sync::Mutex;
+
 use crate::{
     modem::ModemImpl,
     parser::{Command, QuotedString},
     traits::CommandExecutor,
     types::{ExecutionResult, HandledCommand},
 };
-use std::sync::Mutex;
 
 pub const MODE_ENABLE: u8 = 1;
 pub const MODE_QUERY: u8 = 2;

@@ -16,7 +16,8 @@ use super::*;
 
 #[test]
 fn test_udp_header_parsing() {
-    // Sample UDP header: source port 12345, dest port 80, length 28, checksum 0xABCD
+    // Sample UDP header: source port 12345, dest port 80, length 28, checksum
+    // 0xABCD
     let bytes: [u8; 8] = [0x30, 0x39, 0x00, 0x50, 0x00, 0x1C, 0xAB, 0xCD];
     let (header, rest) = UdpHeader::parse(&bytes).expect("Failed to parse UDP header");
 

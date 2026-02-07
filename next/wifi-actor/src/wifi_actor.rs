@@ -1,15 +1,17 @@
-use crate::error::WifiError;
-use crate::medium::Medium;
+use std::{collections::HashMap, sync::Arc};
+
 use actor_framework::DynContext;
 use ap_actor::{shared::SharedKeyStore, ApClient};
 use log::{debug, warn};
-use netsim_model::chip::{Chip, ChipId};
-use netsim_model::stats::NetsimRadioStats;
+use netsim_model::{
+    chip::{Chip, ChipId},
+    stats::NetsimRadioStats,
+};
 use netsim_packets::ieee80211::{FrameDirection, Ieee80211};
 use slirp_actor::SlirpClient;
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
+
+use crate::{error::WifiError, medium::Medium};
 
 /// ID for a Chip (Station)
 pub type ChipIdType = u32;
@@ -165,7 +167,8 @@ impl WifiActor {
                                                 self.out_queue.push((chip_id, resp));
                                             }
                                             // Suppress generic transmission.
-                                            // Act as a Hardware Offload/Medium Interception to ensure ONLY the simulated FTM response is sent.
+                                            // Act as a Hardware Offload/Medium Interception to
+                                            // ensure ONLY the simulated FTM response is sent.
                                             return;
                                         }
                                     }

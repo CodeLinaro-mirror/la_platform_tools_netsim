@@ -2,12 +2,9 @@
 
 //! Integration tests for the `IniFile` manager.
 
+use std::{collections::HashMap, env, fs, io, path::PathBuf};
+
 use daemon::ini_file::{IniFile, IniFileAccess};
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
 
 /// Creates a unique temp directory for a test.
 fn create_temp_dir(test_name: &str) -> PathBuf {
@@ -16,8 +13,8 @@ fn create_temp_dir(test_name: &str) -> PathBuf {
     dir
 }
 
-/// Tests the basic flow of acquiring the lock as a Writer, writing to the INI file,
-/// and a second instance becoming a Reader and reading the configuration.
+/// Tests the basic flow of acquiring the lock as a Writer, writing to the INI
+/// file, and a second instance becoming a Reader and reading the configuration.
 #[test]
 fn test_ini_writer_reader_flow() {
     let temp_dir = create_temp_dir("writer_reader");

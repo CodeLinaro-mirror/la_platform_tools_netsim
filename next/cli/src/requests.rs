@@ -11,27 +11,35 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use crate::args::{
-    Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, LinkDelete, LinkPatch, OnOffState,
-    RadioType, UpDownStatus,
-};
-use crate::grpc_client::{self, GrpcRequest, GrpcResponse};
 use common::util::time_display::TimeDisplay;
 use log::error;
-use netsim_proto::common::ChipKind;
-use netsim_proto::frontend;
-use netsim_proto::frontend::patch_capture_request::PatchCapture as PatchCaptureProto;
-use netsim_proto::frontend::patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto;
-use netsim_proto::frontend_grpc::FrontendServiceClient;
-use netsim_proto::model::chip::{
-    BleBeacon as Chip_Ble_Beacon, Bluetooth as Chip_Bluetooth, Chip as Chip_Type,
-    Radio as Chip_Radio,
-};
-use netsim_proto::model::{
-    self, chip_create, Chip, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
-    PhyKind as PhyKindProto, Position,
+use netsim_proto::{
+    common::ChipKind,
+    frontend,
+    frontend::{
+        patch_capture_request::PatchCapture as PatchCaptureProto,
+        patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto,
+    },
+    frontend_grpc::FrontendServiceClient,
+    model::{
+        self,
+        chip::{
+            BleBeacon as Chip_Ble_Beacon, Bluetooth as Chip_Bluetooth, Chip as Chip_Type,
+            Radio as Chip_Radio,
+        },
+        chip_create, Chip, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
+        PhyKind as PhyKindProto, Position,
+    },
 };
 use protobuf::MessageField;
+
+use crate::{
+    args::{
+        Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, LinkDelete, LinkPatch,
+        OnOffState, RadioType, UpDownStatus,
+    },
+    grpc_client::{self, GrpcRequest, GrpcResponse},
+};
 
 fn radio_type_to_proto_phy_kind(radio_type: RadioType) -> PhyKindProto {
     match radio_type {
@@ -214,9 +222,10 @@ impl Command {
     }
 
     /// Create and return the request protobuf(s) for the command.
-    /// In the case of a command with pattern argument(s) there may be multiple gRPC requests.
-    /// The parsed command parameters are used to construct the request protobuf.
-    /// The client is used to send gRPC call(s) to retrieve information needed for request protobufs.
+    /// In the case of a command with pattern argument(s) there may be multiple
+    /// gRPC requests. The parsed command parameters are used to construct
+    /// the request protobuf. The client is used to send gRPC call(s) to
+    /// retrieve information needed for request protobufs.
     pub fn get_requests(&mut self, client: &FrontendServiceClient) -> Vec<GrpcRequest> {
         match self {
             Command::Capture(Capture::Patch(cmd)) => {
@@ -297,14 +306,6 @@ impl Command {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::args::{
-        AdvertiseMode, BeaconBleAdvertiseData, BeaconBleScanResponseData, BeaconBleSettings,
-        BeaconCreateBle, BeaconPatchBle, Command, Devices, Interval, Link, LinkDelete,
-        LinkDeleteCommand, LinkPatch, LinkPatchCommand, ListCapture, Move, NetsimArgs,
-        ParsableBytes, Radio, RadioType, RssiDelete, RssiPatch, TxPower, TxPowerLevel,
-    };
-
     use clap::Parser;
     use netsim_proto::{
         common::ChipKind,
@@ -333,6 +334,14 @@ mod tests {
         },
     };
     use protobuf::MessageField;
+
+    use super::*;
+    use crate::args::{
+        AdvertiseMode, BeaconBleAdvertiseData, BeaconBleScanResponseData, BeaconBleSettings,
+        BeaconCreateBle, BeaconPatchBle, Command, Devices, Interval, Link, LinkDelete,
+        LinkDeleteCommand, LinkPatch, LinkPatchCommand, ListCapture, Move, NetsimArgs,
+        ParsableBytes, Radio, RadioType, RssiDelete, RssiPatch, TxPower, TxPowerLevel,
+    };
 
     // Helper to test parsing text command into expected Command and GrpcRequest
     fn test_command(command: &str, expected_command: Command, expected_grpc_request: GrpcRequest) {

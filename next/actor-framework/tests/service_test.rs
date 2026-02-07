@@ -1,8 +1,9 @@
 // Copyright 2025 The Android Open Source Project
 
+use std::collections::HashMap;
+
 use actor_framework::{ActorService, DynContext, ResourceActor};
 use async_trait::async_trait;
-use std::collections::HashMap;
 
 // Feature: Actor Service CRUD
 //

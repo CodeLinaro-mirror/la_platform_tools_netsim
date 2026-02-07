@@ -2,10 +2,9 @@
 //!
 //! This module defines the generic client for communicating with actors.
 
-use crate::error::FrameworkError;
-use crate::message::ResourceRequest;
-use crate::service::ActorService;
 use tokio::sync::{mpsc, oneshot};
+
+use crate::{error::FrameworkError, message::ResourceRequest, service::ActorService};
 
 /// A type-safe client for interacting with a `ResourceActor`.
 // ResourceClient manual Clone implementation to avoid T: Clone bound
@@ -16,10 +15,14 @@ impl<T: ActorService> Clone for ResourceClient<T> {
 }
 /// ## ResourceClient
 ///
-/// The `ResourceClient<T>` provides a type‑safe, async API for interacting with a `ResourceActor<T>`. It forwards CRUD + Action requests over a Tokio mpsc channel and returns results via oneshot channels. The client is cheap to clone and can be shared across tasks.
+/// The `ResourceClient<T>` provides a type‑safe, async API for interacting with
+/// a `ResourceActor<T>`. It forwards CRUD + Action requests over a Tokio mpsc
+/// channel and returns results via oneshot channels. The client is cheap to
+/// clone and can be shared across tasks.
 ///
 /// * **Cloneable** – holds only a sender, so cloning is inexpensive.
-/// * **Async API** – all methods return `Future`s that resolve to `Result<…, FrameworkError>`.
+/// * **Async API** – all methods return `Future`s that resolve to `Result<…,
+///   FrameworkError>`.
 /// * **Generic** – works with any resource that implements `ActorService`.
 pub struct ResourceClient<T: ActorService> {
     sender: mpsc::Sender<ResourceRequest<T>>,
@@ -54,7 +57,8 @@ impl<T: ActorService> ResourceClient<T> {
         id: Option<T::Id>,
     ) -> Result<T::Id, FrameworkError> {
         let (respond_to, response) = oneshot::channel();
-        // Construct the Create message with or without ID depending on message.rs availability.
+        // Construct the Create message with or without ID depending on message.rs
+        // availability.
         self.sender
             .send(ResourceRequest::Create { params, id, respond_to })
             .await

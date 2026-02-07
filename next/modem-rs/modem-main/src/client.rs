@@ -1,23 +1,27 @@
 //! # Modem Simulator Client Logic
 //!
-//! This module implements the "client" personality of the `modem_simulator` binary.
-//! See the project `README.md` for a full architectural overview.
+//! This module implements the "client" personality of the `modem_simulator`
+//! binary. See the project `README.md` for a full architectural overview.
 //!
-//! This module assumes that the central server is already running. Its sole job is to
-//! act as an I/O proxy for one or more logical modems by performing the following
-//! steps:
-//! 1.  Read the `VSOC_INSTANCE_ID` environment variable.
-//! 2.  For each file descriptor, compute a globally unique `ModemId`.
-//! 3.  Open a dedicated TCP connection to the server for each file descriptor.
-//! 4.  Perform the handshake to register the `ModemId`.
-//! 5.  Proxy data between the file descriptor and the TCP socket using
-//!     `copy_bidirectional`.
+//! This module assumes that the central server is already running. Its sole job
+//! is to act as an I/O proxy for one or more logical modems by performing the
+//! following steps:
+//! 1. Read the `VSOC_INSTANCE_ID` environment variable.
+//! 2. For each file descriptor, compute a globally unique `ModemId`.
+//! 3. Open a dedicated TCP connection to the server for each file descriptor.
+//! 4. Perform the handshake to register the `ModemId`.
+//! 5. Proxy data between the file descriptor and the TCP socket using
+//!    `copy_bidirectional`.
+
+use std::os::unix::io::FromRawFd;
+
+use log::{error, info};
+use tokio::{
+    io::{copy_bidirectional, AsyncWriteExt},
+    net::TcpStream,
+};
 
 use crate::{Args, TCP_PORT};
-use log::{error, info};
-use std::os::unix::io::FromRawFd;
-use tokio::io::{copy_bidirectional, AsyncWriteExt};
-use tokio::net::TcpStream;
 
 pub async fn run(args: Args) {
     let instance_num: u32 = args.instance_id.expect("Missing --instance_id in proxy mode");

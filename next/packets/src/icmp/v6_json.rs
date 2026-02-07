@@ -1,7 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::icmp::v6::Icmpv6Header;
 use std::collections::BTreeMap;
+
+use crate::icmp::v6::Icmpv6Header;
 
 pub fn to_json(header: &Icmpv6Header) -> BTreeMap<String, String> {
     let mut icmpv6 = BTreeMap::new();
@@ -13,8 +14,9 @@ pub fn to_json(header: &Icmpv6Header) -> BTreeMap<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use zerocopy::byteorder::U16;
+
+    use super::*;
 
     #[test]
     fn test_to_json() {

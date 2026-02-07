@@ -1,10 +1,9 @@
-use crate::types::Parsable;
-use modem_rs_derive::CommandParser;
-use nom::bytes::complete::tag;
-use nom::combinator::map_res;
-use nom::IResult;
-
 use std::str;
+
+use modem_rs_derive::CommandParser;
+use nom::{bytes::complete::tag, combinator::map_res, IResult};
+
+use crate::types::Parsable;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct QuotedString<'a>(pub &'a [u8]);
@@ -23,8 +22,7 @@ impl<'a> AsRef<[u8]> for QuotedString<'a> {
 
 impl<'a> Parsable<'a> for QuotedString<'a> {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self> {
-        use nom::bytes::complete::take_while;
-        use nom::sequence::delimited;
+        use nom::{bytes::complete::take_while, sequence::delimited};
         let (input, content) =
             delimited(tag(br#"""#), take_while(|c| c != b'"'), tag(br#"""#))(input)?;
         Ok((input, QuotedString(content)))

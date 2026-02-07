@@ -1,8 +1,10 @@
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicU32, Arc},
+};
+
 use capture_api::CaptureSender;
 use netsim_model::chip::ChipClient;
-use std::collections::HashMap;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
 
 pub struct DeviceActor {
     pub chip_clients: HashMap<netsim_model::chip::ChipKind, Box<dyn ChipClient>>,

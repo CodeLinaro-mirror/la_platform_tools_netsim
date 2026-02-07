@@ -1,8 +1,9 @@
 // Copyright 2023-2025 The Android Open Source Project
 
+use std::pin::Pin;
+
 use bytes::Bytes;
 use futures::Sink;
-use std::pin::Pin;
 use tokio_stream::Stream;
 
 // The only error from PacketStream occurs when source closes connection.

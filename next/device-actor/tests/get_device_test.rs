@@ -6,8 +6,9 @@
 //   I want to retrieve a device by its ID
 //   So that I can inspect its current state
 
-use crate::world::World;
 use device_api::DeviceId;
+
+use crate::world::World;
 
 // Scenario: Get an existing device
 //   Given a running Device Actor

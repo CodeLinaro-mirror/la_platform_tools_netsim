@@ -1,7 +1,10 @@
-use crate::slirp_actor::{SlirpActor, SlirpReq};
 use actor_framework::ResourceClient;
-use netsim_model::chip::{PacketSink, PacketStream};
-use netsim_model::client_error::ClientError;
+use netsim_model::{
+    chip::{PacketSink, PacketStream},
+    client_error::ClientError,
+};
+
+use crate::slirp_actor::{SlirpActor, SlirpReq};
 
 #[derive(Clone, Debug)]
 pub struct SlirpClient {

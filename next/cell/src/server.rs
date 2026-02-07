@@ -1,18 +1,23 @@
 // Copyright 2024-2025 The Android Open Source Project // touch
 
-use crate::error::CellError;
+use std::{collections::HashMap, sync::Arc};
+
 use bytes::Bytes;
 use client::DeviceClient;
 use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use modem_rs::modem_network::{ModemCallbacks, ModemNetworkInterface};
-use netsim_model::chip::{ChipId, ChipRequest, PacketSink, PacketStream};
-use netsim_model::chip_error::ChipError as NetsimChipError;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::task::{JoinError, JoinSet};
+use netsim_model::{
+    chip::{ChipId, ChipRequest, PacketSink, PacketStream},
+    chip_error::ChipError as NetsimChipError,
+};
+use tokio::{
+    sync::mpsc,
+    task::{JoinError, JoinSet},
+};
 use tokio_stream::{StreamMap, StreamNotifyClose};
+
+use crate::error::CellError;
 
 pub struct CellRunner {
     receiver: mpsc::Receiver<ChipRequest>,

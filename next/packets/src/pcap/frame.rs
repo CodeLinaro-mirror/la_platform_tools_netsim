@@ -5,11 +5,13 @@
 //! Note that the support for pcap format is very limited.
 //! It only supports ethernet packets.
 
-use crate::pcap::ng::{EnhancedPacketBlock, InterfaceDescriptionBlock, SectionHeaderBlock};
 use std::io::{self, Read};
+
 use zerocopy::{
     byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16, U32,
 };
+
+use crate::pcap::ng::{EnhancedPacketBlock, InterfaceDescriptionBlock, SectionHeaderBlock};
 
 pub const PCAP_MAGIC_NUMBER: u32 = 0xa1b2c3d4;
 pub const PCAPNG_MAGIC_NUMBER: u32 = 0x1A2B3C4D;
@@ -133,10 +135,10 @@ impl<R: Read> PcapngReader<R> {
 
     pub fn next_record(&mut self) -> anyhow::Result<Option<(PcapRecordHeader, Vec<u8>)>> {
         loop {
-            // We need to read the Block Type (4 bytes) and Block Total Length (4 bytes) first
-            // to know what kind of block it is and how big it is.
-            // But EnhancedPacketBlock and InterfaceDescriptionBlock start with these same fields.
-            // So we can peek or read a common header.
+            // We need to read the Block Type (4 bytes) and Block Total Length (4 bytes)
+            // first to know what kind of block it is and how big it is.
+            // But EnhancedPacketBlock and InterfaceDescriptionBlock start with these same
+            // fields. So we can peek or read a common header.
             // However, zerocopy structs are fixed size.
             // Let's read enough for the smallest block header we care about?
             // Or just read 8 bytes first?
@@ -161,7 +163,8 @@ impl<R: Read> PcapngReader<R> {
                 let mut rest_of_epb = vec![0; epb_size - 8];
                 self.reader.read_exact(&mut rest_of_epb)?;
 
-                // Reconstruct full buffer to parse (or just parse fields manually, but using zerocopy is safer)
+                // Reconstruct full buffer to parse (or just parse fields manually, but using
+                // zerocopy is safer)
                 let mut full_epb_buf = Vec::new();
                 full_epb_buf.extend_from_slice(&block_header_buf);
                 full_epb_buf.extend_from_slice(&rest_of_epb);
@@ -238,9 +241,9 @@ impl<R: Read> PcapngReader<R> {
 
 #[cfg(test)]
 mod tests {
+    use zerocopy::{I32, U16, U32};
+
     use super::*;
-    use zerocopy::I32;
-    use zerocopy::{U16, U32};
 
     fn create_legacy_pcap_data() -> Vec<u8> {
         let mut data = Vec::new();

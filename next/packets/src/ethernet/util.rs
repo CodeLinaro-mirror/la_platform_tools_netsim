@@ -1,6 +1,7 @@
 // Copyright 2025 The Android Open Source Project
 
-//! Provides utility functions for working with Ethernet-related data structures.
+//! Provides utility functions for working with Ethernet-related data
+//! structures.
 
 use crate::ethernet::{ether_type, MacAddr};
 
@@ -13,8 +14,7 @@ use crate::ethernet::{ether_type, MacAddr};
 ///
 /// # Examples
 /// ```
-/// use netsim_packets::ethernet::ether_type;
-/// use netsim_packets::ethernet::ethertype_to_string;
+/// use netsim_packets::ethernet::{ether_type, ethertype_to_string};
 ///
 /// assert_eq!(ethertype_to_string(ether_type::IPV4), "IPv4");
 /// assert_eq!(ethertype_to_string(ether_type::ARP), "ARP");
@@ -43,8 +43,8 @@ pub fn is_broadcast_mac(mac: &MacAddr) -> bool {
 
 /// Checks if a MAC address is a multicast address.
 ///
-/// A MAC address is multicast if the least significant bit of its first octet is set to 1.
-/// This also includes the broadcast address.
+/// A MAC address is multicast if the least significant bit of its first octet
+/// is set to 1. This also includes the broadcast address.
 ///
 /// # Arguments
 /// * `mac` - A reference to a `MacAddr`.
@@ -54,7 +54,8 @@ pub fn is_multicast_mac(mac: &MacAddr) -> bool {
 
 /// Checks if a MAC address is a unicast address.
 ///
-/// A MAC address is unicast if it's not multicast (and therefore not broadcast).
+/// A MAC address is unicast if it's not multicast (and therefore not
+/// broadcast).
 ///
 /// # Arguments
 /// * `mac` - A reference to a `MacAddr`.
@@ -72,7 +73,8 @@ mod tests {
         assert_eq!(ethertype_to_string(ether_type::ARP), "ARP");
         assert_eq!(ethertype_to_string(ether_type::IPV6), "IPv6");
         assert_eq!(ethertype_to_string(ether_type::VLAN), "VLAN");
-        assert_eq!(ethertype_to_string(0x9000), "0x9000"); // Example of an IEE 802.3 EtherType
+        assert_eq!(ethertype_to_string(0x9000), "0x9000"); // Example of an IEE
+                                                           // 802.3 EtherType
     }
 
     #[test]

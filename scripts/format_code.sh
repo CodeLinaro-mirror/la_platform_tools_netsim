@@ -134,12 +134,11 @@ check_taplo_version
 # Run formatters in parallel
 pids=()
 RUSTFMT="$REPO/prebuilts/rust/$OS-x86/stable/rustfmt"
-RUSTFMT_CONFIG="$REPO/tools/netsim/next/rustfmt.toml"
 BPFMT="$REPO/prebuilts/build-tools/$OS-x86/bin/bpfmt"
 TAPLO_CONFIG="$REPO/tools/netsim/next/taplo.toml"
 
 format "C/C++/Proto/TS" "clang-format -i" "${clang_files[@]}"
-format "Rust" "$RUSTFMT --config-path" "$RUSTFMT_CONFIG" "--files-with-diff" "${rust_files[@]}"
+format "Rust" "$RUSTFMT --files-with-diff" "${rust_files[@]}"
 format "Java" "google-java-format -i" "${java_files[@]}"
 format "Python" "pyformat --in_place --alsologtostderr --noshowprefixforinfo" "${py_files[@]}"
 format "CMake" "cmake-format -i" "${cmake_files[@]}"

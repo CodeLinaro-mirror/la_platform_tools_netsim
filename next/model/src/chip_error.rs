@@ -2,9 +2,9 @@
 
 //! This module defines the error types for the chip service.
 
-use crate::chip::ChipId;
-
 use thiserror::Error;
+
+use crate::chip::ChipId;
 
 /// The error type for operations within the chip service.
 #[derive(Error, Debug)]

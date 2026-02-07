@@ -1,20 +1,28 @@
-use crate::device_actor::DeviceActor;
-use crate::error::DeviceError;
-use crate::utils::create_capture_and_wrap_streams;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
+
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use capture_api::CaptureSender;
-use device_api::api::{DeviceCreate, DeviceUpdate};
-use device_api::{DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId};
+use device_api::{
+    api::{DeviceCreate, DeviceUpdate},
+    DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId,
+};
 use link_api::LinkClient;
 use netsim_model::chip::{
     Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
     PacketSink, PacketStream,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+
+use crate::{
+    device_actor::DeviceActor, error::DeviceError, utils::create_capture_and_wrap_streams,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct InternalDevice {
@@ -391,8 +399,9 @@ impl ActorService for DeviceActor {
             DeviceAction::NotifyChipRemoved(_device_id, chip_id) => {
                 entity.device.chips.retain(|c| c.id != chip_id.0);
                 if entity.device.chips.is_empty() {
-                    // TODO: If entity.device.chips.is_empty(), remove the device itself.
-                    // This requires a way to trigger a self-delete from within the actor.
+                    // TODO: If entity.device.chips.is_empty(), remove the
+                    // device itself. This requires a way to
+                    // trigger a self-delete from within the actor.
                 }
                 self.link_client
                     .notify_chip_removed(chip_id)

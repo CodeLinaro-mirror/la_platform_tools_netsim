@@ -1,8 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 
+use netsim_model::{chip::ChipId, chip_error::ChipError};
+
 use crate::world::World;
-use netsim_model::chip::ChipId;
-use netsim_model::chip_error::ChipError;
 
 // Feature: UWB Chip Lifecycle
 //

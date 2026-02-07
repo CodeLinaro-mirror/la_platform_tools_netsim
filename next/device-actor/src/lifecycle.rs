@@ -1,7 +1,9 @@
-use crate::device_actor::DeviceActor;
+use std::time::Duration;
+
 use actor_framework::{ActorLifecycle, DynContext};
 use async_trait::async_trait;
-use std::time::Duration;
+
+use crate::device_actor::DeviceActor;
 
 #[async_trait]
 impl ActorLifecycle<device_api::DeviceId> for DeviceActor {

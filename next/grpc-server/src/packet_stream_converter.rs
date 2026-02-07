@@ -1,13 +1,13 @@
 use bytes::{BufMut, Bytes, BytesMut};
 use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
-use netsim_proto::common as proto_common;
-use netsim_proto::hci_packet::hcipacket::PacketType;
-use netsim_proto::hci_packet::HCIPacket;
-use netsim_proto::packet_streamer::{self, PacketRequest, PacketResponse};
-use netsim_proto::startup as proto_startup;
+use netsim_proto::{
+    common as proto_common,
+    hci_packet::{hcipacket::PacketType, HCIPacket},
+    packet_streamer::{self, PacketRequest, PacketResponse},
+    startup as proto_startup,
+};
 use packet_stream::error::{PacketStreamError, Result};
-use protobuf::Enum;
-use protobuf::Message;
+use protobuf::{Enum, Message};
 
 pub(crate) const HCI_PACKET_TYPE: u8 = 0x01;
 

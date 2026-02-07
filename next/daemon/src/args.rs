@@ -1,7 +1,8 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use clap::Parser;
 use std::env;
+
+use clap::Parser;
 
 #[derive(Debug, Parser, Default)]
 pub struct Args {
@@ -46,7 +47,8 @@ pub struct Args {
     pub http_proxy: Option<String>,
 
     /// Disable netsimd from shutting down automatically.
-    /// WARNING: This flag is for development purpose. netsimd will not shutdown without SIGKILL.
+    /// WARNING: This flag is for development purpose. netsimd will not shutdown
+    /// without SIGKILL.
     #[arg(long, alias = "no_shutdown")]
     pub no_shutdown: bool,
 
@@ -71,14 +73,16 @@ pub struct Args {
     #[arg(long, alias = "host-dns")]
     pub host_dns: Option<String>,
 
-    /// Set the initial SSID for the default Access Point (defaults to 'AndroidWifi')
+    /// Set the initial SSID for the default Access Point (defaults to
+    /// 'AndroidWifi')
     #[command(flatten)]
     pub wifi: WifiConfig,
 }
 
 #[derive(Debug, Default, Clone, clap::Args)]
 pub struct WifiConfig {
-    /// Set the initial SSID for the default Access Point (defaults to 'AndroidWifi')
+    /// Set the initial SSID for the default Access Point (defaults to
+    /// 'AndroidWifi')
     #[arg(long, alias = "wifi-ssid", help_heading = "WiFi Settings")]
     pub wifi_ssid: Option<String>,
 
@@ -86,11 +90,13 @@ pub struct WifiConfig {
     #[arg(long, alias = "wifi-password", help_heading = "WiFi Settings")]
     pub wifi_password: Option<String>,
 
-    /// Set the initial radio channel for the default Access Point (defaults to 11)
+    /// Set the initial radio channel for the default Access Point (defaults to
+    /// 11)
     #[arg(long, alias = "wifi-channel", help_heading = "WiFi Settings")]
     pub wifi_channel: Option<u8>,
 
-    /// Set the beacon interval in TU for the default Access Point (defaults to 100)
+    /// Set the beacon interval in TU for the default Access Point (defaults to
+    /// 100)
     #[arg(long, alias = "wifi-beacon-interval", help_heading = "WiFi Settings")]
     pub wifi_beacon_interval: Option<u16>,
 

@@ -1,14 +1,17 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use super::{ApActor, ApReq};
 use actor_framework::ResourceClient;
-use netsim_model::chip::{
-    Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipUpdate, ChipVariant,
+use netsim_model::{
+    chip::{
+        Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipUpdate, ChipVariant,
+    },
+    chip_error::ChipError,
+    client_error::ClientError,
+    device::{DeviceId, Position},
+    stats::NetsimRadioStats,
 };
-use netsim_model::chip_error::ChipError;
-use netsim_model::client_error::ClientError;
-use netsim_model::device::{DeviceId, Position};
-use netsim_model::stats::NetsimRadioStats;
+
+use super::{ApActor, ApReq};
 
 /// Client for interacting with the Access Point Actor.
 ///

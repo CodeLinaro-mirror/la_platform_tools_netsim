@@ -3,12 +3,14 @@
 //! This module provides utility functions for the device actor,
 //! including network kind conversion and capture stream wrapping.
 
-use capture_api::io::{CapturedSink, CapturedStream};
-use capture_api::{CaptureCreate, CaptureSender};
+use std::sync::{atomic::AtomicBool, Arc};
+
+use capture_api::{
+    io::{CapturedSink, CapturedStream},
+    CaptureCreate, CaptureSender,
+};
 use futures::{SinkExt, StreamExt};
 use netsim_model::chip::{ChipId, PacketSink, PacketStream};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 pub async fn create_capture_and_wrap_streams(
     capture_client: Arc<dyn CaptureSender>,

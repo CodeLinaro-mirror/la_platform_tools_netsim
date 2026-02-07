@@ -1,21 +1,27 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::hwsim_helper::wrap_ethernet_in_hwsim;
+use std::sync::Arc;
+
 use actor_framework::ResourceActor;
 use ap_actor::{ApActor, ApClient};
 use bytes::Bytes;
 use device_actor::DeviceActor;
 use device_api::{DeviceAction, DeviceId};
-use netsim_model::chip::{ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, WifiCreate};
-use netsim_model::device::Position;
-use netsim_packets::ethernet::{ether_type, EthernetFrame, MacAddr};
-use netsim_packets::ieee80211::{FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddress};
+use netsim_model::{
+    chip::{ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, WifiCreate},
+    device::Position,
+};
+use netsim_packets::{
+    ethernet::{ether_type, EthernetFrame, MacAddr},
+    ieee80211::{FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddress},
+};
 use slirp_actor::SlirpActor;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use wifi_actor::WifiActor;
 use zerocopy::IntoBytes;
+
+use crate::hwsim_helper::wrap_ethernet_in_hwsim;
 
 #[allow(dead_code)]
 pub struct ChipChannels {
@@ -51,7 +57,8 @@ impl World {
 
         // Test DeviceClient
         let (device_tx, device_rx) = mpsc::unbounded_channel();
-        // Create a Mock Device Client to verify that WifiActor interacts with DeviceActor correctly.
+        // Create a Mock Device Client to verify that WifiActor interacts with
+        // DeviceActor correctly.
         let mut mock_device = actor_framework::MockActorClient::<DeviceActor>::new();
 
         // Forward all DeviceActions to the channel for verification.
@@ -70,8 +77,10 @@ impl World {
         setup_mock(&mut mock_device);
 
         // Handle clone_box: Return a new mock with the same setup
-        // We need to use `returning` with a closure that captures the setup logic (or strictly the tx)
-        // Since `setup_mock` closure captures `device_tx_clone`, we can clone `device_tx_clone` again for the `clone_box` closure.
+        // We need to use `returning` with a closure that captures the setup logic (or
+        // strictly the tx) Since `setup_mock` closure captures
+        // `device_tx_clone`, we can clone `device_tx_clone` again for the `clone_box`
+        // closure.
         let tx_for_clone = device_tx.clone();
         mock_device.expect_clone_box().returning(move || {
             let mut new_mock = actor_framework::MockActorClient::<DeviceActor>::new();
@@ -83,22 +92,25 @@ impl World {
             // Note: The new mock ALSO needs to support clone_box if it gets cloned again.
             // This could be recursive.
             // However, usually we clone only once or twice.
-            // To support infinite cloning, we would need a recursive structure or just assume limited depth.
-            // Let's implement one level of depth for now, or use a shared Arc<Function>?
-            // Actually, let's just implement `expect_clone_box` on the NEW mock too.
-            // But mockall closures are moved.
-            // Let's simplify: Just return a mock that panics on clone_box for now, assuming 1 level of clone is enough (WifiActor stores it).
+            // To support infinite cloning, we would need a recursive structure or just
+            // assume limited depth. Let's implement one level of depth for now,
+            // or use a shared Arc<Function>? Actually, let's just implement
+            // `expect_clone_box` on the NEW mock too. But mockall closures are
+            // moved. Let's simplify: Just return a mock that panics on
+            // clone_box for now, assuming 1 level of clone is enough (WifiActor stores it).
             // Or better: make a recursive helper if possible, but closures are hard.
             // "WifiActor" clones it once when storing?
             // WifiActor::new takes `device_client`. It stores it.
             // handle_delete clones it: `let dc = self.device_client.clone();`.
             // So the stored client is indeed cloned.
-            // So the mock returned by `clone_box` MUST also support `perform_action` AND `clone_box` (if that clone is used).
-            // But `handle_delete` uses the clone to call `notify_chip_removed` (perform_action) and then drops it.
+            // So the mock returned by `clone_box` MUST also support `perform_action` AND
+            // `clone_box` (if that clone is used). But `handle_delete` uses the
+            // clone to call `notify_chip_removed` (perform_action) and then drops it.
             // It does NOT clone it again.
-            // So 1 level of recursion for `clone_box` is likely sufficient for `handle_delete`.
-            // NOTE: The mock returned by `clone_box` needs to support `perform_action` but likely doesn't
-            // need to support further cloning if the actor only stores it once.
+            // So 1 level of recursion for `clone_box` is likely sufficient for
+            // `handle_delete`. NOTE: The mock returned by `clone_box` needs to
+            // support `perform_action` but likely doesn't need to support
+            // further cloning if the actor only stores it once.
             Box::new(new_mock)
         });
 
@@ -303,8 +315,9 @@ impl World {
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP multicast packet");
     }
 
-    /// Simulates a Chip transmitting a Data Frame (ToDS=1) to another Chip via the AP.
-    /// This requires `simulate_ap_reflection: true` in Medium (default).
+    /// Simulates a Chip transmitting a Data Frame (ToDS=1) to another Chip via
+    /// the AP. This requires `simulate_ap_reflection: true` in Medium
+    /// (default).
     pub async fn when_chip_transmits_to_ds_unicast(
         &mut self,
         sender_idx: usize,
@@ -465,7 +478,8 @@ impl World {
         }
     }
 
-    /// Simulates a Chip transmitting a Data Frame (ToDS=1) destined for the Internet Gateway (Slirp).
+    /// Simulates a Chip transmitting a Data Frame (ToDS=1) destined for the
+    /// Internet Gateway (Slirp).
     pub async fn when_chip_transmits_data_to_slirp(&mut self, sender_idx: usize) {
         let sender_mac = self.chips[sender_idx].mac;
         let internet_gateway = [0x00, 0x00, 0x00, 0x00, 0x00, 0xFE]; // Dummy Gateway
