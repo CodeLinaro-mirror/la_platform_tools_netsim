@@ -98,7 +98,30 @@ pub enum RadioType {
 
 impl fmt::Display for RadioType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{self:?}")
+        match self {
+            RadioType::Ble => write!(f, "BLE"),
+            RadioType::Classic => write!(f, "CLASSIC"),
+            RadioType::Wifi => write!(f, "WIFI"),
+            RadioType::Uwb => write!(f, "UWB"),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ChipKind {
+    #[value(alias("bt"))]
+    Bluetooth,
+    Wifi,
+    Uwb,
+}
+
+impl fmt::Display for ChipKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ChipKind::Bluetooth => write!(f, "BLUETOOTH"),
+            ChipKind::Wifi => write!(f, "WIFI"),
+            ChipKind::Uwb => write!(f, "UWB"),
+        }
     }
 }
 
@@ -213,11 +236,11 @@ pub struct BeaconRemove {
 #[derive(Debug, Args, PartialEq, Default)]
 pub struct BeaconBleAdvertiseData {
     /// Whether the device name should be included in the advertise packet
-    #[arg(long, required = false)]
+    #[arg(long)]
     pub include_device_name: bool,
     /// Whether the transmission power level should be included in the advertise
     /// packet
-    #[arg(long, required = false)]
+    #[arg(long)]
     pub include_tx_power_level: bool,
     /// Manufacturer-specific data given as bytes in hexadecimal
     #[arg(long)]
@@ -228,61 +251,75 @@ pub struct BeaconBleAdvertiseData {
 pub enum Link {
     /// List all current links and their properties
     List,
+    /// Create a new link
+    Create(LinkCreate),
     /// Add or modify link properties
-    Patch(LinkPatchCommand),
+    Patch(LinkPatch),
     /// Remove link properties
-    Delete(LinkDeleteCommand),
+    Delete(LinkDelete),
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct LinkPatchCommand {
-    #[command(subcommand)]
-    pub command: LinkPatch,
-}
-
-#[derive(Debug, Subcommand, PartialEq)]
-pub enum LinkPatch {
-    /// Patch RSSI (Received Signal Strength Indication) for a link.
-    Rssi(RssiPatch),
-}
-
-#[derive(Debug, Args, PartialEq)]
-pub struct LinkDeleteCommand {
-    #[command(subcommand)]
-    pub command: LinkDelete,
-}
-
-#[derive(Debug, Subcommand, PartialEq)]
-pub enum LinkDelete {
-    /// Delete RSSI (Received Signal Strength Indication) for a link.
-    Rssi(RssiDelete),
-}
-
-#[derive(Debug, Args, PartialEq)]
-pub struct RssiPatch {
-    /// Radio type for the link.
+pub struct LinkCreate {
+    /// Chip kind for the link
     #[arg(value_enum, ignore_case = true)]
-    pub radio_type: RadioType,
+    pub chip_kind: ChipKind,
+    /// Identifier for the sender chip.
+    #[arg(long)]
+    pub sender: Option<u32>,
+    /// Identifier for the receiver chip.
+    #[arg(long)]
+    pub receiver: Option<u32>,
+    /// Name of the sender device.
+    #[arg(long, short = 's')]
+    pub sender_name: Option<String>,
+    /// Name of the receiver device.
+    #[arg(long, short = 'r')]
+    pub receiver_name: Option<String>,
+    /// RSSI value in dBm (e.g., -60).
+    #[arg(long, allow_hyphen_values = true)]
+    pub rssi: Option<i32>,
+}
+
+#[derive(Debug, Args, PartialEq)]
+pub struct LinkPatch {
+    /// Chip kind for the link.
+    #[arg(value_enum, ignore_case = true)]
+    pub chip_kind: ChipKind,
     /// RSSI value in dBm (e.g., -60). Must be between -128 and 127.
-    #[arg(allow_hyphen_values = true)]
-    pub value: i8,
-    /// Identifier for the sender chip. Defaults to 0 (ANY_CHIP), affecting all
-    /// senders to the specified receiver.
-    pub sender_id: Option<u32>,
-    /// Identifier for the receiver chip. Defaults to 0 (ANY_CHIP), affecting
-    /// all receivers from the specified sender.
-    pub receiver_id: Option<u32>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub rssi: Option<i8>,
+    /// Identifier for the sender chip.
+    #[arg(long)]
+    pub sender: Option<u32>,
+    /// Identifier for the receiver chip.
+    #[arg(long)]
+    pub receiver: Option<u32>,
+    /// Name of the sender device.
+    #[arg(long, short = 's')]
+    pub sender_name: Option<String>,
+    /// Name of the receiver device.
+    #[arg(long, short = 'r')]
+    pub receiver_name: Option<String>,
 }
 
 #[derive(Debug, Args, PartialEq)]
-pub struct RssiDelete {
-    /// Radio type for the link.
+pub struct LinkDelete {
+    /// Chip kind for the link.
     #[arg(value_enum, ignore_case = true)]
-    pub radio_type: RadioType,
-    /// Identifier for the sender chip. Defaults to 0 (ANY_CHIP).
-    pub sender_id: Option<u32>,
-    /// Identifier for the receiver chip. Defaults to 0 (ANY_CHIP).
-    pub receiver_id: Option<u32>,
+    pub chip_kind: ChipKind,
+    /// Identifier for the sender chip.
+    #[arg(long)]
+    pub sender: Option<u32>,
+    /// Identifier for the receiver chip.
+    #[arg(long)]
+    pub receiver: Option<u32>,
+    /// Name of the sender device.
+    #[arg(long, short = 's')]
+    pub sender_name: Option<String>,
+    /// Name of the receiver device.
+    #[arg(long, short = 'r')]
+    pub receiver_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -304,11 +341,11 @@ impl FromStr for ParsableBytes {
 #[derive(Debug, Args, PartialEq, Default)]
 pub struct BeaconBleScanResponseData {
     /// Whether the device name should be included in the scan response packet
-    #[arg(long, required = false)]
+    #[arg(long)]
     pub scan_response_include_device_name: bool,
     /// Whether the transmission power level should be included in the scan
     /// response packet
-    #[arg(long, required = false)]
+    #[arg(long)]
     pub scan_response_include_tx_power_level: bool,
     /// Manufacturer-specific data to include in the scan response packet given
     /// as bytes in hexadecimal
