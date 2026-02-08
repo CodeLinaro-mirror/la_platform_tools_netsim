@@ -2,13 +2,16 @@
 
 use actor_framework::ResourceClient;
 use bluetooth_actor::{BluetoothActor, BluetoothClient};
+use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
+use netsim_model::bluetooth::beacon::{AdvertiseSettings, AdvertiseTxPower, TxPower};
 use netsim_model::chip::{
     BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId,
-    DeviceParams, NetworkParams, SnifferParams,
+    DeviceParams, NetworkParams, PacketSink, PacketStream, ScannerParams,
 };
 use netsim_model::device::DeviceId;
 use netsim_testing::logger;
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
@@ -26,11 +29,11 @@ pub struct World {
     /// The ID of the simulated device.
     pub device_id: DeviceId,
     /// Map of chip names to their IDs.
-    pub chips: std::collections::HashMap<String, ChipId>,
+    pub chips: HashMap<String, ChipId>,
     /// Map of chip names to their stream senders (to inject packets).
-    pub streams: std::collections::HashMap<String, mpsc::Sender<bytes::Bytes>>,
+    pub streams: HashMap<String, mpsc::Sender<bytes::Bytes>>,
     /// Map of chip names to their sink receivers (to capture packets).
-    pub sinks: std::collections::HashMap<String, mpsc::Receiver<Vec<u8>>>,
+    pub sinks: HashMap<String, mpsc::Receiver<Vec<u8>>>,
 }
 
 #[allow(dead_code)]
@@ -38,12 +41,15 @@ impl World {
     /// Creates a new World instance.
     pub fn new() -> Self {
         logger::setup(None);
-        let (device_tx, _device_rx) = mpsc::channel(10);
+        let (device_tx, mut _device_rx) = mpsc::channel(10);
         // Use real DeviceClient for integration testing.
         let resource_client = DeviceClient::new(Box::new(ResourceClient::new(device_tx)));
         let (actor, client) = bluetooth_actor::new();
         let resource_client_clone = resource_client.clone();
         let _client_clone = client.clone();
+        // Dropping _device_rx causes the channel to close, which prevents blocking (sends fail immediately).
+        // BluetoothActor handles these failures gracefully (ignoring them), so explicit draining is not needed.
+
         let actor_task = tokio::spawn(async move {
             actor.run(BluetoothActor::new(resource_client_clone)).await;
         });
@@ -54,9 +60,9 @@ impl World {
             _actor_task: actor_task,
             chip_id_counter: 0,
             device_id: DeviceId(1),
-            chips: std::collections::HashMap::new(),
-            streams: std::collections::HashMap::new(),
-            sinks: std::collections::HashMap::new(),
+            chips: HashMap::new(),
+            streams: HashMap::new(),
+            sinks: HashMap::new(),
         }
     }
 
@@ -66,11 +72,48 @@ impl World {
         ChipId(self.chip_id_counter)
     }
 
+    /// Internal helper to create and register a chip
+    async fn create_chip(
+        &mut self,
+        name: &str,
+        mode: BluetoothMode,
+        packet_stream: Option<PacketStream>,
+        packet_sink: Option<PacketSink>,
+        device_id: DeviceId,
+    ) -> ChipId {
+        let id = self.next_chip_id();
+        let address = format!("00:00:00:00:00:{:02x}", id.0);
+
+        let params = ChipCreate {
+            id,
+            packet_stream,
+            packet_sink,
+            config: ChipConfig::new(
+                "test_chip",
+                "netsim",
+                name,
+                NetworkParams::Bluetooth(BluetoothCreate {
+                    address,
+                    bt_properties: Default::default(),
+                    mode,
+                }),
+            ),
+            device_id,
+        };
+
+        if let Err(e) = self.client.0.create(params).await {
+            panic!("Failed to create chip {}: {:?}", name, e);
+        }
+
+        self.chips.insert(name.to_string(), id);
+        id
+    }
+
     // --- Given Steps ---
 
     /// Creates a Bluetooth chip in Device mode with a given name.
     /// The stream and sink are automatically created and managed by the World.
-    pub async fn given_bluetooth_device(&mut self, name: &str) {
+    pub async fn given_device(&mut self, name: &str) {
         if self.chips.contains_key(name) {
             panic!("Chip with name '{}' already exists", name);
         }
@@ -78,82 +121,83 @@ impl World {
         let (stream, stream_tx) = crate::test_utils::mock_stream();
         let (sink, sink_rx) = crate::test_utils::mock_sink();
 
-        let id = self.next_chip_id();
-        let params = ChipCreate {
-            id,
-            packet_stream: Some(stream),
-            packet_sink: Some(sink),
-            config: ChipConfig::new(
-                "device_chip",
-                "netsim",
-                name,
-                NetworkParams::Bluetooth(BluetoothCreate {
-                    address: format!("00:00:00:00:00:{:02x}", id.0),
-                    bt_properties: Default::default(),
-                    mode: BluetoothMode::Device(DeviceParams {}),
-                }),
-            ),
-            device_id: self.device_id,
-        };
-        self.client.0.create(params).await.expect("Failed to create device chip");
+        self.create_chip(
+            name,
+            BluetoothMode::Device(DeviceParams {}),
+            Some(stream),
+            Some(sink),
+            self.device_id,
+        )
+        .await;
 
-        self.chips.insert(name.to_string(), id);
         self.streams.insert(name.to_string(), stream_tx);
         self.sinks.insert(name.to_string(), sink_rx);
     }
 
-    /// Creates a Bluetooth chip in Beacon mode.
-    pub async fn given_bluetooth_beacon(&mut self, name: &str) {
-        let id = self.next_chip_id();
-        let params = ChipCreate {
-            id,
-            packet_stream: None,
-            packet_sink: None,
-            config: ChipConfig::new(
-                "beacon_chip",
-                "netsim",
-                name,
-                NetworkParams::Bluetooth(BluetoothCreate {
-                    address: format!("00:00:00:00:00:{:02x}", id.0),
-                    bt_properties: Default::default(),
-                    mode: BluetoothMode::Beacon(Box::new(BeaconParams {
-                        ble_beacon: BleBeacon::default(),
-                    })),
-                }),
-            ),
-            device_id: self.device_id,
-        };
-        self.client.0.create(params).await.expect("Failed to create beacon chip");
-        self.chips.insert(name.to_string(), id);
+    /// Internal helper to create a beacon chip
+    async fn create_beacon_chip(
+        &mut self,
+        name: &str,
+        address: Option<String>,
+        tx_power: Option<AdvertiseTxPower>,
+    ) {
+        let id_val = self.chip_id_counter + 1;
+        let address = address.unwrap_or_else(|| format!("00:00:00:00:00:{:02x}", id_val));
+
+        let settings = tx_power.map(|power| AdvertiseSettings {
+            tx_power: Some(TxPower::TxPowerLevel(power)),
+            ..Default::default()
+        });
+
+        let mode = BluetoothMode::Beacon(Box::new(BeaconParams {
+            ble_beacon: BleBeacon { address, settings, ..Default::default() },
+        }));
+
+        // Use self.device_id for consistency (unless specific overridden device is needed)
+        // If separation is needed, tests should explicitly set up different World or device.
+        // For now, defaulting to self.device_id (1) as used in other beacons.
+        self.create_chip(name, mode, None, None, self.device_id).await;
     }
 
-    /// Creates a Bluetooth chip in Sniffer mode.
-    pub async fn given_bluetooth_sniffer(&mut self, name: &str) {
+    /// Creates a Bluetooth chip in Beacon mode.
+    pub async fn given_beacon(&mut self, name: &str) {
+        self.create_beacon_chip(name, None, None).await;
+    }
+
+    /// Creates a Bluetooth chip in Beacon mode with a specific address.
+    pub async fn given_beacon_with_address(&mut self, name: &str, address: &str) {
+        self.create_beacon_chip(name, Some(address.to_string()), None).await;
+    }
+
+    /// Creates a Bluetooth chip in Beacon mode with specified Tx Power.
+    pub async fn given_beacon_with_tx_power(&mut self, name: &str, tx_power: &str) {
+        let power_level = match tx_power {
+            "UltraLow" => AdvertiseTxPower::UltraLow,
+            "Low" => AdvertiseTxPower::Low,
+            "Medium" => AdvertiseTxPower::Medium,
+            "High" => AdvertiseTxPower::High,
+            _ => panic!("Unknown Tx Power level: {}", tx_power),
+        };
+
+        self.create_beacon_chip(name, None, Some(power_level)).await;
+    }
+
+    pub async fn given_scanner(&mut self, name: &str) {
         if self.chips.contains_key(name) {
             panic!("Chip with name '{}' already exists", name);
         }
 
         let (sink, sink_rx) = crate::test_utils::mock_sink();
 
-        let id = self.next_chip_id();
-        let params = ChipCreate {
-            id,
-            packet_stream: None,
-            packet_sink: Some(sink),
-            config: ChipConfig::new(
-                "sniffer_chip",
-                "netsim",
-                name,
-                NetworkParams::Bluetooth(BluetoothCreate {
-                    address: format!("00:00:00:00:00:{:02x}", id.0),
-                    bt_properties: Default::default(),
-                    mode: BluetoothMode::Sniffer(SnifferParams {}),
-                }),
-            ),
-            device_id: self.device_id,
-        };
-        self.client.0.create(params).await.expect("Failed to create sniffer chip");
-        self.chips.insert(name.to_string(), id);
+        self.create_chip(
+            name,
+            BluetoothMode::Scanner(ScannerParams::default()),
+            None,
+            Some(sink),
+            self.device_id,
+        )
+        .await;
+
         self.sinks.insert(name.to_string(), sink_rx);
     }
 
@@ -242,6 +286,81 @@ impl World {
             .await
             .expect("Timed out waiting for packet")
             .expect("Packet stream closed unexpectedly")
+    }
+
+    pub async fn receive_scan_report(
+        &mut self,
+        name: &str,
+    ) -> Vec<common::util::scanner_util::ScanResult> {
+        let start = std::time::Instant::now();
+        let timeout = std::time::Duration::from_secs(5);
+        loop {
+            if start.elapsed() > timeout {
+                panic!("Timed out waiting for scan report from {}", name);
+            }
+            let packet = self.receive_packet(name).await;
+            match parse_hci_scan_report(&packet) {
+                Ok(reports) => return reports,
+                Err(e) => {
+                    log::warn!("Ignored packet from {}: {:?} (Error: {})", name, packet, e);
+                }
+            }
+        }
+    }
+
+    pub async fn then_scanner_sees_any_adv(&mut self, name: &str) {
+        let reports = self.receive_scan_report(name).await;
+        for report in reports {
+            log::info!("Received Scan Report: {:?}", report.mac);
+        }
+    }
+
+    /// Verifies that the scanner receives an advertisement from the specified beacon using BDD style.
+    pub async fn then_scanner_sees_adv_from(&mut self, scanner_name: &str, beacon_name: &str) {
+        let beacon_id =
+            *self.chips.get(beacon_name).expect(&format!("Beacon '{}' not found", beacon_name));
+        // Beacons created by World have address ...:ID.
+        // We know from previous analysis that raw packet data is Big Endian [0, 0, 0, 0, 0, ID].
+        // So we just check the last byte.
+        let expected_byte = (beacon_id.0 & 0xFF) as u8;
+
+        let start = std::time::Instant::now();
+        let timeout = std::time::Duration::from_secs(5);
+
+        while start.elapsed() < timeout {
+            let reports = self.receive_scan_report(scanner_name).await;
+            for report in reports {
+                if report.mac[5] == expected_byte {
+                    return;
+                }
+            }
+        }
+        panic!(
+            "Scanner '{}' did not see beacon '{}' (ID {}) within timeout",
+            scanner_name, beacon_name, beacon_id.0
+        );
+    }
+
+    pub async fn then_scanner_sees_adv_with_rssi(&mut self, name: &str, _expected_power: &str) {
+        let reports = self.receive_scan_report(name).await;
+        for report in reports {
+            let rssi = report.rssi;
+            log::info!("Received RSSI: {}", rssi);
+            assert!(rssi != 0, "RSSI should be non-zero");
+        }
+    }
+
+    pub async fn then_chip_eventually_removed(&self, name: &str) {
+        let id = *self.chips.get(name).expect("Chip name tracked in World");
+        let duration = std::time::Duration::from_millis(100);
+        for _ in 0..50 {
+            // ~5 seconds max
+            if self.client.0.get(id).await.expect("Failed to get").is_none() {
+                return; // Success, chip is gone
+            }
+            tokio::time::sleep(duration).await;
+        }
+        panic!("Chip {name} was not removed after timeout");
     }
 
     /// Helper to create a ChipConfig.

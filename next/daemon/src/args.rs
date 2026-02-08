@@ -70,6 +70,61 @@ pub struct Args {
     /// TODO: Not implemented yet
     #[arg(long, alias = "host-dns")]
     pub host_dns: Option<String>,
+
+    /// Set the initial SSID for the default Access Point (defaults to 'AndroidWifi')
+    #[command(flatten)]
+    pub wifi: WifiConfig,
+}
+
+#[derive(Debug, Default, Clone, clap::Args)]
+pub struct WifiConfig {
+    /// Set the initial SSID for the default Access Point (defaults to 'AndroidWifi')
+    #[arg(long, alias = "wifi-ssid", help_heading = "WiFi Settings")]
+    pub wifi_ssid: Option<String>,
+
+    /// Set the WPA passphrase for the default Access Point (optional)
+    #[arg(long, alias = "wifi-password", help_heading = "WiFi Settings")]
+    pub wifi_password: Option<String>,
+
+    /// Set the initial radio channel for the default Access Point (defaults to 11)
+    #[arg(long, alias = "wifi-channel", help_heading = "WiFi Settings")]
+    pub wifi_channel: Option<u8>,
+
+    /// Set the beacon interval in TU for the default Access Point (defaults to 100)
+    #[arg(long, alias = "wifi-beacon-interval", help_heading = "WiFi Settings")]
+    pub wifi_beacon_interval: Option<u16>,
+
+    /// Set the 802.11 mode for the default Access Point (defaults to "g")
+    #[arg(long, alias = "wifi-mode", value_enum, help_heading = "WiFi Settings")]
+    pub wifi_mode: Option<ClapWifiMode>,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum ClapWifiMode {
+    A,
+    B,
+    G,
+    N,
+    Ac,
+    Ax,
+}
+
+use netsim_model::ap::WifiMode as ModelWifiMode;
+
+// We define a local WifiMode enum here to derive clap::ValueEnum,
+// as the `netsim-model` crate should not depend on `clap` (UI concern).
+// We then implement From to convert the CLI argument into the Model type.
+impl From<ClapWifiMode> for ModelWifiMode {
+    fn from(mode: ClapWifiMode) -> Self {
+        match mode {
+            ClapWifiMode::A => ModelWifiMode::A,
+            ClapWifiMode::B => ModelWifiMode::B,
+            ClapWifiMode::G => ModelWifiMode::G,
+            ClapWifiMode::N => ModelWifiMode::N,
+            ClapWifiMode::Ac => ModelWifiMode::Ac,
+            ClapWifiMode::Ax => ModelWifiMode::Ax,
+        }
+    }
 }
 
 impl Args {

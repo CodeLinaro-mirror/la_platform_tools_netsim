@@ -157,6 +157,13 @@ impl ActorService for ApActor {
                     beacon_interval
                 );
                 self.sink = Some(sink);
+                // Preserve BSSID if the new store doesn't have one (Contextual Strangler fix)
+                if let Some(current_bssid) = self.shared_keys.get_bssid() {
+                    if shared_keys.get_bssid().is_none() {
+                        shared_keys.set_bssid(current_bssid);
+                        log::info!("ApActor: Preserved BSSID {:?} in shared_keys", current_bssid);
+                    }
+                }
                 self.shared_keys = shared_keys;
 
                 let tus = (beacon_interval.as_micros() / TU_INTERVAL_US) as u16;

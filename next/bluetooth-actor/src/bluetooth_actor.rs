@@ -55,6 +55,11 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
         } else {
             // If one of the chips is missing, default to tx_power.
             // This can happen during startup/shutdown or if a chip is not yet fully registered.
+            if src_chip.is_none() {
+                log::warn!("on_send_ll: Missing src chip {src_id}");
+            } else {
+                log::warn!("on_send_ll: Missing dst chip {dst_id}");
+            }
             Some(tx_power)
         }
     }

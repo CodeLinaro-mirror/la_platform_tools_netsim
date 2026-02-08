@@ -39,3 +39,6 @@ To ensure consistent code style and quality, this project uses a pre-commit hook
 
 After this one-time setup, the formatting script will run automatically before each commit.
 
+# Lockfile Maintenance
+
+For details on `MODULE.bazel.lock` behavior, specifically regarding `rules_python` and the `source.json` checksum, see [proto/GEMINI.md](proto/GEMINI.md).

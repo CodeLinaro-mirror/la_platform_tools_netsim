@@ -1,6 +1,7 @@
 // Copyright 2025 The Android Open Source Project
 
 use crate::actions::{BluetoothAction, BluetoothActionResult};
+use crate::beacon_utils::generate_legacy_address;
 use crate::bluetooth_actor::BluetoothActor;
 use crate::error::BluetoothError;
 use crate::hci_callbacks::HciCallbacks;
@@ -40,6 +41,12 @@ impl ActorService for BluetoothActor {
             }
         };
 
+        // Validate Scanner constraints: No PacketStream, Must have PacketSink.
+        if let BluetoothMode::Scanner(_) = &create_params.mode {
+            assert!(params.packet_stream.is_none(), "Scanner chip cannot have a packet stream");
+            assert!(params.packet_sink.is_some(), "Scanner chip must have a packet sink");
+        }
+
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
@@ -70,10 +77,17 @@ impl ActorService for BluetoothActor {
             HciCallbacks { id: chip_id, hci_tx: None, ll_tx: None }
         };
 
-        // 3. Create Rootcanal Controller (create_params already extracted)
-        let address = create_params.address.parse().map_err(|_| {
-            BluetoothError::Chip(ChipError::InvalidArguments("Invalid address".into()))
-        })?;
+        // 3. Create Rootcanal Controller
+        let raw_address = if create_params.address.is_empty() {
+            // Legacy behavior: generate address from chip_id.
+            // Matches legacy C++ behavior where address is derived from the ID.
+            // Example: ID 1000 -> 00:00:00:00:03:e8
+            generate_legacy_address(chip_id.into())
+        } else {
+            create_params.address.clone()
+        };
+        let address =
+            raw_address.parse().map_err(|_| BluetoothError::invalid_arg("Invalid address"))?;
         // Note: There is no specific enforcement for a "blue" address type.
         // The current check only validates if the address string is parsable.
 
@@ -82,17 +96,17 @@ impl ActorService for BluetoothActor {
             .to_chip_error()?;
 
         // 4. Create Chip Info in Context
-        // Initialize the chip info based on the mode (Beacon, Device, or Sniffer).
+        // Initialize the chip info based on the mode (Beacon, Device, or Scanner).
 
         let mut chip_info = match &create_params.mode {
             BluetoothMode::Beacon(params) => {
-                crate::beacon::create(&self.rootcanal, chip_id, params)?
+                crate::beacon::create(&self.rootcanal, chip_id, params, &chip.name)?
             }
             BluetoothMode::Device(params) => {
                 crate::device::create(&self.rootcanal, chip_id, params)?
             }
-            BluetoothMode::Sniffer(params) => {
-                crate::sniffer::create(&self.rootcanal, chip_id, params)?
+            BluetoothMode::Scanner(params) => {
+                crate::scanner::create(&self.rootcanal, chip_id, params)?
             }
         };
         chip_info.device_id = chip.device_id;

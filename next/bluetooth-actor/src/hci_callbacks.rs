@@ -21,6 +21,7 @@ pub struct HciCallbacks {
 impl ControllerCallbacks for HciCallbacks {
     fn send_hci(&self, _source_id: Id, h4_packet: Bytes) {
         if let Some(hci_tx) = self.hci_tx.as_ref() {
+            log::debug!("send_hci: Sending packet len={}", h4_packet.len());
             if let Err(e) = hci_tx.try_send(h4_packet) {
                 log::error!("Failed to send HCI packet: {e}, dropping.");
             }
@@ -53,12 +54,16 @@ pub async fn sink_loop(
     mut receiver: tokio::sync::mpsc::Receiver<bytes::Bytes>,
     id: ChipId,
 ) -> ChipId {
+    log::debug!("sink_loop: Started for chip {}", id);
     while let Some(packet) = receiver.recv().await {
+        log::debug!("sink_loop: Received packet len={}", packet.len());
         if sink.send(packet).await.is_err() {
-            log::info!("Sink for chip {} failed", id);
+            log::error!("Sink for chip {} failed", id);
             break;
+        } else {
+            log::debug!("sink_loop: Sent packet successfully");
         }
     }
-    log::info!("Sink task for chip {} finished", id);
+    log::error!("Sink task for chip {} finished", id);
     id
 }

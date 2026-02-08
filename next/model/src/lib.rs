@@ -34,6 +34,8 @@
 /// Bluetooth related definitions.
 pub mod bluetooth;
 
+/// Chip configuration parameters.
+pub mod ap;
 /// Chip actor definitions.
 pub mod chip;
 /// Chip error definitions.
@@ -46,7 +48,7 @@ pub mod device_error;
 pub mod initial_info;
 pub mod link;
 /// Macros for the client methods.
-pub(crate) mod macros;
+pub mod macros;
 /// Packet streamer definitions.
 pub mod packet_streamer;
 /// Statistics related definitions.

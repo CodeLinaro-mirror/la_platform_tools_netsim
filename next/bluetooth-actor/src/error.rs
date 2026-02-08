@@ -18,3 +18,10 @@ pub enum BluetoothError {
     #[error("Rootcanal error: {0}")]
     Rootcanal(String),
 }
+
+impl BluetoothError {
+    /// Helper to create an InvalidArguments error.
+    pub fn invalid_arg(msg: impl Into<String>) -> Self {
+        Self::Chip(ChipError::InvalidArguments(msg.into()))
+    }
+}

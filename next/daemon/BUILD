@@ -79,6 +79,7 @@ rust_binary(
     ],
     deps = [
         ":daemon-lib",
+        "@rand",
         "@tokio",
     ],
 )
@@ -100,10 +101,12 @@ rust_test(
         "//next/link-api",
         "//next/model",
         "//next/packet-stream",
-        "//next/proto",
+        "//proto",
         "@bytes",
+        "@env_logger",
         "@futures",
         "@grpcio",
+        "@log",
         "@rand",
         "@tokio",
     ],

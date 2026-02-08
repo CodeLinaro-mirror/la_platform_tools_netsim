@@ -1,0 +1,30 @@
+[package]
+name = "netsim-cli"
+version = "0.3.92"
+edition = "2021"
+
+[[bin]]
+name = "netsim"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
+clap = { version = "4.1.8", default-features = false, features = [
+  "derive",
+  "error-context",
+  "help",
+  "std",
+  "usage",
+] }
+futures = "0.3.30"
+futures-util = { version = "0.3.30", default-features = false, features = [
+  "sink",
+] }
+grpcio = { version = "0.13.0", default-features = false, features = [
+  "protobufv3-codec",
+] }
+hex = "0.4.3"
+log = "0.4.17"
+netsim-proto = { path = "../proto" }
+netsim-common = { path = "../common" }
+protobuf = "3.7.2"

@@ -8,7 +8,7 @@ DEPS = [
     "//next/model",
     "//next/modem-rs",
     "//next/packet-stream",
-    "//next/proto",
+    "//proto",
     "@tokio",
     "@log",
     "@bytes",
