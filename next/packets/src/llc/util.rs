@@ -2,8 +2,9 @@
 
 //! Provides utility functions for working with LLC and SNAP headers.
 
-use crate::llc::{control_field, sap, LlcHeader};
 use std::fmt::Write;
+
+use crate::llc::{control_field, sap, LlcHeader};
 
 /// Converts an LLC Service Access Point (SAP) value to a human-readable string.
 ///
@@ -19,9 +20,11 @@ pub fn sap_to_string(sap_val: u8) -> String {
     }
 }
 
-/// Converts an LLC Control Field value (for 1-byte control fields) to a human-readable string.
+/// Converts an LLC Control Field value (for 1-byte control fields) to a
+/// human-readable string.
 ///
-/// If the control field value is unknown, it returns the hex representation of the value.
+/// If the control field value is unknown, it returns the hex representation of
+/// the value.
 pub fn control_field_to_string(control_val: u8) -> String {
     match control_val {
         control_field::UI => "UI".to_string(),

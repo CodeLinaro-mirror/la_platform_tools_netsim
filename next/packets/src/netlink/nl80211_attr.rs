@@ -74,7 +74,8 @@ pub struct NlAttr<'a> {
 ///
 /// # Returns
 ///
-/// A `Result` containing a `Vec` of parsed `NlAttr`s, or an error message if parsing fails.
+/// A `Result` containing a `Vec` of parsed `NlAttr`s, or an error message if
+/// parsing fails.
 pub fn parse_attributes(mut data: &[u8]) -> Result<Vec<NlAttr<'_>>, String> {
     let mut attrs = Vec::new();
     while !data.is_empty() {
@@ -111,9 +112,10 @@ pub fn parse_attributes(mut data: &[u8]) -> Result<Vec<NlAttr<'_>>, String> {
 
 #[cfg(test)]
 mod tests {
+    use zerocopy::IntoBytes;
+
     use super::*;
     use crate::netlink::nl80211::attr_id;
-    use zerocopy::IntoBytes;
 
     #[test]
     fn test_parse_attributes_success() {

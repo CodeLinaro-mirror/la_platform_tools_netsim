@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bytes::Bytes;
-use libslirp_rs::libslirp::LibSlirp;
-use libslirp_rs::libslirp_config::SlirpConfig;
+use std::{io, sync::mpsc, time::Duration};
 
-use std::io;
-use std::sync::mpsc;
-use std::time::Duration;
+use bytes::Bytes;
+use libslirp_rs::{libslirp::LibSlirp, libslirp_config::SlirpConfig};
 
 /// Test whether shutdown closes the rx channel
 #[test]

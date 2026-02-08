@@ -7,10 +7,11 @@ use world::World;
 // Feature: Wi-Fi Direct (Peer-to-Peer)
 // ============================================================================
 
-// Scenario: A Station (Chip) sends a unicast packet to another Station (Chip) (Peer-to-Peer / WiFi Direct)
-// Given a Wifi Medium with two provisioned chips (Sender and Receiver)
-// When the Sender transmits a unicast frame addressed to the Receiver (Direct Link)
-// Then the Receiver should receive the packet with the expected payload
+// Scenario: A Station (Chip) sends a unicast packet to another Station (Chip)
+// (Peer-to-Peer / WiFi Direct) Given a Wifi Medium with two provisioned chips
+// (Sender and Receiver) When the Sender transmits a unicast frame addressed to
+// the Receiver (Direct Link) Then the Receiver should receive the packet with
+// the expected payload
 #[tokio::test]
 async fn test_p2p_wifi_direct_flow() {
     let mut world = World::new().await;
@@ -41,11 +42,11 @@ async fn test_broadcast_flow_real() {
 // Feature: Access Point Connectivity (Infrastructure)
 // ============================================================================
 
-// Scenario: The Access Point (Infra) sends a Management/Control frame to a Station (Chip)
-// Given a Wifi Medium with a provisioned chip (Receiver)
+// Scenario: The Access Point (Infra) sends a Management/Control frame to a
+// Station (Chip) Given a Wifi Medium with a provisioned chip (Receiver)
 // And the AP stream is active
-// When the AP injects a unicast management frame (e.g., Auth response) addressed to the Receiver
-// Then the Receiver should receive the packet
+// When the AP injects a unicast management frame (e.g., Auth response)
+// addressed to the Receiver Then the Receiver should receive the packet
 #[tokio::test]
 async fn test_infra_flow_real() {
     let mut world = World::new().await;
@@ -59,11 +60,12 @@ async fn test_infra_flow_real() {
 // Feature: Internet Connectivity (Uplink/Downlink)
 // ============================================================================
 
-// Scenario: A Station (Chip) sends a data packet destined for the internet (Slirp)
-// Given a Wifi Medium with an AP and a provisioned chip (Sender)
+// Scenario: A Station (Chip) sends a data packet destined for the internet
+// (Slirp) Given a Wifi Medium with an AP and a provisioned chip (Sender)
 // And the Sender is enabled (for Slirp)
 // When the Sender transmits a Data Frame (ToDS=1) aimed at the Internet
-// Then the Slirp Actor should receive the packet (Verified via successful transmission/no error)
+// Then the Slirp Actor should receive the packet (Verified via successful
+// transmission/no error)
 #[tokio::test]
 async fn test_uplink_data_flow_stub() {
     let mut world = World::new().await;
@@ -74,17 +76,18 @@ async fn test_uplink_data_flow_stub() {
     world.when_chip_transmits_data_to_slirp(0).await;
 
     // Verification: We assume if no error, routing succeeded.
-    // Ideally we would mock Slirp, but testing end-to-end Slirp is covered in integration_test.rs.
-    // This test ensures the Medium correctly routes "Internet" traffic to the Slirp target.
+    // Ideally we would mock Slirp, but testing end-to-end Slirp is covered in
+    // integration_test.rs. This test ensures the Medium correctly routes
+    // "Internet" traffic to the Slirp target.
 }
 
 // ============================================================================
 // Feature: WiFi to Ethernet Multicast (Station to Slirp)
 // ============================================================================
 
-// Scenario: A Station (Chip) sends a multicast packet (e.g. mDNS) which should also go to Slirp (Gateway)
-// Given a Wifi Medium with an AP and a provisioned chip (Sender)
-// When the Sender transmits a Multicast Frame (mDNS)
+// Scenario: A Station (Chip) sends a multicast packet (e.g. mDNS) which should
+// also go to Slirp (Gateway) Given a Wifi Medium with an AP and a provisioned
+// chip (Sender) When the Sender transmits a Multicast Frame (mDNS)
 // Then the Slirp Actor should receive the packet (via Multicast logic)
 #[tokio::test]
 async fn test_uplink_multicast_flow() {
@@ -153,18 +156,20 @@ async fn test_station_to_ap_mgmt_stub() {
     // Send Mgmt Frame (Assoc Req)
     world.when_chip_transmits_mgmt_to_ap(0).await;
 
-    // No assertion on AP state (requires mock), but ensures no panic and routing execution.
+    // No assertion on AP state (requires mock), but ensures no panic and
+    // routing execution.
 }
 
 // ============================================================================
 // Feature: Client-to-Client Communication (Infrastructure)
 // ============================================================================
 
-// Scenario: A Station (Chip) sends a packet to another Station (Chip) via the AP (Infrastructure Mode)
-// Given a Wifi Medium with two provisioned chips (Sender and Receiver)
-// And "simulate_ap_reflection" is enabled
-// When the Sender transmits a Data Frame (ToDS=1) to the AP BSSID, with Destination=Receiver
-// Then the Receiver should receive a Data Frame (FromDS=1) from the AP BSSID
+// Scenario: A Station (Chip) sends a packet to another Station (Chip) via the
+// AP (Infrastructure Mode) Given a Wifi Medium with two provisioned chips
+// (Sender and Receiver) And "simulate_ap_reflection" is enabled
+// When the Sender transmits a Data Frame (ToDS=1) to the AP BSSID, with
+// Destination=Receiver Then the Receiver should receive a Data Frame (FromDS=1)
+// from the AP BSSID
 #[tokio::test]
 async fn test_ap_reflection_flow_stub() {
     let mut world = World::new().await;
@@ -230,10 +235,11 @@ async fn test_infra_multicast_stub() {
     world.then_chip_receives_payload(0, "Infra Multicast").await;
     world.then_chip_receives_payload(1, "Infra Multicast").await;
 }
-// Scenario: The Infrastructure (Slirp) sends a packet to an unknown MAC address (e.g. DHCP Offer to initial random MAC)
-// Given a Wifi Medium with multiple provisioned chips
-// When the Infra sends a Unicast Ethernet frame to an unknown MAC
-// Then ALL chips should receive the frame (Flooding) AND the destination MAC should be rewritten to match each chip's MAC
+// Scenario: The Infrastructure (Slirp) sends a packet to an unknown MAC address
+// (e.g. DHCP Offer to initial random MAC) Given a Wifi Medium with multiple
+// provisioned chips When the Infra sends a Unicast Ethernet frame to an unknown
+// MAC Then ALL chips should receive the frame (Flooding) AND the destination
+// MAC should be rewritten to match each chip's MAC
 #[tokio::test]
 async fn test_unknown_unicast_flooding() {
     let mut world = World::new().await;

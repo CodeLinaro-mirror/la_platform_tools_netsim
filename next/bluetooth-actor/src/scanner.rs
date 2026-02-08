@@ -8,15 +8,19 @@
 //! included.
 //!
 //! Future Features:
-//! * **External Link Layer API:** Currently used for testing, this mode may expose an external API
-//!   in the future to convert Rootcanal LL packets to standard Bluetooth LL packets for capture.
+//! * **External Link Layer API:** Currently used for testing, this mode may
+//!   expose an external API in the future to convert Rootcanal LL packets to
+//!   standard Bluetooth LL packets for capture.
 
-use crate::utils::ToChipError;
 use log::debug;
-use netsim_model::chip::{Chip, ChipId, ScannerParams};
-use netsim_model::chip_error::ChipError;
+use netsim_model::{
+    chip::{Chip, ChipId, ScannerParams},
+    chip_error::ChipError,
+};
 use rootcanal::Rootcanal;
 use zerocopy::{Immutable, IntoBytes, KnownLayout, Unaligned};
+
+use crate::utils::ToChipError;
 
 const HCI_COMMAND_PACKET: u8 = 0x01;
 const HCI_SET_EVENT_MASK: u16 = 0x0C01;
@@ -65,7 +69,8 @@ pub(crate) fn create(
         packet_type: HCI_COMMAND_PACKET,
         opcode: HCI_LE_SET_EVENT_MASK,
         param_len: 8,
-        mask: 0x00000000000000FF, // Enable everything (first byte 0xFF covers Adv Report which is bit 1)
+        mask: 0x00000000000000FF, /* Enable everything (first byte 0xFF covers Adv Report which
+                                   * is bit 1) */
     };
     rootcanal.receive_hci(chip_id.into(), event_mask.as_bytes().to_vec().into()).to_chip_error()?;
 

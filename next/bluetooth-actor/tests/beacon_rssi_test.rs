@@ -1,19 +1,22 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::world::World;
+use std::time::Duration;
+
 use bluetooth_actor::beacon_utils::{
     is_le_advertising_report, CMD_LE_SET_EVENT_MASK, CMD_LE_SET_SCAN_ENABLE,
     CMD_LE_SET_SCAN_PARAMS, CMD_SET_EVENT_MASK_STD, REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET,
 };
 use bytes::Bytes;
 use netsim_model::device::Position;
-use std::time::Duration;
 use tokio;
+
+use crate::world::World;
 
 /// Scenario: Scanner receives RSSI updates from Beacon
 ///   Given a world with a scanner and a beacon
 ///   When the scanner enables scanning
-///   Then the scanner receives advertising reports with decreasing RSSI as distance increases
+///   Then the scanner receives advertising reports with decreasing RSSI as
+/// distance increases
 #[tokio::test]
 async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
     let _ = env_logger::builder().is_test(true).try_init();
@@ -45,7 +48,8 @@ async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
     world.when_packet_sent("scanner", Bytes::from(CMD_LE_SET_SCAN_PARAMS)).await;
     world.when_packet_sent("scanner", Bytes::from(CMD_LE_SET_SCAN_ENABLE)).await;
 
-    // THEN the scanner receives advertising reports with decreasing RSSI as distance increases
+    // THEN the scanner receives advertising reports with decreasing RSSI as
+    // distance increases
     let distances = [1.0, 10.0, 20.0];
     let mut last_rssi = i8::MAX;
 

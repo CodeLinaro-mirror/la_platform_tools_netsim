@@ -31,14 +31,16 @@
 // with libraries that require raw file descriptors, such as
 // `libslirp_rs`.
 
-use crate::{Error, Result};
-use regex::Regex;
 use std::net::{SocketAddr, ToSocketAddrs};
 #[cfg(unix)]
 use std::os::fd::IntoRawFd;
 #[cfg(windows)]
 use std::os::windows::io::IntoRawSocket;
+
+use regex::Regex;
 use tokio::net::TcpStream;
+
+use crate::{Error, Result};
 
 pub type RawDescriptor = i32;
 
@@ -53,7 +55,8 @@ pub struct ProxyConfig {
 impl ProxyConfig {
     /// Parses a proxy configuration string and returns a `ProxyConfig` struct.
     ///
-    /// The function expects the proxy configuration string to be in the following format:
+    /// The function expects the proxy configuration string to be in the
+    /// following format:
     ///
     /// [protocol://][username:password@]host:port
     /// [protocol://][username:password@]/[host/]:port
@@ -62,7 +65,8 @@ impl ProxyConfig {
     ///
     /// * `protocol`: The network protocol (e.g., `http`, `https`,
     /// `socks5`). If not provided, defaults to `http`.
-    /// * `username`: and `password` are optional credentials for authentication.
+    /// * `username`: and `password` are optional credentials for
+    ///   authentication.
     /// * `host`: The hostname or IP address of the proxy server. If
     /// it's an IPv6 address, it should be enclosed in square brackets
     /// (e.g., "[::1]").
@@ -126,8 +130,9 @@ pub fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+    use super::*;
 
     #[test]
     fn parse_configuration_string_success() {

@@ -135,6 +135,7 @@ check_taplo_version
 pids=()
 RUSTFMT="$REPO/prebuilts/rust/$OS-x86/stable/rustfmt"
 BPFMT="$REPO/prebuilts/build-tools/$OS-x86/bin/bpfmt"
+TAPLO_CONFIG="$REPO/tools/netsim/next/taplo.toml"
 
 format "C/C++/Proto/TS" "clang-format -i" "${clang_files[@]}"
 format "Rust" "$RUSTFMT --files-with-diff" "${rust_files[@]}"
@@ -143,7 +144,7 @@ format "Python" "pyformat --in_place --alsologtostderr --noshowprefixforinfo" "$
 format "CMake" "cmake-format -i" "${cmake_files[@]}"
 format "Android.bp" "$BPFMT -w" "${bp_files[@]}"
 format "Bazel" "buildifier -lint=fix" "${bazel_files[@]}"
-format "TOML" "taplo fmt" "${toml_files[@]}"
+format "TOML" "taplo fmt --config" "$TAPLO_CONFIG" "${toml_files[@]}"
 
 echo "Waiting for formatters to finish..."
 for pid in "${pids[@]}"; do

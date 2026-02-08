@@ -1,19 +1,21 @@
 // Copyright 2025 The Android Open Source Project
 
+use std::collections::HashMap;
+
 use actor_framework::ResourceClient;
 use bluetooth_actor::{BluetoothActor, BluetoothClient};
 use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
-use netsim_model::bluetooth::beacon::{AdvertiseSettings, AdvertiseTxPower, TxPower};
-use netsim_model::chip::{
-    BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId,
-    DeviceParams, NetworkParams, PacketSink, PacketStream, ScannerParams,
+use netsim_model::{
+    bluetooth::beacon::{AdvertiseSettings, AdvertiseTxPower, TxPower},
+    chip::{
+        BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode, ChipConfig, ChipCreate, ChipId,
+        ChipKindParams, DeviceParams, PacketSink, PacketStream, ScannerParams,
+    },
+    device::DeviceId,
 };
-use netsim_model::device::DeviceId;
 use netsim_testing::logger;
-use std::collections::HashMap;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc, task::JoinHandle};
 
 /// The BDD World for Bluetooth Actor tests.
 #[allow(dead_code)]
@@ -47,8 +49,9 @@ impl World {
         let (actor, client) = bluetooth_actor::new();
         let resource_client_clone = resource_client.clone();
         let _client_clone = client.clone();
-        // Dropping _device_rx causes the channel to close, which prevents blocking (sends fail immediately).
-        // BluetoothActor handles these failures gracefully (ignoring them), so explicit draining is not needed.
+        // Dropping _device_rx causes the channel to close, which prevents blocking
+        // (sends fail immediately). BluetoothActor handles these failures
+        // gracefully (ignoring them), so explicit draining is not needed.
 
         let actor_task = tokio::spawn(async move {
             actor.run(BluetoothActor::new(resource_client_clone)).await;
@@ -92,7 +95,7 @@ impl World {
                 "test_chip",
                 "netsim",
                 name,
-                NetworkParams::Bluetooth(BluetoothCreate {
+                ChipKindParams::Bluetooth(BluetoothCreate {
                     address,
                     bt_properties: Default::default(),
                     mode,
@@ -153,9 +156,10 @@ impl World {
             ble_beacon: BleBeacon { address, settings, ..Default::default() },
         }));
 
-        // Use self.device_id for consistency (unless specific overridden device is needed)
-        // If separation is needed, tests should explicitly set up different World or device.
-        // For now, defaulting to self.device_id (1) as used in other beacons.
+        // Use self.device_id for consistency (unless specific overridden device is
+        // needed) If separation is needed, tests should explicitly set up
+        // different World or device. For now, defaulting to self.device_id (1)
+        // as used in other beacons.
         self.create_chip(name, mode, None, None, self.device_id).await;
     }
 
@@ -315,13 +319,14 @@ impl World {
         }
     }
 
-    /// Verifies that the scanner receives an advertisement from the specified beacon using BDD style.
+    /// Verifies that the scanner receives an advertisement from the specified
+    /// beacon using BDD style.
     pub async fn then_scanner_sees_adv_from(&mut self, scanner_name: &str, beacon_name: &str) {
         let beacon_id =
             *self.chips.get(beacon_name).expect(&format!("Beacon '{}' not found", beacon_name));
         // Beacons created by World have address ...:ID.
-        // We know from previous analysis that raw packet data is Big Endian [0, 0, 0, 0, 0, ID].
-        // So we just check the last byte.
+        // We know from previous analysis that raw packet data is Big Endian [0, 0, 0,
+        // 0, 0, ID]. So we just check the last byte.
         let expected_byte = (beacon_id.0 & 0xFF) as u8;
 
         let start = std::time::Instant::now();
@@ -369,7 +374,7 @@ impl World {
             "test_chip",
             "test_manufacturer",
             "test_product",
-            NetworkParams::Bluetooth(BluetoothCreate {
+            ChipKindParams::Bluetooth(BluetoothCreate {
                 address: format!("00:00:00:00:00:{:02x}", id.0),
                 bt_properties: Default::default(),
                 mode,

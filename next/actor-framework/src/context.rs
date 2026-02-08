@@ -1,7 +1,8 @@
 //! # Actor Framework Context
 //!
-//! This module defines the `Context` trait and its standard implementation, `FrameworkContext`.
-//! The context allows the implementation of actors to interact with the framework environment:
+//! This module defines the `Context` trait and its standard implementation,
+//! `FrameworkContext`. The context allows the implementation of actors to
+//! interact with the framework environment:
 //! - Time management (setting tick intervals).
 //! - Asynchronous stream management.
 //! - Lifecycle control (shutdown signals).
@@ -10,16 +11,20 @@
 //! providing a consistent interface for actors to interact with the underlying
 //! execution environment.
 
-use crate::BoxStream;
-use futures::future::BoxFuture;
 use std::time::Duration;
+
+use futures::future::BoxFuture;
 use tokio::sync::oneshot;
 use tokio_stream::{StreamMap, StreamNotifyClose};
 
-/// The runtime environment for an actor, providing access to time, streams, and lifecycle.
+use crate::BoxStream;
+
+/// The runtime environment for an actor, providing access to time, streams, and
+/// lifecycle.
 pub type DynContext<Id> = dyn Context<Id> + Send;
 
-/// The runtime environment for an actor. The ID type must be `Send + Copy + 'static`.
+/// The runtime environment for an actor. The ID type must be `Send + Copy +
+/// 'static`.
 pub trait Context<Id>: Send + 'static {
     /// Schedule a message to be sent to the actor after a delay.oop.
     fn set_interval(&mut self, duration: Duration);
@@ -32,8 +37,9 @@ pub trait Context<Id>: Send + 'static {
 
     /// Spawns a background task to be managed by the runtime.
     ///
-    /// The task is identified by `id`. When it completes, the actor's `on_task_closed` hook will be called
-    /// with the value returned by the task (which must be its `id`).
+    /// The task is identified by `id`. When it completes, the actor's
+    /// `on_task_closed` hook will be called with the value returned by the
+    /// task (which must be its `id`).
     fn spawn(&mut self, id: Id, task: BoxFuture<'static, Id>);
 
     /// Aborts a background task by its ID.

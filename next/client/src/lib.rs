@@ -2,16 +2,17 @@
 
 //! # Domain-Specific Client Wrappers
 //!
-//! This module provides **type-safe, domain-specific wrappers** around the generic
-//! [`ResourceClient`](actor_framework::ResourceClient). These wrappers add domain
-//! knowledge and ergonomic APIs on top of the raw framework client.
+//! This module provides **type-safe, domain-specific wrappers** around the
+//! generic [`ResourceClient`](actor_framework::ResourceClient). These wrappers
+//! add domain knowledge and ergonomic APIs on top of the raw framework client.
 //!
 //! ## The Client Wrapper Pattern
 //!
 //! Instead of exposing the generic `ResourceClient<T>` directly, we wrap it in
 //! domain-specific clients that provide:
 //!
-//! 1. **Domain-specific methods** - `create_user()` instead of generic `create()`
+//! 1. **Domain-specific methods** - `create_user()` instead of generic
+//!    `create()`
 //! 2. **Type-safe errors** - `UserError` instead of generic `FrameworkError`
 //! 3. **Business logic** - Validation, transformation, orchestration
 //! 4. **Better API ergonomics** - Hide framework details from consumers

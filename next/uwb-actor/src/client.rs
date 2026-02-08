@@ -1,15 +1,18 @@
 // Copyright 2026 The Android Open Source Project
 
-use crate::uwb_actor::UwbActor;
 use actor_framework::{FrameworkError, ResourceClient};
 use async_trait::async_trait;
-use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate};
-use netsim_model::client_error::ClientError;
-use netsim_model::stats::NetsimRadioStats;
+use netsim_model::{
+    chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate},
+    client_error::ClientError,
+    stats::NetsimRadioStats,
+};
 
-// Helper to handle downcast failure gracefully if we wanted to preserve error message
-// But downcast consuming only on success is fine if we just convert to string on failure...
-// Actually downcast failure returns the box.
+use crate::uwb_actor::UwbActor;
+
+// Helper to handle downcast failure gracefully if we wanted to preserve error
+// message But downcast consuming only on success is fine if we just convert to
+// string on failure... Actually downcast failure returns the box.
 fn map_framework_error_smart(e: FrameworkError) -> ClientError {
     match e {
         FrameworkError::ServiceError(boxed) => {

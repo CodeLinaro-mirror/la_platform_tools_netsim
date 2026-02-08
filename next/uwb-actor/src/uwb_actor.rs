@@ -1,11 +1,12 @@
 // Copyright 2026 The Android Open Source Project
 
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use client::DeviceClient;
 use futures::SinkExt;
 use log::{debug, error, info};
 use netsim_model::chip::{Chip, ChipId, PacketSink};
-use std::collections::HashMap;
 use tokio::sync::mpsc;
 
 /// The UWB Actor responsible for managing UWB chips and their state.

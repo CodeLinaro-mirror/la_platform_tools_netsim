@@ -24,12 +24,12 @@ crate-type = ["staticlib", "lib"]
 doctest = false
 
 [dependencies]
-etherparse = { version = "0.16" }
 bytes = { version = "1.4.0" }
+etherparse = { version = "0.16" }
 libc = "0.2"
 log = "0.4.17"
-winapi = { version = "0.3", features = ["winsock2"] }
 tokio = { version = "1.32.0", features = ["net", "rt-multi-thread"] }
+winapi = { version = "0.3", features = ["winsock2"] }
 
 [build-dependencies]
 ##bindgen = "0.69.4"

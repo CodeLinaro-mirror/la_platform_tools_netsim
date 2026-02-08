@@ -10,17 +10,23 @@
 //!
 //! The capture system is structured as follows:
 //!
-//! - **`netsim-model`**: Remains the base layer for data models (e.g., `ChipId`, `ChipKind`). It does not depend on `capture-api`.
-//! - **`capture-api`**: Defines the behavioral contract for the capture service.
+//! - **`netsim-model`**: Remains the base layer for data models (e.g.,
+//!   `ChipId`, `ChipKind`). It does not depend on `capture-api`.
+//! - **`capture-api`**: Defines the behavioral contract for the capture
+//!   service.
 //!     - Depends on: `netsim-model`
-//!     - Contains: `CaptureAction` (enum of supported operations), `CaptureActionResult`, `CaptureSender` trait, and re-exports of relevant models.
+//!     - Contains: `CaptureAction` (enum of supported operations),
+//!       `CaptureActionResult`, `CaptureSender` trait, and re-exports of
+//!       relevant models.
 //! - **`capture-actor`**: Implements the capture service.
 //!     - Depends on: `capture-api`, `netsim-model`.
 //!     - Implements the handling logic for `CaptureAction`.
-//! - **`netsim-client`**: Provides a client-side wrapper for the capture service.
+//! - **`netsim-client`**: Provides a client-side wrapper for the capture
+//!   service.
 //!     - Depends on: `capture-api`, `netsim-model`.
 //! - **Consumer Crates** (e.g., `device-actor`, `daemon`):
-//!     - Depend on: `capture-api`, `netsim-client` (and `netsim-model` if needed).
+//!     - Depend on: `capture-api`, `netsim-client` (and `netsim-model` if
+//!       needed).
 //!     - Do not depend directly on `capture-actor` for API definitions.
 //!
 //! ### Dependency Graph (Simplified)
@@ -42,28 +48,37 @@
 //!
 //! ### `CaptureAction`
 //!
-//! An enum representing the actions that can be performed on the capture service. This serves as the primary interface for consumers.
+//! An enum representing the actions that can be performed on the capture
+//! service. This serves as the primary interface for consumers.
 //!
 //! ### `CaptureSender`
 //!
-//! A trait defining the interface for sending packets to the capture system. This allows for dependency injection and easier testing.
+//! A trait defining the interface for sending packets to the capture system.
+//! This allows for dependency injection and easier testing.
 //!
 //! ## Benefits
 //!
-//! 1.  **Clearer Boundaries**: The separation between API and implementation is now explicit.
-//! 2.  **Reduced Coupling**: Consumer crates only depend on the API, not the implementation.
-//! 3.  **Improved Build Times**: Changes to the `capture-actor` implementation do not require recompiling consumer crates, as long as the API remains stable.
-//! 4.  **Easier Testing**: Mocking the capture service is now a matter of implementing the `CaptureAction` contract or the `CaptureSender` trait.
+//! 1. **Clearer Boundaries**: The separation between API and implementation is
+//!    now explicit.
+//! 2. **Reduced Coupling**: Consumer crates only depend on the API, not the
+//!    implementation.
+//! 3. **Improved Build Times**: Changes to the `capture-actor` implementation
+//!    do not require recompiling consumer crates, as long as the API remains
+//!    stable.
+//! 4. **Easier Testing**: Mocking the capture service is now a matter of
+//!    implementing the `CaptureAction` contract or the `CaptureSender` trait.
 
 pub mod io;
+
+use std::{
+    path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use netsim_model::chip::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 #[async_trait]
 pub trait CaptureSender: Send + Sync {

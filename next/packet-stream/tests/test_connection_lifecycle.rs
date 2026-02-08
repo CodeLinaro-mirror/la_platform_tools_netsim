@@ -1,13 +1,16 @@
 // Copyright 2025 Google LLC
 //=============================================================================
-// tests/test_connection_lifecycle.rs - Integration tests for connection lifecycle
+// tests/test_connection_lifecycle.rs - Integration tests for connection
+// lifecycle
 //=============================================================================
 
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use packet_stream::{Chip, ChipInfo, ChipKind, DeviceInfo, Streams, TransportType};
-use tokio::net::TcpStream;
-use tokio::time::{timeout, Duration};
+use tokio::{
+    net::TcpStream,
+    time::{timeout, Duration},
+};
 
 /// Helper to create test chip info
 fn create_test_chip_info() -> ChipInfo {

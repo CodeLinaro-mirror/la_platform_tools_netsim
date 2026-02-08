@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    net::SocketAddr,
+    sync::{mpsc, Arc},
+    thread,
+};
+
+use bytes::Bytes;
+use libslirp_rs::libslirp::{ProxyConnect, ProxyManager};
+use log::{debug, warn};
+use tokio::runtime::Runtime;
+
 use crate::{
     util::{into_raw_descriptor, ProxyConfig},
     Connector, DnsManager, Result,
 };
-use bytes::Bytes;
-use libslirp_rs::libslirp::{ProxyConnect, ProxyManager};
-use log::{debug, warn};
-use std::net::SocketAddr;
-use std::sync::{mpsc, Arc};
-use std::thread;
-use tokio::runtime::Runtime;
 
 /// # Manager
 ///
@@ -44,6 +48,7 @@ use tokio::runtime::Runtime;
 ///
 /// ```
 /// use std::net::SocketAddr;
+///
 /// use libslirp_rs::libslirp::ProxyConnect;
 ///
 /// struct MyProxyConnect;
@@ -55,8 +60,7 @@ use tokio::runtime::Runtime;
 /// }
 ///
 /// #[tokio::main]
-/// async fn main() {
-/// }
+/// async fn main() {}
 /// ```
 pub struct Manager {
     runtime: Arc<Runtime>,
@@ -67,8 +71,8 @@ pub struct Manager {
 impl Manager {
     /// Creates a new `LibSlirp` instance.
     ///
-    /// This function initializes the libslirp library and spawns the necessary threads
-    /// for handling network traffic and polling.
+    /// This function initializes the libslirp library and spawns the necessary
+    /// threads for handling network traffic and polling.
     pub fn new(proxy: &str, rx_proxy_bytes: mpsc::Receiver<Bytes>) -> Result<Self> {
         let config = ProxyConfig::from_string(proxy)?;
         let dns_manager = Arc::new(DnsManager::new());
@@ -88,17 +92,20 @@ impl Manager {
 }
 
 impl ProxyManager for Manager {
-    /// Attempts to establish a TCP connection to the given `sockaddr` through the proxy.
+    /// Attempts to establish a TCP connection to the given `sockaddr` through
+    /// the proxy.
     ///
-    /// This function spawns a new task in the `tokio` runtime to handle the connection process.
-    /// If the connection is successful, it calls the `proxy_connect` function of the provided
-    /// `ProxyConnect` object with the raw file descriptor of the connected socket.
+    /// This function spawns a new task in the `tokio` runtime to handle the
+    /// connection process. If the connection is successful, it calls the
+    /// `proxy_connect` function of the provided `ProxyConnect` object with
+    /// the raw file descriptor of the connected socket.
     ///
     /// # Arguments
     ///
     /// * `sockaddr` - The target socket address to connect to.
     /// * `connect_id` - An identifier for the connection.
-    /// * `connect_func` - A `ProxyConnect` object that will be called with the connected socket.
+    /// * `connect_func` - A `ProxyConnect` object that will be called with the
+    ///   connected socket.
     ///
     /// # Returns
     ///

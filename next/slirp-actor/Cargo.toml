@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
-log = "0.4"
-anyhow = "1.0"
-netsim-packets = { path = "../packets" }
 actor-framework = { path = "../actor-framework" }
-libslirp-rs = { path = "../libslirp-rs" }
+anyhow = "1.0"
 bytes = "1.4"
 futures = "0.3"
+libslirp-rs = { path = "../libslirp-rs" }
+log = "0.4"
 netsim-model = { path = "../model" }
+netsim-packets = { path = "../packets" }
 netsim-proto = { path = "../proto" }
+tokio = { version = "1", features = ["full"] }

@@ -1,5 +1,6 @@
-use crate::world::ApWorld;
 use ap_actor::netsim_model::chip::WifiMode;
+
+use crate::world::ApWorld;
 
 // ============================================================================
 // Feature: AP Creation and Configuration

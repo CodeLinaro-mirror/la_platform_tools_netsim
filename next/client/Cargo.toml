@@ -8,23 +8,23 @@ mocks = []
 
 [dependencies]
 actor-framework = { path = "../actor-framework" }
-netsim-model = { path = "../model" }
+anyhow = "1.0"
+async-trait = "0.1"
+bytes = { version = "1.10.1", features = ["serde"] }
+capture-actor = { path = "../capture-actor" }
+capture-api = { path = "../capture-api" }
 device-actor = { path = "../device-actor" }
 device-api = { path = "../device-api" }
-capture-actor = { path = "../capture-actor" }
+futures = "0.3"
 link-actor = { path = "../link-actor" }
 link-api = { path = "../link-api" }
-capture-api = { path = "../capture-api" }
+log = "0.4"
+netsim-model = { path = "../model" }
+packet-stream = { path = "../packet-stream" }
+thiserror = "1.0"
 tokio = { version = "1.32.0", default-features = false, features = [
   "rt",
   "time",
   "sync",
   "macros",
 ] }
-async-trait = "0.1"
-log = "0.4"
-anyhow = "1.0"
-packet-stream = { path = "../packet-stream" }
-futures = "0.3"
-bytes = { version = "1.10.1", features = ["serde"] }
-thiserror = "1.0"

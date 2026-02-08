@@ -17,13 +17,11 @@ pub mod rsn;
 pub mod sae;
 pub mod wpa_auth;
 
+use actor_framework::ResourceActor;
 pub use ap_actor::{ApActor, ApConfig, ApReq, ApResponse, ApState, ApUpdate};
 pub use ap_client::ApClient;
 pub use error::ApError;
-pub use netsim_model;
-pub use netsim_model::device::Position;
-
-use actor_framework::ResourceActor;
+pub use netsim_model::{self, device::Position};
 
 /// Creates a new ApActor and returns the runner and a client.
 ///

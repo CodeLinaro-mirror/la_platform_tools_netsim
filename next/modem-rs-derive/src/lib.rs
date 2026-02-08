@@ -1,7 +1,8 @@
+use std::str;
+
 use nom::IResult;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::str;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Type};
 
 #[allow(dead_code)]

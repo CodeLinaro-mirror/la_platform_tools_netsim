@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{env, path::PathBuf};
+
 use bindgen;
-use std::env;
-use std::path::PathBuf;
 
 pub fn main() {
     println!("cargo:rerun-if-changed=bindings/wrapper.h");

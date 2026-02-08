@@ -1,11 +1,13 @@
 // Copyright 2024 The Android Open Source Project
 
-//! Defines structures for ICMP (Internet Control Message Protocol) headers using `zerocopy`.
+//! Defines structures for ICMP (Internet Control Message Protocol) headers
+//! using `zerocopy`.
 
-use crate::utils::general::ParseResult;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
 };
+
+use crate::utils::general::ParseResult;
 
 /// Represents the ICMP header.
 #[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable)]
@@ -13,12 +15,14 @@ use zerocopy::{
 pub struct IcmpHeader {
     /// The type of the ICMP message.
     pub icmp_type: u8,
-    /// The code of the ICMP message, providing more specific information about the message type.
+    /// The code of the ICMP message, providing more specific information about
+    /// the message type.
     pub icmp_code: u8,
     /// The checksum of the ICMP header and data.
     pub icmp_checksum: U16<NetworkEndian>,
     /// The rest of the header, which varies depending on the message type.
-    /// For echo request/reply, this contains the identifier and sequence number.
+    /// For echo request/reply, this contains the identifier and sequence
+    /// number.
     pub rest: [u8; 4],
 }
 
@@ -44,8 +48,9 @@ pub struct IcmpEchoHeader {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use zerocopy::Ref;
+
+    use super::*;
 
     #[test]
     fn test_icmp_header_parsing() {

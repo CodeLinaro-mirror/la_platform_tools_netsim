@@ -1,13 +1,59 @@
 // Rust definitions for Bluetooth related structures
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+
+use crate::chip::{Radio, RadioUpdate};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Bluetooth {
-    pub low_energy: Option<Box<super::chip::Radio>>,
-    pub classic: Option<Box<super::chip::Radio>>,
+    pub low_energy: Radio,
+    pub classic: Radio,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BluetoothUpdate {
+    pub classic: RadioUpdate,
+    pub low_energy: RadioUpdate,
+}
+
+/// Parameters for creating a Bluetooth chip.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BluetoothCreate {
+    /// The Bluetooth address of the device.
     pub address: String,
-    pub bt_properties: Option<Controller>,
+    /// Rootcanal controller properties.
+    pub bt_properties: Controller,
+    /// The operational mode of the Bluetooth chip.
+    pub mode: BluetoothMode,
+}
+
+/// An enum to differentiate between the kinds of Bluetooth chips.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum BluetoothMode {
+    /// A full, virtual Bluetooth controller that can be paired with.
+    Device(DeviceParams),
+    /// A simple, non-interactive BLE beacon that broadcasts advertisements.
+    Beacon(Box<BeaconParams>),
+    /// A passive Bluetooth scanner to capture nearby traffic.
+    Scanner(ScannerParams),
+}
+
+/// Parameters for creating a virtual Bluetooth device.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DeviceParams {}
+
+/// Parameters for creating a BLE beacon.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BeaconParams {
+    /// The BLE beacon's configuration.
+    pub ble_beacon: beacon::BleBeacon,
+}
+
+/// Parameters for a Bluetooth scanner.
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScannerParams {
+    // Future scanner-specific properties can be added here.
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -36,10 +82,12 @@ pub mod beacon {
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
     pub struct BleBeacon {
-        pub bt: Option<super::Bluetooth>,
         pub address: String,
+        // Settings on how beacon functions
         pub settings: Option<AdvertiseSettings>,
+        // Advertising Data
         pub adv_data: Option<AdvertiseData>,
+        // Scan Response Data
         pub scan_response: Option<AdvertiseData>,
     }
 

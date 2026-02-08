@@ -1,11 +1,10 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::error::WifiError;
-use crate::wifi_actor::WifiActor;
 use actor_framework::{ActorLifecycle, DynContext};
 use async_trait::async_trait;
-
 use netsim_model::chip::ChipId;
+
+use crate::{error::WifiError, wifi_actor::WifiActor};
 
 /// ID for the AP infrastructure stream
 pub const AP_ID: ChipId = ChipId(u32::MAX);

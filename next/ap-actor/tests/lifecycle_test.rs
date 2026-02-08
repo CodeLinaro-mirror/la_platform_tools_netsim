@@ -1,5 +1,6 @@
-use crate::world::ApWorld;
 use ap_actor::netsim_model::chip::WifiMode;
+
+use crate::world::ApWorld;
 
 // ============================================================================
 // Feature: System Resilience and Lifecycle Management
@@ -151,5 +152,7 @@ async fn test_ap_lifecycle_crud() {
     world.when_ap_is_deleted().await; // Deletes the stored ap_id (SecondAP)
     let list_after = world.client.list_aps().await.expect("List failed");
     assert!(!list_after.iter().any(|ap| ap.config.ssid == "SecondAP"));
-    assert!(list_after.iter().any(|ap| ap.config.ssid == "UpdatedAP")); // First one still there
+    assert!(list_after.iter().any(|ap| ap.config.ssid == "UpdatedAP")); // First
+                                                                        // one still
+                                                                        // there
 }

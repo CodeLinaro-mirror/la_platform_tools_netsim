@@ -1,12 +1,13 @@
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    Mutex,
+};
+
 use crate::{
     modem::ModemImpl,
     parser::{Command, QuotedString},
     traits::CommandExecutor,
     types::{CommandAction, ExecutionResult, HandledCommand},
-};
-use std::sync::{
-    atomic::{AtomicU8, Ordering},
-    Mutex,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

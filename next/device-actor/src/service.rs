@@ -1,20 +1,28 @@
-use crate::device_actor::DeviceActor;
-use crate::error::DeviceError;
-use crate::utils::{chip_kind_to_network_kind, create_capture_and_wrap_streams};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
+
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use capture_api::CaptureSender;
-use device_api::api::{DeviceCreate, DeviceUpdate};
-use device_api::{DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId};
+use device_api::{
+    api::{DeviceCreate, DeviceUpdate},
+    DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId,
+};
 use link_api::LinkClient;
 use netsim_model::chip::{
     Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
-    NetworkKind, PacketSink, PacketStream,
+    PacketSink, PacketStream,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+
+use crate::{
+    device_actor::DeviceActor, error::DeviceError, utils::create_capture_and_wrap_streams,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct InternalDevice {
@@ -45,7 +53,7 @@ impl DeviceActor {
     #[allow(clippy::too_many_arguments)]
     async fn perform_add_chip(
         next_chip_id: &Arc<AtomicU32>,
-        chip_clients: &HashMap<NetworkKind, Box<dyn ChipClient>>,
+        chip_clients: &HashMap<ChipKind, Box<dyn ChipClient>>,
         link_client: &Box<dyn LinkClient>,
         capture_client: &Option<Arc<dyn CaptureSender>>,
         entity: &mut InternalDevice,
@@ -57,8 +65,8 @@ impl DeviceActor {
 
         // 1. Prepare Chip Parameters
         let chip_id = ChipId(next_chip_id.fetch_add(1, Ordering::SeqCst));
-        let network_params = chip_config.network_params.clone();
-        let chip_kind = NetworkKind::from(&network_params);
+        let chip_kind_params = chip_config.chip_kind_params.clone();
+        let chip_kind = ChipKind::from(&chip_kind_params);
 
         // 2. Handle Capture Creation and Stream Wrapping
         // If a capture client is present, wrap the streams to enable packet capture.
@@ -90,7 +98,7 @@ impl DeviceActor {
                 name: chip_config.name.clone(),
                 manufacturer: chip_config.manufacturer.clone(),
                 product_name: chip_config.product_name.clone(),
-                network_params,
+                chip_kind_params,
             },
             device_id: DeviceId(entity.device.id),
         };
@@ -103,7 +111,7 @@ impl DeviceActor {
         // 5. Update Local Device State
         entity.device.chips.push(Chip {
             id: chip_id.0,
-            kind: ChipKind::from(&chip_config.network_params),
+            kind: ChipKind::from(&chip_config.chip_kind_params),
             name: Some(chip_config.name),
             manufacturer: Some(chip_config.manufacturer),
             product_name: Some(chip_config.product_name),
@@ -117,7 +125,7 @@ impl DeviceActor {
 
         // 6. Notify Link Actor
         link_client
-            .notify_chip_added(chip_id, chip_kind.into())
+            .notify_chip_added(chip_id, chip_kind)
             .await
             .expect("Failed to notify LinkActor of chip add");
 
@@ -270,8 +278,7 @@ impl ActorService for DeviceActor {
 
         // Propagate updates to chips
         for chip in entity.device.chips.iter_mut() {
-            let network_kind = chip_kind_to_network_kind(&chip.kind);
-            if let Some(chip_client) = self.chip_clients.get(&network_kind) {
+            if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
                 let mut chip_update = ChipUpdate::default();
 
                 // 1. Propagate Device Position/Orientation if changed
@@ -303,6 +310,8 @@ impl ActorService for DeviceActor {
                         chip_update.variant = u.variant.clone();
                     }
                 }
+
+                // TODO: Propagate SSID update to AP chips if the device name changes
 
                 // 4. Send update if meaningful
                 if chip_update.position.is_some()
@@ -337,8 +346,7 @@ impl ActorService for DeviceActor {
                 self.guid_to_id.remove(guid);
             }
             for chip in &entity.device.chips {
-                let network_kind = chip_kind_to_network_kind(&chip.kind);
-                if let Some(chip_client) = self.chip_clients.get(&network_kind) {
+                if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
                     chip_client
                         .delete(ChipId(chip.id))
                         .await
@@ -391,8 +399,9 @@ impl ActorService for DeviceActor {
             DeviceAction::NotifyChipRemoved(_device_id, chip_id) => {
                 entity.device.chips.retain(|c| c.id != chip_id.0);
                 if entity.device.chips.is_empty() {
-                    // TODO: If entity.device.chips.is_empty(), remove the device itself.
-                    // This requires a way to trigger a self-delete from within the actor.
+                    // TODO: If entity.device.chips.is_empty(), remove the
+                    // device itself. This requires a way to
+                    // trigger a self-delete from within the actor.
                 }
                 self.link_client
                     .notify_chip_removed(chip_id)

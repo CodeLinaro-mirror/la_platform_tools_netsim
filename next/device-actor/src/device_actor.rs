@@ -1,11 +1,13 @@
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicU32, Arc},
+};
+
 use capture_api::CaptureSender;
-use netsim_model::chip::{ChipClient, NetworkKind};
-use std::collections::HashMap;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
+use netsim_model::chip::ChipClient;
 
 pub struct DeviceActor {
-    pub chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>>,
+    pub chip_clients: HashMap<netsim_model::chip::ChipKind, Box<dyn ChipClient>>,
     pub next_chip_id: Arc<AtomicU32>,
     pub capture_client: Option<Arc<dyn CaptureSender>>,
     pub(crate) devices: HashMap<device_api::DeviceId, crate::service::InternalDevice>,
@@ -21,7 +23,7 @@ pub struct DeviceActor {
 
 impl DeviceActor {
     pub fn new(
-        chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>>,
+        chip_clients: HashMap<netsim_model::chip::ChipKind, Box<dyn ChipClient>>,
         next_chip_id: Arc<AtomicU32>,
         capture_client: Option<Arc<dyn CaptureSender>>,
         link_client: Box<dyn link_api::LinkClient>,

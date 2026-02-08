@@ -118,16 +118,19 @@ pub const REPORT_ADDR_OFFSET: usize = 12;
 
 // HCI Commands
 
-/// Set Standard Event Mask (0x0C01) - Enable all events Mask: FF FF FF FF FF FF FF FF
+/// Set Standard Event Mask (0x0C01) - Enable all events Mask: FF FF FF FF FF FF
+/// FF FF
 pub const CMD_SET_EVENT_MASK_STD: &[u8] =
     &[0x01, 0x01, 0x0C, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
 
-/// Set LE Event Mask (0x2001) - Enable all LE events Mask: FF 00 00 00 00 00 00 00
+/// Set LE Event Mask (0x2001) - Enable all LE events Mask: FF 00 00 00 00 00 00
+/// 00
 pub const CMD_LE_SET_EVENT_MASK: &[u8] =
     &[0x01, 0x01, 0x20, 0x08, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
 /// LE Set Scan Parameters (0x200B)
-/// 01 (Cmd) 0B 20 (OpCode) 07 (Len) 00 (Type: Passive) 10 00 (Interval) 10 00 (Window) 00 (OwnAddr) 00 (Filter)
+/// 01 (Cmd) 0B 20 (OpCode) 07 (Len) 00 (Type: Passive) 10 00 (Interval) 10 00
+/// (Window) 00 (OwnAddr) 00 (Filter)
 pub const CMD_LE_SET_SCAN_PARAMS: &[u8] =
     &[0x01, 0x0B, 0x20, 0x07, 0x00, 0x10, 0x00, 0x10, 0x00, 0x00, 0x00];
 

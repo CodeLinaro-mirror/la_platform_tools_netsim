@@ -1,9 +1,11 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::ffi;
 use log::{error, info};
 
-/// SAE Finite Field Cryptography (FFC) or Elliptic Curve Cryptography (ECC) Group
+use crate::ffi;
+
+/// SAE Finite Field Cryptography (FFC) or Elliptic Curve Cryptography (ECC)
+/// Group
 pub enum SaeGroup {
     EccP256 = 19,
 }
@@ -80,8 +82,8 @@ impl SaeStateMachine {
         // 2. Generate Random Scalar and Mask
         // Per hostapd/802.11:
         // We need 'q' (Order of P-256).
-        // Since we don't expose 'q' directly, we rely on FFI to handle modular arithmetic.
-        // We need:
+        // Since we don't expose 'q' directly, we rely on FFI to handle modular
+        // arithmetic. We need:
         //   rand = Rand(32)
         //   mask = Rand(32)
         //   own_commit_scalar = (rand + mask) mod q
@@ -97,7 +99,8 @@ impl SaeStateMachine {
         // Does hostapd support this?
         // hostapd receive:
         //   K = peer_scalar * PWE + peer_element
-        // So yes, as long as we send (scalar, element) such that scalar*PWE + element = rand*PWE.
+        // So yes, as long as we send (scalar, element) such that scalar*PWE + element =
+        // rand*PWE.
 
         // Implementation:
         // rand = ffi::RandBytes(32)
@@ -108,7 +111,8 @@ impl SaeStateMachine {
         // Requires curve order for modular operations.
         // We can hardcode P-256 Order? Or expose it via FFI.
         // Hardcoding P-256 Order is standard.
-        // P-256 Order: FFFFFFFF 00000000 FFFFFFFF FFFFFFFF BCE6FAAD A7179E84 F3B9CAC2 FC632551
+        // P-256 Order: FFFFFFFF 00000000 FFFFFFFF FFFFFFFF BCE6FAAD A7179E84 F3B9CAC2
+        // FC632551
         let p256_order: Vec<u8> = vec![
             0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
             0xFF, 0xFF, 0xBC, 0xE6, 0xFA, 0xAD, 0xA7, 0x17, 0x9E, 0x84, 0xF3, 0xB9, 0xCA, 0xC2,
@@ -135,7 +139,8 @@ impl SaeStateMachine {
 
         // 3. Construct Frame Body
         // Format (802.11-2016 12.4.8.2.2):
-        //   Group (2 bytes) | Scalar (32 bytes) | Element (64 bytes usually - uncompressed)
+        //   Group (2 bytes) | Scalar (32 bytes) | Element (64 bytes usually -
+        // uncompressed)
         let mut body = Vec::new();
         // Group 19 (LE 16-bit)
         body.extend_from_slice(&(SaeGroup::EccP256 as u16).to_le_bytes());
@@ -147,9 +152,9 @@ impl SaeStateMachine {
         }
         body.extend_from_slice(&self.own_commit_scalar);
 
-        // Element (Expect 64 bytes for P-256 uncompressed without header? No, usually 04 + X + Y)
-        // EcP256PointMul returns (04 || X || Y) [65 bytes] or standard uncompressed.
-        // SAE Frame expects just x,y?
+        // Element (Expect 64 bytes for P-256 uncompressed without header? No, usually
+        // 04 + X + Y) EcP256PointMul returns (04 || X || Y) [65 bytes] or
+        // standard uncompressed. SAE Frame expects just x,y?
         // 802.11-2016 9.4.1.25: Finite Cyclic Group field.
         // For ECC: "The x-coordinate ... followed by the y-coordinate"
         // So we strip the '04' prefix if present.
@@ -186,8 +191,9 @@ impl SaeStateMachine {
         let scalar = &body[2..34];
         self.peer_commit_scalar = scalar.to_vec();
 
-        // Extract Element (Remaining bytes, expect 64 or 65? SAE usually sends raw X,Y [64 bytes])
-        // If peer sends 64 bytes, we need to prefix 0x04 for OpenSSL uncompressed format.
+        // Extract Element (Remaining bytes, expect 64 or 65? SAE usually sends raw X,Y
+        // [64 bytes]) If peer sends 64 bytes, we need to prefix 0x04 for
+        // OpenSSL uncompressed format.
         let element_raw = &body[34..];
         if element_raw.len() == 64 {
             self.peer_commit_element = vec![0x04];
@@ -198,9 +204,9 @@ impl SaeStateMachine {
         }
 
         // At this point, we have Peer Scholar & Element.
-        // We can optionally compute K now if we have already sent our commit (Simultaneous) or wait.
-        // Usually, 'process_commit' implies we received it.
-        // If we haven't sent ours, we should 'build_commit' next.
+        // We can optionally compute K now if we have already sent our commit
+        // (Simultaneous) or wait. Usually, 'process_commit' implies we received
+        // it. If we haven't sent ours, we should 'build_commit' next.
 
         // Calculate K if we have everything
         if !self.peer_commit_scalar.is_empty()
@@ -215,7 +221,8 @@ impl SaeStateMachine {
 
     fn process_commit(&mut self) -> Option<()> {
         println!("DEBUG: process_commit started");
-        // K = scalar-op(rand, (elem-op(scalar-op(peer-commit-scalar, PWE), PEER-COMMIT-ELEMENT)))
+        // K = scalar-op(rand, (elem-op(scalar-op(peer-commit-scalar, PWE),
+        // PEER-COMMIT-ELEMENT)))
         // 1. tmp1 = peer_scalar * PWE
         let tmp1 = ffi::EcP256PointMul(&self.pwe, &self.peer_commit_scalar);
         if tmp1.is_empty() {
@@ -260,8 +267,8 @@ impl SaeStateMachine {
         let null_key = vec![0u8; 32];
         let keyseed = ffi::Hmac(ffi::DigestType::SHA256, &null_key, &k);
 
-        // KCK || PMK = KDF-512(keyseed, "SAE KCK and PMK", (own_commit_scalar + peer_commit_scalar) mod q)
-        // We need (scalar + scalar) mod q.
+        // KCK || PMK = KDF-512(keyseed, "SAE KCK and PMK", (own_commit_scalar +
+        // peer_commit_scalar) mod q) We need (scalar + scalar) mod q.
         let p256_order: Vec<u8> = vec![
             0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
             0xFF, 0xFF, 0xBC, 0xE6, 0xFA, 0xAD, 0xA7, 0x17, 0x9E, 0x84, 0xF3, 0xB9, 0xCA, 0xC2,
@@ -270,13 +277,13 @@ impl SaeStateMachine {
         let scalar_sum =
             ffi::BnModAdd(&self.own_commit_scalar, &self.peer_commit_scalar, &p256_order);
 
-        // KDF-512 is not exposed directly. We can use Sha256PrfBits (standard 802.11 KDF) for 512 bits.
-        // But `ffi.rs` doesn't expose `Sha256PrfBits` directly!
-        // We exposed `EcP256...` but missed `Sha256PrfBits` or generic `KDF`.
-        // Using HMAC for KCK/PMK derivation.
-        // We implemented `Sha256PrfBits` in C++ for `EcP256CalculatePwe` but didn't expose it? D'oh.
-        // We can expose `Sha256PrfBits` or just implement it in Rust using `ffi::Hmac`.
-        // `Sha256PrfBits` is simple:
+        // KDF-512 is not exposed directly. We can use Sha256PrfBits (standard 802.11
+        // KDF) for 512 bits. But `ffi.rs` doesn't expose `Sha256PrfBits`
+        // directly! We exposed `EcP256...` but missed `Sha256PrfBits` or
+        // generic `KDF`. Using HMAC for KCK/PMK derivation.
+        // We implemented `Sha256PrfBits` in C++ for `EcP256CalculatePwe` but didn't
+        // expose it? D'oh. We can expose `Sha256PrfBits` or just implement it
+        // in Rust using `ffi::Hmac`. `Sha256PrfBits` is simple:
         //  HMAC(Key, i || Label || Data || Length) loop.
         // Let's implement KDF-512 in Rust using `ffi::Hmac`.
 
@@ -294,7 +301,8 @@ impl SaeStateMachine {
 
         // PMKID = L((own_commit_scalar + peer_commit_scalar) mod q, 0, 128)
         // hostapd says: pmkid = val (scalar_sum) truncated?
-        // 802.11-2016 12.4.8.2.4: PMKID = L(val, 0, 128) -> First 16 bytes of val (scalar_sum).
+        // 802.11-2016 12.4.8.2.4: PMKID = L(val, 0, 128) -> First 16 bytes of val
+        // (scalar_sum).
         if scalar_sum.len() >= 16 {
             self.pmkid = scalar_sum[0..16].to_vec();
         } else {

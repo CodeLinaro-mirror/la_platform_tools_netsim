@@ -1,7 +1,8 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use daemon::netsimd::{run, RunResult};
 use std::process;
+
+use daemon::netsimd::{run, RunResult};
 
 #[tokio::main]
 async fn main() {

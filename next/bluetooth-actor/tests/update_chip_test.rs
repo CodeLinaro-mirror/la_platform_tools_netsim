@@ -1,7 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::world::World;
 use netsim_model::device::Position;
+
+use crate::world::World;
 
 // Feature: Update Chip Properties
 //

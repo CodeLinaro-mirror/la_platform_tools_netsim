@@ -1,13 +1,15 @@
-use crate::error::WifiError;
-use crate::medium::WifiResult;
-use netsim_packets::netlink::hwsim_attr_set::HwsimAttrSet;
-use netsim_packets::netlink::hwsim_frame::HwsimFrame;
-use netsim_packets::netlink::mac80211_hwsim::{TxRate, TxRateFlag};
-use netsim_packets::netlink::NlMsgHdr;
-use netsim_packets::netlink::{HwsimCmd, HwsimMsg, HwsimMsgHdr};
-
 use ap_actor::shared::SharedKeyStore;
-use netsim_packets::ieee80211::MacAddress;
+use netsim_packets::{
+    ieee80211::MacAddress,
+    netlink::{
+        hwsim_attr_set::HwsimAttrSet,
+        hwsim_frame::HwsimFrame,
+        mac80211_hwsim::{TxRate, TxRateFlag},
+        HwsimCmd, HwsimMsg, HwsimMsgHdr, NlMsgHdr,
+    },
+};
+
+use crate::{error::WifiError, medium::WifiResult};
 
 pub const RX_RATE: u32 = 1;
 pub const SIGNAL: u32 = 4294967246; // -50
@@ -52,8 +54,8 @@ pub fn create_encrypted_hwsim_msg(
         };
     let frame_bytes = ieee80211_response.as_bytes();
 
-    // HwsimFrame / HwsimMsg reuses the original flags, we mimic that here via construct_hwsim_msg
-    // but passing specific fields.
+    // HwsimFrame / HwsimMsg reuses the original flags, we mimic that here via
+    // construct_hwsim_msg but passing specific fields.
     construct_hwsim_msg(
         &dest_hwsim_addr.bytes,
         frame_bytes,
@@ -94,8 +96,8 @@ pub fn parse_hwsim_frame(packet: &bytes::Bytes, client_id: u32) -> WifiResult<Hw
             let _ = frame.cookie.ok_or(WifiError::Internal(format!(
                 "Missing cookie attribute in frame for client: {client_id}"
             )))?;
-            // Removed debug logging here to avoid log dependency in utils, or we can add it.
-            // Caller can log if needed.
+            // Removed debug logging here to avoid log dependency in utils, or we can add
+            // it. Caller can log if needed.
             Ok(frame)
         }
         _ => Err(WifiError::Internal(format!(

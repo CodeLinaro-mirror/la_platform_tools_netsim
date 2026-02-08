@@ -1,8 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
+use netsim_packets::{ethernet::MacAddr, ieee80211::management_subtype};
+
 use crate::world::ApWorld;
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::management_subtype;
 
 // ============================================================================
 // Feature: Hostapd CLI Command Support
