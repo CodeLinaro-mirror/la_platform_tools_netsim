@@ -90,14 +90,14 @@ pub trait ActorService: Send + Sync + 'static {
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error>;
 
     /// Called when a get request is received.
     async fn handle_get(
         &self,
         id: Self::Id,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error>;
 
     /// Called when an update request is received.
@@ -105,14 +105,14 @@ pub trait ActorService: Send + Sync + 'static {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error>;
 
     /// Called when a delete request is received for a specific entity.
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error>;
 
     // --- Action Handler (Async) ---
@@ -123,12 +123,12 @@ pub trait ActorService: Send + Sync + 'static {
         &mut self,
         id: Option<Self::Id>,
         action: Self::Action,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error>;
 
     /// Called when a list request is received.
     async fn handle_list(
         &mut self,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error>;
 }

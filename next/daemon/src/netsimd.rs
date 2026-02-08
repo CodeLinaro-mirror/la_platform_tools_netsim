@@ -467,7 +467,13 @@ impl NetsimDaemon {
             Some(Arc::new(capture_client.clone())),
             Box::new(link_client.clone()),
             None,
-            if args.no_shutdown { None } else { Some(Duration::from_secs(15)) },
+            if args.no_shutdown {
+                None
+            } else if let Some(secs) = args.idle_shutdown_timeout {
+                Some(Duration::from_secs(secs))
+            } else {
+                Some(Duration::from_secs(15))
+            },
         );
 
         // Spawn server tasks

@@ -56,6 +56,11 @@ pub struct Args {
     #[arg(long)]
     pub pcap: bool,
 
+    /// Override the default idle shutdown timeout in seconds.
+    /// This is a hidden flag for testing purposes.
+    #[arg(long, hide = true)]
+    pub idle_shutdown_timeout: Option<u64>,
+
     /// Entering Verbose mode
     #[arg(short = 'v', long)]
     pub verbose: bool,

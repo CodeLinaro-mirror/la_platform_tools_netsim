@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use actor_framework::{ActorService, DynContext};
+use actor_framework::{ActorService, Context, DynContext};
 use async_trait::async_trait;
 use capture_api::CaptureSender;
 use device_api::{
@@ -50,20 +50,20 @@ impl InternalDevice {
 }
 
 impl DeviceActor {
-    fn update_idle_state(&mut self) {
-        let has_active_devices = self.devices.values().any(|d| {
-            // Builtin devices (like infra) don't count as "user activity"
-            if d.device.builtin {
-                return false;
-            }
-            true
-        });
+    fn update_idle_state(&mut self, ctx: &mut DynContext<Self>) {
+        let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
 
         if has_active_devices {
             self.has_seen_device = true;
-            self.last_empty_time = None;
-        } else if self.has_seen_device && self.last_empty_time.is_none() {
-            self.last_empty_time = Some(std::time::Instant::now());
+            if let Some(key) = self.idle_timer.take() {
+                ctx.cancel_timer(key);
+            }
+        } else if self.has_seen_device && self.idle_timer.is_none() {
+            if let Some(timeout) = self.idle_timeout {
+                log::info!("DeviceActor: Scheduling idle shutdown in {:?}", timeout);
+                let key = ctx.run_later(timeout, Box::new(Self::on_idle_timeout));
+                self.idle_timer = Some(key);
+            }
         }
     }
 
@@ -156,8 +156,19 @@ impl DeviceActor {
         params: DeviceCreate,
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<DeviceId, DeviceError> {
         log::info!("DeviceActor: Create device {}", params.device_config.name);
+        self.has_seen_device = true;
+        // Cancel startup timer if it exists
+        if let Some(key) = self.startup_timer.take() {
+            ctx.cancel_timer(key);
+        }
+        // Cancel idle timer if it exists
+        if let Some(key) = self.idle_timer.take() {
+            ctx.cancel_timer(key);
+        }
+
         let id = id.unwrap_or_else(|| {
             let id = DeviceId(self.next_device_id);
             self.next_device_id += 1;
@@ -179,13 +190,14 @@ impl DeviceActor {
         .await?;
 
         self.devices.insert(id, entity);
-        self.update_idle_state();
+        self.update_idle_state(ctx);
         Ok(id)
     }
 
     async fn perform_add_chip_by_guid(
         &mut self,
         params: DeviceAddChip,
+        ctx: &mut DynContext<Self>,
     ) -> Result<DeviceActionResult, DeviceError> {
         log::info!("DeviceActor: AddChipByGuid for device {}", params.device_guid);
 
@@ -223,6 +235,7 @@ impl DeviceActor {
                     create_params,
                     params.packet_stream,
                     params.packet_sink,
+                    ctx,
                 )
                 .await?;
 
@@ -237,6 +250,27 @@ impl DeviceActor {
 
             Ok(DeviceActionResult::AddChipByGuidSuccess { device_id: id, chip_id: ChipId(chip_id) })
         }
+    }
+
+    /// Callback for startup timeout
+    pub(crate) fn on_startup_timeout(&mut self, ctx: &mut dyn Context<Self>) {
+        if !self.has_seen_device && self.devices.is_empty() {
+            log::info!(
+                "DeviceActor: Startup timeout reached (no devices connected), shutting down"
+            );
+            ctx.shutdown();
+        }
+        self.startup_timer = None;
+    }
+
+    /// Callback for idle timeout
+    pub(crate) fn on_idle_timeout(&mut self, ctx: &mut dyn Context<Self>) {
+        let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
+        if !has_active_devices {
+            log::info!("DeviceActor: Idle timeout reached, shutting down");
+            ctx.shutdown();
+        }
+        self.idle_timer = None;
     }
 }
 
@@ -254,15 +288,15 @@ impl ActorService for DeviceActor {
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        self.perform_create_device(id, params, None, None).await
+        self.perform_create_device(id, params, None, None, _ctx).await
     }
 
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(self.devices.get(&id).map(|e| e.device.clone()))
     }
@@ -271,7 +305,7 @@ impl ActorService for DeviceActor {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         // Update does not affect device count, so no timeout logic change needed.
         let Some(entity) = self.devices.get_mut(&id) else {
@@ -354,7 +388,7 @@ impl ActorService for DeviceActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         if let Some(entity) = self.devices.remove(&id) {
             if let Some(guid) = &entity.guid {
@@ -373,11 +407,7 @@ impl ActorService for DeviceActor {
                         .expect("Failed to notify LinkActor of chip remove");
                 }
             }
-            if self.devices.is_empty() {
-                self.last_empty_time = Some(std::time::Instant::now());
-            } else {
-                self.update_idle_state();
-            }
+            self.update_idle_state(_ctx);
             Ok(())
         } else {
             Err(DeviceError::DeviceNotFound(id.to_string()))
@@ -388,7 +418,7 @@ impl ActorService for DeviceActor {
         &mut self,
         id: Option<Self::Id>,
         action: Self::Action,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         let Some(id) = id else {
             // Global actions
@@ -398,7 +428,7 @@ impl ActorService for DeviceActor {
                     Ok(DeviceActionResult::Success)
                 }
                 DeviceAction::AddChipByGuid { params } => {
-                    self.perform_add_chip_by_guid(params).await
+                    self.perform_add_chip_by_guid(params, _ctx).await
                 }
                 _ => Err(DeviceError::NotFound("Action requires a device ID".into())),
             };
@@ -458,13 +488,13 @@ impl ActorService for DeviceActor {
             }
             _ => Err(DeviceError::NotFound("Action requires a device ID".into())),
         };
-        self.update_idle_state();
+        self.has_seen_device = true;
         result
     }
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.devices.values().map(|e| e.device.clone()).collect())
     }

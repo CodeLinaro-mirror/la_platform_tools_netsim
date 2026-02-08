@@ -4,7 +4,7 @@ use actor_framework::{ActorLifecycle, DynContext};
 use async_trait::async_trait;
 use netsim_model::chip::ChipId;
 
-use crate::{error::WifiError, wifi_actor::WifiActor};
+use crate::wifi_actor::WifiActor;
 
 /// ID for the AP infrastructure stream
 pub const AP_ID: ChipId = ChipId(u32::MAX);
@@ -12,10 +12,8 @@ pub const AP_ID: ChipId = ChipId(u32::MAX);
 pub const SLIRP_ID: ChipId = ChipId(u32::MAX - 1);
 
 #[async_trait]
-impl ActorLifecycle<ChipId> for WifiActor {
-    type Error = WifiError;
-
-    async fn on_start(&mut self, ctx: &mut DynContext<ChipId>) {
+impl ActorLifecycle for WifiActor {
+    async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
         log::info!("WifiActor started");
 
         if let Some(ap_client) = &self.ap_client {
@@ -77,9 +75,9 @@ impl ActorLifecycle<ChipId> for WifiActor {
 
     async fn on_stream(
         &mut self,
-        chip_id: ChipId,
+        chip_id: Self::Id,
         packet: bytes::Bytes,
-        _ctx: &mut DynContext<ChipId>,
+        _ctx: &mut DynContext<Self>,
     ) {
         if chip_id == AP_ID {
             self.process_ap_packet(packet);
@@ -90,7 +88,7 @@ impl ActorLifecycle<ChipId> for WifiActor {
         }
     }
 
-    async fn on_stream_closed(&mut self, id: ChipId, ctx: &mut DynContext<ChipId>) {
+    async fn on_stream_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
         log::info!("Stream closed for chip {id}");
         ctx.abort(id);
         if let Err(e) = self.handle_delete_impl(id, ctx).await {
@@ -98,7 +96,7 @@ impl ActorLifecycle<ChipId> for WifiActor {
         }
     }
 
-    async fn on_task_closed(&mut self, id: ChipId, ctx: &mut DynContext<ChipId>) {
+    async fn on_task_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
         log::info!("Sink task closed for chip {id}");
         ctx.remove_stream(id);
         if let Err(e) = self.handle_delete_impl(id, ctx).await {

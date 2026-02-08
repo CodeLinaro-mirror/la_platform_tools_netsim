@@ -11,8 +11,11 @@ use crate::world::World;
 //   Then the daemon counts 0 active chips and shuts down
 #[tokio::test]
 async fn test_auto_shutdown_on_chip_removal() {
-    // 1. Start Daemon
-    let mut world = World::new().await;
+    // 1. Start Daemon with 1s timeout
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true;
+    args.idle_shutdown_timeout = Some(1);
+    let mut world = World::new_with_args(args).await;
     let daemon_task = world.spawn_daemon();
 
     // 2. Connect Client (mimic emulator)
@@ -24,9 +27,6 @@ async fn test_auto_shutdown_on_chip_removal() {
     println!("Sending InitialInfo with chip configuration...");
     let mut initial_req = PacketRequest::new();
     let mut chip_info = ChipInfo::new();
-    // name is deprecated but we can set it for completeness or use device_info if
-    // needed chip_info.name = "shutdown-test-chip".to_string(); // 'name' in
-    // ChipInfo is deprecated
 
     // Create a valid Chip model (startup::Chip)
     let mut chip = netsim_proto::startup::Chip::new();
@@ -69,14 +69,25 @@ async fn test_auto_shutdown_on_chip_removal() {
     println!("Dropping client sender to trigger disconnect...");
     drop(client_sender);
 
-    // 5. Wait for shutdown
-    println!("Waiting for daemon shutdown...");
-    let result = tokio::time::timeout(std::time::Duration::from_secs(5), daemon_task).await;
+    // 5. Verify EARLY Check (should NOT be shut down yet)
+    // Timeout is 1s. We wait 0.5s. Daemon should still be running.
+    println!("Verifying daemon is still running at 0.5s...");
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    if daemon_task.is_finished() {
+        panic!("Daemon shut down too early! Timeout was 1s, but finished in <0.5s");
+    }
 
-    // 6. Assert Shutdown
+    // 6. Wait for shutdown (should happen after 1s total)
+    println!("Waiting for daemon shutdown...");
+    // We already waited 0.5s. The idle timeout is 1s.
+    // It should shut down at 1.0s. We allow up to 1.1s (100ms margin).
+    // So we wait an specific 600ms more.
+    let result = tokio::time::timeout(std::time::Duration::from_millis(600), daemon_task).await;
+
+    // 7. Assert Shutdown
     match result {
         Ok(Ok(_)) => println!("Daemon shut down successfully"),
         Ok(Err(e)) => panic!("Daemon task failed: {}", e),
-        Err(_) => panic!("Daemon failed to shut down within timeout"),
+        Err(_) => panic!("Daemon failed to shut down within timeout (took > 1.1s)"),
     }
 }

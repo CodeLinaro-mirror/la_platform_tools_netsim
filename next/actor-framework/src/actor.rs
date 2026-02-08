@@ -89,7 +89,7 @@ use crate::{
 ///         &mut self,
 ///         id: Option<u32>,
 ///         _: MyCreate,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<u32, Self::Error> {
 ///         self.id = id.unwrap_or(0);
 ///         Ok(self.id)
@@ -97,7 +97,7 @@ use crate::{
 ///     async fn handle_get(
 ///         &self,
 ///         _: u32,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<Option<Self::Entity>, Self::Error> {
 ///         Ok(Some(self.clone()))
 ///     }
@@ -105,14 +105,14 @@ use crate::{
 ///         &mut self,
 ///         _: u32,
 ///         _: MyUpdate,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<Self::Entity, Self::Error> {
 ///         Ok(self.clone())
 ///     }
 ///     async fn handle_delete(
 ///         &mut self,
 ///         _: u32,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<(), Self::Error> {
 ///         Ok(())
 ///     }
@@ -120,26 +120,25 @@ use crate::{
 ///         &mut self,
 ///         _: Option<u32>,
 ///         _: MyAction,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<(), Self::Error> {
 ///         Ok(())
 ///     }
 ///     async fn handle_list(
 ///         &mut self,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<Vec<MyActor>, Self::Error> {
 ///         Ok(vec![self.clone()])
 ///     }
 /// }
 ///
 /// #[async_trait]
-/// impl ActorLifecycle<u32> for MyActor {
-///     type Error = MyError;
-///     async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
-///     async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
-///     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
-///     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
-///     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+/// impl ActorLifecycle for MyActor {
+///     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
+///     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
+///     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<Self>) {}
+///     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<Self>) {}
+///     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<Self>) {}
 ///     async fn on_shutdown(&mut self) {}
 /// }
 ///
@@ -159,10 +158,10 @@ use crate::{
 pub struct ResourceActor<T: ActorService> {
     receiver: mpsc::Receiver<ResourceRequest<T>>,
     shutdown_rx: oneshot::Receiver<()>,
-    ctx: FrameworkContext<T::Id>,
+    ctx: FrameworkContext<T>,
 }
 
-impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
+impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
     /// Creates a new `ResourceActor` and its associated `ResourceClient`.
     ///
     /// # Arguments
@@ -199,6 +198,10 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
         loop {
             // Move out of select! to avoid borrow conflicts
             let stream_fut = self.ctx.streams.next();
+            // We need to poll the timers
+            // If the delay queue is empty, peek() returns None, which is fine.
+            let timer_fut = self.ctx.timers.next();
+
             tokio::select! {
                 Some(msg) = self.receiver.recv() => {
                     Self::handle_message(&mut actor, msg, &mut self.ctx).await;
@@ -208,6 +211,10 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
                 }
                 Some((id, msg_opt)) = stream_fut => {
                     Self::handle_stream_event(&mut actor, id, msg_opt, &mut self.ctx).await;
+                }
+                Some(expired) = timer_fut => {
+                    let task = expired.into_inner();
+                    task(&mut actor, &mut self.ctx);
                 }
                 Some(res) = self.ctx.tasks.join_next() => {
                     match res {
@@ -227,7 +234,7 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
         actor: &mut T,
         id: T::Id,
         msg_opt: Option<StreamMessage>,
-        ctx: &mut DynContext<<T as ActorService>::Id>,
+        ctx: &mut DynContext<T>,
     ) {
         match msg_opt {
             Some(msg) => actor.on_stream(id, msg, ctx).await,
@@ -235,11 +242,7 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
         }
     }
 
-    async fn handle_task_closed(
-        actor: &mut T,
-        id: T::Id,
-        ctx: &mut DynContext<<T as ActorService>::Id>,
-    ) {
+    async fn handle_task_closed(actor: &mut T, id: T::Id, ctx: &mut DynContext<T>) {
         actor.on_task_closed(id, ctx).await;
     }
 
@@ -247,11 +250,7 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
         actor.on_shutdown().await;
     }
 
-    async fn handle_message(
-        actor: &mut T,
-        msg: ResourceRequest<T>,
-        ctx: &mut DynContext<<T as ActorService>::Id>,
-    ) {
+    async fn handle_message(actor: &mut T, msg: ResourceRequest<T>, ctx: &mut DynContext<T>) {
         match msg {
             ResourceRequest::Create { params, id, respond_to } => {
                 // Pass the optional ID to the service handle_create method
