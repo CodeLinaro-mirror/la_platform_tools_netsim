@@ -145,6 +145,7 @@ impl FrontendClient {
                     orientation: crate::frontend_converter::from_proto_orientation(
                         req.device.orientation.clone().unwrap_or_default(),
                     ),
+                    builtin: false,
                 };
 
                 let device_create = device_api::api::DeviceCreate {

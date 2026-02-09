@@ -17,30 +17,26 @@ impl ActorLifecycle<device_api::DeviceId> for DeviceActor {
     }
 
     async fn on_tick(&mut self, ctx: &mut DynContext<device_api::DeviceId>) {
-        // If we have devices, we are active.
-        if !self.devices.is_empty() {
-            return;
-        }
-
-        // Case 1: Waiting for first device (Startup Timeout)
-        if !self.has_seen_device {
-            if let Some(timeout) = self.startup_timeout {
-                if self.start_time.elapsed() > timeout {
-                    log::info!("DeviceActor: Startup timeout reached (no devices connected), shutting down");
-                    ctx.shutdown();
-                }
+        // Shutdown immediately if we've had devices previously but now have zero
+        if self.has_seen_device {
+            // Only shutdown if an idle timeout is configured (ignores if --no-shutdown is
+            // passed)
+            if self.last_empty_time.is_some() && self.idle_timeout.is_some() {
+                log::info!("DeviceActor: Last device disconnected. Stopping immediately.");
+                ctx.shutdown();
+                return;
             }
-            return;
-        }
-
-        // Case 2: Devices were present but now empty (Idle Timeout)
-        if let Some(empty_time) = self.last_empty_time {
-            if let Some(timeout) = self.idle_timeout {
-                if empty_time.elapsed() > timeout {
+        } else {
+            // Initial grace period: Shutdown if no devices seen within startup timeout (or
+            // idle_timeout fallback)
+            let period = self.startup_timeout.or(self.idle_timeout);
+            if let Some(timeout) = period {
+                if self.start_time.elapsed() > timeout {
                     log::info!(
-                        "DeviceActor: Idle timeout reached (last device removed), shutting down"
+                        "DeviceActor: Startup timeout reached without any devices. Stopping."
                     );
                     ctx.shutdown();
+                    return;
                 }
             }
         }

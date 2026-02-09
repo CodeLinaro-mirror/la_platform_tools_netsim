@@ -68,7 +68,7 @@ impl ChipClient for WifiClient {
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        Ok(())
+        self.0.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn reset(&self, id: ChipId) -> Result<(), ClientError> {

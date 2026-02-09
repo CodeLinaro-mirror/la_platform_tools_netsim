@@ -185,4 +185,10 @@ impl DeviceClient {
             )),
         }
     }
+
+    /// Shuts down the device actor.
+    pub async fn shutdown(&self) -> Result<(), DeviceError> {
+        debug!("Sending shutdown request");
+        self.inner.shutdown().await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
+    }
 }

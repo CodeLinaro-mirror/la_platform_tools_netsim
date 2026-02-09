@@ -104,6 +104,7 @@ impl World {
                 true,
                 Default::default(),
                 Default::default(),
+                false,
             ),
             chip: DeviceChipCreate {
                 name: "beacon".to_string(),
@@ -206,6 +207,7 @@ impl World {
                 true,
                 Default::default(),
                 Default::default(),
+                false,
             ),
             chip_config: netsim_model::chip::ChipConfig {
                 name: chip_name,

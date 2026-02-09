@@ -433,6 +433,12 @@ impl RadioChipClient {
     }
 }
 
+impl std::fmt::Debug for RadioChipClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RadioChipClient").finish_non_exhaustive()
+    }
+}
+
 #[cfg_attr(feature = "testing", mockall::automock)]
 #[async_trait::async_trait]
 impl ChipClient for RadioChipClient {
@@ -519,7 +525,7 @@ impl ChipClient for RadioChipClient {
 /// and `oneshot` responder boilerplate for each command.
 #[cfg_attr(feature = "testing", mockall::automock)]
 #[async_trait::async_trait]
-pub trait ChipClient: Send + Sync {
+pub trait ChipClient: std::fmt::Debug + Send + Sync {
     async fn create(&self, params: ChipCreate) -> Result<(), ClientError>;
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError>;
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError>;

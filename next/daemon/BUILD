@@ -48,6 +48,7 @@ rust_library(
         "//next/device-api",
         "//next/grpc-server",
         "//next/link-actor",
+        "//next/link-api",
         "//next/model",
         "//next/packet-stream",
         "//next/slirp-actor",
