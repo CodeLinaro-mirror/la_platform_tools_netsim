@@ -15,7 +15,8 @@
 
 # Formats source files according to Google's style guide.
 # By default, formats all files.
-# Use --diff to format files that are different from HEAD.
+# Use --diff to format files that are different from HEAD (including untracked).
+# Use --hook to format files passed as arguments (e.g. for pre-commit).
 
 if [ -z "${BASH_VERSION}" ] || [ "${BASH_VERSION%%.*}" -lt 4 ]; then
   echo "Bash version 4+ is required. Trying to find a newer version."
@@ -40,10 +41,18 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Argument parsing
-FORMAT_ALL=true
-if [[ $# -gt 0 && "$1" == *"--diff"* ]]; then
-  shift
-  FORMAT_ALL=false
+MODE="ALL"
+if [[ $# -gt 0 ]]; then
+  case "$1" in
+    --diff)
+      MODE="DIFF"
+      shift
+      ;;
+    --hook)
+      MODE="HOOK"
+      shift
+      ;;
+  esac
 fi
 
 REPO="$(dirname "$0")/../../.."
@@ -91,7 +100,7 @@ check_taplo_version() {
 check_taplo_version
 
 # Populate file lists based on mode
-if $FORMAT_ALL; then
+if [[ "$MODE" == "ALL" ]]; then
   echo "Gathering all files to format..."
   mapfile -d '' clang_files < <(find src rust next proto ui/ts -type f \( -name '*.cc' -o -name '*.h' -o -name '*.proto' -o -name '*.ts' \) -print0)
   mapfile -d '' rust_files < <(find rust next -type f -name '*.rs' -not -path "*/target/*" -print0)
@@ -102,11 +111,16 @@ if $FORMAT_ALL; then
   mapfile -d '' bazel_files < <(find . -type f \( -name "BUILD" -o -name "MODULE.bazel" -o -name "BUILD.bazel" -o -name "*.bzl" \) -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
   mapfile -d '' toml_files < <(find rust next proto -type f -name 'Cargo.toml' -not -path "*/target/*" -not -path "*/bazel-bin/*" -not -path "*/bazel-netsim/*" -not -path "*/bazel-out/*" -not -path "*/objs/*" -print0)
 else
-  echo "Gathering changed files to format..."
+  echo "Gathering files to format..."
 
-  all_files=("$@")
+  if [[ "$MODE" == "DIFF" ]]; then
+    mapfile -d '' all_files < <(git diff -z --name-only --diff-filter=ACMRTUXB HEAD && git ls-files -z --others --exclude-standard)
+  else # HOOK
+    all_files=("$@")
+  fi
+
   if [ ${#all_files[@]} -eq 0 ]; then
-    echo "No changed files to format."
+    echo "No files to format."
     exit 0
   fi
 
