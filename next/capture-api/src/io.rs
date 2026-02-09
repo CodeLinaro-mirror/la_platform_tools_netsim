@@ -1,25 +1,34 @@
 //! Capture I/O utilities for wrapping streams and sinks with capture logic.
 //!
-//! This module provides wrappers for `PacketStream` and `PacketSink` that automatically
-//! capture packets and invoke a callback for processing (e.g., writing to a PCAP file).
+//! This module provides wrappers for `PacketStream` and `PacketSink` that
+//! automatically capture packets and invoke a callback for processing (e.g.,
+//! writing to a PCAP file).
 //!
-//! The wrappers use an `AtomicBool` flag to dynamically enable/disable capturing without
-//! needing to reconstruct the stream pipeline. This is crucial for performance, as we
-//! only want to incur the cost of capturing when it is actually enabled.
+//! The wrappers use an `AtomicBool` flag to dynamically enable/disable
+//! capturing without needing to reconstruct the stream pipeline. This is
+//! crucial for performance, as we only want to incur the cost of capturing when
+//! it is actually enabled.
 
-use crate::Direction;
+use std::{
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    task::{Context, Poll},
+};
+
 use bytes::Bytes;
 use futures::{Sink, Stream};
 use netsim_model::chip::{ChipId, PacketSink, PacketStream};
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::task::{Context, Poll};
 
-/// A wrapper around `PacketStream` that automatically captures received packets.
+use crate::Direction;
+
+/// A wrapper around `PacketStream` that automatically captures received
+/// packets.
 ///
-/// When packets are read from the inner stream, they are passed to the capture callback
-/// before being returned to the caller, if capturing is enabled.
+/// When packets are read from the inner stream, they are passed to the capture
+/// callback before being returned to the caller, if capturing is enabled.
 ///
 /// This is used for packets received by the device (e.g., from the network).
 pub struct CapturedStream {
@@ -66,8 +75,8 @@ impl Stream for CapturedStream {
 
 /// A wrapper around `PacketSink` that automatically captures sent packets.
 ///
-/// When packets are sent to the inner sink, they are passed to the capture callback
-/// before being forwarded to the inner sink, if capturing is enabled.
+/// When packets are sent to the inner sink, they are passed to the capture
+/// callback before being forwarded to the inner sink, if capturing is enabled.
 ///
 /// This is used for packets sent by the device (e.g., to the network).
 pub struct CapturedSink {

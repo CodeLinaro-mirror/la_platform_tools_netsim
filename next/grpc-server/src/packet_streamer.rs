@@ -1,16 +1,21 @@
-use crate::packet_stream_converter;
+use std::sync::Arc;
+
 use bytes::Bytes;
-use futures::stream::StreamExt;
-use futures::SinkExt;
+use futures::{stream::StreamExt, SinkExt};
 use log::warn;
 use netsim_model::initial_info::ChipInfo;
-use netsim_proto::packet_streamer::{self, PacketRequest, PacketResponse};
-use netsim_proto::packet_streamer_grpc::{self, PacketStreamer};
-use packet_stream::error::{PacketStreamError, Result};
-use packet_stream::transport::traits::{PacketSink, PacketStream};
-use std::sync::Arc;
+use netsim_proto::{
+    packet_streamer::{self, PacketRequest, PacketResponse},
+    packet_streamer_grpc::{self, PacketStreamer},
+};
+use packet_stream::{
+    error::{PacketStreamError, Result},
+    transport::traits::{PacketSink, PacketStream},
+};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+
+use crate::packet_stream_converter;
 
 #[derive(Clone)]
 pub struct PacketStreamerService {
@@ -211,8 +216,9 @@ pub async fn connect(
     let (_mpsc_tx_bridge_out, mpsc_rx_app_in) = mpsc::channel::<Result<Bytes>>(100);
 
     // This bridge is now part of the test, not spawned here.
-    // Note: The caller is responsible for bridging mpsc_rx_bridge_in and mpsc_tx_bridge_out
-    // to the client_send/client_recv if they want a full loop, or just using client directly.
+    // Note: The caller is responsible for bridging mpsc_rx_bridge_in and
+    // mpsc_tx_bridge_out to the client_send/client_recv if they want a full
+    // loop, or just using client directly.
 
     // Create PacketStream and PacketSink for the application
     let app_stream: PacketStream = Box::pin(ReceiverStream::new(mpsc_rx_app_in));

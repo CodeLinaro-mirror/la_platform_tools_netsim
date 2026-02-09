@@ -7,5 +7,4 @@ pub mod tx_packet_state;
 pub mod types;
 pub mod utils;
 
-pub use self::core::Medium;
-pub use self::types::WifiResult;
+pub use self::{core::Medium, types::WifiResult};

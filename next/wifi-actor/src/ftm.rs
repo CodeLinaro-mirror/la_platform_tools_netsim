@@ -18,15 +18,17 @@ const PICOSECONDS_PER_SECOND: u64 = 1_000_000_000_000;
 
 /// Handles an FTM Request packet and generates responses.
 ///
-/// If the packet is a valid FTM Request, this function calculates the distance-based timestamps
-/// (Time of Flight) and returns a list of response frames (FTM Initial + FTM Measurement).
+/// If the packet is a valid FTM Request, this function calculates the
+/// distance-based timestamps (Time of Flight) and returns a list of response
+/// frames (FTM Initial + FTM Measurement).
 pub fn handle_ftm_request(
     packet: &Ieee80211,
     initiator_pos: &Position,
     responder_pos: &Position,
 ) -> Option<Vec<Bytes>> {
     // 1. Verify Packet is Public Action -> FTM Request
-    // We assume the caller checked the basic frame type, but we verify Action content.
+    // We assume the caller checked the basic frame type, but we verify Action
+    // content.
     let (category_val, action_val, trigger) = parse_ftm_request(packet)?;
 
     if category_val != category::PUBLIC || action_val != public_action::FTM_REQUEST {

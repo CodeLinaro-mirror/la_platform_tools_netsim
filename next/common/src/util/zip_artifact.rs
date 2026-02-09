@@ -24,9 +24,8 @@ use std::{
 use log::warn;
 use zip::{result::ZipResult, write::FileOptions, ZipWriter};
 
-use crate::system::netsimd_temp_dir;
-
 use super::time_display::file_current_time;
+use crate::system::netsimd_temp_dir;
 
 /// Recurse all files in root and put it in Vec<PathBuf>
 fn recurse_files(root: &PathBuf) -> Result<Vec<(PathBuf, String)>> {

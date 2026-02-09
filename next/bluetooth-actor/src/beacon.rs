@@ -10,12 +10,13 @@
 //! NOTE: This module is currently missing the complete setup for converting
 //! `BeaconParams` into the appropriate HCI commands for full configuration.
 
-use crate::beacon_utils::construct_data;
-use crate::utils::ToChipError;
-use netsim_model::chip::Chip;
-use netsim_model::chip::{BeaconParams, ChipId};
-use netsim_model::chip_error::ChipError;
+use netsim_model::{
+    chip::{BeaconParams, Chip, ChipId},
+    chip_error::ChipError,
+};
 use rootcanal::Rootcanal;
+
+use crate::{beacon_utils::construct_data, utils::ToChipError};
 
 /// Creates a new `BeaconChip`.
 pub fn create(

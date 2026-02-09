@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::rewriter;
-use crate::{Error, Result};
-use base64::{engine::general_purpose, Engine as _};
 use std::net::SocketAddr;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::TcpStream;
+
+use base64::{engine::general_purpose, Engine as _};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    net::TcpStream,
+};
+
+use crate::{rewriter, Error, Result};
 
 const HTTP_VERSION: &str = "1.1";
 
 /// Establishes a TCP connection to a target address through an HTTP proxy.
 ///
-/// The `Connector` handles the CONNECT request handshake with the proxy, including
-/// optional Basic authentication.
+/// The `Connector` handles the CONNECT request handshake with the proxy,
+/// including optional Basic authentication.
 #[derive(Clone)]
 pub struct Connector {
     proxy_addr: SocketAddr,
@@ -33,7 +36,8 @@ pub struct Connector {
 }
 
 impl Connector {
-    /// Creates a new `Connector` with proxy address and optional authentication details
+    /// Creates a new `Connector` with proxy address and optional authentication
+    /// details
     pub fn new(proxy_addr: SocketAddr, username: Option<String>, password: Option<String>) -> Self {
         Connector { proxy_addr, username, password }
     }
@@ -43,7 +47,8 @@ impl Connector {
         self.proxy_addr
     }
 
-    /// Returns the proxy authorization header if username and password are provided.
+    /// Returns the proxy authorization header if username and password are
+    /// provided.
     pub fn auth_header(&self) -> Option<String> {
         if let (Some(username), Some(password)) = (&self.username, &self.password) {
             let encoded_auth = base64_encode(format!("{}:{}", username, password).as_bytes());
@@ -59,8 +64,8 @@ impl Connector {
 
     /// Establishes a TCP connection to the given address.
     ///
-    /// If the address is on port 80, it will be rewritten to an absolute-form request.
-    /// Otherwise, it will connect directly.
+    /// If the address is on port 80, it will be rewritten to an absolute-form
+    /// request. Otherwise, it will connect directly.
     pub async fn connect(&self, addr: SocketAddr) -> Result<TcpStream> {
         let proxy_addr = self.proxy_addr;
         let auth_header = self.auth_header();
@@ -106,9 +111,12 @@ fn base64_encode(src: &[u8]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use tokio::{
+        io::AsyncReadExt,
+        net::{lookup_host, TcpListener},
+    };
+
     use super::*;
-    use tokio::io::AsyncReadExt;
-    use tokio::net::{lookup_host, TcpListener};
 
     #[tokio::test]
     async fn test_connect() -> Result<()> {

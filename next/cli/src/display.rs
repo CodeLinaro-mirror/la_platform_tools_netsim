@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use netsim_proto::frontend::{ListDeviceResponse, ListLinkResponse};
-use netsim_proto::model::{
-    self,
-    chip::ble_beacon::advertise_settings,
-    chip::ble_beacon::{AdvertiseData, AdvertiseSettings},
+use std::fmt;
+
+use netsim_proto::{
+    frontend::{ListDeviceResponse, ListLinkResponse},
+    model::{
+        self,
+        chip::ble_beacon::{advertise_settings, AdvertiseData, AdvertiseSettings},
+    },
 };
 use protobuf::MessageField;
-use std::fmt;
 
 const INDENT_WIDTH: usize = 2;
 
@@ -53,7 +55,8 @@ impl fmt::Display for Displayer<ListDeviceResponse> {
         while let Some(device) = devices.next() {
             write!(f, "{:indent$}{}", "", Displayer::new(device, self.verbose))?;
             if devices.peek().is_some() {
-                // We print the newline here instead of in the Device displayer because we don't want a newline before the very first device.
+                // We print the newline here instead of in the Device displayer because we don't
+                // want a newline before the very first device.
                 writeln!(f)?;
             }
         }

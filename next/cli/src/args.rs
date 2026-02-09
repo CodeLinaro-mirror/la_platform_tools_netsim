@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::builder::{PossibleValue, TypedValueParser};
-use clap::{Args, Parser, Subcommand, ValueEnum};
-use hex::{decode as hex_to_bytes, FromHexError};
-use netsim_proto::model::chip::ble_beacon::advertise_settings::{
-    AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
-    Interval as IntervalProto, Tx_power as TxPowerProto,
+use std::{fmt, iter, str::FromStr};
+
+use clap::{
+    builder::{PossibleValue, TypedValueParser},
+    Args, Parser, Subcommand, ValueEnum,
 };
+use hex::{decode as hex_to_bytes, FromHexError};
 use netsim_proto::model::chip::ble_beacon::{
+    advertise_settings::{
+        AdvertiseMode as AdvertiseModeProto, AdvertiseTxPower as AdvertiseTxPowerProto,
+        Interval as IntervalProto, Tx_power as TxPowerProto,
+    },
     AdvertiseData as AdvertiseDataProto, AdvertiseSettings as AdvertiseSettingsProto,
 };
-
-use std::fmt;
-use std::iter;
-use std::str::FromStr;
 
 #[derive(Debug, Parser)]
 pub struct NetsimArgs {
@@ -60,7 +60,8 @@ pub enum Command {
     Reset,
     /// Open netsim Web UI
     Gui,
-    /// Control the packet capture functionalities with commands: list, patch, get
+    /// Control the packet capture functionalities with commands: list, patch,
+    /// get
     #[command(subcommand, visible_alias("pcap"))]
     Capture(Capture),
     /// Opens netsim artifacts directory (log, pcaps)
@@ -161,9 +162,11 @@ pub enum BeaconCreate {
 pub struct BeaconCreateBle {
     /// Name of the device to create
     pub device_name: Option<String>,
-    /// Name of the beacon chip to create within the new device. May only be specified if device_name is specified
+    /// Name of the beacon chip to create within the new device. May only be
+    /// specified if device_name is specified
     pub chip_name: Option<String>,
-    /// Bluetooth address of the beacon. Must be a 6-byte hexadecimal string with each byte separated by a colon. Will be generated if not provided
+    /// Bluetooth address of the beacon. Must be a 6-byte hexadecimal string
+    /// with each byte separated by a colon. Will be generated if not provided
     #[arg(long)]
     pub address: Option<String>,
     #[command(flatten)]
@@ -186,7 +189,8 @@ pub struct BeaconPatchBle {
     pub device_name: String,
     /// Name of the beacon chip to modify
     pub chip_name: String,
-    /// Bluetooth address of the beacon. Must be a 6-byte hexadecimal string with each byte separated by a colon
+    /// Bluetooth address of the beacon. Must be a 6-byte hexadecimal string
+    /// with each byte separated by a colon
     #[arg(long)]
     pub address: Option<String>,
     #[command(flatten)]
@@ -201,7 +205,8 @@ pub struct BeaconPatchBle {
 pub struct BeaconRemove {
     /// Name of the device to remove
     pub device_name: String,
-    /// Name of the beacon chip to remove. Can be omitted if the device has exactly 1 chip
+    /// Name of the beacon chip to remove. Can be omitted if the device has
+    /// exactly 1 chip
     pub chip_name: Option<String>,
 }
 
@@ -210,7 +215,8 @@ pub struct BeaconBleAdvertiseData {
     /// Whether the device name should be included in the advertise packet
     #[arg(long, required = false)]
     pub include_device_name: bool,
-    /// Whether the transmission power level should be included in the advertise packet
+    /// Whether the transmission power level should be included in the advertise
+    /// packet
     #[arg(long, required = false)]
     pub include_tx_power_level: bool,
     /// Manufacturer-specific data given as bytes in hexadecimal
@@ -260,9 +266,11 @@ pub struct RssiPatch {
     /// RSSI value in dBm (e.g., -60). Must be between -128 and 127.
     #[arg(allow_hyphen_values = true)]
     pub value: i8,
-    /// Identifier for the sender chip. Defaults to 0 (ANY_CHIP), affecting all senders to the specified receiver.
+    /// Identifier for the sender chip. Defaults to 0 (ANY_CHIP), affecting all
+    /// senders to the specified receiver.
     pub sender_id: Option<u32>,
-    /// Identifier for the receiver chip. Defaults to 0 (ANY_CHIP), affecting all receivers from the specified sender.
+    /// Identifier for the receiver chip. Defaults to 0 (ANY_CHIP), affecting
+    /// all receivers from the specified sender.
     pub receiver_id: Option<u32>,
 }
 
@@ -298,10 +306,12 @@ pub struct BeaconBleScanResponseData {
     /// Whether the device name should be included in the scan response packet
     #[arg(long, required = false)]
     pub scan_response_include_device_name: bool,
-    /// Whether the transmission power level should be included in the scan response packet
+    /// Whether the transmission power level should be included in the scan
+    /// response packet
     #[arg(long, required = false)]
     pub scan_response_include_tx_power_level: bool,
-    /// Manufacturer-specific data to include in the scan response packet given as bytes in hexadecimal
+    /// Manufacturer-specific data to include in the scan response packet given
+    /// as bytes in hexadecimal
     #[arg(long, value_name = "MANUFACTURER_DATA")]
     pub scan_response_manufacturer_data: Option<ParsableBytes>,
 }
@@ -432,7 +442,8 @@ pub enum Capture {
 
 #[derive(Debug, Args, PartialEq, Default)]
 pub struct ListCapture {
-    /// Optional strings of pattern for captures to list. Possible filter fields include Capture ID, Device Name, and Chip Kind
+    /// Optional strings of pattern for captures to list. Possible filter fields
+    /// include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
     /// Continuously print Capture information every second
     #[arg(short, long)]
@@ -444,13 +455,15 @@ pub struct PatchCapture {
     /// Packet capture state
     #[arg(value_enum, ignore_case = true)]
     pub state: OnOffState,
-    /// Optional strings of pattern for captures to patch. Possible filter fields include Capture ID, Device Name, and Chip Kind
+    /// Optional strings of pattern for captures to patch. Possible filter
+    /// fields include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
 pub struct GetCapture {
-    /// Optional strings of pattern for captures to get. Possible filter fields include Capture ID, Device Name, and Chip Kind
+    /// Optional strings of pattern for captures to get. Possible filter fields
+    /// include Capture ID, Device Name, and Chip Kind
     pub patterns: Vec<String>,
     /// Directory to store downloaded capture file(s)
     #[arg(short = 'o', long)]

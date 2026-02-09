@@ -22,6 +22,7 @@ pub mod test_utils;
 
 pub use modem::{Modem, ModemEvent};
 pub use modem_network::{ModemCallbacks, ModemNetworkInterface};
-pub use modem_network_simulator::ModemNetworkSimulator as ModemService;
-pub use modem_network_simulator::{ModemNetworkSimulator, ScheduledEvent};
+pub use modem_network_simulator::{
+    ModemNetworkSimulator as ModemService, ModemNetworkSimulator, ScheduledEvent,
+};
 pub use types::{Callbacks, CallbacksExt, ModemError, ModemId, NetworkCallbacks};

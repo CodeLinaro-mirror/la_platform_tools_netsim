@@ -2,11 +2,12 @@
 
 //! Defines structures for IPv4 and IPv6 headers using `zerocopy`.
 
-use crate::utils::general::ParseResult;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
     U32,
 };
+
+use crate::utils::general::ParseResult;
 
 // Protocol numbers
 pub const IP_P_HOPOPTS: u8 = 0;
@@ -42,7 +43,8 @@ impl Ipv4Header {
         self.version_ihl >> 4
     }
 
-    /// Returns the Internet Header Length (IHL), which is the number of 32-bit words in the header.
+    /// Returns the Internet Header Length (IHL), which is the number of 32-bit
+    /// words in the header.
     pub fn ihl(&self) -> u8 {
         self.version_ihl & 0x0f
     }
@@ -108,7 +110,8 @@ pub struct Ipv6HopByHopHeader {
 }
 
 impl Ipv6HopByHopHeader {
-    /// Parses an `Ipv6HopByHopHeader` from the beginning of the given byte slice.
+    /// Parses an `Ipv6HopByHopHeader` from the beginning of the given byte
+    /// slice.
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, Ipv6HopByHopHeader>> {
         let (header, _) = Ref::<&[u8], Ipv6HopByHopHeader>::from_prefix(bytes).ok()?;
         let header_len = header.header_length();

@@ -1,11 +1,13 @@
 //! # ActorLifecycle Trait
 //!
-//! The `ActorLifecycle` trait defines the contract for an actor's lifecycle hooks.
-//! This allows the Actor Implementation to perform operations outside of ActorService handlers.
+//! The `ActorLifecycle` trait defines the contract for an actor's lifecycle
+//! hooks. This allows the Actor Implementation to perform operations outside of
+//! ActorService handlers.
 
-use crate::DynContext;
 use async_trait::async_trait;
 use bytes::Bytes;
+
+use crate::DynContext;
 
 pub type StreamMessage = Bytes;
 
@@ -15,7 +17,8 @@ pub type StreamMessage = Bytes;
 /// ("When I am invoked"). It allows the actor's context to respond to
 /// framework-level events like startup, shutdown, and timer ticks.
 ///
-/// This allows the Actor Implementation to perform operations outside of ActorService handlers.
+/// This allows the Actor Implementation to perform operations outside of
+/// ActorService handlers.
 #[async_trait]
 pub trait ActorLifecycle<Id>: Send + 'static
 where

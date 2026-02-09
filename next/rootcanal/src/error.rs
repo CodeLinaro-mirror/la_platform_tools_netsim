@@ -3,8 +3,8 @@
 //! This module defines the [`enum@Error`] enum, which represents all possible
 //! errors that can occur in this crate.
 
-use std::io;
-use std::num::ParseIntError;
+use std::{io, num::ParseIntError};
+
 use thiserror::Error;
 
 /// Represents all possible errors that can occur in this crate.

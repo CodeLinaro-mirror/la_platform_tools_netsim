@@ -6,15 +6,18 @@
 //! LLC and SNAP structures from the `llc` module. It includes functions
 //! for converting between these types and for serializing to/from JSON strings.
 
-use crate::llc::{LlcHeader, LlcSnapHeader, SnapHeader};
-use serde::{Deserialize, Serialize};
 use std::{fmt, num::ParseIntError};
+
+use serde::{Deserialize, Serialize};
+
+use crate::llc::{LlcHeader, LlcSnapHeader, SnapHeader};
 
 /// A custom error type for JSON operations and conversions related to LLC/SNAP.
 #[derive(Debug)]
 pub enum JsonError {
     SerdeJsonError(serde_json::Error),
-    /// Indicates an error during conversion from a JSON representation to a zerocopy type.
+    /// Indicates an error during conversion from a JSON representation to a
+    /// zerocopy type.
     HexParseError(String),
     /// Required field missing for conversion (e.g. OUI for SNAP).
     ConversionError(String),
@@ -46,7 +49,8 @@ impl From<ParseIntError> for JsonError {
     }
 }
 
-/// Represents the fields within the "llc" JSON object, compatible with `tshark`.
+/// Represents the fields within the "llc" JSON object, compatible with
+/// `tshark`.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JsonLlcFields {
     #[serde(rename = "llc.dsap")]
@@ -177,8 +181,10 @@ pub fn from_json_string(json_str: &str) -> Result<LlcSnapHeader, JsonError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ethernet::ether_type;
-    use crate::llc::{control_field, sap};
+    use crate::{
+        ethernet::ether_type,
+        llc::{control_field, sap},
+    };
 
     #[test]
     fn test_llc_snap_header_json_serialization_deserialization() {

@@ -1,16 +1,21 @@
-use crate::bt_pcap::BluetoothH4Writer;
-use crate::capture_actor::CaptureActor;
-use crate::error::CaptureError;
-use crate::writer::CaptureWriter;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::SystemTime,
+};
+
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::SystemTime;
+use crate::{
+    bt_pcap::BluetoothH4Writer, capture_actor::CaptureActor, error::CaptureError,
+    writer::CaptureWriter,
+};
 
 /// Entity representing a packet capture for a specific chip.
 ///
@@ -69,7 +74,8 @@ impl CaptureActor {
         _ctx: &mut DynContext<ChipId>,
     ) -> Result<(), CaptureError> {
         if entity.info.enabled == enabled {
-            // Even if enabled matches, we might need to create writer if it is missing (e.g. from create flow)
+            // Even if enabled matches, we might need to create writer if it is missing
+            // (e.g. from create flow)
             if enabled && !self.writers.contains_key(&entity.info.chip_id) {
                 // proceed to creation
             } else {
@@ -128,7 +134,7 @@ impl CaptureActor {
             path.join(&filename)
         };
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
-            ChipKind::BLUETOOTH | ChipKind::BleBeacon => {
+            ChipKind::BLUETOOTH => {
                 log::info!("Creating capture file: {}", filepath.display());
                 Box::new(BluetoothH4Writer::new(&filepath)?)
             }

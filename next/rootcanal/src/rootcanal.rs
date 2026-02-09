@@ -2,14 +2,21 @@
 
 //! This module defines common Bluetooth data types, such as addresses.
 
-use crate::controller::Callbacks as ControllerCallbacks;
-use crate::controller::Id as ControllerId;
-use crate::controller::{BtOps, Controller, ControllerImpl, Stats};
-use crate::error::{Error, Result};
-use crate::types::{Address, Phy};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, Weak},
+};
+
 use bytes::Bytes;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, Weak};
+
+use crate::{
+    controller::{
+        BtOps, Callbacks as ControllerCallbacks, Controller, ControllerImpl, Id as ControllerId,
+        Stats,
+    },
+    error::{Error, Result},
+    types::{Address, Phy},
+};
 
 /// The callbacks for Bluetooth
 pub trait Callbacks: Send + Sync {
@@ -67,7 +74,8 @@ impl Rootcanal {
         Arc::new(Self { controllers: Mutex::new(HashMap::new()), callbacks })
     }
 
-    /// Creates a new Bluetooth controller with a unique id and possibly non-unique address
+    /// Creates a new Bluetooth controller with a unique id and possibly
+    /// non-unique address
     pub fn add_controller(
         self: &Arc<Self>,
         id: ControllerId,
@@ -84,7 +92,8 @@ impl Rootcanal {
         Ok(())
     }
 
-    /// Creates a new Bluetooth controller with a unique id and possibly non-unique address
+    /// Creates a new Bluetooth controller with a unique id and possibly
+    /// non-unique address
     pub fn new_controller(
         self: &Arc<Self>,
         id: ControllerId,
@@ -208,11 +217,14 @@ impl Default for Rootcanal {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        ffi::c_int,
+        str::FromStr,
+        sync::atomic::{AtomicU32, Ordering},
+    };
+
     use super::*;
     use crate::types::Address;
-    use std::ffi::c_int;
-    use std::str::FromStr;
-    use std::sync::atomic::{AtomicU32, Ordering};
 
     struct MockCallbacks {
         drop_packet: bool,
@@ -251,7 +263,8 @@ mod tests {
         }
     }
 
-    /// Test helper to create a Bluetooth instance and a specified number of controllers.
+    /// Test helper to create a Bluetooth instance and a specified number of
+    /// controllers.
     fn setup_bluetooth_with_controllers(bluetooth: &Arc<Rootcanal>, num_controllers: u32) {
         for i in 1..=num_controllers {
             let addr = Address::from_str(&format!("01:02:03:04:05:{:02X}", i)).unwrap();

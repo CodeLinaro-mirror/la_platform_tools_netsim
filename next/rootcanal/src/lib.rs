@@ -5,12 +5,12 @@
 //! # Bluetooth Controller
 //!
 //! This crate provides a simplified interface for interacting with a Rootcanal
-//! emulated Bluetooth controller. It is designed to be used in testing and simulation scenarios.
+//! emulated Bluetooth controller. It is designed to be used in testing and
+//! simulation scenarios.
 //!
 //! The main entry point is the [`Rootcanal`] struct, which represents the
 //! Bluetooth subsystem. It provides methods for creating and managing
 //! emulated Bluetooth controllers.
-//!
 // The [`rootcanal`] module contains the core Rootcanal implementation.
 //!
 //! The [`error`] module defines the error types used in this crate.
@@ -19,7 +19,6 @@
 //! module is not intended to be used directly by consumers of this crate.
 //!
 //! ## Example
-//!
 
 pub mod controller;
 pub mod error;
@@ -33,12 +32,12 @@ pub use types::{Address, Phy};
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::controller::Callbacks as ControllerCallbacks;
-    use crate::types::Address;
+    use std::{ffi::c_int, str::FromStr};
+
     use bytes::Bytes;
-    use std::ffi::c_int;
-    use std::str::FromStr;
+
+    use super::*;
+    use crate::{controller::Callbacks as ControllerCallbacks, types::Address};
 
     struct MockRootcanalCallbacks;
     impl rootcanal::Callbacks for MockRootcanalCallbacks {

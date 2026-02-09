@@ -2,10 +2,11 @@
 
 //! Defines the ARP (Address Resolution Protocol) header.
 
-use crate::utils::general::ParseResult;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
 };
+
+use crate::utils::general::ParseResult;
 
 pub const ARP_OP_REQUEST: u16 = 1;
 pub const ARP_OP_REPLY: u16 = 2;

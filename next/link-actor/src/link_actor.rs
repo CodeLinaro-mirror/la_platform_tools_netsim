@@ -1,8 +1,9 @@
 // Copyright 2025 The Android Open Source Project
 
+use std::collections::HashMap;
+
 use link_api::Link;
 use netsim_model::chip::{ChipId, ChipKind};
-use std::collections::HashMap;
 
 /// Context for LinkActor.
 ///

@@ -1,13 +1,17 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::ffi::{AesWrap, DigestType, Hmac};
-use crate::ApError;
-
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::eapol::{
-    EapolHeader, EapolKeyFrame, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::eapol::{
+        EapolHeader, EapolKeyFrame, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
+    },
 };
 use zerocopy::{FromBytes, IntoBytes};
+
+use crate::{
+    ffi::{AesWrap, DigestType, Hmac},
+    ApError,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum WpaState {
@@ -34,7 +38,8 @@ pub struct WpaAuthenticator {
 }
 
 const EAPOL_HEADER_LEN: usize = 4;
-// KeyDesc(1) + KeyInfo(2) + KeyLen(2) + Replay(8) + Nonce(32) + IV(16) + RSC(8) + ID(8) = 77
+// KeyDesc(1) + KeyInfo(2) + KeyLen(2) + Replay(8) + Nonce(32) + IV(16) + RSC(8)
+// + ID(8) = 77
 const KEY_FRAME_FIXED_LEN: usize = 77;
 const MIC_OFFSET: usize = EAPOL_HEADER_LEN + KEY_FRAME_FIXED_LEN; // 81
 const MIC_LEN: usize = 16;
@@ -68,9 +73,10 @@ impl WpaAuthenticator {
 
         // Construct M1
         self.build_eapol_frame(
-            0x0080 | 0x0008 | 0x0200, // Key Info: Key Descriptor Version 2 (HMAC-SHA1-128/AES) | Pairwise | Ack (M1 has Ack set)
-            &[0u8; 16],               // MIC is 0 in M1
-            0,                        // Data Len 0
+            0x0080 | 0x0008 | 0x0200, /* Key Info: Key Descriptor Version 2 (HMAC-SHA1-128/AES)
+                                       * | Pairwise | Ack (M1 has Ack set) */
+            &[0u8; 16], // MIC is 0 in M1
+            0,          // Data Len 0
             &[],
         )
     }
@@ -193,7 +199,8 @@ impl WpaAuthenticator {
     }
 
     fn calc_ptk(&mut self) {
-        // PTK = PRF-384(PMK, "Pairwise key expansion", Min(AA,SA) || Max(AA,SA) || Min(ANonce,SNonce) || Max(ANonce,SNonce))
+        // PTK = PRF-384(PMK, "Pairwise key expansion", Min(AA,SA) || Max(AA,SA) ||
+        // Min(ANonce,SNonce) || Max(ANonce,SNonce))
         let label = b"Pairwise key expansion";
         let mut data = Vec::new();
 
@@ -254,10 +261,11 @@ impl WpaAuthenticator {
     }
 
     fn verify_mic(&self, frame: &[u8], received_mic: &[u8]) -> bool {
-        // To verify, we must zero out the MIC field in the frame, calculate, and compare.
+        // To verify, we must zero out the MIC field in the frame, calculate, and
+        // compare.
         let mut frame_copy = frame.to_vec();
-        // EAPOL Header (4) + Descr(1) + Info(2) + Len(2) + Replay(8) + Nonce(32) + IV(16) + RSC(8) + ID(8) = 81
-        // Range 81..97 is MIC.
+        // EAPOL Header (4) + Descr(1) + Info(2) + Len(2) + Replay(8) + Nonce(32) +
+        // IV(16) + RSC(8) + ID(8) = 81 Range 81..97 is MIC.
         if frame_copy.len() < MIC_END {
             return false;
         }

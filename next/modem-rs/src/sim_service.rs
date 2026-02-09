@@ -1,16 +1,19 @@
 // src/sim_service.rs
 
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU8, Ordering},
+        Mutex,
+    },
+};
+
 use crate::{
     config::{FileSystem, SimProfile},
     modem::ModemImpl,
     parser::{Command, QuotedString},
     traits::CommandExecutor,
     types::{ExecutionResult, HandledCommand, AT_ERROR, AT_OK, DEFAULT_PIN},
-};
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicU8, Ordering},
-    Mutex,
 };
 
 const DEFAULT_PUK: &str = "12345678";

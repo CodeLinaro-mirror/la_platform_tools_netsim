@@ -13,14 +13,17 @@
 // limitations under the License.
 
 //! Conversion between Rust and C configurations.
-use crate::libslirp_sys::{self, SLIRP_MAX_DNS_SERVERS};
+use std::{
+    ffi::CString,
+    io,
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+    path::PathBuf,
+};
+
 use log::warn;
-use std::ffi::CString;
-use std::io;
-use std::net::SocketAddr;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
-use std::path::PathBuf;
 use tokio;
+
+use crate::libslirp_sys::{self, SLIRP_MAX_DNS_SERVERS};
 
 /// The maximum number of DNS servers supported by libslirp.
 const MAX_DNS_SERVERS: usize = SLIRP_MAX_DNS_SERVERS as usize;
@@ -95,8 +98,9 @@ pub struct SlirpConfig {
 impl Default for SlirpConfig {
     /// Creates a new `SlirpConfig` with default values.
     ///
-    /// The default configuration has IPv4 and IPv6 enabled on a private network,
-    /// with DHCP starting at `10.0.2.16` and a DNS server at `10.0.2.3`.
+    /// The default configuration has IPv4 and IPv6 enabled on a private
+    /// network, with DHCP starting at `10.0.2.16` and a DNS server at
+    /// `10.0.2.3`.
     fn default() -> Self {
         SlirpConfig {
             version: 5,
@@ -159,18 +163,21 @@ pub struct SlirpConfigs {
     // TODO: add other fields
 }
 
-/// Asynchronously looks up the IP addresses for a given hostname or comma-separated list of hostnames.
+/// Asynchronously looks up the IP addresses for a given hostname or
+/// comma-separated list of hostnames.
 ///
-/// Each hostname in the input string is resolved using `tokio::net::lookup_host`.
-/// The port in the resolved `SocketAddr` will be 0.
+/// Each hostname in the input string is resolved using
+/// `tokio::net::lookup_host`. The port in the resolved `SocketAddr` will be 0.
 ///
 /// # Arguments
 ///
-/// * `host_dns` - A string containing a single hostname or a comma-separated list of hostnames.
+/// * `host_dns` - A string containing a single hostname or a comma-separated
+///   list of hostnames.
 ///
 /// # Returns
 ///
-/// A `Result` containing a `Vec` of `SocketAddr` on success, or an `io::Error` on failure.
+/// A `Result` containing a `Vec` of `SocketAddr` on success, or an `io::Error`
+/// on failure.
 pub async fn lookup_host_dns(host_dns: &str) -> io::Result<Vec<SocketAddr>> {
     let mut set = tokio::task::JoinSet::new();
     if host_dns.is_empty() {
@@ -188,11 +195,12 @@ pub async fn lookup_host_dns(host_dns: &str) -> io::Result<Vec<SocketAddr>> {
     Ok(addrs)
 }
 
-/// Converts a slice of `SocketAddr` into an array of `libslirp_sys::sockaddr_storage`.
+/// Converts a slice of `SocketAddr` into an array of
+/// `libslirp_sys::sockaddr_storage`.
 ///
-/// If the input slice contains more than `MAX_DNS_SERVERS` addresses, a warning is logged,
-/// and only the first `MAX_DNS_SERVERS` addresses are converted. The remaining entries
-/// in the output array will be default-initialized.
+/// If the input slice contains more than `MAX_DNS_SERVERS` addresses, a warning
+/// is logged, and only the first `MAX_DNS_SERVERS` addresses are converted. The
+/// remaining entries in the output array will be default-initialized.
 ///
 /// # Arguments
 ///
@@ -200,7 +208,8 @@ pub async fn lookup_host_dns(host_dns: &str) -> io::Result<Vec<SocketAddr>> {
 ///
 /// # Returns
 ///
-/// An array of `libslirp_sys::sockaddr_storage` containing the converted addresses.
+/// An array of `libslirp_sys::sockaddr_storage` containing the converted
+/// addresses.
 fn to_socketaddr_storage(dns: &[SocketAddr]) -> [libslirp_sys::sockaddr_storage; MAX_DNS_SERVERS] {
     let mut result = [libslirp_sys::sockaddr_storage::default(); MAX_DNS_SERVERS];
     if dns.len() > MAX_DNS_SERVERS {
@@ -215,9 +224,9 @@ fn to_socketaddr_storage(dns: &[SocketAddr]) -> [libslirp_sys::sockaddr_storage;
 impl SlirpConfigs {
     /// Creates a new `SlirpConfigs` instance from a Rust `SlirpConfig`.
     ///
-    /// This function converts the Rust configuration into the "C" representation
-    /// used by libslirp, handling string conversions and storing necessary Rust
-    /// data to be referenced by the "C" struct.
+    /// This function converts the Rust configuration into the "C"
+    /// representation used by libslirp, handling string conversions and
+    /// storing necessary Rust data to be referenced by the "C" struct.
     ///
     /// # Arguments
     ///
@@ -296,8 +305,9 @@ impl SlirpConfigs {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tokio::runtime::Runtime;
+
+    use super::*;
 
     /// Tests the default values of the `SlirpConfig` struct.
     #[test]
@@ -337,7 +347,8 @@ mod tests {
         assert_eq!(config.host_dns.len(), 0);
     }
 
-    /// Tests the creation of a `SlirpConfigs` instance from a default `SlirpConfig`.
+    /// Tests the creation of a `SlirpConfigs` instance from a default
+    /// `SlirpConfig`.
     #[test]
     fn test_slirp_configs_new() {
         let rust_config = SlirpConfig::default();
@@ -391,14 +402,17 @@ mod tests {
         let result = to_socketaddr_storage(&dns);
         assert_eq!(result.len(), MAX_DNS_SERVERS);
         for i in 0..dns.len() {
-            assert_ne!(result[i].ss_family, 0); // Converted addresses should have a non-zero family
+            assert_ne!(result[i].ss_family, 0); // Converted addresses should
+                                                // have a non-zero family
         }
         for i in dns.len()..MAX_DNS_SERVERS {
-            assert_eq!(result[i].ss_family, 0); // Remaining entries should be default
+            assert_eq!(result[i].ss_family, 0); // Remaining entries should be
+                                                // default
         }
     }
 
-    /// Tests the `to_socketaddr_storage` function with a valid input slice at the maximum allowed size.
+    /// Tests the `to_socketaddr_storage` function with a valid input slice at
+    /// the maximum allowed size.
     #[test]
     fn test_to_socketaddr_storage_valid_input_at_max() {
         let dns = [
@@ -414,7 +428,8 @@ mod tests {
         }
     }
 
-    /// Tests the `to_socketaddr_storage` function when the input slice exceeds the maximum allowed size.
+    /// Tests the `to_socketaddr_storage` function when the input slice exceeds
+    /// the maximum allowed size.
     #[test]
     fn test_to_socketaddr_storage_input_exceeds_max() {
         let dns = [

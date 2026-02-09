@@ -1,14 +1,24 @@
 //! # ActorService Trait
 //!
-//! The `ActorService` trait defines the contract that every resource (User, Product, Order, …) must implement to be managed by the generic `ResourceActor`. It specifies associated types for IDs, DTOs, actions, context, and errors, and provides lifecycle hooks (`handle_create`, `handle_update`, `handle_delete`, `handle_action`). Implementing this trait enables the framework to offer a uniform CRUD + Action API for any domain model.
+//! The `ActorService` trait defines the contract that every resource (User,
+//! Product, Order, …) must implement to be managed by the generic
+//! `ResourceActor`. It specifies associated types for IDs, DTOs, actions,
+//! context, and errors, and provides lifecycle hooks (`handle_create`,
+//! `handle_update`, `handle_delete`, `handle_action`). Implementing this trait
+//! enables the framework to offer a uniform CRUD + Action API for any domain
+//! model.
 
-use crate::DynContext;
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+    pin::Pin,
+};
+
 use async_trait::async_trait;
 use bytes::Bytes;
-use std::fmt::{Debug, Display};
-use std::hash::Hash;
-use std::pin::Pin;
 use tokio_stream::Stream;
+
+use crate::DynContext;
 
 pub type StreamMessage = Bytes;
 pub type BoxStream = Pin<Box<dyn Stream<Item = StreamMessage> + Send>>;
@@ -37,11 +47,13 @@ impl<T> ActorId for T where
 /// Trait that any resource must implement to be managed by ResourceActor.
 ///
 /// # Architecture Note
-/// By defining a contract (`ActorService`) that all our resource types (User, Product, Order)
-/// must satisfy, we can write the `ResourceActor` logic *once* and reuse it everywhere.
+/// By defining a contract (`ActorService`) that all our resource types (User,
+/// Product, Order) must satisfy, we can write the `ResourceActor` logic *once*
+/// and reuse it everywhere.
 ///
 /// # Async & Context
-/// This trait is `#[async_trait]` to allow asynchronous operations in hooks (e.g., calling other actors).
+/// This trait is `#[async_trait]` to allow asynchronous operations in hooks
+/// (e.g., calling other actors).
 #[async_trait]
 pub trait ActorService: Send + Sync + 'static {
     /// The unique identifier for this entity (e.g., String, Uuid, u64).
@@ -70,8 +82,8 @@ pub trait ActorService: Send + Sync + 'static {
     // --- Lifecycle Hooks (Async) ---
     //
     /// These hooks are called sequentially in the actor's run loop.
-    /// Blocking logic or long-running CPU tasks here will block the entire actor.
-    /// Use `ctx.spawn()` for heavy tasks.
+    /// Blocking logic or long-running CPU tasks here will block the entire
+    /// actor. Use `ctx.spawn()` for heavy tasks.
 
     /// Called when a create request is received.
     async fn handle_create(

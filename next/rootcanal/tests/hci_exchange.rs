@@ -1,6 +1,12 @@
 // Copyright 2023 The Android Open Source Project
 
-//! Test for verifying the exchange of HCI packets with the rootcanal controller.
+//! Test for verifying the exchange of HCI packets with the rootcanal
+//! controller.
+
+use std::{
+    str::FromStr,
+    sync::{Arc, Once},
+};
 
 use bytes::Bytes;
 use env_logger;
@@ -10,11 +16,10 @@ use rootcanal::{
     rootcanal::{Callbacks as RootcanalCallbacks, Rootcanal},
     types::{Address, Phy},
 };
-use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Once;
-use tokio::sync::mpsc;
-use tokio::time::{sleep, timeout, Duration};
+use tokio::{
+    sync::mpsc,
+    time::{sleep, timeout, Duration},
+};
 
 static INIT: Once = Once::new();
 
@@ -93,15 +98,14 @@ async fn assert_command_complete(receiver: &mut mpsc::Receiver<Vec<u8>>, lsb: u8
 // Verifies the end-to-end flow of sending HCI commands to a controller and
 // ensuring the correct link-layer advertising packet is generated and transmitted.
 // This test simulates a Bluetooth host by:
-// 1. Creating two controllers: one to act as the device under test (DUT) and
-//    another to act as a sniffer.
-// 2. Sending a sequence of HCI commands to the DUT to configure and enable
-//    legacy advertising (Reset, Set Adv Params, Set Adv Data, Set Adv Enable).
+// 1. Creating two controllers: one to act as the device under test (DUT) and another to act as a
+//    sniffer.
+// 2. Sending a sequence of HCI commands to the DUT to configure and enable legacy advertising
+//    (Reset, Set Adv Params, Set Adv Data, Set Adv Enable).
 // 3. Verifying that the DUT responds with a Command Complete event for each command.
 // 4. Capturing the resulting link-layer packet from the sniffer.
-// 5. Parsing the captured packet as a LeLegacyAdvertisingPdu and asserting that
-//    its contents (source address, advertising data) match the parameters
-//    configured via HCI.
+// 5. Parsing the captured packet as a LeLegacyAdvertisingPdu and asserting that its contents
+//    (source address, advertising data) match the parameters configured via HCI.
 #[tokio::test]
 async fn test_hci_exchange() {
     test_hci_exchange_internal().await
@@ -170,13 +174,14 @@ async fn test_hci_exchange_internal() {
 
     // Parse the packet using netsim_packets
     // TODO: Include LinkLayer packets
-    //    use rootcanal_rs::packets::link_layer::{Address as LlAddress, LeLegacyAdvertisingPdu};
-    //    let parsed = LeLegacyAdvertisingPdu::decode(&packet).unwrap().0;
+    //    use rootcanal_rs::packets::link_layer::{Address as LlAddress,
+    // LeLegacyAdvertisingPdu};    let parsed =
+    // LeLegacyAdvertisingPdu::decode(&packet).unwrap().0;
     //
     //    // Verify the advertising PDU
     //    let mut expected_addr = [0; 8];
-    //    expected_addr[..6].copy_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x02]);
-    //    assert_eq!(
+    //    expected_addr[..6].copy_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x00,
+    // 0x02]);    assert_eq!(
     //        parsed.source_address(),
     //        LlAddress::try_from(u64::from_le_bytes(expected_addr)).unwrap()
     //    );

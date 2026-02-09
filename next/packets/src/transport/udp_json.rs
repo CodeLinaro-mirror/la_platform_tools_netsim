@@ -2,8 +2,9 @@
 
 //! JSON serialization for UDP headers.
 
-use crate::transport::udp::UdpHeader;
 use serde_json::{Map, Value};
+
+use crate::transport::udp::UdpHeader;
 
 /// Converts a `UdpHeader` to a `serde_json::Map` mimicking `tshark` output.
 pub fn to_json(header: &UdpHeader) -> Map<String, Value> {

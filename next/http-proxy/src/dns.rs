@@ -19,12 +19,14 @@
 /// **Note:** This is not a general-purpose DNS response parser. It is
 /// designed to handle specific record types and response formats.
 use std::convert::TryFrom;
-use std::fmt;
-use std::io::{Cursor, Read, Seek, SeekFrom};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::str;
 #[allow(unused_imports)]
 use std::str::FromStr;
+use std::{
+    fmt,
+    io::{Cursor, Read, Seek, SeekFrom},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    str,
+};
 
 // REGION CURSOR
 

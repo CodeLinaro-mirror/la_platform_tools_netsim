@@ -1,10 +1,10 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::error::LinkError;
-use crate::link_actor::LinkActor;
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use link_api::LinkAction;
+
+use crate::{error::LinkError, link_actor::LinkActor};
 
 #[async_trait]
 impl ActorService for LinkActor {

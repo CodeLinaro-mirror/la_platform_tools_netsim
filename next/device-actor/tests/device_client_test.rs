@@ -2,15 +2,16 @@
 
 //! Device Client Logic Tests.
 //!
-//! This module uses a mock actor client to verify the `DeviceClient` wrapper logic,
-//! ensuring correct serialization and state management without a full actor runtime.
+//! This module uses a mock actor client to verify the `DeviceClient` wrapper
+//! logic, ensuring correct serialization and state management without a full
+//! actor runtime.
 
 use client::DeviceClient;
 use device_actor::DeviceActor;
-use device_api::api::{Chip, DeviceChipCreate, DeviceCreate};
-
-use device_api::DeviceActionResult;
-use device_api::{DeviceConfig, DeviceId};
+use device_api::{
+    api::{Chip, DeviceChipCreate, DeviceCreate},
+    DeviceActionResult, DeviceConfig, DeviceId,
+};
 use netsim_model::chip::{BleBeacon, ChipId};
 
 // Feature: Device Client Logic
@@ -51,8 +52,8 @@ async fn test_device_client_create() {
 }
 
 // Scenario: Client correctly serializes Reset requests
-//   Given a mock Actor Client expecting a PerformAction(Reset) call with a specific ID
-//   When I call reset on the client with a device ID
+//   Given a mock Actor Client expecting a PerformAction(Reset) call with a
+// specific ID   When I call reset on the client with a device ID
 //   Then the mock receives the PerformAction(Reset) request with that ID
 #[tokio::test]
 async fn test_device_client_reset() {
@@ -70,8 +71,8 @@ async fn test_device_client_reset() {
 }
 
 // Scenario: Client correctly serializes Global Reset requests
-//   Given a mock Actor Client expecting a PerformAction(Reset) call with None ID
-//   When I call reset on the client with None
+//   Given a mock Actor Client expecting a PerformAction(Reset) call with None
+// ID   When I call reset on the client with None
 //   Then the mock receives the PerformAction(Reset) request with None
 #[tokio::test]
 async fn test_device_client_global_reset() {
@@ -108,8 +109,9 @@ async fn test_device_client_add_chip() {
     assert_eq!(result_id, device_id);
 }
 
-// Scenario: client.add_chip handles repeated calls by sending AddChipByGuid each time
-//   (The logic of "existing vs new" is handled by the actor, client just delegates)
+// Scenario: client.add_chip handles repeated calls by sending AddChipByGuid
+// each time   (The logic of "existing vs new" is handled by the actor, client
+// just delegates)
 #[tokio::test]
 async fn test_device_client_add_chip_repeated() {
     let mut mock = actor_framework::MockActorClient::<DeviceActor>::new();
@@ -146,7 +148,7 @@ fn create_add_chip_params(guid: &str, chip_name: &str) -> device_api::DeviceAddC
             name: chip_name.to_string(),
             manufacturer: "man-1".to_string(),
             product_name: "prod-1".to_string(),
-            network_params: netsim_model::chip::NetworkParams::Bluetooth(
+            chip_kind_params: netsim_model::chip::ChipKindParams::Bluetooth(
                 netsim_model::chip::BluetoothCreate {
                     address: "00:00:00:00:00:00".to_string(),
                     bt_properties: Default::default(),

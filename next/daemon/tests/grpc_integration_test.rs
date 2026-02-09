@@ -1,14 +1,16 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use crate::world::World;
 use futures::{SinkExt, StreamExt};
-use netsim_proto::common::ChipKind;
-use netsim_proto::frontend::{CreateDeviceRequest, PatchDeviceRequest};
-use netsim_proto::frontend_grpc::FrontendServiceClient;
-use netsim_proto::hci_packet::hcipacket::PacketType;
-use netsim_proto::model::ChipCreate;
-use netsim_proto::model::DeviceCreate;
-use netsim_proto::protobuf::{EnumOrUnknown, MessageField};
+use netsim_proto::{
+    common::ChipKind,
+    frontend::{CreateDeviceRequest, PatchDeviceRequest},
+    frontend_grpc::FrontendServiceClient,
+    hci_packet::hcipacket::PacketType,
+    model::{ChipCreate, DeviceCreate},
+    protobuf::{EnumOrUnknown, MessageField},
+};
+
+use crate::world::World;
 
 // Feature: gRPC Frontend Lifecycle
 //
@@ -125,7 +127,7 @@ async fn test_patch_device_resolution() {
     // 1. Create Device "Resolution-Device"
     let mut beacon = ChipCreate::new();
     beacon.name = "beacon".to_string();
-    beacon.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH_BEACON);
+    beacon.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
     beacon.address = "11:22:33:44:55:66".to_string();
     let mut ble_beacon = netsim_proto::model::chip_create::BleBeaconCreate::new();
     ble_beacon.address = "11:22:33:44:55:66".to_string();
@@ -189,7 +191,7 @@ async fn test_chip_update() {
     // 1. Create Device with 1 Bluetooth Beacon chip
     let mut beacon = ChipCreate::new();
     beacon.name = "beacon0".to_string();
-    beacon.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH_BEACON);
+    beacon.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
     let mut ble_beacon = netsim_proto::model::chip_create::BleBeaconCreate::new();
     ble_beacon.address = "11:22:33:44:55:66".to_string();
     beacon.set_ble_beacon(ble_beacon);
@@ -285,8 +287,9 @@ async fn test_link_wiring_grpc() {
             client,
             "device1",
             "chip1",
-            ChipKind::BLUETOOTH_BEACON,
+            ChipKind::BLUETOOTH,
             "11:11:11:11:11:11",
+            true,
         )
         .await
     };
@@ -296,8 +299,9 @@ async fn test_link_wiring_grpc() {
             client,
             "device2",
             "chip2",
-            ChipKind::BLUETOOTH_BEACON,
+            ChipKind::BLUETOOTH,
             "22:22:22:22:22:22",
+            true,
         )
         .await
     };
@@ -309,7 +313,7 @@ async fn test_link_wiring_grpc() {
     link.sender_id = chip1;
     link.receiver_id = chip2;
     link.rssi = -50;
-    link.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH_BEACON);
+    link.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
 
     let mut create_req = netsim_proto::frontend::CreateLinkRequest::new();
     create_req.link = MessageField::some(link.clone());
@@ -330,7 +334,8 @@ async fn test_link_wiring_grpc() {
     assert_eq!(l.sender_id, chip1);
     assert_eq!(l.receiver_id, chip2);
     assert_eq!(l.rssi, -50);
-    // Internally, BleBeacon maps to Bluetooth ChipKind, so we expect BLUETOOTH here.
+    // Internally, BleBeacon maps to Bluetooth ChipKind, so we expect BLUETOOTH
+    // here.
     assert_eq!(l.kind.enum_value_or_default(), ChipKind::BLUETOOTH);
 
     // 4. Update Link (PatchLink)
@@ -369,13 +374,14 @@ async fn create_test_device(
     chip_name: &str,
     kind: ChipKind,
     address: &str,
+    is_beacon: bool,
 ) -> (u32, u32) {
     let mut chip = ChipCreate::new();
     chip.name = chip_name.to_string();
     chip.kind = EnumOrUnknown::new(kind);
     chip.manufacturer = "Mfg".to_string();
     chip.product_name = "Prod".to_string();
-    if kind == ChipKind::BLUETOOTH_BEACON {
+    if is_beacon {
         let mut ble_beacon = netsim_proto::model::chip_create::BleBeaconCreate::new();
         ble_beacon.address = address.to_string();
         chip.set_ble_beacon(ble_beacon);

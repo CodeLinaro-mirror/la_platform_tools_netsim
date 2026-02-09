@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::world;
 use ap_actor::netsim_model::chip::WifiMode;
-
-use netsim_packets::ieee80211::action::{category, public_action};
-use netsim_packets::ieee80211::{management_subtype, Ieee80211};
+use netsim_packets::ieee80211::{
+    action::{category, public_action},
+    management_subtype, Ieee80211,
+};
 use zerocopy::IntoBytes;
+
+use crate::world;
 
 // ============================================================================
 // Feature: 802.11mc FTM Ranging
@@ -57,8 +59,9 @@ async fn test_ftm_ranging_exchange() {
     // 1. Verify Beacon Advertisement (Extended Capabilities)
     world.then_beacon_is_received(&config.ssid).await;
     // Verify FTM Responder capabilities (Bit 70) in the Beacon.
-    // TODO: Inspect the beacon via rx_from_ap manually if needed, or rely on `then_beacon_is_received` for existence.
-    // For now, we proceed to FTM exchange.
+    // TODO: Inspect the beacon via rx_from_ap manually if needed, or rely on
+    // `then_beacon_is_received` for existence. For now, we proceed to FTM
+    // exchange.
 
     // 2. Send FTM Request
     // Construct FTM Request Frame (Public Action 32)
@@ -99,8 +102,8 @@ async fn test_ftm_ranging_exchange() {
 
     // Expect: FTM Follow Up Frame (with timestamps)
     // For simplicity, we just look for another FTM Action frame.
-    // In a real scenario, we might want to check Dialog Token or other fields to differentiate.
-    // But since recv_frame returns a copy, we can call it again.
+    // In a real scenario, we might want to check Dialog Token or other fields to
+    // differentiate. But since recv_frame returns a copy, we can call it again.
     let ftm_2 = world
         .recv_frame(|frame, msg| {
             if frame.stype() == management_subtype::BEACON {
@@ -110,8 +113,10 @@ async fn test_ftm_ranging_exchange() {
                 && msg.len() > 25
                 && msg[24] == category::PUBLIC
                 && msg[25] == public_action::FINE_TIMING_MEASUREMENT
-                && msg != ftm_1 // Ensure it's a new frame (though strictly recv_frame doesn't buffer past, it drains)
-                                // Actually recv_frame consumes from rx, so calling it again yields the next one.
+                && msg != ftm_1 // Ensure it's a new frame (though strictly
+                                // recv_frame doesn't buffer past, it drains)
+                                // Actually recv_frame consumes from rx, so
+                                // calling it again yields the next one.
         })
         .await;
 
