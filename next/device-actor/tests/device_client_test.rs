@@ -39,6 +39,7 @@ async fn test_device_client_create() {
             true,
             Default::default(),
             Default::default(),
+            false,
         ),
         chip: DeviceChipCreate {
             name: "beacon".to_string(),

@@ -69,9 +69,7 @@ impl ChipClient for BluetoothClient {
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        // ResourceClient does not support explicit shutdown.
-        // Dropping the client will eventually shut down the actor if it's the last one.
-        Ok(())
+        self.0.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn reset(&self, id: ChipId) -> Result<(), ClientError> {

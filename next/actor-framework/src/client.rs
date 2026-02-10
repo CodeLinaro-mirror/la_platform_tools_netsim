@@ -116,6 +116,16 @@ impl<T: ActorService> ResourceClient<T> {
             .map_err(|_| FrameworkError::ActorClosed)?;
         response.await.map_err(|_| FrameworkError::ActorDropped)?
     }
+
+    /// Shut down the actor.
+    pub async fn shutdown(&self) -> Result<(), FrameworkError> {
+        let (respond_to, response) = oneshot::channel();
+        self.sender
+            .send(ResourceRequest::Shutdown { respond_to })
+            .await
+            .map_err(|_| FrameworkError::ActorClosed)?;
+        response.await.map_err(|_| FrameworkError::ActorDropped)?
+    }
 }
 
 /// A trait for interacting with an actor.
@@ -135,6 +145,7 @@ pub trait ActorClient<T: ActorService>: Send + Sync {
         action: T::Action,
     ) -> Result<T::ActionResult, FrameworkError>;
     async fn list(&self) -> Result<Vec<T::Entity>, FrameworkError>;
+    async fn shutdown(&self) -> Result<(), FrameworkError>;
     fn clone_box(&self) -> Box<dyn ActorClient<T>>;
 }
 
@@ -164,6 +175,9 @@ impl<T: ActorService + Send + Sync> ActorClient<T> for ResourceClient<T> {
     }
     async fn list(&self) -> Result<Vec<T::Entity>, FrameworkError> {
         self.list().await
+    }
+    async fn shutdown(&self) -> Result<(), FrameworkError> {
+        self.shutdown().await
     }
     fn clone_box(&self) -> Box<dyn ActorClient<T>> {
         Box::new(self.clone())

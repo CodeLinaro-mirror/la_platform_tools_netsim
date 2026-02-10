@@ -296,6 +296,10 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
                     .map_err(|e| FrameworkError::ServiceError(Box::new(e)));
                 let _ = respond_to.send(result);
             }
+            ResourceRequest::Shutdown { respond_to } => {
+                ctx.shutdown();
+                let _ = respond_to.send(Ok(()));
+            }
         }
     }
 }

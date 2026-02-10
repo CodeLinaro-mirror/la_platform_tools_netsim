@@ -182,7 +182,9 @@ impl World {
     /// spawn the daemon task.
     pub fn spawn_daemon(&mut self) -> tokio::task::JoinHandle<()> {
         if let Some(daemon) = self.daemon.take() {
-            tokio::spawn(daemon.run_daemon())
+            tokio::spawn(async move {
+                let _ = daemon.run_daemon().await;
+            })
         } else {
             panic!("Daemon already running or not initialized");
         }

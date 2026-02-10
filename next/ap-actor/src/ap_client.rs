@@ -242,7 +242,7 @@ impl ChipClient for ApClient {
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        Ok(())
+        self.client.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn reset(&self, _id: ChipId) -> Result<(), ClientError> {
