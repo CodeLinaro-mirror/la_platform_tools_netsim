@@ -40,6 +40,7 @@ impl InternalDevice {
                 visible: params.device_config.visible,
                 position: params.device_config.position.clone(),
                 orientation: params.device_config.orientation.clone(),
+                builtin: params.device_config.builtin,
                 chips: vec![],
             },
             create_params: Some(params),
@@ -49,6 +50,23 @@ impl InternalDevice {
 }
 
 impl DeviceActor {
+    fn update_idle_state(&mut self) {
+        let has_active_devices = self.devices.values().any(|d| {
+            // Builtin devices (like infra) don't count as "user activity"
+            if d.device.builtin {
+                return false;
+            }
+            true
+        });
+
+        if has_active_devices {
+            self.has_seen_device = true;
+            self.last_empty_time = None;
+        } else if self.has_seen_device && self.last_empty_time.is_none() {
+            self.last_empty_time = Some(std::time::Instant::now());
+        }
+    }
+
     /// Adds a chip to a device.
     #[allow(clippy::too_many_arguments)]
     async fn perform_add_chip(
@@ -140,9 +158,6 @@ impl DeviceActor {
         packet_sink: Option<PacketSink>,
     ) -> Result<DeviceId, DeviceError> {
         log::info!("DeviceActor: Create device {}", params.device_config.name);
-        self.has_seen_device = true;
-        self.last_empty_time = None;
-
         let id = id.unwrap_or_else(|| {
             let id = DeviceId(self.next_device_id);
             self.next_device_id += 1;
@@ -164,6 +179,7 @@ impl DeviceActor {
         .await?;
 
         self.devices.insert(id, entity);
+        self.update_idle_state();
         Ok(id)
     }
 
@@ -340,7 +356,6 @@ impl ActorService for DeviceActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self::Id>,
     ) -> Result<(), Self::Error> {
-        // self.last_activity = std::time::Instant::now(); // Removed
         if let Some(entity) = self.devices.remove(&id) {
             if let Some(guid) = &entity.guid {
                 self.guid_to_id.remove(guid);
@@ -360,6 +375,8 @@ impl ActorService for DeviceActor {
             }
             if self.devices.is_empty() {
                 self.last_empty_time = Some(std::time::Instant::now());
+            } else {
+                self.update_idle_state();
             }
             Ok(())
         } else {
@@ -396,17 +413,28 @@ impl ActorService for DeviceActor {
                 // TODO: Implement device reset logic if needed
                 Ok(DeviceActionResult::Success)
             }
-            DeviceAction::NotifyChipRemoved(_device_id, chip_id) => {
-                entity.device.chips.retain(|c| c.id != chip_id.0);
-                if entity.device.chips.is_empty() {
-                    // TODO: If entity.device.chips.is_empty(), remove the
-                    // device itself. This requires a way to
-                    // trigger a self-delete from within the actor.
-                }
+            DeviceAction::NotifyChipRemoved(device_id, chip_id) => {
+                let should_delete = {
+                    let entity = self
+                        .devices
+                        .get_mut(&device_id)
+                        .ok_or_else(|| DeviceError::DeviceNotFound(device_id.to_string()))?;
+                    entity.device.chips.retain(|c| c.id != chip_id.0);
+                    entity.device.chips.is_empty()
+                };
+
                 self.link_client
                     .notify_chip_removed(chip_id)
                     .await
                     .expect("Failed to notify LinkActor of chip remove");
+
+                if should_delete {
+                    log::info!("DeviceActor: Device {} is empty, auto-deleting", device_id);
+                    self.handle_delete(device_id, _ctx).await?;
+                } else {
+                    log::info!("DeviceActor: Device {} is NOT empty after chip removal", device_id);
+                }
+
                 Ok(DeviceActionResult::Success)
             }
             DeviceAction::AddChip { chip_config, packet_stream, packet_sink } => {
@@ -430,8 +458,7 @@ impl ActorService for DeviceActor {
             }
             _ => Err(DeviceError::NotFound("Action requires a device ID".into())),
         };
-        self.has_seen_device = true;
-        self.last_empty_time = None;
+        self.update_idle_state();
         result
     }
 

@@ -163,6 +163,7 @@ pub mod api {
                     position: Default::default(),
                     orientation: Default::default(),
                     visible: false,
+                    builtin: true,
                 },
                 chip: DeviceChipCreate {
                     name: "main-ap".to_string(),
@@ -282,6 +283,7 @@ pub struct Device {
     pub visible: bool,
     pub position: Position,
     pub orientation: Orientation,
+    pub builtin: bool,
     pub chips: Vec<crate::chip::Chip>,
 }
 
@@ -291,6 +293,7 @@ pub struct DeviceConfig {
     pub visible: bool,
     pub position: Position,
     pub orientation: Orientation,
+    pub builtin: bool,
 }
 
 impl DeviceConfig {
@@ -299,8 +302,9 @@ impl DeviceConfig {
         visible: bool,
         position: Position,
         orientation: Orientation,
+        builtin: bool,
     ) -> DeviceConfig {
-        DeviceConfig { name: name.into(), visible, position, orientation }
+        DeviceConfig { name: name.into(), visible, position, orientation, builtin }
     }
 }
 

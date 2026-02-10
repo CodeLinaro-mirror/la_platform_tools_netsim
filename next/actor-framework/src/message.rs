@@ -66,4 +66,7 @@ pub enum ResourceRequest<T: ActorService> {
     List {
         respond_to: Response<Vec<T::Entity>>,
     },
+    Shutdown {
+        respond_to: Response<()>,
+    },
 }
