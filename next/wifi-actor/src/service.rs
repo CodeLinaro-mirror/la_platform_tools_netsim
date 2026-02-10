@@ -25,7 +25,7 @@ impl ActorService for WifiActor {
         &mut self,
         id: Option<Self::Id>,
         mut params: Self::Create,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let id = id.unwrap_or(params.id);
         if self.active_chips.contains_key(&id) {
@@ -83,7 +83,7 @@ impl ActorService for WifiActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(self.active_chips.get(&id).cloned())
     }
@@ -92,7 +92,7 @@ impl ActorService for WifiActor {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(chip) = self.active_chips.get_mut(&id) {
             if let Some(ChipVariantUpdate::Wifi(radio_update)) = update.variant {
@@ -122,7 +122,7 @@ impl ActorService for WifiActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         self.handle_delete_impl(id, ctx).await
     }
@@ -131,7 +131,7 @@ impl ActorService for WifiActor {
         &mut self,
         _id: Option<Self::Id>,
         action: Self::Action,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             WifiReq::GetStatistics => {
@@ -161,7 +161,7 @@ impl ActorService for WifiActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.active_chips.values().cloned().collect())
     }

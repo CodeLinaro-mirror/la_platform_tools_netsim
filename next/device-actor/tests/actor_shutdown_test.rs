@@ -64,34 +64,30 @@ async fn test_server_stays_alive_with_device() {
     assert!(!world.is_actor_finished(), "Server should stay alive while device exists");
 }
 
-// Scenario: Server shuts down immediately when last device is removed
+// Scenario: Server shuts down after idle timeout when last device is removed
 //   Given a running Device Actor
 //   When I create a device and then delete it
-//   Then the server shuts down immediately, bypassing any idle timeout
+//   Then the server shuts down after the idle timeout
 #[tokio::test]
-async fn test_server_shuts_down_immediately_after_last_device_removed() {
+async fn test_server_shuts_down_after_idle_timeout_when_last_device_removed() {
     let chip_clients = World::create_default_chip_clients();
     let link_client = crate::world::World::create_default_link_client();
 
     let world = World::with_clients_and_timeout(
         chip_clients,
         link_client,
-        None, // startup
-        Some(Duration::from_millis(10000)), /* idle (set to 10 seconds, but we shouldn't wait
-               * for it) */
+        None,                            // startup
+        Some(Duration::from_millis(50)), // idle
     )
     .await;
 
     let device_id = world.when_add_chip("guid-1", "chip-1").await;
 
-    // Delete device -> count goes to 0 -> triggers immediate shutdown
+    // Delete device -> count goes to 0 -> triggers idle timer
     world.when_delete_device(device_id).await;
 
-    // Wait a tiny bit to yield execution, but well under the 10s idle timeout
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Wait > idle timeout
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
-    assert!(
-        world.is_actor_finished(),
-        "Server should have shut down immediately without waiting for the idle timeout"
-    );
+    assert!(world.is_actor_finished(), "Server should have shut down after idle timeout");
 }

@@ -5,20 +5,15 @@ use async_trait::async_trait;
 use netsim_model::chip::ChipId;
 use netsim_packets::ieee80211::Ieee80211;
 
-use crate::{
-    ap_actor::{ApActor, WIFI_STREAM_ID},
-    error::ApError,
-};
+use crate::ap_actor::{ApActor, WIFI_STREAM_ID};
 
 #[async_trait]
-impl ActorLifecycle<ChipId> for ApActor {
-    type Error = ApError;
-
-    async fn on_start(&mut self, ctx: &mut DynContext<ChipId>) {
+impl ActorLifecycle for ApActor {
+    async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
         log::info!("ApActor started");
     }
 
-    async fn on_tick(&mut self, ctx: &mut DynContext<ChipId>) {
+    async fn on_tick(&mut self, ctx: &mut DynContext<Self>) {
         // Beacon generation logic
         if let Some(sink) = &self.sink {
             let interval = self.beacon_interval.unwrap_or(200);
@@ -45,7 +40,7 @@ impl ActorLifecycle<ChipId> for ApActor {
         &mut self,
         stream_id: ChipId,
         msg: bytes::Bytes,
-        ctx: &mut DynContext<ChipId>,
+        ctx: &mut DynContext<Self>,
     ) {
         if stream_id.0 != WIFI_STREAM_ID {
             log::warn!("Received message on unknown stream_id: {}", stream_id);
@@ -119,11 +114,11 @@ impl ActorLifecycle<ChipId> for ApActor {
         }
     }
 
-    async fn on_stream_closed(&mut self, stream_id: ChipId, ctx: &mut DynContext<ChipId>) {
+    async fn on_stream_closed(&mut self, stream_id: ChipId, ctx: &mut DynContext<Self>) {
         if stream_id.0 == WIFI_STREAM_ID {
             log::info!("WIFI_STREAM_ID closed, stopping ApActor");
             ctx.shutdown();
         }
     }
-    async fn on_task_closed(&mut self, _id: ChipId, _ctx: &mut DynContext<ChipId>) {}
+    async fn on_task_closed(&mut self, _id: ChipId, _ctx: &mut DynContext<Self>) {}
 }

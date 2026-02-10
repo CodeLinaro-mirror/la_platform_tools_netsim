@@ -12,7 +12,7 @@ use netsim_packets::{
 };
 use zerocopy::{IntoBytes, U16};
 
-use crate::{sae::SaeStateMachine, shared::SharedKeyStore, ApError, ApState};
+use crate::{sae::SaeStateMachine, shared::SharedKeyStore, ApActor, ApError, ApState};
 
 /// Handles 802.11 Management Frames
 #[derive(Clone, Debug)]
@@ -135,7 +135,7 @@ impl Ieee80211Manager {
         shared_keys: &SharedKeyStore,
         beacon_interval: u16,
         source_id: ChipId,
-        _ctx: &mut DynContext<ChipId>,
+        _ctx: &mut DynContext<ApActor>,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let ieee80211_frame = match Ieee80211::decode(frame) {
             Ok(f) => f,

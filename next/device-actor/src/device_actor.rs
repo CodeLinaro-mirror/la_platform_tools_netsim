@@ -3,6 +3,7 @@ use std::{
     sync::{atomic::AtomicU32, Arc},
 };
 
+use actor_framework::TimerKey;
 use capture_api::CaptureSender;
 use netsim_model::chip::ChipClient;
 
@@ -15,8 +16,9 @@ pub struct DeviceActor {
     pub link_client: Box<dyn link_api::LinkClient>,
     pub startup_timeout: Option<std::time::Duration>,
     pub idle_timeout: Option<std::time::Duration>,
-    pub start_time: std::time::Instant,
-    pub last_empty_time: Option<std::time::Instant>,
+
+    pub startup_timer: Option<TimerKey>,
+    pub idle_timer: Option<TimerKey>,
     pub has_seen_device: bool,
     pub guid_to_id: HashMap<String, device_api::DeviceId>,
 }
@@ -39,8 +41,9 @@ impl DeviceActor {
             link_client,
             startup_timeout,
             idle_timeout,
-            start_time: std::time::Instant::now(),
-            last_empty_time: Some(std::time::Instant::now()),
+
+            startup_timer: None,
+            idle_timer: None,
             has_seen_device: false,
             guid_to_id: HashMap::new(),
         }
@@ -54,8 +57,8 @@ impl std::fmt::Debug for DeviceActor {
             .field("devices", &self.devices)
             .field("startup_timeout", &self.startup_timeout)
             .field("idle_timeout", &self.idle_timeout)
-            .field("start_time", &self.start_time)
-            .field("last_empty_time", &self.last_empty_time)
+            .field("startup_timer", &self.startup_timer)
+            .field("idle_timer", &self.idle_timer)
             .field("has_seen_device", &self.has_seen_device)
             .finish_non_exhaustive()
     }

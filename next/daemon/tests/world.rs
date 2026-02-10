@@ -69,7 +69,7 @@ impl World {
     pub fn ensure_frontend_client(&mut self) -> &FrontendServiceClient {
         if self.frontend_client.is_none() {
             let env = Arc::new(EnvBuilder::new().build());
-            let ch = ChannelBuilder::new(env).connect(&format!("127.0.0.1:{}", self.grpc_port));
+            let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", self.grpc_port));
             self.frontend_client = Some(FrontendServiceClient::new(ch));
         }
         self.frontend_client.as_ref().unwrap()
@@ -79,7 +79,7 @@ impl World {
     pub fn ensure_packet_client(&mut self) -> &PacketStreamerClient {
         if self.packet_client.is_none() {
             let env = Arc::new(EnvBuilder::new().build());
-            let ch = ChannelBuilder::new(env).connect(&format!("127.0.0.1:{}", self.grpc_port));
+            let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", self.grpc_port));
             self.packet_client = Some(PacketStreamerClient::new(ch));
         }
         self.packet_client.as_ref().unwrap()

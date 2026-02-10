@@ -76,7 +76,7 @@ impl WifiActor {
     pub(crate) async fn handle_delete_impl(
         &mut self,
         id: ChipId,
-        _ctx: &mut DynContext<ChipId>,
+        _ctx: &mut DynContext<WifiActor>,
     ) -> Result<(), WifiError> {
         if let Some(chip) = self.active_chips.remove(&id) {
             self.senders.remove(&id);
