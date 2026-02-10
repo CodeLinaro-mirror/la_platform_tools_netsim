@@ -5,6 +5,7 @@ use std::{
     env, fs, io,
     path::PathBuf,
     sync::{atomic::AtomicU32, Arc},
+    time::Duration,
 };
 
 use client::{CaptureClient, DeviceClient};
@@ -15,6 +16,7 @@ use common::{
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
+use link_api::LinkClient;
 use log::{error, info, warn};
 use netsim_model::{
     chip::{
@@ -29,6 +31,7 @@ use packet_stream::{
     transport::traits::{PacketSink, PacketStream},
     StreamAddress, Streams, TransportType,
 };
+use slirp_actor::SlirpClient;
 use tokio::{sync::mpsc, task::JoinSet};
 
 use crate::{
@@ -88,6 +91,7 @@ async fn handle_new_connection(
         visible: true,
         position: Default::default(),
         orientation: Default::default(),
+        builtin: false,
     };
 
     let mut chip = match chip_info.chip {
@@ -258,6 +262,11 @@ pub struct NetsimDaemon {
     args: Args,
     /// The gRPC server instance (kept alive).
     _grpc_server: Option<grpcio::Server>,
+    /// The DeviceActor task handle.
+    device_task: tokio::task::JoinHandle<()>,
+    link_client: Box<dyn LinkClient>,
+    slirp_client: Option<SlirpClient>,
+    chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
 }
 
 impl NetsimDaemon {
@@ -423,7 +432,7 @@ impl NetsimDaemon {
         let (wifi_runner, wifi_client) = wifi_actor::new();
         let wifi_actor_state = wifi_actor::WifiActor::new(
             Some(Arc::new(ap_client.clone())),
-            Some(slirp_client),
+            Some(slirp_client.clone()),
             device_client.clone(),
         );
 
@@ -453,12 +462,12 @@ impl NetsimDaemon {
         let link_actor_state = link_actor::LinkActor::new(link_chip_clients);
 
         let device_actor_state = device_actor::DeviceActor::new(
-            chip_clients,
+            chip_clients.clone(),
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
             Box::new(link_client.clone()),
             None,
-            Some(std::time::Duration::from_secs(15)),
+            if args.no_shutdown { None } else { Some(Duration::from_secs(15)) },
         );
 
         // Spawn server tasks
@@ -467,11 +476,15 @@ impl NetsimDaemon {
         join_set.spawn(wifi_runner.run(wifi_actor_state));
         join_set.spawn(ap_runner.run(ap_actor_state));
         join_set.spawn(slirp_runner.run(slirp_actor_state));
-        join_set.spawn(uwb_runner.run(uwb_actor));
-        join_set.spawn(cell_runner.run(cell_server));
-        join_set.spawn(device_runner.run(device_actor_state));
-        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
+        join_set.spawn(async move {
+            cell_runner.run(cell_server).await;
+        });
         join_set.spawn(link_runner.run(link_actor_state));
+        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
+        join_set.spawn(uwb_runner.run(uwb_actor));
+
+        // Spawn DeviceActor separately
+        let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP
         let mut device_create = device_api::DeviceCreate::default_ap(args.wifi.wifi_ssid.clone());
@@ -490,6 +503,9 @@ impl NetsimDaemon {
             capture_client.set_default_capture(true).await.expect("Failed to set default capture");
         }
 
+        // Clone chip_clients for NetsimDaemon
+        let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();
+
         Ok(StartUpMode::Owner(
             NetsimDaemon {
                 device_client,
@@ -500,6 +516,10 @@ impl NetsimDaemon {
                 listener_addresses,
                 args,
                 _grpc_server: Some(grpc_server),
+                device_task,
+                link_client: Box::new(link_client),
+                slirp_client: Some(slirp_client.clone()),
+                chip_clients: daemon_chip_clients,
             },
             ini_guard,
         ))
@@ -521,30 +541,76 @@ impl NetsimDaemon {
         })
     }
 
-    /// Runs the main event loop for the daemon.
-    pub async fn run_daemon(mut self) {
-        let dc = self.device_client.clone();
-        let cc = self.capture_client.clone();
-        let nci = self.next_chip_id.clone();
-        let mut streams = self.streams;
+    async fn shutdown_actors(&mut self) {
+        info!("Graceful shutdown requested for all actors");
 
+        let link_fut = self.link_client.shutdown();
+        let slirp_fut = async {
+            if let Some(slirp) = &self.slirp_client {
+                if let Err(e) = slirp.shutdown().await {
+                    warn!("SlirpActor shutdown error: {}", e);
+                }
+            }
+        };
+        let chips_fut = futures::future::join_all(self.chip_clients.values().map(|c| c.shutdown()));
+
+        // Execute all shutdown dispatches concurrently
+        let (link_res, _, chips_res) = tokio::join!(link_fut, slirp_fut, chips_fut);
+
+        if let Err(e) = link_res {
+            warn!("LinkActor shutdown error: {}", e);
+        }
+        for res in chips_res {
+            if let Err(e) = res {
+                warn!("ChipActor shutdown error: {}", e);
+            }
+        }
+    }
+
+    async fn handle_device_actor_completion(&mut self, result: Result<(), tokio::task::JoinError>) {
+        info!("DeviceActor exited. Shutting down daemon.");
+        if let Err(e) = result {
+            error!("DeviceActor panicked: {}", e);
+        }
+        self.shutdown_actors().await;
+    }
+
+    fn handle_secondary_task_completion(
+        &mut self,
+        result: Option<Result<(), tokio::task::JoinError>>,
+    ) -> bool {
+        match result {
+            Some(Ok(_)) => {
+                info!("A secondary server task completed. Shutting down.");
+                true
+            }
+            Some(Err(e)) => {
+                error!("A secondary server task panicked: {}", e);
+                true
+            }
+            None => {
+                // Should not happen as we have multiple tasks
+                true
+            }
+        }
+    }
+
+    /// Runs the main event loop for the daemon.
+    pub async fn run_daemon(mut self) -> RunResult {
         info!("Netsimd started {}", if self.args.no_shutdown { "--no-shutdown" } else { "" });
 
         loop {
             tokio::select! {
-                // Branch 1: Wait for a new connection
-                accept_result = streams.accept_any() => {
+                // Branch 1: Handle incoming gRPC/UDS streams (New Clients)
+                accept_result = self.streams.accept_any() => {
                     match accept_result {
                         Ok((listener_name, (stream, sink, chip_info, guid))) => {
-                            info!(
-                                "Accepted connection on {}: from {}",
-                                listener_name,
-                                chip_info.device_name()
-                            );
-                            let device_client = dc.clone();
-                            let capture_client = cc.clone();
-                            let next_chip_id = nci.clone();
-                            // Spawn connection handling to avoid blocking the main loop
+                            info!("Accepted connection on {}:", listener_name);
+                            // Spawning the handler ensures the main loop isn't blocked
+                            let device_client = self.device_client.clone();
+                            let capture_client = self.capture_client.clone();
+                            let next_chip_id = self.next_chip_id.clone();
+                                                        // Spawn connection handling to avoid blocking the main loop
                             // handle_new_connection performs async operations (like device_client.add_chip)
                             // which could delay accepting other connections if awaited directly.
                             tokio::spawn(handle_new_connection(device_client, capture_client, next_chip_id, stream, sink, chip_info, guid));
@@ -555,33 +621,28 @@ impl NetsimDaemon {
                     }
                 }
 
-                // Branch 2: Wait for a task in the JoinSet to complete
+                // Branch 2: Wait for DeviceActor to complete (primary shutdown signal)
+                device_result = &mut self.device_task => {
+                    self.handle_device_actor_completion(device_result).await;
+                    break;
+                }
+
+                // Branch 3: Wait for a task in the JoinSet to complete (abnormal shutdown)
                 join_result = self.join_set.join_next() => {
-                    match join_result {
-                        Some(Ok(_)) => {
-                            info!("A server task completed.");
-                        }
-                        Some(Err(e)) => {
-                            error!("A server task panicked: {}", e);
-                        }
-                        None => {
-                            info!("All server tasks in JoinSet have completed. Shutting down.");
-                            break;
-                        }
+                    if self.handle_secondary_task_completion(join_result) {
+                        break;
                     }
                 }
             }
         }
         info!("NetsimDaemon main loop exited.");
+        RunResult::ExitedNormally
     }
 }
 
 pub async fn run() -> RunResult {
     match NetsimDaemon::new().await {
-        Ok(StartUpMode::Owner(daemon, _ini_guard)) => {
-            daemon.run_daemon().await;
-            RunResult::ExitedNormally
-        }
+        Ok(StartUpMode::Owner(daemon, _ini_guard)) => daemon.run_daemon().await,
         Ok(StartUpMode::Client(config)) => {
             info!("Another netsimd is running. Will use its config: {:?}", config);
             info!("Target gRPC port: {}", config.grpc_port);

@@ -27,7 +27,7 @@ fn map_framework_error_smart(e: FrameworkError) -> ClientError {
 
 /// A client for communicating with the UWB Actor.
 /// Wraps a generic `ResourceClient` and implements `ChipClient`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UwbClient(pub ResourceClient<UwbActor>);
 
 #[async_trait]
@@ -65,7 +65,7 @@ impl ChipClient for UwbClient {
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        Ok(())
+        self.0.shutdown().await.map_err(map_framework_error_smart)
     }
 
     async fn reset(&self, id: ChipId) -> Result<(), ClientError> {

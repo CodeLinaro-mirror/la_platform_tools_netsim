@@ -142,6 +142,10 @@ impl link_api::LinkClient for LinkClient {
             .map(|_| ())
             .map_err(|e| e.to_string())
     }
+
+    async fn shutdown(&self) -> Result<(), String> {
+        self.inner.shutdown().await.map_err(|e| e.to_string())
+    }
 }
 
 impl Deref for LinkClient {

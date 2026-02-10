@@ -76,9 +76,9 @@ async fn test_notify_chip_removed() {
 
     world.when_notify_chip_removed(device_id, chip_id).await;
 
-    // Then the device no longer contains the chip
-    let device = world.client.get(device_id).await.unwrap().unwrap();
-    assert_eq!(device.chips.len(), 0);
+    // Then the device no longer contains the chip (it is auto-deleted)
+    let device = world.client.get(device_id).await.unwrap();
+    assert!(device.is_none());
 }
 
 // Scenario: Update device propagates by variant when no ID is provided
