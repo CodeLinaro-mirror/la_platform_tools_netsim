@@ -59,30 +59,27 @@ impl ActorService for UwbActor {
                 .with(|v| async move { Ok(Bytes::from(v)) }),
         );
 
-        let (mut events, handle) = {
-            let mut pica = self.pica.lock().unwrap();
-            (
-                pica.events(),
-                pica.add_device(stream, sink).map_err(|e| ChipError::Internal(e.to_string()))?,
-            )
+        // Clear unrelated events to prevent a lagged error
+        self.pica_connect_events.resubscribe();
+
+        let _ = self.pica_commands.send(PicaCommand::Connect(stream, sink)).await;
+        // Wait for add to complete. This guarantees the chip exists by the time any
+        // actions are performed on it.
+        let handle = loop {
+            if let PicaEvent::Connected { handle, .. } = self
+                .pica_connect_events
+                .recv()
+                .await
+                .map_err(|_| ChipError::Internal("pica shutdown unexpectedly".to_string()))?
+            {
+                break handle;
+            }
         };
 
         self.chip_states.insert(chip_id, UwbChipState { chip, pica_handle: handle });
         self.handle_to_chip.insert(handle, chip_id);
 
-        // Wait for add to complete. This guarantees the chip exists by the time any
-        // actions are performed on it.
-        loop {
-            if let PicaEvent::Connected { handle: event_handle, .. } = events
-                .recv()
-                .await
-                .map_err(|_| ChipError::Internal("pica shutdown unexpectedly".to_string()))?
-            {
-                if handle == event_handle {
-                    break Ok(chip_id);
-                }
-            }
-        }
+        Ok(chip_id)
     }
 
     async fn handle_get(
@@ -124,15 +121,11 @@ impl ActorService for UwbActor {
         ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         let state = self.chip_states.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
-        let (commands, mut events) = {
-            let pica = self.pica.lock().unwrap();
-            (pica.commands(), pica.events())
-        };
 
         // If this request came from an external source, tell Pica to disconnect the
         // chip.
         if self.handle_to_chip.contains_key(&state.pica_handle) {
-            let _ = commands.send(PicaCommand::Disconnect(state.pica_handle)).await;
+            let _ = self.pica_commands.send(PicaCommand::Disconnect(state.pica_handle)).await;
             // Disconnect completes asynchronously and is handled in the
             // lifecycle `on_tick`.
         }
@@ -160,7 +153,6 @@ impl ActorService for UwbActor {
             UwbAction::Reset { id } => {
                 if let Some(state) = self.chip_states.get(&id) {
                     let _handle = state.pica_handle;
-                    let _cmd_tx = self.pica.lock().unwrap().commands();
                     // TODO(b/483097389): implement reset
                 }
                 Ok(UwbActionResult::Success)

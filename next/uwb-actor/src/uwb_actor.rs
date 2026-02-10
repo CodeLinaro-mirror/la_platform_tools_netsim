@@ -1,15 +1,11 @@
 // Copyright 2026 The Android Open Source Project
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{collections::HashMap, time::Duration};
 
 use client::DeviceClient;
 use netsim_model::chip::{Chip, ChipId};
-use pica::{Handle, Pica, PicaEvent, RangingEstimator, RangingMeasurement};
-use tokio::{sync::broadcast, task::JoinHandle};
+use pica::{Handle, Pica, PicaCommand, PicaEvent, RangingEstimator, RangingMeasurement};
+use tokio::sync::{broadcast, mpsc};
 
 /// State associated with a single UWB chip.
 #[derive(Clone)]
@@ -28,13 +24,14 @@ pub struct UwbActor {
     pub(super) handle_to_chip: HashMap<Handle, ChipId>,
     /// Client for interacting with the device actor.
     pub(super) device_client: DeviceClient,
-    /// The Pica simulator instance.
-    /// TODO(b/483089918): use lock-free form of Pica API
-    pub(super) pica: Arc<Mutex<Pica>>,
-    /// The join handle for the Pica run loop.
-    pub(super) pica_task: Option<JoinHandle<Result<(), anyhow::Error>>>,
-    /// Used to detect when a chip disconnects
-    pub(super) pica_events: broadcast::Receiver<PicaEvent>,
+    /// Pica simulator, present only prior to actor lifecycle `on_start`.
+    pub(super) pica: Option<Pica>,
+    /// Pica command queue
+    pub(super) pica_commands: mpsc::Sender<PicaCommand>,
+    /// Used to detect when a chip disconnects due to a stream closure.
+    pub(super) pica_on_tick_events: broadcast::Receiver<PicaEvent>,
+    /// Used to detect when a chip is connected after [`PicaCommand::Connect`].
+    pub(super) pica_connect_events: broadcast::Receiver<PicaEvent>,
 }
 
 impl UwbActor {
@@ -43,15 +40,15 @@ impl UwbActor {
 
     pub fn new(device_client: DeviceClient) -> Self {
         let pica = Pica::new(Box::new(MockRangingEstimator), None);
-        let events = pica.events();
 
         UwbActor {
             chip_states: HashMap::new(),
             handle_to_chip: HashMap::new(),
             device_client,
-            pica_events: events,
-            pica: Arc::new(Mutex::new(pica)),
-            pica_task: None,
+            pica_commands: pica.commands(),
+            pica_on_tick_events: pica.events(),
+            pica_connect_events: pica.events(),
+            pica: Some(pica),
         }
     }
 }
