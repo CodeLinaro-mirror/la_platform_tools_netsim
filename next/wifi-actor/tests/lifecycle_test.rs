@@ -1,10 +1,8 @@
 use device_api::DeviceAction;
 use netsim_model::chip::{ChipClient, ChipId};
-
-mod hwsim_helper;
-mod world;
 use wifi_actor::WifiClient;
-use world::World;
+
+use crate::world::World;
 
 // Feature: Chip Creation
 // Scenario: Create a new chip

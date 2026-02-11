@@ -77,6 +77,7 @@ rust_binary(
     rustc_flags = [
         "-C",
         "link-arg=-lc",
+        "-Cforce-frame-pointers=yes",
     ],
     deps = [
         ":daemon-lib",

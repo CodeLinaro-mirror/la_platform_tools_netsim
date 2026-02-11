@@ -9,6 +9,7 @@ DEPS = [
     "@log",
     "@tokio",
     "@tokio-stream",
+    "@tokio-util",
     "@thiserror",
     "@mockall",
 ]

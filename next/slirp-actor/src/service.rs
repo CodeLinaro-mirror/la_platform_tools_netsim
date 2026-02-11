@@ -20,7 +20,7 @@ impl ActorService for SlirpActor {
         &mut self,
         _id: Option<Self::Id>,
         _create: Self::Create,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         panic!("SlirpActor::create should not be called. Use RegisterSink action instead.")
     }
@@ -28,7 +28,7 @@ impl ActorService for SlirpActor {
     async fn handle_get(
         &self,
         _id: Self::Id,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(Some(SlirpStatus { initialized: self.libslirp.is_some() }))
     }
@@ -37,7 +37,7 @@ impl ActorService for SlirpActor {
         &mut self,
         _id: Self::Id,
         _: Self::Update,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         panic!("Update not supported")
     }
@@ -45,14 +45,14 @@ impl ActorService for SlirpActor {
     async fn handle_delete(
         &mut self,
         _id: Self::Id,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     async fn handle_list(
         &mut self,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(vec![])
     }
@@ -61,7 +61,7 @@ impl ActorService for SlirpActor {
         &mut self,
         _id: Option<Self::Id>,
         action: Self::Action,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             SlirpReq::SendPacket(data) => {

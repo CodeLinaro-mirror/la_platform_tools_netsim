@@ -4,7 +4,7 @@ use actor_framework::{ActorLifecycle, DynContext};
 use async_trait::async_trait;
 use netsim_model::chip::ChipId;
 
-use crate::{error::WifiError, wifi_actor::WifiActor};
+use crate::wifi_actor::WifiActor;
 
 /// ID for the AP infrastructure stream
 pub const AP_ID: ChipId = ChipId(u32::MAX);
@@ -12,10 +12,8 @@ pub const AP_ID: ChipId = ChipId(u32::MAX);
 pub const SLIRP_ID: ChipId = ChipId(u32::MAX - 1);
 
 #[async_trait]
-impl ActorLifecycle<ChipId> for WifiActor {
-    type Error = WifiError;
-
-    async fn on_start(&mut self, ctx: &mut DynContext<ChipId>) {
+impl ActorLifecycle for WifiActor {
+    async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
         log::info!("WifiActor started");
 
         if let Some(ap_client) = &self.ap_client {
@@ -28,10 +26,7 @@ impl ActorLifecycle<ChipId> for WifiActor {
             let (ap_downlink_tx, ap_downlink_rx) = create_channel_stream();
 
             // Wire AP Downlink to Context
-            use tokio_stream::StreamExt;
-            let stream = ap_downlink_rx;
-            let stream = Box::pin(stream);
-            ctx.add_stream(AP_ID, stream);
+            ctx.add_stream(AP_ID, ap_downlink_rx);
 
             // Default beacon interval for now (100ms)
             if let Err(e) = ap_client
@@ -48,27 +43,8 @@ impl ActorLifecycle<ChipId> for WifiActor {
             self.to_ap = Some(ap_uplink_tx);
         }
 
-        // Register Slirp Stream & Sink
-        if let Some(client) = &self.slirp_client {
-            // Uplink: Wifi -> Slirp
-            // We hold the tx, Slirp gets the rx
-            let (slirp_uplink_tx, slirp_uplink_rx) = create_channel_stream();
-
-            // Downlink: Slirp -> Wifi
-            // Slirp gets the tx, We hold the rx
-            let (slirp_downlink_tx, slirp_downlink_rx) = create_channel_stream();
-
-            // Wire Slirp Downlink to Context
-            let stream = slirp_downlink_rx;
-            let stream = Box::pin(stream);
-            ctx.add_stream(SLIRP_ID, stream);
-
-            // Register with SlirpActor
-            if let Err(e) = client.register(slirp_uplink_rx, slirp_downlink_tx).await {
-                log::error!("Failed to register slirp client: {}", e);
-            }
-            self.to_slirp = Some(slirp_uplink_tx);
-        }
+        // Start Gateway (Slirp registration etc)
+        self.gateway.on_start(ctx).await;
     }
 
     async fn on_shutdown(&mut self) {
@@ -77,20 +53,27 @@ impl ActorLifecycle<ChipId> for WifiActor {
 
     async fn on_stream(
         &mut self,
-        chip_id: ChipId,
+        chip_id: Self::Id,
         packet: bytes::Bytes,
-        _ctx: &mut DynContext<ChipId>,
+        _ctx: &mut DynContext<Self>,
     ) {
         if chip_id == AP_ID {
             self.process_ap_packet(packet);
-        } else if chip_id == SLIRP_ID {
-            self.process_slirp_packet(packet);
+        } else if self.gateway.should_handle(chip_id) {
+            self.gateway.handle_incoming(
+                chip_id,
+                packet,
+                &mut self.medium,
+                &self.shared_keys,
+                &mut self.out_queue,
+            );
+            self.flush_out_queue();
         } else {
             self.process_guest_packet(chip_id.0, packet).await;
         }
     }
 
-    async fn on_stream_closed(&mut self, id: ChipId, ctx: &mut DynContext<ChipId>) {
+    async fn on_stream_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
         log::info!("Stream closed for chip {id}");
         ctx.abort(id);
         if let Err(e) = self.handle_delete_impl(id, ctx).await {
@@ -98,7 +81,7 @@ impl ActorLifecycle<ChipId> for WifiActor {
         }
     }
 
-    async fn on_task_closed(&mut self, id: ChipId, ctx: &mut DynContext<ChipId>) {
+    async fn on_task_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
         log::info!("Sink task closed for chip {id}");
         ctx.remove_stream(id);
         if let Err(e) = self.handle_delete_impl(id, ctx).await {

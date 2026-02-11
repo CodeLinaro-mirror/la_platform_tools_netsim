@@ -5,10 +5,8 @@ edition = "2021"
 
 [dependencies]
 actor-framework = { path = "../actor-framework" }
-actor-framework = { path = "../actor-framework" }
 bluetooth-actor = { package = "bluetooth", path = "../bluetooth-actor" }
 capture-actor = { path = "../capture-actor" }
-cell = { path = "../cell" }
 cell = { path = "../cell" }
 chrono = { version = "0.4", features = ["now"] }
 clap = { version = "4.1.8", default-features = false, features = [
@@ -31,7 +29,6 @@ log = "0.4"
 named-lock = "0.4.1"
 netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
-packet-stream = { path = "../packet-stream" }
 packet-stream = { path = "../packet-stream" }
 tokio = { version = "1.28.2", features = ["full"] }
 uwb-actor = { path = "../uwb-actor" }

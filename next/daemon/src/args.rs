@@ -52,6 +52,10 @@ pub struct Args {
     #[arg(long, alias = "no_shutdown")]
     pub no_shutdown: bool,
 
+    /// Set the idle shutdown timeout in milliseconds.
+    #[arg(long, alias = "idle-shutdown-timeout")]
+    pub idle_shutdown_timeout: Option<u64>,
+
     /// Enable packet capture
     #[arg(long)]
     pub pcap: bool,
@@ -103,6 +107,18 @@ pub struct WifiConfig {
     /// Set the 802.11 mode for the default Access Point (defaults to "g")
     #[arg(long, alias = "wifi-mode", value_enum, help_heading = "WiFi Settings")]
     pub wifi_mode: Option<ClapWifiMode>,
+
+    /// Use a specific TAP interface (e.g. cvd-etap-01) or a pattern (e.g.
+    /// cvd-etap-%02d).
+    #[arg(long, alias = "wifi-tap", help_heading = "WiFi Settings")]
+    #[cfg(target_os = "linux")]
+    pub wifi_tap: Option<String>,
+
+    /// Use the standard Cuttlefish TAP pool (cvd-etap-06..10).
+    /// Equivalent to --wifi-tap "cvd-etap-%02d".
+    #[arg(long, alias = "wifi-cvd-tap", help_heading = "WiFi Settings")]
+    #[cfg(target_os = "linux")]
+    pub wifi_cvd_tap: bool,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]

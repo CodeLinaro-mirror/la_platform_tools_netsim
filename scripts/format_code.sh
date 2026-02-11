@@ -36,8 +36,11 @@ fi
 
 set -euo pipefail
 
+# Determine the absolute path of the script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Go to the root of the git repository (tools/netsim).
-cd "$(dirname "$0")/.."
+cd "$SCRIPT_DIR/.."
 
 # Argument parsing
 FORMAT_ALL=true
@@ -46,7 +49,7 @@ if [[ $# -gt 0 && "$1" == *"--diff"* ]]; then
   FORMAT_ALL=false
 fi
 
-REPO="$(dirname "$0")/../../.."
+REPO="$SCRIPT_DIR/../../.."
 OS=$(uname | tr '[:upper:]' '[:lower:]')
 
 DESIRED_TAPLO_VERSION="0.10.0"
@@ -145,7 +148,7 @@ TAPLO_CONFIG="$REPO/tools/netsim/next/taplo.toml"
 [[ ${#cmake_files[@]} -gt 0 ]] && format "CMake" "cmake-format -i" "${cmake_files[@]}"
 [[ ${#bp_files[@]} -gt 0 ]] && format "Android.bp" "$BPFMT -w" "${bp_files[@]}"
 [[ ${#bazel_files[@]} -gt 0 ]] && format "Bazel" "buildifier -lint=fix" "${bazel_files[@]}"
-[[ ${#toml_files[@]} -gt 0 ]] && format "TOML" "taplo fmt --config" "$TAPLO_CONFIG" "${toml_files[@]}"
+[[ ${#toml_files[@]} -gt 0 ]] && format "TOML" "env RUST_LOG=warn taplo fmt --config" "$TAPLO_CONFIG" "${toml_files[@]}"
 
 echo "Waiting for formatters to finish..."
 for pid in "${pids[@]}"; do
