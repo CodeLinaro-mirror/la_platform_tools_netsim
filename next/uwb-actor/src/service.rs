@@ -27,7 +27,7 @@ impl ActorService for UwbActor {
         &mut self,
         _id: Option<Self::Id>,
         params: Self::Create,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = params.id;
         if self.chips.contains_key(&chip_id) {
@@ -63,7 +63,7 @@ impl ActorService for UwbActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(self.chips.get(&id).cloned())
     }
@@ -72,7 +72,7 @@ impl ActorService for UwbActor {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         let chip = self.chips.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
         if let Some(pos) = update.position {
@@ -93,7 +93,7 @@ impl ActorService for UwbActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         let chip = self.chips.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
         self.uci_senders.remove(&id);
@@ -107,7 +107,7 @@ impl ActorService for UwbActor {
         &mut self,
         _id: Option<Self::Id>,
         action: Self::Action,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             UwbAction::Reset { id: _ } => {
@@ -132,7 +132,7 @@ impl ActorService for UwbActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.chips.values().cloned().collect())
     }

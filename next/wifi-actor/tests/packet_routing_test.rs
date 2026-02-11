@@ -1,7 +1,4 @@
-mod hwsim_helper;
-mod world;
-
-use world::World;
+use crate::world::World;
 
 // ============================================================================
 // Feature: Wi-Fi Direct (Peer-to-Peer)

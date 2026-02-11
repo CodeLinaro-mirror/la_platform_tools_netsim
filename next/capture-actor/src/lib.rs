@@ -69,16 +69,24 @@ mod tests {
     }
 
     struct MockContext;
-    impl<Id> actor_framework::Context<Id> for MockContext
-    where
-        Id: Into<u32> + Send + 'static,
-    {
+    impl actor_framework::Context<CaptureActor> for MockContext {
         fn set_interval(&mut self, _duration: std::time::Duration) {}
-        fn add_stream(&mut self, _id: Id, _stream: actor_framework::BoxStream) {}
-        fn remove_stream(&mut self, _id: Id) {}
-        fn spawn(&mut self, _id: Id, _task: futures::future::BoxFuture<'static, Id>) {}
-        fn abort(&mut self, _id: Id) {}
+        fn add_stream(&mut self, _id: ChipId, _stream: actor_framework::BoxStream) {}
+        fn remove_stream(&mut self, _id: ChipId) {}
+        fn spawn(&mut self, _id: ChipId, _task: futures::future::BoxFuture<'static, ChipId>) {}
+        fn abort(&mut self, _id: ChipId) {}
         fn shutdown(&mut self) {}
+        fn run_later(
+            &mut self,
+            _duration: std::time::Duration,
+            _f: Box<
+                dyn FnOnce(&mut CaptureActor, &mut dyn actor_framework::Context<CaptureActor>)
+                    + Send,
+            >,
+        ) -> actor_framework::TimerKey {
+            unimplemented!()
+        }
+        fn cancel_timer(&mut self, _key: actor_framework::TimerKey) {}
     }
 
     fn setup_test_context() -> (CaptureActor, PathBuf) {

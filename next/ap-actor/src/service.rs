@@ -33,7 +33,7 @@ impl ActorService for ApActor {
         &mut self,
         _id: Option<Self::Id>,
         params: Self::Create,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let id_val = params.id.0;
         if self.aps.contains_key(&id_val) {
@@ -56,7 +56,7 @@ impl ActorService for ApActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         if let Some(state) = self.aps.get(&id.0) {
             Ok(Some(ap_state_to_chip(id.0, state)))
@@ -69,7 +69,7 @@ impl ActorService for ApActor {
         &mut self,
         id: Self::Id,
         patch: Self::Update,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         let ap_state = self.aps.get_mut(&id.0).ok_or(ApError::ApNotFound(id.0))?;
 
@@ -128,7 +128,7 @@ impl ActorService for ApActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         if self.aps.remove(&id.0).is_some() {
             log::info!("Deleted AP with ID: {}", id.0);
@@ -140,7 +140,7 @@ impl ActorService for ApActor {
 
     async fn handle_list(
         &mut self,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.aps.iter().map(|(id, state)| ap_state_to_chip(*id, state)).collect())
     }
@@ -149,7 +149,7 @@ impl ActorService for ApActor {
         &mut self,
         _id: Option<Self::Id>,
         action: Self::Action,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             ApReq::Register { stream, sink, shared_keys, beacon_interval } => {

@@ -33,7 +33,7 @@ impl ActorService for BluetoothActor {
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = params.id;
 
@@ -123,7 +123,7 @@ impl ActorService for BluetoothActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         let chips = self.chips.lock().unwrap();
         Ok(chips.get(&id).cloned())
@@ -135,7 +135,7 @@ impl ActorService for BluetoothActor {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         let mut chips = self.chips.lock().unwrap();
         let mut chip =
@@ -172,7 +172,7 @@ impl ActorService for BluetoothActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         let mut chips = self.chips.lock().unwrap();
         if let Some(chip) = chips.remove(&id) {
@@ -199,7 +199,7 @@ impl ActorService for BluetoothActor {
         &mut self,
         _id: Option<Self::Id>,
         _action: Self::Action,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match _action {
             BluetoothAction::Reset { id } => {
@@ -232,7 +232,7 @@ impl ActorService for BluetoothActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         let chips = self.chips.lock().unwrap();
         Ok(chips.values().cloned().collect())
