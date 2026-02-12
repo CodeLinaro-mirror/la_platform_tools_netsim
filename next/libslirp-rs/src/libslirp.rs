@@ -18,10 +18,14 @@
 //!
 //! ## Features
 //!
-//! * **Safe API:**  Wraps the libslirp C API in a safe and idiomatic Rust interface.
-//! * **Networking:**  Provides functionality for virtual networking, including TCP/IP, UDP, and ICMP.
-//! * **Proxy Support:**  Allows integration with proxy managers for handling external connections.
-//! * **Threading:**  Handles communication between the Rust application and the libslirp event loop.
+//! * **Safe API:**  Wraps the libslirp C API in a safe and idiomatic Rust
+//!   interface.
+//! * **Networking:**  Provides functionality for virtual networking, including
+//!   TCP/IP, UDP, and ICMP.
+//! * **Proxy Support:**  Allows integration with proxy managers for handling
+//!   external connections.
+//! * **Threading:**  Handles communication between the Rust application and the
+//!   libslirp event loop.
 //!
 //! ## Usage
 //!
@@ -29,34 +33,39 @@
 //! ## Example with Proxy
 //!
 //!
-//! This module abstracts away the complexities of interacting with the libslirp C library,
-//! providing a more convenient and reliable way to use it in your Rust projects.
+//! This module abstracts away the complexities of interacting with the libslirp
+//! C library, providing a more convenient and reliable way to use it in your
+//! Rust projects.
 
-use crate::libslirp_config;
-use crate::libslirp_config::SlirpConfigs;
-use crate::libslirp_sys::{
-    self, SlirpPollType, SlirpProxyConnectFunc, SlirpTimerId, SLIRP_POLL_ERR, SLIRP_POLL_HUP,
-    SLIRP_POLL_IN, SLIRP_POLL_OUT, SLIRP_POLL_PRI,
-};
-
-use bytes::Bytes;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use log::{debug, info, warn};
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::ffi::{c_char, c_int, c_void, CStr};
-use std::io::{Read, Write};
-use std::mem::ManuallyDrop;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::os::unix::io::AsRawFd;
 #[cfg(target_os = "windows")]
 use std::os::windows::io::AsRawSocket;
-use std::rc::Rc;
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
-use std::time::Instant;
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    ffi::{c_char, c_int, c_void, CStr},
+    io::{Read, Write},
+    mem::ManuallyDrop,
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream},
+    rc::Rc,
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant},
+};
+
+use bytes::Bytes;
+use log::{debug, info, warn};
+
+use crate::{
+    libslirp_config,
+    libslirp_config::SlirpConfigs,
+    libslirp_sys::{
+        self, SlirpPollType, SlirpProxyConnectFunc, SlirpTimerId, SLIRP_POLL_ERR, SLIRP_POLL_HUP,
+        SLIRP_POLL_IN, SLIRP_POLL_OUT, SLIRP_POLL_PRI,
+    },
+};
 
 type TimerOpaque = usize;
 
@@ -343,9 +352,9 @@ unsafe fn callback_context_from_raw(opaque: *mut c_void) -> ManuallyDrop<Box<Cal
     ManuallyDrop::new(
         // Safety:
         //
-        // * `opaque` is a valid pointer to a `CallbackContext` originally passed
-        //    to the slirp API. The `callback_context_from_raw` function itself
-        //    is marked `unsafe` to enforce this precondition on its callers.
+        // * `opaque` is a valid pointer to a `CallbackContext` originally passed to the slirp API.
+        //   The `callback_context_from_raw` function itself is marked `unsafe` to enforce this
+        //   precondition on its callers.
         unsafe { Box::from_raw(opaque as *mut CallbackContext) },
     )
 }
@@ -392,11 +401,11 @@ impl Slirp {
         // * `configs.c_slirp_config` is a valid pointer to the "C" config struct. It is
         //   held by the "C" slirp library for lifetime of the slirp instance.
         //
-        // * `callbacks` is a valid pointer to an array of callback functions.
-        //   It is held by the "C" slirp library for the lifetime of the slirp instance.
+        // * `callbacks` is a valid pointer to an array of callback functions. It is
+        //   held by the "C" slirp library for the lifetime of the slirp instance.
         //
-        // * `callback_context` is an arbitrary opaque type passed back to
-        //   callback functions by libslirp.
+        // * `callback_context` is an arbitrary opaque type passed back to callback
+        //   functions by libslirp.
         let slirp = unsafe {
             libslirp_sys::slirp_new(
                 &configs.c_slirp_config,
@@ -413,9 +422,11 @@ impl Slirp {
         //
         // * self.slirp is a valid state returned by `slirp_new()`
         //
-        // * timer.id is a valid c_uint from "C" slirp library calling `timer_new_opaque_cb()`
+        // * timer.id is a valid c_uint from "C" slirp library calling
+        //   `timer_new_opaque_cb()`
         //
-        // * timer.cb_opaque is an usize representing a pointer to callback function from
+        // * timer.cb_opaque is an usize representing a pointer to callback function
+        //   from
         // "C" slirp library calling `timer_new_opaque_cb()`
         unsafe {
             libslirp_sys::slirp_handle_timer(self.slirp, timer.id, timer.cb_opaque as *mut c_void);
@@ -426,8 +437,8 @@ impl Slirp {
 impl Drop for Slirp {
     /// # Safety
     ///
-    /// * self.slirp is always slirp pointer initialized by slirp_new
-    ///   to the slirp API.
+    /// * self.slirp is always slirp pointer initialized by slirp_new to the
+    ///   slirp API.
     fn drop(&mut self) {
         // Safety:
         //
@@ -536,12 +547,12 @@ fn slirp_thread(
             warn!("libslirp command '{cmd_str}' took too long to complete: {duration:?}");
         }
     }
-    // Shuts down the instance of a slirp stack and release slirp storage. No callbacks
-    // occur after this since it calls slirp_cleanup.
+    // Shuts down the instance of a slirp stack and release slirp storage. No
+    // callbacks occur after this since it calls slirp_cleanup.
     drop(slirp);
 
-    // Shutdown slirp_poll_thread -- worst case it sends a PollResult that is ignored
-    // since this thread is no longer processing Slirp commands.
+    // Shutdown slirp_poll_thread -- worst case it sends a PollResult that is
+    // ignored since this thread is no longer processing Slirp commands.
     drop(tx_poll);
 }
 
@@ -553,7 +564,8 @@ struct PollFd {
 }
 
 impl Slirp {
-    /// Fill the pollfds from libslirp and pass the request to the polling thread.
+    /// Fill the pollfds from libslirp and pass the request to the polling
+    /// thread.
     ///
     /// This is called by the application when it is about to sleep through
     /// poll().  *timeout is set to the amount of virtual time (in ms) that
@@ -686,12 +698,13 @@ macro_rules! ternary {
 
 /// Worker thread that performs blocking `poll` operations on file descriptors.
 ///
-/// It receives polling requests from the `rx` channel, performs the `poll`, and sends the results
-/// back to the slirp thread via the `tx` channel. This allows the slirp stack to be notified about
-/// network events without busy waiting.
+/// It receives polling requests from the `rx` channel, performs the `poll`, and
+/// sends the results back to the slirp thread via the `tx` channel. This allows
+/// the slirp stack to be notified about network events without busy waiting.
 ///
-/// The function handles platform-specific differences in polling mechanisms between Linux/macOS
-/// and Windows. It also converts between Slirp's `SlirpPollType` and the OS-specific poll event types.
+/// The function handles platform-specific differences in polling mechanisms
+/// between Linux/macOS and Windows. It also converts between Slirp's
+/// `SlirpPollType` and the OS-specific poll event types.
 fn slirp_poll_thread(
     rx: mpsc::Receiver<PollRequest>,
     tx: mpsc::Sender<SlirpCmd>,
@@ -727,7 +740,8 @@ fn slirp_poll_thread(
             | ternary!(events & OS_POLL_OUT, SLIRP_POLL_OUT)
             | ternary!(events & OS_POLL_PRI, SLIRP_POLL_PRI)
     }
-    // Convert OS (output) "revents" to Slirp revents definitions which includes ERR and HUP
+    // Convert OS (output) "revents" to Slirp revents definitions which includes ERR
+    // and HUP
     fn to_slirp_revents(revents: i16) -> SlirpPollType {
         to_slirp_events(revents)
             | ternary!(revents & OS_POLL_ERR, SLIRP_POLL_ERR)
@@ -758,9 +772,10 @@ fn slirp_poll_thread(
 
         let mut poll_result = 0;
         // WSAPoll requires an array of one or more POLLFD structures.
-        // When nfds == 0, WSAPoll returns immediately with result -1, ignoring the timeout.
-        // (This is different from poll on Linux/macOS, which will wait for the timeout.)
-        // Therefore when nfds == 0 we will explicitly sleep for the timeout regardless of OS.
+        // When nfds == 0, WSAPoll returns immediately with result -1, ignoring the
+        // timeout. (This is different from poll on Linux/macOS, which will wait
+        // for the timeout.) Therefore when nfds == 0 we will explicitly sleep
+        // for the timeout regardless of OS.
         if os_poll_fds.is_empty() {
             // If there are no FDs to poll, sleep for the specified timeout.
             thread::sleep(Duration::from_millis(timeout as u64));
@@ -817,8 +832,9 @@ fn slirp_poll_thread(
 impl Slirp {
     /// Sends raw input bytes to the slirp stack.
     ///
-    /// This function is called by the application to inject network data into the virtual network
-    /// stack. The `bytes` slice contains the raw packet data that should be processed by slirp.
+    /// This function is called by the application to inject network data into
+    /// the virtual network stack. The `bytes` slice contains the raw packet
+    /// data that should be processed by slirp.
     fn input(&self, bytes: &[u8]) {
         // Safety: The "C" library ensure that the memory is not
         // referenced after the call and `bytes` does not need to remain
@@ -827,14 +843,15 @@ impl Slirp {
     }
 }
 
-/// Callback function invoked by the slirp stack to send an ethernet frame to the guest network.
+/// Callback function invoked by the slirp stack to send an ethernet frame to
+/// the guest network.
 ///
-/// This function is called by the slirp stack when it has a network packet that needs to be
-/// delivered to the guest network. The `buf` pointer points to the raw packet data, and `len`
-/// specifies the length of the packet.
+/// This function is called by the slirp stack when it has a network packet that
+/// needs to be delivered to the guest network. The `buf` pointer points to the
+/// raw packet data, and `len` specifies the length of the packet.
 ///
-/// If the guest is not ready to receive the packet, the function can drop the data. TCP will
-/// handle retransmissions as needed.
+/// If the guest is not ready to receive the packet, the function can drop the
+/// data. TCP will handle retransmissions as needed.
 ///
 /// # Safety
 ///
@@ -862,8 +879,9 @@ impl CallbackContext {
     fn send_packet(&self, buf: *const c_void, len: usize) -> libslirp_sys::slirp_ssize_t {
         // Safety: The caller ensures that `buf` is contains `len` bytes of data.
         let c_slice = unsafe { std::slice::from_raw_parts(buf as *const u8, len) };
-        // Bytes::from(slice: &'static [u8]) creates a Bytes object without copying the data.
-        // To own its data, copy &'static [u8] to Vec<u8> before converting to Bytes.
+        // Bytes::from(slice: &'static [u8]) creates a Bytes object without copying the
+        // data. To own its data, copy &'static [u8] to Vec<u8> before
+        // converting to Bytes.
         let bytes = Bytes::from(c_slice.to_vec());
         let _ = self.tx_bytes.send(bytes.clone());
         // When HTTP Proxy is enabled, it tracks DNS packets.
@@ -874,11 +892,13 @@ impl CallbackContext {
     }
 }
 
-/// Callback function invoked by the slirp stack to report an error caused by guest misbehavior.
+/// Callback function invoked by the slirp stack to report an error caused by
+/// guest misbehavior.
 ///
-/// This function is called by the slirp stack when it encounters an error condition that is
-/// attributed to incorrect or unexpected behavior from the guest network. The `msg` parameter
-/// contains a human-readable error message describing the issue.
+/// This function is called by the slirp stack when it encounters an error
+/// condition that is attributed to incorrect or unexpected behavior from the
+/// guest network. The `msg` parameter contains a human-readable error message
+/// describing the issue.
 ///
 /// # Safety
 ///
@@ -889,10 +909,12 @@ unsafe extern "C" fn guest_error_cb(msg: *const c_char, opaque: *mut c_void) {
     //  * `msg` is guaranteed to be a valid C string by the caller.
     let msg = String::from_utf8_lossy(unsafe { CStr::from_ptr(msg) }.to_bytes());
     // Safety:
-    //  * `opaque` is guaranteed to be a valid, non-null pointer to a `CallbackContext` struct that was originally passed
-    //     to `slirp_new()` and is guaranteed to be valid for the lifetime of the Slirp instance.
-    //  * `callback_context_from_raw()` safely converts the raw `opaque` pointer back to a
-    //     `CallbackContext` reference. This is safe because the `opaque` pointer is guaranteed to be valid.
+    //  * `opaque` is guaranteed to be a valid, non-null pointer to a
+    //    `CallbackContext` struct that was originally passed to `slirp_new()` and
+    //    is guaranteed to be valid for the lifetime of the Slirp instance.
+    //  * `callback_context_from_raw()` safely converts the raw `opaque` pointer
+    //    back to a `CallbackContext` reference. This is safe because the `opaque`
+    //    pointer is guaranteed to be valid.
     unsafe { callback_context_from_raw(opaque) }.guest_error(msg.to_string());
 }
 
@@ -902,10 +924,12 @@ impl CallbackContext {
     }
 }
 
-/// Callback function invoked by the slirp stack to get the current time in nanoseconds.
+/// Callback function invoked by the slirp stack to get the current time in
+/// nanoseconds.
 ///
-/// This function is called by the slirp stack to obtain the current time, which is used for
-/// various timing-related operations within the virtual network stack.
+/// This function is called by the slirp stack to obtain the current time, which
+/// is used for various timing-related operations within the virtual network
+/// stack.
 ///
 /// # Safety
 ///
@@ -928,19 +952,22 @@ impl CallbackContext {
     }
 }
 
-/// Callback function invoked by the slirp stack to signal that initialization is complete.
+/// Callback function invoked by the slirp stack to signal that initialization
+/// is complete.
 ///
-/// This function is called by the slirp stack once it has finished its initialization process
-/// and is ready to handle network traffic.
+/// This function is called by the slirp stack once it has finished its
+/// initialization process and is ready to handle network traffic.
 ///
 /// # Safety
 ///
-/// * `_slirp` is a raw pointer to the slirp instance, but it's not used in this callback.
+/// * `_slirp` is a raw pointer to the slirp instance, but it's not used in this
+///   callback.
 /// * `opaque` must be a valid `CallbackContext` pointer.
 unsafe extern "C" fn init_completed_cb(_slirp: *mut libslirp_sys::Slirp, opaque: *mut c_void) {
     // Safety:
     //
-    // * `_slirp` is a raw pointer to the slirp instance, but it's not used in this callback.
+    // * `_slirp` is a raw pointer to the slirp instance, but it's not used in this
+    //   callback.
     // * `opaque` is a valid `CallbackContext` pointer.
     unsafe { callback_context_from_raw(opaque) }.init_completed();
 }
@@ -953,9 +980,10 @@ impl CallbackContext {
 
 /// Callback function invoked by the slirp stack to create a new timer.
 ///
-/// This function is called by the slirp stack when it needs to create a new timer. The `id`
-/// parameter is a unique identifier for the timer, and `cb_opaque` is an opaque pointer that
-/// will be passed back to the timer callback function when the timer expires.
+/// This function is called by the slirp stack when it needs to create a new
+/// timer. The `id` parameter is a unique identifier for the timer, and
+/// `cb_opaque` is an opaque pointer that will be passed back to the timer
+/// callback function when the timer expires.
 ///
 /// # Safety
 ///
@@ -971,10 +999,12 @@ unsafe extern "C" fn timer_new_opaque_cb(
     opaque: *mut c_void,
 ) -> *mut c_void {
     // Safety:
-    //  * `opaque` is a valid, non-null pointer to a `CallbackContext` struct that was originally passed
-    //     to `slirp_new()` and is guaranteed to be valid for the lifetime of the Slirp instance.
-    //  * `callback_context_from_raw()` safely converts the raw `opaque` pointer back to a
-    //     `CallbackContext` reference. This is safe because the `opaque` pointer is guaranteed to be valid.
+    //  * `opaque` is a valid, non-null pointer to a `CallbackContext` struct that
+    //    was originally passed to `slirp_new()` and is guaranteed to be valid for
+    //    the lifetime of the Slirp instance.
+    //  * `callback_context_from_raw()` safely converts the raw `opaque` pointer
+    //    back to a `CallbackContext` reference. This is safe because the `opaque`
+    //    pointer is guaranteed to be valid.
     unsafe { callback_context_from_raw(opaque).timer_new_opaque(id, cb_opaque) }
 }
 
@@ -983,7 +1013,8 @@ impl CallbackContext {
     ///
     /// # Safety
     ///
-    /// * `cb_opaque` should be a valid pointer that can be passed back to libslirp.
+    /// * `cb_opaque` should be a valid pointer that can be passed back to
+    ///   libslirp.
     unsafe fn timer_new_opaque(&self, id: SlirpTimerId, cb_opaque: *mut c_void) -> *mut c_void {
         let timer = self.timer_manager.next_timer();
         self.timer_manager
@@ -994,18 +1025,20 @@ impl CallbackContext {
 
 /// Callback function invoked by the slirp stack to free a timer.
 ///
-/// This function is called by the slirp stack when a timer is no longer needed and should be
-/// removed. The `timer` parameter is an opaque pointer to the timer that was created previously
-/// using `timer_new_opaque_cb`.
+/// This function is called by the slirp stack when a timer is no longer needed
+/// and should be removed. The `timer` parameter is an opaque pointer to the
+/// timer that was created previously using `timer_new_opaque_cb`.
 ///
 /// # Safety
 ///
-/// * `timer` must be a valid `TimerOpaque` key that was previously returned by `timer_new_opaque_cb`.
+/// * `timer` must be a valid `TimerOpaque` key that was previously returned by
+///   `timer_new_opaque_cb`.
 /// * `opaque` must be a valid `CallbackContext` pointer.
 unsafe extern "C" fn timer_free_cb(timer: *mut c_void, opaque: *mut c_void) {
     // Safety:
     //
-    // * `timer` is a valid `TimerOpaque` key that was previously returned by `timer_new_opaque_cb`.
+    // * `timer` is a valid `TimerOpaque` key that was previously returned by
+    //   `timer_new_opaque_cb`.
     // * `opaque` is a valid `CallbackContext` pointer.
     unsafe { callback_context_from_raw(opaque) }.timer_free(timer);
 }
@@ -1024,19 +1057,22 @@ impl CallbackContext {
 
 /// Callback function invoked by the slirp stack to modify an existing timer.
 ///
-/// This function is called by the slirp stack when it needs to change the expiration time of
-/// an existing timer. The `timer` parameter is an opaque pointer to the timer that was created
-/// previously using `timer_new_opaque_cb`. The `expire_time` parameter specifies the new
+/// This function is called by the slirp stack when it needs to change the
+/// expiration time of an existing timer. The `timer` parameter is an opaque
+/// pointer to the timer that was created previously using
+/// `timer_new_opaque_cb`. The `expire_time` parameter specifies the new
 /// expiration time for the timer, in nanoseconds.
 ///
 /// # Safety
 ///
-/// * `timer` must be a valid `TimerOpaque` key that was previously returned by `timer_new_opaque_cb`.
+/// * `timer` must be a valid `TimerOpaque` key that was previously returned by
+///   `timer_new_opaque_cb`.
 /// * `opaque` must be a valid `CallbackContext` pointer.
 unsafe extern "C" fn timer_mod_cb(timer: *mut c_void, expire_time: i64, opaque: *mut c_void) {
     // Safety:
     //
-    // * `timer` is a valid `TimerOpaque` key that was previously returned by `timer_new_opaque_cb`.
+    // * `timer` is a valid `TimerOpaque` key that was previously returned by
+    //   `timer_new_opaque_cb`.
     // * `opaque` is a valid `CallbackContext` pointer.
     unsafe { callback_context_from_raw(opaque) }.timer_mod(timer, expire_time);
 }
@@ -1044,8 +1080,9 @@ unsafe extern "C" fn timer_mod_cb(timer: *mut c_void, expire_time: i64, opaque: 
 impl CallbackContext {
     /// Modifies the expiration time of a timer in the timer manager.
     ///
-    /// This function updates the expiration time of the specified timer. It also sends a
-    /// notification to the slirp command thread to wake it up and reset its sleep duration,
+    /// This function updates the expiration time of the specified timer. It
+    /// also sends a notification to the slirp command thread to wake it up
+    /// and reset its sleep duration,
     fn timer_mod(&self, timer: *mut c_void, expire_time: i64) {
         let timer_key = timer as TimerOpaque;
         let expire_time = std::cmp::max(expire_time, 0) as u64;
@@ -1078,21 +1115,24 @@ extern "C" fn notify_cb(opaque: *mut c_void) {
 
 /// Callback function invoked by the slirp stack to initiate a proxy connection.
 ///
-/// This function is called by the slirp stack when it needs to establish a connection
-/// through a proxy. The `addr` parameter points to the address to connect to, `connect_func`
-/// is a callback function that should be called to notify libslirp of the connection result,
-/// and `connect_opaque` is an opaque pointer that will be passed back to `connect_func`.
+/// This function is called by the slirp stack when it needs to establish a
+/// connection through a proxy. The `addr` parameter points to the address to
+/// connect to, `connect_func` is a callback function that should be called to
+/// notify libslirp of the connection result, and `connect_opaque` is an opaque
+/// pointer that will be passed back to `connect_func`.
 ///
 /// # Safety
 ///
 /// * `addr` must be a valid pointer to a `sockaddr_storage` structure.
 /// * `connect_func` must be a valid callback function pointer.
-/// * `connect_opaque` should be a valid pointer that can be passed back to libslirp.
+/// * `connect_opaque` should be a valid pointer that can be passed back to
+///   libslirp.
 /// * `opaque` must be a valid `CallbackContext` pointer.
 ///
 /// # Returns
 ///
-/// `true` if the proxy connection request was initiated successfully, `false` otherwise.
+/// `true` if the proxy connection request was initiated successfully, `false`
+/// otherwise.
 unsafe extern "C" fn try_connect_cb(
     addr: *const libslirp_sys::sockaddr_storage,
     connect_func: SlirpProxyConnectFunc,
@@ -1113,8 +1153,9 @@ unsafe extern "C" fn try_connect_cb(
 impl CallbackContext {
     /// Attempts to establish a proxy connection.
     ///
-    /// This function uses the `proxy_manager` to initiate a connection to the specified address.
-    /// If the proxy manager is not available, it returns `false`.
+    /// This function uses the `proxy_manager` to initiate a connection to the
+    /// specified address. If the proxy manager is not available, it returns
+    /// `false`.
     ///
     /// # Safety
     ///
@@ -1128,8 +1169,10 @@ impl CallbackContext {
         if let Some(proxy_manager) = &self.proxy_manager {
             // Safety:
             //
-            //  * `addr` is a valid pointer to a `sockaddr_storage` structure, as guaranteed by the caller
-            //  * Obtaining the `ss_family` field from a valid `sockaddr_storage` struct is safe
+            //  * `addr` is a valid pointer to a `sockaddr_storage` structure, as guaranteed
+            //    by the caller
+            //  * Obtaining the `ss_family` field from a valid `sockaddr_storage` struct is
+            //    safe
             let storage = unsafe { *addr };
             let af = storage.ss_family as i32;
             let socket_addr: SocketAddr = storage.into();
@@ -1152,18 +1195,21 @@ impl CallbackContext {
 
 /// Callback function invoked by the slirp stack to remove a proxy connection.
 ///
-/// This function is called by the slirp stack when a proxy connection is no longer needed
-/// and should be removed. The `connect_opaque` parameter is an opaque pointer that was
-/// originally passed to `try_connect_cb` when the connection was initiated.
+/// This function is called by the slirp stack when a proxy connection is no
+/// longer needed and should be removed. The `connect_opaque` parameter is an
+/// opaque pointer that was originally passed to `try_connect_cb` when the
+/// connection was initiated.
 ///
 /// # Safety
 ///
-/// * `connect_opaque` must be a valid pointer that was previously passed to `try_connect_cb`.
+/// * `connect_opaque` must be a valid pointer that was previously passed to
+///   `try_connect_cb`.
 /// * `opaque` must be a valid `CallbackContext` pointer.
 unsafe extern "C" fn remove_cb(connect_opaque: *mut c_void, opaque: *mut c_void) {
     //  Safety:
     //
-    // * `connect_opaque` is a valid pointer that was previously passed to `try_connect_cb`.
+    // * `connect_opaque` is a valid pointer that was previously passed to
+    //   `try_connect_cb`.
     // * `opaque` is a valid `CallbackContext` pointer.
     unsafe { callback_context_from_raw(opaque) }.remove(connect_opaque as usize);
 }
@@ -1171,8 +1217,8 @@ unsafe extern "C" fn remove_cb(connect_opaque: *mut c_void, opaque: *mut c_void)
 impl CallbackContext {
     /// Removes a proxy connection from the proxy manager.
     ///
-    /// This function calls the `remove` method on the `proxy_manager` to remove the
-    /// connection associated with the given `connect_id`.
+    /// This function calls the `remove` method on the `proxy_manager` to remove
+    /// the connection associated with the given `connect_id`.
     fn remove(&self, connect_id: usize) {
         if let Some(proxy_connector) = &self.proxy_manager {
             proxy_connector.remove(connect_id);
@@ -1302,7 +1348,8 @@ mod tests {
     #[test]
     fn test_slirp_poll_thread_exit() {
         let (_tx_cmds, _rx_cmds, tx_poll, handle) = launch_polling_thread();
-        // Drop the sender to end the polling thread and wait for the polling thread to exit
+        // Drop the sender to end the polling thread and wait for the polling thread to
+        // exit
         drop(tx_poll);
         handle.join().unwrap();
     }
@@ -1316,7 +1363,8 @@ mod tests {
         // Check that the poll result indicates 0 (fd not ready).
         poll_and_assert_result(&tx_poll, &rx_cmds, invalid_fd, SLIRP_POLL_IN, 0);
 
-        // Drop the sender to end the polling thread and wait for the polling thread to exit
+        // Drop the sender to end the polling thread and wait for the polling thread to
+        // exit
         drop(tx_poll);
         handle.join().unwrap();
     }
@@ -1348,7 +1396,8 @@ mod tests {
             expected_revents,
         );
 
-        // Drop the sender to end the polling thread and wait for the polling thread to exit
+        // Drop the sender to end the polling thread and wait for the polling thread to
+        // exit
         drop(tx_poll);
         handle.join().unwrap();
     }
@@ -1372,7 +1421,8 @@ mod tests {
         let expected_revents = SLIRP_POLL_HUP;
         poll_and_assert_result(&tx_poll, &rx_cmds, reader_fd, SLIRP_POLL_IN, expected_revents);
 
-        // Drop the sender to end the polling thread and wait for the polling thread to exit
+        // Drop the sender to end the polling thread and wait for the polling thread to
+        // exit
         drop(tx_poll);
         handle.join().unwrap();
     }
@@ -1420,7 +1470,8 @@ mod tests {
         let expected_revents = SLIRP_POLL_HUP;
         poll_and_assert_result(&tx_poll, &rx_cmds, reader_fd, SLIRP_POLL_IN, expected_revents);
 
-        // Drop the sender to end the polling thread and wait for the polling thread to exit
+        // Drop the sender to end the polling thread and wait for the polling thread to
+        // exit
         drop(tx_poll);
         handle.join().unwrap();
     }

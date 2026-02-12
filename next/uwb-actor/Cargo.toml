@@ -4,16 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+actor-framework = { path = "../actor-framework" }
+anyhow = "1"
+async-trait = "0.1"
 bytes = "1"
+client = { path = "../client" }
+device-api = { path = "../device-api" }
 futures = "0.3"
 log = "0.4"
-device-api = { path = "../device-api" }
 netsim-model = { path = "../model" }
-client = { path = "../client" }
+pica = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
-async-trait = "0.1"
-actor-framework = { path = "../actor-framework" }
+tokio-util = "0.7"
 
 [dev-dependencies]
 netsim-testing = { path = "../testing", features = ["testing"] }

@@ -1,18 +1,23 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::actions::{BluetoothAction, BluetoothActionResult};
-use crate::beacon_utils::generate_legacy_address;
-use crate::bluetooth_actor::BluetoothActor;
-use crate::error::BluetoothError;
-use crate::hci_callbacks::HciCallbacks;
-use crate::utils::ToChipError;
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
-use netsim_model::chip::{
-    BluetoothMode, Chip, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant, ChipVariantUpdate,
-    NetworkParams,
+use netsim_model::{
+    chip::{
+        BluetoothMode, Chip, ChipCreate, ChipId, ChipKind, ChipKindParams, ChipUpdate, ChipVariant,
+        ChipVariantUpdate,
+    },
+    chip_error::ChipError,
 };
-use netsim_model::chip_error::ChipError;
+
+use crate::{
+    actions::{BluetoothAction, BluetoothActionResult},
+    beacon_utils::generate_legacy_address,
+    bluetooth_actor::BluetoothActor,
+    error::BluetoothError,
+    hci_callbacks::HciCallbacks,
+    utils::ToChipError,
+};
 
 #[async_trait]
 impl ActorService for BluetoothActor {
@@ -28,12 +33,12 @@ impl ActorService for BluetoothActor {
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = params.id;
 
-        let create_params = match params.config.network_params {
-            NetworkParams::Bluetooth(p) => p,
+        let create_params = match params.config.chip_kind_params {
+            ChipKindParams::Bluetooth(p) => p,
             _ => {
                 return Err(BluetoothError::Chip(ChipError::InvalidArguments(
                     "Expected Bluetooth network params".into(),
@@ -118,18 +123,19 @@ impl ActorService for BluetoothActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         let chips = self.chips.lock().unwrap();
         Ok(chips.get(&id).cloned())
     }
 
-    // TODO: Implement radio state enforcement (stopping HCI/transmission when disabled).
+    // TODO: Implement radio state enforcement (stopping HCI/transmission when
+    // disabled).
     async fn handle_update(
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         let mut chips = self.chips.lock().unwrap();
         let mut chip =
@@ -166,7 +172,7 @@ impl ActorService for BluetoothActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         let mut chips = self.chips.lock().unwrap();
         if let Some(chip) = chips.remove(&id) {
@@ -193,7 +199,7 @@ impl ActorService for BluetoothActor {
         &mut self,
         _id: Option<Self::Id>,
         _action: Self::Action,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match _action {
             BluetoothAction::Reset { id } => {
@@ -226,7 +232,7 @@ impl ActorService for BluetoothActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         let chips = self.chips.lock().unwrap();
         Ok(chips.values().cloned().collect())

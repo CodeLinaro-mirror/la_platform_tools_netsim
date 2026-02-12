@@ -14,16 +14,19 @@
 
 //! Integration tests for the `hostapd-rs` crate.
 
-use bytes::Bytes;
-use hostapd_rs::hostapd::Hostapd;
-use log::warn;
-use netsim_packets::ieee80211::{util::is_beacon_frame, MacHeader3Addr};
 use std::{
     env,
     time::{Duration, Instant},
 };
-use tokio::sync::mpsc;
-use tokio::time::{sleep, timeout};
+
+use bytes::Bytes;
+use hostapd_rs::hostapd::Hostapd;
+use log::warn;
+use netsim_packets::ieee80211::{util::is_beacon_frame, MacHeader3Addr};
+use tokio::{
+    sync::mpsc,
+    time::{sleep, timeout},
+};
 use zerocopy::Ref;
 
 /// Initializes a `Hostapd` instance for testing.
@@ -57,11 +60,12 @@ async fn terminate_hostapd(hostapd: &Hostapd) {
 ///
 /// Multi threaded tokio runtime is required for hostapd.
 ///
-/// TODO: Split up tests once feasible with `serial_test` crate or other methods.
+/// TODO: Split up tests once feasible with `serial_test` crate or other
+/// methods.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_hostapd() {
-    // Initialize a single Hostapd instance to share across tests to avoid >5s startup &
-    // shutdown overhead for every test
+    // Initialize a single Hostapd instance to share across tests to avoid >5s
+    // startup & shutdown overhead for every test
     let (mut hostapd, mut receiver) = init_test_hostapd();
     test_start(&mut hostapd).await;
     test_receive_beacon_frame(&mut receiver).await;
@@ -111,7 +115,8 @@ fn get_ssid_from_beacon_frame(packet: &[u8]) -> Result<String, &'static str> {
     }
     let body = &packet[BEACON_HEADER_LEN..];
 
-    // Beacon frame body consists of fixed parameters (12 bytes) followed by tagged parameters.
+    // Beacon frame body consists of fixed parameters (12 bytes) followed by tagged
+    // parameters.
     const FIXED_PARAMS_LEN: usize = 12;
     if body.len() <= FIXED_PARAMS_LEN {
         return Err("Beacon body too short for fixed parameters");
@@ -142,7 +147,8 @@ fn get_ssid_from_beacon_frame(packet: &[u8]) -> Result<String, &'static str> {
     Err("SSID not found in beacon frame")
 }
 
-/// Checks if the receiver receives a beacon frame with the specified SSID within 10 seconds.
+/// Checks if the receiver receives a beacon frame with the specified SSID
+/// within 10 seconds.
 async fn verify_beacon_frame_ssid(receiver: &mut mpsc::Receiver<Bytes>, ssid: &str) {
     let timeout_duration = Duration::from_secs(10);
     match timeout(timeout_duration, receiver.recv()).await {

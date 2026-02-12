@@ -1,7 +1,8 @@
 // tests/network_service_test.rs
 
-use crate::common::TestHarness;
 use std::time::Duration;
+
+use crate::common::TestHarness;
 
 #[test]
 fn test_cops_query() {

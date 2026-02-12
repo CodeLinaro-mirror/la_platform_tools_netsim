@@ -1,15 +1,18 @@
 // Copyright 2026 The Android Open Source Project
 
-use crate::uwb_actor::UwbActor;
 use actor_framework::{FrameworkError, ResourceClient};
 use async_trait::async_trait;
-use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate};
-use netsim_model::client_error::ClientError;
-use netsim_model::stats::NetsimRadioStats;
+use netsim_model::{
+    chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate},
+    client_error::ClientError,
+    stats::NetsimRadioStats,
+};
 
-// Helper to handle downcast failure gracefully if we wanted to preserve error message
-// But downcast consuming only on success is fine if we just convert to string on failure...
-// Actually downcast failure returns the box.
+use crate::uwb_actor::UwbActor;
+
+// Helper to handle downcast failure gracefully if we wanted to preserve error
+// message But downcast consuming only on success is fine if we just convert to
+// string on failure... Actually downcast failure returns the box.
 fn map_framework_error_smart(e: FrameworkError) -> ClientError {
     match e {
         FrameworkError::ServiceError(boxed) => {
@@ -24,7 +27,7 @@ fn map_framework_error_smart(e: FrameworkError) -> ClientError {
 
 /// A client for communicating with the UWB Actor.
 /// Wraps a generic `ResourceClient` and implements `ChipClient`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UwbClient(pub ResourceClient<UwbActor>);
 
 #[async_trait]
@@ -62,7 +65,7 @@ impl ChipClient for UwbClient {
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        Ok(())
+        self.0.shutdown().await.map_err(map_framework_error_smart)
     }
 
     async fn reset(&self, id: ChipId) -> Result<(), ClientError> {

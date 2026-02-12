@@ -1,0 +1,11 @@
+[formatting]
+reorder_keys = false
+
+
+[[rule]]
+include = ["**/Cargo.toml"]
+keys = ["dependencies"]
+
+[rule.formatting]
+# Sort dependencies alphabetically
+reorder_keys = true

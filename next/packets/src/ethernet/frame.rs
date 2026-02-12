@@ -1,20 +1,24 @@
 // Copyright 2025 The Android Open Source Project
 
-//! Defines structures for representing Ethernet II frames using `zerocopy` for zero-copy parsing.
+//! Defines structures for representing Ethernet II frames using `zerocopy` for
+//! zero-copy parsing.
 //!
-//! This module provides definitions for MAC addresses, EtherType constants, and the
-//! Ethernet II frame header, suitable for high-performance network packet analysis.
+//! This module provides definitions for MAC addresses, EtherType constants, and
+//! the Ethernet II frame header, suitable for high-performance network packet
+//! analysis.
 
-use crate::utils::general::ParseResult;
 use core::fmt;
+use std::str::FromStr;
+
 use serde::{
     de::{self, Deserialize, Deserializer, Visitor},
     ser::{Serialize, SerializeStruct, Serializer},
 };
-use std::str::FromStr;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
 };
+
+use crate::utils::general::ParseResult;
 
 /// Represents a 6-byte MAC address.
 #[repr(C)]
@@ -225,7 +229,8 @@ impl Serialize for EthernetFrame {
 pub struct VlanHeader {
     /// Tag Control Information (TCI), including VLAN ID, PCP, and DEI.
     pub tci: U16<NetworkEndian>,
-    /// Inner EtherType field, indicating the protocol of the encapsulated payload.
+    /// Inner EtherType field, indicating the protocol of the encapsulated
+    /// payload.
     pub ethertype: U16<NetworkEndian>,
 }
 
@@ -320,9 +325,11 @@ impl<'a> EthernetPacket<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use core::mem::size_of;
-    use zerocopy::Ref; // Updated to use Ref as per zerocopy 0.8.x
+
+    use zerocopy::Ref;
+
+    use super::*; // Updated to use Ref as per zerocopy 0.8.x
 
     /// Tests that the size of the EthernetFrame struct is correct.
     #[test]

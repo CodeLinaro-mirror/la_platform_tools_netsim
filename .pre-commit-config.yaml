@@ -4,7 +4,7 @@ repos:
     -   id: format-code
         name: Format Code
         entry: scripts/format_code.sh
-        args: ["--diff"]
+        args: ["--hook"]
         language: script
         files: \.(cc|h|proto|ts|rs|java|py|cmake|bp|bazel)$|CMakeLists\.txt$|BUILD$|Cargo\.toml$
         # The regex above covers:

@@ -1,8 +1,9 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::netlink::{NlAttrHdr, NlMsgHdr};
 use num_derive::{FromPrimitive, ToPrimitive};
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned};
+
+use crate::netlink::{NlAttrHdr, NlMsgHdr};
 
 #[derive(FromPrimitive, ToPrimitive, PartialEq, Eq, Debug, Copy, Clone)]
 #[repr(u8)]
@@ -200,7 +201,8 @@ mod tests {
     #[test]
     fn test_hwsim_msg_layout() {
         assert_eq!(std::mem::size_of::<HwsimMsgHdr>(), 4);
-        // HwsimMsg contains a Vec, so its size is not just the sum of its fields' wire size.
+        // HwsimMsg contains a Vec, so its size is not just the sum of its
+        // fields' wire size.
     }
 
     #[test]

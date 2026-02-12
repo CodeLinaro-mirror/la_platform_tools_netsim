@@ -1,7 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
-use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use serde_json::Value;
 
 pub fn build_packet_json(layers: Value, packet_len: usize, protocols: &str) -> Value {
     let now = SystemTime::now();

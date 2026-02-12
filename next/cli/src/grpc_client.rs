@@ -1,9 +1,9 @@
 //! gRPC frontend client library for netsim.
-use crate::error::Result;
 use futures_util::StreamExt;
-use netsim_proto::frontend;
-use netsim_proto::frontend_grpc::FrontendServiceClient;
+use netsim_proto::{frontend, frontend_grpc::FrontendServiceClient};
 use protobuf::well_known_types::empty;
+
+use crate::error::Result;
 
 /// Wrapper struct for application defined ClientResponseReader
 pub struct ClientResponseReader {
@@ -37,6 +37,7 @@ pub enum GrpcRequest {
     PatchCapture(frontend::PatchCaptureRequest),
     GetCapture(frontend::GetCaptureRequest),
     ListLink,
+    CreateLink(frontend::CreateLinkRequest),
     PatchLink(frontend::PatchLinkRequest),
     DeleteLink(frontend::DeleteLinkRequest),
 }
@@ -53,6 +54,7 @@ pub enum GrpcResponse {
     PatchDevice,
     PatchCapture,
     ListLink(frontend::ListLinkResponse),
+    CreateLink(frontend::CreateLinkResponse),
     PatchLink,
     DeleteLink,
     Unknown,
@@ -76,53 +78,64 @@ pub fn get_capture(
     Ok(())
 }
 
+pub trait GrpcMethodExecutor {
+    fn send_grpc(&self, grpc_request: &GrpcRequest) -> Result<GrpcResponse>;
+}
+
+impl GrpcMethodExecutor for FrontendServiceClient {
+    fn send_grpc(&self, grpc_request: &GrpcRequest) -> Result<GrpcResponse> {
+        match grpc_request {
+            GrpcRequest::GetVersion => {
+                Ok(GrpcResponse::GetVersion(self.get_version(&empty::Empty::new())?))
+            }
+            GrpcRequest::ListDevice => {
+                Ok(GrpcResponse::ListDevice(self.list_device(&empty::Empty::new())?))
+            }
+            GrpcRequest::Reset => {
+                self.reset(&empty::Empty::new())?;
+                Ok(GrpcResponse::Reset)
+            }
+            GrpcRequest::ListCapture => {
+                Ok(GrpcResponse::ListCapture(self.list_capture(&empty::Empty::new())?))
+            }
+            GrpcRequest::CreateDevice(req) => {
+                Ok(GrpcResponse::CreateDevice(self.create_device(req)?))
+            }
+            GrpcRequest::DeleteChip(req) => {
+                self.delete_chip(req)?;
+                Ok(GrpcResponse::DeleteChip)
+            }
+            GrpcRequest::PatchDevice(req) => {
+                self.patch_device(req)?;
+                Ok(GrpcResponse::PatchDevice)
+            }
+            GrpcRequest::PatchCapture(req) => {
+                self.patch_capture(req)?;
+                Ok(GrpcResponse::PatchCapture)
+            }
+            GrpcRequest::ListLink => {
+                Ok(GrpcResponse::ListLink(self.list_link(&empty::Empty::new())?))
+            }
+            GrpcRequest::CreateLink(req) => Ok(GrpcResponse::CreateLink(self.create_link(req)?)),
+            GrpcRequest::PatchLink(req) => {
+                self.patch_link(req)?;
+                Ok(GrpcResponse::PatchLink)
+            }
+            GrpcRequest::DeleteLink(req) => {
+                self.delete_link(req)?;
+                Ok(GrpcResponse::DeleteLink)
+            }
+            _ => Err(grpcio::Error::RpcFailure(grpcio::RpcStatus::new(
+                grpcio::RpcStatusCode::INVALID_ARGUMENT,
+            ))
+            .into()),
+        }
+    }
+}
+
 pub fn send_grpc(
     client: &FrontendServiceClient,
     grpc_request: &GrpcRequest,
 ) -> Result<GrpcResponse> {
-    match grpc_request {
-        GrpcRequest::GetVersion => {
-            Ok(GrpcResponse::GetVersion(client.get_version(&empty::Empty::new())?))
-        }
-        GrpcRequest::ListDevice => {
-            Ok(GrpcResponse::ListDevice(client.list_device(&empty::Empty::new())?))
-        }
-        GrpcRequest::Reset => {
-            client.reset(&empty::Empty::new())?;
-            Ok(GrpcResponse::Reset)
-        }
-        GrpcRequest::ListCapture => {
-            Ok(GrpcResponse::ListCapture(client.list_capture(&empty::Empty::new())?))
-        }
-        GrpcRequest::CreateDevice(req) => {
-            Ok(GrpcResponse::CreateDevice(client.create_device(req)?))
-        }
-        GrpcRequest::DeleteChip(req) => {
-            client.delete_chip(req)?;
-            Ok(GrpcResponse::DeleteChip)
-        }
-        GrpcRequest::PatchDevice(req) => {
-            client.patch_device(req)?;
-            Ok(GrpcResponse::PatchDevice)
-        }
-        GrpcRequest::PatchCapture(req) => {
-            client.patch_capture(req)?;
-            Ok(GrpcResponse::PatchCapture)
-        }
-        GrpcRequest::ListLink => {
-            Ok(GrpcResponse::ListLink(client.list_link(&empty::Empty::new())?))
-        }
-        GrpcRequest::PatchLink(req) => {
-            client.patch_link(req)?;
-            Ok(GrpcResponse::PatchLink)
-        }
-        GrpcRequest::DeleteLink(req) => {
-            client.delete_link(req)?;
-            Ok(GrpcResponse::DeleteLink)
-        }
-        _ => Err(grpcio::Error::RpcFailure(grpcio::RpcStatus::new(
-            grpcio::RpcStatusCode::INVALID_ARGUMENT,
-        ))
-        .into()),
-    }
+    client.send_grpc(grpc_request)
 }

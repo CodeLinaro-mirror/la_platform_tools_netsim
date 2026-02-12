@@ -2,16 +2,17 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::test_utils::validate_pcap_json;
     use std::path::PathBuf;
+
+    use crate::utils::test_utils::validate_pcap_json;
 
     #[test]
     fn test_beacon_pcap_json() {
         // Validation with tshark output requires file paths.
         // We assume validate_pcap_json works as it is an existing pattern.
 
-        // For test_beacon_pcap_json, if it uses CARGO_MANIFEST_DIR, it relies on "data" attr.
-        // I will just fix test_beacon_details to use include_bytes!
+        // For test_beacon_pcap_json, if it uses CARGO_MANIFEST_DIR, it relies on "data"
+        // attr. I will just fix test_beacon_details to use include_bytes!
 
         let ieee80211_dir =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/ieee80211/test_data");
@@ -38,7 +39,8 @@ mod tests {
         let ieee80211_dir =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/ieee80211/test_data");
         // Validate basic fields + CCMP details (if tshark parses them)
-        // Note: tshark might not decrypt without keys, but it parses the CCMP header (KeyID, ExtIV, PN).
+        // Note: tshark might not decrypt without keys, but it parses the CCMP header
+        // (KeyID, ExtIV, PN).
         let fields = &[
             "wlan.fc.type",
             "wlan.fc.subtype",
@@ -66,7 +68,8 @@ mod tests {
         let pcap_bytes = include_bytes!("test_data/beacon.pcap");
 
         // Skip pcap header (24 bytes) + pcap record header (16 bytes)
-        // This is fragile but sufficient for this specific test file if we know it has one packet.
+        // This is fragile but sufficient for this specific test file if we know it has
+        // one packet.
 
         let mut reader =
             crate::pcap::PcapReader::new(std::io::Cursor::new(pcap_bytes)).expect("PcapReader");
@@ -86,8 +89,8 @@ mod tests {
             crate::ieee80211::frame::management_subtype::BEACON
         );
 
-        // Payload starts after header (24 bytes) + Fixed Params (12 bytes) = 36 bytes offset
-        // Fixed params: Timestamp (8), Interval (2), Caps (2)
+        // Payload starts after header (24 bytes) + Fixed Params (12 bytes) = 36 bytes
+        // offset Fixed params: Timestamp (8), Interval (2), Caps (2)
         // Let's verify fixed params roughly
         let interval = u16::from_le_bytes([data[32], data[33]]);
         // 0.102400 seconds = 102.4 ms. Interval is in TUs (1024 microseconds).

@@ -1,14 +1,18 @@
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicU32, Arc},
+};
+
 use device_actor::{DeviceActor, DeviceClient};
-use device_api::api::{DeviceChipCreate, DeviceCreate};
-use device_api::{DeviceConfig, DeviceId};
+use device_api::{
+    api::{DeviceChipCreate, DeviceCreate},
+    DeviceConfig, DeviceId,
+};
 use link_api::MockLinkClient;
 use netsim_model::chip::{
-    BluetoothUpdate, ChipClient, ChipUpdate, ChipVariantUpdate, MockChipClient, NetworkKind,
+    BluetoothUpdate, ChipClient, ChipKind, ChipUpdate, ChipVariantUpdate, MockChipClient,
     RadioUpdate,
 };
-use std::collections::HashMap;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
 
 /// The BDD World for Device Actor tests.
 pub struct World {
@@ -32,7 +36,7 @@ impl World {
 
     /// Creates a new World with injected custom mock clients.
     pub async fn with_clients(
-        chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>>,
+        chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
         link_client: MockLinkClient,
     ) -> Self {
         Self::with_clients_and_timeout(chip_clients, link_client, None, None).await
@@ -40,7 +44,7 @@ impl World {
 
     /// Creates a new World with injected custom mock clients and idle timeout.
     pub async fn with_clients_and_timeout(
-        chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>>,
+        chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
         link_client: MockLinkClient,
         startup_timeout: Option<std::time::Duration>,
         idle_timeout: Option<std::time::Duration>,
@@ -58,10 +62,10 @@ impl World {
         World { client, _actor_task: actor_task }
     }
 
-    pub fn create_default_chip_clients() -> HashMap<NetworkKind, Box<dyn ChipClient>> {
-        let mut clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();
+    pub fn create_default_chip_clients() -> HashMap<ChipKind, Box<dyn ChipClient>> {
+        let mut clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         // Add default mocks for common chip kinds
-        for kind in [NetworkKind::Bluetooth, NetworkKind::Wifi, NetworkKind::Uwb] {
+        for kind in [ChipKind::BLUETOOTH, ChipKind::WIFI, ChipKind::UWB] {
             clients.insert(kind, Box::new(Self::create_default_mock_chip()));
         }
         clients
@@ -100,6 +104,7 @@ impl World {
                 true,
                 Default::default(),
                 Default::default(),
+                false,
             ),
             chip: DeviceChipCreate {
                 name: "beacon".to_string(),
@@ -202,12 +207,13 @@ impl World {
                 true,
                 Default::default(),
                 Default::default(),
+                false,
             ),
             chip_config: netsim_model::chip::ChipConfig {
                 name: chip_name,
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
-                network_params: netsim_model::chip::NetworkParams::Bluetooth(
+                chip_kind_params: netsim_model::chip::ChipKindParams::Bluetooth(
                     netsim_model::chip::BluetoothCreate {
                         address: chip_address,
                         bt_properties: Default::default(),
@@ -217,7 +223,8 @@ impl World {
             },
         }
     }
-    /// Creates a Bluetooth ChipUpdate with the specified Low Energy and Classic radio states.
+    /// Creates a Bluetooth ChipUpdate with the specified Low Energy and Classic
+    /// radio states.
     pub fn create_bluetooth_chip_update(
         le_state: Option<bool>,
         classic_state: Option<bool>,

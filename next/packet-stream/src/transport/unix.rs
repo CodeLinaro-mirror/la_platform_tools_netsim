@@ -3,9 +3,11 @@
 // src/socket/unix.rs - Unix Domain Socket implementation
 //=============================================================================
 
-use crate::error::Result;
 use std::path::Path;
+
 use tokio::net::{UnixListener, UnixStream};
+
+use crate::error::Result;
 
 pub struct UnixSocketListener {
     listener: UnixListener,

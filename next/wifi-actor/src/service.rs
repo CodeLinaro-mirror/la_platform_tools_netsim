@@ -1,12 +1,15 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::error::WifiError;
-use crate::wifi_actor::{WifiActor, WifiReq, WifiResponse};
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use netsim_model::chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, Radio};
+use netsim_model::chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, RadioUpdate, WifiUpdate};
 use tokio::sync::mpsc;
+
+use crate::{
+    error::WifiError,
+    wifi_actor::{WifiActor, WifiReq, WifiResponse},
+};
 
 #[async_trait]
 impl ActorService for WifiActor {
@@ -22,7 +25,7 @@ impl ActorService for WifiActor {
         &mut self,
         id: Option<Self::Id>,
         mut params: Self::Create,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let id = id.unwrap_or(params.id);
         if self.active_chips.contains_key(&id) {
@@ -63,12 +66,7 @@ impl ActorService for WifiActor {
             id: id.0,
             device_id: params.device_id,
             kind: netsim_model::chip::ChipKind::WIFI,
-            variant: Some(ChipVariant::Wifi(Radio {
-                state: Some(true),
-                range: 0.0,
-                tx_count: 0,
-                rx_count: 0,
-            })),
+            variant: Some(netsim_model::chip::ChipVariant::Wifi(Default::default())),
             name: Some(params.config.name),
             manufacturer: Some(params.config.manufacturer),
             product_name: Some(params.config.product_name),
@@ -79,13 +77,16 @@ impl ActorService for WifiActor {
         // Notify Medium about new chip
         self.medium.add(id.0);
 
+        // Notify Gateway about new chip (e.g. attach TAP)
+        self.gateway.on_chip_create(id, _ctx).await;
+
         Ok(id)
     }
 
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(self.active_chips.get(&id).cloned())
     }
@@ -94,13 +95,14 @@ impl ActorService for WifiActor {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(chip) = self.active_chips.get_mut(&id) {
-            if let Some(ChipVariantUpdate::Wifi(radio_update)) = update.variant {
-                if let Some(state) = radio_update.state {
-                    self.medium.set_enabled(id.0, state);
-                }
+            if let Some(ChipVariantUpdate::Wifi(WifiUpdate {
+                radio: RadioUpdate { state: Some(state) },
+            })) = update.variant
+            {
+                self.medium.set_enabled(id.0, state);
             }
             if let Some(enabled) = update.enabled {
                 self.medium.set_enabled(id.0, enabled);
@@ -111,7 +113,7 @@ impl ActorService for WifiActor {
             // Update the chip state properly
             if let Ok(enabled) = self.medium.enabled(id.0) {
                 if let Some(ChipVariant::Wifi(ref mut radio)) = chip.variant {
-                    radio.state = Some(enabled);
+                    radio.radio.state = Some(enabled);
                 }
                 chip.enabled = enabled;
             }
@@ -124,7 +126,7 @@ impl ActorService for WifiActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         self.handle_delete_impl(id, ctx).await
     }
@@ -133,7 +135,7 @@ impl ActorService for WifiActor {
         &mut self,
         _id: Option<Self::Id>,
         action: Self::Action,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             WifiReq::GetStatistics => {
@@ -163,7 +165,7 @@ impl ActorService for WifiActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.active_chips.values().cloned().collect())
     }

@@ -15,12 +15,13 @@
 
 //! # IniFile class
 
-use std::collections::HashMap;
-use std::error::Error;
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufReader;
-use std::path::PathBuf;
+use std::{
+    collections::HashMap,
+    error::Error,
+    fs::File,
+    io::{prelude::*, BufReader},
+    path::PathBuf,
+};
 
 use log::error;
 
@@ -109,7 +110,8 @@ impl IniFile {
     }
 }
 
-// TODO: Replace with std::fs::File::create_new once Rust toolchain is upgraded to 1.77
+// TODO: Replace with std::fs::File::create_new once Rust toolchain is upgraded
+// to 1.77
 /// Create new file, errors if it already exists.
 fn create_new<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<File> {
     std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(path.as_ref())
@@ -181,14 +183,15 @@ pub fn get_server_address(instance_num: u16) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-    use std::io::{Read, Write};
-    use std::path::PathBuf;
-    use std::{env, time::SystemTime};
+    use std::{
+        env,
+        fs::File,
+        io::{Read, Write},
+        path::PathBuf,
+        time::SystemTime,
+    };
 
-    use super::get_ini_filepath;
-    use super::IniFile;
-
+    use super::{get_ini_filepath, IniFile};
     use crate::tests::ENV_MUTEX;
 
     impl IniFile {
@@ -219,8 +222,9 @@ mod tests {
         ))
     }
 
-    // NOTE: ctest run a test at least twice tests in parallel, so we need to use unique temp file
-    // to prevent tests from accessing the same file simultaneously.
+    // NOTE: ctest run a test at least twice tests in parallel, so we need to use
+    // unique temp file to prevent tests from accessing the same file
+    // simultaneously.
     #[test]
     fn test_read() {
         for test_case in ["port=123", "port= 123", "port =123", " port = 123 "] {
@@ -243,8 +247,8 @@ mod tests {
             assert_eq!(inifile.get("unknown-key"), None);
 
             // Note that there is no guarantee that the file is immediately deleted (e.g.,
-            // depending on platform, other open file descriptors may prevent immediate removal).
-            // https://doc.rust-lang.org/std/fs/fn.remove_file.html.
+            // depending on platform, other open file descriptors may prevent immediate
+            // removal). https://doc.rust-lang.org/std/fs/fn.remove_file.html.
             std::fs::remove_file(filepath).unwrap();
         }
     }

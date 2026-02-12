@@ -1,18 +1,25 @@
 // Copyright 2025 The Android Open Source Project
 
-//! Provides utility functions for working with `nl80211` Netlink attributes, particularly for `mac80211_hwsim`.
+//! Provides utility functions for working with `nl80211` Netlink attributes,
+//! particularly for `mac80211_hwsim`.
 //!
-//! This module offers helpers to build, parse, and interpret the attributes within `nl80211` messages
-//! that are sent between a user space daemon and the `mac80211_hwsim` kernel module. These functions
-//! simplify tasks like creating Netlink messages to command the simulated hardware (e.g., to transmit a frame)
-//! and parsing messages received from it (e.g., an incoming frame notification).
+//! This module offers helpers to build, parse, and interpret the attributes
+//! within `nl80211` messages that are sent between a user space daemon and the
+//! `mac80211_hwsim` kernel module. These functions simplify tasks like creating
+//! Netlink messages to command the simulated hardware (e.g., to transmit a
+//! frame) and parsing messages received from it (e.g., an incoming frame
+//! notification).
 
-use crate::ethernet::MacAddr as EthernetMacAddr;
-use crate::ieee80211::MacHeader3Addr;
-use crate::netlink::nl80211::attr_id;
-use crate::netlink::nl80211::GenlMsgHdr;
-use crate::netlink::nl80211_attr::NlAttrHdr;
 use zerocopy::{FromBytes, IntoBytes, LittleEndian, Ref, U16, U32};
+
+use crate::{
+    ethernet::MacAddr as EthernetMacAddr,
+    ieee80211::MacHeader3Addr,
+    netlink::{
+        nl80211::{attr_id, GenlMsgHdr},
+        nl80211_attr::NlAttrHdr,
+    },
+};
 
 /// Netlink attribute type flags.
 /// The highest bit of the attribute type indicates if it's nested.
@@ -80,15 +87,15 @@ pub fn is_attr_nested(nla_type: u16) -> bool {
 
 /// Converts a mac80211_hwsim Netlink attribute ID to a human-readable string.
 ///
-/// If the attribute ID is unknown, it returns the hex representation of the value.
+/// If the attribute ID is unknown, it returns the hex representation of the
+/// value.
 ///
 /// # Arguments
 /// * `attr_id_val` - The attribute ID value (e.g., `attr_id::IFACE_MAC`).
 ///
 /// # Examples
 /// ```
-/// use netsim_packets::netlink::nl80211::attr_id;
-/// use netsim_packets::netlink::nl80211_util::attr_id_to_string;
+/// use netsim_packets::netlink::{nl80211::attr_id, nl80211_util::attr_id_to_string};
 ///
 /// assert_eq!(attr_id_to_string(attr_id::IFACE_MAC), "IFACE_MAC");
 /// assert_eq!(attr_id_to_string(0xFFFF), "Unknown(0xFFFF)");
@@ -151,8 +158,9 @@ pub fn nla_align(len: usize) -> usize {
 
 /// An iterator over Netlink attributes in a byte buffer.
 ///
-/// Yields tuples of `(Ref<&'a [u8], NlAttrHdr>, &'a [u8])`, where the first element
-/// is a reference to the parsed header and the second is a slice of the attribute's payload.
+/// Yields tuples of `(Ref<&'a [u8], NlAttrHdr>, &'a [u8])`, where the first
+/// element is a reference to the parsed header and the second is a slice of the
+/// attribute's payload.
 #[derive(Debug)]
 pub struct NlAttrIter<'a> {
     buffer: &'a [u8],
@@ -221,17 +229,20 @@ pub fn create_u32_attr_payload(value: u32) -> Vec<u8> {
 /// Parses a u32 value from a Netlink attribute payload.
 pub fn parse_u32_from_payload(payload: &[u8]) -> Result<u32, NetlinkError> {
     if payload.len() == 4 {
-        // U32 implements FromBytes, so we can use read_from_prefix if the length is checked.
-        // read_from_prefix returns Option, which we unwrap as the length is confirmed.
-        // An alternative, more robust if FromBytes wasn't directly usable, would be:
-        // Ref::<&[u8], U32<LittleEndian>>::from_prefix(payload).map(|(val, _rest)| val.get()).ok_or(NetlinkError::InvalidPayloadLength)
+        // U32 implements FromBytes, so we can use read_from_prefix if the length is
+        // checked. read_from_prefix returns Option, which we unwrap as the
+        // length is confirmed. An alternative, more robust if FromBytes wasn't
+        // directly usable, would be: Ref::<&[u8],
+        // U32<LittleEndian>>::from_prefix(payload).map(|(val, _rest)|
+        // val.get()).ok_or(NetlinkError::InvalidPayloadLength)
         Ok(U32::<LittleEndian>::read_from_prefix(payload).unwrap().0.get())
     } else {
         Err(NetlinkError::InvalidPayloadLength)
     }
 }
 
-/// Creates a payload for a Netlink attribute containing a C-style null-terminated string.
+/// Creates a payload for a Netlink attribute containing a C-style
+/// null-terminated string.
 ///
 /// # Arguments
 /// * `s` - The string slice to encode. A null terminator will be appended.
@@ -246,10 +257,12 @@ pub fn create_string_attr_payload(s: &str) -> Vec<u8> {
 /// Parses a C-style null-terminated string from a Netlink attribute payload.
 ///
 /// # Arguments
-/// * `payload` - A byte slice expected to contain a null-terminated UTF-8 string.
+/// * `payload` - A byte slice expected to contain a null-terminated UTF-8
+///   string.
 ///
 /// # Returns
-/// A `Result` containing the parsed `String` or a `NetlinkError` if parsing fails.
+/// A `Result` containing the parsed `String` or a `NetlinkError` if parsing
+/// fails.
 pub fn parse_string_from_payload(payload: &[u8]) -> Result<String, NetlinkError> {
     if let Some(null_pos) = payload.iter().position(|&b| b == 0) {
         std::str::from_utf8(&payload[..null_pos])
@@ -273,7 +286,8 @@ pub fn create_mac_addr_attr_payload(mac: &EthernetMacAddr) -> Vec<u8> {
 /// Parses a MAC address from a Netlink attribute payload.
 ///
 /// # Arguments
-/// * `payload` - A byte slice expected to contain 6 bytes representing a MAC address.
+/// * `payload` - A byte slice expected to contain 6 bytes representing a MAC
+///   address.
 ///
 /// # Returns A `Result` containing the parsed `EthernetMacAddr` or a `NetlinkError`.
 pub fn parse_mac_addr_from_payload(payload: &[u8]) -> Result<EthernetMacAddr, NetlinkError> {
@@ -309,10 +323,12 @@ pub fn create_bytes_attr_payload(bytes: &[u8]) -> Vec<u8> {
 /// # Arguments
 /// * `cmd` - The command for the `GenlMsgHdr`.
 /// * `version` - The version for the `GenlMsgHdr`.
-/// * `attributes` - A slice of tuples, where each tuple is `(attribute_id, attribute_payload_bytes)`.
+/// * `attributes` - A slice of tuples, where each tuple is `(attribute_id,
+///   attribute_payload_bytes)`.
 ///
 /// # Returns
-/// A `Result` containing a `Vec<u8>` with the serialized Netlink message, or a `NetlinkError`.
+/// A `Result` containing a `Vec<u8>` with the serialized Netlink message, or a
+/// `NetlinkError`.
 pub fn build_netlink_message(
     cmd: u8,
     version: u8,
@@ -336,28 +352,30 @@ pub fn build_netlink_message(
     Ok(message)
 }
 
-/// Type alias for the result of successfully extracting an 802.11 frame from a Netlink message.
+/// Type alias for the result of successfully extracting an 802.11 frame from a
+/// Netlink message.
 pub type ExtractedMacFrame<'a> =
     (Ref<&'a [u8], GenlMsgHdr>, Ref<&'a [u8], MacHeader3Addr>, &'a [u8]);
 
-/// Attempts to parse a `GenlMsgHdr` and then extract an IEEE 802.11 `MacHeader3Addr`
-/// from a specific Netlink attribute within the message.
+/// Attempts to parse a `GenlMsgHdr` and then extract an IEEE 802.11
+/// `MacHeader3Addr` from a specific Netlink attribute within the message.
 ///
-/// The function expects the `netlink_packet_bytes` to start with a `GenlMsgHdr`,
-/// followed by Netlink attributes. It searches for an attribute with the ID
-/// `attr_id::HWSIM_ATTR_FRAME_DATA` and tries to parse its payload as an
-/// 802.11 MAC header.
+/// The function expects the `netlink_packet_bytes` to start with a
+/// `GenlMsgHdr`, followed by Netlink attributes. It searches for an attribute
+/// with the ID `attr_id::HWSIM_ATTR_FRAME_DATA` and tries to parse its payload
+/// as an 802.11 MAC header.
 ///
 /// # Arguments
-/// * `netlink_packet_bytes`: A byte slice representing the full Netlink message.
+/// * `netlink_packet_bytes`: A byte slice representing the full Netlink
+///   message.
 ///
 /// # Returns
 /// `Some((genl_hdr, mac_hdr, mac_payload))` if successful, where:
 ///   - `genl_hdr` is a reference to the parsed `GenlMsgHdr`.
 ///   - `mac_hdr` is a reference to the parsed `MacHeader3Addr`.
-///   - `mac_payload` is a slice of the bytes following the `MacHeader3Addr` (the 802.11 payload).
-///     `None` if parsing fails at any stage (e.g., insufficient data, attribute not found,
-///     or 802.11 header parsing error).
+///   - `mac_payload` is a slice of the bytes following the `MacHeader3Addr`
+///     (the 802.11 payload). `None` if parsing fails at any stage (e.g.,
+///     insufficient data, attribute not found, or 802.11 header parsing error).
 pub fn extract_mac80211_frame_from_netlink<'a>(
     netlink_packet_bytes: &'a [u8],
 ) -> Option<ExtractedMacFrame<'a>> {
@@ -381,9 +399,10 @@ pub fn extract_mac80211_frame_from_netlink<'a>(
 
 #[cfg(test)]
 mod tests {
+    use zerocopy::U16;
+
     use super::*;
     use crate::ieee80211::{FrameControl, MacHeader3Addr, SequenceControl};
-    use zerocopy::U16;
 
     #[test]
     fn test_get_attr_id_and_nested_flag() {
@@ -426,8 +445,8 @@ mod tests {
 
     #[test]
     fn test_nl_attr_iter_single_attribute() {
-        // Attr: len=8 (hdr=4, payload=4), type=HW_INDEX (1), payload=[0xAA,0xBB,0xCC,0xDD]
-        // NlAttrHdr (LE): 08 00 01 00
+        // Attr: len=8 (hdr=4, payload=4), type=HW_INDEX (1),
+        // payload=[0xAA,0xBB,0xCC,0xDD] NlAttrHdr (LE): 08 00 01 00
         let data: [u8; 8] = [0x08, 0x00, 0x01, 0x00, 0xAA, 0xBB, 0xCC, 0xDD];
         let mut iter = iter_nl_attrs(&data);
         if let Some((hdr, payload)) = iter.next() {
@@ -442,10 +461,10 @@ mod tests {
 
     #[test]
     fn test_nl_attr_iter_multiple_attributes_with_padding() {
-        // Attr1: len=7 (hdr=4, payload=3), type=HW_INDEX (1), payload=[1,2,3]. Aligned len=8.
-        //        NlAttrHdr (LE): 07 00 01 00
-        // Attr2: len=5 (hdr=4, payload=1), type=IFACE_MAC (2), payload=[0xEE]. Aligned len=8.
-        //        NlAttrHdr (LE): 05 00 02 00
+        // Attr1: len=7 (hdr=4, payload=3), type=HW_INDEX (1), payload=[1,2,3]. Aligned
+        // len=8.        NlAttrHdr (LE): 07 00 01 00
+        // Attr2: len=5 (hdr=4, payload=1), type=IFACE_MAC (2), payload=[0xEE]. Aligned
+        // len=8.        NlAttrHdr (LE): 05 00 02 00
         let data: [u8; 16] = [
             0x07, 0x00, 0x01, 0x00, 0x01, 0x02, 0x03, 0x00, // Attr1 + padding
             0x05, 0x00, 0x02, 0x00, 0xEE, 0x00, 0x00, 0x00, // Attr2 + padding
@@ -492,7 +511,8 @@ mod tests {
         // Attr1: len=7. Aligned len=8. Buffer is only 7 bytes (missing padding).
         let data: [u8; 7] = [0x07, 0x00, 0x01, 0x00, 0x01, 0x02, 0x03];
         let mut iter = iter_nl_attrs(&data);
-        // The iterator should return None because the full aligned attribute cannot be read.
+        // The iterator should return None because the full aligned attribute cannot be
+        // read.
         assert!(iter.next().is_none(), "Should fail as total_aligned_len > buffer length");
     }
 

@@ -1,17 +1,17 @@
 // //! # Observability & Tracing
 // //!
-// //! This module provides the tracing infrastructure for the entire actor system.
-// //!
+// //! This module provides the tracing infrastructure for the entire actor
+// system. //!
 // //! ## Overview
 // //!
-// //! The [`setup_tracing`] function initializes structured logging with the `tracing` crate,
-// //! providing hierarchical spans that show the complete request flow through the system.
-// //!
+// //! The [`setup_tracing`] function initializes structured logging with the
+// `tracing` crate, //! providing hierarchical spans that show the complete
+// request flow through the system. //!
 // //! ## Configuration
 // //!
-// //! The framework uses a compact format that hides the crate/module prefix (`with_target(false)`).
-// //! This keeps log lines short while still providing rich structured data.
-// //!
+// //! The framework uses a compact format that hides the crate/module prefix
+// (`with_target(false)`). //! This keeps log lines short while still providing
+// rich structured data. //!
 // //! - **Structured logging** with `tracing` crate
 // //! - **Hierarchical spans** for request tracing
 // //! - **Configurable log levels** via `RUST_LOG` environment variable
@@ -20,10 +20,10 @@
 // //! ## What Gets Traced
 // //!
 // //! - **Actor Lifecycle**: Startup, shutdown, and final state
-// //! - **Resource Operations**: Create, Get, Update, Delete, and custom Actions
-// //! - **Request Flow**: Hierarchical spans showing the complete request path
-// //! - **Errors**: Detailed error context with entity IDs and failure reasons
-// //!
+// //! - **Resource Operations**: Create, Get, Update, Delete, and custom
+// Actions //! - **Request Flow**: Hierarchical spans showing the complete
+// request path //! - **Errors**: Detailed error context with entity IDs and
+// failure reasons //!
 // //! ## Usage Examples
 // //!
 // //! ```bash
@@ -42,8 +42,8 @@
 // //!
 // //! ## Debug Flag for Full Payload
 // //!
-// //! When you run with `RUST_LOG=debug`, functions log full payloads **once** at the start:
-// //!
+// //! When you run with `RUST_LOG=debug`, functions log full payloads **once**
+// at the start: //!
 // //! ```rust
 // //! # use tracing::debug;
 // //! # #[derive(Debug)]
@@ -52,22 +52,22 @@
 // //! debug!(?order, "create_order called");
 // //! ```
 // //!
-// //! The `?` syntax is a `tracing` macro feature that records the variable using its
-// //! `Debug` representation as a structured field.
+// //! The `?` syntax is a `tracing` macro feature that records the variable
+// using its //! `Debug` representation as a structured field.
 // //!
 // //! Running with `RUST_LOG=debug` will show:
 // //!
 // //! ```text
 // //! DEBUG create_order called order={...}
-// //! INFO order_processing:create_order: Processing create_order request (Client Side)
-// //! ```
+// //! INFO order_processing:create_order: Processing create_order request
+// (Client Side) //! ```
 // //!
 // //! All subsequent logs remain concise, showing only the workflow hierarchy.
 // //!
 // //! ## Workflow Trace Example
 // //!
-// //! The tracing output shows the complete order creation workflow with hierarchical spans.
-// //!
+// //! The tracing output shows the complete order creation workflow with
+// hierarchical spans. //!
 // //! **With `RUST_LOG=info`** (compact):
 // //!
 // //! ```text
@@ -81,26 +81,26 @@
 // //! **With `RUST_LOG=debug`** (detailed):
 // //!
 // //! ```text
-// //! DEBUG create_order called order=Order { id: "", user_id: "user_1", product_id: "product_1", quantity: 3, total: 75.0 }
-// //! INFO Sending create_order to actor
-// //! DEBUG Get user_id="user_1"
+// //! DEBUG create_order called order=Order { id: "", user_id: "user_1",
+// product_id: "product_1", quantity: 3, total: 75.0 } //! INFO Sending
+// create_order to actor //! DEBUG Get user_id="user_1"
 // //! INFO Created user_id="user_1" size=1
 // //! DEBUG Get product_id="product_1"
 // //! INFO Created product_id="product_1" size=1
 // //! DEBUG Action product_id="product_1" action=ReserveStock(3)
 // //! INFO Action ok product_id="product_1"
-// //! DEBUG Create params=OrderCreate { user_id: "user_1", product_id: "product_1", quantity: 3, total: 75.0 }
-// //! INFO Created order_id="order_1" size=1
-// //! ```
+// //! DEBUG Create params=OrderCreate { user_id: "user_1", product_id:
+// "product_1", quantity: 3, total: 75.0 } //! INFO Created order_id="order_1"
+// size=1 //! ```
 // //!
 // //! **Key Observations**:
 // //! 1. **User Validation** → `Get user_id="user_1"` → User found in actor
 // //! 2. **Product Validation** → `Get product_id="product_1"` → Product found
-// //! 3. **Stock Reservation** → `Action...ReserveStock(3)` → Stock reserved (happens in `Order::on_create`)
-// //! 4. **Order Creation** → `Create params=OrderCreate{...}` → Order created
-// //!
-// //! Each step is traced with structured fields that can be filtered and analyzed in
-// //! production logging systems.
+// //! 3. **Stock Reservation** → `Action...ReserveStock(3)` → Stock reserved
+// (happens in `Order::on_create`) //! 4. **Order Creation** → `Create
+// params=OrderCreate{...}` → Order created //!
+// //! Each step is traced with structured fields that can be filtered and
+// analyzed in //! production logging systems.
 // //!
 // //! ## Output Formats
 // //!
@@ -112,7 +112,7 @@
 // pub fn setup_tracing() {
 //     tracing_subscriber::fmt()
 //         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-//         .with_target(false) // Don't show module paths - we use entity_type instead
-//         .compact() // Compact format shows spans inline (e.g., "order_processing:create_order")
-//         .init();
+//         .with_target(false) // Don't show module paths - we use entity_type
+// instead         .compact() // Compact format shows spans inline (e.g.,
+// "order_processing:create_order")         .init();
 // }

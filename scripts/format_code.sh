@@ -15,7 +15,8 @@
 
 # Formats source files according to Google's style guide.
 # By default, formats all files.
-# Use --diff to format files that are different from HEAD.
+# Use --diff to format files that are different from HEAD (including untracked).
+# Use --hook to format files passed as arguments (e.g. for pre-commit).
 
 if [ -z "${BASH_VERSION}" ] || [ "${BASH_VERSION%%.*}" -lt 4 ]; then
   echo "Bash version 4+ is required. Trying to find a newer version."
@@ -36,16 +37,28 @@ fi
 
 set -euo pipefail
 
+# Determine the absolute path of the script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Go to the root of the git repository (tools/netsim).
-cd "$(dirname "$0")/.."
+cd "$SCRIPT_DIR/.."
 
 # Argument parsing
-FORMAT_ALL=true
-if [[ "$*" == *"--diff"* ]]; then
-  FORMAT_ALL=false
+MODE="ALL"
+if [[ $# -gt 0 ]]; then
+  case "$1" in
+    --diff)
+      MODE="DIFF"
+      shift
+      ;;
+    --hook)
+      MODE="HOOK"
+      shift
+      ;;
+  esac
 fi
 
-REPO="$(dirname "$0")/../../.."
+REPO="$SCRIPT_DIR/../../.."
 OS=$(uname | tr '[:upper:]' '[:lower:]')
 
 DESIRED_TAPLO_VERSION="0.10.0"
@@ -90,22 +103,27 @@ check_taplo_version() {
 check_taplo_version
 
 # Populate file lists based on mode
-if $FORMAT_ALL; then
+if [[ "$MODE" == "ALL" ]]; then
   echo "Gathering all files to format..."
-  mapfile -d '' clang_files < <(find src proto ui/ts -type f \( -name '*.cc' -o -name '*.h' -o -name '*.proto' -o -name '*.ts' \) -print0)
+  mapfile -d '' clang_files < <(find src rust next proto ui/ts -type f \( -name '*.cc' -o -name '*.h' -o -name '*.proto' -o -name '*.ts' \) -print0)
   mapfile -d '' rust_files < <(find rust next -type f -name '*.rs' -not -path "*/target/*" -print0)
   mapfile -d '' java_files < <(find . -type f -name '*.java' -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
   mapfile -d '' py_files < <(find . -type f -name '*.py' -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
   mapfile -d '' cmake_files < <(find . -type f \( -name 'CMakeLists.txt' -o -name '*.cmake' \) -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
   mapfile -d '' bp_files < <(find . -maxdepth 1 -type f -name "Android.bp" -print0)
   mapfile -d '' bazel_files < <(find . -type f \( -name "BUILD" -o -name "MODULE.bazel" -o -name "BUILD.bazel" -o -name "*.bzl" \) -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
-  mapfile -d '' toml_files < <(find rust next -type f -name 'Cargo.toml' -not -path "*/target/*" -not -path "*/bazel-bin/*" -not -path "*/bazel-netsim/*" -not -path "*/bazel-out/*" -not -path "*/objs/*" -print0)
+  mapfile -d '' toml_files < <(find rust next proto -type f -name 'Cargo.toml' -not -path "*/target/*" -not -path "*/bazel-bin/*" -not -path "*/bazel-netsim/*" -not -path "*/bazel-out/*" -not -path "*/objs/*" -print0)
 else
-  echo "Gathering changed files to format..."
-  mapfile -t files < <(git diff --name-only --diff-filter=ACMRTUXB HEAD && git ls-files --others --exclude-standard)
+  echo "Gathering files to format..."
 
-  if [ ${#files[@]} -eq 0 ]; then
-    echo "No changed files to format."
+  if [[ "$MODE" == "DIFF" ]]; then
+    mapfile -d '' all_files < <(git diff -z --name-only --diff-filter=ACMRTUXB HEAD && git ls-files -z --others --exclude-standard)
+  else # HOOK
+    all_files=("$@")
+  fi
+
+  if [ ${#all_files[@]} -eq 0 ]; then
+    echo "No files to format."
     exit 0
   fi
 
@@ -117,7 +135,7 @@ else
   bp_files=()
   bazel_files=()
   toml_files=()
-  for f in "${files[@]}"; do
+  for f in "${all_files[@]}"; do
     [[ "$f" =~ \.(cc|h|proto|ts)$ ]] && clang_files+=("$f")
     [[ "$f" =~ \.rs$ ]] && rust_files+=("$f")
     [[ "$f" =~ \.java$ ]] && java_files+=("$f")
@@ -135,15 +153,16 @@ check_taplo_version
 pids=()
 RUSTFMT="$REPO/prebuilts/rust/$OS-x86/stable/rustfmt"
 BPFMT="$REPO/prebuilts/build-tools/$OS-x86/bin/bpfmt"
+TAPLO_CONFIG="$REPO/tools/netsim/next/taplo.toml"
 
-format "C/C++/Proto/TS" "clang-format -i" "${clang_files[@]}"
-format "Rust" "$RUSTFMT --files-with-diff" "${rust_files[@]}"
-format "Java" "google-java-format -i" "${java_files[@]}"
-format "Python" "pyformat --in_place --alsologtostderr --noshowprefixforinfo" "${py_files[@]}"
-format "CMake" "cmake-format -i" "${cmake_files[@]}"
-format "Android.bp" "$BPFMT -w" "${bp_files[@]}"
-format "Bazel" "buildifier -lint=fix" "${bazel_files[@]}"
-format "TOML" "taplo fmt" "${toml_files[@]}"
+[[ ${#clang_files[@]} -gt 0 ]] && format "C/C++/Proto/TS" "clang-format -i" "${clang_files[@]}"
+[[ ${#rust_files[@]} -gt 0 ]] && format "Rust" "$RUSTFMT --files-with-diff" "${rust_files[@]}"
+[[ ${#java_files[@]} -gt 0 ]] && format "Java" "google-java-format -i" "${java_files[@]}"
+[[ ${#py_files[@]} -gt 0 ]] && format "Python" "pyformat --in_place --alsologtostderr --noshowprefixforinfo" "${py_files[@]}"
+[[ ${#cmake_files[@]} -gt 0 ]] && format "CMake" "cmake-format -i" "${cmake_files[@]}"
+[[ ${#bp_files[@]} -gt 0 ]] && format "Android.bp" "$BPFMT -w" "${bp_files[@]}"
+[[ ${#bazel_files[@]} -gt 0 ]] && format "Bazel" "buildifier -lint=fix" "${bazel_files[@]}"
+[[ ${#toml_files[@]} -gt 0 ]] && format "TOML" "env RUST_LOG=warn taplo fmt --config" "$TAPLO_CONFIG" "${toml_files[@]}"
 
 echo "Waiting for formatters to finish..."
 for pid in "${pids[@]}"; do

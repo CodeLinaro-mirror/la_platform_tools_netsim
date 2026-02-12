@@ -3,31 +3,19 @@
 //! This module provides utility functions for the device actor,
 //! including network kind conversion and capture stream wrapping.
 
-use capture_api::io::{CapturedSink, CapturedStream};
-use capture_api::{CaptureCreate, CaptureSender};
+use std::sync::{atomic::AtomicBool, Arc};
+
+use capture_api::{
+    io::{CapturedSink, CapturedStream},
+    CaptureCreate, CaptureSender,
+};
 use futures::{SinkExt, StreamExt};
 use netsim_model::chip::{ChipId, PacketSink, PacketStream};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-
-pub fn chip_kind_to_network_kind(
-    kind: &netsim_model::chip::ChipKind,
-) -> netsim_model::chip::NetworkKind {
-    match kind {
-        netsim_model::chip::ChipKind::BLUETOOTH | netsim_model::chip::ChipKind::BleBeacon => {
-            netsim_model::chip::NetworkKind::Bluetooth
-        }
-        netsim_model::chip::ChipKind::WIFI => netsim_model::chip::NetworkKind::Wifi,
-        netsim_model::chip::ChipKind::UWB => netsim_model::chip::NetworkKind::Uwb,
-        netsim_model::chip::ChipKind::CELLULAR => netsim_model::chip::NetworkKind::Cell,
-        _ => netsim_model::chip::NetworkKind::Bluetooth, // Fallback
-    }
-}
 
 pub async fn create_capture_and_wrap_streams(
     capture_client: Arc<dyn CaptureSender>,
     chip_id: ChipId,
-    chip_kind: netsim_model::chip::NetworkKind,
+    chip_kind: netsim_model::chip::ChipKind,
     device_name: String,
     packet_stream: Option<PacketStream>,
     packet_sink: Option<PacketSink>,
@@ -35,7 +23,7 @@ pub async fn create_capture_and_wrap_streams(
     let enabled_flag = Arc::new(AtomicBool::new(false));
     let capture_create = CaptureCreate {
         chip_id,
-        chip_kind: chip_kind.into(),
+        chip_kind,
         device_name: device_name.to_string(),
         default_enabled: false, // Default to disabled
         enabled_flag: Arc::new(AtomicBool::new(false)),

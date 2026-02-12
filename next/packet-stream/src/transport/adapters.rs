@@ -1,21 +1,26 @@
 // Copyright 2025 Google LLC
 //=============================================================================
-// src/transport/adapters.rs - Adapters for existing PacketStream implementations
+// src/transport/adapters.rs - Adapters for existing PacketStream
+// implementations
 //=============================================================================
 
-use crate::error::{PacketStreamError, Result};
-use crate::streams::InitInfo;
-use crate::transport::traits::{PacketSink, PacketStream, TransportListener};
-use crate::types::ChipInfo;
-use crate::types::StreamAddress;
+use std::{
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+
 use async_trait::async_trait;
-use futures::stream::StreamExt;
-use futures::SinkExt;
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use futures::{stream::StreamExt, SinkExt};
 use tokio::net::{TcpListener, UnixListener};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+
+use crate::{
+    error::{PacketStreamError, Result},
+    streams::InitInfo,
+    transport::traits::{PacketSink, PacketStream, TransportListener},
+    types::{ChipInfo, StreamAddress},
+};
 
 /// TCP listener adapter
 pub struct TcpTransportListener {

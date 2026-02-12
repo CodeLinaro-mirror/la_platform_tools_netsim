@@ -5,38 +5,43 @@
 
 //! # Netsim Model
 //!
-//! This crate defines the core data structures and types used across the Netsim project.
-//! It serves as the base layer for the dependency graph.
+//! This crate defines the core data structures and types used across the Netsim
+//! project. It serves as the base layer for the dependency graph.
 //!
 //! ## Dependency Rules
 //!
-//! - **Base Layer**: This crate should not depend on other Netsim crates (e.g., `*-api`, `*-actor`).
-//! - **Shared Types**: It contains shared types like `ChipId`, `Position`, and `Device` that are used by both API and implementation crates.
+//! - **Base Layer**: This crate should not depend on other Netsim crates (e.g.,
+//!   `*-api`, `*-actor`).
+//! - **Shared Types**: It contains shared types like `ChipId`, `Position`, and
+//!   `Device` that are used by both API and implementation crates.
 //!
 //! ## Dependency Hierarchy
 //!
-//! The Netsim project uses a layered architecture to prevent circular dependencies:
+//! The Netsim project uses a layered architecture to prevent circular
+//! dependencies:
 //!
-//! 1.  **Level 0: Base Layer** (`netsim-model`)
+//! 1. **Level 0: Base Layer** (`netsim-model`)
 //!     - Shared data types (e.g., `ChipId`, `Position`).
 //!     - No dependencies on other Netsim crates.
-//! 2.  **Level 1: API Layer** (`*-api`)
+//! 2. **Level 1: API Layer** (`*-api`)
 //!     - Behavioral contracts (Actions, Results, Traits).
 //!     - Depends on: `netsim-model`.
-//! 3.  **Level 2: Implementation & Client Layer**
-//!     - `*-actor`: Implements the contracts. Depends on `*-api`, `netsim-model`.
-//!     - `netsim-client`: Client-side wrappers. Depends on `*-api`, `netsim-model`.
-//! 4.  **Level 3: Consumer Layer** (`daemon`, `wifi`, `cell`, etc.)
+//! 3. **Level 2: Implementation & Client Layer**
+//!     - `*-actor`: Implements the contracts. Depends on `*-api`,
+//!       `netsim-model`.
+//!     - `netsim-client`: Client-side wrappers. Depends on `*-api`,
+//!       `netsim-model`.
+//! 4. **Level 3: Consumer Layer** (`daemon`, `wifi`, `cell`, etc.)
 //!     - Uses the services. Depends on `netsim-client`, `*-api`.
 //!
-//! By maintaining this structure, we ensure a stable foundation and prevent circular dependencies.
+//! By maintaining this structure, we ensure a stable foundation and prevent
+//! circular dependencies.
 
 /// Bluetooth related definitions.
-pub mod bluetooth;
-
 /// Chip configuration parameters.
 pub mod ap;
-/// Chip actor definitions.
+pub mod bluetooth;
+pub mod cell;
 pub mod chip;
 /// Chip error definitions.
 pub mod chip_error;
@@ -53,5 +58,7 @@ pub mod macros;
 pub mod packet_streamer;
 /// Statistics related definitions.
 pub mod stats;
+pub mod uwb;
+pub mod wifi;
 
 pub use initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};

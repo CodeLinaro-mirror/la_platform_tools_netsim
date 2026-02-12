@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::HashMap, net::IpAddr, sync::Mutex};
+
+use etherparse::{PacketHeaders, PayloadSlice, TransportHeader};
+use log::debug;
+
 /// This module provides a reverse-dns function that caches the domain
 /// name (FQDNs) and IpAddr from DNS answer records.
 ///
@@ -22,13 +27,7 @@
 ///
 /// 2. Proxy bypass/exclusion list requires matching on host name
 /// patterns.
-///
 use crate::dns;
-use etherparse::{PacketHeaders, PayloadSlice, TransportHeader};
-use log::debug;
-use std::collections::HashMap;
-use std::net::IpAddr;
-use std::sync::Mutex;
 
 /// DNS Manager of IP addresses to FQDN
 pub struct DnsManager {

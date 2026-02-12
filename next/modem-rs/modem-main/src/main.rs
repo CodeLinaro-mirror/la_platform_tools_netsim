@@ -8,17 +8,17 @@
 //! - Initialize logging.
 //! - Delegate control to the appropriate logic (client, server, or CLI).
 
+use std::{collections::HashMap, process::Command, sync::Arc, time::Duration};
+
 use clap::{Parser, Subcommand};
 use log::{error, info};
 use modem_rs::ModemId;
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::process::Command;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    net::TcpStream,
+    sync::Mutex,
+};
 
 mod client;
 mod server;
@@ -213,8 +213,9 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tokio::net::TcpListener;
+
+    use super::*;
 
     #[test]
     fn test_parse_args_with_instance_id() {
@@ -232,10 +233,12 @@ mod tests {
     // #[tokio::test]
     // async fn test_ensure_server_is_running_when_not_running() {
     //     // Ensure no server is running on the port
-    //     let _ = TcpListener::bind(format!("localhost:{}", TCP_PORT)).await.unwrap();
+    //     let _ = TcpListener::bind(format!("localhost:{}",
+    // TCP_PORT)).await.unwrap();
 
-    //     let exe = std::env::current_exe().expect("Failed to get current exe path");
-    //     Command::new(exe).arg("--server-mode").spawn().expect("Failed to start server process");
+    //     let exe = std::env::current_exe().expect("Failed to get current exe
+    // path");     Command::new(exe).arg("--server-mode").spawn().expect("Failed
+    // to start server process");
 
     //     ensure_server_is_running().await;
     // }

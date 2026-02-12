@@ -1,8 +1,10 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::world::World;
-use netsim_model::chip::{ChipClient, ChipId, ChipKind, MockChipClient};
 use std::collections::HashMap;
+
+use netsim_model::chip::{ChipClient, ChipId, ChipKind, MockChipClient};
+
+use crate::world::World;
 
 // Feature: Link Propagation
 //
@@ -15,7 +17,8 @@ fn configure_base_mock(mock: &mut MockChipClient) {
     mock.expect_read().returning(|_| Ok(netsim_model::chip::Chip::default()));
 }
 
-// Scenario: Link updates are propagated to chip clients for creation and deletion
+// Scenario: Link updates are propagated to chip clients for creation and
+// deletion
 //
 //   Given a mock chip client expecting updates
 //   When a link is created and then deleted
@@ -161,7 +164,8 @@ async fn test_chip_removal_propagates_patch() {
         .times(1)
         .returning(|_, _| Ok(netsim_model::chip::Chip::default()));
 
-    // Expectation 3: Peer (Chip 2) gets link removal update (When Chip 1 is removed)
+    // Expectation 3: Peer (Chip 2) gets link removal update (When Chip 1 is
+    // removed)
     shared_mock
         .expect_update()
         .withf(move |id, patch| {

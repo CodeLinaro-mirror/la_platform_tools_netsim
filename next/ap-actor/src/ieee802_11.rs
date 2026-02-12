@@ -1,19 +1,18 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::sae::SaeStateMachine;
-use crate::shared::SharedKeyStore;
-use crate::{ApError, ApState};
 use actor_framework::DynContext;
-
 use netsim_model::chip::{ChipId, WifiMode};
-use netsim_packets::ieee80211::wmm::write_wmm_param_element;
-use netsim_packets::ieee80211::{
-    ie::IeIterator, management_subtype, tags, write_ie, AssociationResponseFixedFields,
-    AuthenticationFixedFields, BeaconFixedFields, BeaconFrameHeader, FrameControl, Ieee80211,
-    MacHeader3Addr, SequenceControl,
+use netsim_packets::{
+    ieee80211::{
+        ie::IeIterator, management_subtype, tags, wmm::write_wmm_param_element, write_ie,
+        AssociationResponseFixedFields, AuthenticationFixedFields, BeaconFixedFields,
+        BeaconFrameHeader, FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
+    },
+    llc::{control_field, sap, LlcSnapHeader},
 };
-use netsim_packets::llc::{control_field, sap, LlcSnapHeader};
 use zerocopy::{IntoBytes, U16};
+
+use crate::{sae::SaeStateMachine, shared::SharedKeyStore, ApActor, ApError, ApState};
 
 /// Handles 802.11 Management Frames
 #[derive(Clone, Debug)]
@@ -33,7 +32,8 @@ impl Ieee80211Manager {
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         // Beacon Header
         let header = BeaconFrameHeader {
-            frame_control: FrameControl::new(0x0080), // Mgmt (00), Beacon (1000) -> 0x0080 (LE: 80 00)
+            frame_control: FrameControl::new(0x0080), /* Mgmt (00), Beacon (1000) -> 0x0080 (LE:
+                                                       * 80 00) */
             duration: U16::new(0),
             da: netsim_packets::ethernet::MacAddr { bytes: [0xFF; 6] },
             sa: ap.config.bssid,
@@ -84,10 +84,12 @@ impl Ieee80211Manager {
         }
 
         // TIM IE (Tag 5)
-        // DTIM Count (0), DTIM Period (from config), Bitmap Control (0), Partial Virtual Bitmap (0)
-        // For now, we claim DTIM count is always 0 (every beacon is DTIM) or just follow period?
-        // Let's set DTIM Count = 0 (implying this beacon is a DTIM) for simplicity in simulation.
-        // Bitmap Control = 0 (No Multicast buffered). Partial Virtual Bitmap = 0 (No unicast buffered).
+        // DTIM Count (0), DTIM Period (from config), Bitmap Control (0), Partial
+        // Virtual Bitmap (0) For now, we claim DTIM count is always 0 (every
+        // beacon is DTIM) or just follow period? Let's set DTIM Count = 0
+        // (implying this beacon is a DTIM) for simplicity in simulation. Bitmap
+        // Control = 0 (No Multicast buffered). Partial Virtual Bitmap = 0 (No unicast
+        // buffered).
         write_ie(body, tags::TIM, &[0, ap.config.dtim_period, 0, 0]);
 
         // RSN IE (WPA2)
@@ -133,7 +135,7 @@ impl Ieee80211Manager {
         shared_keys: &SharedKeyStore,
         beacon_interval: u16,
         source_id: ChipId,
-        _ctx: &mut DynContext<ChipId>,
+        _ctx: &mut DynContext<ApActor>,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let ieee80211_frame = match Ieee80211::decode(frame) {
             Ok(f) => f,
@@ -278,8 +280,8 @@ impl Ieee80211Manager {
             // Seq 1: Commit (Peer -> AP) or (Simultaneous)
             // Seq 2: Confirm?
             // SAE uses implicit sequence based on content?
-            // 802.11-2016 12.4.8.2: SAE Auth frames use Seq 1 for Commit, Seq 2 for Confirm.
-            // SAE Standard: Commit is Seq 1, Confirm is Seq 2.
+            // 802.11-2016 12.4.8.2: SAE Auth frames use Seq 1 for Commit, Seq 2 for
+            // Confirm. SAE Standard: Commit is Seq 1, Confirm is Seq 2.
 
             let sae_payload = &body[6..]; // Payload after fixed fields
 
@@ -511,7 +513,8 @@ impl Ieee80211Manager {
         // Parse SSID from Probe Req
         // Frame: Header (24) + IEs.
         // Ieee80211 doesn't have `payload()`, but `decode` validates it.
-        // We'll operate on `raw_frame` slice for IE parsing. Header is usually 24 bytes for Mgmt.
+        // We'll operate on `raw_frame` slice for IE parsing. Header is usually 24 bytes
+        // for Mgmt.
         if raw_frame.len() < 24 {
             return Ok(vec![]);
         }
@@ -580,7 +583,8 @@ impl Ieee80211Manager {
         // Check if we have a session for this source
         if let Some(_wpa) = &ap.wpa {
             // Since ApState currently supports only a single session/authenticator,
-            // we clear it indiscriminately. Future multi-station support will need keyed lookup.
+            // we clear it indiscriminately. Future multi-station support will need keyed
+            // lookup.
             ap.wpa = None;
         }
 

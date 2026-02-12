@@ -1,7 +1,10 @@
-use modem_rs::test_utils::{MockModemHandler, MockNetworkHandler};
-use modem_rs::time::MockClock;
-use modem_rs::*;
 use std::sync::Arc;
+
+use modem_rs::{
+    test_utils::{MockModemHandler, MockNetworkHandler},
+    time::MockClock,
+    *,
+};
 
 #[test]
 fn test_add_modem_to_manager() {

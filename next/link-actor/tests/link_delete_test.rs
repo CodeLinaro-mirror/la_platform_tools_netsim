@@ -1,7 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::world::World;
 use netsim_model::chip::ChipId;
+
+use crate::world::World;
 
 // Feature: Link Deletion
 //

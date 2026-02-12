@@ -1,8 +1,11 @@
 // src/test_utils.rs
 
+use std::{
+    sync::{Condvar, Mutex},
+    time::Duration,
+};
+
 use crate::*;
-use std::sync::{Condvar, Mutex};
-use std::time::Duration;
 
 /// Mock handler for manager callbacks that captures events.
 pub struct MockNetworkHandler {
@@ -18,7 +21,8 @@ impl NetworkCallbacks for MockNetworkHandler {
     }
 
     fn on_modem_hanged_up(&self, _modem_id: ModemId) {
-        // For now, do nothing. This can be expanded if tests need to assert on this event.
+        // For now, do nothing. This can be expanded if tests need to assert on
+        // this event.
     }
 }
 

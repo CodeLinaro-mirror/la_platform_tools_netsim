@@ -1,10 +1,8 @@
 use device_api::DeviceAction;
 use netsim_model::chip::{ChipClient, ChipId};
-
-mod hwsim_helper;
-mod world;
 use wifi_actor::WifiClient;
-use world::World;
+
+use crate::world::World;
 
 // Feature: Chip Creation
 // Scenario: Create a new chip
@@ -122,7 +120,9 @@ async fn test_update_chip_state() {
         position: None,
         orientation: None,
         variant: Some(netsim_model::chip::ChipVariantUpdate::Wifi(
-            netsim_model::chip::RadioUpdate { state: Some(false) },
+            netsim_model::chip::WifiUpdate {
+                radio: netsim_model::chip::RadioUpdate { state: Some(false) },
+            },
         )),
         links: None,
         enabled: None,
@@ -133,15 +133,15 @@ async fn test_update_chip_state() {
     let chip = world.wifi_client.read(ChipId(chip_id)).await.expect("Failed to read chip");
     assert_eq!(chip.enabled, false);
     if let Some(netsim_model::chip::ChipVariant::Wifi(radio)) = chip.variant {
-        assert_eq!(radio.state, Some(false));
+        assert_eq!(radio.radio.state, Some(false));
     } else {
         panic!("Expected Wifi variant");
     }
 
     // When - Update to enabled
     update.variant =
-        Some(netsim_model::chip::ChipVariantUpdate::Wifi(netsim_model::chip::RadioUpdate {
-            state: Some(true),
+        Some(netsim_model::chip::ChipVariantUpdate::Wifi(netsim_model::chip::WifiUpdate {
+            radio: netsim_model::chip::RadioUpdate { state: Some(true) },
         }));
     world.wifi_client.update(ChipId(chip_id), update).await.expect("Failed to update chip");
 
@@ -149,7 +149,7 @@ async fn test_update_chip_state() {
     let chip = world.wifi_client.read(ChipId(chip_id)).await.expect("Failed to read chip");
     assert_eq!(chip.enabled, true);
     if let Some(netsim_model::chip::ChipVariant::Wifi(radio)) = chip.variant {
-        assert_eq!(radio.state, Some(true));
+        assert_eq!(radio.radio.state, Some(true));
     } else {
         panic!("Expected Wifi variant");
     }

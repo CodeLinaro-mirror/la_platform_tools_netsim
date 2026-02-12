@@ -2,9 +2,9 @@
 
 //! This module defines common Bluetooth data types, such as addresses.
 
+use std::{ffi::c_int, str::FromStr};
+
 use crate::error::{Error, Result};
-use std::ffi::c_int;
-use std::str::FromStr;
 
 /// A Bluetooth address.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -3,8 +3,7 @@
 // src/types.rs - Core data types for PacketStream
 //=============================================================================
 
-use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::{net::SocketAddr, path::PathBuf};
 
 /// Stream addressing for different connection types.
 ///
@@ -15,15 +14,15 @@ use std::path::PathBuf;
 /// # Examples
 ///
 /// ```rust
-/// use packet_stream::StreamAddress;
 /// use std::path::PathBuf;
+///
+/// use packet_stream::StreamAddress;
 ///
 /// // TCP address
 /// let tcp_addr = StreamAddress::Tcp("127.0.0.1:8080".parse().unwrap());
 ///
 /// // Unix domain socket
 /// let uds_addr = StreamAddress::Uds(PathBuf::from("/tmp/socket.sock"));
-///
 /// ```
 #[derive(Debug, Clone)]
 pub enum StreamAddress {

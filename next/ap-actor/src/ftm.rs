@@ -1,13 +1,15 @@
 // Copyright 2026 The Android Open Source Project
 
-use crate::ap_actor::ApConfig;
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::action::FineTimingMeasurement;
-use netsim_packets::ieee80211::{
-    action::{category, public_action},
-    FrameControl, MacHeader3Addr, SequenceControl,
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        action::{category, public_action, FineTimingMeasurement},
+        FrameControl, MacHeader3Addr, SequenceControl,
+    },
 };
 use zerocopy::{IntoBytes, U16};
+
+use crate::ap_actor::ApConfig;
 
 /// FTM Responder Logic
 #[derive(Debug)]
@@ -16,18 +18,22 @@ pub struct FtmResponder {
 }
 
 impl FtmResponder {
-    /// Handle an incoming FTM Request and generate the necessary response frames.
+    /// Handle an incoming FTM Request and generate the necessary response
+    /// frames.
     ///
-    /// Handle an incoming FTM Request and generate the necessary response frames.
+    /// Handle an incoming FTM Request and generate the necessary response
+    /// frames.
     ///
     /// Implements a simplified Single-Burst FTM exchange (ASAP=1):
     /// 1. Receive FTM Request (Trigger=1).
-    /// 2. Send Initial FTM Frame (Dialog Token=N, Follow Up=0) with t1/t4 placeholders.
+    /// 2. Send Initial FTM Frame (Dialog Token=N, Follow Up=0) with t1/t4
+    ///    placeholders.
     /// 3. Send Follow-Up FTM Frame (Dialog Token=N, Follow Up=N) containing the
     ///    simulated timestamps (t1, t4) calculated based on a fixed distance.
     ///
-    /// Note: In a real physical exchange, t4 would be captured upon packet arrival.
-    /// Here, we pre-calculate timestamps to simulate a specific distance (RTT).
+    /// Note: In a real physical exchange, t4 would be captured upon packet
+    /// arrival. Here, we pre-calculate timestamps to simulate a specific
+    /// distance (RTT).
     pub fn handle_ftm_request(config: &ApConfig, src: MacAddr, dialog_token: u8) -> Vec<Vec<u8>> {
         let mut responses = Vec::new();
 
