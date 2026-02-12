@@ -204,10 +204,11 @@ The system supports two distinct provisioning flows:
 ### 4.5 Orchestration Policies
 
 - **RQ-POL-01**: **Idle Shutdown Policy**: The system shall support a
-  configurable idle timeout (default: 30s). If the device count drops to zero
-  for `N` seconds, the actor shall signal termination to the Daemon.
+  configurable idle timeout (default: 0s). If the device count drops to zero
+  for `N` seconds, the actor shall signal termination to the Daemon. (A default
+  of 0s matches legacy netsimd's immediate exit on last device removal).
 - **RQ-POL-02**: **Lazy Startup Policy**: The system shall allow a "Startup
-  Grace Period" (default: 10s) where the idle timer is suppressed, allowing time
+  Grace Period" (default: 15s) where the idle timer is suppressed, allowing time
   for the first emulator to connect before self-terminating.
 
 ## 5. Non-Functional Requirements

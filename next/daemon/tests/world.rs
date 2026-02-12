@@ -34,6 +34,7 @@ impl World {
     pub async fn new() -> Self {
         let mut args = daemon::args::Args::default();
         args.logtostderr = true; // Disable log redirection
+        args.no_shutdown = true; // Prevent tests from dying when deleting devices
         Self::new_with_args(args).await
     }
 

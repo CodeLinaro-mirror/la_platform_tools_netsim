@@ -56,6 +56,10 @@ pub struct Args {
     #[arg(long, alias = "idle-shutdown-timeout")]
     pub idle_shutdown_timeout: Option<u64>,
 
+    /// Set the startup timeout in milliseconds.
+    #[arg(long, alias = "startup-timeout")]
+    pub startup_timeout: Option<u64>,
+
     /// Enable packet capture
     #[arg(long)]
     pub pcap: bool,
