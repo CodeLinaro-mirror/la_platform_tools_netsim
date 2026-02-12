@@ -655,6 +655,10 @@ impl Ieee80211 {
         self.is_data() && (self.stype() & 0x8 != 0)
     }
 
+    pub fn is_qos_nodata(&self) -> bool {
+        self.is_data() && self.stype() == DataSubType::QosNodata as u8
+    }
+
     pub fn decode_full(bytes: &[u8]) -> Result<Self, String> {
         Ok(Self { bytes: bytes.to_vec() })
     }
