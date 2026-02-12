@@ -18,12 +18,13 @@ DEPS = [
     "@tokio-util",
     "@tokio-stream",
     "@serde",
+    "@glam",
 ]
 
 netsim_rust_library(
     name = "uwb-actor",
     srcs = glob(["src/**/*.rs"]),
-    crate_features = [],
+    crate_features = ["testing"],
     crate_name = "uwb_actor",
     crate_root = "src/lib.rs",
     edition = "2021",
