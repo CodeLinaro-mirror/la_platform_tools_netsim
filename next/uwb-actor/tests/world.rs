@@ -11,6 +11,8 @@ use netsim_model::{
     device::DeviceId,
 };
 use netsim_testing::mocks::{mock_sink, mock_stream};
+use pdl_runtime::Packet;
+use pica::packets::uci;
 use tokio::sync::mpsc::{Receiver, Sender};
 use uwb_actor::{UwbActor, UwbClient};
 
@@ -163,5 +165,25 @@ impl World {
 
     pub async fn given_a_chip(&mut self, chip_id: u32) {
         self.when_create_chip(chip_id).await.expect("GIVEN: Failed to create chip");
+    }
+
+    pub async fn when_chip_is_reset(&self, chip_id: u32) {
+        self.client.reset(ChipId(chip_id)).await.expect("WHEN: Failed to reset chip");
+    }
+
+    pub async fn then_reset_response_is_received(&mut self, chip_id: u32, status: uci::Status) {
+        let packet = self.then_packet_is_received(chip_id).await;
+        let (rsp, _) = uci::CoreDeviceResetRsp::decode(&packet).expect("reset response");
+        assert_eq!(rsp.status, status);
+    }
+
+    pub async fn then_status_notification_is_received(
+        &mut self,
+        chip_id: u32,
+        state: uci::DeviceState,
+    ) {
+        let packet = self.then_packet_is_received(chip_id).await;
+        let (ntf, _) = uci::CoreDeviceStatusNtf::decode(&packet).expect("status notification");
+        assert_eq!(ntf.device_state, state);
     }
 }
