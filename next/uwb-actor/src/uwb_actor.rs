@@ -1,43 +1,51 @@
 // Copyright 2026 The Android Open Source Project
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
-use bytes::Bytes;
 use client::DeviceClient;
-use futures::SinkExt;
-use log::{debug, error, info};
-use netsim_model::chip::{Chip, ChipId, PacketSink};
-use tokio::sync::mpsc;
+use netsim_model::chip::{Chip, ChipId};
+use pica::{Handle, Pica, RangingEstimator, RangingMeasurement};
+use tokio::{sync::mpsc, task::JoinHandle};
+
+/// State associated with a single UWB chip.
+#[derive(Clone)]
+pub struct UwbChipState {
+    /// The chip model.
+    pub(super) chip: Chip,
+    /// Sender for forwarding UCI packets to Pica.
+    pub(super) pica_sender: mpsc::Sender<bytes::Bytes>,
+    /// Mapping from chip ID to Pica handle.
+    pub(super) pica_handle: Handle,
+}
 
 /// The UWB Actor responsible for managing UWB chips and their state.
 pub struct UwbActor {
     /// Map of active chips.
-    pub chips: HashMap<ChipId, Chip>,
-    /// Senders for forwarding UCI packets to the sink tasks.
-    pub uci_senders: HashMap<ChipId, mpsc::Sender<Bytes>>,
+    pub(super) chip_states: HashMap<ChipId, UwbChipState>,
     /// Client for interacting with the device actor.
-    pub device_client: DeviceClient,
+    pub(super) device_client: DeviceClient,
+    /// The Pica simulator instance.
+    /// TODO(b/483089918): use lock-free form of Pica API
+    pub(super) pica: Arc<Mutex<Pica>>,
+    /// The join handle for the Pica run loop.
+    pub(super) pica_task: Option<JoinHandle<Result<(), anyhow::Error>>>,
 }
 
 impl UwbActor {
     pub fn new(device_client: DeviceClient) -> Self {
-        UwbActor { chips: HashMap::new(), uci_senders: HashMap::new(), device_client }
+        let pica = Arc::new(Mutex::new(Pica::new(Box::new(MockRangingEstimator), None)));
+        UwbActor { chip_states: HashMap::new(), device_client, pica, pica_task: None }
     }
 }
 
-/// Runs a task that forwards packets from a channel to a packet sink.
-pub async fn run_sink_task(
-    mut sink: PacketSink,
-    mut receiver: mpsc::Receiver<Bytes>,
-    id: ChipId,
-) -> ChipId {
-    while let Some(packet) = receiver.recv().await {
-        debug!("Sending packet to sink for chip {id}");
-        if sink.send(packet).await.is_err() {
-            error!("Sink for chip {id} is closed.");
-            break;
-        }
+// TODO(b/458545089): implement real estimator
+struct MockRangingEstimator;
+
+impl RangingEstimator for MockRangingEstimator {
+    fn estimate(&self, _left: &Handle, _right: &Handle) -> Option<RangingMeasurement> {
+        Some(Default::default())
     }
-    info!("Chip {id} sink task finished.");
-    id
 }
