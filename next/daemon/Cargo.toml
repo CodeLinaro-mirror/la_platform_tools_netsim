@@ -30,11 +30,16 @@ log = "0.4"
 netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
 packet-stream = { path = "../packet-stream" }
-tokio = { version = "1.28.2", features = ["full"] }
+tokio = { version = "1.28.2", features = ["full", "tracing"] }
+tokio-stream = "0.1"
+tracing = "0.1"
+tracing-log = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 uwb-actor = { path = "../uwb-actor" }
 wifi-actor = { path = "../wifi-actor" }
 
 [dev-dependencies]
+regex = "1"
 tempfile = "3"
 
 [features]

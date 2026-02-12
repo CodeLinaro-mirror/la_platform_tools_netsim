@@ -10,7 +10,9 @@ netsim_rust_library(
     enable_rustfmt = False,
     visibility = ["//next:__subpackages__"],
     deps = [
+        "//next/common",
         "@bytes",
+        "@chrono",
         "@env_logger",
         "@futures",
         "@log",

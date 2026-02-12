@@ -17,6 +17,10 @@ netsim_rust_library(
         "@log",
         "@protobuf-json-mapping",
         "@rand",
+        "@regex",
+        "@tracing",
+        "@tracing-log",
+        "@tracing-subscriber",
         "@zip",
     ],
 )
