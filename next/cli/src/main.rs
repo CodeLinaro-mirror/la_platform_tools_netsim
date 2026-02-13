@@ -37,7 +37,6 @@ use crate::{
     error::{Error, Result},
     grpc_client::{ClientResponseReader, GrpcRequest, GrpcResponse},
 };
-
 // helper function to process streaming Grpc request
 fn perform_streaming_request(
     client: &FrontendServiceClient,
@@ -57,9 +56,9 @@ fn perform_streaming_request(
         req,
         &mut ClientResponseReader {
             handler: Box::new(FileHandler {
-                file: File::create(&output_file).unwrap_or_else(|_| {
-                    panic!("Failed to create file: {}", &output_file.display())
-                }),
+                file: File::create(&output_file).map_err(|e| {
+                    Error::from(format!("Failed to create file {}: {}", output_file.display(), e))
+                })?,
                 path: output_file,
             }),
         },
@@ -75,14 +74,13 @@ fn perform_command(
 ) -> Result<()> {
     // Get command's gRPC request(s)
     let requests = match command {
-        args::Command::Capture(args::Capture::Patch(_) | args::Capture::Get(_)) => {
-            command.get_requests(&client)
-        }
+        args::Command::Capture(args::Capture::Patch(_) | args::Capture::Get(_))
+        | args::Command::Link(_) => command.get_requests(&client),
         args::Command::Beacon(args::Beacon::Remove(_)) => {
-            vec![args::Command::Devices(args::Devices { continuous: false }).get_request()]
+            Ok(vec![args::Command::Devices(args::Devices { continuous: false }).get_request()])
         }
-        _ => vec![command.get_request()],
-    };
+        _ => Ok(vec![command.get_request()]),
+    }?;
     let mut process_error = false;
     // Process each request
     for (i, req) in requests.iter().enumerate() {
@@ -90,16 +88,16 @@ fn perform_command(
             // Continuous option sends the gRPC call every second
             args::Command::Devices(ref cmd) if cmd.continuous => {
                 continuous_perform_command(command, &client, req, verbose)?;
-                panic!("Continuous command interrupted. Exiting.");
+                unreachable!("Continuous command should loop forever until error");
             }
             args::Command::Capture(args::Capture::List(ref cmd)) if cmd.continuous => {
                 continuous_perform_command(command, &client, req, verbose)?;
-                panic!("Continuous command interrupted. Exiting.");
+                unreachable!("Continuous command should loop forever until error");
             }
             // Get Capture use streaming gRPC reader request
             args::Command::Capture(args::Capture::Get(ref mut cmd)) => {
                 let GrpcRequest::GetCapture(request) = req else {
-                    panic!("Expected to find GetCaptureRequest. Got: {req:?}");
+                    return Err(format!("Expected GetCaptureRequest. Got: {req:?}").into());
                 };
                 perform_streaming_request(&client, cmd, request, &cmd.filenames[i].to_owned())?;
                 Ok(None)
@@ -107,7 +105,7 @@ fn perform_command(
             args::Command::Beacon(args::Beacon::Remove(ref cmd)) => {
                 let response = grpc_client::send_grpc(&client, &GrpcRequest::ListDevice)?;
                 let GrpcResponse::ListDevice(response) = response else {
-                    panic!("Expected to find ListDeviceResponse. Got: {response:?}");
+                    return Err(format!("Expected ListDeviceResponse. Got: {response:?}").into());
                 };
                 let id = find_id_for_remove(response, cmd)?;
                 let res = grpc_client::send_grpc(
@@ -125,7 +123,7 @@ fn perform_command(
                 Ok(Some(response))
             }
         };
-        if let Err(e) = process_result(command, result, verbose) {
+        if let Err(e) = process_result(command, result, Some(req), verbose) {
             error!("{e}");
             process_error = true;
         };
@@ -166,7 +164,7 @@ fn find_id_for_remove(
     Ok(id)
 }
 
-/// Check and handle the gRPC call result
+/// Continuously execute the command every second
 fn continuous_perform_command(
     command: &args::Command,
     client: &FrontendServiceClient,
@@ -175,7 +173,7 @@ fn continuous_perform_command(
 ) -> Result<()> {
     loop {
         let response = grpc_client::send_grpc(client, grpc_request)?;
-        process_result(command, Ok(Some(response)), verbose)?;
+        process_result(command, Ok(Some(response)), Some(grpc_request), verbose)?;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
@@ -183,13 +181,13 @@ fn continuous_perform_command(
 fn process_result(
     command: &args::Command,
     result: Result<Option<GrpcResponse>>,
+    request: Option<&GrpcRequest>,
     verbose: bool,
 ) -> Result<()> {
     match result {
         Ok(grpc_response) => {
             let response = grpc_response.unwrap_or(GrpcResponse::Unknown);
-            command.print_response(&response, verbose);
-            Ok(())
+            command.print_response(&response, request, verbose)
         }
         Err(e) => Err(format!("Grpc call error: {e}").into()),
     }

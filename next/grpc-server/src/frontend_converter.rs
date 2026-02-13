@@ -314,7 +314,7 @@ pub fn from_proto_link(proto: ProtoLink) -> Option<ApiLink> {
     };
 
     if let Some(kind) = kind {
-        Some(ApiLink { id: netsim_model::link::LinkId(0), sender, receiver, kind, rssi })
+        Some(ApiLink { id: netsim_model::link::LinkId(proto.id), sender, receiver, kind, rssi })
     } else {
         None
     }

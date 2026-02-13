@@ -150,3 +150,28 @@ async fn test_daemon_stays_alive_before_timeout() {
         Err(_) => panic!("Daemon failed to shut down within timeout"),
     }
 }
+
+// Scenario: Daemon shuts down on its own due to the startup grace period
+//   Given a newly started Netsim daemon with a 2s startup timeout
+//   When no connected devices are spawned
+//   Then the daemon gracefully self-terminates after slightly more than 2s
+#[tokio::test]
+async fn test_startup_shutdown_timeout() {
+    // 1. Start Daemon with a short 2s startup timeout override
+    let mut args = daemon::args::Args::default();
+    args.startup_timeout = Some(2000);
+    args.logtostderr = true;
+    let mut world = World::new_with_args(args).await;
+    let daemon_task = world.spawn_daemon();
+
+    // 2. Wait 3s (startup timeout is 2s) -> should be dead
+    println!("Waiting for 3 seconds (startup timeout is 2s)...");
+    let result = tokio::time::timeout(std::time::Duration::from_millis(3000), daemon_task).await;
+
+    // 3. Verify successful shutdown
+    match result {
+        Ok(Ok(_)) => println!("Daemon shut down successfully after timeout"),
+        Ok(Err(e)) => panic!("Daemon task failed: {}", e),
+        Err(_) => panic!("Daemon failed to shut down within timeout"),
+    }
+}

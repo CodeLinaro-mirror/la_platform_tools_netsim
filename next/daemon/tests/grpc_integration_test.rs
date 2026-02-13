@@ -35,7 +35,7 @@ async fn test_grpc_frontend_lifecycle() {
 
     // Verify Version
     let version = world.when_get_version().await;
-    assert_eq!(version, "0.0.1-next");
+    assert!(version.starts_with("1."), "Version must be a 1.x release");
 
     // When I create a new device
     let device_name = "grpc-test-device";

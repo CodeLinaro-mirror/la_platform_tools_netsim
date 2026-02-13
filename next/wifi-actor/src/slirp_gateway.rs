@@ -40,6 +40,12 @@ impl SlirpGateway {
 #[async_trait::async_trait]
 impl GatewayTrait for SlirpGateway {
     async fn send_80211(&self, _chip_id: ChipId, ieee80211: &Ieee80211) -> bool {
+        // Drop QosNodata frames (keep-alives/null data) as they contain no payload
+        // and cannot be converted to Ethernet.
+        if ieee80211.is_qos_nodata() {
+            return true;
+        }
+
         ieee80211
             .to_ieee8023()
             .map(|eth| {
@@ -47,7 +53,13 @@ impl GatewayTrait for SlirpGateway {
                 true
             })
             .unwrap_or_else(|e| {
-                warn!("WifiActor: Slirp conversion failed: {e}");
+                let fc = ieee80211.get_fc();
+                let ftype = ieee80211.is_data();
+                let stype = ieee80211.stype();
+                warn!(
+                    "WifiActor: Slirp conversion failed: {}. Frame (Data: {}), Subtype: {}, FC: {:#06x}",
+                    e, ftype, stype, fc
+                );
                 false
             })
     }
