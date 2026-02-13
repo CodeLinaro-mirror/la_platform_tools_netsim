@@ -1,342 +1,388 @@
 use std::{
-    io::{BufRead, BufReader},
-    process::{Child, Command, Stdio},
+    io::{BufRead, BufReader, Write},
+    net::{TcpListener, TcpStream},
+    process::{Child, Stdio},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc, Mutex,
+    },
+    time::{Duration, Instant},
 };
 
-pub trait Executor {
-    fn spawn_server(&self, port: u16) -> anyhow::Result<(Child, u16)>;
-    fn run_client(&self, params: ClientParams) -> anyhow::Result<std::process::Output>;
+use anyhow::Context;
+use async_trait::async_trait;
+
+pub const LABEL_WIDTH: usize = 12;
+
+// Protocol markers for Guest-Host communication
+const MARKER_RECEIVED: &str = ">> RECEIVED:";
+const MARKER_COMPLETED: &str = "<< COMPLETED:";
+const MARKER_FATAL: &str = "!! ERROR:";
+const RESULT_SUCCESS: &str = "RESULT=SUCCESS";
+const RESULT_FAILURE: &str = "RESULT=FAILURE";
+const MSG_KEY: &str = "MSG=";
+
+/// Throughput data collected during a client run.
+#[derive(Debug, Clone)]
+pub struct Throughput {
+    pub bytes: usize,
+    pub duration: Duration,
 }
 
-fn spawn_server_common(port: u16) -> anyhow::Result<(Child, u16)> {
-    let exe = std::env::current_exe()?;
-    let mut child = Command::new(exe)
-        .arg("server")
-        .arg("--port") // This port might be 0
-        .arg(port.to_string())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()?;
-
-    let stdout = child.stdout.take().ok_or_else(|| anyhow::anyhow!("No stdout"))?;
-    let mut reader = BufReader::new(stdout);
-    let mut line = String::new();
-    let mut assigned_port = 0;
-
-    // Read until we find SERVER_PORT
-    while reader.read_line(&mut line)? > 0 {
-        if line.starts_with("SERVER_PORT=") {
-            let port_str = line.trim().trim_start_matches("SERVER_PORT=");
-            assigned_port = port_str.parse().unwrap_or(0);
-            println!("[server] {}", line.trim());
-            line.clear();
-            break;
-        }
-        print!("[server] {}", line);
-        line.clear();
-    }
-
-    if assigned_port == 0 {
-        anyhow::bail!("Server failed to start or didn't print port");
-    }
-
-    // Spawn thread to forward rest
-    std::thread::spawn(move || {
-        while reader.read_line(&mut line).unwrap_or(0) > 0 {
-            print!("[server] {}", line);
-            line.clear();
-        }
-    });
-
-    Ok((child, assigned_port))
+/// Interface for executing commands on a test actor (Host or Guest).
+#[async_trait]
+pub trait Executor: Send + Sync {
+    /// Execute a network client task and return throughput if successful.
+    async fn run_client(&self, params: ClientParams) -> anyhow::Result<Option<Throughput>>;
+    /// Execute an arbitrary BDD step on the actor.
+    async fn execute_step(&self, step: &str) -> anyhow::Result<()>;
+    /// Restart the agent process on the target.
+    async fn reset_agent(&mut self) -> anyhow::Result<()>;
+    /// Get the display label for this executor (e.g., "@Small_Phone").
+    fn get_label(&self) -> String;
+    /// Get the unique serial number if available.
+    fn get_serial(&self) -> Option<String>;
+    /// Enable or disable live feedback logging from this executor.
+    fn set_silent(&self, silent: bool);
 }
 
-#[derive(Default, Clone)]
+/// Parameters for a network client execution.
 pub struct ClientParams {
+    pub payload_size: usize,
     pub proto: String,
     pub target: String,
-    pub payload_size: usize,
     pub expect_eof: bool,
     pub timeout_ms: u64,
 }
 
-impl ClientParams {
-    pub fn to_flags(&self) -> Vec<String> {
-        let mut args = vec![
-            "--proto".to_string(),
-            self.proto.clone(),
-            "--target".to_string(),
-            self.target.clone(),
-            "--payload-size".to_string(),
-            self.payload_size.to_string(),
-            "--timeout".to_string(),
-            self.timeout_ms.to_string(),
-        ];
-        if self.expect_eof {
-            args.push("--expect-eof".to_string());
-        }
-        args
-    }
-}
-
-pub struct LocalExecutor;
-
-impl Executor for LocalExecutor {
-    fn spawn_server(&self, port: u16) -> anyhow::Result<(Child, u16)> {
-        spawn_server_common(port)
-    }
-
-    fn run_client(&self, params: ClientParams) -> anyhow::Result<std::process::Output> {
-        let exe = std::env::current_exe()?;
-        Ok(Command::new(exe).arg("client").args(params.to_flags()).output()?)
-    }
-}
-
+/// Executor for Android Guest devices using ADB.
 pub struct AndroidExecutor {
     pub adb_path: String,
-    pub android_bin_path: Option<String>,
     pub serial: Option<String>,
-    pub emulator_process: Option<Child>,
-    pub netsim_bin: Option<String>,
-    pub netsim_args: Option<String>,
+    pub agent_process: Option<Child>,
     pub netsim_process: Option<Child>,
+    pub apk_path: Option<String>,
+    pub avd_name: Option<String>,
+    pub feedback_port: Option<u16>,
+    pub feedback_stream: Arc<Mutex<Option<TcpStream>>>,
+    pub feedback_receiver: Arc<Mutex<Option<mpsc::Receiver<String>>>>,
+    pub silent: Arc<AtomicBool>,
 }
 
 impl AndroidExecutor {
+    /// Find adb binary in standard locations or provided path.
+    pub fn find_adb(provided_path: Option<&str>) -> String {
+        if let Some(path) = provided_path {
+            let p = std::path::Path::new(path);
+            if p.is_file() {
+                return path.to_string();
+            }
+            // Check provided path directly
+            let adb = p.join("adb");
+            if adb.exists() {
+                return adb.to_string_lossy().to_string();
+            }
+            // Check platform-tools subdirectory (if it's ANDROID_HOME)
+            let adb = p.join("platform-tools").join("adb");
+            if adb.exists() {
+                return adb.to_string_lossy().to_string();
+            }
+        }
+        if let Ok(path) = which::which("adb") {
+            return path.to_string_lossy().to_string();
+        }
+        for var in &["ANDROID_HOME", "ANDROID_SDK_ROOT", "ANDROID_SDK_HOME"] {
+            if let Ok(val) = std::env::var(var) {
+                let p = std::path::Path::new(&val).join("platform-tools").join("adb");
+                if p.exists() {
+                    return p.to_string_lossy().to_string();
+                }
+            }
+        }
+        "adb".to_string()
+    }
+
     pub fn new(
         serial: Option<String>,
-        android_bin_path: Option<String>,
-        netsim_bin: Option<String>,
-        netsim_args: Option<String>,
+        android_home: String,
+        apk_path: Option<String>,
     ) -> anyhow::Result<Self> {
-        // Try to find adb in PATH or ANDROID_HOME
-        let adb_path = if let Ok(path) = which::which("adb") {
-            path.to_string_lossy().to_string()
-        } else if let Ok(home) = std::env::var("ANDROID_HOME") {
-            let path = std::path::Path::new(&home).join("platform-tools").join("adb");
-            if path.exists() {
-                path.to_string_lossy().to_string()
-            } else {
-                "adb".to_string()
-            }
-        } else if let Ok(home) = std::env::var("ANDROID_SDK_HOME") {
-            let path = std::path::Path::new(&home).join("platform-tools").join("adb");
-            if path.exists() {
-                path.to_string_lossy().to_string()
-            } else {
-                "adb".to_string()
-            }
-        } else {
-            "adb".to_string()
-        };
-
         Ok(Self {
-            adb_path,
-            android_bin_path,
+            adb_path: android_home,
+            apk_path,
             serial,
-            emulator_process: None,
-            netsim_bin,
-            netsim_args,
+            agent_process: None,
             netsim_process: None,
+            avd_name: None,
+            feedback_port: None,
+            feedback_stream: Arc::new(Mutex::new(None)),
+            feedback_receiver: Arc::new(Mutex::new(None)),
+            silent: Arc::new(AtomicBool::new(false)),
         })
     }
 
-    fn adb_command(&self) -> Command {
-        let mut cmd = Command::new(&self.adb_path);
+    fn adb_command(&self) -> std::process::Command {
+        let mut cmd = std::process::Command::new(&self.adb_path);
         if let Some(s) = &self.serial {
             cmd.arg("-s").arg(s);
         }
         cmd
     }
 
-    pub fn launch_emulator(&mut self) -> anyhow::Result<()> {
-        // Check if a device is already connected
-        let output = Command::new(&self.adb_path).arg("devices").output()?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        println!("[ntest] 'adb devices' output:\n{}", stdout);
-
-        // Simple parse: look for any line ending in "device"
-        for line in stdout.lines().skip(1) {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 && parts[1] == "device" {
-                let serial = parts[0];
-                println!("[ntest] Found running emulator/device: {}. Skipping launch.", serial);
-                self.serial = Some(serial.to_string());
-                return Ok(());
-            }
-        }
-
-        let emu_path = if let Ok(home) = std::env::var("ANDROID_SDK_HOME") {
-            let path = std::path::Path::new(&home).join("emulator").join("emulator");
-            if path.exists() {
-                path.to_string_lossy().to_string()
-            } else {
-                "emulator".to_string()
-            }
-        } else if let Ok(home) = std::env::var("ANDROID_HOME") {
-            let path = std::path::Path::new(&home).join("emulator").join("emulator");
-            if path.exists() {
-                path.to_string_lossy().to_string()
-            } else {
-                "emulator".to_string()
-            }
-        } else {
-            "emulator".to_string()
-        };
-
-        // Detect AVD
-        let output = Command::new(&emu_path).arg("-list-avds").output()?;
-        let avds = String::from_utf8_lossy(&output.stdout);
-        let first_avd = avds.lines().next().ok_or_else(|| anyhow::anyhow!("No AVDs found"))?;
-        let avd_name = format!("@{}", first_avd);
-
-        println!("[ntest] Launching emulator: {} with AVD: {}", emu_path, avd_name);
-        let mut cmd = Command::new(emu_path);
-        cmd.arg(&avd_name).arg("-no-window").stdout(Stdio::inherit()).stderr(Stdio::inherit());
-
-        if let Some(args) = &self.netsim_args {
-            cmd.arg("-netsim-args").arg(args);
-        }
-
-        let child = cmd.spawn()?;
-
-        self.emulator_process = Some(child);
-        self.wait_for_device_online()?;
-        Ok(())
-    }
-
-    fn wait_for_device_online(&self) -> anyhow::Result<()> {
-        println!("[ntest] Waiting for device to be online (adb wait-for-device)...");
-        let status = self.adb_command().arg("wait-for-device").output()?;
-        if !status.status.success() {
-            anyhow::bail!("Failed to wait for device");
-        }
-
-        println!("[ntest] Device found. Polling for boot completion...");
-        loop {
-            let output = self
-                .adb_command()
-                .arg("shell")
-                .arg("getprop")
-                .arg("sys.boot_completed")
-                .output()?;
-
-            let output_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if output_str == "1" {
-                println!("[ntest] Device boot completed.");
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
-        Ok(())
-    }
-
-    // Kept for compatibility if used elsewhere, but mainly delegates to
-    // wait_for_device_online
-    #[allow(dead_code)]
-    fn wait_for_device(&self) -> anyhow::Result<()> {
-        self.wait_for_device_online()
-    }
-
-    pub fn push_binary(&self) -> anyhow::Result<()> {
-        let bin_path = if let Some(p) = &self.android_bin_path {
-            p.clone()
-        } else {
-            println!("[ntest] WARNING: No android binary path provided. Assuming 'ntest' is already on device.");
-            return Ok(());
-        };
-
-        println!("[ntest] Pushing binary from {} to /data/local/tmp/ntest", bin_path);
-        let status =
-            self.adb_command().arg("push").arg(&bin_path).arg("/data/local/tmp/ntest").status()?;
-
-        if !status.success() {
-            anyhow::bail!("Failed to push binary");
-        }
-
-        let _ = self.adb_command().arg("shell").arg("chmod +x /data/local/tmp/ntest").output()?;
-
-        println!("[ntest] Binary pushed and chmod +x executed.");
-        Ok(())
-    }
-
-    pub fn launch_netsim(&mut self) -> anyhow::Result<()> {
-        if let Some(bin) = &self.netsim_bin {
-            let mut cmd = Command::new(bin);
-            if let Some(args) = &self.netsim_args {
-                for arg in args.split_whitespace() {
+    pub fn launch_netsim(
+        &mut self,
+        bin: &Option<String>,
+        args: &Option<String>,
+    ) -> anyhow::Result<()> {
+        if let Some(bin_path) = bin {
+            let mut cmd = std::process::Command::new(bin_path);
+            if let Some(a) = args {
+                for arg in a.split_whitespace() {
                     cmd.arg(arg);
                 }
             }
-            println!("[ntest] Launching netsim: {:?}", cmd);
-            let child = cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit()).spawn()?;
-            self.netsim_process = Some(child);
-            // Give netsim a moment to start
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            self.netsim_process = Some(cmd.stdout(Stdio::null()).stderr(Stdio::null()).spawn()?);
         }
         Ok(())
     }
 
-    pub fn kill_emulator(&mut self) -> anyhow::Result<()> {
-        if let Some(mut child) = self.emulator_process.take() {
-            println!("[ntest] Killing emulator process...");
-            let _ = child.kill();
-            let _ = child.wait();
-            println!("[ntest] Emulator killed.");
-        }
-        if let Some(mut child) = self.netsim_process.take() {
-            println!("[ntest] Killing netsim process...");
-            let _ = child.kill();
-            let _ = child.wait();
-            println!("[ntest] Netsim killed.");
-        }
-        Ok(())
-    }
-
-    pub fn wait_for_network(&self) -> anyhow::Result<()> {
-        println!("[ntest] Waiting for network (ping 10.0.2.2)...");
-        for _ in 0..30 {
+    pub fn install_apk(&mut self) -> anyhow::Result<()> {
+        if let Some(apk) = &self.apk_path {
             let status = self
                 .adb_command()
-                .arg("shell")
-                .arg("ping -c 1 -W 1 10.0.2.2")
+                .arg("install")
+                .arg("-r")
+                .arg(apk)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status()?;
+            if !status.success() {
+                anyhow::bail!("Failed to install APK: {}", apk);
+            }
+        }
+        Ok(())
+    }
 
-            if status.success() {
-                println!("[ntest] Network is up.");
+    /// Set up TCP reverse tunneling for feedback from the Kotlin agent.
+    pub fn setup_feedback(&mut self) -> anyhow::Result<()> {
+        let listener = TcpListener::bind("0.0.0.0:0")?;
+        let port = listener.local_addr()?.port();
+        self.feedback_port = Some(port);
+        self.adb_command()
+            .arg("reverse")
+            .arg(format!("tcp:{}", port))
+            .arg(format!("tcp:{}", port))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()?;
+
+        let name = self.get_label();
+        let feedback_stream = self.feedback_stream.clone();
+        let silent = self.silent.clone();
+        let (tx, rx) = mpsc::channel();
+        {
+            let mut guard = self.feedback_receiver.lock().unwrap();
+            *guard = Some(rx);
+        }
+
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                match stream {
+                    Ok(s) => {
+                        let name_clone = name.clone();
+                        if let Ok(cloned) = s.try_clone() {
+                            let mut guard = feedback_stream.lock().unwrap();
+                            *guard = Some(cloned);
+                        }
+                        let tx_clone = tx.clone();
+                        let silent_clone = silent.clone();
+                        std::thread::spawn(move || {
+                            let reader = BufReader::new(s);
+                            for line in reader.lines().map_while(Result::ok) {
+                                // Filter out protocol markers from the narrative output
+                                if !line.contains(MARKER_RECEIVED)
+                                    && !line.contains(MARKER_COMPLETED)
+                                {
+                                    if !silent_clone.load(Ordering::SeqCst) {
+                                        Self::print_bdd_line(&name_clone, &line);
+                                    }
+                                }
+                                let _ = tx_clone.send(line);
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        eprintln!("!! ERR: Failed to accept feedback connection: {}", e);
+                    }
+                }
+            }
+        });
+        Ok(())
+    }
+
+    fn print_bdd_line(name: &str, line: &str) {
+        let line = line.trim();
+        let actor_tag = format!("@{:width$}", name, width = LABEL_WIDTH);
+        if line.starts_with("GIVEN")
+            || line.starts_with("WHEN")
+            || line.starts_with("AND")
+            || line.starts_with("THEN")
+        {
+            let mut parts = line.splitn(2, ' ');
+            let verb = parts.next().unwrap_or("");
+            let msg = parts.next().unwrap_or("");
+            println!("{:<6} {} {}", verb, actor_tag, msg);
+        } else if let Some(msg) = line.strip_prefix("INFO") {
+            let msg = msg.trim();
+            if !msg.starts_with('[') {
+                println!("{:<6} {} {}", "INFO", actor_tag, msg);
+            }
+        }
+        let _ = std::io::stdout().flush();
+    }
+
+    pub fn launch_agent(&mut self) -> anyhow::Result<()> {
+        let name = self.get_label();
+        let port_arg =
+            self.feedback_port.ok_or_else(|| anyhow::anyhow!("Feedback port not set"))?.to_string();
+        self.agent_process = Some(
+            self.adb_command()
+                .arg("shell")
+                .arg("am")
+                .arg("instrument")
+                .arg("-w")
+                .arg("-e")
+                .arg("wait")
+                .arg("true")
+                .arg("-e")
+                .arg("device_name")
+                .arg(&name)
+                .arg("-e")
+                .arg("control_port")
+                .arg(&port_arg)
+                .arg("com.android.netsim.ntest/.NTestInstrumentation")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()?,
+        );
+        Ok(())
+    }
+
+    pub fn wait_for_feedback(&self) -> anyhow::Result<()> {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(60) {
+            if self.feedback_stream.lock().unwrap().is_some() {
                 return Ok(());
             }
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            std::thread::sleep(Duration::from_millis(100));
         }
-        anyhow::bail!("Network unreachable after 30s")
+        anyhow::bail!("Feedback timeout waiting for Kotlin agent to connect (60s)")
+    }
+
+    /// Blocks until a specific pattern is received on the feedback channel.
+    /// This is the primary synchronization primitive for Guest orchestration.
+    async fn wait_for_pattern(&self, pattern: &str, timeout_secs: u64) -> anyhow::Result<String> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let pattern = pattern.to_string();
+        let receiver = self.feedback_receiver.clone();
+
+        std::thread::spawn(move || {
+            let rx_guard = receiver.lock().unwrap();
+            if let Some(receiver_rx) = rx_guard.as_ref() {
+                let start = Instant::now();
+                while start.elapsed().as_secs() < timeout_secs {
+                    // Poll with a small sleep to avoid pegged CPU while maintaining responsiveness
+                    if let Ok(line) = receiver_rx.recv_timeout(Duration::from_millis(10)) {
+                        if line.contains(&pattern) {
+                            let _ = tx.send(Ok(line));
+                            return;
+                        }
+                        if line.contains(MARKER_FATAL) {
+                            let _ = tx.send(Err(anyhow::anyhow!("Guest fatal error: {}", line)));
+                            return;
+                        }
+                    }
+                }
+                let _ = tx.send(Err(anyhow::anyhow!("Timeout waiting for pattern: {}", pattern)));
+            }
+        });
+
+        tokio::time::timeout(Duration::from_secs(timeout_secs + 1), rx)
+            .await
+            .context("Pattern wait timed out at the orchestrator level")??
     }
 }
 
-impl Drop for AndroidExecutor {
-    fn drop(&mut self) {
-        let _ = self.kill_emulator();
-    }
-}
-
+#[async_trait]
 impl Executor for AndroidExecutor {
-    fn spawn_server(&self, port: u16) -> anyhow::Result<(Child, u16)> {
-        spawn_server_common(port)
+    async fn run_client(&self, params: ClientParams) -> anyhow::Result<Option<Throughput>> {
+        let step = format!(
+            "When Android sends {} bytes of {} data to {}",
+            params.payload_size,
+            params.proto.to_uppercase(),
+            params.target
+        );
+
+        let start = Instant::now();
+        self.execute_step(&step).await?;
+        let duration = start.elapsed();
+
+        Ok(Some(Throughput { bytes: params.payload_size, duration }))
     }
 
-    fn run_client(&self, params: ClientParams) -> anyhow::Result<std::process::Output> {
-        let args = params.to_flags();
-        println!(
-            "[ntest executor] Running client: adb shell /data/local/tmp/ntest client {:?}",
-            args
-        );
-        Ok(Command::new(&self.adb_path)
-            .arg("shell")
-            .arg("RUST_LOG=info")
-            .arg("/data/local/tmp/ntest")
-            .arg("client")
-            .args(args)
-            .output()?)
+    async fn execute_step(&self, step: &str) -> anyhow::Result<()> {
+        {
+            let mut guard = self.feedback_stream.lock().unwrap();
+            let stream =
+                guard.as_mut().ok_or_else(|| anyhow::anyhow!("Feedback channel disconnected"))?;
+            writeln!(stream, "{}", step)?;
+            stream.flush()?;
+        }
+
+        // 1. Wait for acknowledgement that the agent received the command
+        self.wait_for_pattern(&format!("{} {}", MARKER_RECEIVED, step), 5).await?;
+
+        // 2. Wait for the completion signal (with a generous 60s timeout for network
+        //    tasks)
+        let complete_line =
+            self.wait_for_pattern(&format!("{} {}", MARKER_COMPLETED, step), 60).await?;
+
+        if complete_line.contains(RESULT_FAILURE) {
+            let msg = complete_line.split(MSG_KEY).last().unwrap_or("Unknown actor-side error");
+            anyhow::bail!("Step failed on actor: {}", msg);
+        }
+        Ok(())
+    }
+
+    async fn reset_agent(&mut self) -> anyhow::Result<()> {
+        let quit_step = "THEN Android Quits";
+        {
+            let mut guard = self.feedback_stream.lock().unwrap();
+            if let Some(stream) = guard.as_mut() {
+                let _ = writeln!(stream, "{}", quit_step);
+                let _ = stream.flush();
+                *guard = None;
+            }
+        }
+        let quit_pattern = format!("{} {}", MARKER_RECEIVED, quit_step);
+        let _ = self.wait_for_pattern(&quit_pattern, 2).await;
+        if let Some(mut child) = self.agent_process.take() {
+            let _ = child.wait();
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        self.launch_agent()?;
+        self.wait_for_feedback()
+    }
+
+    fn get_label(&self) -> String {
+        self.avd_name.clone().or(self.serial.clone()).unwrap_or_else(|| "Android".to_string())
+    }
+
+    fn get_serial(&self) -> Option<String> {
+        self.serial.clone()
+    }
+
+    fn set_silent(&self, silent: bool) {
+        self.silent.store(silent, Ordering::SeqCst);
     }
 }
