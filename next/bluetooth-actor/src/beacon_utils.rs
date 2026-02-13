@@ -9,13 +9,13 @@ const AD_TYPE_NAME_COMPLETE: u8 = 0x09;
 const AD_TYPE_MANUFACTURER_SPECIFIC: u8 = 0xFF;
 
 // Fixed Data
-const FLAGS_DATA: &[u8] = &[0x02, AD_TYPE_FLAGS, 0x06];
+const FLAGS_DATA: [u8; 3] = [0x02, AD_TYPE_FLAGS, 0x06];
 
 /// Helper to construct advertising data payload
 pub fn construct_data(manufacturer_data: &[u8], device_name: &Option<String>) -> Vec<u8> {
     let mut data = Vec::new();
     // Flags
-    data.extend_from_slice(FLAGS_DATA);
+    data.extend(FLAGS_DATA);
 
     // Manufacturer Data
     if !manufacturer_data.is_empty() {
