@@ -363,10 +363,10 @@ def run_gcloud_auth(env):
   )
 
 
-def get_bazel_startup_options(env):
+def get_bazel_startup_options():
   """Returns the bazel startup options."""
   startup_options = []
-  tmp_dir = getattr(env, "tmp_dir", None)
+  tmp_dir = Path(os.environ.get("TMPDIR")) if os.environ.get("TMPDIR") else None
   if tmp_dir:
     startup_options += [
         f"--output_base={tmp_dir / 'output'}",

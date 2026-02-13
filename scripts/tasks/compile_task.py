@@ -48,7 +48,7 @@ class CompileTask(Task):
   def _run_bazel(self):
     bazel = get_bazel_path()
     build_configs = get_bazel_build_configs(self.args, self.env)
-    startup_options = get_bazel_startup_options(self.env)
+    startup_options = get_bazel_startup_options()
     targets = get_bazel_targets(self.args)
 
     run(
