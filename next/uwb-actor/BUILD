@@ -12,6 +12,7 @@ DEPS = [
     "@bytes",
     "@futures",
     "@log",
+    "@pdl-runtime",
     "@pica",
     "@tokio",
     "@tokio-util",

@@ -8,7 +8,8 @@ use netsim_model::{
     chip::{Chip, ChipCreate, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate},
     chip_error::ChipError,
 };
-use pica::{PicaCommand, PicaEvent};
+use pdl_runtime::Packet;
+use pica::{packets::uci, PicaCommand, PicaEvent};
 
 use crate::{
     uwb_actor::{UwbActor, UwbChipState},
@@ -152,8 +153,16 @@ impl ActorService for UwbActor {
         match action {
             UwbAction::Reset { id } => {
                 if let Some(state) = self.chip_states.get(&id) {
-                    let _handle = state.pica_handle;
-                    // TODO(b/483097389): implement reset
+                    let handle = state.pica_handle;
+                    let reset_cmd =
+                        uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
+                    let _ = self
+                        .pica_commands
+                        .send(PicaCommand::UciPacket(
+                            handle,
+                            reset_cmd.encode_to_vec().expect("encoding succeeds"),
+                        ))
+                        .await;
                 }
                 Ok(UwbActionResult::Success)
             }
