@@ -16,24 +16,28 @@ use std::cmp::max;
 
 use common::util::time_display::TimeDisplay;
 use netsim_proto::{common::ChipKind, frontend, model};
+use protobuf::MessageField;
 
 use crate::{
-    args::{
-        self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, LinkDelete, LinkPatch,
-        OnOffState,
-    },
+    args::{self, Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, OnOffState},
     display::{Displayer, LinkChipIdDisplay},
-    grpc_client::GrpcResponse,
+    grpc_client::{GrpcRequest, GrpcResponse},
 };
 
 impl args::Command {
-    /// Format and print the response received from the frontend server for the
-    /// command
-    pub fn print_response(&self, response: &GrpcResponse, verbose: bool) {
+    pub fn print_response(
+        &self,
+        response: &GrpcResponse,
+
+        request: Option<&GrpcRequest>,
+        verbose: bool,
+    ) -> crate::error::Result<()> {
         match self {
             Command::Version => {
                 let GrpcResponse::GetVersion(res) = response else {
-                    panic!("Expected to print VersionResponse. Got: {response:?}");
+                    return Err(
+                        format!("Expected to print VersionResponse. Got: {response:?}").into()
+                    );
                 };
                 Self::print_version_response(res);
             }
@@ -60,7 +64,9 @@ impl args::Command {
             }
             Command::Devices(_) => {
                 let GrpcResponse::ListDevice(res) = response else {
-                    panic!("Expected to print ListDeviceResponse. Got: {response:?}");
+                    return Err(
+                        format!("Expected to print ListDeviceResponse. Got: {response:?}").into()
+                    );
                 };
                 println!("{}", Displayer::new(res.clone(), verbose));
             }
@@ -71,7 +77,10 @@ impl args::Command {
             }
             Command::Capture(Capture::List(cmd)) => {
                 let GrpcResponse::ListCapture(res) = response else {
-                    panic!("Expected to print ListCaptureResponse. Got: {response:?}");
+                    return Err(format!(
+                        "Expected to print ListCaptureResponse. Got: {response:?}"
+                    )
+                    .into());
                 };
                 Self::print_list_capture_response(
                     &mut res.clone(),
@@ -102,10 +111,13 @@ impl args::Command {
                 Beacon::Create(kind) => match kind {
                     BeaconCreate::Ble(_) => {
                         if !verbose {
-                            return;
+                            return Ok(());
                         }
                         let GrpcResponse::CreateDevice(res) = response else {
-                            panic!("Expected to print CreateDeviceResponse. Got: {response:?}");
+                            return Err(format!(
+                                "Expected to print CreateDeviceResponse. Got: {response:?}"
+                            )
+                            .into());
                         };
                         let device = &res.device;
                         if device.chips.len() == 1 {
@@ -114,7 +126,7 @@ impl args::Command {
                                 device.name, device.chips[0].name
                             );
                         } else {
-                            panic!("the gRPC request completed successfully but the response contained an unexpected number of chips");
+                            return Err("the gRPC request completed successfully but the response contained an unexpected number of chips".into());
                         }
                     }
                 },
@@ -122,7 +134,7 @@ impl args::Command {
                     match kind {
                         BeaconPatch::Ble(args) => {
                             if !verbose {
-                                return;
+                                return Ok(());
                             }
                             if let Some(advertise_mode) = &args.settings.advertise_mode {
                                 match advertise_mode {
@@ -170,7 +182,7 @@ impl args::Command {
                 }
                 Beacon::Remove(args) => {
                     if !verbose {
-                        return;
+                        return Ok(());
                     }
                     if let Some(chip_name) = &args.chip_name {
                         println!("Removed chip '{}' from device '{}'", chip_name, args.device_name)
@@ -183,38 +195,82 @@ impl args::Command {
                 unimplemented!("No Grpc Response for Bumble Command.");
             }
             Command::Link(link_cmd) => match link_cmd {
+                Link::Create(_) => {
+                    if verbose {
+                        if let GrpcResponse::CreateLink(frontend::CreateLinkResponse {
+                            link: MessageField(Some(match_link)),
+                            ..
+                        }) = response
+                        {
+                            println!(
+                                "Successfully created link (Sender: {}, Receiver: {}, Type: {:?})",
+                                LinkChipIdDisplay(match_link.sender_id),
+                                LinkChipIdDisplay(match_link.receiver_id),
+                                match_link.kind
+                            );
+                        }
+                    }
+                }
                 Link::List => {
                     let GrpcResponse::ListLink(res) = response else {
-                        panic!("Expected to print ListLinkResponse. Got: {response:?}");
+                        return Err(format!(
+                            "Expected to print ListLinkResponse. Got: {response:?}"
+                        )
+                        .into());
                     };
                     println!("{}", Displayer::new(res.clone(), verbose));
                 }
-                Link::Patch(patch_struct) => match &patch_struct.command {
-                    LinkPatch::Rssi(args) => {
+                Link::Patch(args) => {
+                    if let Some(rssi) = args.rssi {
                         if verbose {
+                            // fall back to args (wildcards)
+                            let (sender, receiver) = match request {
+                                Some(GrpcRequest::PatchLink(req)) => {
+                                    match &req.link.clone().into_option() {
+                                        Some(link) => {
+                                            (Some(link.sender_id), Some(link.receiver_id))
+                                        }
+                                        None => (args.sender, args.receiver),
+                                    }
+                                }
+                                _ => (args.sender, args.receiver),
+                            };
+
                             println!(
-                                "Successfully patched RSSI for link (Sender: {}, Receiver: {}, Type: {:?}) to {}.",
-                                LinkChipIdDisplay(args.sender_id.unwrap_or(0)),
-                                LinkChipIdDisplay(args.receiver_id.unwrap_or(0)),
-                                args.radio_type, args.value
+                                "Successfully patched RSSI for link (Sender: {}, Receiver: {}, Type: {}) to {}.",
+                                LinkChipIdDisplay(sender.unwrap_or(0)),
+                                LinkChipIdDisplay(receiver.unwrap_or(0)),
+                                args.chip_kind, rssi
                             );
                         }
                     }
-                },
-                Link::Delete(delete_struct) => match &delete_struct.command {
-                    LinkDelete::Rssi(args) => {
-                        if verbose {
-                            println!(
-                                "Successfully deleted RSSI for link (Sender: {}, Receiver: {}, Type: {:?}).",
-                                LinkChipIdDisplay(args.sender_id.unwrap_or(0)),
-                                LinkChipIdDisplay(args.receiver_id.unwrap_or(0)),
-                                args.radio_type
-                            );
-                        }
+                }
+                Link::Delete(args) => {
+                    if verbose {
+                        // Extract specific link info from request if available
+                        let (sender, receiver) = if let Some(GrpcRequest::DeleteLink(req)) = request
+                        {
+                            #[allow(deprecated)]
+                            if let Some(link) = &req.link.clone().into_option() {
+                                (Some(link.sender_id), Some(link.receiver_id))
+                            } else {
+                                (args.sender, args.receiver)
+                            }
+                        } else {
+                            (args.sender, args.receiver)
+                        };
+
+                        println!(
+                            "Successfully deleted RSSI for link (Sender: {}, Receiver: {}, Type: {}).",
+                            LinkChipIdDisplay(sender.unwrap_or(0)),
+                            LinkChipIdDisplay(receiver.unwrap_or(0)),
+                            args.chip_kind
+                        );
                     }
-                },
+                }
             },
         }
+        Ok(())
     }
 
     fn capture_state_to_string(state: Option<bool>) -> String {
@@ -228,12 +284,10 @@ impl args::Command {
         }
     }
 
-    /// Helper function to format and print VersionResponse
     fn print_version_response(response: &frontend::VersionResponse) {
         println!("Netsim version: {}", response.version);
     }
 
-    /// Helper function to format and print ListCaptureResponse
     fn print_list_capture_response(
         response: &mut frontend::ListCaptureResponse,
         verbose: bool,

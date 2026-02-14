@@ -55,6 +55,9 @@ impl DeviceActor {
 
         if has_active_devices {
             self.has_seen_device = true;
+            if let Some(key) = self.startup_timer.take() {
+                ctx.cancel_timer(key);
+            }
             if let Some(key) = self.idle_timer.take() {
                 ctx.cancel_timer(key);
             }
@@ -159,15 +162,6 @@ impl DeviceActor {
         ctx: &mut DynContext<Self>,
     ) -> Result<DeviceId, DeviceError> {
         log::info!("DeviceActor: Create device {}", params.device_config.name);
-        self.has_seen_device = true;
-        // Cancel startup timer if it exists
-        if let Some(key) = self.startup_timer.take() {
-            ctx.cancel_timer(key);
-        }
-        // Cancel idle timer if it exists
-        if let Some(key) = self.idle_timer.take() {
-            ctx.cancel_timer(key);
-        }
 
         let id = id.unwrap_or_else(|| {
             let id = DeviceId(self.next_device_id);
@@ -254,7 +248,8 @@ impl DeviceActor {
 
     /// Callback for startup timeout
     pub(crate) fn on_startup_timeout(&mut self, ctx: &mut dyn Context<Self>) {
-        if !self.has_seen_device && self.devices.is_empty() {
+        let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
+        if !self.has_seen_device && !has_active_devices {
             log::info!(
                 "DeviceActor: Startup timeout reached (no devices connected), shutting down"
             );
@@ -488,7 +483,6 @@ impl ActorService for DeviceActor {
             }
             _ => Err(DeviceError::NotFound("Action requires a device ID".into())),
         };
-        self.has_seen_device = true;
         result
     }
 

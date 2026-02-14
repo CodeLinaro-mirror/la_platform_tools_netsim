@@ -67,6 +67,7 @@ async fn test_chip_deleted_on_stream_close() {
 
     // When
     world.and_packet_stream_is_closed(chip_id);
+    world.and_tick_occurs().await;
 
     // Then
     world.then_chip_does_not_exist(chip_id).await;

@@ -20,7 +20,6 @@ use netsim_proto::{
         patch_capture_request::PatchCapture as PatchCaptureProto,
         patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto,
     },
-    frontend_grpc::FrontendServiceClient,
     model::{
         self,
         chip::{
@@ -28,31 +27,30 @@ use netsim_proto::{
             Radio as Chip_Radio,
         },
         chip_create, Chip, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
-        PhyKind as PhyKindProto, Position,
+        Position,
     },
 };
 use protobuf::MessageField;
 
 use crate::{
     args::{
-        Beacon, BeaconCreate, BeaconPatch, Capture, Command, Link, LinkDelete, LinkPatch,
+        Beacon, BeaconCreate, BeaconPatch, Capture, ChipKind as ArgsChipKind, Command, Link,
         OnOffState, RadioType, UpDownStatus,
     },
-    grpc_client::{self, GrpcRequest, GrpcResponse},
+    error::{Error, Result},
+    grpc_client::{GrpcMethodExecutor, GrpcRequest, GrpcResponse},
 };
 
-fn radio_type_to_proto_phy_kind(radio_type: RadioType) -> PhyKindProto {
-    match radio_type {
-        RadioType::Ble => PhyKindProto::BLUETOOTH_LOW_ENERGY,
-        RadioType::Classic => PhyKindProto::BLUETOOTH_CLASSIC,
-        RadioType::Wifi => PhyKindProto::WIFI,
-        RadioType::Uwb => PhyKindProto::UWB,
+fn chip_kind_to_proto(chip_kind: ArgsChipKind) -> ChipKind {
+    match chip_kind {
+        ArgsChipKind::Bluetooth => ChipKind::BLUETOOTH,
+        ArgsChipKind::Wifi => ChipKind::WIFI,
+        ArgsChipKind::Uwb => ChipKind::UWB,
     }
 }
 
 impl Command {
     /// Return the generated request protobuf message
-    /// The parsed command parameters are used to construct the request protobuf
     pub fn get_request(&self) -> GrpcRequest {
         match self {
             Command::Version => GrpcRequest::GetVersion,
@@ -186,47 +184,15 @@ impl Command {
             }
             Command::Link(link_cmd) => match link_cmd {
                 Link::List => GrpcRequest::ListLink,
-                Link::Patch(patch_struct) => match &patch_struct.command {
-                    LinkPatch::Rssi(args) => {
-                        let link = model::Link {
-                            sender_id: args.sender_id.unwrap_or(0),
-                            receiver_id: args.receiver_id.unwrap_or(0),
-                            link_kind: radio_type_to_proto_phy_kind(args.radio_type).into(),
-                            rssi: args.value as i32,
-                            ..Default::default()
-                        };
-                        let request = frontend::PatchLinkRequest {
-                            link: MessageField::some(link),
-                            ..Default::default()
-                        };
-                        GrpcRequest::PatchLink(request)
-                    }
-                },
-                Link::Delete(delete_struct) => match &delete_struct.command {
-                    LinkDelete::Rssi(args) => {
-                        let link = model::Link {
-                            sender_id: args.sender_id.unwrap_or(0),
-                            receiver_id: args.receiver_id.unwrap_or(0),
-                            link_kind: radio_type_to_proto_phy_kind(args.radio_type).into(),
-                            ..Default::default()
-                        };
-                        let request = frontend::DeleteLinkRequest {
-                            link: MessageField::some(link),
-                            ..Default::default()
-                        };
-                        GrpcRequest::DeleteLink(request)
-                    }
-                },
+                _ => {
+                    unimplemented!("get_request not implemented for Link Patch/Delete/Create command. Use get_requests instead.")
+                }
             },
         }
     }
 
     /// Create and return the request protobuf(s) for the command.
-    /// In the case of a command with pattern argument(s) there may be multiple
-    /// gRPC requests. The parsed command parameters are used to construct
-    /// the request protobuf. The client is used to send gRPC call(s) to
-    /// retrieve information needed for request protobufs.
-    pub fn get_requests(&mut self, client: &FrontendServiceClient) -> Vec<GrpcRequest> {
+    pub fn get_requests<T: GrpcMethodExecutor>(&mut self, client: &T) -> Result<Vec<GrpcRequest>> {
         match self {
             Command::Capture(Capture::Patch(cmd)) => {
                 let mut reqs = Vec::new();
@@ -244,7 +210,7 @@ impl Command {
                     result.patch = Some(patch_capture).into();
                     reqs.push(GrpcRequest::PatchCapture(result))
                 }
-                reqs
+                Ok(reqs)
             }
             Command::Capture(Capture::Get(cmd)) => {
                 let mut reqs = Vec::new();
@@ -268,8 +234,9 @@ impl Command {
                         file_extension
                     ));
                 }
-                reqs
+                Ok(reqs)
             }
+            Command::Link(link_cmd) => Self::handle_link_command(client, link_cmd),
             _ => {
                 unimplemented!(
                     "get_requests not implemented for this command. Use get_request instead."
@@ -278,12 +245,138 @@ impl Command {
         }
     }
 
-    fn get_filtered_captures(
-        client: &FrontendServiceClient,
+    fn handle_link_command<T: GrpcMethodExecutor>(
+        client: &T,
+        link_cmd: &Link,
+    ) -> Result<Vec<GrpcRequest>> {
+        match link_cmd {
+            Link::List => Ok(vec![GrpcRequest::ListLink]),
+            Link::Create(cmd) => {
+                let chip_kind = chip_kind_to_proto(cmd.chip_kind);
+                let sender_ids = Self::resolve_chip_ids(
+                    client,
+                    cmd.sender,
+                    cmd.sender_name.as_deref(),
+                    chip_kind,
+                )?;
+                let receiver_ids = Self::resolve_chip_ids(
+                    client,
+                    cmd.receiver,
+                    cmd.receiver_name.as_deref(),
+                    chip_kind,
+                )?;
+
+                let reqs = sender_ids
+                    .iter()
+                    .flat_map(|sender_id| {
+                        receiver_ids.iter().map(move |receiver_id| (*sender_id, *receiver_id))
+                    })
+                    .filter(|(sender_id, receiver_id)| sender_id != receiver_id)
+                    .map(|(sender_id, receiver_id)| {
+                        let link = model::Link {
+                            sender_id,
+                            receiver_id,
+                            kind: chip_kind.into(),
+                            rssi: cmd.rssi.unwrap_or(-20),
+                            ..Default::default()
+                        };
+                        GrpcRequest::CreateLink(frontend::CreateLinkRequest {
+                            link: MessageField::some(link),
+                            ..Default::default()
+                        })
+                    })
+                    .collect();
+                Ok(reqs)
+            }
+            Link::Patch(args) => {
+                if let Some(rssi) = args.rssi {
+                    let chip_kind = chip_kind_to_proto(args.chip_kind);
+                    let sender_ids = Self::resolve_chip_ids(
+                        client,
+                        args.sender,
+                        args.sender_name.as_deref(),
+                        chip_kind,
+                    )?;
+                    let receiver_ids = Self::resolve_chip_ids(
+                        client,
+                        args.receiver,
+                        args.receiver_name.as_deref(),
+                        chip_kind,
+                    )?;
+
+                    let links = Self::get_links(client, &sender_ids, &receiver_ids, chip_kind)?;
+
+                    let reqs: Vec<GrpcRequest> = links
+                        .into_iter()
+                        .map(|link| {
+                            let mut link_proto = model::Link::new();
+                            link_proto.id = link.id;
+                            link_proto.rssi = rssi as i32;
+                            link_proto.kind = chip_kind.into();
+                            // Populate sender/receiver for display purposes
+                            link_proto.sender_id = link.sender_id;
+                            link_proto.receiver_id = link.receiver_id;
+
+                            GrpcRequest::PatchLink(frontend::PatchLinkRequest {
+                                link: MessageField::some(link_proto),
+                                id: link.id,
+                                ..Default::default()
+                            })
+                        })
+                        .collect();
+
+                    if reqs.is_empty() {
+                        return Err(Error::Message(
+                            "No links found matching criteria.".to_string(),
+                        ));
+                    }
+                    Ok(reqs)
+                } else {
+                    Ok(Vec::new())
+                }
+            }
+            Link::Delete(args) => {
+                let chip_kind = chip_kind_to_proto(args.chip_kind);
+                let sender_ids = Self::resolve_chip_ids(
+                    client,
+                    args.sender,
+                    args.sender_name.as_deref(),
+                    chip_kind,
+                )?;
+                let receiver_ids = Self::resolve_chip_ids(
+                    client,
+                    args.receiver,
+                    args.receiver_name.as_deref(),
+                    chip_kind,
+                )?;
+
+                let links = Self::get_links(client, &sender_ids, &receiver_ids, chip_kind)?;
+
+                let reqs: Vec<GrpcRequest> = links
+                    .into_iter()
+                    .map(|link| {
+                        GrpcRequest::DeleteLink(frontend::DeleteLinkRequest {
+                            id: link.id,
+                            link: MessageField::some(link),
+                            ..Default::default()
+                        })
+                    })
+                    .collect();
+
+                if reqs.is_empty() {
+                    return Err(Error::Message("No links found matching criteria.".to_string()));
+                }
+                Ok(reqs)
+            }
+        }
+    }
+
+    fn get_filtered_captures<T: GrpcMethodExecutor>(
+        client: &T,
         patterns: &[String],
     ) -> Vec<model::Capture> {
         // Get list of captures, with explicit type annotation for send_grpc
-        let mut result = match grpc_client::send_grpc(client, &GrpcRequest::ListCapture) {
+        let mut result = match client.send_grpc(&GrpcRequest::ListCapture) {
             Ok(GrpcResponse::ListCapture(response)) => response.captures,
             Ok(grpc_response) => {
                 error!("Unexpected GrpcResponse: {grpc_response:?}");
@@ -302,16 +395,84 @@ impl Command {
 
         result
     }
+
+    /// Resolves chip IDs based on optional ID, name, or returns ALL chips of
+    /// kind if both are missing (Wildcard).
+    fn resolve_chip_ids<T: GrpcMethodExecutor>(
+        client: &T,
+        chip_id: Option<u32>,
+        device_name: Option<&str>,
+        chip_kind: ChipKind,
+    ) -> Result<Vec<u32>> {
+        if let Some(id) = chip_id {
+            if id != 0 {
+                return Ok(vec![id]);
+            }
+        }
+
+        // Fetch devices to resolve name or get all chips
+        let mut resolved_ids = Vec::new();
+        match client.send_grpc(&GrpcRequest::ListDevice)? {
+            GrpcResponse::ListDevice(response) => {
+                for device in response.devices {
+                    // Filter by device name if provided
+                    if let Some(dev_name) = device_name {
+                        if device.name != dev_name {
+                            continue;
+                        }
+                    }
+
+                    resolved_ids.extend(
+                        device
+                            .chips
+                            .into_iter()
+                            .filter(|chip| chip.kind == chip_kind.into())
+                            .map(|chip| chip.id),
+                    );
+                }
+            }
+            _ => {}
+        }
+
+        Ok(resolved_ids)
+    }
+
+    /// Get Links matching the set of sender and receiver IDs.
+    fn get_links<T: GrpcMethodExecutor>(
+        client: &T,
+        sender_ids: &[u32],
+        receiver_ids: &[u32],
+        chip_kind: ChipKind,
+    ) -> Result<Vec<model::Link>> {
+        let mut matched_links = Vec::new();
+        match client.send_grpc(&GrpcRequest::ListLink)? {
+            GrpcResponse::ListLink(response) => {
+                matched_links.extend(response.links.into_iter().filter(|link| {
+                    link.kind == chip_kind.into()
+                        && sender_ids.contains(&link.sender_id)
+                        && receiver_ids.contains(&link.receiver_id)
+                }));
+            }
+            _ => {}
+        }
+        Ok(matched_links)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::VecDeque,
+        sync::{Arc, Mutex},
+    };
+
     use clap::Parser;
     use netsim_proto::{
         common::ChipKind,
         frontend::{
             patch_device_request::PatchDeviceFields as PatchDeviceFieldsProto, CreateDeviceRequest,
-            PatchDeviceRequest,
+            CreateLinkRequest, ListDeviceResponse, ListLinkResponse, PatchDeviceRequest,
+            PatchLinkRequest,
         },
         model::{
             self,
@@ -329,26 +490,68 @@ mod tests {
                 Radio as Chip_Radio,
             },
             chip_create::{BleBeaconCreate as BleBeaconCreateProto, Chip as ChipKindCreateProto},
-            Chip as ChipProto, ChipCreate as ChipCreateProto, DeviceCreate as DeviceCreateProto,
-            PhyKind as PhyKindProto, Position,
+            Chip as ChipProto, ChipCreate as ChipCreateProto, Device as DeviceProto,
+            DeviceCreate as DeviceCreateProto, Link as LinkProto, Position,
         },
     };
     use protobuf::MessageField;
 
     use super::*;
-    use crate::args::{
-        AdvertiseMode, BeaconBleAdvertiseData, BeaconBleScanResponseData, BeaconBleSettings,
-        BeaconCreateBle, BeaconPatchBle, Command, Devices, Interval, Link, LinkDelete,
-        LinkDeleteCommand, LinkPatch, LinkPatchCommand, ListCapture, Move, NetsimArgs,
-        ParsableBytes, Radio, RadioType, RssiDelete, RssiPatch, TxPower, TxPowerLevel,
+    use crate::{
+        args::{
+            AdvertiseMode, BeaconBleAdvertiseData, BeaconBleScanResponseData, BeaconBleSettings,
+            BeaconCreateBle, BeaconPatchBle, Command, Devices, Interval, Link, LinkCreate,
+            LinkPatch, ListCapture, Move, NetsimArgs, ParsableBytes, Radio, RadioType, TxPower,
+            TxPowerLevel,
+        },
+        error::Error,
     };
+
+    struct MockClient {
+        responses: Arc<Mutex<VecDeque<Result<GrpcResponse>>>>,
+    }
+
+    impl MockClient {
+        fn new(responses: Vec<Result<GrpcResponse>>) -> Self {
+            Self { responses: Arc::new(Mutex::new(responses.into())) }
+        }
+    }
+
+    impl GrpcMethodExecutor for MockClient {
+        fn send_grpc(&self, _grpc_request: &GrpcRequest) -> Result<GrpcResponse> {
+            self.responses.lock().unwrap().pop_front().unwrap_or_else(|| {
+                Err(Error::Grpc(grpcio::Error::RpcFailure(grpcio::RpcStatus::new(
+                    grpcio::RpcStatusCode::UNKNOWN,
+                ))))
+            })
+        }
+    }
 
     // Helper to test parsing text command into expected Command and GrpcRequest
     fn test_command(command: &str, expected_command: Command, expected_grpc_request: GrpcRequest) {
         let command = NetsimArgs::parse_from(command.split_whitespace()).command;
         assert_eq!(command, expected_command);
+        // Note: We use a MockClient that returns errors for now because get_request()
+        // doesn't seem to use the client for these older tests? Wait, the older
+        // tests used `get_request()` which calls `get_request()` (singular).
+        // `get_request` does NOT take a client.
+        // So this helper is fine for `get_request` commands.
+        // But for `Link` commands we need `test_link_command`.
         let request = command.get_request();
         assert_eq!(request, expected_grpc_request);
+    }
+
+    fn test_link_command(
+        command: &str,
+        expected_command: Command,
+        mock_responses: Vec<Result<GrpcResponse>>,
+        expected_requests: Vec<GrpcRequest>,
+    ) {
+        let mut command_struct = NetsimArgs::parse_from(command.split_whitespace()).command;
+        assert_eq!(command_struct, expected_command);
+        let client = MockClient::new(mock_responses);
+        let requests = command_struct.get_requests(&client).unwrap();
+        assert_eq!(requests, expected_requests);
     }
 
     #[test]
@@ -657,6 +860,124 @@ mod tests {
         });
 
         PatchDeviceRequest { device, ..Default::default() }
+    }
+
+    #[test]
+    fn test_link_create_with_ids() {
+        let cmd = "netsim-cli link create bt --sender 1000 --receiver 1001";
+        let expected_cmd = Command::Link(Link::Create(LinkCreate {
+            chip_kind: ArgsChipKind::Bluetooth,
+            sender: Some(1000),
+            receiver: Some(1001),
+            sender_name: None,
+            receiver_name: None,
+            rssi: None,
+        }));
+        // Mock responses for resolve_chip_ids (1000 and 1001 are non-zero, so it
+        // returns immediately, no grpc calls)
+        let responses = vec![];
+        let expected_reqs = vec![GrpcRequest::CreateLink(CreateLinkRequest {
+            link: MessageField::some(LinkProto {
+                sender_id: 1000,
+                receiver_id: 1001,
+                kind: ChipKind::BLUETOOTH.into(),
+                rssi: -20,
+                ..Default::default()
+            }),
+            ..Default::default()
+        })];
+
+        test_link_command(cmd, expected_cmd, responses, expected_reqs);
+    }
+
+    #[test]
+    fn test_link_patch_with_ids() {
+        let cmd = "netsim-cli link patch bt --rssi -20 --sender 1000 --receiver 1001";
+        let expected_cmd = Command::Link(Link::Patch(LinkPatch {
+            chip_kind: ArgsChipKind::Bluetooth,
+            rssi: Some(-20),
+            sender: Some(1000),
+            receiver: Some(1001),
+            sender_name: None,
+            receiver_name: None,
+        }));
+        // Mock responses:
+        // 1. resolve_chip_ids(1000) -> immediate
+        // 2. resolve_chip_ids(1001) -> immediate
+        // 3. get_link_ids -> ListLink
+        let mut link_proto = LinkProto::new();
+        link_proto.id = 55;
+        link_proto.kind = ChipKind::BLUETOOTH.into();
+        link_proto.sender_id = 1000;
+        link_proto.receiver_id = 1001;
+
+        let list_link_response = ListLinkResponse { links: vec![link_proto], ..Default::default() };
+        let responses = vec![Ok(GrpcResponse::ListLink(list_link_response))];
+
+        let expected_reqs = vec![GrpcRequest::PatchLink(PatchLinkRequest {
+            link: MessageField::some(LinkProto {
+                id: 55,
+                rssi: -20,
+                sender_id: 1000,
+                receiver_id: 1001,
+                kind: ChipKind::BLUETOOTH.into(),
+                ..Default::default()
+            }),
+            id: 55,
+            ..Default::default()
+        })];
+
+        test_link_command(cmd, expected_cmd, responses, expected_reqs);
+    }
+
+    #[test]
+    fn test_link_create_resolve_names() {
+        let cmd = "netsim-cli link create wifi --sender-name dev1 --receiver-name dev2";
+        let expected_cmd = Command::Link(Link::Create(LinkCreate {
+            chip_kind: ArgsChipKind::Wifi,
+            sender: None,
+            receiver: None,
+            sender_name: Some("dev1".to_string()),
+            receiver_name: Some("dev2".to_string()),
+            rssi: None,
+        }));
+
+        // Mock ListDevice response
+        // Device 1: id=10, name="dev1", chips=[{id=100, kind=WIFI}]
+        // Device 2: id=20, name="dev2", chips=[{id=200, kind=WIFI}]
+        let dev1 = DeviceProto {
+            id: 10,
+            name: "dev1".to_string(),
+            chips: vec![ChipProto { id: 100, kind: ChipKind::WIFI.into(), ..Default::default() }],
+            ..Default::default()
+        };
+        let dev2 = DeviceProto {
+            id: 20,
+            name: "dev2".to_string(),
+            chips: vec![ChipProto { id: 200, kind: ChipKind::WIFI.into(), ..Default::default() }],
+            ..Default::default()
+        };
+        let list_device_response =
+            ListDeviceResponse { devices: vec![dev1, dev2], ..Default::default() };
+
+        // resolve_chip_ids called twice. Both call ListDevice.
+        let responses = vec![
+            Ok(GrpcResponse::ListDevice(list_device_response.clone())), // For sender
+            Ok(GrpcResponse::ListDevice(list_device_response)),         // For receiver
+        ];
+
+        let expected_reqs = vec![GrpcRequest::CreateLink(CreateLinkRequest {
+            link: MessageField::some(LinkProto {
+                sender_id: 100,
+                receiver_id: 200,
+                kind: ChipKind::WIFI.into(),
+                rssi: -20,
+                ..Default::default()
+            }),
+            ..Default::default()
+        })];
+
+        test_link_command(cmd, expected_cmd, responses, expected_reqs);
     }
 
     #[test]
@@ -1076,101 +1397,5 @@ mod tests {
         let command = Command::Link(Link::List);
         let grpc_request = command.get_request();
         assert_eq!(grpc_request, GrpcRequest::ListLink);
-    }
-
-    #[test]
-    fn test_link_patch_rssi_request_full() {
-        let command = Command::Link(Link::Patch(LinkPatchCommand {
-            command: LinkPatch::Rssi(RssiPatch {
-                radio_type: RadioType::Ble,
-                value: -60,
-                sender_id: Some(100),
-                receiver_id: Some(200),
-            }),
-        }));
-        let grpc_request = command.get_request();
-        let expected_link = model::Link {
-            sender_id: 100,
-            receiver_id: 200,
-            link_kind: PhyKindProto::BLUETOOTH_LOW_ENERGY.into(),
-            rssi: -60,
-            ..Default::default()
-        };
-        let expected_request = frontend::PatchLinkRequest {
-            link: MessageField::some(expected_link),
-            ..Default::default()
-        };
-        assert_eq!(grpc_request, GrpcRequest::PatchLink(expected_request));
-    }
-
-    #[test]
-    fn test_link_patch_rssi_request_no_ids() {
-        let command = Command::Link(Link::Patch(LinkPatchCommand {
-            command: LinkPatch::Rssi(RssiPatch {
-                radio_type: RadioType::Wifi,
-                value: -70,
-                sender_id: None,
-                receiver_id: None,
-            }),
-        }));
-        let grpc_request = command.get_request();
-        let expected_link = model::Link {
-            sender_id: 0,   // Default for None
-            receiver_id: 0, // Default for None
-            link_kind: PhyKindProto::WIFI.into(),
-            rssi: -70,
-            ..Default::default()
-        };
-        let expected_request = frontend::PatchLinkRequest {
-            link: MessageField::some(expected_link),
-            ..Default::default()
-        };
-        assert_eq!(grpc_request, GrpcRequest::PatchLink(expected_request));
-    }
-
-    #[test]
-    fn test_link_delete_rssi_request_full() {
-        let command = Command::Link(Link::Delete(LinkDeleteCommand {
-            command: LinkDelete::Rssi(RssiDelete {
-                radio_type: RadioType::Classic,
-                sender_id: Some(10),
-                receiver_id: Some(20),
-            }),
-        }));
-        let grpc_request = command.get_request();
-        let expected_link = model::Link {
-            sender_id: 10,
-            receiver_id: 20,
-            link_kind: PhyKindProto::BLUETOOTH_CLASSIC.into(),
-            ..Default::default() // RSSI is not part of delete request key
-        };
-        let expected_request = frontend::DeleteLinkRequest {
-            link: MessageField::some(expected_link),
-            ..Default::default()
-        };
-        assert_eq!(grpc_request, GrpcRequest::DeleteLink(expected_request));
-    }
-
-    #[test]
-    fn test_link_delete_rssi_request_no_ids() {
-        let command = Command::Link(Link::Delete(LinkDeleteCommand {
-            command: LinkDelete::Rssi(RssiDelete {
-                radio_type: RadioType::Ble,
-                sender_id: None,
-                receiver_id: None,
-            }),
-        }));
-        let grpc_request = command.get_request();
-        let expected_link = model::Link {
-            sender_id: 0,   // Default for None
-            receiver_id: 0, // Default for None
-            link_kind: PhyKindProto::BLUETOOTH_LOW_ENERGY.into(),
-            ..Default::default()
-        };
-        let expected_request = frontend::DeleteLinkRequest {
-            link: MessageField::some(expected_link),
-            ..Default::default()
-        };
-        assert_eq!(grpc_request, GrpcRequest::DeleteLink(expected_request));
     }
 }
