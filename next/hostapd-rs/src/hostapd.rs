@@ -689,6 +689,7 @@ mod tests {
             source: parse_mac_address("1:1:1:1:1:1").unwrap(),
             bssid: parse_mac_address("0:0:0:0:0:0").unwrap(),
             seq_ctrl: 0,
+            qos_ctrl: None,
             protected: 1,
             order: 0,
             more_frags: 0,

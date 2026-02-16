@@ -745,7 +745,7 @@ impl Ieee80211 {
         Ok(eth_frame)
     }
 
-    pub fn into_from_ap(&self) -> Result<Ieee80211ToAp, String> {
+    pub fn into_from_ap(&self) -> Result<Ieee80211FromAp, String> {
         let fc = self.get_fc();
         let ftype = match (fc & 0x000C) >> 2 {
             0 => FrameType::Management,
@@ -755,7 +755,14 @@ impl Ieee80211 {
         };
         let stype = ((fc & 0x00F0) >> 4) as u8;
 
-        Ok(Ieee80211ToAp {
+        let is_qos = (fc & 0x000C) == 0x0008 && (stype & 0x08) != 0;
+        let qos_ctrl = if is_qos && self.bytes.len() >= 26 {
+            Some([self.bytes[24], self.bytes[25]])
+        } else {
+            None
+        };
+
+        Ok(Ieee80211FromAp {
             duration_id: u16::from_le_bytes([self.bytes[2], self.bytes[3]]),
             ftype,
             stype,
@@ -763,6 +770,7 @@ impl Ieee80211 {
             source: self.get_source(),
             bssid: self.get_bssid().unwrap_or(MacAddress::new([0; 6])),
             seq_ctrl: u16::from_le_bytes([self.bytes[22], self.bytes[23]]),
+            qos_ctrl,
             protected: if (fc & 0x4000) != 0 { 1 } else { 0 },
             order: if (fc & 0x8000) != 0 { 1 } else { 0 },
             more_frags: if (fc & 0x0400) != 0 { 1 } else { 0 },
@@ -785,6 +793,7 @@ pub struct Ieee80211ToAp {
     pub source: MacAddress,
     pub bssid: MacAddress,
     pub seq_ctrl: u16,
+    pub qos_ctrl: Option<[u8; 2]>,
     pub protected: u8,
     pub order: u8,
     pub more_frags: u8,
@@ -829,6 +838,9 @@ impl Ieee80211ToAp {
         bytes.extend_from_slice(&self.source.bytes); // Addr2 (SA)
         bytes.extend_from_slice(&self.destination.bytes); // Addr3 (DA)
         bytes.extend_from_slice(&self.seq_ctrl.to_le_bytes());
+        if let Some(qos) = self.qos_ctrl {
+            bytes.extend_from_slice(&qos);
+        }
         bytes.extend_from_slice(&self.payload);
 
         Ok(bytes)
@@ -838,6 +850,78 @@ impl Ieee80211ToAp {
 impl TryFrom<Ieee80211ToAp> for Ieee80211 {
     type Error = String;
     fn try_from(val: Ieee80211ToAp) -> Result<Self, Self::Error> {
+        let bytes = val.encode_to_bytes()?;
+        Ok(Ieee80211 { bytes })
+    }
+}
+
+/// Helper struct for creating Ieee80211 frames from AP.
+#[derive(Debug, Clone)]
+pub struct Ieee80211FromAp {
+    pub duration_id: u16,
+    pub ftype: FrameType,
+    pub stype: u8,
+    pub destination: MacAddress,
+    pub source: MacAddress,
+    pub bssid: MacAddress,
+    pub seq_ctrl: u16,
+    pub qos_ctrl: Option<[u8; 2]>,
+    pub protected: u8,
+    pub order: u8,
+    pub more_frags: u8,
+    pub retry: u8,
+    pub pm: u8,
+    pub more_data: u8,
+    pub version: u8,
+    pub payload: Vec<u8>,
+}
+
+impl Ieee80211FromAp {
+    pub fn encode_to_bytes(&self) -> Result<Vec<u8>, String> {
+        let mut fc = 0u16;
+        fc |= (self.version as u16) & 0x03;
+        fc |= ((self.ftype as u16) & 0x03) << 2;
+        fc |= ((self.stype as u16) & 0x0F) << 4;
+        fc |= 0x0200; // FromDS=1
+
+        if self.protected != 0 {
+            fc |= 0x4000;
+        }
+        if self.order != 0 {
+            fc |= 0x8000;
+        }
+        if self.more_frags != 0 {
+            fc |= 0x0400;
+        }
+        if self.retry != 0 {
+            fc |= 0x0800;
+        }
+        if self.pm != 0 {
+            fc |= 0x1000;
+        }
+        if self.more_data != 0 {
+            fc |= 0x2000;
+        }
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&fc.to_le_bytes());
+        bytes.extend_from_slice(&self.duration_id.to_le_bytes());
+        bytes.extend_from_slice(&self.destination.bytes); // Addr1 (DA)
+        bytes.extend_from_slice(&self.bssid.bytes); // Addr2 (BSSID)
+        bytes.extend_from_slice(&self.source.bytes); // Addr3 (SA)
+        bytes.extend_from_slice(&self.seq_ctrl.to_le_bytes());
+        if let Some(qos) = self.qos_ctrl {
+            bytes.extend_from_slice(&qos);
+        }
+        bytes.extend_from_slice(&self.payload);
+
+        Ok(bytes)
+    }
+}
+
+impl TryFrom<Ieee80211FromAp> for Ieee80211 {
+    type Error = String;
+    fn try_from(val: Ieee80211FromAp) -> Result<Self, Self::Error> {
         let bytes = val.encode_to_bytes()?;
         Ok(Ieee80211 { bytes })
     }
@@ -1072,5 +1156,49 @@ mod tests {
         assert_eq!(&frame.bytes[10..16], src.bytes);
         // Addr3 (DA)
         assert_eq!(&frame.bytes[16..22], dst.bytes);
+    }
+
+    #[test]
+    fn test_into_from_ap_qos_preservation() {
+        // QoS Data Frame (ToDS=1):
+        // Frame Control: 0x88 (Type=Data, Subtype=QoS Data)
+        // Flags: 0x01 (ToDS) -> 0x0188
+        // Duration: 0
+        // Addr1 (BSSID): 01:02:03:04:05:06
+        // Addr2 (SA): 11:12:13:14:15:16
+        // Addr3 (DA): 21:22:23:24:25:26
+        // Seq: 0
+        // QoS Control: 0x1234
+        // Payload: DEADBEEF
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&[0x88, 0x01]); // FC
+        bytes.extend_from_slice(&[0x00, 0x00]); // Duration
+        bytes.extend_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06]); // BSSID
+        bytes.extend_from_slice(&[0x11, 0x12, 0x13, 0x14, 0x15, 0x16]); // SA
+        bytes.extend_from_slice(&[0x21, 0x22, 0x23, 0x24, 0x25, 0x26]); // DA
+        bytes.extend_from_slice(&[0x00, 0x00]); // Seq
+        bytes.extend_from_slice(&[0x12, 0x34]); // QoS Control
+        bytes.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]); // Payload
+
+        let frame = Ieee80211::decode_full(&bytes).expect("Failed to decode QoS Data");
+
+        // Convert the frame to represent a transmission *from* the AP.
+        let from_ap = frame.into_from_ap().expect("Failed to convert into_from_ap");
+
+        // Assert the extracted values match exactly what was parsed from the source
+        // frame
+        assert_eq!(from_ap.qos_ctrl, Some([0x12, 0x34]));
+        assert_eq!(from_ap.payload, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+
+        // Re-encode to test encoding behavior.
+        let encoded_bytes = from_ap.encode_to_bytes().expect("Failed to encode into bytes");
+
+        // Validate that QoS is accurately written back out.
+        let re_decoded_frame =
+            Ieee80211::decode_full(&encoded_bytes).expect("Failed to re-decode into_from_ap bytes");
+
+        assert!(re_decoded_frame.is_qos_data());
+        assert_eq!(re_decoded_frame.get_payload(), vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        assert_eq!(re_decoded_frame.bytes[24..26], [0x12, 0x34]);
     }
 }
