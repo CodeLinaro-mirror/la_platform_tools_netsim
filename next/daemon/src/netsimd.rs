@@ -502,19 +502,25 @@ impl NetsimDaemon {
         let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k, v.clone())).collect();
         let link_actor_state = link_actor::LinkActor::new(link_chip_clients);
 
+        let (startup_timeout, idle_timeout) = if args.no_shutdown {
+            (None, None)
+        } else {
+            (
+                Some(args.startup_timeout.map_or(Duration::from_secs(15), Duration::from_millis)),
+                Some(
+                    args.idle_shutdown_timeout
+                        .map_or(Duration::from_secs(0), Duration::from_millis),
+                ),
+            )
+        };
+
         let device_actor_state = device_actor::DeviceActor::new(
             chip_clients.clone(),
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
             Box::new(link_client.clone()),
-            None,
-            if args.no_shutdown {
-                None
-            } else if let Some(millis) = args.idle_shutdown_timeout {
-                Some(Duration::from_millis(millis))
-            } else {
-                Some(Duration::from_secs(15))
-            },
+            startup_timeout,
+            idle_timeout,
         );
 
         // Spawn server tasks

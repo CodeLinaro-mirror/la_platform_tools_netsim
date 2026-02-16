@@ -131,6 +131,10 @@ impl World {
         self.packet_rxs.remove(&chip_id);
     }
 
+    pub async fn and_tick_occurs(&mut self) {
+        tokio::time::sleep(2 * UwbActor::TICK_INTERVAL).await;
+    }
+
     pub async fn then_chip_does_not_exist(&self, chip_id: u32) {
         // Yield to allow the actor to process the stream/sink closure.
         tokio::task::yield_now().await;

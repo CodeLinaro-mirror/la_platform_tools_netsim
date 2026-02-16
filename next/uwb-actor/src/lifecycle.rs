@@ -2,36 +2,58 @@
 
 use actor_framework::{ActorLifecycle, ActorService, DynContext};
 use async_trait::async_trait;
-use bytes::Bytes;
+use futures::FutureExt;
+use log::warn;
 use netsim_model::chip::ChipId;
+use pica::PicaEvent;
+use tokio::sync::broadcast::error::TryRecvError;
 
 use crate::uwb_actor::UwbActor;
 
+const PICA_SENTINEL_CHIP_ID: ChipId = ChipId(u32::MAX);
+
 #[async_trait]
 impl ActorLifecycle for UwbActor {
-    async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
-        // No startup logic needed yet
+    async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
+        log::info!("UwbActor starting Pica run loop");
+
+        let pica = self.pica.take().expect("lifecycle starts only once");
+        ctx.spawn(
+            PICA_SENTINEL_CHIP_ID,
+            async move {
+                if let Err(err) = pica.run().await {
+                    panic!("Pica run loop failed: {err}");
+                }
+                PICA_SENTINEL_CHIP_ID
+            }
+            .boxed(),
+        );
+        ctx.set_interval(Self::TICK_INTERVAL);
     }
 
-    async fn on_stream(&mut self, id: ChipId, _msg: Bytes, _ctx: &mut DynContext<Self>) {
-        // Ignored for now
-    }
-
-    async fn on_stream_closed(&mut self, id: ChipId, ctx: &mut DynContext<Self>) {
-        log::info!("Stream closed for chip {id}");
-        // If the stream closes, we should also ensure the sink task is aborted.
-        ctx.abort(id);
-        if let Err(e) = self.handle_delete(id, ctx).await {
-            log::warn!("Failed to delete chip {id} after stream closed: {e}");
+    async fn on_tick(&mut self, ctx: &mut DynContext<Self>) {
+        loop {
+            match self.pica_on_tick_events.try_recv() {
+                Ok(PicaEvent::Disconnected { handle, .. }) => {
+                    // Received in response to either `PicaCommand::Disconnect` or stream/sink
+                    // closure.
+                    let Some(id) = self.handle_to_chip.remove(&handle) else { continue };
+                    let _ = self.handle_delete(id, ctx).await;
+                }
+                Ok(PicaEvent::Connected { .. }) => {}
+                Err(TryRecvError::Lagged(skipped)) => {
+                    warn!("UWB actor `on_tick` is too slow -- {skipped} messages were missed from Pica. There may be stale chips.");
+                    continue;
+                }
+                Err(TryRecvError::Empty | TryRecvError::Closed) => {
+                    break;
+                }
+            }
         }
     }
 
-    async fn on_task_closed(&mut self, id: ChipId, ctx: &mut DynContext<Self>) {
-        log::info!("Sink task closed for chip {id}");
-        // If the sink task closes, we should also ensure the stream is removed.
-        ctx.remove_stream(id);
-        if let Err(e) = self.handle_delete(id, ctx).await {
-            log::warn!("Failed to delete chip {id} after sink task closed: {e}");
-        }
+    async fn on_shutdown(&mut self) {
+        // Pica is running within the actor context and does not need to be
+        // explicitly shut down.
     }
 }

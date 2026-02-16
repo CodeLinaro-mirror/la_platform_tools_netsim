@@ -3,7 +3,7 @@
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use netsim_model::chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate};
+use netsim_model::chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, RadioUpdate, WifiUpdate};
 use tokio::sync::mpsc;
 
 use crate::{
@@ -98,10 +98,11 @@ impl ActorService for WifiActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(chip) = self.active_chips.get_mut(&id) {
-            if let Some(ChipVariantUpdate::Wifi(radio_update)) = update.variant {
-                if let Some(state) = radio_update.radio.state {
-                    self.medium.set_enabled(id.0, state);
-                }
+            if let Some(ChipVariantUpdate::Wifi(WifiUpdate {
+                radio: RadioUpdate { state: Some(state) },
+            })) = update.variant
+            {
+                self.medium.set_enabled(id.0, state);
             }
             if let Some(enabled) = update.enabled {
                 self.medium.set_enabled(id.0, enabled);

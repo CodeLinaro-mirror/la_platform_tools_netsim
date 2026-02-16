@@ -1,0 +1,16 @@
+rust_binary {
+    name: "ntest",
+    crate_name: "ntest",
+    srcs: ["src/main.rs"],
+    edition: "2021",
+    rustlibs: [
+        "libanyhow",
+        "libclap",
+        "libenv_logger",
+        "liblog_rust",
+        "libsocket2",
+        "libtokio",
+        "libwhich",
+    ],
+    proc_macros: ["libtokio_macros"],
+}
