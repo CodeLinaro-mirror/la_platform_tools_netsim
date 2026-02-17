@@ -25,7 +25,7 @@ impl ActorService for WifiActor {
         &mut self,
         id: Option<Self::Id>,
         mut params: Self::Create,
-        _ctx: &mut DynContext<Self>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let id = id.unwrap_or(params.id);
         if self.active_chips.contains_key(&id) {
@@ -45,7 +45,7 @@ impl ActorService for WifiActor {
 
         // Define sink task: forwards bytes from channel to PacketSink
         let sink_id = id;
-        _ctx.spawn(
+        ctx.spawn(
             sink_id,
             Box::pin(async move {
                 let mut sink = sink;
@@ -54,13 +54,14 @@ impl ActorService for WifiActor {
                         break;
                     }
                 }
+                let _ = sink.close().await;
                 sink_id
             }),
         );
 
         // Register stream with context for polling
         let mapped_stream = stream.map(move |packet| bytes::Bytes::from(packet));
-        _ctx.add_stream(id, Box::pin(mapped_stream));
+        ctx.add_stream(id, Box::pin(mapped_stream));
 
         let chip = Chip {
             id: id.0,
@@ -78,7 +79,7 @@ impl ActorService for WifiActor {
         self.medium.add(id.0);
 
         // Notify Gateway about new chip (e.g. attach TAP)
-        self.gateway.on_chip_create(id, _ctx).await;
+        self.gateway.on_chip_create(id, ctx).await;
 
         Ok(id)
     }
