@@ -12,10 +12,6 @@ netsim_rust_library(
     ]),
     crate_name = "netsim_packets",
     edition = "2021",
-    enable_clippy = False,
-    enable_doc = False,
-    enable_doc_test = False,
-    enable_unit_test = False,
     proc_macro_deps = [
         "@async-trait",
         "@num-derive",

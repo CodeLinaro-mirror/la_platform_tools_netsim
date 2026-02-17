@@ -120,7 +120,7 @@ impl CaptureActor {
         let filepath = if let Some(dir) = self.capture_dir.as_ref() {
             dir.join(&filename)
         } else {
-            let mut path = netsim_common::system::netsimd_temp_dir();
+            let mut path = common::system::netsimd_temp_dir();
             path.push("pcaps");
             if let Err(e) = std::fs::create_dir_all(&path) {
                 log::warn!("Failed to create default pcap directory {}: {}", path.display(), e);

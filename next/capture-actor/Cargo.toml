@@ -17,3 +17,4 @@ byteorder = "1.4"
 anyhow = "1.0"
 thiserror = "1.0"
 log = "0.4"
+common = { package = "netsim-common", path = "../common" }

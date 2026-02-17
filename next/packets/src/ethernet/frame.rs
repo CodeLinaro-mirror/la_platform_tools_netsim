@@ -7,7 +7,10 @@
 
 use crate::utils::general::ParseResult;
 use core::fmt;
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde::{
+    de::{self, Deserialize, Deserializer, Visitor},
+    ser::{Serialize, SerializeStruct, Serializer},
+};
 use std::str::FromStr;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
@@ -24,6 +27,9 @@ pub struct MacAddr {
 }
 
 impl MacAddr {
+    /// Broadcast MAC address (FF:FF:FF:FF:FF:FF).
+    pub const BROADCAST: Self = Self { bytes: [0xFF; 6] };
+
     /// Creates a new `MacAddr` from a 6-byte array.
     pub const fn new(bytes: [u8; 6]) -> Self {
         Self { bytes }
@@ -100,12 +106,46 @@ impl FromStr for MacAddr {
     }
 }
 
+impl TryFrom<&str> for MacAddr {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::from_str(value)
+    }
+}
+
 impl Serialize for MacAddr {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for MacAddr {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct MacAddrVisitor;
+
+        impl<'de> Visitor<'de> for MacAddrVisitor {
+            type Value = MacAddr;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a MAC address string")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                MacAddr::from_str(value).map_err(E::custom)
+            }
+        }
+
+        deserializer.deserialize_str(MacAddrVisitor)
     }
 }
 
@@ -124,6 +164,8 @@ pub mod ether_type {
     pub const IPV6: u16 = 0x86DD;
     /// EtherType for VLAN-tagged frames (IEEE 802.1Q).
     pub const VLAN: u16 = 0x8100;
+    /// EtherType for EAPOL (Extensible Authentication Protocol over LAN).
+    pub const EAPOL: u16 = 0x888E;
 }
 
 /// Represents an Ethernet II frame header.
@@ -312,6 +354,17 @@ mod tests {
     fn test_mac_addr_display() {
         let mac = MacAddr { bytes: [0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02] };
         assert_eq!(format!("{}", mac), "DE:AD:BE:EF:01:02");
+    }
+
+    #[test]
+    fn test_mac_addr_serde() {
+        let mac = MacAddr { bytes: [0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02] };
+        let json = serde_json::to_string(&mac).expect("Failed to serialize MacAddr");
+        assert_eq!(json, "\"DE:AD:BE:EF:01:02\"");
+
+        let deserialized: MacAddr =
+            serde_json::from_str(&json).expect("Failed to deserialize MacAddr");
+        assert_eq!(deserialized, mac);
     }
 
     /// Tests parsing a valid Ethernet frame byte slice using LayoutVerified.

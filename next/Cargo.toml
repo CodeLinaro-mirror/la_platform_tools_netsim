@@ -16,9 +16,11 @@
 resolver = "3"
 members = [
   "actor-framework",
+  "ap-actor",
+  "slirp-actor",
   "capture-actor",
   "capture-api",
-  "bluetooth",
+  "bluetooth-actor",
   "model",
   "daemon",
   "proto",
@@ -28,13 +30,13 @@ members = [
   "link-api",
   "modem-rs",
   "modem-rs-derive",
-  #  "packets",
-  "uwb",
+  "uwb-actor",
   "types",
   "device-actor",
   "device-api",
   "client",
   "rootcanal",
+  "testing",
 ]
 
 [workspace.doc]

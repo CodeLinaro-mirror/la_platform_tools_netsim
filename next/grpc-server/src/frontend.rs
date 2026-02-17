@@ -1,23 +1,271 @@
-use actor_framework::ActorClient;
-use client::DeviceClient;
-use device_api::DeviceId;
+use crate::frontend_converter::to_proto_device;
+use std::sync::Arc;
+
+use client::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
+use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
 use netsim_proto::empty::Empty;
-use netsim_proto::frontend::ListDeviceResponse;
+use netsim_proto::frontend::{ListDeviceResponse, ListLinkResponse};
 use netsim_proto::frontend_grpc::FrontendService;
 use netsim_proto::protobuf;
-
-use crate::frontend_converter::to_proto_device;
 
 #[derive(Clone)]
 pub struct FrontendClient {
     device_client: DeviceClient,
+    link_client: Arc<dyn LinkClient>,
+    version: String,
 }
 
 impl FrontendClient {
-    pub fn new(device_client: DeviceClient) -> Self {
-        Self { device_client }
+    pub fn new(
+        device_client: DeviceClient,
+        link_client: Arc<dyn LinkClient>,
+        version: String,
+    ) -> Self {
+        Self { device_client, link_client, version }
+    }
+
+    async fn handle_create_link(
+        client: Arc<dyn LinkClient>,
+        req: netsim_proto::frontend::CreateLinkRequest,
+    ) -> Result<netsim_proto::frontend::CreateLinkResponse, RpcStatus> {
+        let proto_link = req.link.into_option().ok_or_else(|| {
+            RpcStatus::with_message(RpcStatusCode::INVALID_ARGUMENT, "No link provided".to_string())
+        })?;
+
+        let link = crate::frontend_converter::from_proto_link(proto_link).ok_or_else(|| {
+            RpcStatus::with_message(
+                RpcStatusCode::INVALID_ARGUMENT,
+                "Invalid link parameters".to_string(),
+            )
+        })?;
+
+        let create = LinkCreate { sender: link.sender, receiver: link.receiver, rssi: link.rssi };
+
+        let id = client
+            .create(create)
+            .await
+            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e))?;
+
+        let mut response = netsim_proto::frontend::CreateLinkResponse::new();
+        let mut response_link = crate::frontend_converter::to_proto_link(link);
+        response_link.id = id.0;
+        response.link = protobuf::MessageField::some(response_link);
+        Ok(response)
+    }
+
+    async fn handle_patch_link(
+        client: Arc<dyn LinkClient>,
+        req: netsim_proto::frontend::PatchLinkRequest,
+    ) -> Result<(), RpcStatus> {
+        let proto_link = req.link.into_option().ok_or_else(|| {
+            RpcStatus::with_message(RpcStatusCode::INVALID_ARGUMENT, "No link provided".to_string())
+        })?;
+
+        let link = crate::frontend_converter::from_proto_link(proto_link).ok_or_else(|| {
+            RpcStatus::with_message(
+                RpcStatusCode::INVALID_ARGUMENT,
+                "Invalid link parameters".to_string(),
+            )
+        })?;
+
+        let update = LinkUpdate { rssi: Some(link.rssi) };
+        client
+            .update(LinkId(req.id), update)
+            .await
+            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e))
+    }
+
+    async fn handle_delete_link(
+        client: Arc<dyn LinkClient>,
+        req: netsim_proto::frontend::DeleteLinkRequest,
+    ) -> Result<(), RpcStatus> {
+        if req.id != 0 {
+            client
+                .delete(LinkId(req.id))
+                .await
+                .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e))?;
+            return Ok(());
+        }
+
+        Err(RpcStatus::with_message(
+            RpcStatusCode::INVALID_ARGUMENT,
+            "Link ID required".to_string(),
+        ))
+    }
+
+    async fn handle_list_link(client: Arc<dyn LinkClient>) -> Result<ListLinkResponse, RpcStatus> {
+        let links = client.list().await.map_err(|e| {
+            RpcStatus::with_message(RpcStatusCode::INTERNAL, format!("Failed to list links: {}", e))
+        })?;
+        let mut response = ListLinkResponse::new();
+        for link in links {
+            response.links.push(crate::frontend_converter::to_proto_link(link));
+        }
+        Ok(response)
+    }
+
+    async fn handle_list_device(client: DeviceClient) -> Result<ListDeviceResponse, RpcStatus> {
+        let response = client.list().await.map_err(|e| {
+            RpcStatus::with_message(
+                RpcStatusCode::INTERNAL,
+                format!("Failed to list devices: {}", e),
+            )
+        })?;
+        let mut proto_response = ListDeviceResponse::new();
+        for device in response.devices {
+            proto_response.devices.push(to_proto_device(device));
+        }
+        Ok(proto_response)
+    }
+
+    async fn handle_create_device(
+        client: DeviceClient,
+        req: netsim_proto::frontend::CreateDeviceRequest,
+    ) -> Result<netsim_proto::frontend::CreateDeviceResponse, RpcStatus> {
+        // We only support creating a device with a single chip (Beacon) for now.
+        if let Some(proto_chip_ref) = req.device.chips.first() {
+            let mut proto_chip = proto_chip_ref.clone();
+            // Fallback: Use device name if chip name is missing.
+            if proto_chip.name.is_empty() {
+                proto_chip.name = req.device.name.clone();
+            }
+            if let Some(chip_config) = crate::frontend_converter::from_proto_chip_create(proto_chip)
+            {
+                let device_config = device_api::DeviceConfig {
+                    name: req.device.name.clone(),
+                    visible: true, // Default to true as proto doesn't have this field
+                    position: crate::frontend_converter::from_proto_position(
+                        req.device.position.clone().unwrap_or_default(),
+                    ),
+                    orientation: crate::frontend_converter::from_proto_orientation(
+                        req.device.orientation.clone().unwrap_or_default(),
+                    ),
+                };
+
+                let device_create = device_api::api::DeviceCreate {
+                    device_config: device_config.clone(),
+                    chip: chip_config,
+                };
+
+                match client.create_device(device_create).await {
+                    Ok(id) => {
+                        let mut device = netsim_proto::model::Device::new();
+                        device.id = id.0;
+                        device.name = device_config.name;
+                        device.visible = Some(device_config.visible);
+                        device.position = protobuf::MessageField::some(
+                            crate::frontend_converter::to_proto_position(device_config.position),
+                        );
+                        device.orientation = protobuf::MessageField::some(
+                            crate::frontend_converter::to_proto_orientation(
+                                device_config.orientation,
+                            ),
+                        );
+
+                        Ok(netsim_proto::frontend::CreateDeviceResponse {
+                            device: protobuf::MessageField::some(device),
+                            ..Default::default()
+                        })
+                    }
+                    Err(e) => Err(RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string())),
+                }
+            } else {
+                Err(RpcStatus::with_message(
+                    RpcStatusCode::INVALID_ARGUMENT,
+                    "Unsupported chip kind or invalid config".to_string(),
+                ))
+            }
+        } else {
+            Err(RpcStatus::with_message(
+                RpcStatusCode::INVALID_ARGUMENT,
+                "No chips provided".to_string(),
+            ))
+        }
+    }
+
+    async fn handle_patch_device(
+        client: DeviceClient,
+        req: netsim_proto::frontend::PatchDeviceRequest,
+    ) -> Result<(), RpcStatus> {
+        let id = req.id.unwrap_or(0);
+
+        let update = device_api::api::DeviceUpdate {
+            id,
+            name: req.device.name.clone(),
+            visible: req.device.visible,
+            position: req
+                .device
+                .position
+                .clone()
+                .into_option()
+                .map(crate::frontend_converter::from_proto_position),
+            orientation: req
+                .device
+                .orientation
+                .clone()
+                .into_option()
+                .map(crate::frontend_converter::from_proto_orientation),
+            chips: if !req.device.chips.is_empty() {
+                Some(
+                    req.device
+                        .chips
+                        .iter()
+                        .cloned()
+                        .map(crate::frontend_converter::from_proto_chip_update)
+                        .collect(),
+                )
+            } else {
+                None
+            },
+        };
+
+        let name_opt = req.device.name.as_deref();
+        client.patch(req.id, name_opt, update).await.map_err(|e| match e {
+            DeviceError::NotFound(_) | DeviceError::DeviceNotFound(_) => RpcStatus::with_message(
+                RpcStatusCode::NOT_FOUND,
+                format!("Device not found or patch failed: {}", e),
+            ),
+            _ => RpcStatus::with_message(
+                RpcStatusCode::INTERNAL,
+                format!("Failed to patch device: {}", e),
+            ),
+        })
+    }
+
+    async fn handle_delete_chip(
+        client: DeviceClient,
+        req: netsim_proto::frontend::DeleteChipRequest,
+    ) -> Result<(), RpcStatus> {
+        client.delete(device_api::DeviceId(req.id)).await.map_err(|e| {
+            RpcStatus::with_message(
+                RpcStatusCode::INTERNAL,
+                format!("Failed to delete device: {}", e),
+            )
+        })
+    }
+
+    async fn handle_reset(client: DeviceClient) -> Result<(), RpcStatus> {
+        // TODO: Implement global reset in DeviceClient.
+        // Currently using None for global reset.
+        client.reset(None).await.map_err(|e| {
+            RpcStatus::with_message(
+                RpcStatusCode::INTERNAL,
+                format!("Failed to reset devices: {}", e),
+            )
+        })
+    }
+}
+
+async fn reply<T>(sink: UnarySink<T>, res: Result<T, RpcStatus>) {
+    match res {
+        Ok(msg) => {
+            let _ = sink.success(msg).await;
+        }
+        Err(status) => {
+            let _ = sink.fail(status).await;
+        }
     }
 }
 
@@ -29,33 +277,17 @@ impl FrontendService for FrontendClient {
         sink: UnarySink<netsim_proto::frontend::VersionResponse>,
     ) {
         let mut response = netsim_proto::frontend::VersionResponse::new();
-        response.version = "0.0.1-next".to_string();
+        response.version = self.version.clone();
         let f = sink.success(response).map(|_| ());
         ctx.spawn(f)
     }
 
     fn list_device(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<ListDeviceResponse>) {
         let client = self.device_client.clone();
-        let f = async move {
-            match client.list().await {
-                Ok(response) => {
-                    let mut proto_response = ListDeviceResponse::new();
-                    for device in response.devices {
-                        proto_response.devices.push(to_proto_device(device));
-                    }
-                    sink.success(proto_response).await
-                }
-                Err(e) => {
-                    sink.fail(RpcStatus::with_message(
-                        RpcStatusCode::INTERNAL,
-                        format!("Failed to list devices: {}", e),
-                    ))
-                    .await
-                }
-            }
-        }
-        .map(|_| ());
-        ctx.spawn(f)
+        ctx.spawn(async move {
+            let res = Self::handle_list_device(client).await;
+            reply(sink, res).await;
+        });
     }
 
     fn subscribe_device(
@@ -75,65 +307,18 @@ impl FrontendService for FrontendClient {
         sink: UnarySink<Empty>,
     ) {
         let client = self.device_client.clone();
-        let f = async move {
-            // TODO: Handle case where req.id is missing but name is provided?
-            // For now, we require ID or fail if not present (or maybe 0 is invalid?)
-            let id = req.id.unwrap_or(0); // 0 might be valid?
-
-            let update = device_api::api::DeviceUpdate {
-                id,
-                name: req.device.name.clone(),
-                visible: req.device.visible,
-                position: req
-                    .device
-                    .position
-                    .clone()
-                    .into_option()
-                    .map(crate::frontend_converter::from_proto_position),
-                orientation: req
-                    .device
-                    .orientation
-                    .clone()
-                    .into_option()
-                    .map(crate::frontend_converter::from_proto_orientation),
-            };
-
-            match client.update(DeviceId(id), update).await {
-                Ok(_) => sink.success(Empty::new()).await,
-                Err(e) => {
-                    sink.fail(RpcStatus::with_message(
-                        RpcStatusCode::INTERNAL,
-                        format!("Failed to patch device: {}", e),
-                    ))
-                    .await
-                }
-            }
-        }
-        .map(|_| ());
-        ctx.spawn(f)
+        ctx.spawn(async move {
+            let res = Self::handle_patch_device(client, req).await.map(|_| Empty::new());
+            reply(sink, res).await;
+        });
     }
 
     fn reset(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<Empty>) {
         let client = self.device_client.clone();
-        let f = async move {
-            // TODO: reset might need a DeviceId if it's per-device, or we need a global reset.
-            // For now, we assume it's per-device and we don't have the ID here?
-            // Actually, the old API had a global reset. If the new one is per-device, this is a breaking change.
-            // Given the error, it expects a DeviceId. We'll use a placeholder or fix the API.
-            // For now, let's use a placeholder ID 0 to satisfy compilation, but this needs review.
-            match client.reset(DeviceId(0)).await {
-                Ok(_) => sink.success(Empty::new()).await,
-                Err(e) => {
-                    sink.fail(RpcStatus::with_message(
-                        RpcStatusCode::INTERNAL,
-                        format!("Failed to reset devices: {}", e),
-                    ))
-                    .await
-                }
-            }
-        }
-        .map(|_| ());
-        ctx.spawn(f)
+        ctx.spawn(async move {
+            let res = Self::handle_reset(client).await.map(|_| Empty::new());
+            reply(sink, res).await;
+        });
     }
 
     fn create_device(
@@ -143,78 +328,10 @@ impl FrontendService for FrontendClient {
         sink: UnarySink<netsim_proto::frontend::CreateDeviceResponse>,
     ) {
         let client = self.device_client.clone();
-        let f = async move {
-            // We only support creating a device with a single chip (Beacon) for now.
-            if let Some(proto_chip) = req.device.chips.first() {
-                if let Some(chip_config) =
-                    crate::frontend_converter::from_proto_chip_create(proto_chip.clone())
-                {
-                    let device_config = device_api::DeviceConfig {
-                        name: req.device.name.clone(),
-                        visible: true, // Default to true as proto doesn't have this field
-                        position: crate::frontend_converter::from_proto_position(
-                            req.device.position.clone().unwrap_or_default(),
-                        ),
-                        orientation: crate::frontend_converter::from_proto_orientation(
-                            req.device.orientation.clone().unwrap_or_default(),
-                        ),
-                    };
-
-                    let device_create = device_api::api::DeviceCreate {
-                        device_config: device_config.clone(),
-                        chip: chip_config,
-                    };
-
-                    match client.create_device(device_create).await {
-                        Ok(id) => {
-                            let mut device = netsim_proto::model::Device::new();
-                            device.id = id.0;
-                            device.name = device_config.name;
-                            device.visible = Some(device_config.visible);
-                            device.position = protobuf::MessageField::some(
-                                crate::frontend_converter::to_proto_position(
-                                    device_config.position,
-                                ),
-                            );
-                            device.orientation = protobuf::MessageField::some(
-                                crate::frontend_converter::to_proto_orientation(
-                                    device_config.orientation,
-                                ),
-                            );
-                            // We don't have the full chip info back from create, but we can return the device skeleton.
-                            // Realistically, the client might query list_device after creation.
-
-                            sink.success(netsim_proto::frontend::CreateDeviceResponse {
-                                device: protobuf::MessageField::some(device),
-                                ..Default::default()
-                            })
-                            .await
-                        }
-                        Err(e) => {
-                            sink.fail(RpcStatus::with_message(
-                                RpcStatusCode::INTERNAL,
-                                e.to_string(),
-                            ))
-                            .await
-                        }
-                    }
-                } else {
-                    sink.fail(RpcStatus::with_message(
-                        RpcStatusCode::INVALID_ARGUMENT,
-                        "Unsupported chip kind or invalid config".to_string(),
-                    ))
-                    .await
-                }
-            } else {
-                sink.fail(RpcStatus::with_message(
-                    RpcStatusCode::INVALID_ARGUMENT,
-                    "No chips provided".to_string(),
-                ))
-                .await
-            }
-        }
-        .map(|_| ());
-        ctx.spawn(f)
+        ctx.spawn(async move {
+            let res = Self::handle_create_device(client, req).await;
+            reply(sink, res).await;
+        });
     }
 
     fn delete_chip(
@@ -224,22 +341,143 @@ impl FrontendService for FrontendClient {
         sink: UnarySink<Empty>,
     ) {
         let client = self.device_client.clone();
-        let f = async move {
-            // Proto DeleteChipRequest has `id` which is documented as Device Identifier.
-            // So this actually deletes the device?
-            // netsim-api has `delete(DeviceId)`.
-            match client.delete(device_api::DeviceId(req.id)).await {
-                Ok(_) => sink.success(Empty::new()).await,
-                Err(e) => {
-                    sink.fail(RpcStatus::with_message(
-                        RpcStatusCode::INTERNAL,
-                        format!("Failed to delete device: {}", e),
-                    ))
-                    .await
-                }
-            }
-        }
-        .map(|_| ());
-        ctx.spawn(f)
+        ctx.spawn(async move {
+            let res = Self::handle_delete_chip(client, req).await.map(|_| Empty::new());
+            reply(sink, res).await;
+        });
+    }
+
+    fn create_link(
+        &mut self,
+        ctx: RpcContext,
+        req: netsim_proto::frontend::CreateLinkRequest,
+        sink: UnarySink<netsim_proto::frontend::CreateLinkResponse>,
+    ) {
+        let client = self.link_client.clone();
+        ctx.spawn(async move {
+            let res = Self::handle_create_link(client, req).await;
+            reply(sink, res).await;
+        });
+    }
+
+    fn list_link(&mut self, ctx: RpcContext, _req: Empty, sink: UnarySink<ListLinkResponse>) {
+        let client = self.link_client.clone();
+        ctx.spawn(async move {
+            let res = Self::handle_list_link(client).await;
+            reply(sink, res).await;
+        });
+    }
+
+    fn patch_link(
+        &mut self,
+        ctx: RpcContext,
+        req: netsim_proto::frontend::PatchLinkRequest,
+        sink: UnarySink<Empty>,
+    ) {
+        let client = self.link_client.clone();
+        ctx.spawn(async move {
+            let res = Self::handle_patch_link(client, req).await.map(|_| Empty::new());
+            reply(sink, res).await;
+        });
+    }
+
+    fn delete_link(
+        &mut self,
+        ctx: RpcContext,
+        req: netsim_proto::frontend::DeleteLinkRequest,
+        sink: UnarySink<Empty>,
+    ) {
+        let client = self.link_client.clone();
+        ctx.spawn(async move {
+            let res = Self::handle_delete_link(client, req).await.map(|_| Empty::new());
+            reply(sink, res).await;
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use link_api::{Link, LinkId, MockLinkClient};
+    use netsim_model::chip::ChipId;
+    use protobuf::EnumOrUnknown;
+
+    #[tokio::test]
+    async fn test_create_link() {
+        let mut client = MockLinkClient::new();
+        client
+            .expect_create()
+            .withf(|params| params.sender.0 == 1 && params.receiver.0 == 2 && params.rssi == -50)
+            .times(1)
+            .returning(|_| Ok(LinkId(100)));
+
+        let client = Arc::new(client);
+        let mut req = netsim_proto::frontend::CreateLinkRequest::new();
+        let mut link = netsim_proto::model::Link::new();
+        link.sender_id = 1;
+        link.receiver_id = 2;
+        link.rssi = -50;
+        link.kind = EnumOrUnknown::new(netsim_proto::common::ChipKind::BLUETOOTH);
+        req.link = protobuf::MessageField::some(link);
+
+        let resp = FrontendClient::handle_create_link(client.clone(), req).await.unwrap();
+        assert_eq!(resp.link.id, 100);
+    }
+
+    #[tokio::test]
+    async fn test_patch_link() {
+        let mut client = MockLinkClient::new();
+        // Update()
+        client
+            .expect_update()
+            .withf(|id, patch| id.0 == 10 && patch.rssi == Some(-60))
+            .times(1)
+            .returning(|_, _| Ok(()));
+
+        let client = Arc::new(client);
+        let mut req = netsim_proto::frontend::PatchLinkRequest::new();
+        req.id = 10;
+        let mut link = netsim_proto::model::Link::new();
+        link.sender_id = 1;
+        link.receiver_id = 2;
+        link.rssi = -60;
+        link.kind = EnumOrUnknown::new(netsim_proto::common::ChipKind::BLUETOOTH);
+        req.link = protobuf::MessageField::some(link);
+
+        FrontendClient::handle_patch_link(client.clone(), req).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_delete_link() {
+        let mut client = MockLinkClient::new();
+        // delete()
+        client.expect_delete().withf(|id| id.0 == 20).times(1).returning(|_| Ok(()));
+
+        let client = Arc::new(client);
+        let mut req = netsim_proto::frontend::DeleteLinkRequest::new();
+        req.id = 20;
+
+        FrontendClient::handle_delete_link(client.clone(), req).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_list_link() {
+        let mut client = MockLinkClient::new();
+        client.expect_list().times(1).returning(|| {
+            Ok(vec![Link {
+                id: LinkId(1),
+                sender: ChipId(10),
+                receiver: ChipId(11),
+                kind: netsim_model::chip::ChipKind::BLUETOOTH,
+                rssi: -70,
+            }])
+        });
+
+        let client = Arc::new(client);
+        let resp = FrontendClient::handle_list_link(client.clone()).await.unwrap();
+        assert_eq!(resp.links.len(), 1);
+        assert_eq!(resp.links[0].id, 1);
+        assert_eq!(resp.links[0].sender_id, 10);
+        assert_eq!(resp.links[0].receiver_id, 11);
     }
 }

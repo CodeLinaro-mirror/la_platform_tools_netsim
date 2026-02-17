@@ -25,66 +25,9 @@
 //!
 //! ## Usage
 //!
-//! ```
-//! use bytes::Bytes;
-//! use libslirp_rs::libslirp_config::SlirpConfig;
-//! use libslirp_rs::libslirp::LibSlirp;
-//! use std::net::Ipv4Addr;
-//! use std::sync::mpsc;
-//!
-//! let (tx_cmds, _) = mpsc::channel();
-//! // Create a LibSlirp instance with default configuration
-//! let libslirp = LibSlirp::new(
-//!     SlirpConfig::default(),
-//!     tx_cmds,
-//!     None
-//! );
-//!
-//! let data = vec![0x01, 0x02, 0x03];
-//! // Input network data into libslirp
-//! libslirp.input(Bytes::from(data));
-//!
-//! // ... other operations ...
-//!
-//! // Shutdown libslirp
-//! libslirp.shutdown();
-//! ```
 //!
 //! ## Example with Proxy
 //!
-//! ```
-//! use libslirp_rs::libslirp::LibSlirp;
-//! use libslirp_rs::libslirp_config::SlirpConfig;
-//! use libslirp_rs::libslirp::{ProxyManager, ProxyConnect};
-//! use std::sync::mpsc;
-//! use std::net::SocketAddr;
-//! // Implement the ProxyManager trait for your proxy logic
-//! struct MyProxyManager;
-//!
-//! impl ProxyManager for MyProxyManager {
-//!     // ... implementation ...
-//!     fn try_connect(
-//!         &self,
-//!         sockaddr: SocketAddr,
-//!         connect_id: usize,
-//!         connect_func: Box<dyn ProxyConnect + Send>,
-//!     ) -> bool {
-//!         todo!()
-//!     }
-//!     fn remove(&self, connect_id: usize) {
-//!         todo!()
-//!     }
-//! }
-//! let (tx_cmds, _) = mpsc::channel();
-//! // Create a LibSlirp instance with a proxy manager
-//! let libslirp = LibSlirp::new(
-//!     SlirpConfig::default(),
-//!     tx_cmds,
-//!     Some(Box::new(MyProxyManager)),
-//! );
-//!
-//! // ...
-//! ```
 //!
 //! This module abstracts away the complexities of interacting with the libslirp C library,
 //! providing a more convenient and reliable way to use it in your Rust projects.
@@ -159,8 +102,26 @@ pub trait ProxyManager: Send {
     fn remove(&self, connect_id: usize);
 }
 
+/// Trait to allow abstracting the mechanism of sending packets out of Slirp.
+pub trait PacketSender: Send {
+    /// Sends a packet.
+    fn send(&self, packet: Bytes);
+}
+
+impl PacketSender for mpsc::Sender<Bytes> {
+    fn send(&self, packet: Bytes) {
+        let _ = self.send(packet);
+    }
+}
+
+impl PacketSender for tokio::sync::mpsc::UnboundedSender<Bytes> {
+    fn send(&self, packet: Bytes) {
+        let _ = self.send(packet);
+    }
+}
+
 struct CallbackContext {
-    tx_bytes: mpsc::Sender<Bytes>,
+    tx_bytes: Box<dyn PacketSender>,
     tx_cmds: mpsc::Sender<SlirpCmd>,
     poll_fds: Rc<RefCell<Vec<PollFd>>>,
     proxy_manager: Option<Box<dyn ProxyManager>>,
@@ -250,7 +211,7 @@ impl LibSlirp {
     /// Creates a new `LibSlirp` instance.
     pub fn new(
         config: libslirp_config::SlirpConfig,
-        tx_bytes: mpsc::Sender<Bytes>,
+        tx_bytes: Box<dyn PacketSender>,
         proxy_manager: Option<Box<dyn ProxyManager>>,
         tx_proxy_bytes: Option<mpsc::Sender<Bytes>>,
     ) -> LibSlirp {
@@ -309,6 +270,25 @@ impl LibSlirp {
     }
 
     /// Inputs network data into the `LibSlirp` instance.
+    pub fn input(&self, bytes: Bytes) {
+        if let Err(e) = self.tx_cmds.send(SlirpCmd::Input(bytes)) {
+            warn!("Failed to send Input cmd: {}", e);
+        }
+    }
+
+    /// Returns a cloneable handle for inputting data into LibSlirp.
+    pub fn input_handle(&self) -> LibSlirpInputHandle {
+        LibSlirpInputHandle { tx_cmds: self.tx_cmds.clone() }
+    }
+}
+
+/// A cloneable handle for inputting data into LibSlirp.
+#[derive(Clone)]
+pub struct LibSlirpInputHandle {
+    tx_cmds: mpsc::Sender<SlirpCmd>,
+}
+
+impl LibSlirpInputHandle {
     pub fn input(&self, bytes: Bytes) {
         if let Err(e) = self.tx_cmds.send(SlirpCmd::Input(bytes)) {
             warn!("Failed to send Input cmd: {}", e);
@@ -461,7 +441,7 @@ impl Drop for Slirp {
 #[allow(clippy::too_many_arguments)]
 fn slirp_thread(
     config: libslirp_config::SlirpConfig,
-    tx_bytes: mpsc::Sender<Bytes>,
+    tx_bytes: Box<dyn PacketSender>,
     tx_cmds: mpsc::Sender<SlirpCmd>,
     rx: mpsc::Receiver<SlirpCmd>,
     tx_poll: mpsc::Sender<PollRequest>,

@@ -14,21 +14,93 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 from pathlib import Path
 import platform
+import shutil
 
 from tasks.task import Task
-from utils import (CMAKE, WINDOWS_TMP_OBJS_PATH, move_contents, run)
+from utils import (
+    AOSP_ROOT,
+    CMAKE,
+    WINDOWS_TMP_OBJS_PATH,
+    get_bazel_build_configs,
+    get_bazel_path,
+    get_bazel_startup_options,
+    get_bazel_targets,
+    move_contents,
+    run,
+)
 
 
 class CompileInstallTask(Task):
 
   def __init__(self, args, env):
     super().__init__("CompileInstall")
+    self.args = args
     self.out = Path(args.out_dir)
     self.env = env
 
   def do_run(self):
+    if self.args.cmake:
+      return self._run_cmake()
+    return self._run_bazel()
+
+  def _run_bazel(self):
+    bazel = get_bazel_path()
+    build_configs = get_bazel_build_configs(self.args, self.env)
+    startup_options = get_bazel_startup_options(self.env)
+    targets = get_bazel_targets(self.args)
+
+    run(
+        [bazel] + startup_options + ["build"] + targets + build_configs,
+        self.env,
+        "bazel build",
+        AOSP_ROOT,
+    )
+
+    # Bazel Install
+    search_dir = AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
+    dest_dir = self.out / "distribution" / "emulator"
+    logging.info(f"Installing artifacts from {search_dir} to {dest_dir}")
+
+    try:
+      if not search_dir.is_dir():
+        logging.error(f"Bazel output directory not found: {search_dir}")
+        return False
+
+      dest_dir.mkdir(exist_ok=True, parents=True)
+
+      # Copy netsim binaries
+      for binary in ["netsim", "netsimd"]:
+        binary_name = (
+            f"{binary}.exe" if platform.system() == "Windows" else binary
+        )
+        src_file = search_dir / binary_name
+        logging.info(f"Copying {src_file} to {dest_dir}")
+        dest_file = dest_dir / binary_name
+        # Remove the file if it exists to avoid permission errors on overwrite.
+        if dest_file.is_file():
+          dest_file.unlink()
+        shutil.copy(src_file, dest_file)
+
+      # Copy netsim-ui
+      ui_src_dir = search_dir / "netsim-ui"
+      ui_dest_dir = dest_dir / "netsim-ui"
+      logging.info(f"Copying directory {ui_src_dir} to {ui_dest_dir}")
+      shutil.copytree(ui_src_dir, ui_dest_dir, dirs_exist_ok=True)
+
+    except FileNotFoundError as e:
+      logging.error(
+          f"Artifact not found: {e}. A successful Bazel build is required."
+      )
+      raise e
+    except shutil.Error as e:
+      logging.error(f"Error copying artifacts: {e}")
+      raise e
+    return True
+
+  def _run_cmake(self):
     # Strip for non-Windows builds
     target = "install"
     if platform.system() != "Windows":

@@ -6,7 +6,8 @@ use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
 use netsim_model::chip::{
-    Chip, ChipCreate, ChipId, ChipRequest, LegacyChipClient as ChipClient, PacketSink, PacketStream,
+    Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
+    ChipVariantUpdate, PacketSink, PacketStream,
 };
 use netsim_model::chip_error::ChipError;
 use std::collections::HashMap;
@@ -24,12 +25,11 @@ pub struct Server {
     /// A set of tasks for handling packet sinks.
     sink_tasks: JoinSet<ChipId>,
     /// Keeps sender channels for each chip.
-    /// TODO: Pass senders to pica library after pica is integrated.
     senders: HashMap<ChipId, mpsc::Sender<Bytes>>,
 }
 
 impl Server {
-    pub fn new(device_client: DeviceClient) -> (Self, ChipClient) {
+    pub fn new(device_client: DeviceClient) -> (Self, netsim_model::chip::RadioChipClient) {
         let (command_tx, command_rx) = mpsc::channel(10);
         let server = Server {
             active_chips: HashMap::new(),
@@ -39,7 +39,7 @@ impl Server {
             device_client,
             senders: HashMap::new(),
         };
-        (server, ChipClient::new(command_tx))
+        (server, netsim_model::chip::RadioChipClient::new(command_tx))
     }
 
     pub async fn run(mut self) {
@@ -115,6 +115,26 @@ impl Server {
                 let chip = self.active_chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
                 let _ = respond_to.send(Ok(chip.clone()));
             }
+            ChipRequest::Update { id, patch, respond_to } => {
+                if let Some(chip) = self.active_chips.get_mut(&id) {
+                    if let Some(pos) = patch.position {
+                        chip.position = pos;
+                    }
+                    if let Some(orient) = patch.orientation {
+                        chip.orientation = orient;
+                    }
+                    // TODO: Create helper function: radio_update(&mut radio: Radio, update: RadioUpdate) {};
+                    if let Some(ChipVariantUpdate::Wifi(radio_update)) = patch.variant {
+                        if let Some(ChipVariant::Wifi(wifi_radio)) = &mut chip.variant {
+                            radio_update.apply(wifi_radio);
+                        }
+                    }
+                    let _ = respond_to.send(Ok(chip.clone()));
+                } else {
+                    let _ = respond_to.send(Err(ChipError::ChipNotFound(id)));
+                }
+                // TODO: Update Wifi service.
+            }
             ChipRequest::Shutdown => {
                 *shutdown = true;
             }
@@ -185,7 +205,11 @@ impl Server {
         let mut chip = Chip::default();
         chip.id = chip_id.0;
         chip.device_id = params.device_id;
-        // TODO: Populate other fields if available in params
+        chip.kind = ChipKind::WIFI;
+        chip.variant = Some(ChipVariant::Wifi(Default::default()));
+        chip.name = Some(params.config.name);
+        chip.manufacturer = Some(params.config.manufacturer);
+        chip.product_name = Some(params.config.product_name);
         self.active_chips.insert(chip_id, chip);
         self.streams.insert(chip_id, StreamNotifyClose::new(stream));
         Ok(())

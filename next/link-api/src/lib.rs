@@ -18,15 +18,32 @@
 //! ## Usage
 //!
 //! ```rust
-//! use link_api::{LinkCreate, LinkAction};
+//! use link_api::{LinkCreate, LinkAction, ChipId, ChipKind};
 //! // Create a link
-//! let create_params = LinkCreate { ... };
+//! let create_params = LinkCreate {
+//!     sender: ChipId(0),
+//!     receiver: ChipId(1),
+//!     rssi: -50,
+//! };
 //! // Send an action
-//! let action = LinkAction::NotifyChipAdded(chip_id, network_kind);
+//! let action = LinkAction::NotifyChipAdded(ChipId(0), ChipKind::BLUETOOTH);
 //! ```
 
 pub mod action;
 pub mod create;
 pub use action::LinkAction;
 pub use create::LinkCreate;
+pub use netsim_model::chip::{ChipId, ChipKind};
 pub use netsim_model::link::{Link, LinkId, LinkUpdate};
+
+#[cfg_attr(feature = "testing", mockall::automock)]
+#[async_trait::async_trait]
+pub trait LinkClient: Send + Sync {
+    async fn list(&self) -> Result<Vec<Link>, String>;
+    async fn create(&self, params: LinkCreate) -> Result<LinkId, String>;
+    async fn update(&self, id: LinkId, patch: LinkUpdate) -> Result<(), String>;
+    async fn delete(&self, id: LinkId) -> Result<(), String>;
+    async fn action(&self, id: Option<LinkId>, action: LinkAction) -> Result<(), String>;
+    async fn notify_chip_added(&self, chip_id: ChipId, kind: ChipKind) -> Result<(), String>;
+    async fn notify_chip_removed(&self, chip_id: ChipId) -> Result<(), String>;
+}

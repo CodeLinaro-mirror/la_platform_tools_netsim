@@ -131,6 +131,7 @@ impl ControllerImpl {
                     Some(send_hci_trampoline),
                     Some(send_ll_trampoline),
                     Some(invalid_packet_trampoline),
+                    None,
                     context_ptr as *mut c_void,
                 )
             };
@@ -325,28 +326,14 @@ extern "C" fn send_ll_trampoline(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::rootcanal::{self, Rootcanal};
     use std::str::FromStr;
 
-    struct MockRootcanalCallbacks;
-    impl rootcanal::Callbacks for MockRootcanalCallbacks {
-        fn on_send_ll(
-            &self,
-            _source_id: Id,
-            _destination_id: Id,
-            _packet: &[u8],
-            _phy: Phy,
-            tx_power: i32,
-        ) -> Option<i32> {
-            Some(tx_power)
-        }
-    }
-
+    use super::*;
+    use crate::controller::Id as ControllerId;
     struct MockControllerCallbacks;
     impl Callbacks for MockControllerCallbacks {
-        fn send_hci(&self, _source_id: Id, _data: &[u8]) {}
-        fn send_ll(&self, _source_id: Id, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
+        fn send_hci(&self, _source_id: Id, _data: Bytes) {}
+        fn on_receive_ll(&self, _sender_id: Id, _packet: &[u8], _phy: Phy, _rssi: i32) {}
         fn invalid_packet_received(
             &self,
             _source_id: Id,
@@ -357,11 +344,23 @@ mod tests {
         }
     }
 
+    struct MockBtOps;
+    impl BtOps for MockBtOps {
+        fn broadcast_rootcanal_ll_packet(
+            &self,
+            _sender_id: ControllerId,
+            _packet: &[u8],
+            _phy: Phy,
+            _tx_power: i32,
+        ) {
+        }
+    }
+
     #[test]
     fn test_controller_stats() {
-        let _rootcanal = Rootcanal::new(Box::new(MockRootcanalCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
+        let controller =
+            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
 
         // Check initial stats.
         assert_eq!(controller.get_stats(), Stats::default());
@@ -382,20 +381,20 @@ mod tests {
 
     #[test]
     fn test_receive_hci_increments_counter() {
-        let _rootcanal = Rootcanal::new(Box::new(MockBluetoothCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
+        let controller =
+            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
 
         assert_eq!(controller.get_stats().hci_commands_in, 0);
-        controller.receive_hci(&[1, 1, 2, 3]);
+        controller.receive_hci(Bytes::from_static(&[1, 1, 2, 3]));
         assert_eq!(controller.get_stats().hci_commands_in, 1);
     }
 
     #[test]
     fn test_receive_ll_increments_counter() {
-        let _rootcanal = Rootcanal::new(Box::new(MockBluetoothCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
+        let controller =
+            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
 
         assert_eq!(controller.get_stats().ll_packets_in, 0);
         controller.receive_ll(&[1, 2, 3], Phy::LowEnergy, -80);

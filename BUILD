@@ -1,44 +1,16 @@
-# Copyright 2025 The Android Open Source Project
-"""netsim bazel build rule."""
-
-load("@grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
-load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
-load("@rules_cc//cc:defs.bzl", "cc_binary")
-load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_test")
 
-proto_library(
-    name = "netsimd-proto",
-    srcs = [
-        "proto/netsim/common.proto",
-        "proto/netsim/config.proto",
-        "proto/netsim/frontend.proto",
-        "proto/netsim/hci_packet.proto",
-        "proto/netsim/model.proto",
-        "proto/netsim/packet_streamer.proto",
-        "proto/netsim/startup.proto",
-        "proto/netsim/stats.proto",
-    ],
-    strip_import_prefix = "proto",
-    visibility = ["//visibility:public"],
-    deps = [
-        "@protobuf//:empty_proto",
-        "@protobuf//:timestamp_proto",
-        "@rootcanal//:rootcanal-configuration-proto",
-    ],
-)
-
-cc_proto_library(
+cc_library(
     name = "netsimd_cc_proto",
-    deps = [":netsimd-proto"],
+    visibility = ["//visibility:public"],
+    deps = ["//proto:netsim_cc_proto"],
 )
 
-cc_grpc_library(
+cc_library(
     name = "netsimd_cc_grpc",
-    srcs = ["@netsim//:netsimd-proto"],
-    grpc_only = True,
     visibility = ["//visibility:public"],
-    deps = [":netsimd_cc_proto"],
+    deps = ["//proto:netsim_cc_grpc"],
 )
 
 rust_binary(
@@ -176,6 +148,7 @@ cc_binary(
     }),
     visibility = ["//visibility:public"],
     deps = [
+        ":netsimd_cc_grpc",
         ":netsimd_cc_proto",
         "@aemu//base:aemu-base",
         "@aemu//base:aemu-base-socket-utils",

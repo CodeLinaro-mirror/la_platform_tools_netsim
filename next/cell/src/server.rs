@@ -6,9 +6,7 @@ use client::DeviceClient;
 use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use modem_rs::modem_network::{ModemCallbacks, ModemNetworkInterface};
-use netsim_model::chip::{
-    ChipId, ChipRequest, LegacyChipClient as ChipClient, PacketSink, PacketStream,
-};
+use netsim_model::chip::{ChipId, ChipRequest, PacketSink, PacketStream};
 use netsim_model::chip_error::ChipError as NetsimChipError;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,9 +14,46 @@ use tokio::sync::mpsc;
 use tokio::task::{JoinError, JoinSet};
 use tokio_stream::{StreamMap, StreamNotifyClose};
 
+pub struct CellRunner {
+    receiver: mpsc::Receiver<ChipRequest>,
+}
+
+impl CellRunner {
+    pub fn new(receiver: mpsc::Receiver<ChipRequest>) -> Self {
+        Self { receiver }
+    }
+
+    pub async fn run(mut self, mut server: CellServer) {
+        log::info!("CellServer started");
+        loop {
+            tokio::select! {
+                msg = self.receiver.recv() => {
+                    match msg {
+                        Some(msg) => {
+                            if let Err(e) = server.handle_message(msg).await {
+                                log::error!("Error handling message: {:?}", e);
+                            }
+                        }
+                        None => {
+                            log::info!("CellServer channels closed, stopping.");
+                            break;
+                        }
+                    }
+                }
+                Some((chip_id, packet)) = server.streams.next() => {
+                    server.handle_stream_data(chip_id, packet).await;
+                }
+                Some(res) = server.sink_tasks.join_next() => {
+                    server.handle_join_result(res).await;
+                }
+            }
+        }
+        log::info!("CellServer stopped");
+    }
+}
+
 pub struct CellServer {
     device_client: DeviceClient,
-    receiver: mpsc::Receiver<ChipRequest>,
     controller: Arc<dyn ModemNetworkInterface>,
     active_chips: HashMap<ChipId, DeviceId>,
     senders: HashMap<ChipId, mpsc::Sender<Bytes>>,
@@ -67,51 +102,16 @@ async fn run_sink_task(
 }
 
 impl CellServer {
-    pub fn new(
-        device_client: DeviceClient,
-        controller: Arc<dyn ModemNetworkInterface>,
-    ) -> (Self, ChipClient) {
-        let (command_tx, command_rx) = mpsc::channel(10);
-
-        let server = CellServer {
+    pub fn new(device_client: DeviceClient, controller: Arc<dyn ModemNetworkInterface>) -> Self {
+        CellServer {
             device_client,
-            receiver: command_rx,
             controller,
             active_chips: HashMap::new(),
             senders: HashMap::new(),
             streams: StreamMap::new(),
             sink_tasks: JoinSet::new(),
             callbacks: HashMap::new(),
-        };
-        (server, ChipClient::new(command_tx))
-    }
-
-    pub async fn run(mut self) {
-        log::info!("CellServer started");
-        loop {
-            tokio::select! {
-                msg = self.receiver.recv() => {
-                    match msg {
-                        Some(msg) => {
-                            if let Err(e) = self.handle_message(msg).await {
-                                log::error!("Error handling message: {:?}", e);
-                            }
-                        }
-                        None => {
-                            log::info!("CellServer channels closed, stopping.");
-                            break;
-                        }
-                    }
-                }
-                Some((chip_id, packet)) = self.streams.next() => {
-                    self.handle_stream_data(chip_id, packet).await;
-                }
-                Some(res) = self.sink_tasks.join_next() => {
-                    self.handle_join_result(res).await;
-                }
-            }
         }
-        log::info!("CellServer stopped");
     }
 
     async fn handle_stream_data(&mut self, chip_id: ChipId, packet: Option<Bytes>) {

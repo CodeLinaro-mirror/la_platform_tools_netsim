@@ -33,7 +33,7 @@
 //!
 //! **Further Reading**:
 //! - [Actor Model (Wikipedia)](https://en.wikipedia.org/wiki/Actor_model) - Foundational concurrency pattern by Carl Hewitt
-//! - [Resource-Oriented Architecture](https://www.ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm) - Roy Fielding's dissertation on REST/ROA principles
+//! - [Resource-Oriented Architecture](https://en.wikipedia.org/wiki/Resource-oriented_architecture#cite_note-Fielding-Ch5-1) - Roy Fielding's dissertation on REST/ROA principles
 //! - [Actors in Rust](https://ryhl.io/blog/actors-with-tokio/) - Practical guide to implementing actors with Tokio
 //!
 //! ## Architecture Overview
@@ -129,9 +129,6 @@
 //! ```
 //!
 //! ## Context Injection Pattern
-//!
-//! Dependencies are injected at **runtime** via the `run()` method (if supported by `run` args, but currently `run` takes no args, dependencies are passed to `new` or `handle_create`).
-//! Wait, `ResourceActor::new` takes `actor`. Dependencies should be in the `actor` struct.
 //!
 //! ```rust
 //! use actor_framework::{ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient};
@@ -290,25 +287,23 @@
 //!
 //! ## Testing
 //!
-//! The framework provides a **MockClient** type that implements the same `ResourceClient<T>` API as the real client but operates entirely in‑memory. It lets you write fast, deterministic unit tests for client logic (e.g. `OrderClient`) without spawning any actors. See the [`mock`] module for the full API and usage patterns.
+//! The framework provides a **MockActorClient** type (available with the `testing` feature) that implements the [`ActorClient`] trait. It lets you write fast, deterministic unit tests for client logic without spawning any actors.
 
 mod actor;
 mod client;
-mod client_trait;
 mod context;
 mod error;
 mod lifecycle;
 mod message;
-pub mod mock;
 mod service;
-// pub mod tracing;
 
 pub mod utils;
 
 // Re-export core types for convenience
 pub use actor::ResourceActor;
-pub use client::ResourceClient;
-pub use client_trait::ActorClient;
+#[cfg(feature = "testing")]
+pub use client::MockActorClient;
+pub use client::{ActorClient, ResourceClient};
 pub use context::{Context, DynContext};
 pub use error::FrameworkError;
 pub use lifecycle::ActorLifecycle;

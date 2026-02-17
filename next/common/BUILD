@@ -7,10 +7,8 @@ package(default_visibility = ["//visibility:public"])
 netsim_rust_library(
     name = "common",
     srcs = glob(["src/**/*.rs"]),
+    crate_name = "common",
     edition = "2021",
-    enable_clippy = False,
-    enable_doc_test = False,
-    strict_warnings = False,
     deps = [
         "@anyhow",
         "@chrono",

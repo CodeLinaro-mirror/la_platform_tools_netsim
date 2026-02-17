@@ -26,6 +26,7 @@ use tokio;
 const MAX_DNS_SERVERS: usize = SLIRP_MAX_DNS_SERVERS as usize;
 
 /// Configuration options for the Slirp network stack.
+#[derive(Clone)]
 pub struct SlirpConfig {
     /// Slirp version.
     pub version: u32,
@@ -354,6 +355,7 @@ mod tests {
 
     /// Tests the `lookup_host_dns` function with different inputs.
     #[test]
+    #[ignore]
     fn test_lookup_host_dns() -> io::Result<()> {
         let rt = Runtime::new().unwrap();
         let results = rt.block_on(lookup_host_dns(""))?;

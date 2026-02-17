@@ -1,0 +1,180 @@
+use std::env;
+use std::fs;
+use std::path::Path;
+use std::process::{exit, Command};
+
+fn main() {
+    // Entry point for build_proto
+    let args: Vec<String> = env::args().collect();
+    let mut protoc = String::new();
+    let mut plugin = String::new();
+    let mut out_dir = String::new();
+    let mut proto_paths = Vec::new();
+    let mut grpc_srcs = Vec::new();
+    let mut protos = Vec::new();
+
+    // Simple argument parsing without 'clap' to avoid deps
+    let mut i = 1;
+    while i < args.len() {
+        if args[i].starts_with("--protoc=") {
+            protoc = args[i].splitn(2, '=').nth(1).unwrap().to_string();
+        } else if args[i].starts_with("--plugin=") {
+            plugin = args[i].splitn(2, '=').nth(1).unwrap().to_string();
+        } else if args[i].starts_with("--out-dir=") {
+            out_dir = args[i].splitn(2, '=').nth(1).unwrap().to_string();
+        } else if args[i].starts_with("--proto-path=") {
+            proto_paths.push(args[i].splitn(2, '=').nth(1).unwrap().to_string());
+        } else if args[i] == "--grpc-srcs" {
+            // Handle space-separated list until next flag
+            i += 1;
+            while i < args.len() && !args[i].starts_with("--") {
+                grpc_srcs.push(args[i].clone());
+                i += 1;
+            }
+            continue; // Skip the increment at end of loop since we consumed args
+        } else if !args[i].starts_with("--") {
+            protos.push(args[i].clone());
+        }
+        i += 1;
+    }
+
+    if protoc.is_empty() || plugin.is_empty() || out_dir.is_empty() {
+        eprintln!("Usage: build_proto --protoc=... --plugin=... --out-dir=... [protos...]");
+        exit(1);
+    }
+
+    let out_path = Path::new(&out_dir);
+    if !out_path.exists() {
+        fs::create_dir_all(out_path).expect("Failed to create out dir");
+    }
+
+    // Create subdirectories
+    for subdir in &["netsim", "rootcanal", "google/protobuf", "google"] {
+        let p = out_path.join(subdir);
+        if !p.exists() {
+            fs::create_dir_all(&p).expect("Failed to create subdir");
+        }
+    }
+
+    // Copy gRPC sources
+    for src in &grpc_srcs {
+        if src.ends_with("_grpc.rs") {
+            let path = Path::new(src);
+            if let Some(name) = path.file_name() {
+                let dst = out_path.join(name);
+                fs::copy(path, &dst).expect("Failed to copy grpc file");
+            }
+        }
+    }
+
+    // Run protoc
+    let mut cmd = Command::new(&protoc);
+    cmd.arg(format!("--plugin=protoc-gen-rust_community={}", plugin))
+        .arg(format!("--rust_community_out={}", out_dir))
+        .arg("--experimental_allow_proto3_optional");
+
+    for p in &proto_paths {
+        cmd.arg(format!("--proto_path={}", p));
+    }
+
+    cmd.args(&protos);
+
+    // Print command for debugging (Bazel captures stderr)
+    eprintln!("Running: {:?}", cmd);
+
+    let status = cmd.status().expect("Failed to execute protoc");
+    if !status.success() {
+        eprintln!("Protoc failed with status: {}", status);
+        exit(status.code().unwrap_or(1));
+    }
+
+    // Move files and patch imports
+    let entries = fs::read_dir(out_path).expect("Failed to read out dir");
+    for entry in entries {
+        let entry = entry.expect("Inaccessible entry");
+        let path = entry.path();
+
+        if path.is_file() {
+            let file_name = entry.file_name().into_string().unwrap();
+
+            if file_name == "lib.rs"
+                || file_name.ends_with("_grpc.rs")
+                || !file_name.ends_with(".rs")
+            {
+                continue;
+            }
+
+            let dest_subdir = if file_name == "configuration.rs" {
+                "rootcanal"
+            } else if file_name == "mod.rs" {
+                // skip generated mod.rs, we write our own lib.rs
+                continue;
+            } else {
+                "netsim"
+            };
+
+            let dest = out_path.join(dest_subdir).join(&file_name);
+            fs::rename(&path, &dest).expect("Failed to move file");
+
+            // Patch rootcanal imports if moving to netsim (though generally config stays in rootcanal)
+            if dest_subdir == "netsim" {
+                // Nothing specific needed for netsim files usually unless they ref rootcanal
+            }
+
+            // Patch configuration.rs specifically if needed (from Python logic)
+            if file_name == "configuration.rs" {
+                let content = fs::read_to_string(&dest).expect("Read config");
+                let new_content = content
+                    .replace("super::super::configuration::", "crate::rootcanal::configuration::")
+                    .replace("super::configuration::", "crate::rootcanal::configuration::");
+
+                fs::write(&dest, new_content).expect("Write config");
+            }
+        }
+    }
+
+    // Write lib.rs
+    let lib_rs = out_path.join("lib.rs");
+    let content = r#"
+pub mod netsim {
+  pub mod common;
+  pub mod config;
+  pub mod frontend;
+  pub mod hci_packet;
+  pub mod model;
+  pub mod packet_streamer;
+  pub mod startup;
+  pub mod stats;
+  pub use crate::rootcanal::configuration;
+  pub mod packet {
+      pub use super::hci_packet::*;
+      pub use super::packet_streamer::*;
+  }
+}
+pub mod rootcanal {
+  pub mod configuration;
+}
+pub mod google {
+    pub mod protobuf {
+        pub use crate::protobuf::well_known_types::empty::Empty;
+        pub use crate::protobuf::well_known_types::timestamp::Timestamp;
+    }
+}
+pub use netsim::common;
+pub use netsim::config;
+pub use netsim::frontend;
+pub use netsim::hci_packet;
+pub use netsim::model;
+pub use netsim::packet_streamer;
+pub use netsim::startup;
+pub use netsim::stats;
+pub use rootcanal::configuration;
+#[path = "netsim/frontend_grpc.rs"]
+pub mod frontend_grpc;
+#[path = "netsim/packet_streamer_grpc.rs"]
+pub mod packet_streamer_grpc;
+pub use protobuf;
+pub use protobuf::well_known_types::empty;
+"#;
+    fs::write(&lib_rs, content).expect("Failed to write lib.rs");
+}

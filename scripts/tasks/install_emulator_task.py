@@ -29,12 +29,11 @@ from utils import (
     AOSP_ROOT,
     EMULATOR_ARTIFACT_PATH,
     binary_extension,
-    is_bazel_build,
     run,
 )
 
 OBJS_DIR = AOSP_ROOT / "tools" / "netsim" / "objs"
-BAZEL_OUT_DIR = AOSP_ROOT / "tools" / "netsim" / "bazel-bin"
+BAZEL_OUT_DIR = AOSP_ROOT / "bazel-bin" / "external" / "netsim+"
 PLATFORM_SYSTEM = platform.system()
 PLATFORM_MACHINE = platform.machine()
 
@@ -50,7 +49,7 @@ class InstallEmulatorTask(Task):
     self.target = args.emulator_target
     # Local Emulator directory
     self.local_emulator_dir = args.local_emulator_dir
-    self.is_bazel_build = is_bazel_build(args)
+    self.is_bazel_build = not args.cmake
 
   def do_run(self):
     install_emulator_manager = InstallEmulatorManager(
@@ -99,9 +98,10 @@ class InstallEmulatorManager:
     self.target = target
     self.local_emulator_dir = local_emulator_dir
     self.build_id = build_id
-    self.local_netsim_dir = OBJS_DIR
-    if not self.buildbot and is_bazel_build:
-      self.local_netsim_dir = BAZEL_OUT_DIR
+    # For both Bazel and CMake, we use the distribution directory for local runs
+    # to ensure all artifacts (netsim + emulator) are in one place.
+    # OBJS_DIR is usually args.out_dir.
+    self.local_netsim_dir = Path(self.out_dir) / "distribution" / "emulator"
     self.is_bazel_build = is_bazel_build
 
   def __os_name_fetch(self):
@@ -132,7 +132,7 @@ class InstallEmulatorManager:
         return False
     else:
       # Without buildbots, this scripts is only runnable on Linux
-      # TODO: support local builds for Mac and Windows
+      # TODO: support local builds for Mac and Windows (if needed beyond local_emulator_dir)
       if PLATFORM_SYSTEM != "Linux" and not self.local_emulator_dir:
         logging.info(
             "The local case only works for Linux if you don't have"
@@ -146,8 +146,8 @@ class InstallEmulatorManager:
           and (self.local_netsim_dir / binary_extension("netsimd")).exists()
       ):
         logging.info(
-            "Please run 'scripts/build_tools.sh --task Compile' or"
-            " 'scripts/build_tools.sh --task bazel' before running"
+            "Please run 'scripts/build_tools.py --task Compile' or"
+            " 'scripts/build_tools.py --task CompileInstall' before running"
             " InstallEmulator"
         )
         return False
@@ -206,16 +206,31 @@ class InstallEmulatorManager:
         os.remove(file)
     # Copy artifacts
     if self.buildbot:
-      source_dir = (
-          BAZEL_OUT_DIR
-          if self.is_bazel_build
-          else Path(self.out_dir) / "distribution" / "emulator"
-      )
-      shutil.copytree(
-          source_dir,
-          emulator_filepath,
-          dirs_exist_ok=True,
-      )
+      if self.is_bazel_build:
+        # Copy netsim binaries
+        for binary in ["netsim", "netsimd"]:
+          binary_name = binary_extension(binary)
+          src_file = BAZEL_OUT_DIR / binary_name
+          if src_file.exists():
+            shutil.copy(src_file, emulator_filepath / binary_name)
+          else:
+            logging.warning(f"Binary not found: {src_file}")
+
+        # Copy netsim-ui
+        ui_src_dir = BAZEL_OUT_DIR / "netsim-ui"
+        if ui_src_dir.exists():
+          shutil.copytree(
+              ui_src_dir,
+              emulator_filepath / "netsim-ui",
+              dirs_exist_ok=True,
+          )
+      else:
+        source_dir = Path(self.out_dir) / "distribution" / "emulator"
+        shutil.copytree(
+            source_dir,
+            emulator_filepath,
+            dirs_exist_ok=True,
+        )
     else:
       shutil.copytree(
           emulator_filepath,

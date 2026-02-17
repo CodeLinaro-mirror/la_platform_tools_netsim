@@ -7,7 +7,7 @@ DEPS = [
     "//next/actor-framework",
     "//next/link-api",
     "//next/model",
-    "//next/proto:proto",
+    "//proto",
     "@anyhow",
     "@log",
     "@serde",
@@ -23,8 +23,6 @@ netsim_rust_library(
     crate_name = "link_actor",
     crate_root = "src/lib.rs",
     edition = "2021",
-    enable_clippy = False,
-    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
         "@thiserror-impl",
@@ -33,14 +31,19 @@ netsim_rust_library(
 )
 
 rust_test(
-    name = "integration_test",
+    name = "integration-test",
     srcs = glob(["tests/**/*.rs"]),
+    crate_root = "tests/mod.rs",
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
     ],
-    deps = DEPS + [
-        ":link-actor",
-        "//next/client",
+    deps = [
+        ":testing",
+        "//next/actor-framework:testing",
+        "//next/link-api:testing",
+        "//next/model:testing",
+        "@log",
+        "@tokio",
     ],
 )

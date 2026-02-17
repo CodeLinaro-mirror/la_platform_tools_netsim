@@ -11,9 +11,8 @@ load("//next:defs.bzl", "netsim_rust_library")
 netsim_rust_library(
     name = "rootcanal",
     srcs = glob(["src/**/*.rs"]),
+    crate_name = "rootcanal",
     edition = "2021",
-    enable_clippy = False,
-    enable_unit_test = False,
     visibility = ["//next:__subpackages__"],
     deps = [
         "//next/packets",
