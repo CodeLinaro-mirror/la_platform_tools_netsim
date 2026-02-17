@@ -9,6 +9,7 @@ BLUETOOTH_DEPS = [
     "//next/device-api",
     "//next/model",
     "//next/rootcanal",
+    "//proto",
     "@bytes",
     "@env_logger",
     "@futures",
