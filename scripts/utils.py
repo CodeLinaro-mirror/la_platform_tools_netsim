@@ -76,7 +76,7 @@ CMAKE = shutil.which(
 def rust_version() -> str:
   """Returns rust version"""
   with open(
-      AOSP_ROOT / "external" / "qemu" / "android" / "build" / "toolchains.json",
+      AOSP_ROOT / "build" / "bazel" / "toolchains" / "tool_versions.json",
       encoding="utf-8",
   ) as f:
     return json.load(f)["rust"]
