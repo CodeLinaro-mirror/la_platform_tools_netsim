@@ -133,6 +133,7 @@ async fn test_hci_exchange_internal() {
             sniffer_id,
             sniffer_address,
             Box::new(SnifferCallbacks { sender: ll_sender }),
+            None,
         )
         .expect("new controller failed");
 
@@ -140,7 +141,12 @@ async fn test_hci_exchange_internal() {
     let sender_address = Address::from_str("00:00:00:00:00:02").unwrap();
     let sender_id = 2;
     rootcanal
-        .new_controller(sender_id, sender_address, Box::new(DummyCallbacks { sender: hci_sender }))
+        .new_controller(
+            sender_id,
+            sender_address,
+            Box::new(DummyCallbacks { sender: hci_sender }),
+            None,
+        )
         .expect("new controller failed");
 
     // Reset the controller first.

@@ -48,6 +48,8 @@ extern "C" {
             unsafe extern "C" fn(cookie1: *mut c_void, cookie2: *mut c_void) -> u32,
         >,
         cookie: *mut c_void,
+        proto_bytes: *const uint8_t,
+        proto_len: size_t,
     ) -> *mut c_void;
 
     /// Deletes a Bluetooth controller.
