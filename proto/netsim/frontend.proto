@@ -65,14 +65,16 @@ service FrontendService {
   // Retrieve the contents of the packet capture as streaming bytes
   rpc GetCapture(GetCaptureRequest) returns (stream GetCaptureResponse);
 
+  // Create a new link.
+  rpc CreateLink(CreateLinkRequest) returns (CreateLinkResponse);
+
   // List all current links on netsim.
   rpc ListLink(google.protobuf.Empty) returns (ListLinkResponse);
 
-  // Patch (add or modify) a link.
+  // Patch (modify) a link.
   rpc PatchLink(PatchLinkRequest) returns (google.protobuf.Empty);
 
-  // Delete specified properties for the link. Deletes entire link if all
-  // properties are deleted.
+  // Delete a link.
   rpc DeleteLink(DeleteLinkRequest) returns (google.protobuf.Empty);
 }
 
@@ -200,6 +202,18 @@ message GetCaptureResponse {
   bytes capture_stream = 1;
 }
 
+// Request of CreateLink.
+message CreateLinkRequest {
+  // The link to create.
+  netsim.model.Link link = 1;
+}
+
+// Response of CreateLink.
+message CreateLinkResponse {
+  // The created link.
+  netsim.model.Link link = 1;
+}
+
 // Response of ListLink
 message ListLinkResponse {
   // Collection of current links
@@ -208,12 +222,16 @@ message ListLinkResponse {
 
 // Request of PatchLink.
 message PatchLinkRequest {
-  // The link and properties to apply.
+  // The properties to apply.
   netsim.model.Link link = 1;
+  // The link ID.
+  uint32 id = 2;
 }
 
 // Request of DeleteLink.
 message DeleteLinkRequest {
-  // The link containing properties to be removed.
-  netsim.model.Link link = 1;
+  // The link to delete (deprecated, use id).
+  netsim.model.Link link = 1 [deprecated = true];
+  // The link ID.
+  uint32 id = 2;
 }

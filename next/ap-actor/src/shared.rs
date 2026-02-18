@@ -1,5 +1,13 @@
 // Copyright 2025-2026 The Android Open Source Project
 
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, RwLock,
+    },
+};
+
 use aes::Aes128;
 use ccm::{
     aead::{Aead, KeyInit, Payload},
@@ -7,11 +15,6 @@ use ccm::{
     Ccm,
 };
 use netsim_packets::ieee80211::{CcmpHeader, Ieee80211, MacAddress};
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc, RwLock,
-};
 use zerocopy::IntoBytes;
 
 type AesCcm = Ccm<Aes128, U8, U13>;
@@ -84,10 +87,8 @@ impl SharedKeyStore {
         nonce[10] = pn_bytes[2];
         nonce[11] = pn_bytes[1];
         nonce[12] = pn_bytes[0];
-        // Wait, to_le_bytes puts LSB at index 0.
-        // If pn=1, bytes=[1,0,0,0,0,0,0,0].
-        // nonce[12] = 1, nonce[7] = 0.
-        // Seems correct order for nonce construction if it matches hostapd-rs.
+        // PN is Little Endian from to_le_bytes (LSB at index 0).
+        // We map to Nonce bytes [7..13] matching legacy hostapd logic.
 
         let nonce_ga = ccm::aead::generic_array::GenericArray::from_slice(&nonce);
 
@@ -95,7 +96,7 @@ impl SharedKeyStore {
         // AAD
         let aad = ieee80211.get_aad();
 
-        let payload = ieee80211.get_payload(); // Assuming get_payload
+        let payload = ieee80211.get_payload();
 
         let ciphertext = match cipher.encrypt(nonce_ga, Payload { msg: &payload, aad: &aad }) {
             Ok(c) => c,

@@ -26,6 +26,5 @@ enum ChipKind {
   BLUETOOTH = 1;
   WIFI = 2;
   UWB = 3;
-  // Built-in Bluetooth Beacon for netsim.
-  BLUETOOTH_BEACON = 4;
+  reserved 4;
 }

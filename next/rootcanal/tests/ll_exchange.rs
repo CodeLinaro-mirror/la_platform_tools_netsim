@@ -1,6 +1,17 @@
 // Copyright 2023 The Android Open Source Project
 
-//! Test for verifying the exchange of link layer packets with the rootcanal controller.
+//! Test for verifying the exchange of link layer packets with the rootcanal
+//! controller.
+
+// TODO: include link_layer
+//use rootcanal_rs::packets::link_layer::{
+//    Address as LlAddress, AddressType, LeLegacyAdvertisingPdu,
+// LegacyAdvertisingType,
+//};
+use std::{
+    str::FromStr,
+    sync::{Arc, Once},
+};
 
 use bytes::Bytes;
 use env_logger;
@@ -10,16 +21,10 @@ use rootcanal::{
     rootcanal::{Callbacks as RootcanalCallbacks, Rootcanal},
     types::{Address, Phy},
 };
-// TODO: include link_layer
-//use rootcanal_rs::packets::link_layer::{
-//    Address as LlAddress, AddressType, LeLegacyAdvertisingPdu, LegacyAdvertisingType,
-//};
-
-use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Once;
-use tokio::sync::mpsc;
-use tokio::time::{sleep, Duration};
+use tokio::{
+    sync::mpsc,
+    time::{sleep, Duration},
+};
 
 static INIT: Once = Once::new();
 
@@ -80,14 +85,14 @@ impl ControllerCallbacks for DummyCallbacks {
 // This test confirms that a packet introduced from an external source into one
 // controller is properly broadcast and received by other controllers in the
 // simulation. It performs the following steps:
-// 1. Creates two controllers: one to act as the packet injector/sender and
-//    another to act as a sniffer.
+// 1. Creates two controllers: one to act as the packet injector/sender and another to act as a
+//    sniffer.
 // 2. Manually constructs a valid link-layer advertising PDU (`ADV_IND`).
-// 3. Uses `rootcanal.inject_ll_packet` to send this packet from the sender
-//    controller into the simulation.
+// 3. Uses `rootcanal.inject_ll_packet` to send this packet from the sender controller into the
+//    simulation.
 // 4. Listens on the sniffer controller and asserts that it receives a packet.
-// 5. Verifies that the received packet is byte-for-byte identical to the one
-//    that was injected, confirming the integrity of the transport.
+// 5. Verifies that the received packet is byte-for-byte identical to the one that was injected,
+//    confirming the integrity of the transport.
 #[tokio::test]
 async fn test_ll_exchange() {
     test_ll_exchange_internal().await
@@ -131,7 +136,8 @@ async fn test_ll_exchange_internal() {
     //    let mut sender_addr_bytes = [0; 8];
     //    sender_addr_bytes[..6].copy_from_slice(sender_address.as_bytes());
     //    let pdu = LeLegacyAdvertisingPdu {
-    //        source_address: LlAddress::try_from(u64::from_le_bytes(sender_addr_bytes)).unwrap(),
+    //        source_address:
+    // LlAddress::try_from(u64::from_le_bytes(sender_addr_bytes)).unwrap(),
     //        destination_address: LlAddress::try_from(0).unwrap(),
     //        advertising_address_type: AddressType::Public,
     //        target_address_type: AddressType::Public,
@@ -150,6 +156,7 @@ async fn test_ll_exchange_internal() {
     //    let received_packet = received.unwrap().unwrap();
     //    assert_eq!(received_packet, packet);
     //
-    //    let parsed = LeLegacyAdvertisingPdu::decode(&received_packet).unwrap().0;
+    //    let parsed =
+    // LeLegacyAdvertisingPdu::decode(&received_packet).unwrap().0;
     //    assert_eq!(parsed.advertising_data(), &advertising_data);
 }

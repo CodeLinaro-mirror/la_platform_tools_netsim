@@ -101,3 +101,38 @@ pub const EAPOL_VERSION: u8 = 1;
 pub const EAPOL_TYPE_KEY: u8 = 3;
 /// Key Descriptor Type: RSN (WPA2).
 pub const EAPOL_KEY_DESC_TYPE_RSN: u8 = 2;
+
+/// EAPOL Packet Type: EAP-Packet (0).
+pub const EAPOL_TYPE_PACKET: u8 = 0;
+/// EAPOL Packet Type: EAPOL-Start (1).
+pub const EAPOL_TYPE_START: u8 = 1;
+
+/// EAP Code: Request (1).
+pub const EAP_CODE_REQUEST: u8 = 1;
+/// EAP Code: Response (2).
+pub const EAP_CODE_RESPONSE: u8 = 2;
+/// EAP Code: Success (3).
+pub const EAP_CODE_SUCCESS: u8 = 3;
+/// EAP Code: Failure (4).
+pub const EAP_CODE_FAILURE: u8 = 4;
+
+/// EAP Type: Identity (1).
+pub const EAP_TYPE_IDENTITY: u8 = 1;
+
+/// Represents a generic EAP Packet (Code, ID, Length, Type, Data).
+/// Note: EAP Success/Failure do not have a Type field, just Code/ID/Length.
+/// We'll use a generic byte layout or specific struct.
+/// Header: Code(1), ID(1), Length(2)
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Debug, Clone, Copy, Default)]
+#[repr(C, packed)]
+pub struct EapHeader {
+    pub code: u8,
+    pub id: u8,
+    pub length: [u8; 2],
+}
+
+impl EapHeader {
+    pub fn new(code: u8, id: u8, length: u16) -> Self {
+        Self { code, id, length: length.to_be_bytes() }
+    }
+}

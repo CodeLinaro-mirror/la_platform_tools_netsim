@@ -6,15 +6,19 @@
 /// A unique ID for the Controller
 pub type Id = u32;
 
+use std::{
+    ffi::{c_int, c_void},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex, Weak,
+    },
+};
+
+use bytes::{BufMut, Bytes, BytesMut};
+
 use crate::{
     ffi,
     types::{Address, Phy},
-};
-use bytes::{BufMut, Bytes, BytesMut};
-use std::ffi::{c_int, c_void};
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc, Mutex, Weak,
 };
 
 /// Callbacks for the Bluetooth controller.
@@ -31,7 +35,8 @@ pub trait Callbacks: Send + Sync {
 
 /// Trait used by the controller to call the Bluetooth manager.
 pub trait BtOps: Send + Sync {
-    /// Controller received a LL packet from rootcanal that needs to be broadcasted
+    /// Controller received a LL packet from rootcanal that needs to be
+    /// broadcasted
     fn broadcast_rootcanal_ll_packet(&self, send_id: Id, packet: &[u8], phy: Phy, tx_power: i32);
 }
 
@@ -256,7 +261,8 @@ extern "C" fn send_hci_trampoline(
     data: *const u8,
     data_len: ffi::size_t,
 ) {
-    // SAFETY: The FFI contract guarantees that the C++ side provides a valid `cookie`.
+    // SAFETY: The FFI contract guarantees that the C++ side provides a valid
+    // `cookie`.
     let context = unsafe { context_from_cookie(cookie) };
 
     if let Some(controller) = context.upgrade() {
@@ -284,8 +290,8 @@ extern "C" fn invalid_packet_trampoline(
     let context = unsafe { context_from_cookie(cookie) };
     if let Some(controller) = context.upgrade() {
         controller.invalid_packets.fetch_add(1, Ordering::Relaxed);
-        // SAFETY: The FFI contract guarantees that `message` is a valid, null-terminated
-        // C string.
+        // SAFETY: The FFI contract guarantees that `message` is a valid,
+        // null-terminated C string.
         let message_str = unsafe { std::ffi::CStr::from_ptr(message) }.to_str().unwrap_or("");
         // SAFETY: The FFI contract guarantees that `data` points to a buffer of at
         // least `data_len` bytes.
@@ -307,7 +313,8 @@ extern "C" fn send_ll_trampoline(
     phy: c_int,
     tx_power: c_int,
 ) {
-    // SAFETY: The FFI contract guarantees that the C++ side provides a valid `cookie`.
+    // SAFETY: The FFI contract guarantees that the C++ side provides a valid
+    // `cookie`.
     let context = unsafe { context_from_cookie(cookie) };
     if let Some(controller) = context.upgrade() {
         // SAFETY: The FFI contract guarantees that `data` points to a buffer of at
@@ -326,28 +333,14 @@ extern "C" fn send_ll_trampoline(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::rootcanal::{self, Rootcanal};
     use std::str::FromStr;
 
-    struct MockRootcanalCallbacks;
-    impl rootcanal::Callbacks for MockRootcanalCallbacks {
-        fn on_send_ll(
-            &self,
-            _source_id: Id,
-            _destination_id: Id,
-            _packet: &[u8],
-            _phy: Phy,
-            tx_power: i32,
-        ) -> Option<i32> {
-            Some(tx_power)
-        }
-    }
-
+    use super::*;
+    use crate::controller::Id as ControllerId;
     struct MockControllerCallbacks;
     impl Callbacks for MockControllerCallbacks {
-        fn send_hci(&self, _source_id: Id, _data: &[u8]) {}
-        fn send_ll(&self, _source_id: Id, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
+        fn send_hci(&self, _source_id: Id, _data: Bytes) {}
+        fn on_receive_ll(&self, _sender_id: Id, _packet: &[u8], _phy: Phy, _rssi: i32) {}
         fn invalid_packet_received(
             &self,
             _source_id: Id,
@@ -358,11 +351,23 @@ mod tests {
         }
     }
 
+    struct MockBtOps;
+    impl BtOps for MockBtOps {
+        fn broadcast_rootcanal_ll_packet(
+            &self,
+            _sender_id: ControllerId,
+            _packet: &[u8],
+            _phy: Phy,
+            _tx_power: i32,
+        ) {
+        }
+    }
+
     #[test]
     fn test_controller_stats() {
-        let _rootcanal = Rootcanal::new(Box::new(MockRootcanalCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
+        let controller =
+            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
 
         // Check initial stats.
         assert_eq!(controller.get_stats(), Stats::default());
@@ -383,20 +388,20 @@ mod tests {
 
     #[test]
     fn test_receive_hci_increments_counter() {
-        let _rootcanal = Rootcanal::new(Box::new(MockBluetoothCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
+        let controller =
+            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
 
         assert_eq!(controller.get_stats().hci_commands_in, 0);
-        controller.receive_hci(&[1, 1, 2, 3]);
+        controller.receive_hci(Bytes::from_static(&[1, 1, 2, 3]));
         assert_eq!(controller.get_stats().hci_commands_in, 1);
     }
 
     #[test]
     fn test_receive_ll_increments_counter() {
-        let _rootcanal = Rootcanal::new(Box::new(MockBluetoothCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller = ControllerImpl::new(1, address, Box::new(MockControllerCallbacks));
+        let controller =
+            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
 
         assert_eq!(controller.get_stats().ll_packets_in, 0);
         controller.receive_ll(&[1, 2, 3], Phy::LowEnergy, -80);

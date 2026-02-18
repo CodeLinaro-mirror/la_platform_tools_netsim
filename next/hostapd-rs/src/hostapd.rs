@@ -14,31 +14,37 @@
 
 //! Controller interface for the `hostapd` C library.
 //!
-//! This module allows interaction with `hostapd` to manage WiFi access point and various wireless networking tasks directly from Rust code.
+//! This module allows interaction with `hostapd` to manage WiFi access point
+//! and various wireless networking tasks directly from Rust code.
 //!
-//! The main `hostapd` process is managed by a separate task while responses from the `hostapd` process are handled
-//! by another task, ensuring efficient and non-blocking communication.
+//! The main `hostapd` process is managed by a separate task while responses
+//! from the `hostapd` process are handled by another task, ensuring efficient
+//! and non-blocking communication.
 //!
-//! `hostapd` configuration consists of key-value pairs. The default configuration file is generated in the discovery directory.
+//! `hostapd` configuration consists of key-value pairs. The default
+//! configuration file is generated in the discovery directory.
 //!
 //! ## Features
 //!
-//! * **Asynchronous operation:** The module utilizes `tokio` for asynchronous communication with the `hostapd` process,
-//!   allowing for efficient and non-blocking operations.
+//! * **Asynchronous operation:** The module utilizes `tokio` for asynchronous
+//!   communication with the `hostapd` process, allowing for efficient and
+//!   non-blocking operations.
 //! * **Platform support:** Supports Linux, macOS, and Windows.
-//! * **Configuration management:** Provides functionality to generate and manage `hostapd` configuration files.
-//! * **Easy integration:** Offers a high-level API to simplify interaction with `hostapd`, abstracting away
-//!   low-level details.
+//! * **Configuration management:** Provides functionality to generate and
+//!   manage `hostapd` configuration files.
+//! * **Easy integration:** Offers a high-level API to simplify interaction with
+//!   `hostapd`, abstracting away low-level details.
 //!
 //! ## Usage
 //!
-//! Here's a basic example of how to create a `Hostapd` instance and start the `hostapd` process:
+//! Here's a basic example of how to create a `Hostapd` instance and start the
+//! `hostapd` process:
 //!
 //! ```
-//! use hostapd_rs::hostapd::Hostapd;
 //! use std::path::PathBuf;
-//! use tokio::sync::mpsc;
-//! use tokio::runtime::Runtime;
+//!
+//! use hostapd_rs::hostapd::Hostapd;
+//! use tokio::{runtime::Runtime, sync::mpsc};
 //!
 //! let rt = Runtime::new().unwrap();
 //! rt.block_on(async {
@@ -57,7 +63,24 @@
 //! });
 //! ```
 //!
-//! This starts `hostapd` in a separate task, allowing interaction with it using the `Hostapd` struct's methods.
+//! This starts `hostapd` in a separate task, allowing interaction with it using
+//! the `Hostapd` struct's methods.
+
+#[cfg(unix)]
+use std::os::fd::IntoRawFd;
+#[cfg(windows)]
+use std::os::windows::io::IntoRawSocket;
+use std::{
+    collections::HashMap,
+    ffi::{c_char, c_int, CStr, CString},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc, Mutex as StdMutex, RwLock,
+    },
+    time::Duration,
+};
 
 use aes::Aes128;
 use anyhow::bail;
@@ -69,22 +92,17 @@ use ccm::{
 };
 use log::{debug, info, warn};
 use netsim_packets::ieee80211::{parse_mac_address, Ieee80211, MacAddress, CCMP_HDR_LEN};
-use std::collections::HashMap;
-use std::ffi::{c_char, c_int, CStr, CString};
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
-#[cfg(unix)]
-use std::os::fd::IntoRawFd;
-#[cfg(windows)]
-use std::os::windows::io::IntoRawSocket;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicI64, Ordering};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
-use tokio::net::{
-    tcp::{OwnedReadHalf, OwnedWriteHalf},
-    TcpListener, TcpStream,
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncWriteExt, BufWriter},
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpListener, TcpStream,
+    },
+    sync::{mpsc, Mutex, RwLock as AsyncRwLock},
+    task::JoinHandle,
+    time::sleep,
 };
-use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio::task::JoinHandle;
 
 #[cfg(not(test))]
 use crate::hostapd_sys::{get_active_gtk, get_active_ptk};
@@ -92,9 +110,10 @@ use crate::hostapd_sys::{
     run_hostapd_main, set_virtio_ctrl_sock, set_virtio_sock, VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG,
     VIRTIO_WIFI_CTRL_CMD_TERMINATE,
 };
-use std::time::Duration;
-use tokio::fs::File;
-use tokio::time::sleep;
+
+fn c_string_to_bytes(c_string: &[u8]) -> &[u8] {
+    CStr::from_bytes_with_nul(c_string).expect("c_string_to_bytes error").to_bytes()
+}
 
 /// Alias for RawFd on Unix or RawSocket on Windows (converted to i32)
 type RawDescriptor = i32;
@@ -106,15 +125,15 @@ type KeyData = [u8; 32];
 /// such as starting and stopping the process, configuring the access point,
 /// and sending and receiving data.
 pub struct Hostapd {
-    task_handle: RwLock<Option<JoinHandle<()>>>,
+    task_handle: AsyncRwLock<Option<JoinHandle<()>>>,
     verbose: bool,
-    config: HashMap<String, String>,
+    config: RwLock<HashMap<String, String>>,
     config_path: PathBuf,
-    data_writer: Option<Mutex<OwnedWriteHalf>>,
-    ctrl_writer: Option<Mutex<OwnedWriteHalf>>,
+    data_writer: StdMutex<Option<Arc<Mutex<OwnedWriteHalf>>>>,
+    ctrl_writer: StdMutex<Option<Arc<Mutex<OwnedWriteHalf>>>>,
     tx_bytes: mpsc::Sender<Bytes>,
     // MAC address of the access point.
-    bssid: MacAddress,
+    bssid: RwLock<MacAddress>,
     // Current transmit packet number (PN) used for encryption
     tx_pn: AtomicI64,
 }
@@ -155,25 +174,25 @@ impl Hostapd {
         config.extend(config_data.iter().map(|(k, v)| (k.to_string(), v.to_string())));
 
         Hostapd {
-            task_handle: RwLock::new(None),
+            task_handle: AsyncRwLock::new(None),
             verbose,
-            config,
+            config: RwLock::new(config),
             config_path,
-            data_writer: None,
-            ctrl_writer: None,
+            data_writer: StdMutex::new(None),
+            ctrl_writer: StdMutex::new(None),
             tx_bytes,
-            bssid: parse_mac_address(bssid).unwrap(),
+            bssid: RwLock::new(parse_mac_address(bssid).unwrap()),
             tx_pn: AtomicI64::new(1),
         }
     }
 
     /// Starts the `hostapd` main process and response task.
     ///
-    /// The "hostapd" task manages the C `hostapd` process by running `run_hostapd_main`.
-    /// The "hostapd_response" task manages traffic between `hostapd` and netsim.
-    ///
-    pub async fn run(&mut self) -> bool {
-        debug!("Running hostapd with config: {:?}", &self.config);
+    /// The "hostapd" task manages the C `hostapd` process by running
+    /// `run_hostapd_main`. The "hostapd_response" task manages traffic
+    /// between `hostapd` and netsim.
+    pub async fn run(&self) -> bool {
+        debug!("Running hostapd with config: {:?}", &self.config.read().expect("Poisoned lock"));
 
         // Check if already running
         if self.is_running().await {
@@ -191,16 +210,16 @@ impl Hostapd {
         // Setup Sockets
         let (ctrl_listener, _ctrl_reader, ctrl_writer) =
             self.create_pipe().await.expect("Failed to create ctrl pipe");
-        self.ctrl_writer = Some(Mutex::new(ctrl_writer));
+        *self.ctrl_writer.lock().expect("Poisoned lock") = Some(Arc::new(Mutex::new(ctrl_writer)));
         let (data_listener, data_reader, data_writer) =
             self.create_pipe().await.expect("Failed to create data pipe");
-        self.data_writer = Some(Mutex::new(data_writer));
+        *self.data_writer.lock().expect("Poisoned lock") = Some(Arc::new(Mutex::new(data_writer)));
 
         // Start hostapd task
         let verbose = self.verbose;
         let config_path = self.config_path.to_string_lossy().into_owned();
-        let task_handle = tokio::spawn(async move {
-            Self::hostapd_task(verbose, config_path).await;
+        let task_handle = tokio::task::spawn_blocking(move || {
+            Self::hostapd_task(verbose, config_path);
         });
         *self.task_handle.write().await = Some(task_handle);
 
@@ -209,14 +228,15 @@ impl Hostapd {
         let _response_handle = tokio::spawn(async move {
             Self::hostapd_response_task(data_listener, ctrl_listener, data_reader, tx_bytes).await;
         });
-        // We don't need to store response_handle as we don't need to explicitly manage it after start.
+        // We don't need to store response_handle as we don't need to explicitly manage
+        // it after start.
 
         true
     }
 
     /// Reconfigures `Hostapd` with the specified SSID (and password).
     pub async fn set_ssid(
-        &mut self,
+        &self,
         ssid: impl Into<String>,
         password: impl Into<String>,
     ) -> anyhow::Result<()> {
@@ -232,7 +252,10 @@ impl Hostapd {
         }
 
         // Update the config
-        self.config.insert("ssid".to_string(), ssid);
+        {
+            let mut config = self.config.write().expect("Poisoned lock");
+            config.insert("ssid".to_string(), ssid);
+        }
         if !password.is_empty() {
             let password_config = [
                 ("wpa", "2"),
@@ -240,7 +263,10 @@ impl Hostapd {
                 ("rsn_pairwise", "CCMP"),
                 ("wpa_passphrase", &password),
             ];
-            self.config.extend(password_config.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+            {
+                let mut config = self.config.write().expect("Poisoned lock");
+                config.extend(password_config.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+            }
         }
 
         // Update the config file.
@@ -248,16 +274,43 @@ impl Hostapd {
 
         // Send command for Hostapd to reload config file
         if self.is_running().await {
-            if let Err(e) = Self::async_write(
-                self.ctrl_writer.as_ref().unwrap(),
-                c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG),
-            )
-            .await
-            {
-                bail!("Failed to send VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG to hostapd to reload config: {:?}", e);
+            let cmd = c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG);
+            let ctrl_writer = self.ctrl_writer.lock().expect("Poisoned lock").clone();
+            if let Some(writer) = ctrl_writer {
+                if let Err(e) = Self::async_write(&writer, cmd).await {
+                    bail!("Failed to send VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG to hostapd to reload config: {:?}", e);
+                }
+            } else {
+                bail!("Hostapd failed to reload config: ctrl_writer missing");
             }
         }
 
+        Ok(())
+    }
+
+    /// Reconfigures `Hostapd` with the specified BSSID.
+    pub async fn set_bssid(&self, bssid: &MacAddress) -> anyhow::Result<()> {
+        if *bssid == self.get_bssid() {
+            return Ok(());
+        }
+        *self.bssid.write().expect("Poisoned lock") = *bssid;
+        self.config.write().expect("Poisoned lock").insert("bssid".to_string(), bssid.to_string());
+
+        // Update the config file.
+        self.gen_config_file().await?;
+
+        // Send command for Hostapd to reload config file
+        if self.is_running().await {
+            let cmd = c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG);
+            let ctrl_writer = self.ctrl_writer.lock().expect("Poisoned lock").clone();
+            if let Some(writer) = ctrl_writer {
+                if let Err(e) = Self::async_write(&writer, cmd).await {
+                    bail!("Failed to send VIRTIO_WIFI_CTRL_CMD_RELOAD_CONFIG to hostapd to reload config: {:?}", e);
+                }
+            } else {
+                bail!("Hostapd failed to reload config: ctrl_writer missing");
+            }
+        }
         Ok(())
     }
 
@@ -268,7 +321,7 @@ impl Hostapd {
 
     /// Retrieves the `Hostapd`'s BSSID.
     pub fn get_bssid(&self) -> MacAddress {
-        self.bssid
+        *self.bssid.read().expect("Poisoned lock")
     }
 
     /// Generate the next packet number
@@ -282,10 +335,12 @@ impl Hostapd {
     fn get_key(&self, ieee80211: &Ieee80211) -> (KeyData, usize, u8) {
         // Determine key (GTK for multicast/broadcast, PTK for unicast)
         let key = if ieee80211.is_multicast() || ieee80211.is_broadcast() {
-            // SAFETY: get_active_gtk requires no input and returns a virtio_wifi_key_data struct
+            // SAFETY: get_active_gtk requires no input and returns a virtio_wifi_key_data
+            // struct
             unsafe { get_active_gtk() }
         } else {
-            // SAFETY: get_active_ptk requires no input and returns a virtio_wifi_key_data struct
+            // SAFETY: get_active_ptk requires no input and returns a virtio_wifi_key_data
+            // struct
             unsafe { get_active_ptk() }
         };
 
@@ -408,7 +463,12 @@ impl Hostapd {
         if !self.is_running().await {
             panic!("Failed to send input. Hostapd is not running.");
         }
-        Self::async_write(self.data_writer.as_ref().unwrap(), &bytes).await
+        let data_writer = self.data_writer.lock().expect("Poisoned lock").clone();
+        if let Some(writer) = data_writer {
+            Self::async_write(&writer, &bytes).await
+        } else {
+            panic!("Failed to send input. data_writer missing.");
+        }
     }
 
     /// Checks whether the `hostapd` task is running.
@@ -424,14 +484,18 @@ impl Hostapd {
             return;
         }
 
-        // Send terminate command to hostapd
-        if let Err(e) = Self::async_write(
-            self.ctrl_writer.as_ref().unwrap(),
-            c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_TERMINATE),
-        )
-        .await
-        {
-            warn!("Failed to send VIRTIO_WIFI_CTRL_CMD_TERMINATE to hostapd to terminate: {:?}", e);
+        let ctrl_writer = self.ctrl_writer.lock().expect("Poisoned lock").clone();
+        if let Some(writer) = ctrl_writer {
+            if let Err(e) =
+                Self::async_write(&writer, c_string_to_bytes(VIRTIO_WIFI_CTRL_CMD_TERMINATE)).await
+            {
+                warn!(
+                    "Failed to send VIRTIO_WIFI_CTRL_CMD_TERMINATE to hostapd to terminate: {:?}",
+                    e
+                );
+            }
+        } else {
+            warn!("Failed to terminate hostapd: ctrl_writer missing");
         }
         // Wait for hostapd task to finish.
         if let Some(task_handle) = self.task_handle.write().await.take() {
@@ -446,7 +510,14 @@ impl Hostapd {
         let conf_file = File::create(self.config_path.clone()).await?; // Create or overwrite the file
         let mut writer = BufWriter::new(conf_file);
 
-        for (key, value) in &self.config {
+        let config: Vec<(String, String)> = self
+            .config
+            .read()
+            .expect("Poisoned lock")
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        for (key, value) in config {
             let line = format!("{}={}\n", key, value);
             writer.write_all(line.as_bytes()).await?;
         }
@@ -458,8 +529,11 @@ impl Hostapd {
     /// Gets the value of the given key in the config.
     ///
     /// Returns an empty String if the key is not found.
+    /// Gets the value of the given key in the config.
+    ///
+    /// Returns an empty String if the key is not found.
     fn get_config_val(&self, key: &str) -> String {
-        self.config.get(key).cloned().unwrap_or_default()
+        self.config.read().expect("Poisoned lock").get(key).cloned().unwrap_or_default()
     }
 
     /// Creates a pipe of two connected `TcpStream` objects.
@@ -469,7 +543,8 @@ impl Hostapd {
     ///
     /// # Returns
     ///
-    /// * `Ok((listener, read_half, write_half))` if the pipe creation is successful.
+    /// * `Ok((listener, read_half, write_half))` if the pipe creation is
+    ///   successful.
     /// * `Err(std::io::Error)` if an error occurs during pipe creation.
     async fn create_pipe(
         &self,
@@ -507,7 +582,7 @@ impl Hostapd {
     /// Runs the C `hostapd` process with `run_hostapd_main`.
     ///
     /// This function is meant to be spawned in a separate task.
-    async fn hostapd_task(verbose: bool, config_path: String) {
+    fn hostapd_task(verbose: bool, config_path: String) {
         let mut args = vec![CString::new("hostapd").unwrap()];
         if verbose {
             args.push(CString::new("-dddd").unwrap());
@@ -519,7 +594,8 @@ impl Hostapd {
         );
         let argv: Vec<*const c_char> = args.iter().map(|arg| arg.as_ptr()).collect();
         let argc = argv.len() as c_int;
-        // Safety: we ensure that argc is length of argv and argv.as_ptr() is a valid pointer of hostapd args
+        // Safety: we ensure that argc is length of argv and argv.as_ptr() is a valid
+        // pointer of hostapd args
         unsafe { run_hostapd_main(argc, argv.as_ptr()) };
     }
 
@@ -528,7 +604,8 @@ impl Hostapd {
         data_descriptor: RawDescriptor,
         ctrl_descriptor: RawDescriptor,
     ) -> bool {
-        // Safety: we ensure that data_descriptor and ctrl_descriptor are valid i32 raw file descriptor or socket
+        // Safety: we ensure that data_descriptor and ctrl_descriptor are valid i32 raw
+        // file descriptor or socket
         unsafe {
             set_virtio_sock(data_descriptor) == 0 && set_virtio_ctrl_sock(ctrl_descriptor) == 0
         }
@@ -536,8 +613,9 @@ impl Hostapd {
 
     /// Manages reading `hostapd` responses and sending them via `tx_bytes`.
     ///
-    /// The task first attempts to set virtio driver sockets with retries until success.
-    /// Next, the task reads `hostapd` responses and writes them to netsim.
+    /// The task first attempts to set virtio driver sockets with retries until
+    /// success. Next, the task reads `hostapd` responses and writes them to
+    /// netsim.
     async fn hostapd_response_task(
         data_descriptor: RawDescriptor,
         ctrl_descriptor: RawDescriptor,
@@ -556,14 +634,12 @@ impl Hostapd {
         loop {
             let size = match data_reader.read(&mut buf[..]).await {
                 Ok(size) => size,
-                Err(e) => {
-                    warn!("Failed to read hostapd response: {:?}", e);
+                Err(_e) => {
                     break;
                 }
             };
 
-            if let Err(e) = tx_bytes.send(Bytes::copy_from_slice(&buf[..size])).await {
-                warn!("Failed to send hostapd packet response: {:?}", e);
+            if let Err(_e) = tx_bytes.send(Bytes::copy_from_slice(&buf[..size])).await {
                 break;
             };
         }
@@ -585,16 +661,15 @@ fn into_raw_descriptor(stream: TcpStream) -> RawDescriptor {
     std_stream.into_raw_socket().try_into().expect("Failed to convert Raw Socket value into i32")
 }
 
-/// Converts a null-terminated c-string slice into `&[u8]` bytes without the null terminator.
-fn c_string_to_bytes(c_string: &[u8]) -> &[u8] {
-    CStr::from_bytes_with_nul(c_string).unwrap().to_bytes()
-}
+// Removed c_string_to_bytes as constants are now raw bytes
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use netsim_packets::ieee80211::{parse_mac_address, FrameType, Ieee80211, Ieee80211ToAp};
     use std::env;
+
+    use netsim_packets::ieee80211::{parse_mac_address, FrameType, Ieee80211, Ieee80211ToAp};
+
+    use super::*;
 
     /// Initializes a basic Hostapd instance for testing.
     fn init_hostapd() -> Hostapd {
@@ -639,17 +714,19 @@ mod tests {
         // Clear the protected bit (byte 1, bit 6 i.e. 0x40)
         expected_frame_bytes[1] &= !0x40;
 
-        // Verify that the decrypted frame is identical to the original frame (with protected bit cleared).
+        // Verify that the decrypted frame is identical to the original frame (with
+        // protected bit cleared).
         assert_eq!(
             decrypted_frame, expected_frame_bytes,
-            "Decrypted frame does not match original frame (protected bit cleared)" // More descriptive assertion message
+            "Decrypted frame does not match original frame (protected bit cleared)" /* More descriptive assertion message */
         );
     }
 
     #[tokio::test]
     async fn test_decrypt_encrypt_golden_frame() {
-        // Read Golden Frame from shared test data (exported by packets crate via public API)
-        // This relies on include_bytes! inside the packets crate, ensuring consistent access.
+        // Read Golden Frame from shared test data (exported by packets crate via public
+        // API) This relies on include_bytes! inside the packets crate, ensuring
+        // consistent access.
         let pcap_bytes = netsim_packets::ieee80211::get_golden_ccmp_pcap();
 
         // Skip PCAP Header (24) + Packet Header (16) = 40 bytes
@@ -713,7 +790,8 @@ mod tests {
     }
     // Implementation block for Hostapd specific to tests.
     impl Hostapd {
-        /// Test-specific get_key: returns a fixed key for predictable encryption/decryption.
+        /// Test-specific get_key: returns a fixed key for predictable
+        /// encryption/decryption.
         pub fn get_key(&self, _ieee80211: &Ieee80211) -> (KeyData, usize, u8) {
             let mut key = [0u8; 32];
             const TEST_KEY: [u8; 16] = [

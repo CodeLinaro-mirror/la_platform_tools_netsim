@@ -16,13 +16,14 @@ netsim_rust_library(
         "//next/libslirp-rs",
         "//next/model",
         "//next/packets",
-        "//next/proto",
+        "//proto",
         "@anyhow",
         "@bytes",
         "@futures",
         "@log",
         "@thiserror",
         "@tokio",
+        "@tokio-stream",
     ],
 )
 
@@ -41,5 +42,6 @@ rust_test(
         "@futures",
         "@log",
         "@tokio",
+        "@tokio-stream",
     ],
 )

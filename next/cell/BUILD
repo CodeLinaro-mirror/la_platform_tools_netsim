@@ -8,7 +8,7 @@ DEPS = [
     "//next/model",
     "//next/modem-rs",
     "//next/packet-stream",
-    "//next/proto",
+    "//proto",
     "@tokio",
     "@log",
     "@bytes",
@@ -22,8 +22,6 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "cell",
     edition = "2021",
-    enable_clippy = False,
-    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],

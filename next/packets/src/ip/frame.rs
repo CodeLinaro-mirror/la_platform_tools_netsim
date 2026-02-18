@@ -2,11 +2,12 @@
 
 //! Defines structures for IPv4 and IPv6 headers using `zerocopy`.
 
-use crate::utils::general::ParseResult;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
     U32,
 };
+
+use crate::utils::general::ParseResult;
 
 // Protocol numbers
 pub const IP_P_HOPOPTS: u8 = 0;
@@ -42,14 +43,32 @@ impl Ipv4Header {
         self.version_ihl >> 4
     }
 
-    /// Returns the Internet Header Length (IHL), which is the number of 32-bit words in the header.
+    /// Returns the Internet Header Length (IHL), which is the number of 32-bit
+    /// words in the header.
     pub fn ihl(&self) -> u8 {
         self.version_ihl & 0x0f
     }
 
-    /// Returns the total length of the header in bytes.
     pub fn header_length(&self) -> usize {
         (self.ihl() * 4) as usize
+    }
+
+    /// Calculates and updates the header checksum.
+    pub fn update_checksum(&mut self) {
+        self.header_checksum = U16::new(0);
+        let bytes = self.as_bytes();
+        let mut sum: u32 = 0;
+        for chunk in bytes.chunks(2) {
+            if chunk.len() == 2 {
+                sum += u16::from_be_bytes([chunk[0], chunk[1]]) as u32;
+            } else {
+                sum += (chunk[0] as u32) << 8;
+            }
+        }
+        while (sum >> 16) != 0 {
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        self.header_checksum = U16::new(!sum as u16);
     }
 }
 
@@ -91,7 +110,8 @@ pub struct Ipv6HopByHopHeader {
 }
 
 impl Ipv6HopByHopHeader {
-    /// Parses an `Ipv6HopByHopHeader` from the beginning of the given byte slice.
+    /// Parses an `Ipv6HopByHopHeader` from the beginning of the given byte
+    /// slice.
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, Ipv6HopByHopHeader>> {
         let (header, _) = Ref::<&[u8], Ipv6HopByHopHeader>::from_prefix(bytes).ok()?;
         let header_len = header.header_length();

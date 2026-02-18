@@ -1,21 +1,23 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::shared::SharedKeyStore;
-use crate::{ApError, ApState};
 use actor_framework::DynContext;
-
-use netsim_packets::ieee80211::{
-    ie::IeIterator, management_subtype, tags, write_ie, AssociationResponseFixedFields,
-    AuthenticationFixedFields, BeaconFixedFields, BeaconFrameHeader, FrameControl, Ieee80211,
-    MacHeader3Addr, SequenceControl,
+use netsim_model::chip::{ChipId, WifiMode};
+use netsim_packets::{
+    ieee80211::{
+        ie::IeIterator, management_subtype, tags, wmm::write_wmm_param_element, write_ie,
+        AssociationResponseFixedFields, AuthenticationFixedFields, BeaconFixedFields,
+        BeaconFrameHeader, FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
+    },
+    llc::{control_field, sap, LlcSnapHeader},
 };
-use netsim_packets::llc::{control_field, sap, LlcSnapHeader};
 use zerocopy::{IntoBytes, U16};
+
+use crate::{sae::SaeStateMachine, shared::SharedKeyStore, ApActor, ApError, ApState};
 
 /// Handles 802.11 Management Frames
 #[derive(Clone, Debug)]
 pub struct Ieee80211Manager {
-    // We might need some state here, or pass it in
+    // Stateless for now, state passed in methods
 }
 
 impl Ieee80211Manager {
@@ -23,10 +25,15 @@ impl Ieee80211Manager {
         Self {}
     }
 
-    pub fn generate_beacon(&self, ap: &ApState) -> Result<Vec<bytes::Bytes>, ApError> {
+    pub fn generate_beacon(
+        &self,
+        ap: &ApState,
+        beacon_interval: u16,
+    ) -> Result<Vec<bytes::Bytes>, ApError> {
         // Beacon Header
         let header = BeaconFrameHeader {
-            frame_control: FrameControl::new(0x0080), // Mgmt (00), Beacon (1000) -> 0x0080 (LE: 80 00)
+            frame_control: FrameControl::new(0x0080), /* Mgmt (00), Beacon (1000) -> 0x0080 (LE:
+                                                       * 80 00) */
             duration: U16::new(0),
             da: netsim_packets::ethernet::MacAddr { bytes: [0xFF; 6] },
             sa: ap.config.bssid,
@@ -39,7 +46,7 @@ impl Ieee80211Manager {
         // Fixed Fields
         let fixed = BeaconFixedFields {
             timestamp: [0; 8],
-            beacon_interval: U16::new(ap.config.beacon_interval),
+            beacon_interval: U16::new(beacon_interval),
             capabilities: U16::new(0x0001), // ESS
         };
         frame.extend_from_slice(fixed.as_bytes());
@@ -52,13 +59,38 @@ impl Ieee80211Manager {
 
     fn append_beacon_ies(&self, body: &mut Vec<u8>, ap: &ApState) {
         // SSID IE
-        write_ie(body, tags::SSID, ap.config.ssid.as_bytes());
+        if ap.config.hidden_ssid {
+            write_ie(body, tags::SSID, &[]);
+        } else {
+            write_ie(body, tags::SSID, ap.config.ssid.as_bytes());
+        }
 
         // Supported Rates
         write_ie(body, tags::SUPPORTED_RATES, tags::SUPPORTED_RATES_DEFAULT);
 
         // DS Param (Channel)
         write_ie(body, tags::DS_PARAMETER_SET, &[ap.config.channel]);
+
+        // Country IE (Tag 7)
+        if let Some(cc) = &ap.config.country_code {
+            if cc.len() >= 2 {
+                let mut country_body = Vec::new();
+                country_body.extend_from_slice(cc.as_bytes());
+                // First Channel Number, Number of Channels, Max Transmit Power Level
+                // Simple default: Start at 1, cover 13 channels, Max Power 20dBm
+                country_body.extend_from_slice(&[1, 13, 20]);
+                write_ie(body, tags::COUNTRY, &country_body);
+            }
+        }
+
+        // TIM IE (Tag 5)
+        // DTIM Count (0), DTIM Period (from config), Bitmap Control (0), Partial
+        // Virtual Bitmap (0) For now, we claim DTIM count is always 0 (every
+        // beacon is DTIM) or just follow period? Let's set DTIM Count = 0
+        // (implying this beacon is a DTIM) for simplicity in simulation. Bitmap
+        // Control = 0 (No Multicast buffered). Partial Virtual Bitmap = 0 (No unicast
+        // buffered).
+        write_ie(body, tags::TIM, &[0, ap.config.dtim_period, 0, 0]);
 
         // RSN IE (WPA2)
         let rsn_ie = crate::rsn::build_rsn_ie(&ap.config);
@@ -67,10 +99,31 @@ impl Ieee80211Manager {
         }
 
         // WiFi 6 (HE) Support
-        if ap.config.hw_mode == "ax" {
+        if ap.config.hw_mode == WifiMode::Ax {
             // HE Capabilities (ID 255, ExtID 35)
             // Body: ExtID(35) + Caps(00 00)
             write_ie(body, tags::EXTENSION, &[tags::HE_CAPABILITIES, 0x00, 0x00]);
+        }
+
+        // WMM IE
+        // If 802.11n/ac/ax (HT/VHT/HE) is enabled, WMM is typically mandatory.
+        // We also check wmm_enabled config.
+        let is_ht = ap.config.hw_mode == WifiMode::N
+            || ap.config.hw_mode == WifiMode::Ac
+            || ap.config.hw_mode == WifiMode::Ax;
+        if ap.config.wmm_enabled || is_ht {
+            // U-APSD enabled? Default false for now. Param Set Count 0.
+            write_wmm_param_element(body, false, 0);
+        }
+
+        // Extended Capabilities (Tag 127)
+        if ap.config.ftm_responder_enabled {
+            let mut ext_cap = Vec::new();
+            netsim_packets::ieee80211::ie::set_ext_cap(
+                &mut ext_cap,
+                netsim_packets::ieee80211::ie::tags::EXTENDED_CAPABILITIES_FTM_RESPONDER_BIT,
+            );
+            write_ie(body, tags::EXTENDED_CAPABILITIES, &ext_cap);
         }
     }
 
@@ -80,7 +133,9 @@ impl Ieee80211Manager {
         ap: &mut ApState,
         frame: &[u8],
         shared_keys: &SharedKeyStore,
-        _ctx: &mut DynContext<u32>,
+        beacon_interval: u16,
+        source_id: ChipId,
+        _ctx: &mut DynContext<ApActor>,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let ieee80211_frame = match Ieee80211::decode(frame) {
             Ok(f) => f,
@@ -101,99 +156,324 @@ impl Ieee80211Manager {
         }
 
         match ieee80211_frame.stype() {
-            management_subtype::AUTHENTICATION => self.handle_auth(ap, &ieee80211_frame),
-            management_subtype::ASSOCIATION_REQUEST => self.handle_assoc(ap, &ieee80211_frame),
-            management_subtype::PROBE_REQUEST => self.handle_probe_req(ap, &ieee80211_frame, frame),
+            management_subtype::AUTHENTICATION => self.handle_auth(ap, &ieee80211_frame, frame),
+            management_subtype::ASSOCIATION_REQUEST => {
+                self.handle_assoc(ap, &ieee80211_frame, source_id)
+            }
+            management_subtype::PROBE_REQUEST => {
+                self.handle_probe_req(ap, &ieee80211_frame, frame, beacon_interval)
+            }
             management_subtype::DEAUTHENTICATION => {
                 self.handle_deauth(ap, &ieee80211_frame, shared_keys)
             }
+            management_subtype::ACTION => self.handle_action(ap, &ieee80211_frame, frame),
             _ => Ok(vec![]),
         }
+    }
+
+    fn handle_action(
+        &mut self,
+        _ap: &mut ApState,
+        frame: &Ieee80211,
+        raw_frame: &[u8],
+    ) -> Result<Vec<bytes::Bytes>, ApError> {
+        let src = frame.get_source();
+        // Action Frame Body starts after Header (24 bytes)
+        if raw_frame.len() < 26 {
+            // Header + Category + Action
+            return Ok(vec![]);
+        }
+        let body = &raw_frame[24..];
+        let category = body[0];
+        let action = body[1];
+
+        log::debug!("ApActor: Action Frame Cat={} Act={} from {}", category, action, src);
+
+        // Public Action (Category 4)
+        if category == netsim_packets::ieee80211::action::category::PUBLIC {
+            // FTM Request (Action 32)
+            if action == netsim_packets::ieee80211::action::public_action::FTM_REQUEST {
+                log::info!("ApActor: Received FTM Request from {}", src);
+                // FIXME: Parse Dialog Token from action frame body (Trigger field).
+                // For now, we assume a standard trigger and generate a fixed response sequence.
+                let frames = crate::ftm::FtmResponder::handle_ftm_request(&_ap.config, src, 1);
+                return Ok(frames.into_iter().map(bytes::Bytes::from).collect());
+            }
+        }
+
+        Ok(vec![])
     }
 
     fn handle_auth(
         &mut self,
         ap: &mut ApState,
         frame: &Ieee80211,
+        raw_frame: &[u8],
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let src = frame.get_source();
-        log::info!("ApActor: Received Auth from {}", src);
 
-        // Construct Auth Response (Seq 2)
-        // Header (24 bytes) + Auth Body (6 bytes)
-        // FC: Auth (mgmt, subtype 11)
-        // DA: src
-        // SA: BSSID (ap.config.bssid)
-        // BSSID: BSSID
-        // SC: 0
+        // ACL Check
+        // Mode 0: Disable, 1: Deny, 2: Allow
+        match ap.config.mac_acl_mode {
+            1 => {
+                // Deny List
+                if ap.config.mac_acl_list.contains(&src) {
+                    log::info!("ApActor: ACL Deny {}", src);
+                    return Ok(vec![bytes::Bytes::from(self.build_auth_frame(
+                        ap,
+                        src,
+                        0,
+                        2,
+                        1,
+                        &[],
+                    ))]);
+                }
+            }
+            2 => {
+                // Allow List
+                if !ap.config.mac_acl_list.contains(&src) {
+                    log::info!("ApActor: ACL Reject (Not Allowed) {}", src);
+                    return Ok(vec![bytes::Bytes::from(self.build_auth_frame(
+                        ap,
+                        src,
+                        0,
+                        2,
+                        1,
+                        &[],
+                    ))]);
+                }
+            }
+            _ => {}
+        }
 
-        let mut resp = Vec::new();
+        // Parse Auth Fixed Fields (Alg, Seq, Status)
+        // Mgmt Header is usually 24 bytes (FC+Duration+3Addr+SC)
+        if raw_frame.len() < 24 + 6 {
+            log::warn!("ApActor: Auth frame too short");
+            return Ok(vec![]);
+        }
 
-        // 802.11 Header
+        let body = &raw_frame[24..];
+        let alg = u16::from_le_bytes([body[0], body[1]]);
+        let seq = u16::from_le_bytes([body[2], body[3]]);
+        let status = u16::from_le_bytes([body[4], body[5]]);
+
+        log::info!("ApActor: Received Auth from {} Alg={} Seq={} Status={}", src, alg, seq, status);
+
+        // SAE (Algorithm 3)
+        if alg == 3 {
+            if !ap.config.sae {
+                log::warn!("ApActor: SAE requested but not enabled");
+                // Should return Auth reject? (Status 13 - not supported alg?)
+                // For now, ignore or send error.
+                return Ok(vec![]);
+            }
+
+            // Get or Create SAE Machine
+            let machine = ap.sae_sessions.entry(src).or_insert_with(|| {
+                // Password needed. Use config WPA passphrase.
+                let pwd = ap.config.wpa_passphrase.clone().unwrap_or_default();
+                SaeStateMachine::new(&ap.config.bssid.bytes, &src.bytes, pwd.as_bytes())
+            });
+
+            // Handle SAE State
+            // Seq 1: Commit (Peer -> AP) or (Simultaneous)
+            // Seq 2: Confirm?
+            // SAE uses implicit sequence based on content?
+            // 802.11-2016 12.4.8.2: SAE Auth frames use Seq 1 for Commit, Seq 2 for
+            // Confirm. SAE Standard: Commit is Seq 1, Confirm is Seq 2.
+
+            let sae_payload = &body[6..]; // Payload after fixed fields
+
+            let mut resp_frames = Vec::new();
+
+            if seq == 1 {
+                // Peer Commit
+                if machine.parse_commit(sae_payload).is_some() {
+                    // Generate Our Commit (if not already sent?)
+                    // AP usually responds with Commit (Seq 1) containing its scalar/element.
+                    // Note: Concurrent commit is allowed by SAE spec.
+                    // Or responding to commit.
+
+                    if let Some(commit_body) = machine.build_commit() {
+                        let resp = self.build_auth_frame(ap, src, 3, 1, 0, &commit_body);
+                        resp_frames.push(bytes::Bytes::from(resp));
+                    }
+                }
+            } else if seq == 2 {
+                // Peer Confirm
+                if machine.parse_confirm(sae_payload).is_some() {
+                    // Generate Our Confirm
+                    if let Some(confirm_body) = machine.build_confirm() {
+                        let resp = self.build_auth_frame(ap, src, 3, 2, 0, &confirm_body);
+                        resp_frames.push(bytes::Bytes::from(resp));
+
+                        // SAE Success! Install keys logic?
+                        // Valid confirmed state.
+                        // PMK is ready.
+                        // Wait for Association Request to derive PTK?
+                        log::info!("SAE: Handshake completed for {}", src);
+                    }
+                }
+            }
+
+            return Ok(resp_frames);
+        }
+
+        // Open System (Algorithm 0)
+        if alg == 0 {
+            // ... existing open system logic ...
+            // Copied from previous impl
+            let mut resp = Vec::new();
+            // 802.11 Header
+            let header = MacHeader3Addr {
+                frame_control: FrameControl::new(0x00B0), // Mgmt(00), Auth(1011) -> 0x00B0
+                duration_id: U16::new(0),
+                addr1: src,                                     // DA
+                addr2: ap.config.bssid,                         // SA
+                addr3: ap.config.bssid,                         // BSSID
+                sequence_control: SequenceControl::new(0x0010), // SC (Seq 1?)
+            };
+            resp.extend_from_slice(header.as_bytes());
+
+            // Auth Body
+            let body = AuthenticationFixedFields {
+                algorithm: U16::new(0), // Open System
+                sequence: U16::new(2),
+                status: U16::new(0), // Success
+            };
+            resp.extend_from_slice(body.as_bytes());
+
+            let msg = bytes::Bytes::from(resp);
+            Ok(vec![msg])
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    fn build_auth_frame(
+        &self,
+        ap: &ApState,
+        dest: netsim_packets::ethernet::MacAddr,
+        alg: u16,
+        seq: u16,
+        status: u16,
+        payload: &[u8],
+    ) -> Vec<u8> {
+        let mut frame = Vec::new();
         let header = MacHeader3Addr {
-            frame_control: FrameControl::new(0x00B0), // Mgmt(00), Auth(1011) -> 0x00B0
+            frame_control: FrameControl::new(0x00B0),
             duration_id: U16::new(0),
-            addr1: src,                                     // DA
-            addr2: ap.config.bssid,                         // SA
-            addr3: ap.config.bssid,                         // BSSID
-            sequence_control: SequenceControl::new(0x0010), // SC (Seq 1?)
+            addr1: dest,
+            addr2: ap.config.bssid,
+            addr3: ap.config.bssid,
+            sequence_control: SequenceControl::new(0),
+        };
+        frame.extend_from_slice(header.as_bytes());
+
+        let fixed = AuthenticationFixedFields {
+            algorithm: U16::new(alg),
+            sequence: U16::new(seq),
+            status: U16::new(status),
+        };
+        frame.extend_from_slice(fixed.as_bytes());
+        frame.extend_from_slice(payload);
+        frame
+    }
+
+    pub fn build_deauth_frame(
+        &self,
+        ap: &ApState,
+        dest: netsim_packets::ethernet::MacAddr,
+        reason_code: u16,
+    ) -> Vec<u8> {
+        let mut frame = Vec::new();
+        // Deauthentication (Subtype 12 = 1100b) -> 0xC0
+        let header = MacHeader3Addr {
+            frame_control: FrameControl::new(0x00C0),
+            duration_id: U16::new(0),
+            addr1: dest,            // DA
+            addr2: ap.config.bssid, // SA
+            addr3: ap.config.bssid, // BSSID
+            sequence_control: SequenceControl::new(0),
+        };
+        frame.extend_from_slice(header.as_bytes());
+        frame.extend_from_slice(&reason_code.to_le_bytes());
+        frame
+    }
+
+    fn build_assoc_resp(
+        &self,
+        ap: &ApState,
+        dest: netsim_packets::ethernet::MacAddr,
+        status: u16,
+    ) -> Vec<u8> {
+        let mut resp = Vec::new();
+        let header = MacHeader3Addr {
+            frame_control: FrameControl::new(0x0010), // Mgmt, Assoc Resp
+            duration_id: U16::new(0),
+            addr1: dest,
+            addr2: ap.config.bssid,
+            addr3: ap.config.bssid,
+            sequence_control: SequenceControl::new(0x0010),
         };
         resp.extend_from_slice(header.as_bytes());
 
-        // Auth Body
-        let body = AuthenticationFixedFields {
-            algorithm: U16::new(0), // Open System
-            sequence: U16::new(2),
-            status: U16::new(0), // Success
+        let body = AssociationResponseFixedFields {
+            capabilities: U16::new(0x0001), // ESS
+            status: U16::new(status),
+            aid: U16::new(0xC001),
         };
         resp.extend_from_slice(body.as_bytes());
 
-        let msg = bytes::Bytes::from(resp);
-        Ok(vec![msg])
+        // Only append IEs on Success (Status 0)
+        if status == 0 {
+            write_ie(&mut resp, tags::SUPPORTED_RATES, tags::SUPPORTED_RATES_DEFAULT);
+            if ap.config.wmm_enabled
+                || ap.config.hw_mode == WifiMode::N
+                || ap.config.hw_mode == WifiMode::Ax
+            {
+                write_wmm_param_element(&mut resp, false, 0);
+            }
+        }
+        resp
     }
 
     fn handle_assoc(
         &mut self,
         ap: &mut ApState,
         frame: &Ieee80211,
+        _source_id: ChipId,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let src = frame.get_source();
         log::info!("ApActor: Received Assoc Req from {}", src);
 
+        // ACL Check
+        match ap.config.mac_acl_mode {
+            1 => {
+                if ap.config.mac_acl_list.contains(&src) {
+                    log::info!("ApActor: ACL Deny Assoc {}", src);
+                    let resp = self.build_assoc_resp(ap, src, 1);
+                    return Ok(vec![bytes::Bytes::from(resp)]);
+                }
+            }
+            2 => {
+                if !ap.config.mac_acl_list.contains(&src) {
+                    log::info!("ApActor: ACL Reject Assoc (Not Allowed) {}", src);
+                    let resp = self.build_assoc_resp(ap, src, 1);
+                    return Ok(vec![bytes::Bytes::from(resp)]);
+                }
+            }
+            _ => {}
+        }
+
         let mut msgs = Vec::new();
-
-        // Construct Assoc Response (Seq 2)
-        let mut resp = Vec::new();
-
-        let header = MacHeader3Addr {
-            frame_control: FrameControl::new(0x0010), // Mgmt(00), Assoc Resp(0001) -> 0x0010
-            duration_id: U16::new(0),
-            addr1: src,                                     // DA
-            addr2: ap.config.bssid,                         // SA
-            addr3: ap.config.bssid,                         // BSSID
-            sequence_control: SequenceControl::new(0x0010), // SC
-        };
-        resp.extend_from_slice(header.as_bytes());
-
-        // Body
-        let body = AssociationResponseFixedFields {
-            capabilities: U16::new(0x0001), // ESS
-            status: U16::new(0),            // Success
-            aid: U16::new(0xC001),          // AID 1 (with 0xC000 bits set?) matches valid range?
-                                            // Usually AID is 0xC000 | id.
-        };
-        resp.extend_from_slice(body.as_bytes());
-
-        // Rates IE
-        // Rates IE
-        write_ie(&mut resp, tags::SUPPORTED_RATES, tags::SUPPORTED_RATES_DEFAULT);
-
+        let resp = self.build_assoc_resp(ap, src, 0);
         msgs.push(bytes::Bytes::from(resp));
 
         // Init WPA if configured
         if let Some(passphrase) = &ap.config.wpa_passphrase {
-            // Assume passphrase usage for now (PSK derived?)
-            // We need to implement proper key derivation later.
+            // TODO: Implement proper key derivation (PBKDF2)
             let rsn_ie = crate::rsn::build_rsn_ie(&ap.config);
             let mut authenticator = crate::wpa_auth::WpaAuthenticator::new(
                 ap.config.bssid,
@@ -209,6 +489,10 @@ impl Ieee80211Manager {
             }
         }
 
+        // Track Association
+        ap.associations.insert(src);
+        log::info!("ApActor: Associated {}", src);
+
         Ok(msgs)
     }
 
@@ -217,6 +501,7 @@ impl Ieee80211Manager {
         ap: &mut ApState,
         frame: &Ieee80211,
         raw_frame: &[u8],
+        beacon_interval: u16,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         // Filter by Destination Address (DA)
         // Must be Broadcast (FF:...) or match our BSSID.
@@ -228,7 +513,8 @@ impl Ieee80211Manager {
         // Parse SSID from Probe Req
         // Frame: Header (24) + IEs.
         // Ieee80211 doesn't have `payload()`, but `decode` validates it.
-        // We'll operate on `raw_frame` slice for IE parsing. Header is usually 24 bytes for Mgmt.
+        // We'll operate on `raw_frame` slice for IE parsing. Header is usually 24 bytes
+        // for Mgmt.
         if raw_frame.len() < 24 {
             return Ok(vec![]);
         }
@@ -247,10 +533,10 @@ impl Ieee80211Manager {
 
         // Filter: Respond if SSID matches or is Wildcard (empty)
         let respond = match requested_ssid {
-            Some(s) if s.is_empty() => true,        // Wildcard
-            Some(s) if s == ap.config.ssid => true, // Direct Match
-            None => true,                           // No SSID IE? Assume wildcard or malformed.
-            _ => false,                             // Mismatch
+            Some(s) if s.is_empty() => !ap.config.hidden_ssid, // Wildcard
+            Some(s) if s == ap.config.ssid => true,            // Direct Match
+            None => !ap.config.hidden_ssid,                    // No SSID IE? Assume wildcard
+            _ => false,                                        // Mismatch
         };
 
         if !respond {
@@ -274,7 +560,7 @@ impl Ieee80211Manager {
         // Fixed Fields (Same as Beacon)
         let fixed = BeaconFixedFields {
             timestamp: [0; 8],
-            beacon_interval: U16::new(ap.config.beacon_interval),
+            beacon_interval: U16::new(beacon_interval),
             capabilities: U16::new(0x0001), // ESS
         };
         resp.extend_from_slice(fixed.as_bytes());
@@ -297,11 +583,13 @@ impl Ieee80211Manager {
         // Check if we have a session for this source
         if let Some(_wpa) = &ap.wpa {
             // Since ApState currently supports only a single session/authenticator,
-            // we clear it indiscriminately. Future multi-station support will need keyed lookup.
+            // we clear it indiscriminately. Future multi-station support will need keyed
+            // lookup.
             ap.wpa = None;
         }
 
         shared_keys.remove_session(&src);
+        ap.associations.remove(&src);
 
         Ok(vec![])
     }
@@ -365,46 +653,131 @@ impl Ieee80211Manager {
             return Ok(vec![]);
         }
 
-        let wpa = match &mut ap.wpa {
-            Some(wpa) => wpa,
-            None => {
-                log::debug!("ApActor: Received EAPOL but WPA not configured");
-                return Ok(vec![]);
-            }
-        };
-
         log::info!("ApActor: Received EAPOL frame from src={}", ieee80211_frame.get_source());
-        let payload = &frame[32..]; // Skip Header(24) + LLC(8)
+        let payload = &frame[32..]; // EAPOL Header + Body
 
-        let outputs = match wpa.handle_eapol(payload) {
-            Ok(o) => o,
-            Err(_) => {
-                log::warn!("ApActor: WPA handle_eapol failed");
+        if payload.len() < 4 {
+            return Ok(vec![]);
+        }
+        let eapol_type = payload[1];
+
+        // EAPOL-Start (Type 1)
+        if eapol_type == 1 {
+            if !ap.config.enterprise_enabled {
+                log::warn!("ApActor: Received EAPOL-Start but enterprise not enabled");
                 return Ok(vec![]);
             }
-        };
-
-        let mut frames = Vec::new();
-        let src = ieee80211_frame.get_source();
-        log::info!("ApActor: EAPOL produced {} outputs for {}", outputs.len(), src);
-
-        for out in outputs {
-            match out {
-                crate::wpa_auth::WpaOutput::Frame(data) => {
-                    log::debug!("ApActor: Sending EAPOL response (len={})", data.len());
-                    let wrapped = self.wrap_eapol(ap, src, &data);
-                    frames.push(bytes::Bytes::from(wrapped));
-                }
-                crate::wpa_auth::WpaOutput::InstallKey { key_index, key, cipher } => {
-                    if key_index == 0 {
-                        log::info!("ApActor: Installing PTK for {} cipher={}", src, cipher);
-                        shared_keys.add_session(src, key);
-                    } else {
-                        log::info!("ApActor: Installing GTK idx={}", key_index);
+            // Start EAP
+            let mut auth = crate::eap_auth::EapAuthenticator::new(
+                ap.config.bssid,
+                ieee80211_frame.get_source(),
+            );
+            match auth.start() {
+                Ok(outputs) => {
+                    let mut frames = Vec::new();
+                    for out in outputs {
+                        if let crate::eap_auth::EapOutput::Frame(data) = out {
+                            frames.push(bytes::Bytes::from(self.wrap_eapol(
+                                ap,
+                                ieee80211_frame.get_source(),
+                                &data,
+                            )));
+                        }
                     }
+                    ap.eap_sessions.insert(ieee80211_frame.get_source(), auth);
+                    return Ok(frames);
+                }
+                Err(e) => {
+                    log::error!("ApActor: Failed to start EAP: {:?}", e);
+                    return Ok(vec![]);
                 }
             }
         }
-        Ok(frames)
+
+        // EAP-Packet (Type 0)
+        if eapol_type == 0 {
+            if let Some(auth) = ap.eap_sessions.get_mut(&ieee80211_frame.get_source()) {
+                // Skip EAPOL Header (4 bytes)
+                if payload.len() < 4 {
+                    return Ok(vec![]);
+                }
+                let eap_packet = &payload[4..];
+
+                match auth.handle_eap(eap_packet) {
+                    Ok(outputs) => {
+                        let mut frames = Vec::new();
+                        for out in outputs {
+                            match out {
+                                crate::eap_auth::EapOutput::Frame(data) => {
+                                    frames.push(bytes::Bytes::from(self.wrap_eapol(
+                                        ap,
+                                        ieee80211_frame.get_source(),
+                                        &data,
+                                    )));
+                                }
+                                crate::eap_auth::EapOutput::Success => {
+                                    log::info!("EAP: Success for {}", ieee80211_frame.get_source());
+                                    // TODO: Key Derivation / PMK setting?
+                                    // For now, we are Authenticated.
+                                }
+                                _ => {}
+                            }
+                        }
+                        return Ok(frames);
+                    }
+                    Err(e) => {
+                        log::warn!("EAP Error: {:?}", e);
+                        return Ok(vec![]);
+                    }
+                }
+            } else {
+                log::debug!("EAP Packet from unknown session {}", ieee80211_frame.get_source());
+                return Ok(vec![]);
+            }
+        }
+
+        // Key (Type 3) - WPA
+        if eapol_type == 3 {
+            let wpa = match &mut ap.wpa {
+                Some(wpa) => wpa,
+                None => {
+                    log::debug!("ApActor: Received EAPOL-Key but WPA not configured");
+                    return Ok(vec![]);
+                }
+            };
+
+            let outputs = match wpa.handle_eapol(payload) {
+                Ok(o) => o,
+                Err(_) => {
+                    log::warn!("ApActor: WPA handle_eapol failed");
+                    return Ok(vec![]);
+                }
+            };
+
+            let mut frames = Vec::new();
+            let src = ieee80211_frame.get_source();
+            log::info!("ApActor: EAPOL produced {} outputs for {}", outputs.len(), src);
+
+            for out in outputs {
+                match out {
+                    crate::wpa_auth::WpaOutput::Frame(data) => {
+                        log::debug!("ApActor: Sending EAPOL response (len={})", data.len());
+                        let wrapped = self.wrap_eapol(ap, src, &data);
+                        frames.push(bytes::Bytes::from(wrapped));
+                    }
+                    crate::wpa_auth::WpaOutput::InstallKey { key_index, key, cipher } => {
+                        // Key Install Logic
+                        log::info!("ApActor: Installing PTK.");
+                        if key_index == 0 {
+                            log::info!("ApActor: Installing PTK for {} cipher={}", src, cipher);
+                            shared_keys.add_session(src, key);
+                        }
+                    }
+                }
+            }
+            return Ok(frames);
+        }
+
+        Ok(vec![])
     }
 }

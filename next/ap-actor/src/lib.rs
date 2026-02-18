@@ -11,14 +11,17 @@ pub mod lifecycle;
 pub mod service;
 pub mod shared;
 
+pub mod eap_auth;
+pub mod ftm;
 pub mod rsn;
+pub mod sae;
 pub mod wpa_auth;
 
-pub use ap_actor::{ApActor, ApConfig, ApReq, ApResponse, ApState};
+use actor_framework::ResourceActor;
+pub use ap_actor::{ApActor, ApConfig, ApReq, ApResponse, ApState, ApUpdate};
 pub use ap_client::ApClient;
 pub use error::ApError;
-
-use actor_framework::ResourceActor;
+pub use netsim_model::{self, device::Position};
 
 /// Creates a new ApActor and returns the runner and a client.
 ///

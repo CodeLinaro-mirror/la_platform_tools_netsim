@@ -1,7 +1,9 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use ap_actor::ffi::{AesCcmEncrypt, AesUnwrap, AesWrap, DigestType, Hmac, RandBytes, Sha};
-use ap_actor::shared::SharedKeyStore;
+use ap_actor::{
+    ffi::{AesCcmEncrypt, AesUnwrap, AesWrap, DigestType, Hmac, RandBytes, Sha},
+    shared::SharedKeyStore,
+};
 use netsim_packets::ieee80211::{Ieee80211, MacAddress};
 
 #[test]
@@ -26,7 +28,8 @@ fn test_hmac_sha1() {
 #[test]
 fn test_sha256() {
     let data = b"abc".to_vec();
-    // SHA256("abc") = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+    // SHA256("abc") =
+    // ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
     let expected = vec![
         0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22,
         0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00,
@@ -77,14 +80,14 @@ fn test_crypto_interop_boringssl_encrypt_rust_decrypt() {
 
     // 3. Construct an Ieee80211 frame that SharedKeyStore expects
     //
-    // The SharedKeyStore implementation requires a specific Nonce construction to successfully decrypt:
-    // Nonce = Priority(0) || A2 || PN
+    // The SharedKeyStore implementation requires a specific Nonce construction to
+    // successfully decrypt: Nonce = Priority(0) || A2 || PN
     //
     // We choose A2 and PN such that they form a valid Nonce.
     //
     // A2 = 0x22...22
-    // PN = 0x010203040506 (big-endian bytes [01, 02, 03, 04, 05, 06] but treated as u64/LE depending on impl)
-    // We explicitly define PN bytes below.
+    // PN = 0x010203040506 (big-endian bytes [01, 02, 03, 04, 05, 06] but treated as
+    // u64/LE depending on impl) We explicitly define PN bytes below.
 
     let a2 = MacAddress::new([0x22; 6]);
     let pn5 = 0xFF;
@@ -122,7 +125,7 @@ fn test_crypto_interop_boringssl_encrypt_rust_decrypt() {
     let mut frame_bytes = Vec::new();
     // FC: Type=Data(2), Subtype=Data(0), ToDS=0, FromDS=1, Protected=1
     // Type/Subtype = 0x08 (Data)
-    // Flags = 0x42 (FromDS | Protected) -> wait, little endian encoding of FC?
+    // Flags = 0x42 (FromDS | Protected) -> Little endian encoding of FC?
     // FC is u16.
     // Byte 0: Version(2)|Type(2)|Subtype(4). b0000 1000 = 0x08.
     // Byte 1: ToDS(1)|FromDS(1)|MoreFrag...|Protected(1)|...

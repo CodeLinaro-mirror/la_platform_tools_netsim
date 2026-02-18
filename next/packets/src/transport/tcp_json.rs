@@ -2,8 +2,9 @@
 
 //! JSON serialization for TCP headers.
 
-use crate::transport::tcp::TcpHeader;
 use serde_json::{Map, Value};
+
+use crate::transport::tcp::TcpHeader;
 
 /// Converts a `TcpHeader` to a `serde_json::Map` mimicking `tshark` output.
 pub fn to_json(header: &TcpHeader) -> Map<String, Value> {

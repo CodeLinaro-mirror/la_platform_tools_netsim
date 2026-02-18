@@ -3,10 +3,8 @@ pub mod error;
 pub mod fake_modem_network;
 pub mod server;
 
-pub use server::CellRunner;
-pub use server::CellServer as Server;
-
 use netsim_model::chip::RadioChipClient;
+pub use server::{CellRunner, CellServer as Server};
 use tokio::sync::mpsc;
 
 /// Creates a new Cell server runner and its client.

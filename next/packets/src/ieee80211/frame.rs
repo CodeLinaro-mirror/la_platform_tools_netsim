@@ -6,12 +6,14 @@
 //! suitable for zero-copy parsing of raw wireless packets.
 //! It focuses on common frame types and their headers.
 
-use crate::ethernet::MacAddr;
-pub use crate::ethernet::MacAddr as MacAddress;
 use core::fmt;
 use std::str::FromStr;
+
 use zerocopy::byteorder::LittleEndian; // IEEE 802.11 fields are typically little-endian
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16};
+
+use crate::ethernet::MacAddr;
+pub use crate::ethernet::MacAddr as MacAddress;
 
 pub const CCMP_HDR_LEN: usize = 8;
 
@@ -21,7 +23,8 @@ pub fn parse_mac_address(s: &str) -> Result<MacAddress, String> {
 
 /// Represents the 2-byte Frame Control field in an 802.11 header.
 ///
-/// The Frame Control field is structured as follows (LSB to MSB for bits within a byte):
+/// The Frame Control field is structured as follows (LSB to MSB for bits within
+/// a byte):
 /// - Protocol Version (2 bits): Bits 0-1
 /// - Type (2 bits): Bits 2-3
 /// - Subtype (4 bits): Bits 4-7
@@ -36,7 +39,8 @@ pub fn parse_mac_address(s: &str) -> Result<MacAddress, String> {
 #[repr(C)]
 #[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Copy, Clone)]
 pub struct FrameControl {
-    /// The raw 2-byte value of the Frame Control field, stored in little-endian.
+    /// The raw 2-byte value of the Frame Control field, stored in
+    /// little-endian.
     pub field: U16<LittleEndian>,
 }
 
@@ -75,7 +79,8 @@ impl FrameControl {
         ((self.get() & fc_bits::TYPE_MASK) >> 2) as u8
     }
 
-    /// Frame Subtype (4 bits). Meaning depends on Frame Type. See `FrameSubtype` constants.
+    /// Frame Subtype (4 bits). Meaning depends on Frame Type. See
+    /// `FrameSubtype` constants.
     pub fn frame_subtype(&self) -> u8 {
         ((self.get() & fc_bits::SUBTYPE_MASK) >> 4) as u8
     }
@@ -389,6 +394,15 @@ impl From<DataSubType> for u8 {
     }
 }
 
+/// Direction of the frame for conversion from IEEE 802.3
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameDirection {
+    /// Uplink: From Generic Station to Access Point (ToDS=1, FromDS=0)
+    ToAp,
+    /// Downlink: From Access Point to Generic Station (ToDS=0, FromDS=1)
+    FromAp,
+}
+
 /// A generic wrapper for IEEE 802.11 frames, providing helper methods.
 #[derive(Debug, Clone)]
 pub struct Ieee80211 {
@@ -438,11 +452,18 @@ impl Ieee80211 {
         let fc = u16::from_le_bytes([self.bytes[0], self.bytes[1]]);
         let to_ds = (fc & 0x0100) != 0;
         let from_ds = (fc & 0x0200) != 0;
-        if to_ds && from_ds {
-            30
-        } else {
-            24
+        let mut len = if to_ds && from_ds { 30 } else { 24 };
+
+        // QoS Data check: Type Data (10) and Subtype has bit 3 (1000) set
+        // FC bits 2-3 are Type. FC bits 4-7 are Subtype.
+        // Type Data is 10 binary -> 0x0008 mask in u16?
+        // Byte 0: [Subtype 4][Type 2][Ver 2]
+        // Data Type: 10 binary -> bit 3 (0x08) set. Mask 0x0C.
+        // QoS Subtype: 1xxx binary -> bit 7 (0x80) set. Mask 0xF0.
+        if (fc & 0x000C) == 0x0008 && (fc & 0x0080) != 0 {
+            len += 2;
         }
+        len
     }
 
     pub fn get_nonce(&self, pn: &[u8]) -> [u8; 13] {
@@ -558,6 +579,17 @@ impl Ieee80211 {
         }
     }
 
+    pub fn set_destination(&mut self, addr: &MacAddress) {
+        let offset = if self.is_to_ds() {
+            16 // Addr3
+        } else {
+            4 // Addr1
+        };
+        if self.bytes.len() >= offset + 6 {
+            self.bytes[offset..offset + 6].copy_from_slice(&addr.bytes);
+        }
+    }
+
     pub fn get_source(&self) -> MacAddress {
         if self.is_from_ds() {
             if self.is_to_ds() {
@@ -619,6 +651,14 @@ impl Ieee80211 {
         }
     }
 
+    pub fn is_qos_data(&self) -> bool {
+        self.is_data() && (self.stype() & 0x8 != 0)
+    }
+
+    pub fn is_qos_nodata(&self) -> bool {
+        self.is_data() && self.stype() == DataSubType::QosNodata as u8
+    }
+
     pub fn decode_full(bytes: &[u8]) -> Result<Self, String> {
         Ok(Self { bytes: bytes.to_vec() })
     }
@@ -627,7 +667,11 @@ impl Ieee80211 {
         Ok(self.bytes.clone())
     }
 
-    pub fn from_ieee8023(packet: &[u8], bssid: MacAddress) -> Result<Self, String> {
+    pub fn from_ieee8023(
+        packet: &[u8],
+        bssid: MacAddress,
+        direction: FrameDirection,
+    ) -> Result<Self, String> {
         if packet.len() < 14 {
             return Err("Packet too short".into());
         }
@@ -637,19 +681,68 @@ impl Ieee80211 {
         let payload = &packet[14..];
 
         let mut new_packet = Vec::new();
-        new_packet.extend_from_slice(&0x0108u16.to_le_bytes());
-        new_packet.extend_from_slice(&0u16.to_le_bytes());
-        new_packet.extend_from_slice(&bssid.bytes);
-        new_packet.extend_from_slice(&src.bytes);
-        new_packet.extend_from_slice(&dst.bytes);
-        new_packet.extend_from_slice(&0u16.to_le_bytes());
+        // FC: Data (0x08)
+        // If FromAp (Downlink): ToDS=0, FromDS=1 (0x0200) -> 0x0208
+        // If ToAp (Uplink):     ToDS=1, FromDS=0 (0x0100) -> 0x0108
+        let fc: u16 = match direction {
+            FrameDirection::FromAp => 0x0208,
+            FrameDirection::ToAp => 0x0108,
+        };
+        new_packet.extend_from_slice(&fc.to_le_bytes());
+        new_packet.extend_from_slice(&0u16.to_le_bytes()); // Duration/ID
 
+        match direction {
+            FrameDirection::FromAp => {
+                // Downlink (AP -> STA):
+                // Addr1 (RA) = Destination (Client)
+                new_packet.extend_from_slice(&dst.bytes);
+                // Addr2 (TA) = BSSID (AP)
+                new_packet.extend_from_slice(&bssid.bytes);
+                // Addr3 (SA) = Source (Original Source)
+                new_packet.extend_from_slice(&src.bytes);
+            }
+            FrameDirection::ToAp => {
+                // Uplink/ToDS (STA -> AP):
+                // Addr1 (RA) = BSSID (AP)
+                new_packet.extend_from_slice(&bssid.bytes);
+                // Addr2 (TA) = Source (Client)
+                new_packet.extend_from_slice(&src.bytes);
+                // Addr3 (DA) = Destination
+                new_packet.extend_from_slice(&dst.bytes);
+            }
+        }
+
+        new_packet.extend_from_slice(&0u16.to_le_bytes()); // Sequence Control
+
+        // LLC/SNAP
         new_packet.extend_from_slice(&[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00]);
         new_packet.extend_from_slice(&ethertype);
 
         new_packet.extend_from_slice(payload);
 
         Ok(Self { bytes: new_packet })
+    }
+
+    pub fn to_ieee8023(&self) -> Result<Vec<u8>, String> {
+        let da = self.get_destination();
+        let sa = self.get_source();
+        let payload = self.get_payload();
+
+        // Check LLC/SNAP: AA AA 03 00 00 00
+        if payload.len() < 8 || payload[0..6] != [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00] {
+            return Err("Not LLC/SNAP encapsulated or unknown OUI".into());
+        }
+
+        // EtherType is at offset 6
+        let ethertype = &payload[6..8];
+        let data = &payload[8..];
+
+        let mut eth_frame = Vec::with_capacity(14 + data.len());
+        eth_frame.extend_from_slice(&da.bytes);
+        eth_frame.extend_from_slice(&sa.bytes);
+        eth_frame.extend_from_slice(ethertype);
+        eth_frame.extend_from_slice(data);
+        Ok(eth_frame)
     }
 
     pub fn into_from_ap(&self) -> Result<Ieee80211ToAp, String> {
@@ -752,11 +845,12 @@ impl TryFrom<Ieee80211ToAp> for Ieee80211 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::ieee80211::BeaconFrameHeader;
-    use crate::ieee80211::{data_subtype, frame_type, management_subtype};
     use core::mem::size_of;
+
     use zerocopy::Ref;
+
+    use super::*;
+    use crate::ieee80211::{data_subtype, frame_type, management_subtype, BeaconFrameHeader};
 
     #[test]
     fn test_struct_sizes() {
@@ -790,8 +884,10 @@ mod tests {
     fn test_frame_control_all_flags() {
         // All flags set, except protocol version (usually 0)
         // Type=MGMT (00), Subtype=Beacon (1000) -> 001000 = 0x20
-        // ToDS=1, FromDS=1, MoreFrag=1, Retry=1, PwrMgmt=1, MoreData=1, Protected=1, Order=1 -> 11111111 = 0xFF
-        // FC value: 0xFF80 (LSB: Type=MGMT 00, Subtype=Beacon 1000 => 10000000 = 0x80; MSB: All flags set => 11111111 = 0xFF)
+        // ToDS=1, FromDS=1, MoreFrag=1, Retry=1, PwrMgmt=1, MoreData=1, Protected=1,
+        // Order=1 -> 11111111 = 0xFF FC value: 0xFF80 (LSB: Type=MGMT 00,
+        // Subtype=Beacon 1000 => 10000000 = 0x80; MSB: All flags set => 11111111 =
+        // 0xFF)
         let fc_val: u16 = 0xFF80;
         let fc = FrameControl::new(fc_val);
         assert_eq!(fc.protocol_version(), 0);
@@ -869,5 +965,112 @@ mod tests {
         assert_eq!(header.sequence_control.get(), 0x0312); // Value as read
         assert_eq!(header.sequence_control.sequence_number(), 0x031); // 49
         assert_eq!(header.sequence_control.fragment_number(), 2);
+    }
+    #[test]
+    fn test_qos_data_parsing() {
+        // QoS Data Frame:
+        // Frame Control: 0x88 (Type=Data, Subtype=QoS Data)
+        // Flags: 0x01 (ToDS) -> 0x0188
+        // Duration: 0
+        // Addr1 (BSSID): 01:02:03:04:05:06
+        // Addr2 (SA): 11:12:13:14:15:16
+        // Addr3 (DA): 21:22:23:24:25:26
+        // Seq: 0
+        // QoS Control: 0x0000
+        // Payload: DEADBEEF
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&[0x88, 0x01]); // FC
+        bytes.extend_from_slice(&[0x00, 0x00]); // Duration
+        bytes.extend_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06]); // Addr1
+        bytes.extend_from_slice(&[0x11, 0x12, 0x13, 0x14, 0x15, 0x16]); // Addr2
+        bytes.extend_from_slice(&[0x21, 0x22, 0x23, 0x24, 0x25, 0x26]); // Addr3
+        bytes.extend_from_slice(&[0x00, 0x00]); // Seq
+        bytes.extend_from_slice(&[0x00, 0x00]); // QoS Control
+        bytes.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]); // Payload
+
+        let frame = Ieee80211::decode_full(&bytes).expect("Failed to decode QoS Data");
+
+        assert!(frame.is_qos_data());
+        assert_eq!(frame.get_payload(), vec![0xDE, 0xAD, 0xBE, 0xEF]);
+    }
+
+    #[test]
+    fn test_from_ieee8023_downlink() {
+        let payload = [0xde, 0xad, 0xbe, 0xef];
+        let mut eth_frame = Vec::new();
+        let dst = MacAddress::new([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+        let src = MacAddress::new([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]);
+        let bssid = MacAddress::new([0x02, 0x00, 0x00, 0x00, 0x01, 0x01]);
+
+        eth_frame.extend_from_slice(&dst.bytes);
+        eth_frame.extend_from_slice(&src.bytes);
+        eth_frame.extend_from_slice(&[0x08, 0x00]); // IPv4
+        eth_frame.extend_from_slice(&payload);
+
+        let frame = Ieee80211::from_ieee8023(&eth_frame, bssid, FrameDirection::FromAp)
+            .expect("Failed to convert");
+
+        // Verify Flags
+        // FC should be Data(2) | FromDS(1) -> 0x0208
+        // Little Endian: 08 02
+        assert_eq!(frame.bytes[0], 0x08);
+        assert_eq!(frame.bytes[1], 0x02);
+
+        assert!(frame.is_data());
+        assert!(!frame.is_to_ds());
+        assert!(frame.is_from_ds());
+
+        // Verify Addresses
+        assert_eq!(frame.get_destination(), dst);
+        assert_eq!(frame.get_source(), src);
+        assert_eq!(frame.get_bssid(), Some(bssid));
+
+        // Verify addresses locations manually to ensure order
+        // Addr1 (DA)
+        assert_eq!(&frame.bytes[4..10], dst.bytes);
+        // Addr2 (BSSID)
+        assert_eq!(&frame.bytes[10..16], bssid.bytes);
+        // Addr3 (SA)
+        assert_eq!(&frame.bytes[16..22], src.bytes);
+    }
+
+    #[test]
+    fn test_from_ieee8023_uplink() {
+        let payload = [0xde, 0xad, 0xbe, 0xef];
+        let mut eth_frame = Vec::new();
+        let dst = MacAddress::new([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+        let src = MacAddress::new([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]);
+        let bssid = MacAddress::new([0x02, 0x00, 0x00, 0x00, 0x01, 0x01]);
+
+        eth_frame.extend_from_slice(&dst.bytes);
+        eth_frame.extend_from_slice(&src.bytes);
+        eth_frame.extend_from_slice(&[0x08, 0x00]); // IPv4
+        eth_frame.extend_from_slice(&payload);
+
+        let frame = Ieee80211::from_ieee8023(&eth_frame, bssid, FrameDirection::ToAp)
+            .expect("Failed to convert");
+
+        // Verify Flags
+        // FC should be Data(2) | ToDS(1) -> 0x0108
+        // Little Endian: 08 01
+        assert_eq!(frame.bytes[0], 0x08);
+        assert_eq!(frame.bytes[1], 0x01);
+
+        assert!(frame.is_data());
+        assert!(frame.is_to_ds());
+        assert!(!frame.is_from_ds());
+
+        // Verify Addresses
+        assert_eq!(frame.get_destination(), dst);
+        assert_eq!(frame.get_source(), src);
+        assert_eq!(frame.get_bssid(), Some(bssid));
+
+        // Verify addresses locations manually to ensure order
+        // Addr1 (BSSID)
+        assert_eq!(&frame.bytes[4..10], bssid.bytes);
+        // Addr2 (SA)
+        assert_eq!(&frame.bytes[10..16], src.bytes);
+        // Addr3 (DA)
+        assert_eq!(&frame.bytes[16..22], dst.bytes);
     }
 }

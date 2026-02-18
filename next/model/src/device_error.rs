@@ -2,8 +2,9 @@
 
 //! This module defines the error types for the device service.
 
-use crate::chip_error::ChipError;
 use thiserror::Error;
+
+use crate::chip_error::ChipError;
 
 /// The error type for operations within the device service.
 #[derive(Error, Debug)]

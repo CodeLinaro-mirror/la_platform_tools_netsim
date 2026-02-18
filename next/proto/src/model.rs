@@ -3549,6 +3549,10 @@ pub struct Link {
     pub link_kind: ::protobuf::EnumOrUnknown<PhyKind>,
     // @@protoc_insertion_point(field:netsim.model.Link.rssi)
     pub rssi: i32,
+    // @@protoc_insertion_point(field:netsim.model.Link.kind)
+    pub kind: ::protobuf::EnumOrUnknown<super::common::ChipKind>,
+    // @@protoc_insertion_point(field:netsim.model.Link.id)
+    pub id: u32,
     // special fields
     // @@protoc_insertion_point(special_field:netsim.model.Link.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
@@ -3566,7 +3570,7 @@ impl Link {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(4);
+        let mut fields = ::std::vec::Vec::with_capacity(6);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
             "sender_id",
@@ -3587,6 +3591,16 @@ impl Link {
             "rssi",
             |m: &Link| { &m.rssi },
             |m: &mut Link| { &mut m.rssi },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "kind",
+            |m: &Link| { &m.kind },
+            |m: &mut Link| { &mut m.kind },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_simpler_field_accessor::<_, _>(
+            "id",
+            |m: &Link| { &m.id },
+            |m: &mut Link| { &mut m.id },
         ));
         ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<Link>(
             "Link",
@@ -3618,6 +3632,12 @@ impl ::protobuf::Message for Link {
                 32 => {
                     self.rssi = is.read_int32()?;
                 },
+                40 => {
+                    self.kind = is.read_enum_or_unknown()?;
+                },
+                48 => {
+                    self.id = is.read_uint32()?;
+                },
                 tag => {
                     ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
                 },
@@ -3642,6 +3662,12 @@ impl ::protobuf::Message for Link {
         if self.rssi != 0 {
             my_size += ::protobuf::rt::int32_size(4, self.rssi);
         }
+        if self.kind != ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED) {
+            my_size += ::protobuf::rt::int32_size(5, self.kind.value());
+        }
+        if self.id != 0 {
+            my_size += ::protobuf::rt::uint32_size(6, self.id);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
         self.special_fields.cached_size().set(my_size as u32);
         my_size
@@ -3659,6 +3685,12 @@ impl ::protobuf::Message for Link {
         }
         if self.rssi != 0 {
             os.write_int32(4, self.rssi)?;
+        }
+        if self.kind != ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED) {
+            os.write_enum(5, ::protobuf::EnumOrUnknown::value(&self.kind))?;
+        }
+        if self.id != 0 {
+            os.write_uint32(6, self.id)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -3681,6 +3713,8 @@ impl ::protobuf::Message for Link {
         self.receiver_id = 0;
         self.link_kind = ::protobuf::EnumOrUnknown::new(PhyKind::NONE);
         self.rssi = 0;
+        self.kind = ::protobuf::EnumOrUnknown::new(super::common::ChipKind::UNSPECIFIED);
+        self.id = 0;
         self.special_fields.clear();
     }
 
@@ -3690,6 +3724,8 @@ impl ::protobuf::Message for Link {
             receiver_id: 0,
             link_kind: ::protobuf::EnumOrUnknown::from_i32(0),
             rssi: 0,
+            kind: ::protobuf::EnumOrUnknown::from_i32(0),
+            id: 0,
             special_fields: ::protobuf::SpecialFields::new(),
         };
         &instance
@@ -3877,13 +3913,15 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x05R\x04size\x12\x18\n\x07records\x18\x06\x20\x01(\x05R\x07records\x128\
     \n\ttimestamp\x18\x07\x20\x01(\x0b2\x1a.google.protobuf.TimestampR\ttime\
     stamp\x12\x14\n\x05valid\x18\x08\x20\x01(\x08R\x05validB\x08\n\x06_state\
-    \"\x8c\x01\n\x04Link\x12\x1b\n\tsender_id\x18\x01\x20\x01(\rR\x08senderI\
-    d\x12\x1f\n\x0breceiver_id\x18\x02\x20\x01(\rR\nreceiverId\x122\n\tlink_\
-    kind\x18\x03\x20\x01(\x0e2\x15.netsim.model.PhyKindR\x08linkKind\x12\x12\
-    \n\x04rssi\x18\x04\x20\x01(\x05R\x04rssi*e\n\x07PhyKind\x12\x08\n\x04NON\
-    E\x10\0\x12\x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LO\
-    W_ENERGY\x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\
-    \x0c\n\x08WIFI_RTT\x10\x05b\x06proto3\
+    \"\xcd\x01\n\x04Link\x12\x1b\n\tsender_id\x18\x01\x20\x01(\rR\x08senderI\
+    d\x12\x1f\n\x0breceiver_id\x18\x02\x20\x01(\rR\nreceiverId\x126\n\tlink_\
+    kind\x18\x03\x20\x01(\x0e2\x15.netsim.model.PhyKindR\x08linkKindB\x02\
+    \x18\x01\x12\x12\n\x04rssi\x18\x04\x20\x01(\x05R\x04rssi\x12+\n\x04kind\
+    \x18\x05\x20\x01(\x0e2\x17.netsim.common.ChipKindR\x04kind\x12\x0e\n\x02\
+    id\x18\x06\x20\x01(\rR\x02id*e\n\x07PhyKind\x12\x08\n\x04NONE\x10\0\x12\
+    \x15\n\x11BLUETOOTH_CLASSIC\x10\x01\x12\x18\n\x14BLUETOOTH_LOW_ENERGY\
+    \x10\x02\x12\x08\n\x04WIFI\x10\x03\x12\x07\n\x03UWB\x10\x04\x12\x0c\n\
+    \x08WIFI_RTT\x10\x05b\x06proto3\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file

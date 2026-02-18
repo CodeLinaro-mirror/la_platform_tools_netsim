@@ -15,3 +15,9 @@ netsim_rust_library(
         "@protobuf-rust",
     ],
 )
+
+filegroup(
+    name = "proto_rs_srcs",
+    srcs = glob(["src/*.rs"]),
+    visibility = ["//visibility:public"],
+)

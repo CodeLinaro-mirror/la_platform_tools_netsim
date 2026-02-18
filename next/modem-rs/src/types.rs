@@ -1,6 +1,6 @@
+use std::{fmt, str};
+
 use nom::IResult;
-use std::fmt;
-use std::str;
 
 pub trait Parsable<'a>: Sized {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self>;
@@ -49,7 +49,8 @@ pub enum ModemError {
     DuplicateModemId(ModemId),
 }
 
-// Actions that a command can request to be executed by the CellularNetworkSimulator.
+// Actions that a command can request to be executed by the
+// CellularNetworkSimulator.
 #[derive(Debug, PartialEq)]
 pub enum CommandAction {
     InitiateCall(String),
@@ -119,7 +120,8 @@ pub trait NetworkCallbacks: Send + Sync {
 pub struct HandledCommand {
     /// The immediate response to send back to the client (e.g., "OK\r\n").
     pub responses: Vec<String>,
-    /// An optional follow-up action for the CellularNetworkSimulator to perform.
+    /// An optional follow-up action for the CellularNetworkSimulator to
+    /// perform.
     pub action: Option<CommandAction>,
 }
 
@@ -139,7 +141,8 @@ impl HandledCommand {
         Self { responses: vec!["ERROR\r\n".to_string()], action: None }
     }
 
-    /// Creates a result with a specific "+CME ERROR" response and no follow-up action.
+    /// Creates a result with a specific "+CME ERROR" response and no follow-up
+    /// action.
     pub fn cme_error(code: u32) -> Self {
         Self { responses: vec![format!("+CME ERROR: {}\r\n", code)], action: None }
     }
@@ -151,6 +154,7 @@ pub enum ExecutionResult {
     /// This covers both "OK" and "ERROR" responses.
     Handled(HandledCommand),
 
-    /// This command has not been refactored yet and should be handled by the legacy system.
+    /// This command has not been refactored yet and should be handled by the
+    /// legacy system.
     Unhandled,
 }

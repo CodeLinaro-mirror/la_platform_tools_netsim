@@ -4,10 +4,10 @@ edition = "2021"
 name = "netsim-proto"
 
 [dependencies]
-protobuf = "=3.7.2"
 grpcio = { version = "0.13.0", default-features = false, features = [
   "protobufv3-codec",
 ] }
+protobuf = "=3.7.2"
 
 [build-dependencies]
 protobuf = "=3.7.2"

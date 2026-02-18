@@ -1,13 +1,13 @@
 // src/data_service.rs
 
+use std::{collections::HashMap, sync::Mutex};
+
 use crate::{
     modem::ModemImpl,
     parser::{Command, QuotedString},
     traits::CommandExecutor,
     types::{ExecutionResult, HandledCommand, DEFAULT_IP_ADDRESS},
 };
-use std::collections::HashMap;
-use std::sync::Mutex;
 
 #[derive(Debug, Clone, Default)]
 pub struct Qos {

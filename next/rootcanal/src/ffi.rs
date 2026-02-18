@@ -9,8 +9,10 @@ pub type uint8_t = u8;
 /// A C-compatible size type.
 pub type size_t = usize;
 
-use std::option::Option;
-use std::os::raw::{c_char, c_int, c_void};
+use std::{
+    option::Option,
+    os::raw::{c_char, c_int, c_void},
+};
 
 extern "C" {
     /// Creates a new Bluetooth controller.

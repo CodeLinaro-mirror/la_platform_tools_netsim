@@ -1,19 +1,26 @@
-use crate::error::{PacketStreamError, Result};
-use crate::transport::traits::{PacketSink, PacketStream, TransportListener};
-use crate::types::StreamAddress;
+use std::{
+    collections::VecDeque,
+    fs::File as StdFile,
+    os::unix::io::OwnedFd,
+    pin::Pin,
+    task::{Context, Poll},
+};
+
 use async_trait::async_trait;
-use futures::stream::StreamExt;
-use futures::SinkExt;
+use futures::{stream::StreamExt, SinkExt};
 use netsim_model::initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
-use std::fs::File as StdFile;
-use std::os::unix::io::OwnedFd;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use tokio::fs::File;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::{
+    fs::File,
+    io::{AsyncRead, AsyncWrite, ReadBuf},
+};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+
+use crate::{
+    error::{PacketStreamError, Result},
+    transport::traits::{PacketSink, PacketStream, TransportListener},
+    types::StreamAddress,
+};
 
 struct DualFd {
     reader: File,

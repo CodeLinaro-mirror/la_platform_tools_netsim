@@ -2,17 +2,21 @@
 
 //! High-level Hwsim Frame wrapper.
 
-use crate::ethernet::MacAddr;
-use crate::ieee80211::Ieee80211;
-use crate::netlink::hwsim_attr_set::{HwsimAttrSet, HwsimError};
-use crate::netlink::mac80211_hwsim::{HwsimCmd, HwsimMsg};
-use crate::netlink::TxRate;
+use crate::{
+    ethernet::MacAddr,
+    ieee80211::Ieee80211,
+    netlink::{
+        hwsim_attr_set::{HwsimAttrSet, HwsimError},
+        mac80211_hwsim::{HwsimCmd, HwsimMsg},
+        TxRate,
+    },
+};
 
 /// Parser for the hwsim Frame command (HWSIM_CMD_FRAME).
 ///
 /// The Frame command is sent by the kernel's mac80211_hwsim subsystem
 /// and contains the IEEE 802.11 frame along with hwsim attributes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HwsimFrame {
     /// Transmitter MAC address.
     pub transmitter: Option<MacAddr>,

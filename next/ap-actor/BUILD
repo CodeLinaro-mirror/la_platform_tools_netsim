@@ -24,8 +24,6 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "ap_actor",
     edition = "2021",
-    enable_clippy = False,
-    enable_unit_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
@@ -41,6 +39,7 @@ netsim_rust_library(
         "@cxx.rs//:cxx",
         "@futures",
         "@log",
+        "@mockall",
         "@serde",
         "@thiserror",
         "@tokio",
@@ -74,13 +73,16 @@ cc_library(
 
 rust_test(
     name = "integration-test",
+    size = "small",
     srcs = glob(["tests/**/*.rs"]),
     crate_root = "tests/mod.rs",
     edition = "2021",
     deps = [
         ":testing",
         "//next/actor-framework:testing",
+        "//next/model",
         "//next/packets:testing",
+        "//next/testing",
         "@bytes",
         "@env_logger",
         "@futures",

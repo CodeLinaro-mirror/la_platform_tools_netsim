@@ -1,10 +1,14 @@
-use crate::chip::{ChipConfig, ChipId, PacketSink, PacketStream};
-use crate::client_error::ClientError;
-use crate::client_method;
-use crate::device_error::DeviceError;
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
+
+use crate::{
+    chip::{ChipConfig, ChipId, PacketSink, PacketStream},
+    client_error::ClientError,
+    client_method,
+    device_error::DeviceError,
+};
 
 // DEVICE SERVICE
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -97,15 +101,16 @@ client_method!(DeviceClient => fn update(update: api::DeviceUpdate) -> () as Dev
 client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
 client_method!(DeviceClient => fn reset() -> () as DeviceRequest::Reset);
 
-#[allow(dead_code)]
-pub struct GetVersionMessage {
-    response: oneshot::Sender<String>,
-}
-
 pub mod api {
-    use crate::chip::{BleBeacon, BluetoothCreate, CellCreate, UwbCreate, WifiCreate};
-    use crate::device::{Device, DeviceConfig, Orientation, Position};
     use serde::{Deserialize, Serialize};
+
+    use crate::{
+        chip::{
+            ApCreate, BleBeacon, BluetoothCreate, CellCreate, ChipConfig, UwbCreate, WifiCreate,
+            WifiMode,
+        },
+        device::{Device, DeviceConfig, Orientation, Position},
+    };
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
     pub struct ListDeviceResponse {
@@ -121,12 +126,53 @@ pub mod api {
         pub position: Option<Position>,
         pub orientation: Option<Orientation>,
         //TODO: pub links: Option<Vec<Link>,
+        pub chips: Option<Vec<crate::chip::ChipUpdate>>,
     }
 
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
     pub struct DeviceCreate {
         pub device_config: DeviceConfig,
         pub chip: DeviceChipCreate,
+    }
+
+    impl DeviceCreate {
+        pub fn default_ap(ssid_override: Option<String>) -> Self {
+            let name = ssid_override.unwrap_or_else(|| crate::ap::DEFAULT_WIFI_SSID.to_string());
+
+            let ap_create = ApCreate {
+                ssid: name.clone(),
+                bssid: "02:00:00:44:55:66".to_string(),
+                channel: 6,
+                hw_mode: WifiMode::G,
+                wpa_passphrase: None,
+                beacon_interval: 100,
+                country_code: None,
+                dtim_period: 2,
+                hidden_ssid: false,
+                sae: false,
+                wmm_enabled: true,
+                enterprise_enabled: false,
+                mac_acl_mode: 0,
+                mac_acl_list: vec![],
+                ftm_responder_enabled: true,
+            };
+
+            Self {
+                device_config: DeviceConfig {
+                    name,
+                    position: Default::default(),
+                    orientation: Default::default(),
+                    visible: false,
+                    builtin: true,
+                },
+                chip: DeviceChipCreate {
+                    name: "main-ap".to_string(),
+                    manufacturer: "Google".to_string(),
+                    product_name: "AccessPoint".to_string(),
+                    chip: Chip::Ap(ap_create),
+                },
+            }
+        }
     }
 
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -160,6 +206,7 @@ pub mod api {
         Wifi(WifiCreate),
         Uwb(UwbCreate),
         Cell(CellCreate),
+        Ap(ApCreate),
     }
 
     impl Default for Chip {
@@ -168,27 +215,28 @@ pub mod api {
         }
     }
 
-    impl From<crate::chip::NetworkParams> for Chip {
-        fn from(params: crate::chip::NetworkParams) -> Self {
+    impl From<crate::chip::ChipKindParams> for Chip {
+        fn from(params: crate::chip::ChipKindParams) -> Self {
             match params {
-                crate::chip::NetworkParams::Bluetooth(bt) => match bt.mode {
+                crate::chip::ChipKindParams::Bluetooth(bt) => match bt.mode {
                     crate::chip::BluetoothMode::Beacon(beacon_params) => {
                         Chip::Beacon(beacon_params.ble_beacon)
                     }
                     _ => Chip::Bluetooth(bt),
                 },
-                crate::chip::NetworkParams::Wifi(wifi) => Chip::Wifi(wifi),
-                crate::chip::NetworkParams::Uwb(uwb) => Chip::Uwb(uwb),
-                crate::chip::NetworkParams::Cell(cell) => Chip::Cell(cell),
+                crate::chip::ChipKindParams::Wifi(wifi) => Chip::Wifi(wifi),
+                crate::chip::ChipKindParams::Uwb(uwb) => Chip::Uwb(uwb),
+                crate::chip::ChipKindParams::Cell(cell) => Chip::Cell(cell),
+                crate::chip::ChipKindParams::Ap(ap) => Chip::Ap(ap),
             }
         }
     }
 
-    impl From<Chip> for crate::chip::NetworkParams {
+    impl From<Chip> for crate::chip::ChipKindParams {
         fn from(chip: Chip) -> Self {
             match chip {
                 Chip::Beacon(beacon) => {
-                    crate::chip::NetworkParams::Bluetooth(crate::chip::BluetoothCreate {
+                    crate::chip::ChipKindParams::Bluetooth(crate::chip::BluetoothCreate {
                         address: beacon.address.clone(),
                         bt_properties: Default::default(),
                         mode: crate::chip::BluetoothMode::Beacon(Box::new(
@@ -196,10 +244,33 @@ pub mod api {
                         )),
                     })
                 }
-                Chip::Bluetooth(bt) => crate::chip::NetworkParams::Bluetooth(bt),
-                Chip::Wifi(wifi) => crate::chip::NetworkParams::Wifi(wifi),
-                Chip::Uwb(uwb) => crate::chip::NetworkParams::Uwb(uwb),
-                Chip::Cell(cell) => crate::chip::NetworkParams::Cell(cell),
+                Chip::Bluetooth(bt) => crate::chip::ChipKindParams::Bluetooth(bt),
+                Chip::Wifi(wifi) => crate::chip::ChipKindParams::Wifi(wifi),
+                Chip::Uwb(uwb) => crate::chip::ChipKindParams::Uwb(uwb),
+                Chip::Cell(cell) => crate::chip::ChipKindParams::Cell(cell),
+                Chip::Ap(ap) => crate::chip::ChipKindParams::Ap(ap),
+            }
+        }
+    }
+
+    impl From<DeviceChipCreate> for ChipConfig {
+        fn from(create: DeviceChipCreate) -> Self {
+            ChipConfig {
+                name: create.name,
+                manufacturer: create.manufacturer,
+                product_name: create.product_name,
+                chip_kind_params: create.chip.into(),
+            }
+        }
+    }
+
+    impl From<ChipConfig> for DeviceChipCreate {
+        fn from(config: ChipConfig) -> Self {
+            DeviceChipCreate {
+                name: config.name,
+                manufacturer: config.manufacturer,
+                product_name: config.product_name,
+                chip: config.chip_kind_params.into(),
             }
         }
     }
@@ -212,6 +283,7 @@ pub struct Device {
     pub visible: bool,
     pub position: Position,
     pub orientation: Orientation,
+    pub builtin: bool,
     pub chips: Vec<crate::chip::Chip>,
 }
 
@@ -221,6 +293,7 @@ pub struct DeviceConfig {
     pub visible: bool,
     pub position: Position,
     pub orientation: Orientation,
+    pub builtin: bool,
 }
 
 impl DeviceConfig {
@@ -229,8 +302,9 @@ impl DeviceConfig {
         visible: bool,
         position: Position,
         orientation: Orientation,
+        builtin: bool,
     ) -> DeviceConfig {
-        DeviceConfig { name: name.into(), visible, position, orientation }
+        DeviceConfig { name: name.into(), visible, position, orientation, builtin }
     }
 }
 

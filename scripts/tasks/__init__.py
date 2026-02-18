@@ -18,8 +18,6 @@ import logging
 import platform
 from typing import Mapping
 
-from tasks.bazel_install_task import BazelInstallTask
-from tasks.bazel_task import BazelTask
 from tasks.compile_install_task import CompileInstallTask
 from tasks.compile_task import CompileTask
 from tasks.configure_task import ConfigureTask
@@ -28,11 +26,8 @@ from tasks.run_pytest_task import RunPyTestTask
 from tasks.run_test_task import RunTestTask
 from tasks.task import Task
 from tasks.zip_artifact_task import ZipArtifactTask
-from utils import is_bazel_build
 
 TASK_LIST = [
-    "Bazel",
-    "BazelInstall",
     "Configure",
     "Compile",
     "CompileInstall",
@@ -56,8 +51,6 @@ def get_tasks(args, env) -> Mapping[str, Task]:
 
   # Mapping of tasks
   tasks = {
-      "Bazel": BazelTask(args, env),
-      "BazelInstall": BazelInstallTask(args, env),
       "Configure": ConfigureTask(args, env),
       "Compile": CompileTask(args, env),
       "CompileInstall": CompileInstallTask(args, env),
@@ -69,25 +62,15 @@ def get_tasks(args, env) -> Mapping[str, Task]:
 
   # Enable all tasks for buidlbots
   if args.buildbot:
-    if args.bazel:
-      for task_name in [
-          "Bazel",
-          "BazelInstall",
-          "ZipArtifact",
-          "InstallEmulator",
-          "RunPyTest",
-      ]:
-        tasks[task_name].enable(True)
-    else:
-      for task_name in [
-          "Configure",
-          "CompileInstall",
-          "RunTest",
-          "ZipArtifact",
-          "InstallEmulator",
-          "RunPyTest",
-      ]:
-        tasks[task_name].enable(True)
+    for task_name in [
+        "Configure",
+        "CompileInstall",
+        "RunTest",
+        "ZipArtifact",
+        "InstallEmulator",
+        "RunPyTest",
+    ]:
+      tasks[task_name].enable(True)
     return tasks
 
   # Define the complete task map declaratively.
@@ -99,20 +82,14 @@ def get_tasks(args, env) -> Mapping[str, Task]:
       "zipartifact": ["ZipArtifact"],
       "installemulator": ["InstallEmulator"],
       "runpytest": ["RunPyTest"],
-      "bazel": ["Bazel"],
-      "bazelinstall": ["BazelInstall"],
       "fullbuild": ["Configure", "Compile", "InstallEmulator"],
-      "localrunall": (
-          ["Bazel", "BazelInstall", "InstallEmulator", "RunPyTest"]
-          if is_bazel_build(args)
-          else [
-              "Configure",
-              "Compile",
-              "RunTest",
-              "InstallEmulator",
-              "RunPyTest",
-          ]
-      ),
+      "localrunall": [
+          "Configure",
+          "CompileInstall",
+          "RunTest",
+          "InstallEmulator",
+          "RunPyTest",
+      ],
   }
 
   # Handle the default case and convert to a set for efficient lookup.

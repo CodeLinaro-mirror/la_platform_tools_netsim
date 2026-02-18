@@ -4,21 +4,25 @@
 //!
 //! This module provides a mechanism to ensure only one primary instance of the
 //! netsim daemon is running using a file-based lock (`netsim.ini.lock` managed
-//! by the `named_lock` crate). It also handles reading and writing configuration
-//! parameters (like PID and gRPC port) to the `netsim.ini` file, located in a
-//! platform-specific runtime directory.
+//! by the `named_lock` crate). It also handles reading and writing
+//! configuration parameters (like PID and gRPC port) to the `netsim.ini` file,
+//! located in a platform-specific runtime directory.
 //!
-//! The `IniFile::try_acquire` method is the main entry point, determining if the
-//! current process becomes the `Writer` (gets the lock, can write the INI file) or
-//! a `Reader` (another process holds the lock, can only read the INI file).
+//! The `IniFile::try_acquire` method is the main entry point, determining if
+//! the current process becomes the `Writer` (gets the lock, can write the INI
+//! file) or a `Reader` (another process holds the lock, can only read the INI
+//! file).
+
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::{self, BufWriter, Write},
+    path::PathBuf,
+    str::FromStr,
+};
 
 use log::warn;
 use named_lock::{NamedLock, NamedLockGuard};
-use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{self, BufWriter, Write};
-use std::path::PathBuf;
-use std::str::FromStr;
 
 // --- INI File Management ---
 
@@ -72,7 +76,8 @@ pub struct IniFileGuard {
 }
 
 impl IniFileGuard {
-    /// Writes the given `HashMap` to the INI file, overwriting any existing content.
+    /// Writes the given `HashMap` to the INI file, overwriting any existing
+    /// content.
     pub fn write(&self, data: &HashMap<String, String>) -> io::Result<()> {
         let file = File::create(&self.path)?;
         let mut writer = BufWriter::new(file);
@@ -108,7 +113,8 @@ pub enum IniFileAccess {
     Reader(NetsimConfig),
 }
 
-/// Manages the lifecycle of a lockable INI file used for daemon status and configuration.
+/// Manages the lifecycle of a lockable INI file used for daemon status and
+/// configuration.
 pub struct IniFile {
     path: PathBuf,
     lock: NamedLock,
@@ -121,7 +127,8 @@ impl IniFile {
         Self::new_for_dir(dir)
     }
 
-    /// Creates a new `IniFile` manager for an INI file in the specified directory.
+    /// Creates a new `IniFile` manager for an INI file in the specified
+    /// directory.
     pub fn new_for_dir(dir: PathBuf) -> io::Result<Self> {
         fs::create_dir_all(&dir)?;
         let path = dir.join(INI_FILENAME);
@@ -154,8 +161,9 @@ impl IniFile {
     }
 
     /// Reads the INI file, enforcing a strict key=value format.
-    /// Note: This is a simple parser. It does not handle keys or values containing
-    /// '=', quotes, or escape sequences. Comments start with '#' or ';'.
+    /// Note: This is a simple parser. It does not handle keys or values
+    /// containing '=', quotes, or escape sequences. Comments start with '#'
+    /// or ';'.
     fn read_shared(&self) -> io::Result<HashMap<String, String>> {
         println!("read_shared called for {}", self.path.display());
         let mut data = HashMap::new();
@@ -251,9 +259,9 @@ impl IniFile {
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::HashMap, fs};
+
     use super::*;
-    use std::collections::HashMap;
-    use std::fs;
 
     #[test]
     fn test_ini_file_owner_flow() {

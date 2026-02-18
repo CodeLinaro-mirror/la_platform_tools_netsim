@@ -6,8 +6,9 @@
 //   I want the device actor server to shut down when idle or when requested
 //   So that resources are released when not in use
 
-use crate::world::World;
 use std::time::Duration;
+
+use crate::world::World;
 
 // Scenario: Server shuts down after idle timeout
 //   Given a running Device Actor
@@ -49,13 +50,13 @@ async fn test_server_stays_alive_with_device() {
     let world = World::with_clients_and_timeout(
         chip_clients,
         link_client,
-        Some(Duration::from_millis(50)), // startup
-        Some(Duration::from_millis(50)), // idle
+        Some(Duration::from_millis(200)), // startup
+        Some(Duration::from_millis(50)),  // idle
     )
     .await;
 
-    // Create a device immediately
-    let _id = world.when_create_device("dev-1").await;
+    // Create a device with a Bluetooth chip (which counts as Active)
+    let _id = world.when_add_chip("guid-1", "chip-1").await;
 
     // Wait > timeouts
     tokio::time::sleep(Duration::from_millis(200)).await;
@@ -64,12 +65,11 @@ async fn test_server_stays_alive_with_device() {
 }
 
 // Scenario: Server shuts down after idle timeout when last device is removed
-//   Given a running Device Actor with idle timeout
+//   Given a running Device Actor
 //   When I create a device and then delete it
-//   And I wait for idle timeout
-//   Then the server shuts down automatically
+//   Then the server shuts down after the idle timeout
 #[tokio::test]
-async fn test_server_shutdown_after_last_device_removed() {
+async fn test_server_shuts_down_after_idle_timeout_when_last_device_removed() {
     let chip_clients = World::create_default_chip_clients();
     let link_client = crate::world::World::create_default_link_client();
 
@@ -81,13 +81,16 @@ async fn test_server_shutdown_after_last_device_removed() {
     )
     .await;
 
-    let device_id = world.when_create_device("dev-1").await;
+    let device_id = world.when_add_chip("guid-1", "chip-1").await;
 
-    // Delete device -> count goes to 0 -> idle timer starts
+    // Delete device -> count goes to 0 -> triggers idle timer
     world.when_delete_device(device_id).await;
 
-    // Wait > idle timeout
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Wait < idle timeout (e.g. 10ms)
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(!world.is_actor_finished(), "Server should NOT shut down immediately");
 
+    // Wait > idle timeout (e.g. +100ms)
+    tokio::time::sleep(Duration::from_millis(100)).await;
     assert!(world.is_actor_finished(), "Server should have shut down after idle timeout");
 }

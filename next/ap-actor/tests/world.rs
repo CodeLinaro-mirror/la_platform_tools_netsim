@@ -1,17 +1,20 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use actor_framework::ResourceActor;
-use ap_actor::{ApActor, ApClient, ApConfig};
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::{
-    AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader, FrameControl, Ieee80211,
-    MacHeader3Addr, SequenceControl,
-};
 use std::time::Duration;
+
+use actor_framework::ResourceActor;
+use ap_actor::{netsim_model::chip::WifiMode, shared::SharedKeyStore, ApActor, ApClient, ApConfig};
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
+        FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
+    },
+};
 use tokio::sync::mpsc;
 use zerocopy::{IntoBytes, Ref, U16};
 
-fn generate_random_mac() -> [u8; 6] {
+pub fn generate_random_mac() -> [u8; 6] {
     use rand::Rng;
     let mut rng = rand::rng();
     [0x02, 0x00, 0x00, 0x00, rng.random(), rng.random()]
@@ -23,28 +26,49 @@ pub struct ApWorld {
     pub rx_from_ap: Option<mpsc::UnboundedReceiver<bytes::Bytes>>,
     pub ap_id: Option<u32>,
     pub actor_handle: Option<tokio::task::JoinHandle<()>>,
+    pub next_ap_id: u32,
 }
 
 impl ApWorld {
     pub async fn new() -> Self {
-        let _ = env_logger::builder().try_init();
-        let ap_actor_impl = ApActor::new(None);
+        netsim_testing::logger::setup(None);
+        let ap_actor_impl = ApActor::new();
         let (runner, client_base) = ResourceActor::new(32);
         let client = ApClient::new(client_base);
 
         let handle = tokio::spawn(runner.run(ap_actor_impl));
 
-        Self { client, tx_to_ap: None, rx_from_ap: None, ap_id: None, actor_handle: Some(handle) }
+        Self {
+            client,
+            tx_to_ap: None,
+            rx_from_ap: None,
+            ap_id: None,
+            actor_handle: Some(handle),
+            next_ap_id: 1001,
+        }
     }
 
     pub async fn given_a_registered_ap_with_config(&mut self, config: ApConfig) {
         log::info!("Given a registered AP '{}'", config.ssid);
-        let id = self.client.create_ap(config).await.expect("Failed to create AP");
+        let id = self.next_ap_id;
+        self.next_ap_id += 1;
+        self.client.create_ap(id, config).await.expect("Failed to create AP");
         self.ap_id = Some(id);
+
         if self.tx_to_ap.is_none() {
-            let (tx_to_ap, rx_for_ap) = mpsc::unbounded_channel();
+            let (tx_to_ap, rx_for_ap) = mpsc::unbounded_channel::<bytes::Bytes>();
             let (tx_from_ap, rx_from_ap) = mpsc::unbounded_channel();
-            self.client.register(rx_for_ap, tx_from_ap).await.expect("Failed to register");
+
+            let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx_for_ap));
+            self.client
+                .register(
+                    stream,
+                    tx_from_ap,
+                    std::sync::Arc::new(SharedKeyStore::new()),
+                    Duration::from_millis(100),
+                )
+                .await
+                .expect("Failed to register");
             self.tx_to_ap = Some(tx_to_ap);
             self.rx_from_ap = Some(rx_from_ap);
         }
@@ -62,10 +86,20 @@ impl ApWorld {
             ssid: ssid.to_string(),
             bssid: MacAddr::new([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]),
             channel: 6,
-            hw_mode: "g".to_string(),
+            hw_mode: WifiMode::G,
 
             wpa_passphrase,
             beacon_interval: 100,
+            country_code: None,
+            dtim_period: 2,
+            hidden_ssid: false,
+            sae: false,
+            wmm_enabled: true,
+            enterprise_enabled: false,
+            mac_acl_mode: 0,
+            mac_acl_list: vec![],
+            ftm_responder_enabled: true,
+            position: ap_actor::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }
@@ -76,10 +110,20 @@ impl ApWorld {
             ssid: ssid.to_string(),
             bssid: MacAddr::new(generate_random_mac()),
             channel: 36,
-            hw_mode: "ax".to_string(),
+            hw_mode: WifiMode::Ax,
 
             wpa_passphrase: None,
             beacon_interval: 100,
+            country_code: None,
+            dtim_period: 2,
+            hidden_ssid: false,
+            sae: false,
+            wmm_enabled: true,
+            enterprise_enabled: false,
+            mac_acl_mode: 0,
+            mac_acl_list: vec![],
+            ftm_responder_enabled: true,
+            position: ap_actor::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }
@@ -181,9 +225,7 @@ impl ApWorld {
             match tokio::time::timeout(Duration::from_millis(200), rx.recv()).await {
                 Ok(Some(msg)) => {
                     if let Ok(frame) = Ieee80211::decode(&msg) {
-                        if frame.stype()
-                            == netsim_packets::ieee80211::management_subtype::ASSOCIATION_RESPONSE
-                        {
+                        if frame.stype() == management_subtype::ASSOCIATION_RESPONSE {
                             if frame.get_addr1() == dst_mac {
                                 // DA == Station
                                 return; // Success
@@ -235,5 +277,26 @@ impl ApWorld {
                 Err(_) => panic!("Actor did not shut down in time"),
             }
         }
+    }
+    pub async fn recv_frame<F>(&mut self, filter: F) -> Vec<u8>
+    where
+        F: Fn(&Ieee80211, &[u8]) -> bool,
+    {
+        let rx = self.rx_from_ap.as_mut().expect("AP not registered");
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_secs(2) {
+            let msg = match tokio::time::timeout(Duration::from_millis(200), rx.recv()).await {
+                Ok(Some(msg)) => msg,
+                _ => continue,
+            };
+
+            if let Ok(frame) = Ieee80211::decode(&msg) {
+                // Let the filter decide whether to accept the frame (including Beacons)
+                if filter(&frame, &msg) {
+                    return msg.to_vec();
+                }
+            }
+        }
+        panic!("Timed out waiting for frame");
     }
 }

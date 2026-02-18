@@ -49,11 +49,15 @@ pub fn create_radiotap_packet(frame: &HwsimFrame) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ethernet::MacAddr;
-    use crate::ieee80211::Ieee80211;
-    use crate::netlink::hwsim_attr_set::HwsimAttrSet;
-    use crate::netlink::mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr};
-    use crate::netlink::TxRate;
+    use crate::{
+        ethernet::MacAddr,
+        ieee80211::Ieee80211,
+        netlink::{
+            hwsim_attr_set::HwsimAttrSet,
+            mac80211_hwsim::{HwsimCmd, HwsimMsg, HwsimMsgHdr},
+            TxRate,
+        },
+    };
 
     #[test]
     fn test_create_radiotap_packet() {

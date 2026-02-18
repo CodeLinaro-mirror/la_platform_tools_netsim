@@ -41,8 +41,6 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "packet_stream",
     edition = "2021",
-    # failing on macos
-    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
         "@serde_derive",

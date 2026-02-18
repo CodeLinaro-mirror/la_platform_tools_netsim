@@ -18,9 +18,10 @@
 //! Uses the env_logger crate that allows control of logging through
 //! the RUST_LOG environment variable.
 
+use std::{io::Write, path::Path};
+
 use env_logger::{Builder, Env};
 use log::{Level, Record};
-use std::{io::Write, path::Path};
 
 use crate::util::time_display::log_current_time;
 

@@ -1,8 +1,8 @@
 // modem-rs/src/controller.rs
+use std::{fmt, sync::Arc};
+
 use bytes::Bytes;
 use netsim_model::chip::{Chip, ChipId};
-use std::fmt;
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum ModemError {
@@ -21,7 +21,8 @@ impl fmt::Display for ModemError {
     }
 }
 
-// Callbacks that the CellularController will call into for events for a specific ChipId
+// Callbacks that the CellularController will call into for events for a
+// specific ChipId
 pub trait ModemCallbacks: Send + Sync {
     fn on_data_received(&self, data: Bytes);
     fn on_event(&self, event: String);

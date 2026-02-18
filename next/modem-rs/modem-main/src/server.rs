@@ -1,7 +1,7 @@
 //! # Modem Simulator Server Logic
 //!
-//! This module implements the "server" personality of the `modem_simulator` binary.
-//! See the project `README.md` for a full architectural overview.
+//! This module implements the "server" personality of the `modem_simulator`
+//! binary. See the project `README.md` for a full architectural overview.
 //!
 //! This module's responsibilities include:
 //! - Daemonizing the server process.
@@ -11,17 +11,20 @@
 //! - Processing AT commands from clients.
 //! - Cleaning up all resources when a client disconnects.
 
-use crate::{ClientWriter, ServerCallbacks, PID_FILE, SERVER_LOG_FILE, TCP_PORT};
+use std::{collections::HashMap, sync::Arc};
+
 use daemonize::Daemonize;
 use log::{error, info};
 use modem_rs::{time::SystemClock, Callbacks, CellularNetworkSimulator, ModemId, NetworkCallbacks};
 use serde::Serialize;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    net::{TcpListener, TcpStream},
+    sync::Mutex,
+};
 use url::Url;
+
+use crate::{ClientWriter, ServerCallbacks, PID_FILE, SERVER_LOG_FILE, TCP_PORT};
 
 impl Callbacks for ServerCallbacks {
     fn send_at_response(&self, modem_id: ModemId, response: &[u8]) {

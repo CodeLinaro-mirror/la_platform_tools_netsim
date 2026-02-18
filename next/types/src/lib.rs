@@ -1,8 +1,8 @@
 //! Netsim Common Types
 //!
-//! This crate contains common, low-level data structures used across Netsim crates.
-//! By separating these types into their own crate, we avoid circular dependencies
-//! and reduce compilation times.
+//! This crate contains common, low-level data structures used across Netsim
+//! crates. By separating these types into their own crate, we avoid circular
+//! dependencies and reduce compilation times.
 //!
 //! Major types included:
 //! - `ChipInfo`: Information about a chip and its device.
@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 
 /// Information about the chip and device provided during connection setup.
 ///
-/// This struct is used during the handshake phase to identify the connecting chip
-/// and its parent device.
+/// This struct is used during the handshake phase to identify the connecting
+/// chip and its parent device.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChipInfo {
     /// The name of the chip (e.g., "bt-main").
@@ -98,4 +98,5 @@ pub enum ChipKind {
     WIFI,
     UWB,
     CELL,
+    AP,
 }

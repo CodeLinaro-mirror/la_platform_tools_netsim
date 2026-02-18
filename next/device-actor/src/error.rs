@@ -3,8 +3,8 @@
 //! Device Errors
 //!
 //! This module defines the error types specific to the Device actor and client.
-//! These errors cover issues arising from actor communication, invalid arguments,
-//! and other device-specific failure modes.
+//! These errors cover issues arising from actor communication, invalid
+//! arguments, and other device-specific failure modes.
 
 use thiserror::Error;
 
@@ -16,6 +16,8 @@ pub enum DeviceError {
     DeviceNotFound(String),
     #[error("Actor communication error: {0}")]
     ActorCommunicationError(String),
+    #[error("Chip kind not supported: {0}")]
+    ChipKindNotSupported(String),
 }
 
 impl From<String> for DeviceError {

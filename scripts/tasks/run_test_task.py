@@ -18,7 +18,15 @@ from pathlib import Path
 import platform
 
 from tasks.task import Task
-from utils import (AOSP_ROOT, run, rust_version)
+from utils import (
+    AOSP_ROOT,
+    get_bazel_build_configs,
+    get_bazel_path,
+    get_bazel_startup_options,
+    get_bazel_targets,
+    run,
+    rust_version,
+)
 
 PLATFORM_SYSTEM = platform.system()
 ALL_PACKAGES = [
@@ -37,12 +45,33 @@ class RunTestTask(Task):
 
   def __init__(self, args, env):
     super().__init__("RunTest")
+    self.args = args
     self.buildbot = args.buildbot
     self.out = Path(args.out_dir)
     self.crate = args.crate
     self.env = env
 
   def do_run(self):
+    if not self.args.cmake:
+      # Bazel Test
+      bazel = get_bazel_path()
+      build_configs = get_bazel_build_configs(self.args, self.env)
+      startup_options = get_bazel_startup_options(self.env)
+      targets = get_bazel_targets(self.args)
+
+      run(
+          [bazel]
+          + startup_options
+          + ["test"]
+          + targets
+          + build_configs
+          + ["--test_output=streamed"],
+          self.env,
+          "bazel test",
+          AOSP_ROOT,
+      )
+      return True
+
     # TODO(b/379745416): Support clippy for Mac and Windows
     if PLATFORM_SYSTEM == "Linux":
 

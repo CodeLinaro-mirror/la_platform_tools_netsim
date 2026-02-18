@@ -1,7 +1,10 @@
-use crate::slirp_actor::{SlirpActor, SlirpReq};
 use actor_framework::ResourceClient;
-use netsim_model::chip::{PacketSink, PacketStream};
-use netsim_model::client_error::ClientError;
+use netsim_model::{
+    chip::{PacketSink, PacketStream},
+    client_error::ClientError,
+};
+
+use crate::slirp_actor::{SlirpActor, SlirpReq};
 
 #[derive(Clone, Debug)]
 pub struct SlirpClient {
@@ -29,14 +32,19 @@ impl SlirpClient {
         let _ = self.client.perform_action(None, SlirpReq::SendPacket(packet)).await;
     }
 
-    pub async fn register_sink(
+    pub async fn register(
         &self,
-        tx: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
+        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
+        sink: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
     ) -> Result<(), ClientError> {
         self.client
-            .perform_action(None, SlirpReq::RegisterSink(tx))
+            .perform_action(None, SlirpReq::Register { stream, sink })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
         Ok(())
+    }
+
+    pub async fn shutdown(&self) -> Result<(), ClientError> {
+        self.client.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 }

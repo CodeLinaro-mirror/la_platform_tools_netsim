@@ -6,9 +6,11 @@
 use bytes::Bytes;
 use futures::SinkExt;
 use packet_stream::{Chip, ChipInfo, ChipKind, DeviceInfo, Streams, TransportType};
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpStream;
-use tokio::time::{timeout, Duration};
+use tokio::{
+    io::AsyncWriteExt,
+    net::TcpStream,
+    time::{timeout, Duration},
+};
 
 /// Helper to create test chip info
 fn create_test_chip_info() -> ChipInfo {

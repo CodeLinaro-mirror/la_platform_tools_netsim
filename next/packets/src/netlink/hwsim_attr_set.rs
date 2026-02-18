@@ -2,11 +2,14 @@
 
 //! Hwsim attributes parsing and building.
 
-use crate::ethernet::MacAddr;
-use crate::netlink::NlAttrHdr;
-use crate::netlink::{mac80211_hwsim, HwsimAttrEnum, TxRate, TxRateFlag};
 use std::fmt;
+
 use zerocopy::IntoBytes;
+
+use crate::{
+    ethernet::MacAddr,
+    netlink::{mac80211_hwsim, HwsimAttrEnum, NlAttrHdr, TxRate, TxRateFlag},
+};
 
 /// Error type for Hwsim attribute parsing.
 #[derive(Debug)]
@@ -54,7 +57,7 @@ pub struct HwsimAttrSetBuilder {
 }
 
 /// Set of parsed Hwsim attributes.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HwsimAttrSet {
     /// Transmitter MAC address.
     pub transmitter: Option<MacAddr>,

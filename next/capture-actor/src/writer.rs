@@ -1,19 +1,23 @@
 //! # Capture Writers
 //!
-//! This module provides traits and implementations for writing packet captures to files.
-//! Currently supports PCAP format with Bluetooth H4 encapsulation.
+//! This module provides traits and implementations for writing packet captures
+//! to files. Currently supports PCAP format with Bluetooth H4 encapsulation.
+
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+    path::Path,
+    time::SystemTime,
+};
 
 use anyhow::Result;
 use capture_api::Direction;
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::path::Path;
-use std::time::SystemTime;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 /// Trait for writing packet captures.
 ///
-/// Implementations of this trait handle the actual writing of packets to a specific format.
+/// Implementations of this trait handle the actual writing of packets to a
+/// specific format.
 pub trait CaptureWriter: Send + Sync {
     /// Writes a packet to the capture.
     ///

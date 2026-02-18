@@ -1,9 +1,17 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::world::ApWorld;
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::frame::{FrameControl, MacHeader3Addr, SequenceControl};
+use ap_actor::netsim_model::chip::WifiMode;
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        frame::{FrameControl, MacHeader3Addr, SequenceControl},
+        management_subtype,
+    },
+};
+use tokio;
 use zerocopy::IntoBytes;
+
+use crate::world::ApWorld;
 
 // ============================================================================
 // Feature: Wireless Network Visibility (Beacons)
@@ -61,6 +69,7 @@ async fn test_wifi6_beacon() {
     // When
     world.given_a_wifi6_ap("WiFi6_AP").await;
 
+    // Verify HE Element
     // Verify HE Element
     let rx = world.rx_from_ap.as_mut().expect("AP registered");
     let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
@@ -135,8 +144,7 @@ async fn test_create_two_aps() {
 async fn test_probe_response() {
     log::info!("Scenario: Active Discovery (Probe Response) - Generic/Wildcard");
     let mut world = ApWorld::new().await;
-    log::info!("Given a registered AP 'ProbeAP'"); // Keep this for now or remove? User said "Given" printed by helper.
-                                                   // Wait, given_a_registered_ap prints "Given ...".
+    log::info!("Given a registered AP 'ProbeAP'");
     world.given_a_registered_ap("ProbeAP").await;
 
     // Station sends Probe Req
@@ -158,16 +166,13 @@ async fn test_probe_response() {
     let mut frame = Vec::new();
     frame.extend_from_slice(header.as_bytes());
     // Body can be empty for our lax parser (Wildcard behavior)
-
+    let src_id = netsim_model::chip::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     // Verify Response
     log::info!("Then the AP responds with a Probe Response");
-    let rx = world.rx_from_ap.as_mut().expect("AP registered");
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout")
-        .expect("Stream closed");
+    let msg =
+        world.recv_frame(|frame, _| frame.stype() == management_subtype::PROBE_RESPONSE).await;
 
     // Check if it is Probe Response (0x50)
     // 0x50 = Mgmt(00) + Subtype(0101) = 5.
@@ -207,14 +212,12 @@ async fn test_probe_response_ssid_match() {
     frame.push(7);
     frame.extend_from_slice(b"MatchAP");
 
+    let src_id = netsim_model::chip::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     log::info!("Then the AP responds with a Probe Response");
-    let rx = world.rx_from_ap.as_mut().expect("AP registered");
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
-        .await
-        .expect("Timeout")
-        .expect("Stream closed");
+    let msg =
+        world.recv_frame(|frame, _| frame.stype() == management_subtype::PROBE_RESPONSE).await;
     assert_eq!(msg[0], 0x50);
 }
 
@@ -247,20 +250,27 @@ async fn test_probe_response_ssid_mismatch() {
     frame.push(7);
     frame.extend_from_slice(b"OtherAP");
 
+    let src_id = netsim_model::chip::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     log::info!("Then the AP does NOT respond (ignores request)"); // No helper call
     let rx = world.rx_from_ap.as_mut().expect("AP registered");
 
     // Logic: We might receive Beacons!
-    // We need to filter out Beacons (0x80) and ensure NO Probe Resp (0x50) is received.
+    // We need to filter out Beacons (0x80) and ensure NO Probe Resp (0x50) is
+    // received.
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(1) {
         if let Ok(Some(msg)) =
-            tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await
+            tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if msg[0] == 0x50 {
-                panic!("Received Probe Response for mismatched SSID!");
+            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+                if f.stype() == management_subtype::BEACON {
+                    continue;
+                }
+                if f.stype() == management_subtype::PROBE_RESPONSE {
+                    panic!("Received Probe Response for mismatched SSID!");
+                }
             }
         }
     }
@@ -299,6 +309,7 @@ async fn test_probe_response_bssid_mismatch() {
     frame.push(10);
     frame.extend_from_slice(b"SpecificAP");
 
+    let src_id = netsim_model::chip::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     log::info!("Then the AP does NOT respond");
@@ -307,11 +318,267 @@ async fn test_probe_response_bssid_mismatch() {
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(1) {
         if let Ok(Some(msg)) =
-            tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await
+            tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
         {
-            if msg[0] == 0x50 {
-                panic!("Received Probe Response for mismatched BSSID!");
+            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+                if f.stype() == management_subtype::BEACON {
+                    continue;
+                }
+                if f.stype() == management_subtype::PROBE_RESPONSE {
+                    panic!("Received Probe Response for mismatched BSSID!");
+                }
             }
         }
     }
+}
+// Scenario: Create AP with Country Code and Verify TIM
+// Given an AP configured with Country Code "US" and DTIM Period 3
+// When a beacon is received
+// Then the beacon contains a Country IE for "US"
+// And the beacon contains a TIM IE with DTIM Count 0 and DTIM Period 3
+#[tokio::test]
+async fn test_create_ap_with_country_and_tim() {
+    log::info!("Scenario: Create AP with Country and TIM");
+    let mut world = ApWorld::new().await;
+
+    let config = ap_actor::ApConfig {
+        ssid: "CountryAP".to_string(),
+        bssid: "02:00:00:00:01:00".parse().unwrap(),
+        channel: 6,
+        hw_mode: WifiMode::G,
+        wpa_passphrase: None,
+        beacon_interval: 100,
+        country_code: Some("US".to_string()),
+        dtim_period: 3,
+        hidden_ssid: false,
+        sae: false,
+        wmm_enabled: true,
+        enterprise_enabled: false,
+        mac_acl_mode: 0,
+        mac_acl_list: vec![],
+        ftm_responder_enabled: true,
+        position: ap_actor::Position::default(),
+    };
+
+    world.given_a_registered_ap_with_config(config).await;
+
+    // Verify Beacons
+    let rx = world.rx_from_ap.as_mut().expect("client registered");
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+        .await
+        .expect("Timeout")
+        .expect("Beacon");
+
+    // Check for Country IE (Tag 7) and TIM IE (Tag 5)
+    let mut offset = 36; // Skip Header (24) + Fixed Params (12)
+    let mut found_country = false;
+    let mut found_tim = false;
+
+    while offset < msg.len() {
+        if offset + 1 >= msg.len() {
+            break;
+        }
+        let id = msg[offset];
+        let len = msg[offset + 1] as usize;
+        if offset + 2 + len > msg.len() {
+            break;
+        }
+        let body = &msg[offset + 2..offset + 2 + len];
+
+        if id == 7 {
+            // Country
+            found_country = true;
+            assert!(body.starts_with(b"US"));
+            assert_eq!(body[2], 1); // First Channel
+            assert_eq!(body[3], 13); // Num Channels
+            assert_eq!(body[4], 20); // Max Power
+        } else if id == 5 {
+            // TIM
+            found_tim = true;
+            assert_eq!(body[0], 0); // DTIM Count
+            assert_eq!(body[1], 3); // DTIM Period
+            assert_eq!(body[2], 0); // Bitmap Ctrl
+            assert_eq!(body[3], 0); // Partial Virtual Bitmap
+        }
+
+        offset += 2 + len;
+    }
+    assert!(found_country, "Beacon missing Country IE");
+    assert!(found_tim, "Beacon missing TIM IE");
+}
+
+#[tokio::test]
+async fn test_hidden_ssid() {
+    log::info!("Scenario: Hidden SSID");
+    let mut world = ApWorld::new().await;
+
+    let config = ap_actor::ApConfig {
+        ssid: "HiddenAP".to_string(),
+        bssid: "02:00:00:00:00:99".parse().unwrap(),
+        channel: 6,
+        hw_mode: WifiMode::G,
+        wpa_passphrase: None,
+        beacon_interval: 100,
+        country_code: None,
+        dtim_period: 2,
+        hidden_ssid: true,
+        sae: false,
+        wmm_enabled: true,
+        enterprise_enabled: false,
+        mac_acl_mode: 0,
+        mac_acl_list: vec![],
+        ftm_responder_enabled: true,
+        position: ap_actor::Position::default(),
+    };
+
+    world.given_a_registered_ap_with_config(config).await;
+
+    // 1. Verify Beacon has Empty SSID
+    let rx = world.rx_from_ap.as_mut().expect("client registered");
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+        .await
+        .expect("Timeout")
+        .expect("Beacon");
+
+    // SSID IE is Tag 0.
+    // Parse to find Tag 0 and check len.
+    let mut offset = 36;
+    let mut found_ssid = false;
+    while offset < msg.len() {
+        if offset + 1 >= msg.len() {
+            break;
+        }
+        let id = msg[offset];
+        let len = msg[offset + 1] as usize;
+        if offset + 2 + len > msg.len() {
+            break;
+        }
+
+        if id == 0 {
+            found_ssid = true;
+            assert_eq!(len, 0, "Hidden network beacon should have empty SSID");
+        }
+        offset += 2 + len;
+    }
+    assert!(found_ssid, "Beacon missing SSID IE");
+
+    // 2. Wildcard Probe Request -> Should be IGNORED
+    let tx = world.tx_to_ap.as_mut().expect("AP registered");
+    let station_mac: MacAddr = "02:00:00:00:11:11".try_into().unwrap();
+
+    let header = MacHeader3Addr::new(
+        FrameControl::new(0x0040), // Probe Req
+        0,
+        MacAddr::BROADCAST,
+        station_mac,
+        MacAddr::BROADCAST,
+        SequenceControl::new(0),
+    );
+    let mut frame = Vec::new();
+    frame.extend_from_slice(header.as_bytes());
+    // Wildcard SSID (Len 0)
+    frame.push(0);
+    frame.push(0);
+
+    let src_id = netsim_model::chip::ChipId(123);
+    tx.send(bytes::Bytes::from(frame)).expect("Send Wildcard Probe");
+
+    // Drain rx for a moment to ensure NO Probe Resp (0x50)
+    let start = std::time::Instant::now();
+    while start.elapsed() < std::time::Duration::from_millis(500) {
+        if let Ok(Some(msg)) =
+            tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
+        {
+            if let Ok(f) = netsim_packets::ieee80211::Ieee80211::decode(&msg) {
+                if f.stype() == management_subtype::BEACON {
+                    continue;
+                }
+                if f.stype() == management_subtype::PROBE_RESPONSE {
+                    panic!("Received Probe Response for Wildcard Probe on Hidden Network!");
+                }
+            }
+        }
+    }
+
+    // 3. Specific Probe Request -> Should be ANSWERED
+    let mut frame2 = Vec::new();
+    frame2.extend_from_slice(header.as_bytes());
+    // SSID "HiddenAP"
+    frame2.push(0);
+    frame2.push(8);
+    frame2.extend_from_slice(b"HiddenAP");
+
+    tx.send(bytes::Bytes::from(frame2)).expect("Send Specific Probe");
+
+    let resp =
+        world.recv_frame(|frame, _| frame.stype() == management_subtype::PROBE_RESPONSE).await;
+
+    assert_eq!(resp[0], 0x50, "Expected Probe Response");
+}
+
+#[tokio::test]
+async fn test_wmm_ie_presence() {
+    log::info!("Scenario: WMM IE Presence");
+    let mut world = ApWorld::new().await;
+
+    let config = ap_actor::ApConfig {
+        ssid: "WmmAP".to_string(),
+        bssid: "02:00:00:00:00:10".parse().unwrap(),
+        channel: 36,
+        hw_mode: WifiMode::Ax, // WiFi 6 implies WMM
+        wpa_passphrase: None,
+        beacon_interval: 100,
+        country_code: None,
+        dtim_period: 2,
+        hidden_ssid: false,
+        sae: false,
+        wmm_enabled: true,
+        enterprise_enabled: false,
+        mac_acl_mode: 0,
+        mac_acl_list: vec![],
+        ftm_responder_enabled: true,
+        position: ap_actor::Position::default(),
+    };
+
+    world.given_a_registered_ap_with_config(config).await;
+
+    // Verify Beacon
+    let rx = world.rx_from_ap.as_mut().expect("client registered");
+    let msg = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
+        .await
+        .expect("Timeout")
+        .expect("Beacon");
+
+    // Check for WMM Vendor Specific IE (OUI 00:50:f2, Type 2)
+    let mut offset = 36;
+    let mut found_wmm = false;
+
+    while offset < msg.len() {
+        if offset + 1 >= msg.len() {
+            break;
+        }
+        let id = msg[offset];
+        let len = msg[offset + 1] as usize;
+        if offset + 2 + len > msg.len() {
+            break;
+        }
+        let body = &msg[offset + 2..offset + 2 + len];
+
+        if id == 221 {
+            // Vendor Specific
+            if body.len() >= 6
+                && body[0] == 0x00
+                && body[1] == 0x50
+                && body[2] == 0xf2
+                && body[3] == 2
+            {
+                found_wmm = true;
+                // Verify Subtype and Version
+                assert_eq!(body[4], 1, "WMM Subtype should be 1"); // OUI Subtype
+                assert_eq!(body[5], 1, "WMM Version should be 1"); // Version
+            }
+        }
+        offset += 2 + len;
+    }
+    assert!(found_wmm, "Beacon missing WMM IE");
 }

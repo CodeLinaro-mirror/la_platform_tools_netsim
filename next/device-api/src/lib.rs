@@ -9,17 +9,22 @@
 //!
 //! The device service is structured as follows:
 //!
-//! - **`netsim-model`**: Remains the base layer for data models (e.g., `Device`, `Chip`, `Position`). It does not depend on `device-api`.
+//! - **`netsim-model`**: Remains the base layer for data models (e.g.,
+//!   `Device`, `Chip`, `Position`). It does not depend on `device-api`.
 //! - **`device-api`**: Defines the behavioral contract for the device service.
 //!     - Depends on: `netsim-model`
-//!     - Contains: `DeviceAction` (enum of supported operations), `DeviceActionResult`, and re-exports of relevant models from `netsim-model` for convenience.
+//!     - Contains: `DeviceAction` (enum of supported operations),
+//!       `DeviceActionResult`, and re-exports of relevant models from
+//!       `netsim-model` for convenience.
 //! - **`device-actor`**: Implements the device service.
 //!     - Depends on: `device-api`, `netsim-model`, and other service crates.
 //!     - Implements the handling logic for `DeviceAction`.
-//! - **`netsim-client`**: Provides a client-side wrapper for the device service.
+//! - **`netsim-client`**: Provides a client-side wrapper for the device
+//!   service.
 //!     - Depends on: `device-api`, `netsim-model`.
 //! - **Consumer Crates** (e.g., `wifi`, `cell`, `bluetooth`):
-//!     - Depend on: `device-api`, `netsim-client` (and `netsim-model` if needed).
+//!     - Depend on: `device-api`, `netsim-client` (and `netsim-model` if
+//!       needed).
 //!     - Do not depend directly on `device-actor` for API definitions.
 //!
 //! ### Dependency Graph (Simplified)
@@ -41,28 +46,38 @@
 //!
 //! ### `DeviceAction`
 //!
-//! An enum representing the actions that can be performed on the device service. This serves as the primary interface for consumers.
+//! An enum representing the actions that can be performed on the device
+//! service. This serves as the primary interface for consumers.
 //!
 //! ### Re-exports
 //!
-//! To simplify consumption, `device-api` re-exports commonly used types from `netsim-model`.
+//! To simplify consumption, `device-api` re-exports commonly used types from
+//! `netsim-model`.
 //!
 //! ## Benefits
 //!
-//! 1.  **Clearer Boundaries**: The separation between API and implementation is now explicit.
-//! 2.  **Reduced Coupling**: Consumer crates only depend on the API, not the implementation.
-//! 3.  **Improved Build Times**: Changes to the `device-actor` implementation do not require recompiling consumer crates, as long as the API remains stable.
-//! 4.  **Easier Testing**: Mocking the device service is now a matter of implementing the `DeviceAction` contract.
+//! 1. **Clearer Boundaries**: The separation between API and implementation is
+//!    now explicit.
+//! 2. **Reduced Coupling**: Consumer crates only depend on the API, not the
+//!    implementation.
+//! 3. **Improved Build Times**: Changes to the `device-actor` implementation do
+//!    not require recompiling consumer crates, as long as the API remains
+//!    stable.
+//! 4. **Easier Testing**: Mocking the device service is now a matter of
+//!    implementing the `DeviceAction` contract.
 
-use netsim_model::chip::{ChipId, PacketSink, PacketStream};
-use netsim_model::device::api::DeviceChipCreate;
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
 // Re-export key data models from netsim-model for convenience.
 pub use netsim_model::device::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse};
-pub use netsim_model::device::DeviceAddChip;
-pub use netsim_model::device::{api, Device, DeviceConfig, DeviceId, Orientation, Position};
+pub use netsim_model::device::{
+    api, Device, DeviceAddChip, DeviceConfig, DeviceId, Orientation, Position,
+};
+use netsim_model::{
+    chip::{ChipId, PacketSink, PacketStream},
+    device::api::DeviceChipCreate,
+};
+use serde::{Deserialize, Serialize};
 
 // Behavioral Contract
 
@@ -73,6 +88,18 @@ pub enum DeviceAction {
         chip_config: DeviceChipCreate,
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
+    },
+    /// Adds a chip to a device identified by its GUID.
+    ///
+    /// If a device with the given GUID exists, the chip is added to it.
+    /// If no such device exists, a new device is created with the provided
+    /// configuration, and the chip is added to the new device.
+    ///
+    /// This operation is atomic regarding device creation, preventing race
+    /// conditions when multiple sources try to initialize the same device
+    /// simultaneously.
+    AddChipByGuid {
+        params: DeviceAddChip,
     },
 }
 
@@ -89,6 +116,9 @@ impl fmt::Debug for DeviceAction {
                 .field("packet_stream", &"Option<PacketStream>")
                 .field("packet_sink", &"Option<PacketSink>")
                 .finish(),
+            DeviceAction::AddChipByGuid { params } => {
+                f.debug_struct("AddChipByGuid").field("params", params).finish()
+            }
         }
     }
 }
@@ -97,4 +127,11 @@ impl fmt::Debug for DeviceAction {
 pub enum DeviceActionResult {
     Success,
     ChipId(ChipId),
+    /// Result of an `AddChipByGuid` operation.
+    /// Returns both the `DeviceId` (found or created) and the `ChipId` (newly
+    /// added).
+    AddChipByGuidSuccess {
+        device_id: DeviceId,
+        chip_id: ChipId,
+    },
 }

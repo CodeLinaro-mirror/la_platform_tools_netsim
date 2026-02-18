@@ -1,7 +1,9 @@
 // src/time.rs
 
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 /// A trait that abstracts away the concept of "now" for testability.
 pub trait Clock: Send + Sync {

@@ -143,11 +143,6 @@ def is_presubmit(build_id):
   return build_id.startswith("P")
 
 
-def is_bazel_build(args):
-  """Returns true if this is a bazel build."""
-  return args.bazel or "bazel" in [task.lower() for task in args.task or []]
-
-
 def get_host_and_ip():
   """Try to get my hostname and ip address."""
   st = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -309,3 +304,104 @@ def _log_proc(proc, log_prefix):
     t.start()
 
   return q
+
+
+def get_bazel_path():
+  """Returns the path to the bazel binary."""
+  os_name = platform.system().lower()
+  system = f"{os_name}-x86_64"
+  bazel_binary = "bazel.exe" if os_name == "windows" else "bazel"
+  return AOSP_ROOT / "prebuilts" / "bazel" / system / bazel_binary
+
+
+def run_gcloud_auth(env):
+  """Authenticates with gcloud for hermetic builds."""
+  # This is required for hermetic builds to access GCS for dependencies.
+  # Check if we already have credentials to avoid browser popup
+  if (
+      run(
+          [
+              "gcloud",
+              "auth",
+              "application-default",
+              "print-access-token",
+          ],
+          env,
+          "gcloud auth check",
+          AOSP_ROOT,
+          throw_on_failure=False,
+          log_output=False,
+      )
+      == 0
+  ):
+    print("Gcloud already authenticated, skipping login")
+  else:
+    run(
+        [
+            "gcloud",
+            "auth",
+            "application-default",
+            "login",
+            "--project=emulator-builds",
+        ],
+        env,
+        "gcloud auth",
+        AOSP_ROOT,
+    )
+  # This is required to access the quota project for GCS dependencies.
+  run(
+      [
+          "gcloud",
+          "auth",
+          "application-default",
+          "set-quota-project",
+          "emulator-builds",
+      ],
+      env,
+      "gcloud auth",
+      AOSP_ROOT,
+  )
+
+
+def get_bazel_startup_options(env):
+  """Returns the bazel startup options."""
+  startup_options = []
+  tmp_dir = getattr(env, "tmp_dir", None)
+  if tmp_dir:
+    startup_options += [
+        f"--output_base={tmp_dir / 'output'}",
+        f"--install_base={tmp_dir / 'install'}",
+    ]
+  return startup_options
+
+
+def get_bazel_build_configs(args, env):
+  """Returns the bazel build configurations."""
+  configs = ["release"]
+  if args.buildbot:
+    configs.append("ci")
+  elif args.hermetic:
+    run_gcloud_auth(env)
+    configs.append("hermetic")
+
+  build_configs = [f"--config={c}" for c in configs]
+  if platform.system().lower() == "windows":
+    # Force Static CRT linking to avoid ABI mismatches with the Emulator's prebuilt DLLs.
+    build_configs.append("--features=static_link_msvcrt")
+  return build_configs
+
+
+def get_bazel_targets(args):
+  """Returns the bazel targets."""
+  targets = args.bazel_targets or [
+      "@netsim//:all",
+      "@netsim//rust/...",
+      "@netsim//next/...",
+  ]
+  # TODO(b/320434273): Include next/... for windows once dependent crates are imported
+  if platform.system().lower() == "windows":
+    targets = args.bazel_targets or [
+        "@netsim//:all",
+        "@netsim//rust/...",
+    ]
+  return targets

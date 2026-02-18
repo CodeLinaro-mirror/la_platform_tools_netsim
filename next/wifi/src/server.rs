@@ -1,15 +1,20 @@
 // Copyright 2024-2025 The Android Open Source Project
 
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use client::DeviceClient;
 use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use log::{debug, error, info};
-use netsim_model::chip::{Chip, ChipCreate, ChipId, ChipRequest, PacketSink, PacketStream};
-use netsim_model::chip_error::ChipError;
-use std::collections::HashMap;
-use tokio::sync::mpsc;
-use tokio::task::JoinSet;
+use netsim_model::{
+    chip::{
+        Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
+        ChipVariantUpdate, PacketSink, PacketStream,
+    },
+    chip_error::ChipError,
+};
+use tokio::{sync::mpsc, task::JoinSet};
 use tokio_stream::{StreamMap, StreamNotifyClose};
 
 pub struct Server {
@@ -120,6 +125,13 @@ impl Server {
                     if let Some(orient) = patch.orientation {
                         chip.orientation = orient;
                     }
+                    // TODO: Create helper function: radio_update(&mut radio: Radio, update:
+                    // RadioUpdate) {};
+                    if let Some(ChipVariantUpdate::Wifi(wifi_update)) = patch.variant {
+                        if let Some(ChipVariant::Wifi(wifi_radio)) = &mut chip.variant {
+                            wifi_update.radio.apply(&mut wifi_radio.radio);
+                        }
+                    }
                     let _ = respond_to.send(Ok(chip.clone()));
                 } else {
                     let _ = respond_to.send(Err(ChipError::ChipNotFound(id)));
@@ -196,7 +208,11 @@ impl Server {
         let mut chip = Chip::default();
         chip.id = chip_id.0;
         chip.device_id = params.device_id;
-        // TODO: Populate other fields if available in params
+        chip.kind = ChipKind::WIFI;
+        chip.variant = Some(ChipVariant::Wifi(Default::default()));
+        chip.name = Some(params.config.name);
+        chip.manufacturer = Some(params.config.manufacturer);
+        chip.product_name = Some(params.config.product_name);
         self.active_chips.insert(chip_id, chip);
         self.streams.insert(chip_id, StreamNotifyClose::new(stream));
         Ok(())

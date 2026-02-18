@@ -1,9 +1,9 @@
+use std::{sync::Arc, time::Duration};
+
 use modem_rs::{
     test_utils::MockNetworkHandler, time::MockClock, types::ModemId, ModemEvent,
     ModemNetworkSimulator,
 };
-use std::sync::Arc;
-use std::time::Duration;
 
 #[test]
 fn test_event_loop_tick_and_duration() {

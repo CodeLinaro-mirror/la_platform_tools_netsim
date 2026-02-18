@@ -1,7 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::world::World;
 use netsim_model::chip::{ChipId, ChipKind};
+
+use crate::world::World;
 
 // Feature: Link Lifecycle
 //

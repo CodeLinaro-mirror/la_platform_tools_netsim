@@ -1,7 +1,8 @@
 // Copyright 2024 The Android Open Source Project
 
-use crate::pcap::{PcapHeader, PcapRecordHeader};
 use serde::{Deserialize, Serialize};
+
+use crate::pcap::{PcapHeader, PcapRecordHeader};
 
 #[derive(Serialize, Deserialize)]
 pub struct PcapHeaderJson {
@@ -49,9 +50,9 @@ impl From<PcapRecordHeader> for PcapRecordHeaderJson {
 
 #[cfg(test)]
 mod tests {
+    use zerocopy::{byteorder::LittleEndian, U16, U32};
+
     use super::*;
-    use zerocopy::byteorder::LittleEndian;
-    use zerocopy::{U16, U32};
 
     #[test]
     fn test_pcap_header_from() {

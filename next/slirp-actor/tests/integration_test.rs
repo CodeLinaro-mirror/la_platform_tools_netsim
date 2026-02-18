@@ -9,13 +9,21 @@ use tokio::sync::mpsc;
 struct MockContext;
 
 #[async_trait]
-impl Context<u32> for MockContext {
+impl Context<SlirpActor> for MockContext {
     fn set_interval(&mut self, _duration: std::time::Duration) {}
     fn add_stream(&mut self, _id: u32, _stream: BoxStream) {}
     fn remove_stream(&mut self, _id: u32) {}
     fn spawn(&mut self, _id: u32, _task: BoxFuture<'static, u32>) {}
     fn abort(&mut self, _id: u32) {}
     fn shutdown(&mut self) {}
+    fn run_later(
+        &mut self,
+        _duration: std::time::Duration,
+        _f: Box<dyn FnOnce(&mut SlirpActor, &mut dyn Context<SlirpActor>) + Send>,
+    ) -> actor_framework::TimerKey {
+        unimplemented!("run_later not implemented for MockContext")
+    }
+    fn cancel_timer(&mut self, _key: actor_framework::TimerKey) {}
 }
 
 #[tokio::test]
@@ -26,7 +34,10 @@ async fn test_slirp_actor_lifecycle() {
     let mut ctx = MockContext;
 
     // Register Sink
-    let _ = actor.handle_action(None, SlirpReq::RegisterSink(tx_out), &mut ctx).await;
+    let (_stream_tx, stream_rx) = mpsc::unbounded_channel::<bytes::Bytes>();
+    use tokio_stream::StreamExt;
+    let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(stream_rx));
+    let _ = actor.handle_action(None, SlirpReq::Register { stream, sink: tx_out }, &mut ctx).await;
 
     // When I start the actor
     actor.on_start(&mut ctx).await;

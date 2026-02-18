@@ -1,6 +1,6 @@
-use crate::chip_error::ChipError;
-use crate::device_error::DeviceError;
 use thiserror::Error;
+
+use crate::{chip_error::ChipError, device_error::DeviceError};
 
 /// The error type for client-side operations.
 #[derive(Error, Debug)]

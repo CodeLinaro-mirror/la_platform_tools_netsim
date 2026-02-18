@@ -14,7 +14,8 @@
 
 //! FFI bindings for libslirp library.
 //!
-//! This allows for easy integration of user-mode networking into Rust applications.
+//! This allows for easy integration of user-mode networking into Rust
+//! applications.
 //!
 //! It offers functionality for:
 //!
@@ -24,9 +25,9 @@
 //! # Example
 //!
 //! ```
+//! use std::net::{Ipv4Addr, SocketAddr};
+//!
 //! use libslirp_rs::libslirp_sys::sockaddr_storage;
-//! use std::net::Ipv4Addr;
-//! use std::net::SocketAddr;
 //!
 //! let sockaddr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
 //! let storage: sockaddr_storage = sockaddr.into();
@@ -44,8 +45,10 @@
 // Remove this once bindgen figures out how to do this correctly
 #![allow(deref_nullptr)]
 
-use std::convert::From;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::{
+    convert::From,
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+};
 
 #[cfg(target_os = "linux")]
 include!("linux/bindings.rs");
@@ -73,26 +76,26 @@ impl Default for sockaddr_storage {
 }
 
 fn v4_ref(storage: &sockaddr_storage) -> &sockaddr_in {
-    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of `sockaddr_in`.
-    // Neither types have any padding.
+    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
+    // `sockaddr_in`. Neither types have any padding.
     unsafe { &*(storage as *const sockaddr_storage as *const sockaddr_in) }
 }
 
 fn v6_ref(storage: &sockaddr_storage) -> &sockaddr_in6 {
-    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of `sockaddr_in6`.
-    // Neither types have any padding.
+    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
+    // `sockaddr_in6`. Neither types have any padding.
     unsafe { &*(storage as *const sockaddr_storage as *const sockaddr_in6) }
 }
 
 fn v4_mut(storage: &mut sockaddr_storage) -> &mut sockaddr_in {
-    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of `sockaddr_in`.
-    // Neither types have any padding.
+    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
+    // `sockaddr_in`. Neither types have any padding.
     unsafe { &mut *(storage as *mut sockaddr_storage as *mut sockaddr_in) }
 }
 
 fn v6_mut(storage: &mut sockaddr_storage) -> &mut sockaddr_in6 {
-    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of `sockaddr_in6`.
-    // Neither types have any padding.
+    // SAFETY: `sockaddr_storage` has size and alignment that is at least that of
+    // `sockaddr_in6`. Neither types have any padding.
     unsafe { &mut *(storage as *mut sockaddr_storage as *mut sockaddr_in6) }
 }
 
@@ -326,8 +329,9 @@ impl From<SocketAddrV6> for sockaddr_in6 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::mem;
+
+    use super::*;
 
     // This tests a bidirectional conversion between sockaddr_storage
     // and SocketAddr
