@@ -27,12 +27,14 @@ pub struct ApWorld {
     pub ap_id: Option<u32>,
     pub actor_handle: Option<tokio::task::JoinHandle<()>>,
     pub next_ap_id: u32,
+    pub shared_keys: std::sync::Arc<SharedKeyStore>,
 }
 
 impl ApWorld {
     pub async fn new() -> Self {
         netsim_testing::logger::setup(None);
-        let ap_actor_impl = ApActor::new();
+        let shared_keys = std::sync::Arc::new(SharedKeyStore::new());
+        let ap_actor_impl = ApActor::new(shared_keys.clone());
         let (runner, client_base) = ResourceActor::new(32);
         let client = ApClient::new(client_base);
 
@@ -45,6 +47,7 @@ impl ApWorld {
             ap_id: None,
             actor_handle: Some(handle),
             next_ap_id: 1001,
+            shared_keys,
         }
     }
 
@@ -61,12 +64,7 @@ impl ApWorld {
 
             let stream = Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx_for_ap));
             self.client
-                .register(
-                    stream,
-                    tx_from_ap,
-                    std::sync::Arc::new(SharedKeyStore::new()),
-                    Duration::from_millis(100),
-                )
+                .register(stream, tx_from_ap, self.shared_keys.clone(), Duration::from_millis(100))
                 .await
                 .expect("Failed to register");
             self.tx_to_ap = Some(tx_to_ap);
