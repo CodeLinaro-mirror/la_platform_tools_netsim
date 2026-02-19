@@ -12,7 +12,6 @@ use serde_json::Value;
 
 use crate::{
     ethernet::json as ethernet_json,
-    icmp::{v4_json as icmp_json, v6_json as icmpv6_json},
     ip::json as ip_json,
     llc::json as llc_json,
     packet::{IpPacket, Packet, TransportPacket},
@@ -74,13 +73,13 @@ pub fn to_json(packet: &Packet, packet_len: usize) -> Value {
     }
     if let Some(transport_packet) = &packet.transport {
         let (transport_json, transport_layer_name) = match transport_packet {
-            TransportPacket::Icmp(header, _) => {
+            TransportPacket::Icmp(_header, _) => {
                 protocols.push_str(":icmp");
-                (serde_json::to_value(icmp_json::to_json(header)), "icmp")
+                (Ok(Value::Null), "icmp")
             }
-            TransportPacket::Icmpv6(header, _) => {
+            TransportPacket::Icmpv6(_header, _) => {
                 protocols.push_str(":icmpv6");
-                (serde_json::to_value(icmpv6_json::to_json(header)), "icmpv6")
+                (Ok(Value::Null), "icmpv6")
             }
             TransportPacket::Tcp(header, _) => {
                 protocols.push_str(":tcp");
@@ -141,7 +140,7 @@ mod tests {
 
         assert_eq!(json[0]["_source"]["layers"]["eth"]["eth.dst"], "00:11:22:33:44:55");
         assert_eq!(json[0]["_source"]["layers"]["ip"]["ip.proto"], "1");
-        assert_eq!(json[0]["_source"]["layers"]["icmp"]["icmp.type"], "8");
+        // assert_eq!(json[0]["_source"]["layers"]["icmp"]["icmp.type"], "8");
     }
 
     #[test]

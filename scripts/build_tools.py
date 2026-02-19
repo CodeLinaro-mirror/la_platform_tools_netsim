@@ -170,6 +170,11 @@ def main():
       action="store_true",
       help="Clean the build directory before building.",
   )
+  parser.add_argument(
+      "--enable_repo_cache",
+      action="store_true",
+      help="Enable Bazel repository contents cache (it is disabled by default).",
+  )
 
   args = parser.parse_args()
 

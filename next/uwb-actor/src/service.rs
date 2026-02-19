@@ -3,13 +3,13 @@
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures::{SinkExt, StreamExt};
+use futures::{FutureExt, SinkExt, StreamExt};
 use netsim_model::{
     chip::{Chip, ChipCreate, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate},
     chip_error::ChipError,
 };
-use pica::PicaCommand;
-use tokio::sync::mpsc;
+use pdl_runtime::Packet;
+use pica::{packets::uci, PicaCommand, PicaEvent};
 
 use crate::{
     uwb_actor::{UwbActor, UwbChipState},
@@ -30,16 +30,12 @@ impl ActorService for UwbActor {
         &mut self,
         _id: Option<Self::Id>,
         params: Self::Create,
-        ctx: &mut DynContext<Self>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = params.id;
         if self.chip_states.contains_key(&chip_id) {
             return Err(ChipError::ChipExists(chip_id.0));
         }
-
-        // TODO(b/483090273): pass this to Pica directly
-        let stream = params.packet_stream.expect("Packet stream is present");
-        let sink = params.packet_sink.expect("Packet sink is present");
 
         let chip = Chip {
             id: chip_id.0,
@@ -53,25 +49,36 @@ impl ActorService for UwbActor {
         };
 
         // Add chip to Pica
-        let (pica_sender, pica_rx) = mpsc::channel::<bytes::Bytes>(10);
-        let pica_stream =
-            tokio_stream::wrappers::ReceiverStream::new(pica_rx).map(|b| b.to_vec()).boxed();
+        let stream =
+            params.packet_stream.expect("Packet stream is present").map(|b| b.to_vec()).boxed();
 
         // Pica wants a Sink<Vec<u8>>.
-        let pica_sink = Box::pin(sink.with(|v| async { Ok(Bytes::from(v)) }));
+        let sink = Box::pin(
+            params
+                .packet_sink
+                .expect("Packet sink is present")
+                .with(|v| async move { Ok(Bytes::from(v)) }),
+        );
 
-        let pica_handle = self
-            .pica
-            .lock()
-            .unwrap()
-            .add_device(pica_stream, pica_sink)
-            .map_err(|e| ChipError::Internal(e.to_string()))?;
+        // Clear unrelated events to prevent a lagged error
+        self.pica_connect_events.resubscribe();
 
-        self.chip_states.insert(chip_id, UwbChipState { chip, pica_sender, pica_handle });
+        let _ = self.pica_commands.send(PicaCommand::Connect(stream, sink)).await;
+        // Wait for add to complete. This guarantees the chip exists by the time any
+        // actions are performed on it.
+        let handle = loop {
+            if let PicaEvent::Connected { handle, .. } = self
+                .pica_connect_events
+                .recv()
+                .await
+                .map_err(|_| ChipError::Internal("pica shutdown unexpectedly".to_string()))?
+            {
+                break handle;
+            }
+        };
 
-        // The Pica stream is wrapped and registered to get events via the actor
-        // lifecycle, but we should directly use Pica's event broadcast (b/483090273).
-        ctx.add_stream(chip_id, stream.boxed());
+        self.chip_states.insert(chip_id, UwbChipState { chip, pica_handle: handle });
+        self.handle_to_chip.insert(handle, chip_id);
 
         Ok(chip_id)
     }
@@ -112,16 +119,29 @@ impl ActorService for UwbActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         let state = self.chip_states.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
-        let cmd_tx = { self.pica.lock().unwrap().commands() };
-        let _ = cmd_tx.send(PicaCommand::Disconnect(state.pica_handle)).await;
+
+        // If this request came from an external source, tell Pica to disconnect the
+        // chip.
+        if self.handle_to_chip.contains_key(&state.pica_handle) {
+            let _ = self.pica_commands.send(PicaCommand::Disconnect(state.pica_handle)).await;
+            // Disconnect completes asynchronously and is handled in the
+            // lifecycle `on_tick`.
+        }
+
         let device_client = self.device_client.clone();
         let device_id = state.chip.device_id;
-        tokio::spawn(async move {
-            let _ = device_client.notify_chip_removed(device_id, id).await;
-        });
+        ctx.spawn(
+            id,
+            async move {
+                let _ = device_client.notify_chip_removed(device_id, id);
+                id
+            }
+            .boxed(),
+        );
+
         Ok(())
     }
     async fn handle_action(
@@ -133,9 +153,16 @@ impl ActorService for UwbActor {
         match action {
             UwbAction::Reset { id } => {
                 if let Some(state) = self.chip_states.get(&id) {
-                    let _handle = state.pica_handle;
-                    let _cmd_tx = self.pica.lock().unwrap().commands();
-                    // TODO: implement reset
+                    let handle = state.pica_handle;
+                    let reset_cmd =
+                        uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
+                    let _ = self
+                        .pica_commands
+                        .send(PicaCommand::UciPacket(
+                            handle,
+                            reset_cmd.encode_to_vec().expect("encoding succeeds"),
+                        ))
+                        .await;
                 }
                 Ok(UwbActionResult::Success)
             }

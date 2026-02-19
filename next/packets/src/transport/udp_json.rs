@@ -2,6 +2,7 @@
 
 //! JSON serialization for UDP headers.
 
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::transport::udp::UdpHeader;
@@ -17,4 +18,36 @@ pub fn to_json(header: &UdpHeader) -> Map<String, Value> {
         Value::String(format!("0x{:04x}", header.checksum.get())),
     );
     map
+}
+
+/// A `serde`-compatible representation of a UDP header.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct JsonUdpHeader {
+    #[serde(rename = "udp.srcport")]
+    pub src_port: String,
+    #[serde(rename = "udp.dstport")]
+    pub dst_port: String,
+    #[serde(rename = "udp.length")]
+    pub length: String,
+    #[serde(rename = "udp.checksum")]
+    pub checksum: String,
+}
+
+impl TryFrom<JsonUdpHeader> for UdpHeader {
+    type Error = std::num::ParseIntError;
+
+    fn try_from(json_header: JsonUdpHeader) -> Result<Self, Self::Error> {
+        let checksum = if let Some(stripped) = json_header.checksum.strip_prefix("0x") {
+            u16::from_str_radix(stripped, 16)?
+        } else {
+            json_header.checksum.parse::<u16>()?
+        };
+
+        Ok(UdpHeader {
+            source_port: json_header.src_port.parse::<u16>()?.into(),
+            dest_port: json_header.dst_port.parse::<u16>()?.into(),
+            length: json_header.length.parse::<u16>()?.into(),
+            checksum: checksum.into(),
+        })
+    }
 }

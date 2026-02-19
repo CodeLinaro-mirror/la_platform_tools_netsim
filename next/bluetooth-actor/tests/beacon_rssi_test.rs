@@ -43,6 +43,10 @@ async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // WHEN the scanner enables scanning
+    // First, send an HCI_Reset to bypass Rootcanal's `hardware_error_before_reset`
+    // quirk, which is strictly enforced on chips created via `given_device()`.
+    let cmd_reset: &[u8] = &[0x01, 0x03, 0x0C, 0x00]; // 0x01 = Command Packet, 0x0C03 = Reset Opcode, 0x00 = Length
+    world.when_packet_sent("scanner", Bytes::from(cmd_reset)).await;
     world.when_packet_sent("scanner", Bytes::from(CMD_SET_EVENT_MASK_STD)).await;
     world.when_packet_sent("scanner", Bytes::from(CMD_LE_SET_EVENT_MASK)).await;
     world.when_packet_sent("scanner", Bytes::from(CMD_LE_SET_SCAN_PARAMS)).await;

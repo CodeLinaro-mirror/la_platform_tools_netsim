@@ -74,7 +74,7 @@ mod tests {
         let rootcanal = Rootcanal::new(Box::new(MockRootcanalCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
         let id = 1;
-        rootcanal.new_controller(id, address, Box::new(MockControllerCallbacks)).unwrap();
+        rootcanal.new_controller(id, address, Box::new(MockControllerCallbacks), None).unwrap();
 
         assert_eq!(rootcanal.len(), 1);
 

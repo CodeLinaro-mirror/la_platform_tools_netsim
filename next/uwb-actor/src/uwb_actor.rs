@@ -1,22 +1,17 @@
 // Copyright 2026 The Android Open Source Project
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, time::Duration};
 
 use client::DeviceClient;
 use netsim_model::chip::{Chip, ChipId};
-use pica::{Handle, Pica, RangingEstimator, RangingMeasurement};
-use tokio::{sync::mpsc, task::JoinHandle};
+use pica::{Handle, Pica, PicaCommand, PicaEvent, RangingEstimator, RangingMeasurement};
+use tokio::sync::{broadcast, mpsc};
 
 /// State associated with a single UWB chip.
 #[derive(Clone)]
 pub struct UwbChipState {
     /// The chip model.
     pub(super) chip: Chip,
-    /// Sender for forwarding UCI packets to Pica.
-    pub(super) pica_sender: mpsc::Sender<bytes::Bytes>,
     /// Mapping from chip ID to Pica handle.
     pub(super) pica_handle: Handle,
 }
@@ -25,19 +20,36 @@ pub struct UwbChipState {
 pub struct UwbActor {
     /// Map of active chips.
     pub(super) chip_states: HashMap<ChipId, UwbChipState>,
+    /// Inverse mapping for translating Pica events.
+    pub(super) handle_to_chip: HashMap<Handle, ChipId>,
     /// Client for interacting with the device actor.
     pub(super) device_client: DeviceClient,
-    /// The Pica simulator instance.
-    /// TODO(b/483089918): use lock-free form of Pica API
-    pub(super) pica: Arc<Mutex<Pica>>,
-    /// The join handle for the Pica run loop.
-    pub(super) pica_task: Option<JoinHandle<Result<(), anyhow::Error>>>,
+    /// Pica simulator, present only prior to actor lifecycle `on_start`.
+    pub(super) pica: Option<Pica>,
+    /// Pica command queue
+    pub(super) pica_commands: mpsc::Sender<PicaCommand>,
+    /// Used to detect when a chip disconnects due to a stream closure.
+    pub(super) pica_on_tick_events: broadcast::Receiver<PicaEvent>,
+    /// Used to detect when a chip is connected after [`PicaCommand::Connect`].
+    pub(super) pica_connect_events: broadcast::Receiver<PicaEvent>,
 }
 
 impl UwbActor {
+    /// Used to periodically check for stream closures.
+    pub const TICK_INTERVAL: Duration = Duration::from_millis(100);
+
     pub fn new(device_client: DeviceClient) -> Self {
-        let pica = Arc::new(Mutex::new(Pica::new(Box::new(MockRangingEstimator), None)));
-        UwbActor { chip_states: HashMap::new(), device_client, pica, pica_task: None }
+        let pica = Pica::new(Box::new(MockRangingEstimator), None);
+
+        UwbActor {
+            chip_states: HashMap::new(),
+            handle_to_chip: HashMap::new(),
+            device_client,
+            pica_commands: pica.commands(),
+            pica_on_tick_events: pica.events(),
+            pica_connect_events: pica.events(),
+            pica: Some(pica),
+        }
     }
 }
 

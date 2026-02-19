@@ -449,8 +449,10 @@ impl NetsimDaemon {
         let slirp_actor_state = slirp_actor::SlirpActor::new(Default::default());
 
         // Setup AP Actor
+        let shared_keys = std::sync::Arc::new(ap_actor::shared::SharedKeyStore::new());
+
         let (ap_runner, ap_client) = ap_actor::new();
-        let ap_actor_state = ap_actor::ApActor::new();
+        let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
 
         // Setup Wifi Actor
         let (wifi_runner, wifi_client) = wifi_actor::new();
@@ -475,6 +477,7 @@ impl NetsimDaemon {
             Some(slirp_client.clone()),
             device_client.clone(),
             wifi_tap,
+            shared_keys.clone(),
         );
 
         // Setup Uwb Server
@@ -502,19 +505,25 @@ impl NetsimDaemon {
         let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k, v.clone())).collect();
         let link_actor_state = link_actor::LinkActor::new(link_chip_clients);
 
+        let (startup_timeout, idle_timeout) = if args.no_shutdown {
+            (None, None)
+        } else {
+            (
+                Some(args.startup_timeout.map_or(Duration::from_secs(15), Duration::from_millis)),
+                Some(
+                    args.idle_shutdown_timeout
+                        .map_or(Duration::from_secs(0), Duration::from_millis),
+                ),
+            )
+        };
+
         let device_actor_state = device_actor::DeviceActor::new(
             chip_clients.clone(),
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
             Box::new(link_client.clone()),
-            None,
-            if args.no_shutdown {
-                None
-            } else if let Some(millis) = args.idle_shutdown_timeout {
-                Some(Duration::from_millis(millis))
-            } else {
-                Some(Duration::from_secs(15))
-            },
+            startup_timeout,
+            idle_timeout,
         );
 
         // Spawn server tasks
