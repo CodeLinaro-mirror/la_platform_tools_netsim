@@ -63,32 +63,17 @@ const DEFAULT_INSTANCE: u16 = 1;
 
 /// Get the netsim instance number which is always > 0
 ///
-/// The following priorities are used to determine the instance number:
-///
-/// 1. The environment variable `NETSIM_INSTANCE`.
-/// 2. The CLI flag `--instance`.
-/// 3. The default value `DEFAULT_INSTANCE`.
+/// `instance_flag` comes from cli args or the `NETSIM_INSTANCE` env var.
 pub fn get_instance(instance_flag: Option<u16>) -> u16 {
-    let instance_env: Option<u16> =
-        std::env::var("NETSIM_INSTANCE").ok().and_then(|i| i.parse().ok());
-    match (instance_env, instance_flag) {
-        (Some(i), _) if i > 0 => i,
-        (_, Some(i)) if i > 0 => i,
-        (_, _) => DEFAULT_INSTANCE,
-    }
+    instance_flag.filter(|i| *i != 0).unwrap_or(DEFAULT_INSTANCE)
 }
 
 /// Get the hci port number for netsim
+///
+/// `hci_port_flag` comes from cli args or the `NETSIM_HCI_PORT` env var.
 pub fn get_hci_port(hci_port_flag: u32, instance: u16) -> u32 {
-    // The following priorities are used to determine the HCI port number:
-    //
-    // 1. The CLI flag `-hci_port`.
-    // 2. The environment variable `NETSIM_HCI_PORT`.
-    // 3. The default value `DEFAULT_HCI_PORT`
     if hci_port_flag != 0 {
         hci_port_flag
-    } else if let Ok(netsim_hci_port) = std::env::var("NETSIM_HCI_PORT") {
-        netsim_hci_port.parse::<u32>().unwrap()
     } else {
         DEFAULT_HCI_PORT + (instance as u32)
     }
@@ -193,13 +178,7 @@ pub mod tests {
 
     #[test]
     fn test_get_instance_and_instance_name() {
-        // Set NETSIM_INSTANCE environment variable
-        std::env::set_var("NETSIM_INSTANCE", "100");
-        assert_eq!(get_instance(Some(0)), 100);
-        assert_eq!(get_instance(Some(1)), 100);
-
-        // Remove NETSIM_INSTANCE environment variable
-        std::env::remove_var("NETSIM_INSTANCE");
+        // Falls back to DEFAULT_INSTANCE for None or 0
         assert_eq!(get_instance(None), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(0)), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(1)), 1);
@@ -221,18 +200,12 @@ pub mod tests {
 
     #[test]
     fn test_get_hci_port() {
-        // Test if hci_port flag exists
+        // Test if hci_port flag is honored
         assert_eq!(get_hci_port(1, u16::MAX), 1);
         assert_eq!(get_hci_port(1, u16::MIN), 1);
 
-        // Remove NETSIM_HCI_PORT with hci_port_flag = 0
-        std::env::remove_var("NETSIM_HCI_PORT");
+        // hci_port_flag = 0 should fall back to the default
         assert_eq!(get_hci_port(0, 0), DEFAULT_HCI_PORT);
         assert_eq!(get_hci_port(0, 1), DEFAULT_HCI_PORT + 1);
-
-        // Set NETSIM_HCI_PORT
-        std::env::set_var("NETSIM_HCI_PORT", "100");
-        assert_eq!(get_hci_port(0, 0), 100);
-        assert_eq!(get_hci_port(0, u16::MAX), 100);
     }
 }
