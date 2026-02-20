@@ -3,11 +3,10 @@
 use std::time::Duration;
 
 use bluetooth_actor::beacon_utils::{
-    is_le_advertising_report, CMD_LE_SET_EVENT_MASK, CMD_LE_SET_SCAN_ENABLE,
-    CMD_LE_SET_SCAN_PARAMS, CMD_SET_EVENT_MASK_STD, REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET,
+    is_le_advertising_report, REPORT_ADDR_OFFSET, REPORT_NUM_REPORTS_OFFSET,
 };
-use bytes::Bytes;
 use netsim_model::device::Position;
+use netsim_packets::hci;
 use tokio;
 
 use crate::world::World;
@@ -43,14 +42,35 @@ async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // WHEN the scanner enables scanning
-    // First, send an HCI_Reset to bypass Rootcanal's `hardware_error_before_reset`
-    // quirk, which is strictly enforced on chips created via `given_device()`.
-    let cmd_reset: &[u8] = &[0x01, 0x03, 0x0C, 0x00]; // 0x01 = Command Packet, 0x0C03 = Reset Opcode, 0x00 = Length
-    world.when_packet_sent("scanner", Bytes::from(cmd_reset)).await;
-    world.when_packet_sent("scanner", Bytes::from(CMD_SET_EVENT_MASK_STD)).await;
-    world.when_packet_sent("scanner", Bytes::from(CMD_LE_SET_EVENT_MASK)).await;
-    world.when_packet_sent("scanner", Bytes::from(CMD_LE_SET_SCAN_PARAMS)).await;
-    world.when_packet_sent("scanner", Bytes::from(CMD_LE_SET_SCAN_ENABLE)).await;
+    world.when_command_sent("scanner", hci::Reset {}).await;
+    world.when_command_sent("scanner", hci::SetEventMask { event_mask: u64::MAX.into() }).await;
+    world
+        .when_command_sent(
+            "scanner",
+            hci::LeSetEventMask { le_event_mask: (u8::MAX as u64).into() },
+        )
+        .await;
+    world
+        .when_command_sent(
+            "scanner",
+            hci::LeSetScanParameters {
+                le_scan_type: hci::LeScanType::PASSIVE,
+                le_scan_interval: 0x0010.into(),
+                le_scan_window: 0x0010.into(),
+                own_address_type: hci::OwnAddressType::PUBLIC_DEVICE_ADDRESS,
+                scanning_filter_policy: hci::LeScanningFilterPolicy::ACCEPT_ALL,
+            },
+        )
+        .await;
+    world
+        .when_command_sent(
+            "scanner",
+            hci::LeSetScanEnable {
+                le_scan_enable: hci::Enable::ENABLED,
+                filter_duplicates: hci::Enable::DISABLED,
+            },
+        )
+        .await;
 
     // THEN the scanner receives advertising reports with decreasing RSSI as
     // distance increases
