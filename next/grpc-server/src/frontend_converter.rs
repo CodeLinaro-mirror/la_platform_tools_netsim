@@ -223,7 +223,7 @@ pub fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
         ProtoChipKind::BLUETOOTH => Some(ApiChipKind::BLUETOOTH),
         ProtoChipKind::WIFI => Some(ApiChipKind::WIFI),
         ProtoChipKind::UWB => Some(ApiChipKind::UWB),
-
+        ProtoChipKind::BLE_BEACON => Some(ApiChipKind::BLUETOOTH),
         _ => None,
     }
 }

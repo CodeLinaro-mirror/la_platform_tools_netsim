@@ -26,5 +26,5 @@ enum ChipKind {
   BLUETOOTH = 1;
   WIFI = 2;
   UWB = 3;
-  reserved 4;
+  BLE_BEACON = 4 [deprecated = true];
 }
