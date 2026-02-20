@@ -96,8 +96,26 @@ impl ActorService for BluetoothActor {
         // Note: There is no specific enforcement for a "blue" address type.
         // The current check only validates if the address string is parsable.
 
+        // Construct the Protobuf configuration for Rootcanal
+        let mut quirks = netsim_proto::configuration::ControllerQuirks::new();
+        // This quirk forces Rootcanal to reject post-init commands from uninitialized
+        // hosts, causing a HAL restart that properly unmasks the LE Meta
+        // events. We only apply this to actual Emulator Devices, not internal
+        // netsim beacons or scanners.
+        if let BluetoothMode::Device(_) = &create_params.mode {
+            quirks.hardware_error_before_reset = Some(true);
+        }
+
+        let mut config_controller = netsim_proto::configuration::Controller::new();
+        config_controller.quirks = netsim_proto::protobuf::MessageField::some(quirks);
+
+        let config_bytes = netsim_proto::protobuf::Message::write_to_bytes(&config_controller)
+            .map_err(|e| {
+                BluetoothError::invalid_arg(format!("Failed to serialize bt config: {e}"))
+            })?;
+
         self.rootcanal
-            .new_controller(chip_id.0.into(), address, Box::new(callback))
+            .new_controller(chip_id.0.into(), address, Box::new(callback), Some(&config_bytes))
             .to_chip_error()?;
 
         // 4. Create Chip Info in Context
