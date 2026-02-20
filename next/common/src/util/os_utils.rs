@@ -63,9 +63,19 @@ const DEFAULT_INSTANCE: u16 = 1;
 
 /// Get the netsim instance number which is always > 0
 ///
-/// `instance_flag` comes from cli args or the `NETSIM_INSTANCE` env var.
+/// The following priorities are used to determine the instance number:
+///
+/// 1. The environment variable `NETSIM_INSTANCE`.
+/// 2. The CLI flag `--instance`.
+/// 3. The default value `DEFAULT_INSTANCE`.
 pub fn get_instance(instance_flag: Option<u16>) -> u16 {
-    instance_flag.filter(|i| *i != 0).unwrap_or(DEFAULT_INSTANCE)
+    let instance_env: Option<u16> =
+        std::env::var("NETSIM_INSTANCE").ok().and_then(|i| i.parse().ok());
+    match (instance_env, instance_flag) {
+        (Some(i), _) if i > 0 => i,
+        (_, Some(i)) if i > 0 => i,
+        (_, _) => DEFAULT_INSTANCE,
+    }
 }
 
 /// Get the hci port number for netsim
@@ -178,7 +188,13 @@ pub mod tests {
 
     #[test]
     fn test_get_instance_and_instance_name() {
-        // Falls back to DEFAULT_INSTANCE for None or 0
+        // Set NETSIM_INSTANCE environment variable
+        std::env::set_var("NETSIM_INSTANCE", "100");
+        assert_eq!(get_instance(Some(0)), 100);
+        assert_eq!(get_instance(Some(1)), 100);
+
+        // Remove NETSIM_INSTANCE environment variable
+        std::env::remove_var("NETSIM_INSTANCE");
         assert_eq!(get_instance(None), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(0)), DEFAULT_INSTANCE);
         assert_eq!(get_instance(Some(1)), 1);
