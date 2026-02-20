@@ -146,8 +146,11 @@ impl ActorService for WifiActor {
                     stats.push(netsim_model::stats::NetsimRadioStats {
                         id: id.0,
                         name: chip.name.clone().unwrap_or_default(),
-                        tx_bytes: tx_count as u64,
-                        rx_bytes: rx_count as u64,
+                        kind: netsim_model::chip::ChipKind::WIFI.as_proto(),
+                        tx_count: tx_count as u64,
+                        rx_count: rx_count as u64,
+                        tx_bytes: 0,
+                        rx_bytes: 0,
                         ..Default::default()
                     });
                 }
