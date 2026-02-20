@@ -72,11 +72,30 @@ class CompileInstallTask(Task):
       dest_dir.mkdir(exist_ok=True, parents=True)
 
       # Copy netsim binaries
-      for binary in ["netsim", "netsimd"]:
-        binary_name = (
-            f"{binary}.exe" if platform.system() == "Windows" else binary
-        )
-        src_file = search_dir / binary_name
+      if platform.system() == "Windows":
+        # TODO: Netsim Next is not yet built on Windows.
+        # We don't copy netsim next (netsimx/netsimdx) for now on Windows.
+        binaries = {
+            "netsim": "netsim",
+            "netsimd": "netsimd",
+        }
+      else:
+        binaries = {
+            "netsim": "netsim",
+            "netsimd": "netsimd",
+            "netsimx": "next/cli/netsim",
+            "netsimdx": "next/daemon/daemon",
+        }
+
+      for binary, src in binaries.items():
+        if platform.system() == "Windows":
+          binary_name = f"{binary}.exe"
+          src_name = f"{src}.exe"
+        else:
+          binary_name = binary
+          src_name = src
+
+        src_file = search_dir / src_name
         logging.info(f"Copying {src_file} to {dest_dir}")
         dest_file = dest_dir / binary_name
         # Remove the file if it exists to avoid permission errors on overwrite.
