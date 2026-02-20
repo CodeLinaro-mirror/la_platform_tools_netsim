@@ -18,20 +18,63 @@ use netsim_model::chip::{
 pub struct World {
     pub client: DeviceClient,
     _actor_task: tokio::task::JoinHandle<()>,
+    // Shared state for radio stats, injected into mock chips
+    pub radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+    // Last fetched radio stats
+    pub last_radio_stats: Option<Vec<netsim_model::stats::NetsimRadioStats>>,
+    // Path to clean up on drop
+    stats_file_to_cleanup: Option<std::path::PathBuf>,
 }
 
 impl Drop for World {
     fn drop(&mut self) {
         self._actor_task.abort();
+        if let Some(path) = &self.stats_file_to_cleanup {
+            if path.exists() {
+                let _ = std::fs::remove_file(path);
+            }
+        }
     }
 }
 
 impl World {
     /// Creates a new World with default mock clients.
     pub async fn new() -> Self {
-        let chip_clients = Self::create_default_chip_clients();
+        let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let chip_clients = Self::create_default_chip_clients_with_stats(radio_stats.clone());
         let link_client = Self::create_default_link_client();
-        Self::with_clients(chip_clients, link_client).await
+        let (stats_path, _) = Self::temp_stats_path();
+        Self::with_clients_internal(
+            chip_clients,
+            link_client,
+            None,
+            None,
+            Some(stats_path.clone()),
+            None,
+            radio_stats,
+            Some(stats_path),
+        )
+        .await
+    }
+
+    pub async fn new_with_stats(
+        path: std::path::PathBuf,
+        interval: Option<std::time::Duration>,
+    ) -> Self {
+        let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let chip_clients = Self::create_default_chip_clients_with_stats(radio_stats.clone());
+        let link_client = Self::create_default_link_client();
+        Self::with_clients_internal(
+            chip_clients,
+            link_client,
+            None,
+            None,
+            Some(path),
+            interval,
+            radio_stats,
+            None,
+        )
+        .await
     }
 
     /// Creates a new World with injected custom mock clients.
@@ -39,7 +82,19 @@ impl World {
         chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
         link_client: MockLinkClient,
     ) -> Self {
-        Self::with_clients_and_timeout(chip_clients, link_client, None, None).await
+        let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (stats_path, _) = Self::temp_stats_path();
+        Self::with_clients_internal(
+            chip_clients,
+            link_client,
+            None,
+            None,
+            Some(stats_path.clone()),
+            None,
+            radio_stats,
+            Some(stats_path),
+        )
+        .await
     }
 
     /// Creates a new World with injected custom mock clients and idle timeout.
@@ -48,6 +103,41 @@ impl World {
         link_client: MockLinkClient,
         startup_timeout: Option<std::time::Duration>,
         idle_timeout: Option<std::time::Duration>,
+        stats_path: Option<std::path::PathBuf>,
+    ) -> Self {
+        let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        // If stats_path is None, create a temp one to avoid pollution
+        let (final_path, cleanup_path) = if let Some(p) = stats_path {
+            (Some(p), None)
+        } else {
+            let (p, _) = Self::temp_stats_path();
+            (Some(p.clone()), Some(p))
+        };
+
+        Self::with_clients_internal(
+            chip_clients,
+            link_client,
+            startup_timeout,
+            idle_timeout,
+            final_path,
+            None,
+            radio_stats,
+            cleanup_path,
+        )
+        .await
+    }
+
+    /// Internal helper to create World
+    async fn with_clients_internal(
+        chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
+        link_client: MockLinkClient,
+        startup_timeout: Option<std::time::Duration>,
+        idle_timeout: Option<std::time::Duration>,
+        stats_path: Option<std::path::PathBuf>,
+        stats_interval: Option<std::time::Duration>,
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        stats_file_to_cleanup: Option<std::path::PathBuf>,
     ) -> Self {
         let (runner, client) = device_actor::new();
         let actor = DeviceActor::new(
@@ -57,30 +147,66 @@ impl World {
             Box::new(link_client),
             startup_timeout,
             idle_timeout,
+            "0.0.0-test".to_string(),
+            stats_path,
+            stats_interval,
         );
         let actor_task = tokio::spawn(runner.run(actor));
-        World { client, _actor_task: actor_task }
+        World {
+            client,
+            _actor_task: actor_task,
+            radio_stats,
+            last_radio_stats: None,
+            stats_file_to_cleanup,
+        }
     }
 
     pub fn create_default_chip_clients() -> HashMap<ChipKind, Box<dyn ChipClient>> {
+        let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
+        Self::create_default_chip_clients_with_stats(radio_stats)
+    }
+
+    pub fn create_default_chip_clients_with_stats(
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+    ) -> HashMap<ChipKind, Box<dyn ChipClient>> {
         let mut clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         // Add default mocks for common chip kinds
         for kind in [ChipKind::BLUETOOTH, ChipKind::WIFI, ChipKind::UWB] {
-            clients.insert(kind, Box::new(Self::create_default_mock_chip()));
+            clients.insert(kind, Box::new(Self::create_default_mock_chip(radio_stats.clone())));
         }
         clients
     }
 
-    fn create_default_mock_chip() -> MockChipClient {
+    pub(crate) fn create_default_mock_chip(
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+    ) -> MockChipClient {
         let mut mock = MockChipClient::new();
-        // netsim_model::chip::Chip is a struct
         mock.expect_read().returning(|_| Ok(netsim_model::chip::Chip::default()));
         mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
         mock.expect_create().returning(|_| Ok(()));
         mock.expect_delete().returning(|_| Ok(()));
-        mock.expect_read_statistics().returning(|| Ok(Box::from([])));
+
+        // Return stats from shared state
+        let rs_for_read = radio_stats.clone();
+        mock.expect_read_statistics().returning(move || {
+            let stats = rs_for_read.lock().unwrap();
+            Ok(Box::from(stats.clone()))
+        });
+
         mock.expect_reset().returning(|_| Ok(()));
-        mock.expect_clone_box().returning(|| Box::new(Self::create_default_mock_chip()));
+        // Clone returns a fresh mock handling stats from the shared state
+        let radio_stats_clone = radio_stats.clone();
+        mock.expect_clone_box().returning(move || {
+            let mut clone_mock = MockChipClient::new();
+            let rs_clone = radio_stats_clone.clone();
+
+            clone_mock.expect_read_statistics().returning(move || {
+                let stats = rs_clone.lock().unwrap();
+                Ok(Box::from(stats.clone()))
+            });
+
+            Box::new(clone_mock)
+        });
         mock
     }
 
@@ -150,6 +276,13 @@ impl World {
         chip_id: netsim_model::chip::ChipId,
     ) {
         self.client.notify_chip_removed(device_id, chip_id).await.unwrap();
+    }
+
+    /// BDD Step: When I shut down the actor politely to trigger shutdown hooks
+    pub async fn when_shutdown_actor(&self) {
+        let _ = self.client.shutdown().await;
+        // Wait for Actor loop to flush and execute on_shutdown
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
 
     /// BDD Step: When I delete the device.
@@ -236,5 +369,105 @@ impl World {
             })),
             ..Default::default()
         }
+    }
+
+    /// Helper to get a unique temporary path for stats.
+    pub fn temp_stats_path() -> (std::path::PathBuf, String) {
+        let mut path = std::env::temp_dir();
+        let unique_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let filename = format!("netsim_session_stats_{}.json", unique_id);
+        path.push(&filename);
+        if path.exists() {
+            let _ = std::fs::remove_file(&path);
+        }
+        (path, filename)
+    }
+
+    /// Verifies the content of the stats file.
+    pub async fn verify_stats_file_content(
+        path: &std::path::PathBuf,
+        expected_version: &str,
+        expected_device_count: u32,
+        expected_peak_devices: u32,
+    ) {
+        let mut last_content = String::new();
+        let mut found = false;
+        // Wait up to 5 seconds
+        for _ in 0..50 {
+            if path.exists() {
+                if let Ok(c) = std::fs::read_to_string(path) {
+                    if !c.is_empty() {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&c) {
+                            // Check device_count if it matches.
+                            // Note: device_count in proto is cumulative.
+                            // Protobuf JSON mapping uses camelCase.
+                            let count = json["deviceCount"].as_u64().unwrap_or(0);
+                            if count == expected_device_count as u64 {
+                                found = true;
+                                last_content = c;
+                                break;
+                            }
+                        }
+                        last_content = c;
+                    }
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+
+        assert!(found, "Stats file content mismatch or timeout. Last content: {}", last_content);
+
+        let json: serde_json::Value =
+            serde_json::from_str(&last_content).expect("Failed to parse stats JSON");
+        assert_eq!(json["version"], expected_version, "version mismatch");
+
+        let val = json["deviceCount"].as_u64().unwrap_or(0);
+        assert_eq!(val, expected_device_count as u64, "device_count mismatch");
+
+        let val = json["peakConcurrentDevices"].as_u64().unwrap_or(0);
+        assert_eq!(val, expected_peak_devices as u64, "peak_concurrent_devices mismatch");
+
+        // precise mapping depends on proto compiler options, check both snake and camel
+        let duration = json["duration_secs"]
+            .as_u64()
+            .or_else(|| json["durationSecs"].as_u64())
+            .or_else(|| json["durationSecs"].as_str().map(|s| s.parse::<u64>().unwrap_or(0)));
+
+        assert!(duration.is_some(), "duration_secs should be present");
+    }
+
+    /// Helper to setup mock for verifying radio stats
+    pub fn given_radio_stats(&self, device_id: u32, tx: u64, rx: u64) {
+        let mut stats_vec = self.radio_stats.lock().unwrap();
+        let mut stats = netsim_model::stats::NetsimRadioStats::default();
+        stats.id = device_id;
+        stats.tx_bytes = tx;
+        stats.rx_bytes = rx;
+
+        // Replace or Append
+        if let Some(existing) = stats_vec.iter_mut().find(|s| s.id == device_id) {
+            *existing = stats;
+        } else {
+            stats_vec.push(stats);
+        }
+    }
+
+    /// Actual implementation of when_get_radio_stats assuming client support
+    pub async fn when_fetch_radio_stats(&mut self) {
+        match self.client.get_radio_stats().await {
+            Ok(stats) => self.last_radio_stats = Some(stats),
+            Err(e) => panic!("Failed to get radio stats: {}", e),
+        }
+    }
+
+    pub fn then_radio_stats_has_device_with_bytes(&self, device_id: u32, tx: u64, rx: u64) {
+        let stats = self.last_radio_stats.as_ref().expect("Radio stats not polled");
+        let radio =
+            stats.iter().find(|r| r.id == device_id).expect("Radio stats for device not found");
+        assert_eq!(radio.tx_bytes, tx, "Tx bytes mismatch");
+        assert_eq!(radio.rx_bytes, rx, "Rx bytes mismatch");
     }
 }

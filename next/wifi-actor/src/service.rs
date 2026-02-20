@@ -153,6 +153,10 @@ impl ActorService for WifiActor {
                 }
                 Ok(WifiResponse::Statistics(stats.into_boxed_slice()))
             }
+            WifiReq::GetGlobalStats => {
+                let stats = netsim_proto::stats::WifiStats::default();
+                Ok(WifiResponse::GlobalStats(Box::new(stats)))
+            }
             WifiReq::Reset { id } => {
                 self.medium.reset(id.0);
                 if let Some(chip) = self.active_chips.get_mut(&id) {
