@@ -44,8 +44,8 @@ impl ChipKind {
 pub struct Radio {
     pub state: Option<bool>,
     pub range: f32,
-    pub tx_count: i32,
-    pub rx_count: i32,
+    pub tx_count: u64,
+    pub rx_count: u64,
 }
 
 pub use crate::packet_streamer::{PacketSink, PacketStream};

@@ -286,7 +286,7 @@ Verification is performed via the standard Netsim testing strategy:
 | **RQ-STATS-04**   | Track Netsim Version              | `stats_lifecycle_test.rs`| Verifies version string in JSON                           | **Full**    |
 | **RQ-STATS-05**   | Aggregate Radio Stats             | `stats_collection_test.rs`| Verifies aggregation of Tx/Rx bytes from chips           | **Full**    |
 | **RQ-STATS-06**   | Track cumulative devices          | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
-| **RQ-STATS-07**   | Transport Stats (Pkts/Bytes/Dur)  | `stats_collection_test.rs`| Verifies aggregation of Tx/Rx bytes/packets               | **Partial** |
+| **RQ-STATS-07**   | Transport Stats (Pkts/Bytes/Dur)  | `stats_collection_test.rs`| Verifies aggregation of Tx/Rx bytes/packets               | **Full**    |
 | **RQ-STATS-08**   | Error Stats (Invalid Packets)     | `stats_collection_test.rs`| Verifies invalid packet reporting                         | **Partial** |
 | **RQ-STATS-PERSIST-01** | Persist stats to JSON       | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
 | **RQ-STATS-PERSIST-02** | Atomic write (rename)       | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
