@@ -15,9 +15,11 @@
 # limitations under the License.
 
 import logging
+import os
 from pathlib import Path
 import platform
 import shutil
+import stat
 
 from tasks.task import Task
 from utils import (
@@ -40,6 +42,23 @@ class CompileInstallTask(Task):
     self.args = args
     self.out = Path(args.out_dir)
     self.env = env
+
+  def on_rm_error(self, func, path, exc_info):
+    """Error handler for ``shutil.rmtree``.
+
+    If the error is due to an access error (read only file)
+    it attempts to add write permission and then retries.
+
+    If the error is for another reason it re-raises the error.
+
+    Usage : ``shutil.rmtree(path, onerror=on_rm_error)``
+    """
+    # Is the error an access error?
+    if not os.access(path, os.W_OK):
+      os.chmod(path, stat.S_IWRITE)
+      func(path)
+    else:
+      raise
 
   def do_run(self):
     if self.args.cmake:
@@ -72,21 +91,45 @@ class CompileInstallTask(Task):
       dest_dir.mkdir(exist_ok=True, parents=True)
 
       # Copy netsim binaries
-      for binary in ["netsim", "netsimd"]:
-        binary_name = (
-            f"{binary}.exe" if platform.system() == "Windows" else binary
-        )
-        src_file = search_dir / binary_name
+      if platform.system() == "Windows":
+        # TODO: Netsim Next is not yet built on Windows.
+        # We don't copy netsim next (netsimx/netsimdx) for now on Windows.
+        binaries = {
+            "netsim": "netsim",
+            "netsimd": "netsimd",
+        }
+      else:
+        binaries = {
+            "netsim": "netsim",
+            "netsimd": "netsimd",
+            "netsimx": "next/cli/netsim",
+            "netsimdx": "next/daemon/daemon",
+        }
+
+      for binary, src in binaries.items():
+        if platform.system() == "Windows":
+          binary_name = f"{binary}.exe"
+          src_name = f"{src}.exe"
+        else:
+          binary_name = binary
+          src_name = src
+
+        src_file = search_dir / src_name
         logging.info(f"Copying {src_file} to {dest_dir}")
         dest_file = dest_dir / binary_name
         # Remove the file if it exists to avoid permission errors on overwrite.
         if dest_file.is_file():
-          dest_file.unlink()
+          try:
+            dest_file.unlink()
+          except PermissionError:
+            self.on_rm_error(os.unlink, str(dest_file), None)
         shutil.copy(src_file, dest_file)
 
       # Copy netsim-ui
       ui_src_dir = search_dir / "netsim-ui"
       ui_dest_dir = dest_dir / "netsim-ui"
+      if ui_dest_dir.exists():
+        shutil.rmtree(ui_dest_dir, onerror=self.on_rm_error)
       logging.info(f"Copying directory {ui_src_dir} to {ui_dest_dir}")
       shutil.copytree(ui_src_dir, ui_dest_dir, dirs_exist_ok=True)
 
