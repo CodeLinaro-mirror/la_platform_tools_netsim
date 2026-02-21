@@ -1,4 +1,4 @@
-// Copyright 2023-2025 The Android Open Source Project // touch
+// Copyright 2023-2025 The Android Open Source Project
 
 use std::{
     collections::HashMap,
@@ -524,6 +524,9 @@ impl NetsimDaemon {
             Box::new(link_client.clone()),
             startup_timeout,
             idle_timeout,
+            get_version(),
+            None,
+            None,
         );
 
         // Spawn server tasks

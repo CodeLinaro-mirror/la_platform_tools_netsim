@@ -162,6 +162,7 @@
 //! ```
 #![allow(missing_docs)]
 pub mod ethernet;
+pub mod hci;
 pub mod icmp;
 pub mod ieee80211;
 pub mod ip;

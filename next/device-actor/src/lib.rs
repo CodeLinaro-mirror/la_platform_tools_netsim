@@ -9,6 +9,7 @@ mod device_actor;
 mod error;
 mod lifecycle;
 mod service;
+mod stats;
 mod utils;
 
 pub mod client;
