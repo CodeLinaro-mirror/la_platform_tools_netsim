@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     bt_pcap::BluetoothH4Writer, capture_actor::CaptureActor, error::CaptureError,
-    writer::CaptureWriter,
+    uwb_pcap::UwbPcapWriter, writer::CaptureWriter,
 };
 
 /// Entity representing a packet capture for a specific chip.
@@ -124,16 +124,16 @@ impl CaptureActor {
             }
             path.join(&filename)
         };
+        log::info!("Creating capture file: {}", filepath.display());
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
-            ChipKind::BLUETOOTH => {
-                log::info!("Creating capture file: {}", filepath.display());
-                BluetoothH4Writer::new(&filepath).await?
-            }
-            _ => {
-                // Fallback
-                log::info!("Creating capture file: {}", filepath.display());
-                BluetoothH4Writer::new(&filepath).await?
-            }
+            ChipKind::BLUETOOTH => BluetoothH4Writer::new(&filepath).await?,
+            ChipKind::UWB => UwbPcapWriter::new(&filepath).await?,
+            // Fallback
+            ChipKind::UNSPECIFIED
+            | ChipKind::WIFI
+            | ChipKind::AP
+            | ChipKind::NFC
+            | ChipKind::CELLULAR => BluetoothH4Writer::new(&filepath).await?,
         };
         Ok(writer)
     }

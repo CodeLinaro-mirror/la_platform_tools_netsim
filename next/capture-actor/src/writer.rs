@@ -132,3 +132,5 @@ impl CaptureWriter for PcapWriter {
 
 // Bluetooth H4 DLT is 187
 pub const DLT_BLUETOOTH_H4: u32 = 187;
+// FiRa UCI DLT is 299
+pub const DLT_FIRA_UCI: u32 = 299;
