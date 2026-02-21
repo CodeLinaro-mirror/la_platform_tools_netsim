@@ -1,29 +1,24 @@
+load("@rules_android//rules:rules.bzl", "android_binary")
+load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
+
 package(default_visibility = ["//visibility:public"])
 
-# Dummy APK rule to bypass missing Android SDK (aapt2) error
-genrule(
-    name = "ntest-agent",
+kt_android_library(
+    name = "ntest-agent-lib",
     testonly = True,
-    outs = ["ntest-agent.apk"],
-    cmd = "touch $@",
+    srcs = glob(["src/main/java/**/*.kt"]),
+    manifest = "AndroidManifest.xml",
+    tags = ["manual"],
+    deps = [
+        "@maven//:androidx_test_monitor",
+        "@maven//:androidx_test_runner",
+    ],
 )
 
-# Disabled due to missing SDK
-# kt_android_library(
-#     name = "ntest-agent-lib",
-#     testonly = True,
-#     srcs = glob(["src/main/java/**/*.kt"]),
-#     manifest = "AndroidManifest.xml",
-#     deps = [
-#         "@maven//:androidx_test_monitor",
-#         "@maven//:androidx_test_runner",
-#     ],
-#     #   resource_files = glob(["res/**"]),
-# )
-
-# android_binary(
-#     name = "ntest-agent-real",
-#     testonly = True,
-#     manifest = "AndroidManifest.xml",
-#     deps = [":ntest-agent-lib"],
-# )
+android_binary(
+    name = "ntest-agent",
+    testonly = True,
+    manifest = "AndroidManifest.xml",
+    tags = ["manual"],
+    deps = [":ntest-agent-lib"],
+)
