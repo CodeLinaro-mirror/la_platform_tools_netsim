@@ -58,7 +58,8 @@ impl World {
         let (slirp_runner, slirp_client) = slirp_actor::new();
         tokio::spawn(slirp_runner.run(slirp_actor_impl));
 
-        let ap_actor_impl = ApActor::new();
+        let shared_keys = Arc::new(ap_actor::shared::SharedKeyStore::new());
+        let ap_actor_impl = ApActor::new(shared_keys.clone());
 
         let (ap_runner, ap_client_base) = ResourceActor::new(32);
         tokio::spawn(ap_runner.run(ap_actor_impl));
@@ -115,13 +116,19 @@ impl World {
         let spying_ap_client_arc = Arc::new(spying_ap_client.clone());
 
         let wifi_actor_impl = if let Some(gw) = gateway {
-            WifiActor::new_with_gateway(Some(spying_ap_client_arc.clone()), gw, device_client)
+            WifiActor::new_with_gateway(
+                Some(spying_ap_client_arc.clone()),
+                gw,
+                device_client,
+                shared_keys.clone(),
+            )
         } else {
             WifiActor::new(
                 Some(spying_ap_client_arc.clone()),
                 Some(slirp_client),
                 device_client,
                 None,
+                shared_keys.clone(),
             )
         };
 
@@ -324,6 +331,7 @@ impl World {
             bssid: MacAddress::new(bssid),
             duration_id: 0,
             seq_ctrl: 0,
+            qos_ctrl: None,
             protected: 0,
             order: 0,
             more_frags: 0,
@@ -370,6 +378,7 @@ impl World {
             bssid: MacAddress::new(bssid),
             duration_id: 0,
             seq_ctrl: 0,
+            qos_ctrl: None,
             protected: 0,
             order: 0,
             more_frags: 0,
@@ -481,6 +490,7 @@ impl World {
             bssid: MacAddress::new(bssid),
             duration_id: 0,
             seq_ctrl: 0,
+            qos_ctrl: None,
             protected: 0,
             order: 0,
             more_frags: 0,
@@ -515,6 +525,20 @@ impl World {
 
         let msg =
             wrap_ethernet_in_hwsim(&eth, &bssid_p2p, &mdns_multicast, &sender_mac, 2412).unwrap();
+        self.chips[sender_idx].sink_tx.send(Bytes::from(msg)).await.unwrap();
+    }
+
+    pub async fn when_chip_transmits_infra_mdns(&mut self, sender_idx: usize, payload: &str) {
+        let sender_mac = self.chips[sender_idx].mac;
+        let mdns_multicast = [0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB]; // IPv4 mDNS
+
+        let eth = Self::create_ethernet_frame(&sender_mac, &mdns_multicast, payload.as_bytes());
+
+        // Infra Context: Use AP BSSID.
+        let ap_bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00];
+
+        // The packet goes to the AP (dest_hwsim_addr = ap_bssid)
+        let msg = wrap_ethernet_in_hwsim(&eth, &ap_bssid, &ap_bssid, &sender_mac, 2412).unwrap();
         self.chips[sender_idx].sink_tx.send(Bytes::from(msg)).await.unwrap();
     }
 
