@@ -449,8 +449,10 @@ impl NetsimDaemon {
         let slirp_actor_state = slirp_actor::SlirpActor::new(Default::default());
 
         // Setup AP Actor
+        let shared_keys = std::sync::Arc::new(ap_actor::shared::SharedKeyStore::new());
+
         let (ap_runner, ap_client) = ap_actor::new();
-        let ap_actor_state = ap_actor::ApActor::new();
+        let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
 
         // Setup Wifi Actor
         let (wifi_runner, wifi_client) = wifi_actor::new();
@@ -475,6 +477,7 @@ impl NetsimDaemon {
             Some(slirp_client.clone()),
             device_client.clone(),
             wifi_tap,
+            shared_keys.clone(),
         );
 
         // Setup Uwb Server

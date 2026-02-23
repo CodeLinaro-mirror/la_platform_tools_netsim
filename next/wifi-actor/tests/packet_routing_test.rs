@@ -123,6 +123,26 @@ async fn test_mdns_discovery_flow() {
     world.then_chip_receives_payload(2, "Service Discovery").await;
 }
 
+// Scenario: A Station (Chip) sends an mDNS query/announcement to the AP
+// Given a Wifi Medium with an AP and multiple chips
+// When a Chip transmits an mDNS multicast packet
+// Then ALL other chips should receive it via AP reflection
+#[tokio::test]
+async fn test_mdns_discovery_infrastructure_flow() {
+    let mut world = World::new().await;
+    world.given_an_ap().await;
+    let _sender = world.given_a_chip(1).await;
+    let _receiver = world.given_a_chip(2).await;
+    let _other = world.given_a_chip(3).await;
+
+    // Sender transmits mDNS
+    world.when_chip_transmits_infra_mdns(0, "Infra Service Discovery").await;
+
+    // Both receivers should get it
+    world.then_chip_receives_payload(1, "Infra Service Discovery").await;
+    world.then_chip_receives_payload(2, "Infra Service Discovery").await;
+}
+
 // Scenario: The Internet (Slirp) sends a packet to a Station (Chip)
 // Given a Wifi Medium with a provisioned chip (Receiver)
 // When the Slirp Actor sends an Ethernet frame addressed to the Receiver
