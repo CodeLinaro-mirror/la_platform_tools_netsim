@@ -11,7 +11,7 @@ use std::{
 use client::{CaptureClient, DeviceClient};
 use common::{
     system::netsimd_temp_dir,
-    util::os_utils::{get_instance_name, redirect_std_stream},
+    util::os_utils::{get_hci_port, get_instance, get_instance_name, redirect_std_stream},
 };
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
@@ -424,11 +424,17 @@ impl NetsimDaemon {
             StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], actual_grpc_port))),
         );
 
+        // HCI TCP socket server
+        let instance_num = get_instance(args.instance);
+        let hci_port = args.hci_port.unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
+        tokio::spawn(hci_server::server::run(hci_port, device_client.clone()));
+
         // Write the current daemon's information to the INI file.
         // Clients will use this to connect.
         let mut ini_data = HashMap::from([
             ("pid".to_string(), std::process::id().to_string()),
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
+            ("hci.port".to_string(), hci_port.to_string()),
         ]);
         if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
