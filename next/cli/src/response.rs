@@ -395,7 +395,6 @@ impl args::Command {
             ChipKind::BLUETOOTH => "BLUETOOTH".to_string(),
             ChipKind::WIFI => "WIFI".to_string(),
             ChipKind::UWB => "UWB".to_string(),
-            ChipKind::BLE_BEACON => "BLE_BEACON".to_string(),
         }
     }
 
