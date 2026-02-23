@@ -37,7 +37,7 @@ message NetsimRadioStats {
     UNSPECIFIED = 0;
     BLUETOOTH_LOW_ENERGY = 1;
     BLUETOOTH_CLASSIC = 2;
-    BLE_BEACON = 3 [deprecated = true];
+    reserved 3;
     WIFI = 4;
     UWB = 5;
     NFC = 6;
