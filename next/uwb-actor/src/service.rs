@@ -48,7 +48,6 @@ impl ActorService for UwbActor {
             ..Default::default()
         };
 
-        // Add chip to Pica
         let stream =
             params.packet_stream.expect("Packet stream is present").map(|b| b.to_vec()).boxed();
 
@@ -162,8 +161,12 @@ impl ActorService for UwbActor {
                     .map(|state| netsim_model::stats::NetsimRadioStats {
                         id: state.chip.id,
                         name: state.chip.name.clone().unwrap_or_default(),
+                        kind: netsim_model::chip::ChipKind::UWB.as_proto(),
+                        tx_count: 0,
+                        rx_count: 0,
                         tx_bytes: 0,
                         rx_bytes: 0,
+                        ..Default::default()
                     })
                     .collect();
                 Ok(UwbActionResult::Statistics(stats))

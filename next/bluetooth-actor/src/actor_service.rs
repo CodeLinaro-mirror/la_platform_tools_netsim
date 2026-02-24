@@ -234,8 +234,12 @@ impl ActorService for BluetoothActor {
                         stats_list.push(netsim_model::stats::NetsimRadioStats {
                             id: id.0,
                             name: chip.name.clone().unwrap_or("Unknown".to_string()),
-                            tx_bytes: stats.ll_packets_out,
-                            rx_bytes: stats.ll_packets_in,
+                            kind: netsim_model::chip::ChipKind::BLUETOOTH.as_proto(),
+                            tx_count: stats.ll_packets_out as u64,
+                            rx_count: stats.ll_packets_in as u64,
+                            tx_bytes: 0,
+                            rx_bytes: 0,
+                            ..Default::default()
                         });
                     }
                 }

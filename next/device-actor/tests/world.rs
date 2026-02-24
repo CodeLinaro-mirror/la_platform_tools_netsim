@@ -3,11 +3,13 @@ use std::{
     sync::{atomic::AtomicU32, Arc},
 };
 
+use bytes::Bytes;
 use device_actor::{DeviceActor, DeviceClient};
 use device_api::{
     api::{DeviceChipCreate, DeviceCreate},
     DeviceConfig, DeviceId,
 };
+use futures::{SinkExt, StreamExt};
 use link_api::MockLinkClient;
 use netsim_model::chip::{
     BluetoothUpdate, ChipClient, ChipKind, ChipUpdate, ChipVariantUpdate, MockChipClient,
@@ -24,6 +26,10 @@ pub struct World {
     pub last_radio_stats: Option<Vec<netsim_model::stats::NetsimRadioStats>>,
     // Path to clean up on drop
     stats_file_to_cleanup: Option<std::path::PathBuf>,
+    // BDD State
+    pub current_device_id: Option<DeviceId>,
+    pub current_chip_id: Option<netsim_model::chip::ChipId>,
+    pub transport_tx: Option<tokio::sync::mpsc::UnboundedSender<Bytes>>,
 }
 
 impl Drop for World {
@@ -158,6 +164,9 @@ impl World {
             radio_stats,
             last_radio_stats: None,
             stats_file_to_cleanup,
+            current_device_id: None,
+            current_chip_id: None,
+            transport_tx: None,
         }
     }
 
@@ -183,7 +192,13 @@ impl World {
         let mut mock = MockChipClient::new();
         mock.expect_read().returning(|_| Ok(netsim_model::chip::Chip::default()));
         mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
-        mock.expect_create().returning(|_| Ok(()));
+        mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        mock.expect_create().returning(|params| {
+            if let Some(mut stream) = params.packet_stream {
+                tokio::spawn(async move { while stream.next().await.is_some() {} });
+            }
+            Ok(())
+        });
         mock.expect_delete().returning(|_| Ok(()));
 
         // Return stats from shared state
@@ -320,6 +335,32 @@ impl World {
         (res1.unwrap(), res2.unwrap())
     }
 
+    /// BDD Step: When I add a chip with an injected packet stream.
+    /// Returns the sending end of the channel to simulate transport traffic.
+    pub async fn when_add_chip_with_stream(
+        &self,
+        device_guid: &str,
+        chip_name: &str,
+    ) -> (DeviceId, tokio::sync::mpsc::UnboundedSender<Bytes>) {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
+        let boxed_stream: netsim_model::chip::PacketStream = Box::new(stream);
+        let sink = futures::sink::drain()
+            .sink_map_err(|_| std::io::Error::from(std::io::ErrorKind::Other));
+        let boxed_sink: netsim_model::chip::PacketSink = Box::pin(sink);
+
+        let mut params = Self::create_device_add_chip_params(
+            device_guid.to_string(),
+            chip_name.to_string(),
+            "00:00:00:00:00:00".to_string(),
+        );
+        params.packet_stream = Some(boxed_stream);
+        params.packet_sink = Some(boxed_sink);
+
+        let device_id = self.client.add_chip(params).await.unwrap();
+        (device_id, tx)
+    }
+
     /// Checks if the actor task has finished (e.g. due to shutdown).
     pub fn is_actor_finished(&self) -> bool {
         self._actor_task.is_finished()
@@ -439,6 +480,57 @@ impl World {
         assert!(duration.is_some(), "duration_secs should be present");
     }
 
+    /// BDD Step: Given a device with a transport stream
+    pub async fn given_device_with_transport_stream(&mut self, device_guid: &str, chip_name: &str) {
+        let (device_id, tx) = self.when_add_chip_with_stream(device_guid, chip_name).await;
+        self.current_device_id = Some(device_id);
+        self.transport_tx = Some(tx);
+
+        // Fetch Chip ID
+        let device =
+            self.client.get(device_id).await.expect("RPC failed").expect("Device not found");
+        let chip_id =
+            device.chips.first().expect("Device created with transport stream has no chips").id;
+        self.current_chip_id = Some(netsim_model::chip::ChipId(chip_id));
+    }
+
+    /// BDD Step: Given mock radio stats are primed
+    pub fn given_mock_radio_stats(&self, tx: u64, rx: u64) {
+        let chip_id = self.current_chip_id.expect("No current chip set in World").0;
+        self.given_radio_stats(chip_id, tx, rx);
+    }
+
+    /// BDD Step: When I send packets to the transport
+    pub async fn when_send_packets_to_transport(&self, packet_count: usize, packet_size: usize) {
+        let tx = self.transport_tx.as_ref().expect("No transport_tx in World");
+        let packet = vec![0u8; packet_size];
+        for _ in 0..packet_count {
+            tx.send(bytes::Bytes::from(packet.clone()))
+                .expect("Failed to send packet to transport");
+        }
+        // Small delay to allow async propagation (Stream -> Stats -> Chip)
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    /// BDD Step: Then radio stats should match expected values
+    pub fn then_radio_stats_should_match(&self, expected_tx: u64, expected_rx: u64) {
+        let stats = self
+            .last_radio_stats
+            .as_ref()
+            .expect("No radio stats fetched. Call when_fetch_radio_stats() first.");
+
+        let chip_id = self.current_chip_id.expect("No current chip set in World").0;
+
+        // Find stats for our chip
+        let s = stats
+            .iter()
+            .find(|s| s.id == chip_id)
+            .unwrap_or_else(|| panic!("No stats found for chip {}", chip_id));
+
+        assert_eq!(s.tx_bytes, expected_tx, "Tx bytes mismatch for chip {}", chip_id);
+        assert_eq!(s.rx_bytes, expected_rx, "Rx bytes mismatch for chip {}", chip_id);
+    }
+
     /// Helper to setup mock for verifying radio stats
     pub fn given_radio_stats(&self, device_id: u32, tx: u64, rx: u64) {
         let mut stats_vec = self.radio_stats.lock().unwrap();
@@ -461,13 +553,5 @@ impl World {
             Ok(stats) => self.last_radio_stats = Some(stats),
             Err(e) => panic!("Failed to get radio stats: {}", e),
         }
-    }
-
-    pub fn then_radio_stats_has_device_with_bytes(&self, device_id: u32, tx: u64, rx: u64) {
-        let stats = self.last_radio_stats.as_ref().expect("Radio stats not polled");
-        let radio =
-            stats.iter().find(|r| r.id == device_id).expect("Radio stats for device not found");
-        assert_eq!(radio.tx_bytes, tx, "Tx bytes mismatch");
-        assert_eq!(radio.rx_bytes, rx, "Rx bytes mismatch");
     }
 }

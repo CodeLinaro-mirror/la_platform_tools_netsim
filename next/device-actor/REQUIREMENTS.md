@@ -222,6 +222,8 @@ The `Stats` module within `DeviceActor` is responsible for tracking and persisti
 - **RQ-STATS-04**: The system shall track the Netsim version string (`version`).
 - **RQ-STATS-05**: The system shall support fetching aggregated Radio Statistics on-demand from connected chips (but not yet persist them).
 - **RQ-STATS-06**: The system shall track the total cumulative number of devices created during the session (`device_count` in persistence).
+- **RQ-STATS-07**: **Transport Stats**: The system shall track packet and byte counts for both Tx and Rx directions (`tx_packets`, `rx_packets`, `tx_bytes`, `rx_bytes`) and the duration of the stats collection (`duration_secs`).
+- **RQ-STATS-08**: **Error Stats**: The system shall report invalid packets encountered by the radio (`invalid_packets`), including reason and description.
 
 #### 4.6.2 Persistence
 - **RQ-STATS-PERSIST-01**: Upon shutdown (`Drop`), the system shall write the collected statistics to a JSON file named `netsim_session_stats.json` in the `netsimd_temp_dir`.
@@ -284,6 +286,8 @@ Verification is performed via the standard Netsim testing strategy:
 | **RQ-STATS-04**   | Track Netsim Version              | `stats_lifecycle_test.rs`| Verifies version string in JSON                           | **Full**    |
 | **RQ-STATS-05**   | Aggregate Radio Stats             | `stats_collection_test.rs`| Verifies aggregation of Tx/Rx bytes from chips           | **Full**    |
 | **RQ-STATS-06**   | Track cumulative devices          | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-07**   | Transport Stats (Pkts/Bytes/Dur)  | `stats_collection_test.rs`| Verifies aggregation of Tx/Rx bytes/packets               | **Full**    |
+| **RQ-STATS-08**   | Error Stats (Invalid Packets)     | `stats_collection_test.rs`| Verifies invalid packet reporting                         | **Partial** |
 | **RQ-STATS-PERSIST-01** | Persist stats to JSON       | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
 | **RQ-STATS-PERSIST-02** | Atomic write (rename)       | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
 

@@ -17,6 +17,7 @@ DEPS = [
     "@serde",
     "@log",
     "@thiserror",
+    "@bytes",
 ]
 
 netsim_rust_library(
@@ -48,8 +49,11 @@ rust_test(
         "//next/device-api:testing",
         "//next/link-api:testing",
         "//next/model:testing",
+        "@bytes",
+        "@futures",
         "@mockall",
         "@serde_json",
         "@tokio",
+        "@tokio-stream",
     ],
 )
