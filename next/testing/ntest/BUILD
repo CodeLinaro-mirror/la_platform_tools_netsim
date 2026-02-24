@@ -32,14 +32,13 @@ sh_test(
     srcs = ["ntest-e2e.sh"],
     args = [
         "$(location :ntest)",
-        "$(location @netsim//next/testing/ntest-agent:ntest-agent.apk)",
+        "MANUAL_BUILD_REQUIRED",
         "$(location @netsim//:netsimd)",
         "--dry-run",
     ],
     data = [
         ":ntest",
         "@netsim//:netsimd",
-        "@netsim//next/testing/ntest-agent:ntest-agent.apk",
     ],
     tags = [
         "exclusive",
