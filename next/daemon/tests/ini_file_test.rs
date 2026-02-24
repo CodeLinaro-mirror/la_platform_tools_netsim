@@ -19,16 +19,16 @@ fn create_temp_dir(test_name: &str) -> PathBuf {
 fn test_ini_writer_reader_flow() {
     let temp_dir = create_temp_dir("writer_reader");
 
-    let mut ini_file1 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
+    let ini_file1 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
     match ini_file1.try_acquire() {
-        Ok(IniFileAccess::Writer(guard)) => {
+        Ok(IniFileAccess::Writer(mut guard)) => {
             let mut data = HashMap::new();
             data.insert("pid".to_string(), "12345".to_string());
             data.insert("grpc.port".to_string(), "8554".to_string());
             data.insert("uds.path".to_string(), "/tmp/netsim.sock".to_string());
             guard.write(&data).unwrap();
 
-            let mut ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
+            let ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
             match ini_file2.try_acquire() {
                 Ok(IniFileAccess::Reader(config)) => {
                     assert_eq!(config.pid, Some(12345));
@@ -53,13 +53,13 @@ fn test_ini_reader_malformed_file() {
     let temp_dir = create_temp_dir("reader_malformed");
 
     // Instance 1 becomes owner and writes a malformed file
-    let mut ini_file1 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
+    let ini_file1 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
     match ini_file1.try_acquire() {
         Ok(IniFileAccess::Writer(guard)) => {
             fs::write(guard.path(), "pid=123\nmalformed_line\ngrpc.port=8554").unwrap();
 
             // Instance 2 attempts to acquire, fails lock, then fails to parse
-            let mut ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
+            let ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
             let result = ini_file2.try_acquire();
             println!("Malformed test result: {:?}", result);
             match result {
@@ -78,14 +78,14 @@ fn test_ini_reader_malformed_file() {
 #[test]
 fn test_ini_reader_missing_grpc_port() {
     let temp_dir = create_temp_dir("reader_missing_port");
-    let mut ini_file1 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
+    let ini_file1 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
     match ini_file1.try_acquire() {
-        Ok(IniFileAccess::Writer(guard)) => {
+        Ok(IniFileAccess::Writer(mut guard)) => {
             let mut data = HashMap::new();
             data.insert("pid".to_string(), "12345".to_string());
             guard.write(&data).unwrap(); // grpc.port is missing
 
-            let mut ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
+            let ini_file2 = IniFile::new_for_dir(temp_dir.clone()).unwrap();
             match ini_file2.try_acquire() {
                 Err(e) => {
                     assert_eq!(e.kind(), io::ErrorKind::InvalidData);
@@ -104,7 +104,7 @@ fn test_ini_reader_missing_grpc_port() {
 #[test]
 fn test_ini_writer_no_file() {
     let temp_dir = create_temp_dir("writer_no_file");
-    let mut ini_file = IniFile::new_for_dir(temp_dir.clone()).unwrap();
+    let ini_file = IniFile::new_for_dir(temp_dir.clone()).unwrap();
 
     // Should become Writer as no file exists in this dir
     match ini_file.try_acquire() {

@@ -61,7 +61,7 @@ rust_library(
         "@futures",
         "@grpcio",
         "@log",
-        "@named-lock",
+        "@tempfile",
         "@tokio",
         "@tokio-stream",
     ] + select({

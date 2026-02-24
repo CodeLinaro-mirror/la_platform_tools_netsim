@@ -26,7 +26,6 @@ grpcio = { version = "0.13", default-features = false, features = [
 ] }
 link-actor = { path = "../link-actor" }
 log = "0.4"
-named-lock = "0.4.1"
 netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
 packet-stream = { path = "../packet-stream" }
@@ -35,6 +34,7 @@ uwb-actor = { path = "../uwb-actor" }
 wifi-actor = { path = "../wifi-actor" }
 
 [dev-dependencies]
+tempfile = "3"
 
 [features]
 default = []
