@@ -71,6 +71,10 @@ impl Stream for CapturedStream {
             other => other,
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
 
 /// A wrapper around `PacketSink` that automatically captures sent packets.
