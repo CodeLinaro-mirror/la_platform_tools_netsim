@@ -24,6 +24,7 @@ grpcio = { version = "0.13", default-features = false, features = [
   "protobufv3-codec",
   "openssl",
 ] }
+hci-server = { path = "../hci-server" }
 link-actor = { path = "../link-actor" }
 log = "0.4"
 named-lock = "0.4.1"
