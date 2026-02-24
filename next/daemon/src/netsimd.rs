@@ -275,6 +275,11 @@ impl NetsimDaemon {
         &self.device_client
     }
 
+    /// Returns a reference to the CaptureClient.
+    pub fn capture_client(&self) -> &CaptureClient {
+        &self.capture_client
+    }
+
     /// Creates a new `NetsimDaemon` instance or returns config for forwarding.
     ///
     /// Returns:
@@ -529,7 +534,7 @@ impl NetsimDaemon {
         join_set.spawn(slirp_runner.run(slirp_actor_state));
         join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
-        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
+        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::new(args.pcap)));
         join_set.spawn(uwb_runner.run(uwb_actor));
 
         // Spawn DeviceActor separately
@@ -548,10 +553,6 @@ impl NetsimDaemon {
         }
 
         device_client.create_device(device_create).await.expect("Failed to create default AP");
-
-        if args.pcap {
-            capture_client.set_default_capture(true).await.expect("Failed to set default capture");
-        }
 
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();

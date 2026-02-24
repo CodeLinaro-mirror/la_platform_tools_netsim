@@ -92,7 +92,7 @@ mod tests {
     }
 
     fn setup_test_context() -> (CaptureActor, PathBuf) {
-        let mut ctx = CaptureActor::default();
+        let mut ctx = CaptureActor::new(false);
         let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
         let temp_dir =
             std::env::temp_dir().join(format!("netsim_capture_test_{}_{}", std::process::id(), id));
@@ -117,7 +117,6 @@ mod tests {
             chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device".to_string(),
-            default_enabled: false,
             enabled_flag: enabled_flag.clone(),
         };
         let mut entity = InternalCaptureInfo::from_create_params(chip_id, create_params).unwrap();
@@ -179,7 +178,6 @@ mod tests {
             chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_default".to_string(),
-            default_enabled: false,
             enabled_flag: enabled_flag.clone(),
         };
 
@@ -204,12 +202,11 @@ mod tests {
     async fn test_capture_directory() {
         let (mut ctx, temp_dir) = setup_test_context();
         let chip_id = ChipId(3);
-        let enabled_flag = Arc::new(AtomicBool::new(false));
+        let enabled_flag = Arc::new(AtomicBool::new(true));
         let create_params = CaptureCreate {
             chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_dir".to_string(),
-            default_enabled: true,
             enabled_flag: enabled_flag.clone(),
         };
 

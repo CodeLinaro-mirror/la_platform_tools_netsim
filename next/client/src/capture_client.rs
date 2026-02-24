@@ -38,15 +38,9 @@ impl CaptureClient {
         chip_id: ChipId,
         chip_kind: ChipKind,
         device_name: String,
-        default_enabled: bool,
+        enabled_flag: Arc<AtomicBool>,
     ) -> Result<(), DeviceError> {
-        let create = CaptureCreate {
-            chip_id,
-            chip_kind,
-            device_name,
-            default_enabled,
-            enabled_flag: Arc::new(AtomicBool::new(default_enabled)),
-        };
+        let create = CaptureCreate { chip_id, chip_kind, device_name, enabled_flag };
         self.inner.create(create).await.map_err(|e| DeviceError::Internal(e.to_string()))?;
         Ok(())
     }
@@ -86,26 +80,11 @@ impl CaptureClient {
             .perform_action(Some(chip_id), CaptureAction::Patch { chip_id, enabled })
             .await
             .map_err(|e| anyhow!(e))?;
-        if let CaptureActionResult::Success = result {
-            Ok(())
-        } else {
-            Err(anyhow!("Unexpected result from Patch"))
-        }
-    }
-
-    /// Sets the default capture enabled state for new devices.
-    ///
-    /// # Arguments
-    /// * `enabled` - Whether to enable packet capture by default.
-    pub async fn set_default_capture(&self, enabled: bool) -> Result<()> {
-        let result = self
-            .inner
-            .perform_action(None, CaptureAction::SetDefaultCapture { enabled })
-            .await
-            .map_err(|e| anyhow!(e))?;
         match result {
-            CaptureActionResult::Success => Ok(()),
-            _ => Err(anyhow!("Unexpected result from SetDefaultCapture")),
+            CaptureActionResult::Success | CaptureActionResult::Updated(_) => Ok(()),
+            CaptureActionResult::Error(err) => {
+                Err(anyhow!("Unexpected result from Patch: {err:?}"))
+            }
         }
     }
 
@@ -189,7 +168,7 @@ impl capture_api::CaptureSender for CaptureClient {
             create.chip_id,
             create.chip_kind,
             create.device_name,
-            create.default_enabled,
+            create.enabled_flag,
         )
         .await
         .map_err(|e| anyhow::anyhow!(e))

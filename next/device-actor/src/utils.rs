@@ -66,6 +66,7 @@ pub async fn create_capture_and_wrap_streams(
     packet_stream: Option<PacketStream>,
     packet_sink: Option<PacketSink>,
 ) -> (Option<PacketStream>, Option<PacketSink>, Option<Arc<StreamStats>>) {
+    // Default to disabled, the capture actor is responsible for enabling it
     let enabled_flag = Arc::new(AtomicBool::new(false));
 
     if let Some(client) = &capture_client {
@@ -73,7 +74,6 @@ pub async fn create_capture_and_wrap_streams(
             chip_id,
             chip_kind,
             device_name: device_name.to_string(),
-            default_enabled: false,
             enabled_flag: enabled_flag.clone(),
         };
         let _ = client.create_capture(capture_create).await;

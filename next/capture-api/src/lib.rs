@@ -106,8 +106,6 @@ pub struct CaptureCreate {
     pub chip_kind: ChipKind,
     /// The name of the device.
     pub device_name: String,
-    /// Whether capture should be enabled by default.
-    pub default_enabled: bool,
     /// Optional flag to be updated when capture status changes.
     #[serde(skip)]
     pub enabled_flag: Arc<AtomicBool>,
@@ -124,8 +122,6 @@ pub enum CaptureAction {
     Create { chip_id: ChipId, chip_kind: ChipKind, device_name: String },
     /// Delete a capture.
     Delete { chip_id: ChipId },
-    /// Set default capture state for new captures.
-    SetDefaultCapture { enabled: bool },
     /// Set default capture directory.
     SetCaptureDirectory { path: PathBuf },
 }
