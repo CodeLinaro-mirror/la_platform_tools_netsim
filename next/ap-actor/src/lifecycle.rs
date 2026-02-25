@@ -2,7 +2,7 @@
 
 use actor_framework::{ActorLifecycle, DynContext};
 use async_trait::async_trait;
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use netsim_packets::ieee80211::Ieee80211;
 
 use crate::ap_actor::{ApActor, WIFI_STREAM_ID};

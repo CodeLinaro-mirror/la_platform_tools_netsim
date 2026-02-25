@@ -1,6 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 
 use crate::world::World;
 

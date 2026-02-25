@@ -10,13 +10,8 @@ use packet_stream::error::{PacketStreamError, Result};
 use protobuf::{Enum, Message};
 
 pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {
-    match proto.enum_value_or_default() {
-        proto_common::ChipKind::UNSPECIFIED => ChipKind::UNSPECIFIED,
-        proto_common::ChipKind::BLUETOOTH => ChipKind::BLUETOOTH,
-        proto_common::ChipKind::WIFI => ChipKind::WIFI,
-        proto_common::ChipKind::UWB => ChipKind::UWB,
-        proto_common::ChipKind::BLUETOOTH_BEACON => ChipKind::BLUETOOTH,
-    }
+    crate::frontend_converter::from_proto_chip_kind(proto.enum_value_or_default())
+        .unwrap_or(ChipKind::UNSPECIFIED)
 }
 
 pub fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
@@ -139,15 +134,7 @@ pub fn chip_info_to_proto(chip_info: ChipInfo) -> proto_startup::ChipInfo {
     proto.name = chip_info.name;
     if let Some(chip) = chip_info.chip {
         let mut chip_proto = proto_startup::Chip::new();
-        chip_proto.kind = match chip.kind {
-            ChipKind::UNSPECIFIED => proto_common::ChipKind::UNSPECIFIED,
-            ChipKind::BLUETOOTH => proto_common::ChipKind::BLUETOOTH,
-            ChipKind::WIFI => proto_common::ChipKind::WIFI,
-            ChipKind::UWB => proto_common::ChipKind::UWB,
-            ChipKind::CELL => proto_common::ChipKind::UNSPECIFIED,
-            ChipKind::AP => proto_common::ChipKind::UNSPECIFIED,
-        }
-        .into();
+        chip_proto.kind = crate::frontend_converter::to_proto_chip_kind(chip.kind).into();
         chip_proto.id = chip.id;
         chip_proto.manufacturer = chip.manufacturer;
         chip_proto.product_name = chip.product_name;

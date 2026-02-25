@@ -90,6 +90,9 @@ impl DeviceInfo {
 }
 
 /// The kind of network technology the chip supports.
+///
+/// This enumeration is used to distinguish between different types of simulated
+/// radios and to route packets to the correct handlers.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub enum ChipKind {
     #[default]
@@ -97,6 +100,7 @@ pub enum ChipKind {
     BLUETOOTH,
     WIFI,
     UWB,
-    CELL,
     AP,
+    NFC,
+    CELLULAR,
 }

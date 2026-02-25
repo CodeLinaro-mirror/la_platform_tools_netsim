@@ -4,7 +4,7 @@ use actor_framework::{ActorLifecycle, ActorService, DynContext};
 use async_trait::async_trait;
 use futures::FutureExt;
 use log::warn;
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use pica::PicaEvent;
 use tokio::sync::broadcast::error::TryRecvError;
 

@@ -391,12 +391,15 @@ impl args::Command {
 
     pub fn chip_kind_to_string(chip_kind: ChipKind) -> String {
         match chip_kind {
-            ChipKind::UNSPECIFIED => "UNSPECIFIED".to_string(),
-            ChipKind::BLUETOOTH => "BLUETOOTH".to_string(),
-            ChipKind::WIFI => "WIFI".to_string(),
-            ChipKind::UWB => "UWB".to_string(),
-            ChipKind::BLUETOOTH_BEACON => "BLUETOOTH_BEACON".to_string(),
+            ChipKind::UNSPECIFIED => "UNSPECIFIED",
+            ChipKind::BLUETOOTH => "BLUETOOTH",
+            ChipKind::WIFI => "WIFI",
+            ChipKind::UWB => "UWB",
+            ChipKind::BLUETOOTH_BEACON => "BLUETOOTH_BEACON",
+            ChipKind::NFC => "NFC",
+            ChipKind::CELLULAR => "CELLULAR",
         }
+        .into()
     }
 
     pub fn filter_captures(captures: &mut Vec<model::Capture>, keys: &[String]) {

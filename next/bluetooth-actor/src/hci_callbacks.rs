@@ -4,7 +4,7 @@ use std::ffi::c_int;
 
 use bytes::Bytes;
 use futures::SinkExt;
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use rootcanal::{
     controller::{Callbacks as ControllerCallbacks, Id},
     types::Phy,

@@ -4,7 +4,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 
 use crate::writer::CaptureWriter;
 

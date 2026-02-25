@@ -1,6 +1,6 @@
 use actor_framework::DynContext;
 use ap_actor::shared::SharedKeyStore;
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use netsim_packets::ieee80211::Ieee80211;
 
 use crate::{medium::Medium, wifi_actor::WifiActor};

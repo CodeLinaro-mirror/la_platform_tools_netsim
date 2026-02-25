@@ -8,6 +8,7 @@
 
 use std::fmt;
 
+pub use netsim_types::ChipKind;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
@@ -17,28 +18,6 @@ use crate::{
     device::{DeviceId, Orientation, Position},
     stats::NetsimRadioStats,
 };
-
-/// The kind of network technology the chip supports.
-///
-/// This enumeration is used to distinguish between different types of simulated
-/// radios and to route packets to the correct handlers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[repr(i32)]
-pub enum ChipKind {
-    #[default]
-    BLUETOOTH = 1,
-    WIFI = 2,
-    UWB = 3,
-    NFC = 4,
-    CELLULAR = 6,
-    AP = 7,
-}
-
-impl ChipKind {
-    pub fn as_proto(&self) -> i32 {
-        *self as i32
-    }
-}
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Radio {
@@ -193,20 +172,6 @@ impl ChipConfig {
             manufacturer: manufacturer.into(),
             product_name: product_name.into(),
             chip_kind_params,
-        }
-    }
-}
-
-// TODO: netsim_types can be removed if ChipKind is moved to a base types module
-impl From<netsim_types::ChipKind> for ChipKind {
-    fn from(kind: netsim_types::ChipKind) -> Self {
-        match kind {
-            netsim_types::ChipKind::UNSPECIFIED => ChipKind::BLUETOOTH,
-            netsim_types::ChipKind::BLUETOOTH => ChipKind::BLUETOOTH,
-            netsim_types::ChipKind::WIFI => ChipKind::WIFI,
-            netsim_types::ChipKind::UWB => ChipKind::UWB,
-            netsim_types::ChipKind::CELL => ChipKind::CELLULAR,
-            netsim_types::ChipKind::AP => ChipKind::AP,
         }
     }
 }
