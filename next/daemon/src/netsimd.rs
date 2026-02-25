@@ -357,11 +357,10 @@ impl NetsimDaemon {
             std::env::consts::ARCH
         );
 
-        let mut ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
+        let ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
 
         // Attempt to acquire the singleton lock for the netsim daemon.
-        // The lock file (netsim.ini.lock) is managed by the `named_lock` crate
-        // in a system-wide temporary directory.
+        // The lock is managed by direct file locking on the netsim.ini file.
         match ini_file.try_acquire().map_err(init_error)? {
             // This instance is the Writer (the primary daemon).
             IniFileAccess::Writer(ini_guard) => {
@@ -376,21 +375,12 @@ impl NetsimDaemon {
     }
 
     async fn initialize_primary_daemon(
-        ini_guard: IniFileGuard,
+        mut ini_guard: IniFileGuard,
         args: Args,
         _runtime_dir: PathBuf,
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
-        let ini_path = ini_guard.path();
-        info!("INI file path: {}", ini_path.display());
-
-        // Remove any potential stale INI file from a previous unclean shutdown.
-        if ini_path.exists() {
-            if let Err(e) = fs::remove_file(ini_path) {
-                log::warn!("Failed to remove stale INI file: {}", e);
-                // Continue anyway, as we will overwrite it
-            }
-        }
+        info!("INI file path: {}", ini_guard.path().display());
 
         // Initialize listeners (UDS, gRPC).
         let mut listener_addresses = HashMap::new();
@@ -443,7 +433,7 @@ impl NetsimDaemon {
         // Even if stale file removal failed, we can proceed as ini_guard.write will
         // overwrite.
         ini_guard.write(&ini_data).map_err(init_error)?;
-        info!("Wrote to INI file {}", ini_path.display());
+        info!("Wrote to INI file {}", ini_guard.path().display());
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
