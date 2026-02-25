@@ -22,7 +22,9 @@ use netsim_model::chip::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    device_actor::DeviceActor, error::DeviceError, utils::create_capture_and_wrap_streams,
+    device_actor::DeviceActor,
+    error::DeviceError,
+    utils::{create_capture_and_wrap_streams, StreamStats},
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -30,6 +32,8 @@ pub(crate) struct InternalDevice {
     pub device: device_api::Device,
     pub create_params: Option<DeviceCreate>,
     pub guid: Option<String>,
+    #[serde(skip)]
+    pub chip_stats: HashMap<ChipId, Arc<StreamStats>>,
 }
 
 impl InternalDevice {
@@ -46,6 +50,7 @@ impl InternalDevice {
             },
             create_params: Some(params),
             guid: None,
+            chip_stats: HashMap::new(),
         })
     }
 }
@@ -90,21 +95,20 @@ impl DeviceActor {
         let chip_kind_params = chip_config.chip_kind_params.clone();
         let chip_kind = ChipKind::from(&chip_kind_params);
 
-        // 2. Handle Capture Creation and Stream Wrapping
-        // If a capture client is present, wrap the streams to enable packet capture.
-        let (packet_stream, packet_sink) = if let Some(capture_client) = capture_client {
-            create_capture_and_wrap_streams(
-                capture_client.clone(),
-                chip_id,
-                chip_kind,
-                entity.device.name.clone(),
-                packet_stream,
-                packet_sink,
-            )
-            .await
-        } else {
-            (packet_stream, packet_sink)
-        };
+        // 2. Wrap streams for stats and optional packet capture.
+        let (packet_stream, packet_sink, stream_stats) = create_capture_and_wrap_streams(
+            capture_client.clone(),
+            chip_id,
+            chip_kind,
+            entity.device.name.clone(),
+            packet_stream,
+            packet_sink,
+        )
+        .await;
+
+        if let Some(stats) = stream_stats {
+            entity.chip_stats.insert(chip_id, stats);
+        }
 
         // 3. Get Chip Client
         let chip_client = chip_clients.get(&chip_kind).ok_or_else(|| {
@@ -196,9 +200,8 @@ impl DeviceActor {
     ) -> Result<DeviceActionResult, DeviceError> {
         log::info!("DeviceActor: AddChipByGuid for device {}", params.device_guid);
 
-        // Check if device exists
         if let Some(id) = self.guid_to_id.get(&params.device_guid) {
-            // Device Exists: Add Chip
+            // Add Chip to Existing Device
             let id = *id;
             let entity = self
                 .devices
@@ -219,7 +222,7 @@ impl DeviceActor {
 
             Ok(DeviceActionResult::AddChipByGuidSuccess { device_id: id, chip_id })
         } else {
-            // Device Does Not Exist: Create New Device
+            // Create New Device
             let chip_create_params = params.chip_config.clone().into();
             let create_params =
                 DeviceCreate { device_config: params.device_config, chip: chip_create_params };
@@ -447,6 +450,25 @@ impl ActorService for DeviceActor {
                             ),
                         }
                     }
+
+                    // Optimization: Build a flat map of duplicate-safe stats first (O(N))
+                    let transport_stats: HashMap<ChipId, Arc<StreamStats>> = self
+                        .devices
+                        .values()
+                        .flat_map(|d| d.chip_stats.iter())
+                        .map(|(k, v)| (*k, v.clone()))
+                        .collect();
+
+                    for stats in &mut all_stats {
+                        if let Some(stream_stats) = transport_stats.get(&ChipId(stats.id)) {
+                            stats.tx_count = stream_stats.rx_packets.load(Ordering::Relaxed);
+                            stats.tx_bytes = stream_stats.rx_bytes.load(Ordering::Relaxed);
+                            stats.rx_count = stream_stats.tx_packets.load(Ordering::Relaxed);
+                            stats.rx_bytes = stream_stats.tx_bytes.load(Ordering::Relaxed);
+                            stats.duration_secs = stream_stats.start_time.elapsed().as_secs();
+                        }
+                    }
+
                     Ok(DeviceActionResult::Statistics(all_stats))
                 }
                 DeviceAction::AddChipByGuid { params } => {

@@ -23,6 +23,7 @@ use crate::{
 /// This enumeration is used to distinguish between different types of simulated
 /// radios and to route packets to the correct handlers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[repr(i32)]
 pub enum ChipKind {
     #[default]
     BLUETOOTH = 1,
@@ -33,12 +34,18 @@ pub enum ChipKind {
     AP = 7,
 }
 
+impl ChipKind {
+    pub fn as_proto(&self) -> i32 {
+        *self as i32
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Radio {
     pub state: Option<bool>,
     pub range: f32,
-    pub tx_count: i32,
-    pub rx_count: i32,
+    pub tx_count: u64,
+    pub rx_count: u64,
 }
 
 pub use crate::packet_streamer::{PacketSink, PacketStream};
@@ -421,12 +428,7 @@ impl ChipVariantUpdate {
 /// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
 /// messages to the server over an `mpsc` channel. It abstracts away the channel
 /// and `oneshot` responder boilerplate for each command.
-/// A client handle for interacting with the chip server actor.
-///
-/// There is one chip server actor for each network type (Bluetooth, UWB,
-/// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
-/// messages to the server over an `mpsc` channel. It abstracts away the channel
-/// and `oneshot` responder boilerplate for each command.
+
 /// A generic client for interacting with any chip server actor (UWB, WiFi,
 /// Cell).
 #[derive(Clone)]
