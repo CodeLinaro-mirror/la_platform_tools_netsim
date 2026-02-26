@@ -7,7 +7,6 @@ use std::{
 };
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
@@ -224,7 +223,6 @@ impl CaptureActor {
     }
 }
 
-#[async_trait]
 impl ActorService for CaptureActor {
     type Id = ChipId;
     type Create = CaptureCreate;

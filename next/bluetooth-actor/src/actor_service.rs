@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use netsim_model::{
     chip::{
         BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant, ChipVariantUpdate,
@@ -19,7 +18,6 @@ use crate::{
     utils::ToChipError,
 };
 
-#[async_trait]
 impl ActorService for BluetoothActor {
     type Id = ChipId;
     type Create = ChipCreate;
