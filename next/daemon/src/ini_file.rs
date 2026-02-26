@@ -261,14 +261,14 @@ impl IniFile {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, fs};
+    use std::collections::HashMap;
 
     use super::*;
 
     #[test]
     fn test_ini_file_owner_flow() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
+        let ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
 
         match ini_file.try_acquire() {
             Ok(IniFileAccess::Writer(mut guard)) => {
@@ -276,7 +276,7 @@ mod tests {
                 data.insert("grpc.port".to_string(), "8554".to_string());
                 guard.write(&data).unwrap();
 
-                let mut ini_file2 = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
+                let ini_file2 = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
                 match ini_file2.try_acquire() {
                     Ok(IniFileAccess::Reader(config)) => {
                         assert_eq!(config.grpc_port, 8554);
