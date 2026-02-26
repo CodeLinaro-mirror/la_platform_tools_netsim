@@ -231,12 +231,25 @@ impl ActorService for BluetoothActor {
                 let chips = self.chips.lock().unwrap();
                 for (id, chip) in chips.iter() {
                     if let Ok(stats) = self.rootcanal.get_stats(id.0.into()) {
+                        // BLE Stats
                         stats_list.push(netsim_model::stats::NetsimRadioStats {
                             id: id.0,
                             name: chip.name.clone().unwrap_or("Unknown".to_string()),
-                            kind: ChipKind::BLUETOOTH,
-                            tx_count: stats.ll_packets_out as u64,
-                            rx_count: stats.ll_packets_in as u64,
+                            kind: netsim_model::stats::RadioKind::BluetoothLowEnergy,
+                            tx_count: stats.ll_packets_out_ble,
+                            rx_count: stats.ll_packets_in_ble,
+                            tx_bytes: 0,
+                            rx_bytes: 0,
+                            ..Default::default()
+                        });
+
+                        // Classic Stats
+                        stats_list.push(netsim_model::stats::NetsimRadioStats {
+                            id: id.0,
+                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
+                            kind: netsim_model::stats::RadioKind::BluetoothClassic,
+                            tx_count: stats.ll_packets_out_classic,
+                            rx_count: stats.ll_packets_in_classic,
                             tx_bytes: 0,
                             rx_bytes: 0,
                             ..Default::default()

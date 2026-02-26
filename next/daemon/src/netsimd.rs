@@ -513,7 +513,7 @@ impl NetsimDaemon {
             )
         };
 
-        let device_actor_state = device_actor::DeviceActor::new(
+        let mut device_actor_state = device_actor::DeviceActor::new(
             chip_clients.clone(),
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
@@ -539,6 +539,7 @@ impl NetsimDaemon {
         join_set.spawn(uwb_runner.run(uwb_actor));
 
         // Spawn DeviceActor separately
+        device_actor_state.set_self_client(device_client.clone());
         let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP

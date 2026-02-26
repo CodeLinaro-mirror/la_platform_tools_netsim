@@ -148,7 +148,7 @@ impl World {
         stats_file_to_cleanup: Option<std::path::PathBuf>,
     ) -> Self {
         let (runner, client) = device_actor::new();
-        let actor = DeviceActor::new(
+        let mut actor = DeviceActor::new(
             chip_clients,
             Arc::new(AtomicU32::new(0)),
             None,
@@ -159,6 +159,7 @@ impl World {
             stats_path,
             stats_interval,
         );
+        actor.set_self_client(client.clone());
         let actor_task = tokio::spawn(runner.run(actor));
         World {
             client,
@@ -183,18 +184,57 @@ impl World {
         let mut clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         // Add default mocks for common chip kinds
         for kind in [ChipKind::BLUETOOTH, ChipKind::WIFI, ChipKind::UWB] {
-            clients.insert(kind, Box::new(Self::create_default_mock_chip(radio_stats.clone())));
+            clients
+                .insert(kind, Box::new(Self::create_default_mock_chip(radio_stats.clone(), kind)));
         }
         clients
     }
 
     pub(crate) fn create_default_mock_chip(
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        kind: ChipKind,
     ) -> MockChipClient {
         let mut mock = MockChipClient::new();
-        mock.expect_read().returning(|_| Ok(netsim_model::chip::Chip::default()));
-        mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
-        mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
+        // Shared state for the chip
+        let chip_state = Arc::new(std::sync::Mutex::new(netsim_model::chip::Chip {
+            kind,
+            ..Default::default()
+        }));
+
+        // Return chip with correct kind and state
+        let chip_state_read = chip_state.clone();
+        mock.expect_read().returning(move |_| {
+            let chip = chip_state_read.lock().unwrap();
+            Ok(chip.clone())
+        });
+
+        let chip_state_update = chip_state.clone();
+        mock.expect_update().returning(move |_, patch| {
+            let mut chip = chip_state_update.lock().unwrap();
+            // Apply updates to the shared state
+            if let Some(netsim_model::chip::ChipVariantUpdate::Bluetooth(bt_update)) = patch.variant
+            {
+                let le_state = bt_update.low_energy.state;
+                let classic_state = bt_update.classic.state;
+
+                // Ensure variant exists
+                if chip.variant.is_none() {
+                    chip.variant =
+                        Some(netsim_model::chip::ChipVariant::Bluetooth(Default::default()));
+                }
+
+                if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
+                    if let Some(s) = le_state {
+                        bt.low_energy.state = Some(s);
+                    }
+                    if let Some(s) = classic_state {
+                        bt.classic.state = Some(s);
+                    }
+                }
+            }
+            Ok(chip.clone())
+        });
+
         mock.expect_create().returning(|params| {
             if let Some(mut stream) = params.packet_stream {
                 tokio::spawn(async move { while stream.next().await.is_some() {} });
@@ -211,16 +251,64 @@ impl World {
         });
 
         mock.expect_reset().returning(|_| Ok(()));
-        // Clone returns a fresh mock handling stats from the shared state
+
+        // Clone returns a fresh mock handling stats from the shared state AND shared
+        // chip state
         let radio_stats_clone = radio_stats.clone();
+        let chip_state_clone = chip_state.clone();
+
         mock.expect_clone_box().returning(move || {
             let mut clone_mock = MockChipClient::new();
             let rs_clone = radio_stats_clone.clone();
+            let cs_read = chip_state_clone.clone();
 
             clone_mock.expect_read_statistics().returning(move || {
                 let stats = rs_clone.lock().unwrap();
                 Ok(Box::from(stats.clone()))
             });
+
+            clone_mock.expect_read().returning(move |_| {
+                let chip = cs_read.lock().unwrap();
+                Ok(chip.clone())
+            });
+
+            let cs_update = chip_state_clone.clone();
+            clone_mock.expect_update().returning(move |_, patch| {
+                let mut chip = cs_update.lock().unwrap();
+                if let Some(netsim_model::chip::ChipVariantUpdate::Bluetooth(bt_update)) =
+                    patch.variant
+                {
+                    let le_state = bt_update.low_energy.state;
+                    let classic_state = bt_update.classic.state;
+
+                    if chip.variant.is_none() {
+                        chip.variant =
+                            Some(netsim_model::chip::ChipVariant::Bluetooth(Default::default()));
+                    }
+
+                    if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &mut chip.variant
+                    {
+                        if let Some(s) = le_state {
+                            bt.low_energy.state = Some(s);
+                        }
+                        if let Some(s) = classic_state {
+                            bt.classic.state = Some(s);
+                        }
+                    }
+                }
+                Ok(chip.clone())
+            });
+
+            clone_mock.expect_create().returning(|params| {
+                if let Some(mut stream) = params.packet_stream {
+                    tokio::spawn(async move { while stream.next().await.is_some() {} });
+                }
+                Ok(())
+            });
+            clone_mock.expect_delete().returning(|_| Ok(()));
+            clone_mock.expect_reset().returning(|_| Ok(()));
+            clone_mock.expect_clone_box().returning(move || Box::new(MockChipClient::new())); // Nested clones not fully supported for now, but usually not needed 2 levels
+                                                                                              // deep in tests
 
             Box::new(clone_mock)
         });
@@ -259,13 +347,38 @@ impl World {
         self.client.create_device(params).await.unwrap()
     }
 
-    /// BDD Step: When I add a chip (which creates a device).
     pub async fn when_add_chip(&self, device_guid: &str, chip_name: &str) -> DeviceId {
         let params = Self::create_device_add_chip_params(
             device_guid.to_string(),
             chip_name.to_string(),
             "00:00:00:00:00:00".to_string(),
         );
+        self.client.add_chip(params).await.unwrap()
+    }
+
+    pub async fn when_add_wifi_chip(&self, device_guid: &str, chip_name: &str) -> DeviceId {
+        let mut params = Self::create_device_add_chip_params(
+            device_guid.to_string(),
+            chip_name.to_string(),
+            "".to_string(),
+        );
+        params.chip_config.chip_kind_params =
+            netsim_model::chip::ChipKindParams::Wifi(netsim_model::chip::WifiCreate {
+                ..Default::default()
+            });
+        self.client.add_chip(params).await.unwrap()
+    }
+
+    pub async fn when_add_uwb_chip(&self, device_guid: &str, chip_name: &str) -> DeviceId {
+        let mut params = Self::create_device_add_chip_params(
+            device_guid.to_string(),
+            chip_name.to_string(),
+            "".to_string(),
+        );
+        params.chip_config.chip_kind_params =
+            netsim_model::chip::ChipKindParams::Uwb(netsim_model::chip::UwbCreate {
+                ..Default::default()
+            });
         self.client.add_chip(params).await.unwrap()
     }
 
@@ -363,6 +476,35 @@ impl World {
         (device_id, tx)
     }
 
+    /// BDD Step: When I add a WiFi chip with an injected packet stream.
+    pub async fn when_add_wifi_chip_with_stream(
+        &self,
+        device_guid: &str,
+        chip_name: &str,
+    ) -> (DeviceId, tokio::sync::mpsc::UnboundedSender<Bytes>) {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
+        let boxed_stream: netsim_model::chip::PacketStream = Box::new(stream);
+        let sink = futures::sink::drain()
+            .sink_map_err(|_| std::io::Error::from(std::io::ErrorKind::Other));
+        let boxed_sink: netsim_model::chip::PacketSink = Box::pin(sink);
+
+        let mut params = Self::create_device_add_chip_params(
+            device_guid.to_string(),
+            chip_name.to_string(),
+            "".to_string(),
+        );
+        params.chip_config.chip_kind_params =
+            netsim_model::chip::ChipKindParams::Wifi(netsim_model::chip::WifiCreate {
+                ..Default::default()
+            });
+        params.packet_stream = Some(boxed_stream);
+        params.packet_sink = Some(boxed_sink);
+
+        let device_id = self.client.add_chip(params).await.unwrap();
+        (device_id, tx)
+    }
+
     /// Checks if the actor task has finished (e.g. due to shutdown).
     pub fn is_actor_finished(&self) -> bool {
         self._actor_task.is_finished()
@@ -429,30 +571,16 @@ impl World {
         (path, filename)
     }
 
-    /// Verifies the content of the stats file.
-    pub async fn verify_stats_file_content(
-        path: &std::path::PathBuf,
-        expected_version: &str,
-        expected_device_count: u32,
-        expected_peak_devices: u32,
-    ) {
+    /// Helper to read stats file with retry
+    pub async fn get_stats_from_file(path: &std::path::PathBuf) -> serde_json::Value {
         let mut last_content = String::new();
-        let mut found = false;
         // Wait up to 5 seconds
         for _ in 0..50 {
             if path.exists() {
                 if let Ok(c) = std::fs::read_to_string(path) {
                     if !c.is_empty() {
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&c) {
-                            // Check device_count if it matches.
-                            // Note: device_count in proto is cumulative.
-                            // Protobuf JSON mapping uses camelCase.
-                            let count = json["deviceCount"].as_u64().unwrap_or(0);
-                            if count == expected_device_count as u64 {
-                                found = true;
-                                last_content = c;
-                                break;
-                            }
+                            return json;
                         }
                         last_content = c;
                     }
@@ -460,11 +588,17 @@ impl World {
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
+        panic!("Stats file content mismatch or timeout. Last content: {}", last_content);
+    }
 
-        assert!(found, "Stats file content mismatch or timeout. Last content: {}", last_content);
-
-        let json: serde_json::Value =
-            serde_json::from_str(&last_content).expect("Failed to parse stats JSON");
+    /// Verifies the content of the stats file.
+    pub async fn verify_stats_file_content(
+        path: &std::path::PathBuf,
+        expected_version: &str,
+        expected_device_count: u32,
+        expected_peak_devices: u32,
+    ) {
+        let json = Self::get_stats_from_file(path).await;
         assert_eq!(json["version"], expected_version, "version mismatch");
 
         let val = json["deviceCount"].as_u64().unwrap_or(0);
@@ -496,10 +630,35 @@ impl World {
         self.current_chip_id = Some(netsim_model::chip::ChipId(chip_id));
     }
 
+    /// BDD Step: Given a WiFi device with a transport stream
+    pub async fn given_wifi_device_with_transport_stream(
+        &mut self,
+        device_guid: &str,
+        chip_name: &str,
+    ) {
+        let (device_id, tx) = self.when_add_wifi_chip_with_stream(device_guid, chip_name).await;
+        self.current_device_id = Some(device_id);
+        self.transport_tx = Some(tx);
+
+        // Fetch Chip ID
+        let device =
+            self.client.get(device_id).await.expect("RPC failed").expect("Device not found");
+        let chip_id =
+            device.chips.first().expect("Device created with transport stream has no chips").id;
+        self.current_chip_id = Some(netsim_model::chip::ChipId(chip_id));
+    }
+
     /// BDD Step: Given mock radio stats are primed
     pub fn given_mock_radio_stats(&self, tx: u64, rx: u64) {
-        let chip_id = self.current_chip_id.expect("No current chip set in World").0;
-        self.given_radio_stats(chip_id, tx, rx);
+        let device_id = self.current_device_id.expect("No current device set in World").0;
+        // Default to Bluetooth Low Energy for generic test if not specified,
+        // to avoid UNSPECIFIED in generic tests
+        self.given_radio_stats(
+            device_id,
+            netsim_model::stats::RadioKind::BluetoothLowEnergy,
+            tx,
+            rx,
+        );
     }
 
     /// BDD Step: When I send packets to the transport
@@ -521,23 +680,30 @@ impl World {
             .as_ref()
             .expect("No radio stats fetched. Call when_fetch_radio_stats() first.");
 
-        let chip_id = self.current_chip_id.expect("No current chip set in World").0;
+        let device_id = self.current_device_id.expect("No current device set in World").0;
 
         // Find stats for our chip
         let s = stats
             .iter()
-            .find(|s| s.id == chip_id)
-            .unwrap_or_else(|| panic!("No stats found for chip {}", chip_id));
+            .find(|s| s.id == device_id)
+            .unwrap_or_else(|| panic!("No stats found for device {}", device_id));
 
-        assert_eq!(s.tx_bytes, expected_tx, "Tx bytes mismatch for chip {}", chip_id);
-        assert_eq!(s.rx_bytes, expected_rx, "Rx bytes mismatch for chip {}", chip_id);
+        assert_eq!(s.tx_bytes, expected_tx, "Tx bytes mismatch for device {}", device_id);
+        assert_eq!(s.rx_bytes, expected_rx, "Rx bytes mismatch for device {}", device_id);
     }
 
     /// Helper to setup mock for verifying radio stats
-    pub fn given_radio_stats(&self, device_id: u32, tx: u64, rx: u64) {
+    pub fn given_radio_stats(
+        &self,
+        device_id: u32,
+        kind: netsim_model::stats::RadioKind,
+        tx: u64,
+        rx: u64,
+    ) {
         let mut stats_vec = self.radio_stats.lock().unwrap();
         let mut stats = netsim_model::stats::NetsimRadioStats::default();
         stats.id = device_id;
+        stats.kind = kind;
         stats.tx_bytes = tx;
         stats.rx_bytes = rx;
 

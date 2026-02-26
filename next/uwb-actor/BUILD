@@ -8,6 +8,7 @@ DEPS = [
     "//next/client",
     "//next/device-api",
     "//next/model",
+    "//proto",
     "@anyhow",
     "@bytes",
     "@futures",

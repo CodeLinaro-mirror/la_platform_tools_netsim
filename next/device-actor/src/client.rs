@@ -187,4 +187,13 @@ impl DeviceClient {
         debug!("Sending shutdown request");
         self.inner.shutdown().await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
     }
+
+    /// Triggers a persistence of the current statistics to disk.
+    pub async fn save_stats(&self) -> Result<(), DeviceError> {
+        self.inner
+            .perform_action(None, DeviceAction::SaveStats)
+            .await
+            .map(|_| ())
+            .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
+    }
 }

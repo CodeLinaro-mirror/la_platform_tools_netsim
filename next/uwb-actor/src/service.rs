@@ -162,7 +162,7 @@ impl ActorService for UwbActor {
                     .map(|state| netsim_model::stats::NetsimRadioStats {
                         id: state.chip.id,
                         name: state.chip.name.clone().unwrap_or_default(),
-                        kind: ChipKind::UWB,
+                        kind: netsim_model::stats::RadioKind::Uwb,
                         tx_count: 0,
                         rx_count: 0,
                         tx_bytes: 0,
