@@ -1,52 +1,60 @@
-// tests/network_service_test.rs
+use crate::{steps::*, world::World};
 
-use std::time::Duration;
-
-use crate::common::TestHarness;
-
+// Scenario: Query Operator Selection
+//   Given a modem "A"
+//   When AT command "AT+COPS?" is sent to "A"
+//   Then response from "A" is '+COPS: 0,0,"Android Virtual Operator"'
+//   And response from "A" is "OK"
 #[test]
 fn test_cops_query() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+COPS?\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
 
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+COPS: 0,0,\"Android Virtual Operator\"\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Query Signal Quality
+//   Given a modem "A"
+//   When AT command "AT+CSQ" is sent to "A"
+//   Then response from "A" is "+CSQ: 20,99"
+//   And response from "A" is "OK"
 #[test]
 fn test_csq_query() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CSQ\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CSQ");
 
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+CSQ: 20,99\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Network Registration
+//   Given a modem "A"
+//   When time advances 20 ms
+//   Then response from "A" is "+CREG: 1"
 #[test]
 fn test_network_registration() {
-    let harness = TestHarness::new();
+    let mut world = World::new();
+    given_modem(&mut world, "A");
 
     // Advance the clock to trigger the registration event
-    harness.clock.advance(Duration::from_millis(20));
-
-    // Tick the simulator to process the event
-    harness.manager.tick();
+    when_time_advances_ms(&mut world, 20);
 
     // Verify that the modem sends a +CREG: 1 unsolicited response
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"+CREG: 1\r\n");
+    then_response_is(&mut world, "A", "+CREG: 1");
 }
 
+// Scenario: Query Extended Signal Quality
+//   Given a modem "A"
+//   When AT command "AT+CESQ" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_query_extended_signal_quality() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CESQ\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CESQ");
+
+    then_response_is(&mut world, "A", "OK");
 }

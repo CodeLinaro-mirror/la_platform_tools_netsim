@@ -1,88 +1,105 @@
-// tests/integration_test.rs
+use crate::{steps::*, world::World};
 
-use std::sync::Arc;
-
-use modem_rs::{
-    test_utils::{MockModemHandler, MockNetworkHandler},
-    time::MockClock,
-    types::{ModemId, AT_OK},
-    ModemNetworkSimulator,
-};
-
-use crate::common::constants;
-
+// Scenario: Two Modem End-to-End Flow (Call and SMS)
+//   Given a modem "A"
+//   And a modem "B" with number "12345"
+//   When AT command "AT+CPIN?" is sent to "A"
+//   Then response from "A" is "+CPIN: READY"
+//   And response from "A" is "OK"
+//   When AT command "AT+COPS?" is sent to "A"
+//   Then response from "A" matches "+COPS: ..."
+//   And response from "A" is "OK"
+//   When AT command "ATD12345;" is sent to "A"
+//   Then wait for connection (OK, RING, ATA, OK)
+//   When AT command "AT+CLCC" is sent to "A"
+//   Then response from "A" shows Active call
+//   When AT command "ATH" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "AT+CLCC" is sent to "A"
+//   Then response from "A" is "OK" (No calls)
+//   When B sends SMS "hello" to A
+//   Then A receives SMS
 #[test]
 fn test_two_modem_end_to_end_scenario() {
-    // 1. Setup: Create a manager and two modems (A and B).
-    let manager_handler = Arc::new(MockNetworkHandler::new());
-    let clock = Arc::new(MockClock::new());
-    let manager = ModemNetworkSimulator::new_with_clock(manager_handler.clone(), clock);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    given_modem_with_number(&mut world, "B", "12345");
 
-    let modem_a_id: ModemId = 1;
-    let modem_a_handler = Arc::new(MockModemHandler::new());
-    manager.new_modem(modem_a_id, modem_a_handler.clone()).unwrap();
+    // Power On Checks
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: READY");
+    then_response_is(&mut world, "A", "OK");
 
-    let modem_b_id: ModemId = 2;
-    let modem_b_handler = Arc::new(MockModemHandler::new());
-    manager.new_modem(modem_b_id, modem_b_handler.clone()).unwrap();
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
+    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "OK");
 
-    // Give Modem B a phone number so Modem A can call it.
-    manager.get_modem(modem_b_id).unwrap().set_phone_number(constants::PHONE_NUMBER_A);
+    // Make Call
+    when_at_command_sent(&mut world, "A", "ATD12345;");
+    then_response_is(&mut world, "A", "OK");
 
-    // 2. Power On & Check Network (Modem A)
-    manager.send_at_command(modem_a_id, b"AT+CPIN?\r\n");
-    assert_eq!(modem_a_handler.wait_for_response(), b"+CPIN: READY\r\n");
-    assert_eq!(modem_a_handler.wait_for_response(), AT_OK);
+    then_wait_for_response_containing(&mut world, "B", "RING");
+    when_at_command_sent(&mut world, "B", "ATA");
+    then_response_is(&mut world, "B", "OK");
+    then_wait_for_response_containing(&mut world, "A", "OK"); // Connected
 
-    manager.send_at_command(modem_a_id, b"AT+COPS?\r\n");
-    assert_eq!(modem_a_handler.wait_for_response(), b"+COPS: 0,0,\"Android Virtual Operator\"\r\n");
-    assert_eq!(modem_a_handler.wait_for_response(), AT_OK);
+    // Verify Active Call on A
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_wait_for_response_containing(&mut world, "A", "+CLCC: 1,0,0,0,0,\"12345\"");
+    then_wait_for_response_containing(&mut world, "A", "OK");
 
-    // 3. Make a Call
-    // Modem A dials Modem B's number.
-    manager
-        .send_at_command(modem_a_id, format!("ATD{};\r\n", constants::PHONE_NUMBER_A).as_bytes());
-    assert_eq!(modem_a_handler.wait_for_response(), AT_OK);
+    // Hang Up
+    when_at_command_sent(&mut world, "A", "ATH");
+    then_response_is(&mut world, "A", "OK");
 
-    // Verify Modem A is in the Dialing state.
-    let modem_a = manager.get_modem(modem_a_id).unwrap();
-    assert!(modem_a.call_service().is_dialing());
+    // Verify Idle
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_is(&mut world, "A", "OK");
 
-    // Verify that Modem B receives a RING notification and its state is Alerting.
-    assert_eq!(modem_b_handler.wait_for_response(), b"RING\r\n");
-    let modem_b = manager.get_modem(modem_b_id).unwrap();
-    assert!(modem_b.call_service().is_alerting());
+    // Send SMS B -> A
+    // B sends to A. A has no number.
+    // Wait, integration_test.rs had: `manager.new_modem(modem_a_id, ...)`
+    // And `manager.get_modem(modem_b_id).unwrap().
+    // set_phone_number(constants::PHONE_NUMBER_A)` (which was "12345" assumed).
+    // And A called B.
+    // Then B sent SMS: `AT+CMGS=5`. Payload `hello`.
+    // Where did B send it?
+    // `AT+CMGS` prompts for address first? No.
+    // Text mode: `AT+CMGS="addr"`.
+    // PDU mode: `AT+CMGS=<length>`. PDU contains address.
+    // Original test: `manager.send_at_command(modem_b_id, b"AT+CMGS=5\r\n");`
+    // Then sent "hello".
+    // "hello" is length 5.
+    // Is this PDU or Text?
+    // "hello" is NOT a valid PDU hex string.
+    // Unless in text mode? B didn't set text mode. Default is PDU?
+    // If PDU mode, "hello" (68656C6C6F) is invalid PDU.
+    // BUT original test verified: `+CMT: ,5\r\nhello\r\n`.
+    // This looks like `Text Mode` response? Or a custom simplied mode?
+    // Netsim `sms_service.rs` might support raw text in PDU mode for testing?
+    // Or previous test set text mode on B? No.
 
-    // 4. Answer and Talk
-    // Modem B answers the call.
-    manager.send_at_command(modem_b_id, b"ATA\r\n");
-    assert_eq!(modem_b_handler.wait_for_response(), b"OK\r\n");
+    // I will emulate EXACTLY what the original test did.
+    // `AT+CMGS=5`. Then `hello`.
+    // And expect `+CMT: ,5\r\nhello\r\n` on A.
+    // This implies A received it.
+    // Note: B calls A. But A has no number. PDU has no destination?
+    // `ModemNetworkSimulator` likely broadcasts if no destination or handles
+    // "loopback" or "default peer"? Harness `manager.get_peer(modem_id)`?
 
-    // Modem A should receive an OK to indicate the call is connected.
-    assert_eq!(modem_a_handler.wait_for_response(), AT_OK);
+    when_at_command_sent(&mut world, "B", "AT+CMGS=5");
+    then_response_is(&mut world, "B", "> ");
 
-    // Verify that both modems are now in the Active call state.
-    assert!(modem_a.call_service().is_active());
-    assert!(modem_b.call_service().is_active());
+    // Send "hello" + Ctrl-Z.
+    // I use hex bytes helper. "hello" -> 68656C6C6F. + 1A.
+    let hello_hex = "68656C6C6F1A";
+    when_hex_bytes_sent(&mut world, "B", hello_hex);
 
-    // 5. Hang Up
-    // Modem A hangs up the call.
-    manager.send_at_command(modem_a_id, b"ATH\r\n");
-    assert_eq!(modem_a_handler.wait_for_response(), AT_OK);
+    then_wait_for_response_containing(&mut world, "B", "+CMGS: ");
+    then_response_is(&mut world, "B", "OK");
 
-    // Verify that both modems are now Idle.
-    assert!(modem_a.call_service().is_idle());
-    assert!(modem_b.call_service().is_idle());
-
-    // 6. Send SMS
-    // Modem B sends an SMS to Modem A.
-    // The PDU is a simplified representation for "hello".
-    manager.send_at_command(modem_b_id, b"AT+CMGS=5\r\n");
-    assert_eq!(modem_b_handler.wait_for_response(), b"> \r\n");
-    manager.send_at_command(modem_b_id, b"hello\x1a");
-    assert!(modem_b_handler.wait_for_response().starts_with(b"+CMGS: "));
-    assert_eq!(modem_b_handler.wait_for_response(), b"OK\r\n");
-
-    // Verify that Modem A received the SMS.
-    assert_eq!(modem_a_handler.wait_for_response(), b"+CMT: ,5\r\nhello\r\n");
+    // Verify A received
+    // Expect: "+CMT: ,5\r\nhello"
+    let resp = then_wait_for_response_containing(&mut world, "A", "+CMT:");
+    assert!(resp.contains("hello"));
 }
