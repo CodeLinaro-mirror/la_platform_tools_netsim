@@ -4,7 +4,7 @@ use actor_framework::{ActorLifecycle, ActorService, DynContext};
 use async_trait::async_trait;
 use futures::FutureExt;
 use log::warn;
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use pica::PicaEvent;
 use tokio::sync::broadcast::error::TryRecvError;
 
@@ -37,8 +37,15 @@ impl ActorLifecycle for UwbActor {
                 Ok(PicaEvent::Disconnected { handle, .. }) => {
                     // Received in response to either `PicaCommand::Disconnect` or stream/sink
                     // closure.
-                    let Some(id) = self.handle_to_chip.remove(&handle) else { continue };
-                    let _ = self.handle_delete(id, ctx).await;
+                    let id = self
+                        .chip_states
+                        .read()
+                        .unwrap()
+                        .get(&handle)
+                        .map(|state| ChipId(state.chip.id));
+                    if let Some(id) = id {
+                        let _ = self.handle_delete(id, ctx).await;
+                    }
                 }
                 Ok(PicaEvent::Connected { .. }) => {}
                 Err(TryRecvError::Lagged(skipped)) => {

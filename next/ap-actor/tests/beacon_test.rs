@@ -166,7 +166,7 @@ async fn test_probe_response() {
     let mut frame = Vec::new();
     frame.extend_from_slice(header.as_bytes());
     // Body can be empty for our lax parser (Wildcard behavior)
-    let src_id = netsim_model::chip::ChipId(123);
+    let src_id = netsim_model::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     // Verify Response
@@ -212,7 +212,7 @@ async fn test_probe_response_ssid_match() {
     frame.push(7);
     frame.extend_from_slice(b"MatchAP");
 
-    let src_id = netsim_model::chip::ChipId(123);
+    let src_id = netsim_model::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     log::info!("Then the AP responds with a Probe Response");
@@ -250,7 +250,7 @@ async fn test_probe_response_ssid_mismatch() {
     frame.push(7);
     frame.extend_from_slice(b"OtherAP");
 
-    let src_id = netsim_model::chip::ChipId(123);
+    let src_id = netsim_model::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     log::info!("Then the AP does NOT respond (ignores request)"); // No helper call
@@ -309,7 +309,7 @@ async fn test_probe_response_bssid_mismatch() {
     frame.push(10);
     frame.extend_from_slice(b"SpecificAP");
 
-    let src_id = netsim_model::chip::ChipId(123);
+    let src_id = netsim_model::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     log::info!("Then the AP does NOT respond");

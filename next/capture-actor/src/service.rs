@@ -31,6 +31,10 @@ pub(crate) struct InternalCaptureInfo {
     /// without locking the actor.
     #[serde(skip)]
     pub enabled_flag: Arc<AtomicBool>,
+    /// Used to suppress logs for calls to [CaptureWriter::write_packet] that
+    /// fail.
+    #[serde(skip)]
+    has_warned_on_write: bool,
 }
 
 impl InternalCaptureInfo {
@@ -45,6 +49,7 @@ impl InternalCaptureInfo {
                 bytes_written: 0,
             },
             enabled_flag: params.enabled_flag,
+            has_warned_on_write: false,
         })
     }
 }
@@ -136,12 +141,12 @@ impl CaptureActor {
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
             ChipKind::BLUETOOTH => {
                 log::info!("Creating capture file: {}", filepath.display());
-                Box::new(BluetoothH4Writer::new(&filepath)?)
+                BluetoothH4Writer::new(&filepath).await?
             }
             _ => {
                 // Fallback
                 log::info!("Creating capture file: {}", filepath.display());
-                Box::new(BluetoothH4Writer::new(&filepath)?)
+                BluetoothH4Writer::new(&filepath).await?
             }
         };
         Ok(writer)
@@ -171,8 +176,14 @@ impl CaptureActor {
                 if entity.info.enabled && entity.info.chip_id == chip_id {
                     let writer = self.writers.get_mut(&chip_id);
                     if let Some(writer) = writer {
-                        // Ignore errors on write
-                        let _ = writer.write_packet(SystemTime::now(), direction, bytes);
+                        if let Err(err) =
+                            writer.write_packet(SystemTime::now(), direction, bytes).await
+                        {
+                            if !entity.has_warned_on_write {
+                                entity.has_warned_on_write = true;
+                                log::error!("Packet capture write failed for chip {chip_id}: {err}. Further errors for this chip will be suppressed.");
+                            }
+                        }
                     }
                 }
                 Ok(CaptureActionResult::Success)

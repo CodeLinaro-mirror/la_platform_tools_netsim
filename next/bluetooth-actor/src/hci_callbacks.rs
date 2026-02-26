@@ -4,7 +4,7 @@ use std::ffi::c_int;
 
 use bytes::Bytes;
 use futures::SinkExt;
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use rootcanal::{
     controller::{Callbacks as ControllerCallbacks, Id},
     types::Phy,
@@ -69,6 +69,7 @@ pub async fn sink_loop(
             log::debug!("sink_loop: Sent packet successfully");
         }
     }
+    let _ = sink.close().await;
     log::error!("Sink task for chip {} finished", id);
     id
 }

@@ -47,6 +47,7 @@ rust_library(
         "//next/device-actor",
         "//next/device-api",
         "//next/grpc-server",
+        "//next/hci-server",
         "//next/link-actor",
         "//next/link-api",
         "//next/model",
@@ -61,7 +62,7 @@ rust_library(
         "@futures",
         "@grpcio",
         "@log",
-        "@named-lock",
+        "@tempfile",
         "@tokio",
         "@tokio-stream",
     ] + select({

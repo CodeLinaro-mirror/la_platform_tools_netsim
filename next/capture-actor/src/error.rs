@@ -1,4 +1,4 @@
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use thiserror::Error;
 
 /// Error type for CaptureActor operations.

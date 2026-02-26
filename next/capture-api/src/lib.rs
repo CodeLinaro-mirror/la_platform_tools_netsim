@@ -77,7 +77,7 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use netsim_model::chip::{ChipId, ChipKind};
+use netsim_model::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
 
 #[async_trait]

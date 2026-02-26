@@ -14,9 +14,29 @@ use netsim_model::{
     chip::{BeaconParams, Chip, ChipId},
     chip_error::ChipError,
 };
-use rootcanal::Rootcanal;
+use netsim_packets::hci;
+use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
+use rootcanal::{Address, Rootcanal};
+use zerocopy::{Immutable, IntoBytes, KnownLayout, U16};
 
 use crate::{beacon_utils::construct_data, utils::ToChipError};
+
+/// Send an HCI command to the controller.
+fn send_hci_command<T: hci::HciCommand + IntoBytes + Immutable + KnownLayout>(
+    rootcanal: &Rootcanal,
+    chip_id: ChipId,
+    payload: T,
+) -> Result<(), ChipError> {
+    let header = hci::HciCommandHeader {
+        op_code: T::OP_CODE,
+        parameter_total_length: payload.as_bytes().len() as u8,
+    };
+    let h4_packet = std::iter::once(PacketType::COMMAND.value() as u8)
+        .chain(header.as_bytes().into_iter().copied())
+        .chain(payload.as_bytes().into_iter().copied())
+        .collect();
+    rootcanal.receive_hci(chip_id.into(), h4_packet).to_chip_error()
+}
 
 /// Creates a new `BeaconChip`.
 pub fn create(
@@ -26,19 +46,30 @@ pub fn create(
     device_name: &Option<String>,
 ) -> Result<Chip, ChipError> {
     // Reset the controller first.
-    let reset_cmd = vec![0x01, 0x03, 0x0c, 0x00];
-    rootcanal.receive_hci(chip_id.into(), reset_cmd.into()).to_chip_error()?;
+    send_hci_command(rootcanal, chip_id, hci::Reset {})?;
 
     // LE Set Advertising Parameters
-    let adv_params = vec![
-        0x01, 0x06, 0x20, 15, 0xA0, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x07, 0x00,
-    ];
-    rootcanal.receive_hci(chip_id.into(), adv_params.into()).to_chip_error()?;
+    let address: Address = params
+        .ble_beacon
+        .address
+        .parse()
+        .map_err(|_| ChipError::InvalidArguments("Invalid address".to_string()))?;
+    send_hci_command(
+        rootcanal,
+        chip_id,
+        hci::LeSetAdvertisingParameters {
+            advertising_interval_min: U16::new(0x00A0),
+            advertising_interval_max: U16::new(0x00A0),
+            advertising_type: hci::AdvertisingType::ADV_IND,
+            own_address_type: hci::OwnAddressType::PUBLIC_DEVICE_ADDRESS,
+            peer_address_type: hci::PeerAddressType::PUBLIC_DEVICE_OR_IDENTITY_ADDRESS,
+            peer_address: hci::Address { bytes: address.address },
+            advertising_channel_map: 0x07,
+            advertising_filter_policy: hci::AdvertisingFilterPolicy::ALL_DEVICES,
+        },
+    )?;
 
-    // LE Set Advertising Data
-    let mut adv_data_cmd = vec![0x01, 0x08, 0x20, 32];
-    let adv_data_payload = if let Some(adv_data) = &params.ble_beacon.adv_data {
+    let adv_data = if let Some(adv_data) = &params.ble_beacon.adv_data {
         construct_data(
             &adv_data.manufacturer_data,
             &if adv_data.include_device_name { device_name.clone() } else { None },
@@ -47,35 +78,46 @@ pub fn create(
         construct_data(&[], &None)
     };
 
-    // Length of significant data
-    adv_data_cmd.push(adv_data_payload.len() as u8);
-    adv_data_cmd.extend_from_slice(&adv_data_payload);
+    let mut adv_data_payload = [0u8; 31];
+    adv_data_payload[..adv_data.len()].copy_from_slice(&adv_data);
 
-    // HCI packet must be exactly 36 bytes (4 header + 32 data)
-    adv_data_cmd.resize(36, 0);
-    rootcanal.receive_hci(chip_id.into(), adv_data_cmd.into()).to_chip_error()?;
+    send_hci_command(
+        rootcanal,
+        chip_id,
+        hci::LeSetAdvertisingData {
+            advertising_data_length: adv_data.len() as u8,
+            advertising_data: adv_data_payload,
+        },
+    )?;
 
     // LE Set Scan Response Data
-    let mut scan_resp_cmd = vec![0x01, 0x09, 0x20, 32];
-    let scan_resp_payload = if let Some(scan_resp) = &params.ble_beacon.scan_response {
+    let scan_resp_data = if let Some(scan_resp) = &params.ble_beacon.scan_response {
         construct_data(
             &scan_resp.manufacturer_data,
             &if scan_resp.include_device_name { device_name.clone() } else { None },
         )
     } else {
-        Vec::new()
+        vec![]
     };
 
-    scan_resp_cmd.push(scan_resp_payload.len() as u8);
-    scan_resp_cmd.extend_from_slice(&scan_resp_payload);
+    let mut scan_resp_payload = [0u8; 31];
+    scan_resp_payload[..scan_resp_data.len()].copy_from_slice(&scan_resp_data);
 
-    // HCI packet must be exactly 36 bytes (4 header + 32 data)
-    scan_resp_cmd.resize(36, 0);
-    rootcanal.receive_hci(chip_id.into(), scan_resp_cmd.into()).to_chip_error()?;
+    send_hci_command(
+        rootcanal,
+        chip_id,
+        hci::LeSetScanResponseData {
+            advertising_data_length: scan_resp_data.len() as u8,
+            advertising_data: scan_resp_payload,
+        },
+    )?;
 
     // LE Set Advertising Enable
-    let adv_enable = vec![0x01, 0x0A, 0x20, 0x01, 0x01];
-    rootcanal.receive_hci(chip_id.into(), adv_enable.into()).to_chip_error()?;
+    send_hci_command(
+        rootcanal,
+        chip_id,
+        hci::LeSetAdvertisingEnable { advertising_enable: hci::Enable::ENABLED },
+    )?;
 
     Ok(Chip::default())
 }

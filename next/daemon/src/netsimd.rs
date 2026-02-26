@@ -1,4 +1,4 @@
-// Copyright 2023-2025 The Android Open Source Project // touch
+// Copyright 2023-2025 The Android Open Source Project
 
 use std::{
     collections::HashMap,
@@ -11,7 +11,7 @@ use std::{
 use client::{CaptureClient, DeviceClient};
 use common::{
     system::netsimd_temp_dir,
-    util::os_utils::{get_instance_name, redirect_std_stream},
+    util::os_utils::{get_hci_port, get_instance, get_instance_name, redirect_std_stream},
 };
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
@@ -357,11 +357,10 @@ impl NetsimDaemon {
             std::env::consts::ARCH
         );
 
-        let mut ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
+        let ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
 
         // Attempt to acquire the singleton lock for the netsim daemon.
-        // The lock file (netsim.ini.lock) is managed by the `named_lock` crate
-        // in a system-wide temporary directory.
+        // The lock is managed by direct file locking on the netsim.ini file.
         match ini_file.try_acquire().map_err(init_error)? {
             // This instance is the Writer (the primary daemon).
             IniFileAccess::Writer(ini_guard) => {
@@ -376,21 +375,12 @@ impl NetsimDaemon {
     }
 
     async fn initialize_primary_daemon(
-        ini_guard: IniFileGuard,
+        mut ini_guard: IniFileGuard,
         args: Args,
         _runtime_dir: PathBuf,
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
-        let ini_path = ini_guard.path();
-        info!("INI file path: {}", ini_path.display());
-
-        // Remove any potential stale INI file from a previous unclean shutdown.
-        if ini_path.exists() {
-            if let Err(e) = fs::remove_file(ini_path) {
-                log::warn!("Failed to remove stale INI file: {}", e);
-                // Continue anyway, as we will overwrite it
-            }
-        }
+        info!("INI file path: {}", ini_guard.path().display());
 
         // Initialize listeners (UDS, gRPC).
         let mut listener_addresses = HashMap::new();
@@ -424,11 +414,17 @@ impl NetsimDaemon {
             StreamAddress::Tcp(std::net::SocketAddr::from(([127, 0, 0, 1], actual_grpc_port))),
         );
 
+        // HCI TCP socket server
+        let instance_num = get_instance(args.instance);
+        let hci_port = args.hci_port.unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
+        tokio::spawn(hci_server::server::run(hci_port, device_client.clone()));
+
         // Write the current daemon's information to the INI file.
         // Clients will use this to connect.
         let mut ini_data = HashMap::from([
             ("pid".to_string(), std::process::id().to_string()),
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
+            ("hci.port".to_string(), hci_port.to_string()),
         ]);
         if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
@@ -437,7 +433,7 @@ impl NetsimDaemon {
         // Even if stale file removal failed, we can proceed as ini_guard.write will
         // overwrite.
         ini_guard.write(&ini_data).map_err(init_error)?;
-        info!("Wrote to INI file {}", ini_path.display());
+        info!("Wrote to INI file {}", ini_guard.path().display());
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
@@ -524,6 +520,9 @@ impl NetsimDaemon {
             Box::new(link_client.clone()),
             startup_timeout,
             idle_timeout,
+            get_version(),
+            None,
+            None,
         );
 
         // Spawn server tasks

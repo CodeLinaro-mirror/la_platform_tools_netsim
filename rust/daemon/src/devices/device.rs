@@ -95,8 +95,8 @@ impl Device {
         patch: &ProtoPatchDeviceFields,
         pose_manager: Arc<PoseManager>,
     ) -> Result<(), String> {
-        if patch.visible.is_some() {
-            self.visible.store(patch.visible.unwrap(), Ordering::SeqCst);
+        if let Some(visible) = patch.visible {
+            self.visible.store(visible, Ordering::SeqCst);
         }
         if patch.position.is_some() {
             pose_manager.set_position(self.id, &patch.position);

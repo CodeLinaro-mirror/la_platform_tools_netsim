@@ -6,6 +6,8 @@
 //   I want to list all created devices
 //   So that I can see the current state of the simulation
 
+use netsim_model::ChipKind;
+
 use crate::world::World;
 
 // Scenario: List devices when no devices exist
@@ -77,7 +79,7 @@ async fn test_create_single_bluetooth_chip() {
 
     // Check that the chip kind is Bluetooth
     let chip = &device.chips[0];
-    assert_eq!(chip.kind, netsim_model::chip::ChipKind::BLUETOOTH);
+    assert_eq!(chip.kind, ChipKind::BLUETOOTH);
 
     // Verify that the variant contains both BLE and Classic radios
     assert_eq!(

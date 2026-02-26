@@ -14,8 +14,10 @@ use netsim_model::{
     },
     device::DeviceId,
 };
+use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
 use netsim_testing::logger;
 use tokio::{sync::mpsc, task::JoinHandle};
+use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 /// The BDD World for Bluetooth Actor tests.
 #[allow(dead_code)]
@@ -277,6 +279,25 @@ impl World {
     pub async fn when_packet_sent(&mut self, name: &str, packet: bytes::Bytes) {
         let tx = self.streams.get_mut(name).expect("Stream not found for chip");
         tx.send(packet).await.expect("Failed to send packet");
+    }
+
+    /// Encodes and sends an HCI command with the packet type prefix.
+    pub async fn when_command_sent<
+        T: netsim_packets::hci::HciCommand + IntoBytes + Immutable + KnownLayout,
+    >(
+        &mut self,
+        name: &str,
+        payload: T,
+    ) {
+        let header = netsim_packets::hci::HciCommandHeader {
+            op_code: T::OP_CODE,
+            parameter_total_length: payload.as_bytes().len() as u8,
+        };
+        let h4_packet = std::iter::once(PacketType::COMMAND.value() as u8)
+            .chain(header.as_bytes().into_iter().copied())
+            .chain(payload.as_bytes().into_iter().copied())
+            .collect();
+        self.when_packet_sent(name, h4_packet).await;
     }
 
     pub async fn then_packet_received(&mut self, name: &str, expected: &[u8]) {
