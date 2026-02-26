@@ -1,0 +1,56 @@
+// Copyright 2026 The Android Open Source Project
+
+//! # Step Definitions
+//!
+//! This module defines the core traits and types for Gherkin steps.
+
+use std::{future::Future, pin::Pin};
+
+/// A table of data from a Gherkin step.
+pub type DataTable = Vec<Vec<String>>;
+
+/// Context passed to every step execution.
+pub struct StepContext {
+    /// Optional data table attached to the step.
+    pub table: Option<DataTable>,
+}
+
+impl Default for StepContext {
+    fn default() -> Self {
+        Self { table: None }
+    }
+}
+
+/// A trait for async steps that can be executed by the Features engine.
+///
+/// This trait is automatically implemented for any function that matches the
+/// signature: `fn(&mut W, Vec<String>, StepContext) -> Pin<Box<dyn
+/// Future<Output = ()> + Send>>`.
+pub trait AsyncStep<W>: Send + Sync {
+    fn call<'a>(
+        &'a self,
+        world: &'a mut W,
+        args: Vec<String>,
+        ctx: StepContext,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+}
+
+impl<W, F> AsyncStep<W> for F
+where
+    F: for<'a> Fn(
+            &'a mut W,
+            Vec<String>,
+            StepContext,
+        ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>
+        + Send
+        + Sync,
+{
+    fn call<'a>(
+        &'a self,
+        world: &'a mut W,
+        args: Vec<String>,
+        ctx: StepContext,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        self(world, args, ctx)
+    }
+}

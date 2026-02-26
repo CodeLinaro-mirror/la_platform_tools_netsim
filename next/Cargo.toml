@@ -23,6 +23,7 @@ members = [
   "bluetooth-actor",
   "model",
   "daemon",
+  "hci-server",
   "proto",
   "packets",
   "packet-stream",

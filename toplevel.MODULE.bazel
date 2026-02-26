@@ -13,26 +13,6 @@ custom_toolchains.java(
     version = "jdk17",
 )
 
-gcs_archive = use_repo_rule("@rules_gcs//gcs:repo_rules.bzl", "gcs_archive")
-
-_generic_build = """package(default_visibility = ["//visibility:public"])
-filegroup(
-  name = "all_files",
-  srcs = glob(["**/*"]),
-)
-filegroup(
-  name = "adb",
-  srcs = glob(["**/adb", "**/adb.exe"], allow_empty = True),
-)
-"""
-
-gcs_archive(
-    name = "androidsdk",
-    build_file_content = _generic_build,
-    sha256 = "5c377d32e7ba0c1f982417ec588c33d8e379141e806c46c2de26cf42fe6ed51e",
-    url = "gs://emu-next-bazel/ab/aosp-sdk-release/sdk/13278306/sdk-repo-linux-platform-tools-13278306.zip",
-)
-
 remote_android_extensions = use_extension("@rules_android//bzlmod_extensions:android_extensions.bzl", "remote_android_tools_extensions")
 use_repo(remote_android_extensions, "android_tools")
 
@@ -40,6 +20,11 @@ register_toolchains("@android_tools//:all")
 
 maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 maven.install(
+    known_contributing_modules = [
+        "grpc-java",
+        "netsim",
+        "protobuf",
+    ],
     lock_file = "//tools/netsim:maven_install.json",
     repositories = [
         "https://repo.maven.apache.org/maven2/",
