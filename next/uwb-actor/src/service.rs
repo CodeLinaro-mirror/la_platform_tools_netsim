@@ -124,7 +124,7 @@ impl ActorService for UwbActor {
         ctx.spawn(
             id,
             async move {
-                let _ = device_client.notify_chip_removed(device_id, id);
+                let _ = device_client.notify_chip_removed(device_id, id).await;
                 id
             }
             .boxed(),
