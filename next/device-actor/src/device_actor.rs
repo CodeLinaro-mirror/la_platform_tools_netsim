@@ -5,10 +5,10 @@ use std::{
 
 use actor_framework::TimerKey;
 use capture_api::CaptureSender;
-use netsim_model::chip::ChipClient;
+use netsim_model::{chip::ChipClient, ChipKind};
 
 pub struct DeviceActor {
-    pub chip_clients: HashMap<netsim_model::chip::ChipKind, Box<dyn ChipClient>>,
+    pub chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
     pub next_chip_id: Arc<AtomicU32>,
     pub capture_client: Option<Arc<dyn CaptureSender>>,
     pub(crate) devices: HashMap<device_api::DeviceId, crate::service::InternalDevice>,
@@ -29,7 +29,7 @@ pub struct DeviceActor {
 
 impl DeviceActor {
     pub fn new(
-        chip_clients: HashMap<netsim_model::chip::ChipKind, Box<dyn ChipClient>>,
+        chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
         next_chip_id: Arc<AtomicU32>,
         capture_client: Option<Arc<dyn CaptureSender>>,
         link_client: Box<dyn link_api::LinkClient>,

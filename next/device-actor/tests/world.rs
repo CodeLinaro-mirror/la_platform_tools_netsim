@@ -11,9 +11,11 @@ use device_api::{
 };
 use futures::{SinkExt, StreamExt};
 use link_api::MockLinkClient;
-use netsim_model::chip::{
-    BluetoothUpdate, ChipClient, ChipKind, ChipUpdate, ChipVariantUpdate, MockChipClient,
-    RadioUpdate,
+use netsim_model::{
+    chip::{
+        BluetoothUpdate, ChipClient, ChipUpdate, ChipVariantUpdate, MockChipClient, RadioUpdate,
+    },
+    ChipKind,
 };
 
 /// The BDD World for Device Actor tests.

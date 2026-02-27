@@ -17,7 +17,10 @@ use capture_api::{
     CaptureCreate, CaptureSender,
 };
 use futures::{SinkExt, StreamExt};
-use netsim_model::chip::{ChipId, PacketSink, PacketStream};
+use netsim_model::{
+    chip::{PacketSink, PacketStream},
+    ChipId, ChipKind,
+};
 
 #[derive(Debug)]
 pub struct StreamStats {
@@ -53,7 +56,7 @@ impl Default for StreamStats {
 pub async fn create_capture_and_wrap_streams(
     capture_client: Option<Arc<dyn CaptureSender>>,
     chip_id: ChipId,
-    chip_kind: netsim_model::chip::ChipKind,
+    chip_kind: ChipKind,
     device_name: String,
     packet_stream: Option<PacketStream>,
     packet_sink: Option<PacketSink>,

@@ -17,7 +17,7 @@ pub struct NetsimRadioStats {
     /// The name of the chip.
     pub name: String,
     /// The kind of the radio (e.g. BLUETOOTH_LOW_ENERGY, WIFI).
-    pub kind: i32,
+    pub kind: crate::ChipKind,
     /// Duration of the stats session in seconds.
     pub duration_secs: u64,
     /// Number of packets transmitted.

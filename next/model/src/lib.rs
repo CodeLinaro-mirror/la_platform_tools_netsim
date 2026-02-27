@@ -62,3 +62,5 @@ pub mod uwb;
 pub mod wifi;
 
 pub use initial_info::{Chip, ChipInfo, ChipKind, DeviceInfo};
+
+pub use crate::chip::ChipId;

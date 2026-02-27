@@ -1,8 +1,9 @@
 // Copyright 2025 The Android Open Source Project
 
+use netsim_types::ChipKind;
 use serde::{Deserialize, Serialize};
 
-use crate::chip::{ChipId, ChipKind};
+use crate::chip::ChipId;
 
 /// A unique identifier for a link, represented as a u32.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

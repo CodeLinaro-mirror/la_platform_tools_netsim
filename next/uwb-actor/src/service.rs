@@ -5,8 +5,9 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{FutureExt, SinkExt, StreamExt};
 use netsim_model::{
-    chip::{Chip, ChipCreate, ChipId, ChipUpdate, ChipVariant},
+    chip::{Chip, ChipCreate, ChipUpdate, ChipVariant},
     chip_error::ChipError,
+    ChipId, ChipKind,
 };
 use pdl_runtime::Packet;
 use pica::{packets::uci, PicaCommand, PicaEvent};
@@ -40,7 +41,7 @@ impl ActorService for UwbActor {
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
-            kind: netsim_model::chip::ChipKind::UWB,
+            kind: ChipKind::UWB,
             variant: Some(ChipVariant::Uwb(Default::default())),
             name: Some(params.config.name),
             manufacturer: Some(params.config.manufacturer),
@@ -161,7 +162,7 @@ impl ActorService for UwbActor {
                     .map(|state| netsim_model::stats::NetsimRadioStats {
                         id: state.chip.id,
                         name: state.chip.name.clone().unwrap_or_default(),
-                        kind: netsim_model::chip::ChipKind::UWB.as_proto(),
+                        kind: ChipKind::UWB,
                         tx_count: 0,
                         rx_count: 0,
                         tx_bytes: 0,

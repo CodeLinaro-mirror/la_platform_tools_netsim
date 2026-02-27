@@ -123,7 +123,7 @@ impl DeviceClient {
     pub async fn notify_chip_removed(
         &self,
         id: DeviceId,
-        chip_id: netsim_model::chip::ChipId,
+        chip_id: netsim_model::ChipId,
     ) -> Result<(), DeviceError> {
         debug!("Sending notify_chip_removed request for device {} chip {}", id, chip_id);
         match self

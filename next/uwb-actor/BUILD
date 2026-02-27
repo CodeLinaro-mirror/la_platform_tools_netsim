@@ -49,6 +49,7 @@ rust_test(
         "//next/device-api:testing",
         "//next/model:testing",
         "//next/testing",
+        "//proto",
         "@bytes",
         "@env_logger",
         "@futures",
