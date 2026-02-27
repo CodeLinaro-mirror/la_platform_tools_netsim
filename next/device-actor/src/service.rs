@@ -7,7 +7,6 @@ use std::{
 };
 
 use actor_framework::{ActorService, Context, DynContext};
-use async_trait::async_trait;
 use capture_api::CaptureSender;
 use device_api::{
     api::{DeviceCreate, DeviceUpdate},
@@ -281,7 +280,6 @@ impl DeviceActor {
     }
 }
 
-#[async_trait]
 impl ActorService for DeviceActor {
     type Id = DeviceId;
     type Create = DeviceCreate;
@@ -396,7 +394,7 @@ impl ActorService for DeviceActor {
         id: Self::Id,
         ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        let Some(mut internal_device) = self.devices.remove(&id) else {
+        let Some(internal_device) = self.devices.remove(&id) else {
             return Err(DeviceError::DeviceNotFound(id.to_string()));
         };
         self.stats.update_device_count(self.devices.len(), false);

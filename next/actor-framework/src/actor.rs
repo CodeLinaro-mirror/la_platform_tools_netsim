@@ -47,7 +47,6 @@ use crate::{
 /// use actor_framework::{
 ///     ActorLifecycle, ActorService, BoxStream, Context, DynContext, ResourceActor,
 /// };
-/// use async_trait::async_trait;
 ///
 /// // Minimal Actor Definition
 /// #[derive(Clone, Debug)]
@@ -75,7 +74,6 @@ use crate::{
 ///     }
 /// }
 ///
-/// #[async_trait]
 /// impl ActorService for MyActor {
 ///     type Id = u32;
 ///     type Create = MyCreate;
@@ -132,7 +130,6 @@ use crate::{
 ///     }
 /// }
 ///
-/// #[async_trait]
 /// impl ActorLifecycle for MyActor {
 ///     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 ///     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}

@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 
 use actor_framework::{ActorService, DynContext, ResourceActor};
-use async_trait::async_trait;
 
 // Feature: Actor Service CRUD
 //
@@ -42,14 +41,12 @@ struct UserActor {
     next_id: u32,
 }
 
-#[async_trait]
 impl actor_framework::ActorLifecycle for UserActor {
     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
         self.next_id = 1;
     }
 }
 
-#[async_trait]
 impl ActorService for UserActor {
     type Id = u32;
     type Create = UserCreate;

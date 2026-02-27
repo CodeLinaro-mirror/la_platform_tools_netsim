@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
 use actor_framework::{ActorLifecycle, DynContext};
-use async_trait::async_trait;
 use netsim_model::ChipId;
 
 use crate::wifi_actor::WifiActor;
@@ -11,7 +10,6 @@ pub const AP_ID: ChipId = ChipId(u32::MAX);
 /// ID for the Slirp infrastructure stream
 pub const SLIRP_ID: ChipId = ChipId(u32::MAX - 1);
 
-#[async_trait]
 impl ActorLifecycle for WifiActor {
     async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
         log::info!("WifiActor started");
