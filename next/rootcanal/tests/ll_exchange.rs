@@ -115,14 +115,14 @@ async fn test_ll_exchange_internal() {
     let sniffer_address = Address::from_str("00:00:00:00:00:01").unwrap();
     let sniffer_id = 1;
     rootcanal
-        .new_controller(sniffer_id, sniffer_address, Box::new(SnifferCallbacks { sender }))
+        .new_controller(sniffer_id, sniffer_address, Box::new(SnifferCallbacks { sender }), None)
         .expect("new controller failed");
 
     // Create a raw controller to send a packet.
     let sender_address = Address::from_str("00:00:00:00:00:02").unwrap();
     let sender_id = 2;
     rootcanal
-        .new_controller(sender_id, sender_address, Box::new(DummyCallbacks))
+        .new_controller(sender_id, sender_address, Box::new(DummyCallbacks), None)
         .expect("new controller failed");
 
     // Construct a valid ADV_IND packet.

@@ -211,6 +211,27 @@ The system supports two distinct provisioning flows:
   Grace Period" (default: 15s) where the idle timer is suppressed, allowing time
   for the first emulator to connect before self-terminating.
 
+### 4.6 Statistics & Reporting
+
+The `Stats` module within `DeviceActor` is responsible for tracking and persisting session-level metrics.
+
+#### 4.6.1 Metrics Tracking
+- **RQ-STATS-01**: The system shall track the current number of active devices (accessible via List API).
+- **RQ-STATS-02**: The system shall track the maximum number of concurrent devices seen during the session (`peak_concurrent_devices`).
+- **RQ-STATS-03**: The system shall track the session duration in seconds (`session_duration_seconds`).
+- **RQ-STATS-04**: The system shall track the Netsim version string (`version`).
+- **RQ-STATS-05**: The system shall support fetching aggregated Radio Statistics on-demand from connected chips (but not yet persist them).
+- **RQ-STATS-06**: The system shall track the total cumulative number of devices created during the session (`device_count` in persistence).
+
+#### 4.6.2 Persistence
+- **RQ-STATS-PERSIST-01**: Upon shutdown (`Drop`), the system shall write the collected statistics to a JSON file named `netsim_session_stats.json` in the `netsimd_temp_dir`.
+- **RQ-STATS-PERSIST-02**: The write operation must be atomic (using temporary file + rename) to prevent partial reads by consumers.
+
+#### 4.6.3 Performance & Safety
+- **RQ-STATS-PERF-01**: Stats collection must not block the main actor loop for more than 1ms.
+- **RQ-STATS-SAFETY-01**: File I/O errors during save should be logged but must not panic the actor.
+
+
 ## 5. Non-Functional Requirements
 
 - **RQ-NFR-SCALE**: The system shall support **64 concurrent devices**, each
@@ -257,6 +278,14 @@ Verification is performed via the standard Netsim testing strategy:
 | **RQ-OBS-02**   | Track active count                | `list_device_test.rs`    | List devices populated                                    | **Full**    |
 | **RQ-POL-01**   | Idle Timeout                      | `actor_shutdown_test.rs` | Server shuts down after idle timeout                      | **Full**    |
 | **RQ-POL-02**   | Startup Timeout                   | `actor_shutdown_test.rs` | Server shuts down on startup timeout                      | **Full**    |
+| **RQ-STATS-01**   | Track active devices              | `list_device_test.rs`    | List devices populated                                    | **Full**    |
+| **RQ-STATS-02**   | Track peak concurrent devices     | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-03**   | Track session duration            | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-04**   | Track Netsim Version              | `stats_lifecycle_test.rs`| Verifies version string in JSON                           | **Full**    |
+| **RQ-STATS-05**   | Aggregate Radio Stats             | `stats_collection_test.rs`| Verifies aggregation of Tx/Rx bytes from chips           | **Full**    |
+| **RQ-STATS-06**   | Track cumulative devices          | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-PERSIST-01** | Persist stats to JSON       | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
+| **RQ-STATS-PERSIST-02** | Atomic write (rename)       | `stats_lifecycle_test.rs`| Stats persistence on shutdown                             | **Full**    |
 
 ### 6.3 Coverage Gaps
 
@@ -273,3 +302,8 @@ prioritized for the next test sprint:
 - **RQ-NFR-SCALE**: No load test exists to verify support for 32+ simultaneous
   devices.
 - **RQ-NFR-SYNC**: No latency benchmark exists for position propagation.
+- **RQ-STATS-GAP-01**: **Per-Device Stats Persistence**. The legacy system persisted a detailed list of all devices ever created. The new system only persists aggregate session counts and needs to persist individual `NetsimDeviceStats`.
+- **RQ-STATS-GAP-02**: **Radio Stats Persistence**. The legacy system persisted radio stats (Tx/Rx) cumulatively when a chip was removed. The new system only supports on-demand polling. Periodic saving of radio stats needs to be implemented.
+- **RQ-STATS-GAP-03**: **WiFi Stats Integration**. The legacy system merged WiFi global stats. The new system does not yet integrate with the `WiFi-Actor` global stats mechanism.
+- **RQ-STATS-GAP-04**: **Frontend Stats Integration**. The legacy system reported frontend (gRPC/WebUI) connection activity as part of the session stats. This needs to be implemented in the Daemon and passed down to `DeviceActor`.
+

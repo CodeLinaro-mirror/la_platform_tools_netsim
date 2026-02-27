@@ -1,10 +1,14 @@
 // Copyright 2026 The Android Open Source Project
 
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use client::DeviceClient;
-use netsim_model::chip::{Chip, ChipId};
-use pica::{Handle, Pica, PicaCommand, PicaEvent, RangingEstimator, RangingMeasurement};
+use netsim_model::chip::{Chip, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate};
+use pica::{Handle, Pica, PicaCommand, PicaEvent};
 use tokio::sync::{broadcast, mpsc};
 
 /// State associated with a single UWB chip.
@@ -12,16 +16,35 @@ use tokio::sync::{broadcast, mpsc};
 pub struct UwbChipState {
     /// The chip model.
     pub(super) chip: Chip,
-    /// Mapping from chip ID to Pica handle.
-    pub(super) pica_handle: Handle,
+}
+
+impl UwbChipState {
+    pub(super) fn apply(&mut self, update: ChipUpdate) {
+        if let Some(pos) = update.position {
+            self.chip.position = pos;
+        }
+        if let Some(orient) = update.orientation {
+            self.chip.orientation = orient;
+        }
+        match (update.variant, &mut self.chip.variant) {
+            (Some(ChipVariantUpdate::Uwb(uwb_update)), Some(ChipVariant::Uwb(uwb_radio))) => {
+                uwb_update.radio.apply(&mut uwb_radio.radio);
+            }
+            (Some(other), _) => {
+                log::warn!("Received unexpected update for chip {}: {other:?}", self.chip.id);
+            }
+            (None, _) => {}
+        }
+    }
 }
 
 /// The UWB Actor responsible for managing UWB chips and their state.
 pub struct UwbActor {
-    /// Map of active chips.
-    pub(super) chip_states: HashMap<ChipId, UwbChipState>,
-    /// Inverse mapping for translating Pica events.
-    pub(super) handle_to_chip: HashMap<Handle, ChipId>,
+    /// Map of active chips shared with
+    /// [UwbRangingEstimator](super::ranging_estimator::UwbRangingEstimator).
+    pub(super) chip_states: Arc<RwLock<HashMap<Handle, UwbChipState>>>,
+    /// Map from chip ID to Pica handle, used for actor lookups.
+    pub(super) chip_to_handle: HashMap<ChipId, Handle>,
     /// Client for interacting with the device actor.
     pub(super) device_client: DeviceClient,
     /// Pica simulator, present only prior to actor lifecycle `on_start`.
@@ -39,25 +62,20 @@ impl UwbActor {
     pub const TICK_INTERVAL: Duration = Duration::from_millis(100);
 
     pub fn new(device_client: DeviceClient) -> Self {
-        let pica = Pica::new(Box::new(MockRangingEstimator), None);
+        let chip_states = Arc::new(RwLock::new(HashMap::new()));
+        let pica = Pica::new(
+            Box::new(crate::ranging_estimator::UwbRangingEstimator::new(chip_states.clone())),
+            None,
+        );
 
         UwbActor {
-            chip_states: HashMap::new(),
-            handle_to_chip: HashMap::new(),
+            chip_states,
+            chip_to_handle: HashMap::new(),
             device_client,
             pica_commands: pica.commands(),
             pica_on_tick_events: pica.events(),
             pica_connect_events: pica.events(),
             pica: Some(pica),
         }
-    }
-}
-
-// TODO(b/458545089): implement real estimator
-struct MockRangingEstimator;
-
-impl RangingEstimator for MockRangingEstimator {
-    fn estimate(&self, _left: &Handle, _right: &Handle) -> Option<RangingMeasurement> {
-        Some(Default::default())
     }
 }

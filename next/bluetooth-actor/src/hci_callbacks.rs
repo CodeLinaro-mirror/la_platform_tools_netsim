@@ -69,6 +69,47 @@ pub async fn sink_loop(
             log::debug!("sink_loop: Sent packet successfully");
         }
     }
+    let _ = sink.close().await;
     log::error!("Sink task for chip {} finished", id);
     id
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+    use tokio::sync::{mpsc, mpsc::error::TryRecvError};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_send_hci_drops_when_channel_full() {
+        // Create an extremely small channel with size 2.
+        // This mimics the original issue where mpsc::channel(10) filled up rapidly
+        // before tokio executors could awake `sink_loop` to drain the packets.
+        let (hci_tx, mut hci_rx) = mpsc::channel(2);
+
+        let callbacks = HciCallbacks { id: ChipId::from(1), hci_tx: Some(hci_tx), ll_tx: None };
+
+        // Rootcanal produces packets synchronously and rapidly back-to-back:
+        callbacks.send_hci(0, Bytes::from_static(b"req1")); // Success
+        callbacks.send_hci(0, Bytes::from_static(b"req2")); // Success
+
+        // The queue is now full. This third packet hits `.try_send()` limit and gets
+        // dropped immediately, which reproduces the exact packet loss causing test
+        // failure.
+        callbacks.send_hci(0, Bytes::from_static(b"req3")); // Dropped!
+
+        // Draining the queue reveals only the first two packets reached the sink
+        let packet1 = hci_rx.recv().await.unwrap();
+        assert_eq!(packet1, Bytes::from_static(b"req1"));
+
+        let packet2 = hci_rx.recv().await.unwrap();
+        assert_eq!(packet2, Bytes::from_static(b"req2"));
+
+        // No third packet exists; the channel is empty.
+        match hci_rx.try_recv() {
+            Err(TryRecvError::Empty) => {}
+            _ => panic!("Expected empty channel!"),
+        }
+    }
 }

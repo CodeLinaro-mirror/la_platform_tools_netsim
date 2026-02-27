@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use futures::{stream::StreamExt, SinkExt};
+use futures::{pin_mut, stream::StreamExt, SinkExt, TryStreamExt};
 use log::warn;
 use netsim_model::initial_info::ChipInfo;
 use netsim_proto::{
@@ -20,20 +20,14 @@ use crate::packet_stream_converter;
 #[derive(Clone)]
 pub struct PacketStreamerService {
     // Sender to the GrpcTransportListener (or equivalent) to pass new connections
-    new_connection_tx:
-        mpsc::Sender<(ChipInfo, String, mpsc::Receiver<Result<Bytes>>, mpsc::Sender<Bytes>)>,
+    new_connection_tx: mpsc::Sender<(ChipInfo, String, PacketStream, PacketSink)>,
 }
 
 impl PacketStreamerService {
     pub fn new(
-        new_connection_tx: mpsc::Sender<(
-            ChipInfo,
-            String,
-            mpsc::Receiver<Result<Bytes>>,
-            mpsc::Sender<Bytes>,
-        )>,
+        new_connection_tx: mpsc::Sender<(ChipInfo, String, PacketStream, PacketSink)>,
     ) -> Self {
-        PacketStreamerService { new_connection_tx }
+        Self { new_connection_tx }
     }
 }
 
@@ -89,98 +83,70 @@ async fn handle_grpc_initial_info(
     }
 }
 
-async fn pump_grpc_messages(
-    mut stream: ::grpcio::RequestStream<PacketRequest>,
-    mut sink: ::grpcio::DuplexSink<PacketResponse>,
-    grpc_to_app_tx: mpsc::Sender<Result<Bytes>>,
-    mut app_to_grpc_rx: mpsc::Receiver<Bytes>,
-    is_bt: bool,
-) -> Result<()> {
-    loop {
-        tokio::select! {
-            // Received from gRPC client
-            grpc_msg = stream.next() => {
-                match grpc_msg {
-                    Some(Ok(packet_request)) => {
-                        let bytes_result = packet_stream_converter::packet_request_to_bytes(packet_request);
-                        if grpc_to_app_tx.send(bytes_result).await.is_err() {
-                            break; // App side closed
-                        }
-                    }
-                    Some(Err(e)) => {
-                        let _ = grpc_to_app_tx.send(Err(grpc_error_to_packet_error(e))).await;
-                        break;
-                    }
-                    None => break, // gRPC client closed
-                }
-            }
-            // Received from App
-            mpsc_msg = app_to_grpc_rx.recv() => {
-                match mpsc_msg {
-                    Some(bytes) => {
-                        match packet_stream_converter::bytes_to_packet_response(bytes, is_bt) {
-                            Ok(packet_response) => {
-                                if sink.send((packet_response, grpcio::WriteFlags::default())).await.is_err() {
-                                    break; // gRPC client closed
-                                }
-                            }
-                            Err(e) => {
-                                warn!("Error converting bytes to packet response: {:?}", e);
-                                // Consider propagating this error to the app
-                            }
-                        }
-                    }
-                    None => break, // App side closed
-                }
-            }
-        }
-    }
-    let _ = sink.close().await;
-    Ok(())
-}
-
 impl PacketStreamer for PacketStreamerService {
     fn stream_packets(
         &mut self,
-        _ctx: ::grpcio::RpcContext,
+        ctx: ::grpcio::RpcContext,
         stream: ::grpcio::RequestStream<PacketRequest>,
         sink: ::grpcio::DuplexSink<PacketResponse>,
     ) {
         let new_connection_tx = self.new_connection_tx.clone();
-        let peer_addr = _ctx.peer();
+        let peer_addr = ctx.peer();
 
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async move {
-                let (chip_info, stream, sink) = match handle_grpc_initial_info(stream, sink).await {
-                    Ok(info) => info,
-                    Err(_) => return, // Error already logged and sink failed
-                };
+        ctx.spawn(async move {
+            // Do not call Tokio I/O from within this future, it will panic!
+            // https://github.com/tikv/grpc-rs/issues/338
+            let (chip_info, stream, sink) = match handle_grpc_initial_info(stream, sink).await {
+                Ok(info) => info,
+                Err(_) => return, // Error already logged and sink failed
+            };
 
-                // Create channels for this connection
-                let (grpc_to_app_tx, grpc_to_app_rx) = mpsc::channel::<Result<Bytes>>(100);
-                let (app_to_grpc_tx, app_to_grpc_rx) = mpsc::channel::<Bytes>(100);
+            // Send the new connection's channels to the listener's accept loop
+            let is_bt = chip_info
+                .chip
+                .as_ref()
+                .map_or(false, |c| c.kind == netsim_model::initial_info::ChipKind::BLUETOOTH);
 
-                // Send the new connection's channels to the listener's accept loop
-                let is_bt = chip_info
-                    .chip
-                    .as_ref()
-                    .map_or(false, |c| c.kind == netsim_model::initial_info::ChipKind::BLUETOOTH);
-                if new_connection_tx
-                    .send((chip_info, peer_addr, grpc_to_app_rx, app_to_grpc_tx))
-                    .await
-                    .is_err()
-                {
-                    warn!("Failed to send new connection to listener. Dropping connection.");
-                    return;
+            let grpc_stream = stream.map_err(|err| grpc_error_to_packet_error(err)).and_then(
+                |packet_request| async {
+                    packet_stream_converter::packet_request_to_bytes(packet_request)
+                },
+            );
+            let (packet_stream_tx, packet_stream_rx) = mpsc::channel(100);
+            let packet_stream = Box::pin(ReceiverStream::new(packet_stream_rx));
+
+            let packet_sink = Box::pin(
+                sink.with_flat_map(move |bytes: Bytes| {
+                    match packet_stream_converter::bytes_to_packet_response(bytes, is_bt) {
+                        Ok(packet_response) => futures::stream::iter(vec![Ok((
+                            packet_response,
+                            grpcio::WriteFlags::default(),
+                        ))]),
+                        Err(err) => {
+                            warn!("Error converting bytes to packet response: {err:?}");
+                            futures::stream::iter(vec![])
+                        }
+                    }
+                })
+                .sink_map_err(grpc_error_to_packet_error),
+            );
+
+            if new_connection_tx
+                .send((chip_info, peer_addr, packet_stream, packet_sink))
+                .await
+                .is_err()
+            {
+                warn!("Failed to send new connection to listener. Dropping connection.");
+            }
+
+            // The stream must be driven within gRPC, or tokio won't get a wake.
+            // https://github.com/tikv/grpc-rs/issues/338#issuecomment-512845420
+            pin_mut!(grpc_stream);
+            while let Some(packet_res) = grpc_stream.next().await {
+                if packet_stream_tx.send(packet_res).await.is_err() {
+                    break;
                 }
-
-                if let Err(e) =
-                    pump_grpc_messages(stream, sink, grpc_to_app_tx, app_to_grpc_rx, is_bt).await
-                {
-                    warn!("gRPC message pump error: {:?}", e);
-                }
-            });
+            }
         });
     }
 }
@@ -237,7 +203,7 @@ pub async fn connect(
 }
 
 pub struct ChannelTransportListener {
-    pub rx: mpsc::Receiver<(ChipInfo, String, mpsc::Receiver<Result<Bytes>>, mpsc::Sender<Bytes>)>,
+    pub rx: mpsc::Receiver<(ChipInfo, String, PacketStream, PacketSink)>,
     pub local_addr: packet_stream::StreamAddress,
 }
 
@@ -247,20 +213,7 @@ impl packet_stream::transport::traits::TransportListener for ChannelTransportLis
         &mut self,
     ) -> packet_stream::error::Result<(PacketStream, PacketSink, ChipInfo, String)> {
         match self.rx.recv().await {
-            Some((chip_info, guid, grpc_to_app_rx, app_to_grpc_tx)) => {
-                let app_stream: PacketStream = Box::pin(ReceiverStream::new(grpc_to_app_rx));
-                let app_sink: PacketSink = Box::pin(futures::sink::unfold(
-                    app_to_grpc_tx,
-                    |tx, item: bytes::Bytes| async move {
-                        tx.send(item).await.map_err(|e| {
-                            packet_stream::error::PacketStreamError::Io(std::io::Error::new(
-                                std::io::ErrorKind::BrokenPipe,
-                                e.to_string(),
-                            ))
-                        })?;
-                        Ok(tx)
-                    },
-                ));
+            Some((chip_info, guid, app_stream, app_sink)) => {
                 Ok((app_stream, app_sink, chip_info, guid))
             }
             None => Err(packet_stream::error::PacketStreamError::ConnectionClosed),

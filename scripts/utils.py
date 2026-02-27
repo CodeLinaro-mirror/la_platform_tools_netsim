@@ -76,7 +76,7 @@ CMAKE = shutil.which(
 def rust_version() -> str:
   """Returns rust version"""
   with open(
-      AOSP_ROOT / "external" / "qemu" / "android" / "build" / "toolchains.json",
+      AOSP_ROOT / "build" / "bazel" / "toolchains" / "tool_versions.json",
       encoding="utf-8",
   ) as f:
     return json.load(f)["rust"]
@@ -388,6 +388,8 @@ def get_bazel_build_configs(args, env):
   if platform.system().lower() == "windows":
     # Force Static CRT linking to avoid ABI mismatches with the Emulator's prebuilt DLLs.
     build_configs.append("--features=static_link_msvcrt")
+  if not getattr(args, "enable_repo_cache", False):
+    build_configs.append("--repo_contents_cache=")
   return build_configs
 
 

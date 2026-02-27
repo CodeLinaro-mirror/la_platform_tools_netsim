@@ -1,211 +1,121 @@
-# ntest (Network Tester)
+# ntest (Netsim Network Tester)
 
-`ntest` is a network verification tool to validate TAP and Slirp guest
-networking between emulator and a host. It compiles into a host and android
-binary that acts as a test-runner and test-server on the host and test-client on
-android.
+`ntest` is a descriptive BDD-style orchestration tool designed to validate complex networking scenarios between the Host and one or more Guest devices (Android Emulators).
 
-Note: because of guest-host networking, the guest connects to host.
+## Key Features
 
-The test runner can launch netsimd, emulator, install the android binary on the
-emulator, and run the test scenarios.
+- **Multi-Device Orchestration**: Automatically discovers available emulators via ADB and manages the lifecycle of the test environment.
+- **Narrative BDD Output**: Provides a professional, aligned console output using `GIVEN / WHEN / THEN / INFO` tags for clear auditability of test steps.
+- **Kotlin Agent Integration**: Pairs with a companion `ntest-agent` APK running as a service on Android guests, enabling high-fidelity mobile network testing.
+- **iperf3 Benchmarking**: Built-in support for high-precision throughput measurements with industry-standard `iperf3` formatting, including interval samples and summaries.
+- **Variable Resolution**: Supports dynamic template placeholders like `{port}`, `{target}`, and `{gateway_target}` that resolve automatically during execution.
 
-The main scenarios are:
+## Quick Start
 
-- **TCP Echo:** (Basic) Connects via TCP, sends a payload, and verifies the
-  echoed response matches.
-- **UDP Echo:** (Basic) Connects via UDP, sends a payload, and verifies the
-  echoed response.
-- **Gateway Performance:** (Integration) Connects to the Host via its Gateway
-  address and performs a large data transfer (500MB) to verify stability and
-  throughput. _Note: "Gateway" here refers to the Host's address reachable from
-  the Guest: `10.0.2.2` (Slirp User Networking) or the assigned TAP interface
-  address (Bridged/Routed)._
+### Building
 
-### Planned Scenarios
-
-- **mDNS Discovery:** Verifies multicast routing and service discovery
-  (guest-to-host).
-- **Concurrent Connections:** Stress tests the link with multiple simultaneous
-  clients.
-- **Bidirectional Transfer:** Verifies full-duplex performance by sending data
-  both ways simultaneously.
-
-## Overview
-
-`ntest` operates in three primary modes:
-
-1.  **Test Runner:** Orchestrates the Client and Server to run complex scenarios
-    (e.g., local loopback tests or Android-to-Host integration tests).
-2.  **Server (Reflector):** Binds to ports and echos data back. Run on the host.
-3.  **Client (Tester):** Connects to a target, sends data, and verifies the
-    echo. Usually run on the guest
-
-## Building
-
-To build the `ntest` binary:
-
-### Host (Linux/Mac)
+Build the orchestrator and the E2E wrapper:
 
 ```bash
 bazel build @netsim//next/testing/ntest:ntest
+bazel build @netsim//next/testing/ntest:ntest-e2e
 ```
 
-### Android (aarch64)
+### Running Tests
 
-**Option 1: Script (Recommended)**
-
-Prerequisites: `ANDROID_SDK_HOME` must be set.
+The primary command for integration testing is `run`. It orchestrates the host-side server and the guest-side clients.
 
 ```bash
-export ANDROID_SDK_HOME=/path/to/android-sdk
-./build_android.sh
-```
+# Run all scenarios on a connected device
+./ntest run --apk-path ntest-agent.apk --netsim-path netsimd
 
-The output will be at
-`../../target/aarch64-linux-android/release/ntest_android`.
-
-**Option 2: Bazel (Advanced)**
-
-_Note: Requires local NDK restrictions/rules configuration._
-
-```bash
-bazel build --config=android @netsim//next/testing/ntest:ntest
-```
-
-The output will be in `bazel-bin/tools/netsim/next/testing/ntest/ntest`.
-
-## Usage
-
-The primary way to use `ntest` is via the **Local** or **Android** subcommands.
-
-```bash
-# List available scenarios
+# List available scenarios (Dry-Run Mode)
 ./ntest scenarios
 ```
 
-### Local Mode (Self-Test)
+### E2E Wrapper (Production)
 
-Runs both client and server locally on the host machine using loopback. Useful
-for developing test logic.
-
-```bash
-./ntest local
-```
-
-### Android Mode (Integration Test)
-
-Runs the server on the Host and the client on a connected Android device (via
-ADB).
+For automated environments, use the `ntest-e2e` shell wrapper which resolves paths and dependencies automatically:
 
 ```bash
-# Run on an existing emulator/device (or launch if none found)
-./ntest android --android-bin <path_to_android_binary>
+bazel run @netsim//next/testing/ntest:ntest-e2e
 ```
 
-**Note:** For Android mode, you need to provide the path to the `ntest` binary
-cross-compiled for Android (usually aarch64). See [Building](#building) section
-for instructions.
+## CLI Usage
 
-Then pass the resulting binary:
-
-```bash
-./ntest android --android-bin bazel-bin/tools/netsim/next/testing/ntest/ntest
+```text
+Options:
+  --android-home <PATH>   Path to the Android SDK root, platform-tools, or adb binary
+  --apk-path <PATH>       Path to the ntest-agent APK
+  --netsim-path <PATH>    Path to netsim binary
+  --netsim-args <ARGS>    Arguments to pass to netsim
+  --gateway-ip <IP>       Gateway IP to connect to (defaults to 10.0.2.2)
 ```
 
-#### Android Mode Workflow
+### Discovery Logic
 
-In `android` mode, the Test Runner manages the entire lifecycle:
+The orchestrator intelligently locates `adb` by checking:
+1. The provided `--android-home` flag (checking both the path and `path/platform-tools/adb`).
+2. The `ANDROID_HOME`, `ANDROID_SDK_ROOT`, or `ANDROID_SDK_HOME` environment variables.
+3. The system `PATH`.
 
-1.  **Netsim Launch:** If `--netsim-bin` is provided, the runner launches that
-    specific Netsim instance.
-2.  **Emulator Check:** It checks for connected ADB devices.
-    - If a device is found, it uses it.
-    - If no device is found, it launches a new emulator instance (using
-      available AVDs).
-3.  **Setup:** Pushes the `ntest` binary to `/data/local/tmp/ntest` and waits
-    for network connectivity (`ping 10.0.2.2`).
-4.  **Execution:** Runs the test scenarios, coordinating the Host Server and
-    Android Client.
+## BDD Narrative Format
 
-### Testing Custom Netsim Versions
+`ntest` produces a vertically aligned narrative that describes the interactions between actors:
 
-You can run tests against a specific `netsim` binary or pass custom arguments.
-
-```bash
-# Use a custom netsim binary
-./ntest android --netsim-bin <path_to_netsim>
-
-# Pass arguments to netsim (passed to netsimd or emulator -netsim-args)
-./ntest android --netsim-args "--packet-capture"
+```text
+SCENARIO: Basic TCP Echo
+GIVEN  @adb          Has 1 or more attached devices
+WHEN   @Host         Starts a TCP echo server on "port"
+INFO   @Host         Echo server listening on port=34829
+AND    @Small_Phone  Sends 1KB TCP to 10.0.2.2:34829
+INFO   @Small_Phone  Verifies the TCP echo (1024 bytes)
+THEN   @Host         Receives 1KB TCP data
 ```
 
-### Verifying TAP Configuration
+### Understanding INFO vs. BDD Steps
 
-`ntest` supports verifying TAP interface availability on the Host.
+`ntest` distinguishes between behavioral intent and runtime telemetry:
 
-In **Local Mode**, this verifies that the Host can bind to and reach the TAP
-interface's Gateway IP (e.g. `192.168.96.1`), confirming the interface is up and
-configured.
+- **BDD Steps (`GIVEN`, `WHEN`, `THEN`)**: These define the high-level behavioral "What".
+    - `GIVEN` sets the environment (e.g., "An active server on 'port'").
+    - `WHEN` triggers an action (e.g., "Sends 1KB TCP").
+    - `THEN` asserts an outcome (e.g., "Receives data").
+- **Observational Lines (`INFO`)**: These provide the runtime "How".
+    - **Telemetry**: Dynamic values like kernel-assigned ports (e.g., `port=34829`).
+    - **Side-Effects**: Progress logs like "Installing APK" or "Launching Agent".
+    - **Actor Feedback**: Self-reporting from the Android guest to confirm internal checks.
 
-```bash
-# Verify Cuttlefish TAP pool (implies 192.168.96.1 gateway)
-./ntest local --wifi-cvd-tap
+**Dry-Run Mode**: When running `./ntest scenarios`, the `INFO` lines are automatically suppressed to provide a clean view of the behavioral design.
 
-# Verify specific TAP interface
-./ntest local --wifi-tap tap0 --gateway-ip 192.168.1.1
+### Actor Identification
+
+- **`@Host`**: The Linux host machine running the orchestrator.
+- **`@adb`**: The ADB Bridge (used for environment setup/discovery logs).
+- **`@AVD#N`**: Generic placeholders that resolve to specific devices (e.g., `@Small_Phone`).
+
+## Benchmarking
+
+Scenarios like `Gateway Performance` utilize the `run_benchmark` step to produce high-resolution performance metrics:
+
+```text
+SCENARIO: Gateway Performance
+GIVEN  @adb          Has 1 or more attached devices
+WHEN   @Host         Starts an echo server on the gateway on "port"
+INFO   @Host         Echo server listening on port=44877
+THEN   @Small_Phone  Measures performance with 10 samples of 1MB TCP to 10.0.2.2:44877
+INFO   @Small_Phone  [ ID] Interval           Transfer     Bitrate
+INFO   @Small_Phone  [  5]  0.00- 1.02 sec    1.00 MBytes    8.22 Mbits/sec
+INFO   @Small_Phone  [  5]  1.02- 1.97 sec    1.00 MBytes    8.86 Mbits/sec
+...
+INFO   @Small_Phone  - - - - - - - - - - - - - - - - - - - - - - - - -
+INFO   @Small_Phone  [  5]  0.00- 9.42 sec   10.00 MBytes    8.92 Mbits/sec
 ```
 
-To use TAP in **Android Mode**, pass the arguments to `netsim`:
+## Internal Architecture
 
-```bash
-./ntest android --netsim-args "--wifi-cvd-tap"
-```
+The orchestrator implements a **Control Plane** and a **Data Plane**:
 
-## Support Modes
-
-These modes are used internally by the Test Runner or for manual debugging.
-
-### Server Mode (Reflector)
-
-Runs a TCP/UDP echo server.
-
-```bash
-# Listen on a specific port
-./ntest server --port 8080
-
-# Listen on a random port (prints port to stdout)
-./ntest server --port 0
-```
-
-### Client Mode (Tester)
-
-Runs a single test against a target.
-
-```bash
-# TCP Echo Test
-./ntest client --proto tcp --target 127.0.0.1:8080 --payload-size 1024
-
-# UDP Echo Test
-./ntest client --proto udp --target 127.0.0.1:8080 --payload-size 512
-```
-
-## Architecture
-
-The system relies on a **Reflector Pattern**:
-
-- **Local Mode:**
-  - **Controller:** Spawns a local Server process.
-  - **Client:** Spawns a local Client process connecting to `127.0.0.1`.
-  - **Result:** Immediate verification of test logic.
-
-- **Android Mode:**
-  - **Controller (Host):** running `ntest android ...`.
-  - **Server (Host):** Spawns `ntest server` listening on `0.0.0.0` (accessible
-    from Guest).
-  - **Client (Guest):** Pushes and executes `ntest client` on Android via ADB,
-    connecting to `10.0.2.2` (Host Alias).
-
-This "Native BDD" approach defines tests in purely Rust code
-(`src/tests/scenarios.rs`), giving us compile-time safety and zero parsing
-overhead.
+1.  **Control Plane (Host-to-Guest)**: Communicates with the Kotlin agent via ADB port forwarding and a lightweight command protocol.
+2.  **Data Plane (Guest-to-Host)**: Actual test traffic (TCP/UDP) flows between the Guest agent and the Host echo server through the Netsim medium (Slirp or TAP).
+3.  **Feedback Channel**: A persistent TCP connection from the Guest back to the Host that streams live BDD step status and logs.
