@@ -1,13 +1,11 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::{ActorLifecycle, DynContext};
-use async_trait::async_trait;
 use netsim_model::ChipId;
 use netsim_packets::ieee80211::Ieee80211;
 
 use crate::ap_actor::{ApActor, WIFI_STREAM_ID};
 
-#[async_trait]
 impl ActorLifecycle for ApActor {
     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
         log::info!("ApActor started");

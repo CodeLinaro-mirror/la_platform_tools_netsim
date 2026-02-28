@@ -13,74 +13,94 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-//! A logger for use by netsim and netsimd.
-//!
-//! Uses the env_logger crate that allows control of logging through
-//! the RUST_LOG environment variable.
+use tracing_log::LogTracer;
+use tracing_subscriber::EnvFilter;
 
-use std::{io::Write, path::Path};
-
-use env_logger::{Builder, Env};
-use log::{Level, Record};
-
-use crate::util::time_display::log_current_time;
+/// Formats the current time for logging.
+fn log_current_time() -> String {
+    chrono::Utc::now().format("%m-%d %H:%M:%S%.3f").to_string()
+}
 
 /// Initiating the environment for logging with given prefix
 ///
 /// The current log format follows the same format as Android Emulator team.
 pub fn init(prefix: &'static str, is_verbose: bool) {
     let log_filter = if is_verbose { "debug" } else { "info" };
-    let mut builder = Builder::from_env(Env::default().default_filter_or(log_filter));
-    builder.format(move |buf, record| {
-        let level = level_to_string(record.level());
-        let message = format!(
-            "{} {} {} {}:{} - {}",
-            prefix,
-            level,
-            log_current_time(),
-            format_file(record),
-            record.line().unwrap_or(0),
-            record.args()
-        );
-        writeln!(buf, "{message}")
-    });
-    builder.init();
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_filter));
+
+    let _ = LogTracer::init();
+
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .event_format(CustomFormatter { prefix })
+        .try_init();
 }
 
 /// Initiating the environment for logging in Rust unit tests
 ///
 /// The current log format follows the same format as Android Emulator team.
 pub fn init_for_test() {
-    let mut binding = Builder::from_env(Env::default().default_filter_or("info"));
-    let builder = binding.is_test(true);
-    builder.format(move |buf, record| {
-        let level = level_to_string(record.level());
-        let message =
-            format!("{} {} \t| netsim-test: {}", level, log_current_time(), record.args());
-        writeln!(buf, "{message}")
-    });
-    builder.init();
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let _ = LogTracer::init();
+
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .event_format(CustomFormatter { prefix: "netsim-test" })
+        .with_test_writer()
+        .try_init();
 }
 
-/// Helper function for parsing the file name from given record file path
-/// This will provide the file information where the log function is called
-fn format_file<'a>(record: &'a Record<'a>) -> &'a str {
-    match record.file() {
-        Some(filepath) => {
-            Path::new(filepath).file_name().map(|s| s.to_str().unwrap_or("N/A")).unwrap_or("N/A")
+struct CustomFormatter {
+    prefix: &'static str,
+}
+
+impl<S, N> tracing_subscriber::fmt::FormatEvent<S, N> for CustomFormatter
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+    N: for<'a> tracing_subscriber::fmt::FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        _ctx: &tracing_subscriber::fmt::FmtContext<'_, S, N>,
+        mut writer: tracing_subscriber::fmt::format::Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> std::fmt::Result {
+        let meta = event.metadata();
+        let level = match *meta.level() {
+            tracing::Level::ERROR => "E",
+            tracing::Level::WARN => "W",
+            tracing::Level::INFO => "I",
+            tracing::Level::DEBUG => "D",
+            tracing::Level::TRACE => "T",
+        };
+
+        let file = meta
+            .file()
+            .and_then(|f| std::path::Path::new(f).file_name())
+            .and_then(|s| s.to_str())
+            .unwrap_or("N/A");
+        let line = meta.line().unwrap_or(0);
+
+        write!(writer, "{} {} {} {}:{} - ", self.prefix, level, log_current_time(), file, line)?;
+
+        {
+            struct Visitor<'a, 'b>(&'a mut tracing_subscriber::fmt::format::Writer<'b>);
+            impl tracing::field::Visit for Visitor<'_, '_> {
+                fn record_debug(
+                    &mut self,
+                    field: &tracing::field::Field,
+                    value: &dyn std::fmt::Debug,
+                ) {
+                    if field.name() == "message" {
+                        write!(self.0, "{:?}", value).unwrap();
+                    }
+                }
+            }
+            let mut visitor = Visitor(&mut writer);
+            event.record(&mut visitor);
         }
-        None => "N/A",
-    }
-}
-
-/// Helper function for translating log levels to string.
-fn level_to_string(level: Level) -> &'static str {
-    match level {
-        Level::Error => "E",
-        Level::Warn => "W",
-        Level::Info => "I",
-        Level::Debug => "D",
-        Level::Trace => "T",
+        writeln!(writer)
     }
 }
 
@@ -90,5 +110,67 @@ fn level_to_string(level: Level) -> &'static str {
 #[test]
 fn test_init_for_test() {
     init_for_test();
-    log::info!("Hello Netsim");
+    tracing::info!("Hello Netsim");
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::*;
+
+    static LOG_BUFFER: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+
+    struct BufferWriter;
+
+    impl std::io::Write for BufferWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            LOG_BUFFER.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    // Since Subscriber can only be initialized once, we use with_default for
+    // tracing tests.
+    #[test]
+    fn test_format_matches_legacy() {
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new("info"))
+            .event_format(CustomFormatter { prefix: "netsim" })
+            .with_writer(|| BufferWriter)
+            .finish();
+
+        tracing::subscriber::with_default(subscriber, || {
+            LOG_BUFFER.lock().unwrap().clear();
+            tracing::info!("Test tracing message");
+            let output = String::from_utf8(LOG_BUFFER.lock().unwrap().clone()).unwrap();
+            // Match pattern: netsim I MM-DD HH:MM:SS.sss netsim_logger.rs:LINE - Test
+            // tracing message
+            let re = regex::Regex::new(r"netsim I \d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} netsim_logger\.rs:\d+ - Test tracing message").unwrap();
+            assert!(re.is_match(&output), "Output did not match legacy format: {}", output);
+        });
+
+        // For log::info!, it uses the global dispatcher. If another test already
+        // initialized it, we might not capture it in LOG_BUFFER. We skip log
+        // verification if initialization fails.
+        let _ = LogTracer::init();
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new("info"))
+            .event_format(CustomFormatter { prefix: "netsim" })
+            .with_writer(|| BufferWriter)
+            .try_init();
+
+        // Try log verification but don't fail if buffer is empty (meaning global was
+        // already set elsewhere)
+        LOG_BUFFER.lock().unwrap().clear();
+        log::info!("Test log message");
+        let output = String::from_utf8(LOG_BUFFER.lock().unwrap().clone()).unwrap();
+        if !output.is_empty() {
+            let re = regex::Regex::new(r"netsim I \d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} netsim_logger\.rs:\d+ - Test log message").unwrap();
+            assert!(re.is_match(&output), "Log output did not match legacy format: {}", output);
+        }
+    }
 }

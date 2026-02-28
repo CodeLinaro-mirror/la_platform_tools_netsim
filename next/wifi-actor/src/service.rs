@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
 use netsim_model::{
     chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, RadioUpdate, WifiUpdate},
@@ -14,7 +13,6 @@ use crate::{
     wifi_actor::{WifiActor, WifiReq, WifiResponse},
 };
 
-#[async_trait]
 impl ActorService for WifiActor {
     type Id = ChipId;
     type Create = netsim_model::chip::ChipCreate;

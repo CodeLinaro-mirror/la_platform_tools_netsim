@@ -70,7 +70,6 @@
 //! use actor_framework::{
 //!     ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient,
 //! };
-//! use async_trait::async_trait;
 //!
 //! // 1. Define the Service and Lifecycle
 //! #[derive(Clone, Debug)]
@@ -104,7 +103,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorService for User {
 //!     type Id = u32;
 //!     type Create = UserCreate;
@@ -166,7 +164,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorLifecycle for User {
 //!     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 //!     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
@@ -198,7 +195,6 @@
 //! use actor_framework::{
 //!     ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient,
 //! };
-//! use async_trait::async_trait;
 //!
 //! // --- Define Minimal Services ---
 //! #[derive(Clone, Debug)]
@@ -225,7 +221,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorService for User {
 //!     type Id = u32;
 //!     type Create = UserCreate;
@@ -282,7 +277,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorLifecycle for User {
 //!     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 //!     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
@@ -314,7 +308,6 @@
 //!         ProductError
 //!     }
 //! }
-//! #[async_trait]
 //! impl ActorService for Product {
 //!     type Id = u32;
 //!     type Create = ProductCreate;
@@ -369,7 +362,6 @@
 //!         Ok(vec![self.clone()])
 //!     }
 //! }
-//! #[async_trait]
 //! impl ActorLifecycle for Product {
 //!     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 //!     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
@@ -409,7 +401,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorService for Order {
 //!     type Id = u32;
 //!     type Create = OrderCreate;
@@ -466,7 +457,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorLifecycle for Order {
 //!     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 //!     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}

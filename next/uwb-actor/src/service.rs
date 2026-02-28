@@ -1,7 +1,6 @@
 // Copyright 2026 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{FutureExt, SinkExt, StreamExt};
 use netsim_model::{
@@ -17,7 +16,6 @@ use crate::{
     UwbAction, UwbActionResult,
 };
 
-#[async_trait]
 impl ActorService for UwbActor {
     type Id = ChipId;
     type Create = ChipCreate;
@@ -124,7 +122,7 @@ impl ActorService for UwbActor {
         ctx.spawn(
             id,
             async move {
-                let _ = device_client.notify_chip_removed(device_id, id);
+                let _ = device_client.notify_chip_removed(device_id, id).await;
                 id
             }
             .boxed(),
@@ -172,6 +170,7 @@ impl ActorService for UwbActor {
                     .collect();
                 Ok(UwbActionResult::Statistics(stats))
             }
+            #[cfg(any(test, feature = "testing"))]
             UwbAction::StartRanging { id, session_id } => {
                 if let Some(handle) = self.chip_to_handle.get(&id) {
                     let _ =
@@ -179,6 +178,7 @@ impl ActorService for UwbActor {
                 }
                 Ok(UwbActionResult::Success)
             }
+            #[cfg(any(test, feature = "testing"))]
             UwbAction::StopRanging { id, session_id } => {
                 if let Some(handle) = self.chip_to_handle.get(&id) {
                     let stop_cmd = uci::SessionStopCmd { session_id };
