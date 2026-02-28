@@ -103,6 +103,10 @@ pub enum DeviceAction {
     AddChipByGuid {
         params: DeviceAddChip,
     },
+    /// Triggers a persistence of the current statistics to disk.
+    /// This is primarily used internally by the actor for periodic saves
+    /// and lifecycle events, but can be invoked externally if needed.
+    SaveStats,
 }
 
 impl fmt::Debug for DeviceAction {
@@ -122,6 +126,7 @@ impl fmt::Debug for DeviceAction {
             DeviceAction::AddChipByGuid { params } => {
                 f.debug_struct("AddChipByGuid").field("params", params).finish()
             }
+            DeviceAction::SaveStats => write!(f, "SaveStats"),
         }
     }
 }

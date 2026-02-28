@@ -45,6 +45,14 @@ async fn test_add_chip_to_existing_device() {
     // ChipClient
     let mut mock_chip_client = MockChipClient::new();
     mock_chip_client.expect_create().times(2).returning(|_| Ok(()));
+    mock_chip_client.expect_read_statistics().returning(|| Ok(Box::from(Vec::new())));
+    mock_chip_client.expect_read().returning(|id| {
+        Ok(netsim_model::chip::Chip {
+            id: id.0,
+            kind: netsim_model::chip::ChipKind::BLUETOOTH,
+            ..Default::default()
+        })
+    });
 
     let mut chip_clients = HashMap::new();
     chip_clients.insert(
@@ -89,6 +97,14 @@ async fn test_concurrent_add_chip_race_condition() {
     // ChipClient We expect 2 chips to be created (one for each add_chip call)
     let mut mock_chip_client = MockChipClient::new();
     mock_chip_client.expect_create().times(2).returning(|_| Ok(()));
+    mock_chip_client.expect_read_statistics().returning(|| Ok(Box::from(Vec::new())));
+    mock_chip_client.expect_read().returning(|id| {
+        Ok(netsim_model::chip::Chip {
+            id: id.0,
+            kind: netsim_model::chip::ChipKind::BLUETOOTH,
+            ..Default::default()
+        })
+    });
     // Allow cleanup deletions
     mock_chip_client.expect_delete().returning(|_| Ok(()));
 

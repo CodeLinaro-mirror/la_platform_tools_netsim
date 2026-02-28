@@ -13,6 +13,7 @@ libc = "0.2"
 log = "0.4"
 netsim-model = { path = "../model" }
 netsim-packets = { path = "../packets" }
+netsim-proto = { path = "../../proto" }
 nix = { version = "0.28", features = ["ioctl", "fs"] }
 slirp-actor = { path = "../slirp-actor" }
 thiserror = "1"

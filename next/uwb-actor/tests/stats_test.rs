@@ -19,7 +19,7 @@ async fn test_read_statistics() {
     let expected_stats = [NetsimRadioStats {
         name: format!("uwb_chip_{}", chip_id),
         id: chip_id,
-        kind: ChipKind::UWB,
+        kind: netsim_model::stats::RadioKind::Uwb,
         tx_bytes: 0,
         rx_bytes: 0,
         ..Default::default()

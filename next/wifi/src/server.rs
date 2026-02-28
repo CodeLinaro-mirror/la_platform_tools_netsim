@@ -141,6 +141,9 @@ impl Server {
             ChipRequest::Shutdown => {
                 *shutdown = true;
             }
+            ChipRequest::GetStatistics { respond_to } => {
+                let _ = respond_to.send(Ok(Box::new([])));
+            }
             _ => {
                 log::warn!("Unhandled ChipRequest: {:?}", msg);
             }
