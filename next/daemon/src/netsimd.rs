@@ -92,6 +92,7 @@ async fn handle_new_connection(
         position: Default::default(),
         orientation: Default::default(),
         builtin: false,
+        device_info: chip_info.device_info.clone().map(Into::into),
     };
 
     let mut chip = match chip_info.chip {

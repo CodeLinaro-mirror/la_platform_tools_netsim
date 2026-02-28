@@ -284,3 +284,18 @@ pub fn stream_to_model_stats(
         invalid_packets: vec![],
     }
 }
+
+pub fn to_proto_device_stats(
+    device_id: u32,
+    info: &netsim_model::device::DeviceInfo,
+) -> netsim_proto::stats::NetsimDeviceStats {
+    let mut stats = netsim_proto::stats::NetsimDeviceStats::new();
+    stats.set_device_id(device_id);
+    stats.set_kind(info.kind.clone());
+    stats.set_version(info.version.clone());
+    stats.set_sdk_version(info.sdk_version.clone());
+    stats.set_build_id(info.build_id.clone());
+    stats.set_variant(info.variant.clone());
+    stats.set_arch(info.arch.clone());
+    stats
+}
