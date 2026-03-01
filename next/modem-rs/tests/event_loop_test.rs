@@ -1,8 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use modem_rs::{
-    test_utils::MockNetworkHandler, time::MockClock, types::ModemId, ModemEvent,
-    ModemNetworkSimulator,
+    test_utils::{MockModemHandler, MockNetworkHandler},
+    time::MockClock,
+    types::ModemId,
+    ModemEvent, ModemNetworkSimulator,
 };
 
 #[test]
@@ -12,13 +14,13 @@ fn test_event_loop_tick_and_duration() {
     let simulator = ModemNetworkSimulator::new_with_clock(network_handler, clock.clone());
 
     let modem_id: ModemId = 1;
-    let modem_handler = Arc::new(crate::common::MockModemHandler::new());
+    let modem_handler = Arc::new(MockModemHandler::new());
     simulator.new_modem(modem_id, modem_handler.clone()).unwrap();
 
     // Tick once to clear the initial registration event
     clock.advance(Duration::from_millis(10));
     simulator.tick();
-    modem_handler.get_responses();
+    let _ = modem_handler.wait_for_response();
 
     // 1. Schedule an event 100ms in the future.
     let event_duration = Duration::from_millis(100);
@@ -38,7 +40,6 @@ fn test_event_loop_tick_and_duration() {
     assert!(next_event_in_after.is_none());
 
     // 5. Check that the event was handled.
-    let responses = modem_handler.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"TEST_EVENT_FIRED\r\n");
+    let response = modem_handler.wait_for_response();
+    assert_eq!(response, b"TEST_EVENT_FIRED\r\n");
 }

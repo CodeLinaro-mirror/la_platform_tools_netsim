@@ -1,68 +1,95 @@
-use crate::common::TestHarness;
+use crate::{steps::*, world::World};
 
+// Scenario: STK Display Text
+//   Given a modem "A"
+//   When AT command 'AT+CUSATE="D1150121810D050448656C6C6F20576F726C64"' is
+// sent to "A"   Then response from "A" is '+CUSAT: "9000"'
 #[test]
 fn test_stk_display_text() {
-    let harness = TestHarness::new();
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
     // This is a simplified "Display Text" proactive command envelope.
-    harness.send_at_command(b"AT+CUSATE=\"D1150121810D050448656C6C6F20576F726C64\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    // Expecting a terminal response acknowledging the command
-    assert_eq!(responses[0], b"+CUSAT: \"9000\"\r\n");
+    when_at_command_sent(&mut world, "A", "AT+CUSATE=\"D1150121810D050448656C6C6F20576F726C64\"");
+
+    then_response_is(&mut world, "A", "+CUSAT: \"9000\"");
 }
 
+// Scenario: Send STK Envelope Command
+//   Given a modem "A"
+//   When AT command 'AT+CUSATE="D3120101"' is sent to "A"
+//   Then response from "A" is '+CUSATP: "SubMenu1"'
 #[test]
 fn test_send_stk_envelope_command() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CUSATE=\"D3120101\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"+CUSATP: \"SubMenu1\"\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    when_at_command_sent(&mut world, "A", "AT+CUSATE=\"D3120101\"");
+
+    then_response_is(&mut world, "A", "+CUSATP: \"SubMenu1\"");
 }
 
+// Scenario: STK Get Input
+//   Given a modem "A"
+//   When AT command 'AT+CUSATE="D1150123810D0504456E7465722054657874"' is sent
+// to "A"   Then response from "A" is '+CUSAT: "9000"'
 #[test]
 fn test_stk_get_input() {
-    let harness = TestHarness::new();
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
     // This is a simplified "Get Input" proactive command envelope.
-    harness.send_at_command(b"AT+CUSATE=\"D1150123810D0504456E7465722054657874\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    // Expecting a terminal response acknowledging the command
-    assert_eq!(responses[0], b"+CUSAT: \"9000\"\r\n");
+    when_at_command_sent(&mut world, "A", "AT+CUSATE=\"D1150123810D0504456E7465722054657874\"");
+
+    then_response_is(&mut world, "A", "+CUSAT: \"9000\"");
 }
 
+// Scenario: Query STK Ready
+//   Given a modem "A"
+//   When AT command "AT+CUSATD?" is sent to "A"
+//   Then response from "A" is '+CUSATP: "SETUP MENU"'
 #[test]
 fn test_query_stk_ready() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CUSATD?\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"+CUSATP: \"SETUP MENU\"\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    when_at_command_sent(&mut world, "A", "AT+CUSATD?");
+
+    then_response_is(&mut world, "A", "+CUSATP: \"SETUP MENU\"");
 }
 
+// Scenario: Set STK Mode
+//   Given a modem "A"
+//   When AT command "AT+STK=1" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_set_stk() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+STK=1\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+STK=1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Set STK Enabled
+//   Given a modem "A"
+//   When AT command "AT+STKEN=1" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_set_stk_enabled() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+STKEN=1\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+STKEN=1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Set STK Unsolicited Result
+//   Given a modem "A"
+//   When AT command "AT+STKUR=1" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_set_stk_unsolicited_result() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+STKUR=1\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+STKUR=1");
+    then_response_is(&mut world, "A", "OK");
 }

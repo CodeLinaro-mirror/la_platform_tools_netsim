@@ -1,15 +1,29 @@
-use crate::common::TestHarness;
+use crate::{steps::*, world::World};
 
+// Scenario: Verify PIN Retry Counter
+//   Given a modem "A"
+//   When AT command 'AT+CPIN="0000"' is sent to "A"
+//   Then response from "A" is "ERROR"
+//   When AT command 'AT+CPIN="0000"' is sent to "A"
+//   Then response from "A" is "ERROR"
+//   When AT command "AT+SPIC" is sent to "A"
+//   Then response from "A" is "+SPIC: 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_pin_retry_counter() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CPIN=\"0000\"\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+CPIN=\"0000\"\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+SPIC\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+SPIC: 1\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // First failed attempt
+    when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Second failed attempt
+    when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    // Query retries
+    when_at_command_sent(&mut world, "A", "AT+SPIC");
+    then_response_is(&mut world, "A", "+SPIC: 1");
+    then_response_is(&mut world, "A", "OK");
 }

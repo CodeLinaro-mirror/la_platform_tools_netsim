@@ -7,6 +7,8 @@ use actor_framework::TimerKey;
 use capture_api::CaptureSender;
 use netsim_model::{chip::ChipClient, ChipKind};
 
+use crate::DeviceClient;
+
 pub struct DeviceActor {
     pub chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
     pub next_chip_id: Arc<AtomicU32>,
@@ -18,13 +20,14 @@ pub struct DeviceActor {
     pub idle_timeout: Option<std::time::Duration>,
 
     pub startup_timer: Option<TimerKey>,
-    pub idle_timer: Option<TimerKey>,
+    pub(crate) idle_timer: Option<TimerKey>,
     pub has_seen_device: bool,
     pub guid_to_id: HashMap<String, device_api::DeviceId>,
-    pub stats_timer: Option<TimerKey>,
     pub stats_write_task: Option<tokio::task::JoinHandle<()>>,
     pub(crate) stats: crate::stats::Stats,
     pub stats_interval: std::time::Duration,
+    // Client to send messages to self (e.g. for periodic stats)
+    pub(crate) self_client: Option<DeviceClient>,
 }
 
 impl DeviceActor {
@@ -53,41 +56,15 @@ impl DeviceActor {
             idle_timer: None,
             has_seen_device: false,
             guid_to_id: HashMap::new(),
-            stats_timer: None,
             stats_write_task: None,
-            stats: crate::stats::Stats::new(version, stats_path),
+            stats: crate::stats::Stats::new(version.clone(), stats_path),
             stats_interval: stats_interval.unwrap_or(std::time::Duration::from_secs(10)),
+            self_client: None,
         }
     }
 
-    pub(crate) fn schedule_periodic_stats(&mut self, ctx: &mut dyn actor_framework::Context<Self>) {
-        let base_stats = self.stats.get_base_stats();
-        let path = self.stats.stats_path.clone();
-        let interval = self.stats_interval;
-
-        // Verify previous background write task finished before spawning another
-        if let Some(task) = &self.stats_write_task {
-            if !task.is_finished() {
-                log::warn!(
-                    "DeviceActor: Dropping periodic stats tick; previous write is still pending."
-                );
-                return;
-            }
-        }
-
-        self.stats_write_task = Some(tokio::task::spawn_blocking(move || {
-            if let Err(e) = crate::stats::write_combined_stats(base_stats, path) {
-                log::error!("DeviceActor: {}", e);
-            }
-        }));
-
-        let key = ctx.run_later(
-            interval,
-            Box::new(move |actor, ctx| {
-                actor.schedule_periodic_stats(ctx);
-            }),
-        );
-        self.stats_timer = Some(key);
+    pub fn set_self_client(&mut self, client: DeviceClient) {
+        self.self_client = Some(client);
     }
 }
 
