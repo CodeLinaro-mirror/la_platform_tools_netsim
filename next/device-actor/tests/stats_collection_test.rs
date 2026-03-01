@@ -1,26 +1,27 @@
-// Copyright (C) 2025 The Android Open Source Project
-
+// Scenario: Radio stats are collected from transport (DeviceActor)
+//   Given a running Device Actor
+//   And a device with a transport stream
+//   When I send packets to the transport
+//   Then the radio stats reflect the transport packets
 use crate::world::World;
 
-// Scenario: Radio stats are collected from chips
-//   Given a running Device Actor
-//   And a device with radio stats
-//   When I poll for radio stats
-//   Then the radio stats contain the device with correct bytes
 #[tokio::test]
-async fn test_radio_stats() {
+async fn test_transport_stats() {
     let mut world = World::new().await;
 
-    // Create a device first so it has an ID
-    let device_id = world.when_create_device("device-1").await;
-    let id_u32 = device_id.0;
+    world.given_device_with_transport_stream("device-GUID", "chip-1").await;
 
-    // Given a device with radio stats
-    world.given_radio_stats(id_u32, 1000, 2000);
+    // Prime the mock stats (otherwise read_statistics returns empty result and
+    // merge is skipped)
+    world.given_mock_radio_stats(0, 0);
 
-    // When I poll for radio stats
+    // Send 3 packets of 10 bytes each -> 30 bytes total
+    world.when_send_packets_to_transport(3, 10).await;
+
     world.when_fetch_radio_stats().await;
 
-    // Then the radio stats contain the device with correct bytes
-    world.then_radio_stats_has_device_with_bytes(id_u32, 1000, 2000);
+    // Transport Rx (Stream) -> Radio Tx (Air)
+    // We sent 30 bytes into the stream (DeviceActor Rx), so it should appear as Tx
+    // in Radio stats.
+    world.then_radio_stats_should_match(30, 0);
 }
