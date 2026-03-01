@@ -1,26 +1,25 @@
 use std::{sync::Arc, time::Duration};
 
 use modem_rs::{
-    test_utils::{MockModemHandler, MockNetworkHandler},
-    time::MockClock,
-    types::ModemId,
-    ModemEvent, ModemNetworkSimulator,
+    test_utils::MockModemHandler, time::MockClock, ModemEvent, ModemId, ModemNetworkSimulator,
 };
 
 #[test]
 fn test_event_loop_tick_and_duration() {
     let clock = Arc::new(MockClock::new());
-    let network_handler = Arc::new(MockNetworkHandler::new());
-    let simulator = ModemNetworkSimulator::new_with_clock(network_handler, clock.clone());
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut simulator = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
 
     let modem_id: ModemId = 1;
-    let modem_handler = Arc::new(MockModemHandler::new());
-    simulator.new_modem(modem_id, modem_handler.clone()).unwrap();
+    let (mut modem_handler, sink) = MockModemHandler::new();
+    simulator.new_modem(modem_id, sink).unwrap();
 
     // Tick once to clear the initial registration event
     clock.advance(Duration::from_millis(10));
     simulator.tick();
+    // Consume initial registration response(s)
     let _ = modem_handler.wait_for_response();
+    while let Some(_) = modem_handler.try_get_response() {}
 
     // 1. Schedule an event 100ms in the future.
     let event_duration = Duration::from_millis(100);
@@ -28,16 +27,19 @@ fn test_event_loop_tick_and_duration() {
 
     // 2. Tick before the event is due.
     // It should return the duration until the next event.
-    let next_event_in = simulator.tick().unwrap();
-    assert_eq!(next_event_in, event_duration);
+    let (events, next_duration) = simulator.tick();
+    assert!(events.is_empty());
+    assert_eq!(next_duration, Some(event_duration));
 
     // 3. Advance the clock manually.
     clock.advance(event_duration);
 
     // 4. Tick again. The event should fire now.
-    // The queue should be empty, so it should return None.
-    let next_event_in_after = simulator.tick();
-    assert!(next_event_in_after.is_none());
+    // The queue should be empty, so it should return None (or Duration::ZERO/None
+    // if empty).
+    let (_events_after, next_duration_after) = simulator.tick();
+
+    assert!(next_duration_after.is_none());
 
     // 5. Check that the event was handled.
     let response = modem_handler.wait_for_response();

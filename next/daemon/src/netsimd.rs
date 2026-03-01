@@ -481,10 +481,8 @@ impl NetsimDaemon {
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
-        // TODO: Replace with real modem network.
-        let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
         let (cell_runner, cell_client) = cell::new();
-        let cell_server = cell::Server::new(device_client.clone(), cell_controller);
+        let cell_actor_state = cell::CellActor::new(device_client.clone());
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
@@ -531,9 +529,7 @@ impl NetsimDaemon {
         join_set.spawn(wifi_runner.run(wifi_actor_state));
         join_set.spawn(ap_runner.run(ap_actor_state));
         join_set.spawn(slirp_runner.run(slirp_actor_state));
-        join_set.spawn(async move {
-            cell_runner.run(cell_server).await;
-        });
+        join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
         join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
         join_set.spawn(uwb_runner.run(uwb_actor));

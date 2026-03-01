@@ -47,6 +47,7 @@ DAEMON_DEPS = [
     "//next/link-actor",
     "//next/link-api",
     "//next/model",
+    "//next/modem-rs",
     "//next/packet-stream",
     "//next/slirp-actor",
     "//next/uwb-actor",

@@ -209,3 +209,118 @@ fn test_query_emergency_mode() {
     then_response_is(&mut world, "A", "+WSOS: 1");
     then_response_is(&mut world, "A", "OK");
 }
+
+// Scenario: External Incoming Call (Console)
+//   Given a modem "A"
+//   When external call from "123456" matches "A"
+//   Then response from "A" is "RING"
+//   And response from "A" contains "+CLIP: \"123456\",129,,,,0"
+//   When time, advances > 1s (call ring timeout)
+//   Then check "A" is idle
+#[test]
+fn test_external_incoming_call() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Inject call
+    let id_a = world.modems.get("A").unwrap().0;
+    when_external_call_initiated(&mut world, id_a, "123456");
+
+    // Expect RING
+    then_response_is(&mut world, "A", "RING");
+    // Expect +CLIP
+    then_response_contains(&mut world, "A", "+CLIP: \"123456\",129,,,,0");
+
+    // Verify call state (Alerting)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    // ID=1, Direction=1(Incoming), State=3(Alerting), Voice=0(Voice), Multiparty=0,
+    // Number="123456", Type=129
+    then_response_contains(&mut world, "A", "+CLCC: 1,1,3,0,0,\"123456\",129");
+
+    // Wait for timeout
+    when_time_advances_ms(&mut world, 2000);
+
+    // Call should be gone
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: External Call Control (Answer/Hangup)
+//   Given a modem "A"
+//   When AT command "ATD123;" is sent to "A"
+//   Then response from "A" is "OK"
+//   When external answer triggered for "A"
+//   Then response from "A" is "OK" (representing CONNECT)
+//   And check call state is Active
+//   When external hangup triggered for "A"
+//   Then response from "A" is "NO CARRIER"
+//   And check call state is Idle
+#[test]
+fn test_external_call_control() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    let id_a = world.modems.get("A").unwrap().0;
+
+    // Dial
+    when_at_command_sent(&mut world, "A", "ATD123;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Remote Answer
+    when_external_call_answered(&mut world, id_a);
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify Active
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    // ID=1, Dir=0(Out), State=0(Active), ...
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,0,0,0,\"123\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    // Remote Hangup
+    when_external_call_hungup(&mut world, id_a);
+    then_response_is(&mut world, "A", "NO CARRIER");
+
+    // Verify Idle
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: External Call Hold
+//   Given a modem "A"
+//   When AT command "ATD123;" is sent to "A"
+//   Then response from "A" is "OK"
+//   When external answer triggered
+//   Then response from "A" is "OK"
+//   When external hold (on) triggered
+//   Then AT+CLCC indicates Held (State 1)
+//   When external hold (off) triggered
+//   Then AT+CLCC indicates Active (State 0)
+#[test]
+fn test_external_call_hold() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    let id_a = world.modems.get("A").unwrap().0;
+
+    // Dial and Answer to get Active call
+    when_at_command_sent(&mut world, "A", "ATD123;");
+    then_response_is(&mut world, "A", "OK");
+    when_external_call_answered(&mut world, id_a);
+    then_response_is(&mut world, "A", "OK");
+
+    // Hold ON
+    when_external_call_held(&mut world, id_a, true);
+
+    // Check State (Held = 1)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    // +CLCC: 1,0,1,... (State 1)
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,1,0,0,\"123\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    // Hold OFF (Resume)
+    when_external_call_held(&mut world, id_a, false);
+
+    // Check State (Active = 0)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    // +CLCC: 1,0,0,... (State 0)
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,0,0,0,\"123\",129");
+    then_response_is(&mut world, "A", "OK");
+}

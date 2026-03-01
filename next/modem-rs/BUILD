@@ -29,12 +29,16 @@ netsim_rust_library(
     ],
     deps = [
         "//next/model",
+        "@anyhow",
         "@bytes",
+        "@futures",
         "@hex",
         "@log",
         "@nom",
         "@serde",
+        "@serde_json",
         "@tokio",
+        "@zerocopy",
     ],
 )
 
@@ -47,7 +51,8 @@ rust_test(
         "@async-trait",
     ],
     deps = [
-        ":testing",
+        ":modem-rs",
+        "//next/model",
         "@env_logger",
         "@hex",
         "@log",

@@ -1,137 +1,233 @@
-use std::sync::{Arc, Mutex, Weak};
+use std::time::Duration;
+
+use netsim_model::cell::RegistrationStatus;
 
 use crate::{
     call_service::CallService,
+    constants::CALL_RING_TIMEOUT,
     data_service::DataService,
     misc_service::MiscService,
-    modem_network_simulator::ModemNetworkSimulator,
     network_service::NetworkService,
     parser::Command,
     sim_service::SimService,
     sms_service::SmsService,
     stk_service::StkService,
     sup_service::SupService,
-    traits::CommandExecutor,
-    types::{Callbacks, CallbacksExt, CommandAction, ExecutionResult, ModemId},
+    types::{CommandAction, ExecutionResult, ModemId, AT_ERROR, AT_OK},
 };
 
 /// Represents a single modem device.
 pub struct ModemImpl {
     pub id: ModemId,
-    pub(crate) callbacks: Arc<dyn Callbacks>,
-    pub(crate) network: Weak<ModemNetworkSimulator>,
     pub sim_service: SimService,
-    pub(crate) network_service: Mutex<NetworkService>,
-    pub(crate) sms_service: SmsService,
+    pub network_service: NetworkService,
+    pub sms_service: SmsService,
     pub call_service: CallService,
-    pub(crate) stk_service: StkService,
-    pub(crate) sup_service: SupService,
-    pub(crate) misc_service: MiscService,
+    pub stk_service: StkService,
+    pub sup_service: SupService,
+    pub misc_service: MiscService,
     pub data_service: DataService,
-    phone_number: Mutex<String>,
-    state: Mutex<State>,
+    phone_number: String,
+    _state: State,
 }
-
-pub type Modem = Arc<ModemImpl>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
     Idle,
-    WaitingForSmsPdu(usize, bool),
 }
 
-// An enum representing what to do for a scheduled event
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModemEvent {
     CallRingTimeout { call_token: u32 },
     NetworkRegistrationComplete,
-    // For testing purposes
     TestEvent,
 }
 
+pub enum ModemEffect {
+    Action(CommandAction),
+    Schedule { delay: Duration, event: ModemEvent },
+    Response(Vec<u8>),
+}
+
 impl ModemImpl {
-    pub(crate) fn new(
-        id: ModemId,
-        callbacks: Arc<dyn Callbacks>,
-        network: Weak<ModemNetworkSimulator>,
-        profile: crate::config::SimProfile,
-    ) -> Modem {
-        let modem = Arc::new(Self {
+    pub(crate) fn new(id: ModemId, profile: crate::config::SimProfile) -> Self {
+        Self {
             id,
-            callbacks,
-            network: network.clone(),
             sim_service: SimService::new(&profile),
-            network_service: Mutex::new(NetworkService::new()),
+            network_service: NetworkService::new(),
             sms_service: SmsService::new(),
             stk_service: StkService::new(),
             sup_service: SupService::new(),
             misc_service: MiscService::new(),
             call_service: CallService::new(),
             data_service: DataService::new(),
-            phone_number: Mutex::new("".to_string()),
-            state: Mutex::new(State::Idle),
-        });
-
-        if let Some(network) = network.upgrade() {
-            network.schedule_event(
-                id,
-                std::time::Duration::from_millis(10),
-                ModemEvent::NetworkRegistrationComplete,
-            );
+            phone_number: "".to_string(),
+            _state: State::Idle,
         }
-
-        modem
     }
 
-    pub fn set_phone_number(&self, number: &str) {
-        *self.phone_number.lock().unwrap() = number.to_string();
+    pub fn trigger_incoming_call(&mut self, number: &str) -> Vec<ModemEffect> {
+        let mut effects = Vec::new();
+        let result = self.call_service.ring(number.to_string());
+        if let ExecutionResult::Handled(handled) = result {
+            for response in handled.responses {
+                if !response.is_empty() {
+                    effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+                }
+            }
+            let clip = format!("+CLIP: \"{}\",129,,,,0\r\n", number);
+            effects.push(ModemEffect::Response(clip.as_bytes().to_vec()));
+
+            effects.push(ModemEffect::Schedule {
+                delay: CALL_RING_TIMEOUT,
+                event: ModemEvent::CallRingTimeout { call_token: 1 },
+            });
+        }
+        effects
+    }
+
+    pub fn trigger_remote_answer(&mut self) -> Vec<ModemEffect> {
+        let mut effects = Vec::new(); // Was missing initialization in original block? No, Vec::new() was at end.
+        if self.call_service.remote_answer() {
+            effects.push(ModemEffect::Response(AT_OK.to_vec()));
+        }
+        effects
+    }
+
+    pub fn trigger_remote_hold(&mut self, on_hold: bool) -> Vec<ModemEffect> {
+        if on_hold {
+            self.call_service.receive_hold();
+        } else {
+            self.call_service.receive_resume();
+        }
+        Vec::new()
+    }
+
+    pub fn trigger_remote_hangup(&mut self) -> Vec<ModemEffect> {
+        let mut effects = Vec::new();
+        self.call_service.receive_hangup();
+        effects.push(ModemEffect::Response(b"NO CARRIER\r\n".to_vec()));
+        effects
+    }
+
+    pub fn trigger_incoming_sms(&mut self, sender: &str, text: &str) -> Vec<ModemEffect> {
+        let mut effects = Vec::new();
+        // Format: +CMT: "<sender>",,"<timestamp>"\r\n<text>
+        let timestamp = "22/01/01,12:00:00+00";
+        let response = format!("+CMT: \"{}\",,\"{}\"\r\n{}\r\n", sender, timestamp, text);
+        effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+        effects
+    }
+
+    pub fn trigger_incoming_pdu(&mut self, pdu: &str) -> Vec<ModemEffect> {
+        // Calculate TPDU length
+        let mut effects = Vec::new();
+        if let Ok(bytes) = hex::decode(pdu) {
+            if !bytes.is_empty() {
+                let sca_len = bytes[0] as usize;
+                if bytes.len() > 1 + sca_len {
+                    let tpdu_len = bytes.len() - 1 - sca_len;
+                    let response = format!("+CMT: ,{}\r\n{}\r\n", tpdu_len, pdu);
+                    effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+                }
+            }
+        }
+        effects
+    }
+
+    pub fn trigger_network_time_update(&mut self, time: &str) -> Vec<ModemEffect> {
+        self.misc_service.set_time(time.to_string());
+        let mut effects = Vec::new();
+        // Extract timezone for +CTZV
+        if let Some(pos) = time.rfind('+').or_else(|| time.rfind('-')) {
+            // Basic check to avoid date separators if any
+            if pos > 10 {
+                let zone = &time[pos..];
+                let response = format!("+CTZV: {}\r\n", zone);
+                effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+            }
+        }
+        effects
+    }
+
+    pub fn set_phone_number(&mut self, number: &str) {
+        self.phone_number = number.to_string();
     }
 
     pub fn phone_number(&self) -> String {
-        self.phone_number.lock().unwrap().clone()
+        self.phone_number.clone()
     }
 
-    pub fn set_waiting_for_sms_pdu(&self, len: usize, store: bool) {
-        let mut state = self.state.lock().unwrap();
-        *state = State::WaitingForSmsPdu(len, store);
+    pub fn set_signal_strength(&mut self, rssi: u8, ber: u8) {
+        self.network_service.set_signal_strength(rssi, ber);
     }
+
+    pub fn set_voice_registration(&mut self, status: RegistrationStatus) -> Vec<ModemEffect> {
+        let mut effects = Vec::new();
+        if let Some(response) = self.network_service.set_voice_registration(status) {
+            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+        }
+        effects
+    }
+
+    pub fn set_data_registration(&mut self, status: RegistrationStatus) -> Vec<ModemEffect> {
+        let mut effects = Vec::new();
+        if let Some(response) = self.network_service.set_data_registration(status) {
+            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
+        }
+        effects
+    }
+
+    // Removed set_waiting_for_sms_pdu, moved to SmsService
 
     /// Receives an AT command from the modem.
-    pub fn receive_at_command(&self, command_bytes: &[u8]) {
+    pub fn receive_at_command(&mut self, command_bytes: &[u8]) -> Vec<ModemEffect> {
+        let mut effects = Vec::new();
+
         // Check for SMS PDU submission first. This requires special state handling.
-        let sms_pdu_action = {
-            let mut state = self.state.lock().unwrap();
-            if let State::WaitingForSmsPdu(_, store) = *state {
-                if command_bytes.ends_with(b"\x1a") {
-                    let pdu = &command_bytes[..command_bytes.len() - 1];
-                    let result = if store {
-                        self.sms_service.handle_store_sms(self, pdu)
-                    } else {
-                        self.sms_service.handle_sms_body(self, pdu)
-                    };
-                    *state = State::Idle;
-                    // Return the action to be handled outside the lock.
-                    Some(result)
+        let sms_pdu_action = if self.sms_service.waiting_for_pdu_len.is_some() {
+            if command_bytes.ends_with(b"\x1a") {
+                let pdu = &command_bytes[..command_bytes.len() - 1];
+                let store = self.sms_service.waiting_for_pdu_store;
+
+                let result = if store {
+                    self.sms_service.handle_store_sms(&mut self.sim_service, pdu)
                 } else {
-                    None
-                }
+                    self.sms_service.handle_sms_body(pdu)
+                };
+
+                // Clear waiting state
+                self.sms_service.waiting_for_pdu_len = None;
+                self.sms_service.waiting_for_pdu_store = false;
+
+                Some(result)
+            } else if command_bytes.contains(&0x1b) {
+                // ESC
+                // Abort
+                self.sms_service.waiting_for_pdu_len = None;
+                self.sms_service.waiting_for_pdu_store = false;
+                Some(ExecutionResult::Handled(crate::types::HandledCommand::ok()))
             } else {
-                None
+                None // Waiting for more data? Or just ignore for now if
+                     // incomplete? The emulator usually
+                     // sends full line/buffer.
             }
+        } else {
+            None
         };
 
         if let Some(result) = sms_pdu_action {
             if let ExecutionResult::Handled(handled) = result {
                 for response in handled.responses {
                     if !response.is_empty() {
-                        self.callbacks.send_at_response(self.id, response.as_bytes());
+                        effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
                     }
                 }
                 if let Some(action) = handled.action {
-                    self.handle_command_action(action);
+                    effects.push(ModemEffect::Action(action));
                 }
             }
-            return;
+            return effects;
         }
 
         // Proceed with normal command parsing.
@@ -143,115 +239,117 @@ impl ModemImpl {
                     ExecutionResult::Handled(handled) => {
                         for response in handled.responses {
                             if !response.is_empty() {
-                                self.callbacks.send_at_response(self.id, response.as_bytes());
+                                effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
                             }
                         }
                         if let Some(action) = handled.action {
-                            self.handle_command_action(action);
+                            effects.push(ModemEffect::Action(action));
                         }
                     }
                     ExecutionResult::Unhandled => {
-                        // Now that all services are migrated, this is an error.
                         log::error!("Unhandled command: {:?}", command);
-                        self.callbacks.send_error(self.id);
+                        effects.push(ModemEffect::Response(AT_ERROR.to_vec()));
                     }
                 }
             }
             Err(_) => {
-                self.callbacks.send_error(self.id);
+                effects.push(ModemEffect::Response(AT_ERROR.to_vec()));
             }
         }
+        effects
     }
 
-    fn handle_command_action(&self, action: CommandAction) {
-        log::debug!("[Modem {}] Preparing to handle action: {:?}", self.id, action);
-        if action == CommandAction::None {
-            log::trace!("[Modem {}] Action is None, skipping.", self.id);
-            return;
-        }
-
-        if let Some(network) = self.network.upgrade() {
-            log::debug!("[Modem {}] Delegating action to ModemNetworkSimulator.", self.id);
-            network.handle_command_action(self.id, action);
-        } else {
-            log::warn!("[Modem {}] ModemNetworkSimulator is gone, cannot handle action.", self.id);
-        }
+    pub fn tick(&mut self) -> Vec<ModemEffect> {
+        Vec::new()
     }
 
-    /// Ticks the modem's event loop..
-    pub fn tick(&self) {
-        // To be implemented
-    }
-
-    // This is where we'll handle events dispatched from the manager
-    pub fn handle_event(&self, event: ModemEvent) {
+    pub fn handle_event(&mut self, event: ModemEvent) -> Vec<ModemEffect> {
+        let mut effects = Vec::new();
         match event {
             ModemEvent::TestEvent => {
-                self.callbacks.send_at_response(self.id, b"TEST_EVENT_FIRED\r\n");
+                effects.push(ModemEffect::Response(b"TEST_EVENT_FIRED\r\n".to_vec()));
             }
             ModemEvent::CallRingTimeout { call_token } => {
                 self.call_service.handle_ring_timeout(call_token);
             }
             ModemEvent::NetworkRegistrationComplete => {
-                let result = self.network_service.lock().unwrap().handle_registration_complete();
+                let result = self.network_service.handle_registration_complete();
                 if let ExecutionResult::Handled(handled) = result {
                     for response in handled.responses {
                         if !response.is_empty() {
-                            self.callbacks.send_at_response(self.id, response.as_bytes());
+                            effects.push(ModemEffect::Response(response.as_bytes().to_vec()));
                         }
                     }
                 }
             }
         }
+        effects
+    }
+
+    pub fn get_sms_count(&self) -> usize {
+        self.sim_service.get_sms_count() + self.sms_service.get_sms_count()
+    }
+
+    pub fn is_ringing(&self) -> bool {
+        self.call_service.is_alerting()
+    }
+
+    pub fn get_active_calls(&self) -> Vec<String> {
+        self.call_service
+            .calls
+            .iter()
+            .filter(|c| c.state == crate::call_service::CallState::Active)
+            .map(|c| c.number.clone())
+            .collect()
     }
 
     pub fn call_service(&self) -> &CallService {
         &self.call_service
     }
 
-    pub fn execute(&self, command: &Command) -> crate::types::ExecutionResult {
-        // This is the new "Chain of Responsibility" entry point.
-        let result = self.misc_service.execute(self, command);
+    pub fn execute(&mut self, command: &Command) -> crate::types::ExecutionResult {
+        let result = self.misc_service.execute(command);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
 
-        let result = self.sms_service.execute(self, command);
+        // SMS Service needs SimService
+        let result = self.sms_service.execute(command, &mut self.sim_service);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
 
-        let result = self.call_service.execute(self, command);
+        // Call Service needs ModemId
+        let result = self.call_service.execute(command, self.id);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
 
-        let result = self.data_service.execute(self, command);
+        let result = self.data_service.execute(command);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
 
-        let result = self.network_service.lock().unwrap().execute(self, command);
+        let result = self.network_service.execute(command);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
 
-        let result = self.sim_service.execute(self, command);
+        let result = self.sim_service.execute(command);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
 
-        let result = self.stk_service.execute(self, command);
+        let result = self.stk_service.execute(command);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
 
-        let result = self.sup_service.execute(self, command);
+        let result = self.sup_service.execute(command);
         if !matches!(result, ExecutionResult::Unhandled) {
             return result;
         }
 
-        // If we get here, no service handled the command.
         ExecutionResult::Unhandled
     }
 }
