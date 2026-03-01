@@ -21,6 +21,10 @@ pub struct DeviceActor {
     pub idle_timer: Option<TimerKey>,
     pub has_seen_device: bool,
     pub guid_to_id: HashMap<String, device_api::DeviceId>,
+    pub stats_timer: Option<TimerKey>,
+    pub stats_write_task: Option<tokio::task::JoinHandle<()>>,
+    pub(crate) stats: crate::stats::Stats,
+    pub stats_interval: std::time::Duration,
 }
 
 impl DeviceActor {
@@ -31,6 +35,9 @@ impl DeviceActor {
         link_client: Box<dyn link_api::LinkClient>,
         startup_timeout: Option<std::time::Duration>,
         idle_timeout: Option<std::time::Duration>,
+        version: String,
+        stats_path: Option<std::path::PathBuf>,
+        stats_interval: Option<std::time::Duration>,
     ) -> Self {
         Self {
             chip_clients,
@@ -46,7 +53,41 @@ impl DeviceActor {
             idle_timer: None,
             has_seen_device: false,
             guid_to_id: HashMap::new(),
+            stats_timer: None,
+            stats_write_task: None,
+            stats: crate::stats::Stats::new(version, stats_path),
+            stats_interval: stats_interval.unwrap_or(std::time::Duration::from_secs(10)),
         }
+    }
+
+    pub(crate) fn schedule_periodic_stats(&mut self, ctx: &mut dyn actor_framework::Context<Self>) {
+        let base_stats = self.stats.get_base_stats();
+        let path = self.stats.stats_path.clone();
+        let interval = self.stats_interval;
+
+        // Verify previous background write task finished before spawning another
+        if let Some(task) = &self.stats_write_task {
+            if !task.is_finished() {
+                log::warn!(
+                    "DeviceActor: Dropping periodic stats tick; previous write is still pending."
+                );
+                return;
+            }
+        }
+
+        self.stats_write_task = Some(tokio::task::spawn_blocking(move || {
+            if let Err(e) = crate::stats::write_combined_stats(base_stats, path) {
+                log::error!("DeviceActor: {}", e);
+            }
+        }));
+
+        let key = ctx.run_later(
+            interval,
+            Box::new(move |actor, ctx| {
+                actor.schedule_periodic_stats(ctx);
+            }),
+        );
+        self.stats_timer = Some(key);
     }
 }
 
@@ -60,6 +101,7 @@ impl std::fmt::Debug for DeviceActor {
             .field("startup_timer", &self.startup_timer)
             .field("idle_timer", &self.idle_timer)
             .field("has_seen_device", &self.has_seen_device)
+            .field("stats_interval", &self.stats_interval)
             .finish_non_exhaustive()
     }
 }

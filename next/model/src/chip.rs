@@ -303,6 +303,13 @@ impl Chip {
         }
         true
     }
+
+    pub fn is_uwb_enabled(&self) -> bool {
+        matches!(
+            self.variant,
+            Some(ChipVariant::Uwb(Uwb { radio: Radio { state: Some(true) | None, .. } }))
+        )
+    }
 }
 
 fn default_enabled() -> bool {

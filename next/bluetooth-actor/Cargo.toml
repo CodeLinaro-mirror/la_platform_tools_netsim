@@ -19,6 +19,7 @@ hex = "0.4.3"
 log = "0.4.17"
 netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
+netsim-packets = { path = "../packets" }
 protobuf = "3.6.0"
 rand = "0.8.5"
 rootcanal = { path = "../rootcanal" }

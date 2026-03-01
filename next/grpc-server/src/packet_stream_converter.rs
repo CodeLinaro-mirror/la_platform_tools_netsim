@@ -9,8 +9,6 @@ use netsim_proto::{
 use packet_stream::error::{PacketStreamError, Result};
 use protobuf::{Enum, Message};
 
-pub(crate) const HCI_PACKET_TYPE: u8 = 0x01;
-
 pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {
     match proto.enum_value_or_default() {
         proto_common::ChipKind::UNSPECIFIED => ChipKind::UNSPECIFIED,
@@ -118,15 +116,12 @@ pub fn packet_request_to_bytes(value: PacketRequest) -> Result<Bytes> {
 pub fn packet_response_to_bytes(value: PacketResponse) -> Result<Bytes> {
     match value.response_type {
         Some(packet_streamer::packet_response::Response_type::HciPacket(hci)) => {
-            let mut bytes = BytesMut::new();
-            bytes.put_u8(HCI_PACKET_TYPE);
             let hci_bytes = hci.write_to_bytes().map_err(|e| {
                 PacketStreamError::Protocol(packet_stream::error::ProtocolError::InvalidFormat(
                     e.to_string(),
                 ))
             })?;
-            bytes.put_slice(&hci_bytes);
-            Ok(bytes.freeze())
+            Ok(std::iter::once(hci.packet_type.value() as u8).chain(hci_bytes).collect())
         }
         Some(packet_streamer::packet_response::Response_type::Packet(packet)) => {
             Ok(Bytes::from(packet))

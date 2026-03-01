@@ -5,3 +5,6 @@ pub mod logger;
 
 #[cfg(feature = "testing")]
 pub mod mocks;
+
+#[cfg(feature = "testing")]
+pub mod cuke;
