@@ -18,6 +18,7 @@ impl ActorService for CellActor {
     type ActionResult = ();
     type Error = CellError;
     type Entity = netsim_model::chip::Chip;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,

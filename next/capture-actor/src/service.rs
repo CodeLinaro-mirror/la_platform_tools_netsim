@@ -231,6 +231,7 @@ impl ActorService for CaptureActor {
     type ActionResult = CaptureActionResult;
     type Error = CaptureError;
     type Entity = CaptureInfo;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,

@@ -13,6 +13,7 @@ impl ActorService for SlirpActor {
     type ActionResult = ();
     type Error = SlirpError;
     type Entity = SlirpStatus;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,
