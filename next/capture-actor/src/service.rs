@@ -87,7 +87,11 @@ impl CaptureActor {
             }
         } else {
             // Disable capture: remove the writer to close the file
-            self.writers.remove(&entity.info.chip_id);
+            if let Some(mut writer) = self.writers.remove(&entity.info.chip_id) {
+                if let Err(err) = writer.flush().await {
+                    log::warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
+                }
+            }
         }
         Ok(())
     }
@@ -98,7 +102,11 @@ impl CaptureActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
         // Clean up resources when the entity is deleted.
-        self.writers.remove(&entity.info.chip_id);
+        if let Some(mut writer) = self.writers.remove(&entity.info.chip_id) {
+            if let Err(err) = writer.flush().await {
+                log::warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
+            }
+        }
         Ok(())
     }
 

@@ -54,6 +54,10 @@ impl CaptureWriter for WifiPcapWriter {
         }
     }
 
+    async fn flush(&mut self) -> Result<()> {
+        self.inner.flush().await
+    }
+
     fn get_stats(&self) -> (u64, u64) {
         self.inner.get_stats()
     }
