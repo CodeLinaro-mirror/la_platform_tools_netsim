@@ -4,13 +4,14 @@ use actor_framework::{ActorLifecycle, ActorService, DynContext};
 use bytes::Bytes;
 use modem_rs::HostEvent;
 
-use crate::cell_actor::{CellActor, CLIENT_EVENT_ID};
+use crate::cell_actor::CellActor;
 
 impl ActorLifecycle for CellActor {
     async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
         if let Some(rx) = self.event_receiver.take() {
             let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
-            ctx.add_stream(CLIENT_EVENT_ID, Box::pin(stream));
+            // Internal event stream subscription (ID 0)
+            ctx.add_typed_stream(0, Box::pin(stream));
         }
     }
 
@@ -18,12 +19,7 @@ impl ActorLifecycle for CellActor {
         if message.is_empty() {
             return;
         }
-
-        if id == CLIENT_EVENT_ID {
-            self.handle_host_event(message, ctx).await;
-        } else {
-            self.handle_packet_stream(id, message, ctx).await;
-        }
+        self.handle_packet_stream(id, message, ctx).await;
     }
 
     async fn on_stream_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
@@ -31,6 +27,17 @@ impl ActorLifecycle for CellActor {
         use actor_framework::ActorService;
         let _ = self.handle_delete(id, ctx).await;
         ctx.abort(id);
+    }
+
+    async fn on_typed_stream(
+        &mut self,
+        id: usize,
+        event: modem_rs::HostEvent,
+        ctx: &mut DynContext<Self>,
+    ) {
+        if id == 0 {
+            self.handle_host_event(event, ctx).await;
+        }
     }
 }
 
@@ -46,9 +53,7 @@ impl CellActor {
         }
     }
 
-    async fn handle_host_event(&mut self, message: Bytes, ctx: &mut DynContext<Self>) {
-        let event = HostEvent::parse(message.as_ref());
-
+    async fn handle_host_event(&mut self, event: HostEvent, ctx: &mut DynContext<Self>) {
         match event {
             HostEvent::SinkError(id) => {
                 let chip_id = netsim_model::chip::ChipId(id);
