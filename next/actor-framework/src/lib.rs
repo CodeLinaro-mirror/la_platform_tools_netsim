@@ -111,6 +111,7 @@
 //!     type ActionResult = ();
 //!     type Error = UserError;
 //!     type Entity = User;
+//!     type TypedStream = ();
 //!
 //!     async fn handle_create(
 //!         &mut self,
@@ -229,6 +230,7 @@
 //!     type ActionResult = ();
 //!     type Error = UserError;
 //!     type Entity = User;
+//!     type TypedStream = ();
 //!
 //!     async fn handle_create(
 //!         &mut self,
@@ -316,6 +318,7 @@
 //!     type ActionResult = ();
 //!     type Error = ProductError;
 //!     type Entity = Product;
+//!     type TypedStream = ();
 //!     async fn handle_create(
 //!         &mut self,
 //!         id: Option<u32>,
@@ -409,6 +412,7 @@
 //!     type ActionResult = ();
 //!     type Error = OrderError;
 //!     type Entity = Order;
+//!     type TypedStream = ();
 //!
 //!     async fn handle_create(
 //!         &mut self,
@@ -536,4 +540,4 @@ pub use context::{Context, DynContext, TimerKey};
 pub use error::FrameworkError;
 pub use lifecycle::ActorLifecycle;
 pub use message::{ResourceRequest, Response};
-pub use service::{ActorId, ActorService, BoxStream, StreamMessage};
+pub use service::{ActorId, ActorService, BoxStream, BoxTypedStream, StreamMessage};

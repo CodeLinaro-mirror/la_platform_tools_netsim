@@ -73,6 +73,8 @@ mod tests {
         fn set_interval(&mut self, _duration: std::time::Duration) {}
         fn add_stream(&mut self, _id: ChipId, _stream: actor_framework::BoxStream) {}
         fn remove_stream(&mut self, _id: ChipId) {}
+        fn add_typed_stream(&mut self, _id: usize, _stream: actor_framework::BoxTypedStream<()>) {}
+        fn remove_typed_stream(&mut self, _id: usize) {}
         fn spawn(&mut self, _id: ChipId, _task: futures::future::BoxFuture<'static, ChipId>) {}
         fn abort(&mut self, _id: ChipId) {}
         fn shutdown(&mut self) {}
