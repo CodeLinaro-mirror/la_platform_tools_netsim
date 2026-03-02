@@ -9,15 +9,9 @@ use netsim_proto::{
 use packet_stream::error::{PacketStreamError, Result};
 use protobuf::{Enum, Message};
 
-pub(crate) const HCI_PACKET_TYPE: u8 = 0x01;
-
 pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {
-    match proto.enum_value_or_default() {
-        proto_common::ChipKind::UNSPECIFIED => ChipKind::UNSPECIFIED,
-        proto_common::ChipKind::BLUETOOTH => ChipKind::BLUETOOTH,
-        proto_common::ChipKind::WIFI => ChipKind::WIFI,
-        proto_common::ChipKind::UWB => ChipKind::UWB,
-    }
+    crate::frontend_converter::from_proto_chip_kind(proto.enum_value_or_default())
+        .unwrap_or(ChipKind::UNSPECIFIED)
 }
 
 pub fn proto_to_chip(proto: proto_startup::Chip) -> Chip {
@@ -118,15 +112,12 @@ pub fn packet_request_to_bytes(value: PacketRequest) -> Result<Bytes> {
 pub fn packet_response_to_bytes(value: PacketResponse) -> Result<Bytes> {
     match value.response_type {
         Some(packet_streamer::packet_response::Response_type::HciPacket(hci)) => {
-            let mut bytes = BytesMut::new();
-            bytes.put_u8(HCI_PACKET_TYPE);
             let hci_bytes = hci.write_to_bytes().map_err(|e| {
                 PacketStreamError::Protocol(packet_stream::error::ProtocolError::InvalidFormat(
                     e.to_string(),
                 ))
             })?;
-            bytes.put_slice(&hci_bytes);
-            Ok(bytes.freeze())
+            Ok(std::iter::once(hci.packet_type.value() as u8).chain(hci_bytes).collect())
         }
         Some(packet_streamer::packet_response::Response_type::Packet(packet)) => {
             Ok(Bytes::from(packet))
@@ -143,15 +134,7 @@ pub fn chip_info_to_proto(chip_info: ChipInfo) -> proto_startup::ChipInfo {
     proto.name = chip_info.name;
     if let Some(chip) = chip_info.chip {
         let mut chip_proto = proto_startup::Chip::new();
-        chip_proto.kind = match chip.kind {
-            ChipKind::UNSPECIFIED => proto_common::ChipKind::UNSPECIFIED,
-            ChipKind::BLUETOOTH => proto_common::ChipKind::BLUETOOTH,
-            ChipKind::WIFI => proto_common::ChipKind::WIFI,
-            ChipKind::UWB => proto_common::ChipKind::UWB,
-            ChipKind::CELL => proto_common::ChipKind::UNSPECIFIED,
-            ChipKind::AP => proto_common::ChipKind::UNSPECIFIED,
-        }
-        .into();
+        chip_proto.kind = crate::frontend_converter::to_proto_chip_kind(chip.kind).into();
         chip_proto.id = chip.id;
         chip_proto.manufacturer = chip.manufacturer;
         chip_proto.product_name = chip.product_name;

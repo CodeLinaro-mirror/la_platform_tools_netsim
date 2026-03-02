@@ -3,10 +3,10 @@
 //! Manages the `netsim.ini` file for inter-process discovery and configuration.
 //!
 //! This module provides a mechanism to ensure only one primary instance of the
-//! netsim daemon is running using a file-based lock (`netsim.ini.lock` managed
-//! by the `named_lock` crate). It also handles reading and writing
-//! configuration parameters (like PID and gRPC port) to the `netsim.ini` file,
-//! located in a platform-specific runtime directory.
+//! netsim daemon is running using a file-based lock on the ini file.
+//! It also handles reading and writing configuration parameters (like PID and
+//! gRPC port) to the `netsim.ini` file, located in a platform-specific runtime
+//! directory.
 //!
 //! The `IniFile::try_acquire` method is the main entry point, determining if
 //! the current process becomes the `Writer` (gets the lock, can write the INI
@@ -15,14 +15,13 @@
 
 use std::{
     collections::HashMap,
-    fs::{self, File},
-    io::{self, BufWriter, Write},
+    fs::{self, File, OpenOptions, TryLockError},
+    io::{self, BufWriter, Seek, SeekFrom, Write},
     path::PathBuf,
     str::FromStr,
 };
 
 use log::warn;
-use named_lock::{NamedLock, NamedLockGuard};
 
 // --- INI File Management ---
 
@@ -72,20 +71,18 @@ pub struct NetsimConfig {
 #[derive(Debug)]
 pub struct IniFileGuard {
     path: PathBuf,
-    _lock_guard: NamedLockGuard,
+    locked_file: File,
 }
 
 impl IniFileGuard {
     /// Writes the given `HashMap` to the INI file, overwriting any existing
     /// content.
-    pub fn write(&self, data: &HashMap<String, String>) -> io::Result<()> {
-        let file = File::create(&self.path)?;
-        let mut writer = BufWriter::new(file);
+    pub fn write(&mut self, data: &HashMap<String, String>) -> io::Result<()> {
+        let mut writer = BufWriter::new(&mut self.locked_file);
         for (key, value) in data {
             writeln!(writer, "{key}={value}")?;
         }
-        writer.flush()?;
-        Ok(())
+        writer.flush()
     }
 
     /// Returns a reference to the path of the INI file.
@@ -96,6 +93,7 @@ impl IniFileGuard {
 
 impl Drop for IniFileGuard {
     fn drop(&mut self) {
+        // Remove the INI file (discovery file) as part of cleanup.
         if let Err(e) = fs::remove_file(&self.path) {
             if e.kind() != io::ErrorKind::NotFound {
                 warn!("Failed to remove ini file '{}': {}", self.path.display(), e);
@@ -117,7 +115,7 @@ pub enum IniFileAccess {
 /// configuration.
 pub struct IniFile {
     path: PathBuf,
-    lock: NamedLock,
+    pre_lock_file: File,
 }
 
 impl IniFile {
@@ -132,31 +130,35 @@ impl IniFile {
     pub fn new_for_dir(dir: PathBuf) -> io::Result<Self> {
         fs::create_dir_all(&dir)?;
         let path = dir.join(INI_FILENAME);
-        // Create a unique lock name for testing purposes based on the temp dir
-        let dir_name =
-            dir.file_name().map(|s| s.to_string_lossy()).unwrap_or_else(|| "unknown".into());
-        let lock_name = format!("{}-{}", INI_FILENAME, dir_name);
-        let lock = NamedLock::create(&lock_name).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("NamedLock create failed: {}", e))
-        })?;
-        Ok(IniFile { path, lock })
+        let pre_lock_file = OpenOptions::new().read(true).write(true).create(true).open(&path)?;
+
+        Ok(IniFile { path, pre_lock_file })
     }
 
     /// Attempts to acquire the lock and determine the access level.
-    pub fn try_acquire(&mut self) -> io::Result<IniFileAccess> {
-        match self.lock.try_lock() {
-            Ok(guard) => Ok(IniFileAccess::Writer(IniFileGuard {
-                path: self.path.clone(),
-                _lock_guard: guard,
-            })),
-            Err(_) => {
-                // Lock failed, try to read as a client
+    pub fn try_acquire(self) -> io::Result<IniFileAccess> {
+        match self.pre_lock_file.try_lock() {
+            Ok(()) => {
+                let mut locked_file = self.pre_lock_file;
+                // Wipe old contents on lock acquisition.
+                locked_file.set_len(0)?;
+                locked_file.seek(SeekFrom::Start(0))?;
+                Ok(IniFileAccess::Writer(IniFileGuard { path: self.path, locked_file }))
+            }
+            Err(TryLockError::WouldBlock) => {
+                // Lock failed, another instance is running.
                 warn!(
                     "Failed to acquire lock on {}. Another instance may be running.",
                     self.path.display()
                 );
+                // TODO(b/487343471): Known race here where we may read an old version of the
+                // ini file. We need some sort of "ready" flag to indicate when
+                // the primary daemon has written its ini file and it can be
+                // read.
+
                 self.read_config().map(IniFileAccess::Reader)
             }
+            Err(TryLockError::Error(e)) => Err(e),
         }
     }
 
@@ -165,22 +167,22 @@ impl IniFile {
     /// containing '=', quotes, or escape sequences. Comments start with '#'
     /// or ';'.
     fn read_shared(&self) -> io::Result<HashMap<String, String>> {
-        println!("read_shared called for {}", self.path.display());
+        log::debug!("read_shared called for {}", self.path.display());
         let mut data = HashMap::new();
         let content = fs::read_to_string(&self.path)?;
-        println!("Content: {:#?}", content);
+        log::debug!("Content: {:#?}", content);
         for (line_num, line) in content.lines().enumerate() {
             let trimmed = line.trim();
-            println!("Line {}: '{}'", line_num + 1, trimmed);
+            log::debug!("Line {}: '{}'", line_num + 1, trimmed);
             if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with(';') {
-                println!("  Skipping comment/empty");
+                log::debug!("  Skipping comment/empty");
                 continue;
             }
             if let Some((key, value)) = trimmed.split_once('=') {
                 let key = key.trim();
                 let value = value.trim();
                 if key.is_empty() {
-                    println!("  Error: Empty key");
+                    log::debug!("  Error: Empty key");
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!(
@@ -190,17 +192,17 @@ impl IniFile {
                         ),
                     ));
                 }
-                println!("  Parsed: {} = {}", key, value);
+                log::debug!("  Parsed: {} = {}", key, value);
                 data.insert(key.to_string(), value.to_string());
             } else {
-                println!("  Error: Missing =");
+                log::debug!("  Error: Missing =");
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("Malformed line {} in INI file: Missing '=' '{}'", line_num + 1, line),
                 ));
             }
         }
-        println!("read_shared success: {:?}", data);
+        log::debug!("read_shared success: {:?}", data);
         Ok(data)
     }
 
@@ -265,16 +267,16 @@ mod tests {
 
     #[test]
     fn test_ini_file_owner_flow() {
-        let mut ini_file = IniFile::new_for_dir(PathBuf::from("/tmp/test_owner")).unwrap();
-        let _ = fs::remove_file(ini_file.path());
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
 
         match ini_file.try_acquire() {
-            Ok(IniFileAccess::Writer(guard)) => {
+            Ok(IniFileAccess::Writer(mut guard)) => {
                 let mut data = HashMap::new();
                 data.insert("grpc.port".to_string(), "8554".to_string());
                 guard.write(&data).unwrap();
 
-                let mut ini_file2 = IniFile::new_for_dir(PathBuf::from("/tmp/test_owner")).unwrap();
+                let mut ini_file2 = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
                 match ini_file2.try_acquire() {
                     Ok(IniFileAccess::Reader(config)) => {
                         assert_eq!(config.grpc_port, 8554);
@@ -284,6 +286,5 @@ mod tests {
             }
             _ => panic!("Expected Writer access"),
         }
-        let _ = fs::remove_dir_all("/tmp/test_owner");
     }
 }

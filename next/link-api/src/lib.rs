@@ -32,8 +32,9 @@ pub mod create;
 pub use action::LinkAction;
 pub use create::LinkCreate;
 pub use netsim_model::{
-    chip::{ChipId, ChipKind},
+    chip::ChipId,
     link::{Link, LinkId, LinkUpdate},
+    ChipKind,
 };
 
 #[cfg_attr(feature = "testing", mockall::automock)]

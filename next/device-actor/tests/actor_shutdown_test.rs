@@ -29,6 +29,7 @@ async fn test_server_shutdown_on_startup_timeout() {
         link_client,
         Some(Duration::from_millis(50)), // startup
         None,                            // idle
+        None,
     )
     .await;
 
@@ -52,6 +53,7 @@ async fn test_server_stays_alive_with_device() {
         link_client,
         Some(Duration::from_millis(200)), // startup
         Some(Duration::from_millis(50)),  // idle
+        None,
     )
     .await;
 
@@ -78,6 +80,7 @@ async fn test_server_shuts_down_after_idle_timeout_when_last_device_removed() {
         link_client,
         None,                            // startup
         Some(Duration::from_millis(50)), // idle
+        None,
     )
     .await;
 

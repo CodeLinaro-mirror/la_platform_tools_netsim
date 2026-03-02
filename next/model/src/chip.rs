@@ -8,6 +8,7 @@
 
 use std::fmt;
 
+pub use netsim_types::ChipKind;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
@@ -18,27 +19,12 @@ use crate::{
     stats::NetsimRadioStats,
 };
 
-/// The kind of network technology the chip supports.
-///
-/// This enumeration is used to distinguish between different types of simulated
-/// radios and to route packets to the correct handlers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum ChipKind {
-    #[default]
-    BLUETOOTH = 1,
-    WIFI = 2,
-    UWB = 3,
-    NFC = 4,
-    CELLULAR = 6,
-    AP = 7,
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Radio {
     pub state: Option<bool>,
     pub range: f32,
-    pub tx_count: i32,
-    pub rx_count: i32,
+    pub tx_count: u64,
+    pub rx_count: u64,
 }
 
 pub use crate::packet_streamer::{PacketSink, PacketStream};
@@ -190,20 +176,6 @@ impl ChipConfig {
     }
 }
 
-// TODO: netsim_types can be removed if ChipKind is moved to a base types module
-impl From<netsim_types::ChipKind> for ChipKind {
-    fn from(kind: netsim_types::ChipKind) -> Self {
-        match kind {
-            netsim_types::ChipKind::UNSPECIFIED => ChipKind::BLUETOOTH,
-            netsim_types::ChipKind::BLUETOOTH => ChipKind::BLUETOOTH,
-            netsim_types::ChipKind::WIFI => ChipKind::WIFI,
-            netsim_types::ChipKind::UWB => ChipKind::UWB,
-            netsim_types::ChipKind::CELL => ChipKind::CELLULAR,
-            netsim_types::ChipKind::AP => ChipKind::AP,
-        }
-    }
-}
-
 impl From<&ChipKindParams> for ChipKind {
     fn from(params: &ChipKindParams) -> Self {
         match params {
@@ -302,6 +274,13 @@ impl Chip {
             return bt.classic.state.unwrap_or(true);
         }
         true
+    }
+
+    pub fn is_uwb_enabled(&self) -> bool {
+        matches!(
+            self.variant,
+            Some(ChipVariant::Uwb(Uwb { radio: Radio { state: Some(true) | None, .. } }))
+        )
     }
 }
 
@@ -414,12 +393,7 @@ impl ChipVariantUpdate {
 /// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
 /// messages to the server over an `mpsc` channel. It abstracts away the channel
 /// and `oneshot` responder boilerplate for each command.
-/// A client handle for interacting with the chip server actor.
-///
-/// There is one chip server actor for each network type (Bluetooth, UWB,
-/// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
-/// messages to the server over an `mpsc` channel. It abstracts away the channel
-/// and `oneshot` responder boilerplate for each command.
+
 /// A generic client for interacting with any chip server actor (UWB, WiFi,
 /// Cell).
 #[derive(Clone)]

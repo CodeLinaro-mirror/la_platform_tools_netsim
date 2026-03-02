@@ -13,6 +13,22 @@ pub enum UwbAction {
     },
     /// Retrieves statistics for all chips.
     GetStatistics,
+    /// Starts ranging for the given chip and session.
+    #[cfg(any(test, feature = "testing"))]
+    StartRanging {
+        /// The ID of the chip to start ranging on.
+        id: ChipId,
+        /// The ID of the session to start ranging for.
+        session_id: u32,
+    },
+    /// Stops ranging for the given chip and session.
+    #[cfg(any(test, feature = "testing"))]
+    StopRanging {
+        /// The ID of the chip to stop ranging on.
+        id: ChipId,
+        /// The ID of the session to stop ranging for.
+        session_id: u32,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

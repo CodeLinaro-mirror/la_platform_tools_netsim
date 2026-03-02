@@ -18,7 +18,7 @@ impl ActorLifecycle for BluetoothActor {
 
     async fn on_stream(
         &mut self,
-        id: netsim_model::chip::ChipId,
+        id: netsim_model::ChipId,
         message: bytes::Bytes,
         _ctx: &mut DynContext<Self>,
     ) {
@@ -27,11 +27,7 @@ impl ActorLifecycle for BluetoothActor {
         }
     }
 
-    async fn on_stream_closed(
-        &mut self,
-        id: netsim_model::chip::ChipId,
-        ctx: &mut DynContext<Self>,
-    ) {
+    async fn on_stream_closed(&mut self, id: netsim_model::ChipId, ctx: &mut DynContext<Self>) {
         log::info!("Stream closed for chip {id}");
         // If the stream closes, we should also ensure the sink task is aborted.
         ctx.abort(id);
@@ -40,7 +36,7 @@ impl ActorLifecycle for BluetoothActor {
         }
     }
 
-    async fn on_task_closed(&mut self, id: netsim_model::chip::ChipId, ctx: &mut DynContext<Self>) {
+    async fn on_task_closed(&mut self, id: netsim_model::ChipId, ctx: &mut DynContext<Self>) {
         log::info!("Sink task closed for chip {id}");
         // If the sink task closes, we should also ensure the stream is removed.
         ctx.remove_stream(id);

@@ -91,6 +91,7 @@ impl ControllerImpl {
         address: Address,
         callbacks: Box<dyn Callbacks>,
         bt_ops: Box<dyn BtOps>,
+        properties: Option<&[u8]>,
     ) -> Controller {
         // The initialization process is carefully ordered to manage lifetimes
         // across the FFI boundary and avoid memory leaks or reference cycles.
@@ -123,6 +124,11 @@ impl ControllerImpl {
         let context = Box::new(Arc::downgrade(&controller_impl));
         let context_ptr = Box::into_raw(context);
 
+        let (proto_ptr, proto_len) = match properties {
+            Some(bytes) => (bytes.as_ptr(), bytes.len()),
+            None => (std::ptr::null(), 0),
+        };
+
         // Call the FFI to get the real controller pointer.
         let controller_ptr =
             // SAFETY: The `address` pointer is valid for the duration of this call.
@@ -138,6 +144,8 @@ impl ControllerImpl {
                     Some(invalid_packet_trampoline),
                     None,
                     context_ptr as *mut c_void,
+                    proto_ptr,
+                    proto_len,
                 )
             };
 
@@ -366,8 +374,13 @@ mod tests {
     #[test]
     fn test_controller_stats() {
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller =
-            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
+        let controller = ControllerImpl::new(
+            1,
+            address,
+            Box::new(MockControllerCallbacks),
+            Box::new(MockBtOps),
+            None,
+        );
 
         // Check initial stats.
         assert_eq!(controller.get_stats(), Stats::default());
@@ -389,8 +402,13 @@ mod tests {
     #[test]
     fn test_receive_hci_increments_counter() {
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller =
-            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
+        let controller = ControllerImpl::new(
+            1,
+            address,
+            Box::new(MockControllerCallbacks),
+            Box::new(MockBtOps),
+            None,
+        );
 
         assert_eq!(controller.get_stats().hci_commands_in, 0);
         controller.receive_hci(Bytes::from_static(&[1, 1, 2, 3]));
@@ -400,8 +418,13 @@ mod tests {
     #[test]
     fn test_receive_ll_increments_counter() {
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller =
-            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
+        let controller = ControllerImpl::new(
+            1,
+            address,
+            Box::new(MockControllerCallbacks),
+            Box::new(MockBtOps),
+            None,
+        );
 
         assert_eq!(controller.get_stats().ll_packets_in, 0);
         controller.receive_ll(&[1, 2, 3], Phy::LowEnergy, -80);

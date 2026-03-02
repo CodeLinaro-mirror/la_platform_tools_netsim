@@ -83,7 +83,7 @@ async fn test_ftm_ranging_exchange() {
     req_frame.push(public_action::FTM_REQUEST);
     req_frame.push(1); // Trigger = 1
 
-    let src_id = netsim_model::chip::ChipId(100);
+    let src_id = netsim_model::ChipId(100);
     world.tx_to_ap.as_ref().unwrap().send(bytes::Bytes::from(req_frame)).unwrap();
 
     // 3. Verify Response(s)

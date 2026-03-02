@@ -77,7 +77,7 @@ async fn test_sae_handshake_success() {
     auth_frame.extend_from_slice(&commit_body);
 
     let tx = world.tx_to_ap.as_ref().unwrap().clone();
-    let src_id = netsim_model::chip::ChipId(200);
+    let src_id = netsim_model::ChipId(200);
     tx.send(bytes::Bytes::from(auth_frame)).unwrap();
 
     // 2. Expect AP Commit (Seq 1 or 2? SAE is 1, but response usually has same seq

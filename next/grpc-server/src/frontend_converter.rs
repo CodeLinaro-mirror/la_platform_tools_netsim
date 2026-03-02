@@ -42,9 +42,10 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
         ApiChipKind::WIFI => ProtoChipKind::WIFI,
         ApiChipKind::UWB => ProtoChipKind::UWB,
         // Map unknown/new types to UNSPECIFIED for now
-        ApiChipKind::NFC => ProtoChipKind::UNSPECIFIED,
-        ApiChipKind::CELLULAR => ProtoChipKind::UNSPECIFIED,
+        ApiChipKind::NFC => ProtoChipKind::NFC,
+        ApiChipKind::CELLULAR => ProtoChipKind::CELLULAR,
         ApiChipKind::AP => ProtoChipKind::WIFI,
+        ApiChipKind::UNSPECIFIED => ProtoChipKind::UNSPECIFIED,
     }
 }
 
@@ -92,8 +93,8 @@ fn to_proto_radio(r: &netsim_model::chip::Radio) -> netsim_proto::model::chip::R
     let mut radio = netsim_proto::model::chip::Radio::new();
     radio.state = Some(r.state.unwrap_or(true));
     radio.range = r.range;
-    radio.tx_count = r.tx_count;
-    radio.rx_count = r.rx_count;
+    radio.tx_count = std::cmp::min(r.tx_count, i32::MAX as u64) as i32;
+    radio.rx_count = std::cmp::min(r.rx_count, i32::MAX as u64) as i32;
     radio
 }
 
@@ -223,7 +224,9 @@ pub fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
         ProtoChipKind::BLUETOOTH => Some(ApiChipKind::BLUETOOTH),
         ProtoChipKind::WIFI => Some(ApiChipKind::WIFI),
         ProtoChipKind::UWB => Some(ApiChipKind::UWB),
-
+        ProtoChipKind::BLUETOOTH_BEACON => Some(ApiChipKind::BLUETOOTH),
+        ProtoChipKind::NFC => Some(ApiChipKind::NFC),
+        ProtoChipKind::CELLULAR => Some(ApiChipKind::CELLULAR),
         _ => None,
     }
 }
@@ -284,8 +287,14 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
     }
 }
 
-pub fn from_proto_radio(r: netsim_proto::model::chip::Radio) -> Radio {
-    Radio { state: r.state, range: r.range, tx_count: r.tx_count, rx_count: r.rx_count }
+#[allow(dead_code)]
+fn from_proto_radio(r: netsim_proto::model::chip::Radio) -> Radio {
+    Radio {
+        state: r.state,
+        range: r.range,
+        tx_count: r.tx_count as u64,
+        rx_count: r.rx_count as u64,
+    }
 }
 
 pub fn from_proto_radio_update(r: Option<netsim_proto::model::chip::Radio>) -> RadioUpdate {
