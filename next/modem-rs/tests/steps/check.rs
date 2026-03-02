@@ -1,4 +1,4 @@
-use modem_rs::types::AT_OK;
+use modem_rs::AT_OK;
 
 use crate::world::World;
 
@@ -30,7 +30,7 @@ pub fn then_metrics_are(world: &World, at_commands: u64, calls: u64) {
 ///
 /// Use this when testing synchronous command responses where order is
 /// guaranteed.
-pub fn then_response_is(world: &World, name: &str, expected: &str) {
+pub fn then_response_is(world: &mut World, name: &str, expected: &str) {
     let (_, handler) = world.get_modem(name);
     let expected_bytes = normalize_expected_response(expected);
 
@@ -52,7 +52,7 @@ pub fn then_response_is(world: &World, name: &str, expected: &str) {
 /// of output might be interleaved.
 ///
 /// This function consumes up to 10 responses looking for a match.
-pub fn then_response_contains(world: &World, name: &str, expected: &str) {
+pub fn then_response_contains(world: &mut World, name: &str, expected: &str) {
     then_wait_for_response_containing(world, name, expected);
 }
 
@@ -60,7 +60,7 @@ pub fn then_response_contains(world: &World, name: &str, expected: &str) {
 ///
 /// Returns the matching response string on success.
 /// Panics if no match is found after `MAX_RESPONSE_RETRIES`.
-pub fn then_wait_for_response_containing(world: &World, name: &str, expected: &str) -> String {
+pub fn then_wait_for_response_containing(world: &mut World, name: &str, expected: &str) -> String {
     let (_, handler) = world.get_modem(name);
     const MAX_RESPONSE_RETRIES: usize = 10;
 

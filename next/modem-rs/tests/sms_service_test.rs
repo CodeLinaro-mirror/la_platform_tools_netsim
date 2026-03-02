@@ -55,16 +55,8 @@ fn test_store_and_read_sms() {
 // Scenario: Store and Read SMS on SIM
 //   Given a modem "A"
 //   When AT command 'AT+CPMS="SM","SM","SM"' is sent to "A"
-//   Then response from "A" is "OK" (Wait, CPMS returns +CPMS: ... then OK
-// usually?)   (Original test code cleared responses after CPMS. Some handlers
-// might just return OK if setting?)   (test_set_preferred_message_storage
-// expects +CPMS: ... then OK on QUERY. On SET?)   (Original test:
-// harness.send_at_command(CPMS); harness.get_responses(). (Ignored output).
-//   (Wait, CPMS set command returns +CPMS: <used>,<total>... then OK? Check
-// test_set_preferred_message_storage in old file?
-//   (No, test_set_preferred_message_storage sends SET, clears, then QUERIES.
-//   (So SET command output is ignored or unknown. Standard says +CPMS: ... OK.)
-//   (I'll consume responses until OK).
+//   Then response from "A" is "OK"
+//   (Note: We wait for OK, ignoring intermediate responses like +CPMS:...)
 #[test]
 fn test_store_and_read_sms_on_sim() {
     let mut world = World::new();
@@ -252,7 +244,7 @@ fn test_set_preferred_message_storage() {
 #[test]
 fn test_send_sms_text_mode() {
     let mut world = World::new();
-    given_modem(&mut world, "A");
+    given_modem_with_number(&mut world, "A", "98765");
     given_modem_with_number(&mut world, "B", "12345");
 
     when_at_command_sent(&mut world, "A", "AT+CMGF=1");
@@ -270,6 +262,36 @@ fn test_send_sms_text_mode() {
 
     // Verify reception on B
     // CMT unsolicited
-    let resp = then_wait_for_response_containing(&mut world, "B", "+CMT: \"12345\"");
+    let resp = then_wait_for_response_containing(&mut world, "B", "+CMT: \"98765\"");
     assert!(resp.contains("Hello"), "Response should contain message body 'Hello'");
+}
+
+// Scenario: Incoming SMS (Text and PDU)
+//   Given a modem "A"
+//   When external SMS "Hello" from "123456" is sent to "A"
+//   Then A receives +CMT: "123456",,"..."\r\nHello
+//   When external PDU "0011..." is sent to "A"
+//   Then A receives +CMT: ,<len>\r\nPDU...
+#[test]
+fn test_incoming_sms() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    let id_a = world.modems.get("A").unwrap().0;
+
+    // 1. Text Mode
+    when_incoming_sms_received(&mut world, id_a, "123456", "Hello World");
+
+    // Expect +CMT response
+    let resp = then_wait_for_response_containing(&mut world, "A", "+CMT: \"123456\"");
+    assert!(resp.contains("Hello World"), "Response should contain message body 'Hello World'");
+
+    // 2. PDU Mode
+    // Construct PDU for "Hello World"
+    // PDU_HEX = "0011000B915155255155F40000AA01F0"
+    // TPDU Len = 15.
+
+    when_incoming_pdu_received(&mut world, id_a, PDU_HEX);
+
+    let expected_cmt = format!("+CMT: ,15\r\n{}", PDU_HEX);
+    then_wait_for_response_containing(&mut world, "A", &expected_cmt);
 }

@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use modem_rs::{
-    config::{DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo, SimProfile},
-    test_utils::MockModemHandler,
+    test_utils::MockModemHandler, DedicatedFile, ElementaryFile, FileSystem, SimFile, SimIo,
+    SimProfile,
 };
 
 use crate::world::World;
@@ -18,9 +16,9 @@ pub fn given_modem(world: &mut World, name: &str) {
     }
 
     let id = world.next_modem_id();
-    let handler = Arc::new(MockModemHandler::new());
+    let (handler, sink) = MockModemHandler::new();
 
-    world.manager.new_modem(id, handler.clone()).expect("Failed to create new modem");
+    world.manager.new_modem(id, sink).expect("Failed to create new modem");
     world.modems.insert(name.to_string(), (id, handler));
 }
 
@@ -30,7 +28,7 @@ pub fn given_modem(world: &mut World, name: &str) {
 pub fn given_modem_with_number(world: &mut World, name: &str, number: &str) {
     given_modem(world, name);
     let (id, _) = world.get_modem(name);
-    if let Some(modem) = world.manager.get_modem(id) {
+    if let Some(modem) = world.manager.get_modem_mut(id) {
         modem.set_phone_number(number);
     } else {
         panic!("Failed to retrieve modem '{}' after creation", name);
@@ -47,13 +45,13 @@ pub fn given_modem_with_sim_profile(world: &mut World, name: &str) {
     }
 
     let id = world.next_modem_id();
-    let handler = Arc::new(MockModemHandler::new());
+    let (handler, sink) = MockModemHandler::new();
 
     let profile = create_legacy_test_profile();
 
     world
         .manager
-        .new_modem_with_profile(id, handler.clone(), Some(profile))
+        .new_modem_with_profile(id, sink, Some(profile))
         .expect("Failed to create modem with profile");
     world.modems.insert(name.to_string(), (id, handler));
 }

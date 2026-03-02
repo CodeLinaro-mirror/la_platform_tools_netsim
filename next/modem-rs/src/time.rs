@@ -1,7 +1,10 @@
 // src/time.rs
 
 use std::{
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -28,26 +31,27 @@ impl Clock for SystemClock {
 /// The mock clock implementation for testing.
 #[derive(Clone, Debug)]
 pub struct MockClock {
-    current_time: Arc<Mutex<Instant>>,
+    base: Instant,
+    offset_nanos: Arc<AtomicU64>,
 }
 
 impl MockClock {
     pub fn new() -> Self {
         Self {
             // Start the mock clock at a fixed, known time.
-            current_time: Arc::new(Mutex::new(Instant::now())),
+            base: Instant::now(),
+            offset_nanos: Arc::new(AtomicU64::new(0)),
         }
     }
 
     pub fn advance(&self, duration: Duration) {
-        let mut time = self.current_time.lock().unwrap();
-        *time += duration;
+        self.offset_nanos.fetch_add(duration.as_nanos() as u64, Ordering::Relaxed);
     }
 }
 
 impl Clock for MockClock {
     fn now(&self) -> Instant {
-        *self.current_time.lock().unwrap()
+        self.base + Duration::from_nanos(self.offset_nanos.load(Ordering::Relaxed))
     }
 
     fn clone_box(&self) -> Arc<dyn Clock> {

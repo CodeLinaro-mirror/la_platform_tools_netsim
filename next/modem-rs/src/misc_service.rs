@@ -1,52 +1,48 @@
-// src/misc_service.rs
-
-use std::sync::Mutex;
-
 use crate::{
-    modem::ModemImpl,
     parser::{Command, QuotedString},
-    traits::CommandExecutor,
     types::{ExecutionResult, HandledCommand},
 };
 
 pub struct MiscService {
-    clock: Mutex<String>,
-    speaker_volume: Mutex<u8>,
-    speaker_mute: Mutex<u8>,
-    quiet_mode: Mutex<u8>,
-    verbose_mode: Mutex<u8>,
-    icf_format: Mutex<u8>,
-    icf_parity: Mutex<u8>,
-    ifc_dce: Mutex<u8>,
-    ifc_dte: Mutex<u8>,
+    clock: String,
+    speaker_volume: u8,
+    speaker_mute: u8,
+    quiet_mode: u8,
+    verbose_mode: u8,
+    icf_format: u8,
+    icf_parity: u8,
+    ifc_dce: u8,
+    ifc_dte: u8,
 }
 
 impl MiscService {
     pub fn new() -> Self {
         Self {
-            clock: Mutex::new("".to_string()),
-            speaker_volume: Mutex::new(1),
-            speaker_mute: Mutex::new(1),
-            quiet_mode: Mutex::new(0),
-            verbose_mode: Mutex::new(1),
-            icf_format: Mutex::new(3),
-            icf_parity: Mutex::new(3),
-            ifc_dce: Mutex::new(2),
-            ifc_dte: Mutex::new(2),
+            clock: "".to_string(),
+            speaker_volume: 1,
+            speaker_mute: 1,
+            quiet_mode: 0,
+            verbose_mode: 1,
+            icf_format: 3,
+            icf_parity: 3,
+            ifc_dce: 2,
+            ifc_dte: 2,
         }
     }
 
     // --- Pure command handlers ---
 
-    pub fn handle_set_time(&self, time: QuotedString) -> ExecutionResult {
-        let mut clock = self.clock.lock().unwrap();
-        *clock = String::from_utf8(time.to_vec()).unwrap_or_default();
+    pub fn handle_set_time(&mut self, time: QuotedString) -> ExecutionResult {
+        self.clock = String::from_utf8(time.to_vec()).unwrap_or_default();
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
+    pub fn set_time(&mut self, time: String) {
+        self.clock = time;
+    }
+
     pub fn handle_query_time(&self) -> ExecutionResult {
-        let clock = self.clock.lock().unwrap();
-        let response_data = format!("+CCLK: \"{}\"\r\n", *clock);
+        let response_data = format!("+CCLK: \"{}\"\r\n", self.clock);
         ExecutionResult::Handled(HandledCommand {
             responses: vec![response_data, "OK\r\n".to_string()],
             action: None,
@@ -74,15 +70,15 @@ impl MiscService {
         })
     }
 
-    pub fn handle_set_icf(&self, format: u8, parity: u8) -> ExecutionResult {
-        *self.icf_format.lock().unwrap() = format;
-        *self.icf_parity.lock().unwrap() = parity;
+    pub fn handle_set_icf(&mut self, format: u8, parity: u8) -> ExecutionResult {
+        self.icf_format = format;
+        self.icf_parity = parity;
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
-    pub fn handle_set_ifc(&self, dce: u8, dte: u8) -> ExecutionResult {
-        *self.ifc_dce.lock().unwrap() = dce;
-        *self.ifc_dte.lock().unwrap() = dte;
+    pub fn handle_set_ifc(&mut self, dce: u8, dte: u8) -> ExecutionResult {
+        self.ifc_dce = dce;
+        self.ifc_dte = dte;
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
@@ -98,51 +94,49 @@ impl MiscService {
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
-    pub fn handle_set_speaker_volume(&self, vol: u8) -> ExecutionResult {
-        *self.speaker_volume.lock().unwrap() = vol;
+    pub fn handle_set_speaker_volume(&mut self, vol: u8) -> ExecutionResult {
+        self.speaker_volume = vol;
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
-    pub fn handle_set_speaker_mute(&self, mute: u8) -> ExecutionResult {
-        *self.speaker_mute.lock().unwrap() = mute;
+    pub fn handle_set_speaker_mute(&mut self, mute: u8) -> ExecutionResult {
+        self.speaker_mute = mute;
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
-    pub fn handle_set_quiet_mode(&self, quiet: u8) -> ExecutionResult {
-        *self.quiet_mode.lock().unwrap() = quiet;
+    pub fn handle_set_quiet_mode(&mut self, quiet: u8) -> ExecutionResult {
+        self.quiet_mode = quiet;
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
-    pub fn handle_set_verbose_mode(&self, verbose: u8) -> ExecutionResult {
-        *self.verbose_mode.lock().unwrap() = verbose;
+    pub fn handle_set_verbose_mode(&mut self, verbose: u8) -> ExecutionResult {
+        self.verbose_mode = verbose;
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
-    pub fn handle_reset_to_factory_defaults(&self) -> ExecutionResult {
-        *self.speaker_volume.lock().unwrap() = 1;
-        *self.speaker_mute.lock().unwrap() = 1;
-        *self.quiet_mode.lock().unwrap() = 0;
-        *self.verbose_mode.lock().unwrap() = 1;
-        *self.icf_format.lock().unwrap() = 3;
-        *self.icf_parity.lock().unwrap() = 3;
-        *self.ifc_dce.lock().unwrap() = 2;
-        *self.ifc_dte.lock().unwrap() = 2;
+    pub fn handle_reset_to_factory_defaults(&mut self) -> ExecutionResult {
+        self.speaker_volume = 1;
+        self.speaker_mute = 1;
+        self.quiet_mode = 0;
+        self.verbose_mode = 1;
+        self.icf_format = 3;
+        self.icf_parity = 3;
+        self.ifc_dce = 2;
+        self.ifc_dte = 2;
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
     pub fn handle_view_active_configuration(&self) -> ExecutionResult {
-        let vol = *self.speaker_volume.lock().unwrap();
-        let mute = *self.speaker_mute.lock().unwrap();
-        let quiet = *self.quiet_mode.lock().unwrap();
-        let verbose = *self.verbose_mode.lock().unwrap();
-        let icf_fmt = *self.icf_format.lock().unwrap();
-        let icf_par = *self.icf_parity.lock().unwrap();
-        let ifc_dce = *self.ifc_dce.lock().unwrap();
-        let ifc_dte = *self.ifc_dte.lock().unwrap();
-
         let config_str = format!(
             "ACTIVE PROFILE:\nL:{} M:{} Q:{} V:{} ICF:{},{} IFC:{},{}\nOK\r\n",
-            vol, mute, quiet, verbose, icf_fmt, icf_par, ifc_dce, ifc_dte
+            self.speaker_volume,
+            self.speaker_mute,
+            self.quiet_mode,
+            self.verbose_mode,
+            self.icf_format,
+            self.icf_parity,
+            self.ifc_dce,
+            self.ifc_dte
         );
 
         ExecutionResult::Handled(HandledCommand { responses: vec![config_str], action: None })
@@ -205,10 +199,8 @@ impl MiscService {
             action: None,
         })
     }
-}
 
-impl CommandExecutor for MiscService {
-    fn execute(&self, _context: &ModemImpl, command: &Command) -> ExecutionResult {
+    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
             Command::GetManufacturerIdentification => self.handle_get_manufacturer_identification(),
             Command::GetCapabilities => self.handle_get_capabilities(),
