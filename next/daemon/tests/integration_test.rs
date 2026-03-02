@@ -30,16 +30,6 @@ async fn test_bluetooth_hci_reset() {
     // Given a running Netsim Daemon
     let mut world = World::new().await;
 
-    // Capture UDS path before spawning daemon (which consumes the daemon instance)
-    let uds_path = world
-        .daemon
-        .as_ref()
-        .expect("Daemon not present")
-        .uds_path()
-        .expect("No UDS path")
-        .to_path_buf();
-    let uds_path_str = uds_path.to_str().expect("Invalid UDS path").to_string();
-
     // Start daemon
     let daemon_task = world.spawn_daemon();
 
@@ -48,7 +38,7 @@ async fn test_bluetooth_hci_reset() {
         // Allow some time for netsimd to fully start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let transport = TransportType::uds(uds_path_str);
+        let transport = TransportType::tcp("localhost", world.grpc_port);
         let chip_info = ChipInfo::new("bt_test", ChipKind::BLUETOOTH);
 
         let streams = Streams::new();
