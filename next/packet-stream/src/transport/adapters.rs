@@ -4,15 +4,11 @@
 // implementations
 //=============================================================================
 
-use std::{
-    net::SocketAddr,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::net::SocketAddr;
 
 use async_trait::async_trait;
 use futures::{stream::StreamExt, SinkExt};
-use tokio::net::{TcpListener, UnixListener};
+use tokio::net::TcpListener;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 use crate::{
@@ -70,23 +66,30 @@ impl TransportListener for TcpTransportListener {
 }
 
 /// Unix Domain Socket listener adapter
+#[cfg(unix)]
 pub struct UdsTransportListener {
-    inner: UnixListener,
-    path: PathBuf,
-    conn_counter: Arc<Mutex<u64>>,
+    inner: tokio::net::UnixListener,
+    path: std::path::PathBuf,
+    conn_counter: std::sync::Arc<std::sync::Mutex<u64>>,
 }
 
+#[cfg(unix)]
 impl UdsTransportListener {
     pub async fn bind(path: &str) -> Result<Self> {
-        let path_buf = PathBuf::from(path);
+        let path_buf = std::path::PathBuf::from(path);
         if path_buf.exists() {
             std::fs::remove_file(&path_buf)?;
         }
-        let listener = UnixListener::bind(&path_buf)?;
-        Ok(Self { inner: listener, path: path_buf, conn_counter: Arc::new(Mutex::new(0)) })
+        let listener = tokio::net::UnixListener::bind(&path_buf)?;
+        Ok(Self {
+            inner: listener,
+            path: path_buf,
+            conn_counter: std::sync::Arc::new(std::sync::Mutex::new(0)),
+        })
     }
 }
 
+#[cfg(unix)]
 #[async_trait]
 impl TransportListener for UdsTransportListener {
     async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {

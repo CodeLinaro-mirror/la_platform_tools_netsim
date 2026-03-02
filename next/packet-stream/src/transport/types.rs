@@ -13,7 +13,7 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use crate::{
     error::{PacketStreamError, Result},
     transport::{
-        adapters::{TcpTransportListener, UdsTransportListener},
+        adapters::TcpTransportListener,
         traits::{PacketSink, PacketStream},
     },
 };
@@ -22,9 +22,18 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum TransportType {
-    Tcp { addr: String, port: u16 },
-    Uds { path: String },
-    Fd { in_fd: i32, out_fd: Option<i32> },
+    Tcp {
+        addr: String,
+        port: u16,
+    },
+    #[cfg(unix)]
+    Uds {
+        path: String,
+    },
+    Fd {
+        in_fd: i32,
+        out_fd: Option<i32>,
+    },
 }
 
 impl TransportType {
@@ -32,6 +41,7 @@ impl TransportType {
         TransportType::Tcp { addr: addr.into(), port }
     }
 
+    #[cfg(unix)]
     pub fn uds(path: impl Into<String>) -> Self {
         TransportType::Uds { path: path.into() }
     }
@@ -46,8 +56,9 @@ impl TransportType {
                 let listener = TcpTransportListener::bind(addr, *port).await?;
                 Ok(super::Listener::Tcp(listener))
             }
+            #[cfg(unix)]
             TransportType::Uds { path } => {
-                let listener = UdsTransportListener::bind(path).await?;
+                let listener = crate::transport::adapters::UdsTransportListener::bind(path).await?;
                 Ok(super::Listener::Uds(listener))
             }
             TransportType::Fd { .. } => Err(PacketStreamError::InvalidConfig(
@@ -67,6 +78,7 @@ impl TransportType {
                 let sink = sink.sink_map_err(PacketStreamError::Io);
                 Ok((Box::pin(stream), Box::pin(sink)))
             }
+            #[cfg(unix)]
             TransportType::Uds { path } => {
                 let stream = tokio::net::UnixStream::connect(path).await?;
                 let framed = Framed::new(stream, LengthDelimitedCodec::new());
@@ -85,6 +97,7 @@ impl TransportType {
     pub fn description(&self) -> String {
         match self {
             TransportType::Tcp { addr, port } => format!("TCP {addr}:{port}"),
+            #[cfg(unix)]
             TransportType::Uds { path } => format!("UDS {path}"),
             TransportType::Fd { in_fd, out_fd } => match out_fd {
                 Some(out_fd) => format!("FD {in_fd}:{out_fd}"),
@@ -94,7 +107,14 @@ impl TransportType {
     }
 
     pub fn supports_listener(&self) -> bool {
-        matches!(self, TransportType::Tcp { .. } | TransportType::Uds { .. })
+        #[cfg(unix)]
+        {
+            matches!(self, TransportType::Tcp { .. } | TransportType::Uds { .. })
+        }
+        #[cfg(not(unix))]
+        {
+            matches!(self, TransportType::Tcp { .. })
+        }
     }
 
     pub fn supports_stream(&self) -> bool {
@@ -125,6 +145,7 @@ impl ListenerConfig {
     pub fn default_config() -> Self {
         let mut config = Self::new();
         config.add_listener("tcp", TransportType::tcp("localhost", 8080));
+        #[cfg(unix)]
         config.add_listener("uds", TransportType::uds("/tmp/packetstream.sock"));
         config
     }
