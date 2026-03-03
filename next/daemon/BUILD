@@ -13,9 +13,12 @@
 
 load(
     "@rules_rust//rust:defs.bzl",
-    "rust_binary",
-    "rust_library",
     "rust_test",
+)
+load(
+    "//next:defs.bzl",
+    "netsim_rust_binary",
+    "netsim_rust_library",
 )
 
 package(default_visibility = ["//visibility:public"])
@@ -65,31 +68,22 @@ DAEMON_DEPS = [
     "@tracing",
     "@tracing-log",
     "@tracing-subscriber",
-] + select({
-    "@platforms//os:linux": ["@rustutils"],
-    "//conditions:default": [],
-})
+]
 
-rust_library(
+netsim_rust_library(
     name = "daemon-lib",
     srcs = DAEMON_SRCS,
     crate_name = "daemon",
     edition = "2021",
     proc_macro_deps = ["@async-trait"],
+    select_deps = select({
+        "@platforms//os:linux": ["@rustutils"],
+        "//conditions:default": [],
+    }),
     deps = DAEMON_DEPS,
 )
 
-rust_library(
-    name = "daemon-lib-testing",
-    srcs = DAEMON_SRCS,
-    crate_features = ["testing"],
-    crate_name = "daemon",
-    edition = "2021",
-    proc_macro_deps = ["@async-trait"],
-    deps = DAEMON_DEPS,
-)
-
-rust_binary(
+netsim_rust_binary(
     name = "daemon",
     srcs = ["src/main.rs"],
     edition = "2021",
@@ -116,7 +110,7 @@ rust_test(
     ],
     tags = ["requires-network"],
     deps = [
-        ":daemon-lib-testing",
+        ":testing",
         "//next/client",
         "//next/device-api",
         "//next/link-api",
