@@ -1,58 +1,160 @@
-# Modem Simulator Rewrite Plan
+# Modem Simulator Roadmap
 
-This document outlines the active and planned development tasks for the modem
+The Rust multi-device modem simulator is a replacement for the existing C++
+[Unisoc library](#source-implementations).
+
+The Unisoc simulator uses a process per emulated device. Testing multi-device
+interactions like calls or SMS requires manual console commands or complex TCP
+configuration to bridge these isolated processes.
+
+In contrast, the new Rust implementation runs as a single service within Netsim
+that manages multiple modem instances. This architecture enables sophisticated,
+zero-configuration network-level interactions between simulated modem devices,
+treating them as peers on a shared virtual telephony network.
+
+## Scenarios
+
+### Primary Scenarios
+
+These scenarios are part of the initial release of the multi-device modem
 simulator.
 
-## Completed Milestones (Phases 1-14)
+- **Device-to-Device (D2D) Call Signaling** [IMPLEMENTED]:
+  - **Direct Dialing**: Emulator instances can dial each other using their
+    simulated phone numbers.
+  - **State Synchronization**: Ringing(`RING`), Answering(`ATA`), and
+    Hangup(`ATH`) events are synchronized between the caller and callee.
+- **Device-to-Device SMS** [IMPLEMENTED]:
+  - **Direct Delivery**: SMS messages sent via `AT+CMGS` are instantly routed to
+    the target instance and delivered as `+CMT` notifications.
+- **Conference Calling** [PLANNED]: Support for multi-party voice calls
+  involving more than two AVDs.
+- **Simultaneous Services** [PLANNED]: Handling active voice calls concurrent
+  with active data sessions.
+
+### Secondary Scenarios
+
+These scenarios represent advanced simulation capabilities that will be
+implemented after the core required scenarios are stable.
+
+- **Realistic Radio Layer & Network Simulation**:
+  - **Signal Modeling**: Simulation of PHY/MAC layer aspects including signal
+    strength, interference, path loss, and noise.
+  - **Network Diversity**: Simulating characteristics of different network
+    standards (GSM, LTE, 5G NR).
+  - **Network Congestion**: Modeling resource contention and degraded
+    performance with multiple active devices.
+  - **Dynamic Environment**: API for real-time control of signal strength,
+    registration status, and operator availability.
+
+- **Data Plane & LAN Bridging**:
+  - **LAN Gateway**: Forwarding data packets to the host network (simulating a
+    gateway to the internet/LAN).
+  - **Packet Routing**: Proper routing of IP packets between the simulated modem
+    and the Netsim environment.
+
+- **Mobility & Dynamic Conditions**:
+  - **Handovers**: Simulating device movement and handovers between cells within
+    a managed topology.
+  - **Coverage Transitions**: Simulating devices entering/leaving coverage or
+    transitioning into weak signal zones.
+
+- **Advanced Telephony Features**:
+  - **Group Messaging**: Simulation of Group SMS and MMS exchanges across
+    multiple devices.
+  - **RCS Simulation**: Support for Rich Communication Services (chat, file
+    transfer).
+  - **Emergency Services**: Simulation of E911 calls with location reporting.
+  - **Carrier-Specific Behaviors**: Modeling specific network restrictions,
+    dynamic profile loading, and SIM lock states.
+  - **OTA Updates**: Simulation of Over-the-Air updates to test diverse carrier
+    scenarios.
+  - **Complex Scenario Generation**: Scriptable test scenarios for multi-call
+    flows, SMS/MMS failure injection, and data stall recovery.
+
+- **Observability & Debugging**:
+  - **State Reporting**: Structured query interface for real-time insight into
+    internal modem state.
+  - **Event Bus**: Pub/Sub mechanism for tracking internal state changes for
+    validation.
+
+- **Hardware Integration**:
+  - **AT Command Proxy**: Bridging commands from Android guest to physical
+    hardware modems for Hardware-in-the-Loop (HIL) testing.
+
+## User Feature Requests
+
+The following features have been identified from user feedback and requirements
+docs (e.g., Google Fi, Pixel) but are not yet scheduled in specific phases.
+
+- **Multiple SIM / Dual SIM Support**:
+  - Requirement: Support for testing dual SIM scenarios (DSDS) and multiple
+    active subscriptions.
+  - Source: Google Fi Team.
+- **IPv6 Support**:
+  - Requirement: Proper IPv6 address allocation (SLAAC/DHCPv6) for mobile data
+    to support modern network requirements.
+  - Source: Pixel / Core Networking.
+- **Advanced Network Simulation**:
+  - Requirement: Ability to simulate packet loss, variable latency, and dynamic
+    signal strength changes via Netsim API.
+  - Source: Integration Teams.
+- **Extended PDP Context Support**:
+  - Requirement: Reliable support for at least 3 concurrent PDP contexts with
+    independent network interfaces.
+  - Source: Pixel Team.
+
+## Completed Milestones
 
 - **Architectural Refactoring & Unification**: Completed.
 - **Event Loop & Timers**: Implemented.
 - **Initial Test Coverage**: Expanded to over 100 passing tests across all
   services (Call, Data, Network, SIM, SMS, STK, Sup).
 
-## Phase 14b: Android Emulator Console Support
+## Android Emulator Console Support
 
 Required features to support the standard `emulator -console` telephony
 commands. These commands allow users (and Android Studio) to inject events into
 the modem.
 
-- [ ] **Incoming Call (`gsm call`)**:
-  - [ ] Implement logic to trigger an incoming call (`RING`, `+CLIP`) from an
+- [x] **Incoming Call (`gsm call`)**:
+  - [x] Implement logic to trigger an incoming call (`RING`, `+CLIP`) from an
         external event.
-- [ ] **Remote Call State Changes (`gsm accept`, `gsm hold`)**:
-  - [ ] Implement logic to simulate remote party answering (Active) or putting
-        call on hold (Held).
-- [ ] **Call Termination (`gsm cancel`)**:
-  - [ ] Implement logic to terminate a call from the network side (transitions
+- [x] **Remote Answer (`gsm accept`)**:
+  - [x] Implement logic to simulate remote party answering (Active).
+- [x] **Remote Hold (`gsm hold`)**:
+  - [x] Implement logic to simulate remote party calling hold/resume.
+- [x] **Call Termination (`gsm cancel`)**:
+  - [x] Implement logic to terminate a call from the network side (transitions
         to `SimState::Ready` w/ `NO CARRIER` etc).
-- [ ] **Data/Voice State (`gsm data`, `gsm voice`)**:
-  - [ ] Allow external control of `+CREG` and `+CGREG` states (Roaming,
-        Searching, Denied, etc.) via unsolicited updates.
+- [x] **Data/Voice State (`gsm data`, `gsm voice`)**:
+  - [x] Allow external control of `+CREG` and `+CGREG` states (Roaming,
+        Searching, Denied, etc.).
   - [ ] Support "Metered" network status if applicable.
-- [ ] **Signal Strength (`gsm signal`)**:
-  - [ ] Allow external updates to signal strength (RSSI) and BER.
-- [ ] **Network Time (`updateClock`)**:
-  - [ ] Support external injection of Network Identity and Time Zone (NITZ)
+- [x] **Signal Strength (`gsm signal`)**:
+  - [x] Allow external updates to signal strength (RSSI) and BER.
+- [x] **Network Time (`updateClock`)**:
+  - [x] Support external injection of Network Identity and Time Zone (NITZ)
         updates.
-- [ ] **Incoming SMS (`sms send`, `sms pdu`)**:
-  - [ ] Implement injection of text-mode SMS (`+CMT`).
-  - [ ] Implement injection of PDU-mode SMS (`+CMT`).
+- [x] **Incoming SMS (`sms send`, `sms pdu`)**:
+  - [x] Implement injection of text-mode SMS (`+CMT`).
+  - [x] Implement injection of PDU-mode SMS (`+CMT`).
 
-## Phase 15: Cuttlefish Drop-in Compatibility
+## Cuttlefish Drop-in Compatibility
 
 Ensure the binary functions as a direct drop-in replacement for the legacy modem
 simulator used by Cuttlefish (and eventually Netsim). Focus on simplifying the
 execution model to a single binary where possible, ensuring strictly compatible
 CLI arguments and FD handling.
 
-- [ ] **Verify CLI Compatibility**: Ensure arguments like `--server-fds` match
+- [x] **Verify CLI Compatibility**: Ensure arguments like `--server-fds` match
       legacy behavior.
 - [ ] **Simplify Execution Model**: Evaluate removing the "Daemon/Proxy" split
       in favor of a monolithic run loop for Cuttlefish.
 - [ ] **Integration Test**: Verify the binary runs correctly within a Cuttlefish
       instance.
 
-## Phase 16: Feature Parity with C++ Implementation
+## Feature Parity with C++ Implementation
 
 Based on a detailed comparison of the C++ and Rust source code, the following
 features are missing from the Rust implementation. This plan outlines the work
@@ -117,6 +219,7 @@ for handling time, time zones, and initialization commands.
 **Tasks:**
 
 - [ ] **Implement full `AT+CGSN` command handling:**
+  - [ ] Update `parser.rs` to support optional parameters.
   - [ ] Add support for the `snt` parameter to return different types of
         identification information (IMEI, SVN, etc.).
 - [ ] **Add time and time zone support:**
@@ -136,12 +239,15 @@ a massive amount of work to reach feature parity with the C++
 **Tasks:**
 
 - [ ] **Implement Radio Power Management (`AT+CFUN`):**
+  - [ ] Implement `AT+CFUN` command in `parser.rs`.
   - [ ] Add support for setting and querying the radio power state.
 - [ ] **Implement Network Selection (`AT+COPS`):**
   - [ ] Add support for querying and setting the network selection mode.
   - [ ] Add support for querying available networks.
   - [ ] Add support for requesting the current operator.
 - [ ] **Implement Network Registration (`AT+CREG`, `AT+CGREG`, `AT+CEREG`):**
+  - [ ] Implement `AT+CREG`, `AT+CGREG`, `AT+CEREG` set/query commands in
+        `parser.rs`.
   - [ ] Add support for voice and data network registration.
   - [ ] Implement unsolicited registration status updates.
 - [ ] **Implement Signal Strength (`AT+CSQ`):**
@@ -239,3 +345,46 @@ missing most of the features and complexity of the C++ `sup_service.cpp`.
         forwarding rules.
 - [ ] **Implement Supplementary Service Notifications (`AT+CSSN`):**
   - [ ] Add logic for handling supplementary service notifications.
+
+## Async Architecture
+
+Modernize the codebase to use Tokio and async/await patterns for integration
+with Netsim Next.
+
+- [x] **Async Channels**: Replace legacy callbacks with `tokio::sync::mpsc`.
+- [x] **Cell Actor Refactor**: Remove `Mutex` and `unsafe` blocks, align with
+      actor model.
+- [ ] **Async Native**: Convert `tick()` based loops to `await` driven event
+      loops where appropriate.
+
+## References & Source Material
+
+The development of this modem simulator is guided by the following standards and
+reference implementations.
+
+### Standards
+
+- **3GPP TS 27.007**: _AT command set for User Equipment (UE)_.
+  - Primary reference for general modem control, network service, and call
+    handling commands.
+- **3GPP TS 27.005**: _Use of Data Terminal Equipment - Data Circuit terminating
+  Equipment (DTE - DCE) interface for Short Message Service (SMS) and Cell
+  Broadcast Service (CBS)_.
+  - Reference for all SMS-related commands (`AT+CMGS`, `AT+CMGR`, etc.).
+- **3GPP2 C.S0023-D**: _Removable User Identity Module for Spread Spectrum
+  Systems_.
+  - Reference for CDMA-specific commands (`AT+CCSS`, `AT+WRMP`).
+- **3GPP TS 31.111 / 11.14**: _USIM Application Toolkit (USAT)_.
+  - Reference for STK (SIM Toolkit) commands and envelope structures.
+
+### Source Implementations
+
+- **Unisoc Modem Simulator (C++)**:
+  - Location: AOSP `device/google/cuttlefish/host/commands/modem_simulator`.
+  - Origin: Attributable to a contribution by **Unisoc** circa 2020.
+  - Shared Usage: Also wrapped by Goldfish in
+    `external/qemu/android/third_party/modem-simulator`.
+  - Status: The legacy implementation against which feature parity is being
+    measured (Phase 16).
+  - Capabilities: Included a bespoke TCP protocol (`AT+REMOTECALL`) for ad-hoc
+    device-to-device communication, requiring manual port configuration.
