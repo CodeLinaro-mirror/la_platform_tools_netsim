@@ -43,19 +43,19 @@ mod tests {
     use netsim_model::chip::{ChipId, ChipKind};
 
     use super::*;
-    use crate::{bt_pcap::BluetoothH4Writer, service::InternalCaptureInfo, writer::CaptureWriter};
+    use crate::{bt_pcap::BluetoothH4Writer, service::InternalCaptureInfo};
 
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-    #[test]
-    fn test_pcap_writer() {
+    #[tokio::test]
+    async fn test_pcap_writer() {
         let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!("netsim_test_pcap_writer_{}", id));
         fs::create_dir_all(&dir).unwrap();
         let filename = dir.join("test_pcap.pcap");
-        let mut writer = BluetoothH4Writer::new(&filename).unwrap();
+        let mut writer = BluetoothH4Writer::new(&filename).await.unwrap();
         let data = vec![0x01, 0x00, 0x00, 0x00]; // Fake H4 Command
-        writer.write_packet(SystemTime::now(), Direction::Sent, &data).unwrap();
+        writer.write_packet(SystemTime::now(), Direction::Sent, &data).await.unwrap();
 
         let (records, bytes) = writer.get_stats();
         assert_eq!(records, 1);

@@ -123,7 +123,7 @@ impl DeviceClient {
     pub async fn notify_chip_removed(
         &self,
         id: DeviceId,
-        chip_id: netsim_model::chip::ChipId,
+        chip_id: netsim_model::ChipId,
     ) -> Result<(), DeviceError> {
         debug!("Sending notify_chip_removed request for device {} chip {}", id, chip_id);
         match self
@@ -186,5 +186,14 @@ impl DeviceClient {
     pub async fn shutdown(&self) -> Result<(), DeviceError> {
         debug!("Sending shutdown request");
         self.inner.shutdown().await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
+    }
+
+    /// Triggers a persistence of the current statistics to disk.
+    pub async fn save_stats(&self) -> Result<(), DeviceError> {
+        self.inner
+            .perform_action(None, DeviceAction::SaveStats)
+            .await
+            .map(|_| ())
+            .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
     }
 }

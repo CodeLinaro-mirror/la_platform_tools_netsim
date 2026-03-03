@@ -1,11 +1,10 @@
 // src/data_service.rs
 
-use std::{collections::HashMap, sync::Mutex};
+use std::collections::HashMap;
 
 use crate::{
     modem::ModemImpl,
     parser::{Command, QuotedString},
-    traits::CommandExecutor,
     types::{ExecutionResult, HandledCommand, DEFAULT_IP_ADDRESS},
 };
 
@@ -30,30 +29,32 @@ pub struct PdpContext {
 }
 
 pub struct DataService {
-    pdp_contexts: Mutex<HashMap<u8, PdpContext>>,
+    pdp_contexts: HashMap<u8, PdpContext>,
 }
 
 impl DataService {
     pub fn new() -> Self {
-        Self { pdp_contexts: Mutex::new(HashMap::new()) }
+        Self { pdp_contexts: HashMap::new() }
     }
 
     // --- Helper methods for external services ---
 
-    pub fn on_update_physical_channel_configs(&self, context: &ModemImpl) {
-        context.callbacks.send_at_response(context.id, b"+CGEV: NW PDN DEACT 1\r\n");
+    pub fn on_update_physical_channel_configs(
+        &self,
+        _context: &ModemImpl,
+    ) -> Vec<crate::modem::ModemEffect> {
+        vec![crate::modem::ModemEffect::Response(b"+CGEV: NW PDN DEACT 1\r\n".to_vec())]
     }
 
     // --- Pure command handlers ---
 
     pub fn handle_define_pdp_context(
-        &self,
+        &mut self,
         cid: u8,
         pdp_type: QuotedString,
         apn: QuotedString,
     ) -> ExecutionResult {
-        let mut pdp_contexts = self.pdp_contexts.lock().unwrap();
-        pdp_contexts.insert(
+        self.pdp_contexts.insert(
             cid,
             PdpContext {
                 pdp_type: String::from_utf8(pdp_type.to_vec()).unwrap_or_default(),
@@ -69,9 +70,8 @@ impl DataService {
     }
 
     pub fn handle_query_pdp_context(&self) -> ExecutionResult {
-        let pdp_contexts = self.pdp_contexts.lock().unwrap();
         let mut responses = Vec::new();
-        for (cid, context) in pdp_contexts.iter() {
+        for (cid, context) in self.pdp_contexts.iter() {
             responses.push(format!(
                 "+CGDCONT: {},\"{}\",\"{}\",,0,0\r\n",
                 cid, context.pdp_type, context.apn
@@ -82,7 +82,7 @@ impl DataService {
     }
 
     pub fn handle_set_quality_of_service_minimum(
-        &self,
+        &mut self,
         cid: u8,
         precedence: u8,
         delay: u8,
@@ -90,8 +90,7 @@ impl DataService {
         peak: u8,
         mean: u8,
     ) -> ExecutionResult {
-        let mut pdp_contexts = self.pdp_contexts.lock().unwrap();
-        if let Some(context) = pdp_contexts.get_mut(&cid) {
+        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.qos = Qos { precedence, delay, reliability, peak, mean };
             ExecutionResult::Handled(HandledCommand::ok())
         } else {
@@ -100,9 +99,8 @@ impl DataService {
     }
 
     pub fn handle_query_quality_of_service_minimum(&self) -> ExecutionResult {
-        let pdp_contexts = self.pdp_contexts.lock().unwrap();
         let mut responses = Vec::new();
-        for (cid, context) in pdp_contexts.iter() {
+        for (cid, context) in self.pdp_contexts.iter() {
             responses.push(format!(
                 "+CGEQMIN: {},{},{},{},{},{}\r\n",
                 cid,
@@ -118,7 +116,7 @@ impl DataService {
     }
 
     pub fn handle_set_quality_of_service_requested(
-        &self,
+        &mut self,
         cid: u8,
         precedence: u8,
         delay: u8,
@@ -126,8 +124,7 @@ impl DataService {
         peak: u8,
         mean: u8,
     ) -> ExecutionResult {
-        let mut pdp_contexts = self.pdp_contexts.lock().unwrap();
-        if let Some(context) = pdp_contexts.get_mut(&cid) {
+        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.req_qos = Qos { precedence, delay, reliability, peak, mean };
             ExecutionResult::Handled(HandledCommand::ok())
         } else {
@@ -136,9 +133,8 @@ impl DataService {
     }
 
     pub fn handle_query_quality_of_service_requested(&self) -> ExecutionResult {
-        let pdp_contexts = self.pdp_contexts.lock().unwrap();
         let mut responses = Vec::new();
-        for (cid, context) in pdp_contexts.iter() {
+        for (cid, context) in self.pdp_contexts.iter() {
             responses.push(format!(
                 "+CGEQREQ: {},{},{},{},{},{}\r\n",
                 cid,
@@ -154,7 +150,7 @@ impl DataService {
     }
 
     pub fn handle_set_quality_of_service_minimum_gprs(
-        &self,
+        &mut self,
         cid: u8,
         precedence: u8,
         delay: u8,
@@ -162,8 +158,7 @@ impl DataService {
         peak: u8,
         mean: u8,
     ) -> ExecutionResult {
-        let mut pdp_contexts = self.pdp_contexts.lock().unwrap();
-        if let Some(context) = pdp_contexts.get_mut(&cid) {
+        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.gprs_qos = Qos { precedence, delay, reliability, peak, mean };
             ExecutionResult::Handled(HandledCommand::ok())
         } else {
@@ -172,9 +167,8 @@ impl DataService {
     }
 
     pub fn handle_query_quality_of_service_minimum_gprs(&self) -> ExecutionResult {
-        let pdp_contexts = self.pdp_contexts.lock().unwrap();
         let mut responses = Vec::new();
-        for (cid, context) in pdp_contexts.iter() {
+        for (cid, context) in self.pdp_contexts.iter() {
             responses.push(format!(
                 "+CGQMIN: {},{},{},{},{},{}\r\n",
                 cid,
@@ -190,7 +184,7 @@ impl DataService {
     }
 
     pub fn handle_set_quality_of_service_requested_gprs(
-        &self,
+        &mut self,
         cid: u8,
         precedence: u8,
         delay: u8,
@@ -198,8 +192,7 @@ impl DataService {
         peak: u8,
         mean: u8,
     ) -> ExecutionResult {
-        let mut pdp_contexts = self.pdp_contexts.lock().unwrap();
-        if let Some(context) = pdp_contexts.get_mut(&cid) {
+        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.gprs_req_qos = Qos { precedence, delay, reliability, peak, mean };
             ExecutionResult::Handled(HandledCommand::ok())
         } else {
@@ -208,9 +201,8 @@ impl DataService {
     }
 
     pub fn handle_query_quality_of_service_requested_gprs(&self) -> ExecutionResult {
-        let pdp_contexts = self.pdp_contexts.lock().unwrap();
         let mut responses = Vec::new();
-        for (cid, context) in pdp_contexts.iter() {
+        for (cid, context) in self.pdp_contexts.iter() {
             responses.push(format!(
                 "+CGQREQ: {},{},{},{},{},{}\r\n",
                 cid,
@@ -225,9 +217,8 @@ impl DataService {
         ExecutionResult::Handled(HandledCommand { responses, action: None })
     }
 
-    pub fn handle_set_pdp_context_activate(&self, cid: u8, state: u8) -> ExecutionResult {
-        let mut pdp_contexts = self.pdp_contexts.lock().unwrap();
-        if let Some(context) = pdp_contexts.get_mut(&cid) {
+    pub fn handle_set_pdp_context_activate(&mut self, cid: u8, state: u8) -> ExecutionResult {
+        if let Some(context) = self.pdp_contexts.get_mut(&cid) {
             context.active = state == 1;
             ExecutionResult::Handled(HandledCommand::ok())
         } else {
@@ -255,8 +246,7 @@ impl DataService {
     }
 
     pub fn handle_show_pdp_address(&self, cid: u8) -> ExecutionResult {
-        let pdp_contexts = self.pdp_contexts.lock().unwrap();
-        if let Some(context) = pdp_contexts.get(&cid) {
+        if let Some(context) = self.pdp_contexts.get(&cid) {
             let ip_address = if context.active { DEFAULT_IP_ADDRESS } else { "0.0.0.0" };
             let response = format!("+CGPADDR: {},\"{}\"\r\n", cid, ip_address);
             let mut handled = HandledCommand::ok();
@@ -273,10 +263,8 @@ impl DataService {
         handled.responses.insert(0, response);
         ExecutionResult::Handled(handled)
     }
-}
 
-impl CommandExecutor for DataService {
-    fn execute(&self, _context: &ModemImpl, command: &Command) -> ExecutionResult {
+    pub fn execute(&mut self, command: &Command) -> ExecutionResult {
         match command {
             Command::DefinePdpContext(cid, pdp_type, apn) => {
                 self.handle_define_pdp_context(*cid, *pdp_type, *apn)

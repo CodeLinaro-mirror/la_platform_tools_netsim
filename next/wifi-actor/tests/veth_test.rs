@@ -5,7 +5,10 @@ use std::{sync::Arc, time::Duration};
 use actor_framework::ResourceActor;
 use ap_actor::{shared::SharedKeyStore, ApActor, ApClient};
 use client::DeviceClient;
-use netsim_model::chip::{ChipClient, ChipCreate, ChipId};
+use netsim_model::{
+    chip::{ChipClient, ChipCreate},
+    ChipId,
+};
 use slirp_actor::SlirpActor;
 use tokio::{net::UdpSocket, sync::mpsc};
 use wifi_actor::WifiActor;

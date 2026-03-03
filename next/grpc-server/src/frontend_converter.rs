@@ -42,9 +42,10 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
         ApiChipKind::WIFI => ProtoChipKind::WIFI,
         ApiChipKind::UWB => ProtoChipKind::UWB,
         // Map unknown/new types to UNSPECIFIED for now
-        ApiChipKind::NFC => ProtoChipKind::UNSPECIFIED,
-        ApiChipKind::CELLULAR => ProtoChipKind::UNSPECIFIED,
+        ApiChipKind::NFC => ProtoChipKind::NFC,
+        ApiChipKind::CELLULAR => ProtoChipKind::CELLULAR,
         ApiChipKind::AP => ProtoChipKind::WIFI,
+        ApiChipKind::UNSPECIFIED => ProtoChipKind::UNSPECIFIED,
     }
 }
 
@@ -224,6 +225,8 @@ pub fn from_proto_chip_kind(k: ProtoChipKind) -> Option<ApiChipKind> {
         ProtoChipKind::WIFI => Some(ApiChipKind::WIFI),
         ProtoChipKind::UWB => Some(ApiChipKind::UWB),
         ProtoChipKind::BLUETOOTH_BEACON => Some(ApiChipKind::BLUETOOTH),
+        ProtoChipKind::NFC => Some(ApiChipKind::NFC),
+        ProtoChipKind::CELLULAR => Some(ApiChipKind::CELLULAR),
         _ => None,
     }
 }

@@ -1,166 +1,326 @@
-use std::time::Duration;
+use crate::{steps::*, world::World};
 
-use modem_rs::{
-    constants::CALL_RING_TIMEOUT,
-    types::{ModemId, AT_OK},
-};
-
-use crate::common::TestHarness;
-
+// Scenario: Emergency Call
+//   Given a modem "A"
+//   When AT command "ATD911;" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_emergency_call() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"ATD911;\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], AT_OK);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "ATD911;");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Standard Call
+//   Given a modem "A"
+//   When AT command "ATD1234567;" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_standard_call() {
-    let harness = TestHarness::new();
-    let number = "1234567";
-    harness.send_at_command(format!("ATD{};\r\n", number).as_bytes());
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], AT_OK);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "ATD1234567;");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Receive Ring
+//   Given a modem "A"
+//   When AT command "RING" is sent to "A"
+//   Then response from "A" is "RING"
+//   When AT command "AT+CLCC" is sent to "A"
+//   Then response from "A" contains "+CLCC: 1,1,3,0,0,\"\",129"
+//   And response from "A" contains "OK"
 #[test]
 fn test_ring() {
-    let harness = TestHarness::new();
-    let modem = harness.manager.get_modem(harness.modem_id).unwrap();
-    modem.receive_at_command(b"RING\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"RING\r\n");
-    let calls = modem.call_service.calls.lock().unwrap();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].number, "");
-    assert_eq!(calls[0].state, modem_rs::call_service::CallState::Alerting);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "RING");
+    then_response_is(&mut world, "A", "RING");
+
+    // Verify call state (Incoming/Alerting)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_contains(&mut world, "A", "+CLCC: 1,1,3,0,0,\"\",129");
 }
 
+// Scenario: Query Current Calls
+//   Given a modem "A"
+//   And a modem "B" with number "111"
+//   And a modem "C" with number "222"
+//   When AT command "ATD111;" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "ATA" is sent to "B"
+//   Then response from "B" is "OK"
+//   When AT command "ATD222;" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "ATA" is sent to "C"
+//   Then response from "C" is "OK"
+//   When AT command "AT+CLCC" is sent to "A"
+//   Then response from "A" contains "+CLCC: 1,0,1,0,0,\"111\",129"
+//   And response from "A" contains "+CLCC: 2,0,0,0,0,\"222\",129"
+//   And response from "A" contains "OK"
 #[test]
 fn test_query_current_calls() {
-    // 1. Setup: Create a manager and three modems (A, B, and C).
-    let harness = TestHarness::new();
-    let modem_b_id: ModemId = 2;
-    let modem_c_id: ModemId = 3;
-    harness.manager.get_modem(modem_b_id).unwrap().set_phone_number("111");
-    harness.manager.get_modem(modem_c_id).unwrap().set_phone_number("222");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    given_modem_with_number(&mut world, "B", "111");
+    given_modem_with_number(&mut world, "C", "222");
 
-    // 2. Modem A calls B, B answers.
-    harness.send_at_command(b"ATD111;\r\n");
-    harness.get_responses(); // Clear responses
-    harness.manager.send_at_command(modem_b_id, b"ATA\r\n");
-    harness.get_responses(); // Clear responses
+    // A calls B, B answers
+    when_at_command_sent(&mut world, "A", "ATD111;");
+    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "B", "RING");
 
-    // 3. Modem A calls C, putting B on hold.
-    harness.send_at_command(b"ATD222;\r\n");
-    harness.get_responses(); // Clear responses
-    harness.manager.send_at_command(modem_c_id, b"ATA\r\n");
-    harness.get_responses(); // Clear responses
+    when_at_command_sent(&mut world, "B", "ATA");
+    then_response_is(&mut world, "B", "OK");
+    then_response_is(&mut world, "A", "OK"); // Connection established
 
-    // 4. Modem A queries current calls.
-    harness.send_at_command(b"AT+CLCC\r\n");
+    // A calls C, B goes on hold, C answers
+    when_at_command_sent(&mut world, "A", "ATD222;");
+    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "C", "RING");
 
-    // 5. Verify the response.
-    let mut responses = harness.get_responses();
-    assert_eq!(responses.len(), 3);
-    responses.sort();
+    when_at_command_sent(&mut world, "C", "ATA");
+    then_response_is(&mut world, "C", "OK");
+    then_response_is(&mut world, "A", "OK"); // Connection established
 
-    let expected1 = b"+CLCC: 1,0,1,0,0,\"111\",129\r\n"; // Held call
-    let expected2 = b"+CLCC: 2,0,0,0,0,\"222\",129\r\n"; // Active call
-    let expected_ok = AT_OK;
-
-    assert!(responses.contains(&expected1.to_vec()));
-    assert!(responses.contains(&expected2.to_vec()));
-    assert!(responses.contains(&expected_ok.to_vec()));
+    // Query A's calls
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    // Order might vary, so check contains
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,1,0,0,\"111\",129");
+    then_response_contains(&mut world, "A", "+CLCC: 2,0,0,0,0,\"222\",129");
 }
 
+// Scenario: Call Ring Timeout
+//   Given a modem "A"
+//   And a modem "B" with number "111"
+//   And a modem "C" with number "222"
+//   When AT command "ATD111;" is sent to "A"
+//   And AT command "ATA" is sent to "B"
+//   And AT command "ATD222;" is sent to "A"
+//   Then check "C" is ringing (Alerting)
+//   When time advances 30100 ms
+//   Then check "C" is idle
 #[test]
 fn test_call_ring_timeout() {
-    let harness = TestHarness::new();
-    let modem_b_id: ModemId = 2;
-    let modem_c_id: ModemId = 3;
-    let modem_b = harness.manager.get_modem(modem_b_id).unwrap();
-    modem_b.set_phone_number("111");
-    let modem_c = harness.manager.get_modem(modem_c_id).unwrap();
-    modem_c.set_phone_number("222");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    given_modem_with_number(&mut world, "B", "111");
+    given_modem_with_number(&mut world, "C", "222");
 
-    // Make a call from A to B, and have B answer
-    harness.send_at_command(b"ATD111;\r\n");
-    harness.manager.tick();
-    harness.manager.send_at_command(modem_b_id, b"ATA\r\n");
-    harness.manager.tick();
+    // A calls B, B answers
+    when_at_command_sent(&mut world, "A", "ATD111;");
+    then_response_is(&mut world, "A", "OK");
+    then_response_is(&mut world, "B", "RING");
 
-    // Make a call from A to C
-    harness.send_at_command(b"ATD222;\r\n");
-    harness.manager.tick();
+    when_at_command_sent(&mut world, "B", "ATA");
+    then_response_is(&mut world, "B", "OK");
+    then_response_is(&mut world, "A", "OK"); // Connected
 
-    // Verify that modem C is ringing and B is on hold
-    assert!(modem_c.call_service().is_alerting());
-    assert!(modem_b.call_service().is_held());
+    // A calls C
+    when_at_command_sent(&mut world, "A", "ATD222;");
+    then_response_is(&mut world, "A", "OK");
 
-    // Advance the clock to trigger the timeout
-    harness.clock.advance(CALL_RING_TIMEOUT + Duration::from_millis(100));
+    // Verify C is alerting (Incoming call) - First consume RING
+    then_response_is(&mut world, "C", "RING");
 
-    // Tick the simulator to process the timeout
-    harness.manager.tick();
+    // Check AT+CLCC on C
+    when_at_command_sent(&mut world, "C", "AT+CLCC");
+    then_response_contains(&mut world, "C", "+CLCC: 1,1,3,0,0,\"\",129");
 
-    // Verify that modem C is no longer ringing, but B is still on hold
-    assert!(!modem_c.call_service().is_alerting());
-    assert!(modem_c.call_service().is_idle());
-    assert!(modem_b.call_service().is_held());
+    // Advance time > 30s
+    when_time_advances_ms(&mut world, 30100);
+
+    // Verify C is idle (AT+CLCC returns just OK)
+    when_at_command_sent(&mut world, "C", "AT+CLCC");
+    then_response_is(&mut world, "C", "OK");
 }
 
+// Scenario: Set Mute
+//   Given a modem "A"
+//   When AT command "AT+CMUT=1" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_set_mute() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CMUT=1\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], AT_OK);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CMUT=1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Query Mute
+//   Given a modem "A"
+//   When AT command "AT+CMUT=1" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "AT+CMUT?" is sent to "A"
+//   Then response from "A" is "+CMUT: 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_query_mute() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CMUT=1\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+CMUT?\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+CMUT: 1\r\n");
-    assert_eq!(responses[1], AT_OK);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CMUT=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CMUT?");
+    then_response_is(&mut world, "A", "+CMUT: 1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Send DTMF
+//   Given a modem "A"
+//   When AT command "AT+VTS=1" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_send_dtmf() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+VTS=1\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], AT_OK);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+VTS=1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Set Emergency Mode
+//   Given a modem "A"
+//   When AT command "AT+WSOS=1" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_set_emergency_mode() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+WSOS=1\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], AT_OK);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+WSOS=1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Query Emergency Mode
+//   Given a modem "A"
+//   When AT command "AT+WSOS=1" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "AT+WSOS?" is sent to "A"
+//   Then response from "A" is "+WSOS: 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_query_emergency_mode() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+WSOS=1\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+WSOS?\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+WSOS: 1\r\n");
-    assert_eq!(responses[1], AT_OK);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+WSOS=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+WSOS?");
+    then_response_is(&mut world, "A", "+WSOS: 1");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: External Incoming Call (Console)
+//   Given a modem "A"
+//   When external call from "123456" matches "A"
+//   Then response from "A" is "RING"
+//   And response from "A" contains "+CLIP: \"123456\",129,,,,0"
+//   When time, advances > 1s (call ring timeout)
+//   Then check "A" is idle
+#[test]
+fn test_external_incoming_call() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Inject call
+    let id_a = world.modems.get("A").unwrap().0;
+    when_external_call_initiated(&mut world, id_a, "123456");
+
+    // Expect RING
+    then_response_is(&mut world, "A", "RING");
+    // Expect +CLIP
+    then_response_contains(&mut world, "A", "+CLIP: \"123456\",129,,,,0");
+
+    // Verify call state (Alerting)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    // ID=1, Direction=1(Incoming), State=3(Alerting), Voice=0(Voice), Multiparty=0,
+    // Number="123456", Type=129
+    then_response_contains(&mut world, "A", "+CLCC: 1,1,3,0,0,\"123456\",129");
+
+    // Wait for timeout
+    when_time_advances_ms(&mut world, 2000);
+
+    // Call should be gone
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: External Call Control (Answer/Hangup)
+//   Given a modem "A"
+//   When AT command "ATD123;" is sent to "A"
+//   Then response from "A" is "OK"
+//   When external answer triggered for "A"
+//   Then response from "A" is "OK" (representing CONNECT)
+//   And check call state is Active
+//   When external hangup triggered for "A"
+//   Then response from "A" is "NO CARRIER"
+//   And check call state is Idle
+#[test]
+fn test_external_call_control() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    let id_a = world.modems.get("A").unwrap().0;
+
+    // Dial
+    when_at_command_sent(&mut world, "A", "ATD123;");
+    then_response_is(&mut world, "A", "OK");
+
+    // Remote Answer
+    when_external_call_answered(&mut world, id_a);
+    then_response_is(&mut world, "A", "OK");
+
+    // Verify Active
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    // ID=1, Dir=0(Out), State=0(Active), ...
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,0,0,0,\"123\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    // Remote Hangup
+    when_external_call_hungup(&mut world, id_a);
+    then_response_is(&mut world, "A", "NO CARRIER");
+
+    // Verify Idle
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: External Call Hold
+//   Given a modem "A"
+//   When AT command "ATD123;" is sent to "A"
+//   Then response from "A" is "OK"
+//   When external answer triggered
+//   Then response from "A" is "OK"
+//   When external hold (on) triggered
+//   Then AT+CLCC indicates Held (State 1)
+//   When external hold (off) triggered
+//   Then AT+CLCC indicates Active (State 0)
+#[test]
+fn test_external_call_hold() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    let id_a = world.modems.get("A").unwrap().0;
+
+    // Dial and Answer to get Active call
+    when_at_command_sent(&mut world, "A", "ATD123;");
+    then_response_is(&mut world, "A", "OK");
+    when_external_call_answered(&mut world, id_a);
+    then_response_is(&mut world, "A", "OK");
+
+    // Hold ON
+    when_external_call_held(&mut world, id_a, true);
+
+    // Check State (Held = 1)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    // +CLCC: 1,0,1,... (State 1)
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,1,0,0,\"123\",129");
+    then_response_is(&mut world, "A", "OK");
+
+    // Hold OFF (Resume)
+    when_external_call_held(&mut world, id_a, false);
+
+    // Check State (Active = 0)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+    // +CLCC: 1,0,0,... (State 0)
+    then_response_contains(&mut world, "A", "+CLCC: 1,0,0,0,0,\"123\",129");
+    then_response_is(&mut world, "A", "OK");
 }

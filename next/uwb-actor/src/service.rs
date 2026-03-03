@@ -1,12 +1,12 @@
 // Copyright 2026 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{FutureExt, SinkExt, StreamExt};
 use netsim_model::{
-    chip::{Chip, ChipCreate, ChipId, ChipUpdate, ChipVariant},
+    chip::{Chip, ChipCreate, ChipUpdate, ChipVariant},
     chip_error::ChipError,
+    ChipId, ChipKind,
 };
 use pdl_runtime::Packet;
 use pica::{packets::uci, PicaCommand, PicaEvent};
@@ -16,7 +16,6 @@ use crate::{
     UwbAction, UwbActionResult,
 };
 
-#[async_trait]
 impl ActorService for UwbActor {
     type Id = ChipId;
     type Create = ChipCreate;
@@ -40,7 +39,7 @@ impl ActorService for UwbActor {
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
-            kind: netsim_model::chip::ChipKind::UWB,
+            kind: ChipKind::UWB,
             variant: Some(ChipVariant::Uwb(Default::default())),
             name: Some(params.config.name),
             manufacturer: Some(params.config.manufacturer),
@@ -123,7 +122,7 @@ impl ActorService for UwbActor {
         ctx.spawn(
             id,
             async move {
-                let _ = device_client.notify_chip_removed(device_id, id);
+                let _ = device_client.notify_chip_removed(device_id, id).await;
                 id
             }
             .boxed(),
@@ -161,7 +160,7 @@ impl ActorService for UwbActor {
                     .map(|state| netsim_model::stats::NetsimRadioStats {
                         id: state.chip.id,
                         name: state.chip.name.clone().unwrap_or_default(),
-                        kind: netsim_model::chip::ChipKind::UWB.as_proto(),
+                        kind: netsim_model::stats::RadioKind::Uwb,
                         tx_count: 0,
                         rx_count: 0,
                         tx_bytes: 0,
@@ -171,6 +170,7 @@ impl ActorService for UwbActor {
                     .collect();
                 Ok(UwbActionResult::Statistics(stats))
             }
+            #[cfg(any(test, feature = "testing"))]
             UwbAction::StartRanging { id, session_id } => {
                 if let Some(handle) = self.chip_to_handle.get(&id) {
                     let _ =
@@ -178,6 +178,7 @@ impl ActorService for UwbActor {
                 }
                 Ok(UwbActionResult::Success)
             }
+            #[cfg(any(test, feature = "testing"))]
             UwbAction::StopRanging { id, session_id } => {
                 if let Some(handle) = self.chip_to_handle.get(&id) {
                     let stop_cmd = uci::SessionStopCmd { session_id };

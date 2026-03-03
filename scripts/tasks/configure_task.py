@@ -23,6 +23,7 @@ from utils import (
     WINDOWS_TMP_OBJS_PATH,
     cmake_toolchain,
     get_bazel_path,
+    get_bazel_startup_options,
     run,
 )
 
@@ -58,7 +59,13 @@ class ConfigureTask(Task):
 
     if self.args.clean:
       bazel = get_bazel_path()
-      run([bazel, "clean", "--expunge"], self.env, "bazel clean", AOSP_ROOT)
+      startup_options = get_bazel_startup_options()
+      run(
+          [bazel] + startup_options + ["clean", "--expunge"],
+          self.env,
+          "bazel clean",
+          AOSP_ROOT,
+      )
     return True
 
   def _run_cmake(self):
