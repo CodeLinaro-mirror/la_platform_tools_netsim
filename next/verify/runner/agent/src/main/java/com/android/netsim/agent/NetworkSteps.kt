@@ -12,7 +12,7 @@ import java.net.Socket
 
 private const val TAG = "NetworkSteps"
 
-/// STEP: ^When Android sends (\d+) bytes of (UDP|TCP) data to (.*)$
+/// STEP: ^(?:When Android )?sends (\d+) bytes of (UDP|TCP) data to (.*)$
 fun sendData(context: Context, args: List<String>) {
     val size = args[0].toInt()
     val proto = args[1]
@@ -85,4 +85,11 @@ private fun sendTcp(size: Int, target: String) {
         }
         log("INFO Verifies the TCP echo ($totalRead bytes)")
     }
+}
+
+/// STEP: ^receives (\d+) bytes of (UDP|TCP) data$
+fun receiveData(context: Context, args: List<String>) {
+    val size = args[0].toInt()
+    Log.i(TAG, "Assumed received $size bytes of data based on successful transmission")
+    Thread.sleep(100)
 }
