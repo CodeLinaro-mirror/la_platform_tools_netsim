@@ -10,6 +10,13 @@
 - **iperf3 Benchmarking**: Built-in support for high-precision throughput measurements with industry-standard `iperf3` formatting, including interval samples and summaries.
 - **Variable Resolution**: Supports dynamic template placeholders like `{port}`, `{target}`, and `{gateway_target}` that resolve automatically during execution.
 
+## Prerequisites
+
+To build and run the complete E2E test suite (including the Android Agent), you need:
+- **Android Studio / SDK**: Installed and configured.
+- **Environment Variables**: `ANDROID_HOME` (or `ANDROID_SDK_ROOT`) exported and pointing to your SDK path (e.g. `export ANDROID_HOME=$HOME/Android/Sdk`).
+- **Build Tools**: The Android `build-tools` (which include `aapt2`) must be installed. It is highly recommended to add them to your `PATH` so Bazel's `rules_android` can locate them.
+
 ## Quick Start
 
 ### Building

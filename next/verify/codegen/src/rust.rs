@@ -58,13 +58,28 @@ impl StepVisitor {
         inputs: &syn::punctuated::Punctuated<FnArg, syn::token::Comma>,
         explicit_struct_type: Option<&Type>,
     ) {
+        let mut steps: Vec<String> = Vec::new();
+        let mut current_step = String::new();
         for attr in attrs {
-            let comment = match parse_doc_comment(attr) {
-                Some(c) => c,
-                None => continue,
-            };
+            if let Some(c) = parse_doc_comment(attr) {
+                let trimmed = c.trim_start();
+                if trimmed.starts_with("STEP:") {
+                    if !current_step.is_empty() {
+                        steps.push(current_step);
+                    }
+                    current_step = trimmed.to_string();
+                } else if !current_step.is_empty() {
+                    current_step.push_str(" ");
+                    current_step.push_str(c.trim());
+                }
+            }
+        }
+        if !current_step.is_empty() {
+            steps.push(current_step);
+        }
 
-            let caps = match self.regex_matcher.captures(comment.trim()) {
+        for step_comment in steps {
+            let caps = match self.regex_matcher.captures(step_comment.trim()) {
                 Some(c) => c,
                 None => continue,
             };
@@ -214,7 +229,20 @@ pub fn process_rust_file(input_path: &Path, output_path: &Path) {
     visitor.visit_file(&syntax);
 
     let glue_code = &visitor.glue_code;
-    let registration_code = &visitor.registration_code;
+    let mut registration_code = visitor.registration_code.clone();
+
+    // Sort registration code by pattern length descending to ensure
+    // specific patterns match before generic catch-all patterns.
+    registration_code.sort_by(|a, b| {
+        // We need to parse the Literal string length out of the TokenStream.
+        // A simple heuristic is just sorting the TokenStream string representation
+        // length descending. Since the pattern is the largest variable part of
+        // the registration TokenStream, longer patterns will produce longer
+        // total string lengths.
+        let len_a = a.to_string().len();
+        let len_b = b.to_string().len();
+        len_b.cmp(&len_a)
+    });
 
     let register_fn = if let Some(struct_type) = &visitor.struct_type {
         quote! {
