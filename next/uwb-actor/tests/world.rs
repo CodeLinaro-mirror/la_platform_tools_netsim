@@ -296,6 +296,11 @@ impl World {
         let (status_ntf, _) =
             uci::SessionStatusNtf::decode(&p2).expect("session status notification (start)");
         assert_eq!(status_ntf.session_state, uci::SessionState::SessionStateActive);
+
+        let p3 = self.then_packet_is_received(chip_id).await;
+        let (device_status_ntf, _) =
+            uci::CoreDeviceStatusNtf::decode(&p3).expect("device status notification (active)");
+        assert_eq!(device_status_ntf.device_state, uci::DeviceState::DeviceStateActive);
     }
 
     pub async fn when_ranging_is_triggered(&mut self, chip_id: u32, session_id: u32) {
