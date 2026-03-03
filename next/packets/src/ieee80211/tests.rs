@@ -2,8 +2,6 @@
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use crate::utils::test_utils::validate_pcap_json;
 
     #[test]
@@ -14,8 +12,6 @@ mod tests {
         // For test_beacon_pcap_json, if it uses CARGO_MANIFEST_DIR, it relies on "data"
         // attr. I will just fix test_beacon_details to use include_bytes!
 
-        let ieee80211_dir =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/ieee80211/test_data");
         let fields = &[
             "wlan.fc.type",
             "wlan.fc.subtype",
@@ -28,16 +24,14 @@ mod tests {
             "wlan.fc.frag",
         ];
         validate_pcap_json(
-            ieee80211_dir.join("beacon.pcap"),
-            ieee80211_dir.join("beacon.json"),
+            include_bytes!("test_data/beacon.pcap"),
+            include_str!("test_data/beacon.json"),
             fields,
         );
     }
 
     #[test]
     fn test_golden_ccmp_pcap_json() {
-        let ieee80211_dir =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/ieee80211/test_data");
         // Validate basic fields + CCMP details (if tshark parses them)
         // Note: tshark might not decrypt without keys, but it parses the CCMP header
         // (KeyID, ExtIV, PN).
@@ -57,8 +51,8 @@ mod tests {
             // Key ID is in the first byte of CCMP header.
         ];
         validate_pcap_json(
-            ieee80211_dir.join("golden_ccmp.pcap"),
-            ieee80211_dir.join("golden_ccmp.json"),
+            include_bytes!("test_data/golden_ccmp.pcap"),
+            include_str!("test_data/golden_ccmp.json"),
             fields,
         );
     }
