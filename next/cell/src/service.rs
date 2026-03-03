@@ -18,7 +18,7 @@ impl ActorService for CellActor {
     type ActionResult = ();
     type Error = CellError;
     type Entity = netsim_model::chip::Chip;
-    type TypedStream = ();
+    type TypedStream = modem_rs::HostEvent;
 
     async fn handle_create(
         &mut self,
@@ -53,8 +53,6 @@ impl ActorService for CellActor {
         );
 
         // 1. Add Stream
-        // Using unwrap() for stream because we checked take() above, but logic is
-        // params.packet_stream.take()
         let stream = params.packet_stream.take().ok_or(CellError::MissingStreamSink)?;
         ctx.add_stream(chip_id, Box::pin(stream));
 
@@ -82,11 +80,7 @@ impl ActorService for CellActor {
             }
 
             // Notify DeviceClient
-            // We can spawn or just do it. DeviceClient methods might be async.
             let _ = self.device_client.notify_chip_removed(state.device_id, id).await;
-        } else {
-            // If checking fails, maybe just return Ok or Err as preferred.
-            // Framework might call delete on non-existent?
         }
         Ok(())
     }
