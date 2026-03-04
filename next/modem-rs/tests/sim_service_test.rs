@@ -1,156 +1,223 @@
-use crate::common::TestHarness;
+use crate::{steps::*, world::World};
 
+// Scenario: Query PIN Status
+//   Given a modem "A"
+//   When AT command "AT+CPIN?" is sent to "A"
+//   Then response from "A" is "+CPIN: READY"
+//   And response from "A" is "OK"
 #[test]
 fn test_cpin_query() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CPIN?\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+CPIN: READY\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CPIN?");
+    then_response_is(&mut world, "A", "+CPIN: READY");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Enter PIN
+//   Given a modem "A"
+//   When AT command 'AT+CPIN="1234"' is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_cpin_set() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CPIN=\"1234\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CPIN=\"1234\"");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Request IMSI
+//   Given a modem "A"
+//   When AT command "AT+CIMI" is sent to "A"
+//   Then response from "A" is "123456789012345"
+//   And response from "A" is "OK"
 #[test]
 fn test_cimi() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CIMI\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"123456789012345\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CIMI");
+    then_response_is(&mut world, "A", "123456789012345");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Request ICCID
+//   Given a modem "A"
+//   When AT command "AT+CICCID" is sent to "A"
+//   Then response from "A" is "89012345678901234567"
+//   And response from "A" is "OK"
 #[test]
 fn test_cicc() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CICCID\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"89012345678901234567\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CICCID");
+    then_response_is(&mut world, "A", "89012345678901234567");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Verify PIN Retry Counter
+//   Given a modem "A"
+//   When AT command 'AT+CPIN="0000"' is sent to "A"
+//   Then response from "A" is "ERROR"
+//   When AT command 'AT+CPIN="0000"' is sent to "A"
+//   Then response from "A" is "ERROR"
+//   When AT command "AT+SPIC" is sent to "A"
+//   Then response from "A" is "+SPIC: 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_pin_retry_counter() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CPIN=\"0000\"\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+CPIN=\"0000\"\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+SPIC\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+SPIC: 1\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");
+    then_response_is(&mut world, "A", "ERROR");
+    when_at_command_sent(&mut world, "A", "AT+CPIN=\"0000\"");
+    then_response_is(&mut world, "A", "ERROR");
+    when_at_command_sent(&mut world, "A", "AT+SPIC");
+    then_response_is(&mut world, "A", "+SPIC: 1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Open Logical Channel
+//   Given a modem "A"
+//   When AT command 'AT+CCHO="1234"' is sent to "A"
+//   Then response from "A" is "+CCHO: 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_open_logical_channel() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CCHO=\"1234\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert!(responses[0].starts_with(b"+CCHO: "));
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CCHO=\"1234\"");
+    then_response_is(&mut world, "A", "+CCHO: 1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Close Logical Channel
+//   Given a modem "A"
+//   When AT command 'AT+CCHO="1234"' is sent to "A"
+//   Then response from "A" is "+CCHO: 1"
+//   And response from "A" is "OK"
+//   When AT command "AT+CCHC=1" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command 'AT+CGLA=1,10,"00A40004022FE2"' is sent to "A"
+//   Then response from "A" is "ERROR"
 #[test]
 fn test_close_logical_channel() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CCHO=\"1234\"\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+CCHC=1\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CCHO=\"1234\"");
+    then_response_is(&mut world, "A", "+CCHO: 1");
+    then_response_is(&mut world, "A", "OK");
 
-    // Verify that the channel is closed by trying to transmit on it
-    harness.send_at_command(b"AT+CGLA=1,10,\"00A40004022FE2\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"ERROR\r\n");
+    when_at_command_sent(&mut world, "A", "AT+CCHC=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"00A40004022FE2\"");
+    then_response_is(&mut world, "A", "ERROR");
 }
 
+// Scenario: Transmit Logical Channel
+//   Given a modem "A"
+//   When AT command 'AT+CCHO="1234"' is sent to "A"
+//   Then response from "A" is "+CCHO: 1"
+//   And response from "A" is "OK"
+//   When AT command 'AT+CGLA=1,10,"00A40004022FE2"' is sent to "A"
+//   Then response from "A" is '+CGLA: 10, "9000"'
+//   And response from "A" is "OK"
 #[test]
 fn test_transmit_logical_channel() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CCHO=\"1234\"\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+CGLA=1,10,\"00A40004022FE2\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert!(responses[0].starts_with(b"+CGLA: "));
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CCHO=\"1234\"");
+    then_response_is(&mut world, "A", "+CCHO: 1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CGLA=1,10,\"00A40004022FE2\"");
+    then_response_is(&mut world, "A", "+CGLA: 10, \"9000\"");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Change Password
+//   Given a modem "A"
+//   When AT command 'AT+CPWD="SC","1234","4321"' is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command 'AT+CPIN="1234"' is sent to "A"
+//   Then response from "A" is "ERROR"
+//   When AT command 'AT+CPIN="4321"' is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_change_password() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CPWD=\"SC\",\"1234\",\"4321\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
 
-    // Verify that the old password doesn't work
-    harness.send_at_command(b"AT+CPIN=\"1234\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"ERROR\r\n");
+    when_at_command_sent(&mut world, "A", "AT+CPWD=\"SC\",\"1234\",\"4321\"");
+    then_response_is(&mut world, "A", "OK");
 
-    // Verify that the new password works
-    harness.send_at_command(b"AT+CPIN=\"4321\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    when_at_command_sent(&mut world, "A", "AT+CPIN=\"1234\"");
+    then_response_is(&mut world, "A", "ERROR");
+
+    when_at_command_sent(&mut world, "A", "AT+CPIN=\"4321\"");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Set CDMA Subscription Source
+//   Given a modem "A"
+//   When AT command "AT+CCSS=1" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "AT+CCSS?" is sent to "A"
+//   Then response from "A" is "+CCSS: 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_set_cdma_subscription_source() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CCSS=1\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+CCSS?\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+CCSS: 1\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    when_at_command_sent(&mut world, "A", "AT+CCSS=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+CCSS?");
+    then_response_is(&mut world, "A", "+CCSS: 1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Set CDMA Roaming Preference
+//   Given a modem "A"
+//   When AT command "AT+WRMP=1" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "AT+WRMP?" is sent to "A"
+//   Then response from "A" is "+WRMP: 1"
+//   And response from "A" is "OK"
 #[test]
 fn test_set_cdma_roaming_preference() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+WRMP=1\r\n");
-    harness.get_responses(); // Clear responses
-    harness.send_at_command(b"AT+WRMP?\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+WRMP: 1\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    when_at_command_sent(&mut world, "A", "AT+WRMP=1");
+    then_response_is(&mut world, "A", "OK");
+
+    when_at_command_sent(&mut world, "A", "AT+WRMP?");
+    then_response_is(&mut world, "A", "+WRMP: 1");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: SIM Authentication
+//   Given a modem "A"
+//   When AT command 'AT+MBAU="some_data"' is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_sim_authentication() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+MBAU=\"some_data\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+MBAU=\"some_data\"");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Update Phone Number
+//   Given a modem "A"
+//   When AT command 'AT+REMOTEUPADATEPHONENUMBER="1234567890"' is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_update_phone_number() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+REMOTEUPADATEPHONENUMBER=\"1234567890\"\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+REMOTEUPADATEPHONENUMBER=\"1234567890\"");
+    then_response_is(&mut world, "A", "OK");
 }

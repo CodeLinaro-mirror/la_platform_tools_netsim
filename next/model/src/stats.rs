@@ -9,6 +9,53 @@ pub struct InvalidPacket {
     // Packet content is intentionally omitted from the model to avoid large payloads in stats
 }
 
+/// The kind of radio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RadioKind {
+    Unspecified,
+    BluetoothLowEnergy,
+    BluetoothClassic,
+    BleBeacon,
+    Wifi,
+    Uwb,
+    Nfc,
+}
+
+impl Default for RadioKind {
+    fn default() -> Self {
+        Self::Unspecified
+    }
+}
+
+impl From<i32> for RadioKind {
+    fn from(v: i32) -> Self {
+        match v {
+            1 => Self::BluetoothLowEnergy,
+            2 => Self::BluetoothClassic,
+            3 => Self::BleBeacon,
+            4 => Self::Wifi,
+            5 => Self::Uwb,
+            6 => Self::Nfc,
+            _ => Self::Unspecified,
+        }
+    }
+}
+
+impl From<RadioKind> for i32 {
+    fn from(v: RadioKind) -> Self {
+        match v {
+            RadioKind::Unspecified => 0,
+            RadioKind::BluetoothLowEnergy => 1,
+            RadioKind::BluetoothClassic => 2,
+            RadioKind::BleBeacon => 3,
+            RadioKind::Wifi => 4,
+            RadioKind::Uwb => 5,
+            RadioKind::Nfc => 6,
+        }
+    }
+}
+
 /// Represents the statistics for a radio.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct NetsimRadioStats {
@@ -17,7 +64,7 @@ pub struct NetsimRadioStats {
     /// The name of the chip.
     pub name: String,
     /// The kind of the radio (e.g. BLUETOOTH_LOW_ENERGY, WIFI).
-    pub kind: i32,
+    pub kind: RadioKind,
     /// Duration of the stats session in seconds.
     pub duration_secs: u64,
     /// Number of packets transmitted.

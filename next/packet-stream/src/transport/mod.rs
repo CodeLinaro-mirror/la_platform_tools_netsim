@@ -62,7 +62,6 @@ pub enum CrossPlatformListener {
     Unix(unix::UnixSocketListener),
     #[cfg(windows)]
     Windows(windows::WindowsListener),
-    #[cfg(not(windows))]
     Tcp(tokio::net::TcpListener),
 }
 
@@ -71,7 +70,7 @@ pub enum CrossPlatformStream {
     Unix(tokio::net::UnixStream),
     Tcp(tokio::net::TcpStream),
     #[cfg(windows)]
-    Windows(windows::WindowsStream),
+    Windows(tokio::net::windows::named_pipe::NamedPipeServer),
 }
 
 impl CrossPlatformListener {
@@ -109,11 +108,7 @@ impl CrossPlatformListener {
         }
 
         let addr: std::net::SocketAddr = "localhost:8080".parse()?;
-        let listener = tokio::net::TcpListener::bind(addr).await?;
-        #[cfg(not(windows))]
-        return Ok(CrossPlatformListener::Tcp(listener));
-        #[cfg(windows)]
-        return Ok(CrossPlatformListener::Windows(windows::WindowsListener::bind_tcp(addr).await?));
+        return Ok(CrossPlatformListener::Tcp(tokio::net::TcpListener::bind(addr).await?));
     }
 
     async fn bind_auto() -> Result<Self> {
@@ -128,10 +123,15 @@ impl CrossPlatformListener {
         #[cfg(windows)]
         {
             let pipe_name = "packetstream";
-            let fallback_addr = "localhost:0".parse()?;
-            let listener =
-                windows::WindowsListener::bind_with_fallback(pipe_name, fallback_addr).await?;
-            Ok(CrossPlatformListener::Windows(listener))
+            let fallback_addr: std::net::SocketAddr = "localhost:0".parse()?;
+            match windows::WindowsListener::bind_named_pipe(pipe_name).await {
+                Ok(listener) => Ok(CrossPlatformListener::Windows(listener)),
+                Err(err) => {
+                    log::warn!("Failed to create named pipe, falling back to tcp: {err}");
+                    let listener = tokio::net::TcpListener::bind(fallback_addr).await?;
+                    Ok(CrossPlatformListener::Tcp(listener))
+                }
+            }
         }
 
         #[cfg(not(any(unix, windows)))]
@@ -167,16 +167,8 @@ impl CrossPlatformListener {
                 )))
             }
             SocketType::Tcp(addr) => {
-                #[cfg(windows)]
-                {
-                    let listener = windows::WindowsListener::bind_tcp(addr).await?;
-                    Ok(CrossPlatformListener::Windows(listener))
-                }
-                #[cfg(not(windows))]
-                {
-                    let listener = tokio::net::TcpListener::bind(addr).await?;
-                    Ok(CrossPlatformListener::Tcp(listener))
-                }
+                let listener = tokio::net::TcpListener::bind(addr).await?;
+                Ok(CrossPlatformListener::Tcp(listener))
             }
         }
     }
@@ -203,7 +195,6 @@ impl CrossPlatformListener {
                 let sink = sink.sink_map_err(PacketStreamError::Io);
                 Ok((Box::pin(stream), Box::pin(sink)))
             }
-            #[cfg(not(windows))]
             CrossPlatformListener::Tcp(listener) => {
                 let (stream, _) = listener.accept().await?;
                 let framed = Framed::new(stream, LengthDelimitedCodec::new());
@@ -222,7 +213,6 @@ impl CrossPlatformListener {
             CrossPlatformListener::Unix(listener) => Ok(listener.path().display().to_string()),
             #[cfg(windows)]
             CrossPlatformListener::Windows(listener) => listener.local_addr(),
-            #[cfg(not(windows))]
             CrossPlatformListener::Tcp(listener) => Ok(listener.local_addr()?.to_string()),
         }
     }
@@ -230,6 +220,7 @@ impl CrossPlatformListener {
 
 pub enum Listener {
     Tcp(adapters::TcpTransportListener),
+    #[cfg(unix)]
     Uds(adapters::UdsTransportListener),
     #[cfg(all(unix, feature = "dual_fd"))]
     DualFd(DualFdListener),
@@ -240,6 +231,7 @@ impl TransportListener for Listener {
     async fn accept(&mut self) -> Result<(PacketStream, PacketSink, ChipInfo, String)> {
         match self {
             Listener::Tcp(l) => l.accept().await,
+            #[cfg(unix)]
             Listener::Uds(l) => l.accept().await,
             #[cfg(all(unix, feature = "dual_fd"))]
             Listener::DualFd(l) => l.accept().await,
@@ -249,6 +241,7 @@ impl TransportListener for Listener {
     fn local_addr(&self) -> Result<crate::types::StreamAddress> {
         match self {
             Listener::Tcp(l) => l.local_addr(),
+            #[cfg(unix)]
             Listener::Uds(l) => l.local_addr(),
             #[cfg(all(unix, feature = "dual_fd"))]
             Listener::DualFd(l) => l.local_addr(),
@@ -258,6 +251,7 @@ impl TransportListener for Listener {
     async fn shutdown(&mut self) -> Result<()> {
         match self {
             Listener::Tcp(l) => l.shutdown().await,
+            #[cfg(unix)]
             Listener::Uds(l) => l.shutdown().await,
             #[cfg(all(unix, feature = "dual_fd"))]
             Listener::DualFd(l) => l.shutdown().await,

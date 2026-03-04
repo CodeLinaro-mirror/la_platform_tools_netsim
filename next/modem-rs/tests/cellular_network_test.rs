@@ -1,48 +1,36 @@
-use std::sync::Arc;
+use crate::{steps::*, world::World};
 
-use modem_rs::{
-    test_utils::{MockModemHandler, MockNetworkHandler},
-    time::MockClock,
-    *,
-};
-
+// Scenario: Add Modem to Manager
+//   Given a modem "A"
+//   Then modem count is 1
 #[test]
 fn test_add_modem_to_manager() {
-    let manager_handler = Arc::new(MockNetworkHandler::new());
-    let clock = Arc::new(MockClock::new());
-    let manager = ModemNetworkSimulator::new_with_clock(manager_handler.clone(), clock);
+    let mut world = World::new();
+    given_modem(&mut world, "A");
 
-    let modem_id: ModemId = 1;
-    let modem_handler = Arc::new(MockModemHandler::new());
-    manager.new_modem(modem_id, modem_handler.clone()).unwrap();
-
-    assert_eq!(manager.get_modem_count(), 1);
+    then_modem_count_is(&mut world, 1);
 }
 
+// Scenario: Verify Metrics
+//   Given a modem "A"
+//   Then metrics are (AT=0, Calls=0)
+//   When AT command "AT" is sent to "A"
+//   Then metrics are (AT=1, Calls=0)
+//   When AT command "ATD12345;" is sent to "A"
+//   Then metrics are (AT=2, Calls=1)
 #[test]
 fn test_metrics_counters() {
-    let manager_handler = Arc::new(MockNetworkHandler::new());
-    let clock = Arc::new(MockClock::new());
-    let manager = ModemNetworkSimulator::new_with_clock(manager_handler.clone(), clock);
-
-    let modem_id: ModemId = 1;
-    let modem_handler = Arc::new(MockModemHandler::new());
-    manager.new_modem(modem_id, modem_handler.clone()).unwrap();
+    let mut world = World::new();
+    given_modem(&mut world, "A");
 
     // Check initial state
-    let initial_metrics = manager.get_metrics();
-    assert_eq!(initial_metrics.at_commands_received, 0);
-    assert_eq!(initial_metrics.calls_initiated, 0);
+    then_metrics_are(&mut world, 0, 0);
 
     // Send a command and check again
-    manager.send_at_command(modem_id, b"AT\r\n");
-    let metrics_after_at = manager.get_metrics();
-    assert_eq!(metrics_after_at.at_commands_received, 1);
-    assert_eq!(metrics_after_at.calls_initiated, 0);
+    when_at_command_sent(&mut world, "A", "AT");
+    then_metrics_are(&mut world, 1, 0);
 
     // Initiate a call and check again
-    manager.send_at_command(modem_id, b"ATD12345;\r\n");
-    let metrics_after_dial = manager.get_metrics();
-    assert_eq!(metrics_after_dial.at_commands_received, 2);
-    assert_eq!(metrics_after_dial.calls_initiated, 1);
+    when_at_command_sent(&mut world, "A", "ATD12345;");
+    then_metrics_are(&mut world, 2, 1);
 }

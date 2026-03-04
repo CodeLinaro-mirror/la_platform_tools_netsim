@@ -1,10 +1,9 @@
 // Copyright 2026 The Android Open Source Project
 
 use actor_framework::{ActorLifecycle, ActorService, DynContext};
-use async_trait::async_trait;
 use futures::FutureExt;
 use log::warn;
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use pica::PicaEvent;
 use tokio::sync::broadcast::error::TryRecvError;
 
@@ -12,7 +11,6 @@ use crate::uwb_actor::UwbActor;
 
 const PICA_SENTINEL_CHIP_ID: ChipId = ChipId(u32::MAX);
 
-#[async_trait]
 impl ActorLifecycle for UwbActor {
     async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
         log::info!("UwbActor starting Pica run loop");

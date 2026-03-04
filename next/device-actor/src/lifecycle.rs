@@ -1,12 +1,28 @@
 use actor_framework::{ActorLifecycle, DynContext};
-use async_trait::async_trait;
 
 use crate::device_actor::DeviceActor;
 
-#[async_trait]
 impl ActorLifecycle for DeviceActor {
     async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
-        self.schedule_periodic_stats(ctx);
+        if let Some(client) = self.self_client.clone() {
+            let interval = self.stats_interval;
+            ctx.spawn(
+                device_api::DeviceId(0),
+                Box::pin(async move {
+                    loop {
+                        tokio::time::sleep(interval).await;
+                        if let Err(e) = client.save_stats().await {
+                            log::warn!("Failed to auto-save stats: {}", e);
+                        }
+                    }
+                    #[allow(unreachable_code)]
+                    device_api::DeviceId(0)
+                }),
+            );
+        } else {
+            log::warn!("DeviceActor started without self_client! Stats will not be auto-saved.");
+        }
+
         let Some(timeout) = self.startup_timeout else {
             return;
         };
@@ -17,20 +33,17 @@ impl ActorLifecycle for DeviceActor {
     }
 
     async fn on_shutdown(&mut self) {
-        if let Some(key) = self.stats_timer.take() {
-            log::info!("DeviceActor: Cancelling periodic stats timer on shutdown");
-        }
-
         // Ensure any pending detached background write finishes safely.
         if let Some(task) = self.stats_write_task.take() {
             log::info!("DeviceActor: Awaiting pending background stats write prior to shutdown");
             let _ = task.await;
         }
 
-        let base_stats = self.stats.get_base_stats();
-        let path = self.stats.stats_path.clone();
-        if let Err(e) = crate::stats::write_combined_stats(base_stats, path) {
-            log::error!("DeviceActor on_shutdown: {}", e);
+        // Create a final save task
+        self.save_stats_async().await;
+        if let Some(task) = self.stats_write_task.take() {
+            log::info!("DeviceActor: Awaiting final stats write");
+            let _ = task.await;
         }
     }
 }

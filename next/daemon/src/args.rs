@@ -76,6 +76,10 @@ pub struct Args {
     #[arg(long, alias = "grpc_port", env = "NETSIM_GRPC_PORT")]
     pub grpc_port: Option<u16>,
 
+    /// HCI port for the raw TCP socket
+    #[arg(long, alias = "hci_port", env = "NETSIM_HCI_PORT")]
+    pub hci_port: Option<u16>,
+
     /// DNS server for the host
     /// TODO: Not implemented yet
     #[arg(long, alias = "host-dns")]
