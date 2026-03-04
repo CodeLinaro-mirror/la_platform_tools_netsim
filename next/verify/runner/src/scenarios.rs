@@ -46,6 +46,7 @@ pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
 
     run_feature(&mut features, ctx, "echo.feature", include_str!("../tests/features/echo.feature"))
         .await?;
+
     run_feature(
         &mut features,
         ctx,
@@ -53,6 +54,7 @@ pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
         include_str!("../tests/features/wifi_service_discovery.feature"),
     )
     .await?;
+
     run_feature(
         &mut features,
         ctx,
@@ -60,6 +62,7 @@ pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
         include_str!("../tests/features/gateway_performance.feature"),
     )
     .await?;
+
     run_feature(
         &mut features,
         ctx,
@@ -67,6 +70,7 @@ pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
         include_str!("../tests/features/multi_step_coordination.feature"),
     )
     .await?;
+
     run_feature(
         &mut features,
         ctx,
@@ -74,10 +78,20 @@ pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
         include_str!("../tests/features/multi_avd_echo.feature"),
     )
     .await?;
+
     run_feature(&mut features, ctx, "nsd.feature", include_str!("../tests/features/nsd.feature"))
         .await?;
+
     run_feature(&mut features, ctx, "p2p.feature", include_str!("../tests/features/p2p.feature"))
         .await?;
+
+    run_feature(
+        &mut features,
+        ctx,
+        "uwb_ranging.feature",
+        include_str!("../tests/features/uwb_ranging.feature"),
+    )
+    .await?;
 
     Ok(())
 }
