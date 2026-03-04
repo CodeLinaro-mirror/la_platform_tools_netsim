@@ -73,13 +73,13 @@ pub fn to_json(packet: &Packet, packet_len: usize) -> Value {
     }
     if let Some(transport_packet) = &packet.transport {
         let (transport_json, transport_layer_name) = match transport_packet {
-            TransportPacket::Icmp(_header, _) => {
+            TransportPacket::Icmp(header, _) => {
                 protocols.push_str(":icmp");
-                (Ok(Value::Null), "icmp")
+                (serde_json::to_value(crate::icmp::v4_json::to_json(header)), "icmp")
             }
-            TransportPacket::Icmpv6(_header, _) => {
+            TransportPacket::Icmpv6(header, _) => {
                 protocols.push_str(":icmpv6");
-                (Ok(Value::Null), "icmpv6")
+                (serde_json::to_value(crate::icmp::v6_json::to_json(header)), "icmpv6")
             }
             TransportPacket::Tcp(header, _) => {
                 protocols.push_str(":tcp");
@@ -140,7 +140,7 @@ mod tests {
 
         assert_eq!(json[0]["_source"]["layers"]["eth"]["eth.dst"], "00:11:22:33:44:55");
         assert_eq!(json[0]["_source"]["layers"]["ip"]["ip.proto"], "1");
-        // assert_eq!(json[0]["_source"]["layers"]["icmp"]["icmp.type"], "8");
+        assert_eq!(json[0]["_source"]["layers"]["icmp"]["icmp.type"], "8");
     }
 
     #[test]

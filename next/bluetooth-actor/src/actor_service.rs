@@ -26,6 +26,7 @@ impl ActorService for BluetoothActor {
     type ActionResult = BluetoothActionResult;
     type Error = BluetoothError;
     type Entity = Chip;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,

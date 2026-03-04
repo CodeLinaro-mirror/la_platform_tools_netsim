@@ -21,6 +21,7 @@ impl ActorService for WifiActor {
     type ActionResult = WifiResponse;
     type Error = WifiError;
     type Entity = Chip;
+    type TypedStream = bytes::Bytes;
 
     async fn handle_create(
         &mut self,

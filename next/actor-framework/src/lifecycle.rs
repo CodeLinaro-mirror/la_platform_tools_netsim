@@ -24,6 +24,7 @@ pub trait ActorLifecycle: ActorService {
     /// Use this hook to:
     /// - Schedule initial timers.
     /// - Register initial streams.
+    /// - Register initial typed streams.
     fn on_start(
         &mut self,
         _ctx: &mut DynContext<Self>,
@@ -70,6 +71,26 @@ pub trait ActorLifecycle: ActorService {
         _ctx: &mut DynContext<Self>,
     ) -> impl std::future::Future<Output = ()> + Send {
         log::debug!("Stream closed: {}", id.into());
+        futures::future::ready(())
+    }
+
+    /// Called when a message is received from a registered typed stream.
+    fn on_typed_stream(
+        &mut self,
+        _id: usize,
+        _item: Self::TypedStream,
+        _ctx: &mut DynContext<Self>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        futures::future::ready(())
+    }
+
+    /// Called when a registered typed stream closes.
+    fn on_typed_stream_closed(
+        &mut self,
+        id: usize,
+        _ctx: &mut DynContext<Self>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        log::debug!("Typed stream closed: {}", id);
         futures::future::ready(())
     }
 

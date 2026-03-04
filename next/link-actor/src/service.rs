@@ -13,6 +13,7 @@ impl ActorService for LinkActor {
     type ActionResult = ();
     type Error = LinkError;
     type Entity = link_api::Link;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,
