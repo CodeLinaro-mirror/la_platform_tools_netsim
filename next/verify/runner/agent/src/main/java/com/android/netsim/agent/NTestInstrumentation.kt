@@ -7,6 +7,7 @@ package com.android.netsim.agent
 import android.app.Instrumentation
 import android.os.Bundle
 import android.util.Log
+import androidx.test.platform.app.InstrumentationRegistry
 
 /**
  * NTestInstrumentation is a specialized Android Instrumentation class that acts as a "Guest Agent"
@@ -35,23 +36,71 @@ class NTestInstrumentation : Instrumentation() {
   @Volatile private var registry: StepRegistry? = null
   // private lateinit var nsdManager: NsdManager
   private var controlWriter: java.io.PrintWriter? = null
+  private val logExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
   private fun log(msg: String) {
     Log.i(TAG, msg)
-    controlWriter?.println(msg)
-    controlWriter?.flush()
+    logExecutor.execute {
+      try {
+        controlWriter?.println(msg)
+        controlWriter?.flush()
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to write to control socket: ${e.message}")
+      }
+    }
   }
 
   override fun onCreate(arguments: Bundle) {
     Log.i(TAG, "NTestInstrumentation.onCreate starting")
     super.onCreate(arguments)
+    InstrumentationRegistry.registerInstance(this, arguments)
 
     val deviceName = arguments.getString("device_name") ?: "Android"
     val controlPort = arguments.getString("control_port")?.toIntOrNull() ?: 0
 
     val context = getContext()
     // nsdManager no longer needed here
+    // nsdManager no longer needed here
+    BluetoothState.reset()
     registry = StepRegistry(context)
+
+    // Grant permissions
+    try {
+      val pkg = context.packageName
+      val uiAutomation = getUiAutomation()
+
+      val perms =
+        listOf(
+          "android.permission.BLUETOOTH_ADVERTISE",
+          "android.permission.BLUETOOTH_SCAN",
+          "android.permission.BLUETOOTH_CONNECT",
+          "android.permission.ACCESS_FINE_LOCATION",
+          "android.permission.ACCESS_COARSE_LOCATION",
+        )
+
+      for (perm in perms) {
+        uiAutomation.executeShellCommand("pm grant $pkg $perm")
+      }
+
+      // Application Operations (AppOps)
+      // We set these after granting permissions to ensure the app is considered "valid" for these
+      // ops
+      try {
+        uiAutomation.executeShellCommand("appops set $pkg FINE_LOCATION allow")
+        uiAutomation.executeShellCommand("appops set $pkg COARSE_LOCATION allow")
+        uiAutomation.executeShellCommand("appops set $pkg BLUETOOTH_SCAN allow")
+        uiAutomation.executeShellCommand("appops set $pkg BLUETOOTH_ADVERTISE allow")
+        uiAutomation.executeShellCommand("appops set $pkg BLUETOOTH_CONNECT allow")
+      } catch (ignore: Exception) {
+        Log.w(TAG, "Failed to set AppOps: ${ignore.message}")
+      }
+
+      // Give it a moment to propagate
+      java.lang.Thread.sleep(500)
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to grant permissions: ${e.message}")
+    }
+
     registerSteps()
 
     if (controlPort > 0) {
@@ -82,14 +131,16 @@ class NTestInstrumentation : Instrumentation() {
                   }
                 },
                 condition = { it != null },
-              )!! // Safe because retryUntil throws if condition not met, and condition checks for
-            // non-null
+              )!!
 
             connected = true
             controlWriter = java.io.PrintWriter(socket.getOutputStream(), true)
             startControlLoop(socket)
-          } catch (e: IllegalStateException) {
-            Log.e(TAG, "Giving up on control port $controlPort after $MAX_RETRIES attempts")
+          } catch (e: Exception) {
+            Log.e(
+              TAG,
+              "Giving up on control port $controlPort after $MAX_RETRIES attempts: ${e.message}",
+            )
           }
         }
         .start()
@@ -98,6 +149,16 @@ class NTestInstrumentation : Instrumentation() {
     }
 
     val initialStep = arguments.getString("step")
+
+    // Connect BluetoothState logger to our log function
+    BluetoothState.logger = { msg ->
+      if (msg.startsWith("SCANNED")) {
+        log("${Protocol.INFO_TAG} $msg")
+      } else {
+        Log.i(TAG, msg)
+      }
+    }
+
     if (initialStep != null) {
       registry?.execute(initialStep)
     }
@@ -172,6 +233,7 @@ class NTestInstrumentation : Instrumentation() {
     ServiceDiscoveryLoader.loadSteps(r, context)
     TcpEchoStepsLoader.loadSteps(r, context)
     UwbStepsLoader.loadSteps(r, context)
+    BluetoothAdvStepsLoader.loadSteps(r, context)
   }
 }
 

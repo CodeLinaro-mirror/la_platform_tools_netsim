@@ -84,6 +84,13 @@ pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
 
     run_feature(&mut features, ctx, "p2p.feature", include_str!("../tests/features/p2p.feature"))
         .await?;
+    run_feature(
+        &mut features,
+        ctx,
+        "bluetooth_advertisements.feature",
+        include_str!("../tests/features/bluetooth_advertisements.feature"),
+    )
+    .await?;
 
     run_feature(
         &mut features,
