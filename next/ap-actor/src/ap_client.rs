@@ -1,15 +1,7 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::ResourceClient;
-use netsim_model::{
-    chip::{
-        Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipUpdate, ChipVariant,
-    },
-    chip_error::ChipError,
-    client_error::ClientError,
-    device::{DeviceId, Position},
-    stats::NetsimRadioStats,
-};
+use netsim_model::{chip_error::ChipError, client_error::ClientError, device::Position};
 
 use super::{ApActor, ApReq};
 
@@ -80,57 +72,34 @@ impl ApClient {
     /// Creates a new Access Point with the given configuration.
     ///
     /// Generates a random ID for the AP.
-    pub async fn create_ap(&self, id: u32, config: crate::ApConfig) -> Result<(), ClientError> {
-        let params = ChipCreate {
-            id: ChipId(id),
-            device_id: DeviceId(0),
-            packet_stream: None,
-            packet_sink: None,
-            config: ChipConfig {
-                name: config.ssid.clone(),
-                manufacturer: "Netsim".into(),
-                product_name: "AccessPoint".into(),
-                chip_kind_params: ChipKindParams::Ap(config.into()),
-            },
-        };
-        self.client.create(params).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
+    pub async fn create_ap(&self, _id: u32, config: crate::ApConfig) -> Result<u32, ClientError> {
+        let params: netsim_model::chip::ApCreate = config.into();
+        self.client
+            .create(params)
+            .await
+            .map(|id| id.0)
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     /// Destroys an Access Point by ID.
     pub async fn destroy_ap(&self, id: u32) -> Result<(), ClientError> {
-        self.client.delete(ChipId(id)).await.map_err(|e| ClientError::Send(e.to_string()))
+        self.client
+            .delete(crate::ap_actor::ApId(id))
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     /// Retrieves the state of an Access Point by ID.
     pub async fn get_ap(&self, id: u32) -> Result<Option<crate::ApState>, ClientError> {
-        match self.client.get(ChipId(id)).await.map_err(|e| ClientError::Send(e.to_string()))? {
-            Some(chip) => {
-                if let Some(ChipVariant::Ap(ap_chip)) = chip.variant {
-                    let config: crate::ApConfig = ap_chip
-                        .config
-                        .try_into()
-                        .map_err(|e: String| ClientError::Chip(ChipError::Internal(e)))?;
-                    Ok(Some(crate::ApState::new(config)))
-                } else {
-                    Ok(None)
-                }
-            }
-            None => Ok(None),
-        }
+        self.client
+            .get(crate::ap_actor::ApId(id))
+            .await
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     /// Lists all active Access Points.
     pub async fn list_aps(&self) -> Result<Vec<crate::ApState>, ClientError> {
-        let chips = self.client.list().await.map_err(|e| ClientError::Send(e.to_string()))?;
-        let mut aps = Vec::new();
-        for chip in chips {
-            if let Some(ChipVariant::Ap(ap_chip)) = chip.variant {
-                if let Ok(config) = ap_chip.config.try_into() {
-                    aps.push(crate::ApState::new(config));
-                }
-            }
-        }
-        Ok(aps)
+        self.client.list().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
     /// Updates existing Access Point configuration.
@@ -140,31 +109,19 @@ impl ApClient {
         ssid: Option<String>,
         position: Option<Position>,
     ) -> Result<crate::ApState, ClientError> {
-        use netsim_model::chip::{ApUpdate, ChipUpdate, ChipVariantUpdate};
-        let patch = ChipUpdate {
-            name: ssid.clone(),
-            variant: Some(ChipVariantUpdate::Ap(ApUpdate {
+        let patch = crate::ap_actor::ApActorUpdate {
+            variant: crate::ap_actor::ApUpdate {
                 ssid,
                 channel: None,
                 force_disconnect: Vec::new(),
-            })),
+            },
             position,
-            ..Default::default()
+            enabled: None,
         };
-        let chip = self
-            .client
-            .update(ChipId(id), patch)
+        self.client
+            .update(crate::ap_actor::ApId(id), patch)
             .await
-            .map_err(|e| ClientError::Send(e.to_string()))?;
-        if let Some(ChipVariant::Ap(ap_chip)) = chip.variant {
-            let config: crate::ApConfig = ap_chip
-                .config
-                .try_into()
-                .map_err(|e: String| ClientError::Chip(ChipError::Internal(e)))?;
-            Ok(crate::ApState::new(config))
-        } else {
-            Err(ClientError::Chip(ChipError::Internal("Updated chip is not an AP".into())))
-        }
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     /// Updates Access Point configuration with advanced fields.
@@ -176,80 +133,34 @@ impl ApClient {
         force_disconnect: Option<Vec<String>>,
         enabled: Option<bool>,
     ) -> Result<crate::ApState, ClientError> {
-        use netsim_model::chip::{ApUpdate, ChipId, ChipUpdate, ChipVariantUpdate};
-
         let force_disconnect_macs = force_disconnect.unwrap_or_default();
 
-        let patch = ChipUpdate {
-            name: ssid.clone(),
-            variant: Some(ChipVariantUpdate::Ap(ApUpdate {
+        let patch = crate::ap_actor::ApActorUpdate {
+            variant: crate::ap_actor::ApUpdate {
                 ssid,
                 channel,
                 force_disconnect: force_disconnect_macs,
-            })),
+            },
+            position: None,
             enabled,
-            ..Default::default()
         };
-        let chip = self
-            .client
-            .update(ChipId(id), patch)
-            .await
-            .map_err(|e| ClientError::Send(e.to_string()))?;
-        if let Some(ChipVariant::Ap(ap_chip)) = chip.variant {
-            let config: crate::ApConfig = ap_chip
-                .config
-                .try_into()
-                .map_err(|e: String| ClientError::Chip(ChipError::Internal(e)))?;
-            Ok(crate::ApState::new(config))
-        } else {
-            Err(ClientError::Chip(ChipError::Internal("Updated chip is not an AP".into())))
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl ChipClient for ApClient {
-    async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
-        self.client.create(params).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
-    }
-
-    async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {
         self.client
-            .get(id)
+            .update(crate::ap_actor::ApId(id), patch)
             .await
-            .map_err(|e| ClientError::Send(e.to_string()))?
-            .ok_or(ClientError::Chip(netsim_model::chip_error::ChipError::ChipNotFound(id)))
-    }
-
-    async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
-        self.client.update(id, patch).await.map_err(|e| ClientError::Send(e.to_string()))
-    }
-
-    async fn delete(&self, id: ChipId) -> Result<(), ClientError> {
-        self.client.delete(id).await.map_err(|e| ClientError::Send(e.to_string()))
-    }
-
-    async fn read_statistics(&self) -> Result<Box<[NetsimRadioStats]>, ClientError> {
-        Ok(Box::new([]))
-    }
-
-    async fn read_count_for_testing(&self) -> Result<usize, ClientError> {
-        self.client
-            .list()
-            .await
-            .map(|chips| chips.len())
             .map_err(|e| ClientError::Send(e.to_string()))
     }
-
-    async fn shutdown(&self) -> Result<(), ClientError> {
-        self.client.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
-    }
-
-    async fn reset(&self, _id: ChipId) -> Result<(), ClientError> {
-        Ok(())
-    }
-
-    fn clone_box(&self) -> Box<dyn ChipClient> {
-        Box::new(self.clone())
+    /// Disconnects a device from an Access Point.
+    pub async fn disconnect(&self, id: u32, mac_str: String) -> Result<(), ClientError> {
+        let mac = mac_str
+            .parse::<netsim_packets::ethernet::MacAddr>()
+            .map_err(|e| ClientError::Chip(ChipError::Internal(format!("Invalid MAC: {}", e))))?;
+        self.client
+            .perform_action(
+                Some(crate::ap_actor::ApId(id)),
+                ApReq::Disconnect { id: crate::ap_actor::ApId(id), mac },
+            )
+            .await
+            .map(|_| ())
+            .map_err(|e| ClientError::Chip(ChipError::Internal(e.to_string())))
     }
 }

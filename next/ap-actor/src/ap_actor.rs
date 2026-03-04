@@ -1,6 +1,6 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use netsim_model::{
     chip::{ApCreate, ApUpdate as ModelApUpdate, WifiMode},
@@ -12,7 +12,26 @@ use serde::{Deserialize, Serialize};
 use crate::{ieee802_11::Ieee80211Manager, shared, wpa_auth};
 
 /// ID for an Access Point instance within this actor.
-pub type ApId = u32;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ApId(pub u32);
+
+impl std::fmt::Display for ApId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<u32> for ApId {
+    fn from(id: u32) -> Self {
+        Self(id)
+    }
+}
+
+impl From<ApId> for u32 {
+    fn from(id: ApId) -> Self {
+        id.0
+    }
+}
 
 /// Shared Stream ID for the singleton packet stream (matching SLIRP_ID
 /// convention)
@@ -69,7 +88,7 @@ impl Default for ApConfig {
     fn default() -> Self {
         Self {
             ssid: netsim_model::ap::DEFAULT_WIFI_SSID.to_string(),
-            bssid: MacAddr::from([0; 6]),
+            bssid: MacAddr::from([0x02, 0x00, 0x00, 0x44, 0x55, 0x66]),
             channel: 6,
             hw_mode: WifiMode::G,
             wpa_passphrase: None,
@@ -153,12 +172,23 @@ impl From<ModelApUpdate> for ApUpdate {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApActorUpdate {
+    pub variant: ApUpdate,
+    pub position: Option<Position>,
+    pub enabled: Option<bool>,
+}
+
 pub enum ApReq {
     Register {
         stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
         sink: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
-        shared_keys: std::sync::Arc<shared::SharedKeyStore>,
+        shared_keys: Arc<shared::SharedKeyStore>,
         beacon_interval: std::time::Duration,
+    },
+    Disconnect {
+        id: ApId,
+        mac: MacAddr,
     },
 }
 
@@ -166,6 +196,9 @@ impl std::fmt::Debug for ApReq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ApReq::Register { .. } => write!(f, "ApReq::Register {{ ... }}"),
+            ApReq::Disconnect { id, mac } => {
+                write!(f, "ApReq::Disconnect {{ id: {}, mac: {} }}", id, mac)
+            }
         }
     }
 }
@@ -183,13 +216,15 @@ pub struct ApActor {
     pub(crate) sink: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
     pub(crate) aps: HashMap<ApId, ApState>,
     pub(crate) manager: Ieee80211Manager,
-    pub shared_keys: std::sync::Arc<shared::SharedKeyStore>,
+    pub shared_keys: Arc<shared::SharedKeyStore>,
     pub beacon_interval: Option<u16>, // In TUs (1024us)
+    pub next_id: u32,
 }
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub struct ApState {
+    pub id: ApId,
     pub config: ApConfig,
     pub wpa: Option<wpa_auth::WpaAuthenticator>,
     pub sae_sessions: HashMap<MacAddr, crate::sae::SaeStateMachine>,
@@ -200,20 +235,22 @@ pub struct ApState {
 }
 
 impl ApActor {
-    pub fn new(shared_keys: std::sync::Arc<shared::SharedKeyStore>) -> Self {
+    pub fn new(shared_keys: Arc<shared::SharedKeyStore>) -> Self {
         Self {
             sink: None,
             aps: HashMap::new(),
             manager: Ieee80211Manager::new(),
             shared_keys,
             beacon_interval: None,
+            next_id: 1,
         }
     }
 }
 
 impl ApState {
-    pub fn new(config: ApConfig) -> Self {
+    pub fn new(id: ApId, config: ApConfig) -> Self {
         Self {
+            id,
             config,
             wpa: None,
             sae_sessions: HashMap::new(),

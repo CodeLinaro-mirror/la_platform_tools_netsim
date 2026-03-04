@@ -38,12 +38,13 @@ netsim_rust_library(
     crate_name = "ap_actor",
     edition = "2021",
     proc_macro_deps = [
-        "@async-trait",
     ],
     test_deps = [
         "//next/testing",
         "@env_logger",
+        "@futures",
         "@rand",
+        "@tokio-util",
     ],
     deps = [
         ":ap_actor_cxx",

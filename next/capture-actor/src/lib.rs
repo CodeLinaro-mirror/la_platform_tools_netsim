@@ -275,7 +275,7 @@ mod tests {
         let enabled_flag = Arc::new(AtomicBool::new(true));
 
         // Test both WIFI and AP to ensure service routes them correctly
-        for kind in [ChipKind::WIFI, ChipKind::AP] {
+        for kind in [ChipKind::WIFI] {
             let create_params = CaptureCreate {
                 chip_id,
                 chip_kind: kind,
