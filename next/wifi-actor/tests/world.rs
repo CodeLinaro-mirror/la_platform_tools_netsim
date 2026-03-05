@@ -39,6 +39,7 @@ pub struct World {
     // Injector for AP packets
     pub ap_injector: mpsc::UnboundedSender<Bytes>,
     pub device_action_rx: mpsc::UnboundedReceiver<DeviceAction>,
+    pub baseline_stats: Option<netsim_proto::stats::WifiStats>,
 }
 
 #[allow(dead_code)]
@@ -154,6 +155,7 @@ impl World {
             chips: Vec::new(),
             ap_injector,
             device_action_rx: device_rx,
+            baseline_stats: None,
         }
     }
 
@@ -599,6 +601,55 @@ impl World {
             }
         }
     }
+
+    pub async fn when_global_stats_are_captured(&mut self) {
+        self.baseline_stats = Some(self.wifi_client.get_global_stats_proto().await.unwrap());
+    }
+
+    pub async fn when_chip_transmits_malformed_packet(&mut self, chip_idx: usize) {
+        self.chips[chip_idx].sink_tx.send(bytes::Bytes::from(vec![0x00, 0x01])).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+
+    pub async fn then_client_errors_increased_by(&self, expected_increase: i32) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert_eq!(
+            final_stats.client_errors(),
+            self.baseline_stats.as_ref().unwrap().client_errors() + expected_increase
+        );
+    }
+
+    pub async fn then_frame_errors_increased_by(&self, expected_increase: i32) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert_eq!(
+            final_stats.frame_errors(),
+            self.baseline_stats.as_ref().unwrap().frame_errors() + expected_increase
+        );
+    }
+
+    pub async fn then_hostapd_frames_tx_increased_by(&mut self, expected_increase: i32) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert_eq!(
+            final_stats.hostapd_frames_tx(),
+            self.baseline_stats.as_ref().unwrap().hostapd_frames_tx() + expected_increase
+        );
+        // refresh baseline since test_hostapd_and_network_tx_stats does sequential
+        // checks
+        self.baseline_stats = Some(final_stats);
+    }
+
+    pub async fn then_network_packets_tx_increased_by(&mut self, expected_increase: i32) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert_eq!(
+            final_stats.network_packets_tx(),
+            self.baseline_stats.as_ref().unwrap().network_packets_tx() + expected_increase
+        );
+        self.baseline_stats = Some(final_stats);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -618,11 +669,12 @@ impl wifi_actor::gateway::GatewayTrait for MockGateway {
         &self,
         chip_id: netsim_model::chip::ChipId,
         ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> bool {
-        use zerocopy::IntoBytes;
-        let bytes = ieee80211.encode_to_vec().unwrap();
+    ) -> Result<(), wifi_actor::error::WifiError> {
+        let bytes = ieee80211
+            .encode_to_vec()
+            .map_err(|e| wifi_actor::error::WifiError::Frame(e.to_string()))?;
         self.outgoing_packets.lock().unwrap().push((chip_id, bytes::Bytes::from(bytes)));
-        true
+        Ok(())
     }
 
     fn should_handle(&self, _chip_id: netsim_model::chip::ChipId) -> bool {
