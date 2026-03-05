@@ -4,7 +4,7 @@
 
 #include <vector>
 
-#include "rust/cxx.h"
+#include "cxx.h"
 
 namespace netsim {
 namespace hostap {

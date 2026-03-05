@@ -5,14 +5,28 @@ load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
 
+genrule(
+    name = "cxx-bridge-header",
+    outs = ["cxx.h"],
+    cmd = "$(location @cxx.rs//:codegen) --header >> $(OUTS)",
+    tools = ["@cxx.rs//:codegen"],
+    visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "hostap_crypto_shim",
     srcs = ["src/crypto_ffi.cc"],
-    hdrs = ["src/crypto_ffi.h"],
+    hdrs = [
+        "src/crypto_ffi.h",
+        ":cxx-bridge-header",
+    ],
     defines = [
         "CONFIG_OPENSSL_INTERNAL_AES_WRAP",
     ],
-    includes = ["src"],
+    includes = [
+        ".",
+        "src",
+    ],
     deps = [
         "@boringssl//:crypto",
         "@cxx.rs//:core",
