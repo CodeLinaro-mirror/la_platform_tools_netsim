@@ -484,8 +484,8 @@ impl NetsimDaemon {
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
-        let (cell_runner, cell_client) = cell::new();
-        let cell_actor_state = cell::CellActor::new(device_client.clone());
+        let (cell_runner, cell_client) = cell_actor::new();
+        let cell_actor_state = cell_actor::CellActor::new(device_client.clone());
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
