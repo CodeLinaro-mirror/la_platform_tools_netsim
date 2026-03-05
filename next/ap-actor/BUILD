@@ -1,6 +1,5 @@
 load("@cxx.rs//tools/bazel:rust_cxx_bridge.bzl", "rust_cxx_bridge")
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@rules_rust//rust:defs.bzl", "rust_test")
 load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -26,6 +25,11 @@ netsim_rust_library(
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
+    ],
+    test_deps = [
+        "//next/testing",
+        "@env_logger",
+        "@rand",
     ],
     deps = [
         ":ap_actor_cxx",
@@ -68,28 +72,5 @@ cc_library(
     deps = [
         ":hostap_crypto_shim",
         "@cxx.rs//:core",
-    ],
-)
-
-rust_test(
-    name = "integration-test",
-    size = "small",
-    srcs = glob(["tests/**/*.rs"]),
-    crate_root = "tests/mod.rs",
-    edition = "2021",
-    deps = [
-        ":testing",
-        "//next/actor-framework:testing",
-        "//next/model",
-        "//next/packets:testing",
-        "//next/testing",
-        "@bytes",
-        "@env_logger",
-        "@futures",
-        "@log",
-        "@rand",
-        "@tokio",
-        "@tokio-stream",
-        "@zerocopy",
     ],
 )
