@@ -26,6 +26,7 @@ impl ActorService for ApActor {
 
     type Error = ApError;
     type Entity = Chip;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,

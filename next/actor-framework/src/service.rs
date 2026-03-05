@@ -21,6 +21,7 @@ use crate::DynContext;
 
 pub type StreamMessage = Bytes;
 pub type BoxStream = Pin<Box<dyn Stream<Item = StreamMessage> + Send>>;
+pub type BoxTypedStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
 
 /// Trait alias for Actor IDs ensuring all required bounds are met.
 pub trait ActorId:
@@ -73,6 +74,9 @@ pub trait ActorService: Send + Sync + 'static {
     /// The entity type returned by get/update/list operations.
     type Entity: Send + Sync + Debug + Clone;
 
+    /// The item type for the alternative typed stream map.
+    type TypedStream: Send + Sync + Debug + Clone + Unpin + 'static;
+
     // --- Lifecycle Hooks (Async) ---
     //
     /// These hooks are called sequentially in the actor's run loop.
@@ -111,7 +115,6 @@ pub trait ActorService: Send + Sync + 'static {
 
     // --- Action Handler (Async) ---
 
-    /// Handles a custom action.
     /// Handles a custom action.
     fn handle_action(
         &mut self,

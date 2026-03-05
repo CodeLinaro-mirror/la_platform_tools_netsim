@@ -588,6 +588,7 @@ impl ActorService for DeviceActor {
     type ActionResult = DeviceActionResult;
     type Error = DeviceError;
     type Entity = device_api::Device;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,

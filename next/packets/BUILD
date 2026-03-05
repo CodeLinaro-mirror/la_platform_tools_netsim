@@ -7,7 +7,6 @@ netsim_rust_library(
     name = "packets",
     srcs = glob(["src/**/*.rs"]),
     compile_data = glob([
-        "tests/test_data/**",
         "src/**/test_data/**",
     ]),
     crate_name = "netsim_packets",
