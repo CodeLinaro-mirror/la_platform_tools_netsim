@@ -56,12 +56,40 @@ fun findService(context: Context, args: List<String>) {
 
 object DiscoveryState {
     private val foundServices = mutableSetOf<String>()
+    val activeRegistrations = mutableListOf<NsdManager.RegistrationListener>()
     private val lock = Object()
     private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+    var nsdManagerForCleanup: NsdManager? = null
 
     fun reset() {
         synchronized(lock) {
             foundServices.clear()
+        }
+    }
+
+    fun cleanup() {
+        synchronized(lock) {
+            reset()
+            nsdManagerForCleanup?.let { manager ->
+                val latch = java.util.concurrent.CountDownLatch(activeRegistrations.size)
+                activeRegistrations.forEach { listener ->
+                    if (listener is TrackedRegistrationListener) {
+                        listener.cleanupLatch = latch
+                    }
+                    try {
+                        manager.unregisterService(listener)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error unregistering service during reset", e)
+                        latch.countDown()
+                    }
+                }
+                try {
+                    latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Interrupted while waiting for NSD unregistration")
+                }
+            }
+            activeRegistrations.clear()
         }
     }
 
@@ -114,41 +142,67 @@ private fun startNsd(context: Context, serviceName: String, serviceType: String,
     }
 
     val serviceInfo = NsdServiceInfo().apply {
-        this.serviceName = serviceName
+        this.serviceName = "$serviceName-${java.util.UUID.randomUUID().toString().take(8)}"
         this.serviceType = serviceType
         this.port = port
     }
 
-    val latch = java.util.concurrent.CountDownLatch(1)
-    var error: Int? = null
+    val maxRetries = 3
+    for (attempt in 1..maxRetries) {
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var error: Int? = null
 
-    nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, object : NsdManager.RegistrationListener {
-        override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-            Log.i(TAG, "Registration failed: $errorCode")
-            error = errorCode
-            latch.countDown()
+        val listener = object : TrackedRegistrationListener() {
+            override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                Log.i(TAG, "Registration failed: $errorCode on attempt $attempt")
+                error = errorCode
+                latch.countDown()
+            }
+            override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                cleanupLatch?.countDown()
+            }
+            override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
+                Log.i(TAG, "INFO Verifies the service is registered")
+                latch.countDown()
+            }
+            override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
+                cleanupLatch?.countDown()
+            }
         }
-        override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {}
-        override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
-            Log.i(TAG, "INFO Verifies the service is registered")
-            latch.countDown()
-        }
-        override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {}
-    })
 
-    if (!latch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
-        throw Exception("Timeout waiting for NSD registration of $serviceName")
+        synchronized(DiscoveryState) {
+            DiscoveryState.nsdManagerForCleanup = nsdManager
+            DiscoveryState.activeRegistrations.add(listener)
+        }
+
+        nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, listener)
+
+        if (!latch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+            if (attempt == maxRetries) throw Exception("Timeout waiting for NSD registration of $serviceName")
+            continue
+        }
+
+        if (error == null) {
+            return mapOf("port" to port.toString())
+        }
+
+        // Error 0 usually means an internal error, often caused by a previous
+        // test's unregistration being processed asynchronously by the OS.
+        if (attempt == maxRetries) {
+            throw Exception("NSD Registration Failed: $error after $maxRetries attempts")
+        }
+
+        Log.i(TAG, "Retrying NSD Registration after Error $error. Waiting 1s...")
+        Thread.sleep(1000)
     }
-    error?.let {
-        throw Exception("NSD Registration Failed: $it")
-    }
-    return mapOf("port" to port.toString())
+
+    throw Exception("NSD Registration completely failed.")
 }
 
 private fun discoverNsd(context: Context, serviceType: String) {
     DiscoveryState.acquireLock(context)
     val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
-    
+
     val latch = java.util.concurrent.CountDownLatch(1)
     var error: Int? = null
 
@@ -193,4 +247,8 @@ private fun discoverNsd(context: Context, serviceType: String) {
     error?.let {
         throw Exception("Discovery Start Failed: $it")
     }
+}
+
+abstract class TrackedRegistrationListener : NsdManager.RegistrationListener {
+    var cleanupLatch: java.util.concurrent.CountDownLatch? = null
 }
