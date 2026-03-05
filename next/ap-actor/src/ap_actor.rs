@@ -1,19 +1,21 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::ieee802_11::Ieee80211Manager;
-use crate::shared;
-use crate::wpa_auth;
-use netsim_model::chip::{ApCreate, ApUpdate as ModelApUpdate, WifiMode};
-use netsim_model::device::Position;
+use std::collections::HashMap;
+
+use netsim_model::{
+    chip::{ApCreate, ApUpdate as ModelApUpdate, WifiMode},
+    device::Position,
+};
 use netsim_packets::ethernet::MacAddr;
 use serde::{Deserialize, Serialize};
 
-use std::collections::HashMap;
+use crate::{ieee802_11::Ieee80211Manager, shared, wpa_auth};
 
 /// ID for an Access Point instance within this actor.
 pub type ApId = u32;
 
-/// Shared Stream ID for the singleton packet stream (matching SLIRP_ID convention)
+/// Shared Stream ID for the singleton packet stream (matching SLIRP_ID
+/// convention)
 pub const WIFI_STREAM_ID: u32 = u32::MAX - 1;
 
 /// Configuration for creating a new Access Point.
@@ -66,7 +68,7 @@ fn default_dtim_period() -> u8 {
 impl Default for ApConfig {
     fn default() -> Self {
         Self {
-            ssid: "AndroidWifi".to_string(),
+            ssid: netsim_model::ap::DEFAULT_WIFI_SSID.to_string(),
             bssid: MacAddr::from([0; 6]),
             channel: 6,
             hw_mode: WifiMode::G,

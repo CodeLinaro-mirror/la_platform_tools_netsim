@@ -8,16 +8,17 @@
 //! The main entry point is the `to_json` function, which takes a `Packet`
 //! reference and returns a `Value` representing the full packet structure.
 
-use crate::ethernet::json as ethernet_json;
-use crate::icmp::v4_json as icmp_json;
-use crate::icmp::v6_json as icmpv6_json;
-use crate::ip::json as ip_json;
-use crate::llc::json as llc_json;
-use crate::packet::{IpPacket, Packet, TransportPacket};
-use crate::transport::tcp_json;
-use crate::transport::udp_json;
-use crate::utils::json as json_common;
 use serde_json::Value;
+
+use crate::{
+    ethernet::json as ethernet_json,
+    icmp::{v4_json as icmp_json, v6_json as icmpv6_json},
+    ip::json as ip_json,
+    llc::json as llc_json,
+    packet::{IpPacket, Packet, TransportPacket},
+    transport::{tcp_json, udp_json},
+    utils::json as json_common,
+};
 
 /// Converts a parsed `Packet` into a `serde_json::Value`.
 ///
@@ -96,9 +97,10 @@ pub fn to_json(packet: &Packet, packet_len: usize) -> Value {
     }
 
     // Append :data if there is payload?
-    // For now, let's stick to the main layers. tshark adds :data if there is unparsed data.
-    // We don't easily know if there is unparsed data here without checking payload len.
-    // But we can assume if we parsed everything, we are good.
+    // For now, let's stick to the main layers. tshark adds :data if there is
+    // unparsed data. We don't easily know if there is unparsed data here
+    // without checking payload len. But we can assume if we parsed everything,
+    // we are good.
 
     json_common::build_packet_json(Value::Object(layers), packet_len, &protocols)
 }

@@ -1,16 +1,16 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::hwsim_helper::{unwrap_hwsim_to_ethernet, wrap_ethernet_in_hwsim};
+use std::{sync::Arc, time::Duration};
+
 use actor_framework::ResourceActor;
 use ap_actor::{shared::SharedKeyStore, ApActor, ApClient};
 use client::DeviceClient;
 use netsim_model::chip::{ChipClient, ChipCreate, ChipId};
 use slirp_actor::SlirpActor;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::net::UdpSocket;
-use tokio::sync::mpsc;
+use tokio::{net::UdpSocket, sync::mpsc};
 use wifi_actor::WifiActor;
+
+use crate::hwsim_helper::{unwrap_hwsim_to_ethernet, wrap_ethernet_in_hwsim};
 
 // BSSID for the AP
 const HOSTAPD_BSSID: [u8; 6] = [0x00, 0x13, 0x10, 0x85, 0xfe, 0x01];
@@ -80,7 +80,7 @@ async fn test_udp_guest_to_host() {
         "wifi-chip",
         "google",
         "test",
-        netsim_model::chip::NetworkParams::Wifi(netsim_model::chip::WifiCreate::default()),
+        netsim_model::chip::ChipKindParams::Wifi(netsim_model::chip::WifiCreate::default()),
     );
     let chip_id = ChipId(1);
     let params = ChipCreate {
@@ -147,7 +147,8 @@ async fn test_udp_guest_to_host() {
 
     println!("Packet injected");
     let mut buf = [0u8; 1024];
-    // Remove set_read_timeout as tokio UdpSocket doesn't support it directly, use timeout wrapper
+    // Remove set_read_timeout as tokio UdpSocket doesn't support it directly, use
+    // timeout wrapper
     println!("Waiting for packet on Host socket...");
     let (amt, src) = tokio::time::timeout(Duration::from_secs(2), host_socket.recv_from(&mut buf))
         .await

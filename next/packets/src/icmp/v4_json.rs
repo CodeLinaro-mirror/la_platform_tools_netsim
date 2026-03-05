@@ -1,7 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::icmp::IcmpHeader;
 use std::collections::BTreeMap;
+
+use crate::icmp::IcmpHeader;
 
 pub fn to_json(header: &IcmpHeader) -> BTreeMap<String, String> {
     let mut icmp = BTreeMap::new();
@@ -13,8 +14,9 @@ pub fn to_json(header: &IcmpHeader) -> BTreeMap<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use zerocopy::byteorder::U16;
+
+    use super::*;
 
     #[test]
     fn test_to_json() {

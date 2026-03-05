@@ -1,20 +1,24 @@
 // Copyright 2026 The Android Open Source Project
 
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use client::DeviceClient;
-use netsim_model::chip::{Chip, ChipClient, ChipCreate, ChipId, NetworkParams, UwbCreate};
-use netsim_model::chip_error::ChipError;
-use netsim_model::client_error::ClientError;
-use netsim_model::device::DeviceId;
+use netsim_model::{
+    chip::{Chip, ChipClient, ChipCreate, ChipId, ChipKindParams, UwbCreate},
+    chip_error::ChipError,
+    client_error::ClientError,
+    device::DeviceId,
+};
 use netsim_testing::mocks::{mock_sink, mock_stream};
-use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
 use uwb_actor::{UwbActor, UwbClient};
 
 /// The BDD World for UWB Actor tests.
 pub struct World {
     pub client: UwbClient,
-    pub _device_client: DeviceClient, // Keep reference if we need to check notifications, or use a Mock
+    pub _device_client: DeviceClient, /* Keep reference if we need to check notifications, or
+                                       * use a Mock */
     pub packet_txs: HashMap<ChipId, Sender<Bytes>>,
     pub packet_rxs: HashMap<ChipId, Receiver<Vec<u8>>>,
     _actor_task: tokio::task::JoinHandle<()>,
@@ -40,8 +44,8 @@ impl World {
             new_mock
                 .expect_perform_action()
                 .returning(|_, _| Ok(device_api::DeviceActionResult::Success));
-            // Expect clone_box recursively if needed, but UwbActor probably doesn't clone it again?
-            // Better to be safe:
+            // Expect clone_box recursively if needed, but UwbActor probably doesn't clone
+            // it again? Better to be safe:
             new_mock.expect_clone_box().returning(|| {
                 let mut inner_mock = actor_framework::MockActorClient::new();
                 inner_mock
@@ -87,7 +91,7 @@ impl World {
                 name: format!("uwb_chip_{id}"),
                 manufacturer: "Netsim".to_string(),
                 product_name: "TestUwb".to_string(),
-                network_params: NetworkParams::Uwb(UwbCreate {}),
+                chip_kind_params: ChipKindParams::Uwb(UwbCreate {}),
             },
             device_id: DeviceId(1),
         };
@@ -125,6 +129,10 @@ impl World {
     pub fn and_packet_sink_is_closed(&mut self, chip_id: u32) {
         let chip_id = ChipId(chip_id);
         self.packet_rxs.remove(&chip_id);
+    }
+
+    pub async fn and_tick_occurs(&mut self) {
+        tokio::time::sleep(2 * UwbActor::TICK_INTERVAL).await;
     }
 
     pub async fn then_chip_does_not_exist(&self, chip_id: u32) {

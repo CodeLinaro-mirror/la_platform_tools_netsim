@@ -1,9 +1,12 @@
 // tests/common/mod.rs
 
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
 use log;
 use modem_rs::{time::MockClock, *};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 static LOG_INIT: std::sync::Once = std::sync::Once::new();
 

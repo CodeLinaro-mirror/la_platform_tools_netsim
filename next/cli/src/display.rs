@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use netsim_proto::frontend::{ListDeviceResponse, ListLinkResponse};
-use netsim_proto::model::{
-    self,
-    chip::ble_beacon::advertise_settings,
-    chip::ble_beacon::{AdvertiseData, AdvertiseSettings},
+use std::fmt;
+
+use netsim_proto::{
+    frontend::{ListDeviceResponse, ListLinkResponse},
+    model::{
+        self,
+        chip::ble_beacon::{advertise_settings, AdvertiseData, AdvertiseSettings},
+    },
 };
 use protobuf::MessageField;
-use std::fmt;
 
 const INDENT_WIDTH: usize = 2;
 
-/// Displayer for model protobufs. Implements fmt::Display.
 /// # Invariants
 /// Displayed values **do not** end in a newline.
 pub struct Displayer<T> {
@@ -38,7 +39,6 @@ impl<T> Displayer<T> {
         Displayer { value, verbose, indent: 0 }
     }
 
-    /// Indent the displayed string by a given amount. Returns `self`.
     pub fn indent(&mut self, current_indent: usize) -> &Self {
         self.indent = current_indent + INDENT_WIDTH;
         self
@@ -53,7 +53,8 @@ impl fmt::Display for Displayer<ListDeviceResponse> {
         while let Some(device) = devices.next() {
             write!(f, "{:indent$}{}", "", Displayer::new(device, self.verbose))?;
             if devices.peek().is_some() {
-                // We print the newline here instead of in the Device displayer because we don't want a newline before the very first device.
+                // We print the newline here instead of in the Device displayer because we don't
+                // want a newline before the very first device.
                 writeln!(f)?;
             }
         }
@@ -381,40 +382,78 @@ impl fmt::Display for LinkChipIdDisplay {
     }
 }
 
+// Helper to format PhyKind for display, mapping BLUETOOTH variants to BLUETOOTH
+fn format_phy_kind(kind: netsim_proto::model::PhyKind) -> String {
+    match kind {
+        netsim_proto::model::PhyKind::BLUETOOTH_CLASSIC
+        | netsim_proto::model::PhyKind::BLUETOOTH_LOW_ENERGY => "BLUETOOTH".to_string(),
+        _ => format!("{:?}", kind),
+    }
+}
+
 impl fmt::Display for Displayer<ListLinkResponse> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = self.indent;
         let chip_width = 10;
         let rssi_width = 6;
-        let phykind_width = 20;
+        let phykind_width = 12;
 
         if self.value.links.is_empty() {
             write!(f, "{:indent$}No links with properties are currently set.", "")?;
         } else {
             // Print a header for the table
-            write!(
-                f,
-                "{:indent$}{:chip_width$} | {:chip_width$} | {:phykind_width$} | {:rssi_width$}",
-                "", "Sender", "Receiver", "Type", "RSSI"
-            )?;
-            writeln!(f)?;
-            write!(
-                f,
-                "{:indent$}{:-<chip_width$}-+-{:-<chip_width$}-+-{:-<phykind_width$}-+-{:-<rssi_width$}",
-                "", "", "", "", ""
-            )?;
-            // Iterate through the links and print each one as a row
-            for link in self.value.links.iter() {
+            if self.verbose {
+                let id_width = 4;
+                write!(
+                    f,
+                    "{:indent$}{:id_width$} | {:chip_width$} | {:chip_width$} | {:phykind_width$} | {:rssi_width$}",
+                    "", "ID", "Sender", "Receiver", "Type", "RSSI"
+                )?;
                 writeln!(f)?;
                 write!(
                     f,
-                    "{:indent$}{:<chip_width$} | {:<chip_width$} | {:<phykind_width$} | {:<rssi_width$}",
-                    "",
-                    format!("{}", LinkChipIdDisplay(link.sender_id)),
-                    format!("{}", LinkChipIdDisplay(link.receiver_id)),
-                    format!("{:?}", link.link_kind.enum_value_or_default()),
-                    link.rssi,
+                    "{:indent$}{:-<id_width$}-+-{:-<chip_width$}-+-{:-<chip_width$}-+-{:-<phykind_width$}-+-{:-<rssi_width$}",
+                    "", "", "", "", "", ""
                 )?;
+                // Iterate through the links and print each one as a row
+                for link in self.value.links.iter() {
+                    writeln!(f)?;
+                    write!(
+                        f,
+                        "{:indent$}{:<id_width$} | {:<chip_width$} | {:<chip_width$} | {:<phykind_width$} | {:<rssi_width$}",
+                        "",
+                        link.id,
+                        format!("{}", LinkChipIdDisplay(link.sender_id)),
+                        format!("{}", LinkChipIdDisplay(link.receiver_id)),
+                        format_phy_kind(link.link_kind.enum_value_or_default()),
+                        link.rssi,
+                    )?;
+                }
+            } else {
+                write!(
+                    f,
+                    "{:indent$}{:chip_width$} | {:chip_width$} | {:phykind_width$} | {:rssi_width$}",
+                    "", "Sender", "Receiver", "Type", "RSSI"
+                )?;
+                writeln!(f)?;
+                write!(
+                    f,
+                    "{:indent$}{:-<chip_width$}-+-{:-<chip_width$}-+-{:-<phykind_width$}-+-{:-<rssi_width$}",
+                    "", "", "", "", ""
+                )?;
+                // Iterate through the links and print each one as a row
+                for link in self.value.links.iter() {
+                    writeln!(f)?;
+                    write!(
+                        f,
+                        "{:indent$}{:<chip_width$} | {:<chip_width$} | {:<phykind_width$} | {:<rssi_width$}",
+                        "",
+                        format!("{}", LinkChipIdDisplay(link.sender_id)),
+                        format!("{}", LinkChipIdDisplay(link.receiver_id)),
+                        format_phy_kind(link.link_kind.enum_value_or_default()),
+                        link.rssi,
+                    )?;
+                }
             }
         }
         Ok(())

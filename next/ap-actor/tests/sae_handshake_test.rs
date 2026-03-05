@@ -1,11 +1,12 @@
 // Copyright 2025 The Android Open Source Project
 
-use ap_actor::netsim_model::chip::WifiMode;
-use ap_actor::sae::SaeStateMachine;
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::{
-    management_subtype, AuthenticationFixedFields, FrameControl, Ieee80211, MacHeader3Addr,
-    SequenceControl,
+use ap_actor::{netsim_model::chip::WifiMode, sae::SaeStateMachine};
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        management_subtype, AuthenticationFixedFields, FrameControl, Ieee80211, MacHeader3Addr,
+        SequenceControl,
+    },
 };
 use zerocopy::{IntoBytes, U16};
 
@@ -79,8 +80,10 @@ async fn test_sae_handshake_success() {
     let src_id = netsim_model::chip::ChipId(200);
     tx.send(bytes::Bytes::from(auth_frame)).unwrap();
 
-    // 2. Expect AP Commit (Seq 1 or 2? SAE is 1, but response usually has same seq if strictly following Request/Response? No.
-    // 2. Expect AP Commit (Seq 1 or 2? SAE is 1, but response usually has same seq if strictly following Request/Response? No.
+    // 2. Expect AP Commit (Seq 1 or 2? SAE is 1, but response usually has same seq
+    //    if strictly following Request/Response? No.
+    // 2. Expect AP Commit (Seq 1 or 2? SAE is 1, but response usually has same seq
+    //    if strictly following Request/Response? No.
     // 802.11-2016: SAE Commit is Seq 1. Confirm is Seq 2.
     // Both sides send Commit (Seq 1).
     let msg1 = world

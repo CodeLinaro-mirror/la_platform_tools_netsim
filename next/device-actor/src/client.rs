@@ -7,13 +7,11 @@
 //! It provides a convenient API for interacting with Device actors,
 //! including methods for standard operations and custom actions.
 
-use crate::DeviceActor;
-use crate::DeviceError;
 use actor_framework::ActorClient;
-use device_api::api::DeviceCreate;
-use device_api::DeviceId;
-use device_api::{DeviceAction, DeviceActionResult};
+use device_api::{api::DeviceCreate, DeviceAction, DeviceActionResult, DeviceId};
 use log::debug;
+
+use crate::{DeviceActor, DeviceError};
 
 #[derive(Clone)]
 pub struct DeviceClient {
@@ -165,7 +163,8 @@ impl DeviceClient {
     /// Creates or updates a device based on PacketStream parameters.
     ///
     /// This method uses the actor's `AddChipByGuid` action to atomically
-    /// find an existing device by GUID or create a new one, avoiding race conditions.
+    /// find an existing device by GUID or create a new one, avoiding race
+    /// conditions.
     pub async fn add_chip(
         &self,
         params: netsim_model::device::DeviceAddChip,
@@ -185,5 +184,11 @@ impl DeviceClient {
                 "Unexpected action result for AddChipByGuid".to_string(),
             )),
         }
+    }
+
+    /// Shuts down the device actor.
+    pub async fn shutdown(&self) -> Result<(), DeviceError> {
+        debug!("Sending shutdown request");
+        self.inner.shutdown().await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
     }
 }

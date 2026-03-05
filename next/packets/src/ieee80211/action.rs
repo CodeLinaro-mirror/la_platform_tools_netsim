@@ -60,14 +60,17 @@ pub struct FineTimingMeasurement {
     pub follow_up_dialog_token: u8,
     pub tod: [u8; 6], // Time of Departure (48-bit)
     pub toa: [u8; 6], // Time of Arrival (48-bit)
-    pub tod_error: [u8; 6], // TOD Error (actually part of a larger packed struct in spec, simplified here for simulation)
-                            // Spec: TOD Error (1 byte) | TOA Error (1 byte) | LCI Report (variable) ?
-                            // IEEE 802.11-2016 Figure 9-556
-                            // Order: Category, Action, Dialog Token, Follow Up Dialog Token, TOD, TOA, TOD Error, TOA Error, LCI Report...
-                            // Actually, TOD and TOA are 6 bytes (48 bits).
-                            // TOD Error and TOA Error are 1 byte each?
-                            // Let's check the spec closer or use a larger buffer.
-                            // For now, we define the FIXED fields.
+    pub tod_error: [u8; 6], /* TOD Error (actually part of a larger packed struct in spec,
+                       * simplified here for simulation)
+                       * Spec: TOD Error (1 byte) | TOA Error (1 byte) | LCI Report
+                       * (variable) ? IEEE 802.11-2016 Figure
+                       * 9-556 Order: Category, Action, Dialog
+                       * Token, Follow Up Dialog Token, TOD, TOA, TOD Error, TOA Error,
+                       * LCI Report... Actually, TOD and TOA
+                       * are 6 bytes (48 bits). TOD Error and
+                       * TOA Error are 1 byte each?
+                       * Let's check the spec closer or use a larger buffer.
+                       * For now, we define the FIXED fields. */
 }
 
 // 802.11mc FTM Parameters Bitmap

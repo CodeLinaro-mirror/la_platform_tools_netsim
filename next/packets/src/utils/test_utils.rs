@@ -1,12 +1,14 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::packet;
-use crate::packet::json::to_json;
-use std::fs::File;
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+};
 
-use std::path::{Path, PathBuf};
+use crate::{packet, packet::json::to_json};
 
-/// Validates that the JSON output from parsing a PCAP file matches the golden JSON file.
+/// Validates that the JSON output from parsing a PCAP file matches the golden
+/// JSON file.
 ///
 /// # Arguments
 ///
@@ -32,7 +34,8 @@ pub fn validate_pcap_json(pcap_path: PathBuf, json_path: PathBuf, fields: &[&str
     let (_, packet_data) =
         reader.next_record().expect("Failed to read PCAP record").expect("No records in PCAP");
 
-    // Get LinkType (might be None if PCAPNG and no IDB yet, but usually IDB is first)
+    // Get LinkType (might be None if PCAPNG and no IDB yet, but usually IDB is
+    // first)
     let link_type = reader
         .link_type()
         .expect("Unknown LinkType: PCAPNG file missing Interface Description Block?");
@@ -236,8 +239,9 @@ pub struct PacketBuilder {
 impl PacketBuilder {
     /// Creates a new PacketBuilder with Ethernet header.
     pub fn new(dst_mac: [u8; 6], src_mac: [u8; 6], ethertype: u16) -> Self {
-        use crate::ethernet::{EthernetFrame, MacAddr};
         use zerocopy::IntoBytes;
+
+        use crate::ethernet::{EthernetFrame, MacAddr};
 
         let eth_header =
             EthernetFrame::new(MacAddr::new(dst_mac), MacAddr::new(src_mac), ethertype);
@@ -254,8 +258,9 @@ impl PacketBuilder {
         protocol: u8,
         payload_len: usize,
     ) -> Self {
-        use crate::ip::frame::Ipv4Header;
         use zerocopy::{IntoBytes, U16};
+
+        use crate::ip::frame::Ipv4Header;
 
         self.src_ip = Some(src_ip);
         self.dst_ip = Some(dst_ip);
@@ -280,8 +285,9 @@ impl PacketBuilder {
 
     /// Adds a UDP header.
     pub fn udp(mut self, src_port: u16, dst_port: u16, payload_len: usize) -> Self {
-        use crate::transport::udp::UdpHeader;
         use zerocopy::{IntoBytes, U16};
+
+        use crate::transport::udp::UdpHeader;
 
         let udp_len = (8 + payload_len) as u16;
         let udp_header = UdpHeader {
@@ -305,8 +311,9 @@ impl PacketBuilder {
         window: u16,
         payload: &[u8],
     ) -> Self {
-        use crate::transport::tcp::TcpHeader;
         use zerocopy::{IntoBytes, U16, U32};
+
+        use crate::transport::tcp::TcpHeader;
 
         let data_offset = 5; // 5 * 32-bit words = 20 bytes
         let data_offset_reserved_flags = (data_offset << 12) | (flags & 0x1FF);
@@ -327,8 +334,9 @@ impl PacketBuilder {
         }
 
         self.buffer.extend_from_slice(tcp_header.as_bytes());
-        // NOTE: The payload is used here for checksum calculation but is NOT added to the buffer.
-        // The caller must ensure the same payload is passed to `.payload()` subsequently.
+        // NOTE: The payload is used here for checksum calculation but is NOT added to
+        // the buffer. The caller must ensure the same payload is passed to
+        // `.payload()` subsequently.
         self
     }
 
@@ -341,8 +349,9 @@ impl PacketBuilder {
         target_mac: [u8; 6],
         target_ip: [u8; 4],
     ) -> Self {
-        use crate::ethernet::arp::ArpHeader;
         use zerocopy::{IntoBytes, U16};
+
+        use crate::ethernet::arp::ArpHeader;
 
         let arp_header = ArpHeader {
             hardware_type: U16::new(1),      // Ethernet

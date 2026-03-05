@@ -5,8 +5,11 @@
 //! `WifiMode` for PHY layer configuration and `ApCreate`/`ApUpdate`
 //! for lifecycle management.
 
-use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
+
+pub const DEFAULT_WIFI_SSID: &str = "AndroidWifi";
 
 /// Supported Wi-Fi 802.11 PHY modes.
 ///
@@ -80,4 +83,14 @@ pub struct ApUpdate {
     pub channel: Option<u8>,
     #[serde(default)]
     pub force_disconnect: Vec<String>,
+}
+
+/// Access Point specific chip information.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Ap {
+    pub config: ApCreate,
+    // TODO: Add other state fields if needed
+    // Use ignore to skip serialization of fields that are not relevant to the model
+    #[serde(skip)]
+    pub associations: Vec<String>,
 }

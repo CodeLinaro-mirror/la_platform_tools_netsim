@@ -1,16 +1,19 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::ap_actor::{ApActor, ApReq, ApResponse, ApState, WIFI_STREAM_ID};
-use crate::error::ApError;
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
-
-use netsim_model::chip::{
-    ApChip, Chip, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant, ChipVariantUpdate,
-    NetworkParams,
+use netsim_model::{
+    chip::{
+        Ap, Chip, ChipCreate, ChipId, ChipKind, ChipKindParams, ChipUpdate, ChipVariant,
+        ChipVariantUpdate,
+    },
+    device::DeviceId,
 };
 
-use netsim_model::device::DeviceId;
+use crate::{
+    ap_actor::{ApActor, ApReq, ApResponse, ApState, WIFI_STREAM_ID},
+    error::ApError,
+};
 
 // 1024 microseconds per Time Unit (TU)
 const TU_INTERVAL_US: u128 = 1024;
@@ -30,17 +33,17 @@ impl ActorService for ApActor {
         &mut self,
         _id: Option<Self::Id>,
         params: Self::Create,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let id_val = params.id.0;
         if self.aps.contains_key(&id_val) {
             return Err(ApError::Internal(format!("AP with ID {} already exists", id_val)));
         }
 
-        let config = if let NetworkParams::Ap(ap_create) = params.config.network_params {
+        let config = if let ChipKindParams::Ap(ap_create) = params.config.chip_kind_params {
             crate::ap_actor::ApConfig::try_from(ap_create).map_err(|e| ApError::Internal(e))?
         } else {
-            return Err(ApError::Internal("Invalid NetworkParams for AP".into()));
+            return Err(ApError::Internal("Invalid ChipKindParams for AP".into()));
         };
 
         self.shared_keys.set_bssid(config.bssid);
@@ -53,7 +56,7 @@ impl ActorService for ApActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         if let Some(state) = self.aps.get(&id.0) {
             Ok(Some(ap_state_to_chip(id.0, state)))
@@ -66,7 +69,7 @@ impl ActorService for ApActor {
         &mut self,
         id: Self::Id,
         patch: Self::Update,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         let ap_state = self.aps.get_mut(&id.0).ok_or(ApError::ApNotFound(id.0))?;
 
@@ -105,7 +108,8 @@ impl ActorService for ApActor {
 
                 // Send Deauth Frame
                 if let Some(sink) = &self.sink {
-                    // Reason Code 3 (Deauthenticated because sending STA is leaving (or has left) IBSS or ESS)
+                    // Reason Code 3 (Deauthenticated because sending STA is leaving (or has left)
+                    // IBSS or ESS)
                     let frame = self.manager.build_deauth_frame(ap_state, mac, 3);
                     if let Err(e) = sink.send(bytes::Bytes::from(frame)) {
                         log::error!("Failed to send Deauth frame: {}", e);
@@ -124,7 +128,7 @@ impl ActorService for ApActor {
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         if self.aps.remove(&id.0).is_some() {
             log::info!("Deleted AP with ID: {}", id.0);
@@ -136,7 +140,7 @@ impl ActorService for ApActor {
 
     async fn handle_list(
         &mut self,
-        _: &mut DynContext<Self::Id>,
+        _: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.aps.iter().map(|(id, state)| ap_state_to_chip(*id, state)).collect())
     }
@@ -145,7 +149,7 @@ impl ActorService for ApActor {
         &mut self,
         _id: Option<Self::Id>,
         action: Self::Action,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             ApReq::Register { stream, sink, shared_keys, beacon_interval } => {
@@ -189,7 +193,7 @@ fn ap_state_to_chip(id: u32, state: &ApState) -> Chip {
         position: state.config.position.clone(),
         orientation: Default::default(),
         device_id: DeviceId(0),
-        variant: Some(ChipVariant::Ap(ApChip {
+        variant: Some(ChipVariant::Ap(Ap {
             config: state.config.clone().into(),
             associations: state.associations.iter().map(ToString::to_string).collect(),
         })),

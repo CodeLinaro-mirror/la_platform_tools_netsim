@@ -23,8 +23,6 @@ path = "src/lib.rs"
 crate-type = ["staticlib", "lib"]
 
 [dependencies]
-zerocopy = "0.8.25"
-zerocopy-derive = "0.8.25"
 tokio = { version = "1.32.0", features = [
   "fs",
   "io-util",
@@ -33,3 +31,5 @@ tokio = { version = "1.32.0", features = [
   "rt-multi-thread",
   "sync",
 ] }
+zerocopy = "0.8.25"
+zerocopy-derive = "0.8.25"

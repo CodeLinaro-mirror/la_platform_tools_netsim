@@ -1,5 +1,13 @@
 // Copyright 2025-2026 The Android Open Source Project
 
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, RwLock,
+    },
+};
+
 use aes::Aes128;
 use ccm::{
     aead::{Aead, KeyInit, Payload},
@@ -7,11 +15,6 @@ use ccm::{
     Ccm,
 };
 use netsim_packets::ieee80211::{CcmpHeader, Ieee80211, MacAddress};
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc, RwLock,
-};
 use zerocopy::IntoBytes;
 
 type AesCcm = Ccm<Aes128, U8, U13>;

@@ -13,8 +13,10 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::env;
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 fn paths_to_strs<P: AsRef<Path>>(paths: &[P]) -> Vec<&str> {
     paths.iter().map(|p| p.as_ref().as_os_str().to_str().unwrap()).collect()

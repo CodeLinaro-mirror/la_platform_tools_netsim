@@ -6,12 +6,14 @@
 //! suitable for zero-copy parsing of raw wireless packets.
 //! It focuses on common frame types and their headers.
 
-use crate::ethernet::MacAddr;
-pub use crate::ethernet::MacAddr as MacAddress;
 use core::fmt;
 use std::str::FromStr;
+
 use zerocopy::byteorder::LittleEndian; // IEEE 802.11 fields are typically little-endian
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16};
+
+use crate::ethernet::MacAddr;
+pub use crate::ethernet::MacAddr as MacAddress;
 
 pub const CCMP_HDR_LEN: usize = 8;
 
@@ -21,7 +23,8 @@ pub fn parse_mac_address(s: &str) -> Result<MacAddress, String> {
 
 /// Represents the 2-byte Frame Control field in an 802.11 header.
 ///
-/// The Frame Control field is structured as follows (LSB to MSB for bits within a byte):
+/// The Frame Control field is structured as follows (LSB to MSB for bits within
+/// a byte):
 /// - Protocol Version (2 bits): Bits 0-1
 /// - Type (2 bits): Bits 2-3
 /// - Subtype (4 bits): Bits 4-7
@@ -36,7 +39,8 @@ pub fn parse_mac_address(s: &str) -> Result<MacAddress, String> {
 #[repr(C)]
 #[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Copy, Clone)]
 pub struct FrameControl {
-    /// The raw 2-byte value of the Frame Control field, stored in little-endian.
+    /// The raw 2-byte value of the Frame Control field, stored in
+    /// little-endian.
     pub field: U16<LittleEndian>,
 }
 
@@ -75,7 +79,8 @@ impl FrameControl {
         ((self.get() & fc_bits::TYPE_MASK) >> 2) as u8
     }
 
-    /// Frame Subtype (4 bits). Meaning depends on Frame Type. See `FrameSubtype` constants.
+    /// Frame Subtype (4 bits). Meaning depends on Frame Type. See
+    /// `FrameSubtype` constants.
     pub fn frame_subtype(&self) -> u8 {
         ((self.get() & fc_bits::SUBTYPE_MASK) >> 4) as u8
     }
@@ -650,6 +655,10 @@ impl Ieee80211 {
         self.is_data() && (self.stype() & 0x8 != 0)
     }
 
+    pub fn is_qos_nodata(&self) -> bool {
+        self.is_data() && self.stype() == DataSubType::QosNodata as u8
+    }
+
     pub fn decode_full(bytes: &[u8]) -> Result<Self, String> {
         Ok(Self { bytes: bytes.to_vec() })
     }
@@ -836,11 +845,12 @@ impl TryFrom<Ieee80211ToAp> for Ieee80211 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::ieee80211::BeaconFrameHeader;
-    use crate::ieee80211::{data_subtype, frame_type, management_subtype};
     use core::mem::size_of;
+
     use zerocopy::Ref;
+
+    use super::*;
+    use crate::ieee80211::{data_subtype, frame_type, management_subtype, BeaconFrameHeader};
 
     #[test]
     fn test_struct_sizes() {
@@ -874,8 +884,10 @@ mod tests {
     fn test_frame_control_all_flags() {
         // All flags set, except protocol version (usually 0)
         // Type=MGMT (00), Subtype=Beacon (1000) -> 001000 = 0x20
-        // ToDS=1, FromDS=1, MoreFrag=1, Retry=1, PwrMgmt=1, MoreData=1, Protected=1, Order=1 -> 11111111 = 0xFF
-        // FC value: 0xFF80 (LSB: Type=MGMT 00, Subtype=Beacon 1000 => 10000000 = 0x80; MSB: All flags set => 11111111 = 0xFF)
+        // ToDS=1, FromDS=1, MoreFrag=1, Retry=1, PwrMgmt=1, MoreData=1, Protected=1,
+        // Order=1 -> 11111111 = 0xFF FC value: 0xFF80 (LSB: Type=MGMT 00,
+        // Subtype=Beacon 1000 => 10000000 = 0x80; MSB: All flags set => 11111111 =
+        // 0xFF)
         let fc_val: u16 = 0xFF80;
         let fc = FrameControl::new(fc_val);
         assert_eq!(fc.protocol_version(), 0);

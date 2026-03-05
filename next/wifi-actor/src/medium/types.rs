@@ -1,5 +1,6 @@
-use crate::error::WifiError;
 use netsim_packets::ieee80211::MacAddress;
+
+use crate::error::WifiError;
 
 pub type WifiResult<T> = Result<T, WifiError>;
 

@@ -15,13 +15,11 @@
 
 //! # os utility functions
 
-use std::ffi::CString;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::os::fd::AsRawFd;
 #[cfg(target_os = "windows")]
 use std::os::windows::io::AsRawHandle;
-
-use std::path::PathBuf;
+use std::{ffi::CString, path::PathBuf};
 
 use log::warn;
 
@@ -148,10 +146,11 @@ pub fn redirect_std_stream(instance_name: &str) -> anyhow::Result<()> {
     let stderr_fd =
         unsafe { libc::open_osfhandle(std::io::stderr().as_raw_handle() as isize, libc::O_RDWR) };
 
-    // SAFETY: These operations allow redirection of stdout and stderr stream to a file if terminal.
-    // Convert the raw file descriptors to FILE pointers using libc::fdopen.
-    // This is necessary because freopen expects a FILE* as its last argument, not a raw file descriptor.
-    // Use freopen to redirect stdout and stderr to the specified files.
+    // SAFETY: These operations allow redirection of stdout and stderr stream to a
+    // file if terminal. Convert the raw file descriptors to FILE pointers using
+    // libc::fdopen. This is necessary because freopen expects a FILE* as its
+    // last argument, not a raw file descriptor. Use freopen to redirect stdout
+    // and stderr to the specified files.
     unsafe {
         let stdout_file = libc::fdopen(stdout_fd, mode_c.as_ptr());
         let stderr_file = libc::fdopen(stderr_fd, mode_c.as_ptr());
@@ -214,7 +213,8 @@ pub mod tests {
         assert_eq!(get_instance_name(Some(1), Some(1)), "connector_");
         assert_eq!(get_instance_name(Some(1), Some(2)), "connector_");
 
-        // Both instance and connector set - Expect instance name to be "<instance>_connector_"
+        // Both instance and connector set - Expect instance name to be
+        // "<instance>_connector_"
         assert_eq!(get_instance_name(Some(2), Some(1)), "2_connector_");
         assert_eq!(get_instance_name(Some(3), Some(3)), "3_connector_");
     }

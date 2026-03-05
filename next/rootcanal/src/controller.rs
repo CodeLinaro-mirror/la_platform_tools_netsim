@@ -6,15 +6,19 @@
 /// A unique ID for the Controller
 pub type Id = u32;
 
+use std::{
+    ffi::{c_int, c_void},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex, Weak,
+    },
+};
+
+use bytes::{BufMut, Bytes, BytesMut};
+
 use crate::{
     ffi,
     types::{Address, Phy},
-};
-use bytes::{BufMut, Bytes, BytesMut};
-use std::ffi::{c_int, c_void};
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc, Mutex, Weak,
 };
 
 /// Callbacks for the Bluetooth controller.
@@ -31,7 +35,8 @@ pub trait Callbacks: Send + Sync {
 
 /// Trait used by the controller to call the Bluetooth manager.
 pub trait BtOps: Send + Sync {
-    /// Controller received a LL packet from rootcanal that needs to be broadcasted
+    /// Controller received a LL packet from rootcanal that needs to be
+    /// broadcasted
     fn broadcast_rootcanal_ll_packet(&self, send_id: Id, packet: &[u8], phy: Phy, tx_power: i32);
 }
 
@@ -256,7 +261,8 @@ extern "C" fn send_hci_trampoline(
     data: *const u8,
     data_len: ffi::size_t,
 ) {
-    // SAFETY: The FFI contract guarantees that the C++ side provides a valid `cookie`.
+    // SAFETY: The FFI contract guarantees that the C++ side provides a valid
+    // `cookie`.
     let context = unsafe { context_from_cookie(cookie) };
 
     if let Some(controller) = context.upgrade() {
@@ -284,8 +290,8 @@ extern "C" fn invalid_packet_trampoline(
     let context = unsafe { context_from_cookie(cookie) };
     if let Some(controller) = context.upgrade() {
         controller.invalid_packets.fetch_add(1, Ordering::Relaxed);
-        // SAFETY: The FFI contract guarantees that `message` is a valid, null-terminated
-        // C string.
+        // SAFETY: The FFI contract guarantees that `message` is a valid,
+        // null-terminated C string.
         let message_str = unsafe { std::ffi::CStr::from_ptr(message) }.to_str().unwrap_or("");
         // SAFETY: The FFI contract guarantees that `data` points to a buffer of at
         // least `data_len` bytes.
@@ -307,7 +313,8 @@ extern "C" fn send_ll_trampoline(
     phy: c_int,
     tx_power: c_int,
 ) {
-    // SAFETY: The FFI contract guarantees that the C++ side provides a valid `cookie`.
+    // SAFETY: The FFI contract guarantees that the C++ side provides a valid
+    // `cookie`.
     let context = unsafe { context_from_cookie(cookie) };
     if let Some(controller) = context.upgrade() {
         // SAFETY: The FFI contract guarantees that `data` points to a buffer of at

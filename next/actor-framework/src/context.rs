@@ -1,7 +1,8 @@
 //! # Actor Framework Context
 //!
-//! This module defines the `Context` trait and its standard implementation, `FrameworkContext`.
-//! The context allows the implementation of actors to interact with the framework environment:
+//! This module defines the `Context` trait and its standard implementation,
+//! `FrameworkContext`. The context allows the implementation of actors to
+//! interact with the framework environment:
 //! - Time management (setting tick intervals).
 //! - Asynchronous stream management.
 //! - Lifecycle control (shutdown signals).
@@ -10,51 +11,66 @@
 //! providing a consistent interface for actors to interact with the underlying
 //! execution environment.
 
-use crate::BoxStream;
-use futures::future::BoxFuture;
 use std::time::Duration;
+
+use futures::future::BoxFuture;
 use tokio::sync::oneshot;
 use tokio_stream::{StreamMap, StreamNotifyClose};
+use tokio_util::time::{delay_queue, DelayQueue};
 
-/// The runtime environment for an actor, providing access to time, streams, and lifecycle.
-pub type DynContext<Id> = dyn Context<Id> + Send;
+use crate::{ActorService, BoxStream};
 
-/// The runtime environment for an actor. The ID type must be `Send + Copy + 'static`.
-pub trait Context<Id>: Send + 'static {
+pub type TimerKey = delay_queue::Key;
+
+/// The runtime environment for an actor, providing access to time, streams, and
+/// lifecycle.
+pub type DynContext<T> = dyn Context<T> + Send;
+
+/// The runtime environment for an actor.
+pub trait Context<T: ActorService>: Send + 'static {
     /// Schedule a message to be sent to the actor after a delay.oop.
     fn set_interval(&mut self, duration: Duration);
 
     /// Adds a new stream to be managed by the actor.
-    fn add_stream(&mut self, id: Id, stream: BoxStream);
+    fn add_stream(&mut self, id: T::Id, stream: BoxStream);
 
     /// Removes a managed stream by its ID.
-    fn remove_stream(&mut self, id: Id);
+    fn remove_stream(&mut self, id: T::Id);
 
     /// Spawns a background task to be managed by the runtime.
     ///
-    /// The task is identified by `id`. When it completes, the actor's `on_task_closed` hook will be called
-    /// with the value returned by the task (which must be its `id`).
-    fn spawn(&mut self, id: Id, task: BoxFuture<'static, Id>);
+    /// The task is identified by `id`. When it completes, the actor's
+    /// `on_task_closed` hook will be called with the value returned by the
+    /// task (which must be its `id`).
+    fn spawn(&mut self, id: T::Id, task: BoxFuture<'static, T::Id>);
 
     /// Aborts a background task by its ID.
-    fn abort(&mut self, id: Id);
+    fn abort(&mut self, id: T::Id);
 
     /// Signals the actor to stop processing messages and exit its run loop.
     fn shutdown(&mut self);
+
+    /// Schedule a closure to be run after a duration.
+    fn run_later(
+        &mut self,
+        duration: Duration,
+        f: Box<dyn FnOnce(&mut T, &mut dyn Context<T>) + Send>,
+    ) -> TimerKey;
+
+    /// Cancel a scheduled timer.
+    fn cancel_timer(&mut self, key: TimerKey);
 }
 
-pub(crate) struct FrameworkContext<Id> {
+pub(crate) struct FrameworkContext<T: ActorService> {
     pub(crate) interval: tokio::time::Interval,
-    pub(crate) streams: StreamMap<Id, StreamNotifyClose<BoxStream>>,
+    pub(crate) streams: StreamMap<T::Id, StreamNotifyClose<BoxStream>>,
     pub(crate) shutdown_tx: Option<oneshot::Sender<()>>,
-    pub(crate) tasks: tokio::task::JoinSet<Id>,
-    pub(crate) task_handles: std::collections::HashMap<Id, tokio::task::AbortHandle>,
+    pub(crate) tasks: tokio::task::JoinSet<T::Id>,
+    pub(crate) task_handles: std::collections::HashMap<T::Id, tokio::task::AbortHandle>,
+    pub(crate) timers: DelayQueue<Box<dyn FnOnce(&mut T, &mut dyn Context<T>) + Send>>,
 }
 
-impl<Id> FrameworkContext<Id>
-where
-    Id: std::hash::Hash + Eq + Copy + Send + 'static,
-{
+impl<T: ActorService> FrameworkContext<T> {
     /// Creates a new FrameworkContext with default settings.
     /// Returns the FrameworkContext and a shutdown receiver.
     pub(crate) fn new() -> (Self, oneshot::Receiver<()>) {
@@ -72,36 +88,34 @@ where
                 shutdown_tx: Some(shutdown_tx),
                 tasks: tokio::task::JoinSet::new(),
                 task_handles: std::collections::HashMap::new(),
+                timers: DelayQueue::new(),
             },
             shutdown_rx,
         )
     }
 }
 
-impl<Id> Context<Id> for FrameworkContext<Id>
-where
-    Id: std::hash::Hash + Eq + Copy + Send + 'static,
-{
+impl<T: ActorService> Context<T> for FrameworkContext<T> {
     fn set_interval(&mut self, duration: Duration) {
         let mut interval = tokio::time::interval(duration);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         self.interval = interval;
     }
 
-    fn add_stream(&mut self, id: Id, stream: BoxStream) {
+    fn add_stream(&mut self, id: T::Id, stream: BoxStream) {
         self.streams.insert(id, StreamNotifyClose::new(stream));
     }
 
-    fn remove_stream(&mut self, id: Id) {
+    fn remove_stream(&mut self, id: T::Id) {
         self.streams.remove(&id);
     }
 
-    fn spawn(&mut self, id: Id, task: BoxFuture<'static, Id>) {
+    fn spawn(&mut self, id: T::Id, task: BoxFuture<'static, T::Id>) {
         let handle = self.tasks.spawn(async move { task.await });
         self.task_handles.insert(id, handle);
     }
 
-    fn abort(&mut self, id: Id) {
+    fn abort(&mut self, id: T::Id) {
         if let Some(handle) = self.task_handles.remove(&id) {
             handle.abort();
         }
@@ -113,5 +127,17 @@ where
         }
         self.tasks.abort_all();
         self.task_handles.clear();
+    }
+
+    fn run_later(
+        &mut self,
+        duration: Duration,
+        f: Box<dyn FnOnce(&mut T, &mut dyn Context<T>) + Send>,
+    ) -> TimerKey {
+        self.timers.insert(f, duration)
+    }
+
+    fn cancel_timer(&mut self, key: TimerKey) {
+        self.timers.remove(&key);
     }
 }

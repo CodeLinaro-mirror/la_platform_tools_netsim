@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::grpc_client::ClientResponseReadable;
-use std::fs::File;
 /// Implements handler for pcap operations
 use std::io::Write;
-use std::path::PathBuf;
+use std::{fs::File, path::PathBuf};
+
+use crate::grpc_client::ClientResponseReadable;
 
 pub struct FileHandler {
     pub file: File,

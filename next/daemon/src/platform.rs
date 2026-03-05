@@ -1,7 +1,6 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use std::env;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 /// Returns the appropriate runtime directory for the current platform.
 ///

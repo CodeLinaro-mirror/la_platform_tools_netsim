@@ -1,16 +1,17 @@
 // Copyright 2025 The Android Open Source Project
 
+use std::{path::PathBuf, sync::Arc, time::Duration};
+
 use daemon::netsimd::{NetsimDaemon, StartUpMode};
 use grpcio::{ChannelBuilder, EnvBuilder};
-use netsim_proto::common::ChipKind;
-use netsim_proto::frontend::{CreateDeviceRequest, DeleteChipRequest};
-use netsim_proto::frontend_grpc::FrontendServiceClient;
-use netsim_proto::model::{ChipCreate, DeviceCreate};
-use netsim_proto::packet_streamer_grpc::PacketStreamerClient;
-use netsim_proto::protobuf::{EnumOrUnknown, MessageField};
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
+use netsim_proto::{
+    common::ChipKind,
+    frontend::{CreateDeviceRequest, DeleteChipRequest},
+    frontend_grpc::FrontendServiceClient,
+    model::{ChipCreate, DeviceCreate},
+    packet_streamer_grpc::PacketStreamerClient,
+    protobuf::{EnumOrUnknown, MessageField},
+};
 
 /// The BDD World for Daemon tests.
 pub struct World {
@@ -33,6 +34,7 @@ impl World {
     pub async fn new() -> Self {
         let mut args = daemon::args::Args::default();
         args.logtostderr = true; // Disable log redirection
+        args.no_shutdown = true; // Prevent tests from dying when deleting devices
         Self::new_with_args(args).await
     }
 
@@ -68,7 +70,7 @@ impl World {
     pub fn ensure_frontend_client(&mut self) -> &FrontendServiceClient {
         if self.frontend_client.is_none() {
             let env = Arc::new(EnvBuilder::new().build());
-            let ch = ChannelBuilder::new(env).connect(&format!("127.0.0.1:{}", self.grpc_port));
+            let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", self.grpc_port));
             self.frontend_client = Some(FrontendServiceClient::new(ch));
         }
         self.frontend_client.as_ref().unwrap()
@@ -78,7 +80,7 @@ impl World {
     pub fn ensure_packet_client(&mut self) -> &PacketStreamerClient {
         if self.packet_client.is_none() {
             let env = Arc::new(EnvBuilder::new().build());
-            let ch = ChannelBuilder::new(env).connect(&format!("127.0.0.1:{}", self.grpc_port));
+            let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", self.grpc_port));
             self.packet_client = Some(PacketStreamerClient::new(ch));
         }
         self.packet_client.as_ref().unwrap()
@@ -104,7 +106,7 @@ impl World {
 
         let mut chip_create = ChipCreate::new();
         chip_create.name = chip_name.to_string();
-        chip_create.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH_BEACON);
+        chip_create.kind = EnumOrUnknown::new(ChipKind::BLUETOOTH);
         chip_create.manufacturer = "TestMfg".to_string();
         chip_create.product_name = "TestProduct".to_string();
         chip_create.address = "11:22:33:44:55:66".to_string();
@@ -176,11 +178,14 @@ impl World {
             .expect("RPC failed");
     }
 
-    /// Start the daemon in the background (World owns the logical flow, usually we spawn daemon in a thread or task)
-    /// Note: In these tests, we often spawn the daemon task.
+    /// Start the daemon in the background (World owns the logical flow, usually
+    /// we spawn daemon in a thread or task) Note: In these tests, we often
+    /// spawn the daemon task.
     pub fn spawn_daemon(&mut self) -> tokio::task::JoinHandle<()> {
         if let Some(daemon) = self.daemon.take() {
-            tokio::spawn(daemon.run_daemon())
+            tokio::spawn(async move {
+                let _ = daemon.run_daemon().await;
+            })
         } else {
             panic!("Daemon already running or not initialized");
         }

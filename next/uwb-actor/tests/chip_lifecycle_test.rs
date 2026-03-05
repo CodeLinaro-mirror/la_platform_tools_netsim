@@ -1,8 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 
+use netsim_model::{chip::ChipId, chip_error::ChipError};
+
 use crate::world::World;
-use netsim_model::chip::ChipId;
-use netsim_model::chip_error::ChipError;
 
 // Feature: UWB Chip Lifecycle
 //
@@ -67,6 +67,7 @@ async fn test_chip_deleted_on_stream_close() {
 
     // When
     world.and_packet_stream_is_closed(chip_id);
+    world.and_tick_occurs().await;
 
     // Then
     world.then_chip_does_not_exist(chip_id).await;

@@ -3,7 +3,8 @@
 //! # Netsim Next
 //!
 //! This crate provides the main binary for the netsim daemon, `netsimd`.
-//! It is responsible for handling frontend requests and managing the simulation state.
+//! It is responsible for handling frontend requests and managing the simulation
+//! state.
 //!
 //! ## Internal Module Structure
 //!

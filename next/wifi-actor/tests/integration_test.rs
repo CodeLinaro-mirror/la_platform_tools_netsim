@@ -1,6 +1,11 @@
 // Copyright 2025 The Android Open Source Project
 
+mod ftm_test;
+mod gateway_test;
 mod hwsim_helper;
+mod lifecycle_test;
+mod packet_routing_test;
+// mod veth_test; // Broken/Outdated
 mod world;
 
 use world::World;
@@ -27,8 +32,9 @@ async fn test_full_lifecycle_and_messaging() {
     world.then_chip_receives_nothing(1).await;
 
     // 5. Delete Chip 1 (Simulate DeviceActor deletion)
-    // We use the wifi_client directly for deletion as `world` helpers mostly expose higher level given/when
-    // but correct integration path is via ChipClient (which `world.wifi_client` provides).
+    // We use the wifi_client directly for deletion as `world` helpers mostly expose
+    // higher level given/when but correct integration path is via ChipClient
+    // (which `world.wifi_client` provides).
     use netsim_model::chip::{ChipClient, ChipId};
     world.wifi_client.delete(ChipId(chip1_id)).await.expect("Failed to delete chip 1");
 

@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    io::Cursor,
+    net::{IpAddr, Ipv6Addr},
+    str::FromStr,
+};
+
 use capture::pcap;
-use std::io::Cursor;
-use std::net::{IpAddr, Ipv6Addr};
-use std::str::FromStr;
 use tokio::io::BufReader;
 
 fn ipv6_from_str(addr: &str) -> Result<IpAddr, std::io::Error> {

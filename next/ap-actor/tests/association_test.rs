@@ -1,17 +1,21 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::world::ApWorld;
-use ap_actor::ffi::{DigestType, Hmac};
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::eapol::{
-    EapolHeader, EapolKeyFrame, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
-};
-use netsim_packets::ieee80211::{
-    management_subtype, DataFrameHeader, FrameControl, Ieee80211, SequenceControl,
-};
-use netsim_packets::llc::{control_field, sap, LlcSnapHeader};
 use std::time::Duration;
+
+use ap_actor::ffi::{DigestType, Hmac};
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        eapol::{
+            EapolHeader, EapolKeyFrame, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
+        },
+        management_subtype, DataFrameHeader, FrameControl, Ieee80211, SequenceControl,
+    },
+    llc::{control_field, sap, LlcSnapHeader},
+};
 use zerocopy::{FromBytes, IntoBytes};
+
+use crate::world::ApWorld;
 
 // Helper: Calculate MIC (from wpa_auth.rs logic reversed/reused)
 fn calc_mic(kck: &[u8], frame: &[u8]) -> Vec<u8> {
@@ -267,7 +271,8 @@ async fn test_wpa_handshake_success() {
     // 3. Construct M2 (Correct)
     log::info!("And sends a valid M2");
     // In production, PMK would be PBKDF2(passphrase, ssid, ...).
-    // For test simplicity/speed, and matching current AP behavior, we use raw passphrase bytes.
+    // For test simplicity/speed, and matching current AP behavior, we use raw
+    // passphrase bytes.
     let pmk = b"CorrectPassword";
 
     let snonce = [0x55; 32];

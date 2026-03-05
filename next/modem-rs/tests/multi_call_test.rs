@@ -1,5 +1,6 @@
-use crate::common::TestHarness;
 use modem_rs::types::{ModemId, AT_OK};
+
+use crate::common::TestHarness;
 
 #[test]
 fn test_multi_call_scenario() {

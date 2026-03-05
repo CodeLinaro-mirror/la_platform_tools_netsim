@@ -1,6 +1,6 @@
 [package]
 name = "netsim-daemon"
-version = "0.3.93"
+version = "0.3.94"
 edition = "2021"
 build = "build.rs"
 
@@ -22,21 +22,34 @@ cxx = { version = ">=1.0.85", features = ["c++17"] }
 data-encoding = "2.4.0"
 futures = "0.3.30"
 glam = { version = "0.25.0", features = ["libm"] }
-netsim-proto = { path = "../proto" }
-http = "0.2.9"
-httparse = "1.9.5"
-netsim-common = { path = "../common" }
-libslirp-rs = { path = "../libslirp-rs" }
 hostapd-rs = { path = "../hostapd-rs" }
+http = "0.2.9"
 http-proxy = { path = "../http-proxy" }
+httparse = "1.9.5"
+libslirp-rs = { path = "../libslirp-rs" }
+netsim-common = { path = "../common" }
 netsim-packets = { path = "../packets" }
+netsim-proto = { path = "../proto" }
 # Relax the version constraint for 'pica' to allow cargo to select a compatible version
 # from crates.io since 0.1.9 seems to be only available in AOSP.
+anyhow = "1"
+futures-channel = { version = "0.3.30", features = ["sink"] }
+futures-executor = "0.3.30"
+futures-util = { version = "0.3.30", default-features = false, features = [
+  "sink",
+] }
+grpcio = { version = "0.13.0", default-features = false, features = [
+  "protobufv3-codec",
+] }
+log = "0.4.17"
+pdl-runtime = "0.4.2"
 pica = { version = "0.1", default-features = false }
 protobuf = "3.2.0"
 protobuf-json-mapping = "3.2.0"
 rand = "0.8.5"
 regex = "1.6.0"
+socket2 = "0.5.5"
+thiserror = { version = ">=1.0.40" }
 tokio = { version = "1.32.0", features = [
   "fs",
   "io-util",
@@ -45,20 +58,7 @@ tokio = { version = "1.32.0", features = [
   "rt-multi-thread",
 ] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
-thiserror = { version = ">=1.0.40" }
 tungstenite = { version = ">=0.19.0", default-features = false }
-log = "0.4.17"
-anyhow = "1"
-pdl-runtime = "0.4.2"
-grpcio = { version = "0.13.0", default-features = false, features = [
-  "protobufv3-codec",
-] }
-futures-channel = { version = "0.3.30", features = ["sink"] }
-futures-executor = "0.3.30"
-futures-util = { version = "0.3.30", default-features = false, features = [
-  "sink",
-] }
-socket2 = "0.5.5"
 
 [build-dependencies]
 cxx-build = "1.0.92"

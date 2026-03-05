@@ -1,12 +1,19 @@
 // Copyright 2026 The Android Open Source Project
 
-use crate::uwb_actor::{run_sink_task, UwbActor};
-use crate::{UwbAction, UwbActionResult};
 use actor_framework::{ActorService, DynContext};
 use async_trait::async_trait;
-use netsim_model::chip::{Chip, ChipCreate, ChipId, ChipUpdate};
-use netsim_model::chip_error::ChipError;
-use tokio::sync::mpsc;
+use bytes::Bytes;
+use futures::{FutureExt, SinkExt, StreamExt};
+use netsim_model::{
+    chip::{Chip, ChipCreate, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate},
+    chip_error::ChipError,
+};
+use pica::{PicaCommand, PicaEvent};
+
+use crate::{
+    uwb_actor::{UwbActor, UwbChipState},
+    UwbAction, UwbActionResult,
+};
 
 #[async_trait]
 impl ActorService for UwbActor {
@@ -22,35 +29,55 @@ impl ActorService for UwbActor {
         &mut self,
         _id: Option<Self::Id>,
         params: Self::Create,
-        ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = params.id;
-        if self.chips.contains_key(&chip_id) {
+        if self.chip_states.contains_key(&chip_id) {
             return Err(ChipError::ChipExists(chip_id.0));
         }
-
-        let stream = params.packet_stream.expect("Packet stream is present");
-        let sink = params.packet_sink.expect("Packet sink is present");
 
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
             kind: netsim_model::chip::ChipKind::UWB,
-            variant: Some(netsim_model::chip::ChipVariant::Uwb(Default::default())),
+            variant: Some(ChipVariant::Uwb(Default::default())),
             name: Some(params.config.name),
             manufacturer: Some(params.config.manufacturer),
             product_name: Some(params.config.product_name),
             ..Default::default()
         };
-        self.chips.insert(chip_id, chip);
 
-        // Spawn a task to handle the sink.
-        let (uci_tx, uci_rx) = mpsc::channel(10);
-        self.uci_senders.insert(chip_id, uci_tx);
-        ctx.spawn(chip_id, Box::pin(run_sink_task(sink, uci_rx, chip_id)));
+        // Add chip to Pica
+        let stream =
+            params.packet_stream.expect("Packet stream is present").map(|b| b.to_vec()).boxed();
 
-        // Register the stream with the actor's context to get lifecycle events.
-        ctx.add_stream(chip_id, Box::pin(stream));
+        // Pica wants a Sink<Vec<u8>>.
+        let sink = Box::pin(
+            params
+                .packet_sink
+                .expect("Packet sink is present")
+                .with(|v| async move { Ok(Bytes::from(v)) }),
+        );
+
+        // Clear unrelated events to prevent a lagged error
+        self.pica_connect_events.resubscribe();
+
+        let _ = self.pica_commands.send(PicaCommand::Connect(stream, sink)).await;
+        // Wait for add to complete. This guarantees the chip exists by the time any
+        // actions are performed on it.
+        let handle = loop {
+            if let PicaEvent::Connected { handle, .. } = self
+                .pica_connect_events
+                .recv()
+                .await
+                .map_err(|_| ChipError::Internal("pica shutdown unexpectedly".to_string()))?
+            {
+                break handle;
+            }
+        };
+
+        self.chip_states.insert(chip_id, UwbChipState { chip, pica_handle: handle });
+        self.handle_to_chip.insert(handle, chip_id);
 
         Ok(chip_id)
     }
@@ -58,64 +85,85 @@ impl ActorService for UwbActor {
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        Ok(self.chips.get(&id).cloned())
+        Ok(self.chip_states.get(&id).map(|state| state.chip.clone()))
     }
 
     async fn handle_update(
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        let chip = self.chips.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
+        let state = self.chip_states.get_mut(&id).ok_or(ChipError::ChipNotFound(id))?;
         if let Some(pos) = update.position {
-            chip.position = pos;
+            state.chip.position = pos;
         }
         if let Some(orient) = update.orientation {
-            chip.orientation = orient;
+            state.chip.orientation = orient;
         }
-        if let Some(netsim_model::chip::ChipVariantUpdate::Uwb(radio_update)) = update.variant {
-            if let Some(netsim_model::chip::ChipVariant::Uwb(uwb_radio)) = &mut chip.variant {
-                radio_update.apply(uwb_radio);
+        match (update.variant, &mut state.chip.variant) {
+            (Some(ChipVariantUpdate::Uwb(uwb_update)), Some(ChipVariant::Uwb(uwb_radio))) => {
+                uwb_update.radio.apply(&mut uwb_radio.radio);
             }
+            (Some(other), _) => {
+                log::warn!("Received unexpected update for chip {id}: {other:?}");
+            }
+            (None, _) => {}
         }
-        // TODO: Implement update logic to pica
-        Ok(chip.clone())
+        Ok(state.chip.clone())
     }
 
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        ctx: &mut DynContext<Self::Id>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        let chip = self.chips.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
-        self.uci_senders.remove(&id);
+        let state = self.chip_states.remove(&id).ok_or(ChipError::ChipNotFound(id))?;
+
+        // If this request came from an external source, tell Pica to disconnect the
+        // chip.
+        if self.handle_to_chip.contains_key(&state.pica_handle) {
+            let _ = self.pica_commands.send(PicaCommand::Disconnect(state.pica_handle)).await;
+            // Disconnect completes asynchronously and is handled in the
+            // lifecycle `on_tick`.
+        }
+
         let device_client = self.device_client.clone();
-        tokio::spawn(async move {
-            let _ = device_client.notify_chip_removed(chip.device_id, id).await;
-        });
+        let device_id = state.chip.device_id;
+        ctx.spawn(
+            id,
+            async move {
+                let _ = device_client.notify_chip_removed(device_id, id);
+                id
+            }
+            .boxed(),
+        );
+
         Ok(())
     }
     async fn handle_action(
         &mut self,
         _id: Option<Self::Id>,
         action: Self::Action,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
-            UwbAction::Reset { id: _ } => {
-                // TODO: Implement reset
+            UwbAction::Reset { id } => {
+                if let Some(state) = self.chip_states.get(&id) {
+                    let _handle = state.pica_handle;
+                    // TODO(b/483097389): implement reset
+                }
                 Ok(UwbActionResult::Success)
             }
             UwbAction::GetStatistics => {
                 let stats = self
-                    .chips
+                    .chip_states
                     .values()
-                    .map(|chip| netsim_model::stats::NetsimRadioStats {
-                        id: chip.id,
-                        name: chip.name.clone().unwrap_or_default(),
+                    .map(|state| netsim_model::stats::NetsimRadioStats {
+                        id: state.chip.id,
+                        name: state.chip.name.clone().unwrap_or_default(),
                         tx_bytes: 0,
                         rx_bytes: 0,
                     })
@@ -127,8 +175,8 @@ impl ActorService for UwbActor {
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        Ok(self.chips.values().cloned().collect())
+        Ok(self.chip_states.values().map(|state| state.chip.clone()).collect())
     }
 }

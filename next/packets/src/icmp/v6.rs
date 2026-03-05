@@ -1,11 +1,13 @@
 // Copyright 2024 The Android Open Source Project
 
-//! Defines structures for ICMPv6 (Internet Control Message Protocol for IPv6) headers using `zerocopy`.
+//! Defines structures for ICMPv6 (Internet Control Message Protocol for IPv6)
+//! headers using `zerocopy`.
 
-use crate::utils::general::ParseResult;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
 };
+
+use crate::utils::general::ParseResult;
 
 /// Represents the ICMPv6 header.
 #[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable)]
@@ -13,7 +15,8 @@ use zerocopy::{
 pub struct Icmpv6Header {
     /// The type of the ICMPv6 message.
     pub icmpv6_type: u8,
-    /// The code of the ICMPv6 message, providing more specific information about the message type.
+    /// The code of the ICMPv6 message, providing more specific information
+    /// about the message type.
     pub icmpv6_code: u8,
     /// The checksum of the ICMPv6 header and data.
     pub icmpv6_checksum: U16<NetworkEndian>,

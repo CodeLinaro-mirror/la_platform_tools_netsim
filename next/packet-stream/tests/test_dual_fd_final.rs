@@ -5,13 +5,14 @@ mod tests {
     // tests/test_dual_fd_final.rs - DualFd transport tests (Public API only)
     //=============================================================================
 
-    use packet_stream::transport::dual_fd::DualFdConfig;
-    use packet_stream::TransportType;
+    use packet_stream::{transport::dual_fd::DualFdConfig, TransportType};
 
-    /// Tests for DualFd transport focusing on what's accessible through public API
+    /// Tests for DualFd transport focusing on what's accessible through public
+    /// API
     ///
     /// Note: DualFd is designed for pre-existing file descriptors passed from
-    /// parent processes (like Cuttlefish). Most functionality requires internal APIs.
+    /// parent processes (like Cuttlefish). Most functionality requires internal
+    /// APIs.
 
     #[tokio::test]
     async fn test_dual_fd_transport_creation() {
@@ -83,7 +84,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_dual_fd_config_single_device_multiple_chips() {
-        // Test configuration with multiple chips per device (realistic Cuttlefish scenario)
+        // Test configuration with multiple chips per device (realistic Cuttlefish
+        // scenario)
         let json_config = r#"
     {
         "devices": [

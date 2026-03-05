@@ -1,12 +1,15 @@
 // Copyright 2026 The Android Open Source Project
 
-use crate::ApError;
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::eapol::{
-    EapHeader, EapolHeader, EAPOL_TYPE_PACKET, EAP_CODE_REQUEST, EAP_CODE_RESPONSE,
-    EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::eapol::{
+        EapHeader, EapolHeader, EAPOL_TYPE_PACKET, EAP_CODE_REQUEST, EAP_CODE_RESPONSE,
+        EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
+    },
 };
 use zerocopy::{FromBytes, IntoBytes};
+
+use crate::ApError;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(dead_code)]

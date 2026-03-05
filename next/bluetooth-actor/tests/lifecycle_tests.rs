@@ -1,9 +1,10 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use crate::world::World;
 use bytes::Bytes;
 use netsim_model::chip::ChipClient;
 use tokio::time::Duration;
+
+use crate::world::World;
 
 // Feature: Bluetooth Chip Lifecycle
 //
@@ -59,7 +60,8 @@ async fn test_chip_dies_on_packet_stream_error() {
     world.when_stream_dropped("A");
 
     // 4. Verify the chip has been removed.
-    // A small delay is needed to ensure the actor has time to process the death notice.
+    // A small delay is needed to ensure the actor has time to process the death
+    // notice.
     tokio::time::sleep(Duration::from_millis(10)).await;
     let chip_count: usize = world.client.read_count_for_testing().await.expect("chip count");
     assert_eq!(chip_count, 0);
@@ -114,7 +116,8 @@ async fn test_chip_dies_on_packet_sink_error() {
     world.when_packet_sent("A", hci_reset_cmd).await;
 
     // 4. Verify the chip has been removed.
-    // A small delay is needed to ensure the actor has time to process the death notice.
+    // A small delay is needed to ensure the actor has time to process the death
+    // notice.
     tokio::time::sleep(Duration::from_millis(500)).await;
     let chip_count: usize = world.client.read_count_for_testing().await.expect("chip count");
     assert_eq!(chip_count, 0);

@@ -1,14 +1,15 @@
 // Copyright 2025 The Android Open Source Project
 
+use std::collections::HashMap;
+
 use link_actor::{LinkActor, LinkClient};
 use link_api::{Link, LinkCreate, LinkId, LinkUpdate};
 use netsim_model::chip::{ChipClient, ChipId, ChipKind, MockChipClient};
-use std::collections::HashMap;
 
 /// The BDD World for Link Actor tests.
 ///
-/// Encapsulates the actor runtime, the client interaction, and the mock chip clients.
-/// Dropping this struct terminates the actor task.
+/// Encapsulates the actor runtime, the client interaction, and the mock chip
+/// clients. Dropping this struct terminates the actor task.
 pub struct World {
     pub client: LinkClient,
     _actor_task: tokio::task::JoinHandle<()>,

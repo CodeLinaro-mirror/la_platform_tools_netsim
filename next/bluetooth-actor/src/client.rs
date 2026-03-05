@@ -2,17 +2,18 @@
 
 //! Bluetooth Client
 //!
-//! This module provides the [`BluetoothClient`] struct, which is a wrapper around
-//! [`ResourceClient<BluetoothActor>`].
-
-use crate::BluetoothAction;
-use crate::BluetoothActionResult;
-use crate::BluetoothActor;
-use actor_framework::ResourceClient;
-use netsim_model::chip::{ChipClient, ChipCreate, ChipId};
-use netsim_model::client_error::ClientError;
+//! This module provides the [`BluetoothClient`] struct, which is a wrapper
+//! around [`ResourceClient<BluetoothActor>`].
 
 use std::ops::Deref;
+
+use actor_framework::ResourceClient;
+use netsim_model::{
+    chip::{ChipClient, ChipCreate, ChipId},
+    client_error::ClientError,
+};
+
+use crate::{BluetoothAction, BluetoothActionResult, BluetoothActor};
 
 /// A client for the Bluetooth actor.
 #[derive(Clone, Debug)]
@@ -68,9 +69,7 @@ impl ChipClient for BluetoothClient {
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        // ResourceClient does not support explicit shutdown.
-        // Dropping the client will eventually shut down the actor if it's the last one.
-        Ok(())
+        self.0.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn reset(&self, id: ChipId) -> Result<(), ClientError> {

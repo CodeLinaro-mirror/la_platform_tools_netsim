@@ -1,21 +1,27 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::hwsim_helper::wrap_ethernet_in_hwsim;
+use std::sync::Arc;
+
 use actor_framework::ResourceActor;
 use ap_actor::{ApActor, ApClient};
 use bytes::Bytes;
 use device_actor::DeviceActor;
 use device_api::{DeviceAction, DeviceId};
-use netsim_model::chip::{ChipClient, ChipConfig, ChipCreate, ChipId, NetworkParams, WifiCreate};
-use netsim_model::device::Position;
-use netsim_packets::ethernet::{ether_type, EthernetFrame, MacAddr};
-use netsim_packets::ieee80211::{FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddress};
+use netsim_model::{
+    chip::{ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, WifiCreate},
+    device::Position,
+};
+use netsim_packets::{
+    ethernet::{ether_type, EthernetFrame, MacAddr},
+    ieee80211::{FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddress},
+};
 use slirp_actor::SlirpActor;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use wifi_actor::WifiActor;
 use zerocopy::IntoBytes;
+
+use crate::hwsim_helper::wrap_ethernet_in_hwsim;
 
 #[allow(dead_code)]
 pub struct ChipChannels {
@@ -38,6 +44,14 @@ pub struct World {
 #[allow(dead_code)]
 impl World {
     pub async fn new() -> Self {
+        Self::new_internal(None).await
+    }
+
+    pub async fn new_with_gateway(gateway: Box<dyn wifi_actor::gateway::GatewayTrait>) -> Self {
+        Self::new_internal(Some(gateway)).await
+    }
+
+    async fn new_internal(gateway: Option<Box<dyn wifi_actor::gateway::GatewayTrait>>) -> Self {
         let _ = env_logger::builder().is_test(true).try_init();
         // Setup dependencies
         let slirp_actor_impl = SlirpActor::new(Default::default());
@@ -51,7 +65,8 @@ impl World {
 
         // Test DeviceClient
         let (device_tx, device_rx) = mpsc::unbounded_channel();
-        // Create a Mock Device Client to verify that WifiActor interacts with DeviceActor correctly.
+        // Create a Mock Device Client to verify that WifiActor interacts with
+        // DeviceActor correctly.
         let mut mock_device = actor_framework::MockActorClient::<DeviceActor>::new();
 
         // Forward all DeviceActions to the channel for verification.
@@ -70,8 +85,6 @@ impl World {
         setup_mock(&mut mock_device);
 
         // Handle clone_box: Return a new mock with the same setup
-        // We need to use `returning` with a closure that captures the setup logic (or strictly the tx)
-        // Since `setup_mock` closure captures `device_tx_clone`, we can clone `device_tx_clone` again for the `clone_box` closure.
         let tx_for_clone = device_tx.clone();
         mock_device.expect_clone_box().returning(move || {
             let mut new_mock = actor_framework::MockActorClient::<DeviceActor>::new();
@@ -80,25 +93,6 @@ impl World {
                 let _ = tx.send(action);
                 Ok(device_api::DeviceActionResult::Success)
             });
-            // Note: The new mock ALSO needs to support clone_box if it gets cloned again.
-            // This could be recursive.
-            // However, usually we clone only once or twice.
-            // To support infinite cloning, we would need a recursive structure or just assume limited depth.
-            // Let's implement one level of depth for now, or use a shared Arc<Function>?
-            // Actually, let's just implement `expect_clone_box` on the NEW mock too.
-            // But mockall closures are moved.
-            // Let's simplify: Just return a mock that panics on clone_box for now, assuming 1 level of clone is enough (WifiActor stores it).
-            // Or better: make a recursive helper if possible, but closures are hard.
-            // "WifiActor" clones it once when storing?
-            // WifiActor::new takes `device_client`. It stores it.
-            // handle_delete clones it: `let dc = self.device_client.clone();`.
-            // So the stored client is indeed cloned.
-            // So the mock returned by `clone_box` MUST also support `perform_action` AND `clone_box` (if that clone is used).
-            // But `handle_delete` uses the clone to call `notify_chip_removed` (perform_action) and then drops it.
-            // It does NOT clone it again.
-            // So 1 level of recursion for `clone_box` is likely sufficient for `handle_delete`.
-            // NOTE: The mock returned by `clone_box` needs to support `perform_action` but likely doesn't
-            // need to support further cloning if the actor only stores it once.
             Box::new(new_mock)
         });
 
@@ -108,11 +102,6 @@ impl World {
         // Create ApClient with interceptor to capture the downlink sink
         let (capture_tx, mut capture_rx) = mpsc::unbounded_channel();
         let capture_tx_arc = Arc::new(capture_tx);
-
-        // We need to pass ap_client to WifiActor.
-        // And we also want to keep it in World?
-        // Wait, WifiActor takes Arc<ApClient>.
-        // We can create one ApClient with interceptor.
 
         let ap_client_interceptor = {
             let capture_tx = capture_tx_arc.clone();
@@ -125,8 +114,17 @@ impl World {
             ApClient::new_with_interceptor(ap_client_base, ap_client_interceptor);
         let spying_ap_client_arc = Arc::new(spying_ap_client.clone());
 
-        let wifi_actor_impl =
-            WifiActor::new(Some(spying_ap_client_arc.clone()), Some(slirp_client), device_client);
+        let wifi_actor_impl = if let Some(gw) = gateway {
+            WifiActor::new_with_gateway(Some(spying_ap_client_arc.clone()), gw, device_client)
+        } else {
+            WifiActor::new(
+                Some(spying_ap_client_arc.clone()),
+                Some(slirp_client),
+                device_client,
+                None,
+            )
+        };
+
         let (wifi_runner, wifi_client) = wifi_actor::new();
         tokio::spawn(wifi_runner.run(wifi_actor_impl));
 
@@ -190,7 +188,7 @@ impl World {
             }));
 
         let config =
-            ChipConfig::new("wifi", "google", "test", NetworkParams::Wifi(WifiCreate::default()));
+            ChipConfig::new("wifi", "google", "test", ChipKindParams::Wifi(WifiCreate::default()));
         let id = ChipId(id_val);
 
         let params = ChipCreate {
@@ -303,8 +301,9 @@ impl World {
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP multicast packet");
     }
 
-    /// Simulates a Chip transmitting a Data Frame (ToDS=1) to another Chip via the AP.
-    /// This requires `simulate_ap_reflection: true` in Medium (default).
+    /// Simulates a Chip transmitting a Data Frame (ToDS=1) to another Chip via
+    /// the AP. This requires `simulate_ap_reflection: true` in Medium
+    /// (default).
     pub async fn when_chip_transmits_to_ds_unicast(
         &mut self,
         sender_idx: usize,
@@ -465,7 +464,8 @@ impl World {
         }
     }
 
-    /// Simulates a Chip transmitting a Data Frame (ToDS=1) destined for the Internet Gateway (Slirp).
+    /// Simulates a Chip transmitting a Data Frame (ToDS=1) destined for the
+    /// Internet Gateway (Slirp).
     pub async fn when_chip_transmits_data_to_slirp(&mut self, sender_idx: usize) {
         let sender_mac = self.chips[sender_idx].mac;
         let internet_gateway = [0x00, 0x00, 0x00, 0x00, 0x00, 0xFE]; // Dummy Gateway
@@ -571,5 +571,64 @@ impl World {
                 }
             }
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MockGateway {
+    pub outgoing_packets: Arc<std::sync::Mutex<Vec<(netsim_model::chip::ChipId, bytes::Bytes)>>>,
+}
+
+impl MockGateway {
+    pub fn new() -> Self {
+        Self { outgoing_packets: Arc::new(std::sync::Mutex::new(Vec::new())) }
+    }
+}
+
+#[async_trait::async_trait]
+impl wifi_actor::gateway::GatewayTrait for MockGateway {
+    async fn send_80211(
+        &self,
+        chip_id: netsim_model::chip::ChipId,
+        ieee80211: &netsim_packets::ieee80211::Ieee80211,
+    ) -> bool {
+        use zerocopy::IntoBytes;
+        let bytes = ieee80211.encode_to_vec().unwrap();
+        self.outgoing_packets.lock().unwrap().push((chip_id, bytes::Bytes::from(bytes)));
+        true
+    }
+
+    fn should_handle(&self, _chip_id: netsim_model::chip::ChipId) -> bool {
+        false
+    }
+
+    fn handle_incoming(
+        &self,
+        _chip_id: netsim_model::chip::ChipId,
+        _packet: bytes::Bytes,
+        _medium: &mut wifi_actor::medium::Medium,
+        _shared_keys: &ap_actor::shared::SharedKeyStore,
+        _out_queue: &mut Vec<(u32, bytes::Bytes)>,
+    ) {
+    }
+
+    async fn on_start(&mut self, _ctx: &mut actor_framework::DynContext<WifiActor>) {}
+
+    async fn on_chip_create(
+        &mut self,
+        _chip_id: netsim_model::chip::ChipId,
+        _ctx: &mut actor_framework::DynContext<WifiActor>,
+    ) {
+    }
+
+    async fn on_chip_remove(
+        &mut self,
+        _chip_id: netsim_model::chip::ChipId,
+        _ctx: &mut actor_framework::DynContext<WifiActor>,
+    ) {
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }

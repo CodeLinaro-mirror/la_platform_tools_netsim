@@ -1,5 +1,7 @@
 // Copyright 2026 The Android Open Source Project
 
+use std::pin::Pin;
+
 use bytes::Bytes;
 use futures::{
     sink::Sink,
@@ -7,7 +9,6 @@ use futures::{
     task::{Context, Poll},
     Future,
 };
-use std::pin::Pin;
 use tokio::sync::mpsc;
 
 /// A mock Sink that captures packets into an mpsc channel.

@@ -20,42 +20,51 @@
 //!
 //! ## Key Components
 //!
-//! - **`rewrite_request_to_absolute_form`**: The primary function that reads from a
-//!   `BufRead` stream and performs the transformation.
-//! - **`Error`**: An enum that defines possible errors, such as I/O
-//!   issues, malformed requests, or a missing `Host` header.
+//! - **`rewrite_request_to_absolute_form`**: The primary function that reads
+//!   from a `BufRead` stream and performs the transformation.
+//! - **`Error`**: An enum that defines possible errors, such as I/O issues,
+//!   malformed requests, or a missing `Host` header.
 //!
 //! This is typically used in the core logic of an HTTP proxy server.
 
-use crate::{Error, Result};
-use log::warn;
 use std::net::SocketAddr;
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
-use tokio::net::{TcpListener, TcpStream};
+
+use log::warn;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader},
+    net::{TcpListener, TcpStream},
+};
+
+use crate::{Error, Result};
 
 // --- Core Rewriting Function ---
 
-/// Reads an HTTP request, rewriting the target from origin-form to absolute-form.
+/// Reads an HTTP request, rewriting the target from origin-form to
+/// absolute-form.
 ///
 /// ## HTTP Request Target Forms Explained
 ///
-/// An HTTP request-line is `METHOD TARGET HTTP_VERSION`. The `TARGET` has several forms:
+/// An HTTP request-line is `METHOD TARGET HTTP_VERSION`. The `TARGET` has
+/// several forms:
 ///
-/// 1.  **Origin-Form (Direct Style to Server)**
+/// 1. **Origin-Form (Direct Style to Server)**
 ///     - This is the most common form, sent to an origin server.
 ///     - The target only contains the resource path and query string.
 ///     - Example: `GET /path/to/resource.html HTTP/1.1`
 ///
-/// 2.  **Absolute-Form (Proxy Style)**
+/// 2. **Absolute-Form (Proxy Style)**
 ///     - This form is required when sending a request to an HTTP proxy.
-///     - The target must be the full URI so the proxy knows which server to contact.
+///     - The target must be the full URI so the proxy knows which server to
+///       contact.
 ///     - Example: `GET http://www.example.com/path/to/resource.html HTTP/1.1`
 ///
-/// This function performs the conversion from **origin-form** to **absolute-form**.
+/// This function performs the conversion from **origin-form** to
+/// **absolute-form**.
 ///
 /// # Arguments
 ///
-/// * `reader` - A mutable reference to a buffered reader containing the raw HTTP request.
+/// * `reader` - A mutable reference to a buffered reader containing the raw
+///   HTTP request.
 ///
 /// # Returns
 ///
@@ -123,7 +132,8 @@ async fn rewrite_request_to_absolute_form<R: AsyncRead + Unpin>(
 /// after performing a header rewrite on the initial data.
 ///
 /// This function first connects to the destination to ensure it's available,
-/// then sets up an intermediate TCP pipe and returns a stream that the caller can write to.
+/// then sets up an intermediate TCP pipe and returns a stream that the caller
+/// can write to.
 ///
 /// # Arguments
 /// * `destination_addr`: The `SocketAddr` of the final destination server.
@@ -131,7 +141,8 @@ pub async fn connect_with_header_rewrite(
     proxy_addr: SocketAddr,
     auth_header: Option<String>,
 ) -> Result<TcpStream> {
-    // If a proxy is specified, connect there. Otherwise, connect to the original destination.
+    // If a proxy is specified, connect there. Otherwise, connect to the original
+    // destination.
     let connect_addr = proxy_addr;
 
     // 1. Connect to the next hop (either proxy or final destination).
@@ -171,11 +182,15 @@ pub async fn connect_with_header_rewrite(
 
 #[cfg(test)]
 mod tests {
+    use std::net::SocketAddr;
+
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        sync::oneshot,
+    };
+
     use super::*;
     use crate::Connector;
-    use std::net::SocketAddr;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::sync::oneshot;
 
     #[tokio::test]
     async fn test_rewrite_passes_on_missing_host_header() {
@@ -228,7 +243,8 @@ mod tests {
         assert_eq!(result, expected);
     }
 
-    /// Tests that an error is returned if the 'Host' header is completely missing.
+    /// Tests that an error is returned if the 'Host' header is completely
+    /// missing.
     #[tokio::test]
     async fn test_pass_through_on_missing_host_header() {
         let request = b"GET /path HTTP/1.1\r\nUser-Agent: No-Host-Client\r\n\r\n";
@@ -237,7 +253,8 @@ mod tests {
         assert_eq!(result, "GET /path HTTP/1.1\r\nUser-Agent: No-Host-Client\r\n\r\n");
     }
 
-    /// Tests that an error is returned if the 'Host' header is present but has an empty value.
+    /// Tests that an error is returned if the 'Host' header is present but has
+    /// an empty value.
     #[tokio::test]
     async fn test_pass_through_on_empty_host_header_value() {
         let request = b"GET /path HTTP/1.1\r\nHost: \r\n\r\n";
@@ -334,7 +351,8 @@ mod tests {
         }
     }
 
-    /// Test 3: Client connects but sends no data, resulting in an empty request.
+    /// Test 3: Client connects but sends no data, resulting in an empty
+    /// request.
     #[tokio::test]
     async fn test_client_sends_no_data() {
         // 1. Setup server and synchronization channel
@@ -353,7 +371,8 @@ mod tests {
         let proxy_stream = connect_with_header_rewrite(server_addr, None).await.unwrap();
         drop(proxy_stream);
 
-        // 3. Verify the result: The server should receive no data because the client sent none.
+        // 3. Verify the result: The server should receive no data because the client
+        //    sent none.
         let received_data = server_task.await.unwrap();
         assert!(received_data.is_empty());
     }

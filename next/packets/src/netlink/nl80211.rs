@@ -1,11 +1,14 @@
 // Copyright 2025 The Android Open Source Project
 
-//! Defines structures for parsing `nl80211` Netlink packets, specifically for the `mac80211_hwsim` driver.
+//! Defines structures for parsing `nl80211` Netlink packets, specifically for
+//! the `mac80211_hwsim` driver.
 //!
-//! The `nl80211` protocol is used for communication between user space daemons (like `wpa_supplicant` or `hostapd`)
-//! and the kernel's wireless subsystem (`mac80211`). The `mac80211_hwsim` is a software-simulated WiFi device
-//! that uses this `nl80211` interface. This module provides the data structures to parse, create, and
-//! interpret these Netlink messages, allowing a user space daemon to control and interact with simulated WiFi hardware.
+//! The `nl80211` protocol is used for communication between user space daemons
+//! (like `wpa_supplicant` or `hostapd`) and the kernel's wireless subsystem
+//! (`mac80211`). The `mac80211_hwsim` is a software-simulated WiFi device
+//! that uses this `nl80211` interface. This module provides the data structures
+//! to parse, create, and interpret these Netlink messages, allowing a user
+//! space daemon to control and interact with simulated WiFi hardware.
 
 use zerocopy::{
     byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16,
@@ -24,7 +27,8 @@ pub mod attr_id {
     pub const IFACE_TYPE: u16 = 4;
     /// Requests the creation of a simulated interface.
     pub const REQ_IFACE_NUM: u16 = 5;
-    /// Notifies about the maximum number of interfaces supported by the hardware.
+    /// Notifies about the maximum number of interfaces supported by the
+    /// hardware.
     pub const MAX_IFACES: u16 = 6;
     /// Sets or gets the regulatory domain index.
     pub const REG_DOM: u16 = 7;
@@ -40,9 +44,11 @@ pub mod attr_id {
     pub const CHANNEL_FLAGS: u16 = 12;
     /// Sets or gets the maximum transmission power in dBm.
     pub const MAX_TX_POWER: u16 = 13;
-    /// Sets or gets the center frequency of the first segment for HT40 channels.
+    /// Sets or gets the center frequency of the first segment for HT40
+    /// channels.
     pub const CENTER_FREQ1: u16 = 14;
-    /// Sets or gets the center frequency of the second segment for 80/160 MHz channels.
+    /// Sets or gets the center frequency of the second segment for 80/160 MHz
+    /// channels.
     pub const CENTER_FREQ2: u16 = 15;
     /// Sets or gets the signal strength of a received frame.
     pub const SIGNAL: u16 = 16;
@@ -118,9 +124,10 @@ pub struct GenlMsgHdr {
 
 #[cfg(test)]
 mod tests {
+    use core::mem::size_of;
+
     use super::*;
     use crate::netlink::nl80211::attr_id::HWSIM_ATTR_FRAME_DATA;
-    use core::mem::size_of;
 
     #[test]
     fn test_genl_msg_hdr_size() {

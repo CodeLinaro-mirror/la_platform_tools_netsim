@@ -16,7 +16,8 @@
 
 use protobuf_json_mapping::PrintOptions;
 
-/// A commonly used protobuf JSON print options for devices_handler, captures_handler, and links_handler
+/// A commonly used protobuf JSON print options for devices_handler,
+/// captures_handler, and links_handler
 pub const JSON_PRINT_OPTION: PrintOptions = PrintOptions {
     enum_values_int: false,
     proto_field_name: false,

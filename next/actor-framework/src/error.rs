@@ -1,8 +1,8 @@
 //! # Framework Errors
 //!
-//! This module defines the common error types used throughout the actor framework.
-//! By centralizing error definitions, we ensure consistent error handling across
-//! all actors and clients.
+//! This module defines the common error types used throughout the actor
+//! framework. By centralizing error definitions, we ensure consistent error
+//! handling across all actors and clients.
 
 /// Errors that can occur within the actor framework itself.
 #[derive(Debug, thiserror::Error)]

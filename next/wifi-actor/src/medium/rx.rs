@@ -1,12 +1,17 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::error::WifiError;
-use crate::medium::core::Medium;
-use crate::medium::tx_packet_state::{InfraTarget, TxPacketState};
-use crate::medium::{utils, WifiResult};
 use bytes::Bytes;
 use log::debug;
 use netsim_packets::ieee80211::{DataSubType, Ieee80211};
+
+use crate::{
+    error::WifiError,
+    medium::{
+        core::Medium,
+        tx_packet_state::{InfraTarget, TxPacketState},
+        utils, WifiResult,
+    },
+};
 
 // Packets flowing from Guest (Source) to Medium
 impl Medium {
@@ -14,9 +19,12 @@ impl Medium {
     ///
     /// # Flow
     /// 1. **Parse & Stats**: Validates `HwsimFrame` and updates RX statistics.
-    /// 2. **Station Tracking**: Updates the known state (frequency, etc.) of the source station.
-    /// 3. **Decryption**: Attempts to decrypt the frame if a key session exists.
-    /// 4. **Routing**: Determines where the packet should go (`ap`, `slirp`, `stations`).
+    /// 2. **Station Tracking**: Updates the known state (frequency, etc.) of
+    ///    the source station.
+    /// 3. **Decryption**: Attempts to decrypt the frame if a key session
+    ///    exists.
+    /// 4. **Routing**: Determines where the packet should go (`ap`, `slirp`,
+    ///    `stations`).
     pub fn resolve_tx_packet(
         &mut self,
         client_id: u32,
@@ -63,7 +71,8 @@ impl Medium {
             plaintext_bytes,
         };
 
-        // If we have plaintext, use it for routing decisions. Otherwise use the original frame (likely Mgmt/Open).
+        // If we have plaintext, use it for routing decisions. Otherwise use the
+        // original frame (likely Mgmt/Open).
         let routing_frame = tx_state.get_ieee80211();
 
         if routing_frame.is_mgmt() {

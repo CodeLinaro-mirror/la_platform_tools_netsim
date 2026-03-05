@@ -19,8 +19,8 @@ pub struct PatternVec {
 }
 
 impl PatternVec {
-    /// Creates a new PatternVec from a string containing semicolon (;) or comma (,)
-    /// separated wildcard patterns.
+    /// Creates a new PatternVec from a string containing semicolon (;) or comma
+    /// (,) separated wildcard patterns.
     pub fn new(pattern_list: impl Into<String>) -> PatternVec {
         let pattern_list = pattern_list.into();
         let patterns = if pattern_list.trim().is_empty() {
@@ -41,7 +41,8 @@ impl PatternVec {
     }
 
     /// Checks if a given string matches any of the patterns in the PatternVec.
-    /// A match occurs if the string starts with a pattern's prefix and ends with its suffix.
+    /// A match occurs if the string starts with a pattern's prefix and ends
+    /// with its suffix.
     pub fn matches(&self, s: &str) -> bool {
         self.patterns.iter().any(|(prefix, suffix)| s.starts_with(prefix) && s.ends_with(suffix))
     }

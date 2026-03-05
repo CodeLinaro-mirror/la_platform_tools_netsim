@@ -1,9 +1,10 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::utils::general::ParseResult;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
 };
+
+use crate::utils::general::ParseResult;
 
 /// Represents the LLC (Logical Link Control) header.
 #[repr(C)]

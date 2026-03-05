@@ -1,14 +1,17 @@
-use crate::frontend_converter::to_proto_device;
 use std::sync::Arc;
 
 use client::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
-use netsim_proto::empty::Empty;
-use netsim_proto::frontend::{ListDeviceResponse, ListLinkResponse};
-use netsim_proto::frontend_grpc::FrontendService;
-use netsim_proto::protobuf;
+use netsim_proto::{
+    empty::Empty,
+    frontend::{ListDeviceResponse, ListLinkResponse},
+    frontend_grpc::FrontendService,
+    protobuf,
+};
+
+use crate::frontend_converter::to_proto_device;
 
 #[derive(Clone)]
 pub struct FrontendClient {
@@ -142,6 +145,7 @@ impl FrontendClient {
                     orientation: crate::frontend_converter::from_proto_orientation(
                         req.device.orientation.clone().unwrap_or_default(),
                     ),
+                    builtin: false,
                 };
 
                 let device_create = device_api::api::DeviceCreate {
@@ -397,10 +401,11 @@ impl FrontendService for FrontendClient {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use link_api::{Link, LinkId, MockLinkClient};
     use netsim_model::chip::ChipId;
     use protobuf::EnumOrUnknown;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_create_link() {

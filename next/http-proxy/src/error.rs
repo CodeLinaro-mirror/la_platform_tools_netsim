@@ -14,9 +14,7 @@
 
 //! This module defines the Proxy error types.
 
-use std::fmt;
-use std::io;
-use std::net::SocketAddr;
+use std::{fmt, io, net::SocketAddr};
 
 /// Represents all possible errors that can occur in the http-proxy crate.
 #[derive(Debug)]

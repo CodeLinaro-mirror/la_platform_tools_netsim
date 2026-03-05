@@ -1,7 +1,8 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use clap::Parser;
 use std::env;
+
+use clap::Parser;
 
 #[derive(Debug, Parser, Default)]
 pub struct Args {
@@ -46,9 +47,18 @@ pub struct Args {
     pub http_proxy: Option<String>,
 
     /// Disable netsimd from shutting down automatically.
-    /// WARNING: This flag is for development purpose. netsimd will not shutdown without SIGKILL.
+    /// WARNING: This flag is for development purpose. netsimd will not shutdown
+    /// without SIGKILL.
     #[arg(long, alias = "no_shutdown")]
     pub no_shutdown: bool,
+
+    /// Set the idle shutdown timeout in milliseconds.
+    #[arg(long, alias = "idle-shutdown-timeout")]
+    pub idle_shutdown_timeout: Option<u64>,
+
+    /// Set the startup timeout in milliseconds.
+    #[arg(long, alias = "startup-timeout")]
+    pub startup_timeout: Option<u64>,
 
     /// Enable packet capture
     #[arg(long)]
@@ -71,14 +81,16 @@ pub struct Args {
     #[arg(long, alias = "host-dns")]
     pub host_dns: Option<String>,
 
-    /// Set the initial SSID for the default Access Point (defaults to 'AndroidWifi')
+    /// Set the initial SSID for the default Access Point (defaults to
+    /// 'AndroidWifi')
     #[command(flatten)]
     pub wifi: WifiConfig,
 }
 
 #[derive(Debug, Default, Clone, clap::Args)]
 pub struct WifiConfig {
-    /// Set the initial SSID for the default Access Point (defaults to 'AndroidWifi')
+    /// Set the initial SSID for the default Access Point (defaults to
+    /// 'AndroidWifi')
     #[arg(long, alias = "wifi-ssid", help_heading = "WiFi Settings")]
     pub wifi_ssid: Option<String>,
 
@@ -86,17 +98,31 @@ pub struct WifiConfig {
     #[arg(long, alias = "wifi-password", help_heading = "WiFi Settings")]
     pub wifi_password: Option<String>,
 
-    /// Set the initial radio channel for the default Access Point (defaults to 11)
+    /// Set the initial radio channel for the default Access Point (defaults to
+    /// 11)
     #[arg(long, alias = "wifi-channel", help_heading = "WiFi Settings")]
     pub wifi_channel: Option<u8>,
 
-    /// Set the beacon interval in TU for the default Access Point (defaults to 100)
+    /// Set the beacon interval in TU for the default Access Point (defaults to
+    /// 100)
     #[arg(long, alias = "wifi-beacon-interval", help_heading = "WiFi Settings")]
     pub wifi_beacon_interval: Option<u16>,
 
     /// Set the 802.11 mode for the default Access Point (defaults to "g")
     #[arg(long, alias = "wifi-mode", value_enum, help_heading = "WiFi Settings")]
     pub wifi_mode: Option<ClapWifiMode>,
+
+    /// Use a specific TAP interface (e.g. cvd-etap-01) or a pattern (e.g.
+    /// cvd-etap-%02d).
+    #[arg(long, alias = "wifi-tap", help_heading = "WiFi Settings")]
+    #[cfg(target_os = "linux")]
+    pub wifi_tap: Option<String>,
+
+    /// Use the standard Cuttlefish TAP pool (cvd-etap-06..10).
+    /// Equivalent to --wifi-tap "cvd-etap-%02d".
+    #[arg(long, alias = "wifi-cvd-tap", help_heading = "WiFi Settings")]
+    #[cfg(target_os = "linux")]
+    pub wifi_cvd_tap: bool,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
