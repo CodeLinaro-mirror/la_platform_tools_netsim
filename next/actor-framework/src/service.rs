@@ -14,7 +14,6 @@ use std::{
     pin::Pin,
 };
 
-use async_trait::async_trait;
 use bytes::Bytes;
 use tokio_stream::Stream;
 
@@ -22,6 +21,7 @@ use crate::DynContext;
 
 pub type StreamMessage = Bytes;
 pub type BoxStream = Pin<Box<dyn Stream<Item = StreamMessage> + Send>>;
+pub type BoxTypedStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
 
 /// Trait alias for Actor IDs ensuring all required bounds are met.
 pub trait ActorId:
@@ -50,11 +50,6 @@ impl<T> ActorId for T where
 /// By defining a contract (`ActorService`) that all our resource types (User,
 /// Product, Order) must satisfy, we can write the `ResourceActor` logic *once*
 /// and reuse it everywhere.
-///
-/// # Async & Context
-/// This trait is `#[async_trait]` to allow asynchronous operations in hooks
-/// (e.g., calling other actors).
-#[async_trait]
 pub trait ActorService: Send + Sync + 'static {
     /// The unique identifier for this entity (e.g., String, Uuid, u64).
     /// Must be convertible from u32 for automatic ID generation.
@@ -79,6 +74,9 @@ pub trait ActorService: Send + Sync + 'static {
     /// The entity type returned by get/update/list operations.
     type Entity: Send + Sync + Debug + Clone;
 
+    /// The item type for the alternative typed stream map.
+    type TypedStream: Send + Sync + Debug + Clone + Unpin + 'static;
+
     // --- Lifecycle Hooks (Async) ---
     //
     /// These hooks are called sequentially in the actor's run loop.
@@ -86,49 +84,48 @@ pub trait ActorService: Send + Sync + 'static {
     /// actor. Use `ctx.spawn()` for heavy tasks.
 
     /// Called when a create request is received.
-    async fn handle_create(
+    fn handle_create(
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
         ctx: &mut DynContext<Self>,
-    ) -> Result<Self::Id, Self::Error>;
+    ) -> impl std::future::Future<Output = Result<Self::Id, Self::Error>> + Send;
 
     /// Called when a get request is received.
-    async fn handle_get(
+    fn handle_get(
         &self,
         id: Self::Id,
         ctx: &mut DynContext<Self>,
-    ) -> Result<Option<Self::Entity>, Self::Error>;
+    ) -> impl std::future::Future<Output = Result<Option<Self::Entity>, Self::Error>> + Send;
 
     /// Called when an update request is received.
-    async fn handle_update(
+    fn handle_update(
         &mut self,
         id: Self::Id,
         update: Self::Update,
         ctx: &mut DynContext<Self>,
-    ) -> Result<Self::Entity, Self::Error>;
+    ) -> impl std::future::Future<Output = Result<Self::Entity, Self::Error>> + Send;
 
     /// Called when a delete request is received for a specific entity.
-    async fn handle_delete(
+    fn handle_delete(
         &mut self,
         id: Self::Id,
         ctx: &mut DynContext<Self>,
-    ) -> Result<(), Self::Error>;
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 
     // --- Action Handler (Async) ---
 
     /// Handles a custom action.
-    /// Handles a custom action.
-    async fn handle_action(
+    fn handle_action(
         &mut self,
         id: Option<Self::Id>,
         action: Self::Action,
         ctx: &mut DynContext<Self>,
-    ) -> Result<Self::ActionResult, Self::Error>;
+    ) -> impl std::future::Future<Output = Result<Self::ActionResult, Self::Error>> + Send;
 
     /// Called when a list request is received.
-    async fn handle_list(
+    fn handle_list(
         &mut self,
         ctx: &mut DynContext<Self>,
-    ) -> Result<Vec<Self::Entity>, Self::Error>;
+    ) -> impl std::future::Future<Output = Result<Vec<Self::Entity>, Self::Error>> + Send;
 }

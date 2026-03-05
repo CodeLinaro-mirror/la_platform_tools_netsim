@@ -1,4 +1,4 @@
-// next/cell/tests/integration_test.rs // touch
+// next/cell/tests/integration_test.rs
 use std::{
     io::{Error as IoError, ErrorKind},
     pin::Pin,
@@ -6,7 +6,7 @@ use std::{
 
 use actor_framework::{ResourceClient, ResourceRequest};
 use bytes::Bytes;
-use cell::server::CellServer;
+use cell::CellClient;
 use client::DeviceClient;
 use device_actor::DeviceActor;
 use device_api::{DeviceAction, DeviceActionResult};
@@ -15,7 +15,7 @@ use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
 use netsim_model::{
     chip::{
         CellCreate, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipVariant,
-        LegacyChipClient, PacketSink, PacketStream,
+        PacketSink, PacketStream,
     },
     chip_error::ChipError as NetsimChipError,
     device::DeviceId,
@@ -39,22 +39,20 @@ fn create_dummy_stream_sink(
 }
 
 struct TestHarness {
-    client: LegacyChipClient,
+    client: CellClient,
     device_server_rx: mpsc::Receiver<ResourceRequest<DeviceActor>>,
     server_handle: tokio::task::JoinHandle<()>,
 }
 
 async fn setup_test_harness() -> TestHarness {
     let _ = env_logger::try_init();
-    // let (command_tx, command_rx) = mpsc::channel(100);
     let (device_server_tx, device_server_rx) = mpsc::channel(100);
     let resource_client = ResourceClient::new(device_server_tx);
     let device_client = DeviceClient::new(Box::new(resource_client));
 
-    let fake_controller = cell::fake_modem_network::FakeModemNetwork::new();
-    let (server, client) = CellServer::new(device_client, fake_controller);
-    let server_handle = tokio::spawn(server.run());
-    // let client = ChipClient::new(command_tx);
+    let (actor, client) = cell::new();
+    let service = cell::CellActor::new(device_client);
+    let server_handle = tokio::spawn(actor.run(service));
 
     TestHarness { client, device_server_rx, server_handle }
 }
@@ -166,39 +164,18 @@ async fn test_stream_error_triggers_delete() {
 }
 
 // T020: Test stream to controller passthrough and ECHO response
-// Skipped for skeleton implementation as there is no controller to echo
 #[tokio::test]
 async fn test_stream_to_controller_echo() {
-    /*
-    let harness = setup_test_harness().await;
-    let chip_id = ChipId(4);
-    let (stream, sink, mut stream_tx, mut sink_rx) = create_dummy_stream_sink();
-    let params = create_params(chip_id, stream, sink);
-    harness.client.create(params).await.unwrap();
-
-    let test_data = Bytes::from_static(b"AT+CGMI\r\n");
-    stream_tx.send(test_data.clone()).await.unwrap();
-
-    // Expect ECHO response from StubCellularController
-    match tokio::time::timeout(std::time::Duration::from_millis(500), sink_rx.next()).await {
-        Ok(Some(data)) => {
-            assert_eq!(data, Bytes::from(format!("ECHO: {}", String::from_utf8_lossy(&test_data))));
-        }
-        _ => panic!("Did not receive ECHO response"),
-    }
-    */
+    // Requires controller to echo. ModemNetworkSimulator might not by default
+    // unless we send AT commands it understands.
 }
 
 // T028: Test GetChip message
 #[tokio::test]
 async fn test_get_chip() {
-    test_get_chip_internal().await;
-}
-
-async fn test_get_chip_internal() {
     let harness = setup_test_harness().await;
     let chip_id = ChipId(1);
-    let (stream, sink, _stream_tx, _sink_rx) = create_dummy_stream_sink(); // Keep _stream_tx and _sink_rx in scope
+    let (stream, sink, _stream_tx, _sink_rx) = create_dummy_stream_sink();
     let params = create_params(chip_id, stream, sink);
     let create_response = harness.client.create(params).await;
     assert!(create_response.is_ok(), "CreateChip failed: {:?}", create_response);
@@ -207,7 +184,7 @@ async fn test_get_chip_internal() {
 
     let chip = harness.client.read(chip_id).await.unwrap();
     if let Some(ChipVariant::Cell(cell_chip)) = &chip.variant {
-        assert_eq!(cell_chip.state, "FAKE_ACTIVE");
+        assert_eq!(cell_chip.state, "idle");
     } else {
         panic!("GetChip failed for existing chip");
     }
@@ -221,5 +198,3 @@ async fn test_get_chip_internal() {
         other => panic!("Expected ChipNotFound error, got {:?}", other),
     }
 }
-// T021 & T026 are implicitly tested by the echo in
-// test_stream_to_controller_echo

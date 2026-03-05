@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
 use netsim_model::{
     chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, RadioUpdate, WifiUpdate},
@@ -14,7 +13,6 @@ use crate::{
     wifi_actor::{WifiActor, WifiReq, WifiResponse},
 };
 
-#[async_trait]
 impl ActorService for WifiActor {
     type Id = ChipId;
     type Create = netsim_model::chip::ChipCreate;
@@ -23,6 +21,7 @@ impl ActorService for WifiActor {
     type ActionResult = WifiResponse;
     type Error = WifiError;
     type Entity = Chip;
+    type TypedStream = bytes::Bytes;
 
     async fn handle_create(
         &mut self,
@@ -150,7 +149,7 @@ impl ActorService for WifiActor {
                     stats.push(netsim_model::stats::NetsimRadioStats {
                         id: id.0,
                         name: chip.name.clone().unwrap_or_default(),
-                        kind: ChipKind::WIFI,
+                        kind: netsim_model::stats::RadioKind::Wifi,
                         tx_count: tx_count as u64,
                         rx_count: rx_count as u64,
                         tx_bytes: 0,

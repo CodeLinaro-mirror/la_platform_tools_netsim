@@ -1,12 +1,6 @@
-// src/call_service.rs
-
-use std::sync::{Arc, Mutex};
-
 use crate::{
-    modem::ModemImpl,
     parser::Command,
-    traits::CommandExecutor,
-    types::{CallbacksExt, CommandAction, ExecutionResult, HandledCommand, ModemId},
+    types::{CommandAction, ExecutionResult, HandledCommand, ModemId, AT_OK},
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -37,34 +31,28 @@ pub struct CallStatus {
 
 // Holds all state related to the call service.
 pub struct CallService {
-    pub calls: Mutex<Vec<CallStatus>>,
-    mute: Mutex<bool>,
-    emergency_mode: Mutex<bool>,
+    pub calls: Vec<CallStatus>,
+    mute: bool,
+    emergency_mode: bool,
 }
 
 impl CallService {
     pub fn new() -> Self {
-        Self {
-            calls: Mutex::new(Vec::new()),
-            mute: Mutex::new(false),
-            emergency_mode: Mutex::new(false),
-        }
+        Self { calls: Vec::new(), mute: false, emergency_mode: false }
     }
 
     // --- Helper methods for external services ---
 
-    pub fn receive_hangup(&self) {
-        self.calls.lock().unwrap().clear();
+    pub fn receive_hangup(&mut self) {
+        self.calls.clear();
     }
 
-    pub fn handle_ring_timeout(&self, _call_token: u32) {
-        let mut calls = self.calls.lock().unwrap();
-        calls.retain(|c| c.state != CallState::Alerting);
+    pub fn handle_ring_timeout(&mut self, _call_token: u32) {
+        self.calls.retain(|c| c.state != CallState::Alerting);
     }
 
-    pub fn ring(&self, number: String) -> ExecutionResult {
-        let mut calls = self.calls.lock().unwrap();
-        calls.push(CallStatus {
+    pub fn ring(&mut self, number: String) -> ExecutionResult {
+        self.calls.push(CallStatus {
             state: CallState::Alerting,
             direction: CallDirection::Incoming,
             is_voice_mode: true,
@@ -78,62 +66,63 @@ impl CallService {
         })
     }
 
-    pub fn receive_hold(&self) {
+    pub fn receive_hold(&mut self) {
         log::debug!("[CallService] Receiving hold");
-        let mut calls = self.calls.lock().unwrap();
-        if let Some(call) = calls.iter_mut().find(|c| c.state == CallState::Active) {
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Active) {
             call.state = CallState::Held;
         }
     }
 
-    pub fn receive_resume(&self) {
+    pub fn receive_resume(&mut self) {
         log::debug!("[CallService] Receiving resume");
-        let mut calls = self.calls.lock().unwrap();
-        if let Some(call) = calls.iter_mut().find(|c| c.state == CallState::Held) {
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Held) {
             call.state = CallState::Active;
         }
+    }
+
+    pub fn remote_answer(&mut self) -> bool {
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Dialing) {
+            call.state = CallState::Active;
+            return true;
+        }
+        false
     }
 
     pub fn is_idle(&self) -> bool {
-        self.calls.lock().unwrap().is_empty()
+        self.calls.is_empty()
     }
 
     pub fn is_dialing(&self) -> bool {
-        self.calls.lock().unwrap().iter().any(|c| c.state == CallState::Dialing)
+        self.calls.iter().any(|c| c.state == CallState::Dialing)
     }
 
     pub fn is_alerting(&self) -> bool {
-        self.calls.lock().unwrap().iter().any(|c| c.state == CallState::Alerting)
+        self.calls.iter().any(|c| c.state == CallState::Alerting)
     }
 
     pub fn is_active(&self) -> bool {
-        self.calls.lock().unwrap().iter().any(|c| c.state == CallState::Active)
+        self.calls.iter().any(|c| c.state == CallState::Active)
     }
 
     pub fn is_held(&self) -> bool {
-        self.calls.lock().unwrap().iter().any(|c| c.state == CallState::Held)
+        self.calls.iter().any(|c| c.state == CallState::Held)
     }
 
-    pub fn connect(
-        &self,
-        callbacks: &Arc<dyn crate::types::Callbacks>,
-        modem_id: ModemId,
-        peer_id: ModemId,
-    ) {
+    pub fn connect(&mut self, _modem_id: ModemId, peer_id: ModemId) -> Option<Vec<u8>> {
         log::debug!("[CallService] Connecting to peer {}", peer_id);
-        let mut calls = self.calls.lock().unwrap();
-        log::debug!("[CallService] Calls before connect: {:?}", calls);
-        if let Some(call) = calls.iter_mut().find(|c| c.state == CallState::Dialing) {
+        log::debug!("[CallService] Calls before connect: {:?}", self.calls);
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Dialing) {
             call.state = CallState::Active;
             call.peer_id = Some(peer_id);
-            callbacks.send_ok(modem_id);
+            return Some(AT_OK.to_vec());
         }
-        log::debug!("[CallService] Calls after connect: {:?}", calls);
+        log::debug!("[CallService] Calls after connect: {:?}", self.calls);
+        None
     }
 
     // --- Pure command handlers ---
 
-    pub fn handle_dial(&self, number: &[u8]) -> ExecutionResult {
+    pub fn handle_dial(&mut self, number: &[u8]) -> ExecutionResult {
         log::debug!("[CallService] Dialing number: {}", String::from_utf8_lossy(number));
         if number == b"911" {
             return ExecutionResult::Handled(HandledCommand::ok_with_action(
@@ -141,14 +130,13 @@ impl CallService {
             ));
         }
 
-        let mut calls = self.calls.lock().unwrap();
-        log::debug!("[CallService] Calls before dial: {:?}", calls);
-        if calls.iter().any(|c| c.state == CallState::Dialing) {
+        log::debug!("[CallService] Calls before dial: {:?}", self.calls);
+        if self.calls.iter().any(|c| c.state == CallState::Dialing) {
             return ExecutionResult::Handled(HandledCommand::default()); // No response, just ignore
         }
 
         let mut did_hold = false;
-        for call in calls.iter_mut() {
+        for call in self.calls.iter_mut() {
             if call.state == CallState::Active {
                 call.state = CallState::Held;
                 did_hold = true;
@@ -156,7 +144,7 @@ impl CallService {
         }
 
         let number_str = String::from_utf8(number.to_vec()).unwrap();
-        calls.push(CallStatus {
+        self.calls.push(CallStatus {
             state: CallState::Dialing,
             direction: CallDirection::Outgoing,
             is_voice_mode: true,
@@ -164,7 +152,7 @@ impl CallService {
             number: number_str.clone(),
             peer_id: None,
         });
-        log::debug!("[CallService] Calls after dial: {:?}", calls);
+        log::debug!("[CallService] Calls after dial: {:?}", self.calls);
 
         let action = if did_hold {
             CommandAction::InitiateCallAndHold(number_str)
@@ -175,45 +163,40 @@ impl CallService {
         ExecutionResult::Handled(HandledCommand::ok_with_action(action))
     }
 
-    pub fn handle_answer(&self, context: &ModemImpl) -> ExecutionResult {
+    pub fn handle_answer(&mut self, id: ModemId) -> ExecutionResult {
         log::debug!("[CallService] Answering call");
-        let mut calls = self.calls.lock().unwrap();
-        log::debug!("[CallService] Calls before answer: {:?}", calls);
-        if let Some(call) = calls.iter_mut().find(|c| c.state == CallState::Alerting) {
+        log::debug!("[CallService] Calls before answer: {:?}", self.calls);
+        if let Some(call) = self.calls.iter_mut().find(|c| c.state == CallState::Alerting) {
             call.state = CallState::Active;
-            log::debug!("[CallService] Calls after answer: {:?}", calls);
+            log::debug!("[CallService] Calls after answer: {:?}", self.calls);
             return ExecutionResult::Handled(HandledCommand::ok_with_action(
-                CommandAction::AnswerCall(context.id),
+                CommandAction::AnswerCall(id),
             ));
         }
         ExecutionResult::Handled(HandledCommand::error())
     }
 
-    pub fn handle_hangup(&self, context: &ModemImpl) -> ExecutionResult {
-        let mut calls = self.calls.lock().unwrap();
-        if calls.is_empty() {
+    pub fn handle_hangup(&mut self, id: ModemId) -> ExecutionResult {
+        if self.calls.is_empty() {
             return ExecutionResult::Handled(HandledCommand::error());
         }
-        calls.clear();
-        ExecutionResult::Handled(HandledCommand::ok_with_action(CommandAction::HangupCall(
-            context.id,
-        )))
+        self.calls.clear();
+        ExecutionResult::Handled(HandledCommand::ok_with_action(CommandAction::HangupCall(id)))
     }
 
-    pub fn handle_call_hold(&self, op: u8) -> ExecutionResult {
+    pub fn handle_call_hold(&mut self, op: u8) -> ExecutionResult {
         log::debug!("[CallService] Call hold operation: {}", op);
-        let mut calls = self.calls.lock().unwrap();
-        log::debug!("[CallService] Calls before hold op: {:?}", calls);
+        log::debug!("[CallService] Calls before hold op: {:?}", self.calls);
         if op == 2 {
-            let active_pos = calls.iter().position(|c| c.state == CallState::Active);
-            let held_pos = calls.iter().position(|c| c.state == CallState::Held);
+            let active_pos = self.calls.iter().position(|c| c.state == CallState::Active);
+            let held_pos = self.calls.iter().position(|c| c.state == CallState::Held);
 
             if let (Some(ap), Some(hp)) = (active_pos, held_pos) {
-                let active_peer = calls[ap].peer_id;
-                let held_peer = calls[hp].peer_id;
-                calls[ap].state = CallState::Held;
-                calls[hp].state = CallState::Active;
-                log::debug!("[CallService] Calls after hold op: {:?}", calls);
+                let active_peer = self.calls[ap].peer_id;
+                let held_peer = self.calls[hp].peer_id;
+                self.calls[ap].state = CallState::Held;
+                self.calls[hp].state = CallState::Active;
+                log::debug!("[CallService] Calls after hold op: {:?}", self.calls);
                 if let (Some(active_peer), Some(held_peer)) = (active_peer, held_peer) {
                     return ExecutionResult::Handled(HandledCommand::ok_with_action(
                         CommandAction::SwapCalls(active_peer, held_peer),
@@ -225,9 +208,8 @@ impl CallService {
     }
 
     pub fn handle_query_current_calls(&self) -> ExecutionResult {
-        let calls = self.calls.lock().unwrap();
         let mut responses = Vec::new();
-        for (i, call) in calls.iter().enumerate() {
+        for (i, call) in self.calls.iter().enumerate() {
             let response = format!(
                 "+CLCC: {},{},{},{},{},\"{}\",{}\r\n",
                 i + 1,
@@ -245,10 +227,9 @@ impl CallService {
         ExecutionResult::Handled(HandledCommand { responses, action: None })
     }
 
-    pub fn handle_remote_call(&self, number: &[u8]) -> ExecutionResult {
+    pub fn handle_remote_call(&mut self, number: &[u8]) -> ExecutionResult {
         let number_str = String::from_utf8(number.to_vec()).unwrap();
-        let mut calls = self.calls.lock().unwrap();
-        calls.push(CallStatus {
+        self.calls.push(CallStatus {
             state: CallState::Incoming,
             direction: CallDirection::Incoming,
             is_voice_mode: true,
@@ -261,15 +242,13 @@ impl CallService {
         )))
     }
 
-    pub fn handle_set_mute(&self, mute: u8) -> ExecutionResult {
-        let mut self_mute = self.mute.lock().unwrap();
-        *self_mute = mute == 1;
+    pub fn handle_set_mute(&mut self, mute: u8) -> ExecutionResult {
+        self.mute = mute == 1;
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
     pub fn handle_query_mute(&self) -> ExecutionResult {
-        let mute = self.mute.lock().unwrap();
-        let response = format!("+CMUT: {}\r\n", if *mute { 1 } else { 0 });
+        let response = format!("+CMUT: {}\r\n", if self.mute { 1 } else { 0 });
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
         ExecutionResult::Handled(handled)
@@ -279,27 +258,23 @@ impl CallService {
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
-    pub fn handle_set_emergency_mode(&self, mode: u8) -> ExecutionResult {
-        let mut emergency_mode = self.emergency_mode.lock().unwrap();
-        *emergency_mode = mode == 1;
+    pub fn handle_set_emergency_mode(&mut self, mode: u8) -> ExecutionResult {
+        self.emergency_mode = mode == 1;
         ExecutionResult::Handled(HandledCommand::ok())
     }
 
     pub fn handle_query_emergency_mode(&self) -> ExecutionResult {
-        let emergency_mode = self.emergency_mode.lock().unwrap();
-        let response = format!("+WSOS: {}\r\n", if *emergency_mode { 1 } else { 0 });
+        let response = format!("+WSOS: {}\r\n", if self.emergency_mode { 1 } else { 0 });
         let mut handled = HandledCommand::ok();
         handled.responses.insert(0, response);
         ExecutionResult::Handled(handled)
     }
-}
 
-impl CommandExecutor for CallService {
-    fn execute(&self, context: &ModemImpl, command: &Command) -> ExecutionResult {
+    pub fn execute(&mut self, command: &Command, id: ModemId) -> ExecutionResult {
         match command {
             Command::Dial(number) => self.handle_dial(number),
-            Command::Answer => self.handle_answer(context),
-            Command::Hangup => self.handle_hangup(context),
+            Command::Answer => self.handle_answer(id),
+            Command::Hangup => self.handle_hangup(id),
             Command::CallHold(op) => self.handle_call_hold(*op),
             Command::QueryCurrentCalls => self.handle_query_current_calls(),
             Command::Ring => self.ring("".to_string()),

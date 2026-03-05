@@ -1,39 +1,62 @@
-use modem_rs::types::{ModemId, AT_OK};
+use crate::{steps::*, world::World};
 
-use crate::common::TestHarness;
-
+// Scenario: Multi Call (Conference/Swap)
+//   Given a modem "A"
+//   And a modem "B" with number "111"
+//   And a modem "C" with number "222"
+//   When AT command "ATD111;" is sent to "A"
+//   Then wait for connection (OK from A, Ring B, ATA, OK)
+//   When AT command "ATD222;" is sent to "A"
+//   Then wait for connection (OK from A, Ring C, ATA, OK)
+//   When AT command "AT+CHLD=2" is sent to "A"
+//   Then response from "A" is "OK"
+//   When AT command "AT+CLCC" is sent to "A"
+//   Then response from "A" shows "111" is Active and "222" is Held
 #[test]
 fn test_multi_call_scenario() {
-    // 1. Setup: Create a manager and three modems (A, B, and C).
-    let harness = TestHarness::new();
-    let modem_b_id: ModemId = 2;
-    let modem_c_id: ModemId = 3;
-    harness.manager.get_modem(modem_b_id).unwrap().set_phone_number("111");
-    harness.manager.get_modem(modem_c_id).unwrap().set_phone_number("222");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    given_modem_with_number(&mut world, "B", "111");
+    given_modem_with_number(&mut world, "C", "222");
 
-    // 2. Modem A calls B, B answers.
-    harness.send_at_command(b"ATD111;\r\n");
-    harness.get_responses(); // Clear responses
-    harness.manager.send_at_command(modem_b_id, b"ATA\r\n");
-    harness.get_responses(); // Clear responses
+    // 1. A calls B
+    when_at_command_sent(&mut world, "A", "ATD111;");
+    then_response_is(&mut world, "A", "OK");
+    then_wait_for_response_containing(&mut world, "B", "RING");
 
-    // 3. Modem A calls C, putting B on hold.
-    harness.send_at_command(b"ATD222;\r\n");
-    harness.get_responses(); // Clear responses
-    harness.manager.send_at_command(modem_c_id, b"ATA\r\n");
-    harness.get_responses(); // Clear responses
+    when_at_command_sent(&mut world, "B", "ATA");
+    then_response_is(&mut world, "B", "OK");
+    then_wait_for_response_containing(&mut world, "A", "OK"); // Connected
 
-    // 4. Modem A swaps between calls.
-    harness.send_at_command(b"AT+CHLD=2\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], AT_OK);
+    // 2. A calls C (B put on hold automatically by logic)
+    when_at_command_sent(&mut world, "A", "ATD222;");
+    then_response_is(&mut world, "A", "OK");
+    // Consume potential extra OK from Hold? (Based on previous findings)
+    // I'll use wait_for_response_containing which skips garbage if any.
 
-    // 5. Verify that B is now active and C is held.
-    let modem_a = harness.manager.get_modem(harness.modem_id).unwrap();
-    let modem_b = harness.manager.get_modem(modem_b_id).unwrap();
-    let modem_c = harness.manager.get_modem(modem_c_id).unwrap();
-    assert!(modem_a.call_service().is_active());
-    assert!(modem_b.call_service().is_active());
-    assert!(modem_c.call_service().is_held());
+    then_wait_for_response_containing(&mut world, "C", "RING");
+
+    when_at_command_sent(&mut world, "C", "ATA");
+    then_response_is(&mut world, "C", "OK");
+    then_wait_for_response_containing(&mut world, "A", "OK"); // Connected
+
+    // 3. Swap calls
+    when_at_command_sent(&mut world, "A", "AT+CHLD=2");
+    then_response_is(&mut world, "A", "OK");
+
+    // 4. Verify states
+    // Expected: 111 (Call 1) is Active (State 0)
+    //           222 (Call 2) is Held (State 1)
+    when_at_command_sent(&mut world, "A", "AT+CLCC");
+
+    // Check 111 is Active (0)
+    // Pattern: +CLCC: <idx>,<dir>,0,0,0,"111",...
+    then_wait_for_response_containing(&mut world, "A", "+CLCC: 1,0,0,0,0,\"111\"");
+
+    // Check 222 is Held (1)
+    // Pattern: +CLCC: <idx>,<dir>,1,0,0,"222",...
+    // Note: Index for 222 is likely 2.
+    then_wait_for_response_containing(&mut world, "A", "+CLCC: 2,0,1,0,0,\"222\"");
+
+    then_wait_for_response_containing(&mut world, "A", "OK");
 }

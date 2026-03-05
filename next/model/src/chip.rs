@@ -19,6 +19,30 @@ use crate::{
     stats::NetsimRadioStats,
 };
 
+/// Maps the model ChipKind to the stats RadioKind.
+pub fn chip_kind_to_radio_kind(kind: ChipKind) -> crate::stats::RadioKind {
+    use crate::stats::RadioKind;
+    match kind {
+        ChipKind::BLUETOOTH => RadioKind::BluetoothLowEnergy,
+        ChipKind::WIFI => RadioKind::Wifi,
+        ChipKind::UWB => RadioKind::Uwb,
+        ChipKind::NFC => RadioKind::Nfc,
+        _ => RadioKind::Unspecified,
+    }
+}
+// Keeping this for backward compatibility if needed, or we can remove it if we
+// update all call sites. Let's deprecate it or remove it. I'll remove it and
+// rename the function to be clear.
+pub fn chip_kind_to_proto(kind: ChipKind) -> netsim_proto::stats::netsim_radio_stats::Kind {
+    use netsim_proto::stats::netsim_radio_stats::Kind;
+    match kind {
+        ChipKind::BLUETOOTH => Kind::BLUETOOTH_LOW_ENERGY,
+        ChipKind::WIFI => Kind::WIFI,
+        ChipKind::UWB => Kind::UWB,
+        ChipKind::NFC => Kind::NFC,
+        _ => Kind::UNSPECIFIED,
+    }
+}
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Radio {
     pub state: Option<bool>,

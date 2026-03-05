@@ -131,6 +131,7 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
             position: Default::default(),
             orientation: Default::default(),
             builtin: false,
+            device_info: None,
         },
         chip_config,
     };

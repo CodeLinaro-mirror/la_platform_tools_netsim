@@ -1,4 +1,4 @@
-use std::{fmt, str};
+use std::{str, time::Duration};
 
 use nom::IResult;
 
@@ -37,16 +37,32 @@ pub const AT_OK: &[u8] = b"OK\r\n";
 pub const AT_ERROR: &[u8] = b"ERROR\r\n";
 
 pub const DEFAULT_PIN: &str = "1234";
-pub const DEFAULT_PUK: &str = "12345678";
+
 pub const DEFAULT_IP_ADDRESS: &str = "192.168.1.1";
 
 // A unique identifier for a modem instance.
 pub type ModemId = u32;
 
 // Custom error type for the library.
-#[derive(Debug)]
+use std::fmt;
+
+#[derive(Debug, Clone)]
 pub enum ModemError {
     DuplicateModemId(ModemId),
+    Internal(String),
+    NotFound,
+}
+
+impl std::error::Error for ModemError {}
+
+impl fmt::Display for ModemError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ModemError::DuplicateModemId(id) => write!(f, "Duplicate modem ID: {}", id),
+            ModemError::Internal(s) => write!(f, "Modem network internal error: {}", s),
+            ModemError::NotFound => write!(f, "Modem network not found"),
+        }
+    }
 }
 
 // Actions that a command can request to be executed by the
@@ -65,52 +81,35 @@ pub enum CommandAction {
     None,
 }
 
-/// Callbacks for a single modem instance.
-pub trait Callbacks: Send + Sync {
-    /// Sends an AT response to the modem.
-    fn send_at_response(&self, modem_id: ModemId, response: &[u8]);
+// Callbacks Removed in favor of Sink and NetworkEvent
+
+use std::sync::Arc;
+
+use bytes::Bytes;
+
+/// A sink for sending packets back to the modem client.
+#[derive(Clone)]
+pub struct ModemSink {
+    sender: Arc<dyn Fn(Bytes) -> Result<(), String> + Send + Sync>,
 }
 
-/// An extension trait for `Callbacks` that provides helper methods.
-pub trait CallbacksExt: Callbacks {
-    /// Sends a response followed by "OK".
-    fn send_response_ok(&self, modem_id: ModemId, response: &[u8]) {
-        self.send_at_response(modem_id, response);
-        self.send_ok(modem_id);
+impl ModemSink {
+    pub fn new<F>(f: F) -> Self
+    where
+        F: Fn(Bytes) -> Result<(), String> + Send + Sync + 'static,
+    {
+        Self { sender: Arc::new(f) }
     }
 
-    /// Sends an "OK" response.
-    fn send_ok(&self, modem_id: ModemId) {
-        self.send_at_response(modem_id, AT_OK);
-    }
-
-    /// Sends an "ERROR" response.
-    fn send_error(&self, modem_id: ModemId) {
-        self.send_at_response(modem_id, AT_ERROR);
-    }
-
-    /// Formats a response and sends it.
-    fn send_formatted(&self, modem_id: ModemId, args: fmt::Arguments) {
-        let response = fmt::format(args).into_bytes();
-        self.send_at_response(modem_id, &response);
-    }
-
-    /// Formats a response and sends it followed by "OK".
-    fn send_formatted_ok(&self, modem_id: ModemId, args: fmt::Arguments) {
-        let response = fmt::format(args).into_bytes();
-        self.send_response_ok(modem_id, &response);
+    pub fn send(&self, packet: Bytes) -> Result<(), String> {
+        (self.sender)(packet)
     }
 }
 
-impl<T: Callbacks + ?Sized> CallbacksExt for T {}
-
-/// Callbacks for the cellular network simulator.
-pub trait NetworkCallbacks: Send + Sync {
-    /// Called when a new remote connection is established.
-    fn on_new_remote_connection(&self, modem_id: ModemId, destination: String);
-
-    /// Called when a modem hangs up a call.
-    fn on_modem_hanged_up(&self, modem_id: ModemId);
+impl fmt::Debug for ModemSink {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ModemSink").finish()
+    }
 }
 
 // --- New types for architectural refactoring ---
@@ -157,4 +156,18 @@ pub enum ExecutionResult {
     /// This command has not been refactored yet and should be handled by the
     /// legacy system.
     Unhandled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostEvent {
+    SinkError(u32),
+    TimerRequest { chip_id: u32, duration: Duration },
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ModemInfo {
+    pub id: u32,
+    pub connections: Vec<String>, // Placeholder for actual connection info
+    pub ringing: bool,
+    pub sms_count: usize,
 }

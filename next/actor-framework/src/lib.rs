@@ -70,7 +70,6 @@
 //! use actor_framework::{
 //!     ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient,
 //! };
-//! use async_trait::async_trait;
 //!
 //! // 1. Define the Service and Lifecycle
 //! #[derive(Clone, Debug)]
@@ -104,7 +103,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorService for User {
 //!     type Id = u32;
 //!     type Create = UserCreate;
@@ -113,6 +111,7 @@
 //!     type ActionResult = ();
 //!     type Error = UserError;
 //!     type Entity = User;
+//!     type TypedStream = ();
 //!
 //!     async fn handle_create(
 //!         &mut self,
@@ -166,7 +165,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorLifecycle for User {
 //!     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 //!     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
@@ -198,7 +196,6 @@
 //! use actor_framework::{
 //!     ActorLifecycle, ActorService, Context, DynContext, ResourceActor, ResourceClient,
 //! };
-//! use async_trait::async_trait;
 //!
 //! // --- Define Minimal Services ---
 //! #[derive(Clone, Debug)]
@@ -225,7 +222,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorService for User {
 //!     type Id = u32;
 //!     type Create = UserCreate;
@@ -234,6 +230,7 @@
 //!     type ActionResult = ();
 //!     type Error = UserError;
 //!     type Entity = User;
+//!     type TypedStream = ();
 //!
 //!     async fn handle_create(
 //!         &mut self,
@@ -282,7 +279,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorLifecycle for User {
 //!     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 //!     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
@@ -314,7 +310,6 @@
 //!         ProductError
 //!     }
 //! }
-//! #[async_trait]
 //! impl ActorService for Product {
 //!     type Id = u32;
 //!     type Create = ProductCreate;
@@ -323,6 +318,7 @@
 //!     type ActionResult = ();
 //!     type Error = ProductError;
 //!     type Entity = Product;
+//!     type TypedStream = ();
 //!     async fn handle_create(
 //!         &mut self,
 //!         id: Option<u32>,
@@ -369,7 +365,6 @@
 //!         Ok(vec![self.clone()])
 //!     }
 //! }
-//! #[async_trait]
 //! impl ActorLifecycle for Product {
 //!     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 //!     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
@@ -409,7 +404,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorService for Order {
 //!     type Id = u32;
 //!     type Create = OrderCreate;
@@ -418,6 +412,7 @@
 //!     type ActionResult = ();
 //!     type Error = OrderError;
 //!     type Entity = Order;
+//!     type TypedStream = ();
 //!
 //!     async fn handle_create(
 //!         &mut self,
@@ -466,7 +461,6 @@
 //!     }
 //! }
 //!
-//! #[async_trait]
 //! impl ActorLifecycle for Order {
 //!     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
 //!     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
@@ -546,4 +540,4 @@ pub use context::{Context, DynContext, TimerKey};
 pub use error::FrameworkError;
 pub use lifecycle::ActorLifecycle;
 pub use message::{ResourceRequest, Response};
-pub use service::{ActorId, ActorService, BoxStream, StreamMessage};
+pub use service::{ActorId, ActorService, BoxStream, BoxTypedStream, StreamMessage};

@@ -92,6 +92,7 @@ async fn handle_new_connection(
         position: Default::default(),
         orientation: Default::default(),
         builtin: false,
+        device_info: chip_info.device_info.clone().map(Into::into),
     };
 
     let mut chip = match chip_info.chip {
@@ -275,6 +276,11 @@ impl NetsimDaemon {
         &self.device_client
     }
 
+    /// Returns a reference to the CaptureClient.
+    pub fn capture_client(&self) -> &CaptureClient {
+        &self.capture_client
+    }
+
     /// Creates a new `NetsimDaemon` instance or returns config for forwarding.
     ///
     /// Returns:
@@ -323,8 +329,6 @@ impl NetsimDaemon {
                 None
             }
         });
-        #[cfg(not(target_os = "linux"))]
-        let wifi_tap: Option<String> = None;
 
         // Pre-check TAP permissions if configured.
         // We do this BEFORE redirection so the user can see the error in the console.
@@ -481,10 +485,8 @@ impl NetsimDaemon {
         let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
-        // TODO: Replace with real modem network.
-        let cell_controller = cell::fake_modem_network::FakeModemNetwork::new();
         let (cell_runner, cell_client) = cell::new();
-        let cell_server = cell::Server::new(device_client.clone(), cell_controller);
+        let cell_actor_state = cell::CellActor::new(device_client.clone());
 
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
@@ -513,7 +515,7 @@ impl NetsimDaemon {
             )
         };
 
-        let device_actor_state = device_actor::DeviceActor::new(
+        let mut device_actor_state = device_actor::DeviceActor::new(
             chip_clients.clone(),
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
@@ -531,14 +533,13 @@ impl NetsimDaemon {
         join_set.spawn(wifi_runner.run(wifi_actor_state));
         join_set.spawn(ap_runner.run(ap_actor_state));
         join_set.spawn(slirp_runner.run(slirp_actor_state));
-        join_set.spawn(async move {
-            cell_runner.run(cell_server).await;
-        });
+        join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
-        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
+        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::new(args.pcap)));
         join_set.spawn(uwb_runner.run(uwb_actor));
 
         // Spawn DeviceActor separately
+        device_actor_state.set_self_client(device_client.clone());
         let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP
@@ -553,10 +554,6 @@ impl NetsimDaemon {
         }
 
         device_client.create_device(device_create).await.expect("Failed to create default AP");
-
-        if args.pcap {
-            capture_client.set_default_capture(true).await.expect("Failed to set default capture");
-        }
 
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();

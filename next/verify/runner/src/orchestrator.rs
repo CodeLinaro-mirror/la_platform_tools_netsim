@@ -33,6 +33,7 @@ pub async fn run_android(
     netsim_args: Option<String>,
     apk_path: Option<String>,
     gateway_ip: Option<String>,
+    filter: Option<String>,
     dry_run: bool,
 ) -> Result<()> {
     let host = HostWorld::new(dry_run);
@@ -46,6 +47,7 @@ pub async fn run_android(
         netsim,
         target_ip: "10.0.2.2".to_string(),
         gateway_ip: gateway_ip.unwrap_or_else(|| "10.0.2.2".to_string()),
+        filter,
         is_dry_run: dry_run,
         variables: HashMap::new(),
     };
@@ -61,6 +63,7 @@ pub async fn list_scenarios() {
         netsim: NetsimWorld {},
         target_ip: "10.0.2.2".to_string(),
         gateway_ip: "10.0.2.2".to_string(),
+        filter: None,
         is_dry_run: true,
         variables: HashMap::new(),
     };
@@ -77,6 +80,7 @@ pub struct TestContext {
 
     pub target_ip: String,
     pub gateway_ip: String,
+    pub filter: Option<String>,
     pub is_dry_run: bool,
     pub variables: HashMap<String, String>,
 }
