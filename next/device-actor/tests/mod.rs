@@ -6,6 +6,7 @@ mod create_device_test;
 mod delete_device_test;
 mod device_client_test;
 mod device_error_test;
+mod device_stats_test;
 mod get_device_test;
 mod list_device_test;
 mod stats_collection_test;

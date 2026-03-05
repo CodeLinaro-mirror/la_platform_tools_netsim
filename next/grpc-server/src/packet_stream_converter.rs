@@ -30,6 +30,12 @@ pub fn proto_to_device_info(proto: proto_startup::DeviceInfo) -> DeviceInfo {
         name: proto.name,
         id: String::new(), // Not available in proto DeviceInfo
         avd_path: proto.avd_path,
+        kind: proto.kind,
+        version: proto.version,
+        sdk_version: proto.sdk_version,
+        build_id: proto.build_id,
+        variant: proto.variant,
+        arch: proto.arch,
     }
 }
 
