@@ -288,6 +288,21 @@ static bool Sha256PrfBits(const Vec<uint8_t> &key, const char *label,
   return true;
 }
 
+// PBKDF2-HMAC-SHA1 for WPA2 PMK Derivation
+rust::Vec<uint8_t> Pbkdf2HmacSha1(const rust::Vec<uint8_t> &password,
+                                  const rust::Vec<uint8_t> &salt,
+                                  uint32_t iterations, size_t key_len) {
+  rust::Vec<uint8_t> result;
+  std::vector<uint8_t> out_buf(key_len);
+
+  if (PKCS5_PBKDF2_HMAC(reinterpret_cast<const char *>(password.data()),
+                        password.size(), salt.data(), salt.size(), iterations,
+                        EVP_sha1(), key_len, out_buf.data())) {
+    for (uint8_t b : out_buf) result.push_back(b);
+  }
+  return result;
+}
+
 rust::Vec<uint8_t> EcP256CalculatePwe(const rust::Vec<uint8_t> &password,
                                       const rust::Vec<uint8_t> &address1,
                                       const rust::Vec<uint8_t> &address2) {

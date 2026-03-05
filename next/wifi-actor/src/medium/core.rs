@@ -23,6 +23,7 @@ pub struct Medium {
     pub(crate) key_store: Arc<SharedKeyStore>,
     pub wifi_stats: WifiStats,
     pub(crate) debug: Arc<DebugArgs>,
+    pub(crate) seq: std::sync::atomic::AtomicU16,
 }
 
 impl std::fmt::Debug for Medium {
@@ -53,6 +54,7 @@ impl Medium {
             key_store,
             wifi_stats,
             debug,
+            seq: std::sync::atomic::AtomicU16::new(100),
         }
     }
 
