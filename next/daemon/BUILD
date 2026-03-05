@@ -40,7 +40,7 @@ DAEMON_DEPS = [
     "//next/bluetooth-actor",
     "//next/capture-actor",
     "//next/capture-api",
-    "//next/cell",
+    "//next/cell-actor",
     "//next/client",
     "//next/common",
     "//next/device-actor",

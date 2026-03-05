@@ -22,9 +22,9 @@ DEPS = [
 ]
 
 netsim_rust_library(
-    name = "cell",
+    name = "cell-actor",
     srcs = glob(["src/**/*.rs"]),
-    crate_name = "cell",
+    crate_name = "cell_actor",
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
@@ -37,7 +37,7 @@ rust_test(
     srcs = ["tests/integration_test.rs"],
     edition = "2021",
     deps = DEPS + [
-        ":cell",
+        ":cell-actor",
         "//next/device-actor",
         "@env_logger",
     ],

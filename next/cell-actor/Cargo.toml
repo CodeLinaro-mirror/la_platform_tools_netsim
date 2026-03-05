@@ -1,5 +1,5 @@
 [package]
-name = "cell"
+name = "cell-actor"
 version = "0.1.0"
 edition = "2021"
 
