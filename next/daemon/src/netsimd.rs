@@ -323,8 +323,6 @@ impl NetsimDaemon {
                 None
             }
         });
-        #[cfg(not(target_os = "linux"))]
-        let wifi_tap: Option<String> = None;
 
         // Pre-check TAP permissions if configured.
         // We do this BEFORE redirection so the user can see the error in the console.
