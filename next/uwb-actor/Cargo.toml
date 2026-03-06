@@ -8,17 +8,14 @@ actor-framework = { path = "../actor-framework" }
 anyhow = "1"
 async-trait = "0.1"
 bytes = "1"
-
-device-api = { path = "../device-api" }
+device-actor = { path = "../device-actor" }
 futures = "0.3"
 glam = "0.25"
 log = "0.4"
 netsim-model = { path = "../model" }
-netsim-proto = { path = "../../proto" }
 pica = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["full"] }
-tokio-stream = "0.1"
-tokio-util = "0.7"
 
 [dev-dependencies]
+device-api = { path = "../device-api" }
 netsim-testing = { path = "../testing", features = ["testing"] }

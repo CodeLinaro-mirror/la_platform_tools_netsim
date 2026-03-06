@@ -434,7 +434,7 @@ impl std::fmt::Debug for RadioChipClient {
     }
 }
 
-#[cfg_attr(feature = "testing", mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 impl ChipClient for RadioChipClient {
     async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
@@ -518,7 +518,7 @@ impl ChipClient for RadioChipClient {
 /// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
 /// messages to the server over an `mpsc` channel. It abstracts away the channel
 /// and `oneshot` responder boilerplate for each command.
-#[cfg_attr(feature = "testing", mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait ChipClient: std::fmt::Debug + Send + Sync {
     async fn create(&self, params: ChipCreate) -> Result<(), ClientError>;

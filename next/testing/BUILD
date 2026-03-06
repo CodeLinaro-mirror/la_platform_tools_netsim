@@ -12,12 +12,7 @@ netsim_rust_library(
     deps = [
         "//next/common",
         "@bytes",
-        "@chrono",
-        "@env_logger",
         "@futures",
-        "@log",
-        "@serde",
-        "@serde_json",
         "@tokio",
         "@tokio-stream",
     ],

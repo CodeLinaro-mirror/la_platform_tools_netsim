@@ -4,15 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actor-framework = { path = "../actor-framework" }
-anyhow = "1.0"
 async-trait = "0.1"
-bytes = "1.0"
 mockall = { version = "0.13", optional = true }
 netsim-model = { path = "../model" }
-netsim-proto = { path = "../proto" }
-serde = { version = "1.0", features = ["derive"] }
-thiserror = "1.0"
 
 [features]
 testing = ["mockall"]

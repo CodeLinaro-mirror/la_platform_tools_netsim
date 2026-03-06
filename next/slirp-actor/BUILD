@@ -7,18 +7,14 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "slirp_actor",
     edition = "2021",
-    proc_macro_deps = [
-        "@async-trait",
+    test_deps = [
+        "@futures",
     ],
     deps = [
         "//next/actor-framework",
         "//next/libslirp-rs",
         "//next/model",
-        "//next/packets",
-        "//proto",
-        "@anyhow",
         "@bytes",
-        "@futures",
         "@log",
         "@thiserror",
         "@tokio",

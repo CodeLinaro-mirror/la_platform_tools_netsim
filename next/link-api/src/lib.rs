@@ -37,7 +37,7 @@ pub use netsim_model::{
     ChipKind,
 };
 
-#[cfg_attr(feature = "testing", mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait LinkClient: std::fmt::Debug + Send + Sync {
     async fn list(&self) -> Result<Vec<Link>, String>;

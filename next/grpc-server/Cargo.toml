@@ -8,8 +8,6 @@ anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1.0"
 device-actor = { path = "../device-actor" }
-
-common = { package = "netsim-common", path = "../common" }
 device-api = { path = "../device-api" }
 futures = "0.3"
 grpcio = { version = "0.13", default-features = false, features = [

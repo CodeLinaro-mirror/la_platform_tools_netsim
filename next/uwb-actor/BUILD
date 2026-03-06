@@ -5,9 +5,7 @@ package(default_visibility = ["//visibility:public"])
 DEPS = [
     "//next/actor-framework",
     "//next/device-actor",
-    "//next/device-api",
     "//next/model",
-    "//proto",
     "@anyhow",
     "@bytes",
     "@futures",
@@ -15,8 +13,6 @@ DEPS = [
     "@pdl-runtime",
     "@pica",
     "@tokio",
-    "@tokio-util",
-    "@tokio-stream",
     "@serde",
     "@glam",
 ]
@@ -32,6 +28,7 @@ netsim_rust_library(
         "@async-trait",
     ],
     test_deps = [
+        "//next/device-api:testing",
         "//next/testing",
         "@env_logger",
     ],

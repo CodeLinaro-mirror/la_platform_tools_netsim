@@ -6,22 +6,16 @@ package(default_visibility = ["//visibility:public"])
 BLUETOOTH_DEPS = [
     "//next/actor-framework",
     "//next/device-actor",
-    "//next/device-api",
     "//next/model",
     "//next/rootcanal",
     "//proto",
     "//next/packets",
     "@bytes",
-    "@env_logger",
     "@futures",
-    "@hex",
     "@log",
-    "@protobuf-rust",
-    "@rand",
     "@serde",
     "@thiserror",
     "@tokio",
-    "@tokio-stream",
     "@zerocopy",
 ]
 
@@ -33,7 +27,6 @@ netsim_rust_library(
     enable_integration_test = False,
     proc_macro_deps = [
         "@async-trait",
-        "@zerocopy-derive",
     ],
     deps = BLUETOOTH_DEPS,
 )
