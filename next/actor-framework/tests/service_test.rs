@@ -55,6 +55,7 @@ impl ActorService for UserActor {
     type ActionResult = bool;
     type Error = UserError;
     type Entity = User;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,

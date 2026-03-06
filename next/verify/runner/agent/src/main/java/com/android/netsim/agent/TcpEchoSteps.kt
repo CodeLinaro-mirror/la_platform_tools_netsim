@@ -32,8 +32,30 @@ fun startTcpEchoServer(context: Context, args: List<String>): Any {
         }
     }
 
-    Log.i(TAG, "Started TCP echo server on port $port")
-    return mapOf(varName to "10.0.2.15:$port")
+    val ip = getWlanIp()
+    Log.i(TAG, "Started TCP echo server on $ip:$port")
+    return mapOf(varName to "$ip:$port")
+}
+
+private fun getWlanIp(): String {
+    try {
+        val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+        while (interfaces.hasMoreElements()) {
+            val networkInterface = interfaces.nextElement()
+            if (networkInterface.name == "wlan0") {
+                val addresses = networkInterface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val inetAddress = addresses.nextElement()
+                    if (!inetAddress.isLoopbackAddress && inetAddress is java.net.Inet4Address) {
+                        return inetAddress.hostAddress?.toString() ?: "10.0.2.15"
+                    }
+                }
+            }
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to get wlan0 IP", e)
+    }
+    return "10.0.2.15"
 }
 
 private fun handleClient(socket: Socket) {

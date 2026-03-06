@@ -1,9 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-use std::{
-    fs::File,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
 use crate::{packet, packet::json::to_json};
 
@@ -15,20 +12,15 @@ use crate::{packet, packet::json::to_json};
 /// * `pcap_path` - Path to the PCAP file.
 /// * `json_path` - Path to the golden JSON file (expected output from tshark).
 /// * `layer_name` - The specific layer to validate (e.g., "icmp", "tcp").
-pub fn validate_pcap_json(pcap_path: PathBuf, json_path: PathBuf, fields: &[&str]) {
-    if !pcap_path.exists() || !json_path.exists() {
-        println!("Skipping validation for {:?}: test data not found", pcap_path);
-        return;
-    }
-
+pub fn validate_pcap_json(pcap_bytes: &'static [u8], json_str: &'static str, fields: &[&str]) {
     // Read golden JSON
-    let file = File::open(json_path).expect("Failed to open JSON file");
     let tshark_json: serde_json::Value =
-        serde_json::from_reader(file).expect("Failed to parse JSON file");
+        serde_json::from_str(json_str).expect("Failed to parse JSON string");
 
     // Read PCAP file
-    let file = File::open(&pcap_path).expect("Failed to open PCAP file");
-    let mut reader = crate::pcap::PcapReader::new(file).expect("Failed to create PcapReader");
+    let reader_input = std::io::Cursor::new(pcap_bytes);
+    let mut reader =
+        crate::pcap::PcapReader::new(reader_input).expect("Failed to create PcapReader");
 
     // Read first record
     let (_, packet_data) =
@@ -93,15 +85,12 @@ pub fn validate_pcap_json(pcap_path: PathBuf, json_path: PathBuf, fields: &[&str
         match (n_val, t_val) {
             (Some(n), Some(t)) => {
                 if !compare_values(n, t) {
-                    panic!(
-                        "Field mismatch: {} (netsim: {:?}, tshark: {:?}) in {:?}",
-                        field, n, t, pcap_path
-                    );
+                    panic!("Field mismatch: {} (netsim: {:?}, tshark: {:?})", field, n, t);
                 }
             }
-            (None, Some(_)) => panic!("Field missing in netsim: {} in {:?}", field, pcap_path),
-            (Some(_), None) => panic!("Field missing in tshark: {} in {:?}", field, pcap_path),
-            (None, None) => panic!("Field missing in both: {} in {:?}", field, pcap_path),
+            (None, Some(_)) => panic!("Field missing in netsim: {}", field),
+            (Some(_), None) => panic!("Field missing in tshark: {}", field),
+            (None, None) => panic!("Field missing in both: {}", field),
         }
     }
 }

@@ -82,6 +82,7 @@ use crate::{
 ///     type ActionResult = ();
 ///     type Error = MyError;
 ///     type Entity = MyActor;
+///     type TypedStream = ();
 ///
 ///     async fn handle_create(
 ///         &mut self,
@@ -193,8 +194,9 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
         actor.on_start(&mut self.ctx).await;
 
         loop {
-            // Move out of select! to avoid borrow conflicts
+            // Move futures out of select! to avoid borrow conflicts
             let stream_fut = self.ctx.streams.next();
+            let typed_stream_fut = self.ctx.typed_streams.next();
             // We need to poll the timers
             // If the delay queue is empty, peek() returns None, which is fine.
             let timer_fut = self.ctx.timers.next();
@@ -208,6 +210,9 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
                 }
                 Some((id, msg_opt)) = stream_fut => {
                     Self::handle_stream_event(&mut actor, id, msg_opt, &mut self.ctx).await;
+                }
+                Some((id, msg_opt)) = typed_stream_fut => {
+                    Self::handle_typed_stream_event(&mut actor, id, msg_opt, &mut self.ctx).await;
                 }
                 Some(expired) = timer_fut => {
                     let task = expired.into_inner();
@@ -236,6 +241,21 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
         match msg_opt {
             Some(msg) => actor.on_stream(id, msg, ctx).await,
             Option::None => actor.on_stream_closed(id, ctx).await,
+        }
+    }
+
+    async fn handle_typed_stream_event(
+        actor: &mut T,
+        id: usize,
+        msg_opt: Option<T::TypedStream>,
+        ctx: &mut DynContext<T>,
+    ) {
+        match msg_opt {
+            Some(msg) => actor.on_typed_stream(id, msg, ctx).await,
+            None => {
+                ctx.remove_typed_stream(id);
+                actor.on_typed_stream_closed(id, ctx).await;
+            }
         }
     }
 

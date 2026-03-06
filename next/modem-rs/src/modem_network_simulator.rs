@@ -60,21 +60,21 @@ pub struct ModemNetworkSimulator {
     event_queue: BinaryHeap<Reverse<ScheduledEvent>>,
     modems: HashMap<ModemId, ModemImpl>,
     sinks: HashMap<ModemId, ModemSink>,
-    host_event_tx: mpsc::UnboundedSender<bytes::Bytes>,
+    host_event_tx: mpsc::UnboundedSender<HostEvent>,
     metrics: Arc<Metrics>,
     clock: Arc<dyn Clock>,
 }
 
 impl ModemNetworkSimulator {
     /// Creates a new `ModemNetworkSimulator` with a real system clock.
-    pub fn new(host_event_tx: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>) -> Self {
+    pub fn new(host_event_tx: tokio::sync::mpsc::UnboundedSender<HostEvent>) -> Self {
         Self::new_with_clock(Arc::new(SystemClock), host_event_tx)
     }
 
     /// Creates a new `ModemNetworkSimulator` with a specific clock for testing.
     pub fn new_with_clock(
         clock: Arc<dyn Clock>,
-        host_event_tx: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
+        host_event_tx: tokio::sync::mpsc::UnboundedSender<HostEvent>,
     ) -> Self {
         Self {
             modems: HashMap::new(),
@@ -169,7 +169,7 @@ impl ModemNetworkSimulator {
             match effect {
                 ModemEffect::Schedule { delay, event } => {
                     let msg = HostEvent::TimerRequest { chip_id: id, duration: delay };
-                    if let Err(e) = self.host_event_tx.send(Bytes::from(msg.to_vec())) {
+                    if let Err(e) = self.host_event_tx.send(msg) {
                         log::error!("Failed to send timer request: {}", e);
                     }
                     self.schedule_event(id, delay, event);
@@ -180,7 +180,7 @@ impl ModemNetworkSimulator {
                         if let Err(e) = sink.send(Bytes::from(packet)) {
                             log::error!("Failed to send response to modem {}: {}", id, e);
                             let event = HostEvent::SinkError(id);
-                            if let Err(e) = self.host_event_tx.send(Bytes::from(event.to_vec())) {
+                            if let Err(e) = self.host_event_tx.send(event) {
                                 log::error!("Failed to send client sink error: {}", e);
                             }
                             network_events.push(NetworkEvent::SinkError { id });

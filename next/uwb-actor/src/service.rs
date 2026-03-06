@@ -24,6 +24,7 @@ impl ActorService for UwbActor {
     type ActionResult = UwbActionResult;
     type Error = ChipError;
     type Entity = Chip;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,
