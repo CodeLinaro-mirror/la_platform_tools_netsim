@@ -54,8 +54,12 @@ impl WifiClient {
 
 #[async_trait::async_trait]
 impl ChipClient for WifiClient {
-    async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
-        self.inner.create(params).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
+    async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
+        self.inner
+            .create_with_id(id, params)
+            .await
+            .map(|_| ())
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {

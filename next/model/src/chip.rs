@@ -89,6 +89,8 @@ pub type Responder<T> = oneshot::Sender<Result<T, ChipError>>;
 pub enum ChipRequest {
     /// Create a new chip.
     Create {
+        /// The ID of the new chip.
+        id: ChipId,
         /// The parameters for the new chip.
         params: ChipCreate,
         /// The channel to send the result.
@@ -139,13 +141,10 @@ pub enum ChipRequest {
 /// The top-level parameters for creating any kind of chip.
 ///
 /// This struct provides all the necessary information for creating a new
-/// simulated chip, including its ID, packet transport, and technology-specific
+/// simulated chip, including its packet transport, and technology-specific
 /// configurations. It is used in the [`ChipRequest::Create`] variant and
 /// passed to the chip service through the [`ChipClient::create`] method.
 pub struct ChipCreate {
-    // TODO: This could be inside Chip
-    /// A unique identifier for the new chip.
-    pub id: ChipId,
     /// The transport for packet input.
     pub packet_stream: Option<PacketStream>,
     /// The transport for packet output.
@@ -159,10 +158,7 @@ pub struct ChipCreate {
 
 impl fmt::Debug for ChipCreate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ChipCreate")
-            .field("id", &self.id)
-            .field("config", &self.config)
-            .finish_non_exhaustive()
+        f.debug_struct("ChipCreate").field("config", &self.config).finish_non_exhaustive()
     }
 }
 
@@ -437,10 +433,10 @@ impl std::fmt::Debug for RadioChipClient {
 #[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 impl ChipClient for RadioChipClient {
-    async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
+    async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
         let (tx, rx) = oneshot::channel();
         self.sender
-            .send(ChipRequest::Create { params, respond_to: tx })
+            .send(ChipRequest::Create { id, params, respond_to: tx })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
         rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
@@ -521,7 +517,7 @@ impl ChipClient for RadioChipClient {
 #[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait ChipClient: std::fmt::Debug + Send + Sync {
-    async fn create(&self, params: ChipCreate) -> Result<(), ClientError>;
+    async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError>;
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError>;
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError>;
     async fn delete(&self, id: ChipId) -> Result<(), ClientError>;

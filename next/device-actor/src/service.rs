@@ -478,7 +478,6 @@ impl DeviceActor {
         })?;
 
         let chip_create_params = ChipCreate {
-            id: chip_id,
             packet_stream,
             packet_sink,
             config: netsim_model::chip::ChipConfig {
@@ -491,7 +490,7 @@ impl DeviceActor {
         };
 
         chip_client
-            .create(chip_create_params)
+            .create(chip_id, chip_create_params)
             .await
             .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
         entity.device.chips.push(Chip {

@@ -207,14 +207,13 @@ impl World {
         let id = ChipId(id_val);
 
         let params = ChipCreate {
-            id,
             device_id: DeviceId(1),
             packet_stream: Some(packet_stream),
             packet_sink: Some(packet_sink),
             config,
         };
 
-        self.wifi_client.create(params).await.expect("Failed to create chip");
+        self.wifi_client.create(id, params).await.expect("Failed to create chip");
         let created_id = id_val;
 
         let src_mac = [0x00, 0x00, 0x00, 0x00, 0x00, created_id as u8];

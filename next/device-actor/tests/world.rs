@@ -249,27 +249,29 @@ impl World {
         });
 
         let chips_create = chips.clone();
-        mock.expect_create().with(mockall::predicate::always()).returning(move |params| {
-            let mut chips = chips_create.lock().unwrap();
-            let chip = netsim_model::chip::Chip {
-                id: params.id.0,
-                kind: netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
-                name: Some(params.config.name),
-                manufacturer: Some(params.config.manufacturer),
-                product_name: Some(params.config.product_name),
-                device_id: params.device_id,
-                variant: Some(netsim_model::chip::ChipVariant::from(
-                    netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
-                )),
-                enabled: true,
-                ..Default::default()
-            };
-            chips.insert(params.id, chip);
-            if let Some(mut stream) = params.packet_stream {
-                tokio::spawn(async move { while stream.next().await.is_some() {} });
-            }
-            Ok(())
-        });
+        mock.expect_create()
+            .with(mockall::predicate::always(), mockall::predicate::always())
+            .returning(move |id, params| {
+                let mut chips = chips_create.lock().unwrap();
+                let chip = netsim_model::chip::Chip {
+                    id: id.0,
+                    kind: netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
+                    name: Some(params.config.name),
+                    manufacturer: Some(params.config.manufacturer),
+                    product_name: Some(params.config.product_name),
+                    device_id: params.device_id,
+                    variant: Some(netsim_model::chip::ChipVariant::from(
+                        netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
+                    )),
+                    enabled: true,
+                    ..Default::default()
+                };
+                chips.insert(id, chip);
+                if let Some(mut stream) = params.packet_stream {
+                    tokio::spawn(async move { while stream.next().await.is_some() {} });
+                }
+                Ok(())
+            });
 
         let chips_read = chips.clone();
         mock.expect_read().returning(move |id| {
