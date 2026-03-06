@@ -99,3 +99,80 @@ async fn test_ap_config_args() {
     // created the AP.
     println!("Found CustomAP with {} chips", ap_device.chips.len());
 }
+
+// Scenario: Start daemon with --pcap
+//   Given I start netsimd with --pcap
+//   Then default capture state for new devices is enabled
+#[tokio::test]
+async fn test_pcap_args_enabled() {
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.pcap = true;
+
+    let mut world = World::new_with_args(args).await;
+
+    // Spawn daemon task to process background tasks
+    let _daemon_task = world.spawn_daemon();
+
+    let device_id = world.when_create_device("TestDevice", "TestChip").await;
+    let devices = world.when_list_devices().await;
+    let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
+    let chip = device.chips.first().expect("Chip missing");
+
+    world.then_capture_is(chip.id, true).await;
+}
+
+// Scenario: Start daemon without --pcap
+//   Given I start netsimd without --pcap
+//   Then default capture state for new devices is disabled
+#[tokio::test]
+async fn test_pcap_args_disabled() {
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.pcap = false;
+
+    let mut world = World::new_with_args(args).await;
+
+    let _daemon_task = world.spawn_daemon();
+
+    let device_id = world.when_create_device("TestDevice", "TestChip").await;
+    let devices = world.when_list_devices().await;
+    let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
+    let chip = device.chips.first().expect("Chip missing");
+
+    world.then_capture_is(chip.id, false).await;
+}
+
+// Scenario: Toggle capture using generic patch
+//   Given I start netsimd
+//   When a device is created and its capture is toggled
+//   Then its capture state updates correctly
+#[tokio::test]
+async fn test_capture_patch_enabled_flag() {
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.pcap = false;
+
+    let mut world = World::new_with_args(args).await;
+
+    let _daemon_task = world.spawn_daemon();
+
+    let device_id = world.when_create_device("TestDevice", "TestChip").await;
+    let devices = world.when_list_devices().await;
+    let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
+    let chip = device.chips.first().expect("Chip missing");
+
+    // Initially disabled
+    world.then_capture_is(chip.id, false).await;
+
+    // Patch to enable
+    world.when_patch_capture(chip.id, true).await;
+    world.then_capture_is(chip.id, true).await;
+
+    // Patch to disable
+    world.when_patch_capture(chip.id, false).await;
+    world.then_capture_is(chip.id, false).await;
+}

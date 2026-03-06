@@ -1,7 +1,14 @@
 use std::time::Instant;
 
 use netsim_proto::stats::NetsimStats as ProtoNetsimStats;
-use protobuf_json_mapping::print_to_string;
+use protobuf_json_mapping::{print_to_string_with_options, PrintOptions};
+
+const STATS_PRINT_OPTIONS: PrintOptions = PrintOptions {
+    enum_values_int: false,
+    proto_field_name: true,
+    always_output_default_values: true,
+    _future_options: (),
+};
 
 const DEFAULT_STATS_FILENAME: &str = "netsim_session_stats.json";
 
@@ -59,6 +66,10 @@ impl Stats {
         self.archived_radio_stats.push(radio_stats);
     }
 
+    pub fn add_device_stats(&mut self, device_stats: netsim_proto::stats::NetsimDeviceStats) {
+        self.proto.device_stats.push(device_stats);
+    }
+
     pub fn get_combined_stats(
         &mut self,
         mut active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
@@ -67,9 +78,7 @@ impl Stats {
             self.proto.set_duration_secs(start.elapsed().as_secs());
         }
         let mut combined = self.proto.clone();
-        // Add archived stats first
         combined.radio_stats.extend(self.archived_radio_stats.clone());
-        // Add active stats
         combined.radio_stats.append(&mut active_stats);
         combined
     }
@@ -105,7 +114,8 @@ impl Stats {
 
     fn write_json_to_file(proto: &ProtoNetsimStats, path: &std::path::Path) -> std::io::Result<()> {
         let mut file = std::fs::File::create(path)?;
-        let json = print_to_string(proto)
+
+        let json = print_to_string_with_options(proto, &STATS_PRINT_OPTIONS)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         use std::io::Write;
         file.write_all(json.as_bytes())?;
