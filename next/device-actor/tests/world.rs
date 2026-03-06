@@ -715,6 +715,9 @@ impl World {
         stats.kind = kind;
         stats.tx_bytes = tx;
         stats.rx_bytes = rx;
+        // Assume nonzero equals 1
+        stats.tx_count = if tx > 0 { 1 } else { 0 };
+        stats.rx_count = if rx > 0 { 1 } else { 0 };
 
         // Replace or Append
         if let Some(existing) = stats_vec.iter_mut().find(|s| s.id == device_id) {
