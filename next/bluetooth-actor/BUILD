@@ -30,6 +30,7 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "bluetooth_actor",
     edition = "2021",
+    enable_integration_test = False,
     proc_macro_deps = [
         "@async-trait",
         "@zerocopy-derive",

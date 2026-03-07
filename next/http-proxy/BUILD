@@ -10,6 +10,7 @@ netsim_rust_library(
     crate_name = "http_proxy",
     crate_root = "src/lib.rs",
     edition = "2021",
+    enable_integration_test = False,
     deps = [
         "//next/libslirp-rs",
         "@base64",

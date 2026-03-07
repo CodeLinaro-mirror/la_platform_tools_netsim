@@ -12,10 +12,6 @@
 #   bazel test //next/daemon:tests
 
 load(
-    "@rules_rust//rust:defs.bzl",
-    "rust_test",
-)
-load(
     "//next:defs.bzl",
     "netsim_rust_binary",
     "netsim_rust_library",
@@ -80,6 +76,11 @@ netsim_rust_library(
         "@platforms//os:linux": ["@rustutils"],
         "//conditions:default": [],
     }),
+    test_deps = [
+        "//proto",
+        "@rand",
+        "@regex",
+    ],
     deps = DAEMON_DEPS,
 )
 
@@ -96,37 +97,5 @@ netsim_rust_binary(
         ":daemon-lib",
         "@rand",
         "@tokio",
-    ],
-)
-
-rust_test(
-    name = "tests",
-    srcs = glob(["tests/**/*.rs"]),
-    crate_root = "tests/tests.rs",
-    edition = "2021",
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
-    tags = ["requires-network"],
-    deps = [
-        ":testing",
-        "//next/client:testing",
-        "//next/device-api:testing",
-        "//next/link-api:testing",
-        "//next/model:testing",
-        "//next/packet-stream:testing",
-        "//proto",
-        "@bytes",
-        "@env_logger",
-        "@futures",
-        "@grpcio",
-        "@log",
-        "@rand",
-        "@regex",
-        "@tokio",
-        "@tracing",
-        "@tracing-log",
-        "@tracing-subscriber",
     ],
 )

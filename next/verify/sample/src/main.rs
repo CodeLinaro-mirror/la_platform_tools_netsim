@@ -24,6 +24,8 @@ impl CalculatorWorld {
     }
 }
 
+impl features::World for CalculatorWorld {}
+
 use features::Features;
 
 pub fn setup_world() -> (Features<CalculatorWorld>, CalculatorWorld) {
