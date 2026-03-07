@@ -40,6 +40,7 @@ pub struct World {
     pub ap_injector: mpsc::UnboundedSender<Bytes>,
     pub device_action_rx: mpsc::UnboundedReceiver<DeviceAction>,
     pub baseline_stats: Option<netsim_proto::stats::WifiStats>,
+    pub mock_clock: std::sync::Arc<wifi_actor::stats::MockClock>,
 }
 
 #[allow(dead_code)]
@@ -116,12 +117,15 @@ impl World {
             ApClient::new_with_interceptor(ap_client_base, ap_client_interceptor);
         let spying_ap_client_arc = Arc::new(spying_ap_client.clone());
 
+        let mock_clock = std::sync::Arc::new(wifi_actor::stats::MockClock::new());
+
         let wifi_actor_impl = if let Some(gw) = gateway {
             WifiActor::new_with_gateway(
                 Some(spying_ap_client_arc.clone()),
                 gw,
                 device_client,
                 shared_keys.clone(),
+                mock_clock.clone(),
             )
         } else {
             WifiActor::new(
@@ -130,6 +134,7 @@ impl World {
                 device_client,
                 None,
                 shared_keys.clone(),
+                mock_clock.clone(),
             )
         };
 
@@ -156,6 +161,7 @@ impl World {
             ap_injector,
             device_action_rx: device_rx,
             baseline_stats: None,
+            mock_clock,
         }
     }
 
@@ -650,6 +656,16 @@ impl World {
         );
         self.baseline_stats = Some(final_stats);
     }
+
+    pub async fn then_max_upload_throughput_is_greater_than(&mut self, expected_min: f32) {
+        let final_stats = self.wifi_client.get_global_stats_proto().await.unwrap();
+        assert!(
+            final_stats.max_upload_throughput() > expected_min,
+            "max_upload_throughput {} is not greater than {}",
+            final_stats.max_upload_throughput(),
+            expected_min
+        );
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -669,12 +685,13 @@ impl wifi_actor::gateway::GatewayTrait for MockGateway {
         &self,
         chip_id: netsim_model::chip::ChipId,
         ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> Result<(), wifi_actor::error::WifiError> {
+    ) -> Result<usize, wifi_actor::error::WifiError> {
         let bytes = ieee80211
             .encode_to_vec()
             .map_err(|e| wifi_actor::error::WifiError::Frame(e.to_string()))?;
+        let len = bytes.len();
         self.outgoing_packets.lock().unwrap().push((chip_id, bytes::Bytes::from(bytes)));
-        Ok(())
+        Ok(len)
     }
 
     fn should_handle(&self, _chip_id: netsim_model::chip::ChipId) -> bool {

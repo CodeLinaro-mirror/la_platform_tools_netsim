@@ -175,7 +175,7 @@ impl GatewayTrait for TapGateway {
         &self,
         chip_id: ChipId,
         ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> Result<(), crate::error::WifiError> {
+    ) -> Result<usize, crate::error::WifiError> {
         self.send_80211_impl(chip_id, ieee80211).await
     }
 
@@ -194,6 +194,9 @@ impl GatewayTrait for TapGateway {
         let real_id = chip_id.0 & !TAP_FLAG;
         debug!("TAP_PKT: Chip {} len {}", real_id, packet.len());
         medium.wifi_stats.incr_network_packets_rx();
+        medium.wifi_stats.record_download_bytes(
+            packet.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN),
+        );
 
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
         let Some(bytes) = convert_8023_to_80211(packet.clone(), shared_keys.get_bssid(), seq)
@@ -443,21 +446,25 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
         &self,
         chip_id: ChipId,
         ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> Result<(), crate::error::WifiError> {
+    ) -> Result<usize, crate::error::WifiError> {
         #[cfg(target_os = "linux")]
         {
-            if let Some(tap) = self.taps.get(&chip_id) {
-                let eth = ieee80211.to_ieee8023().map_err(|e| {
-                    crate::error::WifiError::Frame(format!("TAP conversion failed: {}", e))
-                })?;
-                return tap.write(&eth).await.map(|_| ()).map_err(|e| {
-                    crate::error::WifiError::Transmission(format!("TAP write failed: {}", e))
-                });
-            }
-            Err(crate::error::WifiError::Network(format!(
-                "No TAP interface configured for Chip {}",
-                chip_id.0
-            )))
+            let Some(tap) = self.taps.get(&chip_id) else {
+                return Err(crate::error::WifiError::Network(format!(
+                    "No TAP interface configured for Chip {}",
+                    chip_id.0
+                )));
+            };
+
+            let eth = ieee80211.to_ieee8023().map_err(|e| {
+                crate::error::WifiError::Frame(format!("TAP conversion failed: {}", e))
+            })?;
+            let payload_len = eth.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN);
+            let written = tap
+                .write(&eth)
+                .await
+                .map_err(|e| crate::error::WifiError::Network(format!("TAP write failed: {}", e)));
+            return written.map(|_| payload_len);
         }
         #[cfg(not(target_os = "linux"))]
         {

@@ -51,10 +51,10 @@ async fn test_udp_guest_to_host() {
     let wifi_actor_impl = WifiActor::new(
         Some(ap_client.clone()),
         Some(slirp_client.clone()),
-        Some(ap_rx_out),
-        shared_keys.clone(),
         device_client,
-        false, // Do not create default AP
+        None, // wifi_tap
+        shared_keys.clone(),
+        Arc::new(wifi_actor::stats::SystemClock),
     );
 
     // Create Runner

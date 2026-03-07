@@ -47,19 +47,15 @@ impl GatewayTrait for SlirpGateway {
         &self,
         _chip_id: ChipId,
         ieee80211: &Ieee80211,
-    ) -> Result<(), crate::error::WifiError> {
+    ) -> Result<usize, crate::error::WifiError> {
         // Drop QosNodata frames (keep-alives/null data) as they contain no payload
         // and cannot be converted to Ethernet.
         if ieee80211.is_qos_nodata() {
-            return Ok(());
+            return Ok(0);
         }
 
         ieee80211
             .to_ieee8023()
-            .map(|eth| {
-                let _ = self.sender.send(bytes::Bytes::from(eth));
-                ()
-            })
             .map_err(|e| {
                 let fc = ieee80211.get_fc();
                 let ftype = ieee80211.is_data();
@@ -68,6 +64,12 @@ impl GatewayTrait for SlirpGateway {
                     "Slirp conversion failed: {}. Frame (Data: {}), Subtype: {}, FC: {:#06x}",
                     e, ftype, stype, fc
                 ))
+            })
+            .and_then(|eth| {
+                let payload_len = eth.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN);
+                self.sender.send(bytes::Bytes::from(eth)).map(|_| payload_len).map_err(|e| {
+                    crate::error::WifiError::Transmission(format!("Slirp send failed: {}", e))
+                })
             })
     }
 
@@ -92,6 +94,10 @@ impl GatewayTrait for SlirpGateway {
             ));
             return;
         };
+
+        medium.wifi_stats.record_download_bytes(
+            packet.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN),
+        );
 
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
         let Ok(ieee80211) =

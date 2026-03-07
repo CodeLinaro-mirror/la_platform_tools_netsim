@@ -482,6 +482,7 @@ impl NetsimDaemon {
             device_client.clone(),
             wifi_tap,
             shared_keys.clone(),
+            Arc::new(wifi_actor::stats::SystemClock),
         );
 
         // Setup Uwb Server
