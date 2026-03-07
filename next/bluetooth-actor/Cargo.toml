@@ -11,7 +11,7 @@ crate-type = ["staticlib", "lib"]
 actor-framework = { path = "../actor-framework" }
 async-trait = "0.1.68"
 bytes = "1.4.0"
-client = { path = "../client" }
+
 device-api = { path = "../device-api" }
 env_logger = { version = "0.10.0", default-features = false }
 futures = "0.3.31"

@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use actor_framework::ResourceActor;
 use ap_actor::{shared::SharedKeyStore, ApActor, ApClient};
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use netsim_model::{
     chip::{ChipClient, ChipCreate},
     ChipId,

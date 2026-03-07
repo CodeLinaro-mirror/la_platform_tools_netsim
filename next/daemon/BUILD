@@ -37,7 +37,6 @@ DAEMON_DEPS = [
     "//next/capture-actor",
     "//next/capture-api",
     "//next/cell-actor",
-    "//next/client",
     "//next/common",
     "//next/device-actor",
     "//next/device-api",

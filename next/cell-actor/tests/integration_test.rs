@@ -7,8 +7,7 @@ use std::{
 use actor_framework::{ResourceClient, ResourceRequest};
 use bytes::Bytes;
 use cell_actor::CellClient;
-use client::DeviceClient;
-use device_actor::DeviceActor;
+use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult};
 use env_logger;
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};

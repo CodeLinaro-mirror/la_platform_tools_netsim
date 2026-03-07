@@ -14,16 +14,20 @@ mod service;
 mod uwb_pcap;
 mod writer;
 
-use actor_framework::{ResourceActor, ResourceClient};
+use actor_framework::ResourceActor;
 pub use capture_actor::CaptureActor;
 pub use error::CaptureError;
 
+pub mod client;
+pub use client::CaptureClient;
+
 /// Creates a new Capture actor and its client.
-pub fn new() -> (ResourceActor<CaptureActor>, ResourceClient<CaptureActor>) {
+pub fn new() -> (ResourceActor<CaptureActor>, CaptureClient) {
     // Buffer size of 32 is sufficient for capture control commands.
     // Packet data flows through a separate channel if needed, but here we handle
     // control.
-    ResourceActor::new(32)
+    let (runner, client) = ResourceActor::new(32);
+    (runner, CaptureClient::new(client))
 }
 
 #[cfg(test)]
@@ -93,12 +97,11 @@ mod tests {
     }
 
     fn setup_test_context() -> (CaptureActor, PathBuf) {
-        let mut ctx = CaptureActor::new(false);
         let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
         let temp_dir =
             std::env::temp_dir().join(format!("netsim_capture_test_{}_{}", std::process::id(), id));
         fs::create_dir_all(&temp_dir).unwrap();
-        ctx.capture_dir = Some(temp_dir.clone());
+        let ctx = CaptureActor::new(false, Some(temp_dir.clone()));
         (ctx, temp_dir)
     }
 

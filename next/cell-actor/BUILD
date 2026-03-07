@@ -4,7 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 DEPS = [
     "//next/actor-framework",
-    "//next/client",
+    "//next/device-actor",
     "//next/device-api",
     "//next/model",
     "//next/modem-rs",
@@ -29,7 +29,6 @@ netsim_rust_library(
         "@async-trait",
     ],
     test_deps = [
-        "//next/device-actor:testing",
         "@env_logger",
     ],
     deps = DEPS,

@@ -5,7 +5,7 @@ package(default_visibility = ["//visibility:public"])
 
 BLUETOOTH_DEPS = [
     "//next/actor-framework",
-    "//next/client",
+    "//next/device-actor",
     "//next/device-api",
     "//next/model",
     "//next/rootcanal",
@@ -53,7 +53,6 @@ rust_test(
     deps = [
         ":testing",
         "//next/actor-framework:testing",
-        "//next/client:testing",
         "//next/common",
         "//next/device-actor:testing",
         "//next/device-api:testing",

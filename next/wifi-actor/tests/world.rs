@@ -98,7 +98,7 @@ impl World {
         });
 
         // Initialize the DeviceClient with the mock.
-        let device_client = client::DeviceClient::new(Box::new(mock_device));
+        let device_client = device_actor::DeviceClient::new(Box::new(mock_device));
 
         // Create ApClient with interceptor to capture the downlink sink
         let (capture_tx, mut capture_rx) = mpsc::unbounded_channel();

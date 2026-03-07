@@ -55,7 +55,7 @@ pub struct WifiActor {
     pub(crate) shared_keys: Arc<SharedKeyStore>,
     // Output buffer for Medium to avoid allocations
     pub(crate) out_queue: Vec<(u32, bytes::Bytes)>,
-    pub(crate) device_client: ::client::DeviceClient,
+    pub(crate) device_client: device_actor::DeviceClient,
     // Channel to send frames TO the AP Actor (registered via ApClient)
     pub(crate) to_ap: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
     // Gateway for Infra packets (Tap or Slirp)
@@ -66,7 +66,7 @@ impl WifiActor {
     pub fn new(
         ap_client: Option<Arc<ApClient>>,
         slirp_client: Option<SlirpClient>,
-        device_client: ::client::DeviceClient,
+        device_client: device_actor::DeviceClient,
         wifi_tap: Option<String>,
         shared_keys: Arc<SharedKeyStore>,
     ) -> Self {
@@ -92,7 +92,7 @@ impl WifiActor {
     pub fn new_with_gateway(
         ap_client: Option<Arc<ApClient>>,
         gateway: Box<dyn GatewayTrait>,
-        device_client: ::client::DeviceClient,
+        device_client: device_actor::DeviceClient,
         shared_keys: Arc<SharedKeyStore>,
     ) -> Self {
         let medium = Medium::new(

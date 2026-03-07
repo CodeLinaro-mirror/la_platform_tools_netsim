@@ -8,7 +8,7 @@ netsim_rust_library(
     crate_name = "hci_server",
     edition = "2021",
     deps = [
-        "//next/client",
+        "//next/device-actor",
         "//next/device-api",
         "//next/model",
         "//next/packet-stream",

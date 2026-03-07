@@ -8,7 +8,7 @@ actor-framework = { path = "../actor-framework" }
 anyhow = "1"
 async-trait = "0.1"
 bytes = "1"
-client = { path = "../client" }
+
 device-api = { path = "../device-api" }
 futures = "0.3"
 glam = "0.25"

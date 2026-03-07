@@ -30,7 +30,6 @@ netsim_rust_library(
         "@async-trait",
     ],
     test_deps = [
-        "//next/client:testing",
         "@mockall",
         "@serde_json",
         "@tokio-stream",

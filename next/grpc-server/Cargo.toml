@@ -7,7 +7,8 @@ edition = "2021"
 anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1.0"
-client = { path = "../client" }
+device-actor = { path = "../device-actor" }
+
 common = { package = "netsim-common", path = "../common" }
 device-api = { path = "../device-api" }
 futures = "0.3"
@@ -15,7 +16,9 @@ grpcio = { version = "0.13", default-features = false, features = [
   "protobufv3-codec",
   "openssl",
 ] }
+link-actor = { path = "../link-actor" }
 link-api = { path = "../link-api" }
+
 log = "0.4"
 netsim-model = { path = "../model" }
 netsim-proto = { path = "../proto" }

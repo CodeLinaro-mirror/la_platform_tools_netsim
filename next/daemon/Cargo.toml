@@ -17,7 +17,7 @@ clap = { version = "4.1.8", default-features = false, features = [
   "usage",
   "env",
 ] }
-client = { path = "../client" }
+
 device-actor = { path = "../device-actor" }
 grpc-server = { path = "../grpc-server" }
 grpcio = { version = "0.13", default-features = false, features = [
