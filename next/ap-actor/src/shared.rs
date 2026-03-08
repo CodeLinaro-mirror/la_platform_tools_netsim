@@ -32,12 +32,25 @@ impl Default for SessionKeys {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct SharedKeyStore {
     // Current BSSID of the AP
     pub bssid: Arc<RwLock<Option<MacAddress>>>,
     // Map of Station Address -> SessionKeys
     pub sessions: Arc<RwLock<HashMap<MacAddress, Arc<SessionKeys>>>>,
+    pub gtk: Arc<RwLock<Option<[u8; 16]>>>,
+    pub gtk_tx_pn: Arc<AtomicU64>,
+}
+
+impl Default for SharedKeyStore {
+    fn default() -> Self {
+        Self {
+            bssid: Arc::new(RwLock::new(None)),
+            sessions: Arc::new(RwLock::new(HashMap::new())),
+            gtk: Arc::new(RwLock::new(None)),
+            gtk_tx_pn: Arc::new(AtomicU64::new(1)),
+        }
+    }
 }
 
 impl SharedKeyStore {
@@ -58,19 +71,39 @@ impl SharedKeyStore {
         sessions.insert(sta_addr, Arc::new(SessionKeys { tk, tx_pn: AtomicU64::new(1) }));
     }
 
+    pub fn get_gtk(&self) -> Option<[u8; 16]> {
+        *self.gtk.read().unwrap()
+    }
+
+    pub fn set_gtk(&self, gtk: [u8; 16]) {
+        *self.gtk.write().unwrap() = Some(gtk);
+    }
+
     pub fn remove_session(&self, sta_addr: &MacAddress) {
         let mut sessions = self.sessions.write().unwrap();
         sessions.remove(sta_addr);
     }
 
     pub fn try_encrypt(&self, ieee80211: &Ieee80211) -> Option<Vec<u8>> {
-        let sessions = self.sessions.read().ok()?;
-        // Encrypt if destination is in sessions (Unicast to Station)
         let dest = ieee80211.get_destination();
-        let session = sessions.get(&dest)?;
+        let is_group = dest.is_multicast() || dest.is_broadcast();
 
-        let pn = session.tx_pn.fetch_add(1, Ordering::SeqCst);
-        let key = ccm::aead::generic_array::GenericArray::from_slice(&session.tk[..16]);
+        let (tk, pn, key_id) = if is_group {
+            let gtk_opt = self.gtk.read().ok()?;
+            let gtk = gtk_opt.as_ref()?;
+            let pn = self.gtk_tx_pn.fetch_add(1, Ordering::SeqCst);
+            (gtk.to_vec(), pn, 1) // KeyID 1
+        } else {
+            let sessions = self.sessions.read().ok()?;
+            let session = sessions.get(&dest)?;
+            let pn = session.tx_pn.fetch_add(1, Ordering::SeqCst);
+            (session.tk.clone(), pn, 0) // KeyID 0
+        };
+
+        if tk.is_empty() {
+            return None;
+        }
+        let key = ccm::aead::generic_array::GenericArray::from_slice(&tk[..16]);
         let cipher = AesCcm::new(key);
 
         let mut nonce = [0u8; 13];
@@ -92,9 +125,13 @@ impl SharedKeyStore {
 
         let nonce_ga = ccm::aead::generic_array::GenericArray::from_slice(&nonce);
 
-        // AAD
-        // AAD
-        let aad = ieee80211.get_aad();
+        // The CCMP AAD explicitly requires the 'Protected' frame control bit to be
+        // active. We must calculate the AAD against the final physical MAC byte
+        // sequence!
+        let mut final_fc_bytes = ieee80211.as_bytes().to_vec();
+        final_fc_bytes[1] |= 0x40; // Force Protected Bit inside the temporary buffer
+        let final_ieee = Ieee80211::decode(&final_fc_bytes).unwrap();
+        let aad = final_ieee.get_aad();
 
         let payload = ieee80211.get_payload();
 
@@ -110,11 +147,12 @@ impl SharedKeyStore {
 
         // CCMP Header
         // PN0, PN1, Rsvd, KeyID_ExtIV, PN2, PN3, PN4, PN5
+        let ccmp_key_id = 0x20 | (key_id << 6);
         let ccmp_header = CcmpHeader {
             pn0: pn_bytes[0],
             pn1: pn_bytes[1],
             rsvd: 0,
-            key_id: 0x20, // KeyID 0 + ExtIV (bit 5 set)
+            key_id: ccmp_key_id,
             pn2: pn_bytes[2],
             pn3: pn_bytes[3],
             pn4: pn_bytes[4],
@@ -172,7 +210,16 @@ impl SharedKeyStore {
 
         let plaintext = match cipher.decrypt(nonce_ga, Payload { msg: data, aad: &aad }) {
             Ok(p) => p,
-            Err(_) => return None,
+            Err(_) => {
+                log::error!(
+                    "CCMP DECRYPT FAILED! hdr_len: {}, msg_len: {}, aad_len: {}",
+                    hdr_len,
+                    data.len(),
+                    aad.len()
+                );
+                log::error!("RAW FRAME TO DECRYPT (Hex): {:02X?}", ieee80211.as_bytes());
+                return None;
+            }
         };
 
         let mut new_packet = Vec::new();
