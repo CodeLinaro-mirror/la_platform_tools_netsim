@@ -17,6 +17,7 @@ rust_library_host {
         "libbytes",
         "libfutures",
         "libgrpcio",
+        "libnetsim_next_cell_actor",
         "libnetsim_next_device_actor",
         "libnetsim_next_device_api",
         "libnetsim_next_link_actor",
