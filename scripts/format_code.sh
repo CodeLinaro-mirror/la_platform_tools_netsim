@@ -113,6 +113,7 @@ if [[ "$MODE" == "ALL" ]]; then
   mapfile -d '' bp_files < <(find . -maxdepth 1 -type f -name "Android.bp" -print0)
   mapfile -d '' bazel_files < <(find . -type f \( -name "BUILD" -o -name "MODULE.bazel" -o -name "BUILD.bazel" -o -name "*.bzl" \) -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
   mapfile -d '' toml_files < <(find rust next proto -type f -name 'Cargo.toml' -not -path "*/target/*" -not -path "*/bazel-bin/*" -not -path "*/bazel-netsim/*" -not -path "*/bazel-out/*" -not -path "*/objs/*" -print0)
+  mapfile -d '' kt_files < <(find . -type f -name '*.kt' -not -path '*/target/*' -not -path './.git/*' -not -path './bazel-out/*' -not -path './objs/*' -print0)
 else
   echo "Gathering files to format..."
 
@@ -135,6 +136,7 @@ else
   bp_files=()
   bazel_files=()
   toml_files=()
+  kt_files=()
   for f in "${all_files[@]}"; do
     [[ "$f" =~ \.(cc|h|proto|ts)$ ]] && clang_files+=("$f")
     [[ "$f" =~ \.rs$ ]] && rust_files+=("$f")
@@ -144,6 +146,7 @@ else
     [[ "$f" =~ Android\.bp$ ]] && bp_files+=("$f")
     [[ "$f" =~ BUILD$|MODULE\.bazel$|BUILD\.bazel$|\.bzl$ ]] && bazel_files+=("$f")
     [[ "$f" =~ Cargo\.toml$ ]] && toml_files+=("$f")
+    [[ "$f" =~ \.kt$ ]] && kt_files+=("$f")
   done
 fi
 
@@ -155,6 +158,13 @@ RUSTFMT="$REPO/prebuilts/rust/$OS-x86/stable/rustfmt"
 BPFMT="$REPO/prebuilts/build-tools/$OS-x86/bin/bpfmt"
 TAPLO_CONFIG="$REPO/tools/netsim/next/taplo.toml"
 
+KTFMT="ktfmt"
+if ! command -v ktfmt &> /dev/null; then
+  if [ -x "/google/bin/releases/kotlin-google-eng/ktfmt/ktfmt" ]; then
+    KTFMT="/google/bin/releases/kotlin-google-eng/ktfmt/ktfmt"
+  fi
+fi
+
 [[ ${#clang_files[@]} -gt 0 ]] && format "C/C++/Proto/TS" "clang-format -i" "${clang_files[@]}"
 [[ ${#rust_files[@]} -gt 0 ]] && format "Rust" "$RUSTFMT --files-with-diff" "${rust_files[@]}"
 [[ ${#java_files[@]} -gt 0 ]] && format "Java" "google-java-format -i" "${java_files[@]}"
@@ -163,6 +173,7 @@ TAPLO_CONFIG="$REPO/tools/netsim/next/taplo.toml"
 [[ ${#bp_files[@]} -gt 0 ]] && format "Android.bp" "$BPFMT -w" "${bp_files[@]}"
 [[ ${#bazel_files[@]} -gt 0 ]] && format "Bazel" "buildifier -lint=fix" "${bazel_files[@]}"
 [[ ${#toml_files[@]} -gt 0 ]] && format "TOML" "env RUST_LOG=warn taplo fmt --config" "$TAPLO_CONFIG" "${toml_files[@]}"
+[[ ${#kt_files[@]} -gt 0 ]] && format "Kotlin" "$KTFMT --google-style" "${kt_files[@]}"
 
 echo "Waiting for formatters to finish..."
 for pid in "${pids[@]}"; do

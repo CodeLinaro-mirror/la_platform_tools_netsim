@@ -146,6 +146,7 @@ impl FrontendClient {
                         req.device.orientation.clone().unwrap_or_default(),
                     ),
                     builtin: false,
+                    device_info: None,
                 };
 
                 let device_create = device_api::api::DeviceCreate {
