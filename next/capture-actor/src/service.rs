@@ -128,12 +128,13 @@ impl CaptureActor {
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
             ChipKind::BLUETOOTH => BluetoothH4Writer::new(&filepath).await?,
             ChipKind::UWB => UwbPcapWriter::new(&filepath).await?,
+            ChipKind::WIFI | ChipKind::AP => {
+                crate::wifi_pcap::WifiPcapWriter::new(&filepath).await?
+            }
             // Fallback
-            ChipKind::UNSPECIFIED
-            | ChipKind::WIFI
-            | ChipKind::AP
-            | ChipKind::NFC
-            | ChipKind::CELLULAR => BluetoothH4Writer::new(&filepath).await?,
+            ChipKind::UNSPECIFIED | ChipKind::NFC | ChipKind::CELLULAR => {
+                BluetoothH4Writer::new(&filepath).await?
+            }
         };
         Ok(writer)
     }

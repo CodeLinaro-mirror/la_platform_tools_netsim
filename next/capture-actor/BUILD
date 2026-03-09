@@ -7,6 +7,7 @@ DEPS = [
     "//next/capture-api",
     "//next/common",
     "//next/model",
+    "//next/packets",
     "@anyhow",
     "@bytes",
     "@futures",

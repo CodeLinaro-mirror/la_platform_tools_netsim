@@ -12,6 +12,7 @@ mod error;
 mod lifecycle;
 mod service;
 mod uwb_pcap;
+mod wifi_pcap;
 mod writer;
 
 use actor_framework::ResourceActor;
@@ -264,6 +265,55 @@ mod tests {
         assert_eq!(info.bytes_written, 4);
 
         ctx.delete_entity(&entity, &mut runtime).await.unwrap();
+        teardown_test_context(temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_wifi_capture() {
+        let (mut ctx, temp_dir) = setup_test_context();
+        let chip_id = ChipId(5);
+        let enabled_flag = Arc::new(AtomicBool::new(true));
+
+        // Test both WIFI and AP to ensure service routes them correctly
+        for kind in [ChipKind::WIFI, ChipKind::AP] {
+            let create_params = CaptureCreate {
+                chip_id,
+                chip_kind: kind,
+                device_name: format!("test_{:?}_device", kind),
+                enabled_flag: enabled_flag.clone(),
+            };
+
+            let mut entity =
+                InternalCaptureInfo::from_create_params(chip_id, create_params).unwrap();
+            let mut runtime = MockContext;
+
+            ctx.create_entity(&mut entity, &mut runtime).await.unwrap();
+            ctx.entities.insert(chip_id, entity.clone());
+
+            assert!(ctx.writers.contains_key(&chip_id));
+
+            let packet = vec![0x00, 0x01, 0x02, 0x03]; // Fake 802.11 payload
+            ctx.handle_action(
+                Some(chip_id),
+                CaptureAction::CapturePacket {
+                    chip_id,
+                    direction: Direction::Sent,
+                    bytes: bytes::Bytes::from(packet.clone()),
+                },
+                &mut runtime,
+            )
+            .await
+            .unwrap();
+
+            let info = ctx.handle_get(chip_id, &mut runtime).await.unwrap().unwrap();
+
+            // An invalid HwsimMsg (like the fake payload) will be discarded during parsing,
+            // resulting in 0 records written for this chip.
+            assert_eq!(info.records_written, 0);
+            assert_eq!(info.bytes_written, 0);
+
+            ctx.delete_entity(&entity, &mut runtime).await.unwrap();
+        }
         teardown_test_context(temp_dir);
     }
 }
