@@ -54,7 +54,6 @@ pub struct WifiStats {
 }
 
 #[derive(Clone, Debug, Default)]
-#[allow(dead_code)]
 struct WifiCounts {
     hostapd_error: u64,
     network_error: u64,
@@ -126,6 +125,18 @@ impl WifiStats {
             WifiError::Transmission(_) => self.counts.transmission_error += 1,
             WifiError::Other(_) => self.counts.other_error += 1,
             WifiError::Internal(_) => self.counts.other_error += 1,
+        }
+    }
+
+    /// Handles the "log on error, increment on success" pattern.
+    pub fn log_outcome<T, E, F>(&mut self, result: Result<T, E>, success_op: F)
+    where
+        E: Into<WifiError>,
+        F: FnOnce(&mut Self, T),
+    {
+        match result {
+            Ok(val) => success_op(self, val),
+            Err(e) => self.log_and_incr_err_count(&e.into()),
         }
     }
 

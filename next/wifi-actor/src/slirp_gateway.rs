@@ -68,7 +68,7 @@ impl GatewayTrait for SlirpGateway {
             .and_then(|eth| {
                 let payload_len = eth.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN);
                 self.sender.send(bytes::Bytes::from(eth)).map(|_| payload_len).map_err(|e| {
-                    crate::error::WifiError::Transmission(format!("Slirp send failed: {}", e))
+                    crate::error::WifiError::Network(format!("Slirp send failed: {}", e))
                 })
             })
     }
@@ -100,24 +100,28 @@ impl GatewayTrait for SlirpGateway {
         );
 
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-        let Ok(ieee80211) =
-            Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
-        else {
-            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(
-                "Failed to convert Slirp packet to 802.11".to_string(),
-            ));
-            return;
+        let res = Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
+            .map_err(|_| {
+                crate::error::WifiError::Frame("Failed to convert Slirp packet to 802.11".into())
+            });
+
+        let ieee80211 = match res {
+            Ok(i) => i,
+            Err(e) => {
+                medium.wifi_stats.log_and_incr_err_count(&e);
+                return;
+            }
         };
 
-        match ieee80211.encode_to_vec() {
+        let res = ieee80211.encode_to_vec().map_err(|_| {
+            crate::error::WifiError::Frame("Failed to encode Slirp packet to 802.11".into())
+        });
+        match res {
             Ok(bytes) => {
-                let _ = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);
+                let res = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);
+                medium.wifi_stats.log_outcome(res, |_, _| {});
             }
-            Err(_) => {
-                medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(
-                    "Failed to encode Slirp packet to 802.11".to_string(),
-                ));
-            }
+            Err(e) => medium.wifi_stats.log_and_incr_err_count(&e),
         }
     }
 
@@ -145,9 +149,7 @@ impl GatewayTrait for SlirpGateway {
         // No-op for Slirp
     }
 
-    async fn on_chip_remove(&mut self, _chip_id: ChipId, _ctx: &mut DynContext<WifiActor>) {
-        // No-op for Slirp
-    }
+    async fn on_chip_remove(&mut self, _chip_id: ChipId, _ctx: &mut DynContext<WifiActor>) {}
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
