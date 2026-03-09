@@ -77,7 +77,11 @@ async fn test_stats_write_failure_cleans_up_tmp_file() {
     // Create a read-only directory to force a write error
     let mut bad_dir = path.clone();
     bad_dir.pop();
-    bad_dir.push("readonly_stats_dir_test");
+    bad_dir.push(format!(
+        "readonly_stats_dir_test_{}_{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
     std::fs::create_dir_all(&bad_dir).unwrap();
 
     // Make it read-only (Unix specific for this test)
@@ -94,6 +98,8 @@ async fn test_stats_write_failure_cleans_up_tmp_file() {
         World::new_with_stats(bad_path.clone(), Some(std::time::Duration::from_millis(50))).await;
 
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+    _world.when_shutdown_actor().await;
 
     // Verify .tmp file does NOT exist
     assert!(!bad_tmp_path.exists(), "Temporary file leaked on write failure!");

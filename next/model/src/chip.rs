@@ -531,7 +531,7 @@ pub trait ChipClient: std::fmt::Debug + Send + Sync {
     /// Resets the state of the specified chip.
     async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
     fn clone_box(&self) -> Box<dyn ChipClient>;
-    async fn get_wifi_stats(&self) -> Result<Option<netsim_proto::stats::WifiStats>, ClientError> {
+    async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
         Ok(None)
     }
 }

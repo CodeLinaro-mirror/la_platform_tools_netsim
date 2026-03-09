@@ -157,7 +157,7 @@ impl WifiActor {
                 // 1. Ack
                 if let Err(e) = self.medium.ack_frame(chip_id, &tx_state.frame, &mut self.out_queue)
                 {
-                    warn!("Failed to ack frame: {:?}", e);
+                    self.medium.wifi_stats.log_and_incr_err_count(&e);
                 }
 
                 // 2. Infra (AP/Slirp) routing
@@ -166,6 +166,7 @@ impl WifiActor {
                         debug!("ROUTING: Guest -> AP");
                         if let Some(to_ap) = &self.to_ap {
                             let _ = to_ap.send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()));
+                            self.medium.wifi_stats.incr_hostapd_frames_tx();
                         }
                     }
                     InfraTarget::Slirp => {
@@ -223,21 +224,28 @@ impl WifiActor {
                     }
                 }
             }
-            Err(e) => warn!("Error processing packet: {:?}", e),
+            Err(e) => {
+                self.medium.wifi_stats.log_and_incr_err_count(&e);
+            }
         }
         self.flush_out_queue();
     }
 
     pub(crate) fn process_ap_packet(&mut self, packet: bytes::Bytes) {
         debug!("AP_PKT: len {}", packet.len());
+        self.medium.wifi_stats.incr_hostapd_frames_rx();
         if !packet.is_empty() {
             let _ = self.medium.transmit_from_infra(&packet, &mut self.out_queue);
         }
         self.flush_out_queue();
     }
 
-    async fn route_to_infra(&self, chip_id: u32, ieee80211: &Ieee80211) {
+    async fn route_to_infra(&mut self, chip_id: u32, ieee80211: &Ieee80211) {
         debug!("ROUTING: Guest -> Infra");
-        self.gateway.send_80211(ChipId(chip_id), ieee80211).await;
+        if let Err(e) = self.gateway.send_80211(ChipId(chip_id), ieee80211).await {
+            self.medium.wifi_stats.log_and_incr_err_count(&e);
+        } else {
+            self.medium.wifi_stats.incr_network_packets_tx();
+        }
     }
 }

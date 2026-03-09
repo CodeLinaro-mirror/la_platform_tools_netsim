@@ -62,7 +62,15 @@ impl WifiStats {
 
     pub fn log_and_incr_err_count(&mut self, error: &WifiError) {
         warn!("{error}");
-        self.counts.other_error += 1;
+        match error {
+            WifiError::Hostapd(_) => self.counts.hostapd_error += 1,
+            WifiError::Network(_) => self.counts.network_error += 1,
+            WifiError::Client(_) => self.counts.client_error += 1,
+            WifiError::Frame(_) => self.counts.frame_error += 1,
+            WifiError::Transmission(_) => self.counts.transmission_error += 1,
+            WifiError::Other(_) => self.counts.other_error += 1,
+            WifiError::Internal(_) => self.counts.other_error += 1,
+        }
     }
 
     pub fn incr_hwsim_frames_rx(&mut self) {
@@ -111,23 +119,26 @@ impl WifiStats {
 
     pub fn to_proto(&self) -> netsim_proto::stats::WifiStats {
         let mut proto = netsim_proto::stats::WifiStats::new();
-        proto.set_hostapd_errors(self.counts.hostapd_error as i32);
-        proto.set_network_errors(self.counts.network_error as i32);
-        proto.set_client_errors(self.counts.client_error as i32);
-        proto.set_frame_errors(self.counts.frame_error as i32);
-        proto.set_transmission_errors(self.counts.transmission_error as i32);
-        proto.set_other_errors(self.counts.other_error as i32);
 
-        proto.set_hwsim_frames_rx(self.counts.hwsim_frames_rx as i32);
-        proto.set_hwsim_frames_tx(self.counts.hwsim_frames_tx as i32);
-        proto.set_network_packets_tx(self.counts.network_packets_tx as i32);
-        proto.set_network_packets_rx(self.counts.network_packets_rx as i32);
-        proto.set_hostapd_frames_tx(self.counts.hostapd_frames_tx as i32);
-        proto.set_hostapd_frames_rx(self.counts.hostapd_frames_rx as i32);
-        proto.set_wmedium_frames_tx(self.counts.wmedium_frames_tx as i32);
-        proto.set_wmedium_unicast_frames_tx(self.counts.wmedium_unicast_frames_tx as i32);
-        proto.set_mgmt_frames_rx(self.counts.mgmt_frames_rx as i32);
-        proto.set_mdns_count(self.counts.mdns_count as i32);
+        let saturate = |val: u64| -> i32 { std::cmp::min(val, i32::MAX as u64) as i32 };
+
+        proto.set_hostapd_errors(saturate(self.counts.hostapd_error));
+        proto.set_network_errors(saturate(self.counts.network_error));
+        proto.set_client_errors(saturate(self.counts.client_error));
+        proto.set_frame_errors(saturate(self.counts.frame_error));
+        proto.set_transmission_errors(saturate(self.counts.transmission_error));
+        proto.set_other_errors(saturate(self.counts.other_error));
+
+        proto.set_hwsim_frames_rx(saturate(self.counts.hwsim_frames_rx));
+        proto.set_hwsim_frames_tx(saturate(self.counts.hwsim_frames_tx));
+        proto.set_network_packets_tx(saturate(self.counts.network_packets_tx));
+        proto.set_network_packets_rx(saturate(self.counts.network_packets_rx));
+        proto.set_hostapd_frames_tx(saturate(self.counts.hostapd_frames_tx));
+        proto.set_hostapd_frames_rx(saturate(self.counts.hostapd_frames_rx));
+        proto.set_wmedium_frames_tx(saturate(self.counts.wmedium_frames_tx));
+        proto.set_wmedium_unicast_frames_tx(saturate(self.counts.wmedium_unicast_frames_tx));
+        proto.set_mgmt_frames_rx(saturate(self.counts.mgmt_frames_rx));
+        proto.set_mdns_count(saturate(self.counts.mdns_count));
 
         proto.set_max_download_throughput(Self::bytes_ps_to_mbps(
             self.values.download_throughput.max_throughput,

@@ -156,7 +156,6 @@ impl TapInterface {
 ///
 /// If `wifi_tap` arg is provided, we use that for the Primary Guest/Chip.
 /// Future work: Dynamic TAP creation/assignment.
-/// Gateway managing internal Chip -> TAP connections.
 #[derive(Debug)]
 pub struct TapGateway {
     // Map ChipId to TapInterface
@@ -176,7 +175,7 @@ impl GatewayTrait for TapGateway {
         &self,
         chip_id: ChipId,
         ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> bool {
+    ) -> Result<(), crate::error::WifiError> {
         self.send_80211_impl(chip_id, ieee80211).await
     }
 
@@ -194,13 +193,18 @@ impl GatewayTrait for TapGateway {
     ) {
         let real_id = chip_id.0 & !TAP_FLAG;
         debug!("TAP_PKT: Chip {} len {}", real_id, packet.len());
+        medium.wifi_stats.incr_network_packets_rx();
 
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-        if let Some(bytes) = convert_8023_to_80211(packet, shared_keys.get_bssid(), seq) {
-            let _ = medium.transmit_from_infra(&bytes, out_queue);
-        } else {
-            error!("Failed to convert TAP packet to 802.11");
-        }
+        let Some(bytes) = convert_8023_to_80211(packet.clone(), shared_keys.get_bssid(), seq)
+        else {
+            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(
+                "Failed to convert TAP packet to 802.11".to_string(),
+            ));
+            return;
+        };
+
+        let _ = medium.transmit_from_infra(&bytes, out_queue);
     }
 
     async fn on_start(&mut self, _ctx: &mut actor_framework::DynContext<WifiActor>) {}
@@ -439,22 +443,27 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
         &self,
         chip_id: ChipId,
         ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> bool {
+    ) -> Result<(), crate::error::WifiError> {
         #[cfg(target_os = "linux")]
-        if let Some(tap) = self.taps.get(&chip_id) {
-            if let Ok(eth_frame) = ieee80211.to_ieee8023() {
-                if let Err(e) = tap.write(&eth_frame).await {
-                    error!("Tap Write Failed: {}", e);
-                    return false;
-                }
-                return true;
+        {
+            if let Some(tap) = self.taps.get(&chip_id) {
+                let eth = ieee80211.to_ieee8023().map_err(|e| {
+                    crate::error::WifiError::Frame(format!("TAP conversion failed: {}", e))
+                })?;
+                return tap.write(&eth).await.map(|_| ()).map_err(|e| {
+                    crate::error::WifiError::Transmission(format!("TAP write failed: {}", e))
+                });
             }
+            Err(crate::error::WifiError::Network(format!(
+                "No TAP interface configured for Chip {}",
+                chip_id.0
+            )))
         }
         #[cfg(not(target_os = "linux"))]
         {
             let _ = (chip_id, ieee80211);
+            Err(crate::error::WifiError::Network("TAP not supported on non-Linux".to_string()))
         }
-        false
     }
 }
 
