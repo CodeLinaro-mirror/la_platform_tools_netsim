@@ -69,6 +69,7 @@ impl WifiActor {
         device_client: device_actor::DeviceClient,
         wifi_tap: Option<String>,
         shared_keys: Arc<SharedKeyStore>,
+        clock: Arc<dyn crate::stats::Clock>,
     ) -> Self {
         // Fixup pending channels if we just created a SlirpGateway
         let gateway = if let Some(if_name) = wifi_tap {
@@ -86,7 +87,7 @@ impl WifiActor {
             // Default to SlirpGateway
             Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
         };
-        Self::new_with_gateway(ap_client, gateway, device_client, shared_keys)
+        Self::new_with_gateway(ap_client, gateway, device_client, shared_keys, clock)
     }
 
     pub fn new_with_gateway(
@@ -94,10 +95,11 @@ impl WifiActor {
         gateway: Box<dyn GatewayTrait>,
         device_client: device_actor::DeviceClient,
         shared_keys: Arc<SharedKeyStore>,
+        clock: Arc<dyn crate::stats::Clock>,
     ) -> Self {
         let medium = Medium::new(
             shared_keys.clone(),
-            crate::stats::WifiStats::default(),
+            crate::stats::WifiStats::new(clock),
             Arc::new(crate::DebugArgs::default()),
         );
 
@@ -242,10 +244,14 @@ impl WifiActor {
 
     async fn route_to_infra(&mut self, chip_id: u32, ieee80211: &Ieee80211) {
         debug!("ROUTING: Guest -> Infra");
-        if let Err(e) = self.gateway.send_80211(ChipId(chip_id), ieee80211).await {
-            self.medium.wifi_stats.log_and_incr_err_count(&e);
-        } else {
-            self.medium.wifi_stats.incr_network_packets_tx();
+        match self.gateway.send_80211(ChipId(chip_id), ieee80211).await {
+            Err(e) => {
+                self.medium.wifi_stats.log_and_incr_err_count(&e);
+            }
+            Ok(payload_len) => {
+                self.medium.wifi_stats.incr_network_packets_tx();
+                self.medium.wifi_stats.record_upload_bytes(payload_len);
+            }
         }
     }
 }

@@ -1,16 +1,53 @@
 // Copyright 2025 Google LLC
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use log::{debug, warn};
 
 use crate::error::WifiError;
 
+pub trait Clock: Send + Sync + std::fmt::Debug {
+    fn now_millis(&self) -> u64;
+}
+
+#[derive(Debug, Clone)]
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now_millis(&self) -> u64 {
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MockClock {
+    time_millis: Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl MockClock {
+    pub fn new() -> Self {
+        Self { time_millis: Arc::new(std::sync::atomic::AtomicU64::new(0)) }
+    }
+
+    pub fn store(&self, time: u64) {
+        self.time_millis.store(time, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+impl Clock for MockClock {
+    fn now_millis(&self) -> u64 {
+        self.time_millis.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
 /// Stats for the Wifi Actor.
 ///
 /// Tracks error counts, packet counts, and throughput metrics.
 /// Designed for single-threaded usage within the actor (no internal locking).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct WifiStats {
     counts: WifiCounts,
     values: WifiValues,
@@ -38,20 +75,39 @@ struct WifiCounts {
     mdns_count: u64,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct ThroughputValues {
+    clock: Arc<dyn Clock>,
     max_throughput: u64,
     window_start: u64,
     window_bytes: u64,
 }
 
-#[derive(Clone, Debug, Default)]
+impl ThroughputValues {
+    fn new(clock: Arc<dyn Clock>) -> Self {
+        Self { clock, max_throughput: 0, window_start: 0, window_bytes: 0 }
+    }
+}
+
+#[derive(Clone, Debug)]
 struct WifiValues {
     download_throughput: ThroughputValues,
     upload_throughput: ThroughputValues,
 }
 
+impl WifiValues {
+    fn new(clock: Arc<dyn Clock>) -> Self {
+        Self {
+            download_throughput: ThroughputValues::new(clock.clone()),
+            upload_throughput: ThroughputValues::new(clock),
+        }
+    }
+}
+
 impl WifiStats {
+    pub fn new(clock: Arc<dyn Clock>) -> Self {
+        Self { counts: Default::default(), values: WifiValues::new(clock) }
+    }
     pub fn record_download_bytes(&mut self, bytes: usize) {
         self.values.download_throughput.record(bytes, "Download");
     }
@@ -154,8 +210,7 @@ impl WifiStats {
 impl ThroughputValues {
     fn record(&mut self, bytes: usize, name: &str) {
         const WINDOW_MILLIS: u64 = Duration::from_secs(5).as_millis() as u64;
-        let now =
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let now = self.clock.now_millis();
         let start_time = self.window_start;
 
         if start_time == 0 {
