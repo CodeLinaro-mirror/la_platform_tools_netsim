@@ -1,11 +1,17 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use crate::world::ApWorld;
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::frame::{FrameControl, MacHeader3Addr, SequenceControl};
-use netsim_packets::ieee80211::management_subtype;
+use ap_actor::netsim_model::chip::WifiMode;
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        frame::{FrameControl, MacHeader3Addr, SequenceControl},
+        management_subtype,
+    },
+};
 use tokio;
 use zerocopy::IntoBytes;
+
+use crate::world::ApWorld;
 
 // ============================================================================
 // Feature: Wireless Network Visibility (Beacons)
@@ -251,7 +257,8 @@ async fn test_probe_response_ssid_mismatch() {
     let rx = world.rx_from_ap.as_mut().expect("AP registered");
 
     // Logic: We might receive Beacons!
-    // We need to filter out Beacons (0x80) and ensure NO Probe Resp (0x50) is received.
+    // We need to filter out Beacons (0x80) and ensure NO Probe Resp (0x50) is
+    // received.
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(1) {
         if let Ok(Some(msg)) =
@@ -338,7 +345,7 @@ async fn test_create_ap_with_country_and_tim() {
         ssid: "CountryAP".to_string(),
         bssid: "02:00:00:00:01:00".parse().unwrap(),
         channel: 6,
-        hw_mode: "g".to_string(),
+        hw_mode: WifiMode::G,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: Some("US".to_string()),
@@ -409,7 +416,7 @@ async fn test_hidden_ssid() {
         ssid: "HiddenAP".to_string(),
         bssid: "02:00:00:00:00:99".parse().unwrap(),
         channel: 6,
-        hw_mode: "g".to_string(),
+        hw_mode: WifiMode::G,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,
@@ -518,7 +525,7 @@ async fn test_wmm_ie_presence() {
         ssid: "WmmAP".to_string(),
         bssid: "02:00:00:00:00:10".parse().unwrap(),
         channel: 36,
-        hw_mode: "ax".to_string(), // WiFi 6 implies WMM
+        hw_mode: WifiMode::Ax, // WiFi 6 implies WMM
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,

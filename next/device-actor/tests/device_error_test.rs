@@ -6,9 +6,9 @@
 //   I want the system to handle invalid operations gracefully
 //   So that my application doesn't crash on bad input
 
+use device_api::{api::DeviceUpdate, DeviceId};
+
 use crate::world::World;
-use device_api::api::DeviceUpdate;
-use device_api::DeviceId;
 
 // Scenario: Update a non-existent device
 //   Given a running Device Actor

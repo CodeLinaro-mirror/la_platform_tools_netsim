@@ -1,7 +1,11 @@
-use crate::common::TestHarness;
-use modem_rs::constants::CALL_RING_TIMEOUT;
-use modem_rs::types::{ModemId, AT_OK};
 use std::time::Duration;
+
+use modem_rs::{
+    constants::CALL_RING_TIMEOUT,
+    types::{ModemId, AT_OK},
+};
+
+use crate::common::TestHarness;
 
 #[test]
 fn test_emergency_call() {

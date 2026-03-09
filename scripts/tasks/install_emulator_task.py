@@ -29,7 +29,6 @@ from utils import (
     AOSP_ROOT,
     EMULATOR_ARTIFACT_PATH,
     binary_extension,
-    is_bazel_build,
     run,
 )
 
@@ -50,7 +49,7 @@ class InstallEmulatorTask(Task):
     self.target = args.emulator_target
     # Local Emulator directory
     self.local_emulator_dir = args.local_emulator_dir
-    self.is_bazel_build = is_bazel_build(args)
+    self.is_bazel_build = not args.cmake
 
   def do_run(self):
     install_emulator_manager = InstallEmulatorManager(
@@ -147,8 +146,8 @@ class InstallEmulatorManager:
           and (self.local_netsim_dir / binary_extension("netsimd")).exists()
       ):
         logging.info(
-            "Please run 'scripts/build_tools.sh --task Compile' or"
-            " 'scripts/build_tools.sh --task bazel' before running"
+            "Please run 'scripts/build_tools.py --task Compile' or"
+            " 'scripts/build_tools.py --task CompileInstall' before running"
             " InstallEmulator"
         )
         return False

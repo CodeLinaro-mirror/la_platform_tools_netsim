@@ -24,12 +24,9 @@ netsim_rust_library(
     crate_name = "device_actor",
     crate_root = "src/lib.rs",
     edition = "2021",
-    enable_clippy = False,
-    enable_doc_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
-    strict_warnings = False,
     deps = DEPS,
 )
 
@@ -48,6 +45,7 @@ rust_test(
         "//next/device-api:testing",
         "//next/link-api:testing",
         "//next/model:testing",
+        "@mockall",
         "@tokio",
     ],
 )

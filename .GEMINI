@@ -1,0 +1,29 @@
+# Netsim Build Layout & Repository Structure
+
+This document explains the repository layout and Bazel build configuration for Netsim to avoid confusion.
+
+## Root Directory
+- **Root**: `/workspace/ag`
+- This is the Bazel workspace root.
+
+## Sub-Repositories (Goldfish / Android)
+The workspace is composed of multiple repositories managed via `repo`.
+- `tools/netsim`: The main Netsim source code.
+- `external/rust/android-crates-io`: Contains third-party Rust crates.
+- `hardware/generic/goldfish`: Contains build configurations and glue code.
+
+## Bazel Configuration Mapping
+- **toplevel.MODULE.bazel**: Located in `tools/netsim/toplevel.MODULE.bazel`, but it is mapped to `MODULE.bazel` in the workspace root (`/workspace/ag/MODULE.bazel`).
+  - *Crucial*: When editing `tools/netsim/toplevel.MODULE.bazel`, you are effectively editing the root module definition.
+
+## Rust Crates (goldfish_crates)
+Rust dependencies are NOT standard Cargo crates. They are defined and mapped via a custom extension.
+- **Extension**: `goldfish_crates`
+- **Definition File**: `hardware/generic/goldfish/third_party/rust/crates/local_rust_crates.bzl`
+- **Build Files**: Build files for these crates are generated/mapped.
+  - Example: `grpcio-compiler` build file is located at `hardware/generic/goldfish/third_party/rust/crates/netsim_build/grpcio-compiler.BUILD.bazel`.
+  - It handles dependencies like `@protobuf-rust` and `@protobuf-codegen`.
+
+## Build Usage
+- Run builds from `/workspace/ag`.
+- Targets are referenced like `@netsim//proto:all` or `//tools/netsim/proto:all`.

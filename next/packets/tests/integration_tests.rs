@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-use netsim_packets::netlink::nl80211::attr_id;
-use netsim_packets::netlink::NlAttrHdr;
+use netsim_packets::netlink::{nl80211::attr_id, NlAttrHdr};
 use zerocopy::IntoBytes;
 
 #[test]

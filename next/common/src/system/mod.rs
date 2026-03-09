@@ -14,8 +14,7 @@
 
 //! Inspection and manipulation of the system environment.
 
-use std::env;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 /// Get or create the netsimd temporary directory.
 ///
@@ -23,7 +22,6 @@ use std::path::PathBuf;
 ///
 /// Under Forge temp directory is `$ANDROID_TMP/android-$USER/netsimd`,
 /// otherwise it is `$TMP/android-$USER/netsimd`
-///
 pub fn netsimd_temp_dir() -> PathBuf {
     let path = netsimd_temp_dir_pathbuf();
     if !path.is_dir() {
@@ -59,9 +57,10 @@ fn netsimd_temp_dir_pathbuf() -> PathBuf {
 #[cfg(not(target_os = "windows"))]
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use super::netsimd_temp_dir_pathbuf;
     use crate::tests::ENV_MUTEX;
-    use std::env;
 
     #[test]
     fn test_forge() {

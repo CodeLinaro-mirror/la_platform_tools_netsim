@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{io::Cursor, time::Instant};
+
 use capture::pcap;
-use std::io::Cursor;
-use std::time::Instant;
-use tokio;
-use tokio::io::BufReader;
-use tokio::runtime::Runtime;
+use tokio::{self, io::BufReader, runtime::Runtime};
 
 async fn dns_benchmark() {
     const DATA: &[u8] = include_bytes!("../../capture/data/dns.cap");

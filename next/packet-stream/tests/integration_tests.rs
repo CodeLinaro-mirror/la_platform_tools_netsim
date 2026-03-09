@@ -1,6 +1,7 @@
 // Copyright 2025 Google LLC
 //=============================================================================
-// tests/integration_tests.rs - Integration tests for PacketStream core functionality
+// tests/integration_tests.rs - Integration tests for PacketStream core
+// functionality
 //=============================================================================
 
 use bytes::Bytes;

@@ -30,12 +30,13 @@ members = [
   "link-api",
   "modem-rs",
   "modem-rs-derive",
-  "uwb",
+  "uwb-actor",
   "types",
   "device-actor",
   "device-api",
   "client",
   "rootcanal",
+  "testing",
 ]
 
 [workspace.doc]

@@ -5,10 +5,11 @@
 //! Uses the env_logger crate that allows control of logging through
 //! the RUST_LOG environment variable.
 
+use std::{io::Write, path::Path};
+
 use chrono::Utc;
 use env_logger::{Builder, Env};
 use log::{Level, Record};
-use std::{io::Write, path::Path};
 
 /// Formats the current time for logging.
 fn log_current_time() -> String {
@@ -65,9 +66,11 @@ fn level_to_string(level: Level) -> &'static str {
 // NOTE: These tests are basic. A more robust implementation would capture
 // the logger's output and assert its format and content.
 mod tests {
-    use super::*;
-    use log::LevelFilter;
     use std::sync::Once;
+
+    use log::LevelFilter;
+
+    use super::*;
 
     static INIT: Once = Once::new();
 

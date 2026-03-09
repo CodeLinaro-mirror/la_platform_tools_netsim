@@ -1,19 +1,28 @@
-use crate::device_actor::DeviceActor;
-use crate::error::DeviceError;
-use crate::utils::{chip_kind_to_network_kind, create_capture_and_wrap_streams};
-use actor_framework::{ActorService, DynContext};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
+
+use actor_framework::{ActorService, Context, DynContext};
 use async_trait::async_trait;
 use capture_api::CaptureSender;
-use device_api::api::{DeviceCreate, DeviceUpdate};
-use device_api::{DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId};
+use device_api::{
+    api::{DeviceCreate, DeviceUpdate},
+    DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId,
+};
 use link_api::LinkClient;
 use netsim_model::chip::{
-    ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, NetworkKind, PacketSink, PacketStream,
+    Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
+    PacketSink, PacketStream,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+
+use crate::{
+    device_actor::DeviceActor, error::DeviceError, utils::create_capture_and_wrap_streams,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct InternalDevice {
@@ -31,6 +40,7 @@ impl InternalDevice {
                 visible: params.device_config.visible,
                 position: params.device_config.position.clone(),
                 orientation: params.device_config.orientation.clone(),
+                builtin: params.device_config.builtin,
                 chips: vec![],
             },
             create_params: Some(params),
@@ -40,11 +50,31 @@ impl InternalDevice {
 }
 
 impl DeviceActor {
+    fn update_idle_state(&mut self, ctx: &mut DynContext<Self>) {
+        let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
+
+        if has_active_devices {
+            self.has_seen_device = true;
+            if let Some(key) = self.startup_timer.take() {
+                ctx.cancel_timer(key);
+            }
+            if let Some(key) = self.idle_timer.take() {
+                ctx.cancel_timer(key);
+            }
+        } else if self.has_seen_device && self.idle_timer.is_none() {
+            if let Some(timeout) = self.idle_timeout {
+                log::info!("DeviceActor: Scheduling idle shutdown in {:?}", timeout);
+                let key = ctx.run_later(timeout, Box::new(Self::on_idle_timeout));
+                self.idle_timer = Some(key);
+            }
+        }
+    }
+
     /// Adds a chip to a device.
     #[allow(clippy::too_many_arguments)]
     async fn perform_add_chip(
         next_chip_id: &Arc<AtomicU32>,
-        chip_clients: &HashMap<NetworkKind, Box<dyn ChipClient>>,
+        chip_clients: &HashMap<ChipKind, Box<dyn ChipClient>>,
         link_client: &Box<dyn LinkClient>,
         capture_client: &Option<Arc<dyn CaptureSender>>,
         entity: &mut InternalDevice,
@@ -56,8 +86,8 @@ impl DeviceActor {
 
         // 1. Prepare Chip Parameters
         let chip_id = ChipId(next_chip_id.fetch_add(1, Ordering::SeqCst));
-        let network_params = chip_config.network_params.clone();
-        let chip_kind = NetworkKind::from(&network_params);
+        let chip_kind_params = chip_config.chip_kind_params.clone();
+        let chip_kind = ChipKind::from(&chip_kind_params);
 
         // 2. Handle Capture Creation and Stream Wrapping
         // If a capture client is present, wrap the streams to enable packet capture.
@@ -89,7 +119,7 @@ impl DeviceActor {
                 name: chip_config.name.clone(),
                 manufacturer: chip_config.manufacturer.clone(),
                 product_name: chip_config.product_name.clone(),
-                network_params,
+                chip_kind_params,
             },
             device_id: DeviceId(entity.device.id),
         };
@@ -100,23 +130,23 @@ impl DeviceActor {
             .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
 
         // 5. Update Local Device State
-        entity.device.chips.push(netsim_model::chip::Chip {
+        entity.device.chips.push(Chip {
             id: chip_id.0,
-            kind: ChipKind::from(chip_kind),
+            kind: ChipKind::from(&chip_config.chip_kind_params),
             name: Some(chip_config.name),
             manufacturer: Some(chip_config.manufacturer),
             product_name: Some(chip_config.product_name),
             position: entity.device.position.clone(),
             orientation: entity.device.orientation.clone(),
             device_id: DeviceId(entity.device.id),
-            variant: Some(netsim_model::chip::ChipVariant::from(chip_kind)),
+            variant: Some(ChipVariant::from(chip_kind)),
             links: vec![],
             enabled: true,
         });
 
         // 6. Notify Link Actor
         link_client
-            .notify_chip_added(chip_id, chip_kind.into())
+            .notify_chip_added(chip_id, chip_kind)
             .await
             .expect("Failed to notify LinkActor of chip add");
 
@@ -129,10 +159,9 @@ impl DeviceActor {
         params: DeviceCreate,
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<DeviceId, DeviceError> {
         log::info!("DeviceActor: Create device {}", params.device_config.name);
-        self.has_seen_device = true;
-        self.last_empty_time = None;
 
         let id = id.unwrap_or_else(|| {
             let id = DeviceId(self.next_device_id);
@@ -155,12 +184,14 @@ impl DeviceActor {
         .await?;
 
         self.devices.insert(id, entity);
+        self.update_idle_state(ctx);
         Ok(id)
     }
 
     async fn perform_add_chip_by_guid(
         &mut self,
         params: DeviceAddChip,
+        ctx: &mut DynContext<Self>,
     ) -> Result<DeviceActionResult, DeviceError> {
         log::info!("DeviceActor: AddChipByGuid for device {}", params.device_guid);
 
@@ -198,6 +229,7 @@ impl DeviceActor {
                     create_params,
                     params.packet_stream,
                     params.packet_sink,
+                    ctx,
                 )
                 .await?;
 
@@ -212,6 +244,28 @@ impl DeviceActor {
 
             Ok(DeviceActionResult::AddChipByGuidSuccess { device_id: id, chip_id: ChipId(chip_id) })
         }
+    }
+
+    /// Callback for startup timeout
+    pub(crate) fn on_startup_timeout(&mut self, ctx: &mut dyn Context<Self>) {
+        let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
+        if !self.has_seen_device && !has_active_devices {
+            log::info!(
+                "DeviceActor: Startup timeout reached (no devices connected), shutting down"
+            );
+            ctx.shutdown();
+        }
+        self.startup_timer = None;
+    }
+
+    /// Callback for idle timeout
+    pub(crate) fn on_idle_timeout(&mut self, ctx: &mut dyn Context<Self>) {
+        let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
+        if !has_active_devices {
+            log::info!("DeviceActor: Idle timeout reached, shutting down");
+            ctx.shutdown();
+        }
+        self.idle_timer = None;
     }
 }
 
@@ -229,15 +283,15 @@ impl ActorService for DeviceActor {
         &mut self,
         id: Option<Self::Id>,
         params: Self::Create,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        self.perform_create_device(id, params, None, None).await
+        self.perform_create_device(id, params, None, None, _ctx).await
     }
 
     async fn handle_get(
         &self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
         Ok(self.devices.get(&id).map(|e| e.device.clone()))
     }
@@ -246,61 +300,99 @@ impl ActorService for DeviceActor {
         &mut self,
         id: Self::Id,
         update: Self::Update,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         // Update does not affect device count, so no timeout logic change needed.
-        if let Some(entity) = self.devices.get_mut(&id) {
-            // Update local state
-            if let Some(name) = update.name {
-                entity.device.name = name;
-            }
-            if let Some(visible) = update.visible {
-                entity.device.visible = visible;
-            }
-            //TODO: check if chip_id is valid
-            if let Some(pos) = update.position.clone() {
-                entity.device.position = pos;
-            }
-            if let Some(orient) = update.orientation.clone() {
-                entity.device.orientation = orient;
-            }
+        let Some(entity) = self.devices.get_mut(&id) else {
+            return Err(DeviceError::DeviceNotFound(id.to_string()));
+        };
+        // Update local state
+        if let Some(name) = update.name {
+            entity.device.name = name;
+        }
+        if let Some(visible) = update.visible {
+            entity.device.visible = visible;
+        }
+        //TODO: check if chip_id is valid
+        if let Some(pos) = update.position.clone() {
+            entity.device.position = pos;
+        }
+        if let Some(orient) = update.orientation.clone() {
+            entity.device.orientation = orient;
+        }
 
-            // Propagate updates to chips
-            for chip in &entity.device.chips {
-                let network_kind = chip_kind_to_network_kind(&chip.kind);
-                if let Some(chip_client) = self.chip_clients.get(&network_kind) {
-                    let mut chip_update = netsim_model::chip::ChipUpdate::default();
+        // Propagate updates to chips
+        for chip in entity.device.chips.iter_mut() {
+            if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
+                let mut chip_update = ChipUpdate::default();
+
+                // 1. Propagate Device Position/Orientation if changed
+                if update.position.is_some() {
                     chip_update.position = Some(entity.device.position.clone());
+                }
+                if update.orientation.is_some() {
                     chip_update.orientation = Some(entity.device.orientation.clone());
+                }
 
-                    chip_client
-                        .update(netsim_model::chip::ChipId(chip.id), chip_update)
+                // 2. Start with ID-based matching
+                let mut specific_update = None;
+                if let Some(chips) = &update.chips {
+                    // Priority 1: Exact ID match
+                    specific_update = chips.iter().find(|u| u.id == Some(ChipId(chip.id)));
+
+                    // Priority 2: Variant match (if no ID match found)
+                    if specific_update.is_none() {
+                        specific_update = chips.iter().find(|u| {
+                            u.id.is_none()
+                                && u.variant.as_ref().map_or(false, |v| v.kind() == chip.kind)
+                        });
+                    }
+                }
+
+                // 3. Merge specific update fields
+                if let Some(u) = specific_update {
+                    if u.variant.is_some() {
+                        chip_update.variant = u.variant.clone();
+                    }
+                }
+
+                // TODO: Propagate SSID update to AP chips if the device name changes
+
+                // 4. Send update if meaningful
+                if chip_update.position.is_some()
+                    || chip_update.orientation.is_some()
+                    || chip_update.variant.is_some()
+                {
+                    log::info!(
+                        "DeviceActor: Updating chip {} (kind {:?}) with {:?}",
+                        chip.id,
+                        chip.kind,
+                        chip_update
+                    );
+                    let updated_chip = chip_client
+                        .update(ChipId(chip.id), chip_update)
                         .await
                         .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
-                    //TODO: overwrite chip links if update.links is Some
+                    *chip = updated_chip;
                 }
             }
-            Ok(entity.device.clone())
-        } else {
-            Err(DeviceError::DeviceNotFound(id.to_string()))
         }
+        Ok(entity.device.clone())
     }
 
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        // self.last_activity = std::time::Instant::now(); // Removed
         if let Some(entity) = self.devices.remove(&id) {
             if let Some(guid) = &entity.guid {
                 self.guid_to_id.remove(guid);
             }
             for chip in &entity.device.chips {
-                let network_kind = chip_kind_to_network_kind(&chip.kind);
-                if let Some(chip_client) = self.chip_clients.get(&network_kind) {
+                if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
                     chip_client
-                        .delete(netsim_model::chip::ChipId(chip.id))
+                        .delete(ChipId(chip.id))
                         .await
                         .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
                     // Send delete request to Link Actor
@@ -310,9 +402,7 @@ impl ActorService for DeviceActor {
                         .expect("Failed to notify LinkActor of chip remove");
                 }
             }
-            if self.devices.is_empty() {
-                self.last_empty_time = Some(std::time::Instant::now());
-            }
+            self.update_idle_state(_ctx);
             Ok(())
         } else {
             Err(DeviceError::DeviceNotFound(id.to_string()))
@@ -323,7 +413,7 @@ impl ActorService for DeviceActor {
         &mut self,
         id: Option<Self::Id>,
         action: Self::Action,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Self::ActionResult, Self::Error> {
         let Some(id) = id else {
             // Global actions
@@ -333,7 +423,7 @@ impl ActorService for DeviceActor {
                     Ok(DeviceActionResult::Success)
                 }
                 DeviceAction::AddChipByGuid { params } => {
-                    self.perform_add_chip_by_guid(params).await
+                    self.perform_add_chip_by_guid(params, _ctx).await
                 }
                 _ => Err(DeviceError::NotFound("Action requires a device ID".into())),
             };
@@ -348,16 +438,28 @@ impl ActorService for DeviceActor {
                 // TODO: Implement device reset logic if needed
                 Ok(DeviceActionResult::Success)
             }
-            DeviceAction::NotifyChipRemoved(_device_id, chip_id) => {
-                entity.device.chips.retain(|c| c.id != chip_id.0);
-                if entity.device.chips.is_empty() {
-                    // TODO: If entity.device.chips.is_empty(), remove the device itself.
-                    // This requires a way to trigger a self-delete from within the actor.
-                }
+            DeviceAction::NotifyChipRemoved(device_id, chip_id) => {
+                let should_delete = {
+                    let entity = self
+                        .devices
+                        .get_mut(&device_id)
+                        .ok_or_else(|| DeviceError::DeviceNotFound(device_id.to_string()))?;
+                    entity.device.chips.retain(|c| c.id != chip_id.0);
+                    entity.device.chips.is_empty()
+                };
+
                 self.link_client
                     .notify_chip_removed(chip_id)
                     .await
                     .expect("Failed to notify LinkActor of chip remove");
+
+                if should_delete {
+                    log::info!("DeviceActor: Device {} is empty, auto-deleting", device_id);
+                    self.handle_delete(device_id, _ctx).await?;
+                } else {
+                    log::info!("DeviceActor: Device {} is NOT empty after chip removal", device_id);
+                }
+
                 Ok(DeviceActionResult::Success)
             }
             DeviceAction::AddChip { chip_config, packet_stream, packet_sink } => {
@@ -381,14 +483,12 @@ impl ActorService for DeviceActor {
             }
             _ => Err(DeviceError::NotFound("Action requires a device ID".into())),
         };
-        self.has_seen_device = true;
-        self.last_empty_time = None;
         result
     }
 
     async fn handle_list(
         &mut self,
-        _ctx: &mut DynContext<Self::Id>,
+        _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         Ok(self.devices.values().map(|e| e.device.clone()).collect())
     }

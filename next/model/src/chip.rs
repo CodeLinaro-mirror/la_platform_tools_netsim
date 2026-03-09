@@ -2,24 +2,21 @@
 
 //! Chip model and management.
 //!
-//! This module defines the core data structures for representing chips in Netsim,
-//! including their types, state, and communication channels. It handles the lifecycle
-//! of chips, including creation, updates, and deletion.
+//! This module defines the core data structures for representing chips in
+//! Netsim, including their types, state, and communication channels. It handles
+//! the lifecycle of chips, including creation, updates, and deletion.
 
-use crate::bluetooth::beacon::{AdvertiseData, AdvertiseSettings};
-use crate::bluetooth::Controller as RootcanalController;
-use crate::chip_error::ChipError;
-use crate::client_error::ClientError;
-
-use crate::device::{DeviceId, Orientation, Position};
-use crate::stats::NetsimRadioStats;
-use bytes::Bytes;
-use futures::Sink;
-use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::pin::Pin;
+
+use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
-use tokio_stream::Stream;
+
+use crate::{
+    chip_error::ChipError,
+    client_error::ClientError,
+    device::{DeviceId, Orientation, Position},
+    stats::NetsimRadioStats,
+};
 
 /// The kind of network technology the chip supports.
 ///
@@ -28,12 +25,10 @@ use tokio_stream::Stream;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum ChipKind {
     #[default]
-    UNSPECIFIED = 0,
     BLUETOOTH = 1,
     WIFI = 2,
     UWB = 3,
     NFC = 4,
-    BleBeacon = 5,
     CELLULAR = 6,
     AP = 7,
 }
@@ -46,24 +41,13 @@ pub struct Radio {
     pub rx_count: i32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ChipType {
-    Bt(crate::bluetooth::Bluetooth),
-    BleBeacon(crate::bluetooth::beacon::BleBeacon),
-    Uwb(Radio),
-    Wifi(Radio),
-}
-
-// The only error from PacketStream occurs when source closes connection.
-/// A stream of packets from the chip.
-pub type PacketStream = Box<dyn Stream<Item = Bytes> + Send + Sync + Unpin>;
-/// A sink for packets to the chip.
-pub type PacketSink = Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send + Sync>>;
+pub use crate::packet_streamer::{PacketSink, PacketStream};
 
 // CHIP SERVICE
 //
 // This module implements the actor model for managing simulated chips.
-// There is one chip service actor for each network type (Bluetooth, UWB, Wi-Fi).
+// There is one chip service actor for each network type (Bluetooth, UWB,
+// Wi-Fi).
 //
 // The "service" is the actor's message-processing loop, which would be
 // implemented in a separate task that owns the `mpsc::Receiver<ChipRequest>`.
@@ -186,7 +170,7 @@ pub struct ChipConfig {
     /// The product name of the chip.
     pub product_name: String,
     /// Technology-specific parameters.
-    pub network_params: NetworkParams,
+    pub chip_kind_params: ChipKindParams,
 }
 
 impl ChipConfig {
@@ -195,179 +179,71 @@ impl ChipConfig {
         name: impl Into<String>,
         manufacturer: impl Into<String>,
         product_name: impl Into<String>,
-        network_params: NetworkParams,
+        chip_kind_params: ChipKindParams,
     ) -> Self {
         ChipConfig {
             name: name.into(),
             manufacturer: manufacturer.into(),
             product_name: product_name.into(),
-            network_params,
+            chip_kind_params,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum NetworkKind {
-    Bluetooth,
-    Wifi,
-    Uwb,
-    Cell,
-    Ap,
-}
-
-impl From<&NetworkParams> for NetworkKind {
-    fn from(params: &NetworkParams) -> Self {
-        match params {
-            NetworkParams::Bluetooth(_) => NetworkKind::Bluetooth,
-            NetworkParams::Wifi(_) => NetworkKind::Wifi,
-            NetworkParams::Uwb(_) => NetworkKind::Uwb,
-            NetworkParams::Cell(_) => NetworkKind::Cell,
-            NetworkParams::Ap(_) => NetworkKind::Ap,
-        }
-    }
-}
-
-impl From<NetworkKind> for ChipKind {
-    fn from(kind: NetworkKind) -> Self {
+// TODO: netsim_types can be removed if ChipKind is moved to a base types module
+impl From<netsim_types::ChipKind> for ChipKind {
+    fn from(kind: netsim_types::ChipKind) -> Self {
         match kind {
-            NetworkKind::Bluetooth => ChipKind::BLUETOOTH,
-            NetworkKind::Wifi => ChipKind::WIFI,
-            NetworkKind::Uwb => ChipKind::UWB,
-            NetworkKind::Cell => ChipKind::CELLULAR,
-            NetworkKind::Ap => ChipKind::AP,
+            netsim_types::ChipKind::UNSPECIFIED => ChipKind::BLUETOOTH,
+            netsim_types::ChipKind::BLUETOOTH => ChipKind::BLUETOOTH,
+            netsim_types::ChipKind::WIFI => ChipKind::WIFI,
+            netsim_types::ChipKind::UWB => ChipKind::UWB,
+            netsim_types::ChipKind::CELL => ChipKind::CELLULAR,
+            netsim_types::ChipKind::AP => ChipKind::AP,
+        }
+    }
+}
+
+impl From<&ChipKindParams> for ChipKind {
+    fn from(params: &ChipKindParams) -> Self {
+        match params {
+            ChipKindParams::Bluetooth(bt) => match bt.mode {
+                crate::bluetooth::BluetoothMode::Beacon(_) => ChipKind::BLUETOOTH,
+                _ => ChipKind::BLUETOOTH,
+            },
+            ChipKindParams::Wifi(_) => ChipKind::WIFI,
+            ChipKindParams::Uwb(_) => ChipKind::UWB,
+            ChipKindParams::Cell(_) => ChipKind::CELLULAR,
+            ChipKindParams::Ap(_) => ChipKind::AP,
         }
     }
 }
 
 /// An enum holding the parameters for a specific chip technology.
 #[derive(Debug, Clone)]
-pub enum NetworkParams {
+pub enum ChipKindParams {
     /// Bluetooth parameters.
-    Bluetooth(BluetoothCreate),
+    Bluetooth(crate::bluetooth::BluetoothCreate),
     /// Wi-Fi parameters.
-    Wifi(WifiCreate),
+    Wifi(crate::wifi::WifiCreate),
     /// UWB parameters.
-    Uwb(UwbCreate),
+    Uwb(crate::uwb::UwbCreate),
     /// Cellular parameters.
-    Cell(CellCreate),
+    Cell(crate::cell::CellCreate),
     /// Access Point parameters.
-    Ap(ApCreate),
+    Ap(crate::ap::ApCreate),
 }
 
-/// Parameters for creating a Bluetooth chip.
-///
-/// This struct holds all the necessary parameters for creating a Bluetooth chip,
-/// including its address, controller properties, and operational mode. It is
-/// nested within [`ChipCreate`] when the chip being created is a
-/// Bluetooth chip.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BluetoothCreate {
-    /// The Bluetooth address of the device.
-    pub address: String,
-    /// Rootcanal controller properties.
-    pub bt_properties: RootcanalController,
-    /// The operational mode of the Bluetooth chip.
-    pub mode: BluetoothMode,
-}
-
-/// An enum to differentiate between the kinds of Bluetooth chips.
-///
-/// This enum differentiates between the various operational modes of a
-/// Bluetooth chip, such as Device, Beacon, and Sniffer. It is used within
-/// [`BluetoothCreate`] to specify the chip's behavior.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum BluetoothMode {
-    /// A full, virtual Bluetooth controller that can be paired with.
-    Device(DeviceParams),
-    /// A simple, non-interactive BLE beacon that broadcasts advertisements.
-    Beacon(Box<BeaconParams>),
-    /// A passive Bluetooth sniffer to capture nearby traffic.
-    Sniffer(SnifferParams),
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BleBeacon {
-    // BD_ADDR address
-    pub address: String,
-    // Settings on how beacon functions
-    pub settings: Option<AdvertiseSettings>,
-    // Advertising Data
-    pub adv_data: Option<AdvertiseData>,
-    // Scan Response Data
-    pub scan_response: Option<AdvertiseData>,
-}
-
-/// Parameters for creating a virtual Bluetooth device.
-///
-/// This struct holds parameters for creating a virtual Bluetooth device and is
-/// used when the [`BluetoothMode`] is [`BluetoothMode::Device`].
-// TODO: Rename to BluetoothDeviceParams to avoid confusion with DeviceConfig
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct DeviceParams {}
-
-/// Parameters for creating a BLE beacon.
-///
-/// This struct holds parameters for creating a BLE beacon and is used when the
-/// [`BluetoothMode`] is [`BluetoothMode::Beacon`].
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct BeaconParams {
-    /// The BLE beacon's configuration.
-    pub ble_beacon: BleBeacon,
-}
-
-/// Parameters for a Bluetooth sniffer.
-///
-/// This struct holds parameters for a Bluetooth sniffer and is used when the
-/// [`BluetoothMode`] is [`BluetoothMode::Sniffer`].
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SnifferParams {
-    // Future sniffer-specific properties can be added here.
-}
-
-/// Parameters for creating a Wi-Fi chip.
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct WifiCreate {
-    // Future Wi-Fi specific properties.
-}
-
-/// Parameters for creating a UWB chip.
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct UwbCreate {
-    // Future UWB specific properties.
-}
-
-/// Parameters for creating a Cellular chip.
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CellCreate {
-    // Future Cellular specific properties.
-}
-
-/// Parameters for creating an Access Point chip.
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ApCreate {
-    pub ssid: String,
-    pub bssid: String,
-    pub channel: u8,
-    pub hw_mode: String,
-    pub wpa_passphrase: Option<String>,
-    pub beacon_interval: u16,
-    pub country_code: Option<String>,
-    pub dtim_period: u8,
-    pub hidden_ssid: bool,
-    pub sae: bool,
-    pub wmm_enabled: bool,
-    pub enterprise_enabled: bool,
-    pub mac_acl_mode: u8,
-    pub mac_acl_list: Vec<String>,
-    pub ftm_responder_enabled: bool,
-}
-
-/// Parameters for the ChipDied message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ChipDiedParams {
-    /// The ID of the chip that died.
-    pub id: ChipId,
-}
+pub use crate::{
+    ap::{Ap, ApCreate, ApUpdate, WifiMode},
+    bluetooth::{
+        beacon::BleBeacon, BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode,
+        BluetoothUpdate, DeviceParams, ScannerParams,
+    },
+    cell::{Cell, CellCreate},
+    uwb::{Uwb, UwbCreate, UwbUpdate},
+    wifi::{Wifi, WifiCreate, WifiUpdate},
+};
 
 impl fmt::Display for ChipId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -379,6 +255,24 @@ impl fmt::Display for ChipId {
 // Chip - All stateful fields for a chip
 // ======================================================================
 
+/// The generic representation of a simulated chip.
+///
+/// A major purpose of the `Chip` wrapper class is:
+/// 1. To store common fields for all chip kinds.
+/// 2. To allow common signatures (the `ChipActor`) for clients.
+///
+/// # Architecture
+///
+/// The model follows a **Component - Variant** pattern:
+///
+/// 1. **`Chip` (The Entity)**: Contains generic fields common to all chips,
+///    such as `id`, `name`, `position`, and `device_id`.
+/// 2. **`ChipVariant` (The Dispatcher)**: The `variant` field is an enum that
+///    strictly owns the technology-specific struct (e.g.,
+///    `Bluetooth(Bluetooth)`).
+///
+/// Use `Chip` for generic operations (positioning, lifecycle) and access
+/// `variant` for technology-specific state.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Chip {
     pub id: u32,
@@ -395,54 +289,64 @@ pub struct Chip {
     pub enabled: bool,
 }
 
+impl Chip {
+    pub fn is_le_enabled(&self) -> bool {
+        if let Some(ChipVariant::Bluetooth(bt)) = &self.variant {
+            return bt.low_energy.state.unwrap_or(true);
+        }
+        true
+    }
+
+    pub fn is_classic_enabled(&self) -> bool {
+        if let Some(ChipVariant::Bluetooth(bt)) = &self.variant {
+            return bt.classic.state.unwrap_or(true);
+        }
+        true
+    }
+}
+
 fn default_enabled() -> bool {
     true
 }
 
 /// Information about a chip, including technology-specific details.
+///
+/// # Component Composition
+///
+/// Each variant owns a dedicated struct from a technology-specific module.
+/// These structs often compose or wrap the generic `Radio` struct.
+///
+/// - **Bluetooth**: Has two `Radio` components (`classic` and `low_energy`).
+/// - **Wifi**: Wraps a single `Radio` component.
+/// - **Uwb**: Wraps a single `Radio` component.
+/// - **Cell**: Contains cellular-specific state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChipVariant {
-    Bluetooth(Bluetooth),
-    Wifi(Radio),
-    Uwb(Radio),
-    Cell(CellChip),
-    Ap(ApChip),
+    Bluetooth(crate::bluetooth::Bluetooth),
+    Wifi(crate::wifi::Wifi),
+    Uwb(crate::uwb::Uwb),
+    Cell(crate::cell::Cell),
+    Ap(crate::ap::Ap),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Bluetooth {
-    pub low_energy: Radio,
-    pub classic: Radio,
-}
-
-/// Cellular technology specific chip information.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CellChip {
-    /// A string representing the current state of the cellular modem.
-    pub state: String,
-}
-
-/// Access Point specific chip information.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ApChip {
-    pub config: ApCreate,
-    #[serde(default)]
-    pub associations: Vec<String>,
-}
-
-impl From<NetworkKind> for ChipVariant {
-    fn from(kind: NetworkKind) -> Self {
+impl From<ChipKind> for ChipVariant {
+    fn from(kind: ChipKind) -> Self {
         match kind {
-            NetworkKind::Bluetooth => ChipVariant::Bluetooth(Bluetooth {
+            ChipKind::BLUETOOTH => ChipVariant::Bluetooth(crate::bluetooth::Bluetooth {
                 low_energy: Default::default(),
                 classic: Default::default(),
             }),
-            NetworkKind::Wifi => ChipVariant::Wifi(Default::default()),
-            NetworkKind::Uwb => ChipVariant::Uwb(Default::default()),
-            NetworkKind::Cell => ChipVariant::Cell(CellChip { state: "unknown".into() }),
-            NetworkKind::Ap => {
-                ChipVariant::Ap(ApChip { config: Default::default(), associations: Vec::new() })
-            }
+            ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
+            ChipKind::UWB => ChipVariant::Uwb(Default::default()),
+            ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell { state: "unknown".into() }),
+            ChipKind::AP => ChipVariant::Ap(crate::ap::Ap {
+                config: Default::default(),
+                associations: Vec::new(),
+            }),
+            // Use Bluetooth as fallback for generic/unknown types if necessary,
+            // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
+            // types.
+            _ => ChipVariant::Bluetooth(Default::default()),
         }
     }
 }
@@ -455,6 +359,7 @@ impl From<NetworkKind> for ChipVariant {
 /// Chip provided by the client.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ChipUpdate {
+    pub id: Option<ChipId>,
     pub name: Option<String>,
     pub manufacturer: Option<String>,
     pub product_name: Option<String>,
@@ -465,30 +370,38 @@ pub struct ChipUpdate {
     pub enabled: Option<bool>,
 }
 
+/// Generic radio chip update (Bluetooth, Wi-Fi, UWB).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct RadioUpdate {
+    pub state: Option<bool>,
+}
+
+impl RadioUpdate {
+    pub fn apply(&self, radio: &mut Radio) {
+        if let Some(state) = self.state {
+            radio.state = Some(state);
+        }
+    }
+}
+
 /// The techbology variant specific fields
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChipVariantUpdate {
-    Bluetooth(Radio),
-    Wifi(Radio),
-    Uwb(Radio),
-    Cell(CellUpdate),
-    Ap(ApUpdate),
+    Bluetooth(crate::bluetooth::BluetoothUpdate),
+    Wifi(crate::wifi::WifiUpdate),
+    Uwb(crate::uwb::UwbUpdate),
+    Ap(crate::ap::ApUpdate),
 }
 
-/// Cellular technology specific chip information.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CellUpdate {
-    /// A string representing the current state of the modem.
-    pub state: Option<String>,
-}
-
-/// Access Point specific chip update.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ApUpdate {
-    pub ssid: Option<String>,
-    pub channel: Option<u8>,
-    #[serde(default)]
-    pub force_disconnect: Vec<String>,
+impl ChipVariantUpdate {
+    pub fn kind(&self) -> ChipKind {
+        match self {
+            ChipVariantUpdate::Bluetooth(_) => ChipKind::BLUETOOTH,
+            ChipVariantUpdate::Wifi(_) => ChipKind::WIFI,
+            ChipVariantUpdate::Uwb(_) => ChipKind::UWB,
+            ChipVariantUpdate::Ap(_) => ChipKind::AP,
+        }
+    }
 }
 
 // =============================================================================
@@ -497,17 +410,18 @@ pub struct ApUpdate {
 
 /// A client handle for interacting with the chip server actor.
 ///
-/// There is one chip server actor for each network type (Bluetooth, UWB, Wi-Fi).
-/// This client provides a high-level API for sending `ChipRequest` messages to
-/// the server over an `mpsc` channel. It abstracts away the channel and
-/// `oneshot` responder boilerplate for each command.
+/// There is one chip server actor for each network type (Bluetooth, UWB,
+/// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
+/// messages to the server over an `mpsc` channel. It abstracts away the channel
+/// and `oneshot` responder boilerplate for each command.
 /// A client handle for interacting with the chip server actor.
 ///
-/// There is one chip server actor for each network type (Bluetooth, UWB, Wi-Fi).
-/// This client provides a high-level API for sending `ChipRequest` messages to
-/// the server over an `mpsc` channel. It abstracts away the channel and
-/// `oneshot` responder boilerplate for each command.
-/// A generic client for interacting with any chip server actor (UWB, WiFi, Cell).
+/// There is one chip server actor for each network type (Bluetooth, UWB,
+/// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
+/// messages to the server over an `mpsc` channel. It abstracts away the channel
+/// and `oneshot` responder boilerplate for each command.
+/// A generic client for interacting with any chip server actor (UWB, WiFi,
+/// Cell).
 #[derive(Clone)]
 pub struct RadioChipClient {
     sender: tokio::sync::mpsc::Sender<ChipRequest>,
@@ -516,6 +430,12 @@ pub struct RadioChipClient {
 impl RadioChipClient {
     pub fn new(sender: tokio::sync::mpsc::Sender<ChipRequest>) -> Self {
         Self { sender }
+    }
+}
+
+impl std::fmt::Debug for RadioChipClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RadioChipClient").finish_non_exhaustive()
     }
 }
 
@@ -599,13 +519,13 @@ impl ChipClient for RadioChipClient {
 
 /// A client handle for interacting with the chip server actor.
 ///
-/// There is one chip server actor for each network type (Bluetooth, UWB, Wi-Fi).
-/// This client provides a high-level API for sending `ChipRequest` messages to
-/// the server over an `mpsc` channel. It abstracts away the channel and
-/// `oneshot` responder boilerplate for each command.
+/// There is one chip server actor for each network type (Bluetooth, UWB,
+/// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
+/// messages to the server over an `mpsc` channel. It abstracts away the channel
+/// and `oneshot` responder boilerplate for each command.
 #[cfg_attr(feature = "testing", mockall::automock)]
 #[async_trait::async_trait]
-pub trait ChipClient: Send + Sync {
+pub trait ChipClient: std::fmt::Debug + Send + Sync {
     async fn create(&self, params: ChipCreate) -> Result<(), ClientError>;
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError>;
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError>;

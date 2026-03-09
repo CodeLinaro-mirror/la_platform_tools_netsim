@@ -3,12 +3,13 @@
 // src/socket/windows.rs - Windows Named Pipes with TCP fallback
 //=============================================================================
 
-use crate::error::{PacketStreamError, Result, SocketError};
 use std::net::SocketAddr;
-use tokio::net::{TcpListener, TcpStream};
 
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeServer, ServerOptions};
+use tokio::net::{TcpListener, TcpStream};
+
+use crate::error::{PacketStreamError, Result, SocketError};
 
 pub enum WindowsListener {
     #[cfg(windows)]

@@ -13,17 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::error::WifiResult;
-/// LibSlirp Interface for Network Simulation
-use crate::get_runtime;
+use std::sync::mpsc;
 
 use bytes::Bytes;
 use http_proxy::Manager;
 pub use libslirp_rs::libslirp::LibSlirp;
-use libslirp_rs::libslirp::ProxyManager;
-use libslirp_rs::libslirp_config::{lookup_host_dns, SlirpConfig};
+use libslirp_rs::{
+    libslirp::ProxyManager,
+    libslirp_config::{lookup_host_dns, SlirpConfig},
+};
 use netsim_proto::config::SlirpOptions as ProtoSlirpOptions;
-use std::sync::mpsc;
+
+use crate::error::WifiResult;
+/// LibSlirp Interface for Network Simulation
+use crate::get_runtime;
 
 pub fn slirp_run(opt: ProtoSlirpOptions, tx_bytes: mpsc::Sender<Bytes>) -> WifiResult<LibSlirp> {
     // TODO: Convert ProtoSlirpOptions to SlirpConfig.

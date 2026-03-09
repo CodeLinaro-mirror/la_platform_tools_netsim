@@ -1,21 +1,27 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::hwsim_helper::wrap_ethernet_in_hwsim;
+use std::sync::Arc;
+
 use actor_framework::ResourceActor;
 use ap_actor::{ApActor, ApClient};
 use bytes::Bytes;
 use device_actor::DeviceActor;
 use device_api::{DeviceAction, DeviceId};
-use netsim_model::chip::{ChipClient, ChipConfig, ChipCreate, ChipId, NetworkParams, WifiCreate};
-use netsim_model::device::Position;
-use netsim_packets::ethernet::{ether_type, EthernetFrame, MacAddr};
-use netsim_packets::ieee80211::{FrameType, Ieee80211, Ieee80211ToAp, MacAddress};
+use netsim_model::{
+    chip::{ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, WifiCreate},
+    device::Position,
+};
+use netsim_packets::{
+    ethernet::{ether_type, EthernetFrame, MacAddr},
+    ieee80211::{FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddress},
+};
 use slirp_actor::SlirpActor;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use wifi_actor::WifiActor;
 use zerocopy::IntoBytes;
+
+use crate::hwsim_helper::wrap_ethernet_in_hwsim;
 
 #[allow(dead_code)]
 pub struct ChipChannels {
@@ -38,6 +44,15 @@ pub struct World {
 #[allow(dead_code)]
 impl World {
     pub async fn new() -> Self {
+        Self::new_internal(None).await
+    }
+
+    pub async fn new_with_gateway(gateway: Box<dyn wifi_actor::gateway::GatewayTrait>) -> Self {
+        Self::new_internal(Some(gateway)).await
+    }
+
+    async fn new_internal(gateway: Option<Box<dyn wifi_actor::gateway::GatewayTrait>>) -> Self {
+        let _ = env_logger::builder().is_test(true).try_init();
         // Setup dependencies
         let slirp_actor_impl = SlirpActor::new(Default::default());
         let (slirp_runner, slirp_client) = slirp_actor::new();
@@ -50,7 +65,8 @@ impl World {
 
         // Test DeviceClient
         let (device_tx, device_rx) = mpsc::unbounded_channel();
-        // Create a Mock Device Client to verify that WifiActor interacts with DeviceActor correctly.
+        // Create a Mock Device Client to verify that WifiActor interacts with
+        // DeviceActor correctly.
         let mut mock_device = actor_framework::MockActorClient::<DeviceActor>::new();
 
         // Forward all DeviceActions to the channel for verification.
@@ -69,8 +85,6 @@ impl World {
         setup_mock(&mut mock_device);
 
         // Handle clone_box: Return a new mock with the same setup
-        // We need to use `returning` with a closure that captures the setup logic (or strictly the tx)
-        // Since `setup_mock` closure captures `device_tx_clone`, we can clone `device_tx_clone` again for the `clone_box` closure.
         let tx_for_clone = device_tx.clone();
         mock_device.expect_clone_box().returning(move || {
             let mut new_mock = actor_framework::MockActorClient::<DeviceActor>::new();
@@ -79,25 +93,6 @@ impl World {
                 let _ = tx.send(action);
                 Ok(device_api::DeviceActionResult::Success)
             });
-            // Note: The new mock ALSO needs to support clone_box if it gets cloned again.
-            // This could be recursive.
-            // However, usually we clone only once or twice.
-            // To support infinite cloning, we would need a recursive structure or just assume limited depth.
-            // Let's implement one level of depth for now, or use a shared Arc<Function>?
-            // Actually, let's just implement `expect_clone_box` on the NEW mock too.
-            // But mockall closures are moved.
-            // Let's simplify: Just return a mock that panics on clone_box for now, assuming 1 level of clone is enough (WifiActor stores it).
-            // Or better: make a recursive helper if possible, but closures are hard.
-            // "WifiActor" clones it once when storing?
-            // WifiActor::new takes `device_client`. It stores it.
-            // handle_delete clones it: `let dc = self.device_client.clone();`.
-            // So the stored client is indeed cloned.
-            // So the mock returned by `clone_box` MUST also support `perform_action` AND `clone_box` (if that clone is used).
-            // But `handle_delete` uses the clone to call `notify_chip_removed` (perform_action) and then drops it.
-            // It does NOT clone it again.
-            // So 1 level of recursion for `clone_box` is likely sufficient for `handle_delete`.
-            // NOTE: The mock returned by `clone_box` needs to support `perform_action` but likely doesn't
-            // need to support further cloning if the actor only stores it once.
             Box::new(new_mock)
         });
 
@@ -107,11 +102,6 @@ impl World {
         // Create ApClient with interceptor to capture the downlink sink
         let (capture_tx, mut capture_rx) = mpsc::unbounded_channel();
         let capture_tx_arc = Arc::new(capture_tx);
-
-        // We need to pass ap_client to WifiActor.
-        // And we also want to keep it in World?
-        // Wait, WifiActor takes Arc<ApClient>.
-        // We can create one ApClient with interceptor.
 
         let ap_client_interceptor = {
             let capture_tx = capture_tx_arc.clone();
@@ -124,8 +114,17 @@ impl World {
             ApClient::new_with_interceptor(ap_client_base, ap_client_interceptor);
         let spying_ap_client_arc = Arc::new(spying_ap_client.clone());
 
-        let wifi_actor_impl =
-            WifiActor::new(Some(spying_ap_client_arc.clone()), Some(slirp_client), device_client);
+        let wifi_actor_impl = if let Some(gw) = gateway {
+            WifiActor::new_with_gateway(Some(spying_ap_client_arc.clone()), gw, device_client)
+        } else {
+            WifiActor::new(
+                Some(spying_ap_client_arc.clone()),
+                Some(slirp_client),
+                device_client,
+                None,
+            )
+        };
+
         let (wifi_runner, wifi_client) = wifi_actor::new();
         tokio::spawn(wifi_runner.run(wifi_actor_impl));
 
@@ -156,7 +155,7 @@ impl World {
             ssid: "TestAP".to_string(),
             bssid: netsim_packets::ethernet::MacAddr::from([0x02, 0x00, 0x00, 0x00, 0x00, 0x00]),
             channel: 6,
-            hw_mode: "g".to_string(),
+            hw_mode: netsim_model::chip::WifiMode::G,
             wpa_passphrase: None,
             beacon_interval: 100,
             country_code: None,
@@ -189,7 +188,7 @@ impl World {
             }));
 
         let config =
-            ChipConfig::new("wifi", "google", "test", NetworkParams::Wifi(WifiCreate::default()));
+            ChipConfig::new("wifi", "google", "test", ChipKindParams::Wifi(WifiCreate::default()));
         let id = ChipId(id_val);
 
         let params = ChipCreate {
@@ -263,7 +262,23 @@ impl World {
         let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
         let bssid = MacAddress::new(src_mac);
         let ieee80211 =
-            netsim_packets::ieee80211::Ieee80211::from_ieee8023(&Bytes::from(eth), bssid).unwrap();
+            Ieee80211::from_ieee8023(&Bytes::from(eth), bssid, FrameDirection::FromAp).unwrap();
+        let bytes = ieee80211.encode_to_vec().unwrap();
+
+        self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP packet");
+    }
+
+    pub async fn when_infra_transmits_unicast_to_mac(&mut self, dst_mac: [u8; 6], payload: &str) {
+        let src_mac = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00]; // AP
+
+        let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
+        let bssid = MacAddress::new(src_mac);
+        let ieee80211 = netsim_packets::ieee80211::Ieee80211::from_ieee8023(
+            &Bytes::from(eth),
+            bssid,
+            netsim_packets::ieee80211::FrameDirection::FromAp,
+        )
+        .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
 
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP packet");
@@ -275,15 +290,20 @@ impl World {
 
         let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
         let bssid = MacAddress::new(src_mac);
-        let ieee80211 =
-            netsim_packets::ieee80211::Ieee80211::from_ieee8023(&Bytes::from(eth), bssid).unwrap();
+        let ieee80211 = netsim_packets::ieee80211::Ieee80211::from_ieee8023(
+            &Bytes::from(eth),
+            bssid,
+            netsim_packets::ieee80211::FrameDirection::FromAp,
+        )
+        .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
 
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP multicast packet");
     }
 
-    /// Simulates a Chip transmitting a Data Frame (ToDS=1) to another Chip via the AP.
-    /// This requires `simulate_ap_reflection: true` in Medium (default).
+    /// Simulates a Chip transmitting a Data Frame (ToDS=1) to another Chip via
+    /// the AP. This requires `simulate_ap_reflection: true` in Medium
+    /// (default).
     pub async fn when_chip_transmits_to_ds_unicast(
         &mut self,
         sender_idx: usize,
@@ -386,17 +406,17 @@ impl World {
         loop {
             tokio::select! {
                 Some(bytes) = chip.stream_rx.recv() => {
-                    println!("Chip {} received {} bytes", chip.id, bytes.len());
+                    log::info!("Chip {} received {} bytes", chip.id, bytes.len());
                     if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
                         // Check if the received payload matches the expected payload.
                          if eth.len() >= expected_bytes.len() && eth.windows(expected_bytes.len()).any(|w| w == expected_bytes) {
-                            println!("Chip {} received expected payload!", chip.id);
+                            log::info!("Chip {} received expected payload!", chip.id);
                             return;
                         } else {
-                            println!("Chip {} received payload mismatch", chip.id);
+                            log::warn!("Chip {} received payload mismatch", chip.id);
                         }
                     } else {
-                         println!("Chip {} received non-ethernet or invalid packet", chip.id);
+                         log::error!("Chip {} received non-ethernet or invalid packet", chip.id);
                     }
                 }
                 _ = &mut timeout => {
@@ -406,7 +426,46 @@ impl World {
         }
     }
 
-    /// Simulates a Chip transmitting a Data Frame (ToDS=1) destined for the Internet Gateway (Slirp).
+    pub async fn then_chip_receives_payload_and_dst(
+        &mut self,
+        receiver_idx: usize,
+        expected_payload: &str,
+        expected_dst: [u8; 6],
+    ) {
+        let chip = &mut self.chips[receiver_idx];
+        let timeout = tokio::time::sleep(std::time::Duration::from_secs(3));
+        tokio::pin!(timeout);
+        let expected_bytes = expected_payload.as_bytes();
+
+        loop {
+            tokio::select! {
+                Some(bytes) = chip.stream_rx.recv() => {
+                    log::info!("Chip {} received {} bytes", chip.id, bytes.len());
+                    if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
+                         if eth.len() >= expected_bytes.len() && eth.windows(expected_bytes.len()).any(|w| w == expected_bytes) {
+                            // Check Destination MAC
+                            if eth.len() >= 6 && &eth[0..6] == expected_dst {
+                                log::info!("Chip {} received expected payload AND mac matches!", chip.id);
+                                return;
+                            } else {
+                                log::warn!("Chip {} received payload match but MAC mismatch. Got {:?}, expected {:?}", chip.id, &eth[0..6], expected_dst);
+                            }
+                        } else {
+                            log::warn!("Chip {} received payload mismatch", chip.id);
+                        }
+                    } else {
+                         log::error!("Chip {} received non-ethernet or invalid packet", chip.id);
+                    }
+                }
+                _ = &mut timeout => {
+                    panic!("Timeout waiting for payload on chip {}", chip.id);
+                }
+            }
+        }
+    }
+
+    /// Simulates a Chip transmitting a Data Frame (ToDS=1) destined for the
+    /// Internet Gateway (Slirp).
     pub async fn when_chip_transmits_data_to_slirp(&mut self, sender_idx: usize) {
         let sender_mac = self.chips[sender_idx].mac;
         let internet_gateway = [0x00, 0x00, 0x00, 0x00, 0x00, 0xFE]; // Dummy Gateway
@@ -498,7 +557,7 @@ impl World {
                      if packet.len() >= 6 {
                          let msg_type = u16::from_le_bytes([packet[4], packet[5]]);
                          if msg_type == 16 {
-                             println!("Ignored Netlink Control Packet (Type 16, len={})", packet.len());
+                             log::info!("Ignored Netlink Control Packet (Type 16, len={})", packet.len());
                              continue;
                          }
                      }
@@ -512,5 +571,64 @@ impl World {
                 }
             }
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MockGateway {
+    pub outgoing_packets: Arc<std::sync::Mutex<Vec<(netsim_model::chip::ChipId, bytes::Bytes)>>>,
+}
+
+impl MockGateway {
+    pub fn new() -> Self {
+        Self { outgoing_packets: Arc::new(std::sync::Mutex::new(Vec::new())) }
+    }
+}
+
+#[async_trait::async_trait]
+impl wifi_actor::gateway::GatewayTrait for MockGateway {
+    async fn send_80211(
+        &self,
+        chip_id: netsim_model::chip::ChipId,
+        ieee80211: &netsim_packets::ieee80211::Ieee80211,
+    ) -> bool {
+        use zerocopy::IntoBytes;
+        let bytes = ieee80211.encode_to_vec().unwrap();
+        self.outgoing_packets.lock().unwrap().push((chip_id, bytes::Bytes::from(bytes)));
+        true
+    }
+
+    fn should_handle(&self, _chip_id: netsim_model::chip::ChipId) -> bool {
+        false
+    }
+
+    fn handle_incoming(
+        &self,
+        _chip_id: netsim_model::chip::ChipId,
+        _packet: bytes::Bytes,
+        _medium: &mut wifi_actor::medium::Medium,
+        _shared_keys: &ap_actor::shared::SharedKeyStore,
+        _out_queue: &mut Vec<(u32, bytes::Bytes)>,
+    ) {
+    }
+
+    async fn on_start(&mut self, _ctx: &mut actor_framework::DynContext<WifiActor>) {}
+
+    async fn on_chip_create(
+        &mut self,
+        _chip_id: netsim_model::chip::ChipId,
+        _ctx: &mut actor_framework::DynContext<WifiActor>,
+    ) {
+    }
+
+    async fn on_chip_remove(
+        &mut self,
+        _chip_id: netsim_model::chip::ChipId,
+        _ctx: &mut actor_framework::DynContext<WifiActor>,
+    ) {
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }

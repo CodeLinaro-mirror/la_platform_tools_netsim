@@ -1,10 +1,13 @@
 // Copyright 2025 The Android Open Source Project
 
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    fs,
+    path::{Path, PathBuf},
+};
+
 use log::{info, warn};
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
-use std::fs;
-use std::path::{Path, PathBuf};
 
 // This struct matches the top-level configuration.
 #[derive(Debug, Default, PartialEq)]
@@ -86,19 +89,21 @@ pub fn get_avd_data_path(avd_ini_path: &Path) -> Result<PathBuf, Box<dyn Error>>
     let content = fs::read_to_string(avd_ini_path)?;
     let avd_dir_path = get_path_from_avd_ini(&content)?;
 
-    // In next, we might be running in a sandbox or different env, but assuming fs access is allowed as per user request.
-    // Also, handle relative paths in AVD ini? Usually they are absolute or relative to ~/.android/avd/
-    // get_path_from_avd_ini returns PathBuf. If it is relative, it is relative to what?
-    // The emulator usually handles this. Here we assume it is usable as is or we might need to resolve it.
-    // For now we assume typical absolute paths or relative to CWD if any (unlikely for AVDs).
-    // Actually, AVD path in ini is usually absolute.
+    // In next, we might be running in a sandbox or different env, but assuming fs
+    // access is allowed as per user request. Also, handle relative paths in AVD
+    // ini? Usually they are absolute or relative to ~/.android/avd/
+    // get_path_from_avd_ini returns PathBuf. If it is relative, it is relative to
+    // what? The emulator usually handles this. Here we assume it is usable as
+    // is or we might need to resolve it. For now we assume typical absolute
+    // paths or relative to CWD if any (unlikely for AVDs). Actually, AVD path
+    // in ini is usually absolute.
 
     if !avd_dir_path.is_dir() {
         // Warning: creating directories in user's home/AVD folder.
         // Legacy code did this:
         // fs::create_dir_all(&avd_dir_path)?;
-        // info!("Created missing AVD data directory: {}", avd_dir_path.display());
-        // We will keep it but log.
+        // info!("Created missing AVD data directory: {}",
+        // avd_dir_path.display()); We will keep it but log.
     }
     Ok(avd_dir_path)
 }
@@ -154,7 +159,8 @@ fn read_all_bluetooth_addresses(avd_root: &Path) -> Result<HashSet<String>, Box<
     Ok(used_addresses)
 }
 
-// Generates the next available MAC address from BB:BB:BB:00:00:01 to BB:BB:BB:FF:FF:FF.
+// Generates the next available MAC address from BB:BB:BB:00:00:01 to
+// BB:BB:BB:FF:FF:FF.
 fn generate_next_mac(used_addresses: &HashSet<String>) -> Result<String, Box<dyn Error>> {
     for i in 1..=0xFFFFFF {
         let b1 = (i >> 16) & 0xFF;
@@ -169,8 +175,8 @@ fn generate_next_mac(used_addresses: &HashSet<String>) -> Result<String, Box<dyn
 }
 
 /// Retrieves the Bluetooth MAC address for a given AVD name.
-/// If the config or address doesn't exist, it finds the next available sequential MAC,
-/// creates a new config, and saves it.
+/// If the config or address doesn't exist, it finds the next available
+/// sequential MAC, creates a new config, and saves it.
 pub fn get_or_create_bluetooth_mac(avd_ini_path: &str) -> Result<String, Box<dyn Error>> {
     // First, check if this AVD already has a configured address.
     let avd_path = PathBuf::from(avd_ini_path);
@@ -183,7 +189,8 @@ pub fn get_or_create_bluetooth_mac(avd_ini_path: &str) -> Result<String, Box<dyn
             }
         }
         Err(e) => {
-            // Log error, but proceed to generate a new MAC as the file might be missing or corrupt.
+            // Log error, but proceed to generate a new MAC as the file might be missing or
+            // corrupt.
             warn!(
                 "Error reading config for {}: {}. Will attempt to create/overwrite.",
                 avd_ini_path, e
@@ -202,8 +209,9 @@ pub fn get_or_create_bluetooth_mac(avd_ini_path: &str) -> Result<String, Box<dyn
     Ok(new_mac)
 }
 
-/// Public function that reads the netsim.ini config, updates the 'bluetooth.address' field,
-/// and writes the entire config back to the AVD directory.
+/// Public function that reads the netsim.ini config, updates the
+/// 'bluetooth.address' field, and writes the entire config back to the AVD
+/// directory.
 pub fn set_bluetooth_mac(avd_path: &str, address: &str) -> Result<(), Box<dyn Error>> {
     let avd_ini_path = PathBuf::from(avd_path);
     let mut config = read_netsim_config_for_avd(&avd_ini_path).unwrap_or_default();

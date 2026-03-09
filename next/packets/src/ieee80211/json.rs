@@ -6,13 +6,16 @@
 //! IEEE 802.11 structures from the `ieee80211` module. It includes functions
 //! for converting between these types and for serializing to/from JSON strings.
 
-use crate::ieee80211::util as ieee80211_util; // For address interpretation
-use crate::ieee80211::{FrameControl, Ieee80211, MacHeader3Addr, SequenceControl};
-use crate::utils::json as json_common;
-use serde::{Deserialize, Serialize};
 use std::fmt;
-use zerocopy::byteorder::LittleEndian;
-use zerocopy::U16;
+
+use serde::{Deserialize, Serialize};
+use zerocopy::{byteorder::LittleEndian, U16};
+
+use crate::ieee80211::util as ieee80211_util; // For address interpretation
+use crate::{
+    ieee80211::{FrameControl, Ieee80211, MacHeader3Addr, SequenceControl},
+    utils::json as json_common,
+};
 
 /// Serializes an `Ieee80211` packet to a JSON Value (tshark style).
 pub fn to_json(packet: &Ieee80211, packet_len: usize) -> serde_json::Value {
@@ -34,11 +37,13 @@ pub fn to_json(packet: &Ieee80211, packet_len: usize) -> serde_json::Value {
     }
 }
 
-/// A custom error type for JSON operations and conversions related to IEEE 802.11.
+/// A custom error type for JSON operations and conversions related to IEEE
+/// 802.11.
 #[derive(Debug)]
 pub enum JsonError {
     SerdeJsonError(serde_json::Error),
-    /// Indicates an error during conversion from a JSON representation to a zerocopy type.
+    /// Indicates an error during conversion from a JSON representation to a
+    /// zerocopy type.
     HexParseError(String),
     ConversionError(String),
 }
@@ -69,7 +74,8 @@ impl From<serde_json::Error> for JsonError {
     }
 }
 
-/// A `serde`-compatible, `tshark`-like representation of an IEEE 802.11 Frame Control field.
+/// A `serde`-compatible, `tshark`-like representation of an IEEE 802.11 Frame
+/// Control field.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JsonFrameControl {
     #[serde(rename = "wlan.fc.type")]
@@ -124,7 +130,8 @@ impl TryFrom<JsonFrameControl> for FrameControl {
     }
 }
 
-/// A `serde`-compatible, `tshark`-like representation of an IEEE 802.11 Sequence Control field.
+/// A `serde`-compatible, `tshark`-like representation of an IEEE 802.11
+/// Sequence Control field.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JsonSequenceControl {
     #[serde(rename = "wlan.seq")]
@@ -176,8 +183,8 @@ pub struct JsonMacHeader3AddrFields {
     pub sequence_control: JsonSequenceControl,
 }
 
-/// A `serde`-compatible, `tshark`-like representation of an IEEE 802.11 MAC header with 3 addresses.
-/// This structure creates the top-level "wlan" key.
+/// A `serde`-compatible, `tshark`-like representation of an IEEE 802.11 MAC
+/// header with 3 addresses. This structure creates the top-level "wlan" key.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JsonMacHeader3Addr {
     pub wlan: JsonMacHeader3AddrFields,
@@ -207,16 +214,17 @@ impl TryFrom<&JsonMacHeader3Addr> for MacHeader3Addr {
         Ok(MacHeader3Addr {
             frame_control: wlan_fields.frame_control.clone().try_into()?,
             duration_id: U16::<LittleEndian>::new(wlan_fields.duration_id),
-            // Note: Reconstructing addr1/2/3 from ra/ta/da/sa/bssid is complex and context-dependent.
-            // For now, we might need to rely on ra/ta/da/sa if we want to reconstruct,
-            // but this TryFrom is mainly for testing.
+            // Note: Reconstructing addr1/2/3 from ra/ta/da/sa/bssid is complex and
+            // context-dependent. For now, we might need to rely on ra/ta/da/sa if we
+            // want to reconstruct, but this TryFrom is mainly for testing.
             // Let's use ra/ta/da/sa to fill addr1/2/3 based on frame control if possible,
             // or just use placeholders if this path is not critical for now.
             // Actually, for the test `test_mac_header_3_addr_conversion`, we need to fill them.
-            // Let's use wlan.ra as addr1, wlan.ta as addr2, wlan.da as addr3 (incorrect but sufficient for compilation if we update test)
-            // BETTER: Use the `ieee80211_util` logic in reverse? No, that's hard.
-            // Let's just parse ra/ta/da/sa and assign them to addr1/2/3 for now,
-            // assuming a specific frame type (Beacon/Mgmt) where Addr1=RA=DA, Addr2=TA=SA, Addr3=BSSID.
+            // Let's use wlan.ra as addr1, wlan.ta as addr2, wlan.da as addr3 (incorrect but
+            // sufficient for compilation if we update test) BETTER: Use the
+            // `ieee80211_util` logic in reverse? No, that's hard. Let's just parse
+            // ra/ta/da/sa and assign them to addr1/2/3 for now, assuming a specific
+            // frame type (Beacon/Mgmt) where Addr1=RA=DA, Addr2=TA=SA, Addr3=BSSID.
             addr1: wlan_fields.ra.parse().map_err(JsonError::ConversionError)?,
             addr2: wlan_fields.ta.parse().map_err(JsonError::ConversionError)?,
             addr3: wlan_fields

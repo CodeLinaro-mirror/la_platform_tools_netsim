@@ -2,10 +2,11 @@
 
 //! Defines the UDP (User Datagram Protocol) header using `zerocopy`.
 
-use crate::utils::general::ParseResult;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
 };
+
+use crate::utils::general::ParseResult;
 
 /// Represents the UDP header.
 #[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
@@ -24,7 +25,8 @@ pub struct UdpHeader {
 impl UdpHeader {
     /// Parses a `UdpHeader` from the beginning of the given byte slice.
     ///
-    /// Returns a reference to the header and a slice for the remaining bytes (the UDP payload).
+    /// Returns a reference to the header and a slice for the remaining bytes
+    /// (the UDP payload).
     pub fn parse(bytes: &[u8]) -> Option<ParseResult<'_, UdpHeader>> {
         Ref::from_prefix(bytes).ok()
     }

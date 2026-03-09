@@ -5,16 +5,18 @@
 //! This module defines `serde`-compatible structures that mirror the `zerocopy`
 //! Ethernet structures from the `ethernet` module. It includes functions
 //! for converting between these types and for serializing to/from JSON strings.
-use crate::ethernet::{EthernetFrame, EthernetPacket, MacAddr};
-use serde::Deserialize;
-use serde::Serialize;
-use serde_json::Value;
 use std::fmt;
 
-/// Converts an `EthernetPacket` to a JSON `Value` compatible with tshark output.
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::ethernet::{EthernetFrame, EthernetPacket, MacAddr};
+
+/// Converts an `EthernetPacket` to a JSON `Value` compatible with tshark
+/// output.
 ///
-/// This function handles both tagged and untagged frames, extracting the Ethernet header
-/// and any VLAN tags.
+/// This function handles both tagged and untagged frames, extracting the
+/// Ethernet header and any VLAN tags.
 ///
 /// # Arguments
 /// * `ethernet_packet` - The parsed Ethernet packet.
@@ -70,10 +72,12 @@ impl TryFrom<JsonMacAddr> for MacAddr {
     }
 }
 
-/// Inner fields for `JsonEthernetFrame`, mimicking `tshark`'s `eth` object structure.
+/// Inner fields for `JsonEthernetFrame`, mimicking `tshark`'s `eth` object
+/// structure.
 ///
-/// This struct is currently empty as it serves as a placeholder or marker for potential future expansion
-/// where specific inner fields might need to be grouped.
+/// This struct is currently empty as it serves as a placeholder or marker for
+/// potential future expansion where specific inner fields might need to be
+/// grouped.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JsonEthernetFrameFields {}
 
@@ -97,8 +101,9 @@ pub struct Ethernet {
 
 /// Represents the tree structure for Ethernet addresses in the JSON output.
 ///
-/// Tshark represents addresses both as a flat string (e.g., "eth.dst") and as a nested object
-/// (e.g., "eth.dst_tree") containing the address details. This struct mirrors that nested structure.
+/// Tshark represents addresses both as a flat string (e.g., "eth.dst") and as a
+/// nested object (e.g., "eth.dst_tree") containing the address details. This
+/// struct mirrors that nested structure.
 #[derive(Serialize)]
 pub struct EthTree {
     #[serde(rename = "eth.addr")]
@@ -107,8 +112,9 @@ pub struct EthTree {
 
 /// Parses the Ethernet header into a `serde`-compatible `Ethernet` struct.
 ///
-/// This function extracts the destination and source addresses, ethertype/length, and stream index,
-/// formatting them to match tshark's JSON output conventions (e.g., hex strings for ethertypes > 1500).
+/// This function extracts the destination and source addresses,
+/// ethertype/length, and stream index, formatting them to match tshark's JSON
+/// output conventions (e.g., hex strings for ethertypes > 1500).
 pub fn parse_ethernet_header(ethernet_frame: &EthernetFrame, n: usize) -> Ethernet {
     let dst_addr = ethernet_frame.dst_addr.to_string();
     let src_addr = ethernet_frame.src_addr.to_string();
@@ -132,9 +138,10 @@ pub fn parse_ethernet_header(ethernet_frame: &EthernetFrame, n: usize) -> Ethern
 
 #[cfg(test)]
 mod tests {
+    use zerocopy::IntoBytes;
+
     use super::*;
     use crate::ethernet::{ether_type, MacAddr};
-    use zerocopy::IntoBytes;
 
     #[test]
     fn test_json_mac_addr_conversion() {

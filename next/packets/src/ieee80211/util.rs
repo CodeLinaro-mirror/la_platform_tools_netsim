@@ -2,11 +2,12 @@
 
 //! Provides utility functions for working with IEEE 802.11 frames and headers.
 
-use crate::ethernet::MacAddr;
-use crate::ieee80211::{
-    data_subtype, frame_type, management_subtype, FrameControl, MacHeader3Addr,
-};
 use std::fmt::Write;
+
+use crate::{
+    ethernet::MacAddr,
+    ieee80211::{data_subtype, frame_type, management_subtype, FrameControl, MacHeader3Addr},
+};
 
 /// Converts a FrameControl field to a human-readable string.
 pub fn frame_control_to_string(fc: FrameControl) -> String {
@@ -144,8 +145,9 @@ pub fn get_source_address(header: &MacHeader3Addr) -> MacAddr {
 /// - ToDS=0, FromDS=0: BSSID is Addr3 (IBSS/Mgmt)
 /// - ToDS=1, FromDS=0: BSSID is Addr1 (STA to AP)
 /// - ToDS=0, FromDS=1: BSSID is Addr2 (AP to STA)
-/// - ToDS=1, FromDS=1: Not applicable for 3-address header (WDS uses 4 addresses)
-///   Returns None if the ToDS/FromDS combination is for WDS (which needs 4 addresses).
+/// - ToDS=1, FromDS=1: Not applicable for 3-address header (WDS uses 4
+///   addresses) Returns None if the ToDS/FromDS combination is for WDS (which
+///   needs 4 addresses).
 pub fn get_bssid(header: &MacHeader3Addr) -> Option<MacAddr> {
     let fc = header.frame_control;
     match (fc.to_ds(), fc.from_ds()) {
@@ -158,9 +160,10 @@ pub fn get_bssid(header: &MacHeader3Addr) -> Option<MacAddr> {
 
 #[cfg(test)]
 mod tests {
+    use zerocopy::U16;
+
     use super::*;
     use crate::ieee80211::{FrameControl, MacHeader3Addr, SequenceControl};
-    use zerocopy::U16;
 
     fn create_header(
         fc_val: u16,
@@ -211,8 +214,8 @@ mod tests {
         assert_eq!(get_source_address(&header_from_ap).bytes, mac3); // SA = Addr3
         assert_eq!(get_bssid(&header_from_ap).unwrap().bytes, mac2); // BSSID = Addr2
 
-        // Case 4: WDS (ToDS=1, FromDS=1) - BSSID interpretation is different for 3-addr header
-        // FC: Type=Data, Subtype=Data. ToDS=1, FromDS=1. (0x0308)
+        // Case 4: WDS (ToDS=1, FromDS=1) - BSSID interpretation is different for 3-addr
+        // header FC: Type=Data, Subtype=Data. ToDS=1, FromDS=1. (0x0308)
         let header_wds = create_header(0x0308, mac1, mac2, mac3);
         assert!(get_bssid(&header_wds).is_none());
     }

@@ -1,14 +1,24 @@
-use crate::error::WifiError;
-use crate::medium::Medium;
+use std::{collections::HashMap, sync::Arc};
+
 use actor_framework::DynContext;
 use ap_actor::{shared::SharedKeyStore, ApClient};
-use netsim_model::chip::{Chip, ChipId};
-use netsim_model::stats::NetsimRadioStats;
+use log::{debug, warn};
+use netsim_model::{
+    chip::{Chip, ChipId},
+    stats::NetsimRadioStats,
+};
 use netsim_packets::ieee80211::Ieee80211;
 use slirp_actor::SlirpClient;
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
+
+#[cfg(target_os = "linux")]
+use crate::tap_gateway::TapGateway;
+use crate::{
+    error::WifiError,
+    gateway::GatewayTrait,
+    medium::{tx_packet_state::InfraTarget, Medium},
+    slirp_gateway::SlirpGateway,
+};
 
 /// ID for a Chip (Station)
 pub type ChipIdType = u32;
@@ -27,10 +37,15 @@ pub enum WifiResponse {
     Error(String),
 }
 
+pub type SlirpPendingRequest = (
+    tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+    tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
+    tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+);
+
 #[derive(Debug)]
 pub struct WifiActor {
     pub(crate) ap_client: Option<Arc<ApClient>>,
-    pub(crate) slirp_client: Option<SlirpClient>,
     pub(crate) medium: Medium,
     pub(crate) active_chips: HashMap<ChipId, Chip>,
     pub(crate) senders: HashMap<ChipId, UnboundedSender<bytes::Bytes>>,
@@ -40,14 +55,39 @@ pub struct WifiActor {
     pub(crate) device_client: ::client::DeviceClient,
     // Channel to send frames TO the AP Actor (registered via ApClient)
     pub(crate) to_ap: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
-    // Channel to send frames TO the Slirp Actor (registered via SlirpClient)
-    pub(crate) to_slirp: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
+    // Gateway for Infra packets (Tap or Slirp)
+    pub(crate) gateway: Box<dyn GatewayTrait>,
 }
 
 impl WifiActor {
     pub fn new(
         ap_client: Option<Arc<ApClient>>,
         slirp_client: Option<SlirpClient>,
+        device_client: ::client::DeviceClient,
+        wifi_tap: Option<String>,
+    ) -> Self {
+        // Fixup pending channels if we just created a SlirpGateway
+        let gateway = if let Some(if_name) = wifi_tap {
+            #[cfg(target_os = "linux")]
+            {
+                Box::new(TapGateway::new(if_name)) as Box<dyn GatewayTrait>
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                let _ = if_name;
+                warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
+                Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
+            }
+        } else {
+            // Default to SlirpGateway
+            Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
+        };
+        Self::new_with_gateway(ap_client, gateway, device_client)
+    }
+
+    pub fn new_with_gateway(
+        ap_client: Option<Arc<ApClient>>,
+        gateway: Box<dyn GatewayTrait>,
         device_client: ::client::DeviceClient,
     ) -> Self {
         let shared_keys = Arc::new(SharedKeyStore::new());
@@ -56,9 +96,9 @@ impl WifiActor {
             crate::stats::WifiStats::default(),
             Arc::new(crate::DebugArgs::default()),
         );
+
         Self {
             ap_client,
-            slirp_client,
             medium,
             active_chips: HashMap::new(),
             senders: HashMap::new(),
@@ -66,18 +106,21 @@ impl WifiActor {
             out_queue: Vec::new(),
             device_client,
             to_ap: None,
-            to_slirp: None,
+            gateway,
         }
     }
 
     pub(crate) async fn handle_delete_impl(
         &mut self,
         id: ChipId,
-        _ctx: &mut DynContext<ChipId>,
+        ctx: &mut DynContext<WifiActor>,
     ) -> Result<(), WifiError> {
         if let Some(chip) = self.active_chips.remove(&id) {
             self.senders.remove(&id);
             self.medium.remove(id.0);
+
+            // Notify Gateway
+            self.gateway.on_chip_remove(id, ctx).await;
 
             // Notify DeviceService
             let dc = self.device_client.clone();
@@ -103,30 +146,28 @@ impl WifiActor {
 
     // this is the input router
     pub(crate) async fn process_guest_packet(&mut self, chip_id: u32, packet: bytes::Bytes) {
+        debug!("WifiActor: Packet from Guest (Chip {}) len {}", chip_id, packet.len());
+
         match self.medium.resolve_tx_packet(chip_id, &packet) {
             Ok(tx_state) => {
                 // 1. Ack
                 if let Err(e) = self.medium.ack_frame(chip_id, &tx_state.frame, &mut self.out_queue)
                 {
-                    log::error!("Failed to ack frame: {:?}", e);
+                    warn!("Failed to ack frame: {:?}", e);
                 }
 
                 // 2. Infra (AP/Slirp) routing
                 match tx_state.infra_target {
-                    crate::medium::tx_packet_state::InfraTarget::Ap => {
+                    InfraTarget::Ap => {
+                        debug!("ROUTING: Guest -> AP");
                         if let Some(to_ap) = &self.to_ap {
                             let _ = to_ap.send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()));
                         }
                     }
-                    crate::medium::tx_packet_state::InfraTarget::Slirp => {
-                        if let Some(to_slirp) = &self.to_slirp {
-                            if let Ok(eth_frame) = tx_state.get_ieee80211().to_ieee8023() {
-                                let _ = to_slirp.send(bytes::Bytes::from(eth_frame));
-                            }
-                        }
+                    InfraTarget::Slirp => {
+                        self.route_to_infra(chip_id, tx_state.get_ieee80211()).await
                     }
-                    crate::medium::tx_packet_state::InfraTarget::None => {
-                        // Check for FTM Request (Peer-to-Peer Ranging)
+                    InfraTarget::None => {
                         if tx_state.stations {
                             // Check matching FTM Request
                             // TODO: Avoid parsing if possible, but we need to check Frame payload.
@@ -147,16 +188,16 @@ impl WifiActor {
                                             &initiator.position,
                                             &responder.position,
                                         ) {
-                                            log::info!(
+                                            debug!(
                                                 "Simulated FTM Response from {} to {}",
-                                                peer_id,
-                                                chip_id
+                                                peer_id, chip_id
                                             );
                                             for resp in responses {
                                                 self.out_queue.push((chip_id, resp));
                                             }
                                             // Suppress generic transmission.
-                                            // Act as a Hardware Offload/Medium Interception to ensure ONLY the simulated FTM response is sent.
+                                            // Act as a Hardware Offload/Medium Interception to
+                                            // ensure ONLY the simulated FTM response is sent.
                                             return;
                                         }
                                     }
@@ -174,38 +215,25 @@ impl WifiActor {
                         tx_state.get_ieee80211(),
                         &mut self.out_queue,
                     ) {
-                        log::error!("Error queuing frame: {:?}", e);
+                        warn!("Error queuing frame: {:?}", e);
                     }
                 }
             }
-            Err(e) => log::error!("Error processing packet: {:?}", e),
+            Err(e) => warn!("Error processing packet: {:?}", e),
         }
         self.flush_out_queue();
     }
 
     pub(crate) fn process_ap_packet(&mut self, packet: bytes::Bytes) {
+        debug!("AP_PKT: len {}", packet.len());
         if !packet.is_empty() {
             let _ = self.medium.transmit_from_infra(&packet, &mut self.out_queue);
         }
         self.flush_out_queue();
     }
 
-    pub(crate) fn process_slirp_packet(&mut self, packet: bytes::Bytes) {
-        if let Some(bssid) = self.shared_keys.get_bssid() {
-            if let Ok(ieee80211) = Ieee80211::from_ieee8023(&packet, bssid) {
-                if let Ok(from_ap) = ieee80211.into_from_ap() {
-                    // TryInto is needed, ensure it is available or use strict path
-                    if let Ok(frame_converted) = TryInto::<Ieee80211>::try_into(from_ap) {
-                        if let Ok(bytes) = frame_converted.encode_to_vec() {
-                            let _ = self.medium.transmit_from_infra(
-                                &bytes::Bytes::from(bytes),
-                                &mut self.out_queue,
-                            );
-                        }
-                    }
-                }
-            }
-        }
-        self.flush_out_queue();
+    async fn route_to_infra(&self, chip_id: u32, ieee80211: &Ieee80211) {
+        debug!("ROUTING: Guest -> Infra");
+        self.gateway.send_80211(ChipId(chip_id), ieee80211).await;
     }
 }

@@ -5,30 +5,31 @@ edition = "2021"
 
 [dependencies]
 cxx = "1.0"
-thiserror = "1.0"
 log = "0.4"
 netsim-packets = { path = "../packets" }
+thiserror = "1.0"
 
-bytes = "1"
-futures = "0.3"
-tokio = { version = "1", features = ["full"] }
-netsim-proto = { path = "../proto" }
 actor-framework = { path = "../actor-framework" }
 aes = "0.8.4"
 async-trait = "0.1"
+bytes = "1"
 ccm = "0.5.0"
+futures = "0.3"
+netsim-proto = { path = "../proto" }
 serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
 zerocopy = "0.7"
 
 [build-dependencies]
 cxx-build = "1.0"
 
 [dev-dependencies]
+netsim-testing = { path = "../testing", features = ["testing"] }
 tokio-stream = "0.1"
 
 [dependencies.mockall]
-version = "0.13"
 optional = true
+version = "0.13"
 
 [features]
 testing = ["dep:mockall"]

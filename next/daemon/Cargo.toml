@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+actor-framework = { path = "../actor-framework" }
+bluetooth-actor = { package = "bluetooth", path = "../bluetooth-actor" }
+capture-actor = { path = "../capture-actor" }
+cell = { path = "../cell" }
+chrono = { version = "0.4", features = ["now"] }
 clap = { version = "4.1.8", default-features = false, features = [
   "derive",
   "error-context",
@@ -12,30 +17,22 @@ clap = { version = "4.1.8", default-features = false, features = [
   "usage",
   "env",
 ] }
-chrono = { version = "0.4", features = ["now"] }
-env_logger = "0.10"
-futures = "0.3.21"
-log = "0.4"
-netsim-model = { path = "../model" }
-bluetooth-actor = { package = "bluetooth", path = "../bluetooth-actor" }
 client = { path = "../client" }
 device-actor = { path = "../device-actor" }
-packet-stream = { path = "../packet-stream" }
-uwb = { path = "../uwb" }
-cell = { path = "../cell" }
-actor-framework = { path = "../actor-framework" }
 grpc-server = { path = "../grpc-server" }
-wifi = { path = "../wifi" }
 grpcio = { version = "0.13", default-features = false, features = [
   "protobufv3-codec",
   "openssl",
 ] }
 link-actor = { path = "../link-actor" }
-capture-actor = { path = "../capture-actor" }
-netsim-common = { path = "../common" }
-device-api = { path = "../device-api" }
-tokio = { version = "1.28.2", features = ["full"] }
+log = "0.4"
 named-lock = "0.4.1"
+netsim-common = { path = "../common" }
+netsim-model = { path = "../model" }
+packet-stream = { path = "../packet-stream" }
+tokio = { version = "1.28.2", features = ["full"] }
+uwb-actor = { path = "../uwb-actor" }
+wifi-actor = { path = "../wifi-actor" }
 
 [dev-dependencies]
 

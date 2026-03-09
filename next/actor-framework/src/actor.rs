@@ -1,17 +1,18 @@
 //! # Generic Actor Server
 //!
-//! This module defines the `ResourceActor`, the core component that manages the lifecycle
-//! and state of resources. It implements the "Server" side of the Actor Model, processing
-//! messages sequentially and ensuring exclusive access to the resource store.
+//! This module defines the `ResourceActor`, the core component that manages the
+//! lifecycle and state of resources. It implements the "Server" side of the
+//! Actor Model, processing messages sequentially and ensuring exclusive access
+//! to the resource store.
 
-use crate::client::ResourceClient;
-use crate::context::FrameworkContext;
-use crate::error::FrameworkError;
-use crate::message::ResourceRequest;
-use crate::{ActorLifecycle, ActorService, DynContext, StreamMessage};
 use log::error;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
+
+use crate::{
+    client::ResourceClient, context::FrameworkContext, error::FrameworkError,
+    message::ResourceRequest, ActorLifecycle, ActorService, DynContext, StreamMessage,
+};
 // use tracing::{debug, info, warn};
 
 /// The generic actor that manages a collection of resources.
@@ -24,37 +25,55 @@ use tokio_stream::StreamExt;
 /// processes its own messages *sequentially* in a loop.
 /// ## ResourceActor
 ///
-/// The `ResourceActor<T>` struct is the *server* side of the framework. It delegates
-/// operations to the underlying service `T: ActorService`.
+/// The `ResourceActor<T>` struct is the *server* side of the framework. It
+/// delegates operations to the underlying service `T: ActorService`.
 ///
-/// * **Concurrency model** – each actor processes one message at a time, eliminating data races.
-/// * **Context injection** – a user‑provided `Context` is passed to every lifecycle hook.
+/// * **Concurrency model** – each actor processes one message at a time,
+///   eliminating data races.
+/// * **Context injection** – a user‑provided `Context` is passed to every
+///   lifecycle hook.
 /// * **Uniform API** – works with any resource that implements `ActorService`.
 ///
 /// # Usage Pattern
 ///
 /// The canonical way to create and wire actors is:
 ///
-/// 1.  **Create**: Call `ResourceActor::new()` to get the `actor` (server) and `client` (interface).
-/// 2.  **Wire**: Pass dependencies (other clients) into `actor.run(context)`.
-/// 3.  **Run**: Spawn the actor's run loop in a background task.
+/// 1. **Create**: Call `ResourceActor::new()` to get the `actor` (server) and
+///    `client` (interface).
+/// 2. **Wire**: Pass dependencies (other clients) into `actor.run(context)`.
+/// 3. **Run**: Spawn the actor's run loop in a background task.
 ///
 /// ```rust
-/// use actor_framework::{ActorLifecycle, ActorService, BoxStream, Context, DynContext, ResourceActor};
+/// use actor_framework::{
+///     ActorLifecycle, ActorService, BoxStream, Context, DynContext, ResourceActor,
+/// };
 /// use async_trait::async_trait;
 ///
 /// // Minimal Actor Definition
-/// #[derive(Clone, Debug)] struct MyActor { id: u32 }
-/// #[derive(Debug)] struct MyCreate;
-/// #[derive(Debug)] struct MyUpdate;
-/// #[derive(Debug)] enum MyAction {}
-/// #[derive(Debug)] struct MyError(String);
+/// #[derive(Clone, Debug)]
+/// struct MyActor {
+///     id: u32,
+/// }
+/// #[derive(Debug)]
+/// struct MyCreate;
+/// #[derive(Debug)]
+/// struct MyUpdate;
+/// #[derive(Debug)]
+/// enum MyAction {}
+/// #[derive(Debug)]
+/// struct MyError(String);
 ///
 /// impl std::fmt::Display for MyError {
-///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", self.0) }
+///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "{}", self.0)
+///     }
 /// }
 /// impl std::error::Error for MyError {}
-/// impl From<String> for MyError { fn from(s: String) -> Self { MyError(s) } }
+/// impl From<String> for MyError {
+///     fn from(s: String) -> Self {
+///         MyError(s)
+///     }
+/// }
 ///
 /// #[async_trait]
 /// impl ActorService for MyActor {
@@ -70,7 +89,7 @@ use tokio_stream::StreamExt;
 ///         &mut self,
 ///         id: Option<u32>,
 ///         _: MyCreate,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<u32, Self::Error> {
 ///         self.id = id.unwrap_or(0);
 ///         Ok(self.id)
@@ -78,7 +97,7 @@ use tokio_stream::StreamExt;
 ///     async fn handle_get(
 ///         &self,
 ///         _: u32,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<Option<Self::Entity>, Self::Error> {
 ///         Ok(Some(self.clone()))
 ///     }
@@ -86,14 +105,14 @@ use tokio_stream::StreamExt;
 ///         &mut self,
 ///         _: u32,
 ///         _: MyUpdate,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<Self::Entity, Self::Error> {
 ///         Ok(self.clone())
 ///     }
 ///     async fn handle_delete(
 ///         &mut self,
 ///         _: u32,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<(), Self::Error> {
 ///         Ok(())
 ///     }
@@ -101,26 +120,25 @@ use tokio_stream::StreamExt;
 ///         &mut self,
 ///         _: Option<u32>,
 ///         _: MyAction,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<(), Self::Error> {
 ///         Ok(())
 ///     }
 ///     async fn handle_list(
 ///         &mut self,
-///         _: &mut DynContext<Self::Id>,
+///         _: &mut DynContext<Self>,
 ///     ) -> Result<Vec<MyActor>, Self::Error> {
 ///         Ok(vec![self.clone()])
 ///     }
 /// }
 ///
 /// #[async_trait]
-/// impl ActorLifecycle<u32> for MyActor {
-///     type Error = MyError;
-///     async fn on_start(&mut self, _ctx: &mut DynContext<u32>) {}
-///     async fn on_tick(&mut self, _ctx: &mut DynContext<u32>) {}
-///     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<u32>) {}
-///     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
-///     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<u32>) {}
+/// impl ActorLifecycle for MyActor {
+///     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
+///     async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
+///     async fn on_stream(&mut self, _id: u32, _msg: bytes::Bytes, _ctx: &mut DynContext<Self>) {}
+///     async fn on_stream_closed(&mut self, _id: u32, _ctx: &mut DynContext<Self>) {}
+///     async fn on_task_closed(&mut self, _id: u32, _ctx: &mut DynContext<Self>) {}
 ///     async fn on_shutdown(&mut self) {}
 /// }
 ///
@@ -140,22 +158,24 @@ use tokio_stream::StreamExt;
 pub struct ResourceActor<T: ActorService> {
     receiver: mpsc::Receiver<ResourceRequest<T>>,
     shutdown_rx: oneshot::Receiver<()>,
-    ctx: FrameworkContext<T::Id>,
+    ctx: FrameworkContext<T>,
 }
 
-impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
+impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
     /// Creates a new `ResourceActor` and its associated `ResourceClient`.
     ///
     /// # Arguments
     ///
-    /// * `buffer_size` - The capacity of the MPSC channel. If the channel is full,
-    ///   calls to the client will wait until there is space.
+    /// * `buffer_size` - The capacity of the MPSC channel. If the channel is
+    ///   full, calls to the client will wait until there is space.
     ///
     /// # Returns
     ///
     /// A tuple containing:
-    /// 1. The `ResourceActor` instance (the server), which must be run via `.run(actor)`.
-    /// 2. The `ResourceClient` instance, which can be cloned and shared to send requests.
+    /// 1. The `ResourceActor` instance (the server), which must be run via
+    ///    `.run(actor)`.
+    /// 2. The `ResourceClient` instance, which can be cloned and shared to send
+    ///    requests.
     pub fn new(channel_size: usize) -> (Self, ResourceClient<T>) {
         let (sender, receiver) = mpsc::channel(channel_size);
         let (ctx, shutdown_rx) = FrameworkContext::new();
@@ -164,18 +184,24 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
         (actor, client)
     }
 
-    /// Runs the actor's event loop, processing messages until the channel closes.
+    /// Runs the actor's event loop, processing messages until the channel
+    /// closes.
     ///
     /// # Context Injection
-    /// The `context` argument is injected into every service hook. This allows services
-    /// to access external dependencies (like other clients) that were created *after*
-    /// the actor was instantiated but *before* the loop started.
+    /// The `context` argument is injected into every service hook. This allows
+    /// services to access external dependencies (like other clients) that
+    /// were created *after* the actor was instantiated but *before* the
+    /// loop started.
     pub async fn run(mut self, mut actor: T) {
         actor.on_start(&mut self.ctx).await;
 
         loop {
             // Move out of select! to avoid borrow conflicts
             let stream_fut = self.ctx.streams.next();
+            // We need to poll the timers
+            // If the delay queue is empty, peek() returns None, which is fine.
+            let timer_fut = self.ctx.timers.next();
+
             tokio::select! {
                 Some(msg) = self.receiver.recv() => {
                     Self::handle_message(&mut actor, msg, &mut self.ctx).await;
@@ -185,6 +211,10 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
                 }
                 Some((id, msg_opt)) = stream_fut => {
                     Self::handle_stream_event(&mut actor, id, msg_opt, &mut self.ctx).await;
+                }
+                Some(expired) = timer_fut => {
+                    let task = expired.into_inner();
+                    task(&mut actor, &mut self.ctx);
                 }
                 Some(res) = self.ctx.tasks.join_next() => {
                     match res {
@@ -204,7 +234,7 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
         actor: &mut T,
         id: T::Id,
         msg_opt: Option<StreamMessage>,
-        ctx: &mut DynContext<<T as ActorService>::Id>,
+        ctx: &mut DynContext<T>,
     ) {
         match msg_opt {
             Some(msg) => actor.on_stream(id, msg, ctx).await,
@@ -212,11 +242,7 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
         }
     }
 
-    async fn handle_task_closed(
-        actor: &mut T,
-        id: T::Id,
-        ctx: &mut DynContext<<T as ActorService>::Id>,
-    ) {
+    async fn handle_task_closed(actor: &mut T, id: T::Id, ctx: &mut DynContext<T>) {
         actor.on_task_closed(id, ctx).await;
     }
 
@@ -224,11 +250,7 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
         actor.on_shutdown().await;
     }
 
-    async fn handle_message(
-        actor: &mut T,
-        msg: ResourceRequest<T>,
-        ctx: &mut DynContext<<T as ActorService>::Id>,
-    ) {
+    async fn handle_message(actor: &mut T, msg: ResourceRequest<T>, ctx: &mut DynContext<T>) {
         match msg {
             ResourceRequest::Create { params, id, respond_to } => {
                 // Pass the optional ID to the service handle_create method
@@ -272,6 +294,10 @@ impl<T: ActorService + ActorLifecycle<T::Id>> ResourceActor<T> {
                     .await
                     .map_err(|e| FrameworkError::ServiceError(Box::new(e)));
                 let _ = respond_to.send(result);
+            }
+            ResourceRequest::Shutdown { respond_to } => {
+                ctx.shutdown();
+                let _ = respond_to.send(Ok(()));
             }
         }
     }

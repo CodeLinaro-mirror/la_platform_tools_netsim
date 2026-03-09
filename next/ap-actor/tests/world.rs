@@ -1,15 +1,16 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use actor_framework::ResourceActor;
-use ap_actor::shared::SharedKeyStore;
-use ap_actor::{ApActor, ApClient, ApConfig};
-
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::{
-    management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
-    FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
-};
 use std::time::Duration;
+
+use actor_framework::ResourceActor;
+use ap_actor::{netsim_model::chip::WifiMode, shared::SharedKeyStore, ApActor, ApClient, ApConfig};
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        management_subtype, AssociationRequestFixedFields, BeaconFixedFields, BeaconFrameHeader,
+        FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
+    },
+};
 use tokio::sync::mpsc;
 use zerocopy::{IntoBytes, Ref, U16};
 
@@ -30,7 +31,7 @@ pub struct ApWorld {
 
 impl ApWorld {
     pub async fn new() -> Self {
-        let _ = env_logger::builder().try_init();
+        netsim_testing::logger::setup(None);
         let ap_actor_impl = ApActor::new();
         let (runner, client_base) = ResourceActor::new(32);
         let client = ApClient::new(client_base);
@@ -85,7 +86,7 @@ impl ApWorld {
             ssid: ssid.to_string(),
             bssid: MacAddr::new([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]),
             channel: 6,
-            hw_mode: "g".to_string(),
+            hw_mode: WifiMode::G,
 
             wpa_passphrase,
             beacon_interval: 100,
@@ -109,7 +110,7 @@ impl ApWorld {
             ssid: ssid.to_string(),
             bssid: MacAddr::new(generate_random_mac()),
             channel: 36,
-            hw_mode: "ax".to_string(),
+            hw_mode: WifiMode::Ax,
 
             wpa_passphrase: None,
             beacon_interval: 100,

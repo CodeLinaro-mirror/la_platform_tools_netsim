@@ -24,8 +24,6 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "ap_actor",
     edition = "2021",
-    enable_clippy = False,
-    enable_unit_test = False,
     proc_macro_deps = [
         "@async-trait",
     ],
@@ -84,6 +82,7 @@ rust_test(
         "//next/actor-framework:testing",
         "//next/model",
         "//next/packets:testing",
+        "//next/testing",
         "@bytes",
         "@env_logger",
         "@futures",

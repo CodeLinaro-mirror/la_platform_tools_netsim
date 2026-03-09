@@ -1,17 +1,20 @@
 // Copyright 2026 The Android Open Source Project
 
-use netsim_packets::ethernet::MacAddr;
-use netsim_packets::ieee80211::{
-    eapol::{
-        EapHeader, EapolHeader, EAPOL_TYPE_PACKET, EAPOL_TYPE_START, EAP_CODE_REQUEST,
-        EAP_CODE_RESPONSE, EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
+use netsim_packets::{
+    ethernet::MacAddr,
+    ieee80211::{
+        eapol::{
+            EapHeader, EapolHeader, EAPOL_TYPE_PACKET, EAPOL_TYPE_START, EAP_CODE_REQUEST,
+            EAP_CODE_RESPONSE, EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
+        },
+        FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
     },
-    FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
+    llc::{control_field, sap, LlcSnapHeader},
 };
-use netsim_packets::llc::{control_field, sap, LlcSnapHeader};
 use zerocopy::{IntoBytes, U16};
 
 mod world;
+use ap_actor::netsim_model::chip::WifiMode;
 use world::ApWorld;
 
 fn build_eapol_frame(
@@ -69,7 +72,7 @@ async fn test_eap_mock_authentication_success() {
         ssid: "EntAP".to_string(),
         bssid: "02:00:00:00:00:10".parse().unwrap(),
         channel: 36,
-        hw_mode: "ax".to_string(),
+        hw_mode: WifiMode::Ax,
         wpa_passphrase: None,
         beacon_interval: 100,
         country_code: None,

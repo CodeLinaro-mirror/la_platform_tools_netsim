@@ -11,7 +11,7 @@ netsim_rust_library(
     crate_name = "hostapd_rs",
     crate_root = "src/lib.rs",
     edition = "2021",
-    enable_clippy = False,
+    # Doc tests fail to link against hostapd_c_lib symbols
     enable_doc_test = False,
     deps = [
         "//next/common",

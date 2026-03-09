@@ -3,10 +3,14 @@
 pub mod client;
 pub mod error;
 pub mod ftm;
+pub mod gateway;
 pub mod lifecycle;
 pub mod medium;
 pub mod service;
+pub mod slirp_gateway;
 pub mod stats;
+#[cfg(target_os = "linux")]
+pub mod tap_gateway;
 pub mod wifi_actor;
 
 use actor_framework::ResourceActor;

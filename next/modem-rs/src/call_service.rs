@@ -1,12 +1,13 @@
 // src/call_service.rs
 
+use std::sync::{Arc, Mutex};
+
 use crate::{
     modem::ModemImpl,
     parser::Command,
     traits::CommandExecutor,
     types::{CallbacksExt, CommandAction, ExecutionResult, HandledCommand, ModemId},
 };
-use std::sync::{Arc, Mutex};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum CallDirection {

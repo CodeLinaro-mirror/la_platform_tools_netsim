@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    fs, io,
+    net::{SocketAddr, UdpSocket},
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
+
 use bytes::Bytes;
-use etherparse::EtherType;
-use etherparse::LinkHeader::Ethernet2;
-use etherparse::{NetHeaders, PacketBuilder, PacketHeaders, PayloadSlice, TransportHeader};
-use libslirp_rs::libslirp::LibSlirp;
-use libslirp_rs::libslirp_config::SlirpConfig;
-use std::fs;
-use std::io;
-use std::net::{SocketAddr, UdpSocket};
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
+use etherparse::{
+    EtherType, LinkHeader::Ethernet2, NetHeaders, PacketBuilder, PacketHeaders, PayloadSlice,
+    TransportHeader,
+};
+use libslirp_rs::{libslirp::LibSlirp, libslirp_config::SlirpConfig};
 
 const PAYLOAD: &[u8; 23] = b"Hello, UDP echo server!";
 const PAYLOAD_PONG: &[u8; 23] = b"Hello, UDP echo client!";

@@ -3,17 +3,24 @@
 // src/streams.rs - Multi-transport connection manager
 //=============================================================================
 
-use crate::error::{PacketStreamError, Result};
-use crate::transport::traits::{PacketSink, PacketStream, TransportListener};
-use crate::transport::{ListenerConfig, TransportType};
-use crate::types::ChipInfo;
-use crate::types::StreamAddress;
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use futures::SinkExt;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use tokio::sync::{broadcast, mpsc};
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
+};
+
+use crate::{
+    error::{PacketStreamError, Result},
+    transport::{
+        traits::{PacketSink, PacketStream, TransportListener},
+        ListenerConfig, TransportType,
+    },
+    types::{ChipInfo, StreamAddress},
+};
 
 /// Init info message for transport handshake.
 #[derive(Debug, Clone, Serialize, Deserialize)]

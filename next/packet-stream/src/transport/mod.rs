@@ -21,19 +21,21 @@ pub mod windows;
 pub(crate) mod adapters;
 
 // Re-export public API only
+use std::path::PathBuf;
+
+use async_trait::async_trait;
 #[cfg(all(unix, feature = "dual_fd"))]
 pub use dual_fd::{DualFdConfig, DualFdListener};
-pub use types::{ListenerConfig, TransportType};
-
-use crate::error::{PacketStreamError, Result, SocketError};
-use crate::types::ChipInfo;
-use async_trait::async_trait;
-use futures::SinkExt;
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use traits::{PacketSink, PacketStream, TransportListener};
+pub use types::{ListenerConfig, TransportType};
+
+use crate::{
+    error::{PacketStreamError, Result, SocketError},
+    types::ChipInfo,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SocketType {

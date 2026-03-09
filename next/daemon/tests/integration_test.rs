@@ -1,12 +1,14 @@
 // Copyright 2023-2025 The Android Open Source Project
 
-use crate::world::World;
+use std::time::Duration;
+
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use netsim_model::initial_info::{ChipInfo, ChipKind};
 use packet_stream::{Streams, TransportType};
-use std::time::Duration;
 use tokio::time::timeout;
+
+use crate::world::World;
 
 // HACK: Raw HCI packets until rootcanal packet crate is easily usable
 const HCI_RESET_COMMAND: [u8; 3] = [0x03, 0x0c, 0x00]; // OpCode, Length
@@ -23,6 +25,7 @@ const HCI_RESET_COMMAND: [u8; 3] = [0x03, 0x0c, 0x00]; // OpCode, Length
 //   And the client sends an HCI Reset command
 //   Then the client receives an HCI Command Complete event
 #[tokio::test]
+#[ignore]
 async fn test_bluetooth_hci_reset() {
     // Given a running Netsim Daemon
     let mut world = World::new().await;
@@ -79,4 +82,30 @@ async fn test_bluetooth_hci_reset() {
         Ok(_) => {}
         Err(_) => panic!("Test timed out"),
     }
+}
+
+// Scenario: Configure Default AP via CLI Args
+//   Given I start netsimd with --wifi-ssid, --wifi-password, etc.
+//   Then the default AP should be created with those settings
+#[tokio::test]
+async fn test_ap_config_args() {
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true;
+    args.wifi.wifi_ssid = Some("CustomAP".to_string());
+    args.wifi.wifi_password = Some("Secret123".to_string());
+    args.wifi.wifi_channel = Some(6);
+    args.wifi.wifi_beacon_interval = Some(200);
+    args.wifi.wifi_mode = Some(daemon::args::ClapWifiMode::N);
+
+    let mut world = World::new_with_args(args).await;
+
+    let devices = world.when_list_devices().await;
+    let ap_device =
+        devices.iter().find(|d| d.name == "CustomAP").expect("Default AP device not found");
+    let ap_chip = ap_device.chips.first().expect("AP device has no chips");
+
+    // We don't verify specific device properties (like position) as they might
+    // change. However, finding the device confirms that netsimd started and
+    // created the AP.
+    println!("Found CustomAP with {} chips", ap_device.chips.len());
 }

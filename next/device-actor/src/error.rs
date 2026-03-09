@@ -3,8 +3,8 @@
 //! Device Errors
 //!
 //! This module defines the error types specific to the Device actor and client.
-//! These errors cover issues arising from actor communication, invalid arguments,
-//! and other device-specific failure modes.
+//! These errors cover issues arising from actor communication, invalid
+//! arguments, and other device-specific failure modes.
 
 use thiserror::Error;
 

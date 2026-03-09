@@ -1,12 +1,15 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::ranging;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use client::DeviceClient;
 use netsim_model::chip::{Chip, ChipId};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+
+use crate::ranging;
 
 /// A thread-safe map of chip states.
 pub type ChipMap = Arc<Mutex<HashMap<ChipId, Chip>>>;
@@ -24,7 +27,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
         source_id: u32,
         destination_id: u32,
         _packet: &[u8],
-        _phy: Phy,
+        phy: Phy,
         tx_power: i32,
     ) -> Option<i32> {
         let src_id = source_id.into();
@@ -34,6 +37,15 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
         let dst_chip = chips.get(&dst_id);
 
         if let (Some(src), Some(dst)) = (src_chip, dst_chip) {
+            let is_enabled = |chip: &Chip| match phy {
+                Phy::LowEnergy => chip.is_le_enabled(),
+                _ => chip.is_classic_enabled(),
+            };
+
+            if !is_enabled(src) || !is_enabled(dst) {
+                return None;
+            }
+
             let dist = ranging::distance(&src.position, &dst.position);
 
             // Check for link override
@@ -45,7 +57,13 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
             Some(rssi)
         } else {
             // If one of the chips is missing, default to tx_power.
-            // This can happen during startup/shutdown or if a chip is not yet fully registered.
+            // This can happen during startup/shutdown or if a chip is not yet fully
+            // registered.
+            if src_chip.is_none() {
+                log::warn!("on_send_ll: Missing src chip {src_id}");
+            } else {
+                log::warn!("on_send_ll: Missing dst chip {dst_id}");
+            }
             Some(tx_power)
         }
     }
@@ -63,29 +81,23 @@ pub struct BluetoothActor {
     pub(crate) chips: ChipMap,
     /// The client for interacting with the device actor.
     pub(crate) device_client: DeviceClient,
-
-    /// Map of active Bluetooth Entities (actor state).
-    pub(crate) entities: HashMap<ChipId, crate::internal_chip::InternalChip>,
-
-    /// The self-reference client (for calling actions on itself if needed).
-    #[allow(dead_code)]
-    pub(crate) client: Option<crate::BluetoothClient>,
 }
 
 impl BluetoothActor {
     /// Creates a new BluetoothActor context.
-    pub fn new(device_client: DeviceClient, client: crate::BluetoothClient) -> Self {
+    pub fn new(device_client: DeviceClient) -> Self {
         let chips = Arc::new(Mutex::new(HashMap::new()));
         let rootcanal = Rootcanal::new(Box::new(RootcanalCallbacksImpl { chips: chips.clone() }));
-        Self { rootcanal, chips, device_client, entities: HashMap::new(), client: Some(client) }
+        Self { rootcanal, chips, device_client }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use netsim_model::chip::{Chip, ChipId};
+    use netsim_model::chip::{Chip, ChipId, ChipVariant};
     use rootcanal::Phy;
+
+    use super::*;
 
     #[test]
     fn test_on_send_ll_link_override() {
@@ -106,9 +118,8 @@ mod tests {
         chips.lock().unwrap().insert(chip1_id, chip1.clone());
         chips.lock().unwrap().insert(chip2_id, chip2.clone());
 
-        // Test without link (should use distance-based RSSI)
-        // Distance 0 -> RSSI should be close to tx_power (or whatever the model says)
-        // Let's just check it returns *something*
+        // Test without link (should use distance-based RSSI).
+        // Distance 0 should result in a valid RSSI value.
         let rssi_default = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
         assert!(rssi_default.is_some());
 
@@ -119,5 +130,40 @@ mod tests {
         // Test with link
         let rssi_override = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
         assert_eq!(rssi_override, Some(-50));
+    }
+
+    // Scenario: Block traffic when destination radio is disabled
+    //   Given a source chip with enabled radio
+    //   And a destination chip with disabled LE radio
+    //   When the source sends a packet
+    //   Then the packet is blocked (returns None)
+    #[test]
+    fn test_on_send_ll_disabled_destination() {
+        // Given a source chip with enabled radio
+        let chips = Arc::new(Mutex::new(HashMap::new()));
+        let callbacks = RootcanalCallbacksImpl { chips: chips.clone() };
+
+        let chip1_id = ChipId(1);
+        let chip2_id = ChipId(2);
+
+        let mut chip1 = Chip::default();
+        chip1.id = 1;
+
+        // And a destination chip with disabled LE radio
+        let mut chip2 = Chip::default();
+        chip2.id = 2;
+        chip2.variant = Some(ChipVariant::Bluetooth(netsim_model::chip::Bluetooth {
+            low_energy: netsim_model::chip::Radio { state: Some(false), ..Default::default() },
+            classic: Default::default(),
+        }));
+
+        chips.lock().unwrap().insert(chip1_id, chip1.clone());
+        chips.lock().unwrap().insert(chip2_id, chip2.clone());
+
+        // When the source sends an LE packet
+        let rssi = callbacks.on_send_ll(1, 2, &[], Phy::LowEnergy, 0);
+
+        // Then the packet is blocked (returns None)
+        assert!(rssi.is_none());
     }
 }

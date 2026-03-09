@@ -25,5 +25,4 @@ pub mod packet_streamer_grpc;
 pub mod startup;
 pub mod stats;
 
-pub use protobuf;
-pub use protobuf::well_known_types::empty;
+pub use protobuf::{self, well_known_types::empty};

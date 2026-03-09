@@ -152,7 +152,8 @@ impl From<ProtocolError> for PacketStreamError {
     }
 }
 
-// Note: PacketStreamError implements std::error::Error for compatibility with error handling libraries
+// Note: PacketStreamError implements std::error::Error for compatibility with
+// error handling libraries
 
 /// Result type alias for PacketStream operations
 pub type Result<T> = std::result::Result<T, PacketStreamError>;

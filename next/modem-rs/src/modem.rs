@@ -1,16 +1,19 @@
-use crate::call_service::CallService;
-use crate::data_service::DataService;
-use crate::misc_service::MiscService;
-use crate::modem_network_simulator::ModemNetworkSimulator;
-use crate::network_service::NetworkService;
-use crate::parser::Command;
-use crate::sim_service::SimService;
-use crate::sms_service::SmsService;
-use crate::stk_service::StkService;
-use crate::sup_service::SupService;
-use crate::traits::CommandExecutor;
-use crate::types::{Callbacks, CallbacksExt, CommandAction, ExecutionResult, ModemId};
 use std::sync::{Arc, Mutex, Weak};
+
+use crate::{
+    call_service::CallService,
+    data_service::DataService,
+    misc_service::MiscService,
+    modem_network_simulator::ModemNetworkSimulator,
+    network_service::NetworkService,
+    parser::Command,
+    sim_service::SimService,
+    sms_service::SmsService,
+    stk_service::StkService,
+    sup_service::SupService,
+    traits::CommandExecutor,
+    types::{Callbacks, CallbacksExt, CommandAction, ExecutionResult, ModemId},
+};
 
 /// Represents a single modem device.
 pub struct ModemImpl {

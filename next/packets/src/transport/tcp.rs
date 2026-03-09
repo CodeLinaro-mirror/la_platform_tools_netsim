@@ -2,11 +2,12 @@
 
 //! Defines the TCP (Transmission Control Protocol) header using `zerocopy`.
 
-use crate::utils::general::ParseResult;
 use zerocopy::{
     byteorder::NetworkEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Ref, Unaligned, U16,
     U32,
 };
+
+use crate::utils::general::ParseResult;
 
 /// Represents the TCP header.
 #[derive(FromBytes, IntoBytes, Unaligned, KnownLayout, Immutable, Debug)]
@@ -20,13 +21,16 @@ pub struct TcpHeader {
     pub sequence_num: U32<NetworkEndian>,
     /// The acknowledgment number, if the ACK flag is set.
     pub ack_num: U32<NetworkEndian>,
-    /// A combined field containing the data offset, reserved bits, and TCP flags.
+    /// A combined field containing the data offset, reserved bits, and TCP
+    /// flags.
     pub data_offset_reserved_flags: U16<NetworkEndian>,
-    /// The size of the receive window, which specifies the number of window size units.
+    /// The size of the receive window, which specifies the number of window
+    /// size units.
     pub window_size: U16<NetworkEndian>,
     /// The checksum of the TCP header and data.
     pub checksum: U16<NetworkEndian>,
-    /// If the URG flag is set, this field is an offset from the sequence number indicating the last urgent data byte.
+    /// If the URG flag is set, this field is an offset from the sequence number
+    /// indicating the last urgent data byte.
     pub urgent_ptr: U16<NetworkEndian>,
 }
 
@@ -54,7 +58,8 @@ impl TcpHeader {
         Some((header, &bytes[header_len..]))
     }
 
-    /// Returns the Data Offset, which is the size of the TCP header in 32-bit words.
+    /// Returns the Data Offset, which is the size of the TCP header in 32-bit
+    /// words.
     pub fn data_offset(&self) -> u8 {
         (self.data_offset_reserved_flags.get() >> 12) as u8
     }

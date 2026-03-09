@@ -1,6 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-//! Common utility types and functions for the `packets_zc` crate.
+//! Common utility types and functions for the `packets` crate.
 
 use zerocopy::Ref;
 

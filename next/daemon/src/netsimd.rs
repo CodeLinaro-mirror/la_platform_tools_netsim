@@ -1,34 +1,45 @@
 // Copyright 2023-2025 The Android Open Source Project // touch
 
-use crate::args::Args;
-use crate::ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig};
-use crate::logger;
-use crate::platform;
-use crate::version::get_version;
+use std::{
+    collections::HashMap,
+    env, fs, io,
+    path::PathBuf,
+    sync::{atomic::AtomicU32, Arc},
+    time::Duration,
+};
+
 use client::{CaptureClient, DeviceClient};
-use common::system::netsimd_temp_dir;
-use common::util::os_utils::{get_instance_name, redirect_std_stream};
+use common::{
+    system::netsimd_temp_dir,
+    util::os_utils::{get_instance_name, redirect_std_stream},
+};
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
+use link_api::LinkClient;
 use log::{error, info, warn};
-use netsim_model::chip::{
-    ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, DeviceParams,
-    NetworkKind, NetworkParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
-    UwbCreate, WifiCreate,
+use netsim_model::{
+    chip::{
+        ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
+        ChipKindParams, DeviceParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
+        UwbCreate, WifiCreate,
+    },
+    initial_info::ChipInfo,
+    set_if_some,
 };
-use netsim_model::initial_info::{ChipInfo, ChipKind};
-use packet_stream::transport::traits::{PacketSink, PacketStream};
-use packet_stream::{StreamAddress, Streams, TransportType};
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicU32;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::task::JoinSet;
+use packet_stream::{
+    transport::traits::{PacketSink, PacketStream},
+    StreamAddress, Streams, TransportType,
+};
+use slirp_actor::SlirpClient;
+use tokio::{sync::mpsc, task::JoinSet};
+
+use crate::{
+    args::Args,
+    ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig},
+    logger, platform,
+    version::get_version,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum RunResult {
@@ -52,10 +63,11 @@ pub enum StartUpMode {
 #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
 fn cuttlefish_init() {
     use rustutils::inherited_fd;
-    // SAFETY: This function must be called before any other code that might take ownership of
-    // file descriptors. `init_once` takes ownership of all open file descriptors except for
-    // the stdio streams. Calling it after other parts of the program has already acquired
-    // ownership of file descriptors can lead to double-frees or other memory corruption issues.
+    // SAFETY: This function must be called before any other code that might take
+    // ownership of file descriptors. `init_once` takes ownership of all open
+    // file descriptors except for the stdio streams. Calling it after other
+    // parts of the program has already acquired ownership of file descriptors
+    // can lead to double-frees or other memory corruption issues.
     unsafe {
         inherited_fd::init_once().expect("inherited_fds");
     }
@@ -79,6 +91,7 @@ async fn handle_new_connection(
         visible: true,
         position: Default::default(),
         orientation: Default::default(),
+        builtin: false,
     };
 
     let mut chip = match chip_info.chip {
@@ -98,18 +111,18 @@ async fn handle_new_connection(
         chip.address = chip.id.clone();
     }
 
-    let network_params = match chip.kind {
-        ChipKind::BLUETOOTH => NetworkParams::Bluetooth(BluetoothCreate {
+    let chip_kind_params = match ChipKind::from(chip.kind) {
+        ChipKind::BLUETOOTH => ChipKindParams::Bluetooth(BluetoothCreate {
             address: chip.address.clone(),
             bt_properties: Default::default(),
             mode: BluetoothMode::Device(DeviceParams {}),
         }),
-        ChipKind::UWB => NetworkParams::Uwb(UwbCreate::default()),
-        ChipKind::WIFI => NetworkParams::Wifi(WifiCreate::default()),
-        ChipKind::AP => NetworkParams::Ap(ApCreate::default()),
-        ChipKind::CELL => NetworkParams::Cell(CellCreate::default()),
-        _ => {
-            error!("Unsupported chip kind: {:?}", chip.kind);
+        ChipKind::UWB => ChipKindParams::Uwb(UwbCreate::default()),
+        ChipKind::WIFI => ChipKindParams::Wifi(WifiCreate::default()),
+        ChipKind::AP => ChipKindParams::Ap(ApCreate::default()),
+        ChipKind::CELLULAR => ChipKindParams::Cell(CellCreate::default()),
+        kind => {
+            error!("Unsupported chip kind: {:?}", kind);
             return;
         }
     };
@@ -118,7 +131,7 @@ async fn handle_new_connection(
         name: chip.name.clone(),
         manufacturer: chip.manufacturer.clone(),
         product_name: chip.product_name.clone(),
-        network_params,
+        chip_kind_params,
     };
 
     // Convert packet_stream types to netsim_model types
@@ -151,6 +164,7 @@ async fn handle_new_connection(
 }
 
 #[cfg(unix)]
+#[allow(dead_code)]
 async fn setup_uds_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
@@ -248,6 +262,11 @@ pub struct NetsimDaemon {
     args: Args,
     /// The gRPC server instance (kept alive).
     _grpc_server: Option<grpcio::Server>,
+    /// The DeviceActor task handle.
+    device_task: tokio::task::JoinHandle<()>,
+    link_client: Box<dyn LinkClient>,
+    slirp_client: Option<SlirpClient>,
+    chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
 }
 
 impl NetsimDaemon {
@@ -260,7 +279,8 @@ impl NetsimDaemon {
     ///
     /// Returns:
     /// - `Ok(StartUpMode::Owner)`: Daemon instance, lock acquired.
-    /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not acquired.
+    /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not
+    ///   acquired.
     /// - `Err(RunResult::InitializationError)`: Fatal error.
     pub async fn new() -> Result<StartUpMode, RunResult> {
         let discovery_dir = crate::ini_file::get_discovery_directory();
@@ -282,7 +302,7 @@ impl NetsimDaemon {
         #[cfg(all(target_os = "linux", feature = "cuttlefish"))]
         cuttlefish_init();
 
-        logger::init("netsim", true);
+        logger::init("netsim", args.verbose);
 
         info!("netsim startup");
 
@@ -293,6 +313,30 @@ impl NetsimDaemon {
         info!("Artifacts: {:?}", netsimd_temp_dir());
         // Log all args
         info!("{args:#?}");
+
+        // Resolve TAP configuration early to validate permissions/availability.
+        #[cfg(target_os = "linux")]
+        let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
+            if args.wifi.wifi_cvd_tap {
+                Some("cvd-etap-%02d".to_string())
+            } else {
+                None
+            }
+        });
+        #[cfg(not(target_os = "linux"))]
+        let wifi_tap: Option<String> = None;
+
+        // Pre-check TAP permissions if configured.
+        // We do this BEFORE redirection so the user can see the error in the console.
+        #[cfg(target_os = "linux")]
+        if let Some(ref tap_config) = wifi_tap {
+            if let Err(e) = wifi_actor::tap_gateway::TapGateway::preflight_check(tap_config) {
+                return Err(RunResult::InitializationError(format!(
+                    "TAP configuration failed: {}",
+                    e
+                )));
+            }
+        }
 
         if !args.logtostderr {
             if let Err(err) =
@@ -334,7 +378,7 @@ impl NetsimDaemon {
     async fn initialize_primary_daemon(
         ini_guard: IniFileGuard,
         args: Args,
-        runtime_dir: PathBuf,
+        _runtime_dir: PathBuf,
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
         let ini_path = ini_guard.path();
@@ -351,9 +395,6 @@ impl NetsimDaemon {
         // Initialize listeners (UDS, gRPC).
         let mut listener_addresses = HashMap::new();
         let mut streams = Streams::new();
-
-        #[cfg(unix)]
-        setup_uds_listener(&mut streams, &mut listener_addresses, &runtime_dir).await?;
 
         // Setup Link Server
         let (link_runner, link_client) = link_actor::new();
@@ -393,14 +434,14 @@ impl NetsimDaemon {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
 
-        // Even if stale file removal failed, we can proceed as ini_guard.write will overwrite.
+        // Even if stale file removal failed, we can proceed as ini_guard.write will
+        // overwrite.
         ini_guard.write(&ini_data).map_err(init_error)?;
         info!("Wrote to INI file {}", ini_path.display());
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
-        let bt_actor_state =
-            bluetooth_actor::BluetoothActor::new(device_client.clone(), bt_client.clone());
+        let bt_actor_state = bluetooth_actor::BluetoothActor::new(device_client.clone());
 
         // Setup Wifi Server (and dependencies: AP)
         // Setup Slirp Actor
@@ -413,15 +454,32 @@ impl NetsimDaemon {
 
         // Setup Wifi Actor
         let (wifi_runner, wifi_client) = wifi_actor::new();
+        // Initialize wifi_tap configuration.
+        // If --wifi-cvd-tap is set, it implies explicit "cvd-etap-%02d" pattern for
+        // pooling. If --wifi-tap is set, it overrides everything.
+        #[cfg(target_os = "linux")]
+        let wifi_tap = args.wifi.wifi_tap.clone().or_else(|| {
+            if args.wifi.wifi_cvd_tap {
+                Some("cvd-etap-%02d".to_string())
+            } else {
+                None
+            }
+        });
+        #[cfg(not(target_os = "linux"))]
+        let wifi_tap: Option<String> = None;
+
+        // TAP preflight check is now done in `new_with_dirs` before lock acquisition.
+
         let wifi_actor_state = wifi_actor::WifiActor::new(
             Some(Arc::new(ap_client.clone())),
-            Some(slirp_client),
+            Some(slirp_client.clone()),
             device_client.clone(),
+            wifi_tap,
         );
 
         // Setup Uwb Server
-        let (uwb_runner, uwb_client) = uwb::new();
-        let uwb_actor = uwb::UwbActor::new(device_client.clone());
+        let (uwb_runner, uwb_client) = uwb_actor::new();
+        let uwb_actor = uwb_actor::UwbActor::new(device_client.clone());
 
         // Setup Cell Server
         // TODO: Replace with real modem network.
@@ -430,27 +488,39 @@ impl NetsimDaemon {
         let cell_server = cell::Server::new(device_client.clone(), cell_controller);
 
         // Prepare chip clients map for DeviceServer
-        let mut chip_clients: HashMap<NetworkKind, Box<dyn ChipClient>> = HashMap::new();
-        chip_clients.insert(NetworkKind::Bluetooth, Box::new(bt_client.clone()));
-        chip_clients.insert(NetworkKind::Wifi, Box::new(wifi_client.clone()));
-        chip_clients.insert(NetworkKind::Uwb, Box::new(uwb_client.clone()));
-        chip_clients.insert(NetworkKind::Cell, Box::new(cell_client.clone()));
-        chip_clients.insert(NetworkKind::Ap, Box::new(ap_client.clone()));
+        let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
+        chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
+        chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
+        chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
+        chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
+        chip_clients.insert(ChipKind::AP, Box::new(ap_client.clone()));
 
         // Setup Link Actor State
         // Create a new map for LinkActor.
         // We need to inject ChipClients into LinkActor so it can propagate link changes
         // (like RSSI updates) to the underlying radio actors (e.g., BluetoothActor).
-        let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k.into(), v.clone())).collect();
+        let link_chip_clients = chip_clients.iter().map(|(&k, v)| (k, v.clone())).collect();
         let link_actor_state = link_actor::LinkActor::new(link_chip_clients);
 
+        let (startup_timeout, idle_timeout) = if args.no_shutdown {
+            (None, None)
+        } else {
+            (
+                Some(args.startup_timeout.map_or(Duration::from_secs(15), Duration::from_millis)),
+                Some(
+                    args.idle_shutdown_timeout
+                        .map_or(Duration::from_secs(0), Duration::from_millis),
+                ),
+            )
+        };
+
         let device_actor_state = device_actor::DeviceActor::new(
-            chip_clients,
+            chip_clients.clone(),
             next_chip_id.clone(),
             Some(Arc::new(capture_client.clone())),
             Box::new(link_client.clone()),
-            None,
-            Some(std::time::Duration::from_secs(15)),
+            startup_timeout,
+            idle_timeout,
         );
 
         // Spawn server tasks
@@ -459,21 +529,35 @@ impl NetsimDaemon {
         join_set.spawn(wifi_runner.run(wifi_actor_state));
         join_set.spawn(ap_runner.run(ap_actor_state));
         join_set.spawn(slirp_runner.run(slirp_actor_state));
-        join_set.spawn(uwb_runner.run(uwb_actor));
-        join_set.spawn(cell_runner.run(cell_server));
-        join_set.spawn(device_runner.run(device_actor_state));
-        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
+        join_set.spawn(async move {
+            cell_runner.run(cell_server).await;
+        });
         join_set.spawn(link_runner.run(link_actor_state));
+        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::default()));
+        join_set.spawn(uwb_runner.run(uwb_actor));
+
+        // Spawn DeviceActor separately
+        let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP
-        device_client
-            .create_device(*Box::new(device_api::DeviceCreate::default_ap()))
-            .await
-            .expect("Failed to create default AP");
+        let mut device_create = device_api::DeviceCreate::default_ap(args.wifi.wifi_ssid.clone());
+
+        // Apply overrides from args
+        if let device_api::api::Chip::Ap(ref mut ap) = device_create.chip.chip {
+            set_if_some!(ap.wpa_passphrase, args.wifi.wifi_password.clone(), Some);
+            set_if_some!(ap.channel, args.wifi.wifi_channel);
+            set_if_some!(ap.beacon_interval, args.wifi.wifi_beacon_interval);
+            set_if_some!(ap.hw_mode, args.wifi.wifi_mode, Into::into);
+        }
+
+        device_client.create_device(device_create).await.expect("Failed to create default AP");
 
         if args.pcap {
             capture_client.set_default_capture(true).await.expect("Failed to set default capture");
         }
+
+        // Clone chip_clients for NetsimDaemon
+        let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();
 
         Ok(StartUpMode::Owner(
             NetsimDaemon {
@@ -485,6 +569,10 @@ impl NetsimDaemon {
                 listener_addresses,
                 args,
                 _grpc_server: Some(grpc_server),
+                device_task,
+                link_client: Box::new(link_client),
+                slirp_client: Some(slirp_client.clone()),
+                chip_clients: daemon_chip_clients,
             },
             ini_guard,
         ))
@@ -506,30 +594,76 @@ impl NetsimDaemon {
         })
     }
 
-    /// Runs the main event loop for the daemon.
-    pub async fn run_daemon(mut self) {
-        let dc = self.device_client.clone();
-        let cc = self.capture_client.clone();
-        let nci = self.next_chip_id.clone();
-        let mut streams = self.streams;
+    async fn shutdown_actors(&mut self) {
+        info!("Graceful shutdown requested for all actors");
 
+        let link_fut = self.link_client.shutdown();
+        let slirp_fut = async {
+            if let Some(slirp) = &self.slirp_client {
+                if let Err(e) = slirp.shutdown().await {
+                    warn!("SlirpActor shutdown error: {}", e);
+                }
+            }
+        };
+        let chips_fut = futures::future::join_all(self.chip_clients.values().map(|c| c.shutdown()));
+
+        // Execute all shutdown dispatches concurrently
+        let (link_res, _, chips_res) = tokio::join!(link_fut, slirp_fut, chips_fut);
+
+        if let Err(e) = link_res {
+            warn!("LinkActor shutdown error: {}", e);
+        }
+        for res in chips_res {
+            if let Err(e) = res {
+                warn!("ChipActor shutdown error: {}", e);
+            }
+        }
+    }
+
+    async fn handle_device_actor_completion(&mut self, result: Result<(), tokio::task::JoinError>) {
+        info!("DeviceActor exited. Shutting down daemon.");
+        if let Err(e) = result {
+            error!("DeviceActor panicked: {}", e);
+        }
+        self.shutdown_actors().await;
+    }
+
+    fn handle_secondary_task_completion(
+        &mut self,
+        result: Option<Result<(), tokio::task::JoinError>>,
+    ) -> bool {
+        match result {
+            Some(Ok(_)) => {
+                info!("A secondary server task completed. Shutting down.");
+                true
+            }
+            Some(Err(e)) => {
+                error!("A secondary server task panicked: {}", e);
+                true
+            }
+            None => {
+                // Should not happen as we have multiple tasks
+                true
+            }
+        }
+    }
+
+    /// Runs the main event loop for the daemon.
+    pub async fn run_daemon(mut self) -> RunResult {
         info!("Netsimd started {}", if self.args.no_shutdown { "--no-shutdown" } else { "" });
 
         loop {
             tokio::select! {
-                // Branch 1: Wait for a new connection
-                accept_result = streams.accept_any() => {
+                // Branch 1: Handle incoming gRPC/UDS streams (New Clients)
+                accept_result = self.streams.accept_any() => {
                     match accept_result {
                         Ok((listener_name, (stream, sink, chip_info, guid))) => {
-                            info!(
-                                "Accepted connection on {}: from {}",
-                                listener_name,
-                                chip_info.device_name()
-                            );
-                            let device_client = dc.clone();
-                            let capture_client = cc.clone();
-                            let next_chip_id = nci.clone();
-                            // Spawn connection handling to avoid blocking the main loop
+                            info!("Accepted connection on {}:", listener_name);
+                            // Spawning the handler ensures the main loop isn't blocked
+                            let device_client = self.device_client.clone();
+                            let capture_client = self.capture_client.clone();
+                            let next_chip_id = self.next_chip_id.clone();
+                                                        // Spawn connection handling to avoid blocking the main loop
                             // handle_new_connection performs async operations (like device_client.add_chip)
                             // which could delay accepting other connections if awaited directly.
                             tokio::spawn(handle_new_connection(device_client, capture_client, next_chip_id, stream, sink, chip_info, guid));
@@ -540,44 +674,37 @@ impl NetsimDaemon {
                     }
                 }
 
-                // Branch 2: Wait for a task in the JoinSet to complete
+                // Branch 2: Wait for DeviceActor to complete (primary shutdown signal)
+                device_result = &mut self.device_task => {
+                    self.handle_device_actor_completion(device_result).await;
+                    break;
+                }
+
+                // Branch 3: Wait for a task in the JoinSet to complete (abnormal shutdown)
                 join_result = self.join_set.join_next() => {
-                    match join_result {
-                        Some(Ok(_)) => {
-                            info!("A server task completed.");
-                        }
-                        Some(Err(e)) => {
-                            error!("A server task panicked: {}", e);
-                        }
-                        None => {
-                            info!("All server tasks in JoinSet have completed. Shutting down.");
-                            break;
-                        }
+                    if self.handle_secondary_task_completion(join_result) {
+                        break;
                     }
                 }
             }
         }
         info!("NetsimDaemon main loop exited.");
+        RunResult::ExitedNormally
     }
 }
 
 pub async fn run() -> RunResult {
     match NetsimDaemon::new().await {
-        Ok(StartUpMode::Owner(daemon, _ini_guard)) => {
-            daemon.run_daemon().await;
-            RunResult::ExitedNormally
-        }
+        Ok(StartUpMode::Owner(daemon, _ini_guard)) => daemon.run_daemon().await,
         Ok(StartUpMode::Client(config)) => {
+            // If we are just a client, we shouldn't necessarily fail, but if the user
+            // expected to start a NEW daemon, they might be confused.
+            // For now, valid behavior is to print info and exit normally (acting as a
+            // client/discovery).
             info!("Another netsimd is running. Will use its config: {:?}", config);
             info!("Target gRPC port: {}", config.grpc_port);
-            // TODO: Implement client/forwarder logic here for cuttlefish case
-            RunResult::ExitedNormally // Placeholder
+            RunResult::ExitedNormally
         }
-        Err(e) => {
-            if e != RunResult::ExitedNormally {
-                error!("Failed to initialize NetsimDaemon: {:?}", e);
-            }
-            e
-        }
+        Err(e) => e,
     }
 }

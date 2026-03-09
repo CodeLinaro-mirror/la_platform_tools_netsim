@@ -1,9 +1,9 @@
+use std::fmt;
+
 use libslirp_rs::libslirp::LibSlirp;
 use log::info;
-use tokio::sync::mpsc as tokio_mpsc;
-
 use netsim_model::chip::{PacketSink, PacketStream};
-use std::fmt;
+use tokio::sync::mpsc as tokio_mpsc;
 
 pub enum SlirpReq {
     SendPacket(bytes::Bytes),

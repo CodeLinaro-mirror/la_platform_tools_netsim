@@ -1,6 +1,6 @@
 [package]
 name = "netsim-cli"
-version = "0.3.91"
+version = "0.3.94"
 edition = "2021"
 
 [lib]
@@ -24,6 +24,6 @@ grpcio = { version = "0.13.0", default-features = false, features = [
 ] }
 hex = "0.4.3"
 log = "0.4.17"
-netsim-proto = { path = "../proto" }
 netsim-common = { path = "../common" }
+netsim-proto = { path = "../proto" }
 protobuf = "3.2.0"

@@ -5,12 +5,12 @@
 //! # Bluetooth Controller
 //!
 //! This crate provides a simplified interface for interacting with a Rootcanal
-//! emulated Bluetooth controller. It is designed to be used in testing and simulation scenarios.
+//! emulated Bluetooth controller. It is designed to be used in testing and
+//! simulation scenarios.
 //!
 //! The main entry point is the [`Rootcanal`] struct, which represents the
 //! Bluetooth subsystem. It provides methods for creating and managing
 //! emulated Bluetooth controllers.
-//!
 // The [`rootcanal`] module contains the core Rootcanal implementation.
 //!
 //! The [`error`] module defines the error types used in this crate.
@@ -19,7 +19,6 @@
 //! module is not intended to be used directly by consumers of this crate.
 //!
 //! ## Example
-//!
 
 pub mod controller;
 pub mod error;
@@ -33,10 +32,12 @@ pub use types::{Address, Phy};
 
 #[cfg(test)]
 mod tests {
-    use crate::controller::Callbacks as ControllerCallbacks;
-    use crate::types::Address;
-    use std::ffi::c_int;
-    use std::str::FromStr;
+    use std::{ffi::c_int, str::FromStr};
+
+    use bytes::Bytes;
+
+    use super::*;
+    use crate::{controller::Callbacks as ControllerCallbacks, types::Address};
 
     struct MockRootcanalCallbacks;
     impl rootcanal::Callbacks for MockRootcanalCallbacks {
@@ -54,8 +55,8 @@ mod tests {
 
     struct MockControllerCallbacks;
     impl ControllerCallbacks for MockControllerCallbacks {
-        fn send_hci(&self, _source_id: Id, _data: &[u8]) {}
-        fn send_ll(&self, _source_id: Id, _packet: &[u8], _phy: Phy, _tx_power: i32) {}
+        fn send_hci(&self, _source_id: Id, _data: Bytes) {}
+        fn on_receive_ll(&self, _sender_id: Id, _packet: &[u8], _phy: Phy, _rssi: i32) {}
         fn invalid_packet_received(
             &self,
             _source_id: Id,
@@ -72,11 +73,12 @@ mod tests {
     fn test_create_and_delete_controller() {
         let rootcanal = Rootcanal::new(Box::new(MockRootcanalCallbacks));
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let id = rootcanal.new_controller(address, Box::new(MockControllerCallbacks));
+        let id = 1;
+        rootcanal.new_controller(id, address, Box::new(MockControllerCallbacks)).unwrap();
 
         assert_eq!(rootcanal.len(), 1);
 
         rootcanal.remove_controller(id).unwrap();
-        assert_eq!(rootcanal.len(), 0);
+        assert!(rootcanal.is_empty());
     }
 }

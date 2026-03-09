@@ -1,21 +1,24 @@
 // Copyright 2025 The Android Open Source Project
 
-use crate::error::WifiError;
-use crate::medium::types::{Client, Station, WifiResult};
-use crate::stats::WifiStats;
-use crate::DebugArgs;
+use std::{collections::HashMap, sync::Arc};
+
 use ap_actor::shared::SharedKeyStore;
 use log::{info, warn};
-use netsim_packets::ieee80211::MacAddress;
-use netsim_packets::netlink::hwsim_frame::HwsimFrame;
-use std::collections::HashMap;
-use std::sync::Arc;
+use netsim_packets::{ieee80211::MacAddress, netlink::hwsim_frame::HwsimFrame};
+
+use crate::{
+    error::WifiError,
+    medium::types::{Client, Station, WifiResult},
+    stats::WifiStats,
+    DebugArgs,
+};
 
 pub struct Medium {
     pub stations: HashMap<MacAddress, Station>,
     pub clients: HashMap<u32, Client>,
-    /// If true, the Medium reflects `ToDS` frames as `FromDS` frames when deliverying to other stations.
-    /// This allows peer-to-peer communication via the AP without passing through a full AP stack.
+    /// If true, the Medium reflects `ToDS` frames as `FromDS` frames when
+    /// deliverying to other stations. This allows peer-to-peer
+    /// communication via the AP without passing through a full AP stack.
     pub(crate) simulate_ap_reflection: bool,
     pub(crate) key_store: Arc<SharedKeyStore>,
     pub wifi_stats: WifiStats,

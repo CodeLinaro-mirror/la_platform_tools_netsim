@@ -3,18 +3,25 @@
 //! Defines structures for parsing `nl80211` attributes.
 #![allow(clippy::empty_line_after_doc_comments)]
 
-use crate::ethernet::MacAddr;
-use crate::netlink::mac80211_hwsim::HwsimAttrEnum;
-use crate::netlink::nl80211::attr_id;
-use crate::netlink::nl80211_util::{self, NetlinkError};
 use std::fmt;
+
 use zerocopy::{FromBytes, IntoBytes};
+
+use crate::{
+    ethernet::MacAddr,
+    netlink::{
+        mac80211_hwsim::HwsimAttrEnum,
+        nl80211::attr_id,
+        nl80211_util::{self, NetlinkError},
+    },
+};
 
 /// A read-only, zero-copy view of a set of `nl80211` attributes.
 ///
-/// This struct provides a way to access the raw bytes of a set of `nl80211` attributes without
-/// parsing them immediately. This is useful for efficiently passing around the attribute data.
-/// The attributes can be parsed into an `Nl80211AttrSet` using the `to_owned` method.
+/// This struct provides a way to access the raw bytes of a set of `nl80211`
+/// attributes without parsing them immediately. This is useful for efficiently
+/// passing around the attribute data. The attributes can be parsed into an
+/// `Nl80211AttrSet` using the `to_owned` method.
 #[derive(FromBytes, IntoBytes)]
 #[repr(C)]
 pub struct Nl80211AttrPacket<'a> {
@@ -334,7 +341,8 @@ impl Nl80211AttrSet {
         Nl80211AttrPacket::new(attributes).to_owned()
     }
 
-    /// Parses a byte slice into an `Nl80211AttrSet` using `mac80211_hwsim` attribute IDs.
+    /// Parses a byte slice into an `Nl80211AttrSet` using `mac80211_hwsim`
+    /// attribute IDs.
     pub fn parse_hwsim(attributes: &[u8]) -> Result<Self, NetlinkError> {
         Nl80211AttrPacket::new(attributes).to_owned_hwsim()
     }
@@ -492,7 +500,8 @@ impl<'a> Nl80211AttrPacket<'a> {
         Ok(set)
     }
 
-    /// Converts the `Nl80211AttrPacket` to an owned `Nl80211AttrSet` using `mac80211_hwsim` attribute IDs.
+    /// Converts the `Nl80211AttrPacket` to an owned `Nl80211AttrSet` using
+    /// `mac80211_hwsim` attribute IDs.
     pub fn to_owned_hwsim(&self) -> Result<Nl80211AttrSet, NetlinkError> {
         let mut set = Nl80211AttrSet { attributes: self.attributes.to_vec(), ..Default::default() };
         let attrs_to_parse = self.attributes;
@@ -537,9 +546,10 @@ impl<'a> Nl80211AttrPacket<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ethernet::MacAddr;
-    use crate::netlink::nl80211::attr_id;
-    use crate::netlink::nl80211_util;
+    use crate::{
+        ethernet::MacAddr,
+        netlink::{nl80211::attr_id, nl80211_util},
+    };
 
     #[test]
     fn test_nl80211_attr_set_builder_and_parser() {
