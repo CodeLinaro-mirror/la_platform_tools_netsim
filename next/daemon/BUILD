@@ -31,11 +31,9 @@ DAEMON_SRCS = [
 ]
 
 DAEMON_DEPS = [
-    "//next/actor-framework",
     "//next/ap-actor",
     "//next/bluetooth-actor",
     "//next/capture-actor",
-    "//next/capture-api",
     "//next/cell-actor",
     "//next/common",
     "//next/device-actor",
@@ -45,24 +43,15 @@ DAEMON_DEPS = [
     "//next/link-actor",
     "//next/link-api",
     "//next/model",
-    "//next/modem-rs",
     "//next/packet-stream",
     "//next/slirp-actor",
     "//next/uwb-actor",
     "//next/wifi-actor",
-    "@bytes",
-    "@chrono",
     "@clap",
-    "@env_logger",
     "@futures",
     "@grpcio",
     "@log",
-    "@tempfile",
     "@tokio",
-    "@tokio-stream",
-    "@tracing",
-    "@tracing-log",
-    "@tracing-subscriber",
 ]
 
 netsim_rust_library(
@@ -70,15 +59,16 @@ netsim_rust_library(
     srcs = DAEMON_SRCS,
     crate_name = "daemon",
     edition = "2021",
-    proc_macro_deps = ["@async-trait"],
+    proc_macro_deps = [],
     select_deps = select({
-        "@platforms//os:linux": ["@rustutils"],
         "//conditions:default": [],
     }),
     test_deps = [
         "//proto",
+        "@bytes",
         "@rand",
         "@regex",
+        "@tempfile",
     ],
     deps = DAEMON_DEPS,
 )
@@ -94,7 +84,6 @@ netsim_rust_binary(
     ],
     deps = [
         ":daemon-lib",
-        "@rand",
         "@tokio",
     ],
 )

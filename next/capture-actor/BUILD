@@ -10,7 +10,6 @@ DEPS = [
     "//next/packets",
     "@anyhow",
     "@bytes",
-    "@futures",
     "@log",
     "@serde",
     "@thiserror",
@@ -27,6 +26,9 @@ netsim_rust_library(
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
+    ],
+    test_deps = [
+        "@futures",
     ],
     deps = DEPS,
 )

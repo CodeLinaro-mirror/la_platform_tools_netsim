@@ -25,7 +25,6 @@ doctest = false
 
 [dependencies]
 bytes = { version = "1.4.0" }
-etherparse = { version = "0.16" }
 libc = "0.2"
 log = "0.4.17"
 tokio = { version = "1.32.0", features = ["net", "rt-multi-thread"] }

@@ -19,20 +19,14 @@ DEPS = [
     "//next/types",
     "@bytes",
     "@futures",
-    "@futures-util",
-    "@libc",
-    "@log",
-    "@rand",
     "@serde",
     "@serde_json",
-    "@socket2",
     "@tokio",
-    "@tokio-stream",
     "@tokio-util",
 ]
 
 SELECT_DEPS = select({
-    "@platforms//os:linux": ["@rustutils"],
+    "@bazel_tools//src/conditions:windows": ["@log"],
     "//conditions:default": [],
 })
 
@@ -44,7 +38,6 @@ netsim_rust_library(
     enable_integration_test = False,
     proc_macro_deps = [
         "@async-trait",
-        "@serde_derive",
     ],
     select_deps = SELECT_DEPS,
     deps = DEPS,
