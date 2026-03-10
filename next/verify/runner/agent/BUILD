@@ -13,19 +13,25 @@ kt_android_library(
         "src/main/java/com/android/netsim/agent/ServiceDiscovery.kt",
         "src/main/java/com/android/netsim/agent/StepRegistry.kt",
         "src/main/java/com/android/netsim/agent/TcpEchoSteps.kt",
+        "src/main/java/com/android/netsim/agent/UwbSessionManager.kt",
+        "src/main/java/com/android/netsim/agent/UwbSteps.kt",
         "src/main/java/com/android/netsim/agent/WifiSteps.kt",
         ":codegen_lifecycle",
         ":codegen_network",
         ":codegen_service_discovery",
         ":codegen_tcp_echo",
+        ":codegen_uwb",
         ":codegen_wifi",
     ],
     manifest = "AndroidManifest.xml",
     tags = ["manual"],
     deps = [
         "@maven//:androidx_annotation_annotation",
+        "@maven//:androidx_core_uwb_uwb",
         "@maven//:androidx_test_monitor",
         "@maven//:androidx_test_runner",
+        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
     ],
 )
 
@@ -65,6 +71,14 @@ genrule(
     name = "codegen_tcp_echo",
     srcs = ["src/main/java/com/android/netsim/agent/TcpEchoSteps.kt"],
     outs = ["src/main/java/com/android/netsim/agent/TcpEchoStepsLoader.kt"],
+    cmd = "$(location //next/verify/codegen:verify_codegen) $(SRCS) $@",
+    tools = ["//next/verify/codegen:verify_codegen"],
+)
+
+genrule(
+    name = "codegen_uwb",
+    srcs = ["src/main/java/com/android/netsim/agent/UwbSteps.kt"],
+    outs = ["src/main/java/com/android/netsim/agent/UwbStepsLoader.kt"],
     cmd = "$(location //next/verify/codegen:verify_codegen) $(SRCS) $@",
     tools = ["//next/verify/codegen:verify_codegen"],
 )

@@ -49,6 +49,7 @@ impl InternalDevice {
                 orientation: params.device_config.orientation.clone(),
                 builtin: params.device_config.builtin,
                 chips: vec![],
+                device_info: params.device_config.device_info.clone(),
             },
             create_params: Some(params),
             guid: None,
@@ -83,13 +84,6 @@ impl DeviceActor {
     /// This is preferred for persistence as it doesn't require IPC to chip
     /// actors.
     pub(crate) async fn save_stats_async(&mut self) {
-        // Ensure previous write is finished to avoid race conditions and data loss
-        if let Some(task) = self.stats_write_task.take() {
-            if let Err(e) = task.await {
-                log::warn!("DeviceActor: Previous stats write failed: {}", e);
-            }
-        }
-
         let active_model_stats = self.collect_radio_stats_async().await;
         // Convert to Proto for persistence
         let active_proto_stats = active_model_stats.into_iter().map(to_proto_stats).collect();
@@ -97,12 +91,31 @@ impl DeviceActor {
         let combined_stats = self.stats.get_combined_stats(active_proto_stats);
         let path = self.stats.stats_path.clone();
 
-        // Spawn blocking write
-        let task = tokio::task::spawn_blocking(move || {
-            if let Err(e) = crate::stats::write_combined_stats(combined_stats, path) {
-                log::error!("Failed to write stats: {}", e);
+        let previous_task = self.stats_write_task.take();
+
+        // Spawn a background async task to prevent the actor from blocking on disk I/O.
+        // It awaits the previous write task to ensure sequential writes without race
+        // conditions.
+        let task = tokio::spawn(async move {
+            if let Some(t) = previous_task {
+                if let Err(e) = t.await {
+                    log::warn!("DeviceActor: Previous stats write failed: {}", e);
+                }
+            }
+
+            // Spawn blocking write for disk I/O
+            let res = tokio::task::spawn_blocking(move || {
+                if let Err(e) = crate::stats::write_combined_stats(combined_stats, path) {
+                    log::error!("Failed to write stats: {}", e);
+                }
+            })
+            .await;
+
+            if let Err(e) = res {
+                log::error!("DeviceActor: Stats write task panicked: {}", e);
             }
         });
+
         self.stats_write_task = Some(task);
     }
 
@@ -208,13 +221,7 @@ impl DeviceActor {
                     // Resolve Kind Synchronously using pre-fetched state
                     let radio_kind = if chip.kind == netsim_model::ChipKind::BLUETOOTH {
                         let chip_state = chip_state_map.get(&ChipId(chip.id)).unwrap_or(chip);
-                        match (chip_state.is_le_enabled(), chip_state.is_classic_enabled()) {
-                            (true, false) => {
-                                Some(netsim_model::stats::RadioKind::BluetoothLowEnergy)
-                            }
-                            (false, true) => Some(netsim_model::stats::RadioKind::BluetoothClassic),
-                            _ => None,
-                        }
+                        Self::resolve_bluetooth_kind(chip, Some(chip_state))
                     } else {
                         Some(netsim_model::chip::chip_kind_to_radio_kind(chip.kind))
                     };
@@ -252,10 +259,19 @@ impl DeviceActor {
         };
 
         let chip = fresh_chip.as_ref().unwrap_or(chip);
-        match (chip.is_le_enabled(), chip.is_classic_enabled()) {
+        Self::resolve_bluetooth_kind(chip, Some(chip))
+    }
+
+    fn resolve_bluetooth_kind(
+        chip: &Chip,
+        state: Option<&Chip>,
+    ) -> Option<netsim_model::stats::RadioKind> {
+        let chip_state = state.unwrap_or(chip);
+        match (chip_state.is_le_enabled(), chip_state.is_classic_enabled()) {
             (true, false) => Some(netsim_model::stats::RadioKind::BluetoothLowEnergy),
             (false, true) => Some(netsim_model::stats::RadioKind::BluetoothClassic),
-            _ => None, // Ambiguous (Dual Mode) or Invalid -> Drop
+            _ => None, /* Ambiguous (Dual Mode) or Invalid -> Drop
+                        * TODO: Requires HCI packet inspection to accurately distinguish traffic */
         }
     }
 
@@ -481,6 +497,11 @@ impl DeviceActor {
 
         self.devices.insert(id, entity);
         self.stats.update_device_count(self.devices.len(), true);
+
+        if let Some(device_info) = &params.device_config.device_info {
+            self.stats.add_device_stats(crate::utils::to_proto_device_stats(id.0, device_info));
+        }
+
         self.update_idle_state(ctx);
         Ok(id)
     }
@@ -562,9 +583,9 @@ impl DeviceActor {
         let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
         if !self.has_seen_device && !has_active_devices {
             log::info!(
-                "DeviceActor: Startup timeout reached (no devices connected), shutting down"
+                "DeviceActor: Startup timeout reached (no devices connected), initiating shutdown"
             );
-            ctx.shutdown();
+            self.trigger_shutdown(ctx);
         }
         self.startup_timer = None;
     }
@@ -573,10 +594,31 @@ impl DeviceActor {
     pub(crate) fn on_idle_timeout(&mut self, ctx: &mut dyn Context<Self>) {
         let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
         if !has_active_devices {
-            log::info!("DeviceActor: Idle timeout reached, shutting down");
-            ctx.shutdown();
+            log::info!("DeviceActor: Idle timeout reached, initiating shutdown");
+            self.trigger_shutdown(ctx);
         }
         self.idle_timer = None;
+    }
+
+    /// Helper utility to initiate graceful shutdown, ensuring stats are
+    /// flushed.
+    fn trigger_shutdown(&mut self, ctx: &mut dyn Context<Self>) {
+        let stats_task = self.stats_write_task.take();
+        if let Some(client) = self.self_client.clone() {
+            tokio::spawn(async move {
+                if let Some(t) = stats_task {
+                    if let Err(e) = t.await {
+                        log::warn!("DeviceActor: Stats write failed during shutdown flush: {}", e);
+                    }
+                }
+                if let Err(e) = client.shutdown().await {
+                    log::error!("DeviceActor: Failed to shutdown: {}", e);
+                }
+            });
+        } else {
+            log::warn!("DeviceActor: No self_client, forcing immediate shutdown");
+            ctx.shutdown();
+        }
     }
 }
 
@@ -617,7 +659,6 @@ impl ActorService for DeviceActor {
         let Some(entity) = self.devices.get_mut(&id) else {
             return Err(DeviceError::DeviceNotFound(id.to_string()));
         };
-        // Update local state
         if let Some(name) = &update.name {
             entity.device.name = name.clone();
         }
@@ -632,7 +673,6 @@ impl ActorService for DeviceActor {
             entity.device.orientation = orient;
         }
 
-        // Propagate updates to chips
         for chip in entity.device.chips.iter_mut() {
             let Some(chip_client) = self.chip_clients.get(&chip.kind) else {
                 continue;
@@ -640,7 +680,6 @@ impl ActorService for DeviceActor {
 
             let mut chip_update = ChipUpdate::default();
 
-            // Propagate Device Position/Orientation if changed
             if update.position.is_some() {
                 chip_update.position = update.position.clone();
             }
@@ -663,14 +702,12 @@ impl ActorService for DeviceActor {
                 }
             }
 
-            // Merge specific update fields
             if let Some(u) = specific_update {
                 if u.variant.is_some() {
                     chip_update.variant = u.variant.clone();
                 }
             }
 
-            // Send update if meaningful
             if chip_update.position.is_some()
                 || chip_update.orientation.is_some()
                 || chip_update.variant.is_some()
