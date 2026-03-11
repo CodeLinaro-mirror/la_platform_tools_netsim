@@ -8,7 +8,10 @@ use std::{io::Result, path::Path, time::SystemTime};
 use async_trait::async_trait;
 use capture_api::Direction;
 use netsim_packets::{
-    netlink::{hwsim_frame::HwsimFrame, mac80211_hwsim::HwsimMsg},
+    netlink::{
+        hwsim_frame::HwsimFrame,
+        mac80211_hwsim::{HwsimCmd, HwsimMsg},
+    },
     pcap::radiotap::create_radiotap_packet,
 };
 
@@ -37,16 +40,24 @@ impl CaptureWriter for WifiPcapWriter {
         data: &[u8],
     ) -> anyhow::Result<()> {
         match HwsimMsg::decode_full(data) {
-            Ok(hwsim_msg) => match HwsimFrame::parse(&hwsim_msg) {
-                Ok(frame) => {
-                    let radiotap_packet = create_radiotap_packet(&frame);
-                    self.inner.write_packet(timestamp, direction, &radiotap_packet).await
+            Ok(hwsim_msg) => {
+                if hwsim_msg.hwsim_hdr.hwsim_cmd != HwsimCmd::Frame {
+                    return Ok(());
                 }
-                Err(e) => {
-                    log::warn!("WifiPcapWriter: Failed to parse HwsimFrame from HwsimMsg: {:?}", e);
-                    Ok(())
+                match HwsimFrame::parse(&hwsim_msg) {
+                    Ok(frame) => {
+                        let radiotap_packet = create_radiotap_packet(&frame);
+                        self.inner.write_packet(timestamp, direction, &radiotap_packet).await
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "WifiPcapWriter: Failed to parse HwsimFrame from HwsimMsg: {:?}",
+                            e
+                        );
+                        Ok(())
+                    }
                 }
-            },
+            }
             Err(e) => {
                 log::warn!("WifiPcapWriter: Failed to decode HwsimMsg: {:?}", e);
                 Ok(())
@@ -79,6 +90,27 @@ mod tests {
         // Since `[1,2,3]` is an invalid HwsimMsg, it will fail to decode and write 0
         // packets.
         writer.write_packet(SystemTime::now(), Direction::Sent, &[1, 2, 3]).await.unwrap();
+
+        let (records, bytes) = writer.get_stats();
+        assert_eq!(records, 0);
+        assert_eq!(bytes, 0);
+    }
+
+    #[tokio::test]
+    async fn test_wifi_pcap_writer_filter_tx_info() {
+        let dir = std::env::temp_dir();
+        let filepath = dir.join("test_wifi_filter_tx_info.pcap");
+        let _ = fs::remove_file(&filepath);
+
+        let mut writer = WifiPcapWriter::new(&filepath).await.unwrap();
+
+        // Construct a HwsimMsg with HwsimCmd::TxInfoFrame
+        let mut data = vec![0u8; 20];
+        data[0..16].copy_from_slice(&[0; 16]); // NlMsgHdr
+        data[16] = 3; // HwsimCmd::TxInfoFrame
+        data[17] = 1; // HwsimMsgHdr version
+
+        writer.write_packet(SystemTime::now(), Direction::Sent, &data).await.unwrap();
 
         let (records, bytes) = writer.get_stats();
         assert_eq!(records, 0);
