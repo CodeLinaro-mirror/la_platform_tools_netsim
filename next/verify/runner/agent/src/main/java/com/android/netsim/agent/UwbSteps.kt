@@ -57,15 +57,15 @@ fun startUwbRangingRoleConfig(context: Context, args: List<String>) {
   val peer = args[2]
 
   if (role == "Controller") {
-    UwbSessionManager.startController(context, peer, configId)
+    UwbSessionManager.startRanging(peer, configId)
   } else {
-    UwbSessionManager.startControlee(context, peer, configId)
+    UwbSessionManager.startRanging(peer, configId)
   }
 }
 
 /// STEP: ^Starts UWB Ranging with (.*)$
 fun startUwbRangingSimple(context: Context, args: List<String>) {
-  UwbSessionManager.startController(context, args[0], 1)
+  UwbSessionManager.startRanging(args[0], 1)
 }
 
 /// STEP: ^Stops UWB Ranging$
@@ -80,9 +80,9 @@ fun startUwbRangingPeerRole(context: Context, args: List<String>) {
   val configId = 1
 
   if (role == "CONTROLLER") {
-    UwbSessionManager.startController(context, peer, configId)
+    UwbSessionManager.startRanging(peer, configId)
   } else {
-    UwbSessionManager.startControlee(context, peer, configId)
+    UwbSessionManager.startRanging(peer, configId)
   }
 }
 
@@ -220,7 +220,6 @@ fun waitForUwbAddress(context: Context, args: List<String>): Any {
     throw Exception("Timeout waiting for UWB local address")
   }
   Log.i(TAG, "UWB Address Available: $addr")
-  Log.i(TAG, "UWB Address Available: $addr")
   return mapOf("UWB_ADDRESS" to addr)
 }
 
@@ -239,10 +238,4 @@ fun waitForUwbAddressAsVar(context: Context, args: List<String>): Any {
   val varName = args[0]
   Log.i(TAG, "UWB Address Available: $addr saved to $varName")
   return mapOf(varName to addr)
-}
-
-/// STEP: ^starts UWB ranging with peer (.*) as (CONTROLLER|CONTROLEE)$
-fun startUwbRangingWithPeerRole(context: Context, args: List<String>) {
-  val peer = args[0]
-  UwbSessionManager.startRanging(peer, 1) // Config ID 1
 }
