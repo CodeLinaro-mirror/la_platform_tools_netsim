@@ -52,9 +52,10 @@ impl ActorLifecycle for ApActor {
     }
 
     // We expect stream messages (Mgmt frames or Data frames if bridged)
+    // We expect stream messages (Mgmt frames or Data frames if bridged)
     async fn on_stream(
         &mut self,
-        stream_id: ChipId,
+        stream_id: crate::ap_actor::ApId,
         msg: bytes::Bytes,
         ctx: &mut DynContext<Self>,
     ) {
@@ -130,11 +131,15 @@ impl ActorLifecycle for ApActor {
         }
     }
 
-    async fn on_stream_closed(&mut self, stream_id: ChipId, ctx: &mut DynContext<Self>) {
+    async fn on_stream_closed(
+        &mut self,
+        stream_id: crate::ap_actor::ApId,
+        ctx: &mut DynContext<Self>,
+    ) {
         if stream_id.0 == WIFI_STREAM_ID {
             log::info!("WIFI_STREAM_ID closed, stopping ApActor");
             ctx.shutdown();
         }
     }
-    async fn on_task_closed(&mut self, _id: ChipId, _ctx: &mut DynContext<Self>) {}
+    async fn on_task_closed(&mut self, _id: crate::ap_actor::ApId, _ctx: &mut DynContext<Self>) {}
 }

@@ -5,6 +5,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use daemon::netsimd::{NetsimDaemon, StartUpMode};
 use grpcio::{ChannelBuilder, EnvBuilder};
 use netsim_proto::{
+    access_point_grpc::AccessPointServiceClient,
     common::ChipKind,
     frontend::{CreateDeviceRequest, DeleteChipRequest},
     frontend_grpc::FrontendServiceClient,
@@ -17,8 +18,10 @@ use netsim_proto::{
 pub struct World {
     pub daemon: Option<NetsimDaemon>,
     pub frontend_client: Option<FrontendServiceClient>,
+    pub access_point_client: Option<AccessPointServiceClient>,
     pub packet_client: Option<PacketStreamerClient>,
-    pub capture_client: client::CaptureClient,
+    pub capture_client: capture_actor::CaptureClient,
+
     pub grpc_port: u16,
     _temp_dir: PathBuf,
     _ini_guard: Option<daemon::ini_file::IniFileGuard>,
@@ -62,6 +65,7 @@ impl World {
         World {
             daemon: Some(daemon),
             frontend_client: None,
+            access_point_client: None,
             packet_client: None,
             capture_client,
             grpc_port,
@@ -78,6 +82,16 @@ impl World {
             self.frontend_client = Some(FrontendServiceClient::new(ch));
         }
         self.frontend_client.as_ref().unwrap()
+    }
+
+    /// Helper to get or create access point client
+    pub fn ensure_access_point_client(&mut self) -> &AccessPointServiceClient {
+        if self.access_point_client.is_none() {
+            let env = Arc::new(EnvBuilder::new().build());
+            let ch = ChannelBuilder::new(env).connect(&format!("localhost:{}", self.grpc_port));
+            self.access_point_client = Some(AccessPointServiceClient::new(ch));
+        }
+        self.access_point_client.as_ref().unwrap()
     }
 
     /// Helper to get or create packet streamer client

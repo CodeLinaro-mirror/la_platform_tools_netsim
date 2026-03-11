@@ -43,28 +43,33 @@ impl SlirpGateway {
 
 #[async_trait::async_trait]
 impl GatewayTrait for SlirpGateway {
-    async fn send_80211(&self, _chip_id: ChipId, ieee80211: &Ieee80211) -> bool {
+    async fn send_80211(
+        &self,
+        _chip_id: ChipId,
+        ieee80211: &Ieee80211,
+    ) -> Result<usize, crate::error::WifiError> {
         // Drop QosNodata frames (keep-alives/null data) as they contain no payload
         // and cannot be converted to Ethernet.
         if ieee80211.is_qos_nodata() {
-            return true;
+            return Ok(0);
         }
 
         ieee80211
             .to_ieee8023()
-            .map(|eth| {
-                let _ = self.sender.send(bytes::Bytes::from(eth));
-                true
-            })
-            .unwrap_or_else(|e| {
+            .map_err(|e| {
                 let fc = ieee80211.get_fc();
                 let ftype = ieee80211.is_data();
                 let stype = ieee80211.stype();
-                log::error!(
-                    "WifiActor: Slirp conversion failed: {}. Frame (Data: {}), Subtype: {}, FC: {:#06x}",
+                crate::error::WifiError::Frame(format!(
+                    "Slirp conversion failed: {}. Frame (Data: {}), Subtype: {}, FC: {:#06x}",
                     e, ftype, stype, fc
-                );
-                false
+                ))
+            })
+            .and_then(|eth| {
+                let payload_len = eth.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN);
+                self.sender.send(bytes::Bytes::from(eth)).map(|_| payload_len).map_err(|e| {
+                    crate::error::WifiError::Transmission(format!("Slirp send failed: {}", e))
+                })
             })
     }
 
@@ -80,19 +85,39 @@ impl GatewayTrait for SlirpGateway {
         shared_keys: &SharedKeyStore,
         out_queue: &mut Vec<(u32, bytes::Bytes)>,
     ) {
-        if let Some(bssid) = shared_keys.get_bssid() {
-            let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-            if let Ok(ieee80211) =
-                Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
-            {
-                if let Ok(bytes) = ieee80211.encode_to_vec() {
-                    let _ = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);
-                }
-            } else {
-                warn!("Failed to convert Slirp packet to 802.11");
+        debug!("SLIRP_PKT: len {}", packet.len());
+        medium.wifi_stats.incr_network_packets_rx();
+
+        let Some(bssid) = shared_keys.get_bssid() else {
+            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Network(
+                "No BSSID available for Slirp packet conversion".to_string(),
+            ));
+            return;
+        };
+
+        medium.wifi_stats.record_download_bytes(
+            packet.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN),
+        );
+
+        let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+        let Ok(ieee80211) =
+            Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
+        else {
+            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(
+                "Failed to convert Slirp packet to 802.11".to_string(),
+            ));
+            return;
+        };
+
+        match ieee80211.encode_to_vec() {
+            Ok(bytes) => {
+                let _ = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);
             }
-        } else {
-            warn!("No BSSID available for Slirp packet conversion");
+            Err(_) => {
+                medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(
+                    "Failed to encode Slirp packet to 802.11".to_string(),
+                ));
+            }
         }
     }
 

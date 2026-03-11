@@ -7,6 +7,7 @@ use netsim_model::{
     client_error::ClientError,
     stats::NetsimRadioStats,
 };
+use netsim_proto::protobuf::Message;
 
 use crate::wifi_actor::WifiActor;
 
@@ -40,7 +41,9 @@ impl WifiClient {
         self.inner.update(id, patch).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    pub async fn get_global_stats(&self) -> Result<netsim_proto::stats::WifiStats, ClientError> {
+    pub async fn get_global_stats_proto(
+        &self,
+    ) -> Result<netsim_proto::stats::WifiStats, ClientError> {
         match self.inner.perform_action(None, crate::wifi_actor::WifiReq::GetGlobalStats).await {
             Ok(crate::wifi_actor::WifiResponse::GlobalStats(stats)) => Ok(*stats),
             Ok(_) => Err(ClientError::Recv("Unexpected action result".into())),
@@ -99,8 +102,9 @@ impl ChipClient for WifiClient {
             .map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn get_wifi_stats(&self) -> Result<Option<netsim_proto::stats::WifiStats>, ClientError> {
-        self.get_global_stats().await.map(Some)
+    async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
+        let stats = self.get_global_stats_proto().await?;
+        stats.write_to_bytes().map(Some).map_err(|e| ClientError::Recv(e.to_string()))
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {

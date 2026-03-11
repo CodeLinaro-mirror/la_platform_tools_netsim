@@ -207,7 +207,6 @@ impl From<&ChipKindParams> for ChipKind {
             ChipKindParams::Wifi(_) => ChipKind::WIFI,
             ChipKindParams::Uwb(_) => ChipKind::UWB,
             ChipKindParams::Cell(_) => ChipKind::CELLULAR,
-            ChipKindParams::Ap(_) => ChipKind::AP,
         }
     }
 }
@@ -223,8 +222,6 @@ pub enum ChipKindParams {
     Uwb(crate::uwb::UwbCreate),
     /// Cellular parameters.
     Cell(crate::cell::CellCreate),
-    /// Access Point parameters.
-    Ap(crate::ap::ApCreate),
 }
 
 pub use crate::{
@@ -326,7 +323,6 @@ pub enum ChipVariant {
     Wifi(crate::wifi::Wifi),
     Uwb(crate::uwb::Uwb),
     Cell(crate::cell::Cell),
-    Ap(crate::ap::Ap),
 }
 
 impl From<ChipKind> for ChipVariant {
@@ -339,10 +335,6 @@ impl From<ChipKind> for ChipVariant {
             ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
             ChipKind::UWB => ChipVariant::Uwb(Default::default()),
             ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell { state: "unknown".into() }),
-            ChipKind::AP => ChipVariant::Ap(crate::ap::Ap {
-                config: Default::default(),
-                associations: Vec::new(),
-            }),
             // Use Bluetooth as fallback for generic/unknown types if necessary,
             // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
             // types.
@@ -390,7 +382,6 @@ pub enum ChipVariantUpdate {
     Bluetooth(crate::bluetooth::BluetoothUpdate),
     Wifi(crate::wifi::WifiUpdate),
     Uwb(crate::uwb::UwbUpdate),
-    Ap(crate::ap::ApUpdate),
 }
 
 impl ChipVariantUpdate {
@@ -399,7 +390,6 @@ impl ChipVariantUpdate {
             ChipVariantUpdate::Bluetooth(_) => ChipKind::BLUETOOTH,
             ChipVariantUpdate::Wifi(_) => ChipKind::WIFI,
             ChipVariantUpdate::Uwb(_) => ChipKind::UWB,
-            ChipVariantUpdate::Ap(_) => ChipKind::AP,
         }
     }
 }
@@ -434,7 +424,7 @@ impl std::fmt::Debug for RadioChipClient {
     }
 }
 
-#[cfg_attr(feature = "testing", mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 impl ChipClient for RadioChipClient {
     async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
@@ -518,7 +508,7 @@ impl ChipClient for RadioChipClient {
 /// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
 /// messages to the server over an `mpsc` channel. It abstracts away the channel
 /// and `oneshot` responder boilerplate for each command.
-#[cfg_attr(feature = "testing", mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait ChipClient: std::fmt::Debug + Send + Sync {
     async fn create(&self, params: ChipCreate) -> Result<(), ClientError>;
@@ -531,7 +521,7 @@ pub trait ChipClient: std::fmt::Debug + Send + Sync {
     /// Resets the state of the specified chip.
     async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
     fn clone_box(&self) -> Box<dyn ChipClient>;
-    async fn get_wifi_stats(&self) -> Result<Option<netsim_proto::stats::WifiStats>, ClientError> {
+    async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
         Ok(None)
     }
 }

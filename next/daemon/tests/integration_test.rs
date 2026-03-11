@@ -5,6 +5,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use netsim_model::initial_info::{ChipInfo, ChipKind};
+use netsim_proto;
 use packet_stream::{Streams, TransportType};
 use tokio::time::timeout;
 
@@ -89,15 +90,22 @@ async fn test_ap_config_args() {
 
     let mut world = World::new_with_args(args).await;
 
-    let devices = world.when_list_devices().await;
-    let ap_device =
-        devices.iter().find(|d| d.name == "CustomAP").expect("Default AP device not found");
-    let ap_chip = ap_device.chips.first().expect("AP device has no chips");
+    let client = world.ensure_access_point_client();
+    let resp = client
+        .list_async(&netsim_proto::access_point::ListAccessPointsRequest::new())
+        .expect("ListAccessPoints failed")
+        .await
+        .expect("RPC failed");
 
-    // We don't verify specific device properties (like position) as they might
-    // change. However, finding the device confirms that netsimd started and
-    // created the AP.
-    println!("Found CustomAP with {} chips", ap_device.chips.len());
+    let ap = resp
+        .access_points
+        .iter()
+        .find(|ap| ap.ssid == "CustomAP")
+        .expect("Default AP 'CustomAP' not found");
+
+    assert_eq!(ap.channel, 6);
+    // We don't verify all properties, but finding it confirms creation.
+    println!("Found CustomAP with ID {}", ap.id);
 }
 
 // Scenario: Start daemon with --pcap

@@ -235,18 +235,6 @@ impl World {
         mock
     }
 
-    /// Helper to create a mock that shares existing state (for clone_box of an
-    /// ACTIVE client)
-    fn create_shared_mock(
-        chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
-        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
-        wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
-    ) -> Box<MockChipClient> {
-        let mut mock = MockChipClient::new();
-        Self::setup_mock_chip_client(&mut mock, chips, radio_stats, wifi_stats);
-        Box::new(mock)
-    }
-
     fn setup_mock_chip_client(
         mock: &mut MockChipClient,
         chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
@@ -336,17 +324,30 @@ impl World {
 
         let ws = wifi_stats.clone();
         let chips_wifi = chips.clone();
-        mock.expect_get_wifi_stats().returning(move || {
+        mock.expect_get_global_stats().returning(move || {
             let chips = chips_wifi.lock().unwrap();
             let ws_lock = ws.lock().unwrap();
             // Return stats for the first chip found in the map
             for id in chips.keys() {
                 if let Some(stat) = ws_lock.get(&id.0) {
-                    return Ok(Some(stat.clone()));
+                    use netsim_proto::protobuf::Message;
+                    return Ok(Some(stat.write_to_bytes().unwrap_or_default()));
                 }
             }
             Ok(None)
         });
+    }
+
+    /// Helper to create a mock that shares existing state (for clone_box of an
+    /// ACTIVE client)
+    fn create_shared_mock(
+        chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
+    ) -> Box<MockChipClient> {
+        let mut mock = MockChipClient::new();
+        Self::setup_mock_chip_client(&mut mock, chips, radio_stats, wifi_stats);
+        Box::new(mock)
     }
 
     pub fn create_default_link_client() -> MockLinkClient {
@@ -604,10 +605,7 @@ impl World {
     /// Helper to get a unique temporary path for stats.
     pub fn temp_stats_path() -> (std::path::PathBuf, String) {
         let mut path = std::env::temp_dir();
-        let unique_id = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
+        let unique_id = format!("{}_{:?}", std::process::id(), std::thread::current().id());
         let filename = format!("netsim_session_stats_{}.json", unique_id);
         path.push(&filename);
         if path.exists() {

@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use actor_framework::ResourceActor;
 use ap_actor::{shared::SharedKeyStore, ApActor, ApClient};
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use netsim_model::{
     chip::{ChipClient, ChipCreate},
     ChipId,
@@ -30,10 +30,10 @@ async fn test_udp_guest_to_host() {
     let (slirp_runner, slirp_client) = slirp_actor::new();
 
     // 1.2 Ap
-    let (ap_tx_out, mut ap_rx_out) = mpsc::unbounded_channel();
+    let (_ap_tx_out, mut ap_rx_out) = mpsc::unbounded_channel();
     let shared_keys = Arc::new(SharedKeyStore::new());
-    let ap_actor_impl =
-        ApActor::new(ap_tx_out, Some(shared_keys.clone()), Some(slirp_client.clone()));
+    let _next_id = Arc::new(std::sync::atomic::AtomicU32::new(1));
+    let ap_actor_impl = ApActor::new(shared_keys.clone());
     let (ap_runner, ap_client_base) = ResourceActor::new(32);
     let ap_client = ApClient::new(ap_client_base);
 
@@ -49,12 +49,12 @@ async fn test_udp_guest_to_host() {
     let device_client = DeviceClient::new(Box::new(resource_client));
 
     let wifi_actor_impl = WifiActor::new(
-        Some(ap_client.clone()),
+        Some(Arc::new(ap_client.clone())),
         Some(slirp_client.clone()),
-        Some(ap_rx_out),
-        shared_keys.clone(),
         device_client,
-        false, // Do not create default AP
+        None, // wifi_tap
+        shared_keys.clone(),
+        Arc::new(wifi_actor::stats::SystemClock),
     );
 
     // Create Runner
@@ -102,9 +102,10 @@ async fn test_udp_guest_to_host() {
         channel: 6,
         hw_mode: netsim_model::chip::WifiMode::G,
         wpa_passphrase: None,
+        ..Default::default()
     };
     use ap_actor::ApResponse;
-    let id = ap_client.create_ap(ap_config).await.expect("Failed to create AP");
+    let id = ap_client.create_ap(0, ap_config).await.expect("Failed to create AP");
     println!("AP Created with ID: {}", id);
     println!("BSSID in KeyStore: {:?}", shared_keys.get_bssid());
 

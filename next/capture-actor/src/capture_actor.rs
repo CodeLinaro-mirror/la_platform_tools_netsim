@@ -23,11 +23,11 @@ pub struct CaptureActor {
 }
 
 impl CaptureActor {
-    pub fn new(default_capture_enabled: bool) -> Self {
+    pub fn new(default_capture_enabled: bool, capture_dir: Option<PathBuf>) -> Self {
         Self {
             writers: HashMap::new(),
             default_capture_enabled,
-            capture_dir: None,
+            capture_dir,
             entities: HashMap::new(),
         }
     }

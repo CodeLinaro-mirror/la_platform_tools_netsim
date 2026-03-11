@@ -34,6 +34,7 @@ impl ApWorld {
     pub async fn new() -> Self {
         netsim_testing::logger::setup(None);
         let shared_keys = std::sync::Arc::new(SharedKeyStore::new());
+        let _next_id = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(1));
         let ap_actor_impl = ApActor::new(shared_keys.clone());
         let (runner, client_base) = ResourceActor::new(32);
         let client = ApClient::new(client_base);
@@ -53,10 +54,10 @@ impl ApWorld {
 
     pub async fn given_a_registered_ap_with_config(&mut self, config: ApConfig) {
         log::info!("Given a registered AP '{}'", config.ssid);
-        let id = self.next_ap_id;
+        let _id = self.next_ap_id;
         self.next_ap_id += 1;
-        self.client.create_ap(id, config).await.expect("Failed to create AP");
-        self.ap_id = Some(id);
+        let ap_id = self.client.create_ap(0, config).await.expect("Failed to create AP");
+        self.ap_id = Some(ap_id);
 
         if self.tx_to_ap.is_none() {
             let (tx_to_ap, rx_for_ap) = mpsc::unbounded_channel::<bytes::Bytes>();

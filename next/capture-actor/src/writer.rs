@@ -134,3 +134,5 @@ impl CaptureWriter for PcapWriter {
 pub const DLT_BLUETOOTH_H4: u32 = 187;
 // FiRa UCI DLT is 299
 pub const DLT_FIRA_UCI: u32 = 299;
+// IEEE 802.11 Radiotap DLT is 127
+pub const DLT_IEEE802_11_RADIO: u32 = 127;

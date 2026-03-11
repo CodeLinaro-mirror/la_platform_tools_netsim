@@ -68,12 +68,9 @@ async fn test_force_disconnect() {
 
     // 2. Force Disconnect
     log::info!("When the AP forces disconnect for {}", station_mac);
-    // In `world.rs`, the station uses `ChipId(1234)`.
-    world
-        .client
-        .update_ap_config(id, None, None, Some(vec![station_mac_str.to_string()]), None)
-        .await
-        .expect("Force disconnect failed");
+    // 2. Disconnect RPC
+    log::info!("When the AP disconnects {}", station_mac);
+    world.client.disconnect(id, station_mac_str.to_string()).await.expect("Disconnect failed");
 
     // 3. Verify Deauth Frame Received
     let _msg = world

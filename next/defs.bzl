@@ -7,7 +7,7 @@ to provide standard targets for testing, linting, and formatting.
 
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_clippy", "rust_common", "rust_doc", "rust_doc_test", "rust_library", "rust_test")
 
-NETSIM_RUSTC_FLAGS = ["-Dwarnings"]
+NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
 
 # Unfortunately, we can't use the rules_rust version because netsim is in external/.
 def _netsim_rustfmt_test_impl(ctx):
@@ -72,6 +72,7 @@ def netsim_rust_library(
         srcs,
         deps = [],
         select_deps = [],
+        testing_deps = [],
         test_deps = [],
         crate_features = [],
         # Feature Flags (Default to True for safety)
@@ -81,7 +82,6 @@ def netsim_rust_library(
         enable_integration_test = True,
         enable_doc = True,
         enable_doc_test = True,
-        strict_warnings = True,
         **kwargs):
     """
     Defines a Netsim Rust library with standard targets.
@@ -99,6 +99,7 @@ def netsim_rust_library(
         srcs: The source files.
         deps: The dependencies.
         select_deps: The part of deps that uses select()
+        testing_deps: Dependencies for the "testing" feature.
         test_deps: Dependencies for the unit test and integration test targets.
         crate_features: the crate features
         enable_clippy: Whether to enable clippy checks.
@@ -107,14 +108,11 @@ def netsim_rust_library(
         enable_integration_test: Whether to generate an integration test target if files exist.
         enable_doc: Whether to generate documentation.
         enable_doc_test: Whether to generate a doc test target.
-        strict_warnings: Whether to enforce strict warnings (treat warnings as errors).
         **kwargs: Additional arguments passed to rust_library.
     """
 
     # 1. The Main Library (Always created)
-    rustc_flags = kwargs.pop("rustc_flags", [])
-    if strict_warnings:
-        rustc_flags = NETSIM_RUSTC_FLAGS + rustc_flags
+    rustc_flags = NETSIM_RUSTC_FLAGS + kwargs.pop("rustc_flags", [])
 
     rust_library(
         name = name,
@@ -126,7 +124,7 @@ def netsim_rust_library(
     )
 
     # 2. The Testing Library with "testing" feature (always created)
-    testing_deps = [
+    testing_deps = testing_deps + [
         d + ":testing" if d.startswith("//next") else d
         for d in deps
     ]
@@ -141,13 +139,14 @@ def netsim_rust_library(
 
     # 3. Automatic Unit Test
     if enable_unit_test:
-        test_flags = []
-        if strict_warnings:
-            test_flags = NETSIM_RUSTC_FLAGS
+        # There can be integ test deps that are not used in unit tests,
+        # so disable unused_crate_dependencies.
+        test_flags = [f for f in NETSIM_RUSTC_FLAGS if f != "-Dunused_crate_dependencies"]
 
         rust_test(
             name = "test",
             crate = ":testing",
+            crate_features = ["testing"] + crate_features,
             rustc_flags = test_flags,
             deps = testing_deps + select_deps + test_deps,
             testonly = True,
@@ -158,9 +157,9 @@ def netsim_rust_library(
     has_integration_test = enable_integration_test and len(integration_test_srcs) > 0
 
     if has_integration_test:
-        test_flags = []
-        if strict_warnings:
-            test_flags = NETSIM_RUSTC_FLAGS
+        # Integration tests receive all library dependencies for convenience,
+        # so disable unused_crate_dependencies.
+        test_flags = [f for f in NETSIM_RUSTC_FLAGS if f != "-Dunused_crate_dependencies"]
 
         # If there's a mod.rs, it's typically the root.
         # Else it's likely a single-file setup.
@@ -221,7 +220,6 @@ def netsim_rust_binary(
         # Feature Flags (Default to True for safety)
         enable_clippy = True,
         enable_rustfmt = True,
-        strict_warnings = True,
         **kwargs):
     """
     Defines a Netsim Rust binary with standard targets.
@@ -238,14 +236,11 @@ def netsim_rust_binary(
         crate_features: the crate features
         enable_clippy: Whether to enable clippy checks.
         enable_rustfmt: Whether to enable rustfmt checks.
-        strict_warnings: Whether to enforce strict warnings (treat warnings as errors).
         **kwargs: Additional arguments passed to rust_binary.
     """
 
     # 1. The Main Binary
-    rustc_flags = kwargs.pop("rustc_flags", [])
-    if strict_warnings:
-        rustc_flags = NETSIM_RUSTC_FLAGS + rustc_flags
+    rustc_flags = NETSIM_RUSTC_FLAGS + kwargs.pop("rustc_flags", [])
 
     rust_binary(
         name = name,

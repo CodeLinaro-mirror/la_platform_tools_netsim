@@ -17,6 +17,7 @@ use netsim_model::chip::{
     Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
     PacketSink, PacketStream,
 };
+use netsim_proto::protobuf::Message;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -242,15 +243,23 @@ impl DeviceActor {
 
     async fn collect_wifi_stats_async(&self) -> Option<netsim_proto::stats::WifiStats> {
         let client = self.chip_clients.get(&netsim_model::ChipKind::WIFI)?;
-        match tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_wifi_stats()).await {
-            Ok(Ok(Some(stats))) => Some(stats),
+        match tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_global_stats()).await {
+            Ok(Ok(Some(stats_bytes))) => {
+                match netsim_proto::stats::WifiStats::parse_from_bytes(&stats_bytes) {
+                    Ok(stats) => Some(stats),
+                    Err(e) => {
+                        log::error!("DeviceActor: Failed to parse WifiStats: {}", e);
+                        None
+                    }
+                }
+            }
             Ok(Ok(None)) => None,
             Ok(Err(e)) => {
-                log::warn!("DeviceActor: Failed to get Wifi stats: {}", e);
+                log::warn!("DeviceActor: Failed to get global stats: {}", e);
                 None
             }
             Err(_) => {
-                log::debug!("DeviceActor: Timeout getting Wifi stats");
+                log::debug!("DeviceActor: Timeout getting global stats");
                 None
             }
         }
