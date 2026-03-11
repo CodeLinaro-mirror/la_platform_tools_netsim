@@ -413,6 +413,6 @@ fun seesAdvertisementWithRssi(context: Context, args: List<String>) {
 
 /// STEP: ^resets bluetooth state$
 fun resetBluetoothState(context: Context, args: List<String>) {
-  BluetoothState.reset()
+  BluetoothState.reset(context)
   Log.i(TAG, "Reset Bluetooth State")
 }

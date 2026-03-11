@@ -61,7 +61,7 @@ class NTestInstrumentation : Instrumentation() {
     val context = getContext()
     // nsdManager no longer needed here
     // nsdManager no longer needed here
-    BluetoothState.reset()
+    BluetoothState.reset(context)
     registry = StepRegistry(context)
 
     // Grant permissions
@@ -76,6 +76,7 @@ class NTestInstrumentation : Instrumentation() {
           "android.permission.BLUETOOTH_CONNECT",
           "android.permission.ACCESS_FINE_LOCATION",
           "android.permission.ACCESS_COARSE_LOCATION",
+          "android.permission.UWB_RANGING",
         )
 
       for (perm in perms) {
@@ -91,6 +92,7 @@ class NTestInstrumentation : Instrumentation() {
         uiAutomation.executeShellCommand("appops set $pkg BLUETOOTH_SCAN allow")
         uiAutomation.executeShellCommand("appops set $pkg BLUETOOTH_ADVERTISE allow")
         uiAutomation.executeShellCommand("appops set $pkg BLUETOOTH_CONNECT allow")
+        uiAutomation.executeShellCommand("appops set $pkg UWB_RANGING allow")
       } catch (ignore: Exception) {
         Log.w(TAG, "Failed to set AppOps: ${ignore.message}")
       }
