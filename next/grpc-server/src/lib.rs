@@ -1,4 +1,3 @@
-pub mod access_point;
 pub mod frontend;
 
 pub mod frontend_converter;

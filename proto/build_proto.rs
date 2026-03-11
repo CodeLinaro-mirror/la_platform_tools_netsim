@@ -1,8 +1,7 @@
-use std::{
-    env, fs,
-    path::Path,
-    process::{exit, Command},
-};
+use std::env;
+use std::fs;
+use std::path::Path;
+use std::process::{exit, Command};
 
 fn main() {
     // Entry point for build_proto
@@ -125,7 +124,6 @@ fn main() {
             // Patch configuration.rs specifically if needed (from Python logic)
             if file_name == "configuration.rs" {
                 let content = fs::read_to_string(&dest).expect("Read config");
-                #[rustfmt::skip]
                 let new_content = content
                     .replace("super::super::configuration::", "crate::rootcanal::configuration::")
                     .replace("super::configuration::", "crate::rootcanal::configuration::");
@@ -141,7 +139,6 @@ fn main() {
 pub mod netsim {
   pub mod common;
   pub mod config;
-  pub mod access_point;
   pub mod frontend;
   pub mod hci_packet;
   pub mod model;
@@ -165,7 +162,6 @@ pub mod google {
 }
 pub use netsim::common;
 pub use netsim::config;
-pub use netsim::access_point;
 pub use netsim::frontend;
 pub use netsim::hci_packet;
 pub use netsim::model;
@@ -177,8 +173,6 @@ pub use rootcanal::configuration;
 pub mod frontend_grpc;
 #[path = "netsim/packet_streamer_grpc.rs"]
 pub mod packet_streamer_grpc;
-#[path = "netsim/access_point_grpc.rs"]
-pub mod access_point_grpc;
 pub use protobuf;
 pub use protobuf::well_known_types::empty;
 "#;
