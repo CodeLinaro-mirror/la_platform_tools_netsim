@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use actor_framework::DynContext;
 use ap_actor::{shared::SharedKeyStore, ApClient};
-use log::{debug, warn};
+use log::debug;
 use netsim_model::{
     chip::{Chip, ChipId},
     stats::NetsimRadioStats,
@@ -80,7 +80,7 @@ impl WifiActor {
             #[cfg(not(target_os = "linux"))]
             {
                 let _ = if_name;
-                warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
+                log::warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
                 Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
             }
         } else {
@@ -138,7 +138,7 @@ impl WifiActor {
 
             Ok(())
         } else {
-            Err(WifiError::Internal(format!("Chip {} not found", id)))
+            Err(WifiError::Client(format!("Chip {} not found", id)))
         }
     }
 
@@ -157,18 +157,21 @@ impl WifiActor {
         match self.medium.resolve_tx_packet(chip_id, &packet) {
             Ok(tx_state) => {
                 // 1. Ack
-                if let Err(e) = self.medium.ack_frame(chip_id, &tx_state.frame, &mut self.out_queue)
-                {
-                    self.medium.wifi_stats.log_and_incr_err_count(&e);
-                }
-
+                let res = self.medium.ack_frame(chip_id, &tx_state.frame, &mut self.out_queue);
+                self.medium.wifi_stats.log_outcome(res, |_, _| {});
                 // 2. Infra (AP/Slirp) routing
                 match tx_state.infra_target {
                     InfraTarget::Ap => {
                         debug!("ROUTING: Guest -> AP");
                         if let Some(to_ap) = &self.to_ap {
-                            let _ = to_ap.send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()));
-                            self.medium.wifi_stats.incr_hostapd_frames_tx();
+                            self.medium.wifi_stats.log_outcome(
+                                to_ap
+                                    .send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()))
+                                    .map_err(|e| {
+                                        WifiError::Hostapd(format!("Failed to send to AP: {e}"))
+                                    }),
+                                |stats, _| stats.incr_hostapd_frames_tx(),
+                            );
                         }
                     }
                     InfraTarget::Slirp => {
@@ -216,14 +219,12 @@ impl WifiActor {
 
                 // 3. Stations (Loopback/Peers)
                 if tx_state.stations {
-                    // optimized: transmit now takes references
-                    if let Err(e) = self.medium.transmit(
+                    let res = self.medium.transmit(
                         &tx_state.frame,
                         tx_state.get_ieee80211(),
                         &mut self.out_queue,
-                    ) {
-                        warn!("Error queuing frame: {:?}", e);
-                    }
+                    );
+                    self.medium.wifi_stats.log_outcome(res, |_, _| {});
                 }
             }
             Err(e) => {
@@ -237,21 +238,20 @@ impl WifiActor {
         debug!("AP_PKT: len {}", packet.len());
         self.medium.wifi_stats.incr_hostapd_frames_rx();
         if !packet.is_empty() {
-            let _ = self.medium.transmit_from_infra(&packet, &mut self.out_queue);
+            let res = self.medium.transmit_from_infra(&packet, &mut self.out_queue);
+            self.medium.wifi_stats.log_outcome(res, |_, _| {});
         }
         self.flush_out_queue();
     }
 
     async fn route_to_infra(&mut self, chip_id: u32, ieee80211: &Ieee80211) {
         debug!("ROUTING: Guest -> Infra");
-        match self.gateway.send_80211(ChipId(chip_id), ieee80211).await {
-            Err(e) => {
-                self.medium.wifi_stats.log_and_incr_err_count(&e);
-            }
-            Ok(payload_len) => {
-                self.medium.wifi_stats.incr_network_packets_tx();
-                self.medium.wifi_stats.record_upload_bytes(payload_len);
-            }
-        }
+        self.medium.wifi_stats.log_outcome(
+            self.gateway.send_80211(ChipId(chip_id), ieee80211).await,
+            |stats, payload_len| {
+                stats.incr_network_packets_tx();
+                stats.record_upload_bytes(payload_len);
+            },
+        );
     }
 }

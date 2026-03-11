@@ -43,7 +43,7 @@ mod tests {
         time::SystemTime,
     };
 
-    use actor_framework::ActorService;
+    use actor_framework::{ActorLifecycle, ActorService};
     use bytes::Bytes;
     use capture_api::{CaptureAction, CaptureCreate, Direction};
     use netsim_model::chip::{ChipId, ChipKind};
@@ -314,6 +314,201 @@ mod tests {
 
             ctx.delete_entity(&entity, &mut runtime).await.unwrap();
         }
+        teardown_test_context(temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_capture_flushes_on_tick() {
+        let (mut actor, temp_dir) = setup_test_context();
+        let chip_id = ChipId(6);
+        let enabled_flag = Arc::new(AtomicBool::new(true));
+        let create_params = CaptureCreate {
+            chip_id,
+            chip_kind: ChipKind::BLUETOOTH,
+            device_name: "test_device_tick".to_string(),
+            enabled_flag: enabled_flag.clone(),
+        };
+
+        let mut entity = InternalCaptureInfo::from_create_params(chip_id, create_params).unwrap();
+        let mut runtime = MockContext;
+
+        actor.create_entity(&mut entity, &mut runtime).await.unwrap();
+        actor.entities.insert(chip_id, entity.clone());
+
+        let packet = vec![0x00, 0x01, 0x02, 0x03];
+        actor
+            .handle_action(
+                Some(chip_id),
+                CaptureAction::CapturePacket {
+                    chip_id,
+                    direction: Direction::Sent,
+                    bytes: bytes::Bytes::from(packet.clone()),
+                },
+                &mut runtime,
+            )
+            .await
+            .unwrap();
+
+        let entries: Vec<_> = fs::read_dir(&temp_dir).unwrap().map(|r| r.unwrap().path()).collect();
+        assert_eq!(entries.len(), 1, "Expected one pcap file");
+        let pcap_path = &entries[0];
+
+        // Before flush, the file size should be 0 (all written bytes are buffered)
+        let metadata = fs::metadata(pcap_path).unwrap();
+        assert_eq!(metadata.len(), 0, "File should be 0 bytes before flush");
+
+        // Simulate tick by calling flush_writers
+        actor.on_tick(&mut runtime).await;
+
+        let metadata = fs::metadata(pcap_path).unwrap();
+        assert!(metadata.len() > 0, "File should have data after flush");
+
+        actor.delete_entity(&entity, &mut runtime).await.unwrap();
+        teardown_test_context(temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_capture_flushes_on_shutdown() {
+        use actor_framework::ActorLifecycle;
+
+        let (mut actor, temp_dir) = setup_test_context();
+        let chip_id = ChipId(7);
+        let enabled_flag = Arc::new(AtomicBool::new(true));
+        let create_params = CaptureCreate {
+            chip_id,
+            chip_kind: ChipKind::BLUETOOTH,
+            device_name: "test_device_shutdown".to_string(),
+            enabled_flag: enabled_flag.clone(),
+        };
+
+        let mut entity = InternalCaptureInfo::from_create_params(chip_id, create_params).unwrap();
+        let mut runtime = MockContext;
+
+        actor.create_entity(&mut entity, &mut runtime).await.unwrap();
+        actor.entities.insert(chip_id, entity.clone());
+
+        let packet = vec![0x00, 0x01, 0x02, 0x03];
+        actor
+            .handle_action(
+                Some(chip_id),
+                CaptureAction::CapturePacket {
+                    chip_id,
+                    direction: Direction::Sent,
+                    bytes: bytes::Bytes::from(packet.clone()),
+                },
+                &mut runtime,
+            )
+            .await
+            .unwrap();
+
+        let entries: Vec<_> = fs::read_dir(&temp_dir).unwrap().map(|r| r.unwrap().path()).collect();
+        assert_eq!(entries.len(), 1, "Expected one pcap file");
+        let pcap_path = &entries[0];
+
+        let metadata = fs::metadata(pcap_path).unwrap();
+        assert_eq!(metadata.len(), 0, "File should be 0 bytes before flush");
+
+        // Simulate shutdown
+        actor.on_shutdown().await;
+
+        let metadata = fs::metadata(pcap_path).unwrap();
+        assert!(metadata.len() > 0, "File should have data after flush");
+
+        teardown_test_context(temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_capture_flushes_on_disable() {
+        let (mut actor, temp_dir) = setup_test_context();
+        let chip_id = ChipId(8);
+        let enabled_flag = Arc::new(AtomicBool::new(true));
+        let create_params = CaptureCreate {
+            chip_id,
+            chip_kind: ChipKind::BLUETOOTH,
+            device_name: "test_device_disable".to_string(),
+            enabled_flag: enabled_flag.clone(),
+        };
+
+        let mut entity = InternalCaptureInfo::from_create_params(chip_id, create_params).unwrap();
+        let mut runtime = MockContext;
+
+        actor.create_entity(&mut entity, &mut runtime).await.unwrap();
+        actor.entities.insert(chip_id, entity.clone());
+
+        let packet = vec![0x00, 0x01, 0x02, 0x03];
+        actor
+            .handle_action(
+                Some(chip_id),
+                CaptureAction::CapturePacket {
+                    chip_id,
+                    direction: Direction::Sent,
+                    bytes: bytes::Bytes::from(packet.clone()),
+                },
+                &mut runtime,
+            )
+            .await
+            .unwrap();
+
+        let entries: Vec<_> = fs::read_dir(&temp_dir).unwrap().map(|r| r.unwrap().path()).collect();
+        assert_eq!(entries.len(), 1, "Expected one pcap file");
+        let pcap_path = &entries[0];
+
+        let metadata = fs::metadata(pcap_path).unwrap();
+        assert_eq!(metadata.len(), 0, "File should be 0 bytes before flush");
+
+        // Disable capture, which should flush and close writer
+        actor.update_entity(&mut entity, false, &mut runtime).await.unwrap();
+
+        let metadata = fs::metadata(pcap_path).unwrap();
+        assert!(metadata.len() > 0, "File should have data after flush");
+
+        teardown_test_context(temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_capture_flushes_on_delete() {
+        let (mut actor, temp_dir) = setup_test_context();
+        let chip_id = ChipId(9);
+        let enabled_flag = Arc::new(AtomicBool::new(true));
+        let create_params = CaptureCreate {
+            chip_id,
+            chip_kind: ChipKind::BLUETOOTH,
+            device_name: "test_device_delete".to_string(),
+            enabled_flag: enabled_flag.clone(),
+        };
+
+        let mut entity = InternalCaptureInfo::from_create_params(chip_id, create_params).unwrap();
+        let mut runtime = MockContext;
+
+        actor.create_entity(&mut entity, &mut runtime).await.unwrap();
+        actor.entities.insert(chip_id, entity.clone());
+
+        let packet = vec![0x00, 0x01, 0x02, 0x03];
+        actor
+            .handle_action(
+                Some(chip_id),
+                CaptureAction::CapturePacket {
+                    chip_id,
+                    direction: Direction::Sent,
+                    bytes: bytes::Bytes::from(packet.clone()),
+                },
+                &mut runtime,
+            )
+            .await
+            .unwrap();
+
+        let entries: Vec<_> = fs::read_dir(&temp_dir).unwrap().map(|r| r.unwrap().path()).collect();
+        assert_eq!(entries.len(), 1, "Expected one pcap file");
+        let pcap_path = &entries[0];
+
+        let metadata = fs::metadata(pcap_path).unwrap();
+        assert_eq!(metadata.len(), 0, "File should be 0 bytes before flush");
+
+        // Delete capture, which should flush and close writer
+        actor.delete_entity(&entity, &mut runtime).await.unwrap();
+
+        let metadata = fs::metadata(pcap_path).unwrap();
+        assert!(metadata.len() > 0, "File should have data after flush");
         teardown_test_context(temp_dir);
     }
 }

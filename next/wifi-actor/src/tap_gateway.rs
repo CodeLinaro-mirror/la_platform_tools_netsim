@@ -57,7 +57,7 @@ impl TapInterface {
                 nix::fcntl::OFlag::O_RDWR,
                 nix::sys::stat::Mode::empty(),
             )
-            .map_err(|e| WifiError::Internal(format!("Failed to open /dev/net/tun: {}", e)))?;
+            .map_err(|e| WifiError::Network(format!("Failed to open /dev/net/tun: {}", e)))?;
 
             // SAFETY: The file descriptor was just successfully opened via
             // nix::fcntl::open, so it is valid and we are taking exclusive
@@ -71,7 +71,7 @@ impl TapInterface {
         // Set name
         let bytes = if_name.as_bytes();
         if bytes.len() >= libc::IFNAMSIZ {
-            return Err(WifiError::Internal("Interface name too long".to_string()));
+            return Err(WifiError::Frame("Interface name too long".to_string()));
         }
         for (i, b) in bytes.iter().enumerate() {
             if_req.ifr_name[i] = *b as libc::c_char;
@@ -93,23 +93,23 @@ impl TapInterface {
         // SAFETY: `fd` is a valid open file descriptor for /dev/net/tun.
         // `if_req` is a valid libc::ifreq struct on the stack.
         unsafe { tunsetiff(fd.as_raw_fd(), &mut if_req) }
-            .map_err(|e| WifiError::Internal(format!("Failed to TUNSETIFF: {}", e)))?;
+            .map_err(|e| WifiError::Network(format!("Failed to TUNSETIFF: {}", e)))?;
 
         // Set non-blocking
         let flags = nix::fcntl::fcntl(fd.as_raw_fd(), nix::fcntl::FcntlArg::F_GETFL)
-            .map_err(|e| WifiError::Internal(format!("Failed to get flags: {}", e)))?;
+            .map_err(|e| WifiError::Network(format!("Failed to get flags: {}", e)))?;
 
         let oflag = nix::fcntl::OFlag::from_bits_truncate(flags) | nix::fcntl::OFlag::O_NONBLOCK;
 
         nix::fcntl::fcntl(fd.as_raw_fd(), nix::fcntl::FcntlArg::F_SETFL(oflag))
-            .map_err(|e| WifiError::Internal(format!("Failed to set non-blocking: {}", e)))?;
+            .map_err(|e| WifiError::Network(format!("Failed to set non-blocking: {}", e)))?;
 
         // Create File from OwnedFd
         // AsyncFd takes ownership of the File
         let file = std::fs::File::from(fd);
 
         // Wrap in AsyncFd
-        let poll_fd = AsyncFd::new(file).map_err(|e| WifiError::Internal(e.to_string()))?;
+        let poll_fd = AsyncFd::new(file).map_err(|e| WifiError::Network(e.to_string()))?;
 
         info!("Opened TAP interface: {}", if_name);
         Ok(Self { name: if_name.to_string(), poll_fd })
@@ -207,7 +207,10 @@ impl GatewayTrait for TapGateway {
             return;
         };
 
-        let _ = medium.transmit_from_infra(&bytes, out_queue);
+        let res = medium.transmit_from_infra(&bytes, out_queue);
+        medium.wifi_stats.log_outcome(res, |s, _| {
+            // Nothing to do for success of transmit_from_infra
+        });
     }
 
     async fn on_start(&mut self, _ctx: &mut actor_framework::DynContext<WifiActor>) {}
@@ -333,12 +336,10 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
     /// single-tap mode.
     fn allocate_next_tap(&self) -> Option<(u32, String)> {
         if let Some(range) = &self.pool_range {
-            for i in range.clone() {
-                if !self.used_indices.values().any(|&idx| idx == i) {
-                    return Some((i, self.format_name(i)));
-                }
-            }
-            None
+            range
+                .clone()
+                .find(|&i| !self.used_indices.values().any(|&idx| idx == i))
+                .map(|i| (i, self.format_name(i)))
         } else {
             // Single mode: use index 0 as placeholder
             Some((0, self.format_name(0)))
@@ -377,9 +378,9 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
         chip_id: ChipId,
     ) -> WifiResult<impl futures::Stream<Item = bytes::Bytes>> {
         // Allocate TAP
-        let (index, if_name) = self.allocate_next_tap().ok_or_else(|| {
-            WifiError::Internal("No available TAP interfaces in pool".to_string())
-        })?;
+        let (index, if_name) = self
+            .allocate_next_tap()
+            .ok_or_else(|| WifiError::Network("No available TAP interfaces in pool".to_string()))?;
 
         // Record usage if in pool mode
         if self.pool_range.is_some() {

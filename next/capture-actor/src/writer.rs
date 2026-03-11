@@ -34,6 +34,8 @@ pub trait CaptureWriter: Send + Sync {
         data: &[u8],
     ) -> Result<()>;
 
+    async fn flush(&mut self) -> io::Result<()>;
+
     /// Returns statistics about the capture.
     ///
     /// Returns a tuple of (number of records, total bytes written).
@@ -123,6 +125,10 @@ impl CaptureWriter for PcapWriter {
         self.bytes_written += data.len() as u64;
 
         Ok(())
+    }
+
+    async fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush().await
     }
 
     fn get_stats(&self) -> (u64, u64) {

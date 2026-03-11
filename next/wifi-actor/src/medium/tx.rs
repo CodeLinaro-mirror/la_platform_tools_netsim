@@ -30,7 +30,7 @@ impl Medium {
         msg: &HwsimMsg,
         out_queue: &mut Vec<(u32, Bytes)>,
     ) -> WifiResult<()> {
-        let packet = msg.encode_to_vec().map_err(|e| WifiError::Internal(e.to_string()))?.into();
+        let packet = msg.encode_to_vec().map_err(|e| WifiError::Frame(e.to_string()))?.into();
         out_queue.push((client_id, packet));
         Ok(())
     }
@@ -104,7 +104,7 @@ impl Medium {
         let ieee80211 =
             Ieee80211::from_ieee8023_qos(packet, bssid, FrameDirection::FromAp, true, seq)
                 .map_err(|e| {
-                    WifiError::Internal(format!("Failed to process IEEE 802.3 response: {e}"))
+                    WifiError::Frame(format!("Failed to process IEEE 802.3 response: {e}"))
                 })?;
         self.route_infra_packet(ieee80211, out_queue)
     }
@@ -122,7 +122,7 @@ impl Medium {
             return Ok(());
         }
         let ieee80211 = Ieee80211::decode_full(packet).map_err(|e| {
-            WifiError::Internal(format!("Failed to process IEEE 802.11 response: {e}"))
+            WifiError::Frame(format!("Failed to process IEEE 802.11 response: {e}"))
         })?;
         self.route_infra_packet(ieee80211, out_queue)
     }
@@ -194,7 +194,7 @@ impl Medium {
 
         let targets = self.resolve_targets(&dest_addr);
         if targets.is_empty() && !dest_addr.is_multicast() {
-            return Err(WifiError::Internal(format!(
+            return Err(WifiError::Transmission(format!(
                 "Dropped packet from {} to {}",
                 source.addr, dest_addr
             )));
