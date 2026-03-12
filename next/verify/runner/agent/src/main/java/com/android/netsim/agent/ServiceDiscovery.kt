@@ -61,13 +61,9 @@ object DiscoveryState {
   private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
   var nsdManagerForCleanup: NsdManager? = null
 
-  fun reset() {
-    synchronized(lock) { foundServices.clear() }
-  }
-
-  fun cleanup() {
+  fun reset(context: Context) {
     synchronized(lock) {
-      reset()
+      foundServices.clear()
       nsdManagerForCleanup?.let { manager ->
         val latch = java.util.concurrent.CountDownLatch(activeRegistrations.size)
         activeRegistrations.forEach { listener ->

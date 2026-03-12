@@ -160,7 +160,7 @@ impl ActorService for WifiActor {
                 Ok(WifiResponse::Statistics(stats.into_boxed_slice()))
             }
             WifiReq::GetGlobalStats => {
-                let stats = netsim_proto::stats::WifiStats::default();
+                let stats = self.medium.wifi_stats.to_proto();
                 Ok(WifiResponse::GlobalStats(Box::new(stats)))
             }
             WifiReq::Reset { id } => {

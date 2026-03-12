@@ -463,6 +463,12 @@ impl Ieee80211 {
         if (fc & 0x000C) == 0x0008 && (fc & 0x0080) != 0 {
             len += 2;
         }
+
+        // HT Control check: Order bit 15 is set (0x8000) in 802.11n
+        if (fc & 0x8000) != 0 {
+            len += 4;
+        }
+
         len
     }
 
@@ -517,8 +523,22 @@ impl Ieee80211 {
         let sc_masked = sc & 0x000F;
         aad.extend_from_slice(&sc_masked.to_le_bytes());
 
-        if self.hdr_length() >= 30 && self.bytes.len() >= 30 {
+        let to_ds = (fc & 0x0100) != 0;
+        let from_ds = (fc & 0x0200) != 0;
+        let has_addr4 = to_ds && from_ds;
+        let mut qos_offset = 24;
+
+        if has_addr4 && self.bytes.len() >= 30 {
             aad.extend_from_slice(&self.bytes[24..30]); // Addr4
+            qos_offset = 30;
+        }
+
+        // QoS Control masked (TID kept, bits 4-15 -> 0)
+        let is_qos = (fc & 0x000C) == 0x0008 && (fc & 0x0080) != 0;
+        if is_qos && self.bytes.len() >= qos_offset + 2 {
+            let qos_ctrl_0 = self.bytes[qos_offset];
+            aad.push(qos_ctrl_0 & 0x0F);
+            aad.push(0x00);
         }
 
         aad
@@ -634,11 +654,7 @@ impl Ieee80211 {
     }
 
     pub fn is_eapol(&self) -> Result<bool, String> {
-        let hdr_len = self.hdr_length();
-        let mut offset = hdr_len;
-        if self.is_data() && (self.stype() & 0x8) != 0 {
-            offset += 2;
-        }
+        let offset = self.hdr_length();
 
         if self.bytes.len() < offset + 8 {
             return Ok(false);
@@ -671,6 +687,17 @@ impl Ieee80211 {
         packet: &[u8],
         bssid: MacAddress,
         direction: FrameDirection,
+        seq: u16,
+    ) -> Result<Self, String> {
+        Self::from_ieee8023_qos(packet, bssid, direction, false, seq)
+    }
+
+    pub fn from_ieee8023_qos(
+        packet: &[u8],
+        bssid: MacAddress,
+        direction: FrameDirection,
+        is_qos: bool,
+        seq: u16,
     ) -> Result<Self, String> {
         if packet.len() < 14 {
             return Err("Packet too short".into());
@@ -681,12 +708,12 @@ impl Ieee80211 {
         let payload = &packet[14..];
 
         let mut new_packet = Vec::new();
-        // FC: Data (0x08)
-        // If FromAp (Downlink): ToDS=0, FromDS=1 (0x0200) -> 0x0208
-        // If ToAp (Uplink):     ToDS=1, FromDS=0 (0x0100) -> 0x0108
-        let fc: u16 = match direction {
-            FrameDirection::FromAp => 0x0208,
-            FrameDirection::ToAp => 0x0108,
+        // If is_qos: Data (0x88)
+        let fc: u16 = match (direction, is_qos) {
+            (FrameDirection::FromAp, true) => 0x0288,
+            (FrameDirection::FromAp, false) => 0x0208,
+            (FrameDirection::ToAp, true) => 0x0188,
+            (FrameDirection::ToAp, false) => 0x0108,
         };
         new_packet.extend_from_slice(&fc.to_le_bytes());
         new_packet.extend_from_slice(&0u16.to_le_bytes()); // Duration/ID
@@ -712,7 +739,14 @@ impl Ieee80211 {
             }
         }
 
-        new_packet.extend_from_slice(&0u16.to_le_bytes()); // Sequence Control
+        let seq_ctrl = seq << 4;
+        new_packet.extend_from_slice(&seq_ctrl.to_le_bytes()); // Sequence Control
+
+        // QoS Control (if present)
+        if is_qos {
+            // TID 0, no EOSP, no Ack Policy, no AMSDU
+            new_packet.extend_from_slice(&[0x00, 0x00]);
+        }
 
         // LLC/SNAP
         new_packet.extend_from_slice(&[0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00]);
@@ -1091,7 +1125,7 @@ mod tests {
         eth_frame.extend_from_slice(&[0x08, 0x00]); // IPv4
         eth_frame.extend_from_slice(&payload);
 
-        let frame = Ieee80211::from_ieee8023(&eth_frame, bssid, FrameDirection::FromAp)
+        let frame = Ieee80211::from_ieee8023(&eth_frame, bssid, FrameDirection::FromAp, 100)
             .expect("Failed to convert");
 
         // Verify Flags
@@ -1131,7 +1165,7 @@ mod tests {
         eth_frame.extend_from_slice(&[0x08, 0x00]); // IPv4
         eth_frame.extend_from_slice(&payload);
 
-        let frame = Ieee80211::from_ieee8023(&eth_frame, bssid, FrameDirection::ToAp)
+        let frame = Ieee80211::from_ieee8023(&eth_frame, bssid, FrameDirection::ToAp, 100)
             .expect("Failed to convert");
 
         // Verify Flags

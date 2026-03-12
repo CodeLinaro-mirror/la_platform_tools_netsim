@@ -24,6 +24,8 @@ pub struct World {
     _actor_task: tokio::task::JoinHandle<()>,
     // Shared state for radio stats, injected into mock chips
     pub radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+    // Shared state for wifi stats
+    pub wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
     // Last fetched radio stats
     pub last_radio_stats: Option<Vec<netsim_model::stats::NetsimRadioStats>>,
     // Path to clean up on drop
@@ -33,6 +35,8 @@ pub struct World {
     pub current_chip_id: Option<netsim_model::chip::ChipId>,
     pub transport_tx: Option<tokio::sync::mpsc::UnboundedSender<Bytes>>,
     pub device_config: Option<DeviceConfig>,
+    // Persistent stats path for verification even after detach
+    pub stats_path: Option<std::path::PathBuf>,
 }
 
 impl Drop for World {
@@ -56,7 +60,9 @@ impl World {
     /// Creates a new World with default mock clients.
     pub async fn new() -> Self {
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let chip_clients = Self::create_default_chip_clients_with_stats(radio_stats.clone());
+        let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let chip_clients =
+            Self::create_default_chip_clients_with_stats(radio_stats.clone(), wifi_stats.clone());
         let link_client = Self::create_default_link_client();
         let (stats_path, _) = Self::temp_stats_path();
         Self::with_clients_internal(
@@ -67,6 +73,7 @@ impl World {
             Some(stats_path.clone()),
             None,
             radio_stats,
+            wifi_stats,
             Some(stats_path),
         )
         .await
@@ -77,7 +84,9 @@ impl World {
         interval: Option<std::time::Duration>,
     ) -> Self {
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let chip_clients = Self::create_default_chip_clients_with_stats(radio_stats.clone());
+        let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let chip_clients =
+            Self::create_default_chip_clients_with_stats(radio_stats.clone(), wifi_stats.clone());
         let link_client = Self::create_default_link_client();
         Self::with_clients_internal(
             chip_clients,
@@ -87,6 +96,7 @@ impl World {
             Some(path.clone()),
             interval,
             radio_stats,
+            wifi_stats,
             Some(path),
         )
         .await
@@ -98,6 +108,7 @@ impl World {
         link_client: MockLinkClient,
     ) -> Self {
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
         let (stats_path, _) = Self::temp_stats_path();
         Self::with_clients_internal(
             chip_clients,
@@ -107,6 +118,7 @@ impl World {
             Some(stats_path.clone()),
             None,
             radio_stats,
+            wifi_stats,
             Some(stats_path),
         )
         .await
@@ -121,6 +133,7 @@ impl World {
         stats_path: Option<std::path::PathBuf>,
     ) -> Self {
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
 
         // If stats_path is None, create a temp one to avoid pollution
         let (final_path, cleanup_path) = if let Some(p) = stats_path {
@@ -138,6 +151,7 @@ impl World {
             final_path,
             None,
             radio_stats,
+            wifi_stats,
             cleanup_path,
         )
         .await
@@ -152,6 +166,7 @@ impl World {
         stats_path: Option<std::path::PathBuf>,
         stats_interval: Option<std::time::Duration>,
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
         stats_file_to_cleanup: Option<std::path::PathBuf>,
     ) -> Self {
         let (runner, client) = device_actor::new();
@@ -163,7 +178,7 @@ impl World {
             startup_timeout,
             idle_timeout,
             "0.0.0-test".to_string(),
-            stats_path,
+            stats_path.clone(),
             stats_interval,
         );
         actor.set_self_client(client.clone());
@@ -172,155 +187,166 @@ impl World {
             client,
             _actor_task: actor_task,
             radio_stats,
+            wifi_stats,
             last_radio_stats: None,
             stats_file_to_cleanup,
             current_device_id: None,
             current_chip_id: None,
             transport_tx: None,
             device_config: None,
+            stats_path,
         }
     }
 
     pub fn create_default_chip_clients() -> HashMap<ChipKind, Box<dyn ChipClient>> {
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
-        Self::create_default_chip_clients_with_stats(radio_stats)
+        let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        Self::create_default_chip_clients_with_stats(radio_stats, wifi_stats)
     }
 
     pub fn create_default_chip_clients_with_stats(
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
     ) -> HashMap<ChipKind, Box<dyn ChipClient>> {
         let mut clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         // Add default mocks for common chip kinds
         for kind in [ChipKind::BLUETOOTH, ChipKind::WIFI, ChipKind::UWB] {
-            clients
-                .insert(kind, Box::new(Self::create_default_mock_chip(radio_stats.clone(), kind)));
+            clients.insert(
+                kind,
+                Box::new(Self::create_default_mock_chip(
+                    radio_stats.clone(),
+                    wifi_stats.clone(),
+                    kind,
+                )),
+            );
         }
         clients
     }
 
     pub(crate) fn create_default_mock_chip(
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
-        kind: ChipKind,
+        wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
+        _kind: ChipKind,
     ) -> MockChipClient {
+        // Shared map to store state for all chips of this kind (Service Handle pattern)
+        let chips = Arc::new(std::sync::Mutex::new(HashMap::new()));
         let mut mock = MockChipClient::new();
-        // Shared state for the chip
-        let chip_state = Arc::new(std::sync::Mutex::new(netsim_model::chip::Chip {
-            kind,
-            ..Default::default()
-        }));
+        Self::setup_mock_chip_client(&mut mock, chips, radio_stats, wifi_stats);
+        mock
+    }
 
-        // Return chip with correct kind and state
-        let chip_state_read = chip_state.clone();
-        mock.expect_read().returning(move |_| {
-            let chip = chip_state_read.lock().unwrap();
-            Ok(chip.clone())
+    /// Helper to create a mock that shares existing state (for clone_box of an
+    /// ACTIVE client)
+    fn create_shared_mock(
+        chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
+    ) -> Box<MockChipClient> {
+        let mut mock = MockChipClient::new();
+        Self::setup_mock_chip_client(&mut mock, chips, radio_stats, wifi_stats);
+        Box::new(mock)
+    }
+
+    fn setup_mock_chip_client(
+        mock: &mut MockChipClient,
+        chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
+        radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
+        wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
+    ) {
+        let chips_clone = chips.clone();
+        let rs_clone = radio_stats.clone();
+        let ws_clone = wifi_stats.clone();
+        mock.expect_clone_box().returning(move || {
+            Self::create_shared_mock(chips_clone.clone(), rs_clone.clone(), ws_clone.clone())
         });
 
-        let chip_state_update = chip_state.clone();
-        mock.expect_update().returning(move |_, patch| {
-            let mut chip = chip_state_update.lock().unwrap();
-            // Apply updates to the shared state
-            if let Some(netsim_model::chip::ChipVariantUpdate::Bluetooth(bt_update)) = patch.variant
-            {
-                let le_state = bt_update.low_energy.state;
-                let classic_state = bt_update.classic.state;
-
-                // Ensure variant exists
-                if chip.variant.is_none() {
-                    chip.variant =
-                        Some(netsim_model::chip::ChipVariant::Bluetooth(Default::default()));
-                }
-
-                if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
-                    if let Some(s) = le_state {
-                        bt.low_energy.state = Some(s);
-                    }
-                    if let Some(s) = classic_state {
-                        bt.classic.state = Some(s);
-                    }
-                }
-            }
-            Ok(chip.clone())
-        });
-
-        mock.expect_create().returning(|params| {
+        let chips_create = chips.clone();
+        mock.expect_create().with(mockall::predicate::always()).returning(move |params| {
+            let mut chips = chips_create.lock().unwrap();
+            let chip = netsim_model::chip::Chip {
+                id: params.id.0,
+                kind: netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
+                name: Some(params.config.name),
+                manufacturer: Some(params.config.manufacturer),
+                product_name: Some(params.config.product_name),
+                device_id: params.device_id,
+                variant: Some(netsim_model::chip::ChipVariant::from(
+                    netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
+                )),
+                enabled: true,
+                ..Default::default()
+            };
+            chips.insert(params.id, chip);
             if let Some(mut stream) = params.packet_stream {
                 tokio::spawn(async move { while stream.next().await.is_some() {} });
             }
             Ok(())
         });
-        mock.expect_delete().returning(|_| Ok(()));
 
-        // Return stats from shared state
-        let rs_for_read = radio_stats.clone();
-        mock.expect_read_statistics().returning(move || {
-            let stats = rs_for_read.lock().unwrap();
-            Ok(Box::from(stats.clone()))
+        let chips_read = chips.clone();
+        mock.expect_read().returning(move |id| {
+            let chips = chips_read.lock().unwrap();
+            chips.get(&id).cloned().ok_or(netsim_model::client_error::ClientError::Chip(
+                netsim_model::chip_error::ChipError::ChipNotFound(id),
+            ))
         });
 
-        mock.expect_reset().returning(|_| Ok(()));
-
-        // Clone returns a fresh mock handling stats from the shared state AND shared
-        // chip state
-        let radio_stats_clone = radio_stats.clone();
-        let chip_state_clone = chip_state.clone();
-
-        mock.expect_clone_box().returning(move || {
-            let mut clone_mock = MockChipClient::new();
-            let rs_clone = radio_stats_clone.clone();
-            let cs_read = chip_state_clone.clone();
-
-            clone_mock.expect_read_statistics().returning(move || {
-                let stats = rs_clone.lock().unwrap();
-                Ok(Box::from(stats.clone()))
-            });
-
-            clone_mock.expect_read().returning(move |_| {
-                let chip = cs_read.lock().unwrap();
-                Ok(chip.clone())
-            });
-
-            let cs_update = chip_state_clone.clone();
-            clone_mock.expect_update().returning(move |_, patch| {
-                let mut chip = cs_update.lock().unwrap();
+        let chips_update = chips.clone();
+        mock.expect_update().returning(move |id, patch| {
+            let mut chips = chips_update.lock().unwrap();
+            if let Some(chip) = chips.get_mut(&id) {
+                // Apply patches (simplified)
+                if let Some(pos) = patch.position {
+                    chip.position = pos;
+                }
+                if let Some(orient) = patch.orientation {
+                    chip.orientation = orient;
+                }
                 if let Some(netsim_model::chip::ChipVariantUpdate::Bluetooth(bt_update)) =
                     patch.variant
                 {
-                    let le_state = bt_update.low_energy.state;
-                    let classic_state = bt_update.classic.state;
-
-                    if chip.variant.is_none() {
-                        chip.variant =
-                            Some(netsim_model::chip::ChipVariant::Bluetooth(Default::default()));
-                    }
-
                     if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &mut chip.variant
                     {
-                        if let Some(s) = le_state {
+                        if let Some(s) = bt_update.low_energy.state {
                             bt.low_energy.state = Some(s);
                         }
-                        if let Some(s) = classic_state {
+                        if let Some(s) = bt_update.classic.state {
                             bt.classic.state = Some(s);
                         }
                     }
                 }
                 Ok(chip.clone())
-            });
-
-            clone_mock.expect_create().returning(|params| {
-                if let Some(mut stream) = params.packet_stream {
-                    tokio::spawn(async move { while stream.next().await.is_some() {} });
-                }
-                Ok(())
-            });
-            clone_mock.expect_delete().returning(|_| Ok(()));
-            clone_mock.expect_reset().returning(|_| Ok(()));
-            clone_mock.expect_clone_box().returning(move || Box::new(MockChipClient::new())); // Nested clones not fully supported for now, but usually not needed 2 levels
-                                                                                              // deep in tests
-
-            Box::new(clone_mock)
+            } else {
+                Err(netsim_model::client_error::ClientError::Chip(
+                    netsim_model::chip_error::ChipError::ChipNotFound(id),
+                ))
+            }
         });
-        mock
+
+        let chips_delete = chips.clone();
+        mock.expect_delete().returning(move |id| {
+            let mut chips = chips_delete.lock().unwrap();
+            chips.remove(&id);
+            Ok(())
+        });
+        mock.expect_reset().returning(|_| Ok(()));
+
+        let rs = radio_stats.clone();
+        mock.expect_read_statistics().returning(move || Ok(Box::from(rs.lock().unwrap().clone())));
+
+        let ws = wifi_stats.clone();
+        let chips_wifi = chips.clone();
+        mock.expect_get_wifi_stats().returning(move || {
+            let chips = chips_wifi.lock().unwrap();
+            let ws_lock = ws.lock().unwrap();
+            // Return stats for the first chip found in the map
+            for id in chips.keys() {
+                if let Some(stat) = ws_lock.get(&id.0) {
+                    return Ok(Some(stat.clone()));
+                }
+            }
+            Ok(None)
+        });
     }
 
     pub fn create_default_link_client() -> MockLinkClient {
@@ -524,17 +550,23 @@ impl World {
         chip_name: String,
         chip_address: String,
     ) -> device_api::DeviceAddChip {
+        let mut device_config = DeviceConfig::new(
+            "test-dev".to_string(),
+            true,
+            Default::default(),
+            Default::default(),
+            false,
+        );
+        device_config.device_info = Some(netsim_model::device::DeviceInfo {
+            name: "test_device".to_string(),
+            ..Default::default()
+        });
+
         device_api::DeviceAddChip {
             device_guid,
             packet_stream: None,
             packet_sink: None,
-            device_config: DeviceConfig::new(
-                "test-dev".to_string(),
-                true,
-                Default::default(),
-                Default::default(),
-                false,
-            ),
+            device_config,
             chip_config: netsim_model::chip::ChipConfig {
                 name: chip_name,
                 manufacturer: "Netsim".to_string(),
@@ -549,6 +581,7 @@ impl World {
             },
         }
     }
+
     /// Creates a Bluetooth ChipUpdate with the specified Low Energy and Classic
     /// radio states.
     pub fn create_bluetooth_chip_update(
@@ -563,6 +596,10 @@ impl World {
             ..Default::default()
         }
     }
+
+    const STATS_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+    const STATS_RW_RETRIES: usize = 50;
+    const STATS_ABSENT_RETRIES: usize = 10;
 
     /// Helper to get a unique temporary path for stats.
     pub fn temp_stats_path() -> (std::path::PathBuf, String) {
@@ -583,7 +620,7 @@ impl World {
     pub async fn get_stats_from_file(path: &std::path::PathBuf) -> serde_json::Value {
         let mut last_content = String::new();
         // Wait up to 5 seconds
-        for _ in 0..50 {
+        for _ in 0..Self::STATS_RW_RETRIES {
             if path.exists() {
                 if let Ok(c) = std::fs::read_to_string(path) {
                     if !c.is_empty() {
@@ -594,7 +631,7 @@ impl World {
                     }
                 }
             }
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(Self::STATS_RETRY_INTERVAL).await;
         }
         panic!("Stats file content mismatch or timeout. Last content: {}", last_content);
     }
@@ -618,11 +655,156 @@ impl World {
 
         let duration = json["duration_secs"].as_u64();
 
-        if let Some(_) = duration {
-            // okay
-        } else {
-            println!("WARNING: duration_secs missing in stats file");
+        if duration.is_none() {
+            eprintln!("WARNING: duration_secs missing in stats file");
         }
+    }
+
+    // ... (rest of methods)
+
+    /// Verifies that radio stats are NOT present for the current device.
+    /// This is used to verify that stats are dropped when ambiguous (e.g., dual
+    /// mode cleanup fallback).
+    pub async fn verify_radio_stats_absent(&self) {
+        let device_id = self.current_device_id.expect("No current device set in World");
+        let path = self.stats_path.as_ref().expect("Stats path not set in World");
+
+        let mut found_any = false;
+        // Wait for potential async flush
+        for _ in 0..Self::STATS_ABSENT_RETRIES {
+            if path.exists() {
+                let content = std::fs::read_to_string(path).unwrap_or_default();
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(radio_stats) = json["radio_stats"].as_array() {
+                        for s in radio_stats {
+                            let id = s["device_id"].as_u64().unwrap_or(0);
+                            let tx_count = s["tx_count"].as_u64().unwrap_or(0);
+                            if id == device_id.0 as u64 && tx_count > 0 {
+                                found_any = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if found_any {
+                break;
+            }
+            tokio::time::sleep(Self::STATS_RETRY_INTERVAL).await;
+        }
+
+        assert!(
+            !found_any,
+            "Radio stats should be absent for device {}, but were found.",
+            device_id
+        );
+    }
+
+    pub async fn verify_radio_stats_persisted(
+        &self,
+        expected_tx_bytes: Option<u64>,
+        expected_rx_bytes: Option<u64>,
+        expected_tx_count: Option<u64>,
+        expected_rx_count: Option<u64>,
+        expected_kind: Option<&str>,
+    ) {
+        let device_id = self.current_device_id.expect("No current device set in World");
+        let path = self.stats_path.as_ref().expect("Stats path not set in World");
+
+        let mut found = false;
+        let mut last_content = String::new();
+
+        // Retry loop to handle async write latency
+        for _ in 0..Self::STATS_RW_RETRIES {
+            tokio::time::sleep(Self::STATS_RETRY_INTERVAL).await;
+            if !path.exists() {
+                continue;
+            }
+
+            let content = std::fs::read_to_string(path).unwrap_or_default();
+            if content.is_empty() {
+                continue;
+            }
+            last_content = content.clone();
+
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(radio_stats) = json["radio_stats"].as_array() {
+                    for s in radio_stats {
+                        let id = s["device_id"].as_u64().unwrap_or(0);
+                        if id != device_id.0 as u64 {
+                            continue;
+                        }
+
+                        // Check match criteria
+                        let tx_bytes = s["tx_bytes"].as_u64();
+                        let rx_bytes = s["rx_bytes"].as_u64();
+                        let tx_count = s["tx_count"].as_u64();
+                        let rx_count = s["rx_count"].as_u64();
+
+                        let mut matches = true;
+
+                        if let Some(expected) = expected_kind {
+                            let k_str = s["kind"].as_str();
+                            let k_num = s["kind"].as_u64();
+
+                            // Normalize actual kind to string if possible, or keep as is
+                            let actual_kind_match = match (k_str, k_num) {
+                                (Some(s), _) => s.eq_ignore_ascii_case(expected),
+                                (_, Some(n)) => {
+                                    // strictly match known numbers
+                                    let mapped = match n {
+                                        1 => "BLUETOOTH_LOW_ENERGY",
+                                        2 => "BLUETOOTH_CLASSIC",
+                                        4 => "WIFI",
+                                        5 => "UWB",
+                                        _ => "UNSPECIFIED",
+                                    };
+                                    mapped.eq_ignore_ascii_case(expected)
+                                }
+                                _ => false,
+                            };
+                            if !actual_kind_match {
+                                matches = false;
+                            }
+                        }
+
+                        if let Some(expected) = expected_tx_bytes {
+                            if tx_bytes != Some(expected) {
+                                matches = false;
+                            }
+                        }
+                        if let Some(expected) = expected_rx_bytes {
+                            if rx_bytes != Some(expected) {
+                                matches = false;
+                            }
+                        }
+                        if let Some(expected) = expected_tx_count {
+                            if tx_count != Some(expected) {
+                                matches = false;
+                            }
+                        }
+                        if let Some(expected) = expected_rx_count {
+                            if rx_count != Some(expected) {
+                                matches = false;
+                            }
+                        }
+
+                        if matches {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if found {
+                break;
+            }
+        }
+
+        assert!(
+            found,
+            "Radio stats matching criteria not found for device {}. Last content: {}",
+            device_id, last_content
+        );
     }
 
     /// BDD Step: Given a device with a transport stream
@@ -655,6 +837,21 @@ impl World {
         let chip_id =
             device.chips.first().expect("Device created with transport stream has no chips").id;
         self.current_chip_id = Some(netsim_model::chip::ChipId(chip_id));
+    }
+
+    /// BDD Step: Given mock radio stats are primed for the current device
+    pub async fn given_radio_stats_primed(
+        &self,
+        kind: netsim_model::stats::RadioKind,
+        tx: u64,
+        rx: u64,
+    ) {
+        let device_id = self.current_device_id.expect("No current device set in World");
+        let device =
+            self.client.get(device_id).await.expect("RPC failed").expect("Device not found");
+        let chip_id = device.chips[0].id;
+
+        self.given_radio_stats(chip_id, kind, tx, rx);
     }
 
     /// BDD Step: Given mock radio stats are primed
@@ -715,6 +912,9 @@ impl World {
         stats.kind = kind;
         stats.tx_bytes = tx;
         stats.rx_bytes = rx;
+        // Assume nonzero equals 1
+        stats.tx_count = if tx > 0 { 1 } else { 0 };
+        stats.rx_count = if rx > 0 { 1 } else { 0 };
 
         // Replace or Append
         if let Some(existing) = stats_vec.iter_mut().find(|s| s.id == device_id) {
@@ -789,7 +989,7 @@ impl World {
         variant: &str,
         arch: &str,
     ) {
-        let path = self.stats_file_to_cleanup.as_ref().unwrap();
+        let path = self.stats_path.as_ref().expect("No stats_path in World");
         let json = Self::get_stats_from_file(path).await;
 
         let device_stats = json["device_stats"]
@@ -814,89 +1014,28 @@ impl World {
         assert_eq!(ds["arch"], arch);
     }
 
-    /// BDD Step: Then the radio stats file should contain entries matching the
-    /// criteria
-    pub async fn verify_radio_stats_persisted(
+    pub async fn given_wifi_chip(&self, chip_name: &str) -> DeviceId {
+        self.when_add_wifi_chip("guid-wifi-detail", chip_name).await
+    }
+
+    /// BDD Step: Given mock Wifi stats are primed for a specific chip
+    pub fn given_mock_wifi_stats_for_chip(
         &self,
-        expected_tx_bytes: Option<u64>,
-        expected_rx_bytes: Option<u64>,
-        expected_tx_count: Option<u64>,
-        expected_rx_count: Option<u64>,
-        expected_kind: Option<&str>,
+        chip_id: u32,
+        stats: netsim_proto::stats::WifiStats,
     ) {
-        let path = self.stats_file_to_cleanup.as_ref().expect("No stats file path in World");
-        let device_id = self.current_device_id.expect("No current_device_id").0;
-
-        let mut found = false;
-        let mut last_content = String::new();
-
-        // Retry loop to handle async write latency
-        for _ in 0..20 {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            if !path.exists() {
-                continue;
-            }
-
-            let content = std::fs::read_to_string(path).unwrap_or_default();
-            if content.is_empty() {
-                continue;
-            }
-            last_content = content.clone();
-
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(radio_stats) = json["radio_stats"].as_array() {
-                    if radio_stats.iter().any(|s| {
-                        let id = s["device_id"].as_u64().unwrap_or(0);
-                        if id != device_id as u64 {
-                            return false;
-                        }
-
-                        if let Some(kind) = expected_kind {
-                            let k = s["kind"].as_str().unwrap_or("UNSPECIFIED");
-                            // Handle both string and enum number (if serialized as number)
-                            // But usually proto json maps enum to string.
-                            // We allow "1" (BLE) or "BLUETOOTH_LOW_ENERGY" etc.
-                            if k != kind && k != "1" && k != "2" && k != "4" {
-                                // simplified check, strict check would be mapped
-                                if !kind.eq_ignore_ascii_case(k) {
-                                    return false;
-                                }
-                            }
-                        }
-
-                        if let Some(tx) = expected_tx_bytes {
-                            if s["tx_bytes"].as_u64().unwrap_or(0) != tx {
-                                return false;
-                            }
-                        }
-                        if let Some(rx) = expected_rx_bytes {
-                            if s["rx_bytes"].as_u64().unwrap_or(0) != rx {
-                                return false;
-                            }
-                        }
-                        if let Some(count) = expected_tx_count {
-                            if s["tx_count"].as_u64().unwrap_or(0) != count {
-                                return false;
-                            }
-                        }
-                        if let Some(count) = expected_rx_count {
-                            if s["rx_count"].as_u64().unwrap_or(0) != count {
-                                return false;
-                            }
-                        }
-                        true
-                    }) {
-                        found = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        assert!(
-            found,
-            "Radio stats matching criteria not found for device {}. Last content: {}",
-            device_id, last_content
-        );
+        let mut wifi_stats_map = self.wifi_stats.lock().unwrap();
+        wifi_stats_map.insert(chip_id, stats);
+    }
+    pub async fn then_wifi_stats_should_match<F>(&self, verifier: F)
+    where
+        F: FnOnce(&serde_json::Value),
+    {
+        let path = self.stats_file_to_cleanup.as_ref().expect("Stats file path not set");
+        let json = Self::get_stats_from_file(path).await;
+        // WifiStats are GLOBAL in NetsimStats
+        let wifi_stats = &json["wifi_stats"];
+        assert!(!wifi_stats.is_null(), "wifi_stats missing in JSON");
+        verifier(wifi_stats);
     }
 }

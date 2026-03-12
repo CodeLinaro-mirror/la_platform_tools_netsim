@@ -2,7 +2,7 @@
 
 use std::{
     collections::HashMap,
-    env, fs, io,
+    env, io,
     path::PathBuf,
     sync::{atomic::AtomicU32, Arc},
     time::Duration,
@@ -29,7 +29,7 @@ use netsim_model::{
 };
 use packet_stream::{
     transport::traits::{PacketSink, PacketStream},
-    StreamAddress, Streams, TransportType,
+    StreamAddress, Streams,
 };
 use slirp_actor::SlirpClient;
 use tokio::{sync::mpsc, task::JoinSet};
@@ -171,6 +171,10 @@ async fn setup_uds_listener(
     listener_addresses: &mut HashMap<String, StreamAddress>,
     runtime_dir: &PathBuf,
 ) -> Result<(), RunResult> {
+    use std::fs;
+
+    use packet_stream::TransportType;
+
     let uds_path = runtime_dir.join("netsim.sock");
     if uds_path.exists() {
         fs::remove_file(&uds_path).map_err(init_error)?;
