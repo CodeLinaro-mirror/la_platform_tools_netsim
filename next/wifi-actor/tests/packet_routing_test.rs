@@ -277,3 +277,64 @@ async fn test_unknown_unicast_flooding() {
     world.then_chip_receives_payload_and_dst(0, "Unknown Unicast", rx1_mac).await;
     world.then_chip_receives_payload_and_dst(1, "Unknown Unicast", rx2_mac).await;
 }
+
+// ============================================================================
+// Feature: Multicast-to-Unicast (M2U) Encryption Fallback
+// ============================================================================
+
+// Scenario: Verify that broadcast frames fall back to standard broadcast when
+// encryption keys are not yet established.
+//
+// Given an Access Point and an associated station
+// When a shared infrastructure packet (e.g. DHCPOFFER) is received
+// And the station's pairwise encryption keys (PTK) are not yet ready
+// Then the packet must be delivered as a broadcast frame to ensure
+// compatibility
+#[tokio::test]
+async fn test_dhcp_m2u_race_condition() {
+    let mut world = World::new().await;
+    world.given_an_ap().await;
+    let _rx = world.given_a_chip(1).await;
+    let rx_mac = world.chips[0].mac;
+
+    // Simulation: The station is associated but we simulate a handshake delay
+    // by not installing the PTK in the SharedKeyStore.
+
+    log::info!("Injecting Broadcast DHCPOFFER from Infra...");
+    world.when_infra_transmits_multicast("DHCPOFFER").await;
+
+    // Verify that the frame is delivered as a BROADCAST frame (FF:FF:FF:FF:FF:FF)
+    // because unicast encryption is not yet available.
+
+    let chip = &mut world.chips[0];
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(3));
+    tokio::pin!(timeout);
+
+    loop {
+        tokio::select! {
+            Some(bytes) = chip.stream_rx.recv() => {
+                if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
+                    if eth.windows(9).any(|w| w == b"DHCPOFFER") {
+                        let dst_mac = &eth[0..6];
+                        log::info!("Received DHCPOFFER with dst_mac: {:02X?}", dst_mac);
+
+                        // If it's the bug, it will be Unicast (rx_mac)
+                        if dst_mac == rx_mac {
+                            panic!("REPRODUCED: DHCPOFFER was incorrectly converted to UNENCRYPTED UNICAST (dst={:02X?})", dst_mac);
+                        }
+
+                        // If it's correct, it should be Broadcast (at least if unencrypted)
+                        let broadcast = [0xFF; 6];
+                        if dst_mac == broadcast {
+                             log::info!("CORRECT: DHCPOFFER remained BROADCAST");
+                             return;
+                        }
+                    }
+                }
+            }
+            _ = &mut timeout => {
+                panic!("Timeout waiting for DHCPOFFER");
+            }
+        }
+    }
+}
