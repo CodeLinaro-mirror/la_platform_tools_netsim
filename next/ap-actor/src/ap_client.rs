@@ -1,6 +1,7 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::ResourceClient;
+use futures::TryFutureExt;
 use netsim_model::{
     chip::{
         Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, ChipUpdate, ChipVariant,
@@ -72,8 +73,8 @@ impl ApClient {
         let _ = self
             .client
             .perform_action(None, ApReq::Register { stream, sink, shared_keys, beacon_interval })
-            .await
-            .map_err(|e| ClientError::Chip(ChipError::Internal(e.to_string())))?;
+            .err_into::<ClientError>()
+            .await?;
         Ok(())
     }
 
@@ -112,7 +113,7 @@ impl ApClient {
                     let config: crate::ApConfig = ap_chip
                         .config
                         .try_into()
-                        .map_err(|e: String| ClientError::Chip(ChipError::Internal(e)))?;
+                        .map_err(|e: String| ClientError::Chip(ChipError::Internal(e.into())))?;
                     Ok(Some(crate::ApState::new(config)))
                 } else {
                     Ok(None)
@@ -163,7 +164,7 @@ impl ApClient {
             let config: crate::ApConfig = ap_chip
                 .config
                 .try_into()
-                .map_err(|e: String| ClientError::Chip(ChipError::Internal(e)))?;
+                .map_err(|e: String| ClientError::Chip(ChipError::Internal(e.into())))?;
             Ok(crate::ApState::new(config))
         } else {
             Err(ClientError::Chip(ChipError::Internal("Updated chip is not an AP".into())))
@@ -202,7 +203,7 @@ impl ApClient {
             let config: crate::ApConfig = ap_chip
                 .config
                 .try_into()
-                .map_err(|e: String| ClientError::Chip(ChipError::Internal(e)))?;
+                .map_err(|e: String| ClientError::Chip(ChipError::Internal(e.into())))?;
             Ok(crate::ApState::new(config))
         } else {
             Err(ClientError::Chip(ChipError::Internal("Updated chip is not an AP".into())))

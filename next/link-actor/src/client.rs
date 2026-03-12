@@ -11,7 +11,7 @@ use std::ops::Deref;
 use actor_framework::ResourceClient;
 use netsim_model::chip::{ChipId, ChipKind};
 
-use crate::LinkActor;
+use crate::{LinkActor, LinkError};
 
 /// A client for interacting with the Link Actor.
 ///
@@ -60,7 +60,7 @@ impl LinkClient {
         &self,
         sender: ChipId,
         receiver: ChipId,
-    ) -> Result<Option<link_api::LinkId>, actor_framework::FrameworkError> {
+    ) -> Result<Option<link_api::LinkId>, actor_framework::FrameworkError<LinkError>> {
         let links = self.list().await?;
         for link in links {
             if link.sender == sender && link.receiver == receiver {
@@ -75,7 +75,7 @@ impl LinkClient {
         &self,
         id: Option<link_api::LinkId>,
         action: link_api::LinkAction,
-    ) -> Result<(), actor_framework::FrameworkError> {
+    ) -> Result<(), actor_framework::FrameworkError<LinkError>> {
         self.inner.perform_action(id, action).await
     }
 
@@ -84,7 +84,7 @@ impl LinkClient {
         &self,
         chip_id: ChipId,
         kind: ChipKind,
-    ) -> Result<(), actor_framework::FrameworkError> {
+    ) -> Result<(), actor_framework::FrameworkError<LinkError>> {
         self.action(None, link_api::LinkAction::NotifyChipAdded(chip_id, kind)).await
     }
 
@@ -92,7 +92,7 @@ impl LinkClient {
     pub async fn notify_chip_removed(
         &self,
         chip_id: ChipId,
-    ) -> Result<(), actor_framework::FrameworkError> {
+    ) -> Result<(), actor_framework::FrameworkError<LinkError>> {
         self.action(None, link_api::LinkAction::NotifyChipRemoved(chip_id)).await
     }
 }

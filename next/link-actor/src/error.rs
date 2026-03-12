@@ -19,9 +19,3 @@ impl From<String> for LinkError {
         LinkError::Internal(s)
     }
 }
-
-impl From<actor_framework::FrameworkError> for LinkError {
-    fn from(e: actor_framework::FrameworkError) -> Self {
-        LinkError::ActorCommunicationError(e.to_string())
-    }
-}
