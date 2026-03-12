@@ -131,7 +131,7 @@ impl<T: ActorService> ResourceClient<T> {
 /// A trait for interacting with an actor.
 ///
 /// This trait abstracts over the `ResourceClient` to allow for mocking.
-#[cfg_attr(feature = "testing", mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait ActorClient<T: ActorService>: Send + Sync {
     async fn create(&self, params: T::Create) -> Result<T::Id, FrameworkError>;

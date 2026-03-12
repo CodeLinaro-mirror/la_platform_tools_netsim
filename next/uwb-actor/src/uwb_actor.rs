@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use netsim_model::chip::{Chip, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate};
 use pica::{Handle, Pica, PicaCommand, PicaEvent};
 use tokio::sync::{broadcast, mpsc};

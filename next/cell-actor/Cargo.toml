@@ -1,11 +1,11 @@
 [package]
-name = "cell"
+name = "cell-actor"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 bytes = "1"
-client = { path = "../client" }
+
 device-api = { path = "../device-api" }
 futures = "0.3"
 log = "0.4"

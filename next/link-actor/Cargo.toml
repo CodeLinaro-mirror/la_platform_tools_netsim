@@ -5,12 +5,8 @@ edition = "2021"
 
 [dependencies]
 actor-framework = { path = "../actor-framework" }
-anyhow = "1.0"
 async-trait = "0.1"
 link-api = { path = "../link-api" }
 log = "0.4"
 netsim-model = { path = "../model" }
-netsim-proto = { path = "../proto" }
-serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
-tokio = { version = "1.0", features = ["full"] }

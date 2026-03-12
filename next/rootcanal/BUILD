@@ -13,14 +13,12 @@ netsim_rust_library(
     srcs = glob(["src/**/*.rs"]),
     crate_name = "rootcanal",
     edition = "2021",
+    enable_integration_test = False,
     visibility = ["//next:__subpackages__"],
     deps = [
-        "//next/packets",
         "@bytes",
-        "@cxx.rs//:cxx",
         "@log",
         "@rootcanal//:lib_rootcanal_ffi",
-        "@rootcanal//:rootcanal_rs",
         "@thiserror",
     ],
 )

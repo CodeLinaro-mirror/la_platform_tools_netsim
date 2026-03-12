@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use client::{DeviceClient, DeviceError};
+use device_actor::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};

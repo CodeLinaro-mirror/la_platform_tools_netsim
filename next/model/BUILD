@@ -17,19 +17,15 @@ load("//next:defs.bzl", "netsim_rust_library")
 package(default_visibility = ["//visibility:public"])
 
 NETSIM_API_DEPS = [
-    "@anyhow",
     "@bytes",
-    "@chrono",
     "@futures",
     "@log",
-    "//next/packet-stream",
     "//next/types",
     "//proto",
     "@serde",
     "@thiserror",
     "@tokio",
     "@tokio-stream",
-    "@mockall",
 ]
 
 netsim_rust_library(
@@ -39,7 +35,7 @@ netsim_rust_library(
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
-        "@thiserror-impl",
     ],
+    testing_deps = ["@mockall"],
     deps = NETSIM_API_DEPS,
 )

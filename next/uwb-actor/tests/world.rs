@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use netsim_model::{
     chip::{Chip, ChipClient, ChipCreate, ChipId, ChipKindParams, UwbCreate},
     chip_error::ChipError,

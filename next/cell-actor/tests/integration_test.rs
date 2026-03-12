@@ -1,4 +1,4 @@
-// next/cell/tests/integration_test.rs
+// next/cell-actor/tests/integration_test.rs
 use std::{
     io::{Error as IoError, ErrorKind},
     pin::Pin,
@@ -6,9 +6,8 @@ use std::{
 
 use actor_framework::{ResourceClient, ResourceRequest};
 use bytes::Bytes;
-use cell::CellClient;
-use client::DeviceClient;
-use device_actor::DeviceActor;
+use cell_actor::CellClient;
+use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult};
 use env_logger;
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
@@ -50,8 +49,8 @@ async fn setup_test_harness() -> TestHarness {
     let resource_client = ResourceClient::new(device_server_tx);
     let device_client = DeviceClient::new(Box::new(resource_client));
 
-    let (actor, client) = cell::new();
-    let service = cell::CellActor::new(device_client);
+    let (actor, client) = cell_actor::new();
+    let service = cell_actor::CellActor::new(device_client);
     let server_handle = tokio::spawn(actor.run(service));
 
     TestHarness { client, device_server_rx, server_handle }

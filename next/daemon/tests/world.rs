@@ -18,7 +18,8 @@ pub struct World {
     pub daemon: Option<NetsimDaemon>,
     pub frontend_client: Option<FrontendServiceClient>,
     pub packet_client: Option<PacketStreamerClient>,
-    pub capture_client: client::CaptureClient,
+    pub capture_client: capture_actor::CaptureClient,
+
     pub grpc_port: u16,
     _temp_dir: PathBuf,
     _ini_guard: Option<daemon::ini_file::IniFileGuard>,

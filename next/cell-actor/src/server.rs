@@ -3,7 +3,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bytes::Bytes;
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use modem_rs::modem_network::{ModemCallbacks, ModemNetworkInterface};
