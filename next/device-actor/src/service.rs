@@ -670,6 +670,63 @@ impl DeviceActor {
             ctx.shutdown();
         }
     }
+
+    async fn perform_reset(&mut self, id: Option<DeviceId>) -> Result<(), DeviceError> {
+        let device_ids: Vec<DeviceId> = if let Some(id) = id {
+            if !self.devices.contains_key(&id) {
+                return Err(DeviceError::DeviceNotFound(id.to_string()));
+            }
+            vec![id]
+        } else {
+            self.devices.keys().cloned().collect()
+        };
+
+        let mut errors = Vec::new();
+
+        for device_id in device_ids {
+            let Some(entity) = self.devices.get_mut(&device_id) else {
+                log::error!("DeviceActor: Device {} disappeared during reset", device_id);
+                continue;
+            };
+            log::info!("DeviceActor: Resetting device {}", entity.device.name);
+
+            entity.device.visible = true;
+            entity.device.position = device_api::Position::default();
+            entity.device.orientation = device_api::Orientation::default();
+
+            for chip in entity.device.chips.iter_mut() {
+                chip.position = device_api::Position::default();
+                chip.orientation = device_api::Orientation::default();
+
+                if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
+                    if let Err(e) = chip_client.reset(netsim_model::ChipId(chip.id)).await {
+                        log::warn!(
+                            "DeviceActor: Failed to reset chip {} kind {:?}: {}",
+                            chip.id,
+                            chip.kind,
+                            e
+                        );
+                        errors.push(format!("Failed to reset chip {}: {}", chip.id, e));
+                    }
+                }
+            }
+        }
+
+        if id.is_none() {
+            log::info!("DeviceActor: Resetting all links");
+            if let Err(e) = self.link_client.reset().await {
+                log::warn!("DeviceActor: Failed to reset links: {}", e);
+                errors.push(format!("Failed to reset links: {}", e));
+            }
+        }
+
+        self.save_stats_async().await;
+
+        if !errors.is_empty() {
+            return Err(DeviceError::ResetErrors(errors));
+        }
+        Ok(())
+    }
 }
 
 impl ActorService for DeviceActor {
@@ -829,7 +886,10 @@ impl ActorService for DeviceActor {
                 self.save_stats_async().await;
                 Ok(DeviceActionResult::Success)
             }
-            DeviceAction::Reset => Ok(DeviceActionResult::Success),
+            DeviceAction::Reset => {
+                self.perform_reset(id).await?;
+                Ok(DeviceActionResult::Success)
+            }
             DeviceAction::AddChipByGuid { params } => {
                 self.perform_add_chip_by_guid(params, ctx).await
             }

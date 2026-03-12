@@ -18,25 +18,35 @@ use netsim_model::{
     ChipKind,
 };
 
+#[derive(Clone)]
+pub struct LinkTestState {
+    pub links: Arc<std::sync::Mutex<Vec<netsim_model::link::Link>>>,
+    pub reset_called: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl LinkTestState {
+    pub fn new() -> Self {
+        Self {
+            links: Arc::new(std::sync::Mutex::new(Vec::new())),
+            reset_called: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+}
+
 /// The BDD World for Device Actor tests.
 pub struct World {
     pub client: DeviceClient,
     _actor_task: tokio::task::JoinHandle<()>,
-    // Shared state for radio stats, injected into mock chips
     pub radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
-    // Shared state for wifi stats
     pub wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
-    // Last fetched radio stats
     pub last_radio_stats: Option<Vec<netsim_model::stats::NetsimRadioStats>>,
-    // Path to clean up on drop
     pub stats_file_to_cleanup: Option<std::path::PathBuf>,
-    // BDD State
     pub current_device_id: Option<DeviceId>,
     pub current_chip_id: Option<netsim_model::chip::ChipId>,
     pub transport_tx: Option<tokio::sync::mpsc::UnboundedSender<Bytes>>,
     pub device_config: Option<DeviceConfig>,
-    // Persistent stats path for verification even after detach
     pub stats_path: Option<std::path::PathBuf>,
+    pub link_state: LinkTestState,
 }
 
 impl Drop for World {
@@ -57,13 +67,12 @@ impl World {
         self.stats_file_to_cleanup = None;
     }
 
-    /// Creates a new World with default mock clients.
     pub async fn new() -> Self {
+        let (link_client, link_state) = Self::create_default_link_client_and_state();
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
         let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
         let chip_clients =
             Self::create_default_chip_clients_with_stats(radio_stats.clone(), wifi_stats.clone());
-        let link_client = Self::create_default_link_client();
         let (stats_path, _) = Self::temp_stats_path();
         Self::with_clients_internal(
             chip_clients,
@@ -74,6 +83,7 @@ impl World {
             None,
             radio_stats,
             wifi_stats,
+            link_state,
             Some(stats_path),
         )
         .await
@@ -83,11 +93,11 @@ impl World {
         path: std::path::PathBuf,
         interval: Option<std::time::Duration>,
     ) -> Self {
+        let (link_client, link_state) = Self::create_default_link_client_and_state();
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
         let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
         let chip_clients =
             Self::create_default_chip_clients_with_stats(radio_stats.clone(), wifi_stats.clone());
-        let link_client = Self::create_default_link_client();
         Self::with_clients_internal(
             chip_clients,
             link_client,
@@ -97,6 +107,7 @@ impl World {
             interval,
             radio_stats,
             wifi_stats,
+            link_state,
             Some(path),
         )
         .await
@@ -107,6 +118,7 @@ impl World {
         chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
         link_client: MockLinkClient,
     ) -> Self {
+        let link_state = LinkTestState::new();
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
         let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
         let (stats_path, _) = Self::temp_stats_path();
@@ -119,6 +131,7 @@ impl World {
             None,
             radio_stats,
             wifi_stats,
+            link_state,
             Some(stats_path),
         )
         .await
@@ -134,6 +147,7 @@ impl World {
     ) -> Self {
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
         let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let link_state = LinkTestState::new();
 
         // If stats_path is None, create a temp one to avoid pollution
         let (final_path, cleanup_path) = if let Some(p) = stats_path {
@@ -152,6 +166,7 @@ impl World {
             None,
             radio_stats,
             wifi_stats,
+            link_state,
             cleanup_path,
         )
         .await
@@ -167,6 +182,7 @@ impl World {
         stats_interval: Option<std::time::Duration>,
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
+        link_state: LinkTestState,
         stats_file_to_cleanup: Option<std::path::PathBuf>,
     ) -> Self {
         let (runner, client) = device_actor::new();
@@ -195,6 +211,7 @@ impl World {
             transport_tx: None,
             device_config: None,
             stats_path,
+            link_state,
         }
     }
 
@@ -353,12 +370,45 @@ impl World {
     }
 
     pub fn create_default_link_client() -> MockLinkClient {
+        let (mock, _) = Self::create_default_link_client_and_state();
+        mock
+    }
+
+    pub fn create_default_link_client_and_state() -> (MockLinkClient, LinkTestState) {
+        let state = LinkTestState::new();
+        (Self::create_link_client_with_state(state.clone()), state)
+    }
+
+    pub fn create_link_client_with_state(state: LinkTestState) -> MockLinkClient {
         let mut mock = MockLinkClient::new();
+        let links_create = state.links.clone();
+        mock.expect_create().returning(move |params| {
+            let mut links = links_create.lock().unwrap();
+            let id = netsim_model::link::LinkId(links.len() as u32);
+            links.push(netsim_model::link::Link {
+                id,
+                sender: params.sender,
+                receiver: params.receiver,
+                kind: netsim_model::ChipKind::BLUETOOTH, // Default for testing
+                rssi: params.rssi,
+            });
+            Ok(id)
+        });
+
+        let links_list = state.links.clone();
+        mock.expect_list().returning(move || Ok(links_list.lock().unwrap().clone()));
+
+        let reset_called_clone = state.reset_called.clone();
+        let links_reset = state.links.clone();
+        mock.expect_reset().returning(move || {
+            reset_called_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+            links_reset.lock().unwrap().clear();
+            Ok(())
+        });
+
         mock.expect_action().returning(|_, _| Ok(()));
-        mock.expect_create().returning(|_| Ok(link_api::LinkId(0)));
-        mock.expect_update().returning(|_, _| Ok(())); // update returns Result<(), String>
-        mock.expect_delete().returning(|_| Ok(())); // delete returns Result<(), String>
-        mock.expect_list().returning(|| Ok(vec![])); // list returns Result<Vec<Link>, String>
+        mock.expect_update().returning(|_, _| Ok(()));
+        mock.expect_delete().returning(|_| Ok(()));
         mock.expect_notify_chip_added().returning(|_, _| Ok(()));
         mock.expect_notify_chip_removed().returning(|_| Ok(()));
         mock
@@ -1037,5 +1087,99 @@ impl World {
         let wifi_stats = &json["wifi_stats"];
         assert!(!wifi_stats.is_null(), "wifi_stats missing in JSON");
         verifier(wifi_stats);
+    }
+
+    /// BDD Step: Given all devices are modified (visible=false, position
+    /// nonzero)
+    pub async fn given_all_devices_are_modified(&self) {
+        let response = self
+            .client
+            .list()
+            .await
+            .expect("Failed to list devices during given_all_devices_are_modified");
+        for device in response.devices {
+            let id = DeviceId(device.id);
+            let mut update = device_api::api::DeviceUpdate::default();
+            update.id = id.0;
+            update.visible = Some(false);
+            update.position = Some(device_api::Position { x: 1.0, y: 1.0, z: 1.0 });
+            self.client
+                .update(id, update)
+                .await
+                .expect("Failed to update device during given_all_devices_are_modified");
+        }
+    }
+
+    /// BDD Step: Given a specific device is modified
+    pub async fn given_device_is_modified(&self, id: DeviceId) {
+        let mut update = device_api::api::DeviceUpdate::default();
+        update.id = id.0;
+        update.visible = Some(false);
+        update.position = Some(device_api::Position { x: 1.0, y: 1.0, z: 1.0 });
+        self.client
+            .update(id, update)
+            .await
+            .expect("Failed to update device during given_device_is_modified");
+    }
+
+    /// BDD Step: When I call reset (global)
+    pub async fn when_reset_is_called(&self) {
+        self.client.reset(None).await.expect("Global reset RPC failed");
+    }
+
+    /// BDD Step: When I call reset for a specific device
+    pub async fn when_reset_device_is_called(&self, id: DeviceId) {
+        self.client.reset(Some(id)).await.expect(&format!("Reset RPC failed for device {}", id.0));
+    }
+
+    /// BDD Step: Then the link client reset should have been called
+    pub fn then_link_reset_was_called(&self) {
+        assert!(
+            self.link_state.reset_called.load(std::sync::atomic::Ordering::Relaxed),
+            "Link reset was NOT called"
+        );
+    }
+
+    /// BDD Step: Then the link client reset should NOT have been called
+    pub fn then_link_reset_was_not_called(&self) {
+        assert!(
+            !self.link_state.reset_called.load(std::sync::atomic::Ordering::Relaxed),
+            "Link reset was called unexpectedly"
+        );
+    }
+
+    /// BDD Step: Then all device properties should be back to default
+    pub async fn then_all_devices_are_reset(&self) {
+        let response = self
+            .client
+            .list()
+            .await
+            .expect("Failed to list devices during then_all_devices_are_reset");
+        for device in response.devices {
+            assert!(device.visible, "Device {} should be visible after reset", device.id);
+            assert_eq!(
+                device.position,
+                device_api::Position::default(),
+                "Device {} position mismatch",
+                device.id
+            );
+        }
+    }
+
+    /// BDD Step: Then a specific device should be reset
+    pub async fn then_device_properties_are_reset(&self, id: DeviceId) {
+        let device = self
+            .client
+            .get(id)
+            .await
+            .expect("RPC get() failed during then_device_properties_are_reset")
+            .expect("Device not found during then_device_properties_are_reset");
+        assert!(device.visible, "Device {} should be visible after reset", id.0);
+        assert_eq!(
+            device.position,
+            device_api::Position::default(),
+            "Device {} position mismatch",
+            id.0
+        );
     }
 }
