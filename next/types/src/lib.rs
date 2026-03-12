@@ -119,6 +119,7 @@ pub enum ChipKind {
     BLUETOOTH,
     WIFI,
     UWB,
+    AP,
     NFC,
     CELLULAR,
 }
