@@ -162,7 +162,7 @@ impl AdbWorld {
     }
 }
 
-/// STEP: Given @(\S+) has (\d+) attached device(?:s)?
+/// STEP: Given ^@(\S+) has (\d+) attached device(?:s)?$
 async fn given_devices(w: &mut TestContext, actor: String, count: usize) {
     let actor = format!("@{}", actor);
     w.log_step(&actor, "GIVEN", &format!("Has {} or more attached devices", count));
@@ -194,7 +194,7 @@ async fn given_devices(w: &mut TestContext, actor: String, count: usize) {
     }
 }
 
-/// STEP: When (?:@adb)(?::(\S+))? connects to wifi "([^"]+)" with password
+/// STEP: When ^(?:@adb)(?::(\S+))? connects to wifi "([^"]+)" with password$
 /// "([^"]+)"
 async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, password: String) {
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
@@ -253,7 +253,7 @@ async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, 
     }
 }
 
-/// STEP: When (?:@adb)(?::(\S+))? disables cellular data
+/// STEP: When ^(?:@adb)(?::(\S+))? disables cellular data$
 pub async fn adb_disables_cellular(w: &mut TestContext, label: String) {
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
 

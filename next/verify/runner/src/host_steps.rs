@@ -145,7 +145,7 @@ async fn run_server(port: u16, token: CancellationToken) -> Result<u16> {
     Ok(local_port)
 }
 
-/// STEP: When @host starts a (TCP|UDP) echo server on "(\w+)"
+/// STEP: When ^@host starts a (TCP|UDP) echo server on "(\w+)"$
 async fn start_echo_server(w: &mut TestContext, proto: String, var_name: String) {
     let port = w.host.start_server(0).await.expect("Failed to start server");
     // Store full address (GatewayIP:Port) so usage {var} works directly
@@ -158,13 +158,13 @@ async fn start_echo_server(w: &mut TestContext, proto: String, var_name: String)
     w.set_variable(&var_name, full_addr);
 }
 
-/// STEP: Then @host receives (\d+)(KB|B|MB) (TCP|UDP) data(?: total)?
+/// STEP: Then ^@host receives (\d+)(KB|B|MB) (TCP|UDP) data(?: total)?$
 async fn host_receives_data(w: &mut TestContext, size_val: usize, unit: String, proto: String) {
     let actor = "@host";
     w.log_step(actor, "THEN", &format!("Receives {}{} {} data", size_val, unit, proto));
 }
 
-/// STEP: Then @host receives all coordinated data
+/// STEP: Then ^@host receives all coordinated data$
 async fn host_receives_coordinated_data(w: &mut TestContext) {
     let actor = "@host";
     w.log_step(actor, "THEN", "Receives all coordinated data");
