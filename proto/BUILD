@@ -97,7 +97,6 @@ genrule(
     outs = [
         "netsim/frontend_grpc.rs",
         "netsim/packet_streamer_grpc.rs",
-        "netsim/access_point_grpc.rs",
     ],
     cmd = """
         NETSIM_PROTO_ROOT=$$(dirname $$(dirname $(location netsim/common.proto)))
@@ -137,7 +136,6 @@ genrule(
         "netsim/packet_streamer.rs",
         "netsim/startup.rs",
         "netsim/stats.rs",
-        "netsim/access_point.rs",
         "rootcanal/configuration.rs",
         "lib.rs",
     ],
@@ -168,8 +166,6 @@ rust_library(
     name = "proto",
     srcs = [
         "lib.rs",
-        "netsim/access_point.rs",
-        "netsim/access_point_grpc.rs",
         "netsim/common.rs",
         "netsim/config.rs",
         "netsim/frontend.rs",

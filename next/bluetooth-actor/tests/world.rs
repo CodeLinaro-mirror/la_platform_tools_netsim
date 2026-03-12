@@ -87,7 +87,8 @@ impl World {
         device_id: DeviceId,
     ) -> ChipId {
         let id = self.next_chip_id();
-        let address = format!("00:00:00:00:00:{:02x}", id.0);
+        // Use two octets for the chip ID to support up to 65535 chips.
+        let address = format!("60:70:80:90:{:02X}:{:02X}", (id.0 >> 8) & 0xFF, id.0 & 0xFF);
 
         let params = ChipCreate {
             id,
@@ -147,7 +148,10 @@ impl World {
         tx_power: Option<AdvertiseTxPower>,
     ) {
         let id_val = self.chip_id_counter + 1;
-        let address = address.unwrap_or_else(|| format!("00:00:00:00:00:{:02x}", id_val));
+        // Use two octets for the ID_VAL to support more than 255 beacons.
+        let address = address.unwrap_or_else(|| {
+            format!("00:00:00:00:{:02x}:{:02x}", (id_val >> 8) & 0xFF, id_val & 0xFF)
+        });
 
         let settings = tx_power.map(|power| AdvertiseSettings {
             tx_power: Some(TxPower::TxPowerLevel(power)),
@@ -348,7 +352,8 @@ impl World {
         // Beacons created by World have address ...:ID.
         // We know from previous analysis that raw packet data is Big Endian [0, 0, 0,
         // 0, 0, ID]. So we just check the last byte.
-        let expected_byte = (beacon_id.0 & 0xFF) as u8;
+        let expected_byte_5 = (beacon_id.0 & 0xFF) as u8;
+        let expected_byte_4 = ((beacon_id.0 >> 8) & 0xFF) as u8;
 
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_secs(5);
@@ -356,7 +361,7 @@ impl World {
         while start.elapsed() < timeout {
             let reports = self.receive_scan_report(scanner_name).await;
             for report in reports {
-                if report.mac[5] == expected_byte {
+                if report.mac[5] == expected_byte_5 && report.mac[4] == expected_byte_4 {
                     return;
                 }
             }

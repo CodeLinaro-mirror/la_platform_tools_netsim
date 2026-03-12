@@ -427,7 +427,33 @@ impl DeviceActor {
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
     ) -> Result<ChipId, DeviceError> {
-        log::info!("DeviceActor: AddChip {} to device {}", chip_config.name, entity.device.name);
+        let chip_name = if chip_config.name.is_empty() {
+            entity.device.name.clone()
+        } else {
+            chip_config.name.clone()
+        };
+        let manufacturer = if chip_config.manufacturer.is_empty() {
+            entity
+                .device
+                .device_info
+                .as_ref()
+                .map(|info| info.kind.clone())
+                .unwrap_or("Unknown".to_string())
+        } else {
+            chip_config.manufacturer.clone()
+        };
+        let product_name = if chip_config.product_name.is_empty() {
+            entity.device.name.clone()
+        } else {
+            chip_config.product_name.clone()
+        };
+        log::info!(
+            "DeviceActor: AddChip {} ({}, {}) to device {}",
+            chip_name,
+            manufacturer,
+            product_name,
+            entity.device.name
+        );
 
         let chip_id = ChipId(next_chip_id.fetch_add(1, Ordering::SeqCst));
         let chip_kind_params = chip_config.chip_kind_params.clone();
@@ -456,9 +482,9 @@ impl DeviceActor {
             packet_stream,
             packet_sink,
             config: netsim_model::chip::ChipConfig {
-                name: chip_config.name.clone(),
-                manufacturer: chip_config.manufacturer.clone(),
-                product_name: chip_config.product_name.clone(),
+                name: chip_name.clone(),
+                manufacturer: manufacturer.clone(),
+                product_name: product_name.clone(),
                 chip_kind_params,
             },
             device_id: DeviceId(entity.device.id),
@@ -471,9 +497,9 @@ impl DeviceActor {
         entity.device.chips.push(Chip {
             id: chip_id.0,
             kind: ChipKind::from(&chip_config.chip_kind_params),
-            name: Some(chip_config.name),
-            manufacturer: Some(chip_config.manufacturer),
-            product_name: Some(chip_config.product_name),
+            name: Some(chip_name),
+            manufacturer: Some(manufacturer),
+            product_name: Some(product_name),
             position: entity.device.position.clone(),
             orientation: entity.device.orientation.clone(),
             device_id: DeviceId(entity.device.id),

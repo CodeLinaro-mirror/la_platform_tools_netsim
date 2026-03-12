@@ -8,7 +8,6 @@ use std::{
     time::Duration,
 };
 
-use ap_actor::ApClient;
 use capture_actor::CaptureClient;
 use common::{
     system::netsimd_temp_dir,
@@ -22,12 +21,12 @@ use link_actor::LinkClient;
 use log::{error, info, warn};
 use netsim_model::{
     chip::{
-        BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
+        ApCreate, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
         ChipKindParams, DeviceParams, PacketSink as ApiPacketSink, PacketStream as ApiPacketStream,
         UwbCreate, WifiCreate,
     },
     initial_info::ChipInfo,
-    // set_if_some removed
+    set_if_some,
 };
 use packet_stream::{
     transport::traits::{PacketSink, PacketStream},
@@ -122,6 +121,7 @@ async fn handle_new_connection(
         }),
         ChipKind::UWB => ChipKindParams::Uwb(UwbCreate::default()),
         ChipKind::WIFI => ChipKindParams::Wifi(WifiCreate::default()),
+        ChipKind::AP => ChipKindParams::Ap(ApCreate::default()),
         ChipKind::CELLULAR => ChipKindParams::Cell(CellCreate::default()),
         kind => {
             error!("Unsupported chip kind: {:?}", kind);
@@ -208,7 +208,6 @@ async fn setup_grpc_listener(
     requested_port: u16,
     device_client: DeviceClient,
     link_client: LinkClient,
-    ap_client: ApClient,
     version: String,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
@@ -220,7 +219,6 @@ async fn setup_grpc_listener(
         requested_port.into(),
         device_client,
         link_client,
-        ap_client,
         packet_streamer_service,
         version,
     )
@@ -409,11 +407,6 @@ impl NetsimDaemon {
 
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
-        // Setup AP Actor (Before gRPC listener)
-        let shared_keys = std::sync::Arc::new(ap_actor::shared::SharedKeyStore::new());
-        let (ap_runner, ap_client) = ap_actor::new();
-        let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
-
         // gRPC port is determined after the listener starts.
         let (actual_grpc_port, grpc_server) = setup_grpc_listener(
             &mut streams,
@@ -421,7 +414,6 @@ impl NetsimDaemon {
             args.grpc_port.unwrap_or(0),
             device_client.clone(),
             link_client.clone(),
-            ap_client.clone(),
             get_version(),
         )
         .await?;
@@ -460,6 +452,12 @@ impl NetsimDaemon {
         // Setup Slirp Actor
         let (slirp_runner, slirp_client) = slirp_actor::new();
         let slirp_actor_state = slirp_actor::SlirpActor::new(Default::default());
+
+        // Setup AP Actor
+        let shared_keys = std::sync::Arc::new(ap_actor::shared::SharedKeyStore::new());
+
+        let (ap_runner, ap_client) = ap_actor::new();
+        let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
 
         // Setup Wifi Actor
         let (wifi_runner, wifi_client) = wifi_actor::new();
@@ -502,6 +500,7 @@ impl NetsimDaemon {
         chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
+        chip_clients.insert(ChipKind::AP, Box::new(ap_client.clone()));
 
         // Setup Link Actor State
         // Create a new map for LinkActor.
@@ -550,25 +549,17 @@ impl NetsimDaemon {
         let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP
-        let mut ap_config = ap_actor::ApConfig::default();
-        ap_config.ssid = args.wifi.wifi_ssid.clone().unwrap_or(ap_config.ssid);
-        info!("AP Config SSID: {}", ap_config.ssid);
-        if let Some(password) = args.wifi.wifi_password.clone() {
-            ap_config.wpa_passphrase = Some(password);
-        }
-        if let Some(channel) = args.wifi.wifi_channel {
-            ap_config.channel = channel;
-        }
-        if let Some(beacon_interval) = args.wifi.wifi_beacon_interval {
-            ap_config.beacon_interval = beacon_interval;
-        }
-        if let Some(mode) = args.wifi.wifi_mode {
-            ap_config.hw_mode = mode.into();
+        let mut device_create = device_api::DeviceCreate::default_ap(args.wifi.wifi_ssid.clone());
+
+        // Apply overrides from args
+        if let device_api::api::Chip::Ap(ref mut ap) = device_create.chip.chip {
+            set_if_some!(ap.wpa_passphrase, args.wifi.wifi_password.clone(), Some);
+            set_if_some!(ap.channel, args.wifi.wifi_channel);
+            set_if_some!(ap.beacon_interval, args.wifi.wifi_beacon_interval);
+            set_if_some!(ap.hw_mode, args.wifi.wifi_mode, Into::into);
         }
 
-        // We use ID 0 (or let it generate one, but create_ap takes an ID hint which is
-        // usually ignored by service now) Service ignores the ID, so we pass 0.
-        ap_client.create_ap(0, ap_config).await.expect("Failed to create default AP");
+        device_client.create_device(device_create).await.expect("Failed to create default AP");
 
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();

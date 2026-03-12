@@ -29,7 +29,7 @@ fun advertiseService(context: Context, args: List<String>): Map<String, String> 
 /// STEP: ^starts discovery for (.*)$
 fun startDiscovery(context: Context, args: List<String>) {
   val serviceType = args[0]
-  DiscoveryState.reset()
+  DiscoveryState.reset(context)
   discoverNsd(context, serviceType)
 }
 

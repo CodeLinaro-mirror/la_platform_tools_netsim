@@ -45,6 +45,12 @@ object UwbSessionManager {
   val localAddress = MutableStateFlow<String?>(null)
 
   fun initSession(context: Context, isController: Boolean) {
+    if (
+      (isController && controllerSession != null) || (!isController && controleeSession != null)
+    ) {
+      Log.i(TAG, "Session already initialized")
+      return
+    }
     stopRanging()
     sessionState.value = "Initializing"
     localAddress.value = null
@@ -112,40 +118,14 @@ object UwbSessionManager {
           sessionState.value = "Ranging"
 
           sessionFlow.collect { result: RangingResult -> processResult(result) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+          Log.i(TAG, "Ranging coroutine cancelled")
         } catch (e: Exception) {
           Log.e(TAG, "Ranging error: ${e.message}")
           sessionState.value = "Error: ${e.message}"
           e.printStackTrace()
         }
       }
-  }
-
-  fun startController(context: Context, peerAddressStr: String, configId: Int) {
-    scope.launch {
-      initSession(context, true)
-      var retries = 50
-      while (localAddress.value == null && retries > 0) {
-        kotlinx.coroutines.delay(100)
-        retries--
-      }
-      if (localAddress.value != null) {
-        startRanging(peerAddressStr, configId)
-      }
-    }
-  }
-
-  fun startControlee(context: Context, peerAddressStr: String, configId: Int) {
-    scope.launch {
-      initSession(context, false)
-      var retries = 50
-      while (localAddress.value == null && retries > 0) {
-        kotlinx.coroutines.delay(100)
-        retries--
-      }
-      if (localAddress.value != null) {
-        startRanging(peerAddressStr, configId)
-      }
-    }
   }
 
   private fun processResult(result: RangingResult) {
