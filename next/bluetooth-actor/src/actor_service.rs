@@ -34,7 +34,7 @@ impl ActorService for BluetoothActor {
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = params.id;
+        let chip_id = id.ok_or_else(|| BluetoothError::invalid_arg("missing chip id"))?;
 
         let create_params = match params.config.chip_kind_params {
             ChipKindParams::Bluetooth(p) => p,
