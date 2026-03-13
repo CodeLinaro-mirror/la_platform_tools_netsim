@@ -1,6 +1,4 @@
-#[allow(unused_imports)]
-use netsim_model::stats::NetsimRadioStats;
-use netsim_model::{chip::ChipClient, ChipKind};
+use netsim_model::{chip::ChipClient, stats::NetsimRadioStats};
 
 use crate::world::World;
 
