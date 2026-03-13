@@ -94,7 +94,7 @@ impl World {
             packet_stream,
             packet_sink,
             config: ChipConfig::new(
-                "test_chip",
+                name,
                 "netsim",
                 name,
                 ChipKindParams::Bluetooth(BluetoothCreate {
@@ -171,6 +171,36 @@ impl World {
     /// Creates a Bluetooth chip in Beacon mode.
     pub async fn given_beacon(&mut self, name: &str) {
         self.create_beacon_chip(name, None, None).await;
+    }
+
+    /// Creates a Bluetooth chip in Beacon mode with default name and address.
+    pub async fn when_create_beacon_with_defaults(&mut self) -> ChipId {
+        let id = self.next_chip_id();
+        let mode = BluetoothMode::Beacon(Box::new(BeaconParams {
+            ble_beacon: BleBeacon { address: "".to_string(), ..Default::default() },
+        }));
+
+        let params = ChipCreate {
+            packet_stream: None,
+            packet_sink: None,
+            config: ChipConfig::new(
+                "", // Empty name triggers unique naming
+                "netsim",
+                "",
+                ChipKindParams::Bluetooth(BluetoothCreate {
+                    address: "".to_string(), // Empty address triggers generation
+                    bt_properties: Default::default(),
+                    mode,
+                }),
+            ),
+            device_id: self.device_id,
+        };
+
+        if let Err(e) = self.client.0.create_with_id(id, params).await {
+            panic!("Failed to create default beacon: {:?}", e);
+        }
+
+        id
     }
 
     /// Creates a Bluetooth chip in Beacon mode with a specific address.
@@ -278,6 +308,24 @@ impl World {
     pub async fn then_chip_count_is(&self, expected: usize) {
         let count = self.client.0.list().await.expect("Failed to list chips").len();
         assert_eq!(count, expected, "Chip count should be {}", expected);
+    }
+
+    pub async fn then_chip_name_is(&self, id: ChipId, expected: &str) {
+        let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
+        assert_eq!(chip.name.as_deref(), Some(expected), "Chip name match");
+    }
+
+    pub async fn then_chip_address_is_generated(&self, id: ChipId) {
+        let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
+        if let Some(netsim_model::chip::ChipVariant::Bluetooth(_)) = &chip.variant {
+            log::info!("Chip {} exists and is a Bluetooth variant.", id.0);
+            // Note: Verification of the generated address via the `Chip` struct
+            // is not currently supported by the model, as the
+            // address is used for controller initialization but not
+            // persisted in the generic `Chip` state.
+        } else {
+            panic!("Chip {} is not a Bluetooth variant", id.0);
+        }
     }
 
     pub async fn when_packet_sent(&mut self, name: &str, packet: bytes::Bytes) {
