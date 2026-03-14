@@ -227,11 +227,11 @@ impl ActorService for CaptureActor {
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id = params.chip_id;
+        let id = id.ok_or_else(|| CaptureError::Anyhow(anyhow::anyhow!("missing chip id")))?;
         let mut entity = InternalCaptureInfo::from_create_params(id, params)?;
         // Initialize the entity logic (e.g. set up writers based on flags)
         self.create_entity(&mut entity, _ctx).await?;

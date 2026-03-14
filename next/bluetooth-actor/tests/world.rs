@@ -91,7 +91,6 @@ impl World {
         let address = format!("60:70:80:90:{:02X}:{:02X}", (id.0 >> 8) & 0xFF, id.0 & 0xFF);
 
         let params = ChipCreate {
-            id,
             packet_stream,
             packet_sink,
             config: ChipConfig::new(
@@ -107,7 +106,7 @@ impl World {
             device_id,
         };
 
-        if let Err(e) = self.client.0.create(params).await {
+        if let Err(e) = self.client.0.create_with_id(id, params).await {
             panic!("Failed to create chip {}: {:?}", name, e);
         }
 
@@ -215,9 +214,10 @@ impl World {
 
     pub async fn when_create_chip(
         &self,
+        id: ChipId,
         params: ChipCreate,
     ) -> Result<(), actor_framework::FrameworkError> {
-        self.client.0.create(params).await.map(|_| ())
+        self.client.0.create_with_id(id, params).await.map(|_| ())
     }
 
     pub async fn when_delete_chip(

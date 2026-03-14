@@ -82,7 +82,6 @@ impl ApClient {
     /// Generates a random ID for the AP.
     pub async fn create_ap(&self, id: u32, config: crate::ApConfig) -> Result<(), ClientError> {
         let params = ChipCreate {
-            id: ChipId(id),
             device_id: DeviceId(0),
             packet_stream: None,
             packet_sink: None,
@@ -93,7 +92,11 @@ impl ApClient {
                 chip_kind_params: ChipKindParams::Ap(config.into()),
             },
         };
-        self.client.create(params).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
+        self.client
+            .create_with_id(ChipId(id), params)
+            .await
+            .map(|_| ())
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     /// Destroys an Access Point by ID.
@@ -209,8 +212,12 @@ impl ApClient {
 
 #[async_trait::async_trait]
 impl ChipClient for ApClient {
-    async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
-        self.client.create(params).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
+    async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
+        self.client
+            .create_with_id(id, params)
+            .await
+            .map(|_| ())
+            .map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {

@@ -119,7 +119,6 @@ mod tests {
 
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
-            chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device".to_string(),
             enabled_flag: enabled_flag.clone(),
@@ -180,7 +179,6 @@ mod tests {
         let chip_id = ChipId(2);
         let enabled_flag = Arc::new(AtomicBool::new(false));
         let create_params = CaptureCreate {
-            chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_default".to_string(),
             enabled_flag: enabled_flag.clone(),
@@ -209,7 +207,6 @@ mod tests {
         let chip_id = ChipId(3);
         let enabled_flag = Arc::new(AtomicBool::new(true));
         let create_params = CaptureCreate {
-            chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_dir".to_string(),
             enabled_flag: enabled_flag.clone(),
@@ -233,7 +230,6 @@ mod tests {
         let chip_id = ChipId(4);
         let enabled_flag = Arc::new(AtomicBool::new(true));
         let create_params = CaptureCreate {
-            chip_id,
             chip_kind: ChipKind::UWB,
             device_name: "test_uwb_device".to_string(),
             enabled_flag: enabled_flag.clone(),
@@ -277,7 +273,6 @@ mod tests {
         // Test both WIFI and AP to ensure service routes them correctly
         for kind in [ChipKind::WIFI, ChipKind::AP] {
             let create_params = CaptureCreate {
-                chip_id,
                 chip_kind: kind,
                 device_name: format!("test_{:?}_device", kind),
                 enabled_flag: enabled_flag.clone(),
@@ -323,7 +318,6 @@ mod tests {
         let chip_id = ChipId(6);
         let enabled_flag = Arc::new(AtomicBool::new(true));
         let create_params = CaptureCreate {
-            chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_tick".to_string(),
             enabled_flag: enabled_flag.clone(),
@@ -375,7 +369,6 @@ mod tests {
         let chip_id = ChipId(7);
         let enabled_flag = Arc::new(AtomicBool::new(true));
         let create_params = CaptureCreate {
-            chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_shutdown".to_string(),
             enabled_flag: enabled_flag.clone(),
@@ -423,7 +416,6 @@ mod tests {
         let chip_id = ChipId(8);
         let enabled_flag = Arc::new(AtomicBool::new(true));
         let create_params = CaptureCreate {
-            chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_disable".to_string(),
             enabled_flag: enabled_flag.clone(),
@@ -471,7 +463,6 @@ mod tests {
         let chip_id = ChipId(9);
         let enabled_flag = Arc::new(AtomicBool::new(true));
         let create_params = CaptureCreate {
-            chip_id,
             chip_kind: ChipKind::BLUETOOTH,
             device_name: "test_device_delete".to_string(),
             enabled_flag: enabled_flag.clone(),

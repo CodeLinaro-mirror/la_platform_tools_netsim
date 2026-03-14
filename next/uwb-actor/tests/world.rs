@@ -86,7 +86,6 @@ impl World {
         let (stream, packet_tx) = mock_stream();
         let (sink, packet_rx) = mock_sink();
         let params = ChipCreate {
-            id,
             packet_stream: Some(stream),
             packet_sink: Some(sink),
             config: netsim_model::chip::ChipConfig {
@@ -98,7 +97,7 @@ impl World {
             device_id: DeviceId(1),
         };
 
-        self.client.create(params).await.map_err(|e| match e {
+        self.client.create(id, params).await.map_err(|e| match e {
             ClientError::Chip(err) => err,
             _ => ChipError::Internal(e.to_string()),
         })?;
