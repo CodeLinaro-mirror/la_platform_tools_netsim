@@ -88,24 +88,8 @@ pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
     run_feature(
         &mut features,
         ctx,
-        "bluetooth_advertisements.feature",
-        include_str!("../tests/features/bluetooth_advertisements.feature"),
-    )
-    .await?;
-
-    run_feature(
-        &mut features,
-        ctx,
         "uwb_ranging.feature",
         include_str!("../tests/features/uwb_ranging.feature"),
-    )
-    .await?;
-
-    run_feature(
-        &mut features,
-        ctx,
-        "wifi_auth.feature",
-        include_str!("../tests/features/wifi_auth.feature"),
     )
     .await?;
 

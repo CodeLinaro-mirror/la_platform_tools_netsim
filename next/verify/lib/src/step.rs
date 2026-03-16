@@ -21,20 +21,12 @@ impl Default for StepContext {
     }
 }
 
-/// A trait for the test world that holds state.
-pub trait World: Send + Sync {
-    /// Resets the world state before a new scenario.
-    fn reset(&mut self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
-        Box::pin(async {})
-    }
-}
-
 /// A trait for async steps that can be executed by the Features engine.
 ///
 /// This trait is automatically implemented for any function that matches the
 /// signature: `fn(&mut W, Vec<String>, StepContext) -> Pin<Box<dyn
 /// Future<Output = ()> + Send>>`.
-pub trait AsyncStep<W: ?Sized>: Send + Sync {
+pub trait AsyncStep<W>: Send + Sync {
     fn call<'a>(
         &'a self,
         world: &'a mut W,

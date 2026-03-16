@@ -44,14 +44,10 @@ impl Ieee80211Manager {
         let mut frame = header.as_bytes().to_vec();
 
         // Fixed Fields
-        let mut caps = 0x0401; // ESS | Short Slot Time
-        if ap.config.wpa_passphrase.is_some() || ap.config.enterprise_enabled {
-            caps |= 0x0010; // Privacy
-        }
         let fixed = BeaconFixedFields {
             timestamp: [0; 8],
             beacon_interval: U16::new(beacon_interval),
-            capabilities: U16::new(caps),
+            capabilities: U16::new(0x0001), // ESS
         };
         frame.extend_from_slice(fixed.as_bytes());
 
@@ -162,7 +158,7 @@ impl Ieee80211Manager {
         match ieee80211_frame.stype() {
             management_subtype::AUTHENTICATION => self.handle_auth(ap, &ieee80211_frame, frame),
             management_subtype::ASSOCIATION_REQUEST => {
-                self.handle_assoc(ap, &ieee80211_frame, shared_keys, source_id)
+                self.handle_assoc(ap, &ieee80211_frame, source_id)
             }
             management_subtype::PROBE_REQUEST => {
                 self.handle_probe_req(ap, &ieee80211_frame, frame, beacon_interval)
@@ -447,7 +443,6 @@ impl Ieee80211Manager {
         &mut self,
         ap: &mut ApState,
         frame: &Ieee80211,
-        shared_keys: &SharedKeyStore,
         _source_id: ChipId,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let src = frame.get_source();
@@ -478,34 +473,19 @@ impl Ieee80211Manager {
 
         // Init WPA if configured
         if let Some(passphrase) = &ap.config.wpa_passphrase {
+            // TODO: Implement proper key derivation (PBKDF2)
             let rsn_ie = crate::rsn::build_rsn_ie(&ap.config);
-            let global_gtk = shared_keys.get_gtk().unwrap_or_else(|| {
-                let gtk_bytes = crate::ffi::RandBytes(16);
-                let mut new_gtk = [0u8; 16];
-                new_gtk.copy_from_slice(&gtk_bytes);
-                shared_keys.set_gtk(new_gtk);
-                new_gtk
-            });
-
             let mut authenticator = crate::wpa_auth::WpaAuthenticator::new(
                 ap.config.bssid,
                 src,
-                ap.config.ssid.as_bytes(),
                 passphrase.as_bytes(),
                 &rsn_ie,
-                global_gtk,
             );
 
             if let Ok(m1) = authenticator.initiate_handshake() {
                 let m1_frame = self.wrap_eapol(ap, src, &m1);
                 ap.wpa = Some(authenticator);
-
-                // 150ms buffer prevents EAPOL M1 from racing via AF_PACKET against the
-                // asynchronous Netlink Association event. Without it,
-                // wpa_supplicant drops M1 before reaching ASSOCIATED state.
-                let delay = std::time::Instant::now() + std::time::Duration::from_millis(150);
-                ap.delayed_frames.push_back((delay, bytes::Bytes::from(m1_frame)));
-                log::info!("ApActor: Triggered 150ms buffer for EAPOL M1 handshake to {}", src);
+                msgs.push(bytes::Bytes::from(m1_frame));
             }
         }
 
@@ -578,14 +558,10 @@ impl Ieee80211Manager {
         let mut resp = header.as_bytes().to_vec();
 
         // Fixed Fields (Same as Beacon)
-        let mut caps = 0x0401; // ESS | Short Slot Time
-        if ap.config.wpa_passphrase.is_some() || ap.config.enterprise_enabled {
-            caps |= 0x0010; // Privacy
-        }
         let fixed = BeaconFixedFields {
             timestamp: [0; 8],
             beacon_interval: U16::new(beacon_interval),
-            capabilities: U16::new(caps),
+            capabilities: U16::new(0x0001), // ESS
         };
         resp.extend_from_slice(fixed.as_bytes());
 
@@ -630,6 +606,7 @@ impl Ieee80211Manager {
         // 802.11 Header
         // ToDS=0, FromDS=1 (AP to STA) -> FC 0x0208
         // Type=Data(10) Subtype=Data(0000)
+        // FC: 0000 0010 0000 1000 = 0x0208
         let header = MacHeader3Addr {
             frame_control: FrameControl::new(0x0208),
             duration_id: U16::new(0),
@@ -661,20 +638,23 @@ impl Ieee80211Manager {
         ieee80211_frame: Ieee80211,
         shared_keys: &SharedKeyStore,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
-        let dump_len = std::cmp::min(frame.len(), 48);
-        log::warn!(
-            "ApActor: Data Frame Debug [{} bytes] (stype: {:?}) hex: {:02x?}",
-            frame.len(),
-            ieee80211_frame.stype(),
-            &frame[..dump_len]
-        );
+        // Quick EAPOL check (Data Frame + length > 32 + LLC 802.1X Type)
+        if frame.len() <= 32 {
+            return Ok(vec![]);
+        }
+        // Offset 24: LLC Header (AA AA 03 OUI.. Type..)
+        let is_eapol = frame[24] == sap::SNAP
+            && frame[25] == sap::SNAP
+            && frame[26] == control_field::UI
+            && frame[30] == (netsim_packets::ethernet::ether_type::EAPOL >> 8) as u8
+            && frame[31] == (netsim_packets::ethernet::ether_type::EAPOL & 0xFF) as u8;
 
-        if !ieee80211_frame.is_eapol().unwrap_or(false) {
+        if !is_eapol {
             return Ok(vec![]);
         }
 
         log::info!("ApActor: Received EAPOL frame from src={}", ieee80211_frame.get_source());
-        let payload = &ieee80211_frame.get_payload()[8..]; // EAPOL Body after LLC
+        let payload = &frame[32..]; // EAPOL Header + Body
 
         if payload.len() < 4 {
             return Ok(vec![]);

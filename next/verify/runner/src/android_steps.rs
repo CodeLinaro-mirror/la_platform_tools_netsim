@@ -157,7 +157,7 @@ impl AndroidDevice {
         })
     }
 
-    pub fn adb_command(&self) -> std::process::Command {
+    fn adb_command(&self) -> std::process::Command {
         let mut cmd = std::process::Command::new(&self.adb_path);
         if let Some(s) = &self.serial {
             cmd.arg("-s").arg(s);

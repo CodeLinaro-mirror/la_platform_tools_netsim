@@ -73,7 +73,6 @@ impl Stats {
     pub fn get_combined_stats(
         &mut self,
         mut active_stats: Vec<netsim_proto::stats::NetsimRadioStats>,
-        wifi_stats: Option<netsim_proto::stats::WifiStats>,
     ) -> ProtoNetsimStats {
         if let Some(start) = self.start_time {
             self.proto.set_duration_secs(start.elapsed().as_secs());
@@ -81,9 +80,6 @@ impl Stats {
         let mut combined = self.proto.clone();
         combined.radio_stats.extend(self.archived_radio_stats.clone());
         combined.radio_stats.append(&mut active_stats);
-        if let Some(ws) = wifi_stats {
-            combined.wifi_stats = Some(ws).into();
-        }
         combined
     }
 

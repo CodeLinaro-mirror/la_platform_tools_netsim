@@ -99,10 +99,6 @@ impl ChipClient for WifiClient {
             .map_err(|e| ClientError::Send(e.to_string()))
     }
 
-    async fn get_wifi_stats(&self) -> Result<Option<netsim_proto::stats::WifiStats>, ClientError> {
-        self.get_global_stats().await.map(Some)
-    }
-
     fn clone_box(&self) -> Box<dyn ChipClient> {
         Box::new(self.clone())
     }

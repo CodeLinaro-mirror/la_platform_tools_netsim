@@ -53,16 +53,6 @@ impl Medium {
                     targets.push(station.clone());
                 }
             }
-        } else {
-            // Fallback: Android DHCP frames systematically preserve hwsimaddr inside
-            // payloads. Slirp returns these dynamically forcing Destination MAC
-            // outside standard Random MAC arrays.
-            for station in self.stations.values() {
-                if &station.hwsim_addr == dest_addr {
-                    targets.push(station.clone());
-                    break;
-                }
-            }
         }
         targets
     }
@@ -100,12 +90,10 @@ impl Medium {
             .get_bssid()
             .unwrap_or(netsim_packets::ieee80211::MacAddress::new([0, 0, 0, 0, 0, 0]));
 
-        let seq = self.seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let ieee80211 =
-            Ieee80211::from_ieee8023_qos(packet, bssid, FrameDirection::FromAp, true, seq)
-                .map_err(|e| {
-                    WifiError::Internal(format!("Failed to process IEEE 802.3 response: {e}"))
-                })?;
+            Ieee80211::from_ieee8023(packet, bssid, FrameDirection::FromAp).map_err(|e| {
+                WifiError::Internal(format!("Failed to process IEEE 802.3 response: {e}"))
+            })?;
         self.route_infra_packet(ieee80211, out_queue)
     }
 
@@ -134,42 +122,52 @@ impl Medium {
     /// packet.
     pub(crate) fn route_infra_packet(
         &mut self,
-        ieee80211: Ieee80211,
+        mut ieee80211: Ieee80211,
         out_queue: &mut Vec<(u32, Bytes)>,
     ) -> WifiResult<()> {
+        if let Some(encrypted_bytes) = self.key_store.try_encrypt(&ieee80211) {
+            ieee80211 = Ieee80211::decode(&encrypted_bytes).map_err(|e| {
+                WifiError::Internal(format!("Failed to decode encrypted frame: {e}"))
+            })?;
+        }
         let dest_addr = ieee80211.get_destination();
+        log::debug!(
+            "Medium: Routing Infra Packet. Dest: {}, Source: {}",
+            dest_addr,
+            ieee80211.get_source()
+        );
         let mut targets = self.resolve_targets(&dest_addr);
 
         if targets.is_empty() && !dest_addr.is_multicast() {
             // Unknown Unicast Flooding: Deliver to all enabled stations
+            debug!(
+                "Flooding frame to unknown destination: {dest_addr} (Potential DHCP CHADDR Trap)"
+            );
             for station in self.stations.values() {
                 targets.push(station.clone());
             }
         }
 
-        let is_m2u_conversion = targets.len() > 1 || dest_addr.is_multicast();
+        let is_flooding = targets.len() > 1 && !dest_addr.is_multicast();
 
         for dest in targets {
             if self.enabled(dest.client_id)? {
                 let mut frame_to_send = ieee80211.clone();
-                if is_m2u_conversion {
+                if is_flooding {
+                    // Rewrite Destination MAC to match station's MAC
+                    // ensuring the Guest kernel accepts the packet.
                     let target_mac = netsim_packets::ieee80211::MacAddress::new(
                         dest.addr.try_into().unwrap_or([0; 6]),
+                    );
+                    debug!(
+                        "Rewriting Destination MAC for flood: {} -> {} (Target: Client {})",
+                        dest_addr, target_mac, dest.client_id
                     );
                     frame_to_send.set_destination(&target_mac);
                 }
 
-                // If WPA is active, we must encrypt using the destination's PTK
-                // M2U guarantees Multicast is already rewritten as Unicast here!
-                let frame_to_transmit =
-                    if let Some(encrypted_bytes) = self.key_store.try_encrypt(&frame_to_send) {
-                        Ieee80211::decode(&encrypted_bytes).unwrap_or(frame_to_send)
-                    } else {
-                        frame_to_send
-                    };
-
                 let msg = utils::create_hwsim_msg_from_frame(
-                    &frame_to_transmit,
+                    &frame_to_send,
                     &dest.hwsim_addr,
                     dest.freq,
                     None,
@@ -177,6 +175,8 @@ impl Medium {
                 self.wifi_stats.incr_hwsim_frames_tx();
                 self.push_packet(dest.client_id, &msg, out_queue)?;
                 self.incr_rx(dest.client_id)?;
+            } else {
+                debug!("Dropping frame to disabled client {}", dest.client_id);
             }
         }
         Ok(())
@@ -210,8 +210,6 @@ impl Medium {
             self.wifi_stats.incr_wmedium_unicast_frames_tx();
         }
 
-        let is_m2u_conversion = targets.len() > 1 || dest_addr.is_multicast();
-
         for dest in targets {
             if dest.addr == source.addr {
                 continue;
@@ -219,17 +217,9 @@ impl Medium {
             let src_enabled = self.enabled(source.client_id)?;
             let dst_enabled = self.enabled(dest.client_id)?;
             if src_enabled && dst_enabled {
-                let mut target_frame = ieee80211.clone();
-                if is_m2u_conversion {
-                    let target_mac = netsim_packets::ieee80211::MacAddress::new(
-                        dest.addr.try_into().unwrap_or([0; 6]),
-                    );
-                    target_frame.set_destination(&target_mac);
-                }
-
                 match utils::create_encrypted_hwsim_msg(
                     frame,
-                    &target_frame,
+                    ieee80211,
                     &dest.hwsim_addr,
                     &self.key_store,
                     self.simulate_ap_reflection,

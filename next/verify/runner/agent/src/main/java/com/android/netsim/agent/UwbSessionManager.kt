@@ -180,10 +180,6 @@ object UwbSessionManager {
     localAddress.value = null
   }
 
-  fun reset(context: Context) {
-    stopRanging()
-  }
-
   fun setParameters(channel: Int, preambleIndex: Int, sessionId: Int, sessionKey: ByteArray) {
     currentChannel = channel
     currentPreambleIndex = preambleIndex

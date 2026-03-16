@@ -25,7 +25,6 @@ enum WpaState {
 pub struct WpaAuthenticator {
     bssid: MacAddr,
     sta_addr: MacAddr,
-    gtk: [u8; 16],
     pmk: Vec<u8>, // Derived from PSK
     anonce: [u8; 32],
     snonce: [u8; 32],
@@ -47,23 +46,14 @@ const MIC_LEN: usize = 16;
 const MIC_END: usize = MIC_OFFSET + MIC_LEN; // 97
 
 impl WpaAuthenticator {
-    pub fn new(
-        bssid: MacAddr,
-        sta_addr: MacAddr,
-        ssid: &[u8],
-        psk: &[u8],
-        rsn_ie: &[u8],
-        gtk: [u8; 16],
-    ) -> Self {
-        // Derive PMK using PBKDF2-HMAC-SHA1(psk, ssid, 4096 iterations, 32 bytes)
-        let pmk = crate::ffi::Pbkdf2HmacSha1(&psk.to_vec(), &ssid.to_vec(), 4096, 32);
+    pub fn new(bssid: MacAddr, sta_addr: MacAddr, psk: &[u8], rsn_ie: &[u8]) -> Self {
+        // TODO: Implement PBKDF2 for PMK derivation. Treating PSK as PMK for now.
         Self {
             bssid,
             sta_addr,
-            pmk,
+            pmk: psk.to_vec(),
             anonce: [0; 32],
             snonce: [0; 32],
-            gtk,
             ptk: Vec::new(),
             kck: Vec::new(),
             kek: Vec::new(),
@@ -82,13 +72,9 @@ impl WpaAuthenticator {
         self.anonce.copy_from_slice(&anonce_vec);
 
         // Construct M1
-        // Key Info bits:
-        // Version 2 (HMAC-SHA1/AES) = 0x0002
-        // Pairwise = 0x0008
-        // Key Ack = 0x0080
-        // Total = 0x008A
         self.build_eapol_frame(
-            0x008A,
+            0x0080 | 0x0008 | 0x0200, /* Key Info: Key Descriptor Version 2 (HMAC-SHA1-128/AES)
+                                       * | Pairwise | Ack (M1 has Ack set) */
             &[0u8; 16], // MIC is 0 in M1
             0,          // Data Len 0
             &[],
@@ -152,23 +138,15 @@ impl WpaAuthenticator {
                 self.state = WpaState::PtkNegotiating;
                 self.replay_counter += 1;
 
-                // Key Info bits:
-                // Version 2 (HMAC-SHA1/AES) = 0x0002
-                // Pairwise = 0x0008
-                // Install = 0x0040
-                // Key Ack = 0x0080
-                // Key MIC = 0x0100
-                // Secure = 0x0200
-                // Encrypted Key Data = 0x1000
-                // Total = 0x13CA
-                let m3_info = 0x13CA;
+                let m3_info = 0x0008 | 0x0040 | 0x0080 | 0x0100 | 0x0200; // Pairwise | Install | Ack | MIC | Secure
 
                 // Construct RSN IE (CCMP-PSK) for M3
                 // Use the configured RSN IE to ensure consistency
                 let rsn_ie = &self.rsn_ie;
 
-                // Use Global Network GTK
-                let gtk_kde = crate::rsn::build_gtk_kde(&self.gtk, 1); // KeyID 1
+                // Generate Dummy GTK (16 bytes)
+                let gtk = crate::ffi::RandBytes(16);
+                let gtk_kde = crate::rsn::build_gtk_kde(&gtk, 1); // KeyID 1
 
                 let mut key_data = Vec::new();
                 key_data.extend_from_slice(rsn_ie);

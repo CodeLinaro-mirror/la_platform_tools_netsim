@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicU16, Ordering};
-
 use actor_framework::DynContext;
 use ap_actor::shared::SharedKeyStore;
 use log::{debug, warn};
@@ -25,7 +23,6 @@ pub struct SlirpGateway {
     sender: UnboundedSender<bytes::Bytes>,
     pending_channels: Option<SlirpPendingRequest>,
     client: Option<SlirpClient>,
-    seq: AtomicU16,
 }
 
 impl SlirpGateway {
@@ -36,7 +33,6 @@ impl SlirpGateway {
             sender: uplink_tx,
             pending_channels: Some((uplink_rx, downlink_tx, downlink_rx)),
             client,
-            seq: AtomicU16::new(100),
         }
     }
 }
@@ -60,7 +56,7 @@ impl GatewayTrait for SlirpGateway {
                 let fc = ieee80211.get_fc();
                 let ftype = ieee80211.is_data();
                 let stype = ieee80211.stype();
-                log::error!(
+                warn!(
                     "WifiActor: Slirp conversion failed: {}. Frame (Data: {}), Subtype: {}, FC: {:#06x}",
                     e, ftype, stype, fc
                 );
@@ -80,10 +76,9 @@ impl GatewayTrait for SlirpGateway {
         shared_keys: &SharedKeyStore,
         out_queue: &mut Vec<(u32, bytes::Bytes)>,
     ) {
+        debug!("SLIRP_PKT: len {}", packet.len());
         if let Some(bssid) = shared_keys.get_bssid() {
-            let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-            if let Ok(ieee80211) =
-                Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
+            if let Ok(ieee80211) = Ieee80211::from_ieee8023(&packet, bssid, FrameDirection::FromAp)
             {
                 if let Ok(bytes) = ieee80211.encode_to_vec() {
                     let _ = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);

@@ -195,7 +195,6 @@ pub struct ApState {
     pub sae_sessions: HashMap<MacAddr, crate::sae::SaeStateMachine>,
     pub eap_sessions: HashMap<MacAddr, crate::eap_auth::EapAuthenticator>,
     pub associations: std::collections::HashSet<MacAddr>,
-    pub delayed_frames: std::collections::VecDeque<(std::time::Instant, bytes::Bytes)>,
     pub enabled: bool,
 }
 
@@ -219,7 +218,6 @@ impl ApState {
             sae_sessions: HashMap::new(),
             eap_sessions: HashMap::new(),
             associations: std::collections::HashSet::new(),
-            delayed_frames: std::collections::VecDeque::new(),
             enabled: true,
         }
     }

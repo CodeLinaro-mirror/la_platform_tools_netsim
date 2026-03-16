@@ -269,8 +269,7 @@ impl World {
         let eth = Self::create_ethernet_frame(&src_mac, &dst_mac, payload.as_bytes());
         let bssid = MacAddress::new(src_mac);
         let ieee80211 =
-            Ieee80211::from_ieee8023(&Bytes::from(eth), bssid, FrameDirection::FromAp, 100)
-                .unwrap();
+            Ieee80211::from_ieee8023(&Bytes::from(eth), bssid, FrameDirection::FromAp).unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
 
         self.ap_injector.send(Bytes::from(bytes)).expect("Failed to inject AP packet");
@@ -285,7 +284,6 @@ impl World {
             &Bytes::from(eth),
             bssid,
             netsim_packets::ieee80211::FrameDirection::FromAp,
-            100,
         )
         .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();
@@ -303,7 +301,6 @@ impl World {
             &Bytes::from(eth),
             bssid,
             netsim_packets::ieee80211::FrameDirection::FromAp,
-            100,
         )
         .unwrap();
         let bytes = ieee80211.encode_to_vec().unwrap();

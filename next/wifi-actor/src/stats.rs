@@ -108,36 +108,6 @@ impl WifiStats {
     pub fn bytes_ps_to_mbps(bytes_per_second: u64) -> f32 {
         ((bytes_per_second as f64 * 8.0) / (1_000_000.0)) as f32
     }
-
-    pub fn to_proto(&self) -> netsim_proto::stats::WifiStats {
-        let mut proto = netsim_proto::stats::WifiStats::new();
-        proto.set_hostapd_errors(self.counts.hostapd_error as i32);
-        proto.set_network_errors(self.counts.network_error as i32);
-        proto.set_client_errors(self.counts.client_error as i32);
-        proto.set_frame_errors(self.counts.frame_error as i32);
-        proto.set_transmission_errors(self.counts.transmission_error as i32);
-        proto.set_other_errors(self.counts.other_error as i32);
-
-        proto.set_hwsim_frames_rx(self.counts.hwsim_frames_rx as i32);
-        proto.set_hwsim_frames_tx(self.counts.hwsim_frames_tx as i32);
-        proto.set_network_packets_tx(self.counts.network_packets_tx as i32);
-        proto.set_network_packets_rx(self.counts.network_packets_rx as i32);
-        proto.set_hostapd_frames_tx(self.counts.hostapd_frames_tx as i32);
-        proto.set_hostapd_frames_rx(self.counts.hostapd_frames_rx as i32);
-        proto.set_wmedium_frames_tx(self.counts.wmedium_frames_tx as i32);
-        proto.set_wmedium_unicast_frames_tx(self.counts.wmedium_unicast_frames_tx as i32);
-        proto.set_mgmt_frames_rx(self.counts.mgmt_frames_rx as i32);
-        proto.set_mdns_count(self.counts.mdns_count as i32);
-
-        proto.set_max_download_throughput(Self::bytes_ps_to_mbps(
-            self.values.download_throughput.max_throughput,
-        ));
-        proto.set_max_upload_throughput(Self::bytes_ps_to_mbps(
-            self.values.upload_throughput.max_throughput,
-        ));
-
-        proto
-    }
 }
 
 impl ThroughputValues {

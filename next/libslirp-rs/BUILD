@@ -10,7 +10,6 @@ netsim_rust_library(
     crate_name = "libslirp_rs",
     crate_root = "src/lib.rs",
     edition = "2021",
-    enable_integration_test = False,
     select_deps = select({
         "@bazel_tools//src/conditions:windows": ["@winapi"],
         "//conditions:default": [],

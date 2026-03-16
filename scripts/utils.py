@@ -400,4 +400,10 @@ def get_bazel_targets(args):
       "@netsim//rust/...",
       "@netsim//next/...",
   ]
+  # TODO(b/320434273): Include next/... for windows once dependent crates are imported
+  if platform.system().lower() == "windows":
+    targets = args.bazel_targets or [
+        "@netsim//:all",
+        "@netsim//rust/...",
+    ]
   return targets

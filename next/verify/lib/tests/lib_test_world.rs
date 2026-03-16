@@ -49,8 +49,6 @@ impl std::str::FromStr for TxPower {
     }
 }
 
-impl features::World for TestWorld {}
-
 impl TestWorld {}
 
 /// STEP: Given I reset the counter

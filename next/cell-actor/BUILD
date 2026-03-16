@@ -1,3 +1,4 @@
+load("@rules_rust//rust:defs.bzl", "rust_test")
 load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -28,9 +29,16 @@ netsim_rust_library(
     proc_macro_deps = [
         "@async-trait",
     ],
-    test_deps = [
-        "//next/device-actor:testing",
+    deps = DEPS,
+)
+
+rust_test(
+    name = "integration_test",
+    srcs = ["tests/integration_test.rs"],
+    edition = "2021",
+    deps = DEPS + [
+        ":cell-actor",
+        "//next/device-actor",
         "@env_logger",
     ],
-    deps = DEPS,
 )

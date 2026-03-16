@@ -91,12 +91,20 @@ class CompileInstallTask(Task):
       dest_dir.mkdir(exist_ok=True, parents=True)
 
       # Copy netsim binaries
-      binaries = {
-          "netsim": "netsim",
-          "netsimd": "netsimd",
-          "netsimx": "next/cli/netsim",
-          "netsimdx": "next/daemon/daemon",
-      }
+      if platform.system() == "Windows":
+        # TODO: Netsim Next is not yet built on Windows.
+        # We don't copy netsim next (netsimx/netsimdx) for now on Windows.
+        binaries = {
+            "netsim": "netsim",
+            "netsimd": "netsimd",
+        }
+      else:
+        binaries = {
+            "netsim": "netsim",
+            "netsimd": "netsimd",
+            "netsimx": "next/cli/netsim",
+            "netsimdx": "next/daemon/daemon",
+        }
 
       for binary, src in binaries.items():
         if platform.system() == "Windows":

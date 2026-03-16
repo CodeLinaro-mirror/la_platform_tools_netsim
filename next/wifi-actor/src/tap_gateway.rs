@@ -3,13 +3,7 @@ type WifiResult<T> = Result<T, WifiError>;
 
 #[cfg(target_os = "linux")]
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        Arc,
-    },
-};
+use std::{collections::HashMap, sync::Arc};
 
 use ap_actor::shared::SharedKeyStore;
 use log::{debug, error, info};
@@ -167,7 +161,6 @@ pub struct TapGateway {
     // Pool management
     pool_range: Option<std::ops::RangeInclusive<u32>>,
     used_indices: HashMap<ChipId, u32>,
-    seq: AtomicU16,
 }
 
 #[async_trait::async_trait]
@@ -195,8 +188,7 @@ impl GatewayTrait for TapGateway {
         let real_id = chip_id.0 & !TAP_FLAG;
         debug!("TAP_PKT: Chip {} len {}", real_id, packet.len());
 
-        let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-        if let Some(bytes) = convert_8023_to_80211(packet, shared_keys.get_bssid(), seq) {
+        if let Some(bytes) = convert_8023_to_80211(packet, shared_keys.get_bssid()) {
             let _ = medium.transmit_from_infra(&bytes, out_queue);
         } else {
             error!("Failed to convert TAP packet to 802.11");
@@ -266,7 +258,6 @@ impl TapGateway {
             if_name_or_pattern,
             pool_range,
             used_indices: HashMap::new(),
-            seq: AtomicU16::new(100),
         }
     }
 
@@ -462,13 +453,10 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
 pub fn convert_8023_to_80211(
     packet: bytes::Bytes,
     bssid: Option<netsim_packets::ieee80211::MacAddress>,
-    seq: u16,
 ) -> Option<bytes::Bytes> {
     use netsim_packets::ieee80211::{FrameDirection, Ieee80211};
     if let Some(bssid) = bssid {
-        if let Ok(ieee80211) =
-            Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
-        {
+        if let Ok(ieee80211) = Ieee80211::from_ieee8023(&packet, bssid, FrameDirection::FromAp) {
             if let Ok(bytes) = ieee80211.encode_to_vec() {
                 return Some(bytes::Bytes::from(bytes));
             }

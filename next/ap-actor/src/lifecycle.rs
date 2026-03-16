@@ -12,31 +12,13 @@ impl ActorLifecycle for ApActor {
     }
 
     async fn on_tick(&mut self, ctx: &mut DynContext<Self>) {
+        // Beacon generation logic
         if let Some(sink) = &self.sink {
             let interval = self.beacon_interval.unwrap_or(200);
-            let now = std::time::Instant::now();
-            for ap in self.aps.values_mut() {
+            for ap in self.aps.values() {
                 if !ap.enabled {
                     continue;
                 }
-
-                // Process asynchronous delayed queues initially
-                while let Some((time, _)) = ap.delayed_frames.front() {
-                    if now >= *time {
-                        if let Some((_, frame)) = ap.delayed_frames.pop_front() {
-                            if sink.send(frame).is_err() {
-                                log::warn!("Sink closed while transmitting delayed frame");
-                                ctx.shutdown();
-                                self.sink = None;
-                                return;
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                }
-
-                // Beacon generation logic
                 if let Ok(frames) = self.manager.generate_beacon(ap, interval) {
                     for frame in frames {
                         if sink.send(frame).is_err() {

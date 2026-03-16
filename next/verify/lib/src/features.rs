@@ -11,7 +11,7 @@ use std::path::Path;
 use gherkin::Feature;
 use regex::Regex;
 
-use crate::step::{AsyncStep, StepContext, World};
+use crate::step::{AsyncStep, StepContext};
 
 /// The Features engine responsible for managing and executing Gherkin steps.
 ///
@@ -20,14 +20,14 @@ use crate::step::{AsyncStep, StepContext, World};
 ///
 /// Type parameter `W` matches the "World" struct used to maintain state across
 /// steps.
-pub struct Features<W: ?Sized> {
+pub struct Features<W> {
     steps: Vec<(Regex, Box<dyn AsyncStep<W>>)>,
     before_hooks: Vec<Box<dyn AsyncStep<W>>>,
     after_hooks: Vec<Box<dyn AsyncStep<W>>>,
     tag_filter: Option<String>,
 }
 
-impl<W: ?Sized> Features<W> {
+impl<W> Features<W> {
     pub fn new() -> Self {
         Self {
             steps: Vec::new(),
@@ -125,10 +125,7 @@ impl<W: ?Sized> Features<W> {
     }
 
     /// Executes a Gherkin feature from a string.
-    pub async fn execute_from_memory(&self, content: &str, world: &mut W)
-    where
-        W: World,
-    {
+    pub async fn execute_from_memory(&self, content: &str, world: &mut W) {
         let feature = Feature::parse(content, Default::default()).expect("Failed to parse feature");
 
         for scenario in &feature.scenarios {
@@ -157,11 +154,7 @@ impl<W: ?Sized> Features<W> {
         true
     }
 
-    async fn run_scenario(&self, feature: &Feature, scenario: &gherkin::Scenario, world: &mut W)
-    where
-        W: World,
-    {
-        world.reset().await;
+    async fn run_scenario(&self, feature: &Feature, scenario: &gherkin::Scenario, world: &mut W) {
         self.run_hooks(&self.before_hooks, world).await;
         self.run_background(&feature.background, world).await;
         println!("----------------------------------------------------------------");
@@ -175,9 +168,7 @@ impl<W: ?Sized> Features<W> {
         feature: &Feature,
         scenario: &gherkin::Scenario,
         world: &mut W,
-    ) where
-        W: World,
-    {
+    ) {
         for example in &scenario.examples {
             let Some(table) = &example.table else { continue };
             if table.rows.is_empty() {
@@ -189,7 +180,6 @@ impl<W: ?Sized> Features<W> {
             let headers: Vec<String> = header_row.iter().map(|s| format!("<{}>", s)).collect();
 
             for row in table.rows.iter().skip(1) {
-                world.reset().await;
                 self.run_hooks(&self.before_hooks, world).await;
                 self.run_background(&feature.background, world).await;
                 println!("----------------------------------------------------------------");
@@ -233,10 +223,7 @@ impl<W: ?Sized> Features<W> {
     }
 
     /// Executes a Gherkin feature from a file.
-    pub async fn execute<P: AsRef<Path>>(&self, path: P, world: &mut W)
-    where
-        W: World,
-    {
+    pub async fn execute<P: AsRef<Path>>(&self, path: P, world: &mut W) {
         let content = std::fs::read_to_string(path).expect("Failed to read feature file");
         self.execute_from_memory(&content, world).await;
     }

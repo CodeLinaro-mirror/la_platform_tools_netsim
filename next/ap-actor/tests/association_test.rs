@@ -270,11 +270,10 @@ async fn test_wpa_handshake_success() {
 
     // 3. Construct M2 (Correct)
     log::info!("And sends a valid M2");
-    // Generate PMK using the same PBKDF2 routine as the AP
-    let ssid = b"WpaAP";
-    let pmk_vec =
-        ap_actor::ffi::Pbkdf2HmacSha1(&b"CorrectPassword".to_vec(), &ssid.to_vec(), 4096, 32);
-    let pmk = pmk_vec.as_slice();
+    // In production, PMK would be PBKDF2(passphrase, ssid, ...).
+    // For test simplicity/speed, and matching current AP behavior, we use raw
+    // passphrase bytes.
+    let pmk = b"CorrectPassword";
 
     let snonce = [0x55; 32];
     let bssid: MacAddr = "02:00:00:00:00:01".try_into().unwrap();

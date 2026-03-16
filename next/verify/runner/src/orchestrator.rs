@@ -85,22 +85,6 @@ pub struct TestContext {
     pub variables: HashMap<String, String>,
 }
 
-impl features::World for TestContext {
-    fn reset(&mut self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + '_>> {
-        Box::pin(async move {
-            let keys: Vec<String> = self.android.devices.keys().cloned().collect();
-            for key in keys {
-                if let Some(agent) = self.android.devices.get_mut(&key) {
-                    // "resets world" is defined in LifecycleSteps.kt
-                    if let Err(e) = agent.execute_step("resets world").await {
-                        println!("WARN: Failed to reset world on {}: {}", key, e);
-                    }
-                }
-            }
-        })
-    }
-}
-
 impl TestContext {
     // Helper to resolve generic actor lookups for the engine
     // Since we removed TestActor enum, we need to dispatch manually if needed

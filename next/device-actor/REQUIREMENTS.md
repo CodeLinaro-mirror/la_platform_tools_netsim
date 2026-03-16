@@ -315,6 +315,6 @@ prioritized for the next test sprint:
   devices.
 - **RQ-NFR-SYNC**: No latency benchmark exists for position propagation.
 - **RQ-STATS-GAP-01**: **Per-Device Stats Persistence**. (Resolved in CL 4).
-- **RQ-STATS-GAP-03**: **WiFi Stats Integration**. (Resolved in CL 5). The new system integrates with `WiFi-Actor` to collect and persist granular WiFi statistics.
+- **RQ-STATS-GAP-03**: **WiFi Stats Integration**. The legacy system merged WiFi global stats. The new system does not yet integrate with the `WiFi-Actor` global stats mechanism.
 - **RQ-STATS-GAP-04**: **Frontend Stats Integration**. The legacy system reported frontend (gRPC/WebUI) connection activity as part of the session stats. This needs to be implemented in the Daemon and passed down to `DeviceActor`.
 

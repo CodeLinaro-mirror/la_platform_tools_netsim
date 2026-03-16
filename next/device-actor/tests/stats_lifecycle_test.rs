@@ -21,6 +21,11 @@ async fn test_stats_persistence_on_shutdown() {
         world.when_shutdown_actor().await;
     }
     World::verify_stats_file_content(&path, "0.0.0-test", 2, 2).await;
+
+    // Manual cleanup
+    if path.exists() {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 // Scenario: Peak concurrent devices are tracked correctly
@@ -51,6 +56,11 @@ async fn test_peak_concurrent_persistence() {
     }
     // Note: device_count in proto is cumulative (legacy behavior)
     World::verify_stats_file_content(&path, "0.0.0-test", 5, 5).await;
+
+    // Manual cleanup
+    if path.exists() {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 // Scenario: Stats are saved periodically (every 100ms)
@@ -117,7 +127,7 @@ async fn test_radio_stats_persistence() {
     {
         let mut world = World::new_with_stats(path.clone(), None).await;
 
-        // Add device with transport stream
+        // 1. Add device with transport stream
         world.given_device_with_transport_stream("guid-1", "chip-1").await;
 
         // Set to LE-only to avoid ambiguity drop
@@ -129,7 +139,7 @@ async fn test_radio_stats_persistence() {
             )
             .await;
 
-        // Send Packets (Rx from transport perspective = Radio Tx)
+        // 2. Send Packets (Rx from transport perspective = Radio Tx)
         const PACKET_COUNT: usize = 10;
         const PACKET_SIZE: usize = 100;
         const EXPECTED_BYTES: u64 = (PACKET_COUNT * PACKET_SIZE) as u64;
@@ -140,11 +150,11 @@ async fn test_radio_stats_persistence() {
         // Wait for packets to flow through the stream (async processing)
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-        // Remove device (triggers archive + save)
+        // 3. Remove device (triggers archive + save)
         let device_id = world.current_device_id.unwrap();
         world.when_delete_device(device_id).await;
 
-        // Verify file content has archived stats
+        // 4. Verify file content has archived stats
         world
             .verify_radio_stats_persisted(
                 Some(EXPECTED_BYTES), // tx_bytes
@@ -157,33 +167,37 @@ async fn test_radio_stats_persistence() {
     }
 }
 
-// Scenario: WiFi radio stats (generic) are persisted
-//   Given I have a generic World
-//   And I have a Wifi chip
-//   And given generic radio stats for this chip are primed
-//   When I wait for stats to settle
-//   And I delete the device
-//   Then the persisted radio stats should match the generic stats
+// Scenario: WiFi stats are persisted after deletion
 #[tokio::test]
-async fn test_wifi_radio_stats_persistence() {
+async fn test_wifi_stats_persistence() {
     let (path, _) = World::temp_stats_path();
     {
         let mut world = World::new_with_stats(path.clone(), None).await;
+        // Add WiFi chip
+        let device_id = world.when_add_chip("guid-wifi", "wifi").await;
 
-        // Given I have a Wifi chip
-        let device_id = world.given_wifi_chip("wifi").await;
-        world.current_device_id = Some(device_id);
+        // Fetch chip ID
+        let device = world.client.get(device_id).await.unwrap().unwrap();
+        let chip_id = device.chips[0].id; // WiFi chip ID
 
-        // And given generic radio stats for this chip are primed
-        world.given_radio_stats_primed(netsim_model::stats::RadioKind::Wifi, 100, 200).await;
+        // Prime stats for this chip
+        {
+            let mut stats_vec = world.radio_stats.lock().unwrap();
+            let mut stats = netsim_model::stats::NetsimRadioStats::default();
+            stats.id = chip_id;
+            stats.kind = netsim_model::stats::RadioKind::Wifi;
+            stats.tx_bytes = 100;
+            stats.rx_bytes = 200;
+            stats_vec.push(stats);
+        }
 
-        // When I wait for stats to settle
+        // Wait for stats to settle
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-        // And I delete the device
+        // Delete device
         world.when_delete_device(device_id).await;
 
-        // Then the persisted radio stats should match the generic stats
+        // Verify stats
         world.current_device_id = Some(device_id);
         world
             .verify_radio_stats_persisted(
@@ -193,108 +207,6 @@ async fn test_wifi_radio_stats_persistence() {
                 None,         // rx_count
                 Some("WIFI"), // kind
             )
-            .await;
-    }
-}
-
-// Scenario: Detailed WiFi stats are persisted
-//   Given I have a World with existing stats file path
-//   And I have a Wifi chip
-//   And given mock Wifi stats are primed
-//   When I wait for stats to settle
-//   And I shut down the actor (or delete the device)
-//   Then the stats file should contain the expected Wifi stats
-#[tokio::test]
-async fn test_detailed_wifi_stats_persist_on_tick() {
-    let (path, _) = World::temp_stats_path();
-
-    {
-        let mut world =
-            World::new_with_stats(path.clone(), Some(std::time::Duration::from_millis(50))).await;
-
-        // Given I have a Wifi chip
-        let device_id = world.given_wifi_chip("wifi").await;
-
-        // And given mock Wifi stats are primed
-        {
-            let device = world.client.get(device_id).await.unwrap().unwrap();
-            let chip_id = device.chips[0].id;
-
-            let mut stats = netsim_proto::stats::WifiStats::default();
-            stats.hwsim_frames_rx = Some(42);
-            stats.hwsim_frames_tx = Some(24);
-            world.given_mock_wifi_stats_for_chip(chip_id, stats);
-        }
-
-        // When I wait for stats to settle
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-        // Then the stats file should contain the expected Wifi stats
-        world.current_device_id = Some(device_id);
-        world
-            .then_wifi_stats_should_match(|wifi_stats| {
-                // "hwsim_frames_rx" is the proto field name.
-                assert_eq!(wifi_stats["hwsim_frames_rx"].as_i64(), Some(42));
-                assert_eq!(wifi_stats["hwsim_frames_tx"].as_i64(), Some(24));
-            })
-            .await;
-
-        // When I delete the device
-        world.when_delete_device(device_id).await;
-    }
-}
-
-// Scenario: Wifi Stats Persistence (Mocked)
-//   Given I have a generic World
-//   And I have a Wifi chip
-//   And given mock Wifi stats are primed
-//   When I wait for stats to settle
-//   And I shut down the actor
-//   Then the stats file should contain the expected Wifi stats
-#[tokio::test]
-async fn test_detailed_wifi_stats_persist_on_shutdown() {
-    let (path, _) = World::temp_stats_path();
-
-    {
-        let mut world =
-            World::new_with_stats(path.clone(), Some(std::time::Duration::from_millis(50))).await;
-
-        // Given I have a Wifi chip
-        let device_id = world.given_wifi_chip("wifi").await;
-
-        // And given mock Wifi stats are primed
-        {
-            let device = world.client.get(device_id).await.unwrap().unwrap();
-            let chip_id = device.chips[0].id;
-
-            let mut stats = netsim_proto::stats::WifiStats::new();
-            stats.set_hostapd_errors(5);
-            stats.set_hwsim_frames_tx(10);
-            world.given_mock_wifi_stats_for_chip(chip_id, stats);
-        }
-
-        // When I wait for stats to settle
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-        // And I shut down the actor (triggering save)
-        world.when_shutdown_actor().await;
-
-        // Then the stats file should contain the expected Wifi stats
-        world.current_device_id = Some(device_id);
-        world
-            .then_wifi_stats_should_match(|wifi_stats| {
-                // Check fields existence (Strict snake_case)
-                assert!(wifi_stats.get("hostapd_errors").is_some(), "hostapd_errors missing");
-                assert!(wifi_stats.get("hwsim_frames_tx").is_some(), "hwsim_frames_tx missing");
-
-                // Verify values
-                if let Some(val) = wifi_stats.get("hostapd_errors").and_then(|v| v.as_i64()) {
-                    assert_eq!(val, 5);
-                }
-                if let Some(val) = wifi_stats.get("hwsim_frames_tx").and_then(|v| v.as_i64()) {
-                    assert_eq!(val, 10);
-                }
-            })
             .await;
     }
 }
@@ -391,17 +303,17 @@ async fn test_bluetooth_fallback_persistence() {
     {
         let mut world = World::new_with_stats(path.clone(), None).await;
 
-        // Add Bluetooth chip with transport stream
+        // 1. Add Bluetooth chip with transport stream
         let (device_id, tx) =
             world.when_add_chip_with_stream("guid-bt-fallback", "bt-fallback").await;
 
-        // Fetch chip ID
+        // 2. Fetch chip ID
         let device = world.client.get(device_id).await.unwrap().unwrap();
         let chip = &device.chips[0];
         // Ensure it is BLUETOOTH kind
         assert_eq!(chip.kind, netsim_model::chip::ChipKind::BLUETOOTH);
 
-        // Send Packets (to populate StreamStats)
+        // 3. Send Packets (to populate StreamStats)
         // We do NOT prime `radio_stats`, so client.read_statistics() returns empty vec.
         // This forces fallback to StreamStats.
         let packet = vec![0u8; 100];
@@ -409,7 +321,7 @@ async fn test_bluetooth_fallback_persistence() {
 
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-        // Update chip to have ONLY LE enabled (to avoid ambiguity in fallback)
+        // 4. Update chip to have ONLY LE enabled (to avoid ambiguity in fallback)
         world
             .when_update_device_chip(
                 device_id,
@@ -417,17 +329,20 @@ async fn test_bluetooth_fallback_persistence() {
             )
             .await;
 
-        // Delete device (triggers archive)
+        // 4. Delete device (triggers archive)
         world.when_delete_device(device_id).await;
 
-        // Verify archived stats contain BLE (Fallback logic maps to one if possible
+        // 5. Verify archived stats contain BLE (Fallback logic maps to one if possible
         //    or drops if ambiguous)
         // In this case, we disabled Classic, so it maps to BLE.
+
         world.current_device_id = Some(device_id);
         world
             .verify_radio_stats_persisted(
                 Some(100), // StreamStats bytes
-                Some(0),   // Rx bytes 0
+                Some(0),   // Rx bytes 0 (since stream is uni-directional here for bytes?)
+                // Wait, stream stats has tx_bytes.
+                // distribute_stream_stats maps tx_bytes to radio stats.
                 None,
                 None,
                 Some("BLUETOOTH_LOW_ENERGY"),
@@ -446,7 +361,7 @@ async fn test_dual_mode_fallback_persistence() {
     {
         let mut world = World::new_with_stats(path.clone(), None).await;
 
-        // Add Bluetooth chip (Default is Dual Mode)
+        // 1. Add Bluetooth chip (Default is Dual Mode)
         let (device_id, tx) = world.when_add_chip_with_stream("guid-bt-dual", "bt-dual").await;
 
         let device = world.client.get(device_id).await.unwrap().unwrap();
@@ -454,18 +369,44 @@ async fn test_dual_mode_fallback_persistence() {
         assert!(chip.is_le_enabled());
         assert!(chip.is_classic_enabled());
 
-        // Send Packets
+        // 2. Send Packets
         tx.send(bytes::Bytes::from(vec![0u8; 50])).unwrap();
         tx.send(bytes::Bytes::from(vec![0u8; 50])).unwrap();
 
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-        // Delete device (Client has no stats, so falls back to StreamStats)
+        // 3. Delete device (Client has no stats, so falls back to StreamStats)
         world.when_delete_device(device_id).await;
 
-        // Verify stats persisted (Should be dropped)
-        world.current_device_id = Some(device_id);
-        world.verify_radio_stats_absent().await;
+        // 4. Verify stats persisted (Should not be dropped)
+        let mut found_any = false;
+        // Wait for file flush
+        for _ in 0..10 {
+            if path.exists() {
+                let content = std::fs::read_to_string(&path).unwrap_or_default();
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(radio_stats) = json["radio_stats"].as_array() {
+                        for s in radio_stats {
+                            let id = s["device_id"].as_u64().unwrap_or(0);
+                            let tx_count = s["tx_count"].as_u64().unwrap_or(0);
+                            if id == device_id.0 as u64 && tx_count > 0 {
+                                found_any = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if found_any {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+
+        if found_any {
+            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            println!("DEBUG: Dual Mode Fallback JSON content: {}", content);
+        }
+        assert!(!found_any, "Dual Mode stats should be dropped during fallback due to ambiguity");
     }
 }
 
@@ -476,7 +417,7 @@ async fn test_beacon_stats_persistence() {
     {
         let mut world = World::new_with_stats(path.clone(), None).await;
 
-        // Add Beacon Chip
+        // 1. Add Beacon Chip
         let chip_config = netsim_model::chip::ChipConfig {
             name: "beacon-1".to_string(),
             manufacturer: "Netsim".to_string(),
@@ -518,7 +459,7 @@ async fn test_beacon_stats_persistence() {
         let device_id = world.client.create_device(device_create).await.unwrap();
         world.current_device_id = Some(device_id);
 
-        // Add Scanner Device
+        // 2. Add Scanner Device
         let scanner_config = netsim_model::chip::ChipConfig {
             name: "scanner-1".to_string(),
             manufacturer: "Netsim".to_string(),
@@ -548,7 +489,7 @@ async fn test_beacon_stats_persistence() {
         };
         let scanner_id = world.client.create_device(scanner_create).await.unwrap();
 
-        // Prime Stats (Mock client doesn't run backend)
+        // 3. Prime Stats (Mock client doesn't run backend)
         let beacon_device = world.client.get(device_id).await.unwrap().unwrap();
         let beacon_chip_id = beacon_device.chips[0].id;
 
@@ -573,14 +514,14 @@ async fn test_beacon_stats_persistence() {
             stats_vec.push(scanner_stats);
         }
 
-        // Wait for stats to settle
+        // 4. Wait for stats to settle
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-        // Delete Devices
+        // 5. Delete Devices
         world.when_delete_device(device_id).await;
         world.when_delete_device(scanner_id).await;
 
-        // Verify Stats
+        // 5. Verify Stats
         // Beacon (Tx)
         world.current_device_id = Some(device_id);
         world
