@@ -8,6 +8,7 @@ DEPS = [
     "@bytes",
     "@futures",
     "@serde",
+    "@tokio",
 ]
 
 netsim_rust_library(

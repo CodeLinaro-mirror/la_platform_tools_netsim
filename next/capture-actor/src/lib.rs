@@ -79,7 +79,16 @@ mod tests {
         fn set_interval(&mut self, _duration: std::time::Duration) {}
         fn add_stream(&mut self, _id: ChipId, _stream: actor_framework::BoxStream) {}
         fn remove_stream(&mut self, _id: ChipId) {}
-        fn add_typed_stream(&mut self, _id: usize, _stream: actor_framework::BoxTypedStream<()>) {}
+        fn add_typed_stream(
+            &mut self,
+            _id: usize,
+            _stream: actor_framework::BoxTypedStream<(
+                std::time::SystemTime,
+                capture_api::Direction,
+                bytes::Bytes,
+            )>,
+        ) {
+        }
         fn remove_typed_stream(&mut self, _id: usize) {}
         fn spawn(&mut self, _id: ChipId, _task: futures::future::BoxFuture<'static, ChipId>) {}
         fn abort(&mut self, _id: ChipId) {}
@@ -138,17 +147,21 @@ mod tests {
         // work
         ctx.entities.insert(chip_id, entity.clone());
         let packet = vec![0x01, 0x02, 0x03, 0x04];
-        ctx.handle_action(
-            Some(chip_id),
-            CaptureAction::CapturePacket {
-                chip_id,
-                direction: Direction::Sent,
-                bytes: Bytes::from(packet.clone()),
-            },
+        let result = ctx
+            .handle_action(Some(chip_id), CaptureAction::GetPacketSender, &mut runtime)
+            .await
+            .unwrap();
+
+        let tx = match result {
+            capture_api::CaptureActionResult::PacketSender(tx) => tx,
+            _ => panic!("Expected PacketSender"),
+        };
+        ctx.on_typed_stream(
+            chip_id.0 as usize,
+            (std::time::SystemTime::now(), Direction::Sent, Bytes::from(packet.clone())),
             &mut runtime,
         )
-        .await
-        .unwrap();
+        .await;
 
         let info = ctx
             .handle_get(chip_id, &mut runtime)
@@ -244,17 +257,21 @@ mod tests {
         assert!(ctx.writers.contains_key(&chip_id));
 
         let packet = vec![0x00, 0x01, 0x02, 0x03]; // Fake UCI packet
-        ctx.handle_action(
-            Some(chip_id),
-            CaptureAction::CapturePacket {
-                chip_id,
-                direction: Direction::Sent,
-                bytes: bytes::Bytes::from(packet.clone()),
-            },
+        let result = ctx
+            .handle_action(Some(chip_id), CaptureAction::GetPacketSender, &mut runtime)
+            .await
+            .unwrap();
+
+        let tx = match result {
+            capture_api::CaptureActionResult::PacketSender(tx) => tx,
+            _ => panic!("Expected PacketSender"),
+        };
+        ctx.on_typed_stream(
+            chip_id.0 as usize,
+            (std::time::SystemTime::now(), Direction::Sent, Bytes::from(packet.clone())),
             &mut runtime,
         )
-        .await
-        .unwrap();
+        .await;
 
         let info = ctx.handle_get(chip_id, &mut runtime).await.unwrap().unwrap();
         assert_eq!(info.records_written, 1);
@@ -288,17 +305,22 @@ mod tests {
             assert!(ctx.writers.contains_key(&chip_id));
 
             let packet = vec![0x00, 0x01, 0x02, 0x03]; // Fake 802.11 payload
-            ctx.handle_action(
-                Some(chip_id),
-                CaptureAction::CapturePacket {
-                    chip_id,
-                    direction: Direction::Sent,
-                    bytes: bytes::Bytes::from(packet.clone()),
-                },
+            let result = ctx
+                .handle_action(Some(chip_id), CaptureAction::GetPacketSender, &mut runtime)
+                .await
+                .unwrap();
+
+            let tx = match result {
+                capture_api::CaptureActionResult::PacketSender(tx) => tx,
+                _ => panic!("Expected PacketSender"),
+            };
+            use actor_framework::ActorLifecycle;
+            ctx.on_typed_stream(
+                chip_id.0 as usize,
+                (std::time::SystemTime::now(), Direction::Sent, Bytes::from(packet.clone())),
                 &mut runtime,
             )
-            .await
-            .unwrap();
+            .await;
 
             let info = ctx.handle_get(chip_id, &mut runtime).await.unwrap().unwrap();
 
@@ -330,18 +352,22 @@ mod tests {
         actor.entities.insert(chip_id, entity.clone());
 
         let packet = vec![0x00, 0x01, 0x02, 0x03];
-        actor
-            .handle_action(
-                Some(chip_id),
-                CaptureAction::CapturePacket {
-                    chip_id,
-                    direction: Direction::Sent,
-                    bytes: bytes::Bytes::from(packet.clone()),
-                },
-                &mut runtime,
-            )
+        let result = actor
+            .handle_action(Some(chip_id), CaptureAction::GetPacketSender, &mut runtime)
             .await
             .unwrap();
+
+        let tx = match result {
+            capture_api::CaptureActionResult::PacketSender(tx) => tx,
+            _ => panic!("Expected PacketSender"),
+        };
+        actor
+            .on_typed_stream(
+                chip_id.0 as usize,
+                (std::time::SystemTime::now(), Direction::Sent, Bytes::from(packet.clone())),
+                &mut runtime,
+            )
+            .await;
 
         let entries: Vec<_> = fs::read_dir(&temp_dir).unwrap().map(|r| r.unwrap().path()).collect();
         assert_eq!(entries.len(), 1, "Expected one pcap file");
@@ -381,18 +407,22 @@ mod tests {
         actor.entities.insert(chip_id, entity.clone());
 
         let packet = vec![0x00, 0x01, 0x02, 0x03];
-        actor
-            .handle_action(
-                Some(chip_id),
-                CaptureAction::CapturePacket {
-                    chip_id,
-                    direction: Direction::Sent,
-                    bytes: bytes::Bytes::from(packet.clone()),
-                },
-                &mut runtime,
-            )
+        let result = actor
+            .handle_action(Some(chip_id), CaptureAction::GetPacketSender, &mut runtime)
             .await
             .unwrap();
+
+        let tx = match result {
+            capture_api::CaptureActionResult::PacketSender(tx) => tx,
+            _ => panic!("Expected PacketSender"),
+        };
+        actor
+            .on_typed_stream(
+                chip_id.0 as usize,
+                (std::time::SystemTime::now(), Direction::Sent, Bytes::from(packet.clone())),
+                &mut runtime,
+            )
+            .await;
 
         let entries: Vec<_> = fs::read_dir(&temp_dir).unwrap().map(|r| r.unwrap().path()).collect();
         assert_eq!(entries.len(), 1, "Expected one pcap file");
@@ -428,18 +458,22 @@ mod tests {
         actor.entities.insert(chip_id, entity.clone());
 
         let packet = vec![0x00, 0x01, 0x02, 0x03];
-        actor
-            .handle_action(
-                Some(chip_id),
-                CaptureAction::CapturePacket {
-                    chip_id,
-                    direction: Direction::Sent,
-                    bytes: bytes::Bytes::from(packet.clone()),
-                },
-                &mut runtime,
-            )
+        let result = actor
+            .handle_action(Some(chip_id), CaptureAction::GetPacketSender, &mut runtime)
             .await
             .unwrap();
+
+        let tx = match result {
+            capture_api::CaptureActionResult::PacketSender(tx) => tx,
+            _ => panic!("Expected PacketSender"),
+        };
+        actor
+            .on_typed_stream(
+                chip_id.0 as usize,
+                (std::time::SystemTime::now(), Direction::Sent, Bytes::from(packet.clone())),
+                &mut runtime,
+            )
+            .await;
 
         let entries: Vec<_> = fs::read_dir(&temp_dir).unwrap().map(|r| r.unwrap().path()).collect();
         assert_eq!(entries.len(), 1, "Expected one pcap file");
@@ -475,18 +509,22 @@ mod tests {
         actor.entities.insert(chip_id, entity.clone());
 
         let packet = vec![0x00, 0x01, 0x02, 0x03];
-        actor
-            .handle_action(
-                Some(chip_id),
-                CaptureAction::CapturePacket {
-                    chip_id,
-                    direction: Direction::Sent,
-                    bytes: bytes::Bytes::from(packet.clone()),
-                },
-                &mut runtime,
-            )
+        let result = actor
+            .handle_action(Some(chip_id), CaptureAction::GetPacketSender, &mut runtime)
             .await
             .unwrap();
+
+        let tx = match result {
+            capture_api::CaptureActionResult::PacketSender(tx) => tx,
+            _ => panic!("Expected PacketSender"),
+        };
+        actor
+            .on_typed_stream(
+                chip_id.0 as usize,
+                (std::time::SystemTime::now(), Direction::Sent, Bytes::from(packet.clone())),
+                &mut runtime,
+            )
+            .await;
 
         let entries: Vec<_> = fs::read_dir(&temp_dir).unwrap().map(|r| r.unwrap().path()).collect();
         assert_eq!(entries.len(), 1, "Expected one pcap file");
