@@ -1,34 +1,30 @@
 // Copyright 2025 The Android Open Source Project
 
 use actor_framework::{ActorLifecycle, DynContext};
-use async_trait::async_trait;
 use netsim_model::ChipId;
 
 use crate::wifi_actor::WifiActor;
 
-/// ID for the AP infrastructure stream
-pub const AP_ID: ChipId = ChipId(u32::MAX);
 /// ID for the Slirp infrastructure stream
 pub const SLIRP_ID: ChipId = ChipId(u32::MAX - 1);
 
-#[async_trait]
+/// Stream ID for AP downlink messages in the typed_stream map
+const AP_SUBSCRIPTION_ID: usize = 0;
+
 impl ActorLifecycle for WifiActor {
     async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
         log::info!("WifiActor started");
 
         if let Some(ap_client) = &self.ap_client {
-            // Uplink: Wifi -> AP
-            // We hold the tx (to write to AP), AP gets the rx (to read from us)
+            // Uplink: Wifi -> AP (Wifi writes to tx, AP reads from rx)
             let (ap_uplink_tx, ap_uplink_rx) = create_channel_stream();
 
-            // Downlink: AP -> Wifi
-            // AP gets the tx (to write to us), We hold the rx (to read from AP)
+            // Downlink: AP -> Wifi (AP writes to tx, Wifi reads from rx)
             let (ap_downlink_tx, ap_downlink_rx) = create_channel_stream();
 
-            // Wire AP Downlink to Context
-            ctx.add_stream(AP_ID, ap_downlink_rx);
+            ctx.add_typed_stream(AP_SUBSCRIPTION_ID, ap_downlink_rx);
 
-            // Default beacon interval for now (100ms)
+            // Set initial beacon interval to 100ms
             if let Err(e) = ap_client
                 .register(
                     ap_uplink_rx,
@@ -43,7 +39,7 @@ impl ActorLifecycle for WifiActor {
             self.to_ap = Some(ap_uplink_tx);
         }
 
-        // Start Gateway (Slirp registration etc)
+        // Initialize Gateway
         self.gateway.on_start(ctx).await;
     }
 
@@ -57,9 +53,7 @@ impl ActorLifecycle for WifiActor {
         packet: bytes::Bytes,
         _ctx: &mut DynContext<Self>,
     ) {
-        if chip_id == AP_ID {
-            self.process_ap_packet(packet);
-        } else if self.gateway.should_handle(chip_id) {
+        if self.gateway.should_handle(chip_id) {
             self.gateway.handle_incoming(
                 chip_id,
                 packet,
@@ -86,6 +80,17 @@ impl ActorLifecycle for WifiActor {
         ctx.remove_stream(id);
         if let Err(e) = self.handle_delete_impl(id, ctx).await {
             log::error!("Failed to delete chip {id} after sink task closed: {e}");
+        }
+    }
+
+    async fn on_typed_stream(
+        &mut self,
+        id: usize,
+        packet: bytes::Bytes,
+        _ctx: &mut DynContext<Self>,
+    ) {
+        if id == AP_SUBSCRIPTION_ID {
+            self.process_ap_packet(packet);
         }
     }
 }

@@ -24,6 +24,8 @@ enum Commands {
         netsim_args: Option<String>,
         #[arg(long, help = "Gateway IP to connect to (defaults to 10.0.2.2)")]
         gateway_ip: Option<String>,
+        #[arg(long, help = "Optional scenario filter (matches feature file name)")]
+        filter: Option<String>,
         #[arg(long, help = "Simulation mode (no-op for orchestrator logic verification)")]
         #[arg(default_value_t = false)]
         dry_run: bool,
@@ -46,7 +48,15 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Run { android_home, apk_path, netsim_path, netsim_args, gateway_ip, dry_run } => {
+        Commands::Run {
+            android_home,
+            apk_path,
+            netsim_path,
+            netsim_args,
+            gateway_ip,
+            filter,
+            dry_run,
+        } => {
             // Orchestrate Android integration tests
             orchestrator::run_android(
                 android_home,
@@ -54,6 +64,7 @@ async fn main() -> anyhow::Result<()> {
                 netsim_args,
                 apk_path,
                 gateway_ip,
+                filter,
                 dry_run,
             )
             .await?;

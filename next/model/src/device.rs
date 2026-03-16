@@ -164,6 +164,7 @@ pub mod api {
                     orientation: Default::default(),
                     visible: false,
                     builtin: true,
+                    device_info: None,
                 },
                 chip: DeviceChipCreate {
                     name: "main-ap".to_string(),
@@ -285,6 +286,34 @@ pub struct Device {
     pub orientation: Orientation,
     pub builtin: bool,
     pub chips: Vec<crate::chip::Chip>,
+    pub device_info: Option<DeviceInfo>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DeviceInfo {
+    pub name: String,
+    pub kind: String,
+    pub version: String,
+    pub sdk_version: String,
+    pub build_id: String,
+    pub variant: String,
+    pub arch: String,
+    pub avd_path: String,
+}
+
+impl From<netsim_types::DeviceInfo> for DeviceInfo {
+    fn from(info: netsim_types::DeviceInfo) -> Self {
+        Self {
+            name: info.name,
+            kind: info.kind,
+            version: info.version,
+            sdk_version: info.sdk_version,
+            build_id: info.build_id,
+            variant: info.variant,
+            arch: info.arch,
+            avd_path: info.avd_path,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -294,6 +323,7 @@ pub struct DeviceConfig {
     pub position: Position,
     pub orientation: Orientation,
     pub builtin: bool,
+    pub device_info: Option<DeviceInfo>,
 }
 
 impl DeviceConfig {
@@ -304,7 +334,14 @@ impl DeviceConfig {
         orientation: Orientation,
         builtin: bool,
     ) -> DeviceConfig {
-        DeviceConfig { name: name.into(), visible, position, orientation, builtin }
+        DeviceConfig {
+            name: name.into(),
+            visible,
+            position,
+            orientation,
+            builtin,
+            device_info: None,
+        }
     }
 }
 

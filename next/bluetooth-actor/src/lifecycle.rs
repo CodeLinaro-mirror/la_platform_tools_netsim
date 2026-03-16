@@ -1,11 +1,9 @@
 use std::time::Duration;
 
 use actor_framework::{ActorLifecycle, ActorService, DynContext};
-use async_trait::async_trait;
 
 use crate::bluetooth_actor::BluetoothActor;
 
-#[async_trait]
 impl ActorLifecycle for BluetoothActor {
     async fn on_start(&mut self, runtime: &mut DynContext<Self>) {
         // Tick every 10ms to drive Rootcanal

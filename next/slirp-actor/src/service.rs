@@ -1,12 +1,10 @@
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 
 use crate::{
     error::SlirpError,
     slirp_actor::{SlirpActor, SlirpCreate, SlirpReq, SlirpStatus},
 };
 
-#[async_trait]
 impl ActorService for SlirpActor {
     type Id = u32;
     type Create = SlirpCreate;
@@ -15,6 +13,7 @@ impl ActorService for SlirpActor {
     type ActionResult = ();
     type Error = SlirpError;
     type Entity = SlirpStatus;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,
