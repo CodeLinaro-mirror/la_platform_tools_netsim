@@ -57,6 +57,13 @@ mod hostap_ffi {
             out_plain: &mut Vec<u8>,
         ) -> bool;
         fn RandBytes(len: usize) -> Vec<u8>;
+        // PBKDF2
+        fn Pbkdf2HmacSha1(
+            password: &Vec<u8>,
+            salt: &Vec<u8>,
+            iterations: u32,
+            key_len: usize,
+        ) -> Vec<u8>;
         // SAE / ECC P-256
         fn EcP256CalculatePwe(
             password: &Vec<u8>,
@@ -111,6 +118,15 @@ pub fn AesCcmDecrypt(
 
 pub fn RandBytes(len: usize) -> Vec<u8> {
     self::hostap_ffi::RandBytes(len)
+}
+
+pub fn Pbkdf2HmacSha1(
+    password: &Vec<u8>,
+    salt: &Vec<u8>,
+    iterations: u32,
+    key_len: usize,
+) -> Vec<u8> {
+    self::hostap_ffi::Pbkdf2HmacSha1(password, salt, iterations, key_len)
 }
 
 pub fn EcP256CalculatePwe(password: &Vec<u8>, address1: &Vec<u8>, address2: &Vec<u8>) -> Vec<u8> {

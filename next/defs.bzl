@@ -78,6 +78,7 @@ def netsim_rust_library(
         enable_clippy = True,
         enable_rustfmt = True,
         enable_unit_test = True,
+        enable_integration_test = True,
         enable_doc = True,
         enable_doc_test = True,
         strict_warnings = True,
@@ -87,6 +88,7 @@ def netsim_rust_library(
 
     This macro wraps rust_library and automatically generates:
     - _test: Unit tests for the crate.
+    - _integration_test: Integration tests for the crate if tests/ subdirectory has files.
     - _clippy: Clippy checks.
     - _fmt: Rustfmt checks.
     - _doc: Documentation generation.
@@ -97,11 +99,12 @@ def netsim_rust_library(
         srcs: The source files.
         deps: The dependencies.
         select_deps: The part of deps that uses select()
-        test_deps: Dependencies for the unit test target.
+        test_deps: Dependencies for the unit test and integration test targets.
         crate_features: the crate features
         enable_clippy: Whether to enable clippy checks.
         enable_rustfmt: Whether to enable rustfmt checks.
         enable_unit_test: Whether to generate a unit test target.
+        enable_integration_test: Whether to generate an integration test target if files exist.
         enable_doc: Whether to generate documentation.
         enable_doc_test: Whether to generate a doc test target.
         strict_warnings: Whether to enforce strict warnings (treat warnings as errors).
@@ -150,10 +153,49 @@ def netsim_rust_library(
             testonly = True,
         )
 
-    # 4. Common Targets (Clippy, Rustfmt)
-    _define_common_targets(name, enable_clippy, enable_rustfmt, targets = [":" + name], deps = [":" + name])
+    # 4. Automatic Integration Test
+    integration_test_srcs = native.glob(["tests/**/*.rs"], allow_empty = True)
+    has_integration_test = enable_integration_test and len(integration_test_srcs) > 0
 
-    # 5. Documentation
+    if has_integration_test:
+        test_flags = []
+        if strict_warnings:
+            test_flags = NETSIM_RUSTC_FLAGS
+
+        # If there's a mod.rs, it's typically the root.
+        # Else it's likely a single-file setup.
+        crate_root_opts = [
+            "tests/mod.rs",
+            "tests/integration_tests.rs",
+        ]
+        crate_root = None
+        for opt in crate_root_opts:
+            if opt in integration_test_srcs:
+                crate_root = opt
+                break
+
+        rust_test(
+            name = "integration-test",
+            srcs = integration_test_srcs,
+            crate_root = crate_root,
+            rustc_flags = test_flags,
+            compile_data = kwargs.get("compile_data", []),
+            deps = [":testing"] + testing_deps + select_deps + test_deps,
+            proc_macro_deps = kwargs.get("proc_macro_deps", []),
+            edition = kwargs.get("edition", "2021"),
+            testonly = True,
+        )
+
+    # 5. Common Targets (Clippy, Rustfmt)
+    _define_common_targets(
+        name,
+        enable_clippy,
+        enable_rustfmt,
+        targets = [":" + name] + (([":integration-test"] if has_integration_test else [])),
+        deps = [":" + name] + (([":integration-test"] if has_integration_test else [])),
+    )
+
+    # 6. Documentation
     if enable_doc:
         rust_doc(
             name = "doc",
@@ -161,7 +203,7 @@ def netsim_rust_library(
             testonly = True,
         )
 
-    # 6. Documentation Test
+    # 7. Documentation Test
     if enable_doc_test:
         rust_doc_test(
             name = "doc-test",

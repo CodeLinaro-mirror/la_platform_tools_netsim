@@ -88,7 +88,10 @@ impl DeviceActor {
         // Convert to Proto for persistence
         let active_proto_stats = active_model_stats.into_iter().map(to_proto_stats).collect();
 
-        let combined_stats = self.stats.get_combined_stats(active_proto_stats);
+        // Collect WiFi specific stats (Global)
+        let wifi_stats = self.collect_wifi_stats_async().await;
+
+        let combined_stats = self.stats.get_combined_stats(active_proto_stats, wifi_stats);
         let path = self.stats.stats_path.clone();
 
         let previous_task = self.stats_write_task.take();
@@ -120,7 +123,6 @@ impl DeviceActor {
     }
 
     async fn collect_radio_stats_async(&mut self) -> Vec<netsim_model::stats::NetsimRadioStats> {
-        // 1. Fire off requests for Stats AND Chip State (for BT)
         let mut stats_futures = Vec::new();
         let mut state_futures = Vec::new();
 
@@ -157,11 +159,9 @@ impl DeviceActor {
             }
         }
 
-        // 2. Await all
         let stats_results = futures::future::join_all(stats_futures).await;
         let state_results = futures::future::join_all(state_futures).await;
 
-        // 3. Process Results
         let mut chip_stats_map: HashMap<ChipId, Vec<netsim_model::stats::NetsimRadioStats>> =
             HashMap::new();
         for stats in stats_results.into_iter().flatten() {
@@ -238,6 +238,22 @@ impl DeviceActor {
             }
         }
         stats_list
+    }
+
+    async fn collect_wifi_stats_async(&self) -> Option<netsim_proto::stats::WifiStats> {
+        let client = self.chip_clients.get(&netsim_model::ChipKind::WIFI)?;
+        match tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_wifi_stats()).await {
+            Ok(Ok(Some(stats))) => Some(stats),
+            Ok(Ok(None)) => None,
+            Ok(Err(e)) => {
+                log::warn!("DeviceActor: Failed to get Wifi stats: {}", e);
+                None
+            }
+            Err(_) => {
+                log::debug!("DeviceActor: Timeout getting Wifi stats");
+                None
+            }
+        }
     }
 
     /// Resolves the specific RadioKind for a chip, handling ambiguous cases
