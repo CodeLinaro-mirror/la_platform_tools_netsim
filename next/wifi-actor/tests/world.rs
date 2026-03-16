@@ -687,7 +687,7 @@ impl wifi_actor::gateway::GatewayTrait for MockGateway {
     ) -> Result<usize, wifi_actor::error::WifiError> {
         let bytes = ieee80211
             .encode_to_vec()
-            .map_err(|e| wifi_actor::error::WifiError::Frame(e.to_string()))?;
+            .map_err(|e| wifi_actor::error::WifiError::Frame(Box::from(e.to_string())))?;
         let len = bytes.len();
         self.outgoing_packets.lock().unwrap().push((chip_id, bytes::Bytes::from(bytes)));
         Ok(len)

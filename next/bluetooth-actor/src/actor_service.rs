@@ -39,9 +39,7 @@ impl ActorService for BluetoothActor {
         let create_params = match &config.chip_kind_params {
             ChipKindParams::Bluetooth(p) => p,
             _ => {
-                return Err(BluetoothError::Chip(ChipError::InvalidArguments(
-                    "Expected Bluetooth network params".into(),
-                )));
+                return Err(BluetoothError::invalid_arg("Expected Bluetooth network params"));
             }
         };
 

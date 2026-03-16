@@ -91,22 +91,22 @@ impl Medium {
     }
 
     pub(crate) fn get_station(&self, addr: &MacAddress) -> WifiResult<&Station> {
-        self.stations
-            .get(addr)
-            .ok_or_else(|| WifiError::Internal(format!("Station not found for address: {addr}")))
+        self.stations.get(addr).ok_or_else(|| {
+            WifiError::Internal(Box::from(format!("Station not found for address: {addr}")))
+        })
     }
 
     pub(crate) fn get_station_mut(&mut self, addr: &MacAddress) -> WifiResult<&mut Station> {
-        self.stations
-            .get_mut(addr)
-            .ok_or_else(|| WifiError::Internal(format!("Station not found for address: {addr}")))
+        self.stations.get_mut(addr).ok_or_else(|| {
+            WifiError::Internal(Box::from(format!("Station not found for address: {addr}")))
+        })
     }
 
     pub(crate) fn upsert_station(&mut self, client_id: u32, frame: &HwsimFrame) -> WifiResult<()> {
         let src_addr = frame.ieee80211.get_source();
-        let hwsim_addr = frame.transmitter.ok_or(WifiError::Internal(format!(
+        let hwsim_addr = frame.transmitter.ok_or(WifiError::Internal(Box::from(format!(
             "Missing transmitter attribute in frame for client: {client_id}"
-        )))?;
+        ))))?;
         self.stations.entry(src_addr).or_insert_with(|| {
             info!(
                 "Insert station with client id {client_id}, hwsimaddr: {hwsim_addr}, \
@@ -132,12 +132,14 @@ impl Medium {
         self.clients
             .get(&client_id)
             .map(|c| c.enabled)
-            .ok_or_else(|| WifiError::Internal(format!("client {client_id} is missing")))
+            .ok_or_else(|| WifiError::Internal(Box::from(format!("client {client_id} is missing"))))
     }
 
     pub(crate) fn incr_tx(&mut self, client_id: u32) -> WifiResult<()> {
         self.clients.get_mut(&client_id).map_or(
-            Err(WifiError::Internal(format!("client {client_id} is missing for incr_tx"))),
+            Err(WifiError::Internal(Box::from(format!(
+                "client {client_id} is missing for incr_tx"
+            )))),
             |c| {
                 c.tx_count += 1;
                 Ok(())
@@ -147,7 +149,9 @@ impl Medium {
 
     pub(crate) fn incr_rx(&mut self, client_id: u32) -> WifiResult<()> {
         self.clients.get_mut(&client_id).map_or(
-            Err(WifiError::Internal(format!("client {client_id} is missing for incr_rx"))),
+            Err(WifiError::Internal(Box::from(format!(
+                "client {client_id} is missing for incr_rx"
+            )))),
             |c| {
                 c.rx_count += 1;
                 Ok(())

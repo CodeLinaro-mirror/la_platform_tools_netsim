@@ -123,6 +123,7 @@ impl WifiStats {
             WifiError::Client(_) => self.counts.client_error += 1,
             WifiError::Frame(_) => self.counts.frame_error += 1,
             WifiError::Transmission(_) => self.counts.transmission_error += 1,
+            WifiError::Chip(_) => self.counts.other_error += 1,
             WifiError::Other(_) => self.counts.other_error += 1,
             WifiError::Internal(_) => self.counts.other_error += 1,
         }

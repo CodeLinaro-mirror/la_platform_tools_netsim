@@ -93,21 +93,17 @@ impl ApClient {
                 chip_kind_params: ChipKindParams::Ap(config.into()),
             },
         };
-        self.client
-            .create_with_id(ChipId(id), params)
-            .await
-            .map(|_| ())
-            .map_err(|e| ClientError::Send(e.to_string()))
+        self.client.create_with_id(ChipId(id), params).err_into::<ClientError>().await.map(|_| ())
     }
 
     /// Destroys an Access Point by ID.
     pub async fn destroy_ap(&self, id: u32) -> Result<(), ClientError> {
-        self.client.delete(ChipId(id)).await.map_err(|e| ClientError::Send(e.to_string()))
+        self.client.delete(ChipId(id)).err_into::<ClientError>().await
     }
 
     /// Retrieves the state of an Access Point by ID.
     pub async fn get_ap(&self, id: u32) -> Result<Option<crate::ApState>, ClientError> {
-        match self.client.get(ChipId(id)).await.map_err(|e| ClientError::Send(e.to_string()))? {
+        match self.client.get(ChipId(id)).err_into::<ClientError>().await? {
             Some(chip) => {
                 if let Some(ChipVariant::Ap(ap_chip)) = chip.variant {
                     let config: crate::ApConfig = ap_chip
@@ -125,7 +121,7 @@ impl ApClient {
 
     /// Lists all active Access Points.
     pub async fn list_aps(&self) -> Result<Vec<crate::ApState>, ClientError> {
-        let chips = self.client.list().await.map_err(|e| ClientError::Send(e.to_string()))?;
+        let chips = self.client.list().err_into::<ClientError>().await?;
         let mut aps = Vec::new();
         for chip in chips {
             if let Some(ChipVariant::Ap(ap_chip)) = chip.variant {
@@ -155,11 +151,7 @@ impl ApClient {
             position,
             ..Default::default()
         };
-        let chip = self
-            .client
-            .update(ChipId(id), patch)
-            .await
-            .map_err(|e| ClientError::Send(e.to_string()))?;
+        let chip = self.client.update(ChipId(id), patch).err_into::<ClientError>().await?;
         if let Some(ChipVariant::Ap(ap_chip)) = chip.variant {
             let config: crate::ApConfig = ap_chip
                 .config
@@ -194,11 +186,7 @@ impl ApClient {
             enabled,
             ..Default::default()
         };
-        let chip = self
-            .client
-            .update(ChipId(id), patch)
-            .await
-            .map_err(|e| ClientError::Send(e.to_string()))?;
+        let chip = self.client.update(ChipId(id), patch).err_into::<ClientError>().await?;
         if let Some(ChipVariant::Ap(ap_chip)) = chip.variant {
             let config: crate::ApConfig = ap_chip
                 .config
@@ -214,27 +202,23 @@ impl ApClient {
 #[async_trait::async_trait]
 impl ChipClient for ApClient {
     async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
-        self.client
-            .create_with_id(id, params)
-            .await
-            .map(|_| ())
-            .map_err(|e| ClientError::Send(e.to_string()))
+        self.client.create_with_id(id, params).err_into::<ClientError>().await.map(|_| ())
     }
 
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {
         self.client
             .get(id)
-            .await
-            .map_err(|e| ClientError::Send(e.to_string()))?
+            .err_into::<ClientError>()
+            .await?
             .ok_or(ClientError::Chip(netsim_model::chip_error::ChipError::ChipNotFound(id)))
     }
 
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
-        self.client.update(id, patch).await.map_err(|e| ClientError::Send(e.to_string()))
+        self.client.update(id, patch).err_into::<ClientError>().await
     }
 
     async fn delete(&self, id: ChipId) -> Result<(), ClientError> {
-        self.client.delete(id).await.map_err(|e| ClientError::Send(e.to_string()))
+        self.client.delete(id).err_into::<ClientError>().await
     }
 
     async fn read_statistics(&self) -> Result<Box<[NetsimRadioStats]>, ClientError> {
@@ -242,15 +226,11 @@ impl ChipClient for ApClient {
     }
 
     async fn read_count_for_testing(&self) -> Result<usize, ClientError> {
-        self.client
-            .list()
-            .await
-            .map(|chips| chips.len())
-            .map_err(|e| ClientError::Send(e.to_string()))
+        self.client.list().err_into::<ClientError>().await.map(|chips| chips.len())
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        self.client.shutdown().await.map_err(|e| ClientError::Send(e.to_string()))
+        self.client.shutdown().err_into::<ClientError>().await
     }
 
     async fn reset(&self, _id: ChipId) -> Result<(), ClientError> {

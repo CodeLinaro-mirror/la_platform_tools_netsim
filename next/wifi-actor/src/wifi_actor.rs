@@ -138,7 +138,7 @@ impl WifiActor {
 
             Ok(())
         } else {
-            Err(WifiError::Client(format!("Chip {} not found", id)))
+            Err(WifiError::Internal(Box::from(format!("Chip {} not found", id))))
         }
     }
 
@@ -168,7 +168,9 @@ impl WifiActor {
                                 to_ap
                                     .send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()))
                                     .map_err(|e| {
-                                        WifiError::Hostapd(format!("Failed to send to AP: {e}"))
+                                        WifiError::Hostapd(Box::from(format!(
+                                            "Failed to send to AP: {e}"
+                                        )))
                                     }),
                                 |stats, _| stats.incr_hostapd_frames_tx(),
                             );

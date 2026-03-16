@@ -38,7 +38,7 @@ pub enum ChipError {
 
     /// Invalid address.
     #[error("Invalid address: {0}")]
-    InvalidAddress(String),
+    InvalidAddress(Box<dyn std::error::Error + Send + Sync>),
 
     /// Unexpected chip kind.
     #[error("Unexpected chip kind: expected {expected:?}, got {actual:?}")]
@@ -46,5 +46,5 @@ pub enum ChipError {
 
     /// Invalid arguments.
     #[error("Invalid arguments: {0}")]
-    InvalidArguments(String),
+    InvalidArguments(Box<dyn std::error::Error + Send + Sync>),
 }

@@ -33,7 +33,7 @@ impl ActorService for UwbActor {
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = id.ok_or(ChipError::InvalidArguments("missing chip id".to_string()))?;
+        let chip_id = id.ok_or(ChipError::InvalidArguments(Box::from("missing chip id")))?;
         if self.chip_to_handle.contains_key(&chip_id) {
             return Err(ChipError::ChipExists(chip_id.0).into());
         }
