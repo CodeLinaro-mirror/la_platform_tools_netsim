@@ -99,7 +99,7 @@ client_method!(DeviceClient => fn add_chip(request: DeviceAddChip) -> () as Devi
 client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
 client_method!(DeviceClient => fn update(update: api::DeviceUpdate) -> () as DeviceRequest::Update);
 client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
-client_method!(DeviceClient => fn reset(id: Option<DeviceId>) -> () as DeviceRequest::Reset);
+client_method!(DeviceClient => fn reset() -> () as DeviceRequest::Reset);
 
 pub mod api {
     use serde::{Deserialize, Serialize};
@@ -384,7 +384,6 @@ pub enum DeviceRequest {
         respond_to: Responder<()>,
     },
     Reset {
-        id: Option<DeviceId>,
         respond_to: Responder<()>,
     },
     GetChipStatistics {

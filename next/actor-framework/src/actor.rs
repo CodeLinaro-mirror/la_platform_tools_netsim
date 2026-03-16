@@ -194,13 +194,12 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
         actor.on_start(&mut self.ctx).await;
 
         loop {
-            // Framework Starvation Pattern:
-            // We use "Lazy Polling" (checking .is_empty() before creating futures
-            // via tokio::select! if-guards) for all event sources. This is
-            // critical to avoid "select churn" that can starve high-frequency
-            // data paths (like Bluetooth HCI) when multiple actors are running
-            // in the same Tokio runtime.
-            // DO NOT add unconditional branches to this loop.
+            // Move futures out of select! to avoid borrow conflicts
+            let stream_fut = self.ctx.streams.next();
+            let typed_stream_fut = self.ctx.typed_streams.next();
+            // We need to poll the timers
+            // If the delay queue is empty, peek() returns None, which is fine.
+            let timer_fut = self.ctx.timers.next();
 
             tokio::select! {
                 Some(msg) = self.receiver.recv() => {
@@ -209,20 +208,17 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
                 _ = self.ctx.interval.tick() => {
                     actor.on_tick(&mut self.ctx).await;
                 }
-                // Lazy Polling: Only poll collections if they are non-empty.
-                // The `if` guard format in tokio::select! is the most efficient
-                // way to dynamically disable branches.
-                Some((id, msg_opt)) = self.ctx.streams.next(), if !self.ctx.streams.is_empty() => {
+                Some((id, msg_opt)) = stream_fut => {
                     Self::handle_stream_event(&mut actor, id, msg_opt, &mut self.ctx).await;
                 }
-                Some((id, msg_opt)) = self.ctx.typed_streams.next(), if !self.ctx.typed_streams.is_empty() => {
+                Some((id, msg_opt)) = typed_stream_fut => {
                     Self::handle_typed_stream_event(&mut actor, id, msg_opt, &mut self.ctx).await;
                 }
-                Some(expired) = self.ctx.timers.next(), if !self.ctx.timers.is_empty() => {
+                Some(expired) = timer_fut => {
                     let task = expired.into_inner();
                     task(&mut actor, &mut self.ctx);
                 }
-                Some(res) = self.ctx.tasks.join_next(), if !self.ctx.tasks.is_empty() => {
+                Some(res) = self.ctx.tasks.join_next() => {
                     match res {
                         Ok(id) => Self::handle_task_closed(&mut actor, id, &mut self.ctx).await,
                         Err(e) => error!("Monitored task failed: {e}"),

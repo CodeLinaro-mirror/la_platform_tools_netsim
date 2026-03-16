@@ -30,11 +30,11 @@ impl ActorService for ApActor {
 
     async fn handle_create(
         &mut self,
-        id: Option<Self::Id>,
+        _id: Option<Self::Id>,
         params: Self::Create,
         _: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id_val = id.ok_or_else(|| ApError::Internal("missing chip id".into()))?.0;
+        let id_val = params.id.0;
         if self.aps.contains_key(&id_val) {
             return Err(ApError::Internal(format!("AP with ID {} already exists", id_val)));
         }

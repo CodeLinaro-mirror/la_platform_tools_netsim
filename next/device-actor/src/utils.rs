@@ -71,11 +71,12 @@ pub async fn create_capture_and_wrap_streams(
 
     if let Some(client) = &capture_client {
         let capture_create = CaptureCreate {
+            chip_id,
             chip_kind,
             device_name: device_name.to_string(),
             enabled_flag: enabled_flag.clone(),
         };
-        let _ = client.create_capture(chip_id, capture_create).await;
+        let _ = client.create_capture(capture_create).await;
     }
 
     match (packet_stream, packet_sink) {

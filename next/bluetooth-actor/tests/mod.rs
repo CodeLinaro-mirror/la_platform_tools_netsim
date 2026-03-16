@@ -1,7 +1,6 @@
 // Copyright 2023-2025 The Android Open Source Project
 
 mod beacon_rssi_test;
-mod beacon_scan_stress_test;
 mod beacon_tests;
 mod lifecycle_tests;
 mod scanner_tests;

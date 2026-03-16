@@ -152,11 +152,6 @@ impl ActorService for LinkActor {
                     self.update_chip_links(sender).await;
                 }
             }
-            LinkAction::Reset => {
-                log::info!("LinkActor: Resetting all links");
-                self.links.clear();
-                self.chip_pairs.clear();
-            }
         }
         Ok(())
     }

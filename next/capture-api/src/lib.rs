@@ -83,7 +83,7 @@ use serde::{Deserialize, Serialize};
 #[async_trait]
 pub trait CaptureSender: Send + Sync {
     /// Creates a new capture for a chip.
-    async fn create_capture(&self, chip_id: ChipId, create: CaptureCreate) -> anyhow::Result<()>;
+    async fn create_capture(&self, create: CaptureCreate) -> anyhow::Result<()>;
 
     /// Captures a single packet.
     ///
@@ -106,6 +106,8 @@ pub enum Direction {
 /// Parameters for creating a new capture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaptureCreate {
+    /// The ID of the chip to capture.
+    pub chip_id: ChipId,
     /// The kind of chip.
     pub chip_kind: ChipKind,
     /// The name of the device.

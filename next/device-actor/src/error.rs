@@ -18,8 +18,6 @@ pub enum DeviceError {
     ActorCommunicationError(String),
     #[error("Chip kind not supported: {0}")]
     ChipKindNotSupported(String),
-    #[error("Multiple errors during reset: {0:?}")]
-    ResetErrors(Vec<String>),
 }
 
 impl From<String> for DeviceError {

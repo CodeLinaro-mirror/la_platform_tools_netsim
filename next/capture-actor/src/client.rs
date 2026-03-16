@@ -22,8 +22,8 @@ pub struct CaptureClient {
 
 #[async_trait::async_trait]
 impl CaptureSender for CaptureClient {
-    async fn create_capture(&self, chip_id: ChipId, create: CaptureCreate) -> anyhow::Result<()> {
-        self.inner.create_with_id(chip_id, create).await.map(|_| ()).map_err(|e| anyhow::anyhow!(e))
+    async fn create_capture(&self, create: CaptureCreate) -> anyhow::Result<()> {
+        self.inner.create(create).await.map(|_| ()).map_err(|e| anyhow::anyhow!(e))
     }
 
     fn capture_packet(&self, chip_id: ChipId, direction: Direction, packet: Bytes) {

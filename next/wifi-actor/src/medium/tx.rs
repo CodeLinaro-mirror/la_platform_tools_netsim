@@ -147,39 +147,29 @@ impl Medium {
             }
         }
 
-        let is_m2u_conversion =
-            (targets.len() > 1 || dest_addr.is_multicast()) && self.key_store.get_bssid().is_some();
+        let is_m2u_conversion = targets.len() > 1 || dest_addr.is_multicast();
 
         for dest in targets {
             if self.enabled(dest.client_id)? {
-                let frame_to_send = if is_m2u_conversion {
-                    let mut unicast_frame = ieee80211.clone();
+                let mut frame_to_send = ieee80211.clone();
+                if is_m2u_conversion {
                     let target_mac = netsim_packets::ieee80211::MacAddress::new(
                         dest.addr.try_into().unwrap_or([0; 6]),
                     );
-                    unicast_frame.set_destination(&target_mac);
+                    frame_to_send.set_destination(&target_mac);
+                }
 
-                    // If WPA is active, we must successfully encrypt using the destination's PTK
-                    // for M2U (Broadcast-to-Unicast) to be valid.
-                    if let Some(encrypted_bytes) = self.key_store.try_encrypt(&unicast_frame) {
-                        Ieee80211::decode(&encrypted_bytes).unwrap_or(unicast_frame)
-                    } else if dest_addr.is_multicast() || dest_addr.is_broadcast() {
-                        // For Broadcast/Multicast M2U, if encryption fails (keys not ready),
-                        // we MUST NOT send unencrypted unicast. Fall back to original.
-                        ieee80211.clone()
+                // If WPA is active, we must encrypt using the destination's PTK
+                // M2U guarantees Multicast is already rewritten as Unicast here!
+                let frame_to_transmit =
+                    if let Some(encrypted_bytes) = self.key_store.try_encrypt(&frame_to_send) {
+                        Ieee80211::decode(&encrypted_bytes).unwrap_or(frame_to_send)
                     } else {
-                        // For Unicast Flooding, we keep the rewritten MAC even if unencrypted
-                        // as per standard 802.11 bridge behavior.
-                        unicast_frame
-                    }
-                } else if let Some(encrypted_bytes) = self.key_store.try_encrypt(&ieee80211) {
-                    Ieee80211::decode(&encrypted_bytes).unwrap_or(ieee80211.clone())
-                } else {
-                    ieee80211.clone()
-                };
+                        frame_to_send
+                    };
 
                 let msg = utils::create_hwsim_msg_from_frame(
-                    &frame_to_send,
+                    &frame_to_transmit,
                     &dest.hwsim_addr,
                     dest.freq,
                     None,

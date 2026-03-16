@@ -30,12 +30,8 @@ impl Deref for BluetoothClient {
 // TODO: Consider generic impl<T> ChipClient for ResourceClient<T>.
 #[async_trait::async_trait]
 impl ChipClient for BluetoothClient {
-    async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
-        self.0
-            .create_with_id(id, params)
-            .await
-            .map(|_| ())
-            .map_err(|e| ClientError::Send(e.to_string()))
+    async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
+        self.0.create(params).await.map(|_| ()).map_err(|e| ClientError::Send(e.to_string()))
     }
 
     async fn read(&self, id: ChipId) -> Result<netsim_model::chip::Chip, ClientError> {

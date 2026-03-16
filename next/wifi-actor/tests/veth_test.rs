@@ -87,6 +87,7 @@ async fn test_udp_guest_to_host() {
     );
     let chip_id = ChipId(1);
     let params = ChipCreate {
+        id: chip_id,
         device_id: device_api::DeviceId(1),
         packet_stream: Some(packet_stream),
         packet_sink: Some(packet_sink),
@@ -107,7 +108,7 @@ async fn test_udp_guest_to_host() {
     println!("AP Created with ID: {}", id);
     println!("BSSID in KeyStore: {:?}", shared_keys.get_bssid());
 
-    wifi_client.create(chip_id, params).await.expect("Failed to create chip");
+    wifi_client.create(params).await.expect("Failed to create chip");
     println!("Chip created");
 
     // 3. Setup Host UDP Listener

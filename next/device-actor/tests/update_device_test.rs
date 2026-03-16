@@ -22,7 +22,7 @@ use crate::world::World;
 async fn test_update_device_propagates_to_chips() {
     // Given a running Device Actor with expectation for Update call
     let mut mock_chip_client = MockChipClient::new();
-    mock_chip_client.expect_create().times(1).returning(|_, _| Ok(()));
+    mock_chip_client.expect_create().times(1).returning(|_| Ok(()));
     mock_chip_client
         .expect_update()
         .withf(|_, patch| patch.position.is_some() && patch.orientation.is_some())
@@ -89,7 +89,7 @@ async fn test_notify_chip_removed() {
 async fn test_update_device_propagates_by_variant() {
     // Given a running Device Actor with expectation for Update call
     let mut mock_chip_client = MockChipClient::new();
-    mock_chip_client.expect_create().times(1).returning(|_, _| Ok(()));
+    mock_chip_client.expect_create().times(1).returning(|_| Ok(()));
     mock_chip_client
         .expect_update()
         // Verify that update is called despite NO ID being provided in the patch
@@ -124,7 +124,7 @@ async fn test_update_device_propagates_by_variant() {
 async fn test_update_chip_ble_radio_state() {
     // Given a running Device Actor with expectation for Update call
     let mut mock_chip_client = MockChipClient::new();
-    mock_chip_client.expect_create().times(1).returning(|_, _| Ok(()));
+    mock_chip_client.expect_create().times(1).returning(|_| Ok(()));
 
     let mut seq = mockall::Sequence::new();
 
@@ -187,7 +187,7 @@ async fn test_update_chip_ble_radio_state() {
 async fn test_update_chip_classic_radio_state() {
     // Given a running Device Actor with expectation for Chip Update
     let mut mock_chip_client = MockChipClient::new();
-    mock_chip_client.expect_create().times(1).returning(|_, _| Ok(()));
+    mock_chip_client.expect_create().times(1).returning(|_| Ok(()));
 
     let mut seq = mockall::Sequence::new();
 

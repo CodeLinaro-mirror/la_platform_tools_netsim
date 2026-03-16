@@ -30,8 +30,8 @@ pub struct CellClient(pub ResourceClient<CellActor>);
 
 #[async_trait]
 impl ChipClient for CellClient {
-    async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
-        self.0.create_with_id(id, params).await.map(|_| ()).map_err(map_framework_error)
+    async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
+        self.0.create(params).await.map(|_| ()).map_err(map_framework_error)
     }
 
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {

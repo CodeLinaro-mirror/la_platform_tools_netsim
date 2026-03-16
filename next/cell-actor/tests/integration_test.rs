@@ -64,6 +64,7 @@ impl Drop for TestHarness {
 
 fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> ChipCreate {
     ChipCreate {
+        id: chip_id,
         packet_stream: Some(stream),
         packet_sink: Some(sink),
         config: ChipConfig {
@@ -83,7 +84,7 @@ async fn test_create_chip() {
     let chip_id = ChipId(1);
     let (stream, sink, _, _) = create_dummy_stream_sink();
     let params = create_params(chip_id, stream, sink);
-    let response = harness.client.create(chip_id, params).await;
+    let response = harness.client.create(params).await;
     assert!(response.is_ok(), "CreateChip failed: {:?}", response);
 }
 
@@ -94,7 +95,7 @@ async fn test_delete_chip() {
     let chip_id = ChipId(2);
     let (stream, sink, _, _) = create_dummy_stream_sink();
     let params = create_params(chip_id, stream, sink);
-    harness.client.create(chip_id, params).await.unwrap();
+    harness.client.create(params).await.unwrap();
 
     let client = harness.client.clone();
     let delete_handle = tokio::spawn(async move { client.delete(chip_id).await });
@@ -139,7 +140,7 @@ async fn test_stream_error_triggers_delete() {
     let chip_id = ChipId(3);
     let (stream, sink, mut stream_tx, _) = create_dummy_stream_sink();
     let params = create_params(chip_id, stream, sink);
-    harness.client.create(chip_id, params).await.unwrap();
+    harness.client.create(params).await.unwrap();
 
     // Close the stream sender to simulate an error
     stream_tx.close_channel();
@@ -175,7 +176,7 @@ async fn test_get_chip() {
     let chip_id = ChipId(1);
     let (stream, sink, _stream_tx, _sink_rx) = create_dummy_stream_sink();
     let params = create_params(chip_id, stream, sink);
-    let create_response = harness.client.create(chip_id, params).await;
+    let create_response = harness.client.create(params).await;
     assert!(create_response.is_ok(), "CreateChip failed: {:?}", create_response);
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
