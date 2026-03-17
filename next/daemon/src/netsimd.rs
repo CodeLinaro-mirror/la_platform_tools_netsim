@@ -11,7 +11,9 @@ use std::{
 use capture_actor::CaptureClient;
 use common::{
     system::netsimd_temp_dir,
-    util::os_utils::{get_hci_port, get_instance, get_instance_name, redirect_std_stream},
+    util::os_utils::{
+        get_discovery_directory, get_hci_port, get_instance, get_instance_name, redirect_std_stream,
+    },
 };
 use device_actor::DeviceClient;
 use device_api::{DeviceAddChip, DeviceConfig};
@@ -258,7 +260,7 @@ impl NetsimDaemon {
     ///   acquired.
     /// - `Err(RunResult::InitializationError)`: Fatal error.
     pub async fn new() -> Result<StartUpMode, RunResult> {
-        let discovery_dir = crate::ini_file::get_discovery_directory();
+        let discovery_dir = get_discovery_directory();
         Self::new_with_dirs(discovery_dir, Args::parse()).await
     }
 
