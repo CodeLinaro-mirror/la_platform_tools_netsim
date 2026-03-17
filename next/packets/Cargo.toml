@@ -12,7 +12,6 @@ doctest = false
 
 [dependencies]
 anyhow = "1"
-bytes = { version = ">=1.4.0" }
 hex = "0.4.3"
 num-derive = "0.4"
 num-traits = "0.2"

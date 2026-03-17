@@ -22,6 +22,7 @@ members = [
   "capture-api",
   "bluetooth-actor",
   "model",
+  "cell-actor",
   "daemon",
   "hci-server",
   "proto",
@@ -35,7 +36,7 @@ members = [
   "types",
   "device-actor",
   "device-api",
-  "client",
+
   "rootcanal",
   "testing",
 ]

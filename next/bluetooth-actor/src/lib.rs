@@ -4,7 +4,7 @@
 //!
 //! This crate is responsible for managing the lifecycle of simulated Bluetooth
 //! chips, handling HCI communication, and interacting with the `rootcanal`
-//! Bluetooth emulator. simulation backend.
+//! Bluetooth emulator simulation backend.
 //!
 //! # Getting Started
 //!
@@ -19,17 +19,15 @@
 //! 3. Use the `ChipClient` to send commands to the running actor.
 //!
 //! ```no_run
-//! use netsim_model::device::{DeviceClient, DeviceRequest};
 //! use tokio::{self, sync::mpsc};
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let (device_tx, _device_rx) = mpsc::channel(10);
 //!     let resource_client = actor_framework::ResourceClient::new(device_tx);
-//!     // device_client creation depends on where DeviceClient comes from.
-//!     // Assuming client::DeviceClient is correct based on bluetooth_actor.rs usage.
-//!     let device_client = client::DeviceClient::new(Box::new(resource_client));
+//!
 //!     let (actor, client) = bluetooth_actor::new();
+//!     let device_client = device_actor::DeviceClient::new(Box::new(resource_client));
 //!     let bluetooth_actor = bluetooth_actor::BluetoothActor::new(device_client);
 //!     tokio::spawn(async move {
 //!         actor.run(bluetooth_actor).await;

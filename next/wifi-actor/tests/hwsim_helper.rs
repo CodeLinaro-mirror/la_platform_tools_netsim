@@ -21,6 +21,7 @@ pub fn wrap_ethernet_in_hwsim(
         &Bytes::copy_from_slice(ethernet_frame),
         bssid,
         FrameDirection::ToAp,
+        100,
     )
     .map_err(|e| format!("Failed to convert Ethernet to 802.11: {}", e))?;
     // 2. Build HwsimMsg using shared utility

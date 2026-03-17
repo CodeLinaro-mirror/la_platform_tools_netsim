@@ -24,8 +24,13 @@ fn azimuth(delta: Vec3) -> f32 {
 /// helper function for calculating elevation angle from a given 3D delta
 /// vector.
 fn elevation(delta: Vec3) -> f32 {
-    checked_div(delta.y, f32::sqrt(delta.x.powi(2) + delta.z.powi(2)))
-        .map_or(delta.y.signum() * std::f32::consts::FRAC_PI_2, f32::atan)
+    checked_div(delta.y, f32::sqrt(delta.x.powi(2) + delta.z.powi(2))).map_or(
+        match delta.y == 0. {
+            true => 0.,
+            false => delta.y.signum() * std::f32::consts::FRAC_PI_2,
+        },
+        f32::atan,
+    )
 }
 
 /// Internal Pose struct for mathematical representation.
@@ -99,6 +104,17 @@ mod tests {
             let (range, _, _) = compute_range_azimuth_elevation(&a_pose, &b_pose).unwrap();
             assert_eq!(range, f32::sqrt(3000000.));
         }
+    }
+
+    #[test]
+    fn range_zero_distance() {
+        let a_pose = create_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        let b_pose = create_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        let (range, azimuth, elevation) =
+            compute_range_azimuth_elevation(&a_pose, &b_pose).unwrap();
+        assert_eq!(range, 0.0);
+        assert_eq!(azimuth, 0);
+        assert_eq!(elevation, 0);
     }
 
     #[test]

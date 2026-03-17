@@ -30,9 +30,6 @@ pub fn chip_kind_to_radio_kind(kind: ChipKind) -> crate::stats::RadioKind {
         _ => RadioKind::Unspecified,
     }
 }
-// Keeping this for backward compatibility if needed, or we can remove it if we
-// update all call sites. Let's deprecate it or remove it. I'll remove it and
-// rename the function to be clear.
 pub fn chip_kind_to_proto(kind: ChipKind) -> netsim_proto::stats::netsim_radio_stats::Kind {
     use netsim_proto::stats::netsim_radio_stats::Kind;
     match kind {
@@ -437,7 +434,7 @@ impl std::fmt::Debug for RadioChipClient {
     }
 }
 
-#[cfg_attr(feature = "testing", mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 impl ChipClient for RadioChipClient {
     async fn create(&self, params: ChipCreate) -> Result<(), ClientError> {
@@ -521,7 +518,7 @@ impl ChipClient for RadioChipClient {
 /// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
 /// messages to the server over an `mpsc` channel. It abstracts away the channel
 /// and `oneshot` responder boilerplate for each command.
-#[cfg_attr(feature = "testing", mockall::automock)]
+#[cfg_attr(any(test, feature = "testing"), mockall::automock)]
 #[async_trait::async_trait]
 pub trait ChipClient: std::fmt::Debug + Send + Sync {
     async fn create(&self, params: ChipCreate) -> Result<(), ClientError>;
@@ -534,6 +531,9 @@ pub trait ChipClient: std::fmt::Debug + Send + Sync {
     /// Resets the state of the specified chip.
     async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
     fn clone_box(&self) -> Box<dyn ChipClient>;
+    async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
+        Ok(None)
+    }
 }
 
 impl Clone for Box<dyn ChipClient> {
