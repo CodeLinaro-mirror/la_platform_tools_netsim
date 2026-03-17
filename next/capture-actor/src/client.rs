@@ -7,7 +7,9 @@ use std::ops::Deref;
 use actor_framework::ResourceClient;
 use anyhow::Result;
 use bytes::Bytes;
-use capture_api::{CaptureAction, CaptureCreate, CaptureInfo, CaptureSender, Direction};
+use capture_api::{
+    CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo, CaptureSender, Direction,
+};
 use netsim_model::ChipId;
 
 use crate::CaptureActor;
@@ -26,44 +28,27 @@ impl CaptureSender for CaptureClient {
         self.inner.create_with_id(chip_id, create).await.map(|_| ()).map_err(|e| anyhow::anyhow!(e))
     }
 
-    fn capture_packet(&self, chip_id: ChipId, direction: Direction, packet: Bytes) {
-        let inner = self.inner.clone();
-        tokio::spawn(async move {
-            let _ = inner
-                .perform_action(
-                    Some(chip_id),
-                    CaptureAction::CapturePacket { chip_id, direction, bytes: packet },
-                )
-                .await;
-        });
+    async fn packet_sender(
+        &self,
+        chip_id: ChipId,
+    ) -> anyhow::Result<tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>>
+    {
+        let result = self
+            .inner
+            .perform_action(Some(chip_id), CaptureAction::GetPacketSender)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        match result {
+            CaptureActionResult::PacketSender(sender) => Ok(sender),
+            _ => Err(anyhow::anyhow!("Unexpected result from GetPacketSender")),
+        }
     }
 }
 
 impl CaptureClient {
     pub fn new(inner: ResourceClient<CaptureActor>) -> Self {
         Self { inner }
-    }
-
-    /// Captures a packet.
-    ///
-    /// This is the high-frequency path for packet capture.
-    pub async fn capture_packet(
-        &self,
-        chip_id: ChipId,
-        direction: Direction,
-        packet: Bytes,
-    ) -> Result<()> {
-        // We use perform_action directly because it's a fire-and-forget for performance
-        // (though perform_action is actually request-response, so we await it).
-        // TODO: Consider if we want a true fire-and-forget channel for this.
-        self.inner
-            .perform_action(
-                Some(chip_id),
-                CaptureAction::CapturePacket { chip_id, direction, bytes: packet },
-            )
-            .await
-            .map(|_| ())
-            .map_err(|e| anyhow::anyhow!(e))
     }
 
     /// Creates a new capture session for a chip.
