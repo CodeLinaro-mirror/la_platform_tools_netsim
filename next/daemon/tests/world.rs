@@ -44,7 +44,7 @@ impl World {
         let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
         std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
 
-        let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), temp_dir.clone(), args)
+        let startup_mode = NetsimDaemon::new_with_dirs(temp_dir.clone(), args)
             .await
             .expect("Failed to create daemon");
 
