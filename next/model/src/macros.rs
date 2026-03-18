@@ -23,9 +23,9 @@ macro_rules! client_method {
             $(
                 #[doc = "* `"]
                 #[doc = stringify!($param)]
-                #[doc = "`: The "]
+                #[doc = "`: The `"]
                 #[doc = stringify!($param_type)]
-                #[doc = " for the command."]
+                #[doc = "` for the command."]
             )*
             pub async fn $method(&self, $($param: $param_type),*) -> std::result::Result<$return_type, ClientError> {
                 let (respond_to, response) = oneshot::channel();
