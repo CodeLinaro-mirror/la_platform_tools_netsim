@@ -1,15 +1,8 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, oneshot};
-use tracing::error;
 
-use crate::{
-    chip::{ChipConfig, ChipId, PacketSink, PacketStream},
-    client_error::ClientError,
-    client_method,
-    device_error::DeviceError,
-};
+use crate::chip::{ChipConfig, PacketSink, PacketStream};
 
 // DEVICE SERVICE
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -47,60 +40,6 @@ impl fmt::Display for DeviceId {
         write!(f, "{}", self.0)
     }
 }
-
-pub type Responder<T> = oneshot::Sender<Result<T, DeviceError>>;
-
-#[derive(Clone, Debug)]
-pub struct DeviceClient {
-    sender: mpsc::Sender<DeviceRequest>,
-}
-
-impl DeviceClient {
-    pub fn new(sender: mpsc::Sender<DeviceRequest>) -> Self {
-        Self { sender }
-    }
-
-    pub async fn shutdown(&self) -> Result<(), ClientError> {
-        self.sender
-            .send(DeviceRequest::Shutdown)
-            .await
-            .map_err(|e| ClientError::Send(e.to_string()))?;
-        Ok(())
-    }
-
-    pub fn notify_chip_removed(&self, device_id: DeviceId, chip_id: ChipId) {
-        let sender = self.sender.clone();
-        tokio::spawn(async move {
-            if let Err(e) = sender
-                .send(DeviceRequest::NotifyChipRemoved { device_id, chip_id, respond_to: None })
-                .await
-            {
-                error!("Failed to send NotifyChipRemoved for chip {chip_id}: {e}");
-            }
-        });
-    }
-
-    pub async fn notify_chip_removed_block(
-        &self,
-        device_id: DeviceId,
-        chip_id: ChipId,
-    ) -> Result<(), ClientError> {
-        let (tx, rx) = oneshot::channel();
-        self.sender
-            .send(DeviceRequest::NotifyChipRemoved { device_id, chip_id, respond_to: Some(tx) })
-            .await
-            .map_err(|e| ClientError::Send(e.to_string()))?;
-        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?;
-        Ok(())
-    }
-}
-
-client_method!(DeviceClient => fn create(request: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
-client_method!(DeviceClient => fn add_chip(request: DeviceAddChip) -> () as DeviceRequest::AddChip);
-client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
-client_method!(DeviceClient => fn update(update: api::DeviceUpdate) -> () as DeviceRequest::Update);
-client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
-client_method!(DeviceClient => fn reset(id: Option<DeviceId>) -> () as DeviceRequest::Reset);
 
 pub mod api {
     use serde::{Deserialize, Serialize};
@@ -361,40 +300,4 @@ impl fmt::Debug for DeviceAddChip {
             .field("chip_config", &self.chip_config)
             .finish_non_exhaustive()
     }
-}
-
-#[derive(Debug)]
-pub enum DeviceRequest {
-    AddChip {
-        request: DeviceAddChip,
-        respond_to: Responder<()>,
-    },
-    Create {
-        request: Box<api::DeviceCreate>,
-        respond_to: Responder<DeviceId>,
-    },
-    List {
-        respond_to: Responder<api::ListDeviceResponse>,
-    },
-    Update {
-        update: api::DeviceUpdate,
-        respond_to: Responder<()>,
-    },
-    Delete {
-        id: DeviceId,
-        respond_to: Responder<()>,
-    },
-    Reset {
-        id: Option<DeviceId>,
-        respond_to: Responder<()>,
-    },
-    GetChipStatistics {
-        respond_to: Responder<()>,
-    },
-    NotifyChipRemoved {
-        device_id: DeviceId,
-        chip_id: ChipId,
-        respond_to: Option<oneshot::Sender<()>>,
-    },
-    Shutdown,
 }

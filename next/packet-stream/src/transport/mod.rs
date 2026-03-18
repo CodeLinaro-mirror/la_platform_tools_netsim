@@ -109,7 +109,7 @@ impl CrossPlatformListener {
             }
         }
 
-        let addr: std::net::SocketAddr = "localhost:8080".parse()?;
+        let addr: std::net::SocketAddr = "localhost:8080".parse().map_err(SocketError::from)?;
         return Ok(CrossPlatformListener::Tcp(tokio::net::TcpListener::bind(addr).await?));
     }
 
@@ -125,7 +125,8 @@ impl CrossPlatformListener {
         #[cfg(windows)]
         {
             let pipe_name = "packetstream";
-            let fallback_addr: std::net::SocketAddr = "localhost:0".parse()?;
+            let fallback_addr: std::net::SocketAddr =
+                "localhost:0".parse().map_err(SocketError::from)?;
             match windows::WindowsListener::bind_named_pipe(pipe_name).await {
                 Ok(listener) => Ok(CrossPlatformListener::Windows(listener)),
                 Err(err) => {
@@ -138,7 +139,7 @@ impl CrossPlatformListener {
 
         #[cfg(not(any(unix, windows)))]
         {
-            let addr = "localhost:0".parse()?;
+            let addr = "localhost:0".parse().map_err(SocketError::from)?;
             let listener = tokio::net::TcpListener::bind(addr).await?;
             Ok(CrossPlatformListener::Tcp(listener))
         }
