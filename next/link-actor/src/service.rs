@@ -51,7 +51,7 @@ impl ActorService for LinkActor {
         }
 
         if self.chip_pairs.contains_key(&(params.sender, params.receiver)) {
-            return Err(LinkError::AlreadyExists(id.to_string()));
+            return Err(LinkError::AlreadyExists);
         }
 
         // Create Entity (Link)
@@ -88,7 +88,7 @@ impl ActorService for LinkActor {
     ) -> Result<Self::Entity, Self::Error> {
         let link_clone = {
             let Some(link) = self.links.get_mut(&id) else {
-                return Err(LinkError::NotFound(id.to_string()));
+                return Err(LinkError::NotFound(id.0));
             };
 
             if let Some(rssi) = update.rssi {
@@ -115,7 +115,7 @@ impl ActorService for LinkActor {
             self.update_chip_links(sender).await;
             Ok(())
         } else {
-            Err(LinkError::NotFound(id.to_string()))
+            Err(LinkError::NotFound(id.0))
         }
     }
 

@@ -30,7 +30,10 @@ impl ActorService for CellActor {
         let device_id = params.device_id;
 
         if self.active_chips.contains_key(&chip_id) {
-            return Err(CellError::ModemError(format!("Chip {} already exists", chip_id)));
+            return Err(CellError::ModemError(Box::from(format!(
+                "Chip {} already exists",
+                chip_id
+            ))));
         }
 
         let mut sink = params.packet_sink.take().ok_or(CellError::MissingStreamSink)?;
@@ -58,7 +61,7 @@ impl ActorService for CellActor {
 
         // 2. Add to Controller directly (Sync)
         if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink) {
-            return Err(CellError::ModemError(format!("Controller error: {:?}", e)));
+            return Err(CellError::ModemError(Box::from(format!("Controller error: {:?}", e))));
         }
 
         self.active_chips.insert(chip_id, ChipState { device_id });
@@ -111,7 +114,7 @@ impl ActorService for CellActor {
         _update: Self::Update,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        Err(CellError::ModemError("Update not implemented".into()))
+        Err(CellError::ModemError(Box::from("Update not implemented")))
     }
 
     async fn handle_action(

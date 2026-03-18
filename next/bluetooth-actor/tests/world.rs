@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use actor_framework::ResourceClient;
-use bluetooth_actor::{BluetoothActor, BluetoothClient};
+use bluetooth_actor::{BluetoothActor, BluetoothClient, BluetoothError};
 use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
 use netsim_model::{
@@ -246,14 +246,14 @@ impl World {
         &self,
         id: ChipId,
         params: ChipCreate,
-    ) -> Result<(), actor_framework::FrameworkError> {
+    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
         self.client.0.create_with_id(id, params).await.map(|_| ())
     }
 
     pub async fn when_delete_chip(
         &self,
         name: &str,
-    ) -> Result<(), actor_framework::FrameworkError> {
+    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
         let id = *self.chips.get(name).expect("Chip not found");
         self.client.0.delete(id).await
     }

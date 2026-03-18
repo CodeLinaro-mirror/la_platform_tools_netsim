@@ -90,8 +90,12 @@ pub trait CaptureSender: Send + Sync {
     /// # Arguments
     /// * `chip_id` - The ID of the chip.
     /// * `direction` - The direction of the packet.
-    /// * `bytes` - The packet data.
-    fn capture_packet(&self, chip_id: ChipId, direction: Direction, packet: Bytes);
+    ///
+    /// Returns a channel to send packet bytes.
+    async fn packet_sender(
+        &self,
+        chip_id: ChipId,
+    ) -> anyhow::Result<tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>>;
 }
 
 /// Direction of the packet.
@@ -118,8 +122,8 @@ pub struct CaptureCreate {
 /// Actions that can be performed on a capture.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CaptureAction {
-    /// Capture a packet.
-    CapturePacket { chip_id: ChipId, direction: Direction, bytes: Bytes },
+    /// Gets a packet sender for capture.
+    GetPacketSender,
     /// Patch a capture (e.g., enable/disable).
     Patch { chip_id: ChipId, enabled: bool },
     /// Create a new capture.
@@ -130,15 +134,30 @@ pub enum CaptureAction {
     SetCaptureDirectory { path: PathBuf },
 }
 
-/// Result of a capture action.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Result of an action performed on a capture.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CaptureActionResult {
-    /// Action was successful.
+    /// Action succeeded.
     Success,
-    /// An error occurred.
+    /// Action failed.
     Error(String),
     /// The action resulted in an update and returns the new state.
     Updated(CaptureInfo),
+    /// Returns a high-throughput packet sender.
+    #[serde(skip)]
+    PacketSender(tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>),
+}
+
+impl PartialEq for CaptureActionResult {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Success, Self::Success) => true,
+            (Self::Error(a), Self::Error(b)) => a == b,
+            (Self::Updated(a), Self::Updated(b)) => a == b,
+            (Self::PacketSender(a), Self::PacketSender(b)) => a.same_channel(b),
+            _ => false,
+        }
+    }
 }
 
 /// Information about a capture.
