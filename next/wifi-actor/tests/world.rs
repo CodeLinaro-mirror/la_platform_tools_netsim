@@ -185,7 +185,7 @@ impl World {
             position: Position::default(),
         };
         let id = 1001; // WifiActor test AP ID
-        self.ap_client.create_ap(id, ap_config).await.expect("Failed to create AP");
+        self.ap_client.create_ap(Some(id), ap_config).await.expect("Failed to create AP");
         // Give it a moment to initialize
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         id

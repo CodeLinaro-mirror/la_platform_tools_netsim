@@ -4,7 +4,7 @@ use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
 use netsim_packets::ieee80211::Ieee80211;
 
-use crate::ap_actor::{ApActor, WIFI_STREAM_ID};
+use crate::ap_actor::{ApActor, ApId, WIFI_STREAM_ID};
 
 impl ActorLifecycle for ApActor {
     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
@@ -52,12 +52,7 @@ impl ActorLifecycle for ApActor {
     }
 
     // We expect stream messages (Mgmt frames or Data frames if bridged)
-    async fn on_stream(
-        &mut self,
-        stream_id: ChipId,
-        msg: bytes::Bytes,
-        ctx: &mut DynContext<Self>,
-    ) {
+    async fn on_stream(&mut self, stream_id: ApId, msg: bytes::Bytes, ctx: &mut DynContext<Self>) {
         if stream_id.0 != WIFI_STREAM_ID {
             log::warn!("Received message on unknown stream_id: {}", stream_id);
             return;
@@ -130,11 +125,11 @@ impl ActorLifecycle for ApActor {
         }
     }
 
-    async fn on_stream_closed(&mut self, stream_id: ChipId, ctx: &mut DynContext<Self>) {
+    async fn on_stream_closed(&mut self, stream_id: ApId, ctx: &mut DynContext<Self>) {
         if stream_id.0 == WIFI_STREAM_ID {
             log::info!("WIFI_STREAM_ID closed, stopping ApActor");
             ctx.shutdown();
         }
     }
-    async fn on_task_closed(&mut self, _id: ChipId, _ctx: &mut DynContext<Self>) {}
+    async fn on_task_closed(&mut self, _id: ApId, _ctx: &mut DynContext<Self>) {}
 }

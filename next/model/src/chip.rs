@@ -203,7 +203,7 @@ impl From<&ChipKindParams> for ChipKind {
             ChipKindParams::Wifi(_) => ChipKind::WIFI,
             ChipKindParams::Uwb(_) => ChipKind::UWB,
             ChipKindParams::Cell(_) => ChipKind::CELLULAR,
-            ChipKindParams::Ap(_) => ChipKind::AP,
+            ChipKindParams::Ap(_) => ChipKind::WIFI,
         }
     }
 }
@@ -322,7 +322,6 @@ pub enum ChipVariant {
     Wifi(crate::wifi::Wifi),
     Uwb(crate::uwb::Uwb),
     Cell(crate::cell::Cell),
-    Ap(crate::ap::Ap),
 }
 
 impl From<ChipKind> for ChipVariant {
@@ -335,10 +334,6 @@ impl From<ChipKind> for ChipVariant {
             ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
             ChipKind::UWB => ChipVariant::Uwb(Default::default()),
             ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell { state: "unknown".into() }),
-            ChipKind::AP => ChipVariant::Ap(crate::ap::Ap {
-                config: Default::default(),
-                associations: Vec::new(),
-            }),
             // Use Bluetooth as fallback for generic/unknown types if necessary,
             // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
             // types.
@@ -386,7 +381,6 @@ pub enum ChipVariantUpdate {
     Bluetooth(crate::bluetooth::BluetoothUpdate),
     Wifi(crate::wifi::WifiUpdate),
     Uwb(crate::uwb::UwbUpdate),
-    Ap(crate::ap::ApUpdate),
 }
 
 impl ChipVariantUpdate {
@@ -395,7 +389,6 @@ impl ChipVariantUpdate {
             ChipVariantUpdate::Bluetooth(_) => ChipKind::BLUETOOTH,
             ChipVariantUpdate::Wifi(_) => ChipKind::WIFI,
             ChipVariantUpdate::Uwb(_) => ChipKind::UWB,
-            ChipVariantUpdate::Ap(_) => ChipKind::AP,
         }
     }
 }

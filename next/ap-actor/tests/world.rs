@@ -55,7 +55,7 @@ impl ApWorld {
         log::info!("Given a registered AP '{}'", config.ssid);
         let id = self.next_ap_id;
         self.next_ap_id += 1;
-        self.client.create_ap(id, config).await.expect("Failed to create AP");
+        self.client.create_ap(Some(id), config).await.expect("Failed to create AP");
         self.ap_id = Some(id);
 
         if self.tx_to_ap.is_none() {

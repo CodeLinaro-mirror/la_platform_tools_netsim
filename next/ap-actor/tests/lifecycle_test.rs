@@ -92,8 +92,8 @@ async fn test_create_duplicate_bssid() {
     // Direct client usage as ApWorld helpers might mask IDs or return types
     let id1 = 1001;
     let id2 = 1002;
-    let res1 = world.client.create_ap(id1, config1).await;
-    let res2 = world.client.create_ap(id2, config2).await;
+    let res1 = world.client.create_ap(Some(id1), config1).await;
+    let res2 = world.client.create_ap(Some(id2), config2).await;
 
     assert!(res1.is_ok(), "First AP creation failed");
     assert!(res2.is_ok(), "Second AP creation with duplicate BSSID failed");
@@ -145,14 +145,14 @@ async fn test_ap_lifecycle_crud() {
     world.given_a_registered_ap("SecondAP").await;
     let list = world.client.list_aps().await.expect("List failed");
     assert!(list.len() >= 2);
-    assert!(list.iter().any(|ap| ap.config.ssid == "UpdatedAP"));
-    assert!(list.iter().any(|ap| ap.config.ssid == "SecondAP"));
+    assert!(list.iter().any(|(_, ap)| ap.config.ssid == "UpdatedAP"));
+    assert!(list.iter().any(|(_, ap)| ap.config.ssid == "SecondAP"));
 
     // 5. Delete
     world.when_ap_is_deleted().await; // Deletes the stored ap_id (SecondAP)
     let list_after = world.client.list_aps().await.expect("List failed");
-    assert!(!list_after.iter().any(|ap| ap.config.ssid == "SecondAP"));
-    assert!(list_after.iter().any(|ap| ap.config.ssid == "UpdatedAP")); // First
-                                                                        // one still
-                                                                        // there
+    assert!(!list_after.iter().any(|(_, ap)| ap.config.ssid == "SecondAP"));
+    assert!(list_after.iter().any(|(_, ap)| ap.config.ssid == "UpdatedAP")); // First
+                                                                             // one still
+                                                                             // there
 }
