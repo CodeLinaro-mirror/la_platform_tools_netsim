@@ -20,7 +20,6 @@ netsim_rust_library(
         "//next/packet-stream",
         "//next/packets",
         "//proto",
-        "@anyhow",
         "@bytes",
         "@futures",
         "@grpcio",

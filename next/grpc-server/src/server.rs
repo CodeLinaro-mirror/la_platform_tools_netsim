@@ -24,7 +24,7 @@ pub fn start(
     ap_client: ap_actor::ApClient,
     packet_streamer_service: PacketStreamerService,
     version: String,
-) -> anyhow::Result<(Server, u16)> {
+) -> Result<(Server, u16), grpcio::Error> {
     let env = Arc::new(Environment::new(1));
     let backend_service = create_packet_streamer(packet_streamer_service);
     let frontend_service =

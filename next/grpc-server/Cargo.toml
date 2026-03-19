@@ -4,7 +4,6 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1.0"
 device-actor = { path = "../device-actor" }

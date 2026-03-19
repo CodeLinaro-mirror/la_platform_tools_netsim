@@ -31,7 +31,7 @@ pub enum PcapReader<R: Read> {
 }
 
 impl<R: Read + 'static> PcapReader<R> {
-    pub fn new(mut reader: R) -> anyhow::Result<PcapReader<Box<dyn Read>>> {
+    pub fn new(mut reader: R) -> io::Result<PcapReader<Box<dyn Read>>> {
         let mut magic_buf = [0; 4];
         reader.read_exact(&mut magic_buf)?;
         let magic_number = u32::from_le_bytes(magic_buf);
@@ -43,11 +43,14 @@ impl<R: Read + 'static> PcapReader<R> {
         } else if magic_number == PCAPNG_SECTION_HEADER_BLOCK_TYPE {
             Ok(PcapReader::Pcapng(PcapngReader::new(boxed_reader)?))
         } else {
-            anyhow::bail!("Invalid pcap magic number: {:#x}", magic_number);
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid pcap magic number: {:#x}", magic_number),
+            ))
         }
     }
 
-    pub fn next_record(&mut self) -> anyhow::Result<Option<(PcapRecordHeader, Vec<u8>)>> {
+    pub fn next_record(&mut self) -> io::Result<Option<(PcapRecordHeader, Vec<u8>)>> {
         match self {
             PcapReader::Pcap(reader) => reader.next_record(),
             PcapReader::Pcapng(reader) => reader.next_record(),
@@ -91,7 +94,7 @@ pub struct LegacyPcapReader<R: Read> {
 }
 
 impl<R: Read> LegacyPcapReader<R> {
-    pub fn new(mut reader: R) -> anyhow::Result<Self> {
+    pub fn new(mut reader: R) -> io::Result<Self> {
         let mut header_buf = [0; std::mem::size_of::<PcapHeader>()];
         reader.read_exact(&mut header_buf)?;
         let header = PcapHeader::read_from_bytes(&header_buf[..]).unwrap();
@@ -99,7 +102,7 @@ impl<R: Read> LegacyPcapReader<R> {
         Ok(Self { reader, header })
     }
 
-    pub fn next_record(&mut self) -> anyhow::Result<Option<(PcapRecordHeader, Vec<u8>)>> {
+    pub fn next_record(&mut self) -> io::Result<Option<(PcapRecordHeader, Vec<u8>)>> {
         let mut header_buf = [0; std::mem::size_of::<PcapRecordHeader>()];
         if self.reader.read_exact(&mut header_buf).is_err() {
             return Ok(None);
@@ -118,7 +121,7 @@ pub struct PcapngReader<R: Read> {
 }
 
 impl<R: Read> PcapngReader<R> {
-    pub fn new(mut reader: R) -> anyhow::Result<Self> {
+    pub fn new(mut reader: R) -> io::Result<Self> {
         let mut shb_buf = [0; std::mem::size_of::<SectionHeaderBlock>()];
         reader.read_exact(&mut shb_buf)?;
         let shb = SectionHeaderBlock::read_from_bytes(&shb_buf[..]).unwrap();
@@ -133,7 +136,7 @@ impl<R: Read> PcapngReader<R> {
         Ok(Self { reader, swap_bytes, link_type: None })
     }
 
-    pub fn next_record(&mut self) -> anyhow::Result<Option<(PcapRecordHeader, Vec<u8>)>> {
+    pub fn next_record(&mut self) -> io::Result<Option<(PcapRecordHeader, Vec<u8>)>> {
         loop {
             // We need to read the Block Type (4 bytes) and Block Total Length (4 bytes)
             // first to know what kind of block it is and how big it is.

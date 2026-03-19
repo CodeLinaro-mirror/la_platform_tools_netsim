@@ -3,7 +3,11 @@
 //! This module provides a PCAP writer specifically for Wi-Fi packets.
 //! It implements the Radiotap header encapsulation for IEEE 802.11 payloads.
 
-use std::{io::Result, path::Path, time::SystemTime};
+use std::{
+    io::{self, Result},
+    path::Path,
+    time::SystemTime,
+};
 
 use async_trait::async_trait;
 use capture_api::Direction;
@@ -39,7 +43,7 @@ impl CaptureWriter for WifiPcapWriter {
         timestamp: SystemTime,
         direction: Direction,
         data: &[u8],
-    ) -> anyhow::Result<()> {
+    ) -> io::Result<()> {
         match HwsimMsg::decode_full(data) {
             Ok(hwsim_msg) => {
                 if hwsim_msg.hwsim_hdr.hwsim_cmd != HwsimCmd::Frame {
