@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-use ap_actor::shared::SharedKeyStore;
+use ap_actor::SharedKeyStore;
 use netsim_model::ChipId;
 #[cfg(unix)]
 #[cfg(target_os = "linux")]

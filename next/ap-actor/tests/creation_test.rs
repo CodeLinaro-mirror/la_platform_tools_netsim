@@ -1,4 +1,4 @@
-use ap_actor::netsim_model::chip::WifiMode;
+use netsim_model::chip::WifiMode;
 
 use crate::world::ApWorld;
 
@@ -71,7 +71,7 @@ async fn test_create_hidden_ap() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: ap_actor::Position::default(),
+        position: netsim_model::device::Position::default(),
     };
     world.given_a_registered_ap_with_config(config).await;
     let id = world.ap_id.expect("AP ID missing");

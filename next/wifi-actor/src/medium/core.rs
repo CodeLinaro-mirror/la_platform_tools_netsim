@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use ap_actor::shared::SharedKeyStore;
+use ap_actor::SharedKeyStore;
 use netsim_packets::{ieee80211::MacAddress, netlink::hwsim_frame::HwsimFrame};
 use tracing::{info, warn};
 

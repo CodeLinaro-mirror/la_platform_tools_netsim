@@ -13,7 +13,7 @@ use crate::ap_actor::ApConfig;
 
 /// FTM Responder Logic
 #[derive(Debug)]
-pub struct FtmResponder {
+pub(crate) struct FtmResponder {
     // Stateless responder: responds immediately to each request.
 }
 

@@ -6,7 +6,7 @@ use crate::ffi;
 
 /// SAE Finite Field Cryptography (FFC) or Elliptic Curve Cryptography (ECC)
 /// Group
-pub enum SaeGroup {
+pub(crate) enum SaeGroup {
     EccP256 = 19,
 }
 

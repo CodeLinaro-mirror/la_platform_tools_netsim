@@ -61,7 +61,7 @@ impl World {
         let (slirp_runner, slirp_client) = slirp_actor::new();
         tokio::spawn(slirp_runner.run(slirp_actor_impl));
 
-        let shared_keys = Arc::new(ap_actor::shared::SharedKeyStore::new());
+        let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
         let ap_actor_impl = ApActor::new(shared_keys.clone());
 
         let (ap_runner, ap_client_base) = ResourceActor::new(32);
@@ -703,7 +703,7 @@ impl wifi_actor::gateway::GatewayTrait for MockGateway {
         _chip_id: netsim_model::chip::ChipId,
         _packet: bytes::Bytes,
         _medium: &mut wifi_actor::medium::Medium,
-        _shared_keys: &ap_actor::shared::SharedKeyStore,
+        _shared_keys: &ap_actor::SharedKeyStore,
         _out_queue: &mut Vec<(u32, bytes::Bytes)>,
     ) {
     }
