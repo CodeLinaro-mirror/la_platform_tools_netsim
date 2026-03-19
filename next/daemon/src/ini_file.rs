@@ -21,6 +21,7 @@ use std::{
     str::FromStr,
 };
 
+use common::util::os_utils::get_discovery_directory;
 use log::warn;
 
 // --- INI File Management ---
@@ -32,38 +33,6 @@ const INI_FILENAME: &str = "netsim.ini";
 /// On Windows, locking the discovery file would mean it cannot be read by other
 /// processes hence the separation from [INI_FILENAME].
 const LOCK_FILENAME: &str = "netsim.ini.lock";
-
-struct DiscoveryDir {
-    root_env: &'static str,
-    subdir: &'static str,
-}
-
-#[cfg(target_os = "linux")]
-const DISCOVERY: DiscoveryDir = DiscoveryDir { root_env: "XDG_RUNTIME_DIR", subdir: "" };
-#[cfg(target_os = "macos")]
-const DISCOVERY: DiscoveryDir =
-    DiscoveryDir { root_env: "HOME", subdir: "Library/Caches/TemporaryItems" };
-#[cfg(target_os = "windows")]
-const DISCOVERY: DiscoveryDir = DiscoveryDir { root_env: "LOCALAPPDATA", subdir: "Temp" };
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-compile_error!("netsim only supports linux, Mac, and Windows");
-
-/// Get discovery directory for netsim
-pub fn get_discovery_directory() -> PathBuf {
-    // $TMPDIR is the temp directory on buildbots
-    if let Ok(test_env_p) = std::env::var("TMPDIR") {
-        return PathBuf::from(test_env_p);
-    }
-    let mut path = match std::env::var(DISCOVERY.root_env) {
-        Ok(env_p) => PathBuf::from(env_p),
-        Err(_) => {
-            warn!("No discovery env for {}, using /tmp", DISCOVERY.root_env);
-            PathBuf::from("/tmp")
-        }
-    };
-    path.push(DISCOVERY.subdir);
-    path
-}
 
 /// Parsed configuration from the INI file.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
