@@ -74,6 +74,9 @@ pub enum Command {
     /// Manage Link properties
     #[command(subcommand)]
     Link(Link),
+    /// Manage Access Point (AP) properties
+    #[command(subcommand)]
+    Ap(crate::ap::args::ApCommand),
 }
 
 #[derive(Debug, Args, PartialEq)]

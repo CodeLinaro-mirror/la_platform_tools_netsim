@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use netsim_model::{
+    ap::{DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID},
     chip::{ApCreate, ApUpdate as ModelApUpdate, WifiMode},
     device::Position,
 };
@@ -87,7 +88,7 @@ fn default_dtim_period() -> u8 {
 impl Default for ApConfig {
     fn default() -> Self {
         Self {
-            ssid: netsim_model::ap::DEFAULT_WIFI_SSID.to_string(),
+            ssid: DEFAULT_WIFI_SSID.to_string(),
             bssid: MacAddr::from([0; 6]),
             channel: 6,
             hw_mode: WifiMode::G,
@@ -248,7 +249,16 @@ impl ApActor {
 }
 
 impl ApState {
-    pub fn new(id: ApId, config: ApConfig) -> Self {
+    pub fn new(id: ApId, mut config: ApConfig) -> Self {
+        if config.bssid.bytes == [0; 6] {
+            let mut base_mac = DEFAULT_WIFI_BSSID
+                .parse::<MacAddr>()
+                .expect("DEFAULT_WIFI_BSSID is a valid MAC address");
+            base_mac.bytes[4] = (id.0 >> 8) as u8;
+            base_mac.bytes[5] = (id.0 & 0xFF) as u8;
+            config.bssid = base_mac;
+        }
+
         Self {
             id,
             config,
