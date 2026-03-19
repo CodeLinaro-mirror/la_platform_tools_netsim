@@ -138,6 +138,12 @@ impl ActorService for UwbActor {
         match action {
             UwbAction::Reset { id } => {
                 if let Some(handle) = self.chip_to_handle.get(&id) {
+                    {
+                        let mut chips = self.chip_states.write().unwrap();
+                        if let Some(state) = chips.get_mut(handle) {
+                            state.chip.enabled = true;
+                        }
+                    }
                     let reset_cmd =
                         uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
                     let _ = self

@@ -703,6 +703,10 @@ impl DeviceActor {
                         );
                         errors.push(format!("Failed to reset chip {}: {}", chip.id, e));
                     }
+                    if let Ok(updated_chip) = chip_client.read(netsim_model::ChipId(chip.id)).await
+                    {
+                        *chip = updated_chip;
+                    }
                 }
             }
         }
