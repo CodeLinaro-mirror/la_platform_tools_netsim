@@ -29,17 +29,19 @@ impl ActorService for WifiActor {
         mut params: Self::Create,
         ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id = id.unwrap_or(params.id);
+        let id = id.ok_or_else(|| WifiError::Internal("missing chip id".into()))?;
         if self.active_chips.contains_key(&id) {
-            return Err(WifiError::Internal(format!("Chip {} already exists", id)));
+            return Err(WifiError::Internal(Box::from(format!("Chip {} already exists", id))));
         }
 
         let stream = params
             .packet_stream
             .take()
-            .ok_or(WifiError::Internal("Missing PacketStream".into()))?;
-        let sink =
-            params.packet_sink.take().ok_or(WifiError::Internal("Missing PacketSink".into()))?;
+            .ok_or(WifiError::Internal(Box::from("Missing PacketStream")))?;
+        let sink = params
+            .packet_sink
+            .take()
+            .ok_or(WifiError::Internal(Box::from("Missing PacketSink")))?;
 
         // Spawn sink task
         let (tx, mut rx) = mpsc::unbounded_channel::<bytes::Bytes>();
@@ -122,7 +124,7 @@ impl ActorService for WifiActor {
             }
             Ok(chip.clone())
         } else {
-            Err(WifiError::Internal(format!("Chip {} not found", id)))
+            Err(WifiError::Internal(Box::from(format!("Chip {} not found", id))))
         }
     }
 
@@ -160,7 +162,7 @@ impl ActorService for WifiActor {
                 Ok(WifiResponse::Statistics(stats.into_boxed_slice()))
             }
             WifiReq::GetGlobalStats => {
-                let stats = netsim_proto::stats::WifiStats::default();
+                let stats = self.medium.wifi_stats.to_proto();
                 Ok(WifiResponse::GlobalStats(Box::new(stats)))
             }
             WifiReq::Reset { id } => {

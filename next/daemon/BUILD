@@ -12,10 +12,9 @@
 #   bazel test //next/daemon:tests
 
 load(
-    "@rules_rust//rust:defs.bzl",
-    "rust_binary",
-    "rust_library",
-    "rust_test",
+    "//next:defs.bzl",
+    "netsim_rust_binary",
+    "netsim_rust_library",
 )
 
 package(default_visibility = ["//visibility:public"])
@@ -27,18 +26,14 @@ DAEMON_SRCS = [
     "src/lib.rs",
     "src/logger.rs",
     "src/netsimd.rs",
-    "src/platform.rs",
     "src/version.rs",
 ]
 
 DAEMON_DEPS = [
-    "//next/actor-framework",
     "//next/ap-actor",
     "//next/bluetooth-actor",
     "//next/capture-actor",
-    "//next/capture-api",
-    "//next/cell",
-    "//next/client",
+    "//next/cell-actor",
     "//next/common",
     "//next/device-actor",
     "//next/device-api",
@@ -47,49 +42,37 @@ DAEMON_DEPS = [
     "//next/link-actor",
     "//next/link-api",
     "//next/model",
-    "//next/modem-rs",
     "//next/packet-stream",
     "//next/slirp-actor",
     "//next/uwb-actor",
     "//next/wifi-actor",
-    "@bytes",
-    "@chrono",
     "@clap",
-    "@env_logger",
     "@futures",
     "@grpcio",
     "@log",
-    "@tempfile",
     "@tokio",
-    "@tokio-stream",
-    "@tracing",
-    "@tracing-log",
-    "@tracing-subscriber",
-] + select({
-    "@platforms//os:linux": ["@rustutils"],
-    "//conditions:default": [],
-})
+]
 
-rust_library(
+netsim_rust_library(
     name = "daemon-lib",
     srcs = DAEMON_SRCS,
     crate_name = "daemon",
     edition = "2021",
-    proc_macro_deps = ["@async-trait"],
+    proc_macro_deps = [],
+    select_deps = select({
+        "//conditions:default": [],
+    }),
+    test_deps = [
+        "//proto",
+        "@bytes",
+        "@rand",
+        "@regex",
+        "@tempfile",
+    ],
     deps = DAEMON_DEPS,
 )
 
-rust_library(
-    name = "daemon-lib-testing",
-    srcs = DAEMON_SRCS,
-    crate_features = ["testing"],
-    crate_name = "daemon",
-    edition = "2021",
-    proc_macro_deps = ["@async-trait"],
-    deps = DAEMON_DEPS,
-)
-
-rust_binary(
+netsim_rust_binary(
     name = "daemon",
     srcs = ["src/main.rs"],
     edition = "2021",
@@ -100,39 +83,6 @@ rust_binary(
     ],
     deps = [
         ":daemon-lib",
-        "@rand",
         "@tokio",
-    ],
-)
-
-rust_test(
-    name = "tests",
-    srcs = glob(["tests/**/*.rs"]),
-    crate_root = "tests/tests.rs",
-    edition = "2021",
-    rustc_flags = [
-        "-C",
-        "link-arg=-lc",
-    ],
-    tags = ["requires-network"],
-    deps = [
-        ":daemon-lib-testing",
-        "//next/client",
-        "//next/device-api",
-        "//next/link-api",
-        "//next/model",
-        "//next/packet-stream",
-        "//proto",
-        "@bytes",
-        "@env_logger",
-        "@futures",
-        "@grpcio",
-        "@log",
-        "@rand",
-        "@regex",
-        "@tokio",
-        "@tracing",
-        "@tracing-log",
-        "@tracing-subscriber",
     ],
 )

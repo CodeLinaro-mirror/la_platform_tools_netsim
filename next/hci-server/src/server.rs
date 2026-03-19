@@ -2,7 +2,7 @@
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use futures::StreamExt;
 use log::{info, warn};
 use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipKindParams, DeviceParams};
@@ -131,6 +131,7 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
             position: Default::default(),
             orientation: Default::default(),
             builtin: false,
+            device_info: None,
         },
         chip_config,
     };

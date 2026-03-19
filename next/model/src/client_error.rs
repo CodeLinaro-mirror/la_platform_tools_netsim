@@ -19,7 +19,35 @@ pub enum ClientError {
 
     /// An operation-specific error occurred from the device service.
     #[error("Device error: {0}")]
-    Device(Box<DeviceError>),
+    Device(#[source] Box<DeviceError>),
+
+    /// A generic error from the actor framework.
+    #[error("Framework error: {0}")]
+    Framework(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+#[cfg(any(feature = "testing", test))]
+impl ClientError {
+    pub fn as_chip_error(&self) -> Option<&ChipError> {
+        match self {
+            Self::Chip(chip) => Some(chip),
+            Self::Framework(framework) => {
+                let mut chip_error = framework.downcast_ref::<ChipError>();
+                let mut dyn_error_opt = framework.source();
+
+                while let Some(dyn_error) = dyn_error_opt {
+                    if chip_error.is_some() {
+                        break;
+                    }
+                    chip_error = dyn_error.downcast_ref();
+                    dyn_error_opt = dyn_error.source();
+                }
+
+                chip_error
+            }
+            _other => None,
+        }
+    }
 }
 
 impl From<DeviceError> for ClientError {

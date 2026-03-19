@@ -30,17 +30,18 @@ impl ActorService for ApActor {
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         params: Self::Create,
         _: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id_val = params.id.0;
+        let id_val = id.ok_or_else(|| ApError::Internal("missing chip id".into()))?.0;
         if self.aps.contains_key(&id_val) {
-            return Err(ApError::Internal(format!("AP with ID {} already exists", id_val)));
+            return Err(ApError::ApAlreadyExists(id_val));
         }
 
         let config = if let ChipKindParams::Ap(ap_create) = params.config.chip_kind_params {
-            crate::ap_actor::ApConfig::try_from(ap_create).map_err(|e| ApError::Internal(e))?
+            crate::ap_actor::ApConfig::try_from(ap_create)
+                .map_err(|e| ApError::Internal(Box::from(e)))?
         } else {
             return Err(ApError::Internal("Invalid ChipKindParams for AP".into()));
         };

@@ -4,12 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 DEPS = [
     "//next/model",
-    "//proto",
-    "//next/actor-framework",
-    "@bytes",
-    "@serde",
     "@thiserror",
-    "@mockall",
 ]
 
 netsim_rust_library(
@@ -21,6 +16,9 @@ netsim_rust_library(
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
+    ],
+    testing_deps = [
+        "@mockall",
     ],
     deps = DEPS,
 )

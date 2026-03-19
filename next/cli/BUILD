@@ -17,7 +17,6 @@ netsim_rust_binary(
         "@hex",
         "@log",
         "@protobuf-rust",
-        "@tokio",
     ],
 )
 
@@ -36,6 +35,5 @@ rust_test(
         "@hex",
         "@log",
         "@protobuf-rust",
-        "@tokio",
     ],
 )

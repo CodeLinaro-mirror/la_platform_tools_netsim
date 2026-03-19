@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use netsim_model::{
     chip::{Chip, ChipClient, ChipCreate, ChipId, ChipKindParams, UwbCreate},
     chip_error::ChipError,
@@ -81,12 +81,11 @@ impl World {
         }
     }
 
-    pub async fn when_create_chip(&mut self, chip_id: u32) -> Result<(), ChipError> {
+    pub async fn when_create_chip(&mut self, chip_id: u32) -> Result<(), ClientError> {
         let id = ChipId(chip_id);
         let (stream, packet_tx) = mock_stream();
         let (sink, packet_rx) = mock_sink();
         let params = ChipCreate {
-            id,
             packet_stream: Some(stream),
             packet_sink: Some(sink),
             config: netsim_model::chip::ChipConfig {
@@ -98,10 +97,7 @@ impl World {
             device_id: DeviceId(1),
         };
 
-        self.client.create(params).await.map_err(|e| match e {
-            ClientError::Chip(err) => err,
-            _ => ChipError::Internal(e.to_string()),
-        })?;
+        self.client.create(id, params).await?;
 
         self.packet_txs.insert(id, packet_tx);
         self.packet_rxs.insert(id, packet_rx);
@@ -109,18 +105,12 @@ impl World {
         Ok(())
     }
 
-    pub async fn when_delete_chip(&self, chip_id: u32) -> Result<(), ChipError> {
-        self.client.delete(ChipId(chip_id)).await.map_err(|e| match e {
-            ClientError::Chip(err) => err,
-            _ => ChipError::Internal(e.to_string()),
-        })
+    pub async fn when_delete_chip(&self, chip_id: u32) -> Result<(), ClientError> {
+        self.client.delete(ChipId(chip_id)).await
     }
 
-    pub async fn when_get_chip(&self, chip_id: u32) -> Result<Chip, ChipError> {
-        self.client.read(ChipId(chip_id)).await.map_err(|e| match e {
-            ClientError::Chip(err) => err,
-            _ => ChipError::Internal(e.to_string()),
-        })
+    pub async fn when_get_chip(&self, chip_id: u32) -> Result<Chip, ClientError> {
+        self.client.read(ChipId(chip_id)).await
     }
 
     pub fn and_packet_stream_is_closed(&mut self, chip_id: u32) {
@@ -140,8 +130,11 @@ impl World {
     pub async fn then_chip_does_not_exist(&self, chip_id: u32) {
         // Yield to allow the actor to process the stream/sink closure.
         tokio::task::yield_now().await;
-        let result = self.when_get_chip(chip_id).await;
-        assert_eq!(result, Err(ChipError::ChipNotFound(ChipId(chip_id))));
+        let err = self.when_get_chip(chip_id).await.unwrap_err();
+        let Some(ChipError::ChipNotFound(ChipId(actual_chip_id))) = err.as_chip_error() else {
+            panic!("Unexpected error: {err}");
+        };
+        assert_eq!(*actual_chip_id, chip_id);
     }
 
     pub async fn when_packet_is_sent(&mut self, chip_id: u32, packet: &[u8]) {
@@ -296,6 +289,11 @@ impl World {
         let (status_ntf, _) =
             uci::SessionStatusNtf::decode(&p2).expect("session status notification (start)");
         assert_eq!(status_ntf.session_state, uci::SessionState::SessionStateActive);
+
+        let p3 = self.then_packet_is_received(chip_id).await;
+        let (device_status_ntf, _) =
+            uci::CoreDeviceStatusNtf::decode(&p3).expect("device status notification (active)");
+        assert_eq!(device_status_ntf.device_state, uci::DeviceState::DeviceStateActive);
     }
 
     pub async fn when_ranging_is_triggered(&mut self, chip_id: u32, session_id: u32) {

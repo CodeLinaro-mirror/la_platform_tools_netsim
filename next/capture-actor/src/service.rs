@@ -1,19 +1,18 @@
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::SystemTime,
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
 use actor_framework::{ActorService, DynContext};
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use crate::{
     bt_pcap::BluetoothH4Writer, capture_actor::CaptureActor, error::CaptureError,
-    writer::CaptureWriter,
+    uwb_pcap::UwbPcapWriter, writer::CaptureWriter,
 };
 
 /// Entity representing a packet capture for a specific chip.
@@ -30,10 +29,14 @@ pub(crate) struct InternalCaptureInfo {
     /// without locking the actor.
     #[serde(skip)]
     pub enabled_flag: Arc<AtomicBool>,
-    /// Used to suppress logs for calls to [CaptureWriter::write_packet] that
-    /// fail.
+    /// Used to determine whether further error logs while writing captures
+    /// should be suppressed.
     #[serde(skip)]
-    has_warned_on_write: bool,
+    pub has_warned_on_write: bool,
+    #[serde(skip)]
+    pub sender: Option<
+        mpsc::UnboundedSender<(std::time::SystemTime, capture_api::Direction, bytes::Bytes)>,
+    >,
 }
 
 impl InternalCaptureInfo {
@@ -43,12 +46,13 @@ impl InternalCaptureInfo {
                 chip_id: id,
                 chip_kind: params.chip_kind,
                 device_name: params.device_name,
-                enabled: params.default_enabled,
+                enabled: params.enabled_flag.load(Ordering::SeqCst),
                 records_written: 0,
                 bytes_written: 0,
             },
             enabled_flag: params.enabled_flag,
             has_warned_on_write: false,
+            sender: None,
         })
     }
 }
@@ -59,9 +63,6 @@ impl CaptureActor {
         entity: &mut InternalCaptureInfo,
         ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
-        // Register the enabled flag in the context so streams can access it.
-        self.flags.insert(entity.info.chip_id, entity.enabled_flag.clone());
-
         // If enabled by default (either via params or context), set up the writer
         if entity.info.enabled || self.default_capture_enabled {
             entity.info.enabled = true;
@@ -77,29 +78,24 @@ impl CaptureActor {
         enabled: bool,
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
-        if entity.info.enabled == enabled {
-            // Even if enabled matches, we might need to create writer if it is missing
-            // (e.g. from create flow)
-            if enabled && !self.writers.contains_key(&entity.info.chip_id) {
-                // proceed to creation
-            } else {
-                return Ok(());
-            }
+        if entity.info.enabled != enabled {
+            entity.info.enabled = enabled;
+            entity.enabled_flag.store(enabled, Ordering::SeqCst);
         }
-        entity.info.enabled = enabled; // Update the serializable field
-        entity.enabled_flag.store(enabled, Ordering::SeqCst); // Update the atomic flag
 
         if entity.info.enabled {
             // If enabling, create a writer if one does not exist.
             if !self.writers.contains_key(&entity.info.chip_id) {
                 let writer = self.create_writer(entity).await?;
                 self.writers.insert(entity.info.chip_id, writer);
-                // Updating the flags map with the new writer's flag.
-                self.flags.insert(entity.info.chip_id, entity.enabled_flag.clone());
             }
         } else {
             // Disable capture: remove the writer to close the file
-            self.writers.remove(&entity.info.chip_id);
+            if let Some(mut writer) = self.writers.remove(&entity.info.chip_id) {
+                if let Err(err) = writer.flush().await {
+                    log::warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
+                }
+            }
         }
         Ok(())
     }
@@ -110,8 +106,11 @@ impl CaptureActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
         // Clean up resources when the entity is deleted.
-        self.writers.remove(&entity.info.chip_id);
-        self.flags.remove(&entity.info.chip_id);
+        if let Some(mut writer) = self.writers.remove(&entity.info.chip_id) {
+            if let Err(err) = writer.flush().await {
+                log::warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
+            }
+        }
         Ok(())
     }
 
@@ -137,32 +136,32 @@ impl CaptureActor {
             }
             path.join(&filename)
         };
+        log::info!("Creating capture file: {}", filepath.display());
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
-            ChipKind::BLUETOOTH => {
-                log::info!("Creating capture file: {}", filepath.display());
-                BluetoothH4Writer::new(&filepath).await?
+            ChipKind::BLUETOOTH => BluetoothH4Writer::new(&filepath).await?,
+            ChipKind::UWB => UwbPcapWriter::new(&filepath).await?,
+            ChipKind::WIFI | ChipKind::AP => {
+                crate::wifi_pcap::WifiPcapWriter::new(&filepath).await?
             }
-            _ => {
-                // Fallback
-                log::info!("Creating capture file: {}", filepath.display());
+            // Fallback
+            ChipKind::UNSPECIFIED | ChipKind::NFC | ChipKind::CELLULAR => {
                 BluetoothH4Writer::new(&filepath).await?
             }
         };
         Ok(writer)
     }
 
-    pub(crate) fn list_entities(&self) -> Vec<CaptureInfo> {
-        self.entities
-            .values()
-            .map(|e| {
-                let (records_written, bytes_written) =
-                    self.writers.get(&e.info.chip_id).map(|w| w.get_stats()).unwrap_or((0, 0));
-                let mut info = e.info.clone();
-                info.records_written = records_written;
-                info.bytes_written = bytes_written;
-                info
-            })
-            .collect()
+    pub(crate) async fn list_entities(&self) -> Vec<CaptureInfo> {
+        let mut infos = Vec::new();
+        for e in self.entities.values() {
+            let (records_written, bytes_written) =
+                self.writers.get(&e.info.chip_id).map(|w| w.get_stats()).unwrap_or_default();
+            let mut info = e.info.clone();
+            info.records_written = records_written;
+            info.bytes_written = bytes_written;
+            infos.push(info);
+        }
+        infos
     }
     async fn handle_entity_action(
         &mut self,
@@ -171,28 +170,28 @@ impl CaptureActor {
         ctx: &mut DynContext<Self>,
     ) -> Result<CaptureActionResult, CaptureError> {
         match action {
-            CaptureAction::CapturePacket { chip_id, direction, ref bytes } => {
-                if entity.info.enabled && entity.info.chip_id == chip_id {
-                    let writer = self.writers.get_mut(&chip_id);
-                    if let Some(writer) = writer {
-                        if let Err(err) =
-                            writer.write_packet(SystemTime::now(), direction, bytes).await
-                        {
-                            if !entity.has_warned_on_write {
-                                entity.has_warned_on_write = true;
-                                log::error!("Packet capture write failed for chip {chip_id}: {err}. Further errors for this chip will be suppressed.");
-                            }
-                        }
-                    }
-                }
-                Ok(CaptureActionResult::Success)
+            CaptureAction::GetPacketSender => {
+                let sender = entity
+                    .sender
+                    .get_or_insert_with(|| {
+                        let (tx, rx) = mpsc::unbounded_channel();
+
+                        ctx.add_typed_stream(
+                            entity.info.chip_id.0 as usize,
+                            Box::pin(UnboundedReceiverStream::new(rx)),
+                        );
+
+                        tx
+                    })
+                    .clone();
+                Ok(CaptureActionResult::PacketSender(sender))
             }
 
             CaptureAction::Patch { chip_id, enabled } => {
                 if entity.info.chip_id == chip_id {
                     self.update_entity(entity, enabled, ctx).await?;
                     let (records_written, bytes_written) =
-                        self.writers.get(&chip_id).map(|w| w.get_stats()).unwrap_or((0, 0));
+                        self.writers.get(&chip_id).map(|w| w.get_stats()).unwrap_or_default();
                     let mut info = entity.info.clone();
                     info.records_written = records_written;
                     info.bytes_written = bytes_written;
@@ -205,10 +204,6 @@ impl CaptureActor {
                 if entity.info.chip_id == chip_id {
                     self.delete_entity(entity, ctx).await?;
                 }
-                Ok(CaptureActionResult::Success)
-            }
-            CaptureAction::SetDefaultCapture { enabled } => {
-                self.default_capture_enabled = enabled;
                 Ok(CaptureActionResult::Success)
             }
             CaptureAction::SetCaptureDirectory { ref path } => {
@@ -231,7 +226,7 @@ impl ActorService for CaptureActor {
     type ActionResult = CaptureActionResult;
     type Error = CaptureError;
     type Entity = CaptureInfo;
-    type TypedStream = ();
+    type TypedStream = (std::time::SystemTime, capture_api::Direction, bytes::Bytes);
 
     async fn handle_create(
         &mut self,
@@ -239,11 +234,7 @@ impl ActorService for CaptureActor {
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id = id.unwrap_or_else(|| {
-            let id = ChipId(self.next_id);
-            self.next_id += 1;
-            id
-        });
+        let id = id.ok_or_else(|| CaptureError::Anyhow(anyhow::anyhow!("missing chip id")))?;
         let mut entity = InternalCaptureInfo::from_create_params(id, params)?;
         // Initialize the entity logic (e.g. set up writers based on flags)
         self.create_entity(&mut entity, _ctx).await?;
@@ -258,14 +249,16 @@ impl ActorService for CaptureActor {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Option<Self::Entity>, Self::Error> {
-        Ok(self.entities.get(&id).map(|entity| {
+        if let Some(entity) = self.entities.get(&id) {
             let (records_written, bytes_written) =
-                self.writers.get(&id).map(|w| w.get_stats()).unwrap_or((0, 0));
+                self.writers.get(&id).map(|w| w.get_stats()).unwrap_or_default();
             let mut info = entity.info.clone();
             info.records_written = records_written;
             info.bytes_written = bytes_written;
-            info
-        }))
+            Ok(Some(info))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn handle_update(
@@ -277,7 +270,7 @@ impl ActorService for CaptureActor {
         if let Some(mut entity) = self.entities.remove(&id) {
             let _ = self.update_entity(&mut entity, update, _ctx).await?;
             let (records_written, bytes_written) =
-                self.writers.get(&id).map(|w| w.get_stats()).unwrap_or((0, 0));
+                self.writers.get(&id).map(|w| w.get_stats()).unwrap_or_default();
             let mut info = entity.info.clone();
             info.records_written = records_written;
             info.bytes_written = bytes_written;
@@ -310,10 +303,6 @@ impl ActorService for CaptureActor {
         let Some(id) = id else {
             // Global action
             match action {
-                CaptureAction::SetDefaultCapture { enabled } => {
-                    self.default_capture_enabled = enabled;
-                    return Ok(CaptureActionResult::Success);
-                }
                 CaptureAction::SetCaptureDirectory { path } => {
                     self.capture_dir = Some(path);
                     return Ok(CaptureActionResult::Success);
@@ -339,6 +328,6 @@ impl ActorService for CaptureActor {
         &mut self,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
-        Ok(self.list_entities())
+        Ok(self.list_entities().await)
     }
 }

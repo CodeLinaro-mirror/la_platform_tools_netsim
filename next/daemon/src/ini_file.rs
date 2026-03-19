@@ -16,48 +16,23 @@
 use std::{
     collections::HashMap,
     fs::{self, File, OpenOptions, TryLockError},
-    io::{self, BufWriter, Seek, SeekFrom, Write},
+    io::{self, BufWriter, Write},
     path::PathBuf,
     str::FromStr,
 };
 
+use common::util::os_utils::get_discovery_directory;
 use log::warn;
 
 // --- INI File Management ---
 
+/// Discovery configuration (must remain readable by all instances).
 const INI_FILENAME: &str = "netsim.ini";
 
-struct DiscoveryDir {
-    root_env: &'static str,
-    subdir: &'static str,
-}
-
-#[cfg(target_os = "linux")]
-const DISCOVERY: DiscoveryDir = DiscoveryDir { root_env: "XDG_RUNTIME_DIR", subdir: "" };
-#[cfg(target_os = "macos")]
-const DISCOVERY: DiscoveryDir =
-    DiscoveryDir { root_env: "HOME", subdir: "Library/Caches/TemporaryItems" };
-#[cfg(target_os = "windows")]
-const DISCOVERY: DiscoveryDir = DiscoveryDir { root_env: "LOCALAPPDATA", subdir: "Temp" };
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-compile_error!("netsim only supports linux, Mac, and Windows");
-
-/// Get discovery directory for netsim
-pub fn get_discovery_directory() -> PathBuf {
-    // $TMPDIR is the temp directory on buildbots
-    if let Ok(test_env_p) = std::env::var("TMPDIR") {
-        return PathBuf::from(test_env_p);
-    }
-    let mut path = match std::env::var(DISCOVERY.root_env) {
-        Ok(env_p) => PathBuf::from(env_p),
-        Err(_) => {
-            warn!("No discovery env for {}, using /tmp", DISCOVERY.root_env);
-            PathBuf::from("/tmp")
-        }
-    };
-    path.push(DISCOVERY.subdir);
-    path
-}
+/// File used for primary instance synchronization.
+/// On Windows, locking the discovery file would mean it cannot be read by other
+/// processes hence the separation from [INI_FILENAME].
+const LOCK_FILENAME: &str = "netsim.ini.lock";
 
 /// Parsed configuration from the INI file.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -71,14 +46,17 @@ pub struct NetsimConfig {
 #[derive(Debug)]
 pub struct IniFileGuard {
     path: PathBuf,
-    locked_file: File,
+    lock_path: PathBuf,
+    /// Locked handle to [LOCK_FILENAME] that is unlocked on drop.
+    _lock_file: File,
 }
 
 impl IniFileGuard {
     /// Writes the given `HashMap` to the INI file, overwriting any existing
     /// content.
     pub fn write(&mut self, data: &HashMap<String, String>) -> io::Result<()> {
-        let mut writer = BufWriter::new(&mut self.locked_file);
+        let file = File::create(&self.path)?;
+        let mut writer = BufWriter::new(file);
         for (key, value) in data {
             writeln!(writer, "{key}={value}")?;
         }
@@ -93,11 +71,12 @@ impl IniFileGuard {
 
 impl Drop for IniFileGuard {
     fn drop(&mut self) {
-        // Remove the INI file (discovery file) as part of cleanup.
-        if let Err(e) = fs::remove_file(&self.path) {
-            if e.kind() != io::ErrorKind::NotFound {
-                warn!("Failed to remove ini file '{}': {}", self.path.display(), e);
-            }
+        // Remove the INI file and lock file as part of cleanup.
+        if let Err(err) = fs::remove_file(&self.path) {
+            log::warn!("Failed to remove {}: {err}", self.path.display());
+        }
+        if let Err(err) = fs::remove_file(&self.lock_path) {
+            log::warn!("Failed to remove {}: {err}", self.lock_path.display());
         }
     }
 }
@@ -115,7 +94,8 @@ pub enum IniFileAccess {
 /// configuration.
 pub struct IniFile {
     path: PathBuf,
-    pre_lock_file: File,
+    lock_path: PathBuf,
+    lock_file: File,
 }
 
 impl IniFile {
@@ -130,26 +110,25 @@ impl IniFile {
     pub fn new_for_dir(dir: PathBuf) -> io::Result<Self> {
         fs::create_dir_all(&dir)?;
         let path = dir.join(INI_FILENAME);
-        let pre_lock_file = OpenOptions::new().read(true).write(true).create(true).open(&path)?;
+        let lock_path = dir.join(LOCK_FILENAME);
+        let lock_file = OpenOptions::new().read(true).write(true).create(true).open(&lock_path)?;
 
-        Ok(IniFile { path, pre_lock_file })
+        Ok(IniFile { path, lock_path, lock_file })
     }
 
     /// Attempts to acquire the lock and determine the access level.
     pub fn try_acquire(self) -> io::Result<IniFileAccess> {
-        match self.pre_lock_file.try_lock() {
-            Ok(()) => {
-                let mut locked_file = self.pre_lock_file;
-                // Wipe old contents on lock acquisition.
-                locked_file.set_len(0)?;
-                locked_file.seek(SeekFrom::Start(0))?;
-                Ok(IniFileAccess::Writer(IniFileGuard { path: self.path, locked_file }))
-            }
+        match self.lock_file.try_lock() {
+            Ok(()) => Ok(IniFileAccess::Writer(IniFileGuard {
+                path: self.path,
+                lock_path: self.lock_path,
+                _lock_file: self.lock_file,
+            })),
             Err(TryLockError::WouldBlock) => {
                 // Lock failed, another instance is running.
                 warn!(
                     "Failed to acquire lock on {}. Another instance may be running.",
-                    self.path.display()
+                    self.lock_path.display()
                 );
                 // TODO(b/487343471): Known race here where we may read an old version of the
                 // ini file. We need some sort of "ready" flag to indicate when
@@ -261,14 +240,14 @@ impl IniFile {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, fs};
+    use std::collections::HashMap;
 
     use super::*;
 
     #[test]
     fn test_ini_file_owner_flow() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
+        let ini_file = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
 
         match ini_file.try_acquire() {
             Ok(IniFileAccess::Writer(mut guard)) => {
@@ -276,7 +255,7 @@ mod tests {
                 data.insert("grpc.port".to_string(), "8554".to_string());
                 guard.write(&data).unwrap();
 
-                let mut ini_file2 = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
+                let ini_file2 = IniFile::new_for_dir(temp_dir.path().to_path_buf()).unwrap();
                 match ini_file2.try_acquire() {
                     Ok(IniFileAccess::Reader(config)) => {
                         assert_eq!(config.grpc_port, 8554);

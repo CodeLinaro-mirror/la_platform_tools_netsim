@@ -157,7 +157,7 @@ impl AndroidDevice {
         })
     }
 
-    fn adb_command(&self) -> std::process::Command {
+    pub fn adb_command(&self) -> std::process::Command {
         let mut cmd = std::process::Command::new(&self.adb_path);
         if let Some(s) = &self.serial {
             cmd.arg("-s").arg(s);
@@ -307,7 +307,7 @@ impl AndroidDevice {
                 .arg("-e")
                 .arg("control_port")
                 .arg(&port_arg)
-                .arg("com.android.netsim.agent.v2/.NTestInstrumentation")
+                .arg("com.android.netsim.agent.v2/com.android.netsim.agent.NTestInstrumentation")
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()?,
@@ -506,7 +506,7 @@ async fn generic_execution(w: &mut TestContext, actor: String, step: String) {
 }
 
 /// STEP: Then (?:@avd|@android)(?::(\S+))? measures performance with (\d+)
-/// samples of
+/// samples of (\d+)(KB|MB|B) (TCP|UDP) to (.*)
 async fn performance_benchmark(
     w: &mut TestContext,
     label: String,

@@ -11,17 +11,11 @@ crate-type = ["staticlib", "lib"]
 actor-framework = { path = "../actor-framework" }
 async-trait = "0.1.68"
 bytes = "1.4.0"
-client = { path = "../client" }
-device-api = { path = "../device-api" }
-env_logger = { version = "0.10.0", default-features = false }
+device-actor = { path = "../device-actor" }
 futures = "0.3.31"
-hex = "0.4.3"
 log = "0.4.17"
-netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
 netsim-packets = { path = "../packets" }
-protobuf = "3.6.0"
-rand = "0.8.5"
 rootcanal = { path = "../rootcanal" }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
@@ -31,7 +25,6 @@ tokio = { version = "1.32.0", default-features = false, features = [
   "sync",
   "macros",
 ] }
-tokio-stream = "0.1.17"
 zerocopy = "0.8.25"
 
 [features]
@@ -41,3 +34,7 @@ test-utils = []
 [dev-dependencies]
 rootcanal = { path = "../rootcanal" }
 netsim-testing = { path = "../testing", features = ["testing"] }
+env_logger = { version = "0.10.0", default-features = false }
+hex = "0.4.3"
+rand = "0.8.5"
+tokio-stream = "0.1.17"

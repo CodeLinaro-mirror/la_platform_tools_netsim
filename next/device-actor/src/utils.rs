@@ -17,6 +17,7 @@ use capture_api::{
     CaptureCreate, CaptureSender,
 };
 use futures::{SinkExt, StreamExt};
+use log::warn;
 use netsim_model::{
     chip::{PacketSink, PacketStream},
     ChipId, ChipKind,
@@ -66,17 +67,16 @@ pub async fn create_capture_and_wrap_streams(
     packet_stream: Option<PacketStream>,
     packet_sink: Option<PacketSink>,
 ) -> (Option<PacketStream>, Option<PacketSink>, Option<Arc<StreamStats>>) {
+    // Default to disabled, the capture actor is responsible for enabling it
     let enabled_flag = Arc::new(AtomicBool::new(false));
 
     if let Some(client) = &capture_client {
         let capture_create = CaptureCreate {
-            chip_id,
             chip_kind,
             device_name: device_name.to_string(),
-            default_enabled: false,
             enabled_flag: enabled_flag.clone(),
         };
-        let _ = client.create_capture(capture_create).await;
+        let _ = client.create_capture(chip_id, capture_create).await;
     }
 
     match (packet_stream, packet_sink) {
@@ -85,20 +85,17 @@ pub async fn create_capture_and_wrap_streams(
             let stats_clone_rx = stats.clone();
             let stats_clone_tx = stats.clone();
 
-            let create_callback =
-                || -> Box<dyn Fn(ChipId, capture_api::Direction, Bytes) + Send + Sync> {
-                    if let Some(client) = &capture_client {
-                        let cc_clone = client.clone();
-                        Box::new(move |id, dir, bytes| {
-                            cc_clone.capture_packet(id, dir, bytes);
-                        })
-                    } else {
-                        Box::new(|_, _, _| {})
+            let mut sender = None;
+            if let Some(client) = &capture_client {
+                match client.packet_sender(chip_id).await {
+                    Ok(s) => {
+                        sender = Some(s);
                     }
-                };
-
-            let capture_callback = create_callback();
-            let capture_callback2 = create_callback();
+                    Err(err) => {
+                        warn!("Failed to start capture for chip {}: {}", chip_id, err);
+                    }
+                }
+            }
 
             // Wrap stream for stats (Rx from Transport perspective)
             let in_stream = in_stream.inspect(move |bytes| {
@@ -114,13 +111,8 @@ pub async fn create_capture_and_wrap_streams(
             });
 
             let (wrapped_stream, wrapped_sink) = (
-                CapturedStream::new(
-                    Box::new(in_stream),
-                    capture_callback,
-                    chip_id,
-                    enabled_flag.clone(),
-                ),
-                CapturedSink::new(Box::pin(in_sink), capture_callback2, chip_id, enabled_flag),
+                CapturedStream::new(Box::new(in_stream), sender.clone(), enabled_flag.clone()),
+                CapturedSink::new(Box::pin(in_sink), sender, enabled_flag),
             );
 
             let out_stream: PacketStream =
@@ -283,4 +275,19 @@ pub fn stream_to_model_stats(
         rx_bytes: stream_stats.tx_bytes.load(Ordering::Relaxed),
         invalid_packets: vec![],
     }
+}
+
+pub fn to_proto_device_stats(
+    device_id: u32,
+    info: &netsim_model::device::DeviceInfo,
+) -> netsim_proto::stats::NetsimDeviceStats {
+    let mut stats = netsim_proto::stats::NetsimDeviceStats::new();
+    stats.set_device_id(device_id);
+    stats.set_kind(info.kind.clone());
+    stats.set_version(info.version.clone());
+    stats.set_sdk_version(info.sdk_version.clone());
+    stats.set_build_id(info.build_id.clone());
+    stats.set_variant(info.variant.clone());
+    stats.set_arch(info.arch.clone());
+    stats
 }

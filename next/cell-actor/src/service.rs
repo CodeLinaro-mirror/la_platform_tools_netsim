@@ -18,19 +18,22 @@ impl ActorService for CellActor {
     type ActionResult = ();
     type Error = CellError;
     type Entity = netsim_model::chip::Chip;
-    type TypedStream = ();
+    type TypedStream = modem_rs::HostEvent;
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         mut params: Self::Create,
         ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = params.id;
+        let chip_id = id.ok_or_else(|| CellError::ModemError("missing chip id".into()))?;
         let device_id = params.device_id;
 
         if self.active_chips.contains_key(&chip_id) {
-            return Err(CellError::ModemError(format!("Chip {} already exists", chip_id)));
+            return Err(CellError::ModemError(Box::from(format!(
+                "Chip {} already exists",
+                chip_id
+            ))));
         }
 
         let mut sink = params.packet_sink.take().ok_or(CellError::MissingStreamSink)?;
@@ -53,14 +56,12 @@ impl ActorService for CellActor {
         );
 
         // 1. Add Stream
-        // Using unwrap() for stream because we checked take() above, but logic is
-        // params.packet_stream.take()
         let stream = params.packet_stream.take().ok_or(CellError::MissingStreamSink)?;
         ctx.add_stream(chip_id, Box::pin(stream));
 
         // 2. Add to Controller directly (Sync)
         if let Err(e) = self.controller.add_modem(chip_id.0, modem_sink) {
-            return Err(CellError::ModemError(format!("Controller error: {:?}", e)));
+            return Err(CellError::ModemError(Box::from(format!("Controller error: {:?}", e))));
         }
 
         self.active_chips.insert(chip_id, ChipState { device_id });
@@ -82,11 +83,7 @@ impl ActorService for CellActor {
             }
 
             // Notify DeviceClient
-            // We can spawn or just do it. DeviceClient methods might be async.
             let _ = self.device_client.notify_chip_removed(state.device_id, id).await;
-        } else {
-            // If checking fails, maybe just return Ok or Err as preferred.
-            // Framework might call delete on non-existent?
         }
         Ok(())
     }
@@ -117,7 +114,7 @@ impl ActorService for CellActor {
         _update: Self::Update,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        Err(CellError::ModemError("Update not implemented".into()))
+        Err(CellError::ModemError(Box::from("Update not implemented")))
     }
 
     async fn handle_action(

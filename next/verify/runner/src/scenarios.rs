@@ -15,6 +15,27 @@ use anyhow::Result;
 
 use crate::orchestrator::TestContext;
 
+async fn run_feature(
+    features: &mut features::Features<TestContext>,
+    ctx: &mut TestContext,
+    name: &str,
+    content: &str,
+) -> Result<()> {
+    if let Some(f) = &ctx.filter {
+        if !name.contains(f) {
+            return Ok(());
+        }
+    } else {
+        // By default, skip integration variants natively tagged with BDD skip markers
+        if content.contains("@ignore") || content.contains("@skip") {
+            return Ok(());
+        }
+    }
+    features.execute_from_memory(content, ctx).await;
+    ctx.reset_actors().await?;
+    Ok(())
+}
+
 /// Programmatic entry point for the entire integration test suite.
 pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
     let mut features = features::Features::<TestContext>::new();
@@ -22,33 +43,71 @@ pub async fn run_suite(ctx: &mut TestContext) -> Result<()> {
     crate::android_steps::register_steps(&mut features);
     crate::host_steps::register_steps(&mut features);
     crate::netsim_steps::register_steps(&mut features);
-    features.execute_from_memory(include_str!("../tests/features/echo.feature"), ctx).await;
-    ctx.reset_actors().await?;
 
-    features
-        .execute_from_memory(include_str!("../tests/features/wifi_service_discovery.feature"), ctx)
-        .await;
-    ctx.reset_actors().await?;
+    run_feature(&mut features, ctx, "echo.feature", include_str!("../tests/features/echo.feature"))
+        .await?;
 
-    features
-        .execute_from_memory(include_str!("../tests/features/gateway_performance.feature"), ctx)
-        .await;
-    ctx.reset_actors().await?;
+    run_feature(
+        &mut features,
+        ctx,
+        "wifi_service_discovery.feature",
+        include_str!("../tests/features/wifi_service_discovery.feature"),
+    )
+    .await?;
 
-    features
-        .execute_from_memory(include_str!("../tests/features/multi_step_coordination.feature"), ctx)
-        .await;
-    ctx.reset_actors().await?;
+    run_feature(
+        &mut features,
+        ctx,
+        "gateway_performance.feature",
+        include_str!("../tests/features/gateway_performance.feature"),
+    )
+    .await?;
 
-    features
-        .execute_from_memory(include_str!("../tests/features/multi_avd_echo.feature"), ctx)
-        .await;
-    ctx.reset_actors().await?;
+    run_feature(
+        &mut features,
+        ctx,
+        "multi_step_coordination.feature",
+        include_str!("../tests/features/multi_step_coordination.feature"),
+    )
+    .await?;
 
-    features.execute_from_memory(include_str!("../tests/features/nsd.feature"), ctx).await;
-    ctx.reset_actors().await?;
+    run_feature(
+        &mut features,
+        ctx,
+        "multi_avd_echo.feature",
+        include_str!("../tests/features/multi_avd_echo.feature"),
+    )
+    .await?;
 
-    features.execute_from_memory(include_str!("../tests/features/p2p.feature"), ctx).await;
+    run_feature(&mut features, ctx, "nsd.feature", include_str!("../tests/features/nsd.feature"))
+        .await?;
+
+    run_feature(&mut features, ctx, "p2p.feature", include_str!("../tests/features/p2p.feature"))
+        .await?;
+
+    run_feature(
+        &mut features,
+        ctx,
+        "bluetooth_advertisements.feature",
+        include_str!("../tests/features/bluetooth_advertisements.feature"),
+    )
+    .await?;
+
+    run_feature(
+        &mut features,
+        ctx,
+        "uwb_ranging.feature",
+        include_str!("../tests/features/uwb_ranging.feature"),
+    )
+    .await?;
+
+    run_feature(
+        &mut features,
+        ctx,
+        "wifi_auth.feature",
+        include_str!("../tests/features/wifi_auth.feature"),
+    )
+    .await?;
 
     Ok(())
 }

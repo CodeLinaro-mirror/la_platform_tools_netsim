@@ -12,6 +12,7 @@ use pdl_runtime::Packet;
 use pica::{packets::uci, PicaCommand, PicaEvent};
 
 use crate::{
+    error::UwbError,
     uwb_actor::{UwbActor, UwbChipState},
     UwbAction, UwbActionResult,
 };
@@ -22,19 +23,19 @@ impl ActorService for UwbActor {
     type Update = ChipUpdate;
     type Action = UwbAction;
     type ActionResult = UwbActionResult;
-    type Error = ChipError;
+    type Error = UwbError;
     type Entity = Chip;
     type TypedStream = ();
 
     async fn handle_create(
         &mut self,
-        _id: Option<Self::Id>,
+        id: Option<Self::Id>,
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = params.id;
+        let chip_id = id.ok_or(ChipError::InvalidArguments(Box::from("missing chip id")))?;
         if self.chip_to_handle.contains_key(&chip_id) {
-            return Err(ChipError::ChipExists(chip_id.0));
+            return Err(ChipError::ChipExists(chip_id.0).into());
         }
 
         let chip = Chip {
@@ -49,13 +50,13 @@ impl ActorService for UwbActor {
         };
 
         let stream =
-            params.packet_stream.expect("Packet stream is present").map(|b| b.to_vec()).boxed();
+            params.packet_stream.ok_or(UwbError::PacketStreamMissing)?.map(|b| b.to_vec()).boxed();
 
         // Pica wants a Sink<Vec<u8>>.
         let sink = Box::pin(
             params
                 .packet_sink
-                .expect("Packet sink is present")
+                .ok_or(UwbError::PacketSinkMissing)?
                 .with(|v| async move { Ok(Bytes::from(v)) }),
         );
 
@@ -66,11 +67,8 @@ impl ActorService for UwbActor {
         // Wait for add to complete. This guarantees the chip exists by the time any
         // actions are performed on it.
         let handle = loop {
-            if let PicaEvent::Connected { handle, .. } = self
-                .pica_connect_events
-                .recv()
-                .await
-                .map_err(|_| ChipError::Internal("pica shutdown unexpectedly".to_string()))?
+            if let PicaEvent::Connected { handle, .. } =
+                self.pica_connect_events.recv().await.map_err(|_| UwbError::PicaShutdown)?
             {
                 break handle;
             }

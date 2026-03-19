@@ -3,7 +3,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bytes::Bytes;
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use device_api::DeviceId;
 use futures::{SinkExt, StreamExt};
 use modem_rs::modem_network::{ModemCallbacks, ModemNetworkInterface};
@@ -170,7 +170,7 @@ impl CellServer {
                 if self.active_chips.contains_key(&chip_id) {
                     let err_msg = format!("Chip {} already exists", chip_id);
                     log::error!("{}", err_msg);
-                    let _ = respond_to.send(Err(NetsimChipError::Internal(err_msg)));
+                    let _ = respond_to.send(Err(NetsimChipError::Internal(Box::from(err_msg))));
                     return Ok(());
                 }
 
@@ -182,8 +182,10 @@ impl CellServer {
                 let callbacks = Arc::new(CellModemCallbacks { chip_id, tx });
                 if let Err(e) = self.controller.add_modem(chip_id, callbacks.clone()) {
                     log::error!("Failed to add modem to controller: {:?}", e);
-                    let _ = respond_to
-                        .send(Err(NetsimChipError::Internal(format!("Controller error: {:?}", e))));
+                    let _ = respond_to.send(Err(NetsimChipError::Internal(Box::from(format!(
+                        "Controller error: {:?}",
+                        e
+                    )))));
                     return Ok(());
                 }
                 self.callbacks.insert(chip_id, callbacks);
@@ -216,9 +218,8 @@ impl CellServer {
                     }
                     Err(e) => {
                         log::error!("Failed to get modem info for chip {}: {:?}", id, e);
-                        let _ = respond_to.send(Err(NetsimChipError::Internal(format!(
-                            "Controller error: {:?}",
-                            e
+                        let _ = respond_to.send(Err(NetsimChipError::Internal(Box::from(
+                            format!("Controller error: {:?}", e),
                         ))));
                     }
                 }

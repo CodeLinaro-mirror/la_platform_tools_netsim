@@ -17,6 +17,6 @@ pub(crate) trait ToChipError<T> {
 
 impl<T> ToChipError<T> for Result<T, RadioError> {
     fn to_chip_error(self) -> Result<T, ChipError> {
-        self.map_err(|e| ChipError::BackendError(e.to_string()))
+        self.map_err(|e| ChipError::Backend(Box::new(e)))
     }
 }

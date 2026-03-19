@@ -17,6 +17,7 @@ use netsim_model::chip::{
     Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
     PacketSink, PacketStream,
 };
+use netsim_proto::protobuf::Message;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -49,6 +50,7 @@ impl InternalDevice {
                 orientation: params.device_config.orientation.clone(),
                 builtin: params.device_config.builtin,
                 chips: vec![],
+                device_info: params.device_config.device_info.clone(),
             },
             create_params: Some(params),
             guid: None,
@@ -83,31 +85,45 @@ impl DeviceActor {
     /// This is preferred for persistence as it doesn't require IPC to chip
     /// actors.
     pub(crate) async fn save_stats_async(&mut self) {
-        // Ensure previous write is finished to avoid race conditions and data loss
-        if let Some(task) = self.stats_write_task.take() {
-            if let Err(e) = task.await {
-                log::warn!("DeviceActor: Previous stats write failed: {}", e);
-            }
-        }
-
         let active_model_stats = self.collect_radio_stats_async().await;
         // Convert to Proto for persistence
         let active_proto_stats = active_model_stats.into_iter().map(to_proto_stats).collect();
 
-        let combined_stats = self.stats.get_combined_stats(active_proto_stats);
+        // Collect WiFi specific stats (Global)
+        let wifi_stats = self.collect_wifi_stats_async().await;
+
+        let combined_stats = self.stats.get_combined_stats(active_proto_stats, wifi_stats);
         let path = self.stats.stats_path.clone();
 
-        // Spawn blocking write
-        let task = tokio::task::spawn_blocking(move || {
-            if let Err(e) = crate::stats::write_combined_stats(combined_stats, path) {
-                log::error!("Failed to write stats: {}", e);
+        let previous_task = self.stats_write_task.take();
+
+        // Spawn a background async task to prevent the actor from blocking on disk I/O.
+        // It awaits the previous write task to ensure sequential writes without race
+        // conditions.
+        let task = tokio::spawn(async move {
+            if let Some(t) = previous_task {
+                if let Err(e) = t.await {
+                    log::warn!("DeviceActor: Previous stats write failed: {}", e);
+                }
+            }
+
+            // Spawn blocking write for disk I/O
+            let res = tokio::task::spawn_blocking(move || {
+                if let Err(e) = crate::stats::write_combined_stats(combined_stats, path) {
+                    log::error!("Failed to write stats: {}", e);
+                }
+            })
+            .await;
+
+            if let Err(e) = res {
+                log::error!("DeviceActor: Stats write task panicked: {}", e);
             }
         });
+
         self.stats_write_task = Some(task);
     }
 
     async fn collect_radio_stats_async(&mut self) -> Vec<netsim_model::stats::NetsimRadioStats> {
-        // 1. Fire off requests for Stats AND Chip State (for BT)
         let mut stats_futures = Vec::new();
         let mut state_futures = Vec::new();
 
@@ -144,11 +160,9 @@ impl DeviceActor {
             }
         }
 
-        // 2. Await all
         let stats_results = futures::future::join_all(stats_futures).await;
         let state_results = futures::future::join_all(state_futures).await;
 
-        // 3. Process Results
         let mut chip_stats_map: HashMap<ChipId, Vec<netsim_model::stats::NetsimRadioStats>> =
             HashMap::new();
         for stats in stats_results.into_iter().flatten() {
@@ -208,13 +222,7 @@ impl DeviceActor {
                     // Resolve Kind Synchronously using pre-fetched state
                     let radio_kind = if chip.kind == netsim_model::ChipKind::BLUETOOTH {
                         let chip_state = chip_state_map.get(&ChipId(chip.id)).unwrap_or(chip);
-                        match (chip_state.is_le_enabled(), chip_state.is_classic_enabled()) {
-                            (true, false) => {
-                                Some(netsim_model::stats::RadioKind::BluetoothLowEnergy)
-                            }
-                            (false, true) => Some(netsim_model::stats::RadioKind::BluetoothClassic),
-                            _ => None,
-                        }
+                        Self::resolve_bluetooth_kind(chip, Some(chip_state))
                     } else {
                         Some(netsim_model::chip::chip_kind_to_radio_kind(chip.kind))
                     };
@@ -231,6 +239,30 @@ impl DeviceActor {
             }
         }
         stats_list
+    }
+
+    async fn collect_wifi_stats_async(&self) -> Option<netsim_proto::stats::WifiStats> {
+        let client = self.chip_clients.get(&netsim_model::ChipKind::WIFI)?;
+        match tokio::time::timeout(CHIP_READ_TIMEOUT, client.get_global_stats()).await {
+            Ok(Ok(Some(stats_bytes))) => {
+                match netsim_proto::stats::WifiStats::parse_from_bytes(&stats_bytes) {
+                    Ok(stats) => Some(stats),
+                    Err(e) => {
+                        log::error!("DeviceActor: Failed to parse WifiStats: {}", e);
+                        None
+                    }
+                }
+            }
+            Ok(Ok(None)) => None,
+            Ok(Err(e)) => {
+                log::warn!("DeviceActor: Failed to get global stats: {}", e);
+                None
+            }
+            Err(_) => {
+                log::debug!("DeviceActor: Timeout getting global stats");
+                None
+            }
+        }
     }
 
     /// Resolves the specific RadioKind for a chip, handling ambiguous cases
@@ -252,10 +284,19 @@ impl DeviceActor {
         };
 
         let chip = fresh_chip.as_ref().unwrap_or(chip);
-        match (chip.is_le_enabled(), chip.is_classic_enabled()) {
+        Self::resolve_bluetooth_kind(chip, Some(chip))
+    }
+
+    fn resolve_bluetooth_kind(
+        chip: &Chip,
+        state: Option<&Chip>,
+    ) -> Option<netsim_model::stats::RadioKind> {
+        let chip_state = state.unwrap_or(chip);
+        match (chip_state.is_le_enabled(), chip_state.is_classic_enabled()) {
             (true, false) => Some(netsim_model::stats::RadioKind::BluetoothLowEnergy),
             (false, true) => Some(netsim_model::stats::RadioKind::BluetoothClassic),
-            _ => None, // Ambiguous (Dual Mode) or Invalid -> Drop
+            _ => None, /* Ambiguous (Dual Mode) or Invalid -> Drop
+                        * TODO: Requires HCI packet inspection to accurately distinguish traffic */
         }
     }
 
@@ -386,7 +427,33 @@ impl DeviceActor {
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
     ) -> Result<ChipId, DeviceError> {
-        log::info!("DeviceActor: AddChip {} to device {}", chip_config.name, entity.device.name);
+        let chip_name = if chip_config.name.is_empty() {
+            entity.device.name.clone()
+        } else {
+            chip_config.name.clone()
+        };
+        let manufacturer = if chip_config.manufacturer.is_empty() {
+            entity
+                .device
+                .device_info
+                .as_ref()
+                .map(|info| info.kind.clone())
+                .unwrap_or("Unknown".to_string())
+        } else {
+            chip_config.manufacturer.clone()
+        };
+        let product_name = if chip_config.product_name.is_empty() {
+            entity.device.name.clone()
+        } else {
+            chip_config.product_name.clone()
+        };
+        log::info!(
+            "DeviceActor: AddChip {} ({}, {}) to device {}",
+            chip_name,
+            manufacturer,
+            product_name,
+            entity.device.name
+        );
 
         let chip_id = ChipId(next_chip_id.fetch_add(1, Ordering::SeqCst));
         let chip_kind_params = chip_config.chip_kind_params.clone();
@@ -411,28 +478,27 @@ impl DeviceActor {
         })?;
 
         let chip_create_params = ChipCreate {
-            id: chip_id,
             packet_stream,
             packet_sink,
             config: netsim_model::chip::ChipConfig {
-                name: chip_config.name.clone(),
-                manufacturer: chip_config.manufacturer.clone(),
-                product_name: chip_config.product_name.clone(),
+                name: chip_name.clone(),
+                manufacturer: manufacturer.clone(),
+                product_name: product_name.clone(),
                 chip_kind_params,
             },
             device_id: DeviceId(entity.device.id),
         };
 
         chip_client
-            .create(chip_create_params)
+            .create(chip_id, chip_create_params)
             .await
             .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
         entity.device.chips.push(Chip {
             id: chip_id.0,
             kind: ChipKind::from(&chip_config.chip_kind_params),
-            name: Some(chip_config.name),
-            manufacturer: Some(chip_config.manufacturer),
-            product_name: Some(chip_config.product_name),
+            name: Some(chip_name),
+            manufacturer: Some(manufacturer),
+            product_name: Some(product_name),
             position: entity.device.position.clone(),
             orientation: entity.device.orientation.clone(),
             device_id: DeviceId(entity.device.id),
@@ -481,6 +547,11 @@ impl DeviceActor {
 
         self.devices.insert(id, entity);
         self.stats.update_device_count(self.devices.len(), true);
+
+        if let Some(device_info) = &params.device_config.device_info {
+            self.stats.add_device_stats(crate::utils::to_proto_device_stats(id.0, device_info));
+        }
+
         self.update_idle_state(ctx);
         Ok(id)
     }
@@ -562,9 +633,9 @@ impl DeviceActor {
         let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
         if !self.has_seen_device && !has_active_devices {
             log::info!(
-                "DeviceActor: Startup timeout reached (no devices connected), shutting down"
+                "DeviceActor: Startup timeout reached (no devices connected), initiating shutdown"
             );
-            ctx.shutdown();
+            self.trigger_shutdown(ctx);
         }
         self.startup_timer = None;
     }
@@ -573,10 +644,88 @@ impl DeviceActor {
     pub(crate) fn on_idle_timeout(&mut self, ctx: &mut dyn Context<Self>) {
         let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
         if !has_active_devices {
-            log::info!("DeviceActor: Idle timeout reached, shutting down");
-            ctx.shutdown();
+            log::info!("DeviceActor: Idle timeout reached, initiating shutdown");
+            self.trigger_shutdown(ctx);
         }
         self.idle_timer = None;
+    }
+
+    /// Helper utility to initiate graceful shutdown, ensuring stats are
+    /// flushed.
+    fn trigger_shutdown(&mut self, ctx: &mut dyn Context<Self>) {
+        let stats_task = self.stats_write_task.take();
+        if let Some(client) = self.self_client.clone() {
+            tokio::spawn(async move {
+                if let Some(t) = stats_task {
+                    if let Err(e) = t.await {
+                        log::warn!("DeviceActor: Stats write failed during shutdown flush: {}", e);
+                    }
+                }
+                if let Err(e) = client.shutdown().await {
+                    log::error!("DeviceActor: Failed to shutdown: {}", e);
+                }
+            });
+        } else {
+            log::warn!("DeviceActor: No self_client, forcing immediate shutdown");
+            ctx.shutdown();
+        }
+    }
+
+    async fn perform_reset(&mut self, id: Option<DeviceId>) -> Result<(), DeviceError> {
+        let device_ids: Vec<DeviceId> = if let Some(id) = id {
+            if !self.devices.contains_key(&id) {
+                return Err(DeviceError::DeviceNotFound(id.to_string()));
+            }
+            vec![id]
+        } else {
+            self.devices.keys().cloned().collect()
+        };
+
+        let mut errors = Vec::new();
+
+        for device_id in device_ids {
+            let Some(entity) = self.devices.get_mut(&device_id) else {
+                log::error!("DeviceActor: Device {} disappeared during reset", device_id);
+                continue;
+            };
+            log::info!("DeviceActor: Resetting device {}", entity.device.name);
+
+            entity.device.visible = true;
+            entity.device.position = device_api::Position::default();
+            entity.device.orientation = device_api::Orientation::default();
+
+            for chip in entity.device.chips.iter_mut() {
+                chip.position = device_api::Position::default();
+                chip.orientation = device_api::Orientation::default();
+
+                if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
+                    if let Err(e) = chip_client.reset(netsim_model::ChipId(chip.id)).await {
+                        log::warn!(
+                            "DeviceActor: Failed to reset chip {} kind {:?}: {}",
+                            chip.id,
+                            chip.kind,
+                            e
+                        );
+                        errors.push(format!("Failed to reset chip {}: {}", chip.id, e));
+                    }
+                }
+            }
+        }
+
+        if id.is_none() {
+            log::info!("DeviceActor: Resetting all links");
+            if let Err(e) = self.link_client.reset().await {
+                log::warn!("DeviceActor: Failed to reset links: {}", e);
+                errors.push(format!("Failed to reset links: {}", e));
+            }
+        }
+
+        self.save_stats_async().await;
+
+        if !errors.is_empty() {
+            return Err(DeviceError::ResetErrors(errors));
+        }
+        Ok(())
     }
 }
 
@@ -617,7 +766,6 @@ impl ActorService for DeviceActor {
         let Some(entity) = self.devices.get_mut(&id) else {
             return Err(DeviceError::DeviceNotFound(id.to_string()));
         };
-        // Update local state
         if let Some(name) = &update.name {
             entity.device.name = name.clone();
         }
@@ -632,7 +780,6 @@ impl ActorService for DeviceActor {
             entity.device.orientation = orient;
         }
 
-        // Propagate updates to chips
         for chip in entity.device.chips.iter_mut() {
             let Some(chip_client) = self.chip_clients.get(&chip.kind) else {
                 continue;
@@ -640,7 +787,6 @@ impl ActorService for DeviceActor {
 
             let mut chip_update = ChipUpdate::default();
 
-            // Propagate Device Position/Orientation if changed
             if update.position.is_some() {
                 chip_update.position = update.position.clone();
             }
@@ -663,14 +809,12 @@ impl ActorService for DeviceActor {
                 }
             }
 
-            // Merge specific update fields
             if let Some(u) = specific_update {
                 if u.variant.is_some() {
                     chip_update.variant = u.variant.clone();
                 }
             }
 
-            // Send update if meaningful
             if chip_update.position.is_some()
                 || chip_update.orientation.is_some()
                 || chip_update.variant.is_some()
@@ -742,7 +886,10 @@ impl ActorService for DeviceActor {
                 self.save_stats_async().await;
                 Ok(DeviceActionResult::Success)
             }
-            DeviceAction::Reset => Ok(DeviceActionResult::Success),
+            DeviceAction::Reset => {
+                self.perform_reset(id).await?;
+                Ok(DeviceActionResult::Success)
+            }
             DeviceAction::AddChipByGuid { params } => {
                 self.perform_add_chip_by_guid(params, ctx).await
             }

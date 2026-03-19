@@ -1,7 +1,6 @@
 use std::{str, time::Duration};
 
 use nom::IResult;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub trait Parsable<'a>: Sized {
     fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self>;
@@ -159,42 +158,10 @@ pub enum ExecutionResult {
     Unhandled,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HostEvent {
     SinkError(u32),
-    TimerRequest {
-        chip_id: u32,
-        #[serde(
-            serialize_with = "serialize_duration_ms",
-            deserialize_with = "deserialize_duration_ms"
-        )]
-        duration: Duration,
-    },
-}
-
-fn serialize_duration_ms<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    serializer.serialize_u64(duration.as_millis() as u64)
-}
-
-fn deserialize_duration_ms<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let millis = u64::deserialize(deserializer)?;
-    Ok(Duration::from_millis(millis))
-}
-
-impl HostEvent {
-    pub fn to_vec(&self) -> Vec<u8> {
-        serde_json::to_vec(self).expect("HostEvent serialization failed")
-    }
-
-    pub fn parse(bytes: &[u8]) -> Self {
-        serde_json::from_slice(bytes).expect("HostEvent deserialization failed")
-    }
+    TimerRequest { chip_id: u32, duration: Duration },
 }
 
 #[derive(Debug, Clone, Default)]

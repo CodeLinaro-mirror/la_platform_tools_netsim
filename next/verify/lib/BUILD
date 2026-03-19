@@ -14,23 +14,15 @@ netsim_rust_library(
     ],
     crate_name = "features",
     edition = "2021",
+    enable_integration_test = False,
     enable_rustfmt = False,
     proc_macro_deps = [
-        "@async-trait",
     ],
     deps = [
-        "@anyhow",
-        "@bytes",
-        "@env_logger",
-        "@futures",
         "@gherkin",
-        "@log",
         "@regex",
         "@serde",
         "@serde_json",
-        "@tokio",
-        "@tokio-stream",
-        "@tokio-util",
     ],
 )
 

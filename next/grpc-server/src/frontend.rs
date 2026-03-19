@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use client::{DeviceClient, DeviceError};
+use device_actor::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
@@ -49,7 +49,7 @@ impl FrontendClient {
         let id = client
             .create(create)
             .await
-            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e))?;
+            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))?;
 
         let mut response = netsim_proto::frontend::CreateLinkResponse::new();
         let mut response_link = crate::frontend_converter::to_proto_link(link);
@@ -77,7 +77,7 @@ impl FrontendClient {
         client
             .update(LinkId(req.id), update)
             .await
-            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e))
+            .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))
     }
 
     async fn handle_delete_link(
@@ -88,7 +88,7 @@ impl FrontendClient {
             client
                 .delete(LinkId(req.id))
                 .await
-                .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e))?;
+                .map_err(|e| RpcStatus::with_message(RpcStatusCode::INTERNAL, e.to_string()))?;
             return Ok(());
         }
 
@@ -146,6 +146,7 @@ impl FrontendClient {
                         req.device.orientation.clone().unwrap_or_default(),
                     ),
                     builtin: false,
+                    device_info: None,
                 };
 
                 let device_create = device_api::api::DeviceCreate {
@@ -251,8 +252,6 @@ impl FrontendClient {
     }
 
     async fn handle_reset(client: DeviceClient) -> Result<(), RpcStatus> {
-        // TODO: Implement global reset in DeviceClient.
-        // Currently using None for global reset.
         client.reset(None).await.map_err(|e| {
             RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,

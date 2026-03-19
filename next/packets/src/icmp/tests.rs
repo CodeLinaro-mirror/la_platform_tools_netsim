@@ -2,21 +2,25 @@
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use crate::utils::test_utils::validate_pcap_json;
 
     #[test]
     fn test_icmp_pcap_json() {
-        let icmp_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/icmp/test_data");
         let fields = &["icmp.type", "icmp.code", "ip.src", "ip.dst", "ip.proto"];
-        validate_pcap_json(icmp_dir.join("icmp.pcap"), icmp_dir.join("icmp.json"), fields);
+        validate_pcap_json(
+            include_bytes!("test_data/icmp.pcap"),
+            include_str!("test_data/icmp.json"),
+            fields,
+        );
     }
 
     #[test]
     fn test_icmpv6_pcap_json() {
-        let icmp_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/icmp/test_data");
         let fields = &["icmpv6.type", "icmpv6.code", "ipv6.src", "ipv6.dst", "ipv6.nxt"];
-        validate_pcap_json(icmp_dir.join("icmpv6.pcap"), icmp_dir.join("icmpv6.json"), fields);
+        validate_pcap_json(
+            include_bytes!("test_data/icmpv6.pcap"),
+            include_str!("test_data/icmpv6.json"),
+            fields,
+        );
     }
 }

@@ -82,8 +82,20 @@ use serde::{Deserialize, Serialize};
 
 #[async_trait]
 pub trait CaptureSender: Send + Sync {
-    async fn create_capture(&self, create: CaptureCreate) -> anyhow::Result<()>;
-    fn capture_packet(&self, chip_id: ChipId, direction: Direction, packet: Bytes);
+    /// Creates a new capture for a chip.
+    async fn create_capture(&self, chip_id: ChipId, create: CaptureCreate) -> anyhow::Result<()>;
+
+    /// Captures a single packet.
+    ///
+    /// # Arguments
+    /// * `chip_id` - The ID of the chip.
+    /// * `direction` - The direction of the packet.
+    ///
+    /// Returns a channel to send packet bytes.
+    async fn packet_sender(
+        &self,
+        chip_id: ChipId,
+    ) -> anyhow::Result<tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>>;
 }
 
 /// Direction of the packet.
@@ -93,21 +105,15 @@ pub enum Direction {
     Sent,
     /// Packet was received by the device.
     Received,
-    /// Direction is unknown.
-    Unknown,
 }
 
 /// Parameters for creating a new capture.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaptureCreate {
-    /// The ID of the chip to capture.
-    pub chip_id: ChipId,
     /// The kind of chip.
     pub chip_kind: ChipKind,
     /// The name of the device.
     pub device_name: String,
-    /// Whether capture should be enabled by default.
-    pub default_enabled: bool,
     /// Optional flag to be updated when capture status changes.
     #[serde(skip)]
     pub enabled_flag: Arc<AtomicBool>,
@@ -116,29 +122,42 @@ pub struct CaptureCreate {
 /// Actions that can be performed on a capture.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CaptureAction {
-    /// Capture a packet.
-    CapturePacket { chip_id: ChipId, direction: Direction, bytes: Bytes },
+    /// Gets a packet sender for capture.
+    GetPacketSender,
     /// Patch a capture (e.g., enable/disable).
     Patch { chip_id: ChipId, enabled: bool },
     /// Create a new capture.
     Create { chip_id: ChipId, chip_kind: ChipKind, device_name: String },
     /// Delete a capture.
     Delete { chip_id: ChipId },
-    /// Set default capture state for new captures.
-    SetDefaultCapture { enabled: bool },
     /// Set default capture directory.
     SetCaptureDirectory { path: PathBuf },
 }
 
-/// Result of a capture action.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Result of an action performed on a capture.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CaptureActionResult {
-    /// Action was successful.
+    /// Action succeeded.
     Success,
-    /// An error occurred.
+    /// Action failed.
     Error(String),
     /// The action resulted in an update and returns the new state.
     Updated(CaptureInfo),
+    /// Returns a high-throughput packet sender.
+    #[serde(skip)]
+    PacketSender(tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>),
+}
+
+impl PartialEq for CaptureActionResult {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Success, Self::Success) => true,
+            (Self::Error(a), Self::Error(b)) => a == b,
+            (Self::Updated(a), Self::Updated(b)) => a == b,
+            (Self::PacketSender(a), Self::PacketSender(b)) => a.same_channel(b),
+            _ => false,
+        }
+    }
 }
 
 /// Information about a capture.
