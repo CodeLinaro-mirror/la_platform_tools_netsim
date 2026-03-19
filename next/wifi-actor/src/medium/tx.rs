@@ -3,11 +3,11 @@
 use std::collections::HashSet;
 
 use bytes::Bytes;
-use log::debug;
 use netsim_packets::{
     ieee80211::{FrameDirection, Ieee80211},
     netlink::{hwsim_frame::HwsimFrame, HwsimMsg},
 };
+use tracing::debug;
 
 use crate::{
     error::WifiError,

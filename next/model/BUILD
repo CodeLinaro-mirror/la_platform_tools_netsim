@@ -19,7 +19,7 @@ package(default_visibility = ["//visibility:public"])
 NETSIM_API_DEPS = [
     "@bytes",
     "@futures",
-    "@log",
+    "@tracing",
     "//next/types",
     "//proto",
     "@serde",

@@ -6,9 +6,9 @@ use std::{
 };
 
 use bytes::Bytes;
-use log;
 use netsim_model::cell::{ModemAction, RegistrationStatus};
 use tokio::sync::mpsc;
+use tracing::{debug, error, info};
 
 use crate::{
     constants::CALL_RING_TIMEOUT,
@@ -170,18 +170,18 @@ impl ModemNetworkSimulator {
                 ModemEffect::Schedule { delay, event } => {
                     let msg = HostEvent::TimerRequest { chip_id: id, duration: delay };
                     if let Err(e) = self.host_event_tx.send(msg) {
-                        log::error!("Failed to send timer request: {}", e);
+                        error!("Failed to send timer request: {}", e);
                     }
                     self.schedule_event(id, delay, event);
                 }
                 ModemEffect::Response(packet) => {
-                    log::info!("Sending response to {}: {:?}", id, std::str::from_utf8(&packet));
+                    info!("Sending response to {}: {:?}", id, std::str::from_utf8(&packet));
                     if let Some(sink) = self.sinks.get_mut(&id) {
                         if let Err(e) = sink.send(Bytes::from(packet)) {
-                            log::error!("Failed to send response to modem {}: {}", id, e);
+                            error!("Failed to send response to modem {}: {}", id, e);
                             let event = HostEvent::SinkError(id);
                             if let Err(e) = self.host_event_tx.send(event) {
-                                log::error!("Failed to send client sink error: {}", e);
+                                error!("Failed to send client sink error: {}", e);
                             }
                             network_events.push(NetworkEvent::SinkError { id });
                         }
@@ -227,7 +227,7 @@ impl ModemNetworkSimulator {
         id: ModemId,
         action: CommandAction,
     ) -> (Vec<(ModemId, ModemEffect)>, Vec<NetworkEvent>) {
-        log::debug!("[Network] Handling action from {}: {:?}", id, action);
+        debug!("[Network] Handling action from {}: {:?}", id, action);
         let mut effects = Vec::new();
         let mut events = Vec::new();
 
@@ -484,7 +484,7 @@ impl ModemNetworkSimulator {
     }
 
     pub fn external_echo_for_debug(&self, text: String) {
-        log::debug!("[DEBUG] {}", text);
+        debug!("[DEBUG] {}", text);
     }
 
     pub fn schedule_event(&mut self, modem_id: ModemId, delay: Duration, event: ModemEvent) {

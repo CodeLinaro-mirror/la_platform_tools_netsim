@@ -11,13 +11,13 @@ byteorder = "1.4"
 bytes = "1.5"
 capture-api = { path = "../capture-api" }
 common = { package = "netsim-common", path = "../common" }
-log = "0.4"
 netsim-model = { path = "../model" }
 netsim-packets = { path = "../packets" }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 tokio-stream = "0.1"
+tracing = "0.1"
 zerocopy = { version = "0.8", features = ["derive"] }
 
 [dev-dependencies]

@@ -3,6 +3,7 @@
 use actor_framework::{ActorLifecycle, ActorService, DynContext};
 use bytes::Bytes;
 use modem_rs::HostEvent;
+use tracing::{error, info, warn};
 
 use crate::cell_actor::CellActor;
 
@@ -23,7 +24,7 @@ impl ActorLifecycle for CellActor {
     }
 
     async fn on_stream_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
-        log::info!("Stream closed for chip {}", id);
+        info!("Stream closed for chip {}", id);
         use actor_framework::ActorService;
         let _ = self.handle_delete(id, ctx).await;
         ctx.abort(id);
@@ -49,7 +50,7 @@ impl CellActor {
         _ctx: &mut DynContext<Self>,
     ) {
         if let Err(e) = self.controller.send_data(id.0, &message) {
-            log::error!("Failed to send data to controller for chip {}: {:?}", id, e);
+            error!("Failed to send data to controller for chip {}: {:?}", id, e);
         }
     }
 
@@ -57,7 +58,7 @@ impl CellActor {
         match event {
             HostEvent::SinkError(id) => {
                 let chip_id = netsim_model::chip::ChipId(id);
-                log::warn!("Sink error for chip {}, deleting.", chip_id);
+                warn!("Sink error for chip {}, deleting.", chip_id);
                 let _ = self.handle_get(chip_id, ctx).await;
                 ctx.remove_stream(chip_id);
                 ctx.abort(chip_id);
@@ -69,7 +70,7 @@ impl CellActor {
                     duration,
                     Box::new(move |actor, _ctx| {
                         if let Err(e) = actor.controller.on_timer(id) {
-                            log::error!("Timer error for chip {}: {:?}", id, e);
+                            error!("Timer error for chip {}: {:?}", id, e);
                         }
                     }),
                 );

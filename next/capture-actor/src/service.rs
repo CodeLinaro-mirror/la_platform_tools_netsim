@@ -9,6 +9,7 @@ use netsim_model::chip::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tracing::{info, warn};
 
 use crate::{
     bt_pcap::BluetoothH4Writer, capture_actor::CaptureActor, error::CaptureError,
@@ -93,7 +94,7 @@ impl CaptureActor {
             // Disable capture: remove the writer to close the file
             if let Some(mut writer) = self.writers.remove(&entity.info.chip_id) {
                 if let Err(err) = writer.flush().await {
-                    log::warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
+                    warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
                 }
             }
         }
@@ -108,7 +109,7 @@ impl CaptureActor {
         // Clean up resources when the entity is deleted.
         if let Some(mut writer) = self.writers.remove(&entity.info.chip_id) {
             if let Err(err) = writer.flush().await {
-                log::warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
+                warn!("Failed to flush writer for chip {}: {err}", entity.info.chip_id);
             }
         }
         Ok(())
@@ -132,11 +133,11 @@ impl CaptureActor {
             let mut path = common::system::netsimd_temp_dir();
             path.push("pcaps");
             if let Err(e) = std::fs::create_dir_all(&path) {
-                log::warn!("Failed to create default pcap directory {}: {}", path.display(), e);
+                warn!("Failed to create default pcap directory {}: {}", path.display(), e);
             }
             path.join(&filename)
         };
-        log::info!("Creating capture file: {}", filepath.display());
+        info!("Creating capture file: {}", filepath.display());
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
             ChipKind::BLUETOOTH => BluetoothH4Writer::new(&filepath).await?,
             ChipKind::UWB => UwbPcapWriter::new(&filepath).await?,

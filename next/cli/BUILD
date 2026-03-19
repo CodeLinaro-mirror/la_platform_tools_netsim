@@ -15,8 +15,8 @@ netsim_rust_binary(
         "@futures-util",
         "@grpcio",
         "@hex",
-        "@log",
         "@protobuf-rust",
+        "@tracing",
     ],
 )
 
@@ -33,7 +33,7 @@ rust_test(
         "@futures-util",
         "@grpcio",
         "@hex",
-        "@log",
         "@protobuf-rust",
+        "@tracing",
     ],
 )

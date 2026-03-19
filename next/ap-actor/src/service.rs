@@ -1,6 +1,7 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
+use tracing::{error, info, warn};
 
 use crate::{
     ap_actor::{ApActor, ApId, ApReq, ApResponse, ApState, WIFI_STREAM_ID},
@@ -50,7 +51,7 @@ impl ActorService for ApActor {
         self.shared_keys.set_bssid(config.bssid);
         self.aps.insert(id_val, ApState::new(id_val, config));
 
-        log::info!("Created AP with ID: {}", id_val);
+        info!("Created AP with ID: {}", id_val);
         Ok(id_val)
     }
 
@@ -86,13 +87,13 @@ impl ActorService for ApActor {
                 let mac = match mac_str.parse::<netsim_packets::ethernet::MacAddr>() {
                     Ok(m) => m,
                     Err(_) => {
-                        log::warn!("Invalid MAC address in force_disconnect: {}", mac_str);
+                        warn!("Invalid MAC address in force_disconnect: {}", mac_str);
                         continue;
                     }
                 };
 
                 if !ap_state.associations.remove(&mac) {
-                    log::warn!("Requested force disconnect for unknown MAC: {}", mac);
+                    warn!("Requested force disconnect for unknown MAC: {}", mac);
                     continue;
                 }
 
@@ -109,7 +110,7 @@ impl ActorService for ApActor {
                     // IBSS or ESS)
                     let frame = self.manager.build_deauth_frame(ap_state, mac, 3);
                     if let Err(e) = sink.send(bytes::Bytes::from(frame)) {
-                        log::error!("Failed to send Deauth frame: {}", e);
+                        error!("Failed to send Deauth frame: {}", e);
                     }
                 }
             }
@@ -128,9 +129,9 @@ impl ActorService for ApActor {
         _: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
         if self.aps.remove(&id).is_some() {
-            log::info!("Deleted AP with ID: {}", id);
+            info!("Deleted AP with ID: {}", id);
         } else {
-            log::warn!("Attempted to delete non-existent AP with ID: {}", id);
+            warn!("Attempted to delete non-existent AP with ID: {}", id);
         }
         Ok(())
     }
@@ -153,16 +154,13 @@ impl ActorService for ApActor {
                 if self.sink.is_some() {
                     panic!("ApActor: Register called more than once!");
                 }
-                log::info!(
-                    "Registering AP singleton stream/sink with interval: {:?}",
-                    beacon_interval
-                );
+                info!("Registering AP singleton stream/sink with interval: {:?}", beacon_interval);
                 self.sink = Some(sink);
                 // Preserve BSSID if the new store doesn't have one (Contextual Strangler fix)
                 if let Some(current_bssid) = self.shared_keys.get_bssid() {
                     if shared_keys.get_bssid().is_none() {
                         shared_keys.set_bssid(current_bssid);
-                        log::info!("ApActor: Preserved BSSID {:?} in shared_keys", current_bssid);
+                        info!("ApActor: Preserved BSSID {:?} in shared_keys", current_bssid);
                     }
                 }
                 self.shared_keys = shared_keys;
@@ -181,7 +179,7 @@ impl ActorService for ApActor {
                 let ap_state = self.aps.get_mut(&id).ok_or(ApError::ApNotFound(id.0))?;
 
                 if ap_state.associations.remove(&mac) {
-                    log::info!("ApActor: Force disconnecting MAC {} from AP {}", mac, id);
+                    info!("ApActor: Force disconnecting MAC {} from AP {}", mac, id);
 
                     // Clear sessions if any
                     if let Some(wpa) = &mut ap_state.wpa {
@@ -194,15 +192,11 @@ impl ActorService for ApActor {
                     if let Some(sink) = &self.sink {
                         let frame = self.manager.build_deauth_frame(ap_state, mac, 3);
                         if let Err(e) = sink.send(bytes::Bytes::from(frame)) {
-                            log::error!("Failed to send Deauth frame: {}", e);
+                            error!("Failed to send Deauth frame: {}", e);
                         }
                     }
                 } else {
-                    log::warn!(
-                        "ApActor: Requested disconnect for unknown MAC {} on AP {}",
-                        mac,
-                        id
-                    );
+                    warn!("ApActor: Requested disconnect for unknown MAC {} on AP {}", mac, id);
                 }
                 Ok(ApResponse::Ok)
             }

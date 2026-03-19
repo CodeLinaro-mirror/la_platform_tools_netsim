@@ -64,11 +64,11 @@ rust_binary(
         "//next/verify/lib",
         "@anyhow",
         "@clap",
-        "@env_logger",
-        "@log",
         "@regex",
         "@tokio",
         "@tokio-util",
+        "@tracing",
+        "@tracing-subscriber",
         "@which",
     ],
 )

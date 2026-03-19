@@ -12,11 +12,11 @@ use std::{
 };
 
 use ap_actor::shared::SharedKeyStore;
-use log::{debug, error, info};
 use netsim_model::ChipId;
 #[cfg(unix)]
 #[cfg(target_os = "linux")]
 use tokio::io::unix::AsyncFd;
+use tracing::{debug, error, info};
 
 use crate::{gateway::GatewayTrait, medium::Medium, wifi_actor::WifiActor};
 

@@ -6,7 +6,7 @@
 
 use actor_framework::ActorClient;
 use device_api::{api::DeviceCreate, DeviceAction, DeviceActionResult, DeviceId};
-use log::debug;
+use tracing::debug;
 
 use crate::{DeviceActor, DeviceError};
 

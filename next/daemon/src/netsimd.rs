@@ -20,7 +20,6 @@ use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
 use link_actor::LinkClient;
-use log::{error, info, warn};
 use netsim_model::{
     chip::{
         BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipKind,
@@ -36,6 +35,7 @@ use packet_stream::{
 };
 use slirp_actor::SlirpClient;
 use tokio::{sync::mpsc, task::JoinSet};
+use tracing::{error, info, warn};
 
 use crate::{
     args::Args,

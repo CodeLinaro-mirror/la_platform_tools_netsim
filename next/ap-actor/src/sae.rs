@@ -1,6 +1,6 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use log::{error, info};
+use tracing::{error, info};
 
 use crate::ffi;
 

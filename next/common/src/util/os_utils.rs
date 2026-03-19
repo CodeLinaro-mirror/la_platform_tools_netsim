@@ -21,7 +21,7 @@ use std::os::fd::AsRawFd;
 use std::os::windows::io::AsRawHandle;
 use std::{ffi::CString, path::PathBuf};
 
-use log::warn;
+use tracing::warn;
 
 use crate::system::netsimd_temp_dir;
 

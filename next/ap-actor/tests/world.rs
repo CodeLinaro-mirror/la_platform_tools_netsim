@@ -12,6 +12,7 @@ use netsim_packets::{
     },
 };
 use tokio::sync::mpsc;
+use tracing::info;
 use zerocopy::{IntoBytes, Ref, U16};
 
 pub fn generate_random_mac() -> [u8; 6] {
@@ -52,7 +53,7 @@ impl ApWorld {
     }
 
     pub async fn given_a_registered_ap_with_config(&mut self, config: ApConfig) {
-        log::info!("Given a registered AP '{}'", config.ssid);
+        info!("Given a registered AP '{}'", config.ssid);
         let id = self.next_ap_id;
         self.next_ap_id += 1;
         self.client.create_ap(Some(id), config).await.expect("Failed to create AP");
@@ -77,7 +78,7 @@ impl ApWorld {
     }
 
     pub async fn given_a_registered_ap_with_wpa(&mut self, ssid: &str, passphrase: &str) {
-        log::info!("Given a registered AP '{}' with WPA", ssid);
+        info!("Given a registered AP '{}' with WPA", ssid);
         let wpa_passphrase =
             if passphrase.is_empty() { None } else { Some(passphrase.to_string()) };
         let config = ApConfig {
@@ -103,7 +104,7 @@ impl ApWorld {
     }
 
     pub async fn given_a_wifi6_ap(&mut self, ssid: &str) {
-        log::info!("Given a WiFi 6 AP '{}'", ssid);
+        info!("Given a WiFi 6 AP '{}'", ssid);
         let config = ApConfig {
             ssid: ssid.to_string(),
             bssid: MacAddr::new(generate_random_mac()),
@@ -126,7 +127,7 @@ impl ApWorld {
         self.given_a_registered_ap_with_config(config).await;
     }
     pub async fn then_beacon_is_received(&mut self, ssid: &str) {
-        log::info!("Then the World receives a Beacon for '{}'", ssid);
+        info!("Then the World receives a Beacon for '{}'", ssid);
         let rx = self.rx_from_ap.as_mut().expect("AP not registered");
         // Drain until we find a beacon or timeout
         let start = std::time::Instant::now();
@@ -176,7 +177,7 @@ impl ApWorld {
         M::Error: std::fmt::Debug,
     {
         let src_mac = src_mac.try_into().expect("Invalid MAC address");
-        log::info!("When a Station sends an Association Request from {}", src_mac);
+        info!("When a Station sends an Association Request from {}", src_mac);
         // Construct Assoc Req
         let tx = self.tx_to_ap.as_mut().expect("AP not registered");
 
@@ -216,7 +217,7 @@ impl ApWorld {
         M::Error: std::fmt::Debug,
     {
         let dst_mac = dst_mac.try_into().expect("Invalid MAC address");
-        log::info!("Then the Station receives an Association Response at {}", dst_mac);
+        info!("Then the Station receives an Association Response at {}", dst_mac);
         let rx = self.rx_from_ap.as_mut().expect("AP not registered");
         let start = std::time::Instant::now();
         while start.elapsed() < Duration::from_secs(2) {
@@ -238,7 +239,7 @@ impl ApWorld {
     }
 
     pub async fn when_ap_is_deleted(&mut self) {
-        log::info!("When the AP is deleted");
+        info!("When the AP is deleted");
         if let Some(id) = self.ap_id {
             self.client.destroy_ap(id).await.expect("Failed to destroy AP");
             self.ap_id = None;
@@ -246,7 +247,7 @@ impl ApWorld {
     }
 
     pub async fn then_no_beacons_are_received(&mut self) {
-        log::info!("Then no more beacons are received");
+        info!("Then no more beacons are received");
         let rx = self.rx_from_ap.as_mut().expect("AP not registered");
         // Drain
         while rx.try_recv().is_ok() {}

@@ -10,7 +10,7 @@ DEPS = [
     "//next/packets",
     "@anyhow",
     "@bytes",
-    "@log",
+    "@tracing",
     "@serde",
     "@thiserror",
     "@tokio",

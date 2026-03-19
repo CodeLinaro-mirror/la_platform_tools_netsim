@@ -30,8 +30,8 @@ use clap::Parser;
 use common::util::{ini_file::get_server_address, netsim_logger, os_utils::get_instance};
 use file_handler::FileHandler;
 use grpcio::{ChannelBuilder, EnvBuilder};
-use log::error;
 use netsim_proto::{frontend, frontend_grpc::FrontendServiceClient};
+use tracing::error;
 
 use crate::{
     error::{Error, Result},

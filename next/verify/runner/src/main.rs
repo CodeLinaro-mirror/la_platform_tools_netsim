@@ -44,7 +44,7 @@ mod types;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
     let cli = Cli::parse();
 
     match cli.command {

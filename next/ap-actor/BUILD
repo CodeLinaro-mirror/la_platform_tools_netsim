@@ -39,7 +39,6 @@ netsim_rust_library(
     edition = "2021",
     test_deps = [
         "//next/testing",
-        "@env_logger",
         "@rand",
     ],
     deps = [
@@ -53,11 +52,11 @@ netsim_rust_library(
         "@ccm",
         "@cxx.rs//:cxx",
         "@futures",
-        "@log",
         "@serde",
         "@thiserror",
         "@tokio",
         "@tokio-stream",
+        "@tracing",
         "@zerocopy",
     ],
 )

@@ -17,6 +17,7 @@ use netsim_model::{
 use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
 use netsim_testing::logger;
 use tokio::{sync::mpsc, task::JoinHandle};
+use tracing::{info, warn};
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 /// The BDD World for Bluetooth Actor tests.
@@ -318,7 +319,7 @@ impl World {
     pub async fn then_chip_address_is_generated(&self, id: ChipId) {
         let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
         if let Some(netsim_model::chip::ChipVariant::Bluetooth(_)) = &chip.variant {
-            log::info!("Chip {} exists and is a Bluetooth variant.", id.0);
+            info!("Chip {} exists and is a Bluetooth variant.", id.0);
             // Note: Verification of the generated address via the `Chip` struct
             // is not currently supported by the model, as the
             // address is used for controller initialization but not
@@ -379,7 +380,7 @@ impl World {
             match parse_hci_scan_report(&packet) {
                 Ok(reports) => return reports,
                 Err(e) => {
-                    log::warn!("Ignored packet from {}: {:?} (Error: {})", name, packet, e);
+                    warn!("Ignored packet from {}: {:?} (Error: {})", name, packet, e);
                 }
             }
         }
@@ -388,7 +389,7 @@ impl World {
     pub async fn then_scanner_sees_any_adv(&mut self, name: &str) {
         let reports = self.receive_scan_report(name).await;
         for report in reports {
-            log::info!("Received Scan Report: {:?}", report.mac);
+            info!("Received Scan Report: {:?}", report.mac);
         }
     }
 
@@ -424,7 +425,7 @@ impl World {
         let reports = self.receive_scan_report(name).await;
         for report in reports {
             let rssi = report.rssi;
-            log::info!("Received RSSI: {}", rssi);
+            info!("Received RSSI: {}", rssi);
             assert!(rssi != 0, "RSSI should be non-zero");
         }
     }

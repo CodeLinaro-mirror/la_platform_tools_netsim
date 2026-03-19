@@ -6,11 +6,11 @@ use device_actor::DeviceClient;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
-use log::{error, info, warn};
 use netsim_proto::{
     access_point_grpc::create_access_point_service, frontend_grpc::create_frontend_service,
     packet_streamer_grpc::create_packet_streamer,
 };
+use tracing::{error, info, warn};
 
 use crate::{
     access_point::AccessPointServiceImpl, frontend::FrontendClient,

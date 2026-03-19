@@ -2,7 +2,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use actor_framework::DynContext;
 use ap_actor::{shared::SharedKeyStore, ApClient};
-use log::debug;
 use netsim_model::{
     chip::{Chip, ChipId},
     stats::NetsimRadioStats,
@@ -11,6 +10,9 @@ use netsim_packets::ieee80211::Ieee80211;
 use netsim_proto::stats::WifiStats as ProtoWifiStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::debug;
+#[cfg(not(target_os = "linux"))]
+use tracing::warn;
 
 #[cfg(target_os = "linux")]
 use crate::tap_gateway::TapGateway;
@@ -80,7 +82,7 @@ impl WifiActor {
             #[cfg(not(target_os = "linux"))]
             {
                 let _ = if_name;
-                log::warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
+                warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
                 Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
             }
         } else {

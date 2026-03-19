@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 cxx = "1.0"
-log = "0.4"
 netsim-packets = { path = "../packets" }
 thiserror = "1.0"
+tracing = "0.1"
 
 actor-framework = { path = "../actor-framework" }
 aes = "0.8.4"

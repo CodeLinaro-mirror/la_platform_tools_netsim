@@ -14,6 +14,7 @@ use netsim_packets::{
     },
     pcap::radiotap::create_radiotap_packet,
 };
+use tracing::warn;
 
 use crate::writer::{CaptureWriter, PcapWriter, DLT_IEEE802_11_RADIO};
 
@@ -50,16 +51,13 @@ impl CaptureWriter for WifiPcapWriter {
                         self.inner.write_packet(timestamp, direction, &radiotap_packet).await
                     }
                     Err(e) => {
-                        log::warn!(
-                            "WifiPcapWriter: Failed to parse HwsimFrame from HwsimMsg: {:?}",
-                            e
-                        );
+                        warn!("WifiPcapWriter: Failed to parse HwsimFrame from HwsimMsg: {:?}", e);
                         Ok(())
                     }
                 }
             }
             Err(e) => {
-                log::warn!("WifiPcapWriter: Failed to decode HwsimMsg: {:?}", e);
+                warn!("WifiPcapWriter: Failed to decode HwsimMsg: {:?}", e);
                 Ok(())
             }
         }

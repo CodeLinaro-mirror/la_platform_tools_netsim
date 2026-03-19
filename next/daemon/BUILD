@@ -49,7 +49,7 @@ DAEMON_DEPS = [
     "@clap",
     "@futures",
     "@grpcio",
-    "@log",
+    "@tracing",
     "@tokio",
 ]
 

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use common::util::time_display::TimeDisplay;
-use log::error;
 use netsim_proto::{
     common::ChipKind,
     frontend,
@@ -31,6 +30,7 @@ use netsim_proto::{
     },
 };
 use protobuf::MessageField;
+use tracing::error;
 
 use crate::{
     args::{

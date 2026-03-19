@@ -1,6 +1,7 @@
 use std::{collections::HashSet, process::Stdio};
 
 use anyhow::{Context, Result};
+use tracing::{info, warn};
 
 use crate::{
     android_steps::AndroidDevice,
@@ -241,7 +242,7 @@ async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, 
             .expect("Failed to execute ping");
 
         if ping_status.success() {
-            log::info!("Wi-Fi fully connected and routed after {} seconds", i);
+            info!("Wi-Fi fully connected and routed after {} seconds", i);
             connected = true;
             break;
         }
@@ -249,7 +250,7 @@ async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, 
     }
 
     if !connected {
-        log::warn!("Timed out waiting for ping to 10.0.2.2 to succeed! Test may fail.");
+        warn!("Timed out waiting for ping to 10.0.2.2 to succeed! Test may fail.");
     }
 }
 
@@ -261,7 +262,7 @@ pub async fn adb_disables_cellular(w: &mut TestContext, label: String) {
         .get_android_actor(&actor)
         .unwrap_or_else(|| panic!("Actor {} not found or is not an Android Agent", actor));
 
-    log::info!("{} Disabling Cellular Data...", actor);
+    info!("{} Disabling Cellular Data...", actor);
     let mut svc_cmd = android.adb_command();
     svc_cmd
         .arg("shell")
