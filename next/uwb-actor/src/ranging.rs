@@ -59,7 +59,10 @@ use crate::UwbError;
 
 /// UWB Ranging Model for computing range, azimuth, and elevation.
 /// The ranging model is adapted from https://github.com/google/pica.
-pub fn compute_range_azimuth_elevation(a: &Pose, b: &Pose) -> Result<(f32, i16, i8), UwbError> {
+pub(crate) fn compute_range_azimuth_elevation(
+    a: &Pose,
+    b: &Pose,
+) -> Result<(f32, i16, i8), UwbError> {
     let delta = b.position - a.position;
     let distance = delta.length().clamp(0.0, u16::MAX as f32);
     let direction = a.orientation.mul_vec3(delta);

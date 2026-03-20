@@ -14,7 +14,7 @@ use tracing::warn;
 
 /// State associated with a single UWB chip.
 #[derive(Clone)]
-pub struct UwbChipState {
+pub(crate) struct UwbChipState {
     /// The chip model.
     pub(super) chip: Chip,
 }
