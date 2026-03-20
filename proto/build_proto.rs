@@ -140,6 +140,7 @@ pub mod netsim {
   pub mod common;
   pub mod config;
   pub mod access_point;
+  pub mod ble_service;
   pub mod frontend;
   pub mod hci_packet;
   pub mod model;
@@ -164,6 +165,7 @@ pub mod google {
 pub use netsim::common;
 pub use netsim::config;
 pub use netsim::access_point;
+pub use netsim::ble_service;
 pub use netsim::frontend;
 pub use netsim::hci_packet;
 pub use netsim::model;
@@ -177,6 +179,8 @@ pub mod frontend_grpc;
 pub mod packet_streamer_grpc;
 #[path = "netsim/access_point_grpc.rs"]
 pub mod access_point_grpc;
+#[path = "netsim/ble_service_grpc.rs"]
+pub mod ble_service_grpc;
 pub use protobuf;
 pub use protobuf::well_known_types::empty;
 "#;
