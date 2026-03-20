@@ -89,7 +89,7 @@ impl Default for ApConfig {
     fn default() -> Self {
         Self {
             ssid: DEFAULT_WIFI_SSID.to_string(),
-            bssid: MacAddr::from([0; 6]),
+            bssid: MacAddr::from([0x00, 0x13, 0x10, 0x85, 0xfe, 0x01]),
             channel: 6,
             hw_mode: WifiMode::G,
             wpa_passphrase: None,
