@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU16, Ordering};
 
 use actor_framework::DynContext;
-use ap_actor::shared::SharedKeyStore;
+use ap_actor::SharedKeyStore;
 use netsim_model::ChipId;
 use netsim_packets::ieee80211::{FrameDirection, Ieee80211};
 use slirp_actor::SlirpClient;

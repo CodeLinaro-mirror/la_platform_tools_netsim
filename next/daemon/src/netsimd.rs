@@ -372,7 +372,7 @@ impl NetsimDaemon {
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
         // Setup AP Actor (Needed for gRPC)
-        let shared_keys = Arc::new(ap_actor::shared::SharedKeyStore::new());
+        let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
         let (ap_runner, ap_client) = ap_actor::new();
         let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
 

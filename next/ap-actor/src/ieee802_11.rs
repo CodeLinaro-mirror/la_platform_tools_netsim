@@ -17,7 +17,7 @@ use crate::{sae::SaeStateMachine, shared::SharedKeyStore, ApActor, ApError, ApSt
 
 /// Handles 802.11 Management Frames
 #[derive(Clone, Debug)]
-pub struct Ieee80211Manager {
+pub(crate) struct Ieee80211Manager {
     // Stateless for now, state passed in methods
 }
 

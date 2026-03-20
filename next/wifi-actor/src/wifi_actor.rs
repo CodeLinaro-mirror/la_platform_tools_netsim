@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use actor_framework::DynContext;
-use ap_actor::{shared::SharedKeyStore, ApClient};
+use ap_actor::{ApClient, SharedKeyStore};
 use netsim_model::{
     chip::{Chip, ChipId},
     stats::NetsimRadioStats,

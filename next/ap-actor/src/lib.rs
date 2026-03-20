@@ -1,27 +1,34 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-pub mod ap_actor;
-pub mod ap_client;
+mod ap_actor;
+mod ap_client;
 
-pub mod error;
+mod error;
+#[doc(hidden)]
 pub mod ffi;
-pub mod ieee802_11;
-pub mod lifecycle;
+mod ieee802_11;
+mod lifecycle;
 
-pub mod service;
-pub mod shared;
+mod service;
+mod shared;
 
-pub mod eap_auth;
-pub mod ftm;
-pub mod rsn;
-pub mod sae;
-pub mod wpa_auth;
+mod eap_auth;
+mod ftm;
+mod rsn;
+mod sae;
+mod wpa_auth;
 
-pub use actor_framework::ResourceActor;
-pub use ap_actor::{ApActor, ApConfig, ApReq, ApResponse, ApState, ApUpdate};
-pub use ap_client::ApClient;
-pub use error::ApError;
-pub use netsim_model::{self, device::Position};
+use actor_framework::ResourceActor;
+
+pub use crate::{
+    ap_actor::{ApActor, ApConfig, ApReq, ApResponse, ApState, ApUpdate},
+    ap_client::ApClient,
+    eap_auth::{EapAuthenticator, EapOutput},
+    error::ApError,
+    sae::{SaeState, SaeStateMachine},
+    shared::{SessionKeys, SharedKeyStore},
+    wpa_auth::{WpaAuthenticator, WpaOutput},
+};
 
 /// Creates a new ApActor and returns the runner and a client.
 ///

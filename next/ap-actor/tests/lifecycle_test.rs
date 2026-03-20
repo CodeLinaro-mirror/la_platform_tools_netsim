@@ -1,4 +1,4 @@
-use ap_actor::netsim_model::chip::WifiMode;
+use netsim_model::chip::WifiMode;
 
 use crate::world::ApWorld;
 
@@ -66,7 +66,7 @@ async fn test_create_duplicate_bssid() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: ap_actor::Position::default(),
+        position: netsim_model::device::Position::default(),
     };
 
     // Create AP2 (Same BSSID)
@@ -86,7 +86,7 @@ async fn test_create_duplicate_bssid() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: ap_actor::Position::default(),
+        position: netsim_model::device::Position::default(),
     };
 
     // Direct client usage as ApWorld helpers might mask IDs or return types

@@ -1,6 +1,6 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use ap_actor::netsim_model::chip::WifiMode;
+use netsim_model::chip::WifiMode;
 use netsim_packets::{
     ethernet::MacAddr,
     ieee80211::{
@@ -358,7 +358,7 @@ async fn test_create_ap_with_country_and_tim() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: ap_actor::Position::default(),
+        position: netsim_model::device::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config).await;
@@ -429,7 +429,7 @@ async fn test_hidden_ssid() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: ap_actor::Position::default(),
+        position: netsim_model::device::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config).await;
@@ -538,7 +538,7 @@ async fn test_wmm_ie_presence() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: ap_actor::Position::default(),
+        position: netsim_model::device::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config).await;
