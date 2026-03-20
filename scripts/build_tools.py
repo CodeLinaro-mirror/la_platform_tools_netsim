@@ -23,11 +23,12 @@ from pathlib import Path
 from environment import get_default_environment
 from server_config import ServerConfig
 from tasks import (
+    TASK_ALIASES,
     TASK_LIST,
     get_tasks,
     log_enabled_tasks,
 )
-from tasks.run_test_task import ALL_PACKAGES
+from tasks.test_task import ALL_PACKAGES
 from utils import (
     AOSP_ROOT,
     config_logging,
@@ -86,9 +87,10 @@ def main():
       "--task",
       nargs="+",
       type=str.lower,
-      choices=[choice.lower() for choice in TASK_LIST],
+      choices=[choice.lower() for choice in TASK_LIST] + TASK_ALIASES,
+      metavar="TASK",
       help=(
-          "Tasks to perform (Configure, Compile, CompileInstall,"
+          "Tasks to perform (Configure, Build, CompileInstall,"
           " InstallEmulator, RunPyTest, LocalRunAll)"
       ),
   )
@@ -180,8 +182,12 @@ def main():
 
   args = parser.parse_args()
 
-  if args.crate and "runtest" not in (args.task or []):
-    parser.error("argument --crate: can only be used with --task runtest")
+  if (
+      args.crate
+      and "test" not in (args.task or [])
+      and "runtest" not in (args.task or [])
+  ):
+    parser.error("argument --crate: can only be used with --task test")
 
   presubmit = is_presubmit(args.build_id)
 
@@ -222,13 +228,13 @@ def main():
   tasks.get("Configure").run()
 
   # Build
-  tasks.get("Compile").run()
+  tasks.get("Build").run()
 
   # Install
   tasks.get("CompileInstall").run()
 
   # Run Tests
-  tasks.get("RunTest").run()
+  tasks.get("Test").run()
 
   # Zip results..
   tasks.get("ZipArtifact").run()
