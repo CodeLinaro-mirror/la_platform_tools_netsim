@@ -82,7 +82,7 @@ impl ActorService for BluetoothActor {
             manufacturer: Some(params.config.manufacturer.clone()),
             product_name: Some(params.config.product_name.clone()),
             kind: ChipKind::BLUETOOTH,
-            variant: Some(netsim_model::chip::ChipVariant::Bluetooth(Default::default())),
+            variant: Some(ChipVariant::Bluetooth(Default::default())),
             ..Default::default()
         };
 
@@ -228,9 +228,17 @@ impl ActorService for BluetoothActor {
     ) -> Result<Self::ActionResult, Self::Error> {
         match _action {
             BluetoothAction::Reset { id } => {
-                // TODO: Implement reset
-                warn!("Reset chip {id} not implemented");
+                info!("Resetting Bluetooth chip {id}");
                 let _ = self.rootcanal.clear_stats(id.0.into());
+
+                let mut chips = self.chips.lock().unwrap();
+                if let Some(chip) = chips.get_mut(&id) {
+                    chip.enabled = true;
+                    if let Some(ChipVariant::Bluetooth(bt)) = &mut chip.variant {
+                        bt.low_energy.state = Some(true);
+                        bt.classic.state = Some(true);
+                    }
+                }
                 Ok(BluetoothActionResult::Success)
             }
             BluetoothAction::GetStatistics => {
