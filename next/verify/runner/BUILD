@@ -80,9 +80,11 @@ sh_test(
         "$(location :runner)",
         "$(location //next/verify/runner/agent:agent.apk)",
         "$(location @netsim//:netsimd)",
+        "$(location //next/cli:netsim)",
     ],
     data = [
         ":runner",
+        "//next/cli:netsim",
         "//next/verify/runner/agent:agent.apk",
         "@netsim//:netsimd",
     ],
