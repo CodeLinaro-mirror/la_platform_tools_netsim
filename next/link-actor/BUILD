@@ -6,12 +6,7 @@ DEPS = [
     "//next/actor-framework",
     "//next/link-api",
     "//next/model",
-    "//proto",
-    "@anyhow",
     "@log",
-    "@serde",
-    "@tokio",
-    "@tokio-stream",
     "@thiserror",
 ]
 
@@ -24,7 +19,9 @@ netsim_rust_library(
     edition = "2021",
     proc_macro_deps = [
         "@async-trait",
-        "@thiserror-impl",
+    ],
+    test_deps = [
+        "@tokio",
     ],
     deps = DEPS,
 )

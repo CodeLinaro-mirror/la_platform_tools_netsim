@@ -57,7 +57,7 @@ impl TapInterface {
                 nix::fcntl::OFlag::O_RDWR,
                 nix::sys::stat::Mode::empty(),
             )
-            .map_err(|e| WifiError::Internal(format!("Failed to open /dev/net/tun: {}", e)))?;
+            .map_err(|e| WifiError::Network(format!("Failed to open /dev/net/tun: {}", e)))?;
 
             // SAFETY: The file descriptor was just successfully opened via
             // nix::fcntl::open, so it is valid and we are taking exclusive
@@ -71,7 +71,7 @@ impl TapInterface {
         // Set name
         let bytes = if_name.as_bytes();
         if bytes.len() >= libc::IFNAMSIZ {
-            return Err(WifiError::Internal("Interface name too long".to_string()));
+            return Err(WifiError::Frame("Interface name too long".to_string()));
         }
         for (i, b) in bytes.iter().enumerate() {
             if_req.ifr_name[i] = *b as libc::c_char;
@@ -93,23 +93,23 @@ impl TapInterface {
         // SAFETY: `fd` is a valid open file descriptor for /dev/net/tun.
         // `if_req` is a valid libc::ifreq struct on the stack.
         unsafe { tunsetiff(fd.as_raw_fd(), &mut if_req) }
-            .map_err(|e| WifiError::Internal(format!("Failed to TUNSETIFF: {}", e)))?;
+            .map_err(|e| WifiError::Network(format!("Failed to TUNSETIFF: {}", e)))?;
 
         // Set non-blocking
         let flags = nix::fcntl::fcntl(fd.as_raw_fd(), nix::fcntl::FcntlArg::F_GETFL)
-            .map_err(|e| WifiError::Internal(format!("Failed to get flags: {}", e)))?;
+            .map_err(|e| WifiError::Network(format!("Failed to get flags: {}", e)))?;
 
         let oflag = nix::fcntl::OFlag::from_bits_truncate(flags) | nix::fcntl::OFlag::O_NONBLOCK;
 
         nix::fcntl::fcntl(fd.as_raw_fd(), nix::fcntl::FcntlArg::F_SETFL(oflag))
-            .map_err(|e| WifiError::Internal(format!("Failed to set non-blocking: {}", e)))?;
+            .map_err(|e| WifiError::Network(format!("Failed to set non-blocking: {}", e)))?;
 
         // Create File from OwnedFd
         // AsyncFd takes ownership of the File
         let file = std::fs::File::from(fd);
 
         // Wrap in AsyncFd
-        let poll_fd = AsyncFd::new(file).map_err(|e| WifiError::Internal(e.to_string()))?;
+        let poll_fd = AsyncFd::new(file).map_err(|e| WifiError::Network(e.to_string()))?;
 
         info!("Opened TAP interface: {}", if_name);
         Ok(Self { name: if_name.to_string(), poll_fd })
@@ -156,7 +156,6 @@ impl TapInterface {
 ///
 /// If `wifi_tap` arg is provided, we use that for the Primary Guest/Chip.
 /// Future work: Dynamic TAP creation/assignment.
-/// Gateway managing internal Chip -> TAP connections.
 #[derive(Debug)]
 pub struct TapGateway {
     // Map ChipId to TapInterface
@@ -176,7 +175,7 @@ impl GatewayTrait for TapGateway {
         &self,
         chip_id: ChipId,
         ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> bool {
+    ) -> Result<usize, crate::error::WifiError> {
         self.send_80211_impl(chip_id, ieee80211).await
     }
 
@@ -194,13 +193,24 @@ impl GatewayTrait for TapGateway {
     ) {
         let real_id = chip_id.0 & !TAP_FLAG;
         debug!("TAP_PKT: Chip {} len {}", real_id, packet.len());
+        medium.wifi_stats.incr_network_packets_rx();
+        medium.wifi_stats.record_download_bytes(
+            packet.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN),
+        );
 
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-        if let Some(bytes) = convert_8023_to_80211(packet, shared_keys.get_bssid(), seq) {
-            let _ = medium.transmit_from_infra(&bytes, out_queue);
-        } else {
-            error!("Failed to convert TAP packet to 802.11");
-        }
+        let Some(bytes) = convert_8023_to_80211(packet.clone(), shared_keys.get_bssid(), seq)
+        else {
+            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(
+                "Failed to convert TAP packet to 802.11".to_string(),
+            ));
+            return;
+        };
+
+        let res = medium.transmit_from_infra(&bytes, out_queue);
+        medium.wifi_stats.log_outcome(res, |s, _| {
+            // Nothing to do for success of transmit_from_infra
+        });
     }
 
     async fn on_start(&mut self, _ctx: &mut actor_framework::DynContext<WifiActor>) {}
@@ -326,12 +336,10 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
     /// single-tap mode.
     fn allocate_next_tap(&self) -> Option<(u32, String)> {
         if let Some(range) = &self.pool_range {
-            for i in range.clone() {
-                if !self.used_indices.values().any(|&idx| idx == i) {
-                    return Some((i, self.format_name(i)));
-                }
-            }
-            None
+            range
+                .clone()
+                .find(|&i| !self.used_indices.values().any(|&idx| idx == i))
+                .map(|i| (i, self.format_name(i)))
         } else {
             // Single mode: use index 0 as placeholder
             Some((0, self.format_name(0)))
@@ -370,9 +378,9 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
         chip_id: ChipId,
     ) -> WifiResult<impl futures::Stream<Item = bytes::Bytes>> {
         // Allocate TAP
-        let (index, if_name) = self.allocate_next_tap().ok_or_else(|| {
-            WifiError::Internal("No available TAP interfaces in pool".to_string())
-        })?;
+        let (index, if_name) = self
+            .allocate_next_tap()
+            .ok_or_else(|| WifiError::Network("No available TAP interfaces in pool".to_string()))?;
 
         // Record usage if in pool mode
         if self.pool_range.is_some() {
@@ -439,22 +447,31 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
         &self,
         chip_id: ChipId,
         ieee80211: &netsim_packets::ieee80211::Ieee80211,
-    ) -> bool {
+    ) -> Result<usize, crate::error::WifiError> {
         #[cfg(target_os = "linux")]
-        if let Some(tap) = self.taps.get(&chip_id) {
-            if let Ok(eth_frame) = ieee80211.to_ieee8023() {
-                if let Err(e) = tap.write(&eth_frame).await {
-                    error!("Tap Write Failed: {}", e);
-                    return false;
-                }
-                return true;
-            }
+        {
+            let Some(tap) = self.taps.get(&chip_id) else {
+                return Err(crate::error::WifiError::Network(format!(
+                    "No TAP interface configured for Chip {}",
+                    chip_id.0
+                )));
+            };
+
+            let eth = ieee80211.to_ieee8023().map_err(|e| {
+                crate::error::WifiError::Frame(format!("TAP conversion failed: {}", e))
+            })?;
+            let payload_len = eth.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN);
+            let written = tap
+                .write(&eth)
+                .await
+                .map_err(|e| crate::error::WifiError::Network(format!("TAP write failed: {}", e)));
+            return written.map(|_| payload_len);
         }
         #[cfg(not(target_os = "linux"))]
         {
             let _ = (chip_id, ieee80211);
+            Err(crate::error::WifiError::Network("TAP not supported on non-Linux".to_string()))
         }
-        false
     }
 }
 

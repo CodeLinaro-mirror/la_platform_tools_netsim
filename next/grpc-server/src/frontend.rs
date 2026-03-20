@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use client::{DeviceClient, DeviceError};
+use device_actor::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
@@ -252,8 +252,6 @@ impl FrontendClient {
     }
 
     async fn handle_reset(client: DeviceClient) -> Result<(), RpcStatus> {
-        // TODO: Implement global reset in DeviceClient.
-        // Currently using None for global reset.
         client.reset(None).await.map_err(|e| {
             RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,

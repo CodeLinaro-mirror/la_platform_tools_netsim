@@ -12,7 +12,6 @@ netsim_rust_binary(
     ],
     edition = "2021",
     deps = [
-        "@gherkin",
         "@proc-macro2",
         "@quote",
         "@regex",

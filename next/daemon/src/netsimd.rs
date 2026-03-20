@@ -8,15 +8,16 @@ use std::{
     time::Duration,
 };
 
-use client::{CaptureClient, DeviceClient};
+use capture_actor::CaptureClient;
 use common::{
     system::netsimd_temp_dir,
     util::os_utils::{get_hci_port, get_instance, get_instance_name, redirect_std_stream},
 };
+use device_actor::DeviceClient;
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
 use grpc_server::packet_streamer::PacketStreamerService;
-use link_api::LinkClient;
+use link_actor::LinkClient;
 use log::{error, info, warn};
 use netsim_model::{
     chip::{
@@ -206,7 +207,7 @@ async fn setup_grpc_listener(
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
     device_client: DeviceClient,
-    link_client: client::LinkClient,
+    link_client: LinkClient,
     version: String,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
@@ -269,7 +270,8 @@ pub struct NetsimDaemon {
     _grpc_server: Option<grpcio::Server>,
     /// The DeviceActor task handle.
     device_task: tokio::task::JoinHandle<()>,
-    link_client: Box<dyn LinkClient>,
+    link_client: Box<dyn link_api::LinkClient>,
+
     slirp_client: Option<SlirpClient>,
     chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
 }
@@ -401,8 +403,7 @@ impl NetsimDaemon {
         let (device_runner, device_client) = device_actor::new();
 
         // Setup Capture Server
-        let (capture_runner, capture_generic_client) = capture_actor::new();
-        let capture_client = client::CaptureClient::new(capture_generic_client);
+        let (capture_runner, capture_client) = capture_actor::new();
 
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
@@ -482,6 +483,7 @@ impl NetsimDaemon {
             device_client.clone(),
             wifi_tap,
             shared_keys.clone(),
+            Arc::new(wifi_actor::stats::SystemClock),
         );
 
         // Setup Uwb Server
@@ -539,7 +541,7 @@ impl NetsimDaemon {
         join_set.spawn(slirp_runner.run(slirp_actor_state));
         join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
-        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::new(args.pcap)));
+        join_set.spawn(capture_runner.run(capture_actor::CaptureActor::new(args.pcap, None)));
         join_set.spawn(uwb_runner.run(uwb_actor));
 
         // Spawn DeviceActor separately

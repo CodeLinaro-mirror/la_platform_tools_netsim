@@ -10,7 +10,6 @@ DEPS = [
     "@tokio-stream",
     "@tokio-util",
     "@thiserror",
-    "@mockall",
 ]
 
 netsim_rust_library(
@@ -23,5 +22,6 @@ netsim_rust_library(
     proc_macro_deps = [
         "@async-trait",
     ],
+    testing_deps = ["@mockall"],
     deps = DEPS,
 )

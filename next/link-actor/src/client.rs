@@ -143,6 +143,14 @@ impl link_api::LinkClient for LinkClient {
             .map_err(|e| e.to_string())
     }
 
+    async fn reset(&self) -> Result<(), String> {
+        self.inner
+            .perform_action(None, link_api::LinkAction::Reset)
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
     async fn shutdown(&self) -> Result<(), String> {
         self.inner.shutdown().await.map_err(|e| e.to_string())
     }

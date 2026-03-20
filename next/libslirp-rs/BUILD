@@ -13,13 +13,12 @@ netsim_rust_library(
     enable_integration_test = False,
     select_deps = select({
         "@bazel_tools//src/conditions:windows": ["@winapi"],
-        "//conditions:default": [],
+        "@platforms//os:linux": ["@libc"],
+        "@platforms//os:macos": ["@libc"],
     }),
     deps = [
         "@bytes",
-        "@etherparse",
         "@glib//glib",
-        "@libc",
         "@libslirp",
         "@log",
         "@tokio",

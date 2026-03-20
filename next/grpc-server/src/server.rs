@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
@@ -16,7 +16,8 @@ use crate::{frontend::FrontendClient, packet_streamer::PacketStreamerService};
 pub fn start(
     port: u32,
     device_client: DeviceClient,
-    link_client: client::LinkClient,
+    link_client: link_actor::LinkClient,
+
     packet_streamer_service: PacketStreamerService,
     version: String,
 ) -> anyhow::Result<(Server, u16)> {
