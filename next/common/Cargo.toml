@@ -8,7 +8,6 @@ crate-type = ["staticlib", "lib"]
 doctest = false
 
 [dependencies]
-anyhow = "1"
 chrono = { version = "0.4.19", default-features = false }
 chrono = { version = "0.4", features = ["now"] }
 libc = "0.2.150"

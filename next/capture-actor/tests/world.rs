@@ -9,10 +9,14 @@ use std::{
     time::SystemTime,
 };
 
+use actor_framework::FrameworkError;
 use bytes::Bytes;
-use capture_actor::{CaptureActor, CaptureClient};
+use capture_actor::{CaptureActor, CaptureClient, CaptureError};
 use capture_api::{CaptureCreate, CaptureInfo, CaptureSender, Direction};
-use netsim_model::chip::{ChipId, ChipKind};
+use netsim_model::{
+    chip::{ChipId, ChipKind},
+    client_error::ClientError,
+};
 
 static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -57,7 +61,7 @@ impl World {
         chip_kind: ChipKind,
         device_name: &str,
         enabled: bool,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientError> {
         let enabled_flag = Arc::new(AtomicBool::new(enabled));
         let create_params =
             CaptureCreate { chip_kind, device_name: device_name.to_string(), enabled_flag };
@@ -68,16 +72,16 @@ impl World {
         &self,
         chip_id: u32,
         enabled: bool,
-    ) -> anyhow::Result<CaptureInfo> {
+    ) -> Result<CaptureInfo, ClientError> {
         self.client.update_capture(ChipId(chip_id), enabled).await
     }
 
-    pub async fn when_delete_capture(&self, chip_id: u32) -> anyhow::Result<()> {
+    pub async fn when_delete_capture(&self, chip_id: u32) -> Result<(), ClientError> {
         self.client.delete_capture(ChipId(chip_id)).await
     }
 
-    pub async fn when_shutdown(&self) -> anyhow::Result<()> {
-        self.client.shutdown().await.map_err(|e| anyhow::anyhow!(e))
+    pub async fn when_shutdown(&self) -> Result<(), FrameworkError<CaptureError>> {
+        self.client.shutdown().await
     }
 
     pub async fn then_capture_is_none(&self, chip_id: u32) {

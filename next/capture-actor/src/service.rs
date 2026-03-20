@@ -5,7 +5,10 @@ use std::sync::{
 
 use actor_framework::{ActorService, DynContext};
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
-use netsim_model::chip::{ChipId, ChipKind};
+use netsim_model::{
+    chip::{ChipId, ChipKind},
+    chip_error::ChipError,
+};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -233,7 +236,7 @@ impl ActorService for CaptureActor {
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id = id.ok_or_else(|| CaptureError::Anyhow(anyhow::anyhow!("missing chip id")))?;
+        let id = id.ok_or_else(|| ChipError::InvalidArguments(Box::from("chip id required")))?;
         let mut entity = InternalCaptureInfo::from_create_params(id, params)?;
         // Initialize the entity logic (e.g. set up writers based on flags)
         self.create_entity(&mut entity, _ctx).await?;
@@ -266,31 +269,24 @@ impl ActorService for CaptureActor {
         update: Self::Update,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
-        if let Some(mut entity) = self.entities.remove(&id) {
-            let _ = self.update_entity(&mut entity, update, _ctx).await?;
-            let (records_written, bytes_written) =
-                self.writers.get(&id).map(|w| w.get_stats()).unwrap_or_default();
-            let mut info = entity.info.clone();
-            info.records_written = records_written;
-            info.bytes_written = bytes_written;
-            self.entities.insert(id, entity);
-            Ok(info)
-        } else {
-            Err(CaptureError::ChipNotFound(id))
-        }
+        let mut entity = self.entities.remove(&id).ok_or_else(|| ChipError::ChipNotFound(id))?;
+        let _ = self.update_entity(&mut entity, update, _ctx).await?;
+        let (records_written, bytes_written) =
+            self.writers.get(&id).map(|w| w.get_stats()).unwrap_or_default();
+        let mut info = entity.info.clone();
+        info.records_written = records_written;
+        info.bytes_written = bytes_written;
+        self.entities.insert(id, entity);
+        Ok(info)
     }
 
     async fn handle_delete(
         &mut self,
         id: Self::Id,
-        _ctx: &mut DynContext<Self>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        if let Some(entity) = self.entities.remove(&id) {
-            self.delete_entity(&entity, _ctx).await
-            // Don't re-insert
-        } else {
-            Err(CaptureError::ChipNotFound(id))
-        }
+        let entity = self.entities.remove(&id).ok_or_else(|| ChipError::ChipNotFound(id))?;
+        self.delete_entity(&entity, ctx).await
     }
 
     async fn handle_action(
