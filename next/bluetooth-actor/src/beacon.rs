@@ -109,8 +109,8 @@ pub fn create(
         rootcanal,
         chip_id,
         hci::LeSetScanResponseData {
-            advertising_data_length: scan_resp_data.len() as u8,
-            advertising_data: scan_resp_payload,
+            scan_response_data_length: scan_resp_data.len() as u8,
+            scan_response_data: scan_resp_payload,
         },
     )?;
 
