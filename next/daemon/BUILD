@@ -81,6 +81,7 @@ netsim_rust_binary(
         "link-arg=-lc",
         "-Cforce-frame-pointers=yes",
     ],
+    tags = ["no-sandbox"],
     deps = [
         ":daemon-lib",
         "@tokio",

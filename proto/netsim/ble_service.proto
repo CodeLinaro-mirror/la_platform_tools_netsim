@@ -9,9 +9,9 @@ import "netsim/model.proto";
 // Service to manage Bluetooth test capabilities in the simulation
 service BleService {
   // Initiates a Bluetooth scan at a given position.
-  // The scanner chip is automatically created internally, and is removed
-  // automatically when the gRPC stream gets disconnected.
   rpc Scan(ScanRequest) returns (stream ScanResponse);
+  // Initiates a baseband sniffer capture.
+  rpc Sniff(SniffRequest) returns (stream SniffResponse);
 }
 
 message ScanRequest {
@@ -25,4 +25,19 @@ message ScanRequest {
 message ScanResponse {
   // Raw HCI event packet
   bytes packet = 1;
+}
+
+message SniffRequest {
+  // Initial physical position of the sniffer in the simulation.
+  netsim.model.Position position = 1;
+
+  // Optional parameters can be added as fields here in the future.
+}
+
+message SniffResponse {
+  // Raw link-layer packet (Baseband trace)
+  bytes packet = 1;
+
+  // Timestamp of the packet in microseconds since the UNIX epoch.
+  int64 timestamp = 2;
 }
