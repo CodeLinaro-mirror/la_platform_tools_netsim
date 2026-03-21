@@ -4,10 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-actor-framework = { path = "../actor-framework" }
-anyhow = "1.0.75"
-async-trait = "0.1.73"
-log = "0.4.20"
 netsim-model = { path = "../model" }
 serde = { version = "1.0.188", features = ["derive"] }
-tokio = { version = "1.32.0", features = ["full"] }

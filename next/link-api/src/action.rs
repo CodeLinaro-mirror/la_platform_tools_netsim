@@ -7,4 +7,5 @@ use netsim_model::{ChipId, ChipKind};
 pub enum LinkAction {
     NotifyChipAdded(ChipId, ChipKind),
     NotifyChipRemoved(ChipId),
+    Reset,
 }

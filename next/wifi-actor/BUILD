@@ -20,14 +20,13 @@ netsim_rust_library(
     ],
     select_deps = SELECT_DEPS,
     test_deps = [
-        "//next/device-actor:testing",
         "//next/device-api:testing",
         "@env_logger",
     ],
     deps = [
         "//next/actor-framework",
         "//next/ap-actor",
-        "//next/client",
+        "//next/device-actor",
         "//next/model",
         "//next/packets",
         "//next/slirp-actor",

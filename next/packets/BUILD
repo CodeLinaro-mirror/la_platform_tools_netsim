@@ -12,12 +12,10 @@ netsim_rust_library(
     crate_name = "netsim_packets",
     edition = "2021",
     proc_macro_deps = [
-        "@async-trait",
         "@num-derive",
     ],
     deps = [
         "@anyhow",
-        "@bytes",
         "@hex",
         "@num-traits",
         "@serde",
@@ -31,12 +29,10 @@ rust_test(
     crate = ":packets",
     data = glob(["src/**/test_data/**"]),
     proc_macro_deps = [
-        "@async-trait",
         "@num-derive",
     ],
     deps = [
         "@anyhow",
-        "@bytes",
         "@num-traits",
         "@zerocopy",
     ],
@@ -49,7 +45,6 @@ rust_test(
     deps = [
         ":packets",
         "@anyhow",
-        "@bytes",
         "@num-traits",
         "@zerocopy",
     ],
