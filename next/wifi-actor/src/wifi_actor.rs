@@ -39,7 +39,6 @@ pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
     GlobalStats(Box<ProtoWifiStats>),
-    Error(String),
 }
 
 pub type SlirpPendingRequest = (

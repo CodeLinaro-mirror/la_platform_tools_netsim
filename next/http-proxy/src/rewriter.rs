@@ -269,9 +269,11 @@ mod tests {
         // This request line only has two parts, which is invalid.
         let request = b"GET /path\r\nHost: example.com\r\n\r\n";
         let mut reader = BufReader::new(&request[..]);
-        let result = rewrite_request_to_absolute_form(&mut reader, None).await;
-        let expected_error = Error::MalformedRequestLine("GET /path".to_string());
-        assert_eq!(result, Err(expected_error));
+        let err = rewrite_request_to_absolute_form(&mut reader, None).await.unwrap_err();
+        let Error::MalformedRequestLine(actual) = err else { panic!("Unexpected error: {err}") };
+
+        let expected_error = "GET /path";
+        assert_eq!(actual, expected_error);
     }
 
     /// Test 1: The "happy path" success case.

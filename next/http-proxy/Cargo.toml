@@ -28,6 +28,7 @@ bytes = { version = ">=1.4.0" }
 etherparse = { version = "0.16" }
 libslirp-rs = { path = "../libslirp-rs" }
 regex = "1.6.0"
+thiserror = "1.0"
 tokio = { version = "1.32.0", features = [
   "fs",
   "io-util",

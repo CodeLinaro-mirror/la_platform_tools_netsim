@@ -35,8 +35,6 @@ impl From<crate::client_error::ClientError> for DeviceError {
             crate::client_error::ClientError::Recv(s) => DeviceError::ChipClient(s),
             crate::client_error::ClientError::Chip(e) => DeviceError::Chip(e),
             crate::client_error::ClientError::Framework(e) => DeviceError::Internal(e),
-            // A ChipClient should not produce a Device error.
-            crate::client_error::ClientError::Device(e) => DeviceError::Internal(e),
         }
     }
 }

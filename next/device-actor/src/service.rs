@@ -486,10 +486,7 @@ impl DeviceActor {
             device_id: DeviceId(entity.device.id),
         };
 
-        chip_client
-            .create(chip_id, chip_create_params)
-            .await
-            .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
+        chip_client.create(chip_id, chip_create_params).await?;
         entity.device.chips.push(Chip {
             id: chip_id.0,
             kind: ChipKind::from(&chip_config.chip_kind_params),
@@ -678,7 +675,7 @@ impl DeviceActor {
             self.devices.keys().cloned().collect()
         };
 
-        let mut errors = Vec::new();
+        let mut chip_client_errors = Vec::new();
 
         for device_id in device_ids {
             let Some(entity) = self.devices.get_mut(&device_id) else {
@@ -701,7 +698,7 @@ impl DeviceActor {
                             "DeviceActor: Failed to reset chip {} kind {:?}: {}",
                             chip.id, chip.kind, e
                         );
-                        errors.push(format!("Failed to reset chip {}: {}", chip.id, e));
+                        chip_client_errors.push((chip.id, e));
                     }
                     if let Ok(updated_chip) = chip_client.read(netsim_model::ChipId(chip.id)).await
                     {
@@ -711,20 +708,25 @@ impl DeviceActor {
             }
         }
 
-        if id.is_none() {
+        let link_client_error = if id.is_none() {
             info!("DeviceActor: Resetting all links");
             if let Err(e) = self.link_client.reset().await {
                 warn!("DeviceActor: Failed to reset links: {}", e);
-                errors.push(format!("Failed to reset links: {}", e));
+                Some(e)
+            } else {
+                None
             }
-        }
+        } else {
+            None
+        };
 
         self.save_stats_async().await;
 
-        if !errors.is_empty() {
-            return Err(DeviceError::ResetErrors(errors));
+        if !chip_client_errors.is_empty() {
+            Err(DeviceError::ResetErrors { chip_client_errors, link_client_error })
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 
@@ -822,10 +824,7 @@ impl ActorService for DeviceActor {
                     "DeviceActor: Updating chip {} (kind {:?}) with {:?}",
                     chip.id, chip.kind, chip_update
                 );
-                *chip = chip_client
-                    .update(ChipId(chip.id), chip_update)
-                    .await
-                    .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
+                *chip = chip_client.update(ChipId(chip.id), chip_update).await?;
             }
         }
         Ok(entity.device.clone())
@@ -850,10 +849,7 @@ impl ActorService for DeviceActor {
             self.archive_chip_stats(id, chip, stream_stats, cached_stats).await;
 
             if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
-                chip_client
-                    .delete(ChipId(chip.id))
-                    .await
-                    .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))?;
+                chip_client.delete(ChipId(chip.id)).await?;
                 // Send delete request to Link Actor
                 self.link_client
                     .notify_chip_removed(ChipId(chip.id))
