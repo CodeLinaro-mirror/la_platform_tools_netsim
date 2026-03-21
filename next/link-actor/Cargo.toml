@@ -7,5 +7,4 @@ edition = "2021"
 actor-framework = { path = "../actor-framework" }
 async-trait = "0.1"
 link-api = { path = "../link-api" }
-log = "0.4"
 netsim-model = { path = "../model" }

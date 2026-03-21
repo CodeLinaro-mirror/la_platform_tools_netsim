@@ -17,12 +17,12 @@ use capture_api::{
     CaptureCreate, CaptureSender,
 };
 use futures::{SinkExt, StreamExt};
-use log::warn;
 use netsim_model::{
     chip::{PacketSink, PacketStream},
     ChipId, ChipKind,
 };
 use netsim_proto::protobuf::Enum;
+use tracing::warn;
 
 #[derive(Debug)]
 pub struct StreamStats {

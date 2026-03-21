@@ -77,13 +77,17 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use netsim_model::{ChipId, ChipKind};
+use netsim_model::{client_error::ClientError, ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
 
 #[async_trait]
 pub trait CaptureSender: Send + Sync {
     /// Creates a new capture for a chip.
-    async fn create_capture(&self, chip_id: ChipId, create: CaptureCreate) -> anyhow::Result<()>;
+    async fn create_capture(
+        &self,
+        chip_id: ChipId,
+        create: CaptureCreate,
+    ) -> Result<(), ClientError>;
 
     /// Captures a single packet.
     ///
@@ -95,7 +99,10 @@ pub trait CaptureSender: Send + Sync {
     async fn packet_sender(
         &self,
         chip_id: ChipId,
-    ) -> anyhow::Result<tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>>;
+    ) -> Result<
+        tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>,
+        ClientError,
+    >;
 }
 
 /// Direction of the packet.

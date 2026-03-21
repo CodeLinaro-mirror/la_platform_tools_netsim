@@ -4,6 +4,7 @@ use actor_framework::{ActorService, DynContext};
 use futures::SinkExt;
 use modem_rs::ModemSink;
 use netsim_model::chip::{ChipCreate, ChipId, ChipRequest, ChipUpdate};
+use tracing::{error, info};
 
 use crate::{
     cell_actor::{CellActor, ChipState},
@@ -48,7 +49,7 @@ impl ActorService for CellActor {
             Box::pin(async move {
                 while let Some(packet) = rx.recv().await {
                     if let Err(e) = sink.send(packet).await {
-                        log::error!("PacketSink send error: {}", e);
+                        error!("PacketSink send error: {}", e);
                     }
                 }
                 chip_id
@@ -76,10 +77,10 @@ impl ActorService for CellActor {
     ) -> Result<(), Self::Error> {
         // Remove from local state
         if let Some(state) = self.active_chips.remove(&id) {
-            log::info!("Deleting chip {}", id);
+            info!("Deleting chip {}", id);
             // Remove from controller
             if let Err(e) = self.controller.remove_modem(id.0) {
-                log::error!("Failed to remove modem: {:?}", e);
+                error!("Failed to remove modem: {:?}", e);
             }
 
             // Notify DeviceClient

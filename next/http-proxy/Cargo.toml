@@ -27,7 +27,6 @@ base64 = "0.22.0"
 bytes = { version = ">=1.4.0" }
 etherparse = { version = "0.16" }
 libslirp-rs = { path = "../libslirp-rs" }
-log = "0.4.17"
 regex = "1.6.0"
 tokio = { version = "1.32.0", features = [
   "fs",
@@ -37,6 +36,7 @@ tokio = { version = "1.32.0", features = [
   "rt-multi-thread",
   "sync",
 ] }
+tracing = "0.1"
 
 [dev-dependencies]
 # capture = { path = "../capture" }

@@ -2,6 +2,7 @@
 
 use actor_framework::{ActorService, DynContext};
 use link_api::LinkAction;
+use tracing::info;
 
 use crate::{error::LinkError, link_actor::LinkActor};
 
@@ -153,7 +154,7 @@ impl ActorService for LinkActor {
                 }
             }
             LinkAction::Reset => {
-                log::info!("LinkActor: Resetting all links");
+                info!("LinkActor: Resetting all links");
                 self.links.clear();
                 self.chip_pairs.clear();
             }

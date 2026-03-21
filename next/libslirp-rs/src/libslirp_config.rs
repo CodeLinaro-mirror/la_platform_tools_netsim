@@ -20,8 +20,8 @@ use std::{
     path::PathBuf,
 };
 
-use log::warn;
 use tokio;
+use tracing::warn;
 
 use crate::libslirp_sys::{self, SLIRP_MAX_DNS_SERVERS};
 

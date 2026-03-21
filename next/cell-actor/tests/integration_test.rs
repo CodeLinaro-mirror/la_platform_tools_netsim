@@ -9,7 +9,6 @@ use bytes::Bytes;
 use cell_actor::CellClient;
 use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult};
-use env_logger;
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
 use netsim_model::{
     chip::{
@@ -44,7 +43,7 @@ struct TestHarness {
 }
 
 async fn setup_test_harness() -> TestHarness {
-    let _ = env_logger::try_init();
+    let _ = tracing_subscriber::fmt().with_test_writer().try_init();
     let (device_server_tx, device_server_rx) = mpsc::channel(100);
     let resource_client = ResourceClient::new(device_server_tx);
     let device_client = DeviceClient::new(Box::new(resource_client));

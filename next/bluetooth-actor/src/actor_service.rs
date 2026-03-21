@@ -8,6 +8,7 @@ use netsim_model::{
     chip_error::ChipError,
     ChipId, ChipKind,
 };
+use tracing::{info, warn};
 
 use crate::{
     actions::{BluetoothAction, BluetoothActionResult},
@@ -203,7 +204,7 @@ impl ActorService for BluetoothActor {
             let chip_id = ChipId(chip.id);
             let device_id = chip.device_id;
 
-            log::info!("Deleting chip {chip_id}");
+            info!("Deleting chip {chip_id}");
             self.rootcanal.remove_controller(chip_id.0.into()).to_chip_error()?;
 
             // Notify DeviceService
@@ -228,7 +229,7 @@ impl ActorService for BluetoothActor {
         match _action {
             BluetoothAction::Reset { id } => {
                 // TODO: Implement reset
-                log::warn!("Reset chip {id} not implemented");
+                warn!("Reset chip {id} not implemented");
                 let _ = self.rootcanal.clear_stats(id.0.into());
                 Ok(BluetoothActionResult::Success)
             }
@@ -288,7 +289,7 @@ impl BluetoothActor {
             let mut update = netsim_model::device::api::DeviceUpdate::default();
             update.name = Some(name);
             if let Err(e) = dc.update(device_id, update).await {
-                log::warn!("Failed to sync device name for device {}: {:?}", device_id, e);
+                warn!("Failed to sync device name for device {}: {:?}", device_id, e);
             }
         });
     }

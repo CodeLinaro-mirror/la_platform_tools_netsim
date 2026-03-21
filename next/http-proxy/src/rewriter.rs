@@ -29,11 +29,11 @@
 
 use std::net::SocketAddr;
 
-use log::warn;
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
 };
+use tracing::warn;
 
 use crate::{Error, Result};
 

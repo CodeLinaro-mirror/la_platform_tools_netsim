@@ -25,15 +25,15 @@ netsim_rust_library(
         "//next/modem-rs-derive",
     ],
     test_deps = [
-        "@env_logger",
+        "@tracing-subscriber",
     ],
     deps = [
         "//next/model",
         "@bytes",
         "@hex",
-        "@log",
         "@nom",
         "@serde",
         "@tokio",
+        "@tracing",
     ],
 )

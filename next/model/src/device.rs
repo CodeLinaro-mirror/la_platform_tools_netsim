@@ -2,6 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
+use tracing::error;
 
 use crate::{
     chip::{ChipConfig, ChipId, PacketSink, PacketStream},
@@ -74,7 +75,7 @@ impl DeviceClient {
                 .send(DeviceRequest::NotifyChipRemoved { device_id, chip_id, respond_to: None })
                 .await
             {
-                log::error!("Failed to send NotifyChipRemoved for chip {chip_id}: {e}");
+                error!("Failed to send NotifyChipRemoved for chip {chip_id}: {e}");
             }
         });
     }

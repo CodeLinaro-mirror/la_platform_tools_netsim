@@ -19,6 +19,7 @@ use netsim_model::chip::{
 };
 use netsim_proto::protobuf::Message;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     device_actor::DeviceActor,
@@ -74,7 +75,7 @@ impl DeviceActor {
             }
         } else if self.has_seen_device && self.idle_timer.is_none() {
             if let Some(timeout) = self.idle_timeout {
-                log::info!("DeviceActor: Scheduling idle shutdown in {:?}", timeout);
+                info!("DeviceActor: Scheduling idle shutdown in {:?}", timeout);
                 let key = ctx.run_later(timeout, Box::new(Self::on_idle_timeout));
                 self.idle_timer = Some(key);
             }
@@ -103,20 +104,20 @@ impl DeviceActor {
         let task = tokio::spawn(async move {
             if let Some(t) = previous_task {
                 if let Err(e) = t.await {
-                    log::warn!("DeviceActor: Previous stats write failed: {}", e);
+                    warn!("DeviceActor: Previous stats write failed: {}", e);
                 }
             }
 
             // Spawn blocking write for disk I/O
             let res = tokio::task::spawn_blocking(move || {
                 if let Err(e) = crate::stats::write_combined_stats(combined_stats, path) {
-                    log::error!("Failed to write stats: {}", e);
+                    error!("Failed to write stats: {}", e);
                 }
             })
             .await;
 
             if let Err(e) = res {
-                log::error!("DeviceActor: Stats write task panicked: {}", e);
+                error!("DeviceActor: Stats write task panicked: {}", e);
             }
         });
 
@@ -248,18 +249,18 @@ impl DeviceActor {
                 match netsim_proto::stats::WifiStats::parse_from_bytes(&stats_bytes) {
                     Ok(stats) => Some(stats),
                     Err(e) => {
-                        log::error!("DeviceActor: Failed to parse WifiStats: {}", e);
+                        error!("DeviceActor: Failed to parse WifiStats: {}", e);
                         None
                     }
                 }
             }
             Ok(Ok(None)) => None,
             Ok(Err(e)) => {
-                log::warn!("DeviceActor: Failed to get global stats: {}", e);
+                warn!("DeviceActor: Failed to get global stats: {}", e);
                 None
             }
             Err(_) => {
-                log::debug!("DeviceActor: Timeout getting global stats");
+                debug!("DeviceActor: Timeout getting global stats");
                 None
             }
         }
@@ -339,12 +340,12 @@ impl DeviceActor {
             .expect("Failed to notify LinkActor of chip remove");
 
         if should_delete {
-            log::info!("DeviceActor: Device {} is empty, auto-deleting", device_id);
+            info!("DeviceActor: Device {} is empty, auto-deleting", device_id);
             self.handle_delete(device_id, ctx).await?;
         } else {
             // Save stats if we didn't delete the device (partial update)
             self.save_stats_async().await;
-            log::info!("DeviceActor: Device {} is NOT empty after chip removal", device_id);
+            info!("DeviceActor: Device {} is NOT empty after chip removal", device_id);
         }
 
         Ok(())
@@ -357,7 +358,7 @@ impl DeviceActor {
         stream_stats: Option<Arc<StreamStats>>,
         cached_stats: Option<&Vec<netsim_model::stats::NetsimRadioStats>>,
     ) {
-        log::debug!("DeviceActor: Archiving stats for device {} chip {}", device_id, chip.id);
+        debug!("DeviceActor: Archiving stats for device {} chip {}", device_id, chip.id);
 
         let mut archive_stats = |mut chip_stats: Vec<netsim_model::stats::NetsimRadioStats>| {
             if let Some(stream_stats) = &stream_stats {
@@ -392,7 +393,7 @@ impl DeviceActor {
         }
 
         if let Some(cached) = cached_stats {
-            log::debug!("DeviceActor: Using cached LKG stats for chip {}", chip.id);
+            debug!("DeviceActor: Using cached LKG stats for chip {}", chip.id);
             archive_stats(cached.clone());
             return;
         }
@@ -406,10 +407,9 @@ impl DeviceActor {
                     &stream_stats,
                 ));
             } else {
-                log::warn!(
+                warn!(
                     "DeviceActor: Dropping ambiguous stats for chip {} kind {:?}",
-                    chip.id,
-                    chip.kind
+                    chip.id, chip.kind
                 );
             }
         }
@@ -447,12 +447,9 @@ impl DeviceActor {
         } else {
             chip_config.product_name.clone()
         };
-        log::info!(
+        info!(
             "DeviceActor: AddChip {} ({}, {}) to device {}",
-            chip_name,
-            manufacturer,
-            product_name,
-            entity.device.name
+            chip_name, manufacturer, product_name, entity.device.name
         );
 
         let chip_id = ChipId(next_chip_id.fetch_add(1, Ordering::SeqCst));
@@ -523,7 +520,7 @@ impl DeviceActor {
         packet_sink: Option<PacketSink>,
         ctx: &mut DynContext<Self>,
     ) -> Result<DeviceId, DeviceError> {
-        log::info!("DeviceActor: Create device {}", params.device_config.name);
+        info!("DeviceActor: Create device {}", params.device_config.name);
 
         let id = id.unwrap_or_else(|| {
             let id = DeviceId(self.next_device_id);
@@ -562,7 +559,7 @@ impl DeviceActor {
         params: DeviceAddChip,
         ctx: &mut DynContext<Self>,
     ) -> Result<DeviceActionResult, DeviceError> {
-        log::info!("DeviceActor: AddChipByGuid for device {}", params.device_guid);
+        info!("DeviceActor: AddChipByGuid for device {}", params.device_guid);
 
         if let Some(id) = self.guid_to_id.get(&params.device_guid) {
             // Add Chip to Existing Device
@@ -632,7 +629,7 @@ impl DeviceActor {
     pub(crate) fn on_startup_timeout(&mut self, ctx: &mut dyn Context<Self>) {
         let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
         if !self.has_seen_device && !has_active_devices {
-            log::info!(
+            info!(
                 "DeviceActor: Startup timeout reached (no devices connected), initiating shutdown"
             );
             self.trigger_shutdown(ctx);
@@ -644,7 +641,7 @@ impl DeviceActor {
     pub(crate) fn on_idle_timeout(&mut self, ctx: &mut dyn Context<Self>) {
         let has_active_devices = self.devices.values().any(|d| !d.device.builtin);
         if !has_active_devices {
-            log::info!("DeviceActor: Idle timeout reached, initiating shutdown");
+            info!("DeviceActor: Idle timeout reached, initiating shutdown");
             self.trigger_shutdown(ctx);
         }
         self.idle_timer = None;
@@ -658,15 +655,15 @@ impl DeviceActor {
             tokio::spawn(async move {
                 if let Some(t) = stats_task {
                     if let Err(e) = t.await {
-                        log::warn!("DeviceActor: Stats write failed during shutdown flush: {}", e);
+                        warn!("DeviceActor: Stats write failed during shutdown flush: {}", e);
                     }
                 }
                 if let Err(e) = client.shutdown().await {
-                    log::error!("DeviceActor: Failed to shutdown: {}", e);
+                    error!("DeviceActor: Failed to shutdown: {}", e);
                 }
             });
         } else {
-            log::warn!("DeviceActor: No self_client, forcing immediate shutdown");
+            warn!("DeviceActor: No self_client, forcing immediate shutdown");
             ctx.shutdown();
         }
     }
@@ -685,10 +682,10 @@ impl DeviceActor {
 
         for device_id in device_ids {
             let Some(entity) = self.devices.get_mut(&device_id) else {
-                log::error!("DeviceActor: Device {} disappeared during reset", device_id);
+                error!("DeviceActor: Device {} disappeared during reset", device_id);
                 continue;
             };
-            log::info!("DeviceActor: Resetting device {}", entity.device.name);
+            info!("DeviceActor: Resetting device {}", entity.device.name);
 
             entity.device.visible = true;
             entity.device.position = device_api::Position::default();
@@ -700,11 +697,9 @@ impl DeviceActor {
 
                 if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
                     if let Err(e) = chip_client.reset(netsim_model::ChipId(chip.id)).await {
-                        log::warn!(
+                        warn!(
                             "DeviceActor: Failed to reset chip {} kind {:?}: {}",
-                            chip.id,
-                            chip.kind,
-                            e
+                            chip.id, chip.kind, e
                         );
                         errors.push(format!("Failed to reset chip {}: {}", chip.id, e));
                     }
@@ -713,9 +708,9 @@ impl DeviceActor {
         }
 
         if id.is_none() {
-            log::info!("DeviceActor: Resetting all links");
+            info!("DeviceActor: Resetting all links");
             if let Err(e) = self.link_client.reset().await {
-                log::warn!("DeviceActor: Failed to reset links: {}", e);
+                warn!("DeviceActor: Failed to reset links: {}", e);
                 errors.push(format!("Failed to reset links: {}", e));
             }
         }
@@ -819,11 +814,9 @@ impl ActorService for DeviceActor {
                 || chip_update.orientation.is_some()
                 || chip_update.variant.is_some()
             {
-                log::info!(
+                info!(
                     "DeviceActor: Updating chip {} (kind {:?}) with {:?}",
-                    chip.id,
-                    chip.kind,
-                    chip_update
+                    chip.id, chip.kind, chip_update
                 );
                 *chip = chip_client
                     .update(ChipId(chip.id), chip_update)

@@ -9,7 +9,7 @@ DEPS = [
     "@bytes",
     "@thiserror",
     "@futures",
-    "@log",
+    "@tracing",
     "@pdl-runtime",
     "@pica",
     "@tokio",
@@ -30,7 +30,6 @@ netsim_rust_library(
     test_deps = [
         "//next/device-api:testing",
         "//next/testing",
-        "@env_logger",
     ],
     deps = DEPS,
 )
