@@ -25,7 +25,6 @@ members = [
   "cell-actor",
   "daemon",
   "hci-server",
-  "proto",
   "packets",
   "packet-stream",
   "link-actor",

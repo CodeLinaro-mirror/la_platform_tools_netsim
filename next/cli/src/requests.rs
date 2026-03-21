@@ -1017,6 +1017,7 @@ mod tests {
                 include_device_name: true,
                 include_tx_power_level: true,
                 manufacturer_data: Some(ParsableBytes(manufacturer_data.clone())),
+                uuids: vec![],
             },
             scan_response_data: BeaconBleScanResponseData { ..Default::default() },
         })));
@@ -1072,6 +1073,7 @@ mod tests {
                 include_device_name: true,
                 include_tx_power_level: true,
                 manufacturer_data: Some(ParsableBytes(manufacturer_data)),
+                uuids: vec![],
             },
             scan_response_data: BeaconBleScanResponseData { ..Default::default() },
         })));
@@ -1114,6 +1116,7 @@ mod tests {
                 scan_response_include_device_name: true,
                 scan_response_include_tx_power_level: true,
                 scan_response_manufacturer_data: Some(ParsableBytes(manufacturer_data)),
+                scan_response_uuids: vec![],
             },
             ..Default::default()
         })));
@@ -1159,6 +1162,7 @@ mod tests {
                 scan_response_include_device_name: true,
                 scan_response_include_tx_power_level: true,
                 scan_response_manufacturer_data: Some(ParsableBytes(manufacturer_data)),
+                scan_response_uuids: vec![],
             },
         })));
 

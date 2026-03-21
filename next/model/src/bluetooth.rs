@@ -55,7 +55,7 @@ pub struct BeaconParams {
 /// Parameters for a Bluetooth scanner.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScannerParams {
-    // Future scanner-specific properties can be added here.
+    pub active: bool,
 }
 
 /// Parameters for a Bluetooth sniffer.

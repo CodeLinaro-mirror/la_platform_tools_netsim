@@ -32,7 +32,7 @@ const HCI_LE_SET_SCAN_ENABLE: u16 = 0x200c;
 pub(crate) fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
-    _params: &ScannerParams,
+    params: &ScannerParams,
 ) -> Result<Chip, ChipError> {
     debug!("[{chip_id}] Setting up scanner chip");
     // Enable scanning on the new controller.
@@ -93,11 +93,11 @@ pub(crate) fn create(
         packet_type: HCI_COMMAND_PACKET,
         opcode: HCI_LE_SET_SCAN_PARAMETERS,
         param_len: 7,
-        le_scan_type: 0x00,           // Passive Scanning
-        le_scan_interval: 0x0010,     // 10ms
-        le_scan_window: 0x0010,       // 10ms
-        own_address_type: 0x00,       // Public
-        scanning_filter_policy: 0x00, // Accept all
+        le_scan_type: if params.active { 0x01 } else { 0x00 }, // 0x01 for Active, 0x00 for Passive
+        le_scan_interval: 0x0010,                              // 10ms
+        le_scan_window: 0x0010,                                // 10ms
+        own_address_type: 0x00,                                // Public
+        scanning_filter_policy: 0x00,                          // Accept all
     };
     rootcanal
         .receive_hci(chip_id.into(), scan_params.as_bytes().to_vec().into())
