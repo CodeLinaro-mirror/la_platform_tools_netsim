@@ -17,7 +17,7 @@ use crate::{
 
 /// UWB Ranging Estimator that uses shared chip state to calculate ranging
 /// measurements.
-pub struct UwbRangingEstimator {
+pub(crate) struct UwbRangingEstimator {
     shared_chips: Arc<RwLock<HashMap<Handle, UwbChipState>>>,
 }
 

@@ -33,7 +33,7 @@ macro_rules! client_method {
                     $($param,)*
                     respond_to,
                 }).await.map_err(|e| ClientError::Send(e.to_string()))?;
-                Ok(response.await??)
+                response.await?.map_err(|device_err| ClientError::Framework(Box::new(device_err)))
             }
         }
     };
@@ -49,7 +49,7 @@ macro_rules! client_method {
                 self.sender.send($request::$variant { respond_to })
                     .await
                     .map_err(|e| ClientError::Send(e.to_string()))?;
-                Ok(response.await??)
+                response.await?
             }
         }
     };

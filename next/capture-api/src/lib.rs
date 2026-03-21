@@ -146,25 +146,11 @@ pub enum CaptureAction {
 pub enum CaptureActionResult {
     /// Action succeeded.
     Success,
-    /// Action failed.
-    Error(String),
     /// The action resulted in an update and returns the new state.
     Updated(CaptureInfo),
     /// Returns a high-throughput packet sender.
     #[serde(skip)]
     PacketSender(tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>),
-}
-
-impl PartialEq for CaptureActionResult {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Success, Self::Success) => true,
-            (Self::Error(a), Self::Error(b)) => a == b,
-            (Self::Updated(a), Self::Updated(b)) => a == b,
-            (Self::PacketSender(a), Self::PacketSender(b)) => a.same_channel(b),
-            _ => false,
-        }
-    }
 }
 
 /// Information about a capture.

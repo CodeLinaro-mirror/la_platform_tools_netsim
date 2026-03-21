@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{chip_error::ChipError, device_error::DeviceError};
+use crate::chip_error::ChipError;
 
 /// The error type for client-side operations.
 #[derive(Error, Debug)]
@@ -15,11 +15,7 @@ pub enum ClientError {
 
     /// An operation-specific error occurred from the chip service.
     #[error("Chip error: {0}")]
-    Chip(ChipError),
-
-    /// An operation-specific error occurred from the device service.
-    #[error("Device error: {0}")]
-    Device(#[source] Box<DeviceError>),
+    Chip(#[from] ChipError),
 
     /// A generic error from the actor framework.
     #[error("Framework error: {0}")]
@@ -47,18 +43,6 @@ impl ClientError {
             }
             _other => None,
         }
-    }
-}
-
-impl From<DeviceError> for ClientError {
-    fn from(err: DeviceError) -> Self {
-        ClientError::Device(Box::new(err))
-    }
-}
-
-impl From<ChipError> for ClientError {
-    fn from(err: ChipError) -> Self {
-        ClientError::Chip(err)
     }
 }
 

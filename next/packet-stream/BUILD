@@ -21,6 +21,7 @@ DEPS = [
     "@futures",
     "@serde",
     "@serde_json",
+    "@thiserror",
     "@tokio",
     "@tokio-util",
 ]
