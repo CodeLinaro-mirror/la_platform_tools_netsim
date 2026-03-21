@@ -77,6 +77,9 @@ pub enum Command {
     /// Manage Access Point (AP) properties
     #[command(subcommand)]
     Ap(crate::ap::args::ApCommand),
+    /// Manage Bluetooth Low Energy (BLE) properties
+    #[command(subcommand)]
+    Ble(crate::ble::args::BleCommand),
 }
 
 #[derive(Debug, Args, PartialEq)]
