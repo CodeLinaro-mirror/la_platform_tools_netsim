@@ -54,6 +54,12 @@ fn proto_to_ap_config(proto: AccessPoint) -> Result<ApConfig, grpcio::RpcStatus>
     }
     if !proto.bssid.is_empty() {
         if let Ok(bssid) = proto.bssid.parse::<netsim_packets::ethernet::MacAddr>() {
+            if bssid.bytes == [0; 6] {
+                return Err(grpcio::RpcStatus::with_message(
+                    grpcio::RpcStatusCode::INVALID_ARGUMENT,
+                    "Invalid BSSID: all zeros is not permitted".to_string(),
+                ));
+            }
             config.bssid = bssid;
         } else {
             return Err(grpcio::RpcStatus::with_message(

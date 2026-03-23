@@ -4,45 +4,19 @@ description: How to run the Netsim e2e integration test suite using Bazel and An
 
 # Netsim E2E Runner Workflow
 
-When you need to run the `verify/runner:runner-e2e` tests, you must bring up the required daemons and ensure Bazel has the correct environment flags to communicate with the host's ADB daemon, bypassing the strict `linux-sandbox`.
+When you need to run the `verify/runner:runner-e2e` integration tests locally, you must bring up the required daemons (`netsimd`) and Android Emulators, and ensure Bazel has the correct environment flags to communicate with the host's ADB daemon, bypassing the strict `linux-sandbox`.
 
-## 1. Clean up stale processes
-Kill lingering daemon and emulator processes from previous runs:
+To prevent flaky tests from lingering daemons, zombie emulators, or unauthenticated Wi-Fi states, all of this lifecycle management has been fully automated through a standardized wrapper script.
+
+## 1. Run the E2E Lifecycle Wrapper
+Simply execute the `run_e2e.sh` wrapper script which will handle building `netsimd`, destroying stale background processes, launching fresh Android Emulators, explicitly awaiting complete network stack integration, and delegating to the `bazel test` suite:
+
 ```bash
-killall -9 netsimd qemu-system-x86_64 emulator || true
+# turbo-all
+./scripts/run_e2e.sh
 ```
 
-## 2. Launch netsimd
-Launch the netsim daemon in the background to serve the test:
-```bash
-# turbo
-bazel run @netsim//next/daemon:daemon -- --no-shutdown -v --logtostderr &
-```
+If it succeeds, your workspace environments are perfectly synchronized!
 
-## 3. Identify and Run Emulators
-Find the available AVDs:
-```bash
-emulator -list-avds
-```
-Then, pick the AVDs (e.g., `Pixel_6_API_33` and `Pixel_6_API_33b`) and launch them in the background. The test requires at least one attached device:
-```bash
-# turbo
-emulator @Pixel_6_API_33 -no-window -no-audio &
-# And potentially a second one if the scenario requires P2P networking:
-# emulator @Pixel_6_API_33b -no-window -no-audio &
-```
-Wait until `adb devices` shows the device(s) as attached.
-
-## 4. Run the BDD Test Suite
-Because the `ntest run` command relies on ADB, and Bazel limits environment variables and network access (sandbox), you must **explicitly pass both PATH and ANDROID_HOME** via `--test_env` AND force a local execution strategy (`--strategy=TestRunner=local` or `--test_strategy=local`) so the test can connect to your host's ADB server on port `5037`.
-
-Execute the test:
-```bash
-# turbo
-bazel test \
-  --test_env=ANDROID_HOME=$HOME/Android/Sdk \
-  --test_env=PATH=$HOME/Android/Sdk/platform-tools:$HOME/Android/Sdk/emulator:$PATH \
-  --strategy=TestRunner=local \
-  --test_output=streamed \
-  @netsim//next/verify/runner:runner-e2e
-```
+> [!TIP]
+> The scripts directory contains this highly robust `run_e2e.sh` which employs `trap` functions to kill all underlying PIDs even if you CTRL-C mid-execution. It also manually commands `adb shell cmd wifi connect-network` to bypass `ApActor` cold-boot connection bugs.
