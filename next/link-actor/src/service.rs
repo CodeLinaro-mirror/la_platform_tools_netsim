@@ -1,12 +1,10 @@
 // Copyright 2025 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use link_api::LinkAction;
 
 use crate::{error::LinkError, link_actor::LinkActor};
 
-#[async_trait]
 impl ActorService for LinkActor {
     type Id = link_api::LinkId;
     type Create = link_api::LinkCreate;
@@ -15,6 +13,7 @@ impl ActorService for LinkActor {
     type ActionResult = ();
     type Error = LinkError;
     type Entity = link_api::Link;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,
@@ -64,10 +63,10 @@ impl ActorService for LinkActor {
             rssi: params.rssi,
         };
 
-        self.chip_pairs.insert((link.sender, link.receiver), link.id);
-
         let sender = link.sender;
         let receiver = link.receiver;
+        self.chip_pairs.insert((sender, receiver), link.id);
+
         self.links.insert(id, link);
         self.update_chip_links(sender).await;
         Ok(id)

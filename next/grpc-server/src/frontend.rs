@@ -146,6 +146,7 @@ impl FrontendClient {
                         req.device.orientation.clone().unwrap_or_default(),
                     ),
                     builtin: false,
+                    device_info: None,
                 };
 
                 let device_create = device_api::api::DeviceCreate {
@@ -402,7 +403,7 @@ impl FrontendService for FrontendClient {
 #[cfg(test)]
 mod tests {
     use link_api::{Link, LinkId, MockLinkClient};
-    use netsim_model::chip::ChipId;
+    use netsim_model::{ChipId, ChipKind};
     use protobuf::EnumOrUnknown;
 
     use super::*;
@@ -473,7 +474,7 @@ mod tests {
                 id: LinkId(1),
                 sender: ChipId(10),
                 receiver: ChipId(11),
-                kind: netsim_model::chip::ChipKind::BLUETOOTH,
+                kind: ChipKind::BLUETOOTH,
                 rssi: -70,
             }])
         });

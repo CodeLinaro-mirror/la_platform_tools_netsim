@@ -81,13 +81,14 @@ impl Rootcanal {
         id: ControllerId,
         address: Address,
         callbacks: Box<dyn ControllerCallbacks>,
+        properties: Option<&[u8]>,
     ) -> Result<()> {
         let mut controllers = self.controllers.lock().unwrap();
         if controllers.contains_key(&id) {
             return Err(Error::DuplicateControllerId(id));
         }
         let bt_ops = Box::new(BtOpsWrapper { bluetooth: Arc::downgrade(self) });
-        let controller = ControllerImpl::new(id, address, callbacks, bt_ops);
+        let controller = ControllerImpl::new(id, address, callbacks, bt_ops, properties);
         controllers.insert(id, controller);
         Ok(())
     }
@@ -99,9 +100,10 @@ impl Rootcanal {
         id: ControllerId,
         address: Address,
         callbacks: Box<dyn ControllerCallbacks>,
+        properties: Option<&[u8]>,
         // for when controller sends ll to other controllers
     ) -> Result<()> {
-        self.add_controller(id, address, callbacks)
+        self.add_controller(id, address, callbacks, properties)
     }
 
     /// Removes a Bluetooth controller.
@@ -268,7 +270,7 @@ mod tests {
     fn setup_bluetooth_with_controllers(bluetooth: &Arc<Rootcanal>, num_controllers: u32) {
         for i in 1..=num_controllers {
             let addr = Address::from_str(&format!("01:02:03:04:05:{:02X}", i)).unwrap();
-            bluetooth.add_controller(i, addr, Box::new(MockControllerCallbacks {})).unwrap();
+            bluetooth.add_controller(i, addr, Box::new(MockControllerCallbacks {}), None).unwrap();
         }
     }
 
@@ -377,7 +379,7 @@ mod tests {
 
         let addr = Address::from_str("01:02:03:04:05:06").unwrap();
 
-        let result = bluetooth.add_controller(1, addr, Box::new(MockControllerCallbacks {}));
+        let result = bluetooth.add_controller(1, addr, Box::new(MockControllerCallbacks {}), None);
 
         assert!(result.is_err());
         match result.err().unwrap() {

@@ -13,6 +13,8 @@ impl Context<SlirpActor> for MockContext {
     fn set_interval(&mut self, _duration: std::time::Duration) {}
     fn add_stream(&mut self, _id: u32, _stream: BoxStream) {}
     fn remove_stream(&mut self, _id: u32) {}
+    fn add_typed_stream(&mut self, _id: usize, _stream: actor_framework::BoxTypedStream<()>) {}
+    fn remove_typed_stream(&mut self, _id: usize) {}
     fn spawn(&mut self, _id: u32, _task: BoxFuture<'static, u32>) {}
     fn abort(&mut self, _id: u32) {}
     fn shutdown(&mut self) {}

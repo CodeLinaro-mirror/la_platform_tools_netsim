@@ -8,6 +8,7 @@ use netsim_model::{
     stats::NetsimRadioStats,
 };
 use netsim_packets::ieee80211::Ieee80211;
+use netsim_proto::stats::WifiStats as ProtoWifiStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -26,6 +27,7 @@ pub type ChipIdType = u32;
 #[derive(Debug)]
 pub enum WifiReq {
     GetStatistics,
+    GetGlobalStats,
     Reset { id: ChipId },
 }
 
@@ -34,6 +36,7 @@ pub enum WifiReq {
 pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
+    GlobalStats(Box<ProtoWifiStats>),
     Error(String),
 }
 
@@ -65,6 +68,7 @@ impl WifiActor {
         slirp_client: Option<SlirpClient>,
         device_client: ::client::DeviceClient,
         wifi_tap: Option<String>,
+        shared_keys: Arc<SharedKeyStore>,
     ) -> Self {
         // Fixup pending channels if we just created a SlirpGateway
         let gateway = if let Some(if_name) = wifi_tap {
@@ -82,15 +86,15 @@ impl WifiActor {
             // Default to SlirpGateway
             Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
         };
-        Self::new_with_gateway(ap_client, gateway, device_client)
+        Self::new_with_gateway(ap_client, gateway, device_client, shared_keys)
     }
 
     pub fn new_with_gateway(
         ap_client: Option<Arc<ApClient>>,
         gateway: Box<dyn GatewayTrait>,
         device_client: ::client::DeviceClient,
+        shared_keys: Arc<SharedKeyStore>,
     ) -> Self {
-        let shared_keys = Arc::new(SharedKeyStore::new());
         let medium = Medium::new(
             shared_keys.clone(),
             crate::stats::WifiStats::default(),

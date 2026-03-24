@@ -79,17 +79,39 @@ pub struct DeviceInfo {
     pub name: String,
     /// Unique identifier for the device.
     pub id: String,
+    /// Identifier for device kind e.g. EMULATOR, CUTTLEFISH, BUMBLE, etc
+    #[serde(default)]
+    pub kind: String,
+    /// Version info as applicable e.g. Android emulator version 34.1.15.0, etc
+    #[serde(default)]
+    pub version: String,
+    /// SDK version info as applicable e.g. 33, 34, etc
+    #[serde(default)]
+    pub sdk_version: String,
+    /// Build ID e.g. TE1A.220922.034, UQ1A.231205.015, etc
+    #[serde(default)]
+    pub build_id: String,
+    /// Model/variant e.g. sdk_gphone_x86_64-userdebug, cf_x86_64_phone-user,
+    /// etc
+    #[serde(default)]
+    pub variant: String,
+    /// CPU architecture e.g. x86_64, arm64-v8a, etc
+    #[serde(default)]
+    pub arch: String,
     /// Path to the AVD directory, if applicable.
     pub avd_path: String,
 }
 
 impl DeviceInfo {
     pub fn new<S1: Into<String>, S2: Into<String>>(name: S1, id: S2) -> Self {
-        DeviceInfo { name: name.into(), id: id.into(), avd_path: "".to_string() }
+        DeviceInfo { name: name.into(), id: id.into(), ..Default::default() }
     }
 }
 
 /// The kind of network technology the chip supports.
+///
+/// This enumeration is used to distinguish between different types of simulated
+/// radios and to route packets to the correct handlers.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub enum ChipKind {
     #[default]
@@ -97,6 +119,7 @@ pub enum ChipKind {
     BLUETOOTH,
     WIFI,
     UWB,
-    CELL,
     AP,
+    NFC,
+    CELLULAR,
 }

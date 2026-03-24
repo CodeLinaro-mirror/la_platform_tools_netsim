@@ -2,10 +2,7 @@
 
 //! Device Client
 //!
-//! This module provides the [`DeviceClient`] struct, which is a
-//! `Box<dyn ActorClient<DeviceActor>>`.
-//! It provides a convenient API for interacting with Device actors,
-//! including methods for standard operations and custom actions.
+//! Provides the [`DeviceClient`] struct for interacting with Device actors.
 
 use actor_framework::ActorClient;
 use device_api::{api::DeviceCreate, DeviceAction, DeviceActionResult, DeviceId};
@@ -32,9 +29,6 @@ impl DeviceClient {
 
 impl DeviceClient {
     /// Creates a new device with the given parameters.
-    ///
-    /// This is a standard creation method that delegates to the underlying
-    /// `ResourceClient::create` method.
     pub async fn create_device(&self, params: DeviceCreate) -> Result<DeviceId, DeviceError> {
         debug!("Sending create device request");
         self.inner
@@ -43,7 +37,6 @@ impl DeviceClient {
             .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
     }
 
-    /// Gets a device by ID.
     pub async fn get(&self, id: DeviceId) -> Result<Option<device_api::Device>, DeviceError> {
         debug!("Sending get request for device {}", id);
         self.inner.get(id).await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
@@ -98,10 +91,6 @@ impl DeviceClient {
     }
 
     /// Updates an existing device's properties.
-    ///
-    /// # Arguments
-    /// * `id` - The ID of the device to update.
-    /// * `update` - The update parameters.
     pub async fn update(
         &self,
         id: DeviceId,
@@ -115,10 +104,8 @@ impl DeviceClient {
             .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
     }
 
-    /// Resets a device to its default state.
-    ///
-    /// This sends a `DeviceAction::Reset` to the device actor.
-    /// If `id` is `None`, it performs a global reset.
+    /// Resets a device to its default state. If `id` is `None`, performs a
+    /// global reset.
     pub async fn reset(&self, id: Option<DeviceId>) -> Result<(), DeviceError> {
         debug!("Sending reset request for device {:?}", id);
         match self.inner.perform_action(id, DeviceAction::Reset).await {
@@ -136,7 +123,7 @@ impl DeviceClient {
     pub async fn notify_chip_removed(
         &self,
         id: DeviceId,
-        chip_id: netsim_model::chip::ChipId,
+        chip_id: netsim_model::ChipId,
     ) -> Result<(), DeviceError> {
         debug!("Sending notify_chip_removed request for device {} chip {}", id, chip_id);
         match self
@@ -151,10 +138,21 @@ impl DeviceClient {
             Err(e) => Err(DeviceError::ActorCommunicationError(e.to_string())),
         }
     }
+    /// Fetches the latest radio statistics from all associated chip clients.
+    pub async fn get_radio_stats(
+        &self,
+    ) -> Result<Vec<netsim_model::stats::NetsimRadioStats>, DeviceError> {
+        self.inner
+            .perform_action(None, DeviceAction::GetRadioStats)
+            .await
+            .map(|res| match res {
+                DeviceActionResult::Statistics(stats) => stats,
+                _ => vec![],
+            })
+            .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
+    }
+
     /// Deletes a device.
-    ///
-    /// # Arguments
-    /// * `id` - The ID of the device to delete.
     pub async fn delete(&self, id: DeviceId) -> Result<(), DeviceError> {
         debug!("Sending delete request for device {}", id);
         self.inner.delete(id).await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
@@ -162,9 +160,7 @@ impl DeviceClient {
 
     /// Creates or updates a device based on PacketStream parameters.
     ///
-    /// This method uses the actor's `AddChipByGuid` action to atomically
-    /// find an existing device by GUID or create a new one, avoiding race
-    /// conditions.
+    /// Uses `AddChipByGuid` to atomically find/create a device by GUID.
     pub async fn add_chip(
         &self,
         params: netsim_model::device::DeviceAddChip,
@@ -190,5 +186,14 @@ impl DeviceClient {
     pub async fn shutdown(&self) -> Result<(), DeviceError> {
         debug!("Sending shutdown request");
         self.inner.shutdown().await.map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
+    }
+
+    /// Triggers a persistence of the current statistics to disk.
+    pub async fn save_stats(&self) -> Result<(), DeviceError> {
+        self.inner
+            .perform_action(None, DeviceAction::SaveStats)
+            .await
+            .map(|_| ())
+            .map_err(|e| DeviceError::ActorCommunicationError(e.to_string()))
     }
 }

@@ -1,7 +1,7 @@
 use actor_framework::DynContext;
 use ap_actor::shared::SharedKeyStore;
 use log::{debug, warn};
-use netsim_model::chip::ChipId;
+use netsim_model::ChipId;
 use netsim_packets::ieee80211::{FrameDirection, Ieee80211};
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;

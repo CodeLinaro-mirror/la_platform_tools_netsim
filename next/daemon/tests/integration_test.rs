@@ -30,16 +30,6 @@ async fn test_bluetooth_hci_reset() {
     // Given a running Netsim Daemon
     let mut world = World::new().await;
 
-    // Capture UDS path before spawning daemon (which consumes the daemon instance)
-    let uds_path = world
-        .daemon
-        .as_ref()
-        .expect("Daemon not present")
-        .uds_path()
-        .expect("No UDS path")
-        .to_path_buf();
-    let uds_path_str = uds_path.to_str().expect("Invalid UDS path").to_string();
-
     // Start daemon
     let daemon_task = world.spawn_daemon();
 
@@ -48,7 +38,7 @@ async fn test_bluetooth_hci_reset() {
         // Allow some time for netsimd to fully start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let transport = TransportType::uds(uds_path_str);
+        let transport = TransportType::tcp("localhost", world.grpc_port);
         let chip_info = ChipInfo::new("bt_test", ChipKind::BLUETOOTH);
 
         let streams = Streams::new();
@@ -108,4 +98,81 @@ async fn test_ap_config_args() {
     // change. However, finding the device confirms that netsimd started and
     // created the AP.
     println!("Found CustomAP with {} chips", ap_device.chips.len());
+}
+
+// Scenario: Start daemon with --pcap
+//   Given I start netsimd with --pcap
+//   Then default capture state for new devices is enabled
+#[tokio::test]
+async fn test_pcap_args_enabled() {
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.pcap = true;
+
+    let mut world = World::new_with_args(args).await;
+
+    // Spawn daemon task to process background tasks
+    let _daemon_task = world.spawn_daemon();
+
+    let device_id = world.when_create_device("TestDevice", "TestChip").await;
+    let devices = world.when_list_devices().await;
+    let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
+    let chip = device.chips.first().expect("Chip missing");
+
+    world.then_capture_is(chip.id, true).await;
+}
+
+// Scenario: Start daemon without --pcap
+//   Given I start netsimd without --pcap
+//   Then default capture state for new devices is disabled
+#[tokio::test]
+async fn test_pcap_args_disabled() {
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.pcap = false;
+
+    let mut world = World::new_with_args(args).await;
+
+    let _daemon_task = world.spawn_daemon();
+
+    let device_id = world.when_create_device("TestDevice", "TestChip").await;
+    let devices = world.when_list_devices().await;
+    let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
+    let chip = device.chips.first().expect("Chip missing");
+
+    world.then_capture_is(chip.id, false).await;
+}
+
+// Scenario: Toggle capture using generic patch
+//   Given I start netsimd
+//   When a device is created and its capture is toggled
+//   Then its capture state updates correctly
+#[tokio::test]
+async fn test_capture_patch_enabled_flag() {
+    let mut args = daemon::args::Args::default();
+    args.logtostderr = true;
+    args.no_shutdown = true;
+    args.pcap = false;
+
+    let mut world = World::new_with_args(args).await;
+
+    let _daemon_task = world.spawn_daemon();
+
+    let device_id = world.when_create_device("TestDevice", "TestChip").await;
+    let devices = world.when_list_devices().await;
+    let device = devices.iter().find(|d| d.id == device_id).expect("Device missing");
+    let chip = device.chips.first().expect("Chip missing");
+
+    // Initially disabled
+    world.then_capture_is(chip.id, false).await;
+
+    // Patch to enable
+    world.when_patch_capture(chip.id, true).await;
+    world.then_capture_is(chip.id, true).await;
+
+    // Patch to disable
+    world.when_patch_capture(chip.id, false).await;
+    world.then_capture_is(chip.id, false).await;
 }

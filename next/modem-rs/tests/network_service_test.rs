@@ -1,52 +1,108 @@
-// tests/network_service_test.rs
+use crate::{steps::*, world::World};
 
-use std::time::Duration;
-
-use crate::common::TestHarness;
-
+// Scenario: Query Operator Selection
+//   Given a modem "A"
+//   When AT command "AT+COPS?" is sent to "A"
+//   Then response from "A" is '+COPS: 0,0,"Android Virtual Operator"'
+//   And response from "A" is "OK"
 #[test]
 fn test_cops_query() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+COPS?\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+COPS?");
 
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+COPS: 0,0,\"Android Virtual Operator\"\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    then_response_is(&mut world, "A", "+COPS: 0,0,\"Android Virtual Operator\"");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Query Signal Quality
+//   Given a modem "A"
+//   When AT command "AT+CSQ" is sent to "A"
+//   Then response from "A" is "+CSQ: 20,99"
+//   And response from "A" is "OK"
 #[test]
 fn test_csq_query() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CSQ\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CSQ");
 
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+CSQ: 20,99\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Network Registration
+//   Given a modem "A"
+//   When time advances 20 ms
+//   Then response from "A" is "+CREG: 1"
 #[test]
 fn test_network_registration() {
-    let harness = TestHarness::new();
+    let mut world = World::new();
+    given_modem(&mut world, "A");
 
     // Advance the clock to trigger the registration event
-    harness.clock.advance(Duration::from_millis(20));
+    when_time_advances_ms(&mut world, 20);
 
-    // Tick the simulator to process the event
-    harness.manager.tick();
-
-    // Verify that the modem sends a +CREG: 1 unsolicited response
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"+CREG: 1\r\n");
+    // Verify that the modem sends a +CREG: 1 and +CGREG: 1 unsolicited response
+    then_response_is(&mut world, "A", "+CREG: 1");
+    then_response_is(&mut world, "A", "+CGREG: 1");
 }
 
+// Scenario: Set dynamic registration status
+//   Given a modem "A"
+//   When voice registration is set to Roaming (5)
+//   Then unsolicited response from "A" is "+CREG: 5"
+//   When data registration is set to Denied (3)
+//   Then unsolicited response from "A" is "+CGREG: 3"
+#[test]
+fn test_set_registration_status() {
+    use modem_rs::RegistrationStatus;
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    let id_a = world.modems.get("A").unwrap().0;
+
+    // Set Voice
+    when_voice_registration_set(&mut world, id_a, RegistrationStatus::Roaming);
+    then_response_is(&mut world, "A", "+CREG: 5");
+
+    // Set Data
+    when_data_registration_set(&mut world, id_a, RegistrationStatus::Denied);
+    then_response_is(&mut world, "A", "+CGREG: 3");
+}
+
+// Scenario: Query Extended Signal Quality
+//   Given a modem "A"
+//   When AT command "AT+CESQ" is sent to "A"
+//   Then response from "A" is "OK"
 #[test]
 fn test_query_extended_signal_quality() {
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CESQ\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 1);
-    assert_eq!(responses[0], b"OK\r\n");
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CESQ");
+
+    then_response_is(&mut world, "A", "OK");
+}
+
+// Scenario: Set dynamic signal strength
+//   Given a modem "A"
+//   When signal strength is set to 25, 0
+//   Then response from "A" to "AT+CSQ" is "+CSQ: 25,0"
+#[test]
+fn test_set_signal_strength() {
+    let mut world = World::new();
+    given_modem(&mut world, "A");
+
+    // Check default
+    when_at_command_sent(&mut world, "A", "AT+CSQ");
+    then_response_is(&mut world, "A", "+CSQ: 20,99");
+    then_response_is(&mut world, "A", "OK");
+
+    // Change value
+    let id_a = world.modems.get("A").unwrap().0;
+    when_signal_strength_set(&mut world, id_a, 25, 0);
+
+    // Check new value
+    when_at_command_sent(&mut world, "A", "AT+CSQ");
+    then_response_is(&mut world, "A", "+CSQ: 25,0");
+    then_response_is(&mut world, "A", "OK");
 }

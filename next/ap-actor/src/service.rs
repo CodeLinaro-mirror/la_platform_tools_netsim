@@ -1,7 +1,6 @@
 // Copyright 2025-2026 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use netsim_model::{
     chip::{
         Ap, Chip, ChipCreate, ChipId, ChipKind, ChipKindParams, ChipUpdate, ChipVariant,
@@ -18,7 +17,6 @@ use crate::{
 // 1024 microseconds per Time Unit (TU)
 const TU_INTERVAL_US: u128 = 1024;
 
-#[async_trait]
 impl ActorService for ApActor {
     type Id = ChipId;
     type Create = ChipCreate;
@@ -28,6 +26,7 @@ impl ActorService for ApActor {
 
     type Error = ApError;
     type Entity = Chip;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,

@@ -54,21 +54,21 @@ pub fn create_encrypted_hwsim_msg(
         };
     let frame_bytes = ieee80211_response.as_bytes();
 
-    // HwsimFrame / HwsimMsg reuses the original flags, we mimic that here via
-    // construct_hwsim_msg but passing specific fields.
-    construct_hwsim_msg(
+    let hwsim_msg = construct_hwsim_msg(
         &dest_hwsim_addr.bytes,
         frame_bytes,
-        None, // Transmitter not explicitly set here in original code, relied on attrs check?
+        None, // Legacy did not include transmitter for RX frames
         attrs.freq,
         Some(attrs.rx_rate_idx.unwrap_or(RX_RATE)),
         Some(attrs.signal.unwrap_or(SIGNAL)),
         attrs.flags,
-        attrs.cookie,
+        None, // Do not echo the TX cookie to the RX path
         attrs.tx_info.as_deref(),
         attrs.tx_info_flags.as_deref(),
         frame.hwsim_msg.nl_hdr.nlmsg_flags,
-    )
+    )?;
+
+    Ok(hwsim_msg)
 }
 
 pub fn parse_hwsim_frame(packet: &bytes::Bytes, client_id: u32) -> WifiResult<HwsimFrame> {

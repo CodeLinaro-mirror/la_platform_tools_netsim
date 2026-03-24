@@ -1,13 +1,12 @@
 // Copyright 2025 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use netsim_model::{
     chip::{
-        BluetoothMode, Chip, ChipCreate, ChipId, ChipKind, ChipKindParams, ChipUpdate, ChipVariant,
-        ChipVariantUpdate,
+        BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant, ChipVariantUpdate,
     },
     chip_error::ChipError,
+    ChipId, ChipKind,
 };
 
 use crate::{
@@ -19,7 +18,6 @@ use crate::{
     utils::ToChipError,
 };
 
-#[async_trait]
 impl ActorService for BluetoothActor {
     type Id = ChipId;
     type Create = ChipCreate;
@@ -28,6 +26,7 @@ impl ActorService for BluetoothActor {
     type ActionResult = BluetoothActionResult;
     type Error = BluetoothError;
     type Entity = Chip;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,
@@ -96,8 +95,26 @@ impl ActorService for BluetoothActor {
         // Note: There is no specific enforcement for a "blue" address type.
         // The current check only validates if the address string is parsable.
 
+        // Construct the Protobuf configuration for Rootcanal
+        let mut quirks = netsim_proto::configuration::ControllerQuirks::new();
+        // This quirk forces Rootcanal to reject post-init commands from uninitialized
+        // hosts, causing a HAL restart that properly unmasks the LE Meta
+        // events. We only apply this to actual Emulator Devices, not internal
+        // netsim beacons or scanners.
+        if let BluetoothMode::Device(_) = &create_params.mode {
+            quirks.hardware_error_before_reset = Some(true);
+        }
+
+        let mut config_controller = netsim_proto::configuration::Controller::new();
+        config_controller.quirks = netsim_proto::protobuf::MessageField::some(quirks);
+
+        let config_bytes = netsim_proto::protobuf::Message::write_to_bytes(&config_controller)
+            .map_err(|e| {
+                BluetoothError::invalid_arg(format!("Failed to serialize bt config: {e}"))
+            })?;
+
         self.rootcanal
-            .new_controller(chip_id.0.into(), address, Box::new(callback))
+            .new_controller(chip_id.0.into(), address, Box::new(callback), Some(&config_bytes))
             .to_chip_error()?;
 
         // 4. Create Chip Info in Context
@@ -213,11 +230,28 @@ impl ActorService for BluetoothActor {
                 let chips = self.chips.lock().unwrap();
                 for (id, chip) in chips.iter() {
                     if let Ok(stats) = self.rootcanal.get_stats(id.0.into()) {
+                        // BLE Stats
                         stats_list.push(netsim_model::stats::NetsimRadioStats {
                             id: id.0,
                             name: chip.name.clone().unwrap_or("Unknown".to_string()),
-                            tx_bytes: stats.ll_packets_out,
-                            rx_bytes: stats.ll_packets_in,
+                            kind: netsim_model::stats::RadioKind::BluetoothLowEnergy,
+                            tx_count: stats.ll_packets_out_ble,
+                            rx_count: stats.ll_packets_in_ble,
+                            tx_bytes: 0,
+                            rx_bytes: 0,
+                            ..Default::default()
+                        });
+
+                        // Classic Stats
+                        stats_list.push(netsim_model::stats::NetsimRadioStats {
+                            id: id.0,
+                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
+                            kind: netsim_model::stats::RadioKind::BluetoothClassic,
+                            tx_count: stats.ll_packets_out_classic,
+                            rx_count: stats.ll_packets_in_classic,
+                            tx_bytes: 0,
+                            rx_bytes: 0,
+                            ..Default::default()
                         });
                     }
                 }
