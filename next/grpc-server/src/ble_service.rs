@@ -77,7 +77,7 @@ impl BleService for BleServiceImpl {
                 chip_kind_params: ChipKindParams::Bluetooth(BluetoothCreate {
                     address: "".to_string(), // will be generated
                     bt_properties: Default::default(),
-                    mode: BluetoothMode::Scanner(ScannerParams::default()),
+                    mode: BluetoothMode::Scanner(ScannerParams { active: req.active }),
                 }),
             };
 

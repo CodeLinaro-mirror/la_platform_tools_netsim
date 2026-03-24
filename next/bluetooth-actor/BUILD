@@ -12,6 +12,7 @@ BLUETOOTH_DEPS = [
     "//next/packets",
     "@bytes",
     "@futures",
+    "@hex",
     "@tracing",
     "@serde",
     "@thiserror",
