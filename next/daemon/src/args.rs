@@ -41,7 +41,6 @@ pub struct Args {
     ///     `http://<server>:<port>`
     ///     `http://<username>:<password>@<server>:<port>`
     ///     (the 'http://' prefix can be omitted)
-    /// TODO: Not implemented yet
     #[arg(long, verbatim_doc_comment)]
     #[cfg_attr(not(feature = "cuttlefish"), arg(env = "http_proxy"))]
     pub http_proxy: Option<String>,
