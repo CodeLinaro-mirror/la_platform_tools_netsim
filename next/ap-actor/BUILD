@@ -55,6 +55,7 @@ netsim_rust_library(
         "@bytes",
         "@ccm",
         "@cxx.rs//:cxx",
+        "@futures",
         "@log",
         "@serde",
         "@thiserror",

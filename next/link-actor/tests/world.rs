@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use actor_framework::FrameworkError;
 use link_actor::{LinkActor, LinkClient};
 use link_api::{Link, LinkCreate, LinkId, LinkUpdate};
 use netsim_model::chip::{ChipClient, ChipId, ChipKind, MockChipClient};
@@ -48,7 +49,7 @@ impl World {
         let mut mock = MockChipClient::new();
         mock.expect_read().returning(|_| Ok(netsim_model::chip::Chip::default()));
         mock.expect_update().returning(|_, _| Ok(netsim_model::chip::Chip::default()));
-        mock.expect_create().returning(|_| Ok(()));
+        mock.expect_create().returning(|_, _| Ok(()));
         mock.expect_delete().returning(|_| Ok(()));
         mock.expect_read_statistics().returning(|| Ok(Box::from([])));
         mock.expect_reset().returning(|_| Ok(()));
@@ -69,9 +70,9 @@ impl World {
         sender: ChipId,
         receiver: ChipId,
         rssi: i8,
-    ) -> Result<LinkId, String> {
+    ) -> Result<LinkId, FrameworkError<link_api::LinkError>> {
         let params = LinkCreate { sender, receiver, rssi };
-        self.client.create(params).await.map_err(|e| e.to_string())
+        self.client.create(params).await
     }
 
     /// BDD Step: When a chip is added (notification).
@@ -85,7 +86,12 @@ impl World {
     }
 
     /// BDD Step: When a link is updated.
-    pub async fn when_update_link(&self, id: LinkId, rssi: i8) -> Result<Link, String> {
-        self.client.update(id, LinkUpdate { rssi: Some(rssi) }).await.map_err(|e| e.to_string())
+    pub async fn when_update_link(
+        &self,
+        id: LinkId,
+        rssi: i8,
+    ) -> Result<Link, FrameworkError<link_api::LinkError>> {
+        self.client.update(id, LinkUpdate { rssi: Some(rssi) }).await?;
+        self.client.get(id).await.map(|opt| opt.expect("link exists"))
     }
 }

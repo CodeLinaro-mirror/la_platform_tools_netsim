@@ -11,7 +11,9 @@ use std::{
 use capture_actor::CaptureClient;
 use common::{
     system::netsimd_temp_dir,
-    util::os_utils::{get_hci_port, get_instance, get_instance_name, redirect_std_stream},
+    util::os_utils::{
+        get_discovery_directory, get_hci_port, get_instance, get_instance_name, redirect_std_stream,
+    },
 };
 use device_actor::DeviceClient;
 use device_api::{DeviceAddChip, DeviceConfig};
@@ -38,7 +40,7 @@ use tokio::{sync::mpsc, task::JoinSet};
 use crate::{
     args::Args,
     ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig},
-    logger, platform,
+    logger,
     version::get_version,
 };
 
@@ -165,43 +167,6 @@ async fn handle_new_connection(
     }
 }
 
-#[cfg(unix)]
-#[allow(dead_code)]
-async fn setup_uds_listener(
-    streams: &mut Streams,
-    listener_addresses: &mut HashMap<String, StreamAddress>,
-    runtime_dir: &PathBuf,
-) -> Result<(), RunResult> {
-    use std::fs;
-
-    use packet_stream::TransportType;
-
-    let uds_path = runtime_dir.join("netsim.sock");
-    if uds_path.exists() {
-        fs::remove_file(&uds_path).map_err(init_error)?;
-    }
-    if let Some(parent) = uds_path.parent() {
-        fs::create_dir_all(parent).map_err(init_error)?;
-    }
-    if let Some(uds_path_str) = uds_path.to_str() {
-        streams
-            .start_listener("netsim_uds", TransportType::uds(uds_path_str))
-            .await
-            .map_err(init_error)?;
-        info!("UDS listener: {}", uds_path.display());
-        if let Some(addr) = streams.listener_address("netsim_uds") {
-            listener_addresses.insert("netsim_uds".to_string(), addr.clone());
-        } else {
-            return Err(RunResult::InitializationError(
-                "Failed to get UDS listener address after creation".to_string(),
-            ));
-        }
-        Ok(())
-    } else {
-        Err(RunResult::InitializationError(format!("Invalid UDS path: {}", uds_path.display())))
-    }
-}
-
 async fn setup_grpc_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
@@ -246,7 +211,7 @@ async fn setup_grpc_listener(
     Ok((port, server))
 }
 
-/// The main daemon for netsim-next.
+/// The main daemon for netsim.
 ///
 /// This struct manages the lifecycle of various servers (Bluetooth, Device),
 /// and handles incoming connections using the `packet_stream` crate.
@@ -295,15 +260,13 @@ impl NetsimDaemon {
     ///   acquired.
     /// - `Err(RunResult::InitializationError)`: Fatal error.
     pub async fn new() -> Result<StartUpMode, RunResult> {
-        let discovery_dir = crate::ini_file::get_discovery_directory();
-        let runtime_dir = platform::get_runtime_dir();
-        Self::new_with_dirs(discovery_dir, runtime_dir, Args::parse()).await
+        let discovery_dir = get_discovery_directory();
+        Self::new_with_dirs(discovery_dir, Args::parse()).await
     }
 
     /// Creates a new `NetsimDaemon` instance with custom directories.
     pub async fn new_with_dirs(
         discovery_dir: PathBuf,
-        runtime_dir: PathBuf,
         args: Args,
     ) -> Result<StartUpMode, RunResult> {
         if args.version {
@@ -374,7 +337,7 @@ impl NetsimDaemon {
         match ini_file.try_acquire().map_err(init_error)? {
             // This instance is the Writer (the primary daemon).
             IniFileAccess::Writer(ini_guard) => {
-                Self::initialize_primary_daemon(ini_guard, args, runtime_dir).await
+                Self::initialize_primary_daemon(ini_guard, args).await
             }
             // This instance is a Reader, another daemon is already running.
             IniFileAccess::Reader(config) => {
@@ -387,7 +350,6 @@ impl NetsimDaemon {
     async fn initialize_primary_daemon(
         mut ini_guard: IniFileGuard,
         args: Args,
-        _runtime_dir: PathBuf,
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
         info!("INI file path: {}", ini_guard.path().display());

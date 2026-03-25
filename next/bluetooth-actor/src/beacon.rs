@@ -48,12 +48,14 @@ pub fn create(
     // Reset the controller first.
     send_hci_command(rootcanal, chip_id, hci::Reset {})?;
 
+    let address: Address = params.ble_beacon.address.parse().map_err(|_| {
+        ChipError::InvalidArguments(Box::from(format!(
+            "Invalid beacon address: {}",
+            params.ble_beacon.address
+        )))
+    })?;
+
     // LE Set Advertising Parameters
-    let address: Address = params
-        .ble_beacon
-        .address
-        .parse()
-        .map_err(|_| ChipError::InvalidArguments("Invalid address".to_string()))?;
     send_hci_command(
         rootcanal,
         chip_id,

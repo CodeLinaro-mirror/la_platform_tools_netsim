@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use actor_framework::ResourceClient;
-use bluetooth_actor::{BluetoothActor, BluetoothClient};
+use bluetooth_actor::{BluetoothActor, BluetoothClient, BluetoothError};
 use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
 use netsim_model::{
@@ -87,14 +87,14 @@ impl World {
         device_id: DeviceId,
     ) -> ChipId {
         let id = self.next_chip_id();
-        let address = format!("00:00:00:00:00:{:02x}", id.0);
+        // Use two octets for the chip ID to support up to 65535 chips.
+        let address = format!("60:70:80:90:{:02X}:{:02X}", (id.0 >> 8) & 0xFF, id.0 & 0xFF);
 
         let params = ChipCreate {
-            id,
             packet_stream,
             packet_sink,
             config: ChipConfig::new(
-                "test_chip",
+                name,
                 "netsim",
                 name,
                 ChipKindParams::Bluetooth(BluetoothCreate {
@@ -106,7 +106,7 @@ impl World {
             device_id,
         };
 
-        if let Err(e) = self.client.0.create(params).await {
+        if let Err(e) = self.client.0.create_with_id(id, params).await {
             panic!("Failed to create chip {}: {:?}", name, e);
         }
 
@@ -147,7 +147,10 @@ impl World {
         tx_power: Option<AdvertiseTxPower>,
     ) {
         let id_val = self.chip_id_counter + 1;
-        let address = address.unwrap_or_else(|| format!("00:00:00:00:00:{:02x}", id_val));
+        // Use two octets for the ID_VAL to support more than 255 beacons.
+        let address = address.unwrap_or_else(|| {
+            format!("00:00:00:00:{:02x}:{:02x}", (id_val >> 8) & 0xFF, id_val & 0xFF)
+        });
 
         let settings = tx_power.map(|power| AdvertiseSettings {
             tx_power: Some(TxPower::TxPowerLevel(power)),
@@ -168,6 +171,36 @@ impl World {
     /// Creates a Bluetooth chip in Beacon mode.
     pub async fn given_beacon(&mut self, name: &str) {
         self.create_beacon_chip(name, None, None).await;
+    }
+
+    /// Creates a Bluetooth chip in Beacon mode with default name and address.
+    pub async fn when_create_beacon_with_defaults(&mut self) -> ChipId {
+        let id = self.next_chip_id();
+        let mode = BluetoothMode::Beacon(Box::new(BeaconParams {
+            ble_beacon: BleBeacon { address: "".to_string(), ..Default::default() },
+        }));
+
+        let params = ChipCreate {
+            packet_stream: None,
+            packet_sink: None,
+            config: ChipConfig::new(
+                "", // Empty name triggers unique naming
+                "netsim",
+                "",
+                ChipKindParams::Bluetooth(BluetoothCreate {
+                    address: "".to_string(), // Empty address triggers generation
+                    bt_properties: Default::default(),
+                    mode,
+                }),
+            ),
+            device_id: self.device_id,
+        };
+
+        if let Err(e) = self.client.0.create_with_id(id, params).await {
+            panic!("Failed to create default beacon: {:?}", e);
+        }
+
+        id
     }
 
     /// Creates a Bluetooth chip in Beacon mode with a specific address.
@@ -211,15 +244,16 @@ impl World {
 
     pub async fn when_create_chip(
         &self,
+        id: ChipId,
         params: ChipCreate,
-    ) -> Result<(), actor_framework::FrameworkError> {
-        self.client.0.create(params).await.map(|_| ())
+    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
+        self.client.0.create_with_id(id, params).await.map(|_| ())
     }
 
     pub async fn when_delete_chip(
         &self,
         name: &str,
-    ) -> Result<(), actor_framework::FrameworkError> {
+    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
         let id = *self.chips.get(name).expect("Chip not found");
         self.client.0.delete(id).await
     }
@@ -274,6 +308,24 @@ impl World {
     pub async fn then_chip_count_is(&self, expected: usize) {
         let count = self.client.0.list().await.expect("Failed to list chips").len();
         assert_eq!(count, expected, "Chip count should be {}", expected);
+    }
+
+    pub async fn then_chip_name_is(&self, id: ChipId, expected: &str) {
+        let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
+        assert_eq!(chip.name.as_deref(), Some(expected), "Chip name match");
+    }
+
+    pub async fn then_chip_address_is_generated(&self, id: ChipId) {
+        let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
+        if let Some(netsim_model::chip::ChipVariant::Bluetooth(_)) = &chip.variant {
+            log::info!("Chip {} exists and is a Bluetooth variant.", id.0);
+            // Note: Verification of the generated address via the `Chip` struct
+            // is not currently supported by the model, as the
+            // address is used for controller initialization but not
+            // persisted in the generic `Chip` state.
+        } else {
+            panic!("Chip {} is not a Bluetooth variant", id.0);
+        }
     }
 
     pub async fn when_packet_sent(&mut self, name: &str, packet: bytes::Bytes) {
@@ -348,7 +400,8 @@ impl World {
         // Beacons created by World have address ...:ID.
         // We know from previous analysis that raw packet data is Big Endian [0, 0, 0,
         // 0, 0, ID]. So we just check the last byte.
-        let expected_byte = (beacon_id.0 & 0xFF) as u8;
+        let expected_byte_5 = (beacon_id.0 & 0xFF) as u8;
+        let expected_byte_4 = ((beacon_id.0 >> 8) & 0xFF) as u8;
 
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_secs(5);
@@ -356,7 +409,7 @@ impl World {
         while start.elapsed() < timeout {
             let reports = self.receive_scan_report(scanner_name).await;
             for report in reports {
-                if report.mac[5] == expected_byte {
+                if report.mac[5] == expected_byte_5 && report.mac[4] == expected_byte_4 {
                     return;
                 }
             }

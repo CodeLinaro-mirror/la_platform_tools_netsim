@@ -2,6 +2,7 @@
 
 pub mod actions;
 pub mod client;
+pub mod error;
 pub mod lifecycle;
 mod ranging;
 mod ranging_estimator;
@@ -11,6 +12,7 @@ pub mod uwb_actor;
 pub use actions::{UwbAction, UwbActionResult};
 pub use actor_framework::ResourceActor;
 pub use client::UwbClient;
+pub use error::UwbError;
 pub use uwb_actor::UwbActor;
 
 /// Creates a new UWB actor runner and its client.

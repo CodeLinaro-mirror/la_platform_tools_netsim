@@ -60,15 +60,18 @@ impl GatewayTrait for SlirpGateway {
                 let fc = ieee80211.get_fc();
                 let ftype = ieee80211.is_data();
                 let stype = ieee80211.stype();
-                crate::error::WifiError::Frame(format!(
+                crate::error::WifiError::Frame(Box::from(format!(
                     "Slirp conversion failed: {}. Frame (Data: {}), Subtype: {}, FC: {:#06x}",
                     e, ftype, stype, fc
-                ))
+                )))
             })
             .and_then(|eth| {
                 let payload_len = eth.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN);
                 self.sender.send(bytes::Bytes::from(eth)).map(|_| payload_len).map_err(|e| {
-                    crate::error::WifiError::Network(format!("Slirp send failed: {}", e))
+                    crate::error::WifiError::Transmission(Box::from(format!(
+                        "Slirp send failed: {}",
+                        e
+                    )))
                 })
             })
     }
@@ -89,9 +92,9 @@ impl GatewayTrait for SlirpGateway {
         medium.wifi_stats.incr_network_packets_rx();
 
         let Some(bssid) = shared_keys.get_bssid() else {
-            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Network(
-                "No BSSID available for Slirp packet conversion".to_string(),
-            ));
+            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Network(Box::from(
+                "No BSSID available for Slirp packet conversion",
+            )));
             return;
         };
 
@@ -100,17 +103,13 @@ impl GatewayTrait for SlirpGateway {
         );
 
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-        let res = Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
-            .map_err(|_| {
-                crate::error::WifiError::Frame("Failed to convert Slirp packet to 802.11".into())
-            });
-
-        let ieee80211 = match res {
-            Ok(i) => i,
-            Err(e) => {
-                medium.wifi_stats.log_and_incr_err_count(&e);
-                return;
-            }
+        let Ok(ieee80211) =
+            Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
+        else {
+            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(Box::from(
+                "Failed to convert Slirp packet to 802.11",
+            )));
+            return;
         };
 
         let res = ieee80211.encode_to_vec().map_err(|_| {
@@ -118,10 +117,13 @@ impl GatewayTrait for SlirpGateway {
         });
         match res {
             Ok(bytes) => {
-                let res = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);
-                medium.wifi_stats.log_outcome(res, |_, _| {});
+                let _ = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);
             }
-            Err(e) => medium.wifi_stats.log_and_incr_err_count(&e),
+            Err(_) => {
+                medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(
+                    Box::from("Failed to encode Slirp packet to 802.11"),
+                ));
+            }
         }
     }
 
