@@ -266,9 +266,9 @@ impl fmt::Display for ChipId {
 pub struct Chip {
     pub id: u32,
     pub kind: ChipKind,
-    pub name: Option<String>,
-    pub manufacturer: Option<String>,
-    pub product_name: Option<String>,
+    pub name: String,
+    pub manufacturer: String,
+    pub product_name: String,
     pub position: Position,
     pub orientation: Orientation,
     pub device_id: DeviceId,
@@ -381,13 +381,13 @@ impl ChipUpdate {
             chip.id = (*id).into();
         }
         if let Some(name) = name {
-            chip.name = Some(name.clone());
+            chip.name = name.clone();
         }
         if let Some(manufacturer) = manufacturer {
-            chip.manufacturer = Some(manufacturer.clone());
+            chip.manufacturer = manufacturer.clone();
         }
         if let Some(product_name) = product_name {
-            chip.product_name = Some(product_name.clone());
+            chip.product_name = product_name.clone();
         }
         if let Some(position) = position {
             chip.position = *position;
