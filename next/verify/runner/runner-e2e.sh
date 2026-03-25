@@ -4,15 +4,18 @@
 RUNNER_BIN=$1
 APK_PATH=$2
 NETSIM_BIN=$3
-EXTRA_FLAGS=("${@:4}")
+NETSIM_CLI_BIN=$4
+EXTRA_FLAGS=("${@:5}")
 
 echo "[runner@host] Running ntest run"
 echo "[runner@host] APK: $APK_PATH"
 echo "[runner@host] Netsimd: $NETSIM_BIN"
+echo "[runner@host] Netsim CLI: $NETSIM_CLI_BIN"
 echo "[runner@host] Extra Flags: ${EXTRA_FLAGS[*]}"
 
 # Run ntest run command
 $RUNNER_BIN run \
     --apk-path "$APK_PATH" \
     --netsim-path "$NETSIM_BIN" \
+    --netsim-cli-path "$NETSIM_CLI_BIN" \
     "${EXTRA_FLAGS[@]}"

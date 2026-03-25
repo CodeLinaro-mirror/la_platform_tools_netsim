@@ -10,6 +10,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_WIFI_SSID: &str = "AndroidWifi";
+pub const DEFAULT_WIFI_BSSID: &str = "02:15:b2:00:00:00";
 
 /// Supported Wi-Fi 802.11 PHY modes.
 ///

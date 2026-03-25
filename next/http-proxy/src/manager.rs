@@ -20,8 +20,8 @@ use std::{
 
 use bytes::Bytes;
 use libslirp_rs::libslirp::{ProxyConnect, ProxyManager};
-use log::{debug, warn};
 use tokio::runtime::Runtime;
+use tracing::{debug, warn};
 
 use crate::{
     util::{into_raw_descriptor, ProxyConfig},

@@ -7,6 +7,6 @@ edition = "2021"
 actor-framework = { path = "../actor-framework" }
 bytes = "1.4"
 libslirp-rs = { path = "../libslirp-rs" }
-log = "0.4"
 netsim-model = { path = "../model" }
 tokio = { version = "1", features = ["full"] }
+tracing = "0.1"

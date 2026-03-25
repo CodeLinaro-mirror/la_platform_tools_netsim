@@ -4,7 +4,6 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1.0"
 device-actor = { path = "../device-actor" }
@@ -17,7 +16,6 @@ grpcio = { version = "0.13", default-features = false, features = [
 link-actor = { path = "../link-actor" }
 link-api = { path = "../link-api" }
 
-log = "0.4"
 netsim-model = { path = "../model" }
 netsim-proto = { path = "../proto" }
 packet-stream = { path = "../packet-stream" }
@@ -29,3 +27,4 @@ tokio = { version = "1", features = [
   "time",
 ] }
 tokio-stream = "0.1"
+tracing = "0.1"

@@ -8,6 +8,7 @@ use netsim_model::{
     chip_error::ChipError,
     ChipId, ChipKind,
 };
+use tracing::{info, warn};
 
 use crate::{
     actions::{BluetoothAction, BluetoothActionResult},
@@ -39,9 +40,7 @@ impl ActorService for BluetoothActor {
         let create_params = match &config.chip_kind_params {
             ChipKindParams::Bluetooth(p) => p,
             _ => {
-                return Err(BluetoothError::Chip(ChipError::InvalidArguments(
-                    "Expected Bluetooth network params".into(),
-                )));
+                return Err(BluetoothError::invalid_arg("Expected Bluetooth network params"));
             }
         };
 
@@ -83,7 +82,7 @@ impl ActorService for BluetoothActor {
             manufacturer: Some(params.config.manufacturer.clone()),
             product_name: Some(params.config.product_name.clone()),
             kind: ChipKind::BLUETOOTH,
-            variant: Some(netsim_model::chip::ChipVariant::Bluetooth(Default::default())),
+            variant: Some(ChipVariant::Bluetooth(Default::default())),
             ..Default::default()
         };
 
@@ -205,7 +204,7 @@ impl ActorService for BluetoothActor {
             let chip_id = ChipId(chip.id);
             let device_id = chip.device_id;
 
-            log::info!("Deleting chip {chip_id}");
+            info!("Deleting chip {chip_id}");
             self.rootcanal.remove_controller(chip_id.0.into()).to_chip_error()?;
 
             // Notify DeviceService
@@ -229,9 +228,17 @@ impl ActorService for BluetoothActor {
     ) -> Result<Self::ActionResult, Self::Error> {
         match _action {
             BluetoothAction::Reset { id } => {
-                // TODO: Implement reset
-                log::warn!("Reset chip {id} not implemented");
+                info!("Resetting Bluetooth chip {id}");
                 let _ = self.rootcanal.clear_stats(id.0.into());
+
+                let mut chips = self.chips.lock().unwrap();
+                if let Some(chip) = chips.get_mut(&id) {
+                    chip.enabled = true;
+                    if let Some(ChipVariant::Bluetooth(bt)) = &mut chip.variant {
+                        bt.low_energy.state = Some(true);
+                        bt.classic.state = Some(true);
+                    }
+                }
                 Ok(BluetoothActionResult::Success)
             }
             BluetoothAction::GetStatistics => {
@@ -290,7 +297,7 @@ impl BluetoothActor {
             let mut update = netsim_model::device::api::DeviceUpdate::default();
             update.name = Some(name);
             if let Err(e) = dc.update(device_id, update).await {
-                log::warn!("Failed to sync device name for device {}: {:?}", device_id, e);
+                warn!("Failed to sync device name for device {}: {:?}", device_id, e);
             }
         });
     }

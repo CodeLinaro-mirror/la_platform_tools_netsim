@@ -4,13 +4,13 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use device_actor::DeviceClient;
 use futures::StreamExt;
-use log::{info, warn};
 use netsim_model::chip::{BluetoothCreate, BluetoothMode, ChipKindParams, DeviceParams};
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
 };
 use tokio_util::codec::FramedRead;
+use tracing::{info, warn};
 
 use crate::h4::H4Codec;
 

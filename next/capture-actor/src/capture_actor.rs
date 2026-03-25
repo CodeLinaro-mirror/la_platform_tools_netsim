@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use netsim_model::ChipId;
+use tracing::warn;
 
 use crate::writer::CaptureWriter;
 
@@ -36,7 +37,7 @@ impl CaptureActor {
     pub(super) async fn flush_writers(&mut self) {
         for (id, writer) in &mut self.writers {
             if let Err(err) = writer.flush().await {
-                log::warn!("Failed to flush writer for chip {id}: {err}");
+                warn!("Failed to flush writer for chip {id}: {err}");
             }
         }
     }

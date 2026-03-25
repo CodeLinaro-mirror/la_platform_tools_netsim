@@ -66,14 +66,13 @@ object BluetoothState {
 
   fun hasSeen(name: String, uuid: UUID): Boolean {
     synchronized(lock) {
-      val res =
-        scanResults.any {
-          val record = it.scanRecord
-          val dName = record?.deviceName
-          val nameMatch = dName == name
-          val uuidMatch = record?.serviceUuids?.any { u -> u.uuid == uuid } == true
-          nameMatch || uuidMatch
-        }
+      val res = scanResults.any {
+        val record = it.scanRecord
+        val dName = record?.deviceName
+        val nameMatch = dName == name
+        val uuidMatch = record?.serviceUuids?.any { u -> u.uuid == uuid } == true
+        nameMatch || uuidMatch
+      }
       return res
     }
   }
