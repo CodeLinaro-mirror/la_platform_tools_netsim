@@ -500,6 +500,23 @@ impl World {
         self.client.add_chip(params).await.unwrap()
     }
 
+    pub async fn when_add_chip_with_position(
+        &self,
+        device_guid: &str,
+        chip_name: &str,
+        position: device_api::Position,
+        orientation: device_api::Orientation,
+    ) -> DeviceId {
+        let mut params = Self::create_device_add_chip_params(
+            device_guid.to_string(),
+            chip_name.to_string(),
+            "00:00:00:00:00:00".to_string(),
+        );
+        params.device_config.pose.position = position;
+        params.device_config.pose.orientation = orientation;
+        self.client.add_chip(params).await.unwrap()
+    }
+
     pub async fn when_add_wifi_chip(&self, device_guid: &str, chip_name: &str) -> DeviceId {
         let mut params = Self::create_device_add_chip_params(
             device_guid.to_string(),

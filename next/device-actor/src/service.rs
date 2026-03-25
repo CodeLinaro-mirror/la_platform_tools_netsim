@@ -530,6 +530,7 @@ impl DeviceActor {
                 chip_kind_params,
             },
             device_id: DeviceId(entity.device.id),
+            pose: entity.device.pose,
         };
 
         chip_client.create(chip_id, chip_create_params).await?;

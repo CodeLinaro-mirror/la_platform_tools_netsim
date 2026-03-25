@@ -95,6 +95,7 @@ impl World {
                 chip_kind_params: ChipKindParams::Uwb(UwbCreate {}),
             },
             device_id: DeviceId(1),
+            pose: Default::default(),
         };
 
         self.client.create(id, params).await?;

@@ -46,6 +46,7 @@ impl ActorService for UwbActor {
             name: params.config.name,
             manufacturer: params.config.manufacturer,
             product_name: params.config.product_name,
+            pose: params.pose,
             ..Default::default()
         };
 

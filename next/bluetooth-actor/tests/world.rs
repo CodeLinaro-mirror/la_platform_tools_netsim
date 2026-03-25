@@ -105,6 +105,7 @@ impl World {
                 }),
             ),
             device_id,
+            pose: Default::default(),
         };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {
@@ -225,6 +226,7 @@ impl World {
                 }),
             ),
             device_id: self.device_id,
+            pose: Default::default(),
         };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {

@@ -154,11 +154,16 @@ pub struct ChipCreate {
     pub config: ChipConfig,
     /// The ID of the device this chip belongs to.
     pub device_id: DeviceId,
+    /// The initial pose of the chip.
+    pub pose: Pose,
 }
 
 impl fmt::Debug for ChipCreate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ChipCreate").field("config", &self.config).finish_non_exhaustive()
+        f.debug_struct("ChipCreate")
+            .field("config", &self.config)
+            .field("pose", &self.pose)
+            .finish_non_exhaustive()
     }
 }
 

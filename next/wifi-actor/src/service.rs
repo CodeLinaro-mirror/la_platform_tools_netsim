@@ -76,6 +76,7 @@ impl ActorService for WifiActor {
             name: params.config.name,
             manufacturer: params.config.manufacturer,
             product_name: params.config.product_name,
+            pose: params.pose,
             ..Default::default()
         };
         self.active_chips.insert(id, chip);

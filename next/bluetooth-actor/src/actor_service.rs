@@ -86,7 +86,8 @@ impl ActorService for BluetoothActor {
             manufacturer: params.config.manufacturer.clone(),
             product_name: params.config.product_name.clone(),
             kind: ChipKind::BLUETOOTH,
-            variant: Some(ChipVariant::Bluetooth(Default::default())),
+            variant: Some(ChipVariant::from(ChipKind::BLUETOOTH)),
+            pose: params.pose,
             ..Default::default()
         };
 
