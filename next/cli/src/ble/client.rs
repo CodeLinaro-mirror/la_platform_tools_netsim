@@ -9,7 +9,7 @@ use netsim_proto::{ble_service::ScanRequest, ble_service_grpc::BleServiceClient,
 
 use super::{
     args::{BleCommand, BleSniff},
-    display::{print_scan_response, print_sniff_response},
+    display::{parse_scan_response, print_json_event, print_sniff_response},
 };
 use crate::error::Result;
 
@@ -22,16 +22,27 @@ pub fn execute(cmd: &BleCommand, client: &BleServiceClient, verbose: bool) -> Re
             pos.y = args.y;
             pos.z = args.z;
             req.position = protobuf::MessageField::some(pos);
+            req.active = args.active;
 
             let mut stream = client.scan_opt(&req, CallOption::default())?;
 
-            println!("Starting BLE scan at ({}, {}, {})...", args.x, args.y, args.z);
-            println!("Press Ctrl-C to stop.");
+            if args.pcap {
+                write_pcap_global_header();
+            }
 
             futures::executor::block_on(async {
                 while let Some(result) = stream.next().await {
                     match result {
-                        Ok(res) => print_scan_response(&res, verbose),
+                        Ok(res) => {
+                            if args.pcap {
+                                write_pcap_packet(&res.packet);
+                                continue;
+                            }
+                            let events = parse_scan_response(&res, verbose);
+                            for event in events {
+                                print_json_event(&event, verbose);
+                            }
+                        }
                         Err(e) => {
                             eprintln!("Scan stream disconnected or encountered an error: {}", e);
                             break;
@@ -134,4 +145,43 @@ fn execute_sniff(args: &BleSniff, client: &BleServiceClient, verbose: bool) -> R
     });
 
     Ok(())
+}
+
+fn write_pcap_global_header() {
+    let mut file = std::io::stdout();
+    let _ = file.write_all(&0xa1b2c3d4u32.to_ne_bytes());
+    let _ = file.write_all(&2u16.to_ne_bytes()); // major
+    let _ = file.write_all(&4u16.to_ne_bytes()); // minor
+    let _ = file.write_all(&0u32.to_ne_bytes()); // timezone
+    let _ = file.write_all(&0u32.to_ne_bytes()); // sigfigs
+    let _ = file.write_all(&65535u32.to_ne_bytes()); // snaplen
+    let _ = file.write_all(&201u32.to_ne_bytes()); // LINKTYPE_BLUETOOTH_HCI_H4_WITH_PH
+    let _ = file.flush();
+}
+
+fn write_pcap_packet(packet: &[u8]) {
+    let mut file = std::io::stdout();
+    let now =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let ts_sec = now.as_secs() as u32;
+    let ts_usec = now.subsec_micros();
+
+    let dir = [0u8, 0, 0, 1]; // Received by host
+
+    let mut h4_packet = Vec::new();
+    if packet.is_empty() || packet[0] != 0x04 {
+        h4_packet.push(0x04);
+    }
+    h4_packet.extend_from_slice(packet);
+
+    let incl_len = (dir.len() + h4_packet.len()) as u32;
+    let orig_len = incl_len;
+
+    let _ = file.write_all(&ts_sec.to_ne_bytes());
+    let _ = file.write_all(&ts_usec.to_ne_bytes());
+    let _ = file.write_all(&incl_len.to_ne_bytes());
+    let _ = file.write_all(&orig_len.to_ne_bytes());
+    let _ = file.write_all(&dir);
+    let _ = file.write_all(&h4_packet);
+    let _ = file.flush();
 }

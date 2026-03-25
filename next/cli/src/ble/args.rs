@@ -22,6 +22,13 @@ pub struct BleScan {
     /// Z position of the scanner
     #[arg(long, default_value = "0.0")]
     pub z: f32,
+    /// Send Active Scan Requests (SCAN_REQ) to trigger Scan Responses from
+    /// beacons
+    #[arg(long)]
+    pub active: bool,
+    /// Output raw binary PCAP stream to stdout for piping to tshark/Wireshark
+    #[arg(long)]
+    pub pcap: bool,
 }
 
 #[derive(Debug, Args, PartialEq)]

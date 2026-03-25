@@ -13,6 +13,7 @@ async-trait = "0.1.68"
 bytes = "1.4.0"
 device-actor = { path = "../device-actor" }
 futures = "0.3.31"
+hex = "0.4.3"
 netsim-model = { path = "../model" }
 netsim-packets = { path = "../packets" }
 rootcanal = { path = "../rootcanal" }
@@ -34,6 +35,5 @@ test-utils = []
 [dev-dependencies]
 rootcanal = { path = "../rootcanal" }
 netsim-testing = { path = "../testing", features = ["testing"] }
-hex = "0.4.3"
 rand = "0.8.5"
 tokio-stream = "0.1.17"

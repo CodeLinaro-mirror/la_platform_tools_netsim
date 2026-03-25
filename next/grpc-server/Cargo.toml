@@ -17,7 +17,7 @@ link-actor = { path = "../link-actor" }
 link-api = { path = "../link-api" }
 
 netsim-model = { path = "../model" }
-netsim-proto = { path = "../proto" }
+netsim-proto = { path = "../rust/proto" }
 packet-stream = { path = "../packet-stream" }
 protobuf = "3"
 tokio = { version = "1", features = [
