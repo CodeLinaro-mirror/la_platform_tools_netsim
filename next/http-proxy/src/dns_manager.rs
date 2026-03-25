@@ -15,7 +15,7 @@
 use std::{collections::HashMap, net::IpAddr, sync::Mutex};
 
 use etherparse::{PacketHeaders, PayloadSlice, TransportHeader};
-use tracing::debug;
+use log::debug;
 
 /// This module provides a reverse-dns function that caches the domain
 /// name (FQDNs) and IpAddr from DNS answer records.

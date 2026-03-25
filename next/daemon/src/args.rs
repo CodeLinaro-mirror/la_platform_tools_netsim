@@ -38,8 +38,8 @@ pub struct Args {
 
     /// Redirect all TCP connections through the specified HTTP/HTTPS proxy.
     /// Can be one of the following:
-    ///     `http://<server>:<port>`
-    ///     `http://<username>:<password>@<server>:<port>`
+    ///     http://<server>:<port>
+    ///     http://<username>:<password>@<server>:<port>
     ///     (the 'http://' prefix can be omitted)
     /// TODO: Not implemented yet
     #[arg(long, verbatim_doc_comment)]

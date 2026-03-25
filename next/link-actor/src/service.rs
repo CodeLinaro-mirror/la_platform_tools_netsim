@@ -2,7 +2,6 @@
 
 use actor_framework::{ActorService, DynContext};
 use link_api::LinkAction;
-use tracing::info;
 
 use crate::{error::LinkError, link_actor::LinkActor};
 
@@ -52,7 +51,7 @@ impl ActorService for LinkActor {
         }
 
         if self.chip_pairs.contains_key(&(params.sender, params.receiver)) {
-            return Err(LinkError::AlreadyExists);
+            return Err(LinkError::AlreadyExists(id.to_string()));
         }
 
         // Create Entity (Link)
@@ -89,7 +88,7 @@ impl ActorService for LinkActor {
     ) -> Result<Self::Entity, Self::Error> {
         let link_clone = {
             let Some(link) = self.links.get_mut(&id) else {
-                return Err(LinkError::NotFound(id.0));
+                return Err(LinkError::NotFound(id.to_string()));
             };
 
             if let Some(rssi) = update.rssi {
@@ -116,7 +115,7 @@ impl ActorService for LinkActor {
             self.update_chip_links(sender).await;
             Ok(())
         } else {
-            Err(LinkError::NotFound(id.0))
+            Err(LinkError::NotFound(id.to_string()))
         }
     }
 
@@ -154,7 +153,7 @@ impl ActorService for LinkActor {
                 }
             }
             LinkAction::Reset => {
-                info!("LinkActor: Resetting all links");
+                log::info!("LinkActor: Resetting all links");
                 self.links.clear();
                 self.chip_pairs.clear();
             }

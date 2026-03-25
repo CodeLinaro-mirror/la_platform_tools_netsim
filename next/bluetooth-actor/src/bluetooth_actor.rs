@@ -8,7 +8,6 @@ use std::{
 use device_actor::DeviceClient;
 use netsim_model::chip::{Chip, ChipId};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
-use tracing::warn;
 
 use crate::ranging;
 
@@ -61,9 +60,9 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
             // This can happen during startup/shutdown or if a chip is not yet fully
             // registered.
             if src_chip.is_none() {
-                warn!("on_send_ll: Missing src chip {src_id}");
+                log::warn!("on_send_ll: Missing src chip {src_id}");
             } else {
-                warn!("on_send_ll: Missing dst chip {dst_id}");
+                log::warn!("on_send_ll: Missing dst chip {dst_id}");
             }
             Some(tx_power)
         }

@@ -10,11 +10,10 @@ use device_actor::DeviceClient;
 use netsim_model::chip::{Chip, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate};
 use pica::{Handle, Pica, PicaCommand, PicaEvent};
 use tokio::sync::{broadcast, mpsc};
-use tracing::warn;
 
 /// State associated with a single UWB chip.
 #[derive(Clone)]
-pub(crate) struct UwbChipState {
+pub struct UwbChipState {
     /// The chip model.
     pub(super) chip: Chip,
 }
@@ -32,7 +31,7 @@ impl UwbChipState {
                 uwb_update.radio.apply(&mut uwb_radio.radio);
             }
             (Some(other), _) => {
-                warn!("Received unexpected update for chip {}: {other:?}", self.chip.id);
+                log::warn!("Received unexpected update for chip {}: {other:?}", self.chip.id);
             }
             (None, _) => {}
         }

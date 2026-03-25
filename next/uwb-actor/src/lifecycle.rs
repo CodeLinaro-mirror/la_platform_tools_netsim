@@ -2,10 +2,10 @@
 
 use actor_framework::{ActorLifecycle, ActorService, DynContext};
 use futures::FutureExt;
+use log::warn;
 use netsim_model::ChipId;
 use pica::PicaEvent;
 use tokio::sync::broadcast::error::TryRecvError;
-use tracing::{info, warn};
 
 use crate::uwb_actor::UwbActor;
 
@@ -13,7 +13,7 @@ const PICA_SENTINEL_CHIP_ID: ChipId = ChipId(u32::MAX);
 
 impl ActorLifecycle for UwbActor {
     async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
-        info!("UwbActor starting Pica run loop");
+        log::info!("UwbActor starting Pica run loop");
 
         let pica = self.pica.take().expect("lifecycle starts only once");
         ctx.spawn(

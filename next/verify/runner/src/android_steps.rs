@@ -445,8 +445,7 @@ impl AndroidDevice {
     }
 }
 
-/// STEP: When ^(?:@avd|@android)(?::(\S+))? sends (\d+)(KB|B) (TCP|UDP) to
-/// (.*)$
+/// STEP: When (?:@avd|@android)(?::(\S+))? sends (\d+)(KB|B) (TCP|UDP) to (.*)
 async fn avd_sends_packet(
     w: &mut TestContext,
     label: String,
@@ -479,7 +478,7 @@ async fn avd_sends_packet(
     .expect("Client check failed");
 }
 
-/// STEP: When ^(?:@avd|@android)(?::(\S+))? (.*)$
+/// STEP: When (?:@avd|@android)(?::(\S+))? (.*)
 async fn generic_execution_step(w: &mut TestContext, label: String, step: String) {
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
 
@@ -506,8 +505,8 @@ async fn generic_execution(w: &mut TestContext, actor: String, step: String) {
     }
 }
 
-/// STEP: Then ^(?:@avd|@android)(?::(\S+))? measures performance with (\d+)
-/// samples of (\d+)(KB|MB|B) (TCP|UDP) to (.*)$
+/// STEP: Then (?:@avd|@android)(?::(\S+))? measures performance with (\d+)
+/// samples of (\d+)(KB|MB|B) (TCP|UDP) to (.*)
 async fn performance_benchmark(
     w: &mut TestContext,
     label: String,

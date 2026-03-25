@@ -22,7 +22,6 @@ use netsim_model::{
     ChipId, ChipKind,
 };
 use netsim_proto::protobuf::Enum;
-use tracing::warn;
 
 #[derive(Debug)]
 pub struct StreamStats {
@@ -85,17 +84,20 @@ pub async fn create_capture_and_wrap_streams(
             let stats_clone_rx = stats.clone();
             let stats_clone_tx = stats.clone();
 
-            let mut sender = None;
-            if let Some(client) = &capture_client {
-                match client.packet_sender(chip_id).await {
-                    Ok(s) => {
-                        sender = Some(s);
+            let create_callback =
+                || -> Box<dyn Fn(ChipId, capture_api::Direction, Bytes) + Send + Sync> {
+                    if let Some(client) = &capture_client {
+                        let cc_clone = client.clone();
+                        Box::new(move |id, dir, bytes| {
+                            cc_clone.capture_packet(id, dir, bytes);
+                        })
+                    } else {
+                        Box::new(|_, _, _| {})
                     }
-                    Err(err) => {
-                        warn!("Failed to start capture for chip {}: {}", chip_id, err);
-                    }
-                }
-            }
+                };
+
+            let capture_callback = create_callback();
+            let capture_callback2 = create_callback();
 
             // Wrap stream for stats (Rx from Transport perspective)
             let in_stream = in_stream.inspect(move |bytes| {
@@ -111,8 +113,13 @@ pub async fn create_capture_and_wrap_streams(
             });
 
             let (wrapped_stream, wrapped_sink) = (
-                CapturedStream::new(Box::new(in_stream), sender.clone(), enabled_flag.clone()),
-                CapturedSink::new(Box::pin(in_sink), sender, enabled_flag),
+                CapturedStream::new(
+                    Box::new(in_stream),
+                    capture_callback,
+                    chip_id,
+                    enabled_flag.clone(),
+                ),
+                CapturedSink::new(Box::pin(in_sink), capture_callback2, chip_id, enabled_flag),
             );
 
             let out_stream: PacketStream =

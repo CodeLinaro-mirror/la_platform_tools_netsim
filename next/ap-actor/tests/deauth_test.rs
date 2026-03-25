@@ -4,7 +4,6 @@ use netsim_packets::{
     ethernet::MacAddr,
     ieee80211::{FrameControl, MacHeader3Addr, SequenceControl},
 };
-use tracing::info;
 use zerocopy::IntoBytes;
 
 use crate::world::ApWorld;
@@ -18,7 +17,7 @@ use crate::world::ApWorld;
 // doesn't crash/error.
 #[tokio::test]
 async fn test_station_deauth() {
-    info!("Scenario: Station Deauthentication");
+    log::info!("Scenario: Station Deauthentication");
     let mut world = ApWorld::new().await;
     // Config with WPA
     world.given_a_registered_ap_with_wpa("WpaAP", "CorrectPassword").await;
@@ -31,7 +30,7 @@ async fn test_station_deauth() {
     world.then_station_receives_assoc_resp(station_mac).await;
 
     // 2. Perform Deauth
-    info!("When the Station sends a Deauthentication frame");
+    log::info!("When the Station sends a Deauthentication frame");
     let tx = world.tx_to_ap.as_mut().expect("AP registered");
 
     // Construct Deauth Frame
@@ -64,5 +63,5 @@ async fn test_station_deauth() {
     // TODO: Ideally we should verify shared_keys is empty.
     // Since we cannot inspect AP internal state easily, we rely on logs or
     // side-effects.
-    info!("Deauth scenario completed without crash.");
+    log::info!("Deauth scenario completed without crash.");
 }

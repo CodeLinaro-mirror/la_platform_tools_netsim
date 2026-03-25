@@ -1,18 +1,18 @@
 // Copyright 2024-2025 The Android Open Source Project
+use thiserror::Error;
 
-use modem_rs::ModemError;
-use netsim_model::chip_error::ChipError;
-
-#[derive(thiserror::Error, Debug)]
+#[derive(Error, Debug)]
 pub enum CellError {
+    #[error("Chip not found: {0}")]
+    ChipNotFound(String),
+    #[error("Failed to send message: {0}")]
+    SendError(String),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("Missing packet stream or sink")]
     MissingStreamSink,
     #[error("Controller service error: {0}")]
-    ModemError(#[from] ModemError),
-    #[error("Chip error: {0}")]
-    Chip(#[from] ChipError),
+    ModemError(String),
     #[error("Unknown error")]
     Unknown,
 }

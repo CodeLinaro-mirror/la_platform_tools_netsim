@@ -5,14 +5,15 @@
 //! Actor Model, processing messages sequentially and ensuring exclusive access
 //! to the resource store.
 
+use log::error;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
-use tracing::error;
 
 use crate::{
-    client::ResourceClient, context::FrameworkContext, message::ResourceRequest, ActorLifecycle,
-    ActorService, DynContext, StreamMessage,
+    client::ResourceClient, context::FrameworkContext, error::FrameworkError,
+    message::ResourceRequest, ActorLifecycle, ActorService, DynContext, StreamMessage,
 };
+// use tracing::{debug, info, warn};
 
 /// The generic actor that manages a collection of resources.
 ///
@@ -274,27 +275,45 @@ impl<T: ActorService + ActorLifecycle> ResourceActor<T> {
         match msg {
             ResourceRequest::Create { params, id, respond_to } => {
                 // Pass the optional ID to the service handle_create method
-                let result = actor.handle_create(id, params, ctx).await;
+                let result = actor
+                    .handle_create(id, params, ctx)
+                    .await
+                    .map_err(|e| FrameworkError::ServiceError(Box::new(e)));
                 let _ = respond_to.send(result);
             }
             ResourceRequest::Get { id, respond_to } => {
-                let result = actor.handle_get(id, ctx).await;
+                let result = actor
+                    .handle_get(id, ctx)
+                    .await
+                    .map_err(|e| FrameworkError::ServiceError(Box::new(e)));
                 let _ = respond_to.send(result);
             }
             ResourceRequest::Update { id, update, respond_to } => {
-                let result = actor.handle_update(id, update, ctx).await;
+                let result = actor
+                    .handle_update(id, update, ctx)
+                    .await
+                    .map_err(|e| FrameworkError::ServiceError(Box::new(e)));
                 let _ = respond_to.send(result);
             }
             ResourceRequest::Delete { id, respond_to } => {
-                let result = actor.handle_delete(id, ctx).await;
+                let result = actor
+                    .handle_delete(id, ctx)
+                    .await
+                    .map_err(|e| FrameworkError::ServiceError(Box::new(e)));
                 let _ = respond_to.send(result);
             }
             ResourceRequest::Action { id, action, respond_to } => {
-                let result = actor.handle_action(id, action, ctx).await;
+                let result = actor
+                    .handle_action(id, action, ctx)
+                    .await
+                    .map_err(|e| FrameworkError::ServiceError(Box::new(e)));
                 let _ = respond_to.send(result);
             }
             ResourceRequest::List { respond_to } => {
-                let result = actor.handle_list(ctx).await;
+                let result = actor
+                    .handle_list(ctx)
+                    .await
+                    .map_err(|e| FrameworkError::ServiceError(Box::new(e)));
                 let _ = respond_to.send(result);
             }
             ResourceRequest::Shutdown { respond_to } => {

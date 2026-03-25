@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
 use netsim_packets::{ethernet::MacAddr, ieee80211::management_subtype};
-use tracing::info;
 
 use crate::world::ApWorld;
 
@@ -20,7 +19,7 @@ async fn test_update_channel() {
     // (Skipped for brevity/limitations of helper, assuming default)
 
     // 2. Update Channel to 1
-    info!("When the AP channel is updated to 1");
+    log::info!("When the AP channel is updated to 1");
     world.client.update_ap_config(id, None, Some(1), None, None).await.expect("Update failed");
 
     // 3. Verify Beacon has Channel 1
@@ -68,7 +67,7 @@ async fn test_force_disconnect() {
     world.then_station_receives_assoc_resp(station_mac_str).await;
 
     // 2. Force Disconnect
-    info!("When the AP forces disconnect for {}", station_mac);
+    log::info!("When the AP forces disconnect for {}", station_mac);
     // In `world.rs`, the station uses `ChipId(1234)`.
     world
         .client
@@ -103,14 +102,14 @@ async fn test_enable_disable() {
     world.then_beacon_is_received("ToggleAP").await;
 
     // 2. Disable
-    info!("When the AP is disabled");
+    log::info!("When the AP is disabled");
     world.client.update_ap_config(id, None, None, None, Some(false)).await.expect("Disable failed");
 
     // 3. Verify No Beacons
     world.then_no_beacons_are_received().await;
 
     // 4. Enable
-    info!("When the AP is enabled");
+    log::info!("When the AP is enabled");
     world.client.update_ap_config(id, None, None, None, Some(true)).await.expect("Enable failed");
 
     // 5. Verify Beacons return

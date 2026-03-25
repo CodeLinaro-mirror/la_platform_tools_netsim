@@ -3,11 +3,7 @@
 //! This module provides a PCAP writer specifically for Wi-Fi packets.
 //! It implements the Radiotap header encapsulation for IEEE 802.11 payloads.
 
-use std::{
-    io::{self, Result},
-    path::Path,
-    time::SystemTime,
-};
+use std::{io::Result, path::Path, time::SystemTime};
 
 use async_trait::async_trait;
 use capture_api::Direction;
@@ -18,7 +14,6 @@ use netsim_packets::{
     },
     pcap::radiotap::create_radiotap_packet,
 };
-use tracing::warn;
 
 use crate::writer::{CaptureWriter, PcapWriter, DLT_IEEE802_11_RADIO};
 
@@ -43,7 +38,7 @@ impl CaptureWriter for WifiPcapWriter {
         timestamp: SystemTime,
         direction: Direction,
         data: &[u8],
-    ) -> io::Result<()> {
+    ) -> anyhow::Result<()> {
         match HwsimMsg::decode_full(data) {
             Ok(hwsim_msg) => {
                 if hwsim_msg.hwsim_hdr.hwsim_cmd != HwsimCmd::Frame {
@@ -55,13 +50,16 @@ impl CaptureWriter for WifiPcapWriter {
                         self.inner.write_packet(timestamp, direction, &radiotap_packet).await
                     }
                     Err(e) => {
-                        warn!("WifiPcapWriter: Failed to parse HwsimFrame from HwsimMsg: {:?}", e);
+                        log::warn!(
+                            "WifiPcapWriter: Failed to parse HwsimFrame from HwsimMsg: {:?}",
+                            e
+                        );
                         Ok(())
                     }
                 }
             }
             Err(e) => {
-                warn!("WifiPcapWriter: Failed to decode HwsimMsg: {:?}", e);
+                log::warn!("WifiPcapWriter: Failed to decode HwsimMsg: {:?}", e);
                 Ok(())
             }
         }

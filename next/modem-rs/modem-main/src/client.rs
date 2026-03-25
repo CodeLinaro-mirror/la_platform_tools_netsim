@@ -15,11 +15,11 @@
 
 use std::os::unix::io::FromRawFd;
 
+use log::{error, info};
 use tokio::{
     io::{copy_bidirectional, AsyncWriteExt},
     net::TcpStream,
 };
-use tracing::{error, info};
 
 use crate::{Args, TCP_PORT};
 

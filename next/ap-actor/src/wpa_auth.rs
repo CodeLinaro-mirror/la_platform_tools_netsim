@@ -6,7 +6,6 @@ use netsim_packets::{
         EapolHeader, EapolKeyFrame, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
     },
 };
-use tracing::{info, warn};
 use zerocopy::{FromBytes, IntoBytes};
 
 use crate::{
@@ -146,7 +145,7 @@ impl WpaAuthenticator {
                 self.calc_ptk();
 
                 if !self.verify_mic(frame_data, &key_frame.mic) {
-                    warn!("WPA: MIC verification failed for M2 from {}", self.sta_addr);
+                    log::warn!("WPA: MIC verification failed for M2 from {}", self.sta_addr);
                     return Ok(vec![]);
                 }
 
@@ -185,7 +184,7 @@ impl WpaAuthenticator {
                     encrypted_data = AesWrap(&self.kek, &data_to_wrap);
                 }
 
-                info!("WPA: Sending M3 to {} (with GTK)", self.sta_addr);
+                log::info!("WPA: Sending M3 to {} (with GTK)", self.sta_addr);
 
                 let m3_bytes = self.build_eapol_frame(
                     m3_info,
@@ -202,12 +201,12 @@ impl WpaAuthenticator {
             }
             WpaState::PtkNegotiating => {
                 if !self.verify_mic(frame_data, &key_frame.mic) {
-                    warn!("WPA: MIC verification failed for M4 from {}", self.sta_addr);
+                    log::warn!("WPA: MIC verification failed for M4 from {}", self.sta_addr);
                     return Ok(vec![]);
                 }
 
                 self.state = WpaState::PtkDone;
-                info!("WPA: Handshake Complete. PTK Installed.");
+                log::info!("WPA: Handshake Complete. PTK Installed.");
 
                 // Install Key
                 let tk = self.tk.clone();

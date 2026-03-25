@@ -1,4 +1,5 @@
 // Copyright 2025-2026 The Android Open Source Project
+
 #![allow(non_snake_case)]
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

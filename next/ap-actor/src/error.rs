@@ -1,18 +1,16 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use netsim_model::chip_error::ChipError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+
 pub enum ApError {
     #[error("AP not found: {0}")]
     ApNotFound(u32),
-    #[error("AP with ID {0} already exists")]
-    ApAlreadyExists(u32),
+    #[error("AP already exists")]
+    ApAlreadyExists,
     #[error("Invalid Frame")]
     InvalidFrame,
-    #[error("Chip error: {0}")]
-    Chip(#[from] ChipError),
     #[error("Internal error: {0}")]
-    Internal(Box<dyn std::error::Error + Send + Sync>),
+    Internal(String),
 }

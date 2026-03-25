@@ -14,6 +14,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use daemonize::Daemonize;
+use log::{error, info};
 use modem_rs::{time::SystemClock, Callbacks, CellularNetworkSimulator, ModemId, NetworkCallbacks};
 use serde::Serialize;
 use tokio::{
@@ -21,7 +22,6 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::Mutex,
 };
-use tracing::{error, info};
 use url::Url;
 
 use crate::{ClientWriter, ServerCallbacks, PID_FILE, SERVER_LOG_FILE, TCP_PORT};

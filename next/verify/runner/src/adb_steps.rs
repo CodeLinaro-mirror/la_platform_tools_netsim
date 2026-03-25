@@ -1,7 +1,6 @@
 use std::{collections::HashSet, process::Stdio};
 
 use anyhow::{Context, Result};
-use tracing::{info, warn};
 
 use crate::{
     android_steps::AndroidDevice,
@@ -163,7 +162,7 @@ impl AdbWorld {
     }
 }
 
-/// STEP: Given ^@(\S+) has (\d+) attached device(?:s)?$
+/// STEP: Given @(\S+) has (\d+) attached device(?:s)?
 async fn given_devices(w: &mut TestContext, actor: String, count: usize) {
     let actor = format!("@{}", actor);
     w.log_step(&actor, "GIVEN", &format!("Has {} or more attached devices", count));
@@ -195,7 +194,7 @@ async fn given_devices(w: &mut TestContext, actor: String, count: usize) {
     }
 }
 
-/// STEP: When ^(?:@adb)(?::(\S+))? connects to wifi "([^"]+)" with password$
+/// STEP: When (?:@adb)(?::(\S+))? connects to wifi "([^"]+)" with password
 /// "([^"]+)"
 async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, password: String) {
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
@@ -242,7 +241,7 @@ async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, 
             .expect("Failed to execute ping");
 
         if ping_status.success() {
-            info!("Wi-Fi fully connected and routed after {} seconds", i);
+            log::info!("Wi-Fi fully connected and routed after {} seconds", i);
             connected = true;
             break;
         }
@@ -250,11 +249,11 @@ async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, 
     }
 
     if !connected {
-        warn!("Timed out waiting for ping to 10.0.2.2 to succeed! Test may fail.");
+        log::warn!("Timed out waiting for ping to 10.0.2.2 to succeed! Test may fail.");
     }
 }
 
-/// STEP: When ^(?:@adb)(?::(\S+))? disables cellular data$
+/// STEP: When (?:@adb)(?::(\S+))? disables cellular data
 pub async fn adb_disables_cellular(w: &mut TestContext, label: String) {
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
 
@@ -262,7 +261,7 @@ pub async fn adb_disables_cellular(w: &mut TestContext, label: String) {
         .get_android_actor(&actor)
         .unwrap_or_else(|| panic!("Actor {} not found or is not an Android Agent", actor));
 
-    info!("{} Disabling Cellular Data...", actor);
+    log::info!("{} Disabling Cellular Data...", actor);
     let mut svc_cmd = android.adb_command();
     svc_cmd
         .arg("shell")

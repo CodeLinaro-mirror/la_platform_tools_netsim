@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 
-use actor_framework::FrameworkError;
 use link_actor::{LinkActor, LinkClient};
 use link_api::{Link, LinkCreate, LinkId, LinkUpdate};
 use netsim_model::chip::{ChipClient, ChipId, ChipKind, MockChipClient};
@@ -70,9 +69,9 @@ impl World {
         sender: ChipId,
         receiver: ChipId,
         rssi: i8,
-    ) -> Result<LinkId, FrameworkError<link_api::LinkError>> {
+    ) -> Result<LinkId, String> {
         let params = LinkCreate { sender, receiver, rssi };
-        self.client.create(params).await
+        self.client.create(params).await.map_err(|e| e.to_string())
     }
 
     /// BDD Step: When a chip is added (notification).
@@ -86,12 +85,7 @@ impl World {
     }
 
     /// BDD Step: When a link is updated.
-    pub async fn when_update_link(
-        &self,
-        id: LinkId,
-        rssi: i8,
-    ) -> Result<Link, FrameworkError<link_api::LinkError>> {
-        self.client.update(id, LinkUpdate { rssi: Some(rssi) }).await?;
-        self.client.get(id).await.map(|opt| opt.expect("link exists"))
+    pub async fn when_update_link(&self, id: LinkId, rssi: i8) -> Result<Link, String> {
+        self.client.update(id, LinkUpdate { rssi: Some(rssi) }).await.map_err(|e| e.to_string())
     }
 }

@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::chip_error::ChipError;
+use crate::{chip_error::ChipError, device_error::DeviceError};
 
 /// The error type for client-side operations.
 #[derive(Error, Debug)]
@@ -15,34 +15,22 @@ pub enum ClientError {
 
     /// An operation-specific error occurred from the chip service.
     #[error("Chip error: {0}")]
-    Chip(#[from] ChipError),
+    Chip(ChipError),
 
-    /// A generic error from the actor framework.
-    #[error("Framework error: {0}")]
-    Framework(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// An operation-specific error occurred from the device service.
+    #[error("Device error: {0}")]
+    Device(Box<DeviceError>),
 }
 
-#[cfg(any(feature = "testing", test))]
-impl ClientError {
-    pub fn as_chip_error(&self) -> Option<&ChipError> {
-        match self {
-            Self::Chip(chip) => Some(chip),
-            Self::Framework(framework) => {
-                let mut chip_error = framework.downcast_ref::<ChipError>();
-                let mut dyn_error_opt = framework.source();
+impl From<DeviceError> for ClientError {
+    fn from(err: DeviceError) -> Self {
+        ClientError::Device(Box::new(err))
+    }
+}
 
-                while let Some(dyn_error) = dyn_error_opt {
-                    if chip_error.is_some() {
-                        break;
-                    }
-                    chip_error = dyn_error.downcast_ref();
-                    dyn_error_opt = dyn_error.source();
-                }
-
-                chip_error
-            }
-            _other => None,
-        }
+impl From<ChipError> for ClientError {
+    fn from(err: ChipError) -> Self {
+        ClientError::Chip(err)
     }
 }
 

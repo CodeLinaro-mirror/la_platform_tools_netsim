@@ -31,17 +31,15 @@ impl ActorService for WifiActor {
     ) -> Result<Self::Id, Self::Error> {
         let id = id.ok_or_else(|| WifiError::Internal("missing chip id".into()))?;
         if self.active_chips.contains_key(&id) {
-            return Err(WifiError::Internal(Box::from(format!("Chip {} already exists", id))));
+            return Err(WifiError::Internal(format!("Chip {} already exists", id)));
         }
 
         let stream = params
             .packet_stream
             .take()
-            .ok_or(WifiError::Internal(Box::from("Missing PacketStream")))?;
-        let sink = params
-            .packet_sink
-            .take()
-            .ok_or(WifiError::Internal(Box::from("Missing PacketSink")))?;
+            .ok_or(WifiError::Internal("Missing PacketStream".into()))?;
+        let sink =
+            params.packet_sink.take().ok_or(WifiError::Internal("Missing PacketSink".into()))?;
 
         // Spawn sink task
         let (tx, mut rx) = mpsc::unbounded_channel::<bytes::Bytes>();
@@ -124,7 +122,7 @@ impl ActorService for WifiActor {
             }
             Ok(chip.clone())
         } else {
-            Err(WifiError::Internal(Box::from(format!("Chip {} not found", id))))
+            Err(WifiError::Internal(format!("Chip {} not found", id)))
         }
     }
 

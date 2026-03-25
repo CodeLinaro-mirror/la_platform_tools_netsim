@@ -81,7 +81,7 @@ impl World {
         }
     }
 
-    pub async fn when_create_chip(&mut self, chip_id: u32) -> Result<(), ClientError> {
+    pub async fn when_create_chip(&mut self, chip_id: u32) -> Result<(), ChipError> {
         let id = ChipId(chip_id);
         let (stream, packet_tx) = mock_stream();
         let (sink, packet_rx) = mock_sink();
@@ -97,7 +97,10 @@ impl World {
             device_id: DeviceId(1),
         };
 
-        self.client.create(id, params).await?;
+        self.client.create(id, params).await.map_err(|e| match e {
+            ClientError::Chip(err) => err,
+            _ => ChipError::Internal(e.to_string()),
+        })?;
 
         self.packet_txs.insert(id, packet_tx);
         self.packet_rxs.insert(id, packet_rx);
@@ -105,12 +108,18 @@ impl World {
         Ok(())
     }
 
-    pub async fn when_delete_chip(&self, chip_id: u32) -> Result<(), ClientError> {
-        self.client.delete(ChipId(chip_id)).await
+    pub async fn when_delete_chip(&self, chip_id: u32) -> Result<(), ChipError> {
+        self.client.delete(ChipId(chip_id)).await.map_err(|e| match e {
+            ClientError::Chip(err) => err,
+            _ => ChipError::Internal(e.to_string()),
+        })
     }
 
-    pub async fn when_get_chip(&self, chip_id: u32) -> Result<Chip, ClientError> {
-        self.client.read(ChipId(chip_id)).await
+    pub async fn when_get_chip(&self, chip_id: u32) -> Result<Chip, ChipError> {
+        self.client.read(ChipId(chip_id)).await.map_err(|e| match e {
+            ClientError::Chip(err) => err,
+            _ => ChipError::Internal(e.to_string()),
+        })
     }
 
     pub fn and_packet_stream_is_closed(&mut self, chip_id: u32) {
@@ -130,11 +139,8 @@ impl World {
     pub async fn then_chip_does_not_exist(&self, chip_id: u32) {
         // Yield to allow the actor to process the stream/sink closure.
         tokio::task::yield_now().await;
-        let err = self.when_get_chip(chip_id).await.unwrap_err();
-        let Some(ChipError::ChipNotFound(ChipId(actual_chip_id))) = err.as_chip_error() else {
-            panic!("Unexpected error: {err}");
-        };
-        assert_eq!(*actual_chip_id, chip_id);
+        let result = self.when_get_chip(chip_id).await;
+        assert_eq!(result, Err(ChipError::ChipNotFound(ChipId(chip_id))));
     }
 
     pub async fn when_packet_is_sent(&mut self, chip_id: u32, packet: &[u8]) {

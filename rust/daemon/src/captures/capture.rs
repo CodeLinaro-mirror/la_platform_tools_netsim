@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(mismatched_lifetime_syntaxes)]
-
 //! The internal structure of CaptureInfo and CaptureMaps
 //!
 //! CaptureInfo is the internal structure of any Capture that includes

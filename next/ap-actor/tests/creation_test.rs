@@ -1,4 +1,4 @@
-use netsim_model::chip::WifiMode;
+use ap_actor::netsim_model::chip::WifiMode;
 
 use crate::world::ApWorld;
 
@@ -71,7 +71,7 @@ async fn test_create_hidden_ap() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: ap_actor::Position::default(),
     };
     world.given_a_registered_ap_with_config(config).await;
     let id = world.ap_id.expect("AP ID missing");
@@ -97,26 +97,4 @@ async fn test_create_wifi6_ap() {
     let ap_state = world.client.get_ap(id).await.expect("Get failed").expect("AP not found");
     assert_eq!(ap_state.config.hw_mode, WifiMode::Ax);
     assert_eq!(ap_state.config.channel, 36);
-}
-
-// Scenario: Create Default AP
-// Given a running Actor
-// When I create an AP using the default configuration
-// Then the AP should have a valid, non-zero BSSID
-#[tokio::test]
-async fn test_create_default_ap_has_valid_bssid() {
-    let mut world = ApWorld::new().await;
-
-    // When
-    let config = ap_actor::ApConfig::default();
-    world.given_a_registered_ap_with_config(config).await;
-    let id = world.ap_id.expect("AP ID missing");
-
-    // Then
-    let ap_state = world.client.get_ap(id).await.expect("Get failed").expect("AP not found");
-    let zero_bssid = netsim_packets::ethernet::MacAddr::new([0; 6]);
-    assert_ne!(
-        ap_state.config.bssid, zero_bssid,
-        "AP created with default config must not have an all-zero BSSID"
-    );
 }

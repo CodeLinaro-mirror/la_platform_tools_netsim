@@ -2,7 +2,6 @@
 
 use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
-use tracing::{error, info};
 
 use crate::wifi_actor::WifiActor;
 
@@ -14,7 +13,7 @@ const AP_SUBSCRIPTION_ID: usize = 0;
 
 impl ActorLifecycle for WifiActor {
     async fn on_start(&mut self, ctx: &mut DynContext<Self>) {
-        info!("WifiActor started");
+        log::info!("WifiActor started");
 
         if let Some(ap_client) = &self.ap_client {
             // Uplink: Wifi -> AP (Wifi writes to tx, AP reads from rx)
@@ -35,7 +34,7 @@ impl ActorLifecycle for WifiActor {
                 )
                 .await
             {
-                error!("Failed to register with AP client: {}", e);
+                log::error!("Failed to register with AP client: {}", e);
             }
             self.to_ap = Some(ap_uplink_tx);
         }
@@ -45,7 +44,7 @@ impl ActorLifecycle for WifiActor {
     }
 
     async fn on_shutdown(&mut self) {
-        info!("WifiActor stopped");
+        log::info!("WifiActor stopped");
     }
 
     async fn on_stream(
@@ -69,18 +68,18 @@ impl ActorLifecycle for WifiActor {
     }
 
     async fn on_stream_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
-        info!("Stream closed for chip {id}");
+        log::info!("Stream closed for chip {id}");
         ctx.abort(id);
         if let Err(e) = self.handle_delete_impl(id, ctx).await {
-            error!("Failed to delete chip {id} after stream closed: {e}");
+            log::error!("Failed to delete chip {id} after stream closed: {e}");
         }
     }
 
     async fn on_task_closed(&mut self, id: Self::Id, ctx: &mut DynContext<Self>) {
-        info!("Sink task closed for chip {id}");
+        log::info!("Sink task closed for chip {id}");
         ctx.remove_stream(id);
         if let Err(e) = self.handle_delete_impl(id, ctx).await {
-            error!("Failed to delete chip {id} after sink task closed: {e}");
+            log::error!("Failed to delete chip {id} after sink task closed: {e}");
         }
     }
 

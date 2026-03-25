@@ -21,7 +21,7 @@ use std::{
     path::PathBuf,
 };
 
-use tracing::warn;
+use log::warn;
 use zip::{result::ZipResult, write::FileOptions, ZipWriter};
 
 use super::time_display::file_current_time;

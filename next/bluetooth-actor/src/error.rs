@@ -12,16 +12,16 @@ pub enum BluetoothError {
 
     /// Errors related to the device client.
     #[error("Device client error: {0}")]
-    DeviceClient(Box<dyn std::error::Error + Send + Sync>),
+    DeviceClient(String),
 
     /// Errors originating from the Rootcanal simulation.
     #[error("Rootcanal error: {0}")]
-    Rootcanal(Box<dyn std::error::Error + Send + Sync>),
+    Rootcanal(String),
 }
 
 impl BluetoothError {
     /// Helper to create an InvalidArguments error.
     pub fn invalid_arg(msg: impl Into<String>) -> Self {
-        Self::Chip(ChipError::InvalidArguments(Box::from(msg.into())))
+        Self::Chip(ChipError::InvalidArguments(msg.into()))
     }
 }

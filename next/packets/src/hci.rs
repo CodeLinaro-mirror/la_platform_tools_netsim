@@ -1,10 +1,14 @@
 // Copyright 2026 The Android Open Source Project
 
+//! Defines structures for representing Bluetooth HCI packets using `zerocopy`.
+//!
+//! This module provides definitions for HCI commands, events, and subevents,
+//! focusing on the subset required for Bluetooth beacon simulation and basic
+//! scanning tests.
+
 use zerocopy::{
     byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16, U64,
 };
-
-use crate::hci::types::*;
 
 /// HCI OpCodes for Command packets.
 #[derive(
@@ -29,12 +33,154 @@ impl OpCode {
     }
 }
 
+/// HCI Event Codes for Event packets.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct EventCode(pub u8);
+
+impl EventCode {
+    pub const COMMAND_COMPLETE: Self = Self(0x0E);
+    pub const COMMAND_STATUS: Self = Self(0x0F);
+    pub const LE_META_EVENT: Self = Self(0x3E);
+}
+
+/// HCI LE Subevent Codes for LE Meta Events.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct SubeventCode(pub u8);
+
+impl SubeventCode {
+    pub const LE_ADVERTISING_REPORT: Self = Self(0x02);
+}
+
+/// Generic enable/disable.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct Enable(pub u8);
+
+impl Enable {
+    pub const DISABLED: Self = Self(0x00);
+    pub const ENABLED: Self = Self(0x01);
+}
+
+/// Advertising Type for LE Set Advertising Parameters.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct AdvertisingType(pub u8);
+
+impl AdvertisingType {
+    pub const ADV_IND: Self = Self(0x00);
+    pub const ADV_DIRECT_IND_HIGH: Self = Self(0x01);
+    pub const ADV_SCAN_IND: Self = Self(0x02);
+    pub const ADV_NONCONN_IND: Self = Self(0x03);
+    pub const ADV_DIRECT_IND_LOW: Self = Self(0x04);
+}
+
+/// Own Address Type.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct OwnAddressType(pub u8);
+
+impl OwnAddressType {
+    pub const PUBLIC_DEVICE_ADDRESS: Self = Self(0x00);
+    pub const RANDOM_DEVICE_ADDRESS: Self = Self(0x01);
+    pub const RESOLVABLE_OR_PUBLIC_ADDRESS: Self = Self(0x02);
+    pub const RESOLVABLE_OR_RANDOM_ADDRESS: Self = Self(0x03);
+}
+
+/// Peer Address Type.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct PeerAddressType(pub u8);
+
+impl PeerAddressType {
+    pub const PUBLIC_DEVICE_OR_IDENTITY_ADDRESS: Self = Self(0x00);
+    pub const RANDOM_DEVICE_OR_IDENTITY_ADDRESS: Self = Self(0x01);
+}
+
+/// Advertising Filter Policy.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct AdvertisingFilterPolicy(pub u8);
+
+impl AdvertisingFilterPolicy {
+    pub const ALL_DEVICES: Self = Self(0x00);
+    pub const LISTED_SCAN: Self = Self(0x01);
+    pub const LISTED_CONNECT: Self = Self(0x02);
+    pub const LISTED_SCAN_AND_CONNECT: Self = Self(0x03);
+}
+
+/// LE Scan Type.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct LeScanType(pub u8);
+
+impl LeScanType {
+    pub const PASSIVE: Self = Self(0x00);
+    pub const ACTIVE: Self = Self(0x01);
+}
+
+/// LE Scanning Filter Policy.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct LeScanningFilterPolicy(pub u8);
+
+impl LeScanningFilterPolicy {
+    pub const ACCEPT_ALL: Self = Self(0x00);
+    pub const FILTER_ACCEPT_LIST_ONLY: Self = Self(0x01);
+    pub const CHECK_INITIATORS_IDENTITY: Self = Self(0x02);
+    pub const FILTER_ACCEPT_LIST_AND_INITIATORS_IDENTITY: Self = Self(0x03);
+}
+
+/// Standard 6-byte Bluetooth Address.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(C)]
+pub struct Address {
+    pub bytes: [u8; 6],
+}
+
 /// HCI Command Packet Header.
 #[repr(C)]
 #[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Debug)]
 pub struct HciCommandHeader {
     pub op_code: OpCode,
     pub parameter_total_length: u8,
+}
+
+/// HCI Event Packet Header.
+#[repr(C)]
+#[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Debug)]
+pub struct HciEventHeader {
+    pub event_code: EventCode,
+    pub parameter_total_length: u8,
+}
+
+/// HCI LE Meta Event Header (follows HciEventHeader if event_code is
+/// LE_META_EVENT).
+#[repr(C)]
+#[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Debug)]
+pub struct HciLeMetaEventHeader {
+    pub subevent_code: SubeventCode,
 }
 
 /// Trait for HCI commands to associate them with their OpCode.
@@ -98,8 +244,8 @@ impl HciCommand for LeSetAdvertisingData {
 #[repr(C)]
 #[derive(FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout, Debug)]
 pub struct LeSetScanResponseData {
-    pub scan_response_data_length: u8,
-    pub scan_response_data: [u8; 31],
+    pub advertising_data_length: u8,
+    pub advertising_data: [u8; 31],
 }
 
 impl HciCommand for LeSetScanResponseData {

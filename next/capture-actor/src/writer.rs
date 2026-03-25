@@ -5,6 +5,7 @@
 
 use std::{io, path::Path, time::SystemTime};
 
+use anyhow::Result;
 use async_trait::async_trait;
 use capture_api::Direction;
 use tokio::{
@@ -31,7 +32,7 @@ pub trait CaptureWriter: Send + Sync {
         timestamp: SystemTime,
         direction: Direction,
         data: &[u8],
-    ) -> io::Result<()>;
+    ) -> Result<()>;
 
     async fn flush(&mut self) -> io::Result<()>;
 
@@ -105,10 +106,8 @@ impl CaptureWriter for PcapWriter {
         timestamp: SystemTime,
         _direction: Direction,
         data: &[u8],
-    ) -> io::Result<()> {
-        let duration = timestamp
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
+    ) -> Result<()> {
+        let duration = timestamp.duration_since(SystemTime::UNIX_EPOCH)?;
         let ts_sec = duration.as_secs() as u32;
         let ts_usec = duration.subsec_micros() as u32;
 

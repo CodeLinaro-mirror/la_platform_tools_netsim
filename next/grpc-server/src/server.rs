@@ -6,42 +6,31 @@ use device_actor::DeviceClient;
 use grpcio::{
     ChannelBuilder, Environment, ResourceQuota, Server, ServerBuilder, ServerCredentials,
 };
+use log::{error, info, warn};
 use netsim_proto::{
-    access_point_grpc::create_access_point_service, ble_service_grpc::create_ble_service,
     frontend_grpc::create_frontend_service, packet_streamer_grpc::create_packet_streamer,
 };
-use tracing::{error, info, warn};
 
-use crate::{
-    access_point::AccessPointServiceImpl, ble_service::BleServiceImpl, frontend::FrontendClient,
-    packet_streamer::PacketStreamerService,
-};
+use crate::{frontend::FrontendClient, packet_streamer::PacketStreamerService};
 
 pub fn start(
     port: u32,
     device_client: DeviceClient,
     link_client: link_actor::LinkClient,
-    ap_client: ap_actor::ApClient,
+
     packet_streamer_service: PacketStreamerService,
     version: String,
-) -> Result<(Server, u16), grpcio::Error> {
+) -> anyhow::Result<(Server, u16)> {
     let env = Arc::new(Environment::new(1));
     let backend_service = create_packet_streamer(packet_streamer_service);
-    let frontend_service = create_frontend_service(FrontendClient::new(
-        device_client.clone(),
-        Arc::new(link_client),
-        version,
-    ));
-    let access_point_service = create_access_point_service(AccessPointServiceImpl::new(ap_client));
-    let ble_service = create_ble_service(BleServiceImpl::new(device_client.clone()));
+    let frontend_service =
+        create_frontend_service(FrontendClient::new(device_client, Arc::new(link_client), version));
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
     let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota).reuse_port(false);
     let server_builder = ServerBuilder::new(env);
     let mut server = server_builder
         .register_service(backend_service)
         .register_service(frontend_service)
-        .register_service(access_point_service)
-        .register_service(ble_service)
         .channel_args(ch_builder.build_args())
         .build()?;
 

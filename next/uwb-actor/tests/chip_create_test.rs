@@ -55,9 +55,9 @@ async fn test_create_duplicate_chip() {
     let result = world.when_create_chip(chip_id).await;
 
     // Then
-    match result.as_ref().map_err(|err| err.as_chip_error()) {
-        Err(Some(ChipError::ChipExists(id))) => {
-            assert_eq!(*id, ChipId(chip_id).0);
+    match result {
+        Err(ChipError::ChipExists(id)) => {
+            assert_eq!(id, ChipId(chip_id).0);
         }
         _ => panic!("Expected ChipExists error, got {:?}", result),
     }

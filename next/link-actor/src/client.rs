@@ -9,13 +9,9 @@
 use std::ops::Deref;
 
 use actor_framework::ResourceClient;
-use futures::TryFutureExt;
-use netsim_model::{
-    chip::{ChipId, ChipKind},
-    client_error::ClientError,
-};
+use netsim_model::chip::{ChipId, ChipKind};
 
-use crate::{LinkActor, LinkError};
+use crate::LinkActor;
 
 /// A client for interacting with the Link Actor.
 ///
@@ -64,7 +60,7 @@ impl LinkClient {
         &self,
         sender: ChipId,
         receiver: ChipId,
-    ) -> Result<Option<link_api::LinkId>, actor_framework::FrameworkError<LinkError>> {
+    ) -> Result<Option<link_api::LinkId>, actor_framework::FrameworkError> {
         let links = self.list().await?;
         for link in links {
             if link.sender == sender && link.receiver == receiver {
@@ -79,7 +75,7 @@ impl LinkClient {
         &self,
         id: Option<link_api::LinkId>,
         action: link_api::LinkAction,
-    ) -> Result<(), actor_framework::FrameworkError<LinkError>> {
+    ) -> Result<(), actor_framework::FrameworkError> {
         self.inner.perform_action(id, action).await
     }
 
@@ -88,7 +84,7 @@ impl LinkClient {
         &self,
         chip_id: ChipId,
         kind: ChipKind,
-    ) -> Result<(), actor_framework::FrameworkError<LinkError>> {
+    ) -> Result<(), actor_framework::FrameworkError> {
         self.action(None, link_api::LinkAction::NotifyChipAdded(chip_id, kind)).await
     }
 
@@ -96,67 +92,67 @@ impl LinkClient {
     pub async fn notify_chip_removed(
         &self,
         chip_id: ChipId,
-    ) -> Result<(), actor_framework::FrameworkError<LinkError>> {
+    ) -> Result<(), actor_framework::FrameworkError> {
         self.action(None, link_api::LinkAction::NotifyChipRemoved(chip_id)).await
     }
 }
 
 #[async_trait::async_trait]
 impl link_api::LinkClient for LinkClient {
-    async fn list(&self) -> Result<Vec<link_api::Link>, ClientError> {
-        self.inner.list().err_into::<ClientError>().await
+    async fn list(&self) -> Result<Vec<link_api::Link>, String> {
+        self.inner.list().await.map_err(|e| e.to_string())
     }
 
-    async fn create(&self, params: link_api::LinkCreate) -> Result<link_api::LinkId, ClientError> {
-        self.inner.create(params).err_into::<ClientError>().await
+    async fn create(&self, params: link_api::LinkCreate) -> Result<link_api::LinkId, String> {
+        self.inner.create(params).await.map_err(|e| e.to_string())
     }
 
     async fn update(
         &self,
         id: link_api::LinkId,
         patch: link_api::LinkUpdate,
-    ) -> Result<(), ClientError> {
-        self.inner.update(id, patch).err_into::<ClientError>().await.map(|_| ())
+    ) -> Result<(), String> {
+        self.inner.update(id, patch).await.map(|_| ()).map_err(|e| e.to_string())
     }
 
-    async fn delete(&self, id: link_api::LinkId) -> Result<(), ClientError> {
-        self.inner.delete(id).err_into::<ClientError>().await
+    async fn delete(&self, id: link_api::LinkId) -> Result<(), String> {
+        self.inner.delete(id).await.map_err(|e| e.to_string())
     }
 
     async fn action(
         &self,
         id: Option<link_api::LinkId>,
         action: link_api::LinkAction,
-    ) -> Result<(), ClientError> {
-        self.inner.perform_action(id, action).err_into::<ClientError>().await.map(|_| ())
+    ) -> Result<(), String> {
+        self.inner.perform_action(id, action).await.map(|_| ()).map_err(|e| e.to_string())
     }
 
-    async fn notify_chip_added(&self, chip_id: ChipId, kind: ChipKind) -> Result<(), ClientError> {
+    async fn notify_chip_added(&self, chip_id: ChipId, kind: ChipKind) -> Result<(), String> {
         self.inner
             .perform_action(None, link_api::LinkAction::NotifyChipAdded(chip_id, kind))
-            .err_into::<ClientError>()
             .await
             .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 
-    async fn notify_chip_removed(&self, chip_id: ChipId) -> Result<(), ClientError> {
+    async fn notify_chip_removed(&self, chip_id: ChipId) -> Result<(), String> {
         self.inner
             .perform_action(None, link_api::LinkAction::NotifyChipRemoved(chip_id))
-            .err_into::<ClientError>()
             .await
             .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 
-    async fn reset(&self) -> Result<(), ClientError> {
+    async fn reset(&self) -> Result<(), String> {
         self.inner
             .perform_action(None, link_api::LinkAction::Reset)
-            .err_into::<ClientError>()
             .await
             .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 
-    async fn shutdown(&self) -> Result<(), ClientError> {
-        self.inner.shutdown().err_into::<ClientError>().await
+    async fn shutdown(&self) -> Result<(), String> {
+        self.inner.shutdown().await.map_err(|e| e.to_string())
     }
 }
 

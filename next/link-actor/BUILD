@@ -6,8 +6,8 @@ DEPS = [
     "//next/actor-framework",
     "//next/link-api",
     "//next/model",
-    "@futures",
-    "@tracing",
+    "@log",
+    "@thiserror",
 ]
 
 netsim_rust_library(

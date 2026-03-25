@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(mismatched_lifetime_syntaxes)]
-
 use log::{debug, error};
 use netsim_proto::model::Device as ProtoDevice;
 use pica::{Handle, RangingEstimator, RangingMeasurement};

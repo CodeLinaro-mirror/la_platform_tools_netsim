@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
-use ap_actor::SaeStateMachine;
-use netsim_model::chip::WifiMode;
+use ap_actor::{netsim_model::chip::WifiMode, sae::SaeStateMachine};
 use netsim_packets::{
     ethernet::MacAddr,
     ieee80211::{
@@ -43,7 +42,7 @@ async fn test_sae_handshake_success() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: ap_actor::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config.clone()).await;

@@ -2,7 +2,7 @@
 
 use ap_actor::{
     ffi::{AesCcmEncrypt, AesUnwrap, AesWrap, DigestType, Hmac, RandBytes, Sha},
-    SharedKeyStore,
+    shared::SharedKeyStore,
 };
 use netsim_packets::ieee80211::{Ieee80211, MacAddress};
 

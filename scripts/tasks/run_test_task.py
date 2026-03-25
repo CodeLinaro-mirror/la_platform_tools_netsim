@@ -41,10 +41,10 @@ ALL_PACKAGES = [
 ]
 
 
-class TestTask(Task):
+class RunTestTask(Task):
 
   def __init__(self, args, env):
-    super().__init__("Test")
+    super().__init__("RunTest")
     self.args = args
     self.buildbot = args.buildbot
     self.out = Path(args.out_dir)

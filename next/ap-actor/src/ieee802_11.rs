@@ -10,14 +10,13 @@ use netsim_packets::{
     },
     llc::{control_field, sap, LlcSnapHeader},
 };
-use tracing::{debug, error, info, warn};
 use zerocopy::{IntoBytes, U16};
 
 use crate::{sae::SaeStateMachine, shared::SharedKeyStore, ApActor, ApError, ApState};
 
 /// Handles 802.11 Management Frames
 #[derive(Clone, Debug)]
-pub(crate) struct Ieee80211Manager {
+pub struct Ieee80211Manager {
     // Stateless for now, state passed in methods
 }
 
@@ -145,12 +144,12 @@ impl Ieee80211Manager {
         let ieee80211_frame = match Ieee80211::decode(frame) {
             Ok(f) => f,
             Err(e) => {
-                warn!("ApActor: Failed to decode 802.11 frame: {}", e);
+                log::warn!("ApActor: Failed to decode 802.11 frame: {}", e);
                 return Ok(vec![]);
             }
         };
 
-        debug!(
+        log::debug!(
             "ApActor: Handling frame subtype={:?} src={}",
             ieee80211_frame.stype(),
             ieee80211_frame.get_source()
@@ -192,13 +191,13 @@ impl Ieee80211Manager {
         let category = body[0];
         let action = body[1];
 
-        debug!("ApActor: Action Frame Cat={} Act={} from {}", category, action, src);
+        log::debug!("ApActor: Action Frame Cat={} Act={} from {}", category, action, src);
 
         // Public Action (Category 4)
         if category == netsim_packets::ieee80211::action::category::PUBLIC {
             // FTM Request (Action 32)
             if action == netsim_packets::ieee80211::action::public_action::FTM_REQUEST {
-                info!("ApActor: Received FTM Request from {}", src);
+                log::info!("ApActor: Received FTM Request from {}", src);
                 // FIXME: Parse Dialog Token from action frame body (Trigger field).
                 // For now, we assume a standard trigger and generate a fixed response sequence.
                 let frames = crate::ftm::FtmResponder::handle_ftm_request(&_ap.config, src, 1);
@@ -223,7 +222,7 @@ impl Ieee80211Manager {
             1 => {
                 // Deny List
                 if ap.config.mac_acl_list.contains(&src) {
-                    info!("ApActor: ACL Deny {}", src);
+                    log::info!("ApActor: ACL Deny {}", src);
                     return Ok(vec![bytes::Bytes::from(self.build_auth_frame(
                         ap,
                         src,
@@ -237,7 +236,7 @@ impl Ieee80211Manager {
             2 => {
                 // Allow List
                 if !ap.config.mac_acl_list.contains(&src) {
-                    info!("ApActor: ACL Reject (Not Allowed) {}", src);
+                    log::info!("ApActor: ACL Reject (Not Allowed) {}", src);
                     return Ok(vec![bytes::Bytes::from(self.build_auth_frame(
                         ap,
                         src,
@@ -254,7 +253,7 @@ impl Ieee80211Manager {
         // Parse Auth Fixed Fields (Alg, Seq, Status)
         // Mgmt Header is usually 24 bytes (FC+Duration+3Addr+SC)
         if raw_frame.len() < 24 + 6 {
-            warn!("ApActor: Auth frame too short");
+            log::warn!("ApActor: Auth frame too short");
             return Ok(vec![]);
         }
 
@@ -263,12 +262,12 @@ impl Ieee80211Manager {
         let seq = u16::from_le_bytes([body[2], body[3]]);
         let status = u16::from_le_bytes([body[4], body[5]]);
 
-        info!("ApActor: Received Auth from {} Alg={} Seq={} Status={}", src, alg, seq, status);
+        log::info!("ApActor: Received Auth from {} Alg={} Seq={} Status={}", src, alg, seq, status);
 
         // SAE (Algorithm 3)
         if alg == 3 {
             if !ap.config.sae {
-                warn!("ApActor: SAE requested but not enabled");
+                log::warn!("ApActor: SAE requested but not enabled");
                 // Should return Auth reject? (Status 13 - not supported alg?)
                 // For now, ignore or send error.
                 return Ok(vec![]);
@@ -317,7 +316,7 @@ impl Ieee80211Manager {
                         // Valid confirmed state.
                         // PMK is ready.
                         // Wait for Association Request to derive PTK?
-                        info!("SAE: Handshake completed for {}", src);
+                        log::info!("SAE: Handshake completed for {}", src);
                     }
                 }
             }
@@ -452,20 +451,20 @@ impl Ieee80211Manager {
         _source_id: ChipId,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let src = frame.get_source();
-        info!("ApActor: Received Assoc Req from {}", src);
+        log::info!("ApActor: Received Assoc Req from {}", src);
 
         // ACL Check
         match ap.config.mac_acl_mode {
             1 => {
                 if ap.config.mac_acl_list.contains(&src) {
-                    info!("ApActor: ACL Deny Assoc {}", src);
+                    log::info!("ApActor: ACL Deny Assoc {}", src);
                     let resp = self.build_assoc_resp(ap, src, 1);
                     return Ok(vec![bytes::Bytes::from(resp)]);
                 }
             }
             2 => {
                 if !ap.config.mac_acl_list.contains(&src) {
-                    info!("ApActor: ACL Reject Assoc (Not Allowed) {}", src);
+                    log::info!("ApActor: ACL Reject Assoc (Not Allowed) {}", src);
                     let resp = self.build_assoc_resp(ap, src, 1);
                     return Ok(vec![bytes::Bytes::from(resp)]);
                 }
@@ -506,13 +505,13 @@ impl Ieee80211Manager {
                 // wpa_supplicant drops M1 before reaching ASSOCIATED state.
                 let delay = std::time::Instant::now() + std::time::Duration::from_millis(150);
                 ap.delayed_frames.push_back((delay, bytes::Bytes::from(m1_frame)));
-                info!("ApActor: Triggered 150ms buffer for EAPOL M1 handshake to {}", src);
+                log::info!("ApActor: Triggered 150ms buffer for EAPOL M1 handshake to {}", src);
             }
         }
 
         // Track Association
         ap.associations.insert(src);
-        info!("ApActor: Associated {}", src);
+        log::info!("ApActor: Associated {}", src);
 
         Ok(msgs)
     }
@@ -603,7 +602,7 @@ impl Ieee80211Manager {
         shared_keys: &SharedKeyStore,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let src = frame.get_source();
-        info!("ApActor: Received Deauth from {}", src);
+        log::info!("ApActor: Received Deauth from {}", src);
 
         // Check if we have a session for this source
         if let Some(_wpa) = &ap.wpa {
@@ -663,7 +662,7 @@ impl Ieee80211Manager {
         shared_keys: &SharedKeyStore,
     ) -> Result<Vec<bytes::Bytes>, ApError> {
         let dump_len = std::cmp::min(frame.len(), 48);
-        warn!(
+        log::warn!(
             "ApActor: Data Frame Debug [{} bytes] (stype: {:?}) hex: {:02x?}",
             frame.len(),
             ieee80211_frame.stype(),
@@ -674,7 +673,7 @@ impl Ieee80211Manager {
             return Ok(vec![]);
         }
 
-        info!("ApActor: Received EAPOL frame from src={}", ieee80211_frame.get_source());
+        log::info!("ApActor: Received EAPOL frame from src={}", ieee80211_frame.get_source());
         let payload = &ieee80211_frame.get_payload()[8..]; // EAPOL Body after LLC
 
         if payload.len() < 4 {
@@ -685,7 +684,7 @@ impl Ieee80211Manager {
         // EAPOL-Start (Type 1)
         if eapol_type == 1 {
             if !ap.config.enterprise_enabled {
-                warn!("ApActor: Received EAPOL-Start but enterprise not enabled");
+                log::warn!("ApActor: Received EAPOL-Start but enterprise not enabled");
                 return Ok(vec![]);
             }
             // Start EAP
@@ -709,7 +708,7 @@ impl Ieee80211Manager {
                     return Ok(frames);
                 }
                 Err(e) => {
-                    error!("ApActor: Failed to start EAP: {:?}", e);
+                    log::error!("ApActor: Failed to start EAP: {:?}", e);
                     return Ok(vec![]);
                 }
             }
@@ -737,7 +736,7 @@ impl Ieee80211Manager {
                                     )));
                                 }
                                 crate::eap_auth::EapOutput::Success => {
-                                    info!("EAP: Success for {}", ieee80211_frame.get_source());
+                                    log::info!("EAP: Success for {}", ieee80211_frame.get_source());
                                     // TODO: Key Derivation / PMK setting?
                                     // For now, we are Authenticated.
                                 }
@@ -747,12 +746,12 @@ impl Ieee80211Manager {
                         return Ok(frames);
                     }
                     Err(e) => {
-                        warn!("EAP Error: {:?}", e);
+                        log::warn!("EAP Error: {:?}", e);
                         return Ok(vec![]);
                     }
                 }
             } else {
-                debug!("EAP Packet from unknown session {}", ieee80211_frame.get_source());
+                log::debug!("EAP Packet from unknown session {}", ieee80211_frame.get_source());
                 return Ok(vec![]);
             }
         }
@@ -762,7 +761,7 @@ impl Ieee80211Manager {
             let wpa = match &mut ap.wpa {
                 Some(wpa) => wpa,
                 None => {
-                    debug!("ApActor: Received EAPOL-Key but WPA not configured");
+                    log::debug!("ApActor: Received EAPOL-Key but WPA not configured");
                     return Ok(vec![]);
                 }
             };
@@ -770,27 +769,27 @@ impl Ieee80211Manager {
             let outputs = match wpa.handle_eapol(payload) {
                 Ok(o) => o,
                 Err(_) => {
-                    warn!("ApActor: WPA handle_eapol failed");
+                    log::warn!("ApActor: WPA handle_eapol failed");
                     return Ok(vec![]);
                 }
             };
 
             let mut frames = Vec::new();
             let src = ieee80211_frame.get_source();
-            info!("ApActor: EAPOL produced {} outputs for {}", outputs.len(), src);
+            log::info!("ApActor: EAPOL produced {} outputs for {}", outputs.len(), src);
 
             for out in outputs {
                 match out {
                     crate::wpa_auth::WpaOutput::Frame(data) => {
-                        debug!("ApActor: Sending EAPOL response (len={})", data.len());
+                        log::debug!("ApActor: Sending EAPOL response (len={})", data.len());
                         let wrapped = self.wrap_eapol(ap, src, &data);
                         frames.push(bytes::Bytes::from(wrapped));
                     }
                     crate::wpa_auth::WpaOutput::InstallKey { key_index, key, cipher } => {
                         // Key Install Logic
-                        info!("ApActor: Installing PTK.");
+                        log::info!("ApActor: Installing PTK.");
                         if key_index == 0 {
-                            info!("ApActor: Installing PTK for {} cipher={}", src, cipher);
+                            log::info!("ApActor: Installing PTK for {} cipher={}", src, cipher);
                             shared_keys.add_session(src, key);
                         }
                     }

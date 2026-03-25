@@ -24,11 +24,11 @@ grpcio = { version = "0.13", default-features = false, features = [
 ] }
 hci-server = { path = "../hci-server" }
 link-actor = { path = "../link-actor" }
+log = "0.4"
 netsim-common = { path = "../common" }
 netsim-model = { path = "../model" }
 packet-stream = { path = "../packet-stream" }
 tokio = { version = "1.28.2", features = ["full", "tracing"] }
-tracing = "0.1"
 uwb-actor = { path = "../uwb-actor" }
 wifi-actor = { path = "../wifi-actor" }
 

@@ -11,6 +11,7 @@
 use std::{collections::HashMap, process::Command, sync::Arc, time::Duration};
 
 use clap::{Parser, Subcommand};
+use log::{error, info};
 use modem_rs::ModemId;
 use serde::Deserialize;
 use tokio::{
@@ -18,7 +19,6 @@ use tokio::{
     net::TcpStream,
     sync::Mutex,
 };
-use tracing::{error, info};
 
 mod client;
 mod server;
@@ -188,10 +188,10 @@ async fn run_cli_command(args: CliArgs) {
 #[tokio::main]
 async fn main() {
     if std::env::args().any(|arg| arg == "--server-mode") {
-        tracing_subscriber::fmt::init();
+        env_logger::init();
     } else if let Ok(val) = std::env::var("RUST_LOG") {
         if !val.is_empty() {
-            tracing_subscriber::fmt::init();
+            env_logger::init();
         }
     }
 

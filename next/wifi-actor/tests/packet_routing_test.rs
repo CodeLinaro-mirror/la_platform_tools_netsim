@@ -1,5 +1,3 @@
-use tracing::info;
-
 use crate::world::World;
 
 // ============================================================================
@@ -302,7 +300,7 @@ async fn test_dhcp_m2u_race_condition() {
     // Simulation: The station is associated but we simulate a handshake delay
     // by not installing the PTK in the SharedKeyStore.
 
-    info!("Injecting Broadcast DHCPOFFER from Infra...");
+    log::info!("Injecting Broadcast DHCPOFFER from Infra...");
     world.when_infra_transmits_multicast("DHCPOFFER").await;
 
     // Verify that the frame is delivered as a BROADCAST frame (FF:FF:FF:FF:FF:FF)
@@ -318,7 +316,7 @@ async fn test_dhcp_m2u_race_condition() {
                 if let Ok(eth) = crate::hwsim_helper::unwrap_hwsim_to_ethernet(&bytes) {
                     if eth.windows(9).any(|w| w == b"DHCPOFFER") {
                         let dst_mac = &eth[0..6];
-                        info!("Received DHCPOFFER with dst_mac: {:02X?}", dst_mac);
+                        log::info!("Received DHCPOFFER with dst_mac: {:02X?}", dst_mac);
 
                         // If it's the bug, it will be Unicast (rx_mac)
                         if dst_mac == rx_mac {
@@ -328,7 +326,7 @@ async fn test_dhcp_m2u_race_condition() {
                         // If it's correct, it should be Broadcast (at least if unencrypted)
                         let broadcast = [0xFF; 6];
                         if dst_mac == broadcast {
-                             info!("CORRECT: DHCPOFFER remained BROADCAST");
+                             log::info!("CORRECT: DHCPOFFER remained BROADCAST");
                              return;
                         }
                     }

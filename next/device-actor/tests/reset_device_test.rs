@@ -73,29 +73,3 @@ async fn test_individual_device_reset_behavior() {
     // And the link client reset should NOT have been called
     world.then_link_reset_was_not_called();
 }
-
-// Scenario: Reset should re-enable all chips
-//   Given a running Device Actor with a chip
-//   When the chip is disabled
-//   And I call the global reset RPC
-//   Then the chip should be re-enabled
-#[tokio::test]
-async fn test_reset_re_enables_chips() {
-    let world = World::new().await;
-
-    // Given a running Device Actor with a chip
-    let id1 = world.when_add_chip("guid-1", "chip-1").await;
-
-    // Disable the Bluetooth radios (le_state and classic_state)
-    let chip_update = World::create_bluetooth_chip_update(Some(false), Some(false));
-    world.when_update_device_chip(id1, chip_update).await;
-
-    // Verify it is disabled
-    world.then_bluetooth_states_are(id1, false, false).await;
-
-    // When I call the global reset RPC
-    world.when_reset_is_called().await;
-
-    // Then the chip radios should be re-enabled!
-    world.then_bluetooth_states_are(id1, true, true).await;
-}

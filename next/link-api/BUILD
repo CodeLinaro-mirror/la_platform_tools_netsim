@@ -4,7 +4,6 @@ package(default_visibility = ["//visibility:public"])
 
 DEPS = [
     "//next/model",
-    "@thiserror",
 ]
 
 netsim_rust_library(

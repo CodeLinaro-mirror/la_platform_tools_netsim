@@ -1,15 +1,29 @@
 // Copyright 2025 The Android Open Source Project
 
-use actor_framework::ResourceClient;
+use actor_framework::{FrameworkError, ResourceClient};
 use async_trait::async_trait;
-use futures::TryFutureExt;
 use netsim_model::{
     chip::{Chip, ChipClient, ChipCreate, ChipId, ChipUpdate},
     client_error::ClientError,
     stats::NetsimRadioStats,
 };
 
-use crate::CellActor;
+use crate::{CellActor, CellError};
+
+fn map_framework_error(e: FrameworkError) -> ClientError {
+    match e {
+        FrameworkError::ServiceError(boxed) => {
+            // Try to downcast to CellError first
+            if let Some(cell_error) = boxed.downcast_ref::<CellError>() {
+                return ClientError::Chip(netsim_model::chip_error::ChipError::Internal(
+                    cell_error.to_string(),
+                ));
+            }
+            ClientError::Send(boxed.to_string())
+        }
+        _ => ClientError::Send(e.to_string()),
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct CellClient(pub ResourceClient<CellActor>);
@@ -17,23 +31,23 @@ pub struct CellClient(pub ResourceClient<CellActor>);
 #[async_trait]
 impl ChipClient for CellClient {
     async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
-        self.0.create_with_id(id, params).err_into::<ClientError>().await.map(|_| ())
+        self.0.create_with_id(id, params).await.map(|_| ()).map_err(map_framework_error)
     }
 
     async fn read(&self, id: ChipId) -> Result<Chip, ClientError> {
         self.0
             .get(id)
-            .err_into::<ClientError>()
-            .await?
+            .await
+            .map_err(map_framework_error)?
             .ok_or(ClientError::Chip(netsim_model::chip_error::ChipError::ChipNotFound(id)))
     }
 
     async fn update(&self, id: ChipId, patch: ChipUpdate) -> Result<Chip, ClientError> {
-        self.0.update(id, patch).err_into::<ClientError>().await
+        self.0.update(id, patch).await.map_err(map_framework_error)
     }
 
     async fn delete(&self, id: ChipId) -> Result<(), ClientError> {
-        self.0.delete(id).err_into::<ClientError>().await
+        self.0.delete(id).await.map_err(map_framework_error)
     }
 
     async fn read_statistics(&self) -> Result<Box<[NetsimRadioStats]>, ClientError> {
@@ -42,11 +56,11 @@ impl ChipClient for CellClient {
     }
 
     async fn read_count_for_testing(&self) -> Result<usize, ClientError> {
-        self.0.list().err_into::<ClientError>().await.map(|chips| chips.len())
+        self.0.list().await.map(|chips| chips.len()).map_err(map_framework_error)
     }
 
     async fn shutdown(&self) -> Result<(), ClientError> {
-        self.0.shutdown().err_into::<ClientError>().await
+        self.0.shutdown().await.map_err(map_framework_error)
     }
 
     async fn reset(&self, _id: ChipId) -> Result<(), ClientError> {

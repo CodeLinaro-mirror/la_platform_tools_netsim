@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use actor_framework::ResourceClient;
-use bluetooth_actor::{BluetoothActor, BluetoothClient, BluetoothError};
+use bluetooth_actor::{BluetoothActor, BluetoothClient};
 use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
 use netsim_model::{
@@ -17,7 +17,6 @@ use netsim_model::{
 use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
 use netsim_testing::logger;
 use tokio::{sync::mpsc, task::JoinHandle};
-use tracing::{info, warn};
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 /// The BDD World for Bluetooth Actor tests.
@@ -247,14 +246,14 @@ impl World {
         &self,
         id: ChipId,
         params: ChipCreate,
-    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
+    ) -> Result<(), actor_framework::FrameworkError> {
         self.client.0.create_with_id(id, params).await.map(|_| ())
     }
 
     pub async fn when_delete_chip(
         &self,
         name: &str,
-    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
+    ) -> Result<(), actor_framework::FrameworkError> {
         let id = *self.chips.get(name).expect("Chip not found");
         self.client.0.delete(id).await
     }
@@ -319,7 +318,7 @@ impl World {
     pub async fn then_chip_address_is_generated(&self, id: ChipId) {
         let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
         if let Some(netsim_model::chip::ChipVariant::Bluetooth(_)) = &chip.variant {
-            info!("Chip {} exists and is a Bluetooth variant.", id.0);
+            log::info!("Chip {} exists and is a Bluetooth variant.", id.0);
             // Note: Verification of the generated address via the `Chip` struct
             // is not currently supported by the model, as the
             // address is used for controller initialization but not
@@ -380,7 +379,7 @@ impl World {
             match parse_hci_scan_report(&packet) {
                 Ok(reports) => return reports,
                 Err(e) => {
-                    warn!("Ignored packet from {}: {:?} (Error: {})", name, packet, e);
+                    log::warn!("Ignored packet from {}: {:?} (Error: {})", name, packet, e);
                 }
             }
         }
@@ -389,7 +388,7 @@ impl World {
     pub async fn then_scanner_sees_any_adv(&mut self, name: &str) {
         let reports = self.receive_scan_report(name).await;
         for report in reports {
-            info!("Received Scan Report: {:?}", report.mac);
+            log::info!("Received Scan Report: {:?}", report.mac);
         }
     }
 
@@ -425,7 +424,7 @@ impl World {
         let reports = self.receive_scan_report(name).await;
         for report in reports {
             let rssi = report.rssi;
-            info!("Received RSSI: {}", rssi);
+            log::info!("Received RSSI: {}", rssi);
             assert!(rssi != 0, "RSSI should be non-zero");
         }
     }

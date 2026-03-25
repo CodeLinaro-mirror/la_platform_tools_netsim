@@ -17,9 +17,9 @@ netsim_rust_library(
     visibility = ["//next:__subpackages__"],
     deps = [
         "@bytes",
+        "@log",
         "@rootcanal//:lib_rootcanal_ffi",
         "@thiserror",
-        "@tracing",
     ],
 )
 
@@ -38,10 +38,10 @@ rust_test_suite(
         "//next/packets",
         "@bytes",
         "@cxx.rs//:cxx",
+        "@env_logger",
+        "@log",
         "@pdl-runtime",
         "@rootcanal//:rootcanal_rs",
         "@tokio",
-        "@tracing",
-        "@tracing-subscriber",
     ],
 )

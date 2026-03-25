@@ -30,7 +30,6 @@ use crate::{
 pub async fn run_android(
     android_home: Option<String>,
     netsim_path: Option<String>,
-    netsim_cli_path: Option<String>,
     netsim_args: Option<String>,
     apk_path: Option<String>,
     gateway_ip: Option<String>,
@@ -38,8 +37,8 @@ pub async fn run_android(
     dry_run: bool,
 ) -> Result<()> {
     let host = HostWorld::new(dry_run);
-    let adb = AdbWorld::new(android_home, apk_path, netsim_path.clone(), netsim_args);
-    let netsim = NetsimWorld::new(netsim_cli_path);
+    let adb = AdbWorld::new(android_home, apk_path, netsim_path, netsim_args);
+    let netsim = NetsimWorld {};
 
     let mut ctx = TestContext {
         android: AndroidWorld::new(),
@@ -61,7 +60,7 @@ pub async fn list_scenarios() {
         android: AndroidWorld::new(),
         host: HostWorld::new(true),
         adb: AdbWorld::new(None, None, None, None),
-        netsim: NetsimWorld::new(None),
+        netsim: NetsimWorld {},
         target_ip: "10.0.2.2".to_string(),
         gateway_ip: "10.0.2.2".to_string(),
         filter: None,
@@ -89,10 +88,6 @@ pub struct TestContext {
 impl features::World for TestContext {
     fn reset(&mut self) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + '_>> {
         Box::pin(async move {
-            // 1. Reset all host-side actors and the simulation environment
-            let _ = self.reset_actors().await;
-
-            // 2. Explicitly trigger Kotlin agent reset for each device
             let keys: Vec<String> = self.android.devices.keys().cloned().collect();
             for key in keys {
                 if let Some(agent) = self.android.devices.get_mut(&key) {
@@ -250,11 +245,9 @@ impl TestContext {
         if self.is_dry_run {
             return Ok(());
         }
-
         self.host.reset_actor().await?;
         self.adb.reset_actor().await?;
         self.netsim.reset_actor().await?;
-
         for agent in self.android.devices.values_mut() {
             agent.reset_actor().await?;
         }

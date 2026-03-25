@@ -1,6 +1,6 @@
 // Copyright 2025-2026 The Android Open Source Project
 
-use netsim_model::chip::WifiMode;
+use ap_actor::netsim_model::chip::WifiMode;
 use netsim_packets::{
     ethernet::MacAddr,
     ieee80211::{
@@ -9,7 +9,6 @@ use netsim_packets::{
     },
 };
 use tokio;
-use tracing::info;
 use zerocopy::IntoBytes;
 
 use crate::world::ApWorld;
@@ -27,7 +26,7 @@ use crate::world::ApWorld;
 // Then the World receives a Beacon for "TestAP"
 #[tokio::test]
 async fn test_create_ap_beacon_generation() {
-    info!("Scenario: Create an AP and verify beacons");
+    log::info!("Scenario: Create an AP and verify beacons");
     let mut world = ApWorld::new().await;
 
     // When
@@ -43,7 +42,7 @@ async fn test_create_ap_beacon_generation() {
 // Then no more beacons are received
 #[tokio::test]
 async fn test_delete_ap_stops_beacons() {
-    info!("Scenario: Delete AP - stops beacons");
+    log::info!("Scenario: Delete AP - stops beacons");
     let mut world = ApWorld::new().await;
     // Given (Implicit via world method logging)
     world.given_a_registered_ap("DeleteAP").await;
@@ -64,7 +63,7 @@ async fn test_delete_ap_stops_beacons() {
 // Then the World receives a Beacon with HE Capabilities
 #[tokio::test]
 async fn test_wifi6_beacon() {
-    info!("Scenario: Create Request for WiFi 6 AP");
+    log::info!("Scenario: Create Request for WiFi 6 AP");
     let mut world = ApWorld::new().await;
 
     // When
@@ -108,7 +107,7 @@ async fn test_wifi6_beacon() {
 // Then the World receives beacons from both
 #[tokio::test]
 async fn test_create_two_aps() {
-    info!("Scenario: Multiple APs");
+    log::info!("Scenario: Multiple APs");
     let mut world = ApWorld::new().await;
 
     // When
@@ -143,16 +142,16 @@ async fn test_create_two_aps() {
 // Then the AP responds with a Probe Response
 #[tokio::test]
 async fn test_probe_response() {
-    info!("Scenario: Active Discovery (Probe Response) - Generic/Wildcard");
+    log::info!("Scenario: Active Discovery (Probe Response) - Generic/Wildcard");
     let mut world = ApWorld::new().await;
-    info!("Given a registered AP 'ProbeAP'");
+    log::info!("Given a registered AP 'ProbeAP'");
     world.given_a_registered_ap("ProbeAP").await;
 
     // Station sends Probe Req
     let station_mac: MacAddr = "02:00:00:00:00:99".try_into().unwrap();
 
     // When (Manual send, not helper)
-    info!("When a Station sends a Wildcard Probe Request");
+    log::info!("When a Station sends a Wildcard Probe Request");
     let tx = world.tx_to_ap.as_mut().expect("AP registered");
     // FC: Mgmt(00), Probe Req(0100=4) -> 0x40
     let header = MacHeader3Addr::new(
@@ -171,7 +170,7 @@ async fn test_probe_response() {
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
     // Verify Response
-    info!("Then the AP responds with a Probe Response");
+    log::info!("Then the AP responds with a Probe Response");
     let msg =
         world.recv_frame(|frame, _| frame.stype() == management_subtype::PROBE_RESPONSE).await;
 
@@ -186,15 +185,15 @@ async fn test_probe_response() {
 
 #[tokio::test]
 async fn test_probe_response_ssid_match() {
-    info!("Scenario: Active Discovery (Probe Response) - Specific SSID Match");
+    log::info!("Scenario: Active Discovery (Probe Response) - Specific SSID Match");
     let mut world = ApWorld::new().await;
-    info!("Given a registered AP 'MatchAP'");
+    log::info!("Given a registered AP 'MatchAP'");
     world.given_a_registered_ap("MatchAP").await;
 
     let station_mac: MacAddr = "02:00:00:00:00:99".try_into().unwrap();
     let tx = world.tx_to_ap.as_mut().expect("AP registered");
 
-    info!("When a Station sends a Probe Request for 'MatchAP'");
+    log::info!("When a Station sends a Probe Request for 'MatchAP'");
     // FC: Mgmt(00), Probe Req(0100=4) -> 0x40
     let header = MacHeader3Addr::new(
         FrameControl::new(0x0040),
@@ -216,7 +215,7 @@ async fn test_probe_response_ssid_match() {
     let src_id = netsim_model::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
-    info!("Then the AP responds with a Probe Response");
+    log::info!("Then the AP responds with a Probe Response");
     let msg =
         world.recv_frame(|frame, _| frame.stype() == management_subtype::PROBE_RESPONSE).await;
     assert_eq!(msg[0], 0x50);
@@ -224,15 +223,15 @@ async fn test_probe_response_ssid_match() {
 
 #[tokio::test]
 async fn test_probe_response_ssid_mismatch() {
-    info!("Scenario: Active Discovery - SSID Mismatch");
+    log::info!("Scenario: Active Discovery - SSID Mismatch");
     let mut world = ApWorld::new().await;
-    info!("Given a registered AP 'MyAP'");
+    log::info!("Given a registered AP 'MyAP'");
     world.given_a_registered_ap("MyAP").await;
 
     let station_mac: MacAddr = "02:00:00:00:00:88".try_into().unwrap();
     let tx = world.tx_to_ap.as_mut().expect("AP registered");
 
-    info!("When a Station sends a Probe Request for 'OtherAP'");
+    log::info!("When a Station sends a Probe Request for 'OtherAP'");
     // FC: Mgmt(00), Probe Req(0100=4) -> 0x40
     let header = MacHeader3Addr::new(
         FrameControl::new(0x0040),
@@ -254,7 +253,7 @@ async fn test_probe_response_ssid_mismatch() {
     let src_id = netsim_model::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
-    info!("Then the AP does NOT respond (ignores request)"); // No helper call
+    log::info!("Then the AP does NOT respond (ignores request)"); // No helper call
     let rx = world.rx_from_ap.as_mut().expect("AP registered");
 
     // Logic: We might receive Beacons!
@@ -279,16 +278,16 @@ async fn test_probe_response_ssid_mismatch() {
 
 #[tokio::test]
 async fn test_probe_response_bssid_mismatch() {
-    info!("Scenario: Active Discovery - BSSID Mismatch");
+    log::info!("Scenario: Active Discovery - BSSID Mismatch");
     let mut world = ApWorld::new().await;
-    info!("Given a registered AP 'SpecificAP'");
+    log::info!("Given a registered AP 'SpecificAP'");
     world.given_a_registered_ap("SpecificAP").await;
 
     let station_mac: MacAddr = "02:00:00:00:00:77".try_into().unwrap();
     let tx = world.tx_to_ap.as_mut().expect("AP registered");
 
     // Send Probe Req with Correct SSID but Wrong BSSID (Unicast)
-    info!("When a Station sends a Probe Request for 'SpecificAP' to wrong BSSID");
+    log::info!("When a Station sends a Probe Request for 'SpecificAP' to wrong BSSID");
 
     let wrong_bssid: MacAddr = "02:00:00:00:00:99".try_into().unwrap();
 
@@ -313,7 +312,7 @@ async fn test_probe_response_bssid_mismatch() {
     let src_id = netsim_model::ChipId(123);
     tx.send(bytes::Bytes::from(frame)).expect("Send Probe Req");
 
-    info!("Then the AP does NOT respond");
+    log::info!("Then the AP does NOT respond");
     let rx = world.rx_from_ap.as_mut().expect("AP registered");
 
     let start = std::time::Instant::now();
@@ -339,7 +338,7 @@ async fn test_probe_response_bssid_mismatch() {
 // And the beacon contains a TIM IE with DTIM Count 0 and DTIM Period 3
 #[tokio::test]
 async fn test_create_ap_with_country_and_tim() {
-    info!("Scenario: Create AP with Country and TIM");
+    log::info!("Scenario: Create AP with Country and TIM");
     let mut world = ApWorld::new().await;
 
     let config = ap_actor::ApConfig {
@@ -358,7 +357,7 @@ async fn test_create_ap_with_country_and_tim() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: ap_actor::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config).await;
@@ -410,7 +409,7 @@ async fn test_create_ap_with_country_and_tim() {
 
 #[tokio::test]
 async fn test_hidden_ssid() {
-    info!("Scenario: Hidden SSID");
+    log::info!("Scenario: Hidden SSID");
     let mut world = ApWorld::new().await;
 
     let config = ap_actor::ApConfig {
@@ -429,7 +428,7 @@ async fn test_hidden_ssid() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: ap_actor::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config).await;
@@ -519,7 +518,7 @@ async fn test_hidden_ssid() {
 
 #[tokio::test]
 async fn test_wmm_ie_presence() {
-    info!("Scenario: WMM IE Presence");
+    log::info!("Scenario: WMM IE Presence");
     let mut world = ApWorld::new().await;
 
     let config = ap_actor::ApConfig {
@@ -538,7 +537,7 @@ async fn test_wmm_ie_presence() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: netsim_model::device::Position::default(),
+        position: ap_actor::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config).await;

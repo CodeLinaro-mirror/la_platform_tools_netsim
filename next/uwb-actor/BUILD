@@ -6,10 +6,10 @@ DEPS = [
     "//next/actor-framework",
     "//next/device-actor",
     "//next/model",
+    "@anyhow",
     "@bytes",
-    "@thiserror",
     "@futures",
-    "@tracing",
+    "@log",
     "@pdl-runtime",
     "@pica",
     "@tokio",
@@ -30,6 +30,7 @@ netsim_rust_library(
     test_deps = [
         "//next/device-api:testing",
         "//next/testing",
+        "@env_logger",
     ],
     deps = DEPS,
 )

@@ -15,9 +15,9 @@ netsim_rust_library(
         "//next/libslirp-rs",
         "//next/model",
         "@bytes",
+        "@log",
         "@thiserror",
         "@tokio",
         "@tokio-stream",
-        "@tracing",
     ],
 )

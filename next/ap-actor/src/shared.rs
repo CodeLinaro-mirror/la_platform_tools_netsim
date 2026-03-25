@@ -15,7 +15,6 @@ use ccm::{
     Ccm,
 };
 use netsim_packets::ieee80211::{CcmpHeader, Ieee80211, MacAddress};
-use tracing::error;
 use zerocopy::IntoBytes;
 
 type AesCcm = Ccm<Aes128, U8, U13>;
@@ -212,13 +211,13 @@ impl SharedKeyStore {
         let plaintext = match cipher.decrypt(nonce_ga, Payload { msg: data, aad: &aad }) {
             Ok(p) => p,
             Err(_) => {
-                error!(
+                log::error!(
                     "CCMP DECRYPT FAILED! hdr_len: {}, msg_len: {}, aad_len: {}",
                     hdr_len,
                     data.len(),
                     aad.len()
                 );
-                error!("RAW FRAME TO DECRYPT (Hex): {:02X?}", ieee80211.as_bytes());
+                log::error!("RAW FRAME TO DECRYPT (Hex): {:02X?}", ieee80211.as_bytes());
                 return None;
             }
         };

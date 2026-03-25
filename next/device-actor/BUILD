@@ -14,7 +14,7 @@ DEPS = [
     "@futures",
     "@tokio",
     "@serde",
-    "@tracing",
+    "@log",
     "@thiserror",
     "@bytes",
 ]

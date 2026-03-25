@@ -5,10 +5,10 @@
 
 use tokio::sync::oneshot;
 
-use crate::service::ActorService;
+use crate::{error::FrameworkError, service::ActorService};
 
 /// Type alias for the one-shot response channel used by actors.
-pub type Response<R, E> = oneshot::Sender<Result<R, E>>;
+pub type Response<T> = oneshot::Sender<Result<T, FrameworkError>>;
 
 /// Internal message type sent to the actor to request operations.
 ///
@@ -42,31 +42,31 @@ pub enum ResourceRequest<T: ActorService> {
     Create {
         params: T::Create,
         id: Option<T::Id>,
-        respond_to: Response<T::Id, T::Error>,
+        respond_to: Response<T::Id>,
     },
     Get {
         id: T::Id,
-        respond_to: Response<Option<T::Entity>, T::Error>,
+        respond_to: Response<Option<T::Entity>>,
     },
     Update {
         id: T::Id,
         update: T::Update,
-        respond_to: Response<T::Entity, T::Error>,
+        respond_to: Response<T::Entity>,
     },
     #[allow(dead_code)]
     Delete {
         id: T::Id,
-        respond_to: Response<(), T::Error>,
+        respond_to: Response<()>,
     },
     Action {
         id: Option<T::Id>,
         action: T::Action,
-        respond_to: Response<T::ActionResult, T::Error>,
+        respond_to: Response<T::ActionResult>,
     },
     List {
-        respond_to: Response<Vec<T::Entity>, T::Error>,
+        respond_to: Response<Vec<T::Entity>>,
     },
     Shutdown {
-        respond_to: Response<(), T::Error>,
+        respond_to: Response<()>,
     },
 }

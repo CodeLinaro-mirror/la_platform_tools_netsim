@@ -20,7 +20,9 @@ use std::{
 
 use bytes::Bytes;
 use futures::{Sink, Stream};
-use netsim_model::chip::{PacketSink, PacketStream};
+use netsim_model::chip::{ChipId, PacketSink, PacketStream};
+
+use crate::Direction;
 
 /// A wrapper around `PacketStream` that automatically captures received
 /// packets.
@@ -31,9 +33,8 @@ use netsim_model::chip::{PacketSink, PacketStream};
 /// This is used for packets received by the device (e.g., from the network).
 pub struct CapturedStream {
     inner: PacketStream,
-    sender: Option<
-        tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, crate::Direction, Bytes)>,
-    >,
+    capture_callback: Box<dyn Fn(ChipId, Direction, Bytes) + Send + Sync>,
+    chip_id: ChipId,
     enabled: Arc<AtomicBool>,
 }
 
@@ -42,17 +43,16 @@ impl CapturedStream {
     ///
     /// # Arguments
     /// * `inner` - The underlying packet stream to wrap.
-    /// * `sender` - Optional concrete sender for the packets. If None or
-    ///   disconnected, packets are not captured.
+    /// * `capture_callback` - Callback invoked for each captured packet.
+    /// * `chip_id` - The ID of the chip associated with this stream.
     /// * `enabled` - Thread-safe flag to enable/disable capturing.
     pub fn new(
         inner: PacketStream,
-        sender: Option<
-            tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, crate::Direction, Bytes)>,
-        >,
+        capture_callback: Box<dyn Fn(ChipId, Direction, Bytes) + Send + Sync>,
+        chip_id: ChipId,
         enabled: Arc<AtomicBool>,
     ) -> Self {
-        Self { inner, sender, enabled }
+        Self { inner, capture_callback, chip_id, enabled }
     }
 }
 
@@ -64,13 +64,7 @@ impl Stream for CapturedStream {
         match self.inner.poll_next_unpin(cx) {
             Poll::Ready(Some(bytes)) => {
                 if self.enabled.load(Ordering::SeqCst) {
-                    if let Some(sender) = &self.sender {
-                        let _ = sender.send((
-                            std::time::SystemTime::now(),
-                            crate::Direction::Received,
-                            bytes.clone(),
-                        ));
-                    }
+                    (self.capture_callback)(self.chip_id, Direction::Received, bytes.clone());
                 }
                 Poll::Ready(Some(bytes))
             }
@@ -91,21 +85,19 @@ impl Stream for CapturedStream {
 /// This is used for packets sent by the device (e.g., to the network).
 pub struct CapturedSink {
     inner: PacketSink,
-    sender: Option<
-        tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, crate::Direction, Bytes)>,
-    >,
+    capture_callback: Box<dyn Fn(ChipId, Direction, Bytes) + Send + Sync>,
+    chip_id: ChipId,
     enabled: Arc<AtomicBool>,
 }
 
 impl CapturedSink {
     pub fn new(
         inner: PacketSink,
-        sender: Option<
-            tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, crate::Direction, Bytes)>,
-        >,
+        capture_callback: Box<dyn Fn(ChipId, Direction, Bytes) + Send + Sync>,
+        chip_id: ChipId,
         enabled: Arc<AtomicBool>,
     ) -> Self {
-        Self { inner, sender, enabled }
+        Self { inner, capture_callback, chip_id, enabled }
     }
 }
 
@@ -120,13 +112,7 @@ impl Sink<Bytes> for CapturedSink {
     fn start_send(mut self: Pin<&mut Self>, item: Bytes) -> Result<(), Self::Error> {
         use futures::SinkExt;
         if self.enabled.load(Ordering::SeqCst) {
-            if let Some(sender) = &self.sender {
-                let _ = sender.send((
-                    std::time::SystemTime::now(),
-                    crate::Direction::Sent,
-                    item.clone(),
-                ));
-            }
+            (self.capture_callback)(self.chip_id, Direction::Sent, item.clone());
         }
         self.inner.start_send_unpin(item)
     }

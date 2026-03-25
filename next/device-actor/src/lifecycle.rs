@@ -1,5 +1,4 @@
 use actor_framework::{ActorLifecycle, DynContext};
-use tracing::{info, warn};
 
 use crate::device_actor::DeviceActor;
 
@@ -13,7 +12,7 @@ impl ActorLifecycle for DeviceActor {
                     loop {
                         tokio::time::sleep(interval).await;
                         if let Err(e) = client.save_stats().await {
-                            warn!("Failed to auto-save stats: {}", e);
+                            log::warn!("Failed to auto-save stats: {}", e);
                         }
                     }
                     #[allow(unreachable_code)]
@@ -21,14 +20,14 @@ impl ActorLifecycle for DeviceActor {
                 }),
             );
         } else {
-            warn!("DeviceActor started without self_client! Stats will not be auto-saved.");
+            log::warn!("DeviceActor started without self_client! Stats will not be auto-saved.");
         }
 
         let Some(timeout) = self.startup_timeout else {
             return;
         };
 
-        info!("DeviceActor: Scheduling startup timeout for {:?}", timeout);
+        log::info!("DeviceActor: Scheduling startup timeout for {:?}", timeout);
         let key = ctx.run_later(timeout, Box::new(Self::on_startup_timeout));
         self.startup_timer = Some(key);
     }
@@ -36,14 +35,14 @@ impl ActorLifecycle for DeviceActor {
     async fn on_shutdown(&mut self) {
         // Ensure any pending detached background write finishes safely.
         if let Some(task) = self.stats_write_task.take() {
-            info!("DeviceActor: Awaiting pending background stats write prior to shutdown");
+            log::info!("DeviceActor: Awaiting pending background stats write prior to shutdown");
             let _ = task.await;
         }
 
         // Create a final save task
         self.save_stats_async().await;
         if let Some(task) = self.stats_write_task.take() {
-            info!("DeviceActor: Awaiting final stats write");
+            log::info!("DeviceActor: Awaiting final stats write");
             let _ = task.await;
         }
     }

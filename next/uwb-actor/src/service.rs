@@ -12,7 +12,6 @@ use pdl_runtime::Packet;
 use pica::{packets::uci, PicaCommand, PicaEvent};
 
 use crate::{
-    error::UwbError,
     uwb_actor::{UwbActor, UwbChipState},
     UwbAction, UwbActionResult,
 };
@@ -23,7 +22,7 @@ impl ActorService for UwbActor {
     type Update = ChipUpdate;
     type Action = UwbAction;
     type ActionResult = UwbActionResult;
-    type Error = UwbError;
+    type Error = ChipError;
     type Entity = Chip;
     type TypedStream = ();
 
@@ -33,9 +32,9 @@ impl ActorService for UwbActor {
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = id.ok_or(ChipError::InvalidArguments(Box::from("missing chip id")))?;
+        let chip_id = id.ok_or(ChipError::InvalidArguments("missing chip id".to_string()))?;
         if self.chip_to_handle.contains_key(&chip_id) {
-            return Err(ChipError::ChipExists(chip_id.0).into());
+            return Err(ChipError::ChipExists(chip_id.0));
         }
 
         let chip = Chip {
@@ -50,13 +49,13 @@ impl ActorService for UwbActor {
         };
 
         let stream =
-            params.packet_stream.ok_or(UwbError::PacketStreamMissing)?.map(|b| b.to_vec()).boxed();
+            params.packet_stream.expect("Packet stream is present").map(|b| b.to_vec()).boxed();
 
         // Pica wants a Sink<Vec<u8>>.
         let sink = Box::pin(
             params
                 .packet_sink
-                .ok_or(UwbError::PacketSinkMissing)?
+                .expect("Packet sink is present")
                 .with(|v| async move { Ok(Bytes::from(v)) }),
         );
 
@@ -67,8 +66,11 @@ impl ActorService for UwbActor {
         // Wait for add to complete. This guarantees the chip exists by the time any
         // actions are performed on it.
         let handle = loop {
-            if let PicaEvent::Connected { handle, .. } =
-                self.pica_connect_events.recv().await.map_err(|_| UwbError::PicaShutdown)?
+            if let PicaEvent::Connected { handle, .. } = self
+                .pica_connect_events
+                .recv()
+                .await
+                .map_err(|_| ChipError::Internal("pica shutdown unexpectedly".to_string()))?
             {
                 break handle;
             }
@@ -138,12 +140,6 @@ impl ActorService for UwbActor {
         match action {
             UwbAction::Reset { id } => {
                 if let Some(handle) = self.chip_to_handle.get(&id) {
-                    {
-                        let mut chips = self.chip_states.write().unwrap();
-                        if let Some(state) = chips.get_mut(handle) {
-                            state.chip.enabled = true;
-                        }
-                    }
                     let reset_cmd =
                         uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
                     let _ = self

@@ -77,32 +77,21 @@ use std::{
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use netsim_model::{client_error::ClientError, ChipId, ChipKind};
+use netsim_model::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
 
 #[async_trait]
 pub trait CaptureSender: Send + Sync {
     /// Creates a new capture for a chip.
-    async fn create_capture(
-        &self,
-        chip_id: ChipId,
-        create: CaptureCreate,
-    ) -> Result<(), ClientError>;
+    async fn create_capture(&self, chip_id: ChipId, create: CaptureCreate) -> anyhow::Result<()>;
 
     /// Captures a single packet.
     ///
     /// # Arguments
     /// * `chip_id` - The ID of the chip.
     /// * `direction` - The direction of the packet.
-    ///
-    /// Returns a channel to send packet bytes.
-    async fn packet_sender(
-        &self,
-        chip_id: ChipId,
-    ) -> Result<
-        tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>,
-        ClientError,
-    >;
+    /// * `bytes` - The packet data.
+    fn capture_packet(&self, chip_id: ChipId, direction: Direction, packet: Bytes);
 }
 
 /// Direction of the packet.
@@ -129,8 +118,8 @@ pub struct CaptureCreate {
 /// Actions that can be performed on a capture.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CaptureAction {
-    /// Gets a packet sender for capture.
-    GetPacketSender,
+    /// Capture a packet.
+    CapturePacket { chip_id: ChipId, direction: Direction, bytes: Bytes },
     /// Patch a capture (e.g., enable/disable).
     Patch { chip_id: ChipId, enabled: bool },
     /// Create a new capture.
@@ -141,16 +130,15 @@ pub enum CaptureAction {
     SetCaptureDirectory { path: PathBuf },
 }
 
-/// Result of an action performed on a capture.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Result of a capture action.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CaptureActionResult {
-    /// Action succeeded.
+    /// Action was successful.
     Success,
+    /// An error occurred.
+    Error(String),
     /// The action resulted in an update and returns the new state.
     Updated(CaptureInfo),
-    /// Returns a high-throughput packet sender.
-    #[serde(skip)]
-    PacketSender(tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>),
 }
 
 /// Information about a capture.

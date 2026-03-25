@@ -3,8 +3,7 @@
 use std::time::Duration;
 
 use actor_framework::ResourceActor;
-use ap_actor::{ApActor, ApClient, ApConfig, SharedKeyStore};
-use netsim_model::chip::WifiMode;
+use ap_actor::{netsim_model::chip::WifiMode, shared::SharedKeyStore, ApActor, ApClient, ApConfig};
 use netsim_packets::{
     ethernet::MacAddr,
     ieee80211::{
@@ -13,7 +12,6 @@ use netsim_packets::{
     },
 };
 use tokio::sync::mpsc;
-use tracing::info;
 use zerocopy::{IntoBytes, Ref, U16};
 
 pub fn generate_random_mac() -> [u8; 6] {
@@ -54,10 +52,10 @@ impl ApWorld {
     }
 
     pub async fn given_a_registered_ap_with_config(&mut self, config: ApConfig) {
-        info!("Given a registered AP '{}'", config.ssid);
+        log::info!("Given a registered AP '{}'", config.ssid);
         let id = self.next_ap_id;
         self.next_ap_id += 1;
-        self.client.create_ap(Some(id), config).await.expect("Failed to create AP");
+        self.client.create_ap(id, config).await.expect("Failed to create AP");
         self.ap_id = Some(id);
 
         if self.tx_to_ap.is_none() {
@@ -79,7 +77,7 @@ impl ApWorld {
     }
 
     pub async fn given_a_registered_ap_with_wpa(&mut self, ssid: &str, passphrase: &str) {
-        info!("Given a registered AP '{}' with WPA", ssid);
+        log::info!("Given a registered AP '{}' with WPA", ssid);
         let wpa_passphrase =
             if passphrase.is_empty() { None } else { Some(passphrase.to_string()) };
         let config = ApConfig {
@@ -99,13 +97,13 @@ impl ApWorld {
             mac_acl_mode: 0,
             mac_acl_list: vec![],
             ftm_responder_enabled: true,
-            position: netsim_model::device::Position::default(),
+            position: ap_actor::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }
 
     pub async fn given_a_wifi6_ap(&mut self, ssid: &str) {
-        info!("Given a WiFi 6 AP '{}'", ssid);
+        log::info!("Given a WiFi 6 AP '{}'", ssid);
         let config = ApConfig {
             ssid: ssid.to_string(),
             bssid: MacAddr::new(generate_random_mac()),
@@ -123,12 +121,12 @@ impl ApWorld {
             mac_acl_mode: 0,
             mac_acl_list: vec![],
             ftm_responder_enabled: true,
-            position: netsim_model::device::Position::default(),
+            position: ap_actor::Position::default(),
         };
         self.given_a_registered_ap_with_config(config).await;
     }
     pub async fn then_beacon_is_received(&mut self, ssid: &str) {
-        info!("Then the World receives a Beacon for '{}'", ssid);
+        log::info!("Then the World receives a Beacon for '{}'", ssid);
         let rx = self.rx_from_ap.as_mut().expect("AP not registered");
         // Drain until we find a beacon or timeout
         let start = std::time::Instant::now();
@@ -178,7 +176,7 @@ impl ApWorld {
         M::Error: std::fmt::Debug,
     {
         let src_mac = src_mac.try_into().expect("Invalid MAC address");
-        info!("When a Station sends an Association Request from {}", src_mac);
+        log::info!("When a Station sends an Association Request from {}", src_mac);
         // Construct Assoc Req
         let tx = self.tx_to_ap.as_mut().expect("AP not registered");
 
@@ -218,7 +216,7 @@ impl ApWorld {
         M::Error: std::fmt::Debug,
     {
         let dst_mac = dst_mac.try_into().expect("Invalid MAC address");
-        info!("Then the Station receives an Association Response at {}", dst_mac);
+        log::info!("Then the Station receives an Association Response at {}", dst_mac);
         let rx = self.rx_from_ap.as_mut().expect("AP not registered");
         let start = std::time::Instant::now();
         while start.elapsed() < Duration::from_secs(2) {
@@ -240,7 +238,7 @@ impl ApWorld {
     }
 
     pub async fn when_ap_is_deleted(&mut self) {
-        info!("When the AP is deleted");
+        log::info!("When the AP is deleted");
         if let Some(id) = self.ap_id {
             self.client.destroy_ap(id).await.expect("Failed to destroy AP");
             self.ap_id = None;
@@ -248,7 +246,7 @@ impl ApWorld {
     }
 
     pub async fn then_no_beacons_are_received(&mut self) {
-        info!("Then no more beacons are received");
+        log::info!("Then no more beacons are received");
         let rx = self.rx_from_ap.as_mut().expect("AP not registered");
         // Drain
         while rx.try_recv().is_ok() {}

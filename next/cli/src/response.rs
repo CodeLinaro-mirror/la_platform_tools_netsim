@@ -101,7 +101,12 @@ impl args::Command {
                     println!("Successfully downloaded file: {}", cmd.current_file);
                 }
             }
-
+            Command::Gui => {
+                unimplemented!("No Grpc Response for Gui Command.");
+            }
+            Command::Artifact => {
+                unimplemented!("No Grpc Response for Artifact Command.");
+            }
             Command::Beacon(action) => match action {
                 Beacon::Create(kind) => match kind {
                     BeaconCreate::Ble(_) => {
@@ -186,7 +191,9 @@ impl args::Command {
                     }
                 }
             },
-
+            Command::Bumble => {
+                unimplemented!("No Grpc Response for Bumble Command.");
+            }
             Command::Link(link_cmd) => match link_cmd {
                 Link::Create(_) => {
                     if verbose {
@@ -262,10 +269,6 @@ impl args::Command {
                     }
                 }
             },
-            // These commands are intercepted early in main.rs and have no direct gRPC pipeline.
-            _ => {
-                unimplemented!("No Grpc Response for this Command.");
-            }
         }
         Ok(())
     }

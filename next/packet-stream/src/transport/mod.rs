@@ -29,8 +29,6 @@ pub use dual_fd::{DualFdConfig, DualFdListener};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-#[cfg(windows)]
-use tracing::warn;
 use traits::{PacketSink, PacketStream, TransportListener};
 pub use types::{ListenerConfig, TransportType};
 
@@ -109,7 +107,7 @@ impl CrossPlatformListener {
             }
         }
 
-        let addr: std::net::SocketAddr = "localhost:8080".parse().map_err(SocketError::from)?;
+        let addr: std::net::SocketAddr = "localhost:8080".parse()?;
         return Ok(CrossPlatformListener::Tcp(tokio::net::TcpListener::bind(addr).await?));
     }
 
@@ -125,12 +123,11 @@ impl CrossPlatformListener {
         #[cfg(windows)]
         {
             let pipe_name = "packetstream";
-            let fallback_addr: std::net::SocketAddr =
-                "localhost:0".parse().map_err(SocketError::from)?;
+            let fallback_addr: std::net::SocketAddr = "localhost:0".parse()?;
             match windows::WindowsListener::bind_named_pipe(pipe_name).await {
                 Ok(listener) => Ok(CrossPlatformListener::Windows(listener)),
                 Err(err) => {
-                    warn!("Failed to create named pipe, falling back to tcp: {err}");
+                    log::warn!("Failed to create named pipe, falling back to tcp: {err}");
                     let listener = tokio::net::TcpListener::bind(fallback_addr).await?;
                     Ok(CrossPlatformListener::Tcp(listener))
                 }
@@ -139,7 +136,7 @@ impl CrossPlatformListener {
 
         #[cfg(not(any(unix, windows)))]
         {
-            let addr = "localhost:0".parse().map_err(SocketError::from)?;
+            let addr = "localhost:0".parse()?;
             let listener = tokio::net::TcpListener::bind(addr).await?;
             Ok(CrossPlatformListener::Tcp(listener))
         }

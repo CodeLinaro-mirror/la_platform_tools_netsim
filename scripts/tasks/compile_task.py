@@ -32,10 +32,10 @@ from utils import (
 )
 
 
-class BuildTask(Task):
+class CompileTask(Task):
 
   def __init__(self, args, env):
-    super().__init__("Build")
+    super().__init__("Compile")
     self.args = args
     self.out = Path(args.out_dir)
     self.env = env

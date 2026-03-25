@@ -13,7 +13,6 @@ use netsim_packets::{
     },
     llc::{control_field, sap, LlcSnapHeader},
 };
-use tracing::info;
 use zerocopy::{FromBytes, IntoBytes};
 
 use crate::world::ApWorld;
@@ -66,7 +65,7 @@ fn calc_ptk(pmk: &[u8], bssid: &[u8], sta: &[u8], anonce: &[u8], snonce: &[u8]) 
 // Then the Station receives an Association Response
 #[tokio::test]
 async fn test_station_association_flow() {
-    info!("Scenario: Station Association");
+    log::info!("Scenario: Station Association");
     let mut world = ApWorld::new().await;
     world.given_a_registered_ap("AssocAP").await;
 
@@ -86,7 +85,7 @@ async fn test_station_association_flow() {
 // Then the AP does NOT send M3 (handshake fails/stalls)
 #[tokio::test]
 async fn test_wpa_handshake_failure_wrong_password() {
-    info!("Scenario: WPA Handshake Failure (Wrong Password)");
+    log::info!("Scenario: WPA Handshake Failure (Wrong Password)");
     let mut world = ApWorld::new().await;
     // Config with WPA
     world.given_a_registered_ap_with_wpa("WpaAP", "CorrectPassword").await;
@@ -129,7 +128,7 @@ async fn test_wpa_handshake_failure_wrong_password() {
     let anonce = key_frame.key_nonce;
 
     // 3. Construct M2 with WRONG Password
-    info!("And sends an M2 with an Invalid (wrong password derived) encryption/MIC");
+    log::info!("And sends an M2 with an Invalid (wrong password derived) encryption/MIC");
     // PMK = PSK for this simplified sim
     // Wrong Password -> Wrong PMK
     let wrong_pmk = b"WrongPassword_padding_to_32_bytes_";
@@ -203,9 +202,9 @@ async fn test_wpa_handshake_failure_wrong_password() {
     tx.send(bytes::Bytes::from(frame)).expect("Send M2");
 
     // 4. Expect NO M3 (Timeout)
-    info!("Then the AP does NOT send M3 (handshake fails)");
+    log::info!("Then the AP does NOT send M3 (handshake fails)");
     // 4. Expect NO M3 (Timeout)
-    info!("Then the AP does NOT send M3 (handshake fails)");
+    log::info!("Then the AP does NOT send M3 (handshake fails)");
 
     let start = std::time::Instant::now();
     let mut rx = world.rx_from_ap.take().expect("AP registered"); // Take rx to ownership for polling if needed or just borrow
@@ -239,7 +238,7 @@ async fn test_wpa_handshake_failure_wrong_password() {
 // Then keys are established (verified via M3 decryption and M4 acceptance)
 #[tokio::test]
 async fn test_wpa_handshake_success() {
-    info!("Scenario: WPA Handshake Success");
+    log::info!("Scenario: WPA Handshake Success");
     let mut world = ApWorld::new().await;
     // Config with WPA
     world.given_a_registered_ap_with_wpa("WpaAP", "CorrectPassword").await;
@@ -270,7 +269,7 @@ async fn test_wpa_handshake_success() {
     let anonce = key_frame_m1.key_nonce;
 
     // 3. Construct M2 (Correct)
-    info!("And sends a valid M2");
+    log::info!("And sends a valid M2");
     // Generate PMK using the same PBKDF2 routine as the AP
     let ssid = b"WpaAP";
     let pmk_vec =
@@ -331,9 +330,9 @@ async fn test_wpa_handshake_success() {
 
     // 4. Expect M3
     // We should receive M3 now.
-    info!("Then the AP sends M3 (with Encrypted Key Data)");
+    log::info!("Then the AP sends M3 (with Encrypted Key Data)");
     // 4. Expect M3
-    info!("Then the AP sends M3 (with Encrypted Key Data)");
+    log::info!("Then the AP sends M3 (with Encrypted Key Data)");
 
     let m3_msg = world
         .recv_frame(|frame, msg| {
@@ -361,7 +360,7 @@ async fn test_wpa_handshake_success() {
     // Check Encrypted Data?
 
     // 5. Build M4
-    info!("When the Station sends a valid M4");
+    log::info!("When the Station sends a valid M4");
     let mut m4_frame = Vec::new();
     let eapol_header_m4 = EapolHeader {
         version: EAPOL_VERSION,
@@ -400,5 +399,5 @@ async fn test_wpa_handshake_success() {
 
     // 6. Verify AP does NOT resend M3 (which it would if it ignored M4 or failed)
     // And ideally logs "PTK Installed".
-    info!("Then the AP installs the key (Handshake Complete)");
+    log::info!("Then the AP installs the key (Handshake Complete)");
 }

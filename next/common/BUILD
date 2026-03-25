@@ -14,8 +14,10 @@ netsim_rust_library(
         "@regex",
     ],
     deps = [
+        "@anyhow",
         "@chrono",
         "@libc",
+        "@log",
         "@protobuf-json-mapping",
         "@tracing",
         "@tracing-log",

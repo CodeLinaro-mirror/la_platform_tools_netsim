@@ -1,5 +1,5 @@
 use actor_framework::{ActorLifecycle, DynContext};
-use tracing::info;
+use log::info;
 
 use crate::slirp_actor::SlirpActor;
 
