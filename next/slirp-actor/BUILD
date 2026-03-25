@@ -12,6 +12,7 @@ netsim_rust_library(
     ],
     deps = [
         "//next/actor-framework",
+        "//next/http-proxy",
         "//next/libslirp-rs",
         "//next/model",
         "@bytes",

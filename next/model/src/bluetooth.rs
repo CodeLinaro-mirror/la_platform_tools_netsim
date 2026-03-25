@@ -37,6 +37,8 @@ pub enum BluetoothMode {
     Beacon(Box<BeaconParams>),
     /// A passive Bluetooth scanner to capture nearby traffic.
     Scanner(ScannerParams),
+    /// A raw link-layer sniffer for baseband capture.
+    Sniffer(SnifferParams),
 }
 
 /// Parameters for creating a virtual Bluetooth device.
@@ -54,6 +56,12 @@ pub struct BeaconParams {
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScannerParams {
     // Future scanner-specific properties can be added here.
+}
+
+/// Parameters for a Bluetooth sniffer.
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SnifferParams {
+    // Future sniffer-specific properties can be added here.
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

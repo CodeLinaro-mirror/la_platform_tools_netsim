@@ -88,8 +88,8 @@ impl From<&LeMetaEvent<'_>> for JsonLeMetaEvent {
 impl From<&LeAdvertisingReport<'_>> for JsonLeAdvertisingReport {
     fn from(report: &LeAdvertisingReport<'_>) -> Self {
         JsonLeAdvertisingReport {
-            event_type: report.event_type,
-            address_type: report.address_type,
+            event_type: report.event_type.0,
+            address_type: report.address_type.0,
             address: report.address.to_string(),
             data_length: report.data_length,
             data: hex::encode(report.data),

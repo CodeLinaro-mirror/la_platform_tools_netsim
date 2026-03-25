@@ -33,8 +33,8 @@ impl ControllerCallbacks for HciCallbacks {
         }
     }
 
-    fn on_receive_ll(&self, _source_id: Id, packet: &[u8], _phy: Phy, _tx_power: i32) {
-        debug!("[{}] Received LL packet", self.id);
+    fn on_receive_ll(&self, _source_id: Id, packet: &[u8], phy: Phy, _tx_power: i32) {
+        debug!("[{}] Received {:?} LL packet", self.id, phy);
         if let Some(ll_tx) = self.ll_tx.as_ref() {
             let packet = Bytes::copy_from_slice(packet);
             if let Err(e) = ll_tx.try_send(packet) {
