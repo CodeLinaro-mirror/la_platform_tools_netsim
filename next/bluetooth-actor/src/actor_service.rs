@@ -99,8 +99,10 @@ impl ActorService for BluetoothActor {
 
         // 2. Setup Sink and Callbacks
         let callback = if let Some(sink) = params.packet_sink {
-            // Create a channel to send packets from the callback to the sink task.
-            let (tx, rx) = tokio::sync::mpsc::channel(10);
+            // Bounded to 100 packets (~100ms of lag absorption at 2Mbps) to:
+            // - Tolerate transient guest lag.
+            // - Protect netsimd from OOM crashes if the client becomes unresponsive.
+            let (tx, rx) = tokio::sync::mpsc::channel(100);
 
             // Spawn the sink task which forwards packets from the channel to the sink.
             let sink_id = chip_id;
