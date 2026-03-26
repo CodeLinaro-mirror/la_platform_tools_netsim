@@ -11,6 +11,7 @@ pub enum ApCommand {
     /// Modify an existing Access Point
     Patch(ApPatch),
     /// Remove an Access Point
+    #[command(alias("delete"))]
     Remove(ApRemove),
     /// Disconnect a client from an Access Point
     Disconnect(ApDisconnect),

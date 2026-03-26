@@ -301,6 +301,53 @@ impl DeviceActor {
         }
     }
 
+    async fn perform_device_deletion(
+        &mut self,
+        id: DeviceId,
+        ctx: &mut DynContext<Self>,
+    ) -> Result<(), DeviceError> {
+        let stats_to_archive = {
+            let Some(internal_device) = self.devices.get(&id) else {
+                return Err(DeviceError::DeviceNotFound(id.to_string()));
+            };
+
+            let chips = internal_device.device.chips.clone();
+            let mut stats_to_archive = Vec::new();
+            for chip in &chips {
+                let chip_id = ChipId(chip.id);
+                let stream_stats = internal_device.chip_stats.get(&chip_id).cloned();
+                let cached_stats = internal_device.last_known_stats.get(&chip_id).cloned();
+                stats_to_archive.push((chip.clone(), stream_stats, cached_stats));
+            }
+            stats_to_archive
+        };
+
+        for (chip, stream_stats, cached_stats) in stats_to_archive {
+            let chip_id = ChipId(chip.id);
+            self.archive_chip_stats(id, &chip, stream_stats, cached_stats.as_ref()).await;
+
+            if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
+                chip_client.delete(chip_id).await?;
+            }
+
+            // Notify Link Actor
+            self.link_client
+                .notify_chip_removed(chip_id)
+                .await
+                .expect("Failed to notify LinkActor of chip remove");
+        }
+
+        if let Some(internal_device) = self.devices.remove(&id) {
+            if let Some(guid) = &internal_device.guid {
+                self.guid_to_id.remove(guid);
+            }
+        }
+        self.stats.update_device_count(self.devices.len(), false);
+        self.update_idle_state(ctx);
+        self.save_stats_async().await;
+        Ok(())
+    }
+
     async fn perform_chip_removal(
         &mut self,
         device_id: DeviceId,
@@ -858,32 +905,7 @@ impl ActorService for DeviceActor {
         id: Self::Id,
         ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        let Some(internal_device) = self.devices.remove(&id) else {
-            return Err(DeviceError::DeviceNotFound(id.to_string()));
-        };
-        self.stats.update_device_count(self.devices.len(), false);
-
-        if let Some(guid) = &internal_device.guid {
-            self.guid_to_id.remove(guid);
-        }
-        for chip in &internal_device.device.chips {
-            let stream_stats = internal_device.chip_stats.get(&ChipId(chip.id)).cloned();
-            let cached_stats = internal_device.last_known_stats.get(&ChipId(chip.id));
-            self.archive_chip_stats(id, chip, stream_stats, cached_stats).await;
-
-            if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
-                chip_client.delete(ChipId(chip.id)).await?;
-                // Send delete request to Link Actor
-                self.link_client
-                    .notify_chip_removed(ChipId(chip.id))
-                    .await
-                    .expect("Failed to notify LinkActor of chip remove");
-            }
-        }
-
-        self.update_idle_state(ctx);
-        self.save_stats_async().await;
-        Ok(())
+        self.perform_device_deletion(id, ctx).await
     }
 
     async fn handle_action(
@@ -921,6 +943,17 @@ impl ActorService for DeviceActor {
                 }
 
                 self.perform_chip_removal(device_id, chip_id, ctx).await?;
+                Ok(DeviceActionResult::Success)
+            }
+
+            DeviceAction::DeleteDevice(id) => {
+                let Some(internal_device) = self.devices.get(&id) else {
+                    return Err(DeviceError::NotFound(format!("Device not found: {}", id)));
+                };
+                if internal_device.guid.is_some() {
+                    return Err(DeviceError::NotFound("Cannot delete external device".to_string()));
+                }
+                self.perform_device_deletion(id, ctx).await?;
                 Ok(DeviceActionResult::Success)
             }
             DeviceAction::AddChip { chip_config, packet_stream, packet_sink } => {
