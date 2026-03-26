@@ -120,3 +120,80 @@ impl fmt::Display for Address {
         )
     }
 }
+
+/// Event Type for LE Advertising Report.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct LeAdvertisingEventType(pub u8);
+
+impl LeAdvertisingEventType {
+    pub const ADV_IND: Self = Self(0x00);
+    pub const ADV_DIRECT_IND: Self = Self(0x01);
+    pub const ADV_SCAN_IND: Self = Self(0x02);
+    pub const ADV_NONCONN_IND: Self = Self(0x03);
+    pub const SCAN_RSP: Self = Self(0x04);
+}
+
+impl fmt::Display for LeAdvertisingEventType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::ADV_IND => write!(f, "ADV_IND"),
+            Self::ADV_DIRECT_IND => write!(f, "ADV_DIRECT_IND"),
+            Self::ADV_SCAN_IND => write!(f, "ADV_SCAN_IND"),
+            Self::ADV_NONCONN_IND => write!(f, "ADV_NONCONN_IND"),
+            Self::SCAN_RSP => write!(f, "SCAN_RSP"),
+            _ => write!(f, "UNKNOWN ({:#04X})", self.0),
+        }
+    }
+}
+
+/// Generic Access Profile (GAP) Data Types for Advertising Data payload
+/// parsing.
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, FromBytes, IntoBytes, Unaligned, Immutable, KnownLayout,
+)]
+#[repr(transparent)]
+pub struct GapDataType(pub u8);
+
+impl GapDataType {
+    pub const FLAGS: Self = Self(0x01);
+    pub const INCOMPLETE_16BIT_UUIDS: Self = Self(0x02);
+    pub const COMPLETE_16BIT_UUIDS: Self = Self(0x03);
+    pub const INCOMPLETE_32BIT_UUIDS: Self = Self(0x04);
+    pub const COMPLETE_32BIT_UUIDS: Self = Self(0x05);
+    pub const INCOMPLETE_128BIT_UUIDS: Self = Self(0x06);
+    pub const COMPLETE_128BIT_UUIDS: Self = Self(0x07);
+    pub const SHORTENED_LOCAL_NAME: Self = Self(0x08);
+    pub const COMPLETE_LOCAL_NAME: Self = Self(0x09);
+    pub const TX_POWER_LEVEL: Self = Self(0x0A);
+    pub const SERVICE_DATA_16BIT: Self = Self(0x16);
+    pub const APPEARANCE: Self = Self(0x19);
+    pub const SERVICE_DATA_32BIT: Self = Self(0x20);
+    pub const SERVICE_DATA_128BIT: Self = Self(0x21);
+    pub const MANUFACTURER_SPECIFIC: Self = Self(0xFF);
+}
+
+impl fmt::Display for GapDataType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::FLAGS => write!(f, "Flags"),
+            Self::INCOMPLETE_16BIT_UUIDS => write!(f, "Incomplete 16-bit UUIDs"),
+            Self::COMPLETE_16BIT_UUIDS => write!(f, "Complete 16-bit UUIDs"),
+            Self::INCOMPLETE_32BIT_UUIDS => write!(f, "Incomplete 32-bit UUIDs"),
+            Self::COMPLETE_32BIT_UUIDS => write!(f, "Complete 32-bit UUIDs"),
+            Self::INCOMPLETE_128BIT_UUIDS => write!(f, "Incomplete 128-bit UUIDs"),
+            Self::COMPLETE_128BIT_UUIDS => write!(f, "Complete 128-bit UUIDs"),
+            Self::SHORTENED_LOCAL_NAME => write!(f, "Shortened Local Name"),
+            Self::COMPLETE_LOCAL_NAME => write!(f, "Complete Local Name"),
+            Self::TX_POWER_LEVEL => write!(f, "Tx Power Level"),
+            Self::SERVICE_DATA_16BIT => write!(f, "Service Data 16-bit"),
+            Self::APPEARANCE => write!(f, "Appearance"),
+            Self::SERVICE_DATA_32BIT => write!(f, "Service Data 32-bit"),
+            Self::SERVICE_DATA_128BIT => write!(f, "Service Data 128-bit"),
+            Self::MANUFACTURER_SPECIFIC => write!(f, "Manufacturer Specific Data"),
+            _ => write!(f, "Unknown ({:#04X})", self.0),
+        }
+    }
+}

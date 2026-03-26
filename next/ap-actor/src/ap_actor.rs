@@ -69,6 +69,10 @@ pub struct ApConfig {
     pub position: Position,
 }
 
+fn default_bssid() -> MacAddr {
+    DEFAULT_WIFI_BSSID.parse().expect("DEFAULT_WIFI_BSSID is a valid MAC address")
+}
+
 fn default_ftm_responder_enabled() -> bool {
     true
 }
@@ -89,7 +93,7 @@ impl Default for ApConfig {
     fn default() -> Self {
         Self {
             ssid: DEFAULT_WIFI_SSID.to_string(),
-            bssid: MacAddr::from([0x00, 0x13, 0x10, 0x85, 0xfe, 0x01]),
+            bssid: default_bssid(),
             channel: 6,
             hw_mode: WifiMode::G,
             wpa_passphrase: None,
@@ -250,12 +254,11 @@ impl ApActor {
 
 impl ApState {
     pub fn new(id: ApId, mut config: ApConfig) -> Self {
-        if config.bssid.bytes == [0; 6] {
-            let mut base_mac = DEFAULT_WIFI_BSSID
-                .parse::<MacAddr>()
-                .expect("DEFAULT_WIFI_BSSID is a valid MAC address");
-            base_mac.bytes[4] = (id.0 >> 8) as u8;
-            base_mac.bytes[5] = (id.0 & 0xFF) as u8;
+        let default_mac = default_bssid();
+        if config.bssid.bytes == [0; 6] || config.bssid == default_mac {
+            let mut base_mac = default_mac;
+            let offset_id = (id.0 as u16) + 1; // Shift by 1 so the default AP (id 0) gets .01 suffix
+            base_mac.bytes[4..6].copy_from_slice(&offset_id.to_be_bytes());
             config.bssid = base_mac;
         }
 

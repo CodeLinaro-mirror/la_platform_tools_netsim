@@ -251,6 +251,9 @@ pub struct BeaconBleAdvertiseData {
     /// Manufacturer-specific data given as bytes in hexadecimal
     #[arg(long)]
     pub manufacturer_data: Option<ParsableBytes>,
+    /// UUID of a Bluetooth GATT service
+    #[arg(long = "uuid", num_args(1..))]
+    pub uuids: Vec<String>,
 }
 
 #[derive(Debug, Subcommand, PartialEq)]
@@ -357,6 +360,9 @@ pub struct BeaconBleScanResponseData {
     /// as bytes in hexadecimal
     #[arg(long, value_name = "MANUFACTURER_DATA")]
     pub scan_response_manufacturer_data: Option<ParsableBytes>,
+    /// UUID of a Bluetooth GATT service to include in the scan response packet
+    #[arg(long = "scan-response-uuid", num_args(1..))]
+    pub scan_response_uuids: Vec<String>,
 }
 
 #[derive(Debug, Args, PartialEq, Default)]
@@ -564,6 +570,12 @@ impl From<&TxPower> for TxPowerProto {
 
 impl From<&BeaconBleAdvertiseData> for AdvertiseDataProto {
     fn from(value: &BeaconBleAdvertiseData) -> Self {
+        let mut services = vec![];
+        for uuid in &value.uuids {
+            let mut service = netsim_proto::model::chip::ble_beacon::advertise_data::Service::new();
+            service.uuid = uuid.clone();
+            services.push(service);
+        }
         AdvertiseDataProto {
             include_device_name: value.include_device_name,
             include_tx_power_level: value.include_tx_power_level,
@@ -572,6 +584,7 @@ impl From<&BeaconBleAdvertiseData> for AdvertiseDataProto {
                 .clone()
                 .map(ParsableBytes::unwrap)
                 .unwrap_or_default(),
+            services,
             ..Default::default()
         }
     }
@@ -579,6 +592,12 @@ impl From<&BeaconBleAdvertiseData> for AdvertiseDataProto {
 
 impl From<&BeaconBleScanResponseData> for AdvertiseDataProto {
     fn from(value: &BeaconBleScanResponseData) -> Self {
+        let mut services = vec![];
+        for uuid in &value.scan_response_uuids {
+            let mut service = netsim_proto::model::chip::ble_beacon::advertise_data::Service::new();
+            service.uuid = uuid.clone();
+            services.push(service);
+        }
         AdvertiseDataProto {
             include_device_name: value.scan_response_include_device_name,
             include_tx_power_level: value.scan_response_include_tx_power_level,
@@ -587,6 +606,7 @@ impl From<&BeaconBleScanResponseData> for AdvertiseDataProto {
                 .clone()
                 .map(ParsableBytes::unwrap)
                 .unwrap_or_default(),
+            services,
             ..Default::default()
         }
     }

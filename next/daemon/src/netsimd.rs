@@ -421,7 +421,8 @@ impl NetsimDaemon {
         // Setup Wifi Server (and dependencies: AP)
         // Setup Slirp Actor
         let (slirp_runner, slirp_client) = slirp_actor::new();
-        let slirp_actor_state = slirp_actor::SlirpActor::new(Default::default());
+        let slirp_actor_state =
+            slirp_actor::SlirpActor::new(Default::default(), args.http_proxy.clone());
 
         // (AP Actor already initialized above)
 

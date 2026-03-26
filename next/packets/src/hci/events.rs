@@ -2,7 +2,10 @@
 
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
-use crate::hci::{commands::OpCode, types::Address};
+use crate::hci::{
+    commands::OpCode,
+    types::{Address, LeAdvertisingEventType, OwnAddressType},
+};
 
 /// HCI Event Codes for Event packets.
 #[derive(
@@ -126,8 +129,8 @@ pub struct NumReports {
 /// `num_reports` instances of the reports parsed successively.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LeAdvertisingReport<'a> {
-    pub event_type: u8,
-    pub address_type: u8,
+    pub event_type: LeAdvertisingEventType,
+    pub address_type: OwnAddressType,
     pub address: Address,
     pub data_length: u8,
     pub data: &'a [u8],
@@ -138,8 +141,8 @@ pub struct LeAdvertisingReport<'a> {
 #[derive(FromBytes, KnownLayout, Unaligned)]
 #[repr(C)]
 struct LeAdvertisingReportPrefix {
-    event_type: u8,
-    address_type: u8,
+    event_type: LeAdvertisingEventType,
+    address_type: OwnAddressType,
     address: Address,
     data_length: u8,
 }
@@ -222,6 +225,8 @@ mod tests {
             assert_eq!(reports.len(), 1);
             let report = &reports[0];
             assert_eq!(report.address.bytes, [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+            assert_eq!(report.event_type, LeAdvertisingEventType::ADV_IND);
+            assert_eq!(report.address_type, OwnAddressType::PUBLIC_DEVICE_ADDRESS);
             assert_eq!(report.data, &[0x11]);
             assert_eq!(report.rssi, -50);
         } else {

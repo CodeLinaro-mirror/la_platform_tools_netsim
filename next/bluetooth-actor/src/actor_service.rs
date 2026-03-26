@@ -50,6 +50,12 @@ impl ActorService for BluetoothActor {
             assert!(params.packet_sink.is_some(), "Scanner chip must have a packet sink");
         }
 
+        // Validate Sniffer constraints: No PacketStream, Must have PacketSink.
+        if let BluetoothMode::Sniffer(_) = &create_params.mode {
+            assert!(params.packet_stream.is_none(), "Sniffer chip cannot have a packet stream");
+            assert!(params.packet_sink.is_some(), "Sniffer chip must have a packet sink");
+        }
+
         let name =
             if config.name.is_empty() && matches!(create_params.mode, BluetoothMode::Beacon(_)) {
                 let name = crate::beacon_utils::generate_default_name(chip_id.0);
@@ -93,14 +99,18 @@ impl ActorService for BluetoothActor {
 
         // 2. Setup Sink and Callbacks
         let callback = if let Some(sink) = params.packet_sink {
-            // Create a channel to send HCI packets from the callback to the sink task.
-            let (hci_tx, hci_rx) = tokio::sync::mpsc::channel(10);
+            // Create a channel to send packets from the callback to the sink task.
+            let (tx, rx) = tokio::sync::mpsc::channel(10);
 
             // Spawn the sink task which forwards packets from the channel to the sink.
             let sink_id = chip_id;
-            _ctx.spawn(sink_id, Box::pin(crate::hci_callbacks::sink_loop(sink, hci_rx, sink_id)));
+            _ctx.spawn(sink_id, Box::pin(crate::hci_callbacks::sink_loop(sink, rx, sink_id)));
 
-            HciCallbacks { id: chip_id, hci_tx: Some(hci_tx), ll_tx: None }
+            if let BluetoothMode::Sniffer(_) = &mode {
+                HciCallbacks { id: chip_id, hci_tx: None, ll_tx: Some(tx) }
+            } else {
+                HciCallbacks { id: chip_id, hci_tx: Some(tx), ll_tx: None }
+            }
         } else {
             HciCallbacks { id: chip_id, hci_tx: None, ll_tx: None }
         };
@@ -138,6 +148,9 @@ impl ActorService for BluetoothActor {
             }
             BluetoothMode::Scanner(params) => {
                 crate::scanner::create(&self.rootcanal, chip_id, params)?
+            }
+            BluetoothMode::Sniffer(params) => {
+                crate::sniffer::create(&self.rootcanal, chip_id, params)?
             }
         };
         chip_info.device_id = chip.device_id;

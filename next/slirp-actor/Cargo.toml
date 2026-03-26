@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 actor-framework = { path = "../actor-framework" }
 bytes = "1.4"
+http-proxy = { path = "../http-proxy" }
 libslirp-rs = { path = "../libslirp-rs" }
 netsim-model = { path = "../model" }
 tokio = { version = "1", features = ["full"] }
