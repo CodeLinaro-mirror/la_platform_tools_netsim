@@ -684,13 +684,21 @@ impl DeviceActor {
             };
             info!("DeviceActor: Resetting device {}", entity.device.name);
 
+            // Chip actors do not track creation parameters, so the device actor must issue
+            // an update after reset to restore the original position + orientation.
+            let (original_pos, original_orient) = entity
+                .create_params
+                .as_ref()
+                .map(|p| (p.device_config.position.clone(), p.device_config.orientation.clone()))
+                .unwrap_or_default();
+
             entity.device.visible = true;
-            entity.device.position = device_api::Position::default();
-            entity.device.orientation = device_api::Orientation::default();
+            entity.device.position = original_pos.clone();
+            entity.device.orientation = original_orient.clone();
 
             for chip in entity.device.chips.iter_mut() {
-                chip.position = device_api::Position::default();
-                chip.orientation = device_api::Orientation::default();
+                chip.position = original_pos.clone();
+                chip.orientation = original_orient.clone();
 
                 if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
                     if let Err(e) = chip_client.reset(netsim_model::ChipId(chip.id)).await {
@@ -700,6 +708,21 @@ impl DeviceActor {
                         );
                         chip_client_errors.push((chip.id, e));
                     }
+
+                    let chip_update = ChipUpdate {
+                        position: Some(original_pos.clone()),
+                        orientation: Some(original_orient.clone()),
+                        ..Default::default()
+                    };
+                    if let Err(e) =
+                        chip_client.update(netsim_model::ChipId(chip.id), chip_update).await
+                    {
+                        warn!(
+                            "DeviceActor: Failed to update chip {} position during reset: {}",
+                            chip.id, e
+                        );
+                    }
+
                     if let Ok(updated_chip) = chip_client.read(netsim_model::ChipId(chip.id)).await
                     {
                         *chip = updated_chip;

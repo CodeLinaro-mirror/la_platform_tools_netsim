@@ -185,7 +185,7 @@ pub async fn lookup_host_dns(host_dns: &str) -> io::Result<Vec<SocketAddr>> {
     }
 
     for addr in host_dns.split(',') {
-        set.spawn(tokio::net::lookup_host(format!("{addr}:0")));
+        set.spawn(tokio::net::lookup_host(format_dns_addr(addr)));
     }
 
     let mut addrs = Vec::new();
@@ -193,6 +193,53 @@ pub async fn lookup_host_dns(host_dns: &str) -> io::Result<Vec<SocketAddr>> {
         addrs.push(result??.next().ok_or(io::Error::from(io::ErrorKind::NotFound))?);
     }
     Ok(addrs)
+}
+
+/// Formats a DNS address for `tokio::net::lookup_host`.
+///
+/// This function ensures that standard IPv4 and IPv6 addresses are correctly
+/// appended with `:53`. If the user specifies an explicit custom port (e.g.,
+/// `:5354`), we actively strip it and revert to standard port `53`.
+///
+/// This is because `libslirp` internally overwrites the destination port of
+/// intercepted DNS packets with standard port `53` (as seen in
+/// `external/libslirp/src/socket.c`). Silently passing a custom port will be
+/// ignored by `libslirp`, so stripping it ensures our expectations match
+/// reality.
+///
+/// We append `:53` instead of `:0` (which Classic used) because it:
+/// 1. Is logically more accurate (it's a DNS server being connected to).
+/// 2. Avoids errors if standard Rust / tokio libraries in `next` ever try to
+///    use the `SocketAddr` directly (connecting to port 0 is an error in
+///    standard networking).
+///
+/// Note: Both `:0` and `:53` work identically for `libslirp` because it
+/// discards the port in both cases.
+fn format_dns_addr(addr: &str) -> String {
+    if let Ok(ip) = addr.parse::<std::net::IpAddr>() {
+        match ip {
+            std::net::IpAddr::V4(_) => format!("{addr}:53"),
+            std::net::IpAddr::V6(_) => format!("[{addr}]:53"),
+        }
+    } else if let Ok(socket) = addr.parse::<std::net::SocketAddr>() {
+        match socket {
+            std::net::SocketAddr::V4(s) => format!("{}:53", s.ip()),
+            std::net::SocketAddr::V6(s) => format!("[{}]:53", s.ip()),
+        }
+    } else {
+        // Handle bracketed IPv6 without port specified: [2001:db8::1]
+        let stripped = addr.trim_matches(|c| c == '[' || c == ']');
+        if stripped.parse::<std::net::Ipv6Addr>().is_ok() {
+            return format!("[{stripped}]:53");
+        }
+
+        // Fallback for hostnames (e.g., localhost:5354 or localhost)
+        if let Some((host, _)) = addr.rsplit_once(':') {
+            format!("{host}:53")
+        } else {
+            format!("{addr}:53")
+        }
+    }
 }
 
 /// Converts a slice of `SocketAddr` into an array of
@@ -381,6 +428,21 @@ mod tests {
         let results = rt.block_on(lookup_host_dns("localhost,example.com"))?;
         assert_eq!(results.len(), 2);
         Ok(())
+    }
+
+    #[test]
+    fn test_format_dns_addr() {
+        assert_eq!(format_dns_addr("localhost"), "localhost:53");
+        assert_eq!(format_dns_addr("localhost:5354"), "localhost:53"); // Custom port stripped
+        assert_eq!(format_dns_addr("example.com"), "example.com:53");
+        assert_eq!(format_dns_addr("example.com:5354"), "example.com:53"); // Custom port stripped
+        assert_eq!(format_dns_addr("127.0.0.1"), "127.0.0.1:53");
+        assert_eq!(format_dns_addr("127.0.0.1:53"), "127.0.0.1:53");
+        assert_eq!(format_dns_addr("127.0.0.1:5354"), "127.0.0.1:53"); // Custom port stripped
+        assert_eq!(format_dns_addr("[2001:db8::1]"), "[2001:db8::1]:53");
+        assert_eq!(format_dns_addr("[2001:db8::1]:53"), "[2001:db8::1]:53");
+        assert_eq!(format_dns_addr("[2001:db8::1]:5354"), "[2001:db8::1]:53"); // Custom port stripped
+        assert_eq!(format_dns_addr("2001:db8::1"), "[2001:db8::1]:53");
     }
 
     /// Tests the `to_socketaddr_storage` function with an empty input slice.
