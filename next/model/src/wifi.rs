@@ -12,6 +12,12 @@ pub struct WifiUpdate {
     pub radio: crate::chip::RadioUpdate,
 }
 
+impl WifiUpdate {
+    pub fn apply(&self, wifi: &mut Wifi) {
+        self.radio.apply(&mut wifi.radio);
+    }
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WifiCreate {
     // Future Wi-Fi specific properties.

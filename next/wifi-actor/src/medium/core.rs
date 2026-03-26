@@ -124,7 +124,6 @@ impl Medium {
     pub fn set_enabled(&mut self, client_id: u32, enabled: bool) {
         if let Some(client) = self.clients.get_mut(&client_id) {
             client.enabled = enabled;
-        } else {
         }
     }
 

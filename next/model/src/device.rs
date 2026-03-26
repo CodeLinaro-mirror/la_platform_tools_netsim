@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 use crate::chip::{ChipConfig, PacketSink, PacketStream};
 
 // DEVICE SERVICE
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
     pub z: f32,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Orientation {
     pub yaw: f32,
     pub pitch: f32,
