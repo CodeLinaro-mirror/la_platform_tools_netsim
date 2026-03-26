@@ -15,7 +15,6 @@ netsim_rust_library(
         "@num-derive",
     ],
     deps = [
-        "@anyhow",
         "@hex",
         "@num-traits",
         "@serde",
@@ -32,7 +31,6 @@ rust_test(
         "@num-derive",
     ],
     deps = [
-        "@anyhow",
         "@num-traits",
         "@zerocopy",
     ],
@@ -44,7 +42,6 @@ rust_test(
     edition = "2021",
     deps = [
         ":packets",
-        "@anyhow",
         "@num-traits",
         "@zerocopy",
     ],

@@ -1,8 +1,8 @@
 // Copyright 2025 The Android Open Source Project
 
 use bytes::Bytes;
-use log::debug;
 use netsim_packets::ieee80211::{DataSubType, Ieee80211};
+use tracing::debug;
 
 use crate::{
     error::WifiError,
@@ -32,7 +32,7 @@ impl Medium {
     ) -> WifiResult<TxPacketState> {
         // 1. Parse & Stats
         let frame = utils::parse_hwsim_frame(packet, client_id).map_err(|e| {
-            WifiError::Client(format!("error validate for client {client_id}: {e}"))
+            WifiError::Client(Box::from(format!("error validate for client {client_id}: {e}")))
         })?;
 
         if self.debug.debug_no_traffic {
@@ -49,7 +49,9 @@ impl Medium {
 
         // 2. Station Tracking
         self.upsert_station(client_id, &frame).map_err(|e| {
-            WifiError::Client(format!("error upsert station for client {client_id}: {e}"))
+            WifiError::Client(Box::from(format!(
+                "error upsert station for client {client_id}: {e}"
+            )))
         })?;
 
         if let Some(freq) = frame.attrs.freq {

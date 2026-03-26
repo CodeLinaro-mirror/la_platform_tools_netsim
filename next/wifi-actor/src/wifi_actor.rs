@@ -1,8 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use actor_framework::DynContext;
-use ap_actor::{shared::SharedKeyStore, ApClient};
-use log::debug;
+use ap_actor::{ApClient, SharedKeyStore};
 use netsim_model::{
     chip::{Chip, ChipId},
     stats::NetsimRadioStats,
@@ -11,6 +10,9 @@ use netsim_packets::ieee80211::Ieee80211;
 use netsim_proto::stats::WifiStats as ProtoWifiStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::debug;
+#[cfg(not(target_os = "linux"))]
+use tracing::warn;
 
 #[cfg(target_os = "linux")]
 use crate::tap_gateway::TapGateway;
@@ -37,7 +39,6 @@ pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
     GlobalStats(Box<ProtoWifiStats>),
-    Error(String),
 }
 
 pub type SlirpPendingRequest = (
@@ -80,7 +81,7 @@ impl WifiActor {
             #[cfg(not(target_os = "linux"))]
             {
                 let _ = if_name;
-                log::warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
+                warn!("TAP Configured but not supported on this OS. Falling back to Slirp.");
                 Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
             }
         } else {
@@ -138,7 +139,7 @@ impl WifiActor {
 
             Ok(())
         } else {
-            Err(WifiError::Client(format!("Chip {} not found", id)))
+            Err(WifiError::Internal(Box::from(format!("Chip {} not found", id))))
         }
     }
 
@@ -168,7 +169,9 @@ impl WifiActor {
                                 to_ap
                                     .send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()))
                                     .map_err(|e| {
-                                        WifiError::Hostapd(format!("Failed to send to AP: {e}"))
+                                        WifiError::Hostapd(Box::from(format!(
+                                            "Failed to send to AP: {e}"
+                                        )))
                                     }),
                                 |stats, _| stats.incr_hostapd_frames_tx(),
                             );

@@ -5,10 +5,12 @@
 use std::ops::Deref;
 
 use actor_framework::ResourceClient;
-use anyhow::Result;
 use bytes::Bytes;
-use capture_api::{CaptureAction, CaptureCreate, CaptureInfo, CaptureSender, Direction};
-use netsim_model::ChipId;
+use capture_api::{
+    CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo, CaptureSender, Direction,
+};
+use futures::TryFutureExt;
+use netsim_model::{client_error::ClientError, ChipId};
 
 use crate::CaptureActor;
 
@@ -22,20 +24,31 @@ pub struct CaptureClient {
 
 #[async_trait::async_trait]
 impl CaptureSender for CaptureClient {
-    async fn create_capture(&self, chip_id: ChipId, create: CaptureCreate) -> anyhow::Result<()> {
-        self.inner.create_with_id(chip_id, create).await.map(|_| ()).map_err(|e| anyhow::anyhow!(e))
+    async fn create_capture(
+        &self,
+        chip_id: ChipId,
+        create: CaptureCreate,
+    ) -> Result<(), ClientError> {
+        self.inner.create_with_id(chip_id, create).err_into::<ClientError>().await.map(|_| ())
     }
 
-    fn capture_packet(&self, chip_id: ChipId, direction: Direction, packet: Bytes) {
-        let inner = self.inner.clone();
-        tokio::spawn(async move {
-            let _ = inner
-                .perform_action(
-                    Some(chip_id),
-                    CaptureAction::CapturePacket { chip_id, direction, bytes: packet },
-                )
-                .await;
-        });
+    async fn packet_sender(
+        &self,
+        chip_id: ChipId,
+    ) -> Result<
+        tokio::sync::mpsc::UnboundedSender<(std::time::SystemTime, Direction, Bytes)>,
+        ClientError,
+    > {
+        let result = self
+            .inner
+            .perform_action(Some(chip_id), CaptureAction::GetPacketSender)
+            .err_into::<ClientError>()
+            .await?;
+
+        match result {
+            CaptureActionResult::PacketSender(sender) => Ok(sender),
+            _ => Err(ClientError::Recv("Unexpected result from GetPacketSender".into())),
+        }
     }
 }
 
@@ -44,57 +57,38 @@ impl CaptureClient {
         Self { inner }
     }
 
-    /// Captures a packet.
-    ///
-    /// This is the high-frequency path for packet capture.
-    pub async fn capture_packet(
-        &self,
-        chip_id: ChipId,
-        direction: Direction,
-        packet: Bytes,
-    ) -> Result<()> {
-        // We use perform_action directly because it's a fire-and-forget for performance
-        // (though perform_action is actually request-response, so we await it).
-        // TODO: Consider if we want a true fire-and-forget channel for this.
-        self.inner
-            .perform_action(
-                Some(chip_id),
-                CaptureAction::CapturePacket { chip_id, direction, bytes: packet },
-            )
-            .await
-            .map(|_| ())
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
     /// Creates a new capture session for a chip.
-    pub async fn create_capture(&self, params: CaptureCreate) -> Result<ChipId> {
-        self.inner.create(params).await.map_err(|e| anyhow::anyhow!(e))
+    pub async fn create_capture(&self, params: CaptureCreate) -> Result<ChipId, ClientError> {
+        self.inner.create(params).err_into::<ClientError>().await
     }
 
     /// Updates the capture state (enable/disable) for a chip.
-    pub async fn update_capture(&self, chip_id: ChipId, enabled: bool) -> Result<CaptureInfo> {
-        let result = self.inner.update(chip_id, enabled).await.map_err(|e| anyhow::anyhow!(e))?;
-        Ok(result)
+    pub async fn update_capture(
+        &self,
+        chip_id: ChipId,
+        enabled: bool,
+    ) -> Result<CaptureInfo, ClientError> {
+        self.inner.update(chip_id, enabled).err_into::<ClientError>().await
     }
 
     /// Gets the capture info for a chip.
-    pub async fn get_capture(&self, chip_id: ChipId) -> Result<Option<CaptureInfo>> {
-        self.inner.get(chip_id).await.map_err(|e| anyhow::anyhow!(e))
+    pub async fn get_capture(&self, chip_id: ChipId) -> Result<Option<CaptureInfo>, ClientError> {
+        self.inner.get(chip_id).err_into::<ClientError>().await
     }
 
     /// Deletes a capture session.
-    pub async fn delete_capture(&self, chip_id: ChipId) -> Result<()> {
-        self.inner.delete(chip_id).await.map_err(|e| anyhow::anyhow!(e))
+    pub async fn delete_capture(&self, chip_id: ChipId) -> Result<(), ClientError> {
+        self.inner.delete(chip_id).err_into::<ClientError>().await
     }
 
     /// Lists all active captures.
-    pub async fn list_captures(&self) -> Result<Vec<CaptureInfo>> {
-        self.inner.list().await.map_err(|e| anyhow::anyhow!(e))
+    pub async fn list_captures(&self) -> Result<Vec<CaptureInfo>, ClientError> {
+        self.inner.list().err_into::<ClientError>().await
     }
 
     /// Patches a capture (alias for update_capture to match old client).
-    pub async fn patch_capture(&self, chip_id: ChipId, enabled: bool) -> Result<()> {
-        self.update_capture(chip_id, enabled).await.map(|_| ())
+    pub async fn patch_capture(&self, chip_id: ChipId, enabled: bool) -> Result<(), ClientError> {
+        self.update_capture(chip_id, enabled).err_into::<ClientError>().await.map(|_| ())
     }
 }
 

@@ -49,10 +49,10 @@ pub fn create(
     send_hci_command(rootcanal, chip_id, hci::Reset {})?;
 
     let address: Address = params.ble_beacon.address.parse().map_err(|_| {
-        ChipError::InvalidArguments(format!(
+        ChipError::InvalidArguments(Box::from(format!(
             "Invalid beacon address: {}",
             params.ble_beacon.address
-        ))
+        )))
     })?;
 
     // LE Set Advertising Parameters
@@ -109,8 +109,8 @@ pub fn create(
         rootcanal,
         chip_id,
         hci::LeSetScanResponseData {
-            advertising_data_length: scan_resp_data.len() as u8,
-            advertising_data: scan_resp_payload,
+            scan_response_data_length: scan_resp_data.len() as u8,
+            scan_response_data: scan_resp_payload,
         },
     )?;
 
