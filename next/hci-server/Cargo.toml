@@ -9,8 +9,8 @@ device-actor = { path = "../device-actor" }
 
 device-api = { path = "../device-api" }
 futures = "0.3"
-log = "0.4"
 netsim-model = { path = "../model" }
 tokio = { version = "1.28.2", features = ["full"] }
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", features = ["codec"] }
+tracing = "0.1"

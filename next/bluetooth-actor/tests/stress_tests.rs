@@ -2,6 +2,8 @@
 
 use std::{collections::HashSet, time::Duration};
 
+use bytes::Bytes;
+
 use crate::world::World;
 
 #[tokio::test]
@@ -11,18 +13,6 @@ async fn beacon_scan_stress_test() {
     world.given_scanner(scanner_name).await;
 
     let num_beacons = 20;
-
-    /*
-    // Create a client to interact with the actor for noise production
-    let client = world.client.clone();
-    tokio::spawn(async move {
-        for _ in 0..10000 {
-            // Spam list commands to keep the actor loop busy (control-plane stress)
-            let _ = client.0.list().await;
-            tokio::task::yield_now().await;
-        }
-    });
-    */
 
     // Add beacons to the world
     for i in 0..num_beacons {
@@ -54,4 +44,31 @@ async fn beacon_scan_stress_test() {
         "Lost BLE scan results! Seen {}/{}",
         final_count, num_beacons
     );
+}
+
+// Scenario: Handle heavy load without drops
+//
+//   Given a bluetooth chip in device mode
+//   When a burst of 100 commands is sent rapidly
+//   Then all 100 responses are received (no silent drops in internal channels)
+#[tokio::test]
+async fn test_actor_heavy_load_no_drops() {
+    let mut world = World::new();
+
+    // 1. Create a virtual device chip with a slow sink (10ms delay per packet).
+    world.given_slow_device("A", Duration::from_millis(10)).await;
+
+    // 2. Send 100 HCI Reset commands rapidly.
+    // Since we don't read them immediately, this fills up the internal buffer (size
+    // 100).
+    let hci_reset_cmd = Bytes::from(vec![0x01, 0x03, 0x0c, 0x00]);
+    for _ in 0..100 {
+        world.when_packet_sent("A", hci_reset_cmd.clone()).await;
+    }
+
+    // 3. Verify that all 100 responses are received.
+    // If the buffer size was 10, many of these would have been dropped!
+    for _ in 0..100 {
+        let _packet = world.receive_packet("A").await;
+    }
 }

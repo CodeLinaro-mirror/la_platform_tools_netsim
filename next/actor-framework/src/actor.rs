@@ -5,15 +5,14 @@
 //! Actor Model, processing messages sequentially and ensuring exclusive access
 //! to the resource store.
 
-use log::error;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
+use tracing::error;
 
 use crate::{
     client::ResourceClient, context::FrameworkContext, message::ResourceRequest, ActorLifecycle,
     ActorService, DynContext, StreamMessage,
 };
-// use tracing::{debug, info, warn};
 
 /// The generic actor that manages a collection of resources.
 ///

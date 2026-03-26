@@ -9,8 +9,6 @@ use std::{
 };
 
 use bytes::Bytes;
-use env_logger;
-use log::error;
 use rootcanal::{
     controller::{Callbacks as ControllerCallbacks, Id},
     rootcanal::{Callbacks as RootcanalCallbacks, Rootcanal},
@@ -20,12 +18,13 @@ use tokio::{
     sync::mpsc,
     time::{sleep, timeout, Duration},
 };
+use tracing::error;
 
 static INIT: Once = Once::new();
 
 /// Set up the logger for the test.
 fn setup() {
-    INIT.call_once(env_logger::init);
+    INIT.call_once(tracing_subscriber::fmt::init);
 }
 
 /// Main callbacks for the rootcanal Bluetooth instance.

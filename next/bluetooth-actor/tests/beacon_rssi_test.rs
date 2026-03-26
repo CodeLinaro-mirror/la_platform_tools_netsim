@@ -18,7 +18,7 @@ use crate::world::World;
 /// distance increases
 #[tokio::test]
 async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = env_logger::builder().is_test(true).try_init();
+    let _ = tracing_subscriber::fmt().with_test_writer().try_init();
 
     // GIVEN a world with a scanner and a beacon
     let mut world = World::new();

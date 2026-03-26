@@ -3,12 +3,13 @@
 use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
 use netsim_packets::ieee80211::Ieee80211;
+use tracing::{debug, info, warn};
 
-use crate::ap_actor::{ApActor, WIFI_STREAM_ID};
+use crate::ap_actor::{ApActor, ApId, WIFI_STREAM_ID};
 
 impl ActorLifecycle for ApActor {
     async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {
-        log::info!("ApActor started");
+        info!("ApActor started");
     }
 
     async fn on_tick(&mut self, ctx: &mut DynContext<Self>) {
@@ -25,7 +26,7 @@ impl ActorLifecycle for ApActor {
                     if now >= *time {
                         if let Some((_, frame)) = ap.delayed_frames.pop_front() {
                             if sink.send(frame).is_err() {
-                                log::warn!("Sink closed while transmitting delayed frame");
+                                warn!("Sink closed while transmitting delayed frame");
                                 ctx.shutdown();
                                 self.sink = None;
                                 return;
@@ -40,7 +41,7 @@ impl ActorLifecycle for ApActor {
                 if let Ok(frames) = self.manager.generate_beacon(ap, interval) {
                     for frame in frames {
                         if sink.send(frame).is_err() {
-                            log::warn!("Sink closed, stopping ApActor");
+                            warn!("Sink closed, stopping ApActor");
                             ctx.shutdown();
                             self.sink = None;
                             return;
@@ -52,14 +53,9 @@ impl ActorLifecycle for ApActor {
     }
 
     // We expect stream messages (Mgmt frames or Data frames if bridged)
-    async fn on_stream(
-        &mut self,
-        stream_id: ChipId,
-        msg: bytes::Bytes,
-        ctx: &mut DynContext<Self>,
-    ) {
+    async fn on_stream(&mut self, stream_id: ApId, msg: bytes::Bytes, ctx: &mut DynContext<Self>) {
         if stream_id.0 != WIFI_STREAM_ID {
-            log::warn!("Received message on unknown stream_id: {}", stream_id);
+            warn!("Received message on unknown stream_id: {}", stream_id);
             return;
         }
         let source_id = ChipId(0); // Placeholder until we lookup by MAC
@@ -68,7 +64,7 @@ impl ActorLifecycle for ApActor {
         let ieee_frame = match Ieee80211::decode(&msg) {
             Ok(frame) => frame,
             Err(_) => {
-                log::warn!("Failed to parse IEEE 802.11 frame");
+                warn!("Failed to parse IEEE 802.11 frame");
                 return;
             }
         };
@@ -111,7 +107,7 @@ impl ActorLifecycle for ApActor {
                         ) {
                             for frame in frames {
                                 if sink.send(frame).is_err() {
-                                    log::warn!("Sink closed, stopping ApActor");
+                                    warn!("Sink closed, stopping ApActor");
                                     ctx.shutdown();
                                     self.sink = None;
                                     return;
@@ -125,16 +121,16 @@ impl ActorLifecycle for ApActor {
             }
 
             if !handled {
-                log::debug!("No AP found for unicast frame dest: {}", dest);
+                debug!("No AP found for unicast frame dest: {}", dest);
             }
         }
     }
 
-    async fn on_stream_closed(&mut self, stream_id: ChipId, ctx: &mut DynContext<Self>) {
+    async fn on_stream_closed(&mut self, stream_id: ApId, ctx: &mut DynContext<Self>) {
         if stream_id.0 == WIFI_STREAM_ID {
-            log::info!("WIFI_STREAM_ID closed, stopping ApActor");
+            info!("WIFI_STREAM_ID closed, stopping ApActor");
             ctx.shutdown();
         }
     }
-    async fn on_task_closed(&mut self, _id: ChipId, _ctx: &mut DynContext<Self>) {}
+    async fn on_task_closed(&mut self, _id: ApId, _ctx: &mut DynContext<Self>) {}
 }

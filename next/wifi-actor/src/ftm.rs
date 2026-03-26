@@ -1,7 +1,6 @@
 // Copyright 2025 The Android Open Source Project
 
 use bytes::Bytes;
-use log::{debug, warn};
 use netsim_model::device::Position;
 use netsim_packets::ieee80211::{
     action::{
@@ -11,6 +10,7 @@ use netsim_packets::ieee80211::{
     },
     Ieee80211,
 };
+use tracing::{debug, warn};
 use zerocopy::IntoBytes;
 
 const SPEED_OF_LIGHT: f64 = 299_792_458.0; // m/s

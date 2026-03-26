@@ -21,7 +21,7 @@ netsim_rust_library(
     select_deps = SELECT_DEPS,
     test_deps = [
         "//next/device-api:testing",
-        "@env_logger",
+        "@tracing-subscriber",
     ],
     deps = [
         "//next/actor-framework",
@@ -33,10 +33,10 @@ netsim_rust_library(
         "//proto",
         "@bytes",
         "@futures",
-        "@log",
         "@thiserror",
         "@tokio",
         "@tokio-stream",
+        "@tracing",
         "@zerocopy",
     ],
 )

@@ -5,7 +5,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use log::{debug, warn};
+use tracing::{debug, warn};
 
 use crate::error::WifiError;
 

@@ -336,7 +336,18 @@ impl World {
             chips.remove(&id);
             Ok(())
         });
-        mock.expect_reset().returning(|_| Ok(()));
+        let chips_reset = chips.clone();
+        mock.expect_reset().returning(move |id| {
+            let mut chips = chips_reset.lock().unwrap();
+            if let Some(chip) = chips.get_mut(&id) {
+                chip.enabled = true;
+                if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
+                    bt.low_energy.state = Some(true);
+                    bt.classic.state = Some(true);
+                }
+            }
+            Ok(())
+        });
 
         let rs = radio_stats.clone();
         mock.expect_read_statistics().returning(move || Ok(Box::from(rs.lock().unwrap().clone())));
@@ -1181,5 +1192,28 @@ impl World {
             "Device {} position mismatch",
             id.0
         );
+    }
+
+    /// BDD Step: Then a specific device's Bluetooth states should match
+    pub async fn then_bluetooth_states_are(&self, id: DeviceId, le: bool, classic: bool) {
+        let device = self
+            .client
+            .get(id)
+            .await
+            .expect("RPC get() failed during then_bluetooth_states_are")
+            .expect("Device not found during then_bluetooth_states_are");
+        let chip =
+            device.chips.first().expect("Device has no chips during then_bluetooth_states_are");
+        if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &chip.variant {
+            assert_eq!(bt.low_energy.state, Some(le), "LE state mismatch for device {}", id.0);
+            assert_eq!(
+                bt.classic.state,
+                Some(classic),
+                "Classic state mismatch for device {}",
+                id.0
+            );
+        } else {
+            panic!("Not a Bluetooth chip");
+        }
     }
 }

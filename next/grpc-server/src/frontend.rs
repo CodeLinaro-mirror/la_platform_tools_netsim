@@ -4,6 +4,7 @@ use device_actor::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
+use netsim_model::client_error::ClientError;
 use netsim_proto::{
     empty::Empty,
     frontend::{ListDeviceResponse, ListLinkResponse},
@@ -228,10 +229,17 @@ impl FrontendClient {
 
         let name_opt = req.device.name.as_deref();
         client.patch(req.id, name_opt, update).await.map_err(|e| match e {
-            DeviceError::NotFound(_) | DeviceError::DeviceNotFound(_) => RpcStatus::with_message(
-                RpcStatusCode::NOT_FOUND,
-                format!("Device not found or patch failed: {}", e),
-            ),
+            ClientError::Framework(ref framework)
+                if matches!(
+                    framework.downcast_ref::<DeviceError>(),
+                    Some(DeviceError::NotFound(_) | DeviceError::DeviceNotFound(_))
+                ) =>
+            {
+                RpcStatus::with_message(
+                    RpcStatusCode::NOT_FOUND,
+                    format!("Device not found or patch failed: {}", e),
+                )
+            }
             _ => RpcStatus::with_message(
                 RpcStatusCode::INTERNAL,
                 format!("Failed to patch device: {}", e),

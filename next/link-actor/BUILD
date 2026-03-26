@@ -7,7 +7,7 @@ DEPS = [
     "//next/link-api",
     "//next/model",
     "@futures",
-    "@log",
+    "@tracing",
 ]
 
 netsim_rust_library(
