@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Actions that can be performed on the UWB actor.
 pub enum UwbAction {
-    /// Resets the chip with the given ID.
     Reset {
         /// The ID of the chip to reset.
         id: ChipId,
@@ -38,4 +37,6 @@ pub enum UwbActionResult {
     Success,
     /// The action returned statistics.
     Statistics(Box<[NetsimRadioStats]>),
+    /// The action returned the updated chip state.
+    Chip(netsim_model::chip::Chip),
 }

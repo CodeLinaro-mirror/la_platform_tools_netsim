@@ -12,7 +12,6 @@ use pica::{Handle, Pica, PicaCommand, PicaEvent};
 use tokio::sync::{broadcast, mpsc};
 
 /// State associated with a single UWB chip.
-#[derive(Clone)]
 pub(crate) struct UwbChipState {
     /// The chip model.
     pub(super) chip: Chip,
@@ -25,6 +24,8 @@ pub struct UwbActor {
     pub(super) chip_states: Arc<RwLock<HashMap<Handle, UwbChipState>>>,
     /// Map from chip ID to Pica handle, used for actor lookups.
     pub(super) chip_to_handle: HashMap<ChipId, Handle>,
+    /// Map from chip ID to initial chip state for resets.
+    pub(super) initial_chips: HashMap<ChipId, Chip>,
     /// Client for interacting with the device actor.
     pub(super) device_client: DeviceClient,
     /// Pica simulator, present only prior to actor lifecycle `on_start`.
@@ -51,6 +52,7 @@ impl UwbActor {
         UwbActor {
             chip_states,
             chip_to_handle: HashMap::new(),
+            initial_chips: HashMap::new(),
             device_client,
             pica_commands: pica.commands(),
             pica_on_tick_events: pica.events(),

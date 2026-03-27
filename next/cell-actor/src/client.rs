@@ -49,9 +49,9 @@ impl ChipClient for CellClient {
         self.0.shutdown().err_into::<ClientError>().await
     }
 
-    async fn reset(&self, _id: ChipId) -> Result<(), ClientError> {
+    async fn reset(&self, id: ChipId) -> Result<Chip, ClientError> {
         // Not implemented
-        Ok(())
+        self.read(id).await
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {

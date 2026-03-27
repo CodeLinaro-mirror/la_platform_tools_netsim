@@ -123,6 +123,8 @@ pub enum ChipRequest {
     Reset {
         /// The ID of the chip to reset.
         id: ChipId,
+        /// The channel to send the updated chip state back on.
+        respond_to: Responder<Chip>,
     },
     /// Get radio statistics for all chips.
     GetStatistics {
@@ -540,12 +542,13 @@ impl ChipClient for RadioChipClient {
         Ok(())
     }
 
-    async fn reset(&self, id: ChipId) -> Result<(), ClientError> {
+    async fn reset(&self, id: ChipId) -> Result<Chip, ClientError> {
+        let (tx, rx) = oneshot::channel();
         self.sender
-            .send(ChipRequest::Reset { id })
+            .send(ChipRequest::Reset { id, respond_to: tx })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
-        Ok(())
+        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)
     }
 
     fn clone_box(&self) -> Box<dyn ChipClient> {
@@ -570,7 +573,7 @@ pub trait ChipClient: std::fmt::Debug + Send + Sync {
     async fn read_count_for_testing(&self) -> Result<usize, ClientError>;
     async fn shutdown(&self) -> Result<(), ClientError>;
     /// Resets the state of the specified chip.
-    async fn reset(&self, id: ChipId) -> Result<(), ClientError>;
+    async fn reset(&self, id: ChipId) -> Result<Chip, ClientError>;
     fn clone_box(&self) -> Box<dyn ChipClient>;
     async fn get_global_stats(&self) -> Result<Option<Vec<u8>>, ClientError> {
         Ok(None)

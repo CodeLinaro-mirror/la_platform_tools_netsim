@@ -275,28 +275,40 @@ impl World {
         _kind: ChipKind,
     ) -> MockChipClient {
         let mut mock = MockChipClient::new();
-        Self::setup_mock_chip_client(&mut mock, mock_chips, radio_stats, wifi_stats);
+        let initial_chips = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        Self::setup_mock_chip_client(&mut mock, mock_chips, initial_chips, radio_stats, wifi_stats);
         mock
     }
 
     fn setup_mock_chip_client(
         mock: &mut MockChipClient,
         chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
+        initial_chips: Arc<
+            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
+        >,
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
     ) {
         let chips_clone = chips.clone();
         let rs_clone = radio_stats.clone();
         let ws_clone = wifi_stats.clone();
+        let initial_chips_clone = initial_chips.clone();
         mock.expect_clone_box().returning(move || {
-            Self::create_shared_mock(chips_clone.clone(), rs_clone.clone(), ws_clone.clone())
+            Self::create_shared_mock(
+                chips_clone.clone(),
+                initial_chips_clone.clone(),
+                rs_clone.clone(),
+                ws_clone.clone(),
+            )
         });
 
         let chips_create = chips.clone();
+        let initial_chips_create = initial_chips.clone();
         mock.expect_create()
             .with(mockall::predicate::always(), mockall::predicate::always())
             .returning(move |id, params| {
                 let mut chips = chips_create.lock().unwrap();
+                let mut initial_chips = initial_chips_create.lock().unwrap();
                 let chip = netsim_model::chip::Chip {
                     id: id.0,
                     kind: netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
@@ -304,13 +316,15 @@ impl World {
                     manufacturer: params.config.manufacturer,
                     product_name: params.config.product_name,
                     device_id: params.device_id,
+                    pose: params.pose,
                     variant: Some(netsim_model::chip::ChipVariant::from(
                         netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
                     )),
                     enabled: true,
                     ..Default::default()
                 };
-                chips.insert(id, chip);
+                chips.insert(id, chip.clone());
+                initial_chips.insert(id, chip);
                 if let Some(mut stream) = params.packet_stream {
                     tokio::spawn(async move { while stream.next().await.is_some() {} });
                 }
@@ -364,16 +378,27 @@ impl World {
             Ok(())
         });
         let chips_reset = chips.clone();
+        let initial_chips_reset = initial_chips.clone();
         mock.expect_reset().returning(move |id| {
             let mut chips = chips_reset.lock().unwrap();
+            let initial_chips = initial_chips_reset.lock().unwrap();
+            let initial_chip =
+                initial_chips.get(&id).ok_or(netsim_model::client_error::ClientError::Chip(
+                    netsim_model::chip_error::ChipError::ChipNotFound(id),
+                ))?;
             if let Some(chip) = chips.get_mut(&id) {
+                chip.pose = initial_chip.pose;
                 chip.enabled = true;
                 if let Some(netsim_model::chip::ChipVariant::Bluetooth(bt)) = &mut chip.variant {
                     bt.low_energy.state = Some(true);
                     bt.classic.state = Some(true);
                 }
+                Ok(chip.clone())
+            } else {
+                Err(netsim_model::client_error::ClientError::Chip(
+                    netsim_model::chip_error::ChipError::ChipNotFound(id),
+                ))
             }
-            Ok(())
         });
 
         let rs = radio_stats.clone();
@@ -399,11 +424,14 @@ impl World {
     /// ACTIVE client)
     fn create_shared_mock(
         chips: Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
+        initial_chips: Arc<
+            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
+        >,
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
     ) -> Box<MockChipClient> {
         let mut mock = MockChipClient::new();
-        Self::setup_mock_chip_client(&mut mock, chips, radio_stats, wifi_stats);
+        Self::setup_mock_chip_client(&mut mock, chips, initial_chips, radio_stats, wifi_stats);
         Box::new(mock)
     }
 

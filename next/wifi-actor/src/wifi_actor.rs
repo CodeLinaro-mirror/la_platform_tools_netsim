@@ -39,6 +39,7 @@ pub enum WifiResponse {
     Ok,
     Statistics(Box<[NetsimRadioStats]>),
     GlobalStats(Box<ProtoWifiStats>),
+    Chip(netsim_model::chip::Chip),
 }
 
 pub type SlirpPendingRequest = (
@@ -52,6 +53,7 @@ pub struct WifiActor {
     pub(crate) ap_client: Option<Arc<ApClient>>,
     pub(crate) medium: Medium,
     pub(crate) active_chips: HashMap<ChipId, Chip>,
+    pub(crate) initial_chips: HashMap<ChipId, Chip>,
     pub(crate) senders: HashMap<ChipId, UnboundedSender<bytes::Bytes>>,
     pub(crate) shared_keys: Arc<SharedKeyStore>,
     // Output buffer for Medium to avoid allocations
@@ -118,6 +120,7 @@ impl WifiActor {
             ap_client,
             medium,
             active_chips: HashMap::new(),
+            initial_chips: HashMap::new(),
             senders: HashMap::new(),
             shared_keys,
             out_queue: Vec::new(),

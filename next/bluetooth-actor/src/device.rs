@@ -12,7 +12,7 @@
 //! included.
 
 use netsim_model::{
-    chip::{Chip, ChipId, DeviceParams},
+    chip::{ChipId, DeviceParams},
     chip_error::ChipError,
 };
 use rootcanal::Rootcanal;
@@ -22,7 +22,7 @@ pub fn create(
     _rootcanal: &Rootcanal,
     _chip_id: ChipId,
     _params: &DeviceParams,
-) -> Result<Chip, ChipError> {
+) -> Result<(), ChipError> {
     // Validate mode parameters
-    Ok(Chip::default())
+    Ok(())
 }
