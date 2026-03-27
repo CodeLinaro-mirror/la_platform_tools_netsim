@@ -79,6 +79,9 @@ pub struct Args {
     #[arg(long, alias = "hci_port", env = "NETSIM_HCI_PORT")]
     pub hci_port: Option<u16>,
 
+    #[arg(long, env = "NETSIM_WS_PORT")]
+    pub ws_port: Option<u16>,
+
     /// DNS server for the host
     /// TODO: Not implemented yet
     #[arg(long, alias = "host-dns")]
