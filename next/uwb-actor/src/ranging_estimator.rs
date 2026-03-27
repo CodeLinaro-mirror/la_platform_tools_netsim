@@ -37,8 +37,8 @@ impl RangingEstimator for UwbRangingEstimator {
             return None;
         }
 
-        let a_pose = Pose::from((&a_state.chip.position, &a_state.chip.orientation));
-        let b_pose = Pose::from((&b_state.chip.position, &b_state.chip.orientation));
+        let a_pose = Pose::from(&a_state.chip.pose);
+        let b_pose = Pose::from(&b_state.chip.pose);
 
         match compute_range_azimuth_elevation(&a_pose, &b_pose) {
             Ok((range, azimuth, elevation)) => {

@@ -305,8 +305,13 @@ impl World {
         position: netsim_model::device::Position,
     ) {
         let id = *self.chips.get(name).expect("Chip not found");
-        let update =
-            netsim_model::chip::ChipUpdate { position: Some(position), ..Default::default() };
+        let update = netsim_model::chip::ChipUpdate {
+            pose: netsim_model::device::api::PoseUpdate {
+                position: Some(position),
+                orientation: None,
+            },
+            ..Default::default()
+        };
         self.client.0.update(id, update).await.expect("Failed to update chip");
     }
 
@@ -320,7 +325,7 @@ impl World {
         let id = *self.chips.get(name).expect("Chip not found");
         let chip =
             self.client.0.get(id).await.expect("Failed to get chip").expect("Chip should exist");
-        assert_eq!(chip.position, expected, "Chip position matches");
+        assert_eq!(chip.pose.position, expected, "Chip position matches");
     }
 
     pub async fn then_chip_exists(&self, name: &str) {
