@@ -128,7 +128,8 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
         device_config: device_api::DeviceConfig {
             name: name,
             visible: true,
-            pose: Default::default(),
+            position: Default::default(),
+            orientation: Default::default(),
             builtin: false,
             device_info: None,
         },

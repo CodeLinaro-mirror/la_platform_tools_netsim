@@ -19,12 +19,6 @@ pub struct Orientation {
     pub roll: f32,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
-pub struct Pose {
-    pub position: Position,
-    pub orientation: Orientation,
-}
-
 /// A unique identifier for a simulated device, represented as a u32.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct DeviceId(pub u32);
@@ -59,23 +53,6 @@ pub mod api {
     };
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-    pub struct PoseUpdate {
-        pub position: Option<Position>,
-        pub orientation: Option<Orientation>,
-    }
-
-    impl PoseUpdate {
-        pub fn apply(&self, pose: &mut super::Pose) {
-            if let Some(pos) = &self.position {
-                pose.position = *pos;
-            }
-            if let Some(orient) = &self.orientation {
-                pose.orientation = *orient;
-            }
-        }
-    }
-
-    #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
     pub struct ListDeviceResponse {
         pub devices: Vec<Device>,
     }
@@ -86,21 +63,10 @@ pub mod api {
         pub name: Option<String>,
         pub visible: Option<bool>,
         //TODO: pub chip_id: Option<ChipId>,
-        pub pose: PoseUpdate,
+        pub position: Option<Position>,
+        pub orientation: Option<Orientation>,
         //TODO: pub links: Option<Vec<Link>,
         pub chips: Option<Vec<crate::chip::ChipUpdate>>,
-    }
-
-    impl DeviceUpdate {
-        pub fn apply(&self, device: &mut super::Device) {
-            if let Some(name) = &self.name {
-                device.name = name.clone();
-            }
-            if let Some(visible) = self.visible {
-                device.visible = visible;
-            }
-            self.pose.apply(&mut device.pose);
-        }
     }
 
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -134,7 +100,8 @@ pub mod api {
             Self {
                 device_config: DeviceConfig {
                     name,
-                    pose: Default::default(),
+                    position: Default::default(),
+                    orientation: Default::default(),
                     visible: false,
                     builtin: true,
                     device_info: None,
@@ -255,7 +222,8 @@ pub struct Device {
     pub id: u32,
     pub name: String,
     pub visible: bool,
-    pub pose: Pose,
+    pub position: Position,
+    pub orientation: Orientation,
     pub builtin: bool,
     pub chips: Vec<crate::chip::Chip>,
     pub device_info: Option<DeviceInfo>,
@@ -292,14 +260,28 @@ impl From<netsim_types::DeviceInfo> for DeviceInfo {
 pub struct DeviceConfig {
     pub name: String,
     pub visible: bool,
-    pub pose: Pose,
+    pub position: Position,
+    pub orientation: Orientation,
     pub builtin: bool,
     pub device_info: Option<DeviceInfo>,
 }
 
 impl DeviceConfig {
-    pub fn new(name: impl Into<String>, visible: bool, pose: Pose, builtin: bool) -> DeviceConfig {
-        DeviceConfig { name: name.into(), visible, pose, builtin, device_info: None }
+    pub fn new(
+        name: impl Into<String>,
+        visible: bool,
+        position: Position,
+        orientation: Orientation,
+        builtin: bool,
+    ) -> DeviceConfig {
+        DeviceConfig {
+            name: name.into(),
+            visible,
+            position,
+            orientation,
+            builtin,
+            device_info: None,
+        }
     }
 }
 

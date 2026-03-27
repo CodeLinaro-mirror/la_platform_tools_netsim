@@ -69,7 +69,7 @@
 use std::fmt;
 
 // Re-export key data models from netsim-model for convenience.
-pub use netsim_model::device::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse, PoseUpdate};
+pub use netsim_model::device::api::{DeviceCreate, DeviceUpdate, ListDeviceResponse};
 pub use netsim_model::device::{
     api, Device, DeviceAddChip, DeviceConfig, DeviceId, Orientation, Position,
 };

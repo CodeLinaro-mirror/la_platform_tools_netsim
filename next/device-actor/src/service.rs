@@ -10,7 +10,7 @@ use actor_framework::{ActorService, Context, DynContext};
 use capture_api::CaptureSender;
 use device_api::{
     api::{DeviceCreate, DeviceUpdate},
-    DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId, PoseUpdate,
+    DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId,
 };
 use link_api::LinkClient;
 use netsim_model::chip::{
@@ -47,7 +47,8 @@ impl InternalDevice {
                 id: id.0,
                 name: params.device_config.name.clone(),
                 visible: params.device_config.visible,
-                pose: params.device_config.pose,
+                position: params.device_config.position.clone(),
+                orientation: params.device_config.orientation.clone(),
                 builtin: params.device_config.builtin,
                 chips: vec![],
                 device_info: params.device_config.device_info.clone(),
@@ -492,7 +493,8 @@ impl DeviceActor {
             name: Some(chip_name),
             manufacturer: Some(manufacturer),
             product_name: Some(product_name),
-            pose: entity.device.pose,
+            position: entity.device.position.clone(),
+            orientation: entity.device.orientation.clone(),
             device_id: DeviceId(entity.device.id),
             variant: Some(ChipVariant::from(chip_kind)),
             links: vec![],
@@ -687,16 +689,16 @@ impl DeviceActor {
             let (original_pos, original_orient) = entity
                 .create_params
                 .as_ref()
-                .map(|p| (p.device_config.pose.position, p.device_config.pose.orientation))
+                .map(|p| (p.device_config.position.clone(), p.device_config.orientation.clone()))
                 .unwrap_or_default();
 
             entity.device.visible = true;
-            entity.device.pose.position = original_pos;
-            entity.device.pose.orientation = original_orient;
+            entity.device.position = original_pos.clone();
+            entity.device.orientation = original_orient.clone();
 
             for chip in entity.device.chips.iter_mut() {
-                chip.pose.position = original_pos;
-                chip.pose.orientation = original_orient;
+                chip.position = original_pos.clone();
+                chip.orientation = original_orient.clone();
 
                 if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
                     if let Err(e) = chip_client.reset(netsim_model::ChipId(chip.id)).await {
@@ -708,10 +710,8 @@ impl DeviceActor {
                     }
 
                     let chip_update = ChipUpdate {
-                        pose: PoseUpdate {
-                            position: Some(original_pos.clone()),
-                            orientation: Some(original_orient.clone()),
-                        },
+                        position: Some(original_pos.clone()),
+                        orientation: Some(original_orient.clone()),
                         ..Default::default()
                     };
                     if let Err(e) =
@@ -790,7 +790,19 @@ impl ActorService for DeviceActor {
         let Some(entity) = self.devices.get_mut(&id) else {
             return Err(DeviceError::DeviceNotFound(id.to_string()));
         };
-        update.apply(&mut entity.device);
+        if let Some(name) = &update.name {
+            entity.device.name = name.clone();
+        }
+        if let Some(visible) = update.visible {
+            entity.device.visible = visible;
+        }
+
+        if let Some(pos) = update.position.clone() {
+            entity.device.position = pos;
+        }
+        if let Some(orient) = update.orientation.clone() {
+            entity.device.orientation = orient;
+        }
 
         for chip in entity.device.chips.iter_mut() {
             let Some(chip_client) = self.chip_clients.get(&chip.kind) else {
@@ -799,7 +811,12 @@ impl ActorService for DeviceActor {
 
             let mut chip_update = ChipUpdate::default();
 
-            chip_update.pose = update.pose.clone();
+            if update.position.is_some() {
+                chip_update.position = update.position.clone();
+            }
+            if update.orientation.is_some() {
+                chip_update.orientation = update.orientation.clone();
+            }
 
             // Start with ID-based matching
             let mut specific_update = None;
@@ -822,8 +839,8 @@ impl ActorService for DeviceActor {
                 }
             }
 
-            if chip_update.pose.position.is_some()
-                || chip_update.pose.orientation.is_some()
+            if chip_update.position.is_some()
+                || chip_update.orientation.is_some()
                 || chip_update.variant.is_some()
             {
                 info!(

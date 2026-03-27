@@ -117,7 +117,8 @@ async fn test_update_chip_state() {
         name: None,
         manufacturer: None,
         product_name: None,
-        pose: Default::default(),
+        position: None,
+        orientation: None,
         variant: Some(netsim_model::chip::ChipVariantUpdate::Wifi(
             netsim_model::chip::WifiUpdate {
                 radio: netsim_model::chip::RadioUpdate { state: Some(false) },
