@@ -111,7 +111,7 @@ impl CrossPlatformListener {
         }
 
         let addr: std::net::SocketAddr = "localhost:8080".parse().map_err(SocketError::from)?;
-        return Ok(CrossPlatformListener::Tcp(tokio::net::TcpListener::bind(addr).await?));
+        Ok(CrossPlatformListener::Tcp(tokio::net::TcpListener::bind(addr).await?))
     }
 
     async fn bind_auto() -> Result<Self> {
