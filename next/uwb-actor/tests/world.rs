@@ -198,7 +198,13 @@ impl World {
         self.client
             .update(
                 ChipId(chip_id),
-                netsim_model::chip::ChipUpdate { position: Some(pos), ..Default::default() },
+                netsim_model::chip::ChipUpdate {
+                    pose: netsim_model::device::api::PoseUpdate {
+                        position: Some(pos),
+                        orientation: None,
+                    },
+                    ..Default::default()
+                },
             )
             .await
             .expect("Failed to set chip position");

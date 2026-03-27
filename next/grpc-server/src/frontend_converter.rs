@@ -1,5 +1,5 @@
 use device_api::{
-    api::{Chip, DeviceChipCreate},
+    api::{Chip, DeviceChipCreate, PoseUpdate},
     Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition,
 };
 use link_api::Link as ApiLink;
@@ -56,7 +56,7 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
     chip.product_name = c.product_name.unwrap_or_default();
     // Note: netsim_model Chip has position, but netsim_proto Chip has offset
     // (Position)
-    chip.offset = MessageField::some(to_proto_position(c.position));
+    chip.offset = MessageField::some(to_proto_position(c.pose.position));
 
     if let Some(variant) = c.variant {
         match variant {
@@ -96,8 +96,8 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
     device.id = d.id;
     device.name = d.name;
     device.visible = Some(d.visible);
-    device.position = MessageField::some(to_proto_position(d.position));
-    device.orientation = MessageField::some(to_proto_orientation(d.orientation));
+    device.position = MessageField::some(to_proto_position(d.pose.position));
+    device.orientation = MessageField::some(to_proto_orientation(d.pose.orientation));
     for chip in d.chips {
         device.chips.push(to_proto_chip(chip));
     }
@@ -271,8 +271,10 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
         name: if c.name.is_empty() { None } else { Some(c.name) },
         manufacturer: if c.manufacturer.is_empty() { None } else { Some(c.manufacturer) },
         product_name: if c.product_name.is_empty() { None } else { Some(c.product_name) },
-        position: c.offset.into_option().map(from_proto_position),
-        orientation: None, // Proto Chip does not have orientation.
+        pose: PoseUpdate {
+            position: c.offset.into_option().map(from_proto_position),
+            orientation: None, // Proto Chip does not have orientation.
+        },
         variant,
         links: None, // TODO
         enabled: None,
