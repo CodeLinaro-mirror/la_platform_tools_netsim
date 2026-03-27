@@ -46,10 +46,9 @@ impl ActorService for ApActor {
             return Err(ApError::ApAlreadyExists(id_val.0));
         }
 
-        let config = params;
-
-        self.shared_keys.set_bssid(config.bssid);
-        self.aps.insert(id_val, ApState::new(id_val, config));
+        let state = ApState::new(id_val, params);
+        self.shared_keys.set_bssid(state.config.bssid);
+        self.aps.insert(id_val, state);
 
         info!("Created AP with ID: {}", id_val);
         Ok(id_val)

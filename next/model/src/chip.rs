@@ -227,7 +227,7 @@ pub use crate::{
     ap::{Ap, ApCreate, ApUpdate, WifiMode},
     bluetooth::{
         beacon::BleBeacon, BeaconParams, Bluetooth, BluetoothCreate, BluetoothMode,
-        BluetoothUpdate, DeviceParams, ScannerParams,
+        BluetoothUpdate, DeviceParams, ScannerParams, SnifferParams,
     },
     cell::{Cell, CellCreate},
     uwb::{Uwb, UwbCreate, UwbUpdate},

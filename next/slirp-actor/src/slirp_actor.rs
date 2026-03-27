@@ -39,6 +39,7 @@ impl fmt::Debug for SlirpCreate {
 pub struct SlirpActor {
     pub(crate) libslirp: Option<LibSlirp>,
     pub(crate) config: libslirp_rs::libslirp_config::SlirpConfig,
+    pub(crate) http_proxy: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -47,8 +48,11 @@ pub struct SlirpStatus {
 }
 
 impl SlirpActor {
-    pub fn new(config: libslirp_rs::libslirp_config::SlirpConfig) -> Self {
-        Self { libslirp: None, config }
+    pub fn new(
+        config: libslirp_rs::libslirp_config::SlirpConfig,
+        http_proxy: Option<String>,
+    ) -> Self {
+        Self { libslirp: None, config, http_proxy }
     }
 }
 

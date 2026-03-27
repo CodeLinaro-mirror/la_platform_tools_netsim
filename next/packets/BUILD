@@ -1,3 +1,5 @@
+# Copyright 2026 The Android Open Source Project
+
 load("@rules_rust//rust:defs.bzl", "rust_test")
 load("//next:defs.bzl", "netsim_rust_library")
 
