@@ -94,25 +94,53 @@ impl GatewayTrait for SlirpGateway {
         debug!("SLIRP_PKT: len {}", packet.len());
         medium.wifi_stats.incr_network_packets_rx();
 
-        let Some(bssid) = shared_keys.get_bssid() else {
-            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Network(Box::from(
-                "No BSSID available for Slirp packet conversion",
-            )));
-            return;
-        };
+        // Extract the original destination MAC (which is the station)
+        let dest_mac_bytes: [u8; 6] = packet[0..6].try_into().unwrap_or([0; 6]);
+        let dest_mac = netsim_packets::MacAddress::new(dest_mac_bytes);
 
         medium.wifi_stats.record_download_bytes(
             packet.len().saturating_sub(crate::gateway::ETHERNET_HEADER_LEN),
         );
 
-        let seq = self.seq.fetch_add(1, Ordering::Relaxed);
-        let Ok(ieee80211) =
-            Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)
-        else {
-            medium.wifi_stats.log_and_incr_err_count(&crate::error::WifiError::Frame(Box::from(
-                "Failed to convert Slirp packet to 802.11",
-            )));
+        if dest_mac.is_broadcast() || dest_mac.is_multicast() {
+            let bssids = shared_keys.bssids.read().unwrap().clone();
+            for bssid in bssids {
+                let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+                if let Ok(ieee80211) = netsim_packets::Ieee80211::from_ieee8023_qos(
+                    &packet,
+                    bssid,
+                    FrameDirection::FromAp,
+                    true,
+                    seq,
+                ) {
+                    if let Ok(bytes) = ieee80211.encode_to_vec() {
+                        let _ = medium.transmit_from_infra(&bytes::Bytes::from(bytes), out_queue);
+                    }
+                }
+            }
             return;
+        }
+
+        let Some(bssid) = shared_keys.get_station_bssid(&dest_mac) else {
+            tracing::warn!("Dropping unicast packet to unknown station {}", dest_mac);
+            return;
+        };
+
+        let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+        let ieee80211 = match netsim_packets::Ieee80211::from_ieee8023_qos(
+            &packet,
+            bssid,
+            FrameDirection::FromAp,
+            true,
+            seq,
+        ) {
+            Ok(frame) => frame,
+            Err(e) => {
+                medium
+                    .wifi_stats
+                    .log_and_incr_err_count(&crate::error::WifiError::Frame(Box::from(e)));
+                return;
+            }
         };
 
         let res = ieee80211.encode_to_vec().map_err(|_| {

@@ -104,7 +104,10 @@ async fn test_udp_guest_to_host() {
     use ap_actor::ApResponse;
     let id = ap_client.create_ap(None, ap_config).await.expect("Failed to create AP");
     println!("AP Created with ID: {}", id);
-    println!("BSSID in KeyStore: {:?}", shared_keys.get_bssid());
+    println!(
+        "BSSID in KeyStore: {:?}",
+        shared_keys.has_bssid(&netsim_packets::ieee80211::MacAddress::new(HOSTAPD_BSSID))
+    );
 
     wifi_client.create(chip_id, params).await.expect("Failed to create chip");
     println!("Chip created");

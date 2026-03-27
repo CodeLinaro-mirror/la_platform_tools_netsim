@@ -3,8 +3,9 @@
 
 use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
-use netsim_packets::Ieee80211;
+use netsim_packets::{management_subtype, AuthenticationFixedFields, Ieee80211};
 use tracing::{debug, info, warn};
+use zerocopy::FromBytes;
 
 use crate::ap_actor::{ApActor, ApId, WIFI_STREAM_ID};
 
@@ -71,6 +72,33 @@ impl ActorLifecycle for ApActor {
         };
 
         let dest = ieee_frame.get_addr1();
+
+        // If it's a Unicast Authentication frame (Sequence=1), we can assume the source
+        // STA is exclusively attempting to connect to the target AP. We should
+        // implicitly disconnect it from any *other* BSSIDs we currently track
+        // to prevent stale state.
+        if !dest.is_broadcast()
+            && ieee_frame.stype() == management_subtype::AUTHENTICATION
+            && msg.len() >= 24 + 6
+        {
+            if let Ok((auth_fields, _)) = AuthenticationFixedFields::read_from_prefix(&msg[24..]) {
+                if auth_fields.sequence.get() == 1 {
+                    let src = ieee_frame.get_source();
+                    let mut aps_to_clear = Vec::new();
+                    for (id, ap) in self.aps.iter() {
+                        if ap.config.bssid != dest && ap.associations.contains(&src) {
+                            aps_to_clear.push(*id);
+                        }
+                    }
+                    for id in aps_to_clear {
+                        if let Some(ap) = self.aps.get_mut(&id) {
+                            ap.clear_station_state(&src);
+                            self.shared_keys.remove_session(&src);
+                        }
+                    }
+                }
+            }
+        }
 
         // If broadcast, send to all APs
         if dest.is_broadcast() {
