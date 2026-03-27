@@ -248,7 +248,7 @@ async fn given_devices(w: &mut TestContext, actor: String, count: usize) {
     }
 }
 
-/// STEP: When ^(?:@adb)(?::(\S+))? connects to wifi "([^"]+)"$
+/// STEP: When ^(?:@adb)(?::(\S+))? connects to (?:open )?wifi "([^"]+)"$
 async fn adb_connects_to_open_wifi(w: &mut TestContext, label: String, ssid: String) {
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
     w.log_step(&actor, "->", &format!("Connects to open WiFi network '{}'", ssid));
