@@ -205,11 +205,7 @@ atest --host-unit-test-only --test-filter netsim
 
 Unit tests can be run from the `netsim-dev` branch using the following command
 ```
-scripts/build_tools.py --task runtest
-```
-By default, this runs `bazel test`. To use `cargo test` (legacy), add `--cmake`:
-```
-scripts/build_tools.py --cmake --task runtest
+scripts/build_tools.py --task test
 ```
 
 ### Repo workflow
