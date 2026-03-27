@@ -31,6 +31,8 @@ enum Commands {
         #[arg(long, help = "Simulation mode (no-op for orchestrator logic verification)")]
         #[arg(default_value_t = false)]
         dry_run: bool,
+        #[arg(long, short, help = "Enable verbose output")]
+        verbose: bool,
     },
     /// List available test scenarios
     Scenarios,
@@ -59,6 +61,7 @@ async fn main() -> anyhow::Result<()> {
             gateway_ip,
             filter,
             dry_run,
+            verbose,
         } => {
             // Orchestrate Android integration tests
             orchestrator::run_android(
@@ -70,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
                 gateway_ip,
                 filter,
                 dry_run,
+                verbose,
             )
             .await?;
         }
