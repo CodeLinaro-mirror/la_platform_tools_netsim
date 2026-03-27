@@ -11,10 +11,7 @@ use device_api::{
     api::{Chip, DeviceChipCreate, DeviceCreate},
     DeviceActionResult, DeviceConfig, DeviceId,
 };
-use netsim_model::{
-    chip::{BleBeacon, ChipId},
-    device::Pose,
-};
+use netsim_model::chip::{BleBeacon, ChipId};
 
 // Feature: Device Client Logic
 //
@@ -36,7 +33,13 @@ async fn test_device_client_create() {
     let client = DeviceClient::new(Box::new(mock));
 
     let params = DeviceCreate {
-        device_config: DeviceConfig::new("test".to_string(), true, Pose::default(), false),
+        device_config: DeviceConfig::new(
+            "test".to_string(),
+            true,
+            Default::default(),
+            Default::default(),
+            false,
+        ),
         chip: DeviceChipCreate {
             name: "beacon".to_string(),
             manufacturer: "Netsim".to_string(),

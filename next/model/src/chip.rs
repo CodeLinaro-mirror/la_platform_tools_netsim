@@ -15,7 +15,7 @@ use tokio::sync::oneshot;
 use crate::{
     chip_error::ChipError,
     client_error::ClientError,
-    device::{api::PoseUpdate, DeviceId, Pose},
+    device::{DeviceId, Orientation, Position},
     stats::NetsimRadioStats,
 };
 
@@ -269,7 +269,8 @@ pub struct Chip {
     pub name: Option<String>,
     pub manufacturer: Option<String>,
     pub product_name: Option<String>,
-    pub pose: Pose,
+    pub position: Position,
+    pub orientation: Orientation,
     pub device_id: DeviceId,
     pub variant: Option<ChipVariant>,
     pub links: Vec<(ChipId, i8)>,
@@ -353,7 +354,8 @@ pub struct ChipUpdate {
     pub name: Option<String>,
     pub manufacturer: Option<String>,
     pub product_name: Option<String>,
-    pub pose: PoseUpdate,
+    pub position: Option<Position>,
+    pub orientation: Option<Orientation>,
     pub variant: Option<ChipVariantUpdate>,
     pub links: Option<Vec<(ChipId, i8)>>,
     pub enabled: Option<bool>,
@@ -363,8 +365,17 @@ impl ChipUpdate {
     /// Replaces the fields on `Chip` with the fields on `ChipUpdate` if they
     /// are `Some`.
     pub fn apply(&self, chip: &mut Chip) {
-        let ChipUpdate { id, name, manufacturer, product_name, pose, variant, links, enabled } =
-            self;
+        let ChipUpdate {
+            id,
+            name,
+            manufacturer,
+            product_name,
+            position,
+            orientation,
+            variant,
+            links,
+            enabled,
+        } = self;
 
         if let Some(id) = id {
             chip.id = (*id).into();
@@ -378,7 +389,12 @@ impl ChipUpdate {
         if let Some(product_name) = product_name {
             chip.product_name = Some(product_name.clone());
         }
-        pose.apply(&mut chip.pose);
+        if let Some(position) = position {
+            chip.position = *position;
+        }
+        if let Some(orientation) = orientation {
+            chip.orientation = *orientation;
+        }
         if let Some(enabled) = enabled {
             chip.enabled = *enabled;
         }

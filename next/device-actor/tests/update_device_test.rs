@@ -25,7 +25,7 @@ async fn test_update_device_propagates_to_chips() {
     mock_chip_client.expect_create().times(1).returning(|_, _| Ok(()));
     mock_chip_client
         .expect_update()
-        .withf(|_, patch| patch.pose.position.is_some() && patch.pose.orientation.is_some())
+        .withf(|_, patch| patch.position.is_some() && patch.orientation.is_some())
         .times(1)
         .returning(|_, _| Ok(Chip::default()));
 
@@ -43,16 +43,16 @@ async fn test_update_device_propagates_to_chips() {
 
     let mut update = DeviceUpdate::default();
     update.id = device_id.0;
-    update.pose.position = Some(device_api::Position { x: 10.0, y: 10.0, z: 0.0 });
-    update.pose.orientation = Some(device_api::Orientation { yaw: 1.0, pitch: 0.0, roll: 0.0 });
+    update.position = Some(device_api::Position { x: 10.0, y: 10.0, z: 0.0 });
+    update.orientation = Some(device_api::Orientation { yaw: 1.0, pitch: 0.0, roll: 0.0 });
     update.name = Some("updated-name".to_string());
 
     world.when_update_device(device_id, update).await;
 
     // Then the device properties are updated
     let device = world.client.get(device_id).await.unwrap().unwrap();
-    assert_eq!(device.pose.position.x, 10.0);
-    assert_eq!(device.pose.orientation.yaw, 1.0);
+    assert_eq!(device.position.x, 10.0);
+    assert_eq!(device.orientation.yaw, 1.0);
     assert_eq!(device.name, "updated-name");
 
     // And the Chip Client received the expected Update call (verified by
