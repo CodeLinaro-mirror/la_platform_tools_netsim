@@ -209,8 +209,8 @@ impl WifiActor {
                                     ) {
                                         if let Some(responses) = crate::ftm::handle_ftm_request(
                                             &frame,
-                                            &initiator.position,
-                                            &responder.position,
+                                            &initiator.pose.position,
+                                            &responder.pose.position,
                                         ) {
                                             debug!(
                                                 "Simulated FTM Response from {} to {}",

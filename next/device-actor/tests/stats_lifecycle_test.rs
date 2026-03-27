@@ -1,5 +1,7 @@
 // Copyright (C) 2025 The Android Open Source Project
 
+use netsim_model::device::Pose;
+
 use crate::world::World;
 
 // Scenario: Stats are written to file on shutdown
@@ -514,8 +516,7 @@ async fn test_beacon_stats_persistence() {
             device_config: device_api::DeviceConfig::new(
                 "beacon-device".to_string(),
                 true,
-                Default::default(),
-                Default::default(),
+                Pose::default(),
                 false,
             ),
             chip: chip_config.into(),
@@ -544,8 +545,7 @@ async fn test_beacon_stats_persistence() {
             device_config: device_api::DeviceConfig::new(
                 "scanner-device".to_string(),
                 true,
-                Default::default(),
-                Default::default(),
+                Pose::default(),
                 false,
             ),
             chip: scanner_config.into(),

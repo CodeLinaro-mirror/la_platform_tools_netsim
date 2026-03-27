@@ -47,7 +47,7 @@ impl RootcanalCallbacks for RootcanalCallbacksImpl {
                 return None;
             }
 
-            let dist = ranging::distance(&src.position, &dst.position);
+            let dist = ranging::distance(&src.pose.position, &dst.pose.position);
 
             // Check for link override
             let rssi = src

@@ -10,7 +10,7 @@ use netsim_model::{
     chip::{
         BluetoothCreate, BluetoothMode, ChipConfig, ChipKindParams, ScannerParams, SnifferParams,
     },
-    device::{DeviceAddChip, DeviceConfig, Position},
+    device::{DeviceAddChip, DeviceConfig, Pose, Position},
 };
 use netsim_proto::{
     ble_service::{ScanRequest, ScanResponse, SniffRequest, SniffResponse},
@@ -64,8 +64,7 @@ impl BleService for BleServiceImpl {
             let device_config = DeviceConfig {
                 name: guid.clone(),
                 visible: true,
-                position,
-                orientation: Default::default(),
+                pose: Pose { position, orientation: Default::default() },
                 builtin: true,
                 device_info: None,
             };
@@ -147,8 +146,7 @@ impl BleService for BleServiceImpl {
             let device_config = DeviceConfig {
                 name: guid.clone(),
                 visible: true,
-                position,
-                orientation: Default::default(),
+                pose: Pose { position, orientation: Default::default() },
                 builtin: true,
                 device_info: None,
             };

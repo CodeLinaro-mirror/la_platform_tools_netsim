@@ -4,7 +4,7 @@ use device_actor::{DeviceClient, DeviceError};
 use futures::FutureExt;
 use grpcio::{RpcContext, RpcStatus, RpcStatusCode, UnarySink};
 use link_api::{LinkClient, LinkCreate, LinkId, LinkUpdate};
-use netsim_model::client_error::ClientError;
+use netsim_model::{client_error::ClientError, device::Pose};
 use netsim_proto::{
     empty::Empty,
     frontend::{ListDeviceResponse, ListLinkResponse},
@@ -140,12 +140,14 @@ impl FrontendClient {
                 let device_config = device_api::DeviceConfig {
                     name: req.device.name.clone(),
                     visible: true, // Default to true as proto doesn't have this field
-                    position: crate::frontend_converter::from_proto_position(
-                        req.device.position.clone().unwrap_or_default(),
-                    ),
-                    orientation: crate::frontend_converter::from_proto_orientation(
-                        req.device.orientation.clone().unwrap_or_default(),
-                    ),
+                    pose: Pose {
+                        position: crate::frontend_converter::from_proto_position(
+                            req.device.position.clone().unwrap_or_default(),
+                        ),
+                        orientation: crate::frontend_converter::from_proto_orientation(
+                            req.device.orientation.clone().unwrap_or_default(),
+                        ),
+                    },
                     builtin: false,
                     device_info: None,
                 };
@@ -162,11 +164,13 @@ impl FrontendClient {
                         device.name = device_config.name;
                         device.visible = Some(device_config.visible);
                         device.position = protobuf::MessageField::some(
-                            crate::frontend_converter::to_proto_position(device_config.position),
+                            crate::frontend_converter::to_proto_position(
+                                device_config.pose.position,
+                            ),
                         );
                         device.orientation = protobuf::MessageField::some(
                             crate::frontend_converter::to_proto_orientation(
-                                device_config.orientation,
+                                device_config.pose.orientation,
                             ),
                         );
 
@@ -201,18 +205,20 @@ impl FrontendClient {
             id,
             name: req.device.name.clone(),
             visible: req.device.visible,
-            position: req
-                .device
-                .position
-                .clone()
-                .into_option()
-                .map(crate::frontend_converter::from_proto_position),
-            orientation: req
-                .device
-                .orientation
-                .clone()
-                .into_option()
-                .map(crate::frontend_converter::from_proto_orientation),
+            pose: device_api::api::PoseUpdate {
+                position: req
+                    .device
+                    .position
+                    .clone()
+                    .into_option()
+                    .map(crate::frontend_converter::from_proto_position),
+                orientation: req
+                    .device
+                    .orientation
+                    .clone()
+                    .into_option()
+                    .map(crate::frontend_converter::from_proto_orientation),
+            },
             chips: if !req.device.chips.is_empty() {
                 Some(
                     req.device
