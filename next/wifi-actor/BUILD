@@ -33,6 +33,7 @@ netsim_rust_library(
         "//proto",
         "@bytes",
         "@futures",
+        "@socket2",
         "@thiserror",
         "@tokio",
         "@tokio-stream",

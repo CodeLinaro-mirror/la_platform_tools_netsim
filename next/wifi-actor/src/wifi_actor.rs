@@ -61,6 +61,7 @@ pub struct WifiActor {
     pub(crate) to_ap: Option<tokio::sync::mpsc::UnboundedSender<bytes::Bytes>>,
     // Gateway for Infra packets (Tap or Slirp)
     pub(crate) gateway: Box<dyn GatewayTrait>,
+    pub(crate) forward_host_mdns: bool,
 }
 
 impl WifiActor {
@@ -71,6 +72,7 @@ impl WifiActor {
         wifi_tap: Option<String>,
         shared_keys: Arc<SharedKeyStore>,
         clock: Arc<dyn crate::stats::Clock>,
+        forward_host_mdns: bool,
     ) -> Self {
         // Fixup pending channels if we just created a SlirpGateway
         let gateway = if let Some(if_name) = wifi_tap {
@@ -88,7 +90,14 @@ impl WifiActor {
             // Default to SlirpGateway
             Box::new(SlirpGateway::new(slirp_client)) as Box<dyn GatewayTrait>
         };
-        Self::new_with_gateway(ap_client, gateway, device_client, shared_keys, clock)
+        Self::new_with_gateway(
+            ap_client,
+            gateway,
+            device_client,
+            shared_keys,
+            clock,
+            forward_host_mdns,
+        )
     }
 
     pub fn new_with_gateway(
@@ -97,6 +106,7 @@ impl WifiActor {
         device_client: device_actor::DeviceClient,
         shared_keys: Arc<SharedKeyStore>,
         clock: Arc<dyn crate::stats::Clock>,
+        forward_host_mdns: bool,
     ) -> Self {
         let medium = Medium::new(
             shared_keys.clone(),
@@ -114,6 +124,7 @@ impl WifiActor {
             device_client,
             to_ap: None,
             gateway,
+            forward_host_mdns,
         }
     }
 

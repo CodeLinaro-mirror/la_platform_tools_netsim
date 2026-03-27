@@ -464,6 +464,7 @@ impl NetsimDaemon {
             wifi_tap,
             shared_keys.clone(),
             Arc::new(wifi_actor::stats::SystemClock),
+            args.forward_host_mdns,
         );
 
         // Setup Uwb Server
