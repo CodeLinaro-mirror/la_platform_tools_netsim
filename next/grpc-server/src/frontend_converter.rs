@@ -51,9 +51,9 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
     let mut chip = ProtoChip::new();
     chip.id = c.id;
     chip.kind = EnumOrUnknown::new(to_proto_chip_kind(c.kind));
-    chip.name = c.name.unwrap_or_default();
-    chip.manufacturer = c.manufacturer.unwrap_or_default();
-    chip.product_name = c.product_name.unwrap_or_default();
+    chip.name = c.name;
+    chip.manufacturer = c.manufacturer;
+    chip.product_name = c.product_name;
     // Note: netsim_model Chip has position, but netsim_proto Chip has offset
     // (Position)
     chip.offset = MessageField::some(to_proto_position(c.position));
