@@ -140,6 +140,36 @@ impl World {
         self.sinks.insert(name.to_string(), sink_rx);
     }
 
+    pub async fn given_slow_device(&mut self, name: &str, delay: tokio::time::Duration) {
+        if self.chips.contains_key(name) {
+            panic!("Chip with name '{}' already exists", name);
+        }
+
+        let (stream, stream_tx) = crate::test_utils::mock_stream();
+        let (sink, mut sink_rx) = crate::test_utils::mock_sink();
+
+        // Spawn a background task to slow down the reading from the packet sink.
+        let (slow_tx, slow_rx) = tokio::sync::mpsc::channel(100);
+        tokio::spawn(async move {
+            while let Some(packet) = sink_rx.recv().await {
+                tokio::time::sleep(delay).await; // 👈 Continuous slow consumer!
+                let _ = slow_tx.send(packet).await;
+            }
+        });
+
+        self.create_chip(
+            name,
+            BluetoothMode::Device(DeviceParams {}),
+            Some(stream),
+            Some(sink),
+            self.device_id,
+        )
+        .await;
+
+        self.streams.insert(name.to_string(), stream_tx);
+        self.sinks.insert(name.to_string(), slow_rx);
+    }
+
     /// Internal helper to create a beacon chip
     async fn create_beacon_chip(
         &mut self,

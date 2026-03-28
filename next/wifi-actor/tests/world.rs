@@ -57,7 +57,7 @@ impl World {
     async fn new_internal(gateway: Option<Box<dyn wifi_actor::gateway::GatewayTrait>>) -> Self {
         let _ = tracing_subscriber::fmt().with_test_writer().try_init();
         // Setup dependencies
-        let slirp_actor_impl = SlirpActor::new(Default::default(), None);
+        let slirp_actor_impl = SlirpActor::new(Default::default(), None, None).await;
         let (slirp_runner, slirp_client) = slirp_actor::new();
         tokio::spawn(slirp_runner.run(slirp_actor_impl));
 
