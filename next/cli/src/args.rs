@@ -178,6 +178,7 @@ pub enum Beacon {
     #[command(subcommand)]
     Patch(BeaconPatch),
     /// Remove a beacon chip
+    #[command(alias("delete"))]
     Remove(BeaconRemove),
 }
 
@@ -234,9 +235,6 @@ pub struct BeaconPatchBle {
 pub struct BeaconRemove {
     /// Name of the device to remove
     pub device_name: String,
-    /// Name of the beacon chip to remove. Can be omitted if the device has
-    /// exactly 1 chip
-    pub chip_name: Option<String>,
 }
 
 #[derive(Debug, Args, PartialEq, Default)]

@@ -30,6 +30,7 @@ packet-stream = { path = "../packet-stream" }
 tokio = { version = "1.28.2", features = ["full", "tracing"] }
 tracing = "0.1"
 uwb-actor = { path = "../uwb-actor" }
+websocket-server = { path = "../websocket-server" }
 wifi-actor = { path = "../wifi-actor" }
 
 [dev-dependencies]

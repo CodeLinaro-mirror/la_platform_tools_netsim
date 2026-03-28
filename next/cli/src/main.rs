@@ -1,16 +1,4 @@
-// Copyright 2022 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2022 The Android Open Source Project
 
 //! Command Line Interface for Netsim
 
@@ -115,7 +103,7 @@ fn perform_command(
                 let id = find_id_for_remove(response, cmd)?;
                 let res = grpc_client::send_grpc(
                     &client,
-                    &GrpcRequest::DeleteChip(frontend::DeleteChipRequest {
+                    &GrpcRequest::DeleteDevice(frontend::DeleteDeviceRequest {
                         id,
                         ..Default::default()
                     }),
@@ -144,29 +132,11 @@ fn find_id_for_remove(
     cmd: &args::BeaconRemove,
 ) -> Result<u32> {
     let devices = response.devices;
-    let id = devices
+    let device = devices
         .iter()
         .find(|device| device.name == cmd.device_name)
-        .and_then(|device| cmd.chip_name.as_ref().map_or(
-            (device.chips.len() == 1).then_some(&device.chips[0]),
-            |chip_name| device.chips.iter().find(|chip| &chip.name == chip_name)
-        ))
-        .ok_or_else(|| {
-            cmd.chip_name
-                .as_ref()
-                .map_or_else(
-                    || Error::from(format!("failed to delete chip: device '{}' has multiple possible candidates, please specify a chip name", cmd.device_name)),
-                    |chip_name| {
-                        Error::from(format!(
-                            "failed to delete chip: could not find chip '{}' on device '{}'",
-                            chip_name, cmd.device_name
-                        ))
-                    },
-                )
-        })?
-        .id;
-
-    Ok(id)
+        .ok_or_else(|| format!("Device not found: {}", cmd.device_name))?;
+    Ok(device.id)
 }
 
 /// Continuously execute the command every second
@@ -257,17 +227,12 @@ mod tests {
     #[test]
     fn test_remove_device() {
         let device_name = String::from("a-device");
-        let chip_id = 7;
+        let device_id = 42;
 
-        let cmd = &BeaconRemove { device_name: device_name.clone(), chip_name: None };
+        let cmd = &BeaconRemove { device_name: device_name.clone() };
 
         let response = ListDeviceResponse {
-            devices: vec![DeviceProto {
-                id: 0,
-                name: device_name,
-                chips: vec![ChipProto { id: chip_id, ..Default::default() }],
-                ..Default::default()
-            }],
+            devices: vec![DeviceProto { id: device_id, name: device_name, ..Default::default() }],
             ..Default::default()
         };
 
@@ -275,92 +240,6 @@ mod tests {
         assert!(id.is_ok(), "{}", id.unwrap_err());
         let id = id.unwrap();
 
-        assert_eq!(chip_id, id);
-    }
-
-    #[test]
-    fn test_remove_chip() {
-        let device_name = String::from("a-device");
-        let chip_name = String::from("should-be-deleted");
-        let device_id = 4;
-        let chip_id = 2;
-
-        let cmd =
-            &BeaconRemove { device_name: device_name.clone(), chip_name: Some(chip_name.clone()) };
-
-        let response = ListDeviceResponse {
-            devices: vec![DeviceProto {
-                id: device_id,
-                name: device_name,
-                chips: vec![
-                    ChipProto { id: chip_id, name: chip_name, ..Default::default() },
-                    ChipProto {
-                        id: chip_id + 1,
-                        name: String::from("shouldnt-be-deleted"),
-                        ..Default::default()
-                    },
-                ],
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
-        let id = find_id_for_remove(response, cmd);
-        assert!(id.is_ok(), "{}", id.unwrap_err());
-        let id = id.unwrap();
-
-        assert_eq!(chip_id, id);
-    }
-
-    #[test]
-    fn test_remove_multiple_chips_fails() {
-        let device_name = String::from("a-device");
-        let device_id = 3;
-
-        let cmd = &BeaconRemove { device_name: device_name.clone(), chip_name: None };
-
-        let response = ListDeviceResponse {
-            devices: vec![DeviceProto {
-                id: device_id,
-                name: device_name,
-                chips: vec![
-                    ChipProto { id: 1, name: String::from("chip-1"), ..Default::default() },
-                    ChipProto { id: 2, name: String::from("chip-2"), ..Default::default() },
-                ],
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
-        let id = find_id_for_remove(response, cmd);
-        assert!(id.is_err());
-    }
-
-    #[test]
-    fn test_remove_nonexistent_chip_fails() {
-        let device_name = String::from("a-device");
-        let device_id = 1;
-
-        let cmd = &BeaconRemove {
-            device_name: device_name.clone(),
-            chip_name: Some(String::from("nonexistent-chip")),
-        };
-
-        let response = ListDeviceResponse {
-            devices: vec![DeviceProto {
-                id: device_id,
-                name: device_name,
-                chips: vec![ChipProto {
-                    id: 1,
-                    name: String::from("this-chip-exists"),
-                    ..Default::default()
-                }],
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
-        let id = find_id_for_remove(response, cmd);
-        assert!(id.is_err());
+        assert_eq!(device_id, id);
     }
 }

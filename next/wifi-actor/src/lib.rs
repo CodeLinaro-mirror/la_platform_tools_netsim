@@ -5,6 +5,7 @@ pub mod error;
 pub mod ftm;
 pub mod gateway;
 pub mod lifecycle;
+pub mod mdns_forwarder;
 pub mod medium;
 pub mod service;
 pub mod slirp_gateway;

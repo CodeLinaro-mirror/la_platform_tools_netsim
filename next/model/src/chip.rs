@@ -266,9 +266,9 @@ impl fmt::Display for ChipId {
 pub struct Chip {
     pub id: u32,
     pub kind: ChipKind,
-    pub name: Option<String>,
-    pub manufacturer: Option<String>,
-    pub product_name: Option<String>,
+    pub name: String,
+    pub manufacturer: String,
+    pub product_name: String,
     pub position: Position,
     pub orientation: Orientation,
     pub device_id: DeviceId,

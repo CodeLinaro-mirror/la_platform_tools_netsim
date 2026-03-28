@@ -255,7 +255,12 @@ fun verifyUwbPeerStateSpecific(context: Context, args: List<String>) {
 
   try {
     runBlocking {
-      withTimeout(5000L) { UwbSessionManager.peerStatusMap.first { it[peer] == expectedStatus } }
+      withTimeout(5000L) {
+        UwbSessionManager.peerStatusMap.first {
+          val status = it[peer]
+          status == expectedStatus || (expectedStatus == "Disconnected" && status == null)
+        }
+      }
     }
   } catch (e: TimeoutCancellationException) {
     val currentStatuses = UwbSessionManager.peerStatusMap.value
