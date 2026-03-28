@@ -12,6 +12,12 @@ pub struct UwbUpdate {
     pub radio: crate::chip::RadioUpdate,
 }
 
+impl UwbUpdate {
+    pub fn apply(&self, uwb: &mut Uwb) {
+        self.radio.apply(&mut uwb.radio);
+    }
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UwbCreate {
     // Future UWB specific properties.

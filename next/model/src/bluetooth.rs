@@ -17,6 +17,13 @@ pub struct BluetoothUpdate {
     pub low_energy: RadioUpdate,
 }
 
+impl BluetoothUpdate {
+    pub fn apply(&self, bluetooth: &mut Bluetooth) {
+        self.classic.apply(&mut bluetooth.classic);
+        self.low_energy.apply(&mut bluetooth.low_energy);
+    }
+}
+
 /// Parameters for creating a Bluetooth chip.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BluetoothCreate {

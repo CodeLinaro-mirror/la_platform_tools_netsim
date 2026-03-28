@@ -2,9 +2,7 @@
 
 use actor_framework::{ActorService, DynContext};
 use netsim_model::{
-    chip::{
-        BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant, ChipVariantUpdate,
-    },
+    chip::{BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant},
     chip_error::ChipError,
     ChipId, ChipKind,
 };
@@ -181,29 +179,10 @@ impl ActorService for BluetoothActor {
         let mut chip =
             chips.get(&id).cloned().ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
 
-        // 1. Update the chip data first
-        if let Some(pos) = update.position {
-            chip.position = pos;
-        }
-        if let Some(orient) = update.orientation {
-            chip.orientation = orient;
-        }
-        if let Some(links) = update.links {
-            chip.links = links;
-        }
-        if let Some(enabled) = update.enabled {
-            chip.enabled = enabled;
-        }
+        // 1. Update the chip data
+        update.apply(&mut chip);
 
-        // 2. Handle Variant logic
-        if let Some(ChipVariantUpdate::Bluetooth(bt_update)) = update.variant {
-            if let Some(ChipVariant::Bluetooth(bt_chip)) = &mut chip.variant {
-                bt_update.classic.apply(&mut bt_chip.classic);
-                bt_update.low_energy.apply(&mut bt_chip.low_energy);
-            }
-        }
-
-        // 3. Sync the global chips map
+        // 2. Sync the global chips map
         chips.insert(id, chip.clone());
 
         Ok(chip)
