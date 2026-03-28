@@ -87,6 +87,10 @@ pub struct Args {
     #[arg(long, alias = "host-dns")]
     pub host_dns: Option<String>,
 
+    /// Forward mDNS packets from host to guest Wi-Fi medium
+    #[arg(long)]
+    pub forward_host_mdns: bool,
+
     /// Set the initial SSID for the default Access Point (defaults to
     /// 'AndroidWifi')
     #[command(flatten)]
