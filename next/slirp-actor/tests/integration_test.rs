@@ -30,7 +30,7 @@ impl Context<SlirpActor> for MockContext {
 async fn test_slirp_actor_lifecycle() {
     // Given a SlirpActor
     let (tx_out, _rx_out) = mpsc::unbounded_channel::<bytes::Bytes>();
-    let mut actor = SlirpActor::new(Default::default(), None);
+    let mut actor = SlirpActor::new(Default::default(), None, None).await;
     let mut ctx = MockContext;
 
     // Register Sink

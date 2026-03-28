@@ -47,6 +47,8 @@ pub struct World {
     pub device_config: Option<DeviceConfig>,
     pub stats_path: Option<std::path::PathBuf>,
     pub link_state: LinkTestState,
+    pub mock_chips:
+        Arc<std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>>,
 }
 
 impl Drop for World {
@@ -71,8 +73,12 @@ impl World {
         let (link_client, link_state) = Self::create_default_link_client_and_state();
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
         let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
-        let chip_clients =
-            Self::create_default_chip_clients_with_stats(radio_stats.clone(), wifi_stats.clone());
+        let mock_chips = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let chip_clients = Self::create_default_chip_clients_with_stats(
+            radio_stats.clone(),
+            wifi_stats.clone(),
+            mock_chips.clone(),
+        );
         let (stats_path, _) = Self::temp_stats_path();
         Self::with_clients_internal(
             chip_clients,
@@ -85,6 +91,7 @@ impl World {
             wifi_stats,
             link_state,
             Some(stats_path),
+            mock_chips,
         )
         .await
     }
@@ -96,8 +103,12 @@ impl World {
         let (link_client, link_state) = Self::create_default_link_client_and_state();
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
         let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
-        let chip_clients =
-            Self::create_default_chip_clients_with_stats(radio_stats.clone(), wifi_stats.clone());
+        let mock_chips = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let chip_clients = Self::create_default_chip_clients_with_stats(
+            radio_stats.clone(),
+            wifi_stats.clone(),
+            mock_chips.clone(),
+        );
         Self::with_clients_internal(
             chip_clients,
             link_client,
@@ -109,6 +120,7 @@ impl World {
             wifi_stats,
             link_state,
             Some(path),
+            mock_chips,
         )
         .await
     }
@@ -121,6 +133,7 @@ impl World {
         let link_state = LinkTestState::new();
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
         let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let mock_chips = Arc::new(std::sync::Mutex::new(HashMap::new()));
         let (stats_path, _) = Self::temp_stats_path();
         Self::with_clients_internal(
             chip_clients,
@@ -133,6 +146,7 @@ impl World {
             wifi_stats,
             link_state,
             Some(stats_path),
+            mock_chips,
         )
         .await
     }
@@ -147,6 +161,7 @@ impl World {
     ) -> Self {
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
         let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        let mock_chips = Arc::new(std::sync::Mutex::new(HashMap::new()));
         let link_state = LinkTestState::new();
 
         // If stats_path is None, create a temp one to avoid pollution
@@ -168,6 +183,7 @@ impl World {
             wifi_stats,
             link_state,
             cleanup_path,
+            mock_chips,
         )
         .await
     }
@@ -184,6 +200,9 @@ impl World {
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
         link_state: LinkTestState,
         stats_file_to_cleanup: Option<std::path::PathBuf>,
+        mock_chips: Arc<
+            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
+        >,
     ) -> Self {
         let (runner, client) = device_actor::new();
         let mut actor = DeviceActor::new(
@@ -212,18 +231,23 @@ impl World {
             device_config: None,
             stats_path,
             link_state,
+            mock_chips,
         }
     }
 
     pub fn create_default_chip_clients() -> HashMap<ChipKind, Box<dyn ChipClient>> {
         let radio_stats = Arc::new(std::sync::Mutex::new(Vec::new()));
         let wifi_stats = Arc::new(std::sync::Mutex::new(HashMap::new()));
-        Self::create_default_chip_clients_with_stats(radio_stats, wifi_stats)
+        let mock_chips = Arc::new(std::sync::Mutex::new(HashMap::new()));
+        Self::create_default_chip_clients_with_stats(radio_stats, wifi_stats, mock_chips)
     }
 
     pub fn create_default_chip_clients_with_stats(
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
+        mock_chips: Arc<
+            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
+        >,
     ) -> HashMap<ChipKind, Box<dyn ChipClient>> {
         let mut clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         // Add default mocks for common chip kinds
@@ -233,6 +257,7 @@ impl World {
                 Box::new(Self::create_default_mock_chip(
                     radio_stats.clone(),
                     wifi_stats.clone(),
+                    mock_chips.clone(),
                     kind,
                 )),
             );
@@ -243,12 +268,13 @@ impl World {
     pub(crate) fn create_default_mock_chip(
         radio_stats: Arc<std::sync::Mutex<Vec<netsim_model::stats::NetsimRadioStats>>>,
         wifi_stats: Arc<std::sync::Mutex<HashMap<u32, netsim_proto::stats::WifiStats>>>,
+        mock_chips: Arc<
+            std::sync::Mutex<HashMap<netsim_model::chip::ChipId, netsim_model::chip::Chip>>,
+        >,
         _kind: ChipKind,
     ) -> MockChipClient {
-        // Shared map to store state for all chips of this kind (Service Handle pattern)
-        let chips = Arc::new(std::sync::Mutex::new(HashMap::new()));
         let mut mock = MockChipClient::new();
-        Self::setup_mock_chip_client(&mut mock, chips, radio_stats, wifi_stats);
+        Self::setup_mock_chip_client(&mut mock, mock_chips, radio_stats, wifi_stats);
         mock
     }
 
@@ -435,6 +461,26 @@ impl World {
                 Default::default(),
                 false,
             ),
+            chip: DeviceChipCreate {
+                name: "beacon".to_string(),
+                manufacturer: "Netsim".to_string(),
+                product_name: "NetsimBeacon".to_string(),
+                chip: device_api::api::Chip::Beacon(Default::default()),
+            },
+        };
+        self.client.create_device(params).await.unwrap()
+    }
+
+    /// BDD Step: When I create a new device with specific position and
+    /// orientation.
+    pub async fn when_create_device_at_position_and_orientation(
+        &self,
+        name: &str,
+        position: device_api::Position,
+        orientation: device_api::Orientation,
+    ) -> DeviceId {
+        let params = DeviceCreate {
+            device_config: DeviceConfig::new(name.to_string(), true, position, orientation, false),
             chip: DeviceChipCreate {
                 name: "beacon".to_string(),
                 manufacturer: "Netsim".to_string(),
@@ -1122,7 +1168,7 @@ impl World {
     }
 
     /// BDD Step: Given a specific device is modified
-    pub async fn given_device_is_modified(&self, id: DeviceId) {
+    pub async fn when_device_is_modified(&self, id: DeviceId) {
         let mut update = device_api::api::DeviceUpdate::default();
         update.id = id.0;
         update.visible = Some(false);
@@ -1130,7 +1176,7 @@ impl World {
         self.client
             .update(id, update)
             .await
-            .expect("Failed to update device during given_device_is_modified");
+            .expect("Failed to update device during when_device_is_modified");
     }
 
     /// BDD Step: When I call reset (global)
@@ -1214,6 +1260,76 @@ impl World {
             );
         } else {
             panic!("Not a Bluetooth chip");
+        }
+    }
+
+    /// BDD Step: Then a specific device and its chips should match properties
+    pub async fn then_device_and_chips_position_and_orientation_match(
+        &self,
+        id: DeviceId,
+        position: device_api::Position,
+        orientation: device_api::Orientation,
+    ) {
+        let device = self
+            .client
+            .get(id)
+            .await
+            .expect("RPC get() failed during then_device_and_chips_position_and_orientation_match")
+            .expect("Device not found during then_device_and_chips_position_and_orientation_match");
+
+        assert_eq!(
+            device.position, position,
+            "Device {} position mismatch: expected {:?}, got {:?}",
+            id.0, position, device.position
+        );
+        assert_eq!(
+            device.orientation, orientation,
+            "Device {} orientation mismatch: expected {:?}, got {:?}",
+            id.0, orientation, device.orientation
+        );
+
+        for chip in &device.chips {
+            assert_eq!(
+                chip.position, position,
+                "Chip {} (device {}) position mismatch: expected {:?}, got {:?}",
+                chip.id, id.0, position, chip.position
+            );
+            assert_eq!(
+                chip.orientation, orientation,
+                "Chip {} (device {}) orientation mismatch: expected {:?}, got {:?}",
+                chip.id, id.0, orientation, chip.orientation
+            );
+        }
+    }
+
+    /// BDD Step: Then all chip actors for a device should match position and
+    /// orientation
+    pub async fn then_all_chip_actors_position_and_orientation_match(
+        &self,
+        device_id: DeviceId,
+        position: device_api::Position,
+        orientation: device_api::Orientation,
+    ) {
+        let device =
+            self.client.get(device_id).await.expect("RPC get() failed").expect("Device not found");
+
+        let mock_chips = self.mock_chips.lock().unwrap();
+        for device_chip in &device.chips {
+            let chip_id = netsim_model::chip::ChipId(device_chip.id);
+            let chip = mock_chips
+                .get(&chip_id)
+                .expect(&format!("Chip {} not found in mock_chips", chip_id.0));
+
+            assert_eq!(
+                chip.position, position,
+                "Chip Actor {} position mismatch: expected {:?}, got {:?}",
+                chip_id.0, position, chip.position
+            );
+            assert_eq!(
+                chip.orientation, orientation,
+                "Chip Actor {} orientation mismatch: expected {:?}, got {:?}",
+                chip_id.0, orientation, chip.orientation
+            );
         }
     }
 }

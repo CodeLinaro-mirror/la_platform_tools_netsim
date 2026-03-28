@@ -51,7 +51,7 @@ impl Sink<Bytes> for MockSink {
 /// Creates a mock packet sink and a receiver to check the captured packets.
 pub fn mock_sink(
 ) -> (Pin<Box<dyn Sink<Bytes, Error = std::io::Error> + Send + Sync>>, mpsc::Receiver<Vec<u8>>) {
-    let (packet_tx, packet_rx) = mpsc::channel(10);
+    let (packet_tx, packet_rx) = mpsc::channel(100);
     let sink = Box::pin(MockSink { tx: packet_tx });
     (sink, packet_rx)
 }
