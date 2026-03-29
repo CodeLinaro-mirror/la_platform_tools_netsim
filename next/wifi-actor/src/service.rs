@@ -73,9 +73,9 @@ impl ActorService for WifiActor {
             device_id: params.device_id,
             kind: ChipKind::WIFI,
             variant: Some(netsim_model::chip::ChipVariant::Wifi(Default::default())),
-            name: params.config.name,
-            manufacturer: params.config.manufacturer,
-            product_name: params.config.product_name,
+            name: Some(params.config.name),
+            manufacturer: Some(params.config.manufacturer),
+            product_name: Some(params.config.product_name),
             ..Default::default()
         };
         self.active_chips.insert(id, chip);
@@ -146,7 +146,7 @@ impl ActorService for WifiActor {
                     let tx_count = self.medium.get_tx_count(id.0);
                     stats.push(netsim_model::stats::NetsimRadioStats {
                         id: id.0,
-                        name: chip.name.clone(),
+                        name: chip.name.clone().unwrap_or_default(),
                         kind: netsim_model::stats::RadioKind::Wifi,
                         tx_count: tx_count as u64,
                         rx_count: rx_count as u64,

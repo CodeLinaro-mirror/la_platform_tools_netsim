@@ -537,9 +537,9 @@ impl DeviceActor {
         entity.device.chips.push(Chip {
             id: chip_id.0,
             kind: ChipKind::from(&chip_config.chip_kind_params),
-            name: chip_name,
-            manufacturer,
-            product_name,
+            name: Some(chip_name),
+            manufacturer: Some(manufacturer),
+            product_name: Some(product_name),
             position: entity.device.position.clone(),
             orientation: entity.device.orientation.clone(),
             device_id: DeviceId(entity.device.id),
