@@ -31,7 +31,7 @@ async fn test_add_chip_creates_new_device() {
     // And the device contains the chip
     let device = world.client.get(device_id).await.unwrap().unwrap();
     assert_eq!(device.chips.len(), 1);
-    assert_eq!(device.chips[0].name, "beacon");
+    assert_eq!(device.chips[0].name, Some("beacon".to_string()));
 }
 
 // Scenario: Add chip to existing device
@@ -81,7 +81,7 @@ async fn test_add_chip_to_existing_device() {
     assert_eq!(device.chips.len(), 2);
 
     // Verify names
-    let names: Vec<String> = device.chips.iter().map(|c| c.name.clone()).collect();
+    let names: Vec<String> = device.chips.iter().filter_map(|c| c.name.clone()).collect();
     assert!(names.contains(&"beacon-1".to_string()));
     assert!(names.contains(&"beacon-2".to_string()));
 }
