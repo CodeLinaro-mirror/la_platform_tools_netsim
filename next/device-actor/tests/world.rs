@@ -273,9 +273,9 @@ impl World {
                 let chip = netsim_model::chip::Chip {
                     id: id.0,
                     kind: netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),
-                    name: params.config.name,
-                    manufacturer: params.config.manufacturer,
-                    product_name: params.config.product_name,
+                    name: Some(params.config.name),
+                    manufacturer: Some(params.config.manufacturer),
+                    product_name: Some(params.config.product_name),
                     device_id: params.device_id,
                     variant: Some(netsim_model::chip::ChipVariant::from(
                         netsim_model::chip::ChipKind::from(&params.config.chip_kind_params),

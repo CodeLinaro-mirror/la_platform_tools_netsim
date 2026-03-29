@@ -84,9 +84,9 @@ impl ActorService for BluetoothActor {
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
-            name,
-            manufacturer: params.config.manufacturer.clone(),
-            product_name: params.config.product_name.clone(),
+            name: Some(name),
+            manufacturer: Some(params.config.manufacturer.clone()),
+            product_name: Some(params.config.product_name.clone()),
             kind: ChipKind::BLUETOOTH,
             variant: Some(ChipVariant::Bluetooth(Default::default())),
             ..Default::default()
@@ -264,7 +264,7 @@ impl ActorService for BluetoothActor {
                         // BLE Stats
                         stats_list.push(netsim_model::stats::NetsimRadioStats {
                             id: id.0,
-                            name: chip.name.clone(),
+                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
                             kind: netsim_model::stats::RadioKind::BluetoothLowEnergy,
                             tx_count: stats.ll_packets_out_ble,
                             rx_count: stats.ll_packets_in_ble,
@@ -276,7 +276,7 @@ impl ActorService for BluetoothActor {
                         // Classic Stats
                         stats_list.push(netsim_model::stats::NetsimRadioStats {
                             id: id.0,
-                            name: chip.name.clone(),
+                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
                             kind: netsim_model::stats::RadioKind::BluetoothClassic,
                             tx_count: stats.ll_packets_out_classic,
                             rx_count: stats.ll_packets_in_classic,

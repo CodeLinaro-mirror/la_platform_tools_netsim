@@ -43,9 +43,9 @@ impl ActorService for UwbActor {
             device_id: params.device_id,
             kind: ChipKind::UWB,
             variant: Some(ChipVariant::Uwb(Default::default())),
-            name: params.config.name,
-            manufacturer: params.config.manufacturer,
-            product_name: params.config.product_name,
+            name: Some(params.config.name),
+            manufacturer: Some(params.config.manufacturer),
+            product_name: Some(params.config.product_name),
             ..Default::default()
         };
 
@@ -164,7 +164,7 @@ impl ActorService for UwbActor {
                     .values()
                     .map(|state| netsim_model::stats::NetsimRadioStats {
                         id: state.chip.id,
-                        name: state.chip.name.clone(),
+                        name: state.chip.name.clone().unwrap_or_default(),
                         kind: netsim_model::stats::RadioKind::Uwb,
                         tx_count: 0,
                         rx_count: 0,

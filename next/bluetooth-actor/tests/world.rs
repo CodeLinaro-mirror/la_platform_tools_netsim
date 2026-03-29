@@ -343,7 +343,7 @@ impl World {
 
     pub async fn then_chip_name_is(&self, id: ChipId, expected: &str) {
         let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
-        assert_eq!(chip.name, expected, "Chip name match");
+        assert_eq!(chip.name.as_deref(), Some(expected), "Chip name match");
     }
 
     pub async fn then_chip_address_is_generated(&self, id: ChipId) {
