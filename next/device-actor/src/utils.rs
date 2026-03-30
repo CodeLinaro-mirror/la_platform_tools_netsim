@@ -236,24 +236,8 @@ pub fn stream_to_proto_stats(
     duration_secs: u64,
     stream_stats: &StreamStats,
 ) -> netsim_proto::stats::NetsimRadioStats {
-    let mut p = netsim_proto::stats::NetsimRadioStats::new();
-    p.set_device_id(device_id);
-    let k_i32: i32 = kind.into();
-    if let Some(k) = netsim_proto::stats::netsim_radio_stats::Kind::from_i32(k_i32) {
-        p.set_kind(k);
-    } else {
-        p.set_kind(netsim_proto::stats::netsim_radio_stats::Kind::UNSPECIFIED);
-    }
-    p.set_duration_secs(duration_secs);
-
-    // Stream RX is Chip TX
-    p.set_tx_count(saturate_cast(stream_stats.rx_packets.load(Ordering::Relaxed)));
-    p.set_tx_bytes(saturate_cast(stream_stats.rx_bytes.load(Ordering::Relaxed)));
-    // Stream TX is Chip RX
-    p.set_rx_count(saturate_cast(stream_stats.tx_packets.load(Ordering::Relaxed)));
-    p.set_rx_bytes(saturate_cast(stream_stats.tx_bytes.load(Ordering::Relaxed)));
-
-    p
+    let model_stats = stream_to_model_stats(device_id, kind, duration_secs, stream_stats);
+    to_proto_stats(model_stats)
 }
 
 /// Creates a Model RadioStats object directly from StreamStats.
@@ -264,17 +248,16 @@ pub fn stream_to_model_stats(
     duration_secs: u64,
     stream_stats: &StreamStats,
 ) -> netsim_model::stats::NetsimRadioStats {
-    netsim_model::stats::NetsimRadioStats {
-        id: device_id,
-        name: "".to_string(), // or derive from kind?
-        kind,
-        duration_secs,
-        tx_count: stream_stats.rx_packets.load(Ordering::Relaxed),
-        rx_count: stream_stats.tx_packets.load(Ordering::Relaxed),
-        tx_bytes: stream_stats.rx_bytes.load(Ordering::Relaxed),
-        rx_bytes: stream_stats.tx_bytes.load(Ordering::Relaxed),
-        invalid_packets: vec![],
-    }
+    let mut stats = netsim_model::stats::NetsimRadioStats::default();
+    stats.id = device_id;
+    stats.name = "".to_string(); // or derive from kind?
+    stats.kind = kind;
+    stats.duration_secs = duration_secs;
+    stats.tx_count = stream_stats.rx_packets.load(Ordering::Relaxed);
+    stats.rx_count = stream_stats.tx_packets.load(Ordering::Relaxed);
+    stats.tx_bytes = stream_stats.rx_bytes.load(Ordering::Relaxed);
+    stats.rx_bytes = stream_stats.tx_bytes.load(Ordering::Relaxed);
+    stats
 }
 
 pub fn to_proto_device_stats(

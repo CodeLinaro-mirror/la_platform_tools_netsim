@@ -1,4 +1,6 @@
 // Rust definitions for statistics related structures
+use std::collections::VecDeque;
+
 use serde::{Deserialize, Serialize};
 
 /// Represents an invalid packet with a reason and description.
@@ -75,9 +77,22 @@ pub struct NetsimRadioStats {
     pub tx_bytes: u64,
     /// Number of bytes received.
     pub rx_bytes: u64,
-    /// List of invalid packets encountered.
-    // TODO: Cap this vector to avoid unbounded growth (e.g. max 50 items).
-    pub invalid_packets: Vec<InvalidPacket>,
+    /// List of invalid packets encountered (capped at 50).
+    /// Use `push_invalid_packet` to add items to enforce the cap.
+    invalid_packets: VecDeque<InvalidPacket>,
+}
+
+impl NetsimRadioStats {
+    /// The maximum number of invalid packets to store.
+    pub const MAX_INVALID_PACKETS: usize = 50;
+
+    /// Adds an invalid packet to the stats, maintaining a maximum of 50 items.
+    pub fn push_invalid_packet(&mut self, packet: InvalidPacket) {
+        if self.invalid_packets.len() >= Self::MAX_INVALID_PACKETS {
+            self.invalid_packets.pop_front();
+        }
+        self.invalid_packets.push_back(packet);
+    }
 }
 
 /// Represents the statistics for a device.
@@ -114,4 +129,27 @@ pub struct NetsimFrontendStats {
     pub patch_capture: u32,
     pub list_capture: u32,
     pub get_capture: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_push_invalid_packet_capping() {
+        let mut stats = NetsimRadioStats::default();
+        let overflow = 10;
+        for i in 0..(NetsimRadioStats::MAX_INVALID_PACKETS + overflow) {
+            stats.push_invalid_packet(InvalidPacket {
+                reason: format!("reason {}", i),
+                description: format!("description {}", i),
+            });
+        }
+        assert_eq!(stats.invalid_packets.len(), NetsimRadioStats::MAX_INVALID_PACKETS);
+        assert_eq!(stats.invalid_packets[0].reason, format!("reason {}", overflow));
+        assert_eq!(
+            stats.invalid_packets[NetsimRadioStats::MAX_INVALID_PACKETS - 1].reason,
+            format!("reason {}", NetsimRadioStats::MAX_INVALID_PACKETS + overflow - 1)
+        );
+    }
 }

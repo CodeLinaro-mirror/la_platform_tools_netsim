@@ -241,28 +241,22 @@ impl ActorService for BluetoothActor {
                 for (id, chip) in chips.iter() {
                     if let Ok(stats) = self.rootcanal.get_stats(id.0.into()) {
                         // BLE Stats
-                        stats_list.push(netsim_model::stats::NetsimRadioStats {
-                            id: id.0,
-                            name: chip.name.clone(),
-                            kind: netsim_model::stats::RadioKind::BluetoothLowEnergy,
-                            tx_count: stats.ll_packets_out_ble,
-                            rx_count: stats.ll_packets_in_ble,
-                            tx_bytes: 0,
-                            rx_bytes: 0,
-                            ..Default::default()
-                        });
+                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        radio_stats.id = id.0;
+                        radio_stats.name = chip.name.clone();
+                        radio_stats.kind = netsim_model::stats::RadioKind::BluetoothLowEnergy;
+                        radio_stats.tx_count = stats.ll_packets_out_ble;
+                        radio_stats.rx_count = stats.ll_packets_in_ble;
+                        stats_list.push(radio_stats);
 
                         // Classic Stats
-                        stats_list.push(netsim_model::stats::NetsimRadioStats {
-                            id: id.0,
-                            name: chip.name.clone(),
-                            kind: netsim_model::stats::RadioKind::BluetoothClassic,
-                            tx_count: stats.ll_packets_out_classic,
-                            rx_count: stats.ll_packets_in_classic,
-                            tx_bytes: 0,
-                            rx_bytes: 0,
-                            ..Default::default()
-                        });
+                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        radio_stats.id = id.0;
+                        radio_stats.name = chip.name.clone();
+                        radio_stats.kind = netsim_model::stats::RadioKind::BluetoothClassic;
+                        radio_stats.tx_count = stats.ll_packets_out_classic;
+                        radio_stats.rx_count = stats.ll_packets_in_classic;
+                        stats_list.push(radio_stats);
                     }
                 }
                 Ok(BluetoothActionResult::Statistics(stats_list.into_boxed_slice()))
