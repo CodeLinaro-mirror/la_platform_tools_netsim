@@ -29,7 +29,7 @@ impl ActorService for CellActor {
         ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = id.ok_or_else(|| ChipError::InvalidArguments("missing chip id".into()))?;
-        let device_id = params.device_id;
+        let device_id = params.chip.device_id;
 
         if self.active_chips.contains_key(&chip_id) {
             return Err(CellError::Chip(ChipError::ChipExists(chip_id.0)));

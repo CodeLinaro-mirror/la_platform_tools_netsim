@@ -160,6 +160,7 @@ mod tests {
         chip2.variant = Some(ChipVariant::Bluetooth(netsim_model::Bluetooth {
             low_energy: netsim_model::Radio { state: Some(false), ..Default::default() },
             classic: Default::default(),
+            ..Default::default()
         }));
 
         chips.lock().unwrap().insert(chip1_id, chip1.clone());

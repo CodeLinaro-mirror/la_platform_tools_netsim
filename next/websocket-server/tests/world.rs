@@ -15,7 +15,7 @@ use bytes::{Bytes, BytesMut};
 use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult, DeviceAddChip, DeviceId};
 use futures::{SinkExt, StreamExt};
-use netsim_model::{ChipId, ChipKindParams, PacketSink, PacketStream};
+use netsim_model::{ChipId, PacketSink, PacketStream};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -256,7 +256,7 @@ impl TestWorld {
     ) {
         let req = &self.clients[client_idx].add_request;
         assert_eq!(req.device_config.name, expected_name);
-        if let ChipKindParams::Bluetooth(ref bt) = req.chip_config.chip_kind_params {
+        if let Some(netsim_model::ChipVariant::Bluetooth(ref bt)) = req.chip.variant {
             assert_eq!(bt.address, expected_address);
         } else {
             panic!("Expected Bluetooth chip params");

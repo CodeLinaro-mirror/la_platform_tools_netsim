@@ -8,9 +8,7 @@ use ap_actor::{ApActor, ApClient};
 use bytes::Bytes;
 use device_actor::DeviceActor;
 use device_api::{DeviceAction, DeviceId};
-use netsim_model::{
-    ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams, Position, WifiCreate,
-};
+use netsim_model::{ChipClient, ChipCreate, ChipId, Position};
 use netsim_packets::{
     ether_type, EthernetFrame, FrameDirection, FrameType, Ieee80211, Ieee80211ToAp, MacAddr,
     MacAddress,
@@ -205,19 +203,22 @@ impl World {
                 Ok::<_, std::io::Error>(tx)
             }));
 
-        let config =
-            ChipConfig::new("wifi", "google", "test", ChipKindParams::Wifi(WifiCreate::default()));
-        let id = ChipId(id_val);
-
-        let params = ChipCreate {
+        let chip = netsim_model::Chip {
+            name: "wifi".to_string(),
+            manufacturer: "google".to_string(),
+            product_name: "test".to_string(),
+            kind: netsim_model::ChipKind::WIFI,
             device_id: DeviceId(1),
-            packet_stream: Some(packet_stream),
-            packet_sink: Some(packet_sink),
-            config,
-            pose: Default::default(),
+            variant: Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi {
+                radio: Default::default(),
+            })),
+            ..Default::default()
         };
 
-        self.wifi_client.create(id, params).await.expect("Failed to create chip");
+        let params =
+            ChipCreate { packet_stream: Some(packet_stream), packet_sink: Some(packet_sink), chip };
+
+        self.wifi_client.create(ChipId(id_val), params).await.expect("Failed to create chip");
         let created_id = id_val;
 
         let src_mac = [0x00, 0x00, 0x00, 0x00, 0x00, created_id as u8];

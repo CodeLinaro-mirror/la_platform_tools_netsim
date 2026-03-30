@@ -486,30 +486,6 @@ async fn test_beacon_stats_persistence() {
         let mut world = World::new_with_stats(path.clone(), None).await;
 
         // Add Beacon Chip
-        let chip_config = netsim_model::ChipConfig {
-            name: "beacon-1".to_string(),
-            manufacturer: "Netsim".to_string(),
-            product_name: "Beacon".to_string(),
-            chip_kind_params: netsim_model::ChipKindParams::Bluetooth(
-                netsim_model::BluetoothCreate {
-                    address: "00:00:00:00:00:01".to_string(),
-                    bt_properties: Default::default(),
-                    mode: netsim_model::BluetoothMode::Beacon(Box::new(
-                        netsim_model::BeaconParams {
-                            ble_beacon: netsim_model::BleBeacon {
-                                address: "00:00:00:00:00:01".to_string(),
-                                settings: Some(netsim_model::AdvertiseSettings {
-                                    scannable: true,
-                                    timeout: 1000,
-                                    ..Default::default()
-                                }),
-                                ..Default::default()
-                            },
-                        },
-                    )),
-                },
-            ),
-        };
 
         let device_create = device_api::DeviceCreate {
             device_config: device_api::DeviceConfig::new(
@@ -518,27 +494,26 @@ async fn test_beacon_stats_persistence() {
                 Pose::default(),
                 false,
             ),
-            chip: chip_config.into(),
+            chip: device_api::DeviceChipCreate {
+                name: "beacon-1".to_string(),
+                manufacturer: "Netsim".to_string(),
+                product_name: "Beacon".to_string(),
+                chip: device_api::ChipCreateVariant::Beacon(netsim_model::BleBeacon {
+                    address: "00:00:00:00:00:01".to_string(),
+                    settings: Some(netsim_model::AdvertiseSettings {
+                        scannable: true,
+                        timeout: 1000,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+            },
         };
 
         let device_id = world.client.create_device(device_create).await.unwrap();
         world.current_device_id = Some(device_id);
 
         // Add Scanner Device
-        let scanner_config = netsim_model::ChipConfig {
-            name: "scanner-1".to_string(),
-            manufacturer: "Netsim".to_string(),
-            product_name: "Scanner".to_string(),
-            chip_kind_params: netsim_model::ChipKindParams::Bluetooth(
-                netsim_model::BluetoothCreate {
-                    address: "00:00:00:00:00:02".to_string(),
-                    bt_properties: Default::default(),
-                    mode: netsim_model::BluetoothMode::Scanner(netsim_model::ScannerParams {
-                        active: false,
-                    }),
-                },
-            ),
-        };
 
         let scanner_create = device_api::DeviceCreate {
             device_config: device_api::DeviceConfig::new(
@@ -547,7 +522,18 @@ async fn test_beacon_stats_persistence() {
                 Pose::default(),
                 false,
             ),
-            chip: scanner_config.into(),
+            chip: device_api::DeviceChipCreate {
+                name: "scanner-1".to_string(),
+                manufacturer: "Netsim".to_string(),
+                product_name: "Scanner".to_string(),
+                chip: device_api::ChipCreateVariant::Bluetooth(netsim_model::BluetoothCreate {
+                    address: "00:00:00:00:00:02".to_string(),
+                    bt_properties: Default::default(),
+                    mode: netsim_model::BluetoothMode::Scanner(netsim_model::ScannerParams {
+                        active: false,
+                    }),
+                }),
+            },
         };
         let scanner_id = world.client.create_device(scanner_create).await.unwrap();
 

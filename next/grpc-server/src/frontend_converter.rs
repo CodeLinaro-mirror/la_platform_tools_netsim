@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use device_api::{
-    Device as ApiDevice, DeviceChipCreate, Orientation as ApiOrientation, PoseUpdate,
-    Position as ApiPosition,
+    ChipCreateVariant, Device as ApiDevice, DeviceChipCreate, Orientation as ApiOrientation,
+    PoseUpdate, Position as ApiPosition,
 };
 use link_api::Link as ApiLink;
 use netsim_model::{
     AdvertiseData, AdvertiseMode, AdvertiseSettings, AdvertiseTxPower, BleBeacon, BluetoothCreate,
     BluetoothMode, BluetoothUpdate, ChipId, ChipKind as ApiChipKind, ChipUpdate, ChipVariantUpdate,
-    DeviceChip, Interval, Radio, RadioUpdate, TxPower,
+    Interval, Radio, RadioUpdate, TxPower,
 };
 use netsim_proto::{
     common::ChipKind as ProtoChipKind,
@@ -120,7 +120,7 @@ pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
             name: c.name,
             manufacturer: c.manufacturer,
             product_name: c.product_name,
-            chip: DeviceChip::Beacon(beacon),
+            chip: ChipCreateVariant::Beacon(beacon),
         })
     } else if c.kind.enum_value_or_default() == ProtoChipKind::BLUETOOTH {
         let bt_create = BluetoothCreate {
@@ -132,7 +132,7 @@ pub fn from_proto_chip_create(c: ChipCreate) -> Option<DeviceChipCreate> {
             name: c.name,
             manufacturer: c.manufacturer,
             product_name: c.product_name,
-            chip: DeviceChip::Bluetooth(bt_create),
+            chip: ChipCreateVariant::Bluetooth(bt_create),
         })
     } else {
         None

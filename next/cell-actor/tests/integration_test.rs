@@ -9,8 +9,8 @@ use device_actor::{DeviceActor, DeviceClient};
 use device_api::{DeviceAction, DeviceActionResult};
 use futures::{channel::mpsc as fmpsc, future::ready, sink::SinkExt};
 use netsim_model::{
-    CellCreate, ChipClient, ChipConfig, ChipCreate, ChipError as NetsimChipError, ChipId,
-    ChipKindParams, ChipVariant, DeviceId, PacketSink, PacketStream,
+    Cell, Chip, ChipClient, ChipCreate, ChipError as NetsimChipError, ChipId, ChipVariant,
+    DeviceId, PacketSink, PacketStream,
 };
 use tokio::sync::mpsc;
 
@@ -56,18 +56,12 @@ impl Drop for TestHarness {
 }
 
 fn create_params(chip_id: ChipId, stream: PacketStream, sink: PacketSink) -> ChipCreate {
-    ChipCreate {
-        packet_stream: Some(stream),
-        packet_sink: Some(sink),
-        config: ChipConfig {
-            name: format!("cell-{}", chip_id),
-            manufacturer: "Netsim".to_string(),
-            product_name: "CellEmulator".to_string(),
-            chip_kind_params: ChipKindParams::Cell(CellCreate::default()),
-        },
-        device_id: DeviceId(1),
-        pose: Default::default(),
-    }
+    let mut chip = Chip::new_test_cell(format!("cell-{}", chip_id));
+    chip.id = chip_id.0;
+    chip.device_id = DeviceId(1);
+    chip.variant = Some(ChipVariant::Cell(Cell { state: "idle".to_string() }));
+
+    ChipCreate { packet_stream: Some(stream), packet_sink: Some(sink), chip }
 }
 
 // T011: Test for CreateChip message

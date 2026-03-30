@@ -6,8 +6,7 @@ use std::collections::HashMap;
 use bytes::Bytes;
 use device_actor::DeviceClient;
 use netsim_model::{
-    Chip, ChipClient, ChipCreate, ChipError, ChipId, ChipKindParams, ClientError, DeviceId,
-    UwbCreate,
+    Chip, ChipClient, ChipCreate, ChipError, ChipId, ChipUpdate, ClientError, DeviceId,
 };
 use netsim_testing::mocks::{mock_sink, mock_stream};
 use pdl_runtime::Packet;
@@ -84,18 +83,11 @@ impl World {
         let id = ChipId(chip_id);
         let (stream, packet_tx) = mock_stream();
         let (sink, packet_rx) = mock_sink();
-        let params = ChipCreate {
-            packet_stream: Some(stream),
-            packet_sink: Some(sink),
-            config: netsim_model::ChipConfig {
-                name: format!("uwb_chip_{id}"),
-                manufacturer: "Netsim".to_string(),
-                product_name: "TestUwb".to_string(),
-                chip_kind_params: ChipKindParams::Uwb(UwbCreate {}),
-            },
-            device_id: DeviceId(1),
-            pose: Default::default(),
-        };
+        let mut chip = Chip::new_test_uwb(format!("uwb_chip_{id}"));
+        chip.id = id.0;
+        chip.device_id = DeviceId(1);
+
+        let params = ChipCreate { packet_stream: Some(stream), packet_sink: Some(sink), chip };
 
         self.client.create(id, params).await?;
 
@@ -198,7 +190,7 @@ impl World {
         self.client
             .update(
                 ChipId(chip_id),
-                netsim_model::ChipUpdate {
+                ChipUpdate {
                     pose: netsim_model::PoseUpdate { position: Some(pos), orientation: None },
                     ..Default::default()
                 },

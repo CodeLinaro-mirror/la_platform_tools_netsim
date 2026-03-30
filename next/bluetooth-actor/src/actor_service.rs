@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::{ActorService, DynContext};
-use netsim_model::{
-    BluetoothMode, Chip, ChipCreate, ChipError, ChipId, ChipKind, ChipKindParams, ChipUpdate,
-    ChipVariant,
-};
+use netsim_model::{BluetoothMode, Chip, ChipCreate, ChipError, ChipId, ChipUpdate, ChipVariant};
 use tracing::{info, warn};
 
 use crate::{
@@ -34,65 +31,66 @@ impl ActorService for BluetoothActor {
     ) -> Result<Self::Id, Self::Error> {
         let chip_id = id.ok_or_else(|| BluetoothError::invalid_arg("missing chip id"))?;
 
-        let config = &params.config;
-        let create_params = match &config.chip_kind_params {
-            ChipKindParams::Bluetooth(p) => p,
-            _ => {
-                return Err(BluetoothError::invalid_arg("Expected Bluetooth network params"));
-            }
+        let variant = params
+            .chip
+            .variant
+            .as_ref()
+            .ok_or_else(|| BluetoothError::invalid_arg("Missing chip variant"))?;
+        let bluetooth = match variant {
+            ChipVariant::Bluetooth(b) => b,
+            _ => return Err(BluetoothError::invalid_arg("Expected Bluetooth variant")),
         };
 
         // Validate Scanner constraints: No PacketStream, Must have PacketSink.
-        if let BluetoothMode::Scanner(_) = &create_params.mode {
+        if let BluetoothMode::Scanner(_) = &bluetooth.mode {
             assert!(params.packet_stream.is_none(), "Scanner chip cannot have a packet stream");
             assert!(params.packet_sink.is_some(), "Scanner chip must have a packet sink");
         }
 
         // Validate Sniffer constraints: No PacketStream, Must have PacketSink.
-        if let BluetoothMode::Sniffer(_) = &create_params.mode {
+        if let BluetoothMode::Sniffer(_) = &bluetooth.mode {
             assert!(params.packet_stream.is_none(), "Sniffer chip cannot have a packet stream");
             assert!(params.packet_sink.is_some(), "Sniffer chip must have a packet sink");
         }
 
         let name =
-            if config.name.is_empty() && matches!(create_params.mode, BluetoothMode::Beacon(_)) {
+            if params.chip.name.is_empty() && matches!(bluetooth.mode, BluetoothMode::Beacon(_)) {
                 let name = crate::beacon_utils::generate_default_name(chip_id.0);
-                self.sync_device_name(params.device_id, name.clone());
+                self.sync_device_name(params.chip.device_id, name.clone());
                 name
             } else {
-                config.name.clone()
+                params.chip.name.clone()
             };
 
-        let raw_address = if create_params.address.is_empty() {
+        let raw_address = if bluetooth.address.is_empty() {
             crate::beacon_utils::generate_legacy_address(chip_id.into())
         } else {
-            create_params.address.clone()
+            bluetooth.address.clone()
         };
 
         let address: rootcanal::Address =
             raw_address.parse().map_err(|_| BluetoothError::invalid_arg("Invalid address"))?;
 
-        let mut mode = create_params.mode.clone();
+        let mut mode = bluetooth.mode.clone();
         if let BluetoothMode::Beacon(ref mut beacon_params) = mode {
             if beacon_params.ble_beacon.address.is_empty() {
                 beacon_params.ble_beacon.address = raw_address;
             }
         }
 
-        let chip = Chip {
-            id: chip_id.0,
-            device_id: params.device_id,
-            name,
-            manufacturer: params.config.manufacturer.clone(),
-            product_name: params.config.product_name.clone(),
-            kind: ChipKind::BLUETOOTH,
-            pose: params.pose,
-            variant: Some(ChipVariant::Bluetooth(netsim_model::Bluetooth {
-                low_energy: netsim_model::Radio { state: Some(true), ..Default::default() },
-                classic: netsim_model::Radio { state: Some(true), ..Default::default() },
-            })),
-            ..Default::default()
-        };
+        let mut chip = params.chip;
+        chip.id = chip_id.0;
+        chip.name = name;
+
+        // Ensure radio states are enabled by default for initial state
+        if let Some(netsim_model::ChipVariant::Bluetooth(ref mut bluetooth)) = chip.variant {
+            if bluetooth.low_energy.state.is_none() {
+                bluetooth.low_energy.state = Some(true);
+            }
+            if bluetooth.classic.state.is_none() {
+                bluetooth.classic.state = Some(true);
+            }
+        }
 
         // 1. Register Stream
         if let Some(stream) = params.packet_stream {

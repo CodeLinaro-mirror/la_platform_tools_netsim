@@ -25,3 +25,9 @@ impl WifiUpdate {
 pub struct WifiCreate {
     // Future Wi-Fi specific properties.
 }
+
+impl From<WifiCreate> for Wifi {
+    fn from(_create: WifiCreate) -> Self {
+        Wifi { radio: crate::chip::Radio::default() }
+    }
+}

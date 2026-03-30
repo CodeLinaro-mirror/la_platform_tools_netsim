@@ -143,11 +143,11 @@ async fn test_add_chip_propagates_position() {
     let mut mock_chip_client = MockChipClient::new();
     mock_chip_client.expect_create().times(1).returning(move |_, params| {
         assert_eq!(
-            params.pose.position, expected_pos,
+            params.chip.pose.position, expected_pos,
             "Passed position should match device position"
         );
         assert_eq!(
-            params.pose.orientation, expected_orient,
+            params.chip.pose.orientation, expected_orient,
             "Passed orientation should match device orientation"
         );
         Ok(())

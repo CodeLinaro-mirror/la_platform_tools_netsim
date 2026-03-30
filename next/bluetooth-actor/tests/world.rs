@@ -8,9 +8,9 @@ use bluetooth_actor::{BluetoothActor, BluetoothClient, BluetoothError};
 use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
 use netsim_model::{
-    AdvertiseSettings, AdvertiseTxPower, BeaconParams, BleBeacon, BluetoothCreate, BluetoothMode,
-    ChipConfig, ChipCreate, ChipId, ChipKindParams, DeviceId, DeviceParams, PacketSink,
-    PacketStream, ScannerParams, TxPower,
+    AdvertiseSettings, AdvertiseTxPower, BeaconParams, BleBeacon, BluetoothMode, Chip, ChipCreate,
+    ChipId, ChipUpdate, ChipVariant, DeviceId, DeviceParams, PacketSink, PacketStream,
+    ScannerParams, TxPower,
 };
 use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
 use netsim_testing::logger;
@@ -89,22 +89,19 @@ impl World {
         // Use two octets for the chip ID to support up to 65535 chips.
         let address = format!("60:70:80:90:{:02X}:{:02X}", (id.0 >> 8) & 0xFF, id.0 & 0xFF);
 
-        let params = ChipCreate {
-            packet_stream,
-            packet_sink,
-            config: ChipConfig::new(
-                name,
-                "netsim",
-                name,
-                ChipKindParams::Bluetooth(BluetoothCreate {
-                    address,
-                    bt_properties: Default::default(),
-                    mode,
-                }),
-            ),
-            device_id,
-            pose: Default::default(),
-        };
+        let mut chip = Chip::new_test_ble(name);
+        chip.id = id.0;
+        chip.device_id = device_id;
+        chip.product_name = name.to_string();
+        chip.variant = Some(ChipVariant::Bluetooth(netsim_model::Bluetooth {
+            low_energy: Default::default(),
+            classic: Default::default(),
+            address,
+            bt_properties: Default::default(),
+            mode,
+        }));
+
+        let params = ChipCreate { packet_stream, packet_sink, chip };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {
             panic!("Failed to create chip {}: {:?}", name, e);
@@ -210,22 +207,18 @@ impl World {
             ble_beacon: BleBeacon { address: "".to_string(), ..Default::default() },
         }));
 
-        let params = ChipCreate {
-            packet_stream: None,
-            packet_sink: None,
-            config: ChipConfig::new(
-                "", // Empty name triggers unique naming
-                "netsim",
-                "",
-                ChipKindParams::Bluetooth(BluetoothCreate {
-                    address: "".to_string(), // Empty address triggers generation
-                    bt_properties: Default::default(),
-                    mode,
-                }),
-            ),
-            device_id: self.device_id,
-            pose: Default::default(),
-        };
+        let mut chip = Chip::new_test_ble("");
+        chip.id = id.0;
+        chip.device_id = self.device_id;
+        chip.variant = Some(ChipVariant::Bluetooth(netsim_model::Bluetooth {
+            low_energy: Default::default(),
+            classic: Default::default(),
+            address: "".to_string(),
+            bt_properties: Default::default(),
+            mode,
+        }));
+
+        let params = ChipCreate { packet_stream: None, packet_sink: None, chip };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {
             panic!("Failed to create default beacon: {:?}", e);
@@ -301,7 +294,7 @@ impl World {
 
     pub async fn when_update_chip_position(&self, name: &str, position: netsim_model::Position) {
         let id = *self.chips.get(name).expect("Chip not found");
-        let update = netsim_model::ChipUpdate {
+        let update = ChipUpdate {
             pose: netsim_model::PoseUpdate { position: Some(position), orientation: None },
             ..Default::default()
         };
@@ -342,7 +335,7 @@ impl World {
 
     pub async fn then_chip_address_is_generated(&self, id: ChipId) {
         let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
-        if let Some(netsim_model::ChipVariant::Bluetooth(_)) = &chip.variant {
+        if let Some(ChipVariant::Bluetooth(_)) = &chip.variant {
             info!("Chip {} exists and is a Bluetooth variant.", id.0);
             // Note: Verification of the generated address via the `Chip` struct
             // is not currently supported by the model, as the
@@ -465,19 +458,5 @@ impl World {
             tokio::time::sleep(duration).await;
         }
         panic!("Chip {name} was not removed after timeout");
-    }
-
-    /// Helper to create a ChipConfig.
-    pub fn create_chip_config(id: ChipId, mode: BluetoothMode) -> ChipConfig {
-        ChipConfig::new(
-            "test_chip",
-            "test_manufacturer",
-            "test_product",
-            ChipKindParams::Bluetooth(BluetoothCreate {
-                address: format!("00:00:00:00:00:{:02x}", id.0),
-                bt_properties: Default::default(),
-                mode,
-            }),
-        )
     }
 }

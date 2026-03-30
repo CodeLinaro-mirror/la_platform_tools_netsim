@@ -66,7 +66,7 @@ pub use crate::chip::MockChipClient;
 pub use crate::client_error::ClientError;
 // From device::api
 pub use crate::device::api::{
-    DeviceChip, DeviceChipCreate, DeviceCreate, DeviceUpdate, ListDeviceResponse, PoseUpdate,
+    ChipCreateVariant, DeviceChipCreate, DeviceCreate, DeviceUpdate, ListDeviceResponse, PoseUpdate,
 };
 // From device.rs
 pub use crate::device::{
@@ -92,9 +92,9 @@ pub use crate::{
     },
     cell::{Cell, CellCreate, ModemAction, RegistrationStatus},
     chip::{
-        chip_kind_to_radio_kind, Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKindParams,
-        ChipRequest, ChipUpdate, ChipVariant, ChipVariantUpdate, PacketSink, PacketStream, Radio,
-        RadioChipClient, RadioUpdate,
+        chip_kind_to_radio_kind, Chip, ChipClient, ChipCreate, ChipId, ChipRequest, ChipUpdate,
+        ChipVariant, ChipVariantUpdate, PacketSink, PacketStream, Radio, RadioChipClient,
+        RadioUpdate,
     },
     chip_error::ChipError,
     uwb::{Uwb, UwbCreate, UwbUpdate},

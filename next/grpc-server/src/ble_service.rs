@@ -8,8 +8,7 @@ use device_actor::DeviceClient;
 use futures::SinkExt;
 use grpcio::{RpcContext, ServerStreamingSink, WriteFlags};
 use netsim_model::{
-    BluetoothCreate, BluetoothMode, ChipConfig, ChipKindParams, DeviceAddChip, DeviceConfig, Pose,
-    Position, ScannerParams, SnifferParams,
+    BluetoothMode, DeviceAddChip, DeviceConfig, Pose, Position, ScannerParams, SnifferParams,
 };
 use netsim_proto::{
     ble_service::{ScanRequest, ScanResponse, SniffRequest, SniffResponse},
@@ -68,15 +67,18 @@ impl BleService for BleServiceImpl {
                 device_info: None,
             };
 
-            let chip_config = ChipConfig {
+            let chip = netsim_model::Chip {
                 name: "BleScanner".to_string(),
                 manufacturer: "Netsim".to_string(),
                 product_name: "Scanner".to_string(),
-                chip_kind_params: ChipKindParams::Bluetooth(BluetoothCreate {
-                    address: "".to_string(), // will be generated
-                    bt_properties: Default::default(),
+                kind: netsim_model::ChipKind::BLUETOOTH,
+                variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
+                    address: "".to_string(),
                     mode: BluetoothMode::Scanner(ScannerParams { active: req.active }),
-                }),
+                    bt_properties: Default::default(),
+                    ..Default::default()
+                })),
+                ..Default::default()
             };
 
             let add_chip = DeviceAddChip {
@@ -84,7 +86,7 @@ impl BleService for BleServiceImpl {
                 packet_stream: None,
                 packet_sink: Some(app_sink),
                 device_config,
-                chip_config,
+                chip,
             };
 
             if let Err(e) = device_client.add_chip(add_chip).await {
@@ -150,15 +152,18 @@ impl BleService for BleServiceImpl {
                 device_info: None,
             };
 
-            let chip_config = ChipConfig {
+            let chip = netsim_model::Chip {
                 name: "BleSniffer".to_string(),
                 manufacturer: "Netsim".to_string(),
                 product_name: "Sniffer".to_string(),
-                chip_kind_params: ChipKindParams::Bluetooth(BluetoothCreate {
-                    address: "".to_string(), // will be generated
-                    bt_properties: Default::default(),
+                kind: netsim_model::ChipKind::BLUETOOTH,
+                variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
+                    address: "".to_string(),
                     mode: BluetoothMode::Sniffer(SnifferParams::default()),
-                }),
+                    bt_properties: Default::default(),
+                    ..Default::default()
+                })),
+                ..Default::default()
             };
 
             let add_chip = DeviceAddChip {
@@ -166,7 +171,7 @@ impl BleService for BleServiceImpl {
                 packet_stream: None,
                 packet_sink: Some(app_sink),
                 device_config,
-                chip_config,
+                chip,
             };
 
             if let Err(e) = device_client.add_chip(add_chip).await {

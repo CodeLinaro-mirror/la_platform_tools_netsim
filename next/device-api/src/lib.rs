@@ -71,11 +71,11 @@
 
 use std::fmt;
 
-use netsim_model::{ChipId, NetsimRadioStats, PacketSink, PacketStream};
 pub use netsim_model::{
-    Device, DeviceAddChip, DeviceChip, DeviceChipCreate, DeviceConfig, DeviceCreate, DeviceId,
-    DeviceUpdate, ListDeviceResponse, Orientation, PoseUpdate, Position,
+    ChipCreateVariant, Device, DeviceAddChip, DeviceChipCreate, DeviceConfig, DeviceCreate,
+    DeviceId, DeviceUpdate, ListDeviceResponse, Orientation, PoseUpdate, Position,
 };
+use netsim_model::{ChipId, NetsimRadioStats, PacketSink, PacketStream};
 use serde::{Deserialize, Serialize};
 
 // Behavioral Contract

@@ -6,10 +6,7 @@ use std::{sync::Arc, time::Duration};
 use actor_framework::ResourceActor;
 use ap_actor::{shared::SharedKeyStore, ApActor, ApClient};
 use device_actor::DeviceClient;
-use netsim_model::{
-    chip::{ChipClient, ChipCreate},
-    ChipId,
-};
+use netsim_model::{ChipClient, ChipCreate, ChipId};
 use slirp_actor::SlirpActor;
 use tokio::{net::UdpSocket, sync::mpsc};
 use wifi_actor::WifiActor;
@@ -77,20 +74,20 @@ async fn test_udp_guest_to_host() {
             Ok::<_, std::io::Error>(tx)
         }));
 
-    let config = netsim_model::chip::ChipConfig::new(
-        "wifi-chip",
-        "google",
-        "test",
-        netsim_model::chip::ChipKindParams::Wifi(netsim_model::chip::WifiCreate::default()),
-    );
-    let chip_id = ChipId(1);
-    let params = ChipCreate {
+    let chip = netsim_model::Chip {
+        name: "wifi-chip".to_string(),
+        manufacturer: "google".to_string(),
+        product_name: "test".to_string(),
+        kind: netsim_model::ChipKind::WIFI,
         device_id: device_api::DeviceId(1),
-        packet_stream: Some(packet_stream),
-        packet_sink: Some(packet_sink),
-        config,
-        pose: Default::default(),
+        variant: Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi {
+            radio: Default::default(),
+        })),
+        ..Default::default()
     };
+
+    let params =
+        ChipCreate { packet_stream: Some(packet_stream), packet_sink: Some(packet_sink), chip };
 
     // Create AP
     println!("Creating AP...");
@@ -98,7 +95,7 @@ async fn test_udp_guest_to_host() {
         ssid: "TestAP".to_string(),
         bssid: netsim_packets::MacAddr::from(HOSTAPD_BSSID),
         channel: 6,
-        hw_mode: netsim_model::chip::WifiMode::G,
+        hw_mode: netsim_model::WifiMode::G,
         wpa_passphrase: None,
     };
     use ap_actor::ApResponse;
@@ -106,7 +103,7 @@ async fn test_udp_guest_to_host() {
     println!("AP Created with ID: {}", id);
     println!("BSSID in KeyStore: {:?}", shared_keys.get_bssid());
 
-    wifi_client.create(chip_id, params).await.expect("Failed to create chip");
+    wifi_client.create(ChipId(1), params).await.expect("Failed to create chip");
     println!("Chip created");
 
     // 3. Setup Host UDP Listener

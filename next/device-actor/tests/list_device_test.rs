@@ -88,6 +88,7 @@ async fn test_create_single_bluetooth_chip() {
         Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
             low_energy: Default::default(),
             classic: Default::default(),
+            ..Default::default()
         }))
     );
 }

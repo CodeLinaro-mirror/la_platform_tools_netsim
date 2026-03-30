@@ -3,7 +3,7 @@
 
 use actor_framework::{ActorService, DynContext};
 use futures::{SinkExt, StreamExt};
-use netsim_model::{Chip, ChipId, ChipKind, ChipVariant, Radio, Wifi};
+use netsim_model::{Chip, ChipId, ChipVariant, Radio, Wifi};
 use tokio::sync::mpsc;
 
 use crate::{
@@ -65,17 +65,8 @@ impl ActorService for WifiActor {
         let mapped_stream = stream.map(move |packet| bytes::Bytes::from(packet));
         ctx.add_stream(id, Box::pin(mapped_stream));
 
-        let chip = Chip {
-            id: id.0,
-            device_id: params.device_id,
-            kind: ChipKind::WIFI,
-            variant: Some(netsim_model::ChipVariant::Wifi(Default::default())),
-            name: params.config.name,
-            manufacturer: params.config.manufacturer,
-            product_name: params.config.product_name,
-            pose: params.pose,
-            ..Default::default()
-        };
+        let mut chip = params.chip;
+        chip.id = id.0;
         self.active_chips.insert(id, chip.clone());
         self.initial_chips.insert(id, chip);
 

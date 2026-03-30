@@ -15,7 +15,7 @@ use netsim_packets::{
 use zerocopy::{IntoBytes, U16};
 
 mod world;
-use ap_actor::netsim_model::chip::WifiMode;
+use ap_actor::netsim_model::WifiMode;
 use world::ApWorld;
 
 fn build_eapol_frame(

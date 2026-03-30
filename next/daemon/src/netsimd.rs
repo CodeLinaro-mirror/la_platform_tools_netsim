@@ -22,9 +22,8 @@ use futures::{SinkExt, StreamExt};
 use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
-    set_if_some, BluetoothCreate, BluetoothMode, CellCreate, ChipClient, ChipConfig, ChipInfo,
-    ChipKind, ChipKindParams, DeviceParams, PacketSink as ApiPacketSink,
-    PacketStream as ApiPacketStream, Pose, UwbCreate, WifiCreate,
+    set_if_some, BluetoothMode, ChipClient, ChipInfo, ChipKind, DeviceParams,
+    PacketSink as ApiPacketSink, PacketStream as ApiPacketStream, Pose,
 };
 use packet_stream::{
     transport::traits::{PacketSink, PacketStream},
@@ -115,26 +114,38 @@ async fn handle_new_connection(
         chip.address = chip.id.clone();
     }
 
-    let chip_kind_params = match ChipKind::from(chip.kind) {
-        ChipKind::BLUETOOTH => ChipKindParams::Bluetooth(BluetoothCreate {
-            address: chip.address.clone(),
-            bt_properties: Default::default(),
-            mode: BluetoothMode::Device(DeviceParams {}),
-        }),
-        ChipKind::UWB => ChipKindParams::Uwb(UwbCreate::default()),
-        ChipKind::WIFI => ChipKindParams::Wifi(WifiCreate::default()),
-        ChipKind::CELLULAR => ChipKindParams::Cell(CellCreate::default()),
+    let chip_variant = match ChipKind::from(chip.kind) {
+        ChipKind::BLUETOOTH => {
+            Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
+                address: chip.address.clone(),
+                bt_properties: Default::default(),
+                mode: BluetoothMode::Device(DeviceParams {}),
+                ..Default::default()
+            }))
+        }
+        ChipKind::UWB => {
+            Some(netsim_model::ChipVariant::Uwb(netsim_model::Uwb { radio: Default::default() }))
+        }
+        ChipKind::WIFI => {
+            Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }))
+        }
+        ChipKind::CELLULAR => {
+            Some(netsim_model::ChipVariant::Cell(netsim_model::Cell { state: "idle".to_string() }))
+        }
         kind => {
             error!("Unsupported chip kind: {:?}", kind);
             return;
         }
     };
 
-    let chip_config = ChipConfig {
+    let chip_instance = netsim_model::Chip {
+        id: 0,
+        kind: ChipKind::from(chip.kind),
         name: chip.name.clone(),
         manufacturer: chip.manufacturer.clone(),
         product_name: chip.product_name.clone(),
-        chip_kind_params,
+        variant: chip_variant,
+        ..Default::default()
     };
 
     // Convert packet_stream types to netsim_model types
@@ -158,7 +169,7 @@ async fn handle_new_connection(
         packet_stream: Some(api_stream),
         packet_sink: Some(api_sink),
         device_config,
-        chip_config,
+        chip: chip_instance,
     };
 
     if let Err(e) = device_client.add_chip(request).await {

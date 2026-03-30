@@ -142,87 +142,17 @@ pub struct ChipCreate {
     pub packet_stream: Option<PacketStream>,
     /// The transport for packet output.
     pub packet_sink: Option<PacketSink>,
-    // TODO: Use Chip instead
-    /// Chip config.
-    pub config: ChipConfig,
-    /// The ID of the device this chip belongs to.
-    pub device_id: DeviceId,
-    /// The initial pose of the chip.
-    pub pose: Pose,
+    /// The standard Chip representation.
+    pub chip: Chip,
 }
 
 impl fmt::Debug for ChipCreate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ChipCreate")
-            .field("config", &self.config)
-            .field("pose", &self.pose)
-            .finish_non_exhaustive()
+        f.debug_struct("ChipCreate").field("chip", &self.chip).finish_non_exhaustive()
     }
-}
-
-// TODO: use Chip instead
-#[derive(Debug, Clone)]
-/// Chip configuration
-pub struct ChipConfig {
-    /// The name of the chip.
-    pub name: String,
-    /// The manufacturer of the chip.
-    pub manufacturer: String,
-    /// The product name of the chip.
-    pub product_name: String,
-    /// Technology-specific parameters.
-    pub chip_kind_params: ChipKindParams,
-}
-
-impl ChipConfig {
-    /// Creates a new `ChipConfig`.
-    pub fn new(
-        name: impl Into<String>,
-        manufacturer: impl Into<String>,
-        product_name: impl Into<String>,
-        chip_kind_params: ChipKindParams,
-    ) -> Self {
-        ChipConfig {
-            name: name.into(),
-            manufacturer: manufacturer.into(),
-            product_name: product_name.into(),
-            chip_kind_params,
-        }
-    }
-}
-
-impl From<&ChipKindParams> for ChipKind {
-    fn from(params: &ChipKindParams) -> Self {
-        match params {
-            ChipKindParams::Bluetooth(bt) => match bt.mode {
-                crate::bluetooth::BluetoothMode::Beacon(_) => ChipKind::BLUETOOTH,
-                _ => ChipKind::BLUETOOTH,
-            },
-            ChipKindParams::Wifi(_) => ChipKind::WIFI,
-            ChipKindParams::Uwb(_) => ChipKind::UWB,
-            ChipKindParams::Cell(_) => ChipKind::CELLULAR,
-            ChipKindParams::Ap(_) => ChipKind::WIFI,
-        }
-    }
-}
-
-/// An enum holding the parameters for a specific chip technology.
-#[derive(Debug, Clone)]
-pub enum ChipKindParams {
-    /// Bluetooth parameters.
-    Bluetooth(crate::bluetooth::BluetoothCreate),
-    /// Wi-Fi parameters.
-    Wifi(crate::wifi::WifiCreate),
-    /// UWB parameters.
-    Uwb(crate::uwb::UwbCreate),
-    /// Cellular parameters.
-    Cell(crate::cell::CellCreate),
-    /// Access Point parameters.
-    Ap(crate::ap::ApCreate),
 }
 
 pub use crate::{
-    ap::{ApCreate, WifiMode},
     bluetooth::{beacon::BleBeacon, BeaconParams, BluetoothCreate, BluetoothMode},
     cell::CellCreate,
     uwb::{Uwb, UwbCreate},
@@ -295,6 +225,42 @@ impl Chip {
     }
 }
 
+#[cfg(any(test, feature = "testing"))]
+impl Chip {
+    pub fn new_test_uwb(name: impl Into<String>) -> Self {
+        Self {
+            kind: ChipKind::UWB,
+            name: name.into(),
+            manufacturer: "Google".into(),
+            product_name: "Netsim UWB".into(),
+            variant: Some(ChipVariant::from(ChipKind::UWB)),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_test_ble(name: impl Into<String>) -> Self {
+        Self {
+            kind: ChipKind::BLUETOOTH,
+            name: name.into(),
+            manufacturer: "Google".into(),
+            product_name: "Netsim BLE".into(),
+            variant: Some(ChipVariant::from(ChipKind::BLUETOOTH)),
+            ..Default::default()
+        }
+    }
+
+    pub fn new_test_cell(name: impl Into<String>) -> Self {
+        Self {
+            kind: ChipKind::CELLULAR,
+            name: name.into(),
+            manufacturer: "Google".into(),
+            product_name: "Netsim Cell".into(),
+            variant: Some(ChipVariant::from(ChipKind::CELLULAR)),
+            ..Default::default()
+        }
+    }
+}
+
 fn default_enabled() -> bool {
     true
 }
@@ -324,6 +290,9 @@ impl From<ChipKind> for ChipVariant {
             ChipKind::BLUETOOTH => ChipVariant::Bluetooth(crate::bluetooth::Bluetooth {
                 low_energy: Default::default(),
                 classic: Default::default(),
+                address: String::new(),
+                bt_properties: Default::default(),
+                mode: crate::chip::BluetoothMode::Device(Default::default()),
             }),
             ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
             ChipKind::UWB => ChipVariant::Uwb(Default::default()),

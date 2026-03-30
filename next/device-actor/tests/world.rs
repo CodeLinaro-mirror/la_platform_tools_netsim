@@ -9,9 +9,7 @@ use std::{
 
 use bytes::Bytes;
 use device_actor::{DeviceActor, DeviceClient};
-use device_api::{
-    DeviceChip, DeviceChipCreate, DeviceConfig, DeviceCreate, DeviceId, DeviceUpdate,
-};
+use device_api::{DeviceChipCreate, DeviceConfig, DeviceCreate, DeviceId, DeviceUpdate};
 use futures::{SinkExt, StreamExt};
 use link_api::MockLinkClient;
 use netsim_model::{
@@ -299,22 +297,11 @@ impl World {
             .with(mockall::predicate::always(), mockall::predicate::always())
             .returning(move |id, params| {
                 let mut chips = chips_create.lock().unwrap();
-                let mut initial_chips = initial_chips_create.lock().unwrap();
-                let chip = netsim_model::Chip {
-                    id: id.0,
-                    kind: netsim_model::ChipKind::from(&params.config.chip_kind_params),
-                    name: params.config.name,
-                    manufacturer: params.config.manufacturer,
-                    product_name: params.config.product_name,
-                    device_id: params.device_id,
-                    pose: params.pose,
-                    variant: Some(netsim_model::ChipVariant::from(netsim_model::ChipKind::from(
-                        &params.config.chip_kind_params,
-                    ))),
-                    enabled: true,
-                    ..Default::default()
-                };
+                let mut chip = params.chip;
+                chip.id = id.0;
+                chip.enabled = true;
                 chips.insert(id, chip.clone());
+                let mut initial_chips = initial_chips_create.lock().unwrap();
                 initial_chips.insert(id, chip);
                 if let Some(mut stream) = params.packet_stream {
                     tokio::spawn(async move { while stream.next().await.is_some() {} });
@@ -470,7 +457,7 @@ impl World {
                 name: "beacon".to_string(),
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
-                chip: DeviceChip::Beacon(Default::default()),
+                chip: device_api::ChipCreateVariant::Beacon(Default::default()),
             },
         };
         self.client.create_device(params).await.unwrap()
@@ -495,7 +482,7 @@ impl World {
                 name: "beacon".to_string(),
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
-                chip: DeviceChip::Beacon(Default::default()),
+                chip: device_api::ChipCreateVariant::Beacon(Default::default()),
             },
         };
         self.client.create_device(params).await.unwrap()
@@ -533,8 +520,9 @@ impl World {
             chip_name.to_string(),
             "".to_string(),
         );
-        params.chip_config.chip_kind_params =
-            netsim_model::ChipKindParams::Wifi(netsim_model::WifiCreate { ..Default::default() });
+        params.chip.kind = netsim_model::ChipKind::WIFI;
+        params.chip.variant =
+            Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }));
         self.client.add_chip(params).await.unwrap()
     }
 
@@ -544,8 +532,9 @@ impl World {
             chip_name.to_string(),
             "".to_string(),
         );
-        params.chip_config.chip_kind_params =
-            netsim_model::ChipKindParams::Uwb(netsim_model::UwbCreate { ..Default::default() });
+        params.chip.kind = netsim_model::ChipKind::UWB;
+        params.chip.variant =
+            Some(netsim_model::ChipVariant::Uwb(netsim_model::Uwb { ..Default::default() }));
         self.client.add_chip(params).await.unwrap()
     }
 
@@ -657,8 +646,9 @@ impl World {
             chip_name.to_string(),
             "".to_string(),
         );
-        params.chip_config.chip_kind_params =
-            netsim_model::ChipKindParams::Wifi(netsim_model::WifiCreate { ..Default::default() });
+        params.chip.kind = netsim_model::ChipKind::WIFI;
+        params.chip.variant =
+            Some(netsim_model::ChipVariant::Wifi(netsim_model::Wifi { radio: Default::default() }));
         params.packet_stream = Some(boxed_stream);
         params.packet_sink = Some(boxed_sink);
 
@@ -701,17 +691,18 @@ impl World {
             packet_stream: None,
             packet_sink: None,
             device_config,
-            chip_config: netsim_model::ChipConfig {
+            chip: netsim_model::Chip {
                 name: chip_name,
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
-                chip_kind_params: netsim_model::ChipKindParams::Bluetooth(
-                    netsim_model::BluetoothCreate {
-                        address: chip_address,
-                        bt_properties: Default::default(),
-                        mode: netsim_model::BluetoothMode::Device(Default::default()),
-                    },
-                ),
+                kind: netsim_model::ChipKind::BLUETOOTH,
+                variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
+                    address: chip_address,
+                    mode: netsim_model::BluetoothMode::Device(Default::default()),
+                    bt_properties: Default::default(),
+                    ..Default::default()
+                })),
+                ..Default::default()
             },
         }
     }
@@ -1094,7 +1085,7 @@ impl World {
                 name: "beacon".to_string(),
                 manufacturer: "Netsim".to_string(),
                 product_name: "NetsimBeacon".to_string(),
-                chip: DeviceChip::Beacon(Default::default()),
+                chip: device_api::ChipCreateVariant::Beacon(Default::default()),
             },
         };
         let id = self.client.create_device(params).await.unwrap();

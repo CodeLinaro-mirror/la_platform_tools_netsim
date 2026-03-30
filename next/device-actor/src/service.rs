@@ -16,8 +16,7 @@ use device_api::{
 };
 use link_api::LinkClient;
 use netsim_model::{
-    Chip, ChipClient, ChipConfig, ChipCreate, ChipId, ChipKind, ChipUpdate, ChipVariant,
-    PacketSink, PacketStream,
+    Chip, ChipClient, ChipCreate, ChipId, ChipKind, ChipUpdate, PacketSink, PacketStream,
 };
 use netsim_proto::protobuf::Message;
 use serde::{Deserialize, Serialize};
@@ -471,16 +470,13 @@ impl DeviceActor {
         link_client: &Box<dyn LinkClient>,
         capture_client: &Option<Arc<dyn CaptureSender>>,
         entity: &mut InternalDevice,
-        chip_config: ChipConfig,
+        mut chip: netsim_model::Chip,
         packet_stream: Option<PacketStream>,
         packet_sink: Option<PacketSink>,
     ) -> Result<ChipId, DeviceError> {
-        let chip_name = if chip_config.name.is_empty() {
-            entity.device.name.clone()
-        } else {
-            chip_config.name.clone()
-        };
-        let manufacturer = if chip_config.manufacturer.is_empty() {
+        let chip_name =
+            if chip.name.is_empty() { entity.device.name.clone() } else { chip.name.clone() };
+        let manufacturer = if chip.manufacturer.is_empty() {
             entity
                 .device
                 .device_info
@@ -488,12 +484,12 @@ impl DeviceActor {
                 .map(|info| info.kind.clone())
                 .unwrap_or("Unknown".to_string())
         } else {
-            chip_config.manufacturer.clone()
+            chip.manufacturer.clone()
         };
-        let product_name = if chip_config.product_name.is_empty() {
+        let product_name = if chip.product_name.is_empty() {
             entity.device.name.clone()
         } else {
-            chip_config.product_name.clone()
+            chip.product_name.clone()
         };
         info!(
             "DeviceActor: AddChip {} ({}, {}) to device {}",
@@ -501,8 +497,7 @@ impl DeviceActor {
         );
 
         let chip_id = ChipId(next_chip_id.fetch_add(1, Ordering::SeqCst));
-        let chip_kind_params = chip_config.chip_kind_params.clone();
-        let chip_kind = ChipKind::from(&chip_kind_params);
+        let chip_kind = chip.kind;
 
         let (packet_stream, packet_sink, stream_stats) = create_capture_and_wrap_streams(
             capture_client.clone(),
@@ -522,32 +517,17 @@ impl DeviceActor {
             DeviceError::ChipKindNotSupported(format!("No chip client for {:?}", chip_kind))
         })?;
 
-        let chip_create_params = ChipCreate {
-            packet_stream,
-            packet_sink,
-            config: netsim_model::ChipConfig {
-                name: chip_name.clone(),
-                manufacturer: manufacturer.clone(),
-                product_name: product_name.clone(),
-                chip_kind_params,
-            },
-            device_id: DeviceId(entity.device.id),
-            pose: entity.device.pose,
-        };
+        chip.id = chip_id.0;
+        chip.name = chip_name;
+        chip.manufacturer = manufacturer;
+        chip.product_name = product_name;
+        chip.device_id = DeviceId(entity.device.id);
+        chip.pose = entity.device.pose;
+
+        let chip_create_params = ChipCreate { packet_stream, packet_sink, chip: chip.clone() };
 
         chip_client.create(chip_id, chip_create_params).await?;
-        entity.device.chips.push(Chip {
-            id: chip_id.0,
-            kind: ChipKind::from(&chip_config.chip_kind_params),
-            name: chip_name,
-            manufacturer,
-            product_name,
-            pose: entity.device.pose,
-            device_id: DeviceId(entity.device.id),
-            variant: Some(ChipVariant::from(chip_kind)),
-            links: vec![],
-            enabled: true,
-        });
+        entity.device.chips.push(chip);
 
         link_client
             .notify_chip_added(chip_id, chip_kind)
@@ -574,14 +554,14 @@ impl DeviceActor {
         });
 
         let mut entity = InternalDevice::from_create_params(id, params.clone())?;
-        let chip_config: ChipConfig = params.chip.into();
+        let chip: netsim_model::Chip = params.chip.into();
         Self::perform_add_chip(
             &self.next_chip_id,
             &self.chip_clients,
             &self.link_client,
             &self.capture_client,
             &mut entity,
-            chip_config,
+            chip,
             packet_stream,
             packet_sink,
         )
@@ -620,7 +600,7 @@ impl DeviceActor {
                 &self.link_client,
                 &self.capture_client,
                 entity,
-                params.chip_config,
+                params.chip,
                 params.packet_stream,
                 params.packet_sink,
             )
@@ -632,7 +612,7 @@ impl DeviceActor {
             Ok(DeviceActionResult::AddChipByGuidSuccess { device_id: id, chip_id })
         } else {
             // Create New Device
-            let chip_create_params = params.chip_config.clone().into();
+            let chip_create_params = params.chip.clone().into();
             let create_params =
                 DeviceCreate { device_config: params.device_config, chip: chip_create_params };
 
@@ -934,15 +914,15 @@ impl ActorService for DeviceActor {
                     return Err(DeviceError::DeviceNotFound(id.to_string()));
                 };
 
-                // Convert API ChipConfig to Model ChipConfig
-                let config: ChipConfig = chip_config.into();
+                // Convert API DeviceChipCreate to Model Chip
+                let chip: netsim_model::Chip = chip_config.into();
                 let chip_id_res = Self::perform_add_chip(
                     &self.next_chip_id,
                     &self.chip_clients,
                     &self.link_client,
                     &self.capture_client,
                     entity,
-                    config,
+                    chip,
                     packet_stream,
                     packet_sink,
                 )

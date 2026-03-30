@@ -8,7 +8,7 @@ use netsim_packets::{
 use zerocopy::FromBytes;
 
 mod world;
-use ap_actor::netsim_model::chip::WifiMode;
+use ap_actor::netsim_model::WifiMode;
 use world::ApWorld;
 
 const DENY_MODE: u8 = 1;

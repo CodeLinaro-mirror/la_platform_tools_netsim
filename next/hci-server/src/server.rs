@@ -5,7 +5,7 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use device_actor::DeviceClient;
 use futures::StreamExt;
-use netsim_model::{BluetoothCreate, BluetoothMode, ChipKindParams, DeviceParams};
+use netsim_model::{BluetoothCreate, BluetoothMode, DeviceParams};
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
@@ -101,11 +101,18 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
         mode: BluetoothMode::Device(DeviceParams {}),
     };
 
-    let chip_config = netsim_model::ChipConfig {
+    let chip = netsim_model::Chip {
         name: name.clone(),
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
-        chip_kind_params: ChipKindParams::Bluetooth(chip_create_params),
+        kind: netsim_model::ChipKind::BLUETOOTH,
+        variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
+            address: chip_create_params.address.clone(),
+            mode: chip_create_params.mode.clone(),
+            bt_properties: chip_create_params.bt_properties.clone(),
+            ..Default::default()
+        })),
+        ..Default::default()
     };
 
     let packet_stream: netsim_model::PacketStream = Box::new(
@@ -133,7 +140,7 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
             builtin: false,
             device_info: None,
         },
-        chip_config,
+        chip,
     };
 
     // 4. Send request to add chip
