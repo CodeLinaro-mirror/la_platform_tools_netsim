@@ -76,9 +76,11 @@ impl ActorService for WifiActor {
             name: params.config.name,
             manufacturer: params.config.manufacturer,
             product_name: params.config.product_name,
+            pose: params.pose,
             ..Default::default()
         };
-        self.active_chips.insert(id, chip);
+        self.active_chips.insert(id, chip.clone());
+        self.initial_chips.insert(id, chip);
 
         // Notify Medium about new chip
         self.medium.add(id.0);
@@ -163,10 +165,15 @@ impl ActorService for WifiActor {
             }
             WifiReq::Reset { id } => {
                 self.medium.reset(id.0);
-                if let Some(chip) = self.active_chips.get_mut(&id) {
-                    chip.enabled = true;
-                }
-                Ok(WifiResponse::Ok)
+                let initial_chip = self.initial_chips.get(&id).ok_or_else(|| {
+                    WifiError::Internal(Box::from(format!("Initial chip not found: {}", id)))
+                })?;
+                let chip = self.active_chips.get_mut(&id).ok_or_else(|| {
+                    WifiError::Internal(Box::from(format!("Chip not found: {}", id)))
+                })?;
+                *chip = initial_chip.clone();
+                let chip = chip.clone();
+                Ok(WifiResponse::Chip(chip))
             }
         }
     }

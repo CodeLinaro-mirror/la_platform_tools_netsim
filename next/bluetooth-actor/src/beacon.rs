@@ -11,7 +11,7 @@
 //! `BeaconParams` into the appropriate HCI commands for full configuration.
 
 use netsim_model::{
-    chip::{BeaconParams, Chip, ChipId},
+    chip::{BeaconParams, ChipId},
     chip_error::ChipError,
 };
 use netsim_packets::hci;
@@ -44,7 +44,7 @@ pub fn create(
     chip_id: ChipId,
     params: &BeaconParams,
     device_name: &String,
-) -> Result<Chip, ChipError> {
+) -> Result<(), ChipError> {
     // Reset the controller first.
     send_hci_command(rootcanal, chip_id, hci::Reset {})?;
 
@@ -121,5 +121,5 @@ pub fn create(
         hci::LeSetAdvertisingEnable { advertising_enable: hci::Enable::ENABLED },
     )?;
 
-    Ok(Chip::default())
+    Ok(())
 }
