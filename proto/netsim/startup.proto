@@ -67,6 +67,8 @@ message ChipInfo {
   Chip chip = 2;
   // additional device information
   DeviceInfo device_info = 3;
+  // True if this connection is a result of a host reconnect event.
+  bool is_host_reconnect = 4;
 }
 
 message DeviceInfo {
