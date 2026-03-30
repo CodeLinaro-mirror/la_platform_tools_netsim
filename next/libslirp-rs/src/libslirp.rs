@@ -340,7 +340,7 @@ unsafe fn callback_context_from_raw(opaque: *mut c_void) -> ManuallyDrop<Box<Cal
         // * `opaque` is a valid pointer to a `CallbackContext` originally passed to the slirp API.
         //   The `callback_context_from_raw` function itself is marked `unsafe` to enforce this
         //   precondition on its callers.
-        unsafe { Box::from_raw(opaque as *mut CallbackContext) },
+        unsafe { Box::from_raw(opaque.cast::<CallbackContext>()) },
     )
 }
 
@@ -861,7 +861,7 @@ unsafe extern "C" fn send_packet_cb(
 impl CallbackContext {
     fn send_packet(&self, buf: *const c_void, len: usize) -> libslirp_sys::slirp_ssize_t {
         // Safety: The caller ensures that `buf` is contains `len` bytes of data.
-        let c_slice = unsafe { std::slice::from_raw_parts(buf as *const u8, len) };
+        let c_slice = unsafe { std::slice::from_raw_parts(buf.cast::<u8>(), len) };
         // Bytes::from(slice: &'static [u8]) creates a Bytes object without copying the
         // data. To own its data, copy &'static [u8] to Vec<u8> before
         // converting to Bytes.

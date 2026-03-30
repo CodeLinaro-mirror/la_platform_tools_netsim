@@ -272,7 +272,7 @@ impl ApWorld {
             match tokio::time::timeout(Duration::from_secs(2), handle).await {
                 Ok(Ok(_)) => {} // Success
                 Ok(Err(e)) => panic!("Actor joined with error: {:?}", e),
-                Err(_) => panic!("Actor did not shut down in time"),
+                Err(e) => panic!("Actor did not shut down in time: {e}"),
             }
         }
     }

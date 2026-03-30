@@ -113,18 +113,18 @@ pub fn redirect_std_stream(instance_name: &str) -> Result<(), NulError> {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     let stdout_fd = std::io::stdout().as_raw_fd();
     #[cfg(target_os = "windows")]
-    // SAFETY: This operation allows opening a runtime file descriptor in Windows.
-    // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
     let stdout_fd =
+        // SAFETY: This operation allows opening a runtime file descriptor in Windows.
+        // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
         unsafe { libc::open_osfhandle(std::io::stdout().as_raw_handle() as isize, libc::O_RDWR) };
 
     // Obtain the raw file descriptors for stderr.
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     let stderr_fd = std::io::stderr().as_raw_fd();
     #[cfg(target_os = "windows")]
-    // SAFETY: This operation allows opening a runtime file descriptor in Windows.
-    // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
     let stderr_fd =
+        // SAFETY: This operation allows opening a runtime file descriptor in Windows.
+        // This is necessary to translate the RawHandle as a FileDescriptor to redirect streams.
         unsafe { libc::open_osfhandle(std::io::stderr().as_raw_handle() as isize, libc::O_RDWR) };
 
     // SAFETY: These operations allow redirection of stdout and stderr stream to a
