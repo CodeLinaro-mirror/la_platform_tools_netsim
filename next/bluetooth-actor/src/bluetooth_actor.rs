@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use client::DeviceClient;
+use device_actor::DeviceClient;
 use netsim_model::chip::{Chip, ChipId};
 use rootcanal::{Callbacks as RootcanalCallbacks, Phy, Rootcanal};
 

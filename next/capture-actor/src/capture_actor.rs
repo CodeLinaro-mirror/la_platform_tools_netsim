@@ -23,12 +23,21 @@ pub struct CaptureActor {
 }
 
 impl CaptureActor {
-    pub fn new(default_capture_enabled: bool) -> Self {
+    pub fn new(default_capture_enabled: bool, capture_dir: Option<PathBuf>) -> Self {
         Self {
             writers: HashMap::new(),
             default_capture_enabled,
-            capture_dir: None,
+            capture_dir,
             entities: HashMap::new(),
+        }
+    }
+
+    /// Calls [CaptureWriter::flush] on all active writers.
+    pub(super) async fn flush_writers(&mut self) {
+        for (id, writer) in &mut self.writers {
+            if let Err(err) = writer.flush().await {
+                log::warn!("Failed to flush writer for chip {id}: {err}");
+            }
         }
     }
 }

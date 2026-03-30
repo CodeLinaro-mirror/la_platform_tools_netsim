@@ -26,11 +26,7 @@ netsim_rust_library(
     crate_name = "device_actor",
     crate_root = "src/lib.rs",
     edition = "2021",
-    proc_macro_deps = [
-        "@async-trait",
-    ],
     test_deps = [
-        "//next/client:testing",
         "@mockall",
         "@serde_json",
         "@tokio-stream",
