@@ -103,6 +103,8 @@ pub enum DeviceAction {
     AddChipByGuid {
         params: DeviceAddChip,
     },
+    /// Deletes an internal device by ID.
+    DeleteDevice(DeviceId),
     /// Triggers a persistence of the current statistics to disk.
     /// This is primarily used internally by the actor for periodic saves
     /// and lifecycle events, but can be invoked externally if needed.
@@ -127,6 +129,9 @@ impl fmt::Debug for DeviceAction {
                 f.debug_struct("AddChipByGuid").field("params", params).finish()
             }
             DeviceAction::SaveStats => write!(f, "SaveStats"),
+            DeviceAction::DeleteDevice(device_id) => {
+                f.debug_tuple("DeleteDevice").field(device_id).finish()
+            }
         }
     }
 }

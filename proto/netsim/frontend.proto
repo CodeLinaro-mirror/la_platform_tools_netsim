@@ -39,7 +39,13 @@ service FrontendService {
   rpc CreateDevice(CreateDeviceRequest) returns (CreateDeviceResponse);
 
   // Delete a builtin chip. Implicitly deletes devices which contain no chips.
-  rpc DeleteChip(DeleteChipRequest) returns (google.protobuf.Empty);
+  // Deprecated: Use DeleteDevice instead.
+  rpc DeleteChip(DeleteChipRequest) returns (google.protobuf.Empty) {
+    option deprecated = true;
+  }
+
+  // Delete a builtin device.
+  rpc DeleteDevice(DeleteDeviceRequest) returns (google.protobuf.Empty);
 
   // Patch a device
   rpc PatchDevice(PatchDeviceRequest) returns (google.protobuf.Empty);
@@ -103,12 +109,20 @@ message CreateDeviceResponse {
   netsim.model.Device device = 1;
 }
 
+// Request of DeleteChip.
+//
+// Deprecated: Use DeleteDevice instead.
+message DeleteChipRequest {
+  // Device Identifier
+  uint32 id = 2 [deprecated = true];
+}
+
 // Request of DeleteDevice.
 //
 // DeleteDevice is only used for built-in device.
-message DeleteChipRequest {
+message DeleteDeviceRequest {
   // Device Identifier
-  uint32 id = 2;
+  uint32 id = 1;
 }
 
 // Request of PatchDevice.

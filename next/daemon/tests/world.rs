@@ -7,7 +7,7 @@ use grpcio::{ChannelBuilder, EnvBuilder};
 use netsim_proto::{
     access_point_grpc::AccessPointServiceClient,
     common::ChipKind,
-    frontend::{CreateDeviceRequest, DeleteChipRequest},
+    frontend::{CreateDeviceRequest, DeleteChipRequest, DeleteDeviceRequest},
     frontend_grpc::FrontendServiceClient,
     model::{ChipCreate, DeviceCreate},
     packet_streamer_grpc::PacketStreamerClient,
@@ -144,6 +144,13 @@ impl World {
         resp.device.id
     }
 
+    pub async fn when_delete_device(&mut self, device_id: u32) {
+        let client = self.ensure_frontend_client();
+        let mut req = DeleteDeviceRequest::new();
+        req.id = device_id;
+        client.delete_device_async(&req).expect("DeleteDevice failed").await.expect("RPC failed");
+    }
+
     /// When I list access points
     pub async fn when_list_access_points(
         &mut self,
@@ -168,11 +175,11 @@ impl World {
         resp.devices
     }
 
-    /// When I delete a chip (device)
-    pub async fn when_delete_chip(&mut self, device_id: u32) {
+    /// When I delete a chip
+    pub async fn when_delete_chip(&mut self, chip_id: u32) {
         let client = self.ensure_frontend_client();
         let mut req = DeleteChipRequest::new();
-        req.id = device_id;
+        req.id = chip_id;
         client.delete_chip_async(&req).expect("DeleteChip failed").await.expect("RPC failed");
     }
 

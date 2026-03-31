@@ -127,6 +127,7 @@ impl World {
                 device_client,
                 shared_keys.clone(),
                 mock_clock.clone(),
+                false,
             )
         } else {
             WifiActor::new(
@@ -136,6 +137,7 @@ impl World {
                 None,
                 shared_keys.clone(),
                 mock_clock.clone(),
+                false,
             )
         };
 

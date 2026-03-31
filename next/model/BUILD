@@ -25,6 +25,7 @@ NETSIM_API_DEPS = [
     "@thiserror",
     "@tokio",
     "@tokio-stream",
+    "@tracing",
 ]
 
 netsim_rust_library(
