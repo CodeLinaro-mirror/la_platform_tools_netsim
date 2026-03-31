@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use netsim_packets::netlink::{nl80211::attr_id, NlAttrHdr};
 use zerocopy::IntoBytes;

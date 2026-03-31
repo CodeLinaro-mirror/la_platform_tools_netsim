@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{steps::*, world::World};
 
 const PDU_HEX: &str = "0011000B915155255155F40000AA01F0";

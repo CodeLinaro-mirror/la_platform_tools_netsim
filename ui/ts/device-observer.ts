@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 import {Capture, Chip, Chip_Radio, Device as ProtoDevice,} from './netsim/model.js';
 
 // URL for netsim

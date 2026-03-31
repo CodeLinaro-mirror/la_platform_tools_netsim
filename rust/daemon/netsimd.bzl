@@ -1,3 +1,6 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
 """Provides a wrapper for rust_library and rust_static_library for netsimd on different platforms."""
 
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_static_library")

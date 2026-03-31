@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Modem Simulator Client Logic
 //!
 //! This module implements the "client" personality of the `modem_simulator`

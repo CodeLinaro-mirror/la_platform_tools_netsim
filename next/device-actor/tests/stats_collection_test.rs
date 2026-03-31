@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 // Scenario: Radio stats are collected from transport (DeviceActor)
 //   Given a running Device Actor
 //   And a device with a transport stream

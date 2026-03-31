@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 const HCI_EVENT_PACKET: u8 = 0x04;
 const HCI_LE_META_EVENT: u8 = 0x3E;
 const HCI_LE_ADVERTISING_REPORT: u8 = 0x02;

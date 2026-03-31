@@ -1,4 +1,5 @@
 // Copyright 2022 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Command Line Interface for Netsim
 
@@ -217,10 +218,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use netsim_proto::{
-        frontend::ListDeviceResponse,
-        model::{Chip as ChipProto, Device as DeviceProto},
-    };
+    use netsim_proto::{frontend::ListDeviceResponse, model::Device as DeviceProto};
 
     use crate::{args::BeaconRemove, find_id_for_remove};
 

@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! `packets` is a crate for zero-copy parsing and handling of network packets.
 //!

@@ -1,4 +1,5 @@
 // Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use zerocopy::{
     byteorder::LittleEndian, FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16, U64,

@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Netsim Test Orchestrator
 //!
 //! This module implements the central Control Plane for `ntest`. It manages the

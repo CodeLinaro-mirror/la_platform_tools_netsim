@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use netsim_packets::{ethernet::MacAddr, ieee80211::management_subtype};
 use tracing::info;

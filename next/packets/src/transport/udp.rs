@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Defines the UDP (User Datagram Protocol) header using `zerocopy`.
 

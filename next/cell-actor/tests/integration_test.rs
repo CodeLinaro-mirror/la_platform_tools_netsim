@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 // next/cell-actor/tests/integration_test.rs
 use std::{
     io::{Error as IoError, ErrorKind},

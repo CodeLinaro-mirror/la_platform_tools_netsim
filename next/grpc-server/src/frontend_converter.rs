@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use device_api::{
     api::{Chip, DeviceChipCreate, PoseUpdate},
     Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition,

@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use bytes::Bytes;
 use netsim_packets::{ieee80211::Ieee80211, netlink::hwsim_frame::HwsimFrame};
 

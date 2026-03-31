@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 // src/pdu.rs
 
 // Represents the fixed-size header of a Command APDU (ISO/IEC 7816-4).

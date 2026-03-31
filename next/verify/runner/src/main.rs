@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! Command-line tool for running Netsim integration tests.
 
 use clap::{Parser, Subcommand};

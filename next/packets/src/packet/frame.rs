@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! This module provides a simplified interface for parsing a byte slice
 //! into a structured `Packet` object. It handles the logic of identifying

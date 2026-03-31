@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Defines structures for representing Ethernet II frames using `zerocopy` for
 //! zero-copy parsing.

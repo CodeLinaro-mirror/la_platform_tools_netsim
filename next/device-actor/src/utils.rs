@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Device Actor Utilities
 //!
 //! This module provides utility functions for the device actor,

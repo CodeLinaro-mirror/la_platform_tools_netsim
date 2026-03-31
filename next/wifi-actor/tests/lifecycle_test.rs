@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use device_api::DeviceAction;
 use netsim_model::chip::{ChipClient, ChipId};
 use wifi_actor::WifiClient;

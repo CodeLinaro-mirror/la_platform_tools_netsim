@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # ActorLifecycle Trait
 //!
 //! The `ActorLifecycle` trait defines the contract for an actor's lifecycle

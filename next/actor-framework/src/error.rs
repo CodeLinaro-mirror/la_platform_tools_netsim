@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Framework Errors
 //!
 //! This module defines the common error types used throughout the actor
