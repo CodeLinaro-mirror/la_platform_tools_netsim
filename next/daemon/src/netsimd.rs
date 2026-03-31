@@ -18,7 +18,7 @@ use common::{
 };
 use device_actor::DeviceClient;
 use device_api::{DeviceAddChip, DeviceConfig};
-use futures::{SinkExt, StreamExt};
+use futures::{pin_mut, FutureExt, SinkExt, StreamExt};
 use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
@@ -31,7 +31,11 @@ use packet_stream::{
 };
 #[cfg(not(feature = "cuttlefish"))]
 use slirp_actor::SlirpClient;
-use tokio::{sync::mpsc, task::JoinSet};
+use tokio::{
+    signal::{self},
+    sync::mpsc,
+    task::JoinSet,
+};
 use tracing::{error, info, warn};
 
 use crate::{
@@ -682,6 +686,9 @@ impl NetsimDaemon {
     pub async fn run_daemon(mut self) -> RunResult {
         info!("Netsimd started {}", if self.args.no_shutdown { "--no-shutdown" } else { "" });
 
+        let shutdown_signal = shutdown_signal();
+        pin_mut!(shutdown_signal);
+
         loop {
             tokio::select! {
                 // Branch 1: Handle incoming gRPC/UDS streams (New Clients)
@@ -716,10 +723,80 @@ impl NetsimDaemon {
                         break;
                     }
                 }
+                // Branch 4: Graceful shutdown
+                () = &mut shutdown_signal => {
+                    info!("Shutting down gracefully...");
+                    self.shutdown_actors().await;
+                    break;
+                }
             }
         }
         info!("NetsimDaemon main loop exited.");
         RunResult::ExitedNormally
+    }
+}
+
+/// Listens for process shutdown signals to enable graceful termination.
+///
+/// - On Unix: listens for `SIGINT` (Ctrl+C) and `SIGTERM`.
+/// - On Windows: listens for Ctrl+C and `CTRL_CLOSE_EVENT`.
+///
+/// If it fails to listen for a signal, that error is logged and ignored.
+async fn shutdown_signal() {
+    let ctrl_c = signal::ctrl_c().fuse();
+    pin_mut!(ctrl_c);
+
+    let mut terminate = {
+        #[cfg(unix)]
+        {
+            match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+                Ok(sig) => Some(sig),
+                Err(err) => {
+                    warn!("Failed to listen for terminate signal: {err}");
+                    None
+                }
+            }
+        }
+        #[cfg(target_os = "windows")]
+        {
+            match signal::windows::ctrl_close() {
+                Ok(sig) => Some(sig),
+                Err(err) => {
+                    warn!("Failed to listen for ctrl_close signal: {err}");
+                    None
+                }
+            }
+        }
+        #[cfg(not(any(unix, target_os = "windows")))]
+        {
+            None
+        }
+    };
+    let terminate_fut = async {
+        if let Some(ref mut sig) = terminate {
+            sig.recv().await;
+        } else {
+            // Signal failed to init or unsupported platform
+            futures::future::pending::<Option<()>>().await;
+        }
+    };
+    pin_mut!(terminate_fut);
+
+    loop {
+        tokio::select! {
+            res = &mut ctrl_c => {
+                if let Err(err) = res {
+                    warn!("Failed to listen for ctrl+c signal: {err}");
+                } else {
+                    info!("Ctrl+C received");
+                    break;
+                }
+            }
+            _ = &mut terminate_fut => {
+                info!("Termination signal received");
+                break;
+            }
+        }
     }
 }
 
