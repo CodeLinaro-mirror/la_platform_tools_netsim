@@ -41,10 +41,13 @@ use tracing::{error, info, warn};
 
 use crate::{
     args::Args,
-    ini_file::{IniFile, IniFileAccess, IniFileGuard, NetsimConfig},
+    ini_file::{IniFile, IniFileAccess, IniFileInitialized, IniFileUninitialized, NetsimConfig},
     logger,
     version::get_version,
 };
+
+const MAX_INIT_RETRIES: i32 = 20;
+const RETRY_DELAY: Duration = Duration::from_millis(100);
 
 #[derive(Debug, PartialEq)]
 pub enum RunResult {
@@ -58,7 +61,7 @@ fn init_error<E: std::fmt::Display>(e: E) -> RunResult {
 
 #[derive(Debug)]
 pub enum StartUpMode {
-    Owner(NetsimDaemon, IniFileGuard),
+    Owner(NetsimDaemon, IniFileInitialized),
     Client(NetsimConfig),
 }
 
@@ -334,25 +337,36 @@ impl NetsimDaemon {
             std::env::consts::ARCH
         );
 
-        let ini_file = IniFile::new_for_dir(discovery_dir).map_err(init_error)?;
+        let mut attempts = 0;
 
-        // Attempt to acquire the singleton lock for the netsim daemon.
-        // The lock is managed by direct file locking on the netsim.ini file.
-        match ini_file.try_acquire().map_err(init_error)? {
-            // This instance is the Writer (the primary daemon).
-            IniFileAccess::Writer(ini_guard) => {
-                Self::initialize_primary_daemon(ini_guard, args).await
-            }
-            // This instance is a Reader, another daemon is already running.
-            IniFileAccess::Reader(config) => {
-                info!("Lock held by another process. Reading config: {:?}", config);
-                Ok(StartUpMode::Client(config))
+        loop {
+            let ini_file = IniFile::new_for_dir(discovery_dir.clone()).map_err(init_error)?;
+
+            // Attempt to acquire the singleton lock for the netsim daemon.
+            // The lock is managed by direct file locking on the netsim.ini file.
+            match ini_file.try_acquire().map_err(init_error)? {
+                // This instance is the Writer (the primary daemon).
+                IniFileAccess::Writer(uninitialized_guard) => {
+                    return Self::initialize_primary_daemon(uninitialized_guard, args).await;
+                }
+                // This instance is a Reader, another daemon is already running.
+                IniFileAccess::Reader(config) => {
+                    info!("Lock held by another process. Reading config: {:?}", config);
+                    return Ok(StartUpMode::Client(config));
+                }
+                IniFileAccess::Initializing => {
+                    if attempts >= MAX_INIT_RETRIES {
+                        return Err(init_error("Timed out waiting for daemon to initialize"));
+                    }
+                    attempts += 1;
+                    tokio::time::sleep(RETRY_DELAY).await;
+                }
             }
         }
     }
 
     async fn initialize_primary_daemon(
-        mut ini_guard: IniFileGuard,
+        ini_guard: IniFileUninitialized,
         args: Args,
     ) -> Result<StartUpMode, RunResult> {
         info!("Acquired lock (Owner)");
@@ -433,8 +447,8 @@ impl NetsimDaemon {
 
         // Even if stale file removal failed, we can proceed as ini_guard.write will
         // overwrite.
-        ini_guard.write(&ini_data).map_err(init_error)?;
-        info!("Wrote to INI file {}", ini_guard.path().display());
+        let initialized_guard = ini_guard.write(&ini_data).map_err(init_error)?;
+        info!("Wrote to INI file {}", initialized_guard.path().display());
 
         // Setup Bluetooth Server
         let (bt_runner, bt_client) = bluetooth_actor::new();
@@ -573,7 +587,7 @@ impl NetsimDaemon {
                 slirp_client: Some(slirp_client.clone()),
                 chip_clients: daemon_chip_clients,
             },
-            ini_guard,
+            initialized_guard,
         ))
     }
 

@@ -44,7 +44,7 @@ pub struct World {
 
     pub grpc_port: u16,
     _temp_dir: PathBuf,
-    _ini_guard: Option<daemon::ini_file::IniFileGuard>,
+    _ini_guard: Option<daemon::ini_file::IniFileInitialized>,
 }
 
 impl Drop for World {
