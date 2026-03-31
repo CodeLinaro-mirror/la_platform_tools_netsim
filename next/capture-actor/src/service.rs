@@ -7,14 +7,13 @@ use std::{
 };
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use capture_api::{CaptureAction, CaptureActionResult, CaptureCreate, CaptureInfo};
 use netsim_model::chip::{ChipId, ChipKind};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     bt_pcap::BluetoothH4Writer, capture_actor::CaptureActor, error::CaptureError,
-    writer::CaptureWriter,
+    uwb_pcap::UwbPcapWriter, writer::CaptureWriter,
 };
 
 /// Entity representing a packet capture for a specific chip.
@@ -31,6 +30,10 @@ pub(crate) struct InternalCaptureInfo {
     /// without locking the actor.
     #[serde(skip)]
     pub enabled_flag: Arc<AtomicBool>,
+    /// Used to suppress logs for calls to [CaptureWriter::write_packet] that
+    /// fail.
+    #[serde(skip)]
+    has_warned_on_write: bool,
 }
 
 impl InternalCaptureInfo {
@@ -40,11 +43,12 @@ impl InternalCaptureInfo {
                 chip_id: id,
                 chip_kind: params.chip_kind,
                 device_name: params.device_name,
-                enabled: params.default_enabled,
+                enabled: params.enabled_flag.load(Ordering::SeqCst),
                 records_written: 0,
                 bytes_written: 0,
             },
             enabled_flag: params.enabled_flag,
+            has_warned_on_write: false,
         })
     }
 }
@@ -55,9 +59,6 @@ impl CaptureActor {
         entity: &mut InternalCaptureInfo,
         ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
-        // Register the enabled flag in the context so streams can access it.
-        self.flags.insert(entity.info.chip_id, entity.enabled_flag.clone());
-
         // If enabled by default (either via params or context), set up the writer
         if entity.info.enabled || self.default_capture_enabled {
             entity.info.enabled = true;
@@ -73,25 +74,16 @@ impl CaptureActor {
         enabled: bool,
         _ctx: &mut DynContext<Self>,
     ) -> Result<(), CaptureError> {
-        if entity.info.enabled == enabled {
-            // Even if enabled matches, we might need to create writer if it is missing
-            // (e.g. from create flow)
-            if enabled && !self.writers.contains_key(&entity.info.chip_id) {
-                // proceed to creation
-            } else {
-                return Ok(());
-            }
+        if entity.info.enabled != enabled {
+            entity.info.enabled = enabled;
+            entity.enabled_flag.store(enabled, Ordering::SeqCst);
         }
-        entity.info.enabled = enabled; // Update the serializable field
-        entity.enabled_flag.store(enabled, Ordering::SeqCst); // Update the atomic flag
 
         if entity.info.enabled {
             // If enabling, create a writer if one does not exist.
             if !self.writers.contains_key(&entity.info.chip_id) {
                 let writer = self.create_writer(entity).await?;
                 self.writers.insert(entity.info.chip_id, writer);
-                // Updating the flags map with the new writer's flag.
-                self.flags.insert(entity.info.chip_id, entity.enabled_flag.clone());
             }
         } else {
             // Disable capture: remove the writer to close the file
@@ -107,7 +99,6 @@ impl CaptureActor {
     ) -> Result<(), CaptureError> {
         // Clean up resources when the entity is deleted.
         self.writers.remove(&entity.info.chip_id);
-        self.flags.remove(&entity.info.chip_id);
         Ok(())
     }
 
@@ -133,16 +124,16 @@ impl CaptureActor {
             }
             path.join(&filename)
         };
+        log::info!("Creating capture file: {}", filepath.display());
         let writer: Box<dyn CaptureWriter> = match entity.info.chip_kind {
-            ChipKind::BLUETOOTH => {
-                log::info!("Creating capture file: {}", filepath.display());
-                Box::new(BluetoothH4Writer::new(&filepath)?)
-            }
-            _ => {
-                // Fallback
-                log::info!("Creating capture file: {}", filepath.display());
-                Box::new(BluetoothH4Writer::new(&filepath)?)
-            }
+            ChipKind::BLUETOOTH => BluetoothH4Writer::new(&filepath).await?,
+            ChipKind::UWB => UwbPcapWriter::new(&filepath).await?,
+            // Fallback
+            ChipKind::UNSPECIFIED
+            | ChipKind::WIFI
+            | ChipKind::AP
+            | ChipKind::NFC
+            | ChipKind::CELLULAR => BluetoothH4Writer::new(&filepath).await?,
         };
         Ok(writer)
     }
@@ -171,8 +162,14 @@ impl CaptureActor {
                 if entity.info.enabled && entity.info.chip_id == chip_id {
                     let writer = self.writers.get_mut(&chip_id);
                     if let Some(writer) = writer {
-                        // Ignore errors on write
-                        let _ = writer.write_packet(SystemTime::now(), direction, bytes);
+                        if let Err(err) =
+                            writer.write_packet(SystemTime::now(), direction, bytes).await
+                        {
+                            if !entity.has_warned_on_write {
+                                entity.has_warned_on_write = true;
+                                log::error!("Packet capture write failed for chip {chip_id}: {err}. Further errors for this chip will be suppressed.");
+                            }
+                        }
                     }
                 }
                 Ok(CaptureActionResult::Success)
@@ -197,10 +194,6 @@ impl CaptureActor {
                 }
                 Ok(CaptureActionResult::Success)
             }
-            CaptureAction::SetDefaultCapture { enabled } => {
-                self.default_capture_enabled = enabled;
-                Ok(CaptureActionResult::Success)
-            }
             CaptureAction::SetCaptureDirectory { ref path } => {
                 self.capture_dir = Some(path.clone());
                 Ok(CaptureActionResult::Success)
@@ -213,7 +206,6 @@ impl CaptureActor {
     }
 }
 
-#[async_trait]
 impl ActorService for CaptureActor {
     type Id = ChipId;
     type Create = CaptureCreate;
@@ -222,18 +214,15 @@ impl ActorService for CaptureActor {
     type ActionResult = CaptureActionResult;
     type Error = CaptureError;
     type Entity = CaptureInfo;
+    type TypedStream = ();
 
     async fn handle_create(
         &mut self,
-        id: Option<Self::Id>,
+        _id: Option<Self::Id>,
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let id = id.unwrap_or_else(|| {
-            let id = ChipId(self.next_id);
-            self.next_id += 1;
-            id
-        });
+        let id = params.chip_id;
         let mut entity = InternalCaptureInfo::from_create_params(id, params)?;
         // Initialize the entity logic (e.g. set up writers based on flags)
         self.create_entity(&mut entity, _ctx).await?;
@@ -300,10 +289,6 @@ impl ActorService for CaptureActor {
         let Some(id) = id else {
             // Global action
             match action {
-                CaptureAction::SetDefaultCapture { enabled } => {
-                    self.default_capture_enabled = enabled;
-                    return Ok(CaptureActionResult::Success);
-                }
                 CaptureAction::SetCaptureDirectory { path } => {
                     self.capture_dir = Some(path);
                     return Ok(CaptureActionResult::Success);

@@ -18,6 +18,7 @@ pub struct World {
     pub daemon: Option<NetsimDaemon>,
     pub frontend_client: Option<FrontendServiceClient>,
     pub packet_client: Option<PacketStreamerClient>,
+    pub capture_client: client::CaptureClient,
     pub grpc_port: u16,
     _temp_dir: PathBuf,
     _ini_guard: Option<daemon::ini_file::IniFileGuard>,
@@ -56,10 +57,13 @@ impl World {
         // Allow some time for bindings
         tokio::time::sleep(Duration::from_millis(100)).await;
 
+        let capture_client = daemon.capture_client().clone();
+
         World {
             daemon: Some(daemon),
             frontend_client: None,
             packet_client: None,
+            capture_client,
             grpc_port,
             _temp_dir: temp_dir,
             _ini_guard: Some(ini_guard),
@@ -277,5 +281,28 @@ impl World {
             };
             assert_eq!(state, expected, "Radio state for chip {} should be {}", chip.id, expected);
         }
+    }
+
+    /// When I patch the capture state of a chip
+    pub async fn when_patch_capture(&self, chip_id: u32, enabled: bool) {
+        self.capture_client
+            .patch_capture(netsim_model::chip::ChipId::from(chip_id), enabled)
+            .await
+            .expect("Failed to patch capture");
+    }
+
+    /// Then I verify the capture state of a chip
+    pub async fn then_capture_is(&self, chip_id: u32, expected: bool) {
+        let captures = self.capture_client.list_captures().await.expect("Failed to list captures");
+        let capture = captures
+            .iter()
+            .find(|c| c.chip_id == netsim_model::chip::ChipId::from(chip_id))
+            .expect("Capture info missing");
+
+        assert_eq!(
+            capture.enabled, expected,
+            "Capture expected for chip {} should be {}",
+            chip_id, expected
+        );
     }
 }

@@ -5,10 +5,12 @@ use std::{
 
 use actor_framework::TimerKey;
 use capture_api::CaptureSender;
-use netsim_model::chip::ChipClient;
+use netsim_model::{chip::ChipClient, ChipKind};
+
+use crate::DeviceClient;
 
 pub struct DeviceActor {
-    pub chip_clients: HashMap<netsim_model::chip::ChipKind, Box<dyn ChipClient>>,
+    pub chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
     pub next_chip_id: Arc<AtomicU32>,
     pub capture_client: Option<Arc<dyn CaptureSender>>,
     pub(crate) devices: HashMap<device_api::DeviceId, crate::service::InternalDevice>,
@@ -18,19 +20,27 @@ pub struct DeviceActor {
     pub idle_timeout: Option<std::time::Duration>,
 
     pub startup_timer: Option<TimerKey>,
-    pub idle_timer: Option<TimerKey>,
+    pub(crate) idle_timer: Option<TimerKey>,
     pub has_seen_device: bool,
     pub guid_to_id: HashMap<String, device_api::DeviceId>,
+    pub stats_write_task: Option<tokio::task::JoinHandle<()>>,
+    pub(crate) stats: crate::stats::Stats,
+    pub stats_interval: std::time::Duration,
+    // Client to send messages to self (e.g. for periodic stats)
+    pub(crate) self_client: Option<DeviceClient>,
 }
 
 impl DeviceActor {
     pub fn new(
-        chip_clients: HashMap<netsim_model::chip::ChipKind, Box<dyn ChipClient>>,
+        chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
         next_chip_id: Arc<AtomicU32>,
         capture_client: Option<Arc<dyn CaptureSender>>,
         link_client: Box<dyn link_api::LinkClient>,
         startup_timeout: Option<std::time::Duration>,
         idle_timeout: Option<std::time::Duration>,
+        version: String,
+        stats_path: Option<std::path::PathBuf>,
+        stats_interval: Option<std::time::Duration>,
     ) -> Self {
         Self {
             chip_clients,
@@ -46,7 +56,15 @@ impl DeviceActor {
             idle_timer: None,
             has_seen_device: false,
             guid_to_id: HashMap::new(),
+            stats_write_task: None,
+            stats: crate::stats::Stats::new(version.clone(), stats_path),
+            stats_interval: stats_interval.unwrap_or(std::time::Duration::from_secs(10)),
+            self_client: None,
         }
+    }
+
+    pub fn set_self_client(&mut self, client: DeviceClient) {
+        self.self_client = Some(client);
     }
 }
 
@@ -60,6 +78,7 @@ impl std::fmt::Debug for DeviceActor {
             .field("startup_timer", &self.startup_timer)
             .field("idle_timer", &self.idle_timer)
             .field("has_seen_device", &self.has_seen_device)
+            .field("stats_interval", &self.stats_interval)
             .finish_non_exhaustive()
     }
 }

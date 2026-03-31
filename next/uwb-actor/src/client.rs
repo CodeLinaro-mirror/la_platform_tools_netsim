@@ -80,3 +80,24 @@ impl ChipClient for UwbClient {
         Box::new(self.clone())
     }
 }
+
+#[cfg(any(test, feature = "testing"))]
+impl UwbClient {
+    /// Starts ranging for the given chip and session.
+    pub async fn start_ranging(&self, id: ChipId, session_id: u32) -> Result<(), ClientError> {
+        self.0
+            .perform_action(Some(id), crate::UwbAction::StartRanging { id, session_id })
+            .await
+            .map(|_| ())
+            .map_err(map_framework_error_smart)
+    }
+
+    /// Stops ranging for the given chip and session.
+    pub async fn stop_ranging(&self, id: ChipId, session_id: u32) -> Result<(), ClientError> {
+        self.0
+            .perform_action(Some(id), crate::UwbAction::StopRanging { id, session_id })
+            .await
+            .map(|_| ())
+            .map_err(map_framework_error_smart)
+    }
+}

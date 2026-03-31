@@ -9,12 +9,15 @@ DEPS = [
     "//next/device-api",
     "//next/model",
     "//next/link-api",
+    "//next/common",
+    "//proto",
+    "@protobuf-json-mapping",
     "@futures",
     "@tokio",
     "@serde",
     "@log",
     "@thiserror",
-    "@mockall",
+    "@bytes",
 ]
 
 netsim_rust_library(
@@ -42,10 +45,15 @@ rust_test(
         ":testing",
         "//next/actor-framework:testing",
         "//next/client:testing",
+        "//next/common",
         "//next/device-api:testing",
         "//next/link-api:testing",
         "//next/model:testing",
+        "@bytes",
+        "@futures",
         "@mockall",
+        "@serde_json",
         "@tokio",
+        "@tokio-stream",
     ],
 )

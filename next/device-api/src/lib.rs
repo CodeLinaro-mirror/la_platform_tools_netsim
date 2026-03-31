@@ -76,6 +76,7 @@ pub use netsim_model::device::{
 use netsim_model::{
     chip::{ChipId, PacketSink, PacketStream},
     device::api::DeviceChipCreate,
+    stats::NetsimRadioStats,
 };
 use serde::{Deserialize, Serialize};
 
@@ -83,6 +84,7 @@ use serde::{Deserialize, Serialize};
 
 pub enum DeviceAction {
     Reset,
+    GetRadioStats,
     NotifyChipRemoved(DeviceId, ChipId),
     AddChip {
         chip_config: DeviceChipCreate,
@@ -101,12 +103,17 @@ pub enum DeviceAction {
     AddChipByGuid {
         params: DeviceAddChip,
     },
+    /// Triggers a persistence of the current statistics to disk.
+    /// This is primarily used internally by the actor for periodic saves
+    /// and lifecycle events, but can be invoked externally if needed.
+    SaveStats,
 }
 
 impl fmt::Debug for DeviceAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DeviceAction::Reset => write!(f, "Reset"),
+            DeviceAction::GetRadioStats => write!(f, "GetRadioStats"),
             DeviceAction::NotifyChipRemoved(device_id, chip_id) => {
                 f.debug_tuple("NotifyChipRemoved").field(device_id).field(chip_id).finish()
             }
@@ -119,6 +126,7 @@ impl fmt::Debug for DeviceAction {
             DeviceAction::AddChipByGuid { params } => {
                 f.debug_struct("AddChipByGuid").field("params", params).finish()
             }
+            DeviceAction::SaveStats => write!(f, "SaveStats"),
         }
     }
 }
@@ -126,6 +134,7 @@ impl fmt::Debug for DeviceAction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DeviceActionResult {
     Success,
+    Statistics(Vec<NetsimRadioStats>),
     ChipId(ChipId),
     /// Result of an `AddChipByGuid` operation.
     /// Returns both the `DeviceId` (found or created) and the `ChipId` (newly

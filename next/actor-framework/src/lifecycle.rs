@@ -4,7 +4,6 @@
 //! hooks. This allows the Actor Implementation to perform operations outside of
 //! ActorService handlers.
 
-use async_trait::async_trait;
 use bytes::Bytes;
 
 use crate::{ActorService, DynContext};
@@ -19,25 +18,36 @@ pub type StreamMessage = Bytes;
 ///
 /// This allows the Actor Implementation to perform operations outside of
 /// ActorService handlers.
-#[async_trait]
 pub trait ActorLifecycle: ActorService {
     /// Called when the actor starts, before processing any messages.
     ///
     /// Use this hook to:
     /// - Schedule initial timers.
     /// - Register initial streams.
-    async fn on_start(&mut self, _ctx: &mut DynContext<Self>) {}
+    /// - Register initial typed streams.
+    fn on_start(
+        &mut self,
+        _ctx: &mut DynContext<Self>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        futures::future::ready(())
+    }
 
     /// Called on every tick of the actor's interval.
-    async fn on_tick(&mut self, _ctx: &mut DynContext<Self>) {}
+    fn on_tick(
+        &mut self,
+        _ctx: &mut DynContext<Self>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        futures::future::ready(())
+    }
 
     /// Called when a stream produces a message.
-    async fn on_stream(
+    fn on_stream(
         &mut self,
         _id: Self::Id,
         _message: StreamMessage,
         _ctx: &mut DynContext<Self>,
-    ) {
+    ) -> impl std::future::Future<Output = ()> + Send {
+        futures::future::ready(())
     }
 
     /// Hook called when a background task managed by `spawn` completes.
@@ -45,15 +55,47 @@ pub trait ActorLifecycle: ActorService {
     /// # Arguments
     ///
     /// * `id` - The ID of the task that completed.
-    async fn on_task_closed(&mut self, id: Self::Id, _ctx: &mut DynContext<Self>) {
+    fn on_task_closed(
+        &mut self,
+        id: Self::Id,
+        _ctx: &mut DynContext<Self>,
+    ) -> impl std::future::Future<Output = ()> + Send {
         log::debug!("Task closed: {}", id.into());
+        futures::future::ready(())
     }
 
     /// Called when a registered stream closes.
-    async fn on_stream_closed(&mut self, id: Self::Id, _ctx: &mut DynContext<Self>) {
+    fn on_stream_closed(
+        &mut self,
+        id: Self::Id,
+        _ctx: &mut DynContext<Self>,
+    ) -> impl std::future::Future<Output = ()> + Send {
         log::debug!("Stream closed: {}", id.into());
+        futures::future::ready(())
+    }
+
+    /// Called when a message is received from a registered typed stream.
+    fn on_typed_stream(
+        &mut self,
+        _id: usize,
+        _item: Self::TypedStream,
+        _ctx: &mut DynContext<Self>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        futures::future::ready(())
+    }
+
+    /// Called when a registered typed stream closes.
+    fn on_typed_stream_closed(
+        &mut self,
+        id: usize,
+        _ctx: &mut DynContext<Self>,
+    ) -> impl std::future::Future<Output = ()> + Send {
+        log::debug!("Typed stream closed: {}", id);
+        futures::future::ready(())
     }
 
     /// Called when the actor receives a shutdown signal.
-    async fn on_shutdown(&mut self) {}
+    fn on_shutdown(&mut self) -> impl std::future::Future<Output = ()> + Send {
+        futures::future::ready(())
+    }
 }

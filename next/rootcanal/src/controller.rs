@@ -15,6 +15,7 @@ use std::{
 };
 
 use bytes::{BufMut, Bytes, BytesMut};
+use log::warn;
 
 use crate::{
     ffi,
@@ -60,6 +61,10 @@ pub(crate) struct ControllerImpl {
     ll_packets_in: AtomicU64,
     ll_packets_out: AtomicU64,
     ll_packets_dropped: AtomicU64,
+    ll_packets_in_ble: AtomicU64,
+    ll_packets_in_classic: AtomicU64,
+    ll_packets_out_ble: AtomicU64,
+    ll_packets_out_classic: AtomicU64,
 }
 
 /// A Bluetooth controller.
@@ -80,6 +85,14 @@ pub struct Stats {
     pub ll_packets_out: u64,
     /// The number of link layer packets dropped.
     pub ll_packets_dropped: u64,
+    /// The number of BLE link layer packets received.
+    pub ll_packets_in_ble: u64,
+    /// The number of Classic link layer packets received.
+    pub ll_packets_in_classic: u64,
+    /// The number of BLE link layer packets sent.
+    pub ll_packets_out_ble: u64,
+    /// The number of Classic link layer packets sent.
+    pub ll_packets_out_classic: u64,
 }
 
 // The context that is passed to the C++ code.
@@ -91,6 +104,7 @@ impl ControllerImpl {
         address: Address,
         callbacks: Box<dyn Callbacks>,
         bt_ops: Box<dyn BtOps>,
+        properties: Option<&[u8]>,
     ) -> Controller {
         // The initialization process is carefully ordered to manage lifetimes
         // across the FFI boundary and avoid memory leaks or reference cycles.
@@ -117,11 +131,20 @@ impl ControllerImpl {
             ll_packets_in: AtomicU64::new(0),
             ll_packets_out: AtomicU64::new(0),
             ll_packets_dropped: AtomicU64::new(0),
+            ll_packets_in_ble: AtomicU64::new(0),
+            ll_packets_in_classic: AtomicU64::new(0),
+            ll_packets_out_ble: AtomicU64::new(0),
+            ll_packets_out_classic: AtomicU64::new(0),
         });
 
         // Create the context for the C++ side, using a Weak pointer to avoid cycles.
         let context = Box::new(Arc::downgrade(&controller_impl));
         let context_ptr = Box::into_raw(context);
+
+        let (proto_ptr, proto_len) = match properties {
+            Some(bytes) => (bytes.as_ptr(), bytes.len()),
+            None => (std::ptr::null(), 0),
+        };
 
         // Call the FFI to get the real controller pointer.
         let controller_ptr =
@@ -138,6 +161,8 @@ impl ControllerImpl {
                     Some(invalid_packet_trampoline),
                     None,
                     context_ptr as *mut c_void,
+                    proto_ptr,
+                    proto_len,
                 )
             };
 
@@ -173,6 +198,14 @@ impl ControllerImpl {
     /// Receives a link layer packet from a peer.
     pub(crate) fn receive_ll(&self, data: &[u8], phy: Phy, rssi: i32) {
         self.ll_packets_in.fetch_add(1, Ordering::Relaxed);
+        match phy {
+            Phy::LowEnergy => {
+                self.ll_packets_in_ble.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {
+                self.ll_packets_in_classic.fetch_add(1, Ordering::Relaxed);
+            }
+        }
         let controller = self.controller.lock().unwrap();
         // SAFETY: The `controller.0` pointer is guaranteed to be valid
         // as long as `self` exists. `data` is a valid slice, and we provide its
@@ -215,6 +248,10 @@ impl ControllerImpl {
             ll_packets_in: self.ll_packets_in.load(Ordering::Relaxed),
             ll_packets_out: self.ll_packets_out.load(Ordering::Relaxed),
             ll_packets_dropped: self.ll_packets_dropped.load(Ordering::Relaxed),
+            ll_packets_in_ble: self.ll_packets_in_ble.load(Ordering::Relaxed),
+            ll_packets_in_classic: self.ll_packets_in_classic.load(Ordering::Relaxed),
+            ll_packets_out_ble: self.ll_packets_out_ble.load(Ordering::Relaxed),
+            ll_packets_out_classic: self.ll_packets_out_classic.load(Ordering::Relaxed),
         }
     }
 
@@ -231,6 +268,10 @@ impl ControllerImpl {
         self.ll_packets_in.store(0, Ordering::Relaxed);
         self.ll_packets_out.store(0, Ordering::Relaxed);
         self.ll_packets_dropped.store(0, Ordering::Relaxed);
+        self.ll_packets_in_ble.store(0, Ordering::Relaxed);
+        self.ll_packets_in_classic.store(0, Ordering::Relaxed);
+        self.ll_packets_out_ble.store(0, Ordering::Relaxed);
+        self.ll_packets_out_classic.store(0, Ordering::Relaxed);
     }
 }
 
@@ -285,7 +326,7 @@ extern "C" fn invalid_packet_trampoline(
     data: *const u8,
     data_len: ffi::size_t,
 ) {
-    println!("invalid packet received");
+    warn!("invalid packet received");
     // SAFETY: The `cookie` is an opaque pointer passed to us from the C++ side.
     let context = unsafe { context_from_cookie(cookie) };
     if let Some(controller) = context.upgrade() {
@@ -321,6 +362,14 @@ extern "C" fn send_ll_trampoline(
         // least `data_len` bytes that is valid for the duration of this call.
         let data_slice = unsafe { std::slice::from_raw_parts(data, data_len as ffi::size_t) };
         controller.ll_packets_out.fetch_add(1, Ordering::Relaxed);
+        match Phy::from(phy) {
+            Phy::LowEnergy => {
+                controller.ll_packets_out_ble.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {
+                controller.ll_packets_out_classic.fetch_add(1, Ordering::Relaxed);
+            }
+        }
         // rootcanal request to send ll through bluetooth medium
         controller.bt_ops.broadcast_rootcanal_ll_packet(
             controller.get_id(),
@@ -366,8 +415,13 @@ mod tests {
     #[test]
     fn test_controller_stats() {
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller =
-            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
+        let controller = ControllerImpl::new(
+            1,
+            address,
+            Box::new(MockControllerCallbacks),
+            Box::new(MockBtOps),
+            None,
+        );
 
         // Check initial stats.
         assert_eq!(controller.get_stats(), Stats::default());
@@ -389,8 +443,13 @@ mod tests {
     #[test]
     fn test_receive_hci_increments_counter() {
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller =
-            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
+        let controller = ControllerImpl::new(
+            1,
+            address,
+            Box::new(MockControllerCallbacks),
+            Box::new(MockBtOps),
+            None,
+        );
 
         assert_eq!(controller.get_stats().hci_commands_in, 0);
         controller.receive_hci(Bytes::from_static(&[1, 1, 2, 3]));
@@ -400,8 +459,13 @@ mod tests {
     #[test]
     fn test_receive_ll_increments_counter() {
         let address = Address::from_str("01:02:03:04:05:06").unwrap();
-        let controller =
-            ControllerImpl::new(1, address, Box::new(MockControllerCallbacks), Box::new(MockBtOps));
+        let controller = ControllerImpl::new(
+            1,
+            address,
+            Box::new(MockControllerCallbacks),
+            Box::new(MockBtOps),
+            None,
+        );
 
         assert_eq!(controller.get_stats().ll_packets_in, 0);
         controller.receive_ll(&[1, 2, 3], Phy::LowEnergy, -80);

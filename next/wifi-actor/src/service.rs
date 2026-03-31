@@ -1,9 +1,11 @@
 // Copyright 2025 The Android Open Source Project
 
 use actor_framework::{ActorService, DynContext};
-use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use netsim_model::chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, RadioUpdate, WifiUpdate};
+use netsim_model::{
+    chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, RadioUpdate, WifiUpdate},
+    ChipKind,
+};
 use tokio::sync::mpsc;
 
 use crate::{
@@ -11,7 +13,6 @@ use crate::{
     wifi_actor::{WifiActor, WifiReq, WifiResponse},
 };
 
-#[async_trait]
 impl ActorService for WifiActor {
     type Id = ChipId;
     type Create = netsim_model::chip::ChipCreate;
@@ -20,12 +21,13 @@ impl ActorService for WifiActor {
     type ActionResult = WifiResponse;
     type Error = WifiError;
     type Entity = Chip;
+    type TypedStream = bytes::Bytes;
 
     async fn handle_create(
         &mut self,
         id: Option<Self::Id>,
         mut params: Self::Create,
-        _ctx: &mut DynContext<Self>,
+        ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
         let id = id.unwrap_or(params.id);
         if self.active_chips.contains_key(&id) {
@@ -45,7 +47,7 @@ impl ActorService for WifiActor {
 
         // Define sink task: forwards bytes from channel to PacketSink
         let sink_id = id;
-        _ctx.spawn(
+        ctx.spawn(
             sink_id,
             Box::pin(async move {
                 let mut sink = sink;
@@ -54,18 +56,19 @@ impl ActorService for WifiActor {
                         break;
                     }
                 }
+                let _ = sink.close().await;
                 sink_id
             }),
         );
 
         // Register stream with context for polling
         let mapped_stream = stream.map(move |packet| bytes::Bytes::from(packet));
-        _ctx.add_stream(id, Box::pin(mapped_stream));
+        ctx.add_stream(id, Box::pin(mapped_stream));
 
         let chip = Chip {
             id: id.0,
             device_id: params.device_id,
-            kind: netsim_model::chip::ChipKind::WIFI,
+            kind: ChipKind::WIFI,
             variant: Some(netsim_model::chip::ChipVariant::Wifi(Default::default())),
             name: Some(params.config.name),
             manufacturer: Some(params.config.manufacturer),
@@ -78,7 +81,7 @@ impl ActorService for WifiActor {
         self.medium.add(id.0);
 
         // Notify Gateway about new chip (e.g. attach TAP)
-        self.gateway.on_chip_create(id, _ctx).await;
+        self.gateway.on_chip_create(id, ctx).await;
 
         Ok(id)
     }
@@ -146,12 +149,19 @@ impl ActorService for WifiActor {
                     stats.push(netsim_model::stats::NetsimRadioStats {
                         id: id.0,
                         name: chip.name.clone().unwrap_or_default(),
-                        tx_bytes: tx_count as u64,
-                        rx_bytes: rx_count as u64,
+                        kind: netsim_model::stats::RadioKind::Wifi,
+                        tx_count: tx_count as u64,
+                        rx_count: rx_count as u64,
+                        tx_bytes: 0,
+                        rx_bytes: 0,
                         ..Default::default()
                     });
                 }
                 Ok(WifiResponse::Statistics(stats.into_boxed_slice()))
+            }
+            WifiReq::GetGlobalStats => {
+                let stats = netsim_proto::stats::WifiStats::default();
+                Ok(WifiResponse::GlobalStats(Box::new(stats)))
             }
             WifiReq::Reset { id } => {
                 self.medium.reset(id.0);

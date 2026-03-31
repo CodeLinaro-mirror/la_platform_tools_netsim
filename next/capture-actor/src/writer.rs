@@ -3,21 +3,22 @@
 //! This module provides traits and implementations for writing packet captures
 //! to files. Currently supports PCAP format with Bluetooth H4 encapsulation.
 
-use std::{
-    fs::File,
-    io::{BufWriter, Write},
-    path::Path,
-    time::SystemTime,
-};
+use std::{io, path::Path, time::SystemTime};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use capture_api::Direction;
+use tokio::{
+    fs::File,
+    io::{AsyncWriteExt, BufWriter},
+};
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 /// Trait for writing packet captures.
 ///
 /// Implementations of this trait handle the actual writing of packets to a
 /// specific format.
+#[async_trait]
 pub trait CaptureWriter: Send + Sync {
     /// Writes a packet to the capture.
     ///
@@ -26,7 +27,7 @@ pub trait CaptureWriter: Send + Sync {
     /// * `timestamp` - The time the packet was captured.
     /// * `direction` - The direction of the packet (Sent/Received).
     /// * `data` - The packet data.
-    fn write_packet(
+    async fn write_packet(
         &mut self,
         timestamp: SystemTime,
         direction: Direction,
@@ -76,8 +77,8 @@ impl PcapWriter {
     ///
     /// * `path` - The path to the output file.
     /// * `network` - The Link-Layer Header Type (DLT).
-    pub fn new<P: AsRef<Path>>(path: P, network: u32) -> Result<Self> {
-        let file = File::create(path)?;
+    pub async fn new<P: AsRef<Path>>(path: P, network: u32) -> io::Result<Self> {
+        let file = File::create(path).await?;
         let mut writer = BufWriter::new(file);
 
         let header = PcapGlobalHeader {
@@ -90,14 +91,15 @@ impl PcapWriter {
             network,
         };
 
-        writer.write_all(header.as_bytes())?;
+        writer.write_all(header.as_bytes()).await?;
 
         Ok(Self { writer, records_written: 0, bytes_written: 0 })
     }
 }
 
+#[async_trait]
 impl CaptureWriter for PcapWriter {
-    fn write_packet(
+    async fn write_packet(
         &mut self,
         timestamp: SystemTime,
         _direction: Direction,
@@ -114,8 +116,8 @@ impl CaptureWriter for PcapWriter {
             orig_len: data.len() as u32,
         };
 
-        self.writer.write_all(header.as_bytes())?;
-        self.writer.write_all(data)?;
+        self.writer.write_all(header.as_bytes()).await?;
+        self.writer.write_all(data).await?;
 
         self.records_written += 1;
         self.bytes_written += data.len() as u64;
@@ -130,3 +132,5 @@ impl CaptureWriter for PcapWriter {
 
 // Bluetooth H4 DLT is 187
 pub const DLT_BLUETOOTH_H4: u32 = 187;
+// FiRa UCI DLT is 299
+pub const DLT_FIRA_UCI: u32 = 299;

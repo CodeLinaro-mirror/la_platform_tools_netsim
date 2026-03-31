@@ -1,23 +1,29 @@
-use crate::common::TestHarness;
+use crate::{steps::*, world::World};
 
+// Scenario: Read ICCID from SIM Filesystem
+//   Given a modem "A"
+//   When AT command 'AT+CRSM=176,12258,0,0,10' is sent to "A"
+//   Then response from "A" is '+CRSM: 144,0,"89012345678901234567"'
+//   And response from "A" is "OK"
 #[test]
 fn test_read_iccid() {
-    crate::common::init_logger();
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CRSM=176,12258,0,0,10\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+CRSM: 144,0,\"89012345678901234567\"\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CRSM=176,12258,0,0,10");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,\"89012345678901234567\"");
+    then_response_is(&mut world, "A", "OK");
 }
 
+// Scenario: Select Master File
+//   Given a modem "A"
+//   When AT command 'AT+CRSM=162,16128,0,0,0' is sent to "A"
+//   Then response from "A" is '+CRSM: 144,0,"6210"'
+//   And response from "A" is "OK"
 #[test]
 fn test_select_mf() {
-    crate::common::init_logger();
-    let harness = TestHarness::new();
-    harness.send_at_command(b"AT+CRSM=162,16128,0,0,0\r\n");
-    let responses = harness.get_responses();
-    assert_eq!(responses.len(), 2);
-    assert_eq!(responses[0], b"+CRSM: 144,0,\"6210\"\r\n");
-    assert_eq!(responses[1], b"OK\r\n");
+    let mut world = World::new();
+    given_modem_with_sim_profile(&mut world, "A");
+    when_at_command_sent(&mut world, "A", "AT+CRSM=162,16128,0,0,0");
+    then_response_is(&mut world, "A", "+CRSM: 144,0,\"6210\"");
+    then_response_is(&mut world, "A", "OK");
 }

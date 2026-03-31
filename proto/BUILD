@@ -1,4 +1,6 @@
+load("@grpc-java//:java_grpc_library.bzl", "java_grpc_library")
 load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@protobuf//bazel:java_proto_library.bzl", "java_proto_library")
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library")
@@ -65,6 +67,17 @@ proto_library(
 cc_proto_library(
     name = "netsim_cc_proto",
     deps = [":netsim_proto_library"],
+)
+
+java_proto_library(
+    name = "netsim_java_proto",
+    deps = [":netsim_proto_library"],
+)
+
+java_grpc_library(
+    name = "netsim_java_grpc",
+    srcs = [":netsim_proto_library"],
+    deps = [":netsim_java_proto"],
 )
 
 filegroup(
