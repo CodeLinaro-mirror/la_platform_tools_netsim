@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    net::{TcpListener, TcpStream as StdTcpStream},
+    net::TcpStream as StdTcpStream,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -181,12 +181,11 @@ impl TestWorld {
 
         let device_client = DeviceClient::new(Box::new(mock));
 
-        let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind");
+        let listener = websocket_server::server::bind(0).expect("Failed to bind");
         let port = listener.local_addr().unwrap().port();
-        drop(listener);
 
         tokio::spawn(async move {
-            server::run(port, device_client).await;
+            server::run(listener, device_client).await;
         });
 
         tokio::time::sleep(Duration::from_millis(100)).await;

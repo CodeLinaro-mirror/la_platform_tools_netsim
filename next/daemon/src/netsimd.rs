@@ -400,9 +400,18 @@ impl NetsimDaemon {
         tokio::spawn(hci_server::server::run(hci_port, device_client.clone()));
 
         // WebSocket server
+        let mut actual_ws_port = None;
         let websocket_port = args.ws_port.map(|p| p + instance_num - 1);
         if let Some(ws_port) = websocket_port {
-            tokio::spawn(websocket_server::server::run(ws_port, device_client.clone()));
+            match websocket_server::server::bind(ws_port) {
+                Ok(listener) => {
+                    actual_ws_port = Some(listener.local_addr().map_err(init_error)?.port());
+                    tokio::spawn(websocket_server::server::run(listener, device_client.clone()));
+                }
+                Err(e) => {
+                    error!("Failed to bind WebSocket server: {e}");
+                }
+            }
         }
 
         // Write the current daemon's information to the INI file.
@@ -412,7 +421,7 @@ impl NetsimDaemon {
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
             ("hci.port".to_string(), hci_port.to_string()),
         ]);
-        if let Some(ws_port) = websocket_port {
+        if let Some(ws_port) = actual_ws_port {
             ini_data.insert("ws.port".to_string(), ws_port.to_string());
         }
         if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
