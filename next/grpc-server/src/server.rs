@@ -25,6 +25,7 @@ static SHARED_ENV: OnceLock<Arc<Environment>> = OnceLock::new();
 
 pub fn start(
     port: u32,
+    enable_cli_ui: bool,
     device_client: DeviceClient,
     link_client: link_actor::LinkClient,
     ap_client: ap_actor::ApClient,
@@ -33,23 +34,23 @@ pub fn start(
 ) -> Result<(Server, u16), grpcio::Error> {
     let env = SHARED_ENV.get_or_init(|| Arc::new(Environment::new(1))).clone();
     let backend_service = create_packet_streamer(packet_streamer_service);
-    let frontend_service = create_frontend_service(FrontendClient::new(
-        device_client.clone(),
-        Arc::new(link_client),
-        version,
-    ));
     let access_point_service = create_access_point_service(AccessPointServiceImpl::new(ap_client));
     let ble_service = create_ble_service(BleServiceImpl::new(device_client.clone()));
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
     let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota).reuse_port(false);
-    let server_builder = ServerBuilder::new(env);
-    let mut server = server_builder
+    let mut server_builder = ServerBuilder::new(env)
         .register_service(backend_service)
-        .register_service(frontend_service)
         .register_service(access_point_service)
-        .register_service(ble_service)
-        .channel_args(ch_builder.build_args())
-        .build()?;
+        .register_service(ble_service);
+    if enable_cli_ui {
+        let frontend_service = create_frontend_service(FrontendClient::new(
+            device_client.clone(),
+            Arc::new(link_client),
+            version,
+        ));
+        server_builder = server_builder.register_service(frontend_service);
+    }
+    let mut server = server_builder.channel_args(ch_builder.build_args()).build()?;
 
     let addr = format!("localhost:{port}");
     let port = server.add_listening_port(&addr, ServerCredentials::insecure()).map_err(|e| {
