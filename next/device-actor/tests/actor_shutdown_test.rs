@@ -34,10 +34,7 @@ async fn test_server_shutdown_on_startup_timeout() {
     )
     .await;
 
-    // Wait > startup timeout
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    assert!(world.is_actor_finished(), "Server should have shut down on startup timeout");
+    world.then_actor_should_shutdown().await;
 }
 
 // Scenario: Server does NOT shut down if device exists
@@ -94,7 +91,5 @@ async fn test_server_shuts_down_after_idle_timeout_when_last_device_removed() {
     tokio::time::sleep(Duration::from_millis(10)).await;
     assert!(!world.is_actor_finished(), "Server should NOT shut down immediately");
 
-    // Wait > idle timeout (e.g. +100ms)
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert!(world.is_actor_finished(), "Server should have shut down after idle timeout");
+    world.then_actor_should_shutdown().await;
 }

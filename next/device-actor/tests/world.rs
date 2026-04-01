@@ -4,6 +4,7 @@
 use std::{
     collections::HashMap,
     sync::{atomic::AtomicU32, Arc},
+    time,
 };
 
 use bytes::Bytes;
@@ -702,6 +703,18 @@ impl World {
         self._actor_task.is_finished()
     }
 
+    pub async fn then_actor_should_shutdown(&self) {
+        let mut found = false;
+        for _ in 0..Self::SHUTDOWN_RETRIES {
+            if self.is_actor_finished() {
+                found = true;
+                break;
+            }
+            tokio::time::sleep(Self::SHUTDOWN_RETRY_INTERVAL).await;
+        }
+        assert!(found, "Server should have shut down, but did not");
+    }
+
     /// Helper to create DeviceAddChip params with defaults.
     pub fn create_device_add_chip_params(
         device_guid: String,
@@ -753,11 +766,18 @@ impl World {
     const STATS_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
     const STATS_RW_RETRIES: usize = 50;
     const STATS_ABSENT_RETRIES: usize = 10;
+    const SHUTDOWN_RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+    const SHUTDOWN_RETRIES: usize = 50;
 
     /// Helper to get a unique temporary path for stats.
     pub fn temp_stats_path() -> (std::path::PathBuf, String) {
         let mut path = std::env::temp_dir();
-        let unique_id = format!("{}_{:?}", std::process::id(), std::thread::current().id());
+        let unique_id = format!(
+            "{}_{:?}_{:?}",
+            std::process::id(),
+            std::thread::current().id(),
+            time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_nanos()
+        );
         let filename = format!("netsim_session_stats_{}.json", unique_id);
         path.push(&filename);
         if path.exists() {
@@ -1176,11 +1196,21 @@ impl World {
         F: FnOnce(&serde_json::Value),
     {
         let path = self.stats_file_to_cleanup.as_ref().expect("Stats file path not set");
-        let json = Self::get_stats_from_file(path).await;
-        // WifiStats are GLOBAL in NetsimStats
-        let wifi_stats = &json["wifi_stats"];
-        assert!(!wifi_stats.is_null(), "wifi_stats missing in JSON");
-        verifier(wifi_stats);
+        let mut found = false;
+        let mut last_json = serde_json::Value::Null;
+
+        for _ in 0..Self::STATS_RW_RETRIES {
+            let json = Self::get_stats_from_file(path).await;
+            if !json["wifi_stats"].is_null() {
+                last_json = json;
+                found = true;
+                break;
+            }
+            tokio::time::sleep(Self::STATS_RETRY_INTERVAL).await;
+        }
+
+        assert!(found, "wifi_stats missing in JSON after retries");
+        verifier(&last_json["wifi_stats"]);
     }
 
     /// BDD Step: Given all devices are modified (visible=false, position
