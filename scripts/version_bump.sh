@@ -26,7 +26,10 @@ export CARGO=$SCRIPT/../rust/daemon/Cargo.toml
 export CARGO_CLI=$SCRIPT/../rust/cli/Cargo.toml
 export CARGO_COMMON=$SCRIPT/../rust/common/Cargo.toml
 export VERSION=$SCRIPT/../rust/daemon/src/version.rs
-NEW_VERSION=$(python <<EOF
+export NEXT_DIR=$SCRIPT/../next
+export NEXT_VERSION=$SCRIPT/../next/daemon/src/version.rs
+
+VERSIONS=$(python <<EOF
 import re
 import os
 
@@ -35,13 +38,13 @@ new_version = ""
 for cargo in [os.environ["CARGO_COMMON"], os.environ["CARGO_CLI"], os.environ["CARGO"]]:
     with open(cargo, "r+") as f:
 
-        version = re.compile(r'^version\s=\s"(\d+)\.(\d+)\.(\d+)"$')
+        version_regex = re.compile(r'^version\s=\s"(\d+)\.(\d+)\.(\d+)"$')
 
         lines = f.readlines()
         for i, line in enumerate(lines):
             # Check if the line contains the string "version = "
             # and replace
-            m = version.match(line)
+            m = version_regex.match(line)
             if m:
                 new_version = "{0}.{1}.{2}".format(m[1], m[2], int(m[3]) + 1)
                 lines[i] = 'version = "{}"\n'.format(new_version)
@@ -49,6 +52,7 @@ for cargo in [os.environ["CARGO_COMMON"], os.environ["CARGO_CLI"], os.environ["C
 
         f.seek(0)
         f.writelines(lines)
+        f.truncate()
 
 with open(os.environ["VERSION"], "r+") as f:
         lines = f.readlines()
@@ -59,14 +63,35 @@ with open(os.environ["VERSION"], "r+") as f:
 
         f.seek(0)
         f.writelines(lines)
-print(new_version)
+        f.truncate()
+
+new_next_version = ""
+if os.path.exists(os.environ["NEXT_VERSION"]):
+    with open(os.environ["NEXT_VERSION"], "r+") as f:
+        lines = f.readlines()
+        next_ver_regex = re.compile(r'^pub const VERSION:\s&str\s=\s"(\d+)\.(\d+)\.(\d+)";$')
+        for i, line in enumerate(lines):
+            m = next_ver_regex.match(line)
+            if m:
+               new_next_version = "{0}.{1}.{2}".format(m[1], m[2], int(m[3]) + 1)
+               lines[i] = 'pub const VERSION: &str = "{}";\n'.format(new_next_version)
+               break
+        f.seek(0)
+        f.writelines(lines)
+        f.truncate()
+
+print(new_version + " " + new_next_version)
 EOF
 )
 
-echo "Bumping to version $NEW_VERSION"
+NEW_VERSION=$(echo $VERSIONS | awk '{print $1}')
+NEW_NEXT_VERSION=$(echo $VERSIONS | awk '{print $2}')
+
+echo "Bumping original to version $NEW_VERSION"
+echo "Bumping next to version $NEW_NEXT_VERSION"
 
 # Create a CL
 cd "$SCRIPT/.."
-repo start "version_bump_$NEW_VERSION" .
-git commit -m "Version Bump to $NEW_VERSION" "$CARGO" "$CARGO_CLI" "$CARGO_COMMON" "$VERSION"
+repo start "version_bump_${NEW_VERSION}_${NEW_NEXT_VERSION}" .
+git commit -m "Version Bump to $NEW_VERSION (next to $NEW_NEXT_VERSION)" "$CARGO" "$CARGO_CLI" "$CARGO_COMMON" "$VERSION" "$NEXT_VERSION"
 repo upload -y --cbr -o nokeycheck --label Presubmit-Ready+1 --re=formosa@google.com,shuohsu@google.com --cc=schilit@google.com .
