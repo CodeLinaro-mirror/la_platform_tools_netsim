@@ -361,6 +361,52 @@ pub struct ChipUpdate {
     pub enabled: Option<bool>,
 }
 
+impl ChipUpdate {
+    /// Replaces the fields on `Chip` with the fields on `ChipUpdate` if they
+    /// are `Some`.
+    pub fn apply(&self, chip: &mut Chip) {
+        let ChipUpdate {
+            id,
+            name,
+            manufacturer,
+            product_name,
+            position,
+            orientation,
+            variant,
+            links,
+            enabled,
+        } = self;
+
+        if let Some(id) = id {
+            chip.id = (*id).into();
+        }
+        if let Some(name) = name {
+            chip.name = Some(name.clone());
+        }
+        if let Some(manufacturer) = manufacturer {
+            chip.manufacturer = Some(manufacturer.clone());
+        }
+        if let Some(product_name) = product_name {
+            chip.product_name = Some(product_name.clone());
+        }
+        if let Some(position) = position {
+            chip.position = *position;
+        }
+        if let Some(orientation) = orientation {
+            chip.orientation = *orientation;
+        }
+        if let Some(enabled) = enabled {
+            chip.enabled = *enabled;
+        }
+        if let Some(links) = links {
+            chip.links = links.clone();
+        }
+        if let (Some(update_variant), Some(chip_variant)) = (variant, &mut chip.variant) {
+            update_variant.apply(chip_variant);
+        }
+    }
+}
+
 /// Generic radio chip update (Bluetooth, Wi-Fi, UWB).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct RadioUpdate {
@@ -389,6 +435,23 @@ impl ChipVariantUpdate {
             ChipVariantUpdate::Bluetooth(_) => ChipKind::BLUETOOTH,
             ChipVariantUpdate::Wifi(_) => ChipKind::WIFI,
             ChipVariantUpdate::Uwb(_) => ChipKind::UWB,
+        }
+    }
+
+    pub fn apply(&self, variant: &mut ChipVariant) {
+        match (self, variant) {
+            (ChipVariantUpdate::Bluetooth(update), ChipVariant::Bluetooth(bt)) => {
+                update.apply(bt);
+            }
+            (ChipVariantUpdate::Wifi(update), ChipVariant::Wifi(wifi)) => {
+                update.apply(wifi);
+            }
+            (ChipVariantUpdate::Uwb(update), ChipVariant::Uwb(uwb)) => {
+                update.apply(uwb);
+            }
+            (u, v) => {
+                tracing::warn!("ChipVariantUpdate mismatch with ChipVariant: {:?} vs {:?}", u, v);
+            }
         }
     }
 }

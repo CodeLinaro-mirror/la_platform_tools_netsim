@@ -398,6 +398,12 @@ impl NetsimDaemon {
         let hci_port = args.hci_port.unwrap_or_else(|| get_hci_port(0, instance_num - 1) as u16);
         tokio::spawn(hci_server::server::run(hci_port, device_client.clone()));
 
+        // WebSocket server
+        let websocket_port = args.ws_port.map(|p| p + instance_num - 1);
+        if let Some(ws_port) = websocket_port {
+            tokio::spawn(websocket_server::server::run(ws_port, device_client.clone()));
+        }
+
         // Write the current daemon's information to the INI file.
         // Clients will use this to connect.
         let mut ini_data = HashMap::from([
@@ -405,6 +411,9 @@ impl NetsimDaemon {
             ("grpc.port".to_string(), actual_grpc_port.to_string()),
             ("hci.port".to_string(), hci_port.to_string()),
         ]);
+        if let Some(ws_port) = websocket_port {
+            ini_data.insert("ws.port".to_string(), ws_port.to_string());
+        }
         if let Some(StreamAddress::Uds(path)) = listener_addresses.get("netsim_uds") {
             ini_data.insert("uds.path".to_string(), path.to_string_lossy().to_string());
         }
@@ -455,6 +464,7 @@ impl NetsimDaemon {
             wifi_tap,
             shared_keys.clone(),
             Arc::new(wifi_actor::stats::SystemClock),
+            args.forward_host_mdns,
         );
 
         // Setup Uwb Server

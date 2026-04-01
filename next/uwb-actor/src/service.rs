@@ -99,7 +99,7 @@ impl ActorService for UwbActor {
         let mut chips = self.chip_states.write().unwrap();
         let state = chips.get_mut(handle).ok_or(ChipError::ChipNotFound(id))?;
 
-        state.apply(update);
+        update.apply(&mut state.chip);
 
         Ok(state.chip.clone())
     }

@@ -132,7 +132,11 @@ impl<W: ?Sized> Features<W> {
         let feature = Feature::parse(content, Default::default()).expect("Failed to parse feature");
 
         for scenario in &feature.scenarios {
-            if !self.should_run(&feature.tags, &scenario.tags) {
+            if self.is_ignored(&feature.tags, &scenario.tags) {
+                println!("Scenario: {} ... SKIP", scenario.name);
+                continue;
+            }
+            if !self.matches_filter(&feature.tags, &scenario.tags) {
                 continue;
             }
 
@@ -144,15 +148,100 @@ impl<W: ?Sized> Features<W> {
         }
     }
 
-    fn should_run(&self, feature_tags: &[String], scenario_tags: &[String]) -> bool {
+    /// Parses a Gherkin feature and prints its matched scenarios and steps in
+    /// Cucumber style without executing them.
+    pub fn dry_run_list(&self, content: &str) {
+        let feature = Feature::parse(content, Default::default()).expect("Failed to parse feature");
+        // No longer print the Feature title to save vertical noise
+
+        if let Some(bg) = &feature.background {
+            let sep = if bg.name.is_empty() { "" } else { " " };
+            println!("  Background:{}{}", sep, bg.name);
+            for step in &bg.steps {
+                let status = if self.is_match(&step.value) {
+                    "\x1b[32m# ok\x1b[0m"
+                } else {
+                    "\x1b[31m# UNDEFINED\x1b[0m"
+                };
+                println!("    {} {} {}", step.keyword, step.value, status);
+            }
+            println!();
+        }
+
+        for scenario in &feature.scenarios {
+            if self.is_ignored(&feature.tags, &scenario.tags) {
+                println!("  Scenario: {} ... \x1b[33mSKIP\x1b[0m", scenario.name);
+                continue;
+            }
+            if !self.matches_filter(&feature.tags, &scenario.tags) {
+                continue;
+            }
+            if scenario.examples.is_empty() {
+                println!("  Scenario: {}", scenario.name);
+                for step in &scenario.steps {
+                    let status = if self.is_match(&step.value) {
+                        "\x1b[32m# ok\x1b[0m"
+                    } else {
+                        "\x1b[31m# UNDEFINED\x1b[0m"
+                    };
+                    println!("    {} {} {}", step.keyword, step.value, status);
+                }
+                println!();
+            } else {
+                for example in &scenario.examples {
+                    let Some(table) = &example.table else { continue };
+                    if table.rows.is_empty() {
+                        continue;
+                    }
+                    let header_row = &table.rows[0];
+                    let headers: Vec<String> =
+                        header_row.iter().map(|s| format!("<{}>", s)).collect();
+
+                    for row in table.rows.iter().skip(1) {
+                        println!("  Scenario Outline: {}", scenario.name);
+                        let replacements: Vec<(&str, &str)> = headers
+                            .iter()
+                            .zip(row.iter())
+                            .map(|(h, v)| (h.as_str(), v.as_str()))
+                            .collect();
+                        for step in &scenario.steps {
+                            let value =
+                                crate::utils::apply_replacements(&step.value, &replacements);
+                            let status = if self.is_match(&value) {
+                                "\x1b[32m# ok\x1b[0m"
+                            } else {
+                                "\x1b[31m# UNDEFINED\x1b[0m"
+                            };
+                            println!("    {} {} {}", step.keyword, value, status);
+                        }
+                        println!();
+                    }
+                }
+            }
+        }
+    }
+
+    fn is_match(&self, text: &str) -> bool {
+        for (regex, _) in &self.steps {
+            if regex.is_match(text) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn is_ignored(&self, feature_tags: &[String], scenario_tags: &[String]) -> bool {
+        feature_tags.iter().any(|t| t == "skip" || t == "ignore")
+            || scenario_tags.iter().any(|t| t == "skip" || t == "ignore")
+    }
+
+    fn matches_filter(&self, feature_tags: &[String], scenario_tags: &[String]) -> bool {
         if let Some(filter) = &self.tag_filter {
             let filter_str = filter.as_str();
             let filter_name = filter_str.strip_prefix("@").unwrap_or(filter_str);
 
-            let match_found = feature_tags.iter().any(|t| t == filter_str || t == filter_name)
+            return feature_tags.iter().any(|t| t == filter_str || t == filter_name)
                 || scenario_tags.iter().any(|t| t == filter_str || t == filter_name);
-
-            return match_found;
         }
         true
     }
@@ -161,13 +250,19 @@ impl<W: ?Sized> Features<W> {
     where
         W: World,
     {
+        use std::io::Write;
+        print!("Scenario: {} ... ", scenario.name);
+        std::io::stdout().flush().unwrap();
+
+        let start = std::time::Instant::now();
         world.reset().await;
         self.run_hooks(&self.before_hooks, world).await;
         self.run_background(&feature.background, world).await;
-        println!("----------------------------------------------------------------");
-        println!("Scenario: {}", scenario.name);
         self.run_steps(&scenario.steps, world, &[]).await;
         self.run_hooks(&self.after_hooks, world).await;
+
+        let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+        println!("PASS ({:.1} ms)", elapsed);
     }
 
     async fn run_scenario_outline(
@@ -192,14 +287,25 @@ impl<W: ?Sized> Features<W> {
                 world.reset().await;
                 self.run_hooks(&self.before_hooks, world).await;
                 self.run_background(&feature.background, world).await;
-                println!("----------------------------------------------------------------");
-                println!("Scenario Outline: {}", scenario.name);
 
                 let replacements: Vec<(&str, &str)> =
                     headers.iter().zip(row.iter()).map(|(h, v)| (h.as_str(), v.as_str())).collect();
 
+                let desc = replacements
+                    .iter()
+                    .map(|(k, v)| format!("{}={}", k, v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                use std::io::Write;
+                print!("Scenario Outline: {} [{}] ... ", scenario.name, desc);
+                std::io::stdout().flush().unwrap();
+
+                let start = std::time::Instant::now();
                 self.run_steps(&scenario.steps, world, &replacements).await;
                 self.run_hooks(&self.after_hooks, world).await;
+
+                let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+                println!("PASS ({:.1} ms)", elapsed);
             }
         }
     }
@@ -213,20 +319,16 @@ impl<W: ?Sized> Features<W> {
         for step in steps {
             let value = crate::utils::apply_replacements(&step.value, replacements);
             let table = step.table.as_ref().map(|t| apply_table_replacements(t, replacements));
-
-            println!("  {}{}", step.keyword, value);
             self.run_with_context(&value, world, StepContext { table }).await;
         }
     }
 
     async fn run_background(&self, bg: &Option<gherkin::Background>, world: &mut W) {
         if let Some(ref bg) = bg {
-            let sep = if bg.name.is_empty() { "" } else { " " };
-            println!("Background:{}{}", sep, bg.name);
+            // Suppress background trace prints to keep test output clean
             for step in &bg.steps {
                 let table =
                     step.table.clone().map(|t| t.rows.iter().map(|row| row.to_vec()).collect());
-                println!("  {}{}", step.keyword, step.value);
                 self.run_with_context(&step.value, world, StepContext { table }).await;
             }
         }

@@ -279,11 +279,6 @@ impl AndroidDevice {
             let _verb = parts.next().unwrap_or("");
             let msg = parts.next().unwrap_or("");
             println!("    {:<6} {} {}", "->", actor_tag, msg);
-        } else if let Some(msg) = line.strip_prefix("INFO") {
-            let msg = msg.trim();
-            if !msg.starts_with('[') {
-                println!("    {:<6} {} {}", "INFO", actor_tag, msg);
-            }
         }
         let _ = std::io::stdout().flush();
     }
@@ -484,7 +479,6 @@ async fn generic_execution_step(w: &mut TestContext, label: String, step: String
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
 
     let step = step.trim().to_string();
-    println!("DEBUG: Sending step to agent: [{}]", step);
     w.log_step(&actor, "->", &step);
 
     if w.is_dry_run {
