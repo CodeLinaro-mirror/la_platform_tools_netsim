@@ -14,20 +14,25 @@ NETSIM_RUSTC_FLAGS = ["-Dwarnings", "-Dunused_crate_dependencies"]
 NETSIM_CLIPPY_FLAGS = [
     "-Dwarnings",
     # Async / Concurrency
+    "-Dclippy::future_not_send",
     "-Dclippy::large_futures",
-    "-Dclippy::rc_mutex",
     "-Dclippy::mutex_atomic",
+    "-Dclippy::rc_mutex",
+    "-Dclippy::significant_drop_in_scrutinee",
     # Performance
     "-Dclippy::large_stack_arrays",
     "-Dclippy::large_types_passed_by_value",
     # FFI / Safety
-    "-Dclippy::ptr_as_ptr",
     "-Dclippy::cast_ptr_alignment",
+    "-Dclippy::ptr_as_ptr",
+    "-Dclippy::ptr_cast_constness",
     "-Dclippy::undocumented_unsafe_blocks",
     # Code Hygiene
-    "-Dclippy::dbg_macro",
-    "-Dclippy::match_wild_err_arm",
     "-Dclippy::cloned_instead_of_copied",
+    "-Dclippy::dbg_macro",
+    "-Dclippy::map_err_ignore",
+    "-Dclippy::match_wild_err_arm",
+    "-Dclippy::unwrap_in_result",
 ]
 
 # Unfortunately, we can't use the rules_rust version because netsim is in external/.

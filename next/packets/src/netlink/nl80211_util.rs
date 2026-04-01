@@ -44,7 +44,7 @@ const GENL_HDR_SIZE: usize = core::mem::size_of::<GenlMsgHdr>();
 #[derive(Debug, PartialEq, Eq)]
 pub enum NetlinkError {
     /// Buffer is too short to contain the expected data.
-    BufferTooShort,
+    BufferTooShort(String),
     /// Payload length does not match expected size for the type.
     InvalidPayloadLength,
     /// String payload is not valid UTF-8 or not null-terminated.
@@ -56,7 +56,7 @@ pub enum NetlinkError {
 impl core::fmt::Display for NetlinkError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            NetlinkError::BufferTooShort => write!(f, "Buffer too short"),
+            NetlinkError::BufferTooShort(msg) => write!(f, "Buffer too short: {}", msg),
             NetlinkError::InvalidPayloadLength => write!(f, "Invalid payload length"),
             NetlinkError::InvalidString => write!(f, "Invalid string in payload"),
             NetlinkError::BuildError(s) => write!(f, "Netlink build error: {}", s),
@@ -239,7 +239,9 @@ pub fn parse_u32_from_payload(payload: &[u8]) -> Result<u32, NetlinkError> {
         // directly usable, would be: Ref::<&[u8],
         // U32<LittleEndian>>::from_prefix(payload).map(|(val, _rest)|
         // val.get()).ok_or(NetlinkError::InvalidPayloadLength)
-        Ok(U32::<LittleEndian>::read_from_prefix(payload).unwrap().0.get())
+        let (val, _) = U32::<LittleEndian>::read_from_prefix(payload)
+            .map_err(|err| NetlinkError::BufferTooShort(err.to_string()))?;
+        Ok(val.get())
     } else {
         Err(NetlinkError::InvalidPayloadLength)
     }
@@ -269,9 +271,10 @@ pub fn create_string_attr_payload(s: &str) -> Vec<u8> {
 /// fails.
 pub fn parse_string_from_payload(payload: &[u8]) -> Result<String, NetlinkError> {
     if let Some(null_pos) = payload.iter().position(|&b| b == 0) {
-        std::str::from_utf8(&payload[..null_pos])
-            .map(String::from)
-            .map_err(|_| NetlinkError::InvalidString)
+        std::str::from_utf8(&payload[..null_pos]).map(String::from).map_err(|err| {
+            let _ = err;
+            NetlinkError::InvalidString
+        })
     } else {
         Err(NetlinkError::InvalidString) // No null terminator
     }

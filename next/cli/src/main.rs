@@ -38,10 +38,10 @@ fn perform_streaming_request(
     req: &frontend::GetCaptureRequest,
     filename: &str,
 ) -> Result<()> {
-    let dir = if cmd.location.is_some() {
-        PathBuf::from(cmd.location.to_owned().unwrap())
+    let dir = if let Some(location) = cmd.location.as_ref() {
+        PathBuf::from(location.clone())
     } else {
-        env::current_dir().unwrap()
+        env::current_dir()?
     };
     let output_file = dir.join(filename);
     cmd.current_file = output_file.display().to_string();

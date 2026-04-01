@@ -50,10 +50,10 @@ pub fn create(
     // Reset the controller first.
     send_hci_command(rootcanal, chip_id, Reset {})?;
 
-    let address: Address = params.ble_beacon.address.parse().map_err(|_| {
+    let address: Address = params.ble_beacon.address.parse().map_err(|err| {
         ChipError::InvalidArguments(Box::from(format!(
-            "Invalid beacon address: {}",
-            params.ble_beacon.address
+            "Invalid beacon address '{}': {}",
+            params.ble_beacon.address, err
         )))
     })?;
 

@@ -89,13 +89,18 @@ impl Medium {
             return Ok(());
         }
         // Try to determine the destination MacAddress from the Ethernet header
-        let dest_mac_bytes: [u8; 6] = packet[0..6].try_into().map_err(|_| {
-            WifiError::Internal(Box::from("Failed to parse Ethernet Destination MAC"))
+        let dest_mac_bytes: [u8; 6] = packet[0..6].try_into().map_err(|e| {
+            WifiError::Internal(Box::from(format!("Failed to parse Ethernet Destination MAC: {e}")))
         })?;
         let dest_mac = netsim_packets::MacAddress::new(dest_mac_bytes);
 
         if dest_mac.is_broadcast() || dest_mac.is_multicast() {
-            let bssids = self.key_store.bssids.read().unwrap().clone();
+            let bssids = self
+                .key_store
+                .bssids
+                .read()
+                .map_err(|e| WifiError::Internal(Box::from(format!("BSSIDs lock poisoned: {e}"))))?
+                .clone();
             for bssid in bssids {
                 let seq = self.seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 if let Ok(ieee80211) = netsim_packets::Ieee80211::from_ieee8023_qos(
@@ -167,7 +172,12 @@ impl Medium {
         }
 
         let is_m2u_conversion = (targets.len() > 1 || dest_addr.is_multicast())
-            && !self.key_store.bssids.read().unwrap().is_empty();
+            && !self
+                .key_store
+                .bssids
+                .read()
+                .map_err(|e| WifiError::Internal(Box::from(format!("BSSIDs lock poisoned: {e}"))))?
+                .is_empty();
 
         for dest in targets {
             if self.enabled(dest.client_id)? {

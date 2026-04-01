@@ -3,6 +3,8 @@
 
 use actor_framework::{ActorLifecycle, DynContext};
 use netsim_model::ChipId;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info};
 
 use crate::wifi_actor::WifiActor;
@@ -27,12 +29,12 @@ impl ActorLifecycle for WifiActor {
             // Downlink: AP -> Wifi (AP writes to tx, Wifi reads from rx)
             let (ap_downlink_tx, ap_downlink_rx) = create_channel_stream();
 
-            ctx.add_typed_stream(AP_SUBSCRIPTION_ID, ap_downlink_rx);
+            ctx.add_typed_stream(AP_SUBSCRIPTION_ID, Box::pin(ap_downlink_rx));
 
             // Set initial beacon interval to 100ms
             if let Err(e) = ap_client
                 .register(
-                    ap_uplink_rx,
+                    Box::pin(ap_uplink_rx),
                     ap_downlink_tx,
                     self.shared_keys.clone(),
                     std::time::Duration::from_millis(100),
@@ -45,7 +47,7 @@ impl ActorLifecycle for WifiActor {
         }
         if self.forward_host_mdns {
             let (mdns_tx, mdns_rx) = create_channel_stream();
-            ctx.add_typed_stream(MDNS_SUBSCRIPTION_ID, mdns_rx);
+            ctx.add_typed_stream(MDNS_SUBSCRIPTION_ID, Box::pin(mdns_rx));
 
             tokio::spawn(async move {
                 if let Err(e) = crate::mdns_forwarder::run_mdns_forwarder(mdns_tx).await {
@@ -111,12 +113,10 @@ impl ActorLifecycle for WifiActor {
 }
 
 /// Creates an unbounded channel and wraps the receiver in a pinned BoxStream.
-fn create_channel_stream<T>(
-) -> (tokio::sync::mpsc::UnboundedSender<T>, futures::stream::BoxStream<'static, T>)
+fn create_channel_stream<T>() -> (UnboundedSender<T>, UnboundedReceiverStream<T>)
 where
     T: Send + 'static,
 {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
-    (tx, Box::pin(stream))
+    (tx, UnboundedReceiverStream::new(rx))
 }

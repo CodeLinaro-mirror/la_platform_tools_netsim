@@ -26,7 +26,7 @@ pub enum DeviceError {
     /// An internal error occurred within the device service. This typically
     /// indicates a bug or an inconsistent state.
     #[error("Internal error: {0}")]
-    Internal(Box<dyn std::error::Error + Send + Sync>),
+    Internal(Box<dyn std::error::Error + Send>),
 }
 
 impl From<crate::client_error::ClientError> for DeviceError {

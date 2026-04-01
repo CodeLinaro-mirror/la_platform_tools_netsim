@@ -49,7 +49,7 @@ impl ApClient {
     /// Registers the AP Actor with the packet stream and sink.
     pub async fn register(
         &self,
-        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
+        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Sync + Send>>,
         sink: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
         shared_keys: std::sync::Arc<super::shared::SharedKeyStore>,
         beacon_interval: std::time::Duration,

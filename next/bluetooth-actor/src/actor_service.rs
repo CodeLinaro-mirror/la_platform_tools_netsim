@@ -69,7 +69,7 @@ impl ActorService for BluetoothActor {
         };
 
         let address: rootcanal::Address =
-            raw_address.parse().map_err(|_| BluetoothError::invalid_arg("Invalid address"))?;
+            raw_address.parse().map_err(BluetoothError::AddressParse)?;
 
         let mut mode = bluetooth.mode.clone();
         if let BluetoothMode::Beacon(ref mut beacon_params) = mode {

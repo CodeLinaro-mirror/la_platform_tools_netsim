@@ -366,7 +366,7 @@ impl<'a> Nl80211AttrPacket<'a> {
                 zerocopy::Ref::<&[u8], crate::netlink::nl80211::GenlMsgHdr>::from_prefix(
                     self.attributes,
                 )
-                .unwrap();
+                .map_err(|err| NetlinkError::BufferTooShort(err.to_string()))?;
             if hdr.cmd == 0 {
                 attrs_to_parse = rest;
             }

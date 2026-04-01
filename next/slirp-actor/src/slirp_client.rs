@@ -34,7 +34,7 @@ impl SlirpClient {
 
     pub async fn register(
         &self,
-        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
+        stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Sync + Send>>,
         sink: tokio::sync::mpsc::UnboundedSender<bytes::Bytes>,
     ) -> Result<(), ClientError> {
         self.client

@@ -5,10 +5,11 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, Weak},
+    sync::{Arc, Weak},
 };
 
 use bytes::Bytes;
+use parking_lot::Mutex;
 
 use crate::{
     controller::{
@@ -84,7 +85,7 @@ impl Rootcanal {
         callbacks: Box<dyn ControllerCallbacks>,
         properties: Option<&[u8]>,
     ) -> Result<()> {
-        let mut controllers = self.controllers.lock().unwrap();
+        let mut controllers = self.controllers.lock();
         if controllers.contains_key(&id) {
             return Err(Error::DuplicateControllerId(id));
         }
@@ -109,12 +110,7 @@ impl Rootcanal {
 
     /// Removes a Bluetooth controller.
     pub fn remove_controller(&self, id: ControllerId) -> Result<()> {
-        self.controllers
-            .lock()
-            .unwrap()
-            .remove(&id)
-            .ok_or(Error::ControllerNotFound(id))
-            .map(|_| ())
+        self.controllers.lock().remove(&id).ok_or(Error::ControllerNotFound(id)).map(|_| ())
     }
 
     /// Injects a link layer packet from an external source into the simulation.
@@ -143,7 +139,7 @@ impl Rootcanal {
 
     // Use to get a copy of controllers without holding the lock
     fn cloned_controllers(&self) -> Vec<Controller> {
-        self.controllers.lock().unwrap().values().cloned().collect()
+        self.controllers.lock().values().cloned().collect()
     }
 
     /// Advances the state of all controllers by one tick.
@@ -155,18 +151,17 @@ impl Rootcanal {
 
     /// Returns the number of controllers.
     pub fn len(&self) -> usize {
-        self.controllers.lock().unwrap().len()
+        self.controllers.lock().len()
     }
 
     /// Returns true if there are no controllers.
     pub fn is_empty(&self) -> bool {
-        self.controllers.lock().unwrap().is_empty()
+        self.controllers.lock().is_empty()
     }
 
     /// Returns a vector of the current controller IDs.
     pub fn get_controller_ids(&self) -> Vec<ControllerId> {
-        let mut keys: Vec<ControllerId> =
-            self.controllers.lock().unwrap().keys().copied().collect();
+        let mut keys: Vec<ControllerId> = self.controllers.lock().keys().copied().collect();
         keys.sort();
         keys
     }
@@ -175,7 +170,6 @@ impl Rootcanal {
     pub fn receive_hci(&self, controller_id: ControllerId, h4_packet: Bytes) -> Result<()> {
         self.controllers
             .lock()
-            .unwrap()
             .get(&controller_id)
             .ok_or(Error::ControllerNotFound(controller_id))
             .map(|controller| controller.receive_hci(h4_packet))
@@ -185,7 +179,6 @@ impl Rootcanal {
     pub fn get_address(&self, controller_id: ControllerId) -> Result<Address> {
         self.controllers
             .lock()
-            .unwrap()
             .get(&controller_id)
             .map(|c| c.get_address())
             .ok_or(Error::ControllerNotFound(controller_id))
@@ -195,7 +188,6 @@ impl Rootcanal {
     pub fn get_stats(&self, controller_id: ControllerId) -> Result<Stats> {
         self.controllers
             .lock()
-            .unwrap()
             .get(&controller_id)
             .map(|c| c.get_stats())
             .ok_or(Error::ControllerNotFound(controller_id))
@@ -205,7 +197,6 @@ impl Rootcanal {
     pub fn clear_stats(&self, controller_id: ControllerId) -> Result<()> {
         self.controllers
             .lock()
-            .unwrap()
             .get(&controller_id)
             .ok_or(Error::ControllerNotFound(controller_id))
             .map(|controller| controller.clear_stats())

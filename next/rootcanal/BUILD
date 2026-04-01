@@ -18,6 +18,7 @@ netsim_rust_library(
     visibility = ["//next:__subpackages__"],
     deps = [
         "@bytes",
+        "@parking_lot",
         "@rootcanal//:lib_rootcanal_ffi",
         "@thiserror",
         "@tracing",

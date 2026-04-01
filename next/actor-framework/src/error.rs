@@ -15,7 +15,7 @@ use netsim_model::ClientError;
 #[derive(Debug, thiserror::Error)]
 pub enum FrameworkError<E: Error + Send + Sync> {
     #[error("Actor send channel closed")]
-    ActorClosed,
+    ActorClosed(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("Actor dropped response channel")]
     ActorDropped(#[source] tokio::sync::oneshot::error::RecvError),
     #[error("Service error: {0}")]

@@ -10,7 +10,7 @@ pub enum UwbError {
     Chip(#[from] ChipError),
 
     #[error("Pica shutdown unexpectedly")]
-    PicaShutdown,
+    PicaShutdown(#[source] Box<dyn std::error::Error + Send + Sync>),
 
     #[error("Invalid azimuth: {0} (expected -180.0 to 180.0)")]
     InvalidAzimuth(f32),

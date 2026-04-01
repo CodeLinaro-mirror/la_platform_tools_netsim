@@ -126,7 +126,7 @@ impl TryFrom<JsonFrameControl> for FrameControl {
 
     fn try_from(json_fc: JsonFrameControl) -> Result<Self, Self::Error> {
         let fc_val = u16::from_str_radix(&json_fc.field_hex, 16)
-            .map_err(|_| JsonError::HexParse(json_fc.field_hex))?;
+            .map_err(|err| JsonError::HexParse(format!("{}: {}", json_fc.field_hex, err)))?;
         Ok(FrameControl::new(fc_val))
     }
 }
@@ -158,7 +158,7 @@ impl TryFrom<JsonSequenceControl> for SequenceControl {
 
     fn try_from(json_sc: JsonSequenceControl) -> Result<Self, Self::Error> {
         let sc_val = u16::from_str_radix(&json_sc.field_hex, 16)
-            .map_err(|_| JsonError::HexParse(json_sc.field_hex))?;
+            .map_err(|err| JsonError::HexParse(format!("{}: {}", json_sc.field_hex, err)))?;
         Ok(SequenceControl::new(sc_val))
     }
 }
