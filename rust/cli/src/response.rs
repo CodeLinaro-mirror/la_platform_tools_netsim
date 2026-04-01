@@ -322,11 +322,11 @@ impl args::Command {
 
     pub fn chip_kind_to_string(chip_kind: ChipKind) -> String {
         match chip_kind {
-            ChipKind::UNSPECIFIED => "UNSPECIFIED".to_string(),
             ChipKind::BLUETOOTH => "BLUETOOTH".to_string(),
             ChipKind::WIFI => "WIFI".to_string(),
             ChipKind::UWB => "UWB".to_string(),
             ChipKind::BLUETOOTH_BEACON => "BLUETOOTH_BEACON".to_string(),
+            _ => "UNSPECIFIED".to_string(),
         }
     }
 
