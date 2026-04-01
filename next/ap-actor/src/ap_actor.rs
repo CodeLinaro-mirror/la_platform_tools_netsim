@@ -226,7 +226,6 @@ pub struct ApActor {
 }
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct ApState {
     pub id: ApId,
     pub config: ApConfig,

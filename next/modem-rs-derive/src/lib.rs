@@ -1,44 +1,9 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str;
-
-use nom::IResult;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Type};
-
-#[allow(dead_code)]
-trait Parsable<'a>: Sized {
-    fn parse(input: &'a [u8]) -> IResult<&'a [u8], Self>;
-}
-
-impl Parsable<'_> for u8 {
-    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        nom::combinator::map_res(
-            nom::combinator::map_res(nom::character::complete::digit1, str::from_utf8),
-            |s: &str| s.parse::<u8>(),
-        )(input)
-    }
-}
-
-impl Parsable<'_> for u16 {
-    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        nom::combinator::map_res(
-            nom::combinator::map_res(nom::character::complete::digit1, str::from_utf8),
-            |s: &str| s.parse::<u16>(),
-        )(input)
-    }
-}
-
-impl Parsable<'_> for u32 {
-    fn parse(input: &[u8]) -> IResult<&[u8], Self> {
-        nom::combinator::map_res(
-            nom::combinator::map_res(nom::character::complete::digit1, str::from_utf8),
-            |s: &str| s.parse::<u32>(),
-        )(input)
-    }
-}
 
 #[proc_macro_derive(CommandParser, attributes(command, parser))]
 pub fn command_parser_derive(input: TokenStream) -> TokenStream {

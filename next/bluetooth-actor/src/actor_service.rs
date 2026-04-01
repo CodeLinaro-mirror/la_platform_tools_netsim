@@ -137,7 +137,7 @@ impl ActorService for BluetoothActor {
             })?;
 
         self.rootcanal
-            .new_controller(chip_id.0.into(), address, Box::new(callback), Some(&config_bytes))
+            .new_controller(chip_id.0, address, Box::new(callback), Some(&config_bytes))
             .to_chip_error()?;
 
         // 4. Create Chip Info in Context
@@ -201,7 +201,7 @@ impl ActorService for BluetoothActor {
             let device_id = chip.device_id;
 
             info!("Deleting chip {chip_id}");
-            self.rootcanal.remove_controller(chip_id.0.into()).to_chip_error()?;
+            self.rootcanal.remove_controller(chip_id.0).to_chip_error()?;
 
             // Notify DeviceService
             let dc = self.device_client.clone();
@@ -225,7 +225,7 @@ impl ActorService for BluetoothActor {
         match _action {
             BluetoothAction::Reset { id } => {
                 info!("Resetting Bluetooth chip {id}");
-                let _ = self.rootcanal.clear_stats(id.0.into());
+                let _ = self.rootcanal.clear_stats(id.0);
 
                 let chip = {
                     let mut chips = self.chips.lock().unwrap();
@@ -239,13 +239,13 @@ impl ActorService for BluetoothActor {
                     *chip = initial_chip.clone();
                     chip.clone()
                 };
-                Ok(BluetoothActionResult::Chip(chip))
+                Ok(BluetoothActionResult::Chip(Box::new(chip)))
             }
             BluetoothAction::GetStatistics => {
                 let mut stats_list = Vec::new();
                 let chips = self.chips.lock().unwrap();
                 for (id, chip) in chips.iter() {
-                    if let Ok(stats) = self.rootcanal.get_stats(id.0.into()) {
+                    if let Ok(stats) = self.rootcanal.get_stats(id.0) {
                         // BLE Stats
                         let mut radio_stats = netsim_model::NetsimRadioStats::default();
                         radio_stats.id = id.0;
@@ -288,8 +288,7 @@ impl BluetoothActor {
     fn sync_device_name(&self, device_id: netsim_model::DeviceId, name: String) {
         let dc = self.device_client.clone();
         tokio::spawn(async move {
-            let mut update = netsim_model::DeviceUpdate::default();
-            update.name = Some(name);
+            let update = netsim_model::DeviceUpdate { name: Some(name), ..Default::default() };
             if let Err(e) = dc.update(device_id, update).await {
                 warn!("Failed to sync device name for device {}: {:?}", device_id, e);
             }

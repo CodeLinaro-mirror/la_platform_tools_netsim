@@ -118,9 +118,7 @@ pub async fn create_capture_and_wrap_streams(
             let out_stream: PacketStream =
                 Box::new(wrapped_stream.filter_map(|item| futures::future::ready(Some(item))));
 
-            let out_sink: PacketSink = Box::pin(
-                wrapped_sink.sink_map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)),
-            );
+            let out_sink: PacketSink = Box::pin(wrapped_sink.sink_map_err(std::io::Error::other));
 
             (Some(out_stream), Some(out_sink), Some(stats))
         }

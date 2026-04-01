@@ -25,30 +25,38 @@
 //! // Interact with the Slirp instance
 //! ```
 
-#![allow(missing_docs)]
-#![allow(clippy::missing_safety_doc)]
-#![allow(unsafe_op_in_unsafe_fn)]
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-#![allow(unnecessary_transmutes)]
-// TODO(b/203002625) - since rustc 1.53, bindgen causes UB warnings
-// Remove this once bindgen figures out how to do this correctly
-#![allow(deref_nullptr)]
-
 use std::{
     convert::From,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
 };
 
-#[cfg(target_os = "linux")]
-include!("linux/bindings.rs");
+mod bindings {
+    #![allow(missing_docs)]
+    #![allow(clippy::missing_safety_doc)]
+    #![allow(unsafe_op_in_unsafe_fn)]
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+    #![allow(unnecessary_transmutes)]
+    #![allow(clippy::useless_transmute)]
+    #![allow(clippy::type_complexity)]
+    #![allow(clippy::too_many_arguments)]
+    #![allow(clippy::unnecessary_cast)]
+    // TODO(b/203002625) - since rustc 1.53, bindgen causes UB warnings
+    // Remove this once bindgen figures out how to do this correctly
+    #![allow(deref_nullptr)]
 
-#[cfg(target_os = "macos")]
-include!("macos/bindings.rs");
+    #[cfg(target_os = "linux")]
+    include!("linux/bindings.rs");
 
-#[cfg(target_os = "windows")]
-include!("windows/bindings.rs");
+    #[cfg(target_os = "macos")]
+    include!("macos/bindings.rs");
+
+    #[cfg(target_os = "windows")]
+    include!("windows/bindings.rs");
+}
+
+pub use bindings::*;
 
 impl Default for sockaddr_storage {
     /// Returns a zeroed `sockaddr_storage`.

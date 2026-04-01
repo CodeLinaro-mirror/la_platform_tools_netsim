@@ -19,12 +19,11 @@ use tracing::{info, warn};
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 /// The BDD World for Bluetooth Actor tests.
-#[allow(dead_code)]
 pub struct World {
     /// The Bluetooth Client under test.
     pub client: BluetoothClient,
     /// The mocked or real DeviceClient for interactions.
-    pub device_client: DeviceClient,
+    pub _device_client: DeviceClient,
     /// The background task running the actor (dropped on World drop).
     pub _actor_task: JoinHandle<()>,
     /// Counter for generating unique ChipIds in tests.
@@ -39,7 +38,6 @@ pub struct World {
     pub sinks: HashMap<String, mpsc::Receiver<Vec<u8>>>,
 }
 
-#[allow(dead_code)]
 impl World {
     /// Creates a new World instance.
     pub fn new() -> Self {
@@ -60,7 +58,7 @@ impl World {
 
         World {
             client,
-            device_client: resource_client,
+            _device_client: resource_client,
             _actor_task: actor_task,
             chip_id_counter: 0,
             device_id: DeviceId(1),
@@ -93,13 +91,13 @@ impl World {
         chip.id = id.0;
         chip.device_id = device_id;
         chip.product_name = name.to_string();
-        chip.variant = Some(ChipVariant::Bluetooth(netsim_model::Bluetooth {
+        chip.variant = Some(ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
             low_energy: Default::default(),
             classic: Default::default(),
             address,
             bt_properties: Default::default(),
             mode,
-        }));
+        })));
 
         let params = ChipCreate { packet_stream, packet_sink, chip };
 
@@ -210,13 +208,13 @@ impl World {
         let mut chip = Chip::new_test_ble("");
         chip.id = id.0;
         chip.device_id = self.device_id;
-        chip.variant = Some(ChipVariant::Bluetooth(netsim_model::Bluetooth {
+        chip.variant = Some(ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
             low_energy: Default::default(),
             classic: Default::default(),
             address: "".to_string(),
             bt_properties: Default::default(),
             mode,
-        }));
+        })));
 
         let params = ChipCreate { packet_stream: None, packet_sink: None, chip };
 
@@ -266,14 +264,6 @@ impl World {
 
     // --- When Steps ---
 
-    pub async fn when_create_chip(
-        &self,
-        id: ChipId,
-        params: ChipCreate,
-    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
-        self.client.0.create_with_id(id, params).await.map(|_| ())
-    }
-
     pub async fn when_delete_chip(
         &self,
         name: &str,
@@ -310,19 +300,6 @@ impl World {
         assert_eq!(chip.pose.position, expected, "Chip position matches");
     }
 
-    pub async fn then_chip_exists(&self, name: &str) {
-        let id = *self.chips.get(name).expect("Chip name tracked in World");
-        let chip = self.client.0.get(id).await.expect("Failed to get chip");
-        assert!(chip.is_some(), "Chip {} ({}) should exist", name, id);
-    }
-
-    pub async fn then_chip_does_not_exist(&self, name: &str) {
-        if let Some(id) = self.chips.get(name) {
-            let chip = self.client.0.get(*id).await.expect("Failed to get chip");
-            assert!(chip.is_none(), "Chip {} ({}) should NOT exist", name, id);
-        }
-    }
-
     pub async fn then_chip_count_is(&self, expected: usize) {
         let count = self.client.0.list().await.expect("Failed to list chips").len();
         assert_eq!(count, expected, "Chip count should be {}", expected);
@@ -331,19 +308,6 @@ impl World {
     pub async fn then_chip_name_is(&self, id: ChipId, expected: &str) {
         let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
         assert_eq!(chip.name, expected, "Chip name match");
-    }
-
-    pub async fn then_chip_address_is_generated(&self, id: ChipId) {
-        let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
-        if let Some(ChipVariant::Bluetooth(_)) = &chip.variant {
-            info!("Chip {} exists and is a Bluetooth variant.", id.0);
-            // Note: Verification of the generated address via the `Chip` struct
-            // is not currently supported by the model, as the
-            // address is used for controller initialization but not
-            // persisted in the generic `Chip` state.
-        } else {
-            panic!("Chip {} is not a Bluetooth variant", id.0);
-        }
     }
 
     pub async fn when_packet_sent(&mut self, name: &str, packet: bytes::Bytes) {

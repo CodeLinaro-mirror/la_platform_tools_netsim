@@ -106,12 +106,12 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
         kind: netsim_model::ChipKind::BLUETOOTH,
-        variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
+        variant: Some(netsim_model::ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
             address: chip_create_params.address.clone(),
             mode: chip_create_params.mode.clone(),
             bt_properties: chip_create_params.bt_properties.clone(),
             ..Default::default()
-        })),
+        }))),
         ..Default::default()
     };
 
@@ -134,7 +134,7 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
         packet_stream: Some(packet_stream),
         packet_sink: Some(packet_sink),
         device_config: device_api::DeviceConfig {
-            name: name,
+            name,
             visible: true,
             pose: Default::default(),
             builtin: false,

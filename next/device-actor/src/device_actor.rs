@@ -34,6 +34,7 @@ pub struct DeviceActor {
 }
 
 impl DeviceActor {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
         next_chip_id: Arc<AtomicU32>,

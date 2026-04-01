@@ -36,9 +36,8 @@ pub struct SmsService {
     pub waiting_for_pdu_store: bool,
 }
 
-impl SmsService {
-    /// Creates a new SmsService.
-    pub fn new() -> Self {
+impl Default for SmsService {
+    fn default() -> Self {
         Self {
             message_reference: AtomicU8::new(1),
             messages: Vec::new(),
@@ -52,7 +51,9 @@ impl SmsService {
             waiting_for_pdu_store: false,
         }
     }
+}
 
+impl SmsService {
     // --- Pure command handlers ---
 
     pub fn get_sms_count(&self) -> usize {
@@ -109,28 +110,24 @@ impl SmsService {
             } else {
                 ExecutionResult::Handled(HandledCommand::error())
             }
+        } else if (index as usize) > 0 && (index as usize - 1) < self.messages.len() {
+            self.messages.remove(index as usize - 1);
+            ExecutionResult::Handled(HandledCommand::ok())
         } else {
-            if (index as usize) > 0 && (index as usize - 1) < self.messages.len() {
-                self.messages.remove(index as usize - 1);
-                ExecutionResult::Handled(HandledCommand::ok())
-            } else {
-                ExecutionResult::Handled(HandledCommand::error())
-            }
+            ExecutionResult::Handled(HandledCommand::error())
         }
     }
 
     pub fn handle_read_sms(&mut self, sim_service: &mut SimService, index: u8) -> ExecutionResult {
         if self.storage1 == MessageStorage::Sim {
             sim_service.read_sms(index)
+        } else if let Some(pdu) = self.messages.get(index as usize - 1) {
+            let response = format!("+CMGR: 0,,{}\r\n{}\r\n", pdu.len(), hex::encode_upper(pdu));
+            let mut handled = HandledCommand::ok();
+            handled.responses.insert(0, response);
+            ExecutionResult::Handled(handled)
         } else {
-            if let Some(pdu) = self.messages.get(index as usize - 1) {
-                let response = format!("+CMGR: 0,,{}\r\n{}\r\n", pdu.len(), hex::encode_upper(pdu));
-                let mut handled = HandledCommand::ok();
-                handled.responses.insert(0, response);
-                ExecutionResult::Handled(handled)
-            } else {
-                ExecutionResult::Handled(HandledCommand::error())
-            }
+            ExecutionResult::Handled(HandledCommand::error())
         }
     }
 

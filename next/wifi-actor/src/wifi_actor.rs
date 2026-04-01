@@ -177,13 +177,11 @@ impl WifiActor {
                         debug!("ROUTING: Guest -> AP");
                         if let Some(to_ap) = &self.to_ap {
                             self.medium.wifi_stats.log_outcome(
-                                to_ap
-                                    .send(bytes::Bytes::from(tx_state.get_ieee80211_bytes()))
-                                    .map_err(|e| {
-                                        WifiError::Hostapd(Box::from(format!(
-                                            "Failed to send to AP: {e}"
-                                        )))
-                                    }),
+                                to_ap.send(tx_state.get_ieee80211_bytes()).map_err(|e| {
+                                    WifiError::Hostapd(Box::from(format!(
+                                        "Failed to send to AP: {e}"
+                                    )))
+                                }),
                                 |stats, _| stats.incr_hostapd_frames_tx(),
                             );
                         }

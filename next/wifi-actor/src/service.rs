@@ -62,7 +62,7 @@ impl ActorService for WifiActor {
         );
 
         // Register stream with context for polling
-        let mapped_stream = stream.map(move |packet| bytes::Bytes::from(packet));
+        let mapped_stream = stream.map(move |packet| packet);
         ctx.add_stream(id, Box::pin(mapped_stream));
 
         let mut chip = params.chip;

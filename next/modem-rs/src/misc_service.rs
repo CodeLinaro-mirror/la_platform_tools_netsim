@@ -18,8 +18,8 @@ pub struct MiscService {
     ifc_dte: u8,
 }
 
-impl MiscService {
-    pub fn new() -> Self {
+impl Default for MiscService {
+    fn default() -> Self {
         Self {
             clock: "".to_string(),
             speaker_volume: 1,
@@ -32,7 +32,9 @@ impl MiscService {
             ifc_dte: 2,
         }
     }
+}
 
+impl MiscService {
     // --- Pure command handlers ---
 
     pub fn handle_set_time(&mut self, time: QuotedString) -> ExecutionResult {

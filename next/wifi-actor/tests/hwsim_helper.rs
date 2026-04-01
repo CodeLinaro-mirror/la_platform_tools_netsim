@@ -36,7 +36,6 @@ pub fn wrap_ethernet_in_hwsim(
 
 /// Unwraps a HwsimMsg (as bytes or struct) and extracts the Ethernet frame if
 /// present. Note: This assumes the payload is LLC SNAP encoded Ethernet II.
-#[allow(dead_code)]
 pub fn unwrap_hwsim_to_ethernet(packet: &[u8]) -> Result<Vec<u8>, String> {
     // 1. Parse HwsimMsg
     let hwsim_msg =

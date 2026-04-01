@@ -28,5 +28,5 @@ pub enum BluetoothActionResult {
     /// The action returned a count.
     Count(usize),
     /// The action returned the updated chip state.
-    Chip(netsim_model::Chip),
+    Chip(Box<netsim_model::Chip>),
 }

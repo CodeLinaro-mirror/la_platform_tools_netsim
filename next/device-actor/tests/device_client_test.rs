@@ -143,12 +143,14 @@ fn create_add_chip_params(guid: &str, chip_name: &str) -> device_api::DeviceAddC
             manufacturer: "man-1".to_string(),
             product_name: "prod-1".to_string(),
             kind: netsim_model::ChipKind::BLUETOOTH,
-            variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
-                address: "00:00:00:00:00:00".to_string(),
-                mode: netsim_model::BluetoothMode::Device(Default::default()),
-                bt_properties: Default::default(),
-                ..Default::default()
-            })),
+            variant: Some(netsim_model::ChipVariant::Bluetooth(Box::new(
+                netsim_model::Bluetooth {
+                    address: "00:00:00:00:00:00".to_string(),
+                    mode: netsim_model::BluetoothMode::Device(Default::default()),
+                    bt_properties: Default::default(),
+                    ..Default::default()
+                },
+            ))),
             ..Default::default()
         },
     }

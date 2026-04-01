@@ -212,11 +212,6 @@ impl ModemNetworkSimulator {
         self.process_effects(effects)
     }
 
-    #[allow(dead_code)]
-    fn get_modems(&self) -> Vec<&ModemImpl> {
-        self.modems.values().collect()
-    }
-
     // Helper to find peer ID.
     fn find_peer_id<P>(&self, source_id: ModemId, predicate: P) -> Option<ModemId>
     where

@@ -130,7 +130,7 @@ impl ActorService for CellActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Vec<Self::Entity>, Self::Error> {
         let mut chips = Vec::new();
-        for (id, _state) in &self.active_chips {
+        for id in self.active_chips.keys() {
             if let Ok(info) = self.controller.get_modem_info(id.0) {
                 chips.push(netsim_model::Chip {
                     kind: netsim_model::ChipKind::CELLULAR,

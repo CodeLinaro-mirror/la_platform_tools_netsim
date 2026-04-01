@@ -1,3 +1,4 @@
+#![allow(clippy::field_reassign_with_default)]
 // Copyright 2025 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
@@ -251,7 +252,7 @@ impl World {
             match result {
                 Ok(Ok(_)) => {}
                 Ok(Err(e)) => panic!("Daemon task failed: {}", e),
-                Err(_) => panic!("Daemon failed to shut down within timeout"),
+                Err(e) => panic!("Daemon failed to shut down within timeout: {e}"),
             }
         } else {
             panic!("No daemon spawned to shut down");

@@ -12,10 +12,9 @@ use tracing::debug;
 /// This manager exists for two reasons:
 ///
 /// 1. RFC2817 Compliance (b/37055721): Requires converting IP address to
-/// hostname for HTTP CONNECT requests.
+///    hostname for HTTP CONNECT requests.
 ///
-/// 2. Proxy bypass/exclusion list requires matching on host name
-/// patterns.
+/// 2. Proxy bypass/exclusion list requires matching on host name patterns.
 use crate::dns;
 
 /// DNS Manager of IP addresses to FQDN

@@ -45,12 +45,12 @@ pub(crate) async fn setup_virtual_chip(
         manufacturer: "Google".to_string(),
         product_name: "Google".to_string(),
         kind: netsim_model::ChipKind::BLUETOOTH,
-        variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
+        variant: Some(netsim_model::ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
             address: chip_create_params.address.clone(),
             mode: chip_create_params.mode.clone(),
             bt_properties: chip_create_params.bt_properties.clone(),
             ..Default::default()
-        })),
+        }))),
         ..Default::default()
     };
 
@@ -104,7 +104,7 @@ pub(crate) async fn run_websocket_transport(
             // Ref: RFC 6455, Section 5.2 - Base Framing Protocol
             match websocket_reader.read() {
                 Ok(Message::Binary(data)) => {
-                    if stream_tx.blocking_send(Ok(Bytes::from(data))).is_err() {
+                    if stream_tx.blocking_send(Ok(data)).is_err() {
                         break;
                     }
                 }

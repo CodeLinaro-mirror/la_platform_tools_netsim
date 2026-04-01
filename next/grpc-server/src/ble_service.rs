@@ -72,12 +72,14 @@ impl BleService for BleServiceImpl {
                 manufacturer: "Netsim".to_string(),
                 product_name: "Scanner".to_string(),
                 kind: netsim_model::ChipKind::BLUETOOTH,
-                variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
-                    address: "".to_string(),
-                    mode: BluetoothMode::Scanner(ScannerParams { active: req.active }),
-                    bt_properties: Default::default(),
-                    ..Default::default()
-                })),
+                variant: Some(netsim_model::ChipVariant::Bluetooth(Box::new(
+                    netsim_model::Bluetooth {
+                        address: "".to_string(),
+                        mode: BluetoothMode::Scanner(ScannerParams { active: req.active }),
+                        bt_properties: Default::default(),
+                        ..Default::default()
+                    },
+                ))),
                 ..Default::default()
             };
 
@@ -157,12 +159,14 @@ impl BleService for BleServiceImpl {
                 manufacturer: "Netsim".to_string(),
                 product_name: "Sniffer".to_string(),
                 kind: netsim_model::ChipKind::BLUETOOTH,
-                variant: Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
-                    address: "".to_string(),
-                    mode: BluetoothMode::Sniffer(SnifferParams::default()),
-                    bt_properties: Default::default(),
-                    ..Default::default()
-                })),
+                variant: Some(netsim_model::ChipVariant::Bluetooth(Box::new(
+                    netsim_model::Bluetooth {
+                        address: "".to_string(),
+                        mode: BluetoothMode::Sniffer(SnifferParams::default()),
+                        bt_properties: Default::default(),
+                        ..Default::default()
+                    },
+                ))),
                 ..Default::default()
             };
 

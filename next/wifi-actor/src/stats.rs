@@ -28,6 +28,12 @@ pub struct MockClock {
     time_millis: Arc<std::sync::atomic::AtomicU64>,
 }
 
+impl Default for MockClock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockClock {
     pub fn new() -> Self {
         Self { time_millis: Arc::new(std::sync::atomic::AtomicU64::new(0)) }

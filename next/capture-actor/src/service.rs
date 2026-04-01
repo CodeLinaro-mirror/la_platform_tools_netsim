@@ -264,7 +264,7 @@ impl ActorService for CaptureActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         let mut entity = self.entities.remove(&id).ok_or_else(|| ChipError::ChipNotFound(id))?;
-        let _ = self.update_entity(&mut entity, update, _ctx).await?;
+        self.update_entity(&mut entity, update, _ctx).await?;
         let (records_written, bytes_written) =
             self.writers.get(&id).map(|w| w.get_stats()).unwrap_or_default();
         let mut info = entity.info.clone();

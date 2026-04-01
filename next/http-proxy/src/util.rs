@@ -35,7 +35,7 @@ pub type RawDescriptor = i32;
 
 /// Proxy configuration
 pub struct ProxyConfig {
-    pub protocol: String,
+    pub _protocol: String,
     pub addr: SocketAddr,
     pub username: Option<String>,
     pub password: Option<String>,
@@ -52,13 +52,13 @@ impl ProxyConfig {
     ///
     /// where:
     ///
-    /// * `protocol`: The network protocol (e.g., `http`, `https`,
-    /// `socks5`). If not provided, defaults to `http`.
+    /// * `protocol`: The network protocol (e.g., `http`, `https`, `socks5`). If
+    ///   not provided, defaults to `http`.
     /// * `username`: and `password` are optional credentials for
     ///   authentication.
-    /// * `host`: The hostname or IP address of the proxy server. If
-    /// it's an IPv6 address, it should be enclosed in square brackets
-    /// (e.g., "[::1]").
+    /// * `host`: The hostname or IP address of the proxy server. If it's an
+    ///   IPv6 address, it should be enclosed in square brackets (e.g.,
+    ///   "[::1]").
     /// * `port`: The port number on which the proxy server is listening.
     ///
     /// # Errors
@@ -98,7 +98,12 @@ impl ProxyConfig {
             .ok_or(Error::InvalidHost)?
             .ip();
 
-        Ok(ProxyConfig { protocol, username, password, addr: SocketAddr::from((host, port)) })
+        Ok(ProxyConfig {
+            _protocol: protocol,
+            username,
+            password,
+            addr: SocketAddr::from((host, port)),
+        })
     }
 }
 
@@ -130,7 +135,7 @@ mod tests {
             (
                 "127.0.0.1:8080",
                 ProxyConfig {
-                    protocol: "http".to_owned(),
+                    _protocol: "http".to_owned(),
                     addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
@@ -139,7 +144,7 @@ mod tests {
             (
                 "http://127.0.0.1:8080",
                 ProxyConfig {
-                    protocol: "http".to_owned(),
+                    _protocol: "http".to_owned(),
                     addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
@@ -148,7 +153,7 @@ mod tests {
             (
                 "https://127.0.0.1:8080",
                 ProxyConfig {
-                    protocol: "https".to_owned(),
+                    _protocol: "https".to_owned(),
                     addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
@@ -157,7 +162,7 @@ mod tests {
             (
                 "sock5://127.0.0.1:8080",
                 ProxyConfig {
-                    protocol: "sock5".to_owned(),
+                    _protocol: "sock5".to_owned(),
                     addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)),
                     username: None,
                     password: None,
@@ -166,7 +171,7 @@ mod tests {
             (
                 "user:pass@192.168.0.18:3128",
                 ProxyConfig {
-                    protocol: "http".to_owned(),
+                    _protocol: "http".to_owned(),
                     addr: SocketAddr::from((IpAddr::V4(Ipv4Addr::new(192, 168, 0, 18)), 3128)),
                     username: Some("user".to_string()),
                     password: Some("pass".to_string()),
@@ -175,7 +180,7 @@ mod tests {
             (
                 "https://[::1]:7000",
                 ProxyConfig {
-                    protocol: "https".to_owned(),
+                    _protocol: "https".to_owned(),
                     addr: SocketAddr::from((
                         IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
                         7000,
@@ -187,7 +192,7 @@ mod tests {
             (
                 "[::1]:7000",
                 ProxyConfig {
-                    protocol: "http".to_owned(),
+                    _protocol: "http".to_owned(),
                     addr: SocketAddr::from((
                         IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
                         7000,

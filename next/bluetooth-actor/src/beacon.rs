@@ -34,8 +34,8 @@ fn send_hci_command<T: HciCommand + IntoBytes + Immutable + KnownLayout>(
         parameter_total_length: payload.as_bytes().len() as u8,
     };
     let h4_packet = std::iter::once(PacketType::COMMAND.value() as u8)
-        .chain(header.as_bytes().into_iter().copied())
-        .chain(payload.as_bytes().into_iter().copied())
+        .chain(header.as_bytes().iter().copied())
+        .chain(payload.as_bytes().iter().copied())
         .collect();
     rootcanal.receive_hci(chip_id.into(), h4_packet).to_chip_error()
 }
@@ -45,7 +45,7 @@ pub fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
     params: &BeaconParams,
-    device_name: &String,
+    device_name: &str,
 ) -> Result<(), ChipError> {
     // Reset the controller first.
     send_hci_command(rootcanal, chip_id, Reset {})?;
@@ -76,7 +76,7 @@ pub fn create(
     let adv_data = if let Some(adv_data) = &params.ble_beacon.adv_data {
         construct_data(
             adv_data,
-            &if adv_data.include_device_name { Some(device_name.clone()) } else { None },
+            &if adv_data.include_device_name { Some(device_name.to_string()) } else { None },
         )
     } else {
         construct_data(&netsim_model::AdvertiseData::default(), &None)
@@ -98,7 +98,7 @@ pub fn create(
     let scan_resp_data = if let Some(scan_resp) = &params.ble_beacon.scan_response {
         construct_data(
             scan_resp,
-            &if scan_resp.include_device_name { Some(device_name.clone()) } else { None },
+            &if scan_resp.include_device_name { Some(device_name.to_string()) } else { None },
         )
     } else {
         vec![]

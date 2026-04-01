@@ -55,6 +55,7 @@ fn init_error<E: std::fmt::Display>(e: E) -> RunResult {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum StartUpMode {
     Owner(NetsimDaemon, IniFileInitialized),
     Client(NetsimConfig),
@@ -114,14 +115,14 @@ async fn handle_new_connection(
         chip.address = chip.id.clone();
     }
 
-    let chip_variant = match ChipKind::from(chip.kind) {
+    let chip_variant = match chip.kind {
         ChipKind::BLUETOOTH => {
-            Some(netsim_model::ChipVariant::Bluetooth(netsim_model::Bluetooth {
+            Some(netsim_model::ChipVariant::Bluetooth(Box::new(netsim_model::Bluetooth {
                 address: chip.address.clone(),
                 bt_properties: Default::default(),
                 mode: BluetoothMode::Device(DeviceParams {}),
                 ..Default::default()
-            }))
+            })))
         }
         ChipKind::UWB => {
             Some(netsim_model::ChipVariant::Uwb(netsim_model::Uwb { radio: Default::default() }))
@@ -140,7 +141,7 @@ async fn handle_new_connection(
 
     let chip_instance = netsim_model::Chip {
         id: 0,
-        kind: ChipKind::from(chip.kind),
+        kind: chip.kind,
         name: chip.name.clone(),
         manufacturer: chip.manufacturer.clone(),
         product_name: chip.product_name.clone(),
@@ -161,8 +162,7 @@ async fn handle_new_connection(
         })
     }));
 
-    let api_sink: ApiPacketSink =
-        Box::pin(sink.sink_map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+    let api_sink: ApiPacketSink = Box::pin(sink.sink_map_err(io::Error::other));
 
     let request = DeviceAddChip {
         device_guid,
@@ -177,6 +177,7 @@ async fn handle_new_connection(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn setup_grpc_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
@@ -270,6 +271,7 @@ impl NetsimDaemon {
     /// - `Ok(StartUpMode::Client)`: Config of running daemon, lock not
     ///   acquired.
     /// - `Err(RunResult::InitializationError)`: Fatal error.
+    #[allow(clippy::new_ret_no_self)]
     pub async fn new() -> Result<StartUpMode, RunResult> {
         let discovery_dir = get_discovery_directory();
         Self::new_with_dirs(discovery_dir, Args::parse()).await

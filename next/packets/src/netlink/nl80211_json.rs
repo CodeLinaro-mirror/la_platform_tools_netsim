@@ -20,19 +20,19 @@ use crate::netlink::{nl80211_attr::NlAttrHdr, nl80211_util};
 /// attributes.
 #[derive(Debug)]
 pub enum JsonError {
-    SerdeJsonError(serde_json::Error),
-    HexParseError(hex::FromHexError),
-    ConversionError(String),
+    SerdeJson(serde_json::Error),
+    HexParse(hex::FromHexError),
+    Conversion(String),
 }
 
 impl fmt::Display for JsonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            JsonError::SerdeJsonError(e) => {
+            JsonError::SerdeJson(e) => {
                 write!(f, "JSON serialization/deserialization error: {}", e)
             }
-            JsonError::HexParseError(e) => write!(f, "Hex parsing error: {}", e),
-            JsonError::ConversionError(s) => write!(f, "Conversion error: {}", s),
+            JsonError::HexParse(e) => write!(f, "Hex parsing error: {}", e),
+            JsonError::Conversion(s) => write!(f, "Conversion error: {}", s),
         }
     }
 }
@@ -41,13 +41,13 @@ impl std::error::Error for JsonError {}
 
 impl From<serde_json::Error> for JsonError {
     fn from(err: serde_json::Error) -> Self {
-        JsonError::SerdeJsonError(err)
+        JsonError::SerdeJson(err)
     }
 }
 
 impl From<hex::FromHexError> for JsonError {
     fn from(err: hex::FromHexError) -> Self {
-        JsonError::HexParseError(err)
+        JsonError::HexParse(err)
     }
 }
 

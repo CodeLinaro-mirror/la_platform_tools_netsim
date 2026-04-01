@@ -21,7 +21,6 @@ pub struct LinkActor {
     /// Map of ChipId to ChipKind for validation
     pub(crate) chip_kind_map: HashMap<ChipId, ChipKind>,
     /// Map of ChipKind to ChipClient for forwarding updates
-    #[allow(dead_code)]
     pub(crate) chip_clients: HashMap<ChipKind, Box<dyn netsim_model::ChipClient>>,
     pub(crate) links: HashMap<link_api::LinkId, Link>,
     pub(crate) next_id: u32,
@@ -51,7 +50,7 @@ impl LinkActor {
             .links
             .values()
             .filter(|l| l.sender == chip_id)
-            .map(|l| (l.receiver, l.rssi as i8))
+            .map(|l| (l.receiver, l.rssi))
             .collect();
 
         let update = netsim_model::ChipUpdate { links: Some(links), ..Default::default() };

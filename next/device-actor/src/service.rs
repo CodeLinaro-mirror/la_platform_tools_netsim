@@ -128,7 +128,7 @@ impl DeviceActor {
         let mut stats_futures = Vec::new();
         let mut state_futures = Vec::new();
 
-        for (_kind, client) in &self.chip_clients {
+        for client in self.chip_clients.values() {
             // Stats requests
             stats_futures.push(async move {
                 tokio::time::timeout(CHIP_READ_TIMEOUT, client.read_statistics())
@@ -425,7 +425,7 @@ impl DeviceActor {
                     .into_iter()
                     .filter(|s| s.id == chip.id)
                     .map(|mut s| {
-                        s.id = device_id.0.into();
+                        s.id = device_id.0;
                         s.duration_secs =
                             stream_stats.as_ref().map_or(0, |x| x.start_time.elapsed().as_secs());
                         s
@@ -467,7 +467,7 @@ impl DeviceActor {
     async fn perform_add_chip(
         next_chip_id: &Arc<AtomicU32>,
         chip_clients: &HashMap<ChipKind, Box<dyn ChipClient>>,
-        link_client: &Box<dyn LinkClient>,
+        link_client: &dyn LinkClient,
         capture_client: &Option<Arc<dyn CaptureSender>>,
         entity: &mut InternalDevice,
         mut chip: netsim_model::Chip,
@@ -558,7 +558,7 @@ impl DeviceActor {
         Self::perform_add_chip(
             &self.next_chip_id,
             &self.chip_clients,
-            &self.link_client,
+            self.link_client.as_ref(),
             &self.capture_client,
             &mut entity,
             chip,
@@ -597,7 +597,7 @@ impl DeviceActor {
             let chip_id = Self::perform_add_chip(
                 &self.next_chip_id,
                 &self.chip_clients,
-                &self.link_client,
+                self.link_client.as_ref(),
                 &self.capture_client,
                 entity,
                 params.chip,
@@ -811,9 +811,7 @@ impl ActorService for DeviceActor {
                 continue;
             };
 
-            let mut chip_update = ChipUpdate::default();
-
-            chip_update.pose = update.pose.clone();
+            let mut chip_update = ChipUpdate { pose: update.pose.clone(), ..Default::default() };
 
             // Start with ID-based matching
             let mut specific_update = None;
@@ -824,8 +822,7 @@ impl ActorService for DeviceActor {
                 // Priority 2: Variant match (if no ID match found)
                 if specific_update.is_none() {
                     specific_update = chips.iter().find(|u| {
-                        u.id.is_none()
-                            && u.variant.as_ref().map_or(false, |v| v.kind() == chip.kind)
+                        u.id.is_none() && u.variant.as_ref().is_some_and(|v| v.kind() == chip.kind)
                     });
                 }
             }
@@ -879,7 +876,7 @@ impl ActorService for DeviceActor {
                 Ok(DeviceActionResult::Success)
             }
             DeviceAction::AddChipByGuid { params } => {
-                self.perform_add_chip_by_guid(params, ctx).await
+                self.perform_add_chip_by_guid(*params, ctx).await
             }
             DeviceAction::NotifyChipRemoved(device_id, chip_id) => {
                 // Verify ID match if provided
@@ -915,11 +912,11 @@ impl ActorService for DeviceActor {
                 };
 
                 // Convert API DeviceChipCreate to Model Chip
-                let chip: netsim_model::Chip = chip_config.into();
+                let chip: netsim_model::Chip = (*chip_config).into();
                 let chip_id_res = Self::perform_add_chip(
                     &self.next_chip_id,
                     &self.chip_clients,
-                    &self.link_client,
+                    self.link_client.as_ref(),
                     &self.capture_client,
                     entity,
                     chip,

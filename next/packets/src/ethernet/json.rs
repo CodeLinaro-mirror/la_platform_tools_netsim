@@ -36,22 +36,22 @@ pub fn to_json(ethernet_packet: &EthernetPacket, n: usize) -> Value {
 
 #[derive(Debug)]
 pub enum JsonError {
-    SerdeJsonError(serde_json::Error),
-    MacAddrParseError(String),
+    SerdeJson(serde_json::Error),
+    MacAddrParse(String),
 }
 
 impl fmt::Display for JsonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            JsonError::SerdeJsonError(e) => write!(f, "JSON error: {}", e),
-            JsonError::MacAddrParseError(s) => write!(f, "MAC address parse error: {}", s),
+            JsonError::SerdeJson(e) => write!(f, "JSON error: {}", e),
+            JsonError::MacAddrParse(s) => write!(f, "MAC address parse error: {}", s),
         }
     }
 }
 
 impl From<serde_json::Error> for JsonError {
     fn from(err: serde_json::Error) -> Self {
-        JsonError::SerdeJsonError(err)
+        JsonError::SerdeJson(err)
     }
 }
 
@@ -69,7 +69,7 @@ impl TryFrom<JsonMacAddr> for MacAddr {
     type Error = JsonError;
 
     fn try_from(json_mac: JsonMacAddr) -> Result<Self, Self::Error> {
-        json_mac.0.parse().map_err(JsonError::MacAddrParseError)
+        json_mac.0.parse().map_err(JsonError::MacAddrParse)
     }
 }
 

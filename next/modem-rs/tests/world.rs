@@ -6,7 +6,6 @@ use std::{collections::HashMap, sync::Arc};
 use modem_rs::{test_utils::MockModemHandler, time::MockClock, ModemId, ModemNetworkSimulator};
 
 /// The BDD World for Modem-rs tests.
-#[allow(dead_code)]
 pub struct World {
     /// The Modem Network Simulator under test.
     pub manager: ModemNetworkSimulator,
@@ -19,12 +18,13 @@ pub struct World {
 }
 
 impl World {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         crate::common::init_logger();
         // No network handler needed for constructor.
         // If tests need to inspect network events, they should capture them from
         // dispatch output. For now, we assume tests rely on modem responses.
-        let clock = Arc::new(MockClock::new());
+        let clock = Arc::new(MockClock::default());
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let manager = ModemNetworkSimulator::new_with_clock(clock.clone(), tx);
 

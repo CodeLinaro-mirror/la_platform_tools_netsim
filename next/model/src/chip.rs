@@ -83,7 +83,7 @@ pub enum ChipRequest {
         /// The ID of the new chip.
         id: ChipId,
         /// The parameters for the new chip.
-        params: ChipCreate,
+        params: Box<ChipCreate>,
         /// The channel to send the result.
         respond_to: Responder<()>,
     },
@@ -278,7 +278,7 @@ fn default_enabled() -> bool {
 /// - **Cell**: Contains cellular-specific state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ChipVariant {
-    Bluetooth(crate::bluetooth::Bluetooth),
+    Bluetooth(Box<crate::bluetooth::Bluetooth>),
     Wifi(crate::wifi::Wifi),
     Uwb(crate::uwb::Uwb),
     Cell(crate::cell::Cell),
@@ -287,20 +287,20 @@ pub enum ChipVariant {
 impl From<ChipKind> for ChipVariant {
     fn from(kind: ChipKind) -> Self {
         match kind {
-            ChipKind::BLUETOOTH => ChipVariant::Bluetooth(crate::bluetooth::Bluetooth {
+            ChipKind::BLUETOOTH => ChipVariant::Bluetooth(Box::new(crate::bluetooth::Bluetooth {
                 low_energy: Default::default(),
                 classic: Default::default(),
                 address: String::new(),
                 bt_properties: Default::default(),
                 mode: crate::chip::BluetoothMode::Device(Default::default()),
-            }),
+            })),
             ChipKind::WIFI => ChipVariant::Wifi(Default::default()),
             ChipKind::UWB => ChipVariant::Uwb(Default::default()),
             ChipKind::CELLULAR => ChipVariant::Cell(crate::cell::Cell { state: "unknown".into() }),
             // Use Bluetooth as fallback for generic/unknown types if necessary,
             // or panic if this is unreachable. For now, default to Bluetooth for unimplemented
             // types.
-            _ => ChipVariant::Bluetooth(Default::default()),
+            _ => ChipVariant::Bluetooth(Box::default()),
         }
     }
 }
@@ -414,7 +414,7 @@ impl ChipVariantUpdate {
 /// Wi-Fi). This client provides a high-level API for sending `ChipRequest`
 /// messages to the server over an `mpsc` channel. It abstracts away the channel
 /// and `oneshot` responder boilerplate for each command.
-
+///
 /// A generic client for interacting with any chip server actor (UWB, WiFi,
 /// Cell).
 #[derive(Clone)]
@@ -440,7 +440,7 @@ impl ChipClient for RadioChipClient {
     async fn create(&self, id: ChipId, params: ChipCreate) -> Result<(), ClientError> {
         let (tx, rx) = oneshot::channel();
         self.sender
-            .send(ChipRequest::Create { id, params, respond_to: tx })
+            .send(ChipRequest::Create { id, params: Box::new(params), respond_to: tx })
             .await
             .map_err(|e| ClientError::Send(e.to_string()))?;
         rx.await.map_err(|e| ClientError::Recv(e.to_string()))?.map_err(ClientError::Chip)

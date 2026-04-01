@@ -97,7 +97,7 @@ impl TapInterface {
 
         // SAFETY: `fd` is a valid open file descriptor for /dev/net/tun.
         // `if_req` is a valid libc::ifreq struct on the stack.
-        unsafe { tunsetiff(fd.as_raw_fd(), &mut if_req) }
+        unsafe { tunsetiff(fd.as_raw_fd(), &if_req) }
             .map_err(|e| WifiError::Internal(Box::from(format!("Failed to TUNSETIFF: {}", e))))?;
 
         // Set non-blocking
@@ -470,7 +470,7 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
             let written = tap.write(&eth).await.map_err(|e| {
                 crate::error::WifiError::Network(Box::from(format!("TAP write failed: {}", e)))
             });
-            return written.map(|_| payload_len);
+            written.map(|_| payload_len)
         }
         #[cfg(not(target_os = "linux"))]
         {

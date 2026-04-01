@@ -3,7 +3,6 @@
 
 use netsim_proto::access_point;
 
-#[allow(dead_code)]
 pub fn print_list_ap_response(response: &access_point::ListAccessPointsResponse, _verbose: bool) {
     if response.access_points.is_empty() {
         println!("No available Access Points found.");
