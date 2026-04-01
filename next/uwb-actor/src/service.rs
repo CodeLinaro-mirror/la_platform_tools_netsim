@@ -167,15 +167,12 @@ impl ActorService for UwbActor {
                     .read()
                     .unwrap()
                     .values()
-                    .map(|state| netsim_model::stats::NetsimRadioStats {
-                        id: state.chip.id,
-                        name: state.chip.name.clone(),
-                        kind: netsim_model::stats::RadioKind::Uwb,
-                        tx_count: 0,
-                        rx_count: 0,
-                        tx_bytes: 0,
-                        rx_bytes: 0,
-                        ..Default::default()
+                    .map(|state| {
+                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        radio_stats.id = state.chip.id;
+                        radio_stats.name = state.chip.name.clone();
+                        radio_stats.kind = netsim_model::stats::RadioKind::Uwb;
+                        radio_stats
                     })
                     .collect();
                 Ok(UwbActionResult::Statistics(stats))
