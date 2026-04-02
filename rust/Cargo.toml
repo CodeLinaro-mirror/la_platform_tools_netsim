@@ -3,7 +3,6 @@
 
 [workspace]
 members = [
-  "proto",
   "cli",
   "common",
   "daemon",

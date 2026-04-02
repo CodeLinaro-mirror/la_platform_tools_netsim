@@ -31,16 +31,6 @@ pub fn chip_kind_to_radio_kind(kind: ChipKind) -> crate::stats::RadioKind {
         _ => RadioKind::Unspecified,
     }
 }
-pub fn chip_kind_to_proto(kind: ChipKind) -> netsim_proto::stats::netsim_radio_stats::Kind {
-    use netsim_proto::stats::netsim_radio_stats::Kind;
-    match kind {
-        ChipKind::BLUETOOTH => Kind::BLUETOOTH_LOW_ENERGY,
-        ChipKind::WIFI => Kind::WIFI,
-        ChipKind::UWB => Kind::UWB,
-        ChipKind::NFC => Kind::NFC,
-        _ => Kind::UNSPECIFIED,
-    }
-}
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Radio {
     pub state: Option<bool>,
