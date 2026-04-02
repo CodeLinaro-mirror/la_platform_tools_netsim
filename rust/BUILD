@@ -23,7 +23,6 @@ rustfmt_test(
         "//rust/http-proxy:netsim_http_proxy",
         "//rust/libslirp-rs:netsim_libslirp_rs",
         "//rust/packets:netsim_packets",
-        "//rust/proto-cf",
     ],
 )
 

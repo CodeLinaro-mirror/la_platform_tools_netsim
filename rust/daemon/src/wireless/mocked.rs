@@ -36,11 +36,11 @@ impl WirelessChip for Mock {
     fn get_stats(&self, _duration_secs: u64) -> Vec<ProtoRadioStats> {
         let mut stats = ProtoRadioStats::new();
         stats.kind = Some(EnumOrUnknown::new(match self.chip_kind {
-            ProtoChipKind::UNSPECIFIED => netsim_radio_stats::Kind::UNSPECIFIED,
             ProtoChipKind::BLUETOOTH => netsim_radio_stats::Kind::BLUETOOTH_LOW_ENERGY,
             ProtoChipKind::WIFI => netsim_radio_stats::Kind::WIFI,
             ProtoChipKind::UWB => netsim_radio_stats::Kind::UWB,
             ProtoChipKind::BLUETOOTH_BEACON => netsim_radio_stats::Kind::BLE_BEACON,
+            _ => netsim_radio_stats::Kind::UNSPECIFIED,
         }));
         vec![stats]
     }
