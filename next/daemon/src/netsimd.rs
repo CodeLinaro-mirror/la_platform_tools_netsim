@@ -171,6 +171,7 @@ async fn setup_grpc_listener(
     streams: &mut Streams,
     listener_addresses: &mut HashMap<String, StreamAddress>,
     requested_port: u16,
+    enable_cli_ui: bool,
     device_client: DeviceClient,
     link_client: LinkClient,
     ap_client: ap_actor::ApClient,
@@ -183,6 +184,7 @@ async fn setup_grpc_listener(
     // Start the gRPC server
     let (server, port) = grpc_server::server::start(
         requested_port.into(),
+        enable_cli_ui,
         device_client,
         link_client,
         ap_client,
@@ -382,6 +384,7 @@ impl NetsimDaemon {
             &mut streams,
             &mut listener_addresses,
             args.grpc_port.unwrap_or(0),
+            !args.no_cli_ui,
             device_client.clone(),
             link_client.clone(),
             ap_client.clone(),
