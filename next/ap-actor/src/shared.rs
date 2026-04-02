@@ -15,7 +15,7 @@ use ccm::{
     consts::{U13, U8},
     Ccm,
 };
-use netsim_packets::ieee80211::{CcmpHeader, Ieee80211, MacAddress};
+use netsim_packets::{CcmpHeader, Ieee80211, MacAddress};
 use tracing::error;
 use zerocopy::IntoBytes;
 

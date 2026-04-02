@@ -5,7 +5,7 @@ use std::io::Write;
 
 use futures_util::StreamExt;
 use grpcio::CallOption;
-use netsim_packets::pcap::{create_bredr_bb_packet, create_le_ll_packet};
+use netsim_packets::{create_bredr_bb_packet, create_le_ll_packet};
 use netsim_proto::{ble_service::ScanRequest, ble_service_grpc::BleServiceClient, model::Position};
 
 use super::{

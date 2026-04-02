@@ -9,7 +9,7 @@ use netsim_model::{
     chip::{Chip, ChipId},
     stats::NetsimRadioStats,
 };
-use netsim_packets::ieee80211::Ieee80211;
+use netsim_packets::Ieee80211;
 use netsim_proto::stats::WifiStats as ProtoWifiStats;
 use slirp_actor::SlirpClient;
 use tokio::sync::mpsc::UnboundedSender;
@@ -25,9 +25,6 @@ use crate::{
     medium::{tx_packet_state::InfraTarget, Medium},
     slirp_gateway::SlirpGateway,
 };
-
-/// ID for a Chip (Station)
-pub type ChipIdType = u32;
 
 #[derive(Debug)]
 pub enum WifiReq {

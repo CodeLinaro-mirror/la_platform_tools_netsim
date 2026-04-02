@@ -5,14 +5,9 @@ use std::time::Duration;
 
 use ap_actor::ffi::{DigestType, Hmac};
 use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::{
-        eapol::{
-            EapolHeader, EapolKeyFrame, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
-        },
-        management_subtype, DataFrameHeader, FrameControl, Ieee80211, SequenceControl,
-    },
-    llc::{control_field, sap, LlcSnapHeader},
+    control_field, management_subtype, sap, DataFrameHeader, EapolHeader, EapolKeyFrame,
+    FrameControl, Ieee80211, LlcSnapHeader, MacAddr, SequenceControl, EAPOL_KEY_DESC_TYPE_RSN,
+    EAPOL_TYPE_KEY, EAPOL_VERSION,
 };
 use tracing::info;
 use zerocopy::{FromBytes, IntoBytes};

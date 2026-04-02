@@ -4,12 +4,10 @@
 use actor_framework::DynContext;
 use netsim_model::chip::{ChipId, WifiMode};
 use netsim_packets::{
-    ieee80211::{
-        ie::IeIterator, management_subtype, tags, wmm::write_wmm_param_element, write_ie,
-        AssociationResponseFixedFields, AuthenticationFixedFields, BeaconFixedFields,
-        BeaconFrameHeader, FrameControl, Ieee80211, MacHeader3Addr, SequenceControl,
-    },
-    llc::{control_field, sap, LlcSnapHeader},
+    control_field, management_subtype, sap, tags, write_ie, write_wmm_param_element,
+    AssociationResponseFixedFields, AuthenticationFixedFields, BeaconFixedFields,
+    BeaconFrameHeader, FrameControl, IeIterator, Ieee80211, LlcSnapHeader, MacHeader3Addr,
+    SequenceControl,
 };
 use tracing::{debug, error, info, warn};
 use zerocopy::{IntoBytes, U16};
@@ -37,7 +35,7 @@ impl Ieee80211Manager {
             frame_control: FrameControl::new(0x0080), /* Mgmt (00), Beacon (1000) -> 0x0080 (LE:
                                                        * 80 00) */
             duration: U16::new(0),
-            da: netsim_packets::ethernet::MacAddr { bytes: [0xFF; 6] },
+            da: netsim_packets::MacAddr { bytes: [0xFF; 6] },
             sa: ap.config.bssid,
             bssid: ap.config.bssid,
             sequence_control: SequenceControl::new(0),
@@ -125,9 +123,9 @@ impl Ieee80211Manager {
         // Extended Capabilities (Tag 127)
         if ap.config.ftm_responder_enabled {
             let mut ext_cap = Vec::new();
-            netsim_packets::ieee80211::ie::set_ext_cap(
+            netsim_packets::set_ext_cap(
                 &mut ext_cap,
-                netsim_packets::ieee80211::ie::tags::EXTENDED_CAPABILITIES_FTM_RESPONDER_BIT,
+                netsim_packets::EXTENDED_CAPABILITIES_FTM_RESPONDER_BIT,
             );
             write_ie(body, tags::EXTENDED_CAPABILITIES, &ext_cap);
         }
@@ -196,9 +194,9 @@ impl Ieee80211Manager {
         debug!("ApActor: Action Frame Cat={} Act={} from {}", category, action, src);
 
         // Public Action (Category 4)
-        if category == netsim_packets::ieee80211::action::category::PUBLIC {
+        if category == netsim_packets::category::PUBLIC {
             // FTM Request (Action 32)
-            if action == netsim_packets::ieee80211::action::public_action::FTM_REQUEST {
+            if action == netsim_packets::public_action::FTM_REQUEST {
                 info!("ApActor: Received FTM Request from {}", src);
                 // FIXME: Parse Dialog Token from action frame body (Trigger field).
                 // For now, we assume a standard trigger and generate a fixed response sequence.
@@ -360,7 +358,7 @@ impl Ieee80211Manager {
     fn build_auth_frame(
         &self,
         ap: &ApState,
-        dest: netsim_packets::ethernet::MacAddr,
+        dest: netsim_packets::MacAddr,
         alg: u16,
         seq: u16,
         status: u16,
@@ -390,7 +388,7 @@ impl Ieee80211Manager {
     pub fn build_deauth_frame(
         &self,
         ap: &ApState,
-        dest: netsim_packets::ethernet::MacAddr,
+        dest: netsim_packets::MacAddr,
         reason_code: u16,
     ) -> Vec<u8> {
         let mut frame = Vec::new();
@@ -411,7 +409,7 @@ impl Ieee80211Manager {
     fn build_assoc_resp(
         &self,
         ap: &ApState,
-        dest: netsim_packets::ethernet::MacAddr,
+        dest: netsim_packets::MacAddr,
         status: u16,
     ) -> Vec<u8> {
         let mut resp = Vec::new();
@@ -621,12 +619,7 @@ impl Ieee80211Manager {
     }
 
     // Helper to wrap EAPOL in Data Frame
-    fn wrap_eapol(
-        &self,
-        ap: &ApState,
-        dest: netsim_packets::ethernet::MacAddr,
-        payload: &[u8],
-    ) -> Vec<u8> {
+    fn wrap_eapol(&self, ap: &ApState, dest: netsim_packets::MacAddr, payload: &[u8]) -> Vec<u8> {
         let mut frame = Vec::new();
 
         // 802.11 Header
@@ -648,7 +641,7 @@ impl Ieee80211Manager {
             sap::SNAP,
             control_field::UI,
             [0x00, 0x00, 0x00],
-            netsim_packets::ethernet::ether_type::EAPOL,
+            netsim_packets::ether_type::EAPOL,
         );
         frame.extend_from_slice(llc.as_bytes());
 

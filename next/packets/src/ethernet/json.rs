@@ -73,15 +73,6 @@ impl TryFrom<JsonMacAddr> for MacAddr {
     }
 }
 
-/// Inner fields for `JsonEthernetFrame`, mimicking `tshark`'s `eth` object
-/// structure.
-///
-/// This struct is currently empty as it serves as a placeholder or marker for
-/// potential future expansion where specific inner fields might need to be
-/// grouped.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct JsonEthernetFrameFields {}
-
 #[derive(Serialize)]
 pub struct Ethernet {
     #[serde(rename = "eth.dst")]

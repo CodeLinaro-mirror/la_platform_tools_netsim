@@ -180,7 +180,7 @@ impl GatewayTrait for TapGateway {
     async fn send_80211(
         &self,
         chip_id: ChipId,
-        ieee80211: &netsim_packets::ieee80211::Ieee80211,
+        ieee80211: &netsim_packets::Ieee80211,
     ) -> Result<usize, crate::error::WifiError> {
         self.send_80211_impl(chip_id, ieee80211).await
     }
@@ -452,7 +452,7 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
     pub async fn send_80211_impl(
         &self,
         chip_id: ChipId,
-        ieee80211: &netsim_packets::ieee80211::Ieee80211,
+        ieee80211: &netsim_packets::Ieee80211,
     ) -> Result<usize, crate::error::WifiError> {
         #[cfg(target_os = "linux")]
         {
@@ -483,10 +483,10 @@ If using a TAP pool (e.g. cvd-etap), ensure the interfaces are created.
 /// Converts an 802.3 packet (from TAP) to 802.11 for the Medium.
 pub fn convert_8023_to_80211(
     packet: bytes::Bytes,
-    bssid: Option<netsim_packets::ieee80211::MacAddress>,
+    bssid: Option<netsim_packets::MacAddress>,
     seq: u16,
 ) -> Option<bytes::Bytes> {
-    use netsim_packets::ieee80211::{FrameDirection, Ieee80211};
+    use netsim_packets::{FrameDirection, Ieee80211};
     if let Some(bssid) = bssid {
         if let Ok(ieee80211) =
             Ieee80211::from_ieee8023_qos(&packet, bssid, FrameDirection::FromAp, true, seq)

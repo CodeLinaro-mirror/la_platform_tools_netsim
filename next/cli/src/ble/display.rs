@@ -4,9 +4,8 @@
 use std::collections::BTreeMap;
 
 use common::util::time_display::TimeDisplay;
-use netsim_packets::hci::{
-    events::{parse_hci_event, HciEvent, LeMetaEvent},
-    types::{GapDataType, LeAdvertisingEventType, OwnAddressType},
+use netsim_packets::{
+    parse_hci_event, GapDataType, HciEvent, LeAdvertisingEventType, LeMetaEvent, OwnAddressType,
 };
 use netsim_proto::ble_service::{ScanResponse, SniffResponse};
 use serde::Serialize;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use netsim_packets::{ieee80211::Ieee80211, netlink::hwsim_frame::HwsimFrame};
+use netsim_packets::{HwsimFrame, Ieee80211};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum InfraTarget {

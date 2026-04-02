@@ -13,9 +13,13 @@
 //!
 //! ![Internal Module Graph](modules.png)
 
-pub mod args;
-pub mod avd_config;
-pub mod ini_file;
-pub mod logger;
-pub mod netsimd;
-pub mod version;
+pub(crate) mod args;
+pub(crate) mod avd_config;
+pub(crate) mod ini_file;
+pub(crate) mod logger;
+pub(crate) mod netsimd;
+pub(crate) mod version;
+
+pub use args::{Args, ClapWifiMode};
+pub use ini_file::{IniFile, IniFileAccess, IniFileInitialized};
+pub use netsimd::{run, NetsimDaemon, RunResult, StartUpMode};

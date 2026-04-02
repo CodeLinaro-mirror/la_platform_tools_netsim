@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::eapol::{
-        EapolHeader, EapolKeyFrame, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
-    },
+    EapolHeader, EapolKeyFrame, MacAddr, EAPOL_KEY_DESC_TYPE_RSN, EAPOL_TYPE_KEY, EAPOL_VERSION,
 };
 use tracing::{info, warn};
 use zerocopy::{FromBytes, IntoBytes};

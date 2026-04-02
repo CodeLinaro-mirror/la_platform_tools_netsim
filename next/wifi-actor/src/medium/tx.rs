@@ -4,10 +4,7 @@
 use std::collections::HashSet;
 
 use bytes::Bytes;
-use netsim_packets::{
-    ieee80211::{FrameDirection, Ieee80211},
-    netlink::{hwsim_frame::HwsimFrame, HwsimMsg},
-};
+use netsim_packets::{FrameDirection, HwsimFrame, HwsimMsg, Ieee80211};
 use tracing::debug;
 
 use crate::{
@@ -42,7 +39,7 @@ impl Medium {
     /// - If unicast and known: returns the specific station.
     /// - If multicast: returns all subscribed stations.
     /// - If unknown: returns empty list.
-    fn resolve_targets(&self, dest_addr: &netsim_packets::ieee80211::MacAddress) -> Vec<Station> {
+    fn resolve_targets(&self, dest_addr: &netsim_packets::MacAddress) -> Vec<Station> {
         let mut targets = Vec::new();
         if self.contains_station(dest_addr) {
             if let Ok(station) = self.get_station(dest_addr) {
@@ -100,7 +97,7 @@ impl Medium {
         let bssid = self
             .key_store
             .get_bssid()
-            .unwrap_or(netsim_packets::ieee80211::MacAddress::new([0, 0, 0, 0, 0, 0]));
+            .unwrap_or(netsim_packets::MacAddress::new([0, 0, 0, 0, 0, 0]));
 
         let seq = self.seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let ieee80211 =
@@ -158,9 +155,8 @@ impl Medium {
             if self.enabled(dest.client_id)? {
                 let frame_to_send = if is_m2u_conversion {
                     let mut unicast_frame = ieee80211.clone();
-                    let target_mac = netsim_packets::ieee80211::MacAddress::new(
-                        dest.addr.try_into().unwrap_or([0; 6]),
-                    );
+                    let target_mac =
+                        netsim_packets::MacAddress::new(dest.addr.try_into().unwrap_or([0; 6]));
                     unicast_frame.set_destination(&target_mac);
 
                     // If WPA is active, we must successfully encrypt using the destination's PTK
@@ -239,9 +235,8 @@ impl Medium {
             if src_enabled && dst_enabled {
                 let mut target_frame = ieee80211.clone();
                 if is_m2u_conversion && dest.addr != source_addr {
-                    let target_mac = netsim_packets::ieee80211::MacAddress::new(
-                        dest.addr.try_into().unwrap_or([0; 6]),
-                    );
+                    let target_mac =
+                        netsim_packets::MacAddress::new(dest.addr.try_into().unwrap_or([0; 6]));
                     target_frame.set_destination(&target_mac);
                 }
 

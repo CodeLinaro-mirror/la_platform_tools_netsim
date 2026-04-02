@@ -19,7 +19,7 @@ use common::{
 use device_actor::DeviceClient;
 use device_api::{DeviceAddChip, DeviceConfig};
 use futures::{SinkExt, StreamExt};
-use grpc_server::packet_streamer::PacketStreamerService;
+use grpc_server::PacketStreamerService;
 use link_actor::LinkClient;
 use netsim_model::{
     chip::{
@@ -185,7 +185,7 @@ async fn setup_grpc_listener(
     let packet_streamer_service = PacketStreamerService::new(new_connection_tx);
 
     // Start the gRPC server
-    let (server, port) = grpc_server::server::start(
+    let (server, port) = grpc_server::start(
         requested_port.into(),
         enable_cli_ui,
         device_client,
@@ -196,7 +196,7 @@ async fn setup_grpc_listener(
     )
     .map_err(|e| init_error(format!("Failed to start gRPC server: {}", e)))?;
 
-    let listener = grpc_server::packet_streamer::ChannelTransportListener {
+    let listener = grpc_server::ChannelTransportListener {
         rx: new_connection_rx,
         local_addr: StreamAddress::Grpc(std::net::SocketAddr::new(
             std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
@@ -249,11 +249,6 @@ pub struct NetsimDaemon {
 }
 
 impl NetsimDaemon {
-    /// Returns a reference to the DeviceClient.
-    pub fn device_client(&self) -> &DeviceClient {
-        &self.device_client
-    }
-
     /// Returns a reference to the CaptureClient.
     pub fn capture_client(&self) -> &CaptureClient {
         &self.capture_client
@@ -310,7 +305,7 @@ impl NetsimDaemon {
         // We do this BEFORE redirection so the user can see the error in the console.
         #[cfg(target_os = "linux")]
         if let Some(ref tap_config) = wifi_tap {
-            if let Err(e) = wifi_actor::tap_gateway::TapGateway::preflight_check(tap_config) {
+            if let Err(e) = wifi_actor::TapGateway::preflight_check(tap_config) {
                 return Err(RunResult::InitializationError(format!(
                     "TAP configuration failed: {}",
                     e
@@ -490,7 +485,7 @@ impl NetsimDaemon {
             device_client.clone(),
             wifi_tap,
             shared_keys.clone(),
-            Arc::new(wifi_actor::stats::SystemClock),
+            Arc::new(wifi_actor::SystemClock),
             args.forward_host_mdns,
         );
 
@@ -589,14 +584,6 @@ impl NetsimDaemon {
             },
             initialized_guard,
         ))
-    }
-
-    /// Gets the path to the Unix Domain Socket, if one is active.
-    pub fn uds_path(&self) -> Option<PathBuf> {
-        self.listener_addresses.get("netsim_uds").and_then(|addr| match addr {
-            StreamAddress::Uds(path) => Some(path.clone()),
-            _ => None,
-        })
     }
 
     /// Gets the gRPC port, if the server is running.

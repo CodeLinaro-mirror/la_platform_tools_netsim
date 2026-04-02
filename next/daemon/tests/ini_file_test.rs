@@ -5,7 +5,7 @@
 
 use std::{collections::HashMap, env, fs, io, path::PathBuf};
 
-use daemon::ini_file::{IniFile, IniFileAccess};
+use daemon::{IniFile, IniFileAccess};
 
 /// Creates a unique temp directory for a test.
 fn create_temp_dir(test_name: &str) -> PathBuf {

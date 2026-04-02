@@ -10,7 +10,7 @@ use netsim_proto::{
     startup as proto_startup,
 };
 use packet_stream::error::{PacketStreamError, Result};
-use protobuf::{Enum, Message};
+use protobuf::Enum;
 
 pub fn proto_to_chip_kind(proto: protobuf::EnumOrUnknown<proto_common::ChipKind>) -> ChipKind {
     crate::frontend_converter::from_proto_chip_kind(proto.enum_value_or_default())
@@ -50,34 +50,6 @@ pub fn proto_to_chip_info(proto: proto_startup::ChipInfo) -> ChipInfo {
     }
 }
 
-// Convert Bytes to PacketRequest
-pub fn bytes_to_packet_request(bytes: Bytes, is_bt: bool) -> Result<PacketRequest> {
-    if bytes.is_empty() {
-        return Err(PacketStreamError::InvalidConfig("Empty bytes".to_string()));
-    }
-    let mut req = PacketRequest::new();
-    if is_bt {
-        // For Bluetooth, the incoming bytes are H4: IDC + payload
-        if let Some(packet_type) = PacketType::from_i32(bytes[0].into()) {
-            let hci_packet = HCIPacket {
-                packet_type: packet_type.into(),
-                packet: bytes.slice(1..).to_vec(),
-                ..Default::default()
-            };
-            req.set_hci_packet(hci_packet);
-        } else {
-            return Err(PacketStreamError::InvalidConfig(format!(
-                "Invalid HCI Packet Type byte: {}",
-                bytes[0]
-            )));
-        }
-    } else {
-        // For other types, treat as raw packet
-        req.set_packet(bytes.to_vec());
-    }
-    Ok(req)
-}
-
 // Convert Bytes to PacketResponse
 pub fn bytes_to_packet_response(bytes: Bytes, is_bt: bool) -> Result<PacketResponse> {
     if bytes.is_empty() {
@@ -115,46 +87,4 @@ pub fn packet_request_to_bytes(value: PacketRequest) -> Result<Bytes> {
             "PacketRequest does not contain a supported packet type".to_string(),
         )),
     }
-}
-
-// Convert PacketResponse to Bytes
-pub fn packet_response_to_bytes(value: PacketResponse) -> Result<Bytes> {
-    match value.response_type {
-        Some(packet_streamer::packet_response::Response_type::HciPacket(hci)) => {
-            let hci_bytes = hci.write_to_bytes().map_err(|e| {
-                PacketStreamError::Protocol(packet_stream::error::ProtocolError::InvalidFormat(
-                    e.to_string(),
-                ))
-            })?;
-            Ok(std::iter::once(hci.packet_type.value() as u8).chain(hci_bytes).collect())
-        }
-        Some(packet_streamer::packet_response::Response_type::Packet(packet)) => {
-            Ok(Bytes::from(packet))
-        }
-        _ => Err(PacketStreamError::InvalidConfig(
-            "PacketResponse does not contain a supported packet type".to_string(),
-        )),
-    }
-}
-
-// Helper to convert ChipInfo to proto
-pub fn chip_info_to_proto(chip_info: ChipInfo) -> proto_startup::ChipInfo {
-    let mut proto = proto_startup::ChipInfo::new();
-    proto.name = chip_info.name;
-    if let Some(chip) = chip_info.chip {
-        let mut chip_proto = proto_startup::Chip::new();
-        chip_proto.kind = crate::frontend_converter::to_proto_chip_kind(chip.kind).into();
-        chip_proto.id = chip.id;
-        chip_proto.manufacturer = chip.manufacturer;
-        chip_proto.product_name = chip.product_name;
-        chip_proto.address = chip.address;
-        proto.chip = Some(chip_proto).into();
-    }
-    if let Some(device_info) = chip_info.device_info {
-        let mut device_proto = proto_startup::DeviceInfo::new();
-        device_proto.name = device_info.name;
-        device_proto.avd_path = device_info.avd_path;
-        proto.device_info = Some(device_proto).into();
-    }
-    proto
 }

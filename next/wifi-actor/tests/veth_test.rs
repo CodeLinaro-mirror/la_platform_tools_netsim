@@ -40,7 +40,6 @@ async fn test_udp_guest_to_host() {
     // Create Medium
     // Create WifiActor Logic
     // Medium is now internal
-    use wifi_actor::stats::WifiStats;
 
     // Create Dummy DeviceClient
     let (dummy_tx, _dummy_rx) = mpsc::channel(1);
@@ -53,7 +52,7 @@ async fn test_udp_guest_to_host() {
         device_client,
         None, // wifi_tap
         shared_keys.clone(),
-        Arc::new(wifi_actor::stats::SystemClock),
+        Arc::new(wifi_actor::SystemClock),
     );
 
     // Create Runner
@@ -97,7 +96,7 @@ async fn test_udp_guest_to_host() {
     println!("Creating AP...");
     let ap_config = ap_actor::ApConfig {
         ssid: "TestAP".to_string(),
-        bssid: netsim_packets::ethernet::MacAddr::from(HOSTAPD_BSSID),
+        bssid: netsim_packets::MacAddr::from(HOSTAPD_BSSID),
         channel: 6,
         hw_mode: netsim_model::chip::WifiMode::G,
         wpa_passphrase: None,

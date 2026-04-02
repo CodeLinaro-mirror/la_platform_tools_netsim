@@ -4,7 +4,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use ap_actor::SharedKeyStore;
-use netsim_packets::{ieee80211::MacAddress, netlink::hwsim_frame::HwsimFrame};
+use netsim_packets::{HwsimFrame, MacAddress};
 use tracing::{info, warn};
 
 use crate::{

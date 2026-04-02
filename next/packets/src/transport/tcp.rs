@@ -43,9 +43,6 @@ pub mod flags {
     pub const PSH: u16 = 1 << 3;
     pub const ACK: u16 = 1 << 4;
     pub const URG: u16 = 1 << 5;
-    pub const ECE: u16 = 1 << 6;
-    pub const CWR: u16 = 1 << 7;
-    pub const NS: u16 = 1 << 8;
 }
 
 impl TcpHeader {

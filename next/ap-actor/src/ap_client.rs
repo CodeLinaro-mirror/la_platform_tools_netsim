@@ -141,7 +141,7 @@ impl ApClient {
 
     /// Disconnects a device from an Access Point.
     pub async fn disconnect(&self, id: u32, mac_str: String) -> Result<(), ClientError> {
-        let mac = mac_str.parse::<netsim_packets::ethernet::MacAddr>().map_err(|e| {
+        let mac = mac_str.parse::<netsim_packets::MacAddr>().map_err(|e| {
             ClientError::Chip(netsim_model::chip_error::ChipError::Internal(
                 format!("Invalid MAC: {}", e).into(),
             ))

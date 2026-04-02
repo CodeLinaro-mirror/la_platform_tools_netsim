@@ -8,19 +8,12 @@
 //! It focuses on common frame types and their headers.
 
 use core::fmt;
-use std::str::FromStr;
 
 use zerocopy::byteorder::LittleEndian; // IEEE 802.11 fields are typically little-endian
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned, U16};
 
 use crate::ethernet::MacAddr;
 pub use crate::ethernet::MacAddr as MacAddress;
-
-pub const CCMP_HDR_LEN: usize = 8;
-
-pub fn parse_mac_address(s: &str) -> Result<MacAddress, String> {
-    MacAddress::from_str(s)
-}
 
 /// Represents the 2-byte Frame Control field in an 802.11 header.
 ///
@@ -146,7 +139,7 @@ impl fmt::Debug for FrameControl {
     }
 }
 
-/// IEEE 802.11 Frame Types.
+#[cfg(test)]
 pub mod frame_type {
     pub const MANAGEMENT: u8 = 0b00;
     pub const CONTROL: u8 = 0b01;
@@ -154,7 +147,7 @@ pub mod frame_type {
     // 0b11 is reserved
 }
 
-/// IEEE 802.11 Frame Subtypes for Data frames.
+#[cfg(test)]
 pub mod data_subtype {
     pub const DATA: u8 = 0b0000;
     pub const DATA_CF_ACK: u8 = 0b0001;

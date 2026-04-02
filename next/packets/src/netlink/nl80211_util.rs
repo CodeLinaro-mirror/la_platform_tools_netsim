@@ -11,15 +11,17 @@
 //! frame) and parsing messages received from it (e.g., an incoming frame
 //! notification).
 
-use zerocopy::{FromBytes, IntoBytes, LittleEndian, Ref, U16, U32};
+use zerocopy::{FromBytes, LittleEndian, Ref, U32};
+#[cfg(test)]
+use zerocopy::{IntoBytes, U16};
 
+#[cfg(test)]
+use crate::ieee80211::MacHeader3Addr;
+#[cfg(test)]
+use crate::netlink::nl80211::GenlMsgHdr;
 use crate::{
     ethernet::MacAddr as EthernetMacAddr,
-    ieee80211::MacHeader3Addr,
-    netlink::{
-        nl80211::{attr_id, GenlMsgHdr},
-        nl80211_attr::NlAttrHdr,
-    },
+    netlink::{nl80211::attr_id, nl80211_attr::NlAttrHdr},
 };
 
 /// Netlink attribute type flags.
@@ -35,6 +37,7 @@ pub const NLA_ALIGNTO: usize = 4;
 const NLA_HDR_SIZE: usize = core::mem::size_of::<NlAttrHdr>();
 
 /// Size of the Generic Netlink message header.
+#[cfg(test)]
 const GENL_HDR_SIZE: usize = core::mem::size_of::<GenlMsgHdr>();
 
 /// Error type for Netlink utility functions.
@@ -96,7 +99,7 @@ pub fn is_attr_nested(nla_type: u16) -> bool {
 ///
 /// # Examples
 /// ```
-/// use netsim_packets::netlink::{nl80211::attr_id, nl80211_util::attr_id_to_string};
+/// use netsim_packets::{attr_id, attr_id_to_string};
 ///
 /// assert_eq!(attr_id_to_string(attr_id::IFACE_MAC), "IFACE_MAC");
 /// assert_eq!(attr_id_to_string(0xFFFF), "Unknown(0xFFFF)");
@@ -301,14 +304,6 @@ pub fn parse_mac_addr_from_payload(payload: &[u8]) -> Result<EthernetMacAddr, Ne
     }
 }
 
-/// Creates a payload for a Netlink attribute that is just a flag (no data).
-/// Such attributes are present by their type ID alone.
-///
-/// # Returns An empty `Vec<u8>`.
-pub fn create_flag_attr_payload() -> Vec<u8> {
-    Vec::new()
-}
-
 /// Creates a payload for a Netlink attribute containing raw bytes.
 ///
 /// # Arguments
@@ -330,6 +325,7 @@ pub fn create_bytes_attr_payload(bytes: &[u8]) -> Vec<u8> {
 /// # Returns
 /// A `Result` containing a `Vec<u8>` with the serialized Netlink message, or a
 /// `NetlinkError`.
+#[cfg(test)]
 pub fn build_netlink_message(
     cmd: u8,
     version: u8,
@@ -355,6 +351,7 @@ pub fn build_netlink_message(
 
 /// Type alias for the result of successfully extracting an 802.11 frame from a
 /// Netlink message.
+#[cfg(test)]
 pub type ExtractedMacFrame<'a> =
     (Ref<&'a [u8], GenlMsgHdr>, Ref<&'a [u8], MacHeader3Addr>, &'a [u8]);
 
@@ -377,6 +374,7 @@ pub type ExtractedMacFrame<'a> =
 ///   - `mac_payload` is a slice of the bytes following the `MacHeader3Addr`
 ///     (the 802.11 payload). `None` if parsing fails at any stage (e.g.,
 ///     insufficient data, attribute not found, or 802.11 header parsing error).
+#[cfg(test)]
 pub fn extract_mac80211_frame_from_netlink<'a>(
     netlink_packet_bytes: &'a [u8],
 ) -> Option<ExtractedMacFrame<'a>> {

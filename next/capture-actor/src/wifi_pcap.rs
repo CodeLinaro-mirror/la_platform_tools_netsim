@@ -14,13 +14,7 @@ use std::{
 
 use async_trait::async_trait;
 use capture_api::Direction;
-use netsim_packets::{
-    netlink::{
-        hwsim_frame::HwsimFrame,
-        mac80211_hwsim::{HwsimCmd, HwsimMsg},
-    },
-    pcap::radiotap::create_radiotap_packet,
-};
+use netsim_packets::{create_radiotap_packet, HwsimCmd, HwsimFrame, HwsimMsg};
 use tracing::warn;
 
 use crate::writer::{CaptureWriter, PcapWriter, DLT_IEEE802_11_RADIO};

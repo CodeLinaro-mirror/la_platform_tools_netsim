@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use netsim_packets::{
-    ethernet::MacAddr,
-    ieee80211::eapol::{
-        EapHeader, EapolHeader, EAPOL_TYPE_PACKET, EAP_CODE_REQUEST, EAP_CODE_RESPONSE,
-        EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
-    },
+    EapHeader, EapolHeader, MacAddr, EAPOL_TYPE_PACKET, EAP_CODE_REQUEST, EAP_CODE_RESPONSE,
+    EAP_CODE_SUCCESS, EAP_TYPE_IDENTITY,
 };
 use zerocopy::{FromBytes, IntoBytes};
 
