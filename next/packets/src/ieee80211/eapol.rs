@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! EAPOL (Extensible Authentication Protocol over LAN) definitions.
 

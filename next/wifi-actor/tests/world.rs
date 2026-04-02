@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
 
@@ -127,6 +128,7 @@ impl World {
                 device_client,
                 shared_keys.clone(),
                 mock_clock.clone(),
+                false,
             )
         } else {
             WifiActor::new(
@@ -136,6 +138,7 @@ impl World {
                 None,
                 shared_keys.clone(),
                 mock_clock.clone(),
+                false,
             )
         };
 
@@ -212,6 +215,7 @@ impl World {
             packet_stream: Some(packet_stream),
             packet_sink: Some(packet_sink),
             config,
+            pose: Default::default(),
         };
 
         self.wifi_client.create(id, params).await.expect("Failed to create chip");

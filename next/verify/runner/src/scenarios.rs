@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Netsim BDD Scenarios
 //!
 //! This module defines the sequence of operations for the integration test
@@ -25,12 +28,12 @@ async fn run_feature(
         if !name.contains(f) {
             return Ok(());
         }
-    } else {
-        // By default, skip integration variants natively tagged with BDD skip markers
-        if content.contains("@ignore") || content.contains("@skip") {
-            return Ok(());
-        }
     }
+    if ctx.is_dry_run {
+        features.dry_run_list(content);
+        return Ok(());
+    }
+
     features.execute_from_memory(content, ctx).await;
     ctx.reset_actors().await?;
     Ok(())

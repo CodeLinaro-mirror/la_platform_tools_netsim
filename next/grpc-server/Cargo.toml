@@ -1,3 +1,6 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
 [package]
 name = "grpc-server"
 version = "0.0.1"
@@ -16,6 +19,7 @@ grpcio = { version = "0.13", default-features = false, features = [
 link-actor = { path = "../link-actor" }
 link-api = { path = "../link-api" }
 
+actor-framework = { path = "../actor-framework" }
 netsim-model = { path = "../model" }
 netsim-proto = { path = "../rust/proto" }
 packet-stream = { path = "../packet-stream" }

@@ -1,4 +1,5 @@
-// Copyright 2026 Google LLC
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
@@ -128,8 +129,7 @@ async fn handle_hci_client(stream: TcpStream, addr: SocketAddr, device_client: D
         device_config: device_api::DeviceConfig {
             name: name,
             visible: true,
-            position: Default::default(),
-            orientation: Default::default(),
+            pose: Default::default(),
             builtin: false,
             device_info: None,
         },

@@ -1,4 +1,5 @@
 // Copyright 2023-2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! This module provides the functionality for creating and managing Bluetooth
 //! device chips.
@@ -12,7 +13,7 @@
 //! included.
 
 use netsim_model::{
-    chip::{Chip, ChipId, DeviceParams},
+    chip::{ChipId, DeviceParams},
     chip_error::ChipError,
 };
 use rootcanal::Rootcanal;
@@ -22,7 +23,7 @@ pub fn create(
     _rootcanal: &Rootcanal,
     _chip_id: ChipId,
     _params: &DeviceParams,
-) -> Result<Chip, ChipError> {
+) -> Result<(), ChipError> {
     // Validate mode parameters
-    Ok(Chip::default())
+    Ok(())
 }

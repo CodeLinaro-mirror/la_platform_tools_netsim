@@ -117,8 +117,14 @@ Kotlin_DIRS="."
 Kotlin_EXTS="-name *.kt"
 Kotlin_REGEX="\.kt$"
 
+# License Headers
+License_CMD="$SCRIPT_DIR/format_licenses.py"
+License_DIRS="."
+License_EXTS="-name *.rs -o -name *.toml -o -name BUILD* -o -name *.bzl -o -name *.cc -o -name *.h -o -name *.py -o -name *.java -o -name *.ts -o -name *.proto -o -name *.kt -o -name CMakeLists.txt"
+License_REGEX="\.(rs|toml|bzl|cc|h|py|java|ts|proto|kt)$|^BUILD|^CMakeLists\.txt$"
+
 # Ordered list of languages to process
-LANGS=(Clang Rust Java Python CMake Blueprint Bazel Toml Kotlin)
+LANGS=(License Clang Rust Java Python CMake Blueprint Bazel Toml Kotlin)
 
 # --- Helpers ---
 
@@ -156,8 +162,12 @@ format_files() {
   fi
 
   echo "Formatting ${#files_ref[@]} $lang files..."
-  ${cmd_ref} "${files_ref[@]}" &
-  pids+=($!)
+  if [[ "${3:-}" == "SYNC" ]]; then
+    printf "%s\0" "${files_ref[@]}" | xargs -0 -P 4 -n 100 ${cmd_ref}
+  else
+    printf "%s\0" "${files_ref[@]}" | xargs -0 -P 4 -n 100 ${cmd_ref} &
+    pids+=($!)
+  fi
 }
 
 check_taplo_version
@@ -180,7 +190,9 @@ if [[ "$MODE" == "ALL" ]]; then
 
     # Split regex/globs for find (SC2086 is desired here)
     # shellcheck disable=SC2086
+    set -f
     find_args=( \( ${exts_ref} \) )
+    set +f
 
     flags=()
     if [[ -n "${flags_ref:-}" ]]; then
@@ -217,7 +229,6 @@ else
        if [[ "$f" =~ ${regex_ref} ]]; then
           declare -n target_ref="FILES_$lang"
           target_ref+=("$f")
-          break
        fi
     done
   done
@@ -226,7 +237,11 @@ fi
 # --- Execution ---
 
 for lang in "${LANGS[@]}"; do
-  format_files "$lang" "FILES_$lang"
+  if [[ "$lang" == "License" ]]; then
+    format_files "$lang" "FILES_$lang" "SYNC"
+  else
+    format_files "$lang" "FILES_$lang"
+  fi
 done
 
 # Wait for background processes and check for failures

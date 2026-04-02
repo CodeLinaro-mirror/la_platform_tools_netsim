@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use std::{sync::Arc, time::Duration};
 
@@ -89,6 +90,7 @@ async fn test_udp_guest_to_host() {
         packet_stream: Some(packet_stream),
         packet_sink: Some(packet_sink),
         config,
+        pose: Default::default(),
     };
 
     // Create AP

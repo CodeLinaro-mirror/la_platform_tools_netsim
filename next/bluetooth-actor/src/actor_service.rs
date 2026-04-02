@@ -1,10 +1,9 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::{ActorService, DynContext};
 use netsim_model::{
-    chip::{
-        BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant, ChipVariantUpdate,
-    },
+    chip::{BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant},
     chip_error::ChipError,
     ChipId, ChipKind,
 };
@@ -84,11 +83,15 @@ impl ActorService for BluetoothActor {
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
-            name: Some(name),
-            manufacturer: Some(params.config.manufacturer.clone()),
-            product_name: Some(params.config.product_name.clone()),
+            name,
+            manufacturer: params.config.manufacturer.clone(),
+            product_name: params.config.product_name.clone(),
             kind: ChipKind::BLUETOOTH,
-            variant: Some(ChipVariant::Bluetooth(Default::default())),
+            pose: params.pose,
+            variant: Some(ChipVariant::Bluetooth(netsim_model::bluetooth::Bluetooth {
+                low_energy: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
+                classic: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
+            })),
             ..Default::default()
         };
 
@@ -141,7 +144,7 @@ impl ActorService for BluetoothActor {
             .to_chip_error()?;
 
         // 4. Create Chip Info in Context
-        let mut chip_info = match &mode {
+        match &mode {
             BluetoothMode::Beacon(params) => {
                 crate::beacon::create(&self.rootcanal, chip_id, params, &chip.name)?
             }
@@ -154,9 +157,9 @@ impl ActorService for BluetoothActor {
             BluetoothMode::Sniffer(params) => {
                 crate::sniffer::create(&self.rootcanal, chip_id, params)?
             }
-        };
-        chip_info.device_id = chip.device_id;
-        self.chips.lock().unwrap().insert(id.unwrap_or(chip_id), chip);
+        }
+        self.chips.lock().unwrap().insert(chip_id, chip.clone());
+        self.initial_chips.insert(chip_id, chip);
         Ok(chip_id)
     }
 
@@ -181,29 +184,10 @@ impl ActorService for BluetoothActor {
         let mut chip =
             chips.get(&id).cloned().ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
 
-        // 1. Update the chip data first
-        if let Some(pos) = update.position {
-            chip.position = pos;
-        }
-        if let Some(orient) = update.orientation {
-            chip.orientation = orient;
-        }
-        if let Some(links) = update.links {
-            chip.links = links;
-        }
-        if let Some(enabled) = update.enabled {
-            chip.enabled = enabled;
-        }
+        // 1. Update the chip data
+        update.apply(&mut chip);
 
-        // 2. Handle Variant logic
-        if let Some(ChipVariantUpdate::Bluetooth(bt_update)) = update.variant {
-            if let Some(ChipVariant::Bluetooth(bt_chip)) = &mut chip.variant {
-                bt_update.classic.apply(&mut bt_chip.classic);
-                bt_update.low_energy.apply(&mut bt_chip.low_energy);
-            }
-        }
-
-        // 3. Sync the global chips map
+        // 2. Sync the global chips map
         chips.insert(id, chip.clone());
 
         Ok(chip)
@@ -246,15 +230,19 @@ impl ActorService for BluetoothActor {
                 info!("Resetting Bluetooth chip {id}");
                 let _ = self.rootcanal.clear_stats(id.0.into());
 
-                let mut chips = self.chips.lock().unwrap();
-                if let Some(chip) = chips.get_mut(&id) {
-                    chip.enabled = true;
-                    if let Some(ChipVariant::Bluetooth(bt)) = &mut chip.variant {
-                        bt.low_energy.state = Some(true);
-                        bt.classic.state = Some(true);
-                    }
-                }
-                Ok(BluetoothActionResult::Success)
+                let chip = {
+                    let mut chips = self.chips.lock().unwrap();
+                    let initial_chip = self
+                        .initial_chips
+                        .get(&id)
+                        .ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
+                    let chip = chips
+                        .get_mut(&id)
+                        .ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
+                    *chip = initial_chip.clone();
+                    chip.clone()
+                };
+                Ok(BluetoothActionResult::Chip(chip))
             }
             BluetoothAction::GetStatistics => {
                 let mut stats_list = Vec::new();
@@ -262,28 +250,22 @@ impl ActorService for BluetoothActor {
                 for (id, chip) in chips.iter() {
                     if let Ok(stats) = self.rootcanal.get_stats(id.0.into()) {
                         // BLE Stats
-                        stats_list.push(netsim_model::stats::NetsimRadioStats {
-                            id: id.0,
-                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
-                            kind: netsim_model::stats::RadioKind::BluetoothLowEnergy,
-                            tx_count: stats.ll_packets_out_ble,
-                            rx_count: stats.ll_packets_in_ble,
-                            tx_bytes: 0,
-                            rx_bytes: 0,
-                            ..Default::default()
-                        });
+                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        radio_stats.id = id.0;
+                        radio_stats.name = chip.name.clone();
+                        radio_stats.kind = netsim_model::stats::RadioKind::BluetoothLowEnergy;
+                        radio_stats.tx_count = stats.ll_packets_out_ble;
+                        radio_stats.rx_count = stats.ll_packets_in_ble;
+                        stats_list.push(radio_stats);
 
                         // Classic Stats
-                        stats_list.push(netsim_model::stats::NetsimRadioStats {
-                            id: id.0,
-                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
-                            kind: netsim_model::stats::RadioKind::BluetoothClassic,
-                            tx_count: stats.ll_packets_out_classic,
-                            rx_count: stats.ll_packets_in_classic,
-                            tx_bytes: 0,
-                            rx_bytes: 0,
-                            ..Default::default()
-                        });
+                        let mut radio_stats = netsim_model::stats::NetsimRadioStats::default();
+                        radio_stats.id = id.0;
+                        radio_stats.name = chip.name.clone();
+                        radio_stats.kind = netsim_model::stats::RadioKind::BluetoothClassic;
+                        radio_stats.tx_count = stats.ll_packets_out_classic;
+                        radio_stats.rx_count = stats.ll_packets_in_classic;
+                        stats_list.push(radio_stats);
                     }
                 }
                 Ok(BluetoothActionResult::Statistics(stats_list.into_boxed_slice()))

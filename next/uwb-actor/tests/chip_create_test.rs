@@ -1,4 +1,5 @@
 // Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use netsim_model::{
     chip::{ChipId, ChipKind},
@@ -33,7 +34,7 @@ async fn test_create_and_get_chip() {
         Some(netsim_model::chip::ChipVariant::Uwb(_)) => {
             assert_eq!(chip_info.id, chip_id);
             assert_eq!(chip_info.kind, ChipKind::UWB);
-            assert_eq!(chip_info.name, Some(format!("uwb_chip_{}", chip_id)));
+            assert_eq!(chip_info.name, format!("uwb_chip_{}", chip_id));
         }
         _ => panic!("Unexpected ChipInfo variant"),
     }

@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use std::sync::atomic::{AtomicU16, Ordering};
 
 use actor_framework::DynContext;

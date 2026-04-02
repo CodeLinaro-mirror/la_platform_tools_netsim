@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the [`enum@Error`] enum, which represents all possible
 //! errors that can occur in this crate.

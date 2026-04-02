@@ -1,4 +1,5 @@
 // Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
 
@@ -95,6 +96,7 @@ impl World {
                 chip_kind_params: ChipKindParams::Uwb(UwbCreate {}),
             },
             device_id: DeviceId(1),
+            pose: Default::default(),
         };
 
         self.client.create(id, params).await?;
@@ -198,7 +200,13 @@ impl World {
         self.client
             .update(
                 ChipId(chip_id),
-                netsim_model::chip::ChipUpdate { position: Some(pos), ..Default::default() },
+                netsim_model::chip::ChipUpdate {
+                    pose: netsim_model::device::api::PoseUpdate {
+                        position: Some(pos),
+                        orientation: None,
+                    },
+                    ..Default::default()
+                },
             )
             .await
             .expect("Failed to set chip position");

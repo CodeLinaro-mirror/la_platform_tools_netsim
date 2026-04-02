@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use modem_rs::{
     parser::{parse_raw_data, parse_until_semicolon, QuotedString},
     types::Parsable,

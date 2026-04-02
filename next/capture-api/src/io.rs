@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! Capture I/O utilities for wrapping streams and sinks with capture logic.
 //!
 //! This module provides wrappers for `PacketStream` and `PacketSink` that

@@ -1,3 +1,6 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
 load("//next:defs.bzl", "netsim_rust_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -33,6 +36,7 @@ netsim_rust_library(
         "//proto",
         "@bytes",
         "@futures",
+        "@socket2",
         "@thiserror",
         "@tokio",
         "@tokio-stream",

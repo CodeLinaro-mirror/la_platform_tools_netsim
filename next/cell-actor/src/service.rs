@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use actor_framework::{ActorService, DynContext};
 use futures::SinkExt;
@@ -98,7 +99,7 @@ impl ActorService for CellActor {
             Ok(Some(netsim_model::chip::Chip {
                 kind: netsim_model::chip::ChipKind::CELLULAR,
                 id: info.id,
-                name: Some(format!("modem-{}", info.id)),
+                name: format!("modem-{}", info.id),
                 variant: Some(netsim_model::chip::ChipVariant::Cell(netsim_model::cell::Cell {
                     state: if info.ringing { "ringing".to_string() } else { "idle".to_string() },
                 })),
@@ -137,7 +138,7 @@ impl ActorService for CellActor {
                 chips.push(netsim_model::chip::Chip {
                     kind: netsim_model::chip::ChipKind::CELLULAR,
                     id: info.id,
-                    name: Some(format!("modem-{}", info.id)),
+                    name: format!("modem-{}", info.id),
                     variant: Some(netsim_model::chip::ChipVariant::Cell(
                         netsim_model::cell::Cell {
                             state: if info.ringing {

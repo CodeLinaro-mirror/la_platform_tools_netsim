@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 pub mod v4;
 pub mod v4_json;
 pub mod v6;

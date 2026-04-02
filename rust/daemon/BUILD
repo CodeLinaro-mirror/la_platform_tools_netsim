@@ -1,3 +1,6 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
 load(":netsimd.bzl", "netsimd_rust_library")
 
 package(default_visibility = ["//:__subpackages__"])

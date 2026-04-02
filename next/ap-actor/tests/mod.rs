@@ -1,4 +1,5 @@
 // Copyright 2025-2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 mod ap_control_test;
 mod association_test;

@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Modem Simulator Main Entry Point
 //!
 //! This module is the main entry point for the `modem_simulator` binary.

@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! Access Point (AP) configuration module.
 //!
 //! This module defines the types and structures required to configure

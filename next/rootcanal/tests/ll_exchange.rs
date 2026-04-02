@@ -1,4 +1,5 @@
 // Copyright 2023 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Test for verifying the exchange of link layer packets with the rootcanal
 //! controller.

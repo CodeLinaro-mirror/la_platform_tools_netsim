@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -124,7 +125,6 @@ impl Medium {
     pub fn set_enabled(&mut self, client_id: u32, enabled: bool) {
         if let Some(client) = self.clients.get_mut(&client_id) {
             client.enabled = enabled;
-        } else {
         }
     }
 

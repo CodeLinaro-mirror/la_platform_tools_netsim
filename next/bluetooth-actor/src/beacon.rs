@@ -1,4 +1,5 @@
 // Copyright 2023-2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! This module provides the functionality for creating and managing Bluetooth
 //! beacon chips.
@@ -11,7 +12,7 @@
 //! `BeaconParams` into the appropriate HCI commands for full configuration.
 
 use netsim_model::{
-    chip::{BeaconParams, Chip, ChipId},
+    chip::{BeaconParams, ChipId},
     chip_error::ChipError,
 };
 use netsim_packets::hci;
@@ -43,8 +44,8 @@ pub fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
     params: &BeaconParams,
-    device_name: &Option<String>,
-) -> Result<Chip, ChipError> {
+    device_name: &String,
+) -> Result<(), ChipError> {
     // Reset the controller first.
     send_hci_command(rootcanal, chip_id, hci::Reset {})?;
 
@@ -74,7 +75,7 @@ pub fn create(
     let adv_data = if let Some(adv_data) = &params.ble_beacon.adv_data {
         construct_data(
             adv_data,
-            &if adv_data.include_device_name { device_name.clone() } else { None },
+            &if adv_data.include_device_name { Some(device_name.clone()) } else { None },
         )
     } else {
         construct_data(&netsim_model::bluetooth::beacon::AdvertiseData::default(), &None)
@@ -96,7 +97,7 @@ pub fn create(
     let scan_resp_data = if let Some(scan_resp) = &params.ble_beacon.scan_response {
         construct_data(
             scan_resp,
-            &if scan_resp.include_device_name { device_name.clone() } else { None },
+            &if scan_resp.include_device_name { Some(device_name.clone()) } else { None },
         )
     } else {
         vec![]
@@ -121,5 +122,5 @@ pub fn create(
         hci::LeSetAdvertisingEnable { advertising_enable: hci::Enable::ENABLED },
     )?;
 
-    Ok(Chip::default())
+    Ok(())
 }

@@ -1,4 +1,5 @@
-// Copyright 2025 Google LLC
+// Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use tokio::net::windows::named_pipe::{
     ClientOptions, NamedPipeClient, NamedPipeServer, ServerOptions,

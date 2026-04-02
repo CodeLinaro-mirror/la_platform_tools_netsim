@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Provides utility functions for working with `nl80211` Netlink attributes,
 //! particularly for `mac80211_hwsim`.

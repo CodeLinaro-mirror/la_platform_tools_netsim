@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! This module provides functionality to serialize a parsed `Packet`
 //! object into a `serde_json::Value`. This is designed to produce JSON

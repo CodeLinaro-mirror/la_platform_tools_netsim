@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Actor Framework
 //!
 //! This crate provides the foundational building blocks for creating type-safe,

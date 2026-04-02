@@ -1,3 +1,6 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
 load("@rules_android//rules:rules.bzl", "android_binary")
 load("@rules_kotlin//kotlin:android.bzl", "kt_android_library")
 

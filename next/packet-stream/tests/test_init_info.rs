@@ -1,4 +1,5 @@
-// Copyright 2025 Google LLC
+// Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 //=============================================================================
 // tests/test_init_info.rs - Integration tests for init_info protocol handling
 //=============================================================================

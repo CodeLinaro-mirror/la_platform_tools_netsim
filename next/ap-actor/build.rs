@@ -1,4 +1,5 @@
 // Copyright 2025-2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 fn main() {
     cxx_build::bridge("src/ffi.rs")

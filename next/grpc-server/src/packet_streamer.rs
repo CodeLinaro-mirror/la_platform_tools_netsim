@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -120,7 +123,9 @@ impl PacketStreamer for PacketStreamerService {
                     match packet_stream_converter::bytes_to_packet_response(bytes, is_bt) {
                         Ok(packet_response) => futures::stream::iter(vec![Ok((
                             packet_response,
-                            grpcio::WriteFlags::default(),
+                            grpcio::WriteFlags::default()
+                                .buffer_hint(false)
+                                .force_no_compress(true),
                         ))]),
                         Err(err) => {
                             warn!("Error converting bytes to packet response: {err:?}");

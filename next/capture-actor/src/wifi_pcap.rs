@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! # Wi-Fi PCAP Writer
 //!
 //! This module provides a PCAP writer specifically for Wi-Fi packets.

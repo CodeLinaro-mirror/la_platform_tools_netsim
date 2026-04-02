@@ -1,6 +1,8 @@
+// Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 #[cfg(all(unix, feature = "dual_fd"))]
 mod tests {
-    // Copyright 2025 Google LLC
     //=============================================================================
     // tests/test_dual_fd_final.rs - DualFd transport tests (Public API only)
     //=============================================================================

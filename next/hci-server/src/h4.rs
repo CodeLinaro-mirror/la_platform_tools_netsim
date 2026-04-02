@@ -1,4 +1,5 @@
 // Copyright 2023-2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use bytes::{Buf, Bytes, BytesMut};
 use tokio_util::codec::Decoder;

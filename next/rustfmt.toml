@@ -1,3 +1,6 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
 # Derived from Android Format Style
 #
 # Any changes here _must not_ conflict with the upstream in

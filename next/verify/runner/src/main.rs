@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 //! Command-line tool for running Netsim integration tests.
 
 use clap::{Parser, Subcommand};
@@ -31,6 +34,8 @@ enum Commands {
         #[arg(long, help = "Simulation mode (no-op for orchestrator logic verification)")]
         #[arg(default_value_t = false)]
         dry_run: bool,
+        #[arg(long, short, help = "Enable verbose output")]
+        verbose: bool,
     },
     /// List available test scenarios
     Scenarios,
@@ -59,6 +64,7 @@ async fn main() -> anyhow::Result<()> {
             gateway_ip,
             filter,
             dry_run,
+            verbose,
         } => {
             // Orchestrate Android integration tests
             orchestrator::run_android(
@@ -70,6 +76,7 @@ async fn main() -> anyhow::Result<()> {
                 gateway_ip,
                 filter,
                 dry_run,
+                verbose,
             )
             .await?;
         }

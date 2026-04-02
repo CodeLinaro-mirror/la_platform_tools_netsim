@@ -1,3 +1,6 @@
+# Copyright 2026 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
+
 """Setup file for netsim-grpc.
 
 Use setup.cfg to configure your project.

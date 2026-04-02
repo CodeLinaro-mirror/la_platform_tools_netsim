@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use netsim_model::{chip::ChipId, stats::NetsimRadioStats};
 use serde::{Deserialize, Serialize};
@@ -26,4 +27,6 @@ pub enum BluetoothActionResult {
     Statistics(Box<[NetsimRadioStats]>),
     /// The action returned a count.
     Count(usize),
+    /// The action returned the updated chip state.
+    Chip(netsim_model::chip::Chip),
 }

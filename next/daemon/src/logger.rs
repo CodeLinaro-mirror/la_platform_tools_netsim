@@ -1,4 +1,5 @@
 // Copyright 2023-2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Uses the tracing crate that allows control of logging through
 //! the RUST_LOG environment variable.

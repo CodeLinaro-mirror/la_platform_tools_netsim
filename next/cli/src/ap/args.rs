@@ -1,4 +1,5 @@
 // Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use clap::{Args, Subcommand};
 
@@ -11,6 +12,7 @@ pub enum ApCommand {
     /// Modify an existing Access Point
     Patch(ApPatch),
     /// Remove an Access Point
+    #[command(alias("delete"))]
     Remove(ApRemove),
     /// Disconnect a client from an Access Point
     Disconnect(ApDisconnect),

@@ -1,5 +1,6 @@
 /*
  * Copyright 2026 The Android Open Source Project
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package com.android.netsim.agent
@@ -12,7 +13,10 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.location.LocationManager
 import android.os.ParcelUuid
 import android.util.Log
@@ -179,8 +183,40 @@ fun advertiseWithNameAndPower(context: Context, args: List<String>): Map<String,
   val uuid = UUID.nameUUIDFromBytes(name.toByteArray())
   val pUuid = ParcelUuid(uuid)
 
-  // Set the adapter name to match the requested advertisement name
-  adapter.name = name
+  if (adapter.name != name) {
+    val nameLatch = CountDownLatch(1)
+    val nameReceiver =
+      object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+          if (android.bluetooth.BluetoothAdapter.ACTION_LOCAL_NAME_CHANGED == intent.action) {
+            val newName = intent.getStringExtra(android.bluetooth.BluetoothAdapter.EXTRA_LOCAL_NAME)
+            if (newName == name) {
+              nameLatch.countDown()
+            }
+          }
+        }
+      }
+
+    val filter = IntentFilter(android.bluetooth.BluetoothAdapter.ACTION_LOCAL_NAME_CHANGED)
+    context.registerReceiver(nameReceiver, filter)
+
+    try {
+      adapter.name = name
+      if (!nameLatch.await(5, TimeUnit.SECONDS)) {
+        Log.w(TAG, "Timeout waiting for ACTION_LOCAL_NAME_CHANGED to $name. Continuing anyway.")
+      } else {
+        Log.i(TAG, "Adapter name successfully changed to $name")
+      }
+    } finally {
+      try {
+        context.unregisterReceiver(nameReceiver)
+      } catch (e: Exception) {
+        // Ignore unregister errors
+      }
+    }
+  } else {
+    Log.i(TAG, "Adapter name is already $name")
+  }
 
   val data = AdvertiseData.Builder().setIncludeDeviceName(true).addServiceUuid(pUuid).build()
 

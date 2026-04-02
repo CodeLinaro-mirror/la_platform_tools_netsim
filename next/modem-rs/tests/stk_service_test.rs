@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{steps::*, world::World};
 
 // Scenario: STK Display Text

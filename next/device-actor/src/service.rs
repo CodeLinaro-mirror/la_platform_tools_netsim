@@ -1,3 +1,6 @@
+// Copyright 2026 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{
     collections::HashMap,
     sync::{
@@ -47,8 +50,7 @@ impl InternalDevice {
                 id: id.0,
                 name: params.device_config.name.clone(),
                 visible: params.device_config.visible,
-                position: params.device_config.position.clone(),
-                orientation: params.device_config.orientation.clone(),
+                pose: params.device_config.pose,
                 builtin: params.device_config.builtin,
                 chips: vec![],
                 device_info: params.device_config.device_info.clone(),
@@ -301,6 +303,53 @@ impl DeviceActor {
         }
     }
 
+    async fn perform_device_deletion(
+        &mut self,
+        id: DeviceId,
+        ctx: &mut DynContext<Self>,
+    ) -> Result<(), DeviceError> {
+        let stats_to_archive = {
+            let Some(internal_device) = self.devices.get(&id) else {
+                return Err(DeviceError::DeviceNotFound(id.to_string()));
+            };
+
+            let chips = internal_device.device.chips.clone();
+            let mut stats_to_archive = Vec::new();
+            for chip in &chips {
+                let chip_id = ChipId(chip.id);
+                let stream_stats = internal_device.chip_stats.get(&chip_id).cloned();
+                let cached_stats = internal_device.last_known_stats.get(&chip_id).cloned();
+                stats_to_archive.push((chip.clone(), stream_stats, cached_stats));
+            }
+            stats_to_archive
+        };
+
+        for (chip, stream_stats, cached_stats) in stats_to_archive {
+            let chip_id = ChipId(chip.id);
+            self.archive_chip_stats(id, &chip, stream_stats, cached_stats.as_ref()).await;
+
+            if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
+                chip_client.delete(chip_id).await?;
+            }
+
+            // Notify Link Actor
+            self.link_client
+                .notify_chip_removed(chip_id)
+                .await
+                .expect("Failed to notify LinkActor of chip remove");
+        }
+
+        if let Some(internal_device) = self.devices.remove(&id) {
+            if let Some(guid) = &internal_device.guid {
+                self.guid_to_id.remove(guid);
+            }
+        }
+        self.stats.update_device_count(self.devices.len(), false);
+        self.update_idle_state(ctx);
+        self.save_stats_async().await;
+        Ok(())
+    }
+
     async fn perform_chip_removal(
         &mut self,
         device_id: DeviceId,
@@ -484,17 +533,17 @@ impl DeviceActor {
                 chip_kind_params,
             },
             device_id: DeviceId(entity.device.id),
+            pose: entity.device.pose,
         };
 
         chip_client.create(chip_id, chip_create_params).await?;
         entity.device.chips.push(Chip {
             id: chip_id.0,
             kind: ChipKind::from(&chip_config.chip_kind_params),
-            name: Some(chip_name),
-            manufacturer: Some(manufacturer),
-            product_name: Some(product_name),
-            position: entity.device.position.clone(),
-            orientation: entity.device.orientation.clone(),
+            name: chip_name,
+            manufacturer,
+            product_name,
+            pose: entity.device.pose,
             device_id: DeviceId(entity.device.id),
             variant: Some(ChipVariant::from(chip_kind)),
             links: vec![],
@@ -684,25 +733,34 @@ impl DeviceActor {
             };
             info!("DeviceActor: Resetting device {}", entity.device.name);
 
+            // Chip actors do not track creation parameters, so the device actor must issue
+            // an update after reset to restore the original position + orientation.
+            let (original_pos, original_orient) = entity
+                .create_params
+                .as_ref()
+                .map(|p| (p.device_config.pose.position, p.device_config.pose.orientation))
+                .unwrap_or_default();
+
             entity.device.visible = true;
-            entity.device.position = device_api::Position::default();
-            entity.device.orientation = device_api::Orientation::default();
+            entity.device.pose.position = original_pos;
+            entity.device.pose.orientation = original_orient;
 
             for chip in entity.device.chips.iter_mut() {
-                chip.position = device_api::Position::default();
-                chip.orientation = device_api::Orientation::default();
+                chip.pose.position = original_pos;
+                chip.pose.orientation = original_orient;
 
                 if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
-                    if let Err(e) = chip_client.reset(netsim_model::ChipId(chip.id)).await {
-                        warn!(
-                            "DeviceActor: Failed to reset chip {} kind {:?}: {}",
-                            chip.id, chip.kind, e
-                        );
-                        chip_client_errors.push((chip.id, e));
-                    }
-                    if let Ok(updated_chip) = chip_client.read(netsim_model::ChipId(chip.id)).await
-                    {
-                        *chip = updated_chip;
+                    match chip_client.reset(netsim_model::ChipId(chip.id)).await {
+                        Ok(updated_chip) => {
+                            *chip = updated_chip;
+                        }
+                        Err(e) => {
+                            warn!(
+                                "DeviceActor: Failed to reset chip {} kind {:?}: {}",
+                                chip.id, chip.kind, e
+                            );
+                            chip_client_errors.push((chip.id, e));
+                        }
                     }
                 }
             }
@@ -767,19 +825,7 @@ impl ActorService for DeviceActor {
         let Some(entity) = self.devices.get_mut(&id) else {
             return Err(DeviceError::DeviceNotFound(id.to_string()));
         };
-        if let Some(name) = &update.name {
-            entity.device.name = name.clone();
-        }
-        if let Some(visible) = update.visible {
-            entity.device.visible = visible;
-        }
-
-        if let Some(pos) = update.position.clone() {
-            entity.device.position = pos;
-        }
-        if let Some(orient) = update.orientation.clone() {
-            entity.device.orientation = orient;
-        }
+        update.apply(&mut entity.device);
 
         for chip in entity.device.chips.iter_mut() {
             let Some(chip_client) = self.chip_clients.get(&chip.kind) else {
@@ -788,12 +834,7 @@ impl ActorService for DeviceActor {
 
             let mut chip_update = ChipUpdate::default();
 
-            if update.position.is_some() {
-                chip_update.position = update.position.clone();
-            }
-            if update.orientation.is_some() {
-                chip_update.orientation = update.orientation.clone();
-            }
+            chip_update.pose = update.pose.clone();
 
             // Start with ID-based matching
             let mut specific_update = None;
@@ -816,8 +857,8 @@ impl ActorService for DeviceActor {
                 }
             }
 
-            if chip_update.position.is_some()
-                || chip_update.orientation.is_some()
+            if chip_update.pose.position.is_some()
+                || chip_update.pose.orientation.is_some()
                 || chip_update.variant.is_some()
             {
                 info!(
@@ -835,32 +876,7 @@ impl ActorService for DeviceActor {
         id: Self::Id,
         ctx: &mut DynContext<Self>,
     ) -> Result<(), Self::Error> {
-        let Some(internal_device) = self.devices.remove(&id) else {
-            return Err(DeviceError::DeviceNotFound(id.to_string()));
-        };
-        self.stats.update_device_count(self.devices.len(), false);
-
-        if let Some(guid) = &internal_device.guid {
-            self.guid_to_id.remove(guid);
-        }
-        for chip in &internal_device.device.chips {
-            let stream_stats = internal_device.chip_stats.get(&ChipId(chip.id)).cloned();
-            let cached_stats = internal_device.last_known_stats.get(&ChipId(chip.id));
-            self.archive_chip_stats(id, chip, stream_stats, cached_stats).await;
-
-            if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
-                chip_client.delete(ChipId(chip.id)).await?;
-                // Send delete request to Link Actor
-                self.link_client
-                    .notify_chip_removed(ChipId(chip.id))
-                    .await
-                    .expect("Failed to notify LinkActor of chip remove");
-            }
-        }
-
-        self.update_idle_state(ctx);
-        self.save_stats_async().await;
-        Ok(())
+        self.perform_device_deletion(id, ctx).await
     }
 
     async fn handle_action(
@@ -898,6 +914,17 @@ impl ActorService for DeviceActor {
                 }
 
                 self.perform_chip_removal(device_id, chip_id, ctx).await?;
+                Ok(DeviceActionResult::Success)
+            }
+
+            DeviceAction::DeleteDevice(id) => {
+                let Some(internal_device) = self.devices.get(&id) else {
+                    return Err(DeviceError::NotFound(format!("Device not found: {}", id)));
+                };
+                if internal_device.guid.is_some() {
+                    return Err(DeviceError::NotFound("Cannot delete external device".to_string()));
+                }
+                self.perform_device_deletion(id, ctx).await?;
                 Ok(DeviceActionResult::Success)
             }
             DeviceAction::AddChip { chip_config, packet_stream, packet_sink } => {

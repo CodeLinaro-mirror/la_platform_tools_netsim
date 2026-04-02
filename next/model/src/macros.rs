@@ -1,4 +1,5 @@
 // Copyright 2023-2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! This module defines helper macros, particularly for reducing boilerplate
 //! in client implementations for sending requests to actor services.

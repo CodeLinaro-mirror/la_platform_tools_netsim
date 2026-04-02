@@ -1,4 +1,5 @@
 // Copyright 2025 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 //! Defines structures for representing IEEE 802.11 frames using `zerocopy`.
 //!

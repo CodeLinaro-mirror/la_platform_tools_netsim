@@ -1,16 +1,5 @@
-// Copyright 2022 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2022 The Android Open Source Project
+// SPDX-License-Identifier: Apache-2.0
 
 use std::{fmt, iter, str::FromStr};
 
@@ -178,6 +167,7 @@ pub enum Beacon {
     #[command(subcommand)]
     Patch(BeaconPatch),
     /// Remove a beacon chip
+    #[command(alias("delete"))]
     Remove(BeaconRemove),
 }
 
@@ -234,9 +224,6 @@ pub struct BeaconPatchBle {
 pub struct BeaconRemove {
     /// Name of the device to remove
     pub device_name: String,
-    /// Name of the beacon chip to remove. Can be omitted if the device has
-    /// exactly 1 chip
-    pub chip_name: Option<String>,
 }
 
 #[derive(Debug, Args, PartialEq, Default)]

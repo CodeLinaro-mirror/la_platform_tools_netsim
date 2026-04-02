@@ -1,4 +1,5 @@
 # Copyright 2025 The Android Open Source Project
+# SPDX-License-Identifier: Apache-2.0
 
 load("@rules_rust//rust:defs.bzl", "rust_test_suite")
 load("//next:defs.bzl", "netsim_rust_library")
