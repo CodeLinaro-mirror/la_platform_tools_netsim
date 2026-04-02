@@ -62,11 +62,14 @@ impl World {
         let mut args = daemon::args::Args::default();
         args.logtostderr = true; // Disable log redirection
         args.no_shutdown = true; // Prevent tests from dying when deleting devices
-        args.hci_port = Some(0); // Let the OS assign a random available port
         Self::new_with_args(args).await
     }
 
-    pub async fn new_with_args(args: daemon::args::Args) -> Self {
+    pub async fn new_with_args(mut args: daemon::args::Args) -> Self {
+        if args.hci_port.is_none() {
+            args.hci_port = Some(0); // Let the OS assign a random available
+                                     // port
+        }
         let temp_dir = std::env::temp_dir().join(format!("netsim_test_{}", rand::random::<u32>()));
         std::fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
 
@@ -701,6 +704,12 @@ impl World {
         let mut initial_req = netsim_proto::packet_streamer::PacketRequest::new();
         let mut chip_info = netsim_proto::startup::ChipInfo::new();
         chip_info.name = chip_name.to_string();
+
+        let mut chip = netsim_proto::startup::Chip::new();
+        chip.kind = netsim_proto::protobuf::EnumOrUnknown::new(ChipKind::BLUETOOTH); // Default to Bluetooth for streamer testing
+        chip.address = "11:22:33:44:55:66".to_string();
+        chip_info.chip = netsim_proto::protobuf::MessageField::some(chip);
+
         initial_req.set_initial_info(chip_info);
 
         sender

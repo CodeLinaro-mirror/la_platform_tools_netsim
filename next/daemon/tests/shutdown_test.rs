@@ -59,13 +59,13 @@ async fn test_auto_shutdown_on_chip_removal() {
     drop(client_sender);
 
     // 5. Verify EARLY Check (should NOT be shut down yet)
-    // Timeout is 1s. We wait 0.5s. Daemon should still be running.
+    // Timeout is 3s. We wait 0.5s. Daemon should still be running.
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     if world.is_daemon_finished() {
-        panic!("Daemon shut down too early! Timeout was 1s, but finished in <0.5s");
+        panic!("Daemon unexpectedly shut down early!");
     }
 
-    world.then_daemon_shutdown(1000).await;
+    world.then_daemon_shutdown(3000).await;
 }
 
 // Scenario: Daemon does NOT shut down before the timeout

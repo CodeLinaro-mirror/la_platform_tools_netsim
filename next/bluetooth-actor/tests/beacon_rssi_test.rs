@@ -92,6 +92,14 @@ async fn test_rssi_updates() -> Result<(), Box<dyn std::error::Error>> {
             world.client.0.update(beacon_id, update).await?;
         }
 
+        // Wait for pose to propagate and old packets to settle
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Drain stale packets
+        if let Some(rx) = world.sinks.get_mut("scanner") {
+            while rx.try_recv().is_ok() {}
+        }
+
         // Wait up to 2 seconds for a valid packet
         let start = std::time::Instant::now();
         let mut found_rssi = None;
