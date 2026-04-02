@@ -38,7 +38,8 @@ pub fn start(
     let env = SHARED_ENV.get_or_init(|| Arc::new(Environment::new(1))).clone();
     let backend_service = create_packet_streamer(packet_streamer_service);
     #[cfg(not(feature = "cuttlefish"))]
-    let access_point_service = create_access_point_service(AccessPointServiceImpl::new(ap_client));
+    let access_point_service =
+        create_access_point_service(AccessPointServiceImpl::new(ap_client.clone()));
     let ble_service = create_ble_service(BleServiceImpl::new(device_client.clone()));
     let quota = ResourceQuota::new(Some("NetsimGrpcServerQuota")).resize_memory(1024 * 1024);
     let ch_builder = ChannelBuilder::new(env.clone()).set_resource_quota(quota).reuse_port(false);
@@ -54,6 +55,8 @@ pub fn start(
         let frontend_service = create_frontend_service(FrontendClient::new(
             device_client.clone(),
             Arc::new(link_client),
+            #[cfg(not(feature = "cuttlefish"))]
+            ap_client,
             version,
         ));
         server_builder = server_builder.register_service(frontend_service);

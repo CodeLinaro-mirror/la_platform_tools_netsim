@@ -72,6 +72,7 @@ impl Medium {
     }
 
     pub fn reset(&mut self, client_id: u32) {
+        self.stations.retain(|_, s| s.client_id != client_id);
         if let Some(client) = self.clients.get_mut(&client_id) {
             client.enabled = true;
             client.tx_count = 0;

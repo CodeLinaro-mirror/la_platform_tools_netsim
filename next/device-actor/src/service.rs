@@ -331,10 +331,7 @@ impl DeviceActor {
             }
 
             // Notify Link Actor
-            self.link_client
-                .notify_chip_removed(chip_id)
-                .await
-                .expect("Failed to notify LinkActor of chip remove");
+            self.link_client.notify_chip_removed(chip_id).await?;
         }
 
         if let Some(internal_device) = self.devices.remove(&id) {
@@ -693,43 +690,60 @@ impl DeviceActor {
         }
     }
 
-    async fn perform_reset(&mut self, id: Option<DeviceId>) -> Result<(), DeviceError> {
-        let device_ids: Vec<DeviceId> = if let Some(id) = id {
-            if !self.devices.contains_key(&id) {
-                return Err(DeviceError::DeviceNotFound(id.to_string()));
-            }
-            vec![id]
+    async fn perform_reset(
+        &mut self,
+        target_id: Option<DeviceId>,
+        ctx: &mut DynContext<Self>,
+    ) -> Result<(), DeviceError> {
+        let (devices_to_delete, devices_to_reset) = if let Some(target_id) = target_id {
+            if !self.devices.contains_key(&target_id) {
+                return Err(DeviceError::DeviceNotFound(target_id.to_string()));
+            };
+            (vec![], vec![target_id])
         } else {
-            self.devices.keys().cloned().collect()
+            let mut to_delete = vec![];
+            let mut to_reset = vec![];
+
+            for (device_id, device) in &self.devices {
+                if device.guid.is_some() || device.device.builtin {
+                    to_reset.push(*device_id);
+                } else {
+                    to_delete.push(*device_id);
+                }
+            }
+            (to_delete, to_reset)
         };
 
-        let mut chip_client_errors = Vec::new();
+        let mut device_delete_errors = Vec::new();
+        for device_id in devices_to_delete {
+            info!("DeviceActor: Deleting internal device {}", device_id);
+            if let Err(err) = self.perform_device_deletion(device_id, ctx).await {
+                warn!("DeviceActor: Failed to reset chip device {}: {}", device_id, err);
+                device_delete_errors.push((device_id, err));
+            }
+        }
 
-        for device_id in device_ids {
-            let Some(entity) = self.devices.get_mut(&device_id) else {
-                error!("DeviceActor: Device {} disappeared during reset", device_id);
-                continue;
-            };
-            info!("DeviceActor: Resetting device {}", entity.device.name);
+        let mut chip_reset_errors = Vec::new();
+        for device_id in devices_to_reset {
+            let device = self.devices.get_mut(&device_id).expect("list has not changed");
+            info!("DeviceActor: Resetting device {}", device.device.name);
 
-            // Chip actors do not track creation parameters, so the device actor must issue
-            // an update after reset to restore the original position + orientation.
-            let (original_pos, original_orient) = entity
+            let (original_pos, original_orient) = device
                 .create_params
                 .as_ref()
                 .map(|p| (p.device_config.pose.position, p.device_config.pose.orientation))
                 .unwrap_or_default();
 
-            entity.device.visible = true;
-            entity.device.pose.position = original_pos;
-            entity.device.pose.orientation = original_orient;
+            device.device.visible = true;
+            device.device.pose.position = original_pos;
+            device.device.pose.orientation = original_orient;
 
-            for chip in entity.device.chips.iter_mut() {
+            for chip in device.device.chips.iter_mut() {
                 chip.pose.position = original_pos;
                 chip.pose.orientation = original_orient;
 
                 if let Some(chip_client) = self.chip_clients.get(&chip.kind) {
-                    match chip_client.reset(netsim_model::ChipId(chip.id)).await {
+                    match chip_client.reset(ChipId(chip.id)).await {
                         Ok(updated_chip) => {
                             *chip = updated_chip;
                         }
@@ -738,18 +752,18 @@ impl DeviceActor {
                                 "DeviceActor: Failed to reset chip {} kind {:?}: {}",
                                 chip.id, chip.kind, e
                             );
-                            chip_client_errors.push((chip.id, e));
+                            chip_reset_errors.push((chip.id, e));
                         }
                     }
                 }
             }
         }
 
-        let link_client_error = if id.is_none() {
+        let link_client_error = if target_id.is_none() {
             info!("DeviceActor: Resetting all links");
-            if let Err(e) = self.link_client.reset().await {
-                warn!("DeviceActor: Failed to reset links: {}", e);
-                Some(e)
+            if let Err(err) = self.link_client.reset().await {
+                warn!("DeviceActor: Failed to reset links: {}", err);
+                Some(err)
             } else {
                 None
             }
@@ -759,8 +773,12 @@ impl DeviceActor {
 
         self.save_stats_async().await;
 
-        if !chip_client_errors.is_empty() {
-            Err(DeviceError::ResetErrors { chip_client_errors, link_client_error })
+        if !chip_reset_errors.is_empty() {
+            Err(DeviceError::ResetErrors {
+                device_delete_errors,
+                chip_reset_errors,
+                link_client_error,
+            })
         } else {
             Ok(())
         }
@@ -872,7 +890,7 @@ impl ActorService for DeviceActor {
                 Ok(DeviceActionResult::Success)
             }
             DeviceAction::Reset => {
-                self.perform_reset(id).await?;
+                self.perform_reset(id, ctx).await?;
                 Ok(DeviceActionResult::Success)
             }
             DeviceAction::AddChipByGuid { params } => {

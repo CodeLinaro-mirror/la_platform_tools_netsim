@@ -122,6 +122,15 @@ impl World {
         resp.version
     }
 
+    /// When I call reset
+    pub async fn when_reset_is_called(&mut self) {
+        self.frontend_client
+            .reset_async(&netsim_proto::empty::Empty::new())
+            .expect("Reset failed")
+            .await
+            .expect("RPC failed");
+    }
+
     /// When I create a device with name and chip
     pub async fn when_create_device(&mut self, name: &str, chip_name: &str) -> u32 {
         let mut create_req = CreateDeviceRequest::new();
@@ -496,6 +505,12 @@ impl World {
         assert!(aps.iter().any(|ap| ap.id == id));
     }
 
+    /// Then I verify the Access Point is NOT in the list
+    pub async fn then_access_point_not_in_list(&mut self, id: u32) {
+        let aps = self.when_list_access_points().await;
+        assert!(!aps.iter().any(|ap| ap.id == id));
+    }
+
     /// Then I verify the device list contains a device
     pub async fn then_device_list_contains(&mut self, device_id: u32, device_name: &str) {
         let devices = self.when_list_devices().await;
@@ -534,6 +549,13 @@ impl World {
         assert!((pos.x - expected_x).abs() < 0.001, "Expected X {}, got {}", expected_x, pos.x);
         assert!((pos.y - expected_y).abs() < 0.001, "Expected Y {}, got {}", expected_y, pos.y);
     }
+
+    /// Then I verify an Access Point exists by SSID
+    pub async fn then_access_point_exists_by_ssid(&mut self, ssid: &str) {
+        let aps = self.when_list_access_points().await;
+        assert!(aps.iter().any(|a| a.ssid == ssid), "AP with SSID {} not found in list", ssid);
+    }
+
     /// Then I verify an Access Point matches by SSID
     pub async fn then_access_point_matches_by_ssid(
         &mut self,
