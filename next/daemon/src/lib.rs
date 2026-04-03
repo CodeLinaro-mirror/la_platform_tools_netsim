@@ -17,5 +17,4 @@ pub mod avd_config;
 pub mod ini_file;
 pub mod logger;
 pub mod netsimd;
-pub mod platform;
 pub mod version;

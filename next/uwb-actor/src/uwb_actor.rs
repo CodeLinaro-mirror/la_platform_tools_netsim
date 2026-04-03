@@ -7,35 +7,15 @@ use std::{
 };
 
 use device_actor::DeviceClient;
-use netsim_model::chip::{Chip, ChipId, ChipUpdate, ChipVariant, ChipVariantUpdate};
+use netsim_model::chip::{Chip, ChipId};
 use pica::{Handle, Pica, PicaCommand, PicaEvent};
 use tokio::sync::{broadcast, mpsc};
 
 /// State associated with a single UWB chip.
 #[derive(Clone)]
-pub struct UwbChipState {
+pub(crate) struct UwbChipState {
     /// The chip model.
     pub(super) chip: Chip,
-}
-
-impl UwbChipState {
-    pub(super) fn apply(&mut self, update: ChipUpdate) {
-        if let Some(pos) = update.position {
-            self.chip.position = pos;
-        }
-        if let Some(orient) = update.orientation {
-            self.chip.orientation = orient;
-        }
-        match (update.variant, &mut self.chip.variant) {
-            (Some(ChipVariantUpdate::Uwb(uwb_update)), Some(ChipVariant::Uwb(uwb_radio))) => {
-                uwb_update.radio.apply(&mut uwb_radio.radio);
-            }
-            (Some(other), _) => {
-                log::warn!("Received unexpected update for chip {}: {other:?}", self.chip.id);
-            }
-            (None, _) => {}
-        }
-    }
 }
 
 /// The UWB Actor responsible for managing UWB chips and their state.

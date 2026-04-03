@@ -10,6 +10,7 @@ use rootcanal::{
     types::Phy,
 };
 use tokio::sync::mpsc;
+use tracing::{debug, error};
 
 /// Callbacks for handling HCI and Link Layer packets from Rootcanal.
 pub struct HciCallbacks {
@@ -25,25 +26,25 @@ pub struct HciCallbacks {
 impl ControllerCallbacks for HciCallbacks {
     fn send_hci(&self, _source_id: Id, h4_packet: Bytes) {
         if let Some(hci_tx) = self.hci_tx.as_ref() {
-            log::debug!("send_hci: Sending packet len={}", h4_packet.len());
+            debug!("send_hci: Sending packet len={}", h4_packet.len());
             if let Err(e) = hci_tx.try_send(h4_packet) {
-                log::error!("Failed to send HCI packet: {e}, dropping.");
+                error!("Failed to send HCI packet: {e}, dropping.");
             }
         }
     }
 
-    fn on_receive_ll(&self, _source_id: Id, packet: &[u8], _phy: Phy, _tx_power: i32) {
-        log::debug!("[{}] Received LL packet", self.id);
+    fn on_receive_ll(&self, _source_id: Id, packet: &[u8], phy: Phy, _tx_power: i32) {
+        debug!("[{}] Received {:?} LL packet", self.id, phy);
         if let Some(ll_tx) = self.ll_tx.as_ref() {
             let packet = Bytes::copy_from_slice(packet);
             if let Err(e) = ll_tx.try_send(packet) {
-                log::error!("Failed to send LL packet: {e}, dropping.");
+                error!("Failed to send LL packet: {e}, dropping.");
             }
         }
     }
 
     fn invalid_packet_received(&self, _source_id: Id, reason: c_int, message: &str, _data: &[u8]) {
-        log::error!(
+        error!(
             "[chip-{}] Invalid packet received by device: reason={reason}, message={message}",
             self.id
         );
@@ -59,18 +60,18 @@ pub async fn sink_loop(
     mut receiver: tokio::sync::mpsc::Receiver<bytes::Bytes>,
     id: ChipId,
 ) -> ChipId {
-    log::debug!("sink_loop: Started for chip {}", id);
+    debug!("sink_loop: Started for chip {}", id);
     while let Some(packet) = receiver.recv().await {
-        log::debug!("sink_loop: Received packet len={}", packet.len());
+        debug!("sink_loop: Received packet len={}", packet.len());
         if sink.send(packet).await.is_err() {
-            log::error!("Sink for chip {} failed", id);
+            error!("Sink for chip {} failed", id);
             break;
         } else {
-            log::debug!("sink_loop: Sent packet successfully");
+            debug!("sink_loop: Sent packet successfully");
         }
     }
     let _ = sink.close().await;
-    log::error!("Sink task for chip {} finished", id);
+    error!("Sink task for chip {} finished", id);
     id
 }
 

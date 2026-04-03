@@ -13,9 +13,8 @@ use netsim_model::{
 use netsim_proto::{
     common::ChipKind as ProtoChipKind,
     model::{
-        chip::Radio as ProtoRadio, Chip as ProtoChip, ChipCreate, Device as ProtoDevice,
-        Link as ProtoLink, Orientation as ProtoOrientation, PhyKind as ProtoPhyKind,
-        Position as ProtoPosition,
+        Chip as ProtoChip, ChipCreate, Device as ProtoDevice, Link as ProtoLink,
+        Orientation as ProtoOrientation, PhyKind as ProtoPhyKind, Position as ProtoPosition,
     },
     protobuf::{EnumOrUnknown, MessageField},
 };
@@ -44,7 +43,6 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
         // Map unknown/new types to UNSPECIFIED for now
         ApiChipKind::NFC => ProtoChipKind::NFC,
         ApiChipKind::CELLULAR => ProtoChipKind::CELLULAR,
-        ApiChipKind::AP => ProtoChipKind::WIFI,
         ApiChipKind::UNSPECIFIED => ProtoChipKind::UNSPECIFIED,
     }
 }
@@ -77,11 +75,6 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
             }
             netsim_model::chip::ChipVariant::Cell(_) => {
                 // TODO: Add Cell support to proto if available
-            }
-            netsim_model::chip::ChipVariant::Ap(_) => {
-                let mut radio = ProtoRadio::new();
-                radio.state = Some(true); //  AP radio is active by default
-                chip.chip = Some(netsim_proto::model::chip::Chip::Wifi(radio));
             }
         }
     }
@@ -242,7 +235,6 @@ pub fn to_proto_link(l: ApiLink) -> ProtoLink {
         ApiChipKind::BLUETOOTH => ProtoPhyKind::BLUETOOTH_LOW_ENERGY,
         ApiChipKind::WIFI => ProtoPhyKind::WIFI,
         ApiChipKind::UWB => ProtoPhyKind::UWB,
-        ApiChipKind::AP => ProtoPhyKind::WIFI,
         _ => ProtoPhyKind::NONE,
     });
     link

@@ -1,6 +1,7 @@
 use std::{collections::HashSet, process::Stdio};
 
 use anyhow::{Context, Result};
+use tracing::{info, warn};
 
 use crate::{
     android_steps::AndroidDevice,
@@ -45,6 +46,7 @@ impl AdbWorld {
         &self,
         mut known_serials: HashSet<String>,
         expected: usize,
+        is_verbose: bool,
     ) -> Result<Vec<AndroidDevice>> {
         let mut new_agents = Vec::new();
         let start = std::time::Instant::now();
@@ -101,7 +103,10 @@ impl AdbWorld {
                     launch_netsim = false;
                 }
 
-                println!("INFO   @{} Installing ntest-agent APK...", exec.get_label());
+                if is_verbose {
+                    println!("INFO   @{} Installing ntest-agent APK...", exec.get_label());
+                }
+
                 // Best effort uninstall to clear state
                 let _ = exec.uninstall_apk("com.android.netsim.agent");
 
@@ -116,10 +121,20 @@ impl AdbWorld {
                     continue;
                 }
 
-                println!("INFO   Waiting 5s for package registration on {}...", exec.get_label());
+                if is_verbose {
+                    println!(
+                        "INFO   Waiting 5s for package registration on {}...",
+                        exec.get_label()
+                    );
+                }
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-                println!("INFO   @{} Launching NTest instrumentation agent...", exec.get_label());
+                if is_verbose {
+                    println!(
+                        "INFO   @{} Launching NTest instrumentation agent...",
+                        exec.get_label()
+                    );
+                }
                 if let Err(e) = exec.launch_agent() {
                     println!("WARN   Failed to launch agent on {}: {}", serial, e);
                     continue;
@@ -162,7 +177,7 @@ impl AdbWorld {
     }
 }
 
-/// STEP: Given @(\S+) has (\d+) attached device(?:s)?
+/// STEP: Given ^@(\S+) has (\d+) attached device(?:s)?$
 async fn given_devices(w: &mut TestContext, actor: String, count: usize) {
     let actor = format!("@{}", actor);
     w.log_step(&actor, "GIVEN", &format!("Has {} or more attached devices", count));
@@ -187,15 +202,16 @@ async fn given_devices(w: &mut TestContext, actor: String, count: usize) {
     // We get adb agent as immutable ref here
     let adb_agent = &w.adb;
 
-    let new_agents = adb_agent.discover(known, count).await.expect("Discovery failed");
+    let new_agents =
+        adb_agent.discover(known, count, w.is_verbose).await.expect("Discovery failed");
 
     for agent in new_agents {
         w.register_android_actor(agent);
     }
 }
 
-/// STEP: When (?:@adb)(?::(\S+))? connects to wifi "([^"]+)" with password
-/// "([^"]+)"
+/// STEP: When ^(?:@adb)(?::(\S+))? connects to wifi "([^"]+)" with password
+/// "([^"]+)"$
 async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, password: String) {
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
     w.log_step(&actor, "->", &format!("Connects to WiFi network '{}'", ssid));
@@ -241,7 +257,7 @@ async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, 
             .expect("Failed to execute ping");
 
         if ping_status.success() {
-            log::info!("Wi-Fi fully connected and routed after {} seconds", i);
+            info!("Wi-Fi fully connected and routed after {} seconds", i);
             connected = true;
             break;
         }
@@ -249,11 +265,11 @@ async fn adb_connects_to_wifi(w: &mut TestContext, label: String, ssid: String, 
     }
 
     if !connected {
-        log::warn!("Timed out waiting for ping to 10.0.2.2 to succeed! Test may fail.");
+        warn!("Timed out waiting for ping to 10.0.2.2 to succeed! Test may fail.");
     }
 }
 
-/// STEP: When (?:@adb)(?::(\S+))? disables cellular data
+/// STEP: When ^(?:@adb)(?::(\S+))? disables cellular data$
 pub async fn adb_disables_cellular(w: &mut TestContext, label: String) {
     let actor = if label.is_empty() { "@avd:1".to_string() } else { format!("@avd:{}", label) };
 
@@ -261,7 +277,12 @@ pub async fn adb_disables_cellular(w: &mut TestContext, label: String) {
         .get_android_actor(&actor)
         .unwrap_or_else(|| panic!("Actor {} not found or is not an Android Agent", actor));
 
-    log::info!("{} Disabling Cellular Data...", actor);
+    info!("{} Disabling Cellular Data...", actor);
+
+    if w.is_dry_run {
+        return;
+    }
+
     let mut svc_cmd = android.adb_command();
     svc_cmd
         .arg("shell")

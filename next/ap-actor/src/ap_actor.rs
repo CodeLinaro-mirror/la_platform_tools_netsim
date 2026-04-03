@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use netsim_model::{
+    ap::{DEFAULT_WIFI_BSSID, DEFAULT_WIFI_SSID},
     chip::{ApCreate, ApUpdate as ModelApUpdate, WifiMode},
     device::Position,
 };
@@ -12,7 +13,26 @@ use serde::{Deserialize, Serialize};
 use crate::{ieee802_11::Ieee80211Manager, shared, wpa_auth};
 
 /// ID for an Access Point instance within this actor.
-pub type ApId = u32;
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ApId(pub u32);
+
+impl std::fmt::Display for ApId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<u32> for ApId {
+    fn from(id: u32) -> Self {
+        Self(id)
+    }
+}
+
+impl From<ApId> for u32 {
+    fn from(id: ApId) -> Self {
+        id.0
+    }
+}
 
 /// Shared Stream ID for the singleton packet stream (matching SLIRP_ID
 /// convention)
@@ -49,6 +69,10 @@ pub struct ApConfig {
     pub position: Position,
 }
 
+fn default_bssid() -> MacAddr {
+    DEFAULT_WIFI_BSSID.parse().expect("DEFAULT_WIFI_BSSID is a valid MAC address")
+}
+
 fn default_ftm_responder_enabled() -> bool {
     true
 }
@@ -68,8 +92,8 @@ fn default_dtim_period() -> u8 {
 impl Default for ApConfig {
     fn default() -> Self {
         Self {
-            ssid: netsim_model::ap::DEFAULT_WIFI_SSID.to_string(),
-            bssid: MacAddr::from([0; 6]),
+            ssid: DEFAULT_WIFI_SSID.to_string(),
+            bssid: default_bssid(),
             channel: 6,
             hw_mode: WifiMode::G,
             wpa_passphrase: None,
@@ -153,6 +177,14 @@ impl From<ModelApUpdate> for ApUpdate {
     }
 }
 
+/// Consolidated update struct for ApActor.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ApActorUpdate {
+    pub position: Option<Position>,
+    pub enabled: Option<bool>,
+    pub ap_update: Option<ApUpdate>,
+}
+
 pub enum ApReq {
     Register {
         stream: std::pin::Pin<Box<dyn tokio_stream::Stream<Item = bytes::Bytes> + Send>>,
@@ -160,12 +192,18 @@ pub enum ApReq {
         shared_keys: std::sync::Arc<shared::SharedKeyStore>,
         beacon_interval: std::time::Duration,
     },
+    Disconnect {
+        mac: netsim_packets::ethernet::MacAddr,
+    },
 }
 
 impl std::fmt::Debug for ApReq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ApReq::Register { .. } => write!(f, "ApReq::Register {{ ... }}"),
+            ApReq::Disconnect { mac } => {
+                f.debug_struct("ApReq::Disconnect").field("mac", mac).finish()
+            }
         }
     }
 }
@@ -184,12 +222,14 @@ pub struct ApActor {
     pub(crate) aps: HashMap<ApId, ApState>,
     pub(crate) manager: Ieee80211Manager,
     pub shared_keys: std::sync::Arc<shared::SharedKeyStore>,
+    pub next_ap_id: u32,
     pub beacon_interval: Option<u16>, // In TUs (1024us)
 }
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub struct ApState {
+    pub id: ApId,
     pub config: ApConfig,
     pub wpa: Option<wpa_auth::WpaAuthenticator>,
     pub sae_sessions: HashMap<MacAddr, crate::sae::SaeStateMachine>,
@@ -206,14 +246,24 @@ impl ApActor {
             aps: HashMap::new(),
             manager: Ieee80211Manager::new(),
             shared_keys,
+            next_ap_id: 1,
             beacon_interval: None,
         }
     }
 }
 
 impl ApState {
-    pub fn new(config: ApConfig) -> Self {
+    pub fn new(id: ApId, mut config: ApConfig) -> Self {
+        let default_mac = default_bssid();
+        if config.bssid.bytes == [0; 6] || config.bssid == default_mac {
+            let mut base_mac = default_mac;
+            let offset_id = (id.0 as u16) + 1; // Shift by 1 so the default AP (id 0) gets .01 suffix
+            base_mac.bytes[4..6].copy_from_slice(&offset_id.to_be_bytes());
+            config.bssid = base_mac;
+        }
+
         Self {
+            id,
             config,
             wpa: None,
             sae_sessions: HashMap::new(),

@@ -12,15 +12,15 @@ device-actor = { path = "../device-actor" }
 futures = "0.3"
 
 libc = "0.2"
-log = "0.4"
 netsim-model = { path = "../model" }
 netsim-packets = { path = "../packets" }
-netsim-proto = { path = "../../proto" }
+netsim-proto = { path = "../../rust/proto" }
 nix = { version = "0.28", features = ["ioctl", "fs"] }
 slirp-actor = { path = "../slirp-actor" }
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
+tracing = "0.1"
 
 [dev-dependencies]
 tempfile = "3"

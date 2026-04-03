@@ -1,3 +1,5 @@
+# Copyright 2026 The Android Open Source Project
+
 load("@rules_rust//rust:defs.bzl", "rust_test")
 load("//next:defs.bzl", "netsim_rust_library")
 
@@ -15,7 +17,6 @@ netsim_rust_library(
         "@num-derive",
     ],
     deps = [
-        "@anyhow",
         "@hex",
         "@num-traits",
         "@serde",
@@ -32,7 +33,6 @@ rust_test(
         "@num-derive",
     ],
     deps = [
-        "@anyhow",
         "@num-traits",
         "@zerocopy",
     ],
@@ -44,7 +44,6 @@ rust_test(
     edition = "2021",
     deps = [
         ":packets",
-        "@anyhow",
         "@num-traits",
         "@zerocopy",
     ],

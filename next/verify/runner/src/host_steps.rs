@@ -145,7 +145,7 @@ async fn run_server(port: u16, token: CancellationToken) -> Result<u16> {
     Ok(local_port)
 }
 
-/// STEP: When @host starts a (TCP|UDP) echo server on "(\w+)"
+/// STEP: When ^@host starts a (TCP|UDP) echo server on "(\w+)"$
 async fn start_echo_server(w: &mut TestContext, proto: String, var_name: String) {
     let port = w.host.start_server(0).await.expect("Failed to start server");
     // Store full address (GatewayIP:Port) so usage {var} works directly
@@ -158,16 +158,66 @@ async fn start_echo_server(w: &mut TestContext, proto: String, var_name: String)
     w.set_variable(&var_name, full_addr);
 }
 
-/// STEP: Then @host receives (\d+)(KB|B|MB) (TCP|UDP) data(?: total)?
+/// STEP: Then ^@host receives (\d+)(KB|B|MB) (TCP|UDP) data(?: total)?$
 async fn host_receives_data(w: &mut TestContext, size_val: usize, unit: String, proto: String) {
     let actor = "@host";
     w.log_step(actor, "THEN", &format!("Receives {}{} {} data", size_val, unit, proto));
 }
 
-/// STEP: Then @host receives all coordinated data
+/// STEP: Then ^@host receives all coordinated data$
 async fn host_receives_coordinated_data(w: &mut TestContext) {
     let actor = "@host";
     w.log_step(actor, "THEN", "Receives all coordinated data");
+}
+
+/// STEP: When ^@host advertises mDNS service (.+)$
+async fn host_advertises_mdns_service(w: &mut TestContext, service: String) {
+    let actor = "@host";
+    w.log_step(actor, "WHEN", &format!("Advertises mDNS service '{}'", service));
+
+    if w.host.is_dry_run {
+        return;
+    }
+
+    let mut name_bytes = Vec::new();
+    let service_labels: Vec<&str> = service.split('.').filter(|s| !s.is_empty()).collect();
+    for label in service_labels {
+        name_bytes.push(label.len() as u8);
+        name_bytes.extend_from_slice(label.as_bytes());
+    }
+    // Always append .local for valid mDNS
+    name_bytes.push(5);
+    name_bytes.extend_from_slice(b"local");
+    name_bytes.push(0); // Null terminator
+
+    let mut packet = Vec::with_capacity(12 + name_bytes.len() + 12);
+    // DNS Header
+    packet.extend_from_slice(&[
+        0x00, 0x00, // Transaction ID
+        0x84, 0x00, // Flags: Response, Authoritative
+        0x00, 0x00, // Questions
+        0x00, 0x01, // Answer RRs
+        0x00, 0x00, // Authority RRs
+        0x00, 0x00, // Additional RRs
+    ]);
+    // Answer 1 Name
+    packet.extend(name_bytes);
+    // Answer 1 Type, Class, TTL, Len, Data
+    packet.extend_from_slice(&[
+        0x00, 0x0c, // Type: PTR
+        0x00, 0x01, // Class: IN
+        0x00, 0x00, 0x00, 0x78, // TTL: 120
+        0x00, 0x02, // Data Length: 2
+        0xc0, 0x0c, // Data: Pointer to offset 12 (start of name)
+    ]);
+
+    let socket = tokio::net::UdpSocket::bind(("0.0.0.0", 0))
+        .await
+        .expect("Failed to bind UDP socket for advertisement");
+    socket.set_multicast_loop_v4(true).expect("Failed to set multicast loop");
+
+    let mdns_addr = "224.0.0.251:5353";
+    socket.send_to(&packet, mdns_addr).await.expect("Failed to send mDNS advertisement");
 }
 
 // Include generated glue code

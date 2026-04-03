@@ -49,7 +49,6 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub enum ModemError {
     DuplicateModemId(ModemId),
-    Internal(String),
     NotFound,
 }
 
@@ -59,7 +58,6 @@ impl fmt::Display for ModemError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ModemError::DuplicateModemId(id) => write!(f, "Duplicate modem ID: {}", id),
-            ModemError::Internal(s) => write!(f, "Modem network internal error: {}", s),
             ModemError::NotFound => write!(f, "Modem network not found"),
         }
     }
