@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use actor_framework::ResourceClient;
-use bluetooth_actor::{BluetoothActor, BluetoothClient};
+use bluetooth_actor::{BluetoothActor, BluetoothClient, BluetoothError};
 use common::util::scanner_util::parse_hci_scan_report;
 use device_actor::client::DeviceClient;
 use netsim_model::{
@@ -17,6 +17,7 @@ use netsim_model::{
 use netsim_proto::{hci_packet::hcipacket::PacketType, protobuf::Enum};
 use netsim_testing::logger;
 use tokio::{sync::mpsc, task::JoinHandle};
+use tracing::{info, warn};
 use zerocopy::{Immutable, IntoBytes, KnownLayout};
 
 /// The BDD World for Bluetooth Actor tests.
@@ -104,6 +105,7 @@ impl World {
                 }),
             ),
             device_id,
+            pose: Default::default(),
         };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {
@@ -137,6 +139,36 @@ impl World {
 
         self.streams.insert(name.to_string(), stream_tx);
         self.sinks.insert(name.to_string(), sink_rx);
+    }
+
+    pub async fn given_slow_device(&mut self, name: &str, delay: tokio::time::Duration) {
+        if self.chips.contains_key(name) {
+            panic!("Chip with name '{}' already exists", name);
+        }
+
+        let (stream, stream_tx) = crate::test_utils::mock_stream();
+        let (sink, mut sink_rx) = crate::test_utils::mock_sink();
+
+        // Spawn a background task to slow down the reading from the packet sink.
+        let (slow_tx, slow_rx) = tokio::sync::mpsc::channel(100);
+        tokio::spawn(async move {
+            while let Some(packet) = sink_rx.recv().await {
+                tokio::time::sleep(delay).await; // 👈 Continuous slow consumer!
+                let _ = slow_tx.send(packet).await;
+            }
+        });
+
+        self.create_chip(
+            name,
+            BluetoothMode::Device(DeviceParams {}),
+            Some(stream),
+            Some(sink),
+            self.device_id,
+        )
+        .await;
+
+        self.streams.insert(name.to_string(), stream_tx);
+        self.sinks.insert(name.to_string(), slow_rx);
     }
 
     /// Internal helper to create a beacon chip
@@ -194,6 +226,7 @@ impl World {
                 }),
             ),
             device_id: self.device_id,
+            pose: Default::default(),
         };
 
         if let Err(e) = self.client.0.create_with_id(id, params).await {
@@ -246,14 +279,14 @@ impl World {
         &self,
         id: ChipId,
         params: ChipCreate,
-    ) -> Result<(), actor_framework::FrameworkError> {
+    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
         self.client.0.create_with_id(id, params).await.map(|_| ())
     }
 
     pub async fn when_delete_chip(
         &self,
         name: &str,
-    ) -> Result<(), actor_framework::FrameworkError> {
+    ) -> Result<(), actor_framework::FrameworkError<BluetoothError>> {
         let id = *self.chips.get(name).expect("Chip not found");
         self.client.0.delete(id).await
     }
@@ -274,8 +307,13 @@ impl World {
         position: netsim_model::device::Position,
     ) {
         let id = *self.chips.get(name).expect("Chip not found");
-        let update =
-            netsim_model::chip::ChipUpdate { position: Some(position), ..Default::default() };
+        let update = netsim_model::chip::ChipUpdate {
+            pose: netsim_model::device::api::PoseUpdate {
+                position: Some(position),
+                orientation: None,
+            },
+            ..Default::default()
+        };
         self.client.0.update(id, update).await.expect("Failed to update chip");
     }
 
@@ -289,7 +327,7 @@ impl World {
         let id = *self.chips.get(name).expect("Chip not found");
         let chip =
             self.client.0.get(id).await.expect("Failed to get chip").expect("Chip should exist");
-        assert_eq!(chip.position, expected, "Chip position matches");
+        assert_eq!(chip.pose.position, expected, "Chip position matches");
     }
 
     pub async fn then_chip_exists(&self, name: &str) {
@@ -312,13 +350,13 @@ impl World {
 
     pub async fn then_chip_name_is(&self, id: ChipId, expected: &str) {
         let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
-        assert_eq!(chip.name.as_deref(), Some(expected), "Chip name match");
+        assert_eq!(chip.name, expected, "Chip name match");
     }
 
     pub async fn then_chip_address_is_generated(&self, id: ChipId) {
         let chip = self.client.0.get(id).await.expect("Failed to get chip").expect("Chip missing");
         if let Some(netsim_model::chip::ChipVariant::Bluetooth(_)) = &chip.variant {
-            log::info!("Chip {} exists and is a Bluetooth variant.", id.0);
+            info!("Chip {} exists and is a Bluetooth variant.", id.0);
             // Note: Verification of the generated address via the `Chip` struct
             // is not currently supported by the model, as the
             // address is used for controller initialization but not
@@ -379,7 +417,7 @@ impl World {
             match parse_hci_scan_report(&packet) {
                 Ok(reports) => return reports,
                 Err(e) => {
-                    log::warn!("Ignored packet from {}: {:?} (Error: {})", name, packet, e);
+                    warn!("Ignored packet from {}: {:?} (Error: {})", name, packet, e);
                 }
             }
         }
@@ -388,7 +426,7 @@ impl World {
     pub async fn then_scanner_sees_any_adv(&mut self, name: &str) {
         let reports = self.receive_scan_report(name).await;
         for report in reports {
-            log::info!("Received Scan Report: {:?}", report.mac);
+            info!("Received Scan Report: {:?}", report.mac);
         }
     }
 
@@ -424,7 +462,7 @@ impl World {
         let reports = self.receive_scan_report(name).await;
         for report in reports {
             let rssi = report.rssi;
-            log::info!("Received RSSI: {}", rssi);
+            info!("Received RSSI: {}", rssi);
             assert!(rssi != 0, "RSSI should be non-zero");
         }
     }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ap_actor::netsim_model::chip::WifiMode;
+use netsim_model::chip::WifiMode;
 use netsim_packets::ieee80211::{
     action::{category, public_action},
     management_subtype, Ieee80211,
@@ -49,7 +49,7 @@ async fn test_ftm_ranging_exchange() {
         mac_acl_mode: 0,
         mac_acl_list: vec![],
         ftm_responder_enabled: true,
-        position: ap_actor::Position::default(),
+        position: netsim_model::device::Position::default(),
     };
 
     world.given_a_registered_ap_with_config(config.clone()).await;

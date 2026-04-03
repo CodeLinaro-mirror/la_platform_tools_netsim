@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::{pin_mut, stream::StreamExt, SinkExt, TryStreamExt};
-use log::warn;
 use netsim_model::initial_info::ChipInfo;
 use netsim_proto::{
     packet_streamer::{self, PacketRequest, PacketResponse},
@@ -14,6 +13,7 @@ use packet_stream::{
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::warn;
 
 use crate::packet_stream_converter;
 
@@ -120,7 +120,9 @@ impl PacketStreamer for PacketStreamerService {
                     match packet_stream_converter::bytes_to_packet_response(bytes, is_bt) {
                         Ok(packet_response) => futures::stream::iter(vec![Ok((
                             packet_response,
-                            grpcio::WriteFlags::default(),
+                            grpcio::WriteFlags::default()
+                                .buffer_hint(false)
+                                .force_no_compress(true),
                         ))]),
                         Err(err) => {
                             warn!("Error converting bytes to packet response: {err:?}");

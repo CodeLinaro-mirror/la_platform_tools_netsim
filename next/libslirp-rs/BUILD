@@ -20,7 +20,7 @@ netsim_rust_library(
         "@bytes",
         "@glib//glib",
         "@libslirp",
-        "@log",
         "@tokio",
+        "@tracing",
     ],
 )

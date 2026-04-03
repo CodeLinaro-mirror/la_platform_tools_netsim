@@ -1,5 +1,5 @@
 use device_api::{
-    api::{Chip, DeviceChipCreate},
+    api::{Chip, DeviceChipCreate, PoseUpdate},
     Device as ApiDevice, Orientation as ApiOrientation, Position as ApiPosition,
 };
 use link_api::Link as ApiLink;
@@ -13,9 +13,8 @@ use netsim_model::{
 use netsim_proto::{
     common::ChipKind as ProtoChipKind,
     model::{
-        chip::Radio as ProtoRadio, Chip as ProtoChip, ChipCreate, Device as ProtoDevice,
-        Link as ProtoLink, Orientation as ProtoOrientation, PhyKind as ProtoPhyKind,
-        Position as ProtoPosition,
+        Chip as ProtoChip, ChipCreate, Device as ProtoDevice, Link as ProtoLink,
+        Orientation as ProtoOrientation, PhyKind as ProtoPhyKind, Position as ProtoPosition,
     },
     protobuf::{EnumOrUnknown, MessageField},
 };
@@ -44,7 +43,6 @@ pub fn to_proto_chip_kind(k: ApiChipKind) -> ProtoChipKind {
         // Map unknown/new types to UNSPECIFIED for now
         ApiChipKind::NFC => ProtoChipKind::NFC,
         ApiChipKind::CELLULAR => ProtoChipKind::CELLULAR,
-        ApiChipKind::AP => ProtoChipKind::WIFI,
         ApiChipKind::UNSPECIFIED => ProtoChipKind::UNSPECIFIED,
     }
 }
@@ -53,12 +51,12 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
     let mut chip = ProtoChip::new();
     chip.id = c.id;
     chip.kind = EnumOrUnknown::new(to_proto_chip_kind(c.kind));
-    chip.name = c.name.unwrap_or_default();
-    chip.manufacturer = c.manufacturer.unwrap_or_default();
-    chip.product_name = c.product_name.unwrap_or_default();
+    chip.name = c.name;
+    chip.manufacturer = c.manufacturer;
+    chip.product_name = c.product_name;
     // Note: netsim_model Chip has position, but netsim_proto Chip has offset
     // (Position)
-    chip.offset = MessageField::some(to_proto_position(c.position));
+    chip.offset = MessageField::some(to_proto_position(c.pose.position));
 
     if let Some(variant) = c.variant {
         match variant {
@@ -77,11 +75,6 @@ pub fn to_proto_chip(c: netsim_model::chip::Chip) -> ProtoChip {
             }
             netsim_model::chip::ChipVariant::Cell(_) => {
                 // TODO: Add Cell support to proto if available
-            }
-            netsim_model::chip::ChipVariant::Ap(_) => {
-                let mut radio = ProtoRadio::new();
-                radio.state = Some(true); //  AP radio is active by default
-                chip.chip = Some(netsim_proto::model::chip::Chip::Wifi(radio));
             }
         }
     }
@@ -103,8 +96,8 @@ pub fn to_proto_device(d: ApiDevice) -> ProtoDevice {
     device.id = d.id;
     device.name = d.name;
     device.visible = Some(d.visible);
-    device.position = MessageField::some(to_proto_position(d.position));
-    device.orientation = MessageField::some(to_proto_orientation(d.orientation));
+    device.position = MessageField::some(to_proto_position(d.pose.position));
+    device.orientation = MessageField::some(to_proto_orientation(d.pose.orientation));
     for chip in d.chips {
         device.chips.push(to_proto_chip(chip));
     }
@@ -242,7 +235,6 @@ pub fn to_proto_link(l: ApiLink) -> ProtoLink {
         ApiChipKind::BLUETOOTH => ProtoPhyKind::BLUETOOTH_LOW_ENERGY,
         ApiChipKind::WIFI => ProtoPhyKind::WIFI,
         ApiChipKind::UWB => ProtoPhyKind::UWB,
-        ApiChipKind::AP => ProtoPhyKind::WIFI,
         _ => ProtoPhyKind::NONE,
     });
     link
@@ -279,8 +271,10 @@ pub fn from_proto_chip_update(c: ProtoChip) -> ChipUpdate {
         name: if c.name.is_empty() { None } else { Some(c.name) },
         manufacturer: if c.manufacturer.is_empty() { None } else { Some(c.manufacturer) },
         product_name: if c.product_name.is_empty() { None } else { Some(c.product_name) },
-        position: c.offset.into_option().map(from_proto_position),
-        orientation: None, // Proto Chip does not have orientation.
+        pose: PoseUpdate {
+            position: c.offset.into_option().map(from_proto_position),
+            orientation: None, // Proto Chip does not have orientation.
+        },
         variant,
         links: None, // TODO
         enabled: None,

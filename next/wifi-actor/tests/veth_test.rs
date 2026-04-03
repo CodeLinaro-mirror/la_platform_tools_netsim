@@ -30,10 +30,8 @@ async fn test_udp_guest_to_host() {
     let (slirp_runner, slirp_client) = slirp_actor::new();
 
     // 1.2 Ap
-    let (ap_tx_out, mut ap_rx_out) = mpsc::unbounded_channel();
     let shared_keys = Arc::new(SharedKeyStore::new());
-    let ap_actor_impl =
-        ApActor::new(ap_tx_out, Some(shared_keys.clone()), Some(slirp_client.clone()));
+    let ap_actor_impl = ApActor::new(shared_keys.clone());
     let (ap_runner, ap_client_base) = ResourceActor::new(32);
     let ap_client = ApClient::new(ap_client_base);
 
@@ -91,6 +89,7 @@ async fn test_udp_guest_to_host() {
         packet_stream: Some(packet_stream),
         packet_sink: Some(packet_sink),
         config,
+        pose: Default::default(),
     };
 
     // Create AP
@@ -103,7 +102,7 @@ async fn test_udp_guest_to_host() {
         wpa_passphrase: None,
     };
     use ap_actor::ApResponse;
-    let id = ap_client.create_ap(ap_config).await.expect("Failed to create AP");
+    let id = ap_client.create_ap(None, ap_config).await.expect("Failed to create AP");
     println!("AP Created with ID: {}", id);
     println!("BSSID in KeyStore: {:?}", shared_keys.get_bssid());
 

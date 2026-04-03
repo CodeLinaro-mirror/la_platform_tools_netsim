@@ -1,8 +1,8 @@
 // Copyright 2023-2026 The Android Open Source Project
 
 use bytes::{Buf, Bytes, BytesMut};
-use log::warn;
 use tokio_util::codec::Decoder;
+use tracing::warn;
 
 /* H4 message type */
 pub const H4_CMD_TYPE: u8 = 1;

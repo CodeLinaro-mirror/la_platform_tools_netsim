@@ -20,8 +20,8 @@ use std::{
 
 use bytes::Bytes;
 use libslirp_rs::libslirp::{ProxyConnect, ProxyManager};
-use log::{debug, warn};
 use tokio::runtime::Runtime;
+use tracing::{debug, warn};
 
 use crate::{
     util::{into_raw_descriptor, ProxyConfig},
@@ -69,22 +69,32 @@ pub struct Manager {
 }
 
 impl Manager {
-    /// Creates a new `LibSlirp` instance.
+    /// Creates a new `Manager` instance to handle HTTP proxy connections.
     ///
-    /// This function initializes the libslirp library and spawns the necessary
-    /// threads for handling network traffic and polling.
+    /// This function initializes the proxy configuration, creates a
+    /// `DnsManager` for IP-to-FQDN reverse lookup caching, and spawns a
+    /// background thread to capture and process ethernet traffic for DNS
+    /// caching.
     pub fn new(proxy: &str, rx_proxy_bytes: mpsc::Receiver<Bytes>) -> Result<Self> {
         let config = ProxyConfig::from_string(proxy)?;
         let dns_manager = Arc::new(DnsManager::new());
         let dns_manager_clone = dns_manager.clone();
+
         let _ = thread::Builder::new().name("Dns Manager".to_string()).spawn(move || {
             while let Ok(bytes) = rx_proxy_bytes.recv() {
                 dns_manager_clone.add_from_ethernet_slice(&bytes);
             }
         });
 
+        // We initialize a private, isolated tokio runtime for HTTP proxy tasks.
+        // Sharing the main daemon runtime with high-throughput actors (like Slirp or
+        // Bluetooth) can cause scheduling delays for HTTP reachability checks,
+        // leading to PARTIAL_CONNECTIVITY status. Isolation ensures consistent
+        // performance.
+        let runtime = Arc::new(Runtime::new()?);
+
         Ok(Self {
-            runtime: Arc::new(Runtime::new()?),
+            runtime,
             connector: Connector::new(config.addr, config.username, config.password),
             dns_manager,
         })

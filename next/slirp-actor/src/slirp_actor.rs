@@ -1,9 +1,12 @@
 use std::fmt;
 
-use libslirp_rs::libslirp::LibSlirp;
-use log::info;
+use libslirp_rs::{
+    libslirp::LibSlirp,
+    libslirp_config::{lookup_host_dns, SlirpConfig},
+};
 use netsim_model::chip::{PacketSink, PacketStream};
 use tokio::sync::mpsc as tokio_mpsc;
+use tracing::{info, warn};
 
 pub enum SlirpReq {
     SendPacket(bytes::Bytes),
@@ -38,7 +41,8 @@ impl fmt::Debug for SlirpCreate {
 
 pub struct SlirpActor {
     pub(crate) libslirp: Option<LibSlirp>,
-    pub(crate) config: libslirp_rs::libslirp_config::SlirpConfig,
+    pub(crate) config: SlirpConfig,
+    pub(crate) http_proxy: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -47,8 +51,18 @@ pub struct SlirpStatus {
 }
 
 impl SlirpActor {
-    pub fn new(config: libslirp_rs::libslirp_config::SlirpConfig) -> Self {
-        Self { libslirp: None, config }
+    pub async fn new(
+        mut config: SlirpConfig,
+        http_proxy: Option<String>,
+        host_dns: Option<String>,
+    ) -> Self {
+        if let Some(host_dns_str) = host_dns {
+            match lookup_host_dns(&host_dns_str).await {
+                Ok(addrs) => config.host_dns = addrs,
+                Err(e) => warn!("Failed to resolve host-dns '{}': {}", host_dns_str, e),
+            }
+        }
+        Self { libslirp: None, config, http_proxy }
     }
 }
 

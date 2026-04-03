@@ -11,7 +11,7 @@
 //! `BeaconParams` into the appropriate HCI commands for full configuration.
 
 use netsim_model::{
-    chip::{BeaconParams, Chip, ChipId},
+    chip::{BeaconParams, ChipId},
     chip_error::ChipError,
 };
 use netsim_packets::hci;
@@ -43,16 +43,16 @@ pub fn create(
     rootcanal: &Rootcanal,
     chip_id: ChipId,
     params: &BeaconParams,
-    device_name: &Option<String>,
-) -> Result<Chip, ChipError> {
+    device_name: &String,
+) -> Result<(), ChipError> {
     // Reset the controller first.
     send_hci_command(rootcanal, chip_id, hci::Reset {})?;
 
     let address: Address = params.ble_beacon.address.parse().map_err(|_| {
-        ChipError::InvalidArguments(format!(
+        ChipError::InvalidArguments(Box::from(format!(
             "Invalid beacon address: {}",
             params.ble_beacon.address
-        ))
+        )))
     })?;
 
     // LE Set Advertising Parameters
@@ -73,11 +73,11 @@ pub fn create(
 
     let adv_data = if let Some(adv_data) = &params.ble_beacon.adv_data {
         construct_data(
-            &adv_data.manufacturer_data,
-            &if adv_data.include_device_name { device_name.clone() } else { None },
+            adv_data,
+            &if adv_data.include_device_name { Some(device_name.clone()) } else { None },
         )
     } else {
-        construct_data(&[], &None)
+        construct_data(&netsim_model::bluetooth::beacon::AdvertiseData::default(), &None)
     };
 
     let mut adv_data_payload = [0u8; 31];
@@ -95,8 +95,8 @@ pub fn create(
     // LE Set Scan Response Data
     let scan_resp_data = if let Some(scan_resp) = &params.ble_beacon.scan_response {
         construct_data(
-            &scan_resp.manufacturer_data,
-            &if scan_resp.include_device_name { device_name.clone() } else { None },
+            scan_resp,
+            &if scan_resp.include_device_name { Some(device_name.clone()) } else { None },
         )
     } else {
         vec![]
@@ -109,8 +109,8 @@ pub fn create(
         rootcanal,
         chip_id,
         hci::LeSetScanResponseData {
-            advertising_data_length: scan_resp_data.len() as u8,
-            advertising_data: scan_resp_payload,
+            scan_response_data_length: scan_resp_data.len() as u8,
+            scan_response_data: scan_resp_payload,
         },
     )?;
 
@@ -121,5 +121,5 @@ pub fn create(
         hci::LeSetAdvertisingEnable { advertising_enable: hci::Enable::ENABLED },
     )?;
 
-    Ok(Chip::default())
+    Ok(())
 }

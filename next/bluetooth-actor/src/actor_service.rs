@@ -2,12 +2,11 @@
 
 use actor_framework::{ActorService, DynContext};
 use netsim_model::{
-    chip::{
-        BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant, ChipVariantUpdate,
-    },
+    chip::{BluetoothMode, Chip, ChipCreate, ChipKindParams, ChipUpdate, ChipVariant},
     chip_error::ChipError,
     ChipId, ChipKind,
 };
+use tracing::{info, warn};
 
 use crate::{
     actions::{BluetoothAction, BluetoothActionResult},
@@ -39,9 +38,7 @@ impl ActorService for BluetoothActor {
         let create_params = match &config.chip_kind_params {
             ChipKindParams::Bluetooth(p) => p,
             _ => {
-                return Err(BluetoothError::Chip(ChipError::InvalidArguments(
-                    "Expected Bluetooth network params".into(),
-                )));
+                return Err(BluetoothError::invalid_arg("Expected Bluetooth network params"));
             }
         };
 
@@ -49,6 +46,12 @@ impl ActorService for BluetoothActor {
         if let BluetoothMode::Scanner(_) = &create_params.mode {
             assert!(params.packet_stream.is_none(), "Scanner chip cannot have a packet stream");
             assert!(params.packet_sink.is_some(), "Scanner chip must have a packet sink");
+        }
+
+        // Validate Sniffer constraints: No PacketStream, Must have PacketSink.
+        if let BluetoothMode::Sniffer(_) = &create_params.mode {
+            assert!(params.packet_stream.is_none(), "Sniffer chip cannot have a packet stream");
+            assert!(params.packet_sink.is_some(), "Sniffer chip must have a packet sink");
         }
 
         let name =
@@ -79,11 +82,15 @@ impl ActorService for BluetoothActor {
         let chip = Chip {
             id: chip_id.0,
             device_id: params.device_id,
-            name: Some(name),
-            manufacturer: Some(params.config.manufacturer.clone()),
-            product_name: Some(params.config.product_name.clone()),
+            name,
+            manufacturer: params.config.manufacturer.clone(),
+            product_name: params.config.product_name.clone(),
             kind: ChipKind::BLUETOOTH,
-            variant: Some(netsim_model::chip::ChipVariant::Bluetooth(Default::default())),
+            pose: params.pose,
+            variant: Some(ChipVariant::Bluetooth(netsim_model::bluetooth::Bluetooth {
+                low_energy: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
+                classic: netsim_model::chip::Radio { state: Some(true), ..Default::default() },
+            })),
             ..Default::default()
         };
 
@@ -94,14 +101,20 @@ impl ActorService for BluetoothActor {
 
         // 2. Setup Sink and Callbacks
         let callback = if let Some(sink) = params.packet_sink {
-            // Create a channel to send HCI packets from the callback to the sink task.
-            let (hci_tx, hci_rx) = tokio::sync::mpsc::channel(10);
+            // Bounded to 100 packets (~100ms of lag absorption at 2Mbps) to:
+            // - Tolerate transient guest lag.
+            // - Protect netsimd from OOM crashes if the client becomes unresponsive.
+            let (tx, rx) = tokio::sync::mpsc::channel(100);
 
             // Spawn the sink task which forwards packets from the channel to the sink.
             let sink_id = chip_id;
-            _ctx.spawn(sink_id, Box::pin(crate::hci_callbacks::sink_loop(sink, hci_rx, sink_id)));
+            _ctx.spawn(sink_id, Box::pin(crate::hci_callbacks::sink_loop(sink, rx, sink_id)));
 
-            HciCallbacks { id: chip_id, hci_tx: Some(hci_tx), ll_tx: None }
+            if let BluetoothMode::Sniffer(_) = &mode {
+                HciCallbacks { id: chip_id, hci_tx: None, ll_tx: Some(tx) }
+            } else {
+                HciCallbacks { id: chip_id, hci_tx: Some(tx), ll_tx: None }
+            }
         } else {
             HciCallbacks { id: chip_id, hci_tx: None, ll_tx: None }
         };
@@ -130,7 +143,7 @@ impl ActorService for BluetoothActor {
             .to_chip_error()?;
 
         // 4. Create Chip Info in Context
-        let mut chip_info = match &mode {
+        match &mode {
             BluetoothMode::Beacon(params) => {
                 crate::beacon::create(&self.rootcanal, chip_id, params, &chip.name)?
             }
@@ -140,9 +153,12 @@ impl ActorService for BluetoothActor {
             BluetoothMode::Scanner(params) => {
                 crate::scanner::create(&self.rootcanal, chip_id, params)?
             }
-        };
-        chip_info.device_id = chip.device_id;
-        self.chips.lock().unwrap().insert(id.unwrap_or(chip_id), chip);
+            BluetoothMode::Sniffer(params) => {
+                crate::sniffer::create(&self.rootcanal, chip_id, params)?
+            }
+        }
+        self.chips.lock().unwrap().insert(chip_id, chip.clone());
+        self.initial_chips.insert(chip_id, chip);
         Ok(chip_id)
     }
 
@@ -167,29 +183,10 @@ impl ActorService for BluetoothActor {
         let mut chip =
             chips.get(&id).cloned().ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
 
-        // 1. Update the chip data first
-        if let Some(pos) = update.position {
-            chip.position = pos;
-        }
-        if let Some(orient) = update.orientation {
-            chip.orientation = orient;
-        }
-        if let Some(links) = update.links {
-            chip.links = links;
-        }
-        if let Some(enabled) = update.enabled {
-            chip.enabled = enabled;
-        }
+        // 1. Update the chip data
+        update.apply(&mut chip);
 
-        // 2. Handle Variant logic
-        if let Some(ChipVariantUpdate::Bluetooth(bt_update)) = update.variant {
-            if let Some(ChipVariant::Bluetooth(bt_chip)) = &mut chip.variant {
-                bt_update.classic.apply(&mut bt_chip.classic);
-                bt_update.low_energy.apply(&mut bt_chip.low_energy);
-            }
-        }
-
-        // 3. Sync the global chips map
+        // 2. Sync the global chips map
         chips.insert(id, chip.clone());
 
         Ok(chip)
@@ -205,7 +202,7 @@ impl ActorService for BluetoothActor {
             let chip_id = ChipId(chip.id);
             let device_id = chip.device_id;
 
-            log::info!("Deleting chip {chip_id}");
+            info!("Deleting chip {chip_id}");
             self.rootcanal.remove_controller(chip_id.0.into()).to_chip_error()?;
 
             // Notify DeviceService
@@ -229,10 +226,22 @@ impl ActorService for BluetoothActor {
     ) -> Result<Self::ActionResult, Self::Error> {
         match _action {
             BluetoothAction::Reset { id } => {
-                // TODO: Implement reset
-                log::warn!("Reset chip {id} not implemented");
+                info!("Resetting Bluetooth chip {id}");
                 let _ = self.rootcanal.clear_stats(id.0.into());
-                Ok(BluetoothActionResult::Success)
+
+                let chip = {
+                    let mut chips = self.chips.lock().unwrap();
+                    let initial_chip = self
+                        .initial_chips
+                        .get(&id)
+                        .ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
+                    let chip = chips
+                        .get_mut(&id)
+                        .ok_or(BluetoothError::Chip(ChipError::ChipNotFound(id)))?;
+                    *chip = initial_chip.clone();
+                    chip.clone()
+                };
+                Ok(BluetoothActionResult::Chip(chip))
             }
             BluetoothAction::GetStatistics => {
                 let mut stats_list = Vec::new();
@@ -242,7 +251,7 @@ impl ActorService for BluetoothActor {
                         // BLE Stats
                         stats_list.push(netsim_model::stats::NetsimRadioStats {
                             id: id.0,
-                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
+                            name: chip.name.clone(),
                             kind: netsim_model::stats::RadioKind::BluetoothLowEnergy,
                             tx_count: stats.ll_packets_out_ble,
                             rx_count: stats.ll_packets_in_ble,
@@ -254,7 +263,7 @@ impl ActorService for BluetoothActor {
                         // Classic Stats
                         stats_list.push(netsim_model::stats::NetsimRadioStats {
                             id: id.0,
-                            name: chip.name.clone().unwrap_or("Unknown".to_string()),
+                            name: chip.name.clone(),
                             kind: netsim_model::stats::RadioKind::BluetoothClassic,
                             tx_count: stats.ll_packets_out_classic,
                             rx_count: stats.ll_packets_in_classic,
@@ -290,7 +299,7 @@ impl BluetoothActor {
             let mut update = netsim_model::device::api::DeviceUpdate::default();
             update.name = Some(name);
             if let Err(e) = dc.update(device_id, update).await {
-                log::warn!("Failed to sync device name for device {}: {:?}", device_id, e);
+                warn!("Failed to sync device name for device {}: {:?}", device_id, e);
             }
         });
     }

@@ -33,7 +33,7 @@ async fn test_create_and_get_chip() {
         Some(netsim_model::chip::ChipVariant::Uwb(_)) => {
             assert_eq!(chip_info.id, chip_id);
             assert_eq!(chip_info.kind, ChipKind::UWB);
-            assert_eq!(chip_info.name, Some(format!("uwb_chip_{}", chip_id)));
+            assert_eq!(chip_info.name, format!("uwb_chip_{}", chip_id));
         }
         _ => panic!("Unexpected ChipInfo variant"),
     }
@@ -55,9 +55,9 @@ async fn test_create_duplicate_chip() {
     let result = world.when_create_chip(chip_id).await;
 
     // Then
-    match result {
-        Err(ChipError::ChipExists(id)) => {
-            assert_eq!(id, ChipId(chip_id).0);
+    match result.as_ref().map_err(|err| err.as_chip_error()) {
+        Err(Some(ChipError::ChipExists(id))) => {
+            assert_eq!(*id, ChipId(chip_id).0);
         }
         _ => panic!("Expected ChipExists error, got {:?}", result),
     }

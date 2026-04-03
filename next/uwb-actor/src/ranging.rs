@@ -3,7 +3,6 @@
 //! Ranging utilities for UWB spatial computations.
 
 use glam::{EulerRot, Quat, Vec3};
-use netsim_model::device::{Orientation, Position};
 
 /// helper function for performing division with zero division check
 fn checked_div(num: f32, den: f32) -> Option<f32> {
@@ -39,25 +38,34 @@ pub(crate) struct Pose {
     pub orientation: Quat,
 }
 
-impl From<(&Position, &Orientation)> for Pose {
-    fn from((pos, orient): (&Position, &Orientation)) -> Self {
+impl From<&netsim_model::device::Pose> for Pose {
+    fn from(pose: &netsim_model::device::Pose) -> Self {
         Pose {
             // Converts x, y, z from meters to centimeters
-            position: Vec3::new(pos.x * 100., pos.y * 100., pos.z * 100.),
+            position: Vec3::new(
+                pose.position.x * 100.,
+                pose.position.y * 100.,
+                pose.position.z * 100.,
+            ),
             // Converts roll, pitch, yaw from degrees to radians
             orientation: Quat::from_euler(
                 EulerRot::ZXY,
-                orient.roll.to_radians(),
-                orient.pitch.to_radians(),
-                orient.yaw.to_radians(),
+                pose.orientation.roll.to_radians(),
+                pose.orientation.pitch.to_radians(),
+                pose.orientation.yaw.to_radians(),
             ),
         }
     }
 }
 
+use crate::UwbError;
+
 /// UWB Ranging Model for computing range, azimuth, and elevation.
 /// The ranging model is adapted from https://github.com/google/pica.
-pub fn compute_range_azimuth_elevation(a: &Pose, b: &Pose) -> anyhow::Result<(f32, i16, i8)> {
+pub(crate) fn compute_range_azimuth_elevation(
+    a: &Pose,
+    b: &Pose,
+) -> Result<(f32, i16, i8), UwbError> {
     let delta = b.position - a.position;
     let distance = delta.length().clamp(0.0, u16::MAX as f32);
     let direction = a.orientation.mul_vec3(delta);
@@ -65,20 +73,25 @@ pub fn compute_range_azimuth_elevation(a: &Pose, b: &Pose) -> anyhow::Result<(f3
     let elevation = elevation(direction).to_degrees().round();
 
     if !(-180. ..=180.).contains(&azimuth) {
-        return Err(anyhow::anyhow!("azimuth is not between -180 and 180. value: {azimuth}"));
+        return Err(UwbError::InvalidAzimuth(azimuth));
     }
     if !(-90. ..=90.).contains(&elevation) {
-        return Err(anyhow::anyhow!("elevation is not between -90 and 90. value: {elevation}"));
+        return Err(UwbError::InvalidElevation(elevation));
     }
     Ok((distance, azimuth as i16, elevation as i8))
 }
 
 #[cfg(test)]
 mod tests {
+    use netsim_model::device::{Orientation, Pose, Position};
+
     use super::*;
 
-    fn create_pose(x: f32, y: f32, z: f32, yaw: f32, pitch: f32, roll: f32) -> Pose {
-        Pose::from((&Position { x, y, z }, &Orientation { yaw, pitch, roll }))
+    fn create_pose(x: f32, y: f32, z: f32, yaw: f32, pitch: f32, roll: f32) -> super::Pose {
+        super::Pose::from(&Pose {
+            position: Position { x, y, z },
+            orientation: Orientation { yaw, pitch, roll },
+        })
     }
 
     #[test]

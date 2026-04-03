@@ -1,4 +1,5 @@
 use actor_framework::{ActorService, DynContext};
+use libslirp_rs::libslirp::{LibSlirp, ProxyManager};
 
 use crate::{
     error::SlirpError,
@@ -74,10 +75,21 @@ impl ActorService for SlirpActor {
                 if self.libslirp.is_some() {
                     panic!("SlirpActor: Register called twice");
                 } else {
-                    let config = self.config.clone();
+                    let mut config = self.config.clone();
+                    let mut proxy_manager = None;
+                    let mut tx_proxy_bytes = None;
+
+                    if let Some(ref proxy) = self.http_proxy {
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        config.http_proxy_on = true;
+                        let manager = http_proxy::Manager::new(proxy, rx)
+                            .map_err(|e| crate::error::SlirpError::Internal(e.to_string()))?;
+                        proxy_manager = Some(Box::new(manager) as Box<dyn ProxyManager>);
+                        tx_proxy_bytes = Some(tx);
+                    }
                     // Wrap tx in Box<dyn PacketSender>, effectively removing the bridge thread
                     let slirp =
-                        libslirp_rs::libslirp::LibSlirp::new(config, Box::new(sink), None, None);
+                        LibSlirp::new(config, Box::new(sink), proxy_manager, tx_proxy_bytes);
                     self.libslirp = Some(slirp);
 
                     // Add the stream to the context

@@ -5,6 +5,7 @@
 //! ActorService handlers.
 
 use bytes::Bytes;
+use tracing::debug;
 
 use crate::{ActorService, DynContext};
 
@@ -60,7 +61,7 @@ pub trait ActorLifecycle: ActorService {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> impl std::future::Future<Output = ()> + Send {
-        log::debug!("Task closed: {}", id.into());
+        debug!("Task closed: {}", id.into());
         futures::future::ready(())
     }
 
@@ -70,7 +71,7 @@ pub trait ActorLifecycle: ActorService {
         id: Self::Id,
         _ctx: &mut DynContext<Self>,
     ) -> impl std::future::Future<Output = ()> + Send {
-        log::debug!("Stream closed: {}", id.into());
+        debug!("Stream closed: {}", id.into());
         futures::future::ready(())
     }
 
@@ -90,7 +91,7 @@ pub trait ActorLifecycle: ActorService {
         id: usize,
         _ctx: &mut DynContext<Self>,
     ) -> impl std::future::Future<Output = ()> + Send {
-        log::debug!("Typed stream closed: {}", id);
+        debug!("Typed stream closed: {}", id);
         futures::future::ready(())
     }
 

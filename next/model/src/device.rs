@@ -1,28 +1,28 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, oneshot};
 
-use crate::{
-    chip::{ChipConfig, ChipId, PacketSink, PacketStream},
-    client_error::ClientError,
-    client_method,
-    device_error::DeviceError,
-};
+use crate::chip::{ChipConfig, PacketSink, PacketStream};
 
 // DEVICE SERVICE
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
     pub z: f32,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Orientation {
     pub yaw: f32,
     pub pitch: f32,
     pub roll: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct Pose {
+    pub position: Position,
+    pub orientation: Orientation,
 }
 
 /// A unique identifier for a simulated device, represented as a u32.
@@ -47,60 +47,6 @@ impl fmt::Display for DeviceId {
     }
 }
 
-pub type Responder<T> = oneshot::Sender<Result<T, DeviceError>>;
-
-#[derive(Clone, Debug)]
-pub struct DeviceClient {
-    sender: mpsc::Sender<DeviceRequest>,
-}
-
-impl DeviceClient {
-    pub fn new(sender: mpsc::Sender<DeviceRequest>) -> Self {
-        Self { sender }
-    }
-
-    pub async fn shutdown(&self) -> Result<(), ClientError> {
-        self.sender
-            .send(DeviceRequest::Shutdown)
-            .await
-            .map_err(|e| ClientError::Send(e.to_string()))?;
-        Ok(())
-    }
-
-    pub fn notify_chip_removed(&self, device_id: DeviceId, chip_id: ChipId) {
-        let sender = self.sender.clone();
-        tokio::spawn(async move {
-            if let Err(e) = sender
-                .send(DeviceRequest::NotifyChipRemoved { device_id, chip_id, respond_to: None })
-                .await
-            {
-                log::error!("Failed to send NotifyChipRemoved for chip {chip_id}: {e}");
-            }
-        });
-    }
-
-    pub async fn notify_chip_removed_block(
-        &self,
-        device_id: DeviceId,
-        chip_id: ChipId,
-    ) -> Result<(), ClientError> {
-        let (tx, rx) = oneshot::channel();
-        self.sender
-            .send(DeviceRequest::NotifyChipRemoved { device_id, chip_id, respond_to: Some(tx) })
-            .await
-            .map_err(|e| ClientError::Send(e.to_string()))?;
-        rx.await.map_err(|e| ClientError::Recv(e.to_string()))?;
-        Ok(())
-    }
-}
-
-client_method!(DeviceClient => fn create(request: Box<api::DeviceCreate>) -> DeviceId as DeviceRequest::Create);
-client_method!(DeviceClient => fn add_chip(request: DeviceAddChip) -> () as DeviceRequest::AddChip);
-client_method!(DeviceClient => fn list() -> api::ListDeviceResponse as DeviceRequest::List);
-client_method!(DeviceClient => fn update(update: api::DeviceUpdate) -> () as DeviceRequest::Update);
-client_method!(DeviceClient => fn delete(id: DeviceId) -> () as DeviceRequest::Delete);
-client_method!(DeviceClient => fn reset(id: Option<DeviceId>) -> () as DeviceRequest::Reset);
-
 pub mod api {
     use serde::{Deserialize, Serialize};
 
@@ -113,6 +59,23 @@ pub mod api {
     };
 
     #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+    pub struct PoseUpdate {
+        pub position: Option<Position>,
+        pub orientation: Option<Orientation>,
+    }
+
+    impl PoseUpdate {
+        pub fn apply(&self, pose: &mut super::Pose) {
+            if let Some(pos) = &self.position {
+                pose.position = *pos;
+            }
+            if let Some(orient) = &self.orientation {
+                pose.orientation = *orient;
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
     pub struct ListDeviceResponse {
         pub devices: Vec<Device>,
     }
@@ -123,10 +86,21 @@ pub mod api {
         pub name: Option<String>,
         pub visible: Option<bool>,
         //TODO: pub chip_id: Option<ChipId>,
-        pub position: Option<Position>,
-        pub orientation: Option<Orientation>,
+        pub pose: PoseUpdate,
         //TODO: pub links: Option<Vec<Link>,
         pub chips: Option<Vec<crate::chip::ChipUpdate>>,
+    }
+
+    impl DeviceUpdate {
+        pub fn apply(&self, device: &mut super::Device) {
+            if let Some(name) = &self.name {
+                device.name = name.clone();
+            }
+            if let Some(visible) = self.visible {
+                device.visible = visible;
+            }
+            self.pose.apply(&mut device.pose);
+        }
     }
 
     #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -160,8 +134,7 @@ pub mod api {
             Self {
                 device_config: DeviceConfig {
                     name,
-                    position: Default::default(),
-                    orientation: Default::default(),
+                    pose: Default::default(),
                     visible: false,
                     builtin: true,
                     device_info: None,
@@ -282,8 +255,7 @@ pub struct Device {
     pub id: u32,
     pub name: String,
     pub visible: bool,
-    pub position: Position,
-    pub orientation: Orientation,
+    pub pose: Pose,
     pub builtin: bool,
     pub chips: Vec<crate::chip::Chip>,
     pub device_info: Option<DeviceInfo>,
@@ -320,28 +292,14 @@ impl From<netsim_types::DeviceInfo> for DeviceInfo {
 pub struct DeviceConfig {
     pub name: String,
     pub visible: bool,
-    pub position: Position,
-    pub orientation: Orientation,
+    pub pose: Pose,
     pub builtin: bool,
     pub device_info: Option<DeviceInfo>,
 }
 
 impl DeviceConfig {
-    pub fn new(
-        name: impl Into<String>,
-        visible: bool,
-        position: Position,
-        orientation: Orientation,
-        builtin: bool,
-    ) -> DeviceConfig {
-        DeviceConfig {
-            name: name.into(),
-            visible,
-            position,
-            orientation,
-            builtin,
-            device_info: None,
-        }
+    pub fn new(name: impl Into<String>, visible: bool, pose: Pose, builtin: bool) -> DeviceConfig {
+        DeviceConfig { name: name.into(), visible, pose, builtin, device_info: None }
     }
 }
 
@@ -360,40 +318,4 @@ impl fmt::Debug for DeviceAddChip {
             .field("chip_config", &self.chip_config)
             .finish_non_exhaustive()
     }
-}
-
-#[derive(Debug)]
-pub enum DeviceRequest {
-    AddChip {
-        request: DeviceAddChip,
-        respond_to: Responder<()>,
-    },
-    Create {
-        request: Box<api::DeviceCreate>,
-        respond_to: Responder<DeviceId>,
-    },
-    List {
-        respond_to: Responder<api::ListDeviceResponse>,
-    },
-    Update {
-        update: api::DeviceUpdate,
-        respond_to: Responder<()>,
-    },
-    Delete {
-        id: DeviceId,
-        respond_to: Responder<()>,
-    },
-    Reset {
-        id: Option<DeviceId>,
-        respond_to: Responder<()>,
-    },
-    GetChipStatistics {
-        respond_to: Responder<()>,
-    },
-    NotifyChipRemoved {
-        device_id: DeviceId,
-        chip_id: ChipId,
-        respond_to: Option<oneshot::Sender<()>>,
-    },
-    Shutdown,
 }

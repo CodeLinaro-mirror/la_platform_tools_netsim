@@ -3,7 +3,8 @@
 use actor_framework::{ActorService, DynContext};
 use futures::{SinkExt, StreamExt};
 use netsim_model::{
-    chip::{Chip, ChipId, ChipVariant, ChipVariantUpdate, RadioUpdate, WifiUpdate},
+    chip::{Chip, ChipId, ChipVariant, Radio},
+    wifi::Wifi,
     ChipKind,
 };
 use tokio::sync::mpsc;
@@ -31,15 +32,17 @@ impl ActorService for WifiActor {
     ) -> Result<Self::Id, Self::Error> {
         let id = id.ok_or_else(|| WifiError::Internal("missing chip id".into()))?;
         if self.active_chips.contains_key(&id) {
-            return Err(WifiError::Internal(format!("Chip {} already exists", id)));
+            return Err(WifiError::Internal(Box::from(format!("Chip {} already exists", id))));
         }
 
         let stream = params
             .packet_stream
             .take()
-            .ok_or(WifiError::Internal("Missing PacketStream".into()))?;
-        let sink =
-            params.packet_sink.take().ok_or(WifiError::Internal("Missing PacketSink".into()))?;
+            .ok_or(WifiError::Internal(Box::from("Missing PacketStream")))?;
+        let sink = params
+            .packet_sink
+            .take()
+            .ok_or(WifiError::Internal(Box::from("Missing PacketSink")))?;
 
         // Spawn sink task
         let (tx, mut rx) = mpsc::unbounded_channel::<bytes::Bytes>();
@@ -70,12 +73,14 @@ impl ActorService for WifiActor {
             device_id: params.device_id,
             kind: ChipKind::WIFI,
             variant: Some(netsim_model::chip::ChipVariant::Wifi(Default::default())),
-            name: Some(params.config.name),
-            manufacturer: Some(params.config.manufacturer),
-            product_name: Some(params.config.product_name),
+            name: params.config.name,
+            manufacturer: params.config.manufacturer,
+            product_name: params.config.product_name,
+            pose: params.pose,
             ..Default::default()
         };
-        self.active_chips.insert(id, chip);
+        self.active_chips.insert(id, chip.clone());
+        self.initial_chips.insert(id, chip);
 
         // Notify Medium about new chip
         self.medium.add(id.0);
@@ -101,28 +106,23 @@ impl ActorService for WifiActor {
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Entity, Self::Error> {
         if let Some(chip) = self.active_chips.get_mut(&id) {
-            if let Some(ChipVariantUpdate::Wifi(WifiUpdate {
-                radio: RadioUpdate { state: Some(state) },
-            })) = update.variant
-            {
-                self.medium.set_enabled(id.0, state);
-            }
-            if let Some(enabled) = update.enabled {
-                self.medium.set_enabled(id.0, enabled);
-            }
-            if let Some(pos) = update.position {
-                chip.position = pos;
-            }
-            // Update the chip state properly
-            if let Ok(enabled) = self.medium.enabled(id.0) {
-                if let Some(ChipVariant::Wifi(ref mut radio)) = chip.variant {
-                    radio.radio.state = Some(enabled);
-                }
-                chip.enabled = enabled;
-            }
+            // Apply update to chip
+            update.apply(chip);
+
+            self.medium.set_enabled(
+                id.0,
+                chip.enabled
+                    && matches!(
+                        chip.variant,
+                        Some(ChipVariant::Wifi(Wifi {
+                            radio: Radio { state: Some(true) | None, .. }
+                        }))
+                    ),
+            );
+
             Ok(chip.clone())
         } else {
-            Err(WifiError::Internal(format!("Chip {} not found", id)))
+            Err(WifiError::Internal(Box::from(format!("Chip {} not found", id))))
         }
     }
 
@@ -148,7 +148,7 @@ impl ActorService for WifiActor {
                     let tx_count = self.medium.get_tx_count(id.0);
                     stats.push(netsim_model::stats::NetsimRadioStats {
                         id: id.0,
-                        name: chip.name.clone().unwrap_or_default(),
+                        name: chip.name.clone(),
                         kind: netsim_model::stats::RadioKind::Wifi,
                         tx_count: tx_count as u64,
                         rx_count: rx_count as u64,
@@ -165,10 +165,15 @@ impl ActorService for WifiActor {
             }
             WifiReq::Reset { id } => {
                 self.medium.reset(id.0);
-                if let Some(chip) = self.active_chips.get_mut(&id) {
-                    chip.enabled = true;
-                }
-                Ok(WifiResponse::Ok)
+                let initial_chip = self.initial_chips.get(&id).ok_or_else(|| {
+                    WifiError::Internal(Box::from(format!("Initial chip not found: {}", id)))
+                })?;
+                let chip = self.active_chips.get_mut(&id).ok_or_else(|| {
+                    WifiError::Internal(Box::from(format!("Chip not found: {}", id)))
+                })?;
+                *chip = initial_chip.clone();
+                let chip = chip.clone();
+                Ok(WifiResponse::Chip(chip))
             }
         }
     }

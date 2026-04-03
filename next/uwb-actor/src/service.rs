@@ -12,6 +12,7 @@ use pdl_runtime::Packet;
 use pica::{packets::uci, PicaCommand, PicaEvent};
 
 use crate::{
+    error::UwbError,
     uwb_actor::{UwbActor, UwbChipState},
     UwbAction, UwbActionResult,
 };
@@ -22,7 +23,7 @@ impl ActorService for UwbActor {
     type Update = ChipUpdate;
     type Action = UwbAction;
     type ActionResult = UwbActionResult;
-    type Error = ChipError;
+    type Error = UwbError;
     type Entity = Chip;
     type TypedStream = ();
 
@@ -32,9 +33,9 @@ impl ActorService for UwbActor {
         params: Self::Create,
         _ctx: &mut DynContext<Self>,
     ) -> Result<Self::Id, Self::Error> {
-        let chip_id = id.ok_or(ChipError::InvalidArguments("missing chip id".to_string()))?;
+        let chip_id = id.ok_or(ChipError::InvalidArguments(Box::from("missing chip id")))?;
         if self.chip_to_handle.contains_key(&chip_id) {
-            return Err(ChipError::ChipExists(chip_id.0));
+            return Err(ChipError::ChipExists(chip_id.0).into());
         }
 
         let chip = Chip {
@@ -42,20 +43,21 @@ impl ActorService for UwbActor {
             device_id: params.device_id,
             kind: ChipKind::UWB,
             variant: Some(ChipVariant::Uwb(Default::default())),
-            name: Some(params.config.name),
-            manufacturer: Some(params.config.manufacturer),
-            product_name: Some(params.config.product_name),
+            name: params.config.name,
+            manufacturer: params.config.manufacturer,
+            product_name: params.config.product_name,
+            pose: params.pose,
             ..Default::default()
         };
 
         let stream =
-            params.packet_stream.expect("Packet stream is present").map(|b| b.to_vec()).boxed();
+            params.packet_stream.ok_or(UwbError::PacketStreamMissing)?.map(|b| b.to_vec()).boxed();
 
         // Pica wants a Sink<Vec<u8>>.
         let sink = Box::pin(
             params
                 .packet_sink
-                .expect("Packet sink is present")
+                .ok_or(UwbError::PacketSinkMissing)?
                 .with(|v| async move { Ok(Bytes::from(v)) }),
         );
 
@@ -66,17 +68,15 @@ impl ActorService for UwbActor {
         // Wait for add to complete. This guarantees the chip exists by the time any
         // actions are performed on it.
         let handle = loop {
-            if let PicaEvent::Connected { handle, .. } = self
-                .pica_connect_events
-                .recv()
-                .await
-                .map_err(|_| ChipError::Internal("pica shutdown unexpectedly".to_string()))?
+            if let PicaEvent::Connected { handle, .. } =
+                self.pica_connect_events.recv().await.map_err(|_| UwbError::PicaShutdown)?
             {
                 break handle;
             }
         };
 
-        self.chip_states.write().unwrap().insert(handle, UwbChipState { chip });
+        self.chip_states.write().unwrap().insert(handle, UwbChipState { chip: chip.clone() });
+        self.initial_chips.insert(chip_id, chip);
         self.chip_to_handle.insert(chip_id, handle);
 
         Ok(chip_id)
@@ -101,7 +101,7 @@ impl ActorService for UwbActor {
         let mut chips = self.chip_states.write().unwrap();
         let state = chips.get_mut(handle).ok_or(ChipError::ChipNotFound(id))?;
 
-        state.apply(update);
+        update.apply(&mut state.chip);
 
         Ok(state.chip.clone())
     }
@@ -139,18 +139,26 @@ impl ActorService for UwbActor {
     ) -> Result<Self::ActionResult, Self::Error> {
         match action {
             UwbAction::Reset { id } => {
-                if let Some(handle) = self.chip_to_handle.get(&id) {
-                    let reset_cmd =
-                        uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
-                    let _ = self
-                        .pica_commands
-                        .send(PicaCommand::UciPacket(
-                            *handle,
-                            reset_cmd.encode_to_vec().expect("encoding succeeds"),
-                        ))
-                        .await;
-                }
-                Ok(UwbActionResult::Success)
+                let handle = self.chip_to_handle.get(&id).ok_or(ChipError::ChipNotFound(id))?;
+                let initial_chip =
+                    self.initial_chips.get(&id).ok_or(ChipError::ChipNotFound(id))?;
+                let chip = {
+                    let mut chips = self.chip_states.write().unwrap();
+                    let state = chips.get_mut(handle).ok_or(ChipError::ChipNotFound(id))?;
+                    state.chip = initial_chip.clone();
+                    state.chip.clone()
+                };
+                let reset_cmd =
+                    uci::CoreDeviceResetCmd { reset_config: uci::ResetConfig::UwbsReset };
+                let _ = self
+                    .pica_commands
+                    .send(PicaCommand::UciPacket(
+                        *handle,
+                        reset_cmd.encode_to_vec().expect("encoding succeeds"),
+                    ))
+                    .await;
+
+                Ok(UwbActionResult::Chip(chip))
             }
             UwbAction::GetStatistics => {
                 let stats = self
@@ -160,7 +168,7 @@ impl ActorService for UwbActor {
                     .values()
                     .map(|state| netsim_model::stats::NetsimRadioStats {
                         id: state.chip.id,
-                        name: state.chip.name.clone().unwrap_or_default(),
+                        name: state.chip.name.clone(),
                         kind: netsim_model::stats::RadioKind::Uwb,
                         tx_count: 0,
                         rx_count: 0,

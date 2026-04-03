@@ -16,8 +16,9 @@ netsim_rust_library(
         "@base64",
         "@bytes",
         "@etherparse",
-        "@log",
         "@regex",
+        "@thiserror",
         "@tokio",
+        "@tracing",
     ],
 )

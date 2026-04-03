@@ -31,7 +31,7 @@ async fn test_bluetooth_hci_reset() {
     let mut world = World::new().await;
 
     // Start daemon
-    let daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     // Spawn the client task
     let client_task = tokio::spawn(async move {
@@ -89,15 +89,7 @@ async fn test_ap_config_args() {
 
     let mut world = World::new_with_args(args).await;
 
-    let devices = world.when_list_devices().await;
-    let ap_device =
-        devices.iter().find(|d| d.name == "CustomAP").expect("Default AP device not found");
-    let ap_chip = ap_device.chips.first().expect("AP device has no chips");
-
-    // We don't verify specific device properties (like position) as they might
-    // change. However, finding the device confirms that netsimd started and
-    // created the AP.
-    println!("Found CustomAP with {} chips", ap_device.chips.len());
+    world.then_access_point_matches_by_ssid("CustomAP", 6, "n").await;
 }
 
 // Scenario: Start daemon with --pcap
@@ -113,7 +105,7 @@ async fn test_pcap_args_enabled() {
     let mut world = World::new_with_args(args).await;
 
     // Spawn daemon task to process background tasks
-    let _daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     let device_id = world.when_create_device("TestDevice", "TestChip").await;
     let devices = world.when_list_devices().await;
@@ -135,7 +127,7 @@ async fn test_pcap_args_disabled() {
 
     let mut world = World::new_with_args(args).await;
 
-    let _daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     let device_id = world.when_create_device("TestDevice", "TestChip").await;
     let devices = world.when_list_devices().await;
@@ -158,7 +150,7 @@ async fn test_capture_patch_enabled_flag() {
 
     let mut world = World::new_with_args(args).await;
 
-    let _daemon_task = world.spawn_daemon();
+    world.when_spawn_daemon().await;
 
     let device_id = world.when_create_device("TestDevice", "TestChip").await;
     let devices = world.when_list_devices().await;

@@ -9,7 +9,7 @@ DEPS = [
     "//next/model",
     "//next/modem-rs",
     "@tokio",
-    "@log",
+    "@tracing",
     "@bytes",
     "@futures",
     "@tokio-stream",
@@ -25,7 +25,7 @@ netsim_rust_library(
         "@async-trait",
     ],
     test_deps = [
-        "@env_logger",
+        "@tracing-subscriber",
     ],
     deps = DEPS,
 )
