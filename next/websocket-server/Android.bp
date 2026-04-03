@@ -1,0 +1,33 @@
+package {
+    default_applicable_licenses: ["tools_netsim_license"],
+}
+
+rust_library_host {
+    name: "libnetsim_next_websocket_server",
+    crate_name: "websocket_server",
+    stem: "libwebsocket_server",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libanyhow",
+        "libbase64_rust",
+        "libbytes",
+        "libfutures",
+        "libhttp",
+        "libhttparse",
+        "libnetsim_next_device_actor",
+        "libnetsim_next_device_api",
+        "libnetsim_next_model",
+        "libring",
+        "libsocket2",
+        "libthiserror",
+        "libtokio",
+        "libtokio_stream",
+        "libtracing",
+        "libtungstenite",
+    ],
+}

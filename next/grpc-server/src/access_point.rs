@@ -1,6 +1,8 @@
 // Copyright 2026 The Android Open Source Project
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(not(feature = "cuttlefish"))]
+
 use ap_actor::{ApClient, ApConfig};
 use grpcio::{RpcContext, UnarySink};
 use netsim_model::ap::WifiMode;

@@ -5,6 +5,7 @@
 #[cfg(test)]
 use tracing::info;
 use tracing_log::LogTracer;
+#[cfg(not(feature = "cuttlefish"))]
 use tracing_subscriber::EnvFilter;
 
 /// Formats the current time for logging.
@@ -16,30 +17,53 @@ fn log_current_time() -> String {
 ///
 /// The current log format follows the same format as Android Emulator team.
 pub fn init(prefix: &'static str, is_verbose: bool) {
-    let log_filter = if is_verbose { "debug" } else { "info" };
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_filter));
-
     let _ = LogTracer::init();
 
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .event_format(CustomFormatter { prefix })
-        .try_init();
+    #[cfg(not(feature = "cuttlefish"))]
+    {
+        let log_filter = if is_verbose { "debug" } else { "info" };
+        let filter =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_filter));
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .event_format(CustomFormatter { prefix })
+            .try_init();
+    }
+
+    #[cfg(feature = "cuttlefish")]
+    {
+        let level = if is_verbose { tracing::Level::DEBUG } else { tracing::Level::INFO };
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(level)
+            .event_format(CustomFormatter { prefix })
+            .try_init();
+    }
 }
 
 /// Initiating the environment for logging in Rust unit tests
 ///
 /// The current log format follows the same format as Android Emulator team.
 pub fn init_for_test() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-
     let _ = LogTracer::init();
 
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .event_format(CustomFormatter { prefix: "netsim-test" })
-        .with_test_writer()
-        .try_init();
+    #[cfg(not(feature = "cuttlefish"))]
+    {
+        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .event_format(CustomFormatter { prefix: "netsim-test" })
+            .with_test_writer()
+            .try_init();
+    }
+
+    #[cfg(feature = "cuttlefish")]
+    {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .event_format(CustomFormatter { prefix: "netsim-test" })
+            .with_test_writer()
+            .try_init();
+    }
 }
 
 struct CustomFormatter {
@@ -128,8 +152,16 @@ mod tests {
     // tracing tests.
     #[test]
     fn test_format_matches_legacy() {
+        #[cfg(not(feature = "cuttlefish"))]
         let subscriber = tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::new("info"))
+            .event_format(CustomFormatter { prefix: "netsim" })
+            .with_writer(|| BufferWriter)
+            .finish();
+
+        #[cfg(feature = "cuttlefish")]
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
             .event_format(CustomFormatter { prefix: "netsim" })
             .with_writer(|| BufferWriter)
             .finish();
@@ -148,8 +180,16 @@ mod tests {
         // initialized it, we might not capture it in LOG_BUFFER. We skip log
         // verification if initialization fails.
         let _ = LogTracer::init();
+        #[cfg(not(feature = "cuttlefish"))]
         let _ = tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::new("info"))
+            .event_format(CustomFormatter { prefix: "netsim" })
+            .with_writer(|| BufferWriter)
+            .try_init();
+
+        #[cfg(feature = "cuttlefish")]
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
             .event_format(CustomFormatter { prefix: "netsim" })
             .with_writer(|| BufferWriter)
             .try_init();

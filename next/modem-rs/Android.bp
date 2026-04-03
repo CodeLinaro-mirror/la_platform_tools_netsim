@@ -1,0 +1,27 @@
+package {
+    default_applicable_licenses: ["tools_netsim_license"],
+}
+
+rust_library_host {
+    name: "libnetsim_next_modem_rs",
+    crate_name: "modem_rs",
+    stem: "libmodem_rs",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libhex",
+        "libnetsim_next_model",
+        "libnom",
+        "libserde",
+        "libtokio",
+        "libtracing",
+    ],
+    proc_macros: [
+        "libnetsim_next_modem_rs_derive",
+    ],
+}

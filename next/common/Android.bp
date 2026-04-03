@@ -1,0 +1,24 @@
+package {
+    default_applicable_licenses: ["tools_netsim_license"],
+}
+
+rust_library_host {
+    name: "libnetsim_next_common",
+    crate_name: "common",
+    stem: "libcommon",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libchrono",
+        "liblibc",
+        "libprotobuf_json_mapping",
+        "libtracing",
+        "libtracing_log",
+        "libtracing_subscriber",
+        "libzip",
+    ],
+}

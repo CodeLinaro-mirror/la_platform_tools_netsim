@@ -35,6 +35,7 @@ use packet_stream::{
     transport::traits::{PacketSink, PacketStream},
     StreamAddress, Streams,
 };
+#[cfg(not(feature = "cuttlefish"))]
 use slirp_actor::SlirpClient;
 use tokio::{sync::mpsc, task::JoinSet};
 use tracing::{error, info, warn};
@@ -177,7 +178,7 @@ async fn setup_grpc_listener(
     enable_cli_ui: bool,
     device_client: DeviceClient,
     link_client: LinkClient,
-    ap_client: ap_actor::ApClient,
+    #[cfg(not(feature = "cuttlefish"))] ap_client: ap_actor::ApClient,
     version: String,
 ) -> Result<(u16, grpcio::Server), RunResult> {
     // Create a channel to bridge PacketStreamerService connections to Streams
@@ -190,6 +191,7 @@ async fn setup_grpc_listener(
         enable_cli_ui,
         device_client,
         link_client,
+        #[cfg(not(feature = "cuttlefish"))]
         ap_client,
         packet_streamer_service,
         version,
@@ -244,6 +246,7 @@ pub struct NetsimDaemon {
     device_task: tokio::task::JoinHandle<()>,
     link_client: Box<dyn link_api::LinkClient>,
 
+    #[cfg(not(feature = "cuttlefish"))]
     slirp_client: Option<SlirpClient>,
     chip_clients: HashMap<ChipKind, Box<dyn ChipClient>>,
 }
@@ -308,7 +311,7 @@ impl NetsimDaemon {
 
         // Pre-check TAP permissions if configured.
         // We do this BEFORE redirection so the user can see the error in the console.
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(feature = "cuttlefish")))]
         if let Some(ref tap_config) = wifi_tap {
             if let Err(e) = wifi_actor::tap_gateway::TapGateway::preflight_check(tap_config) {
                 return Err(RunResult::InitializationError(format!(
@@ -389,8 +392,11 @@ impl NetsimDaemon {
         let next_chip_id = Arc::new(AtomicU32::new(0));
 
         // Setup AP Actor (Needed for gRPC)
+        #[cfg(not(feature = "cuttlefish"))]
         let shared_keys = Arc::new(ap_actor::SharedKeyStore::new());
+        #[cfg(not(feature = "cuttlefish"))]
         let (ap_runner, ap_client) = ap_actor::new();
+        #[cfg(not(feature = "cuttlefish"))]
         let ap_actor_state = ap_actor::ApActor::new(shared_keys.clone());
 
         // gRPC port is determined after the listener starts.
@@ -401,6 +407,7 @@ impl NetsimDaemon {
             !args.no_cli_ui,
             device_client.clone(),
             link_client.clone(),
+            #[cfg(not(feature = "cuttlefish"))]
             ap_client.clone(),
             get_version(),
         )
@@ -456,7 +463,9 @@ impl NetsimDaemon {
 
         // Setup Wifi Server (and dependencies: AP)
         // Setup Slirp Actor
+        #[cfg(not(feature = "cuttlefish"))]
         let (slirp_runner, slirp_client) = slirp_actor::new();
+        #[cfg(not(feature = "cuttlefish"))]
         let slirp_actor_state = slirp_actor::SlirpActor::new(
             Default::default(),
             args.http_proxy.clone(),
@@ -467,6 +476,7 @@ impl NetsimDaemon {
         // (AP Actor already initialized above)
 
         // Setup Wifi Actor
+        #[cfg(not(feature = "cuttlefish"))]
         let (wifi_runner, wifi_client) = wifi_actor::new();
         // Initialize wifi_tap configuration.
         // If --wifi-cvd-tap is set, it implies explicit "cvd-etap-%02d" pattern for
@@ -484,6 +494,7 @@ impl NetsimDaemon {
 
         // TAP preflight check is now done in `new_with_dirs` before lock acquisition.
 
+        #[cfg(not(feature = "cuttlefish"))]
         let wifi_actor_state = wifi_actor::WifiActor::new(
             Some(Arc::new(ap_client.clone())),
             Some(slirp_client.clone()),
@@ -505,6 +516,7 @@ impl NetsimDaemon {
         // Prepare chip clients map for DeviceServer
         let mut chip_clients: HashMap<ChipKind, Box<dyn ChipClient>> = HashMap::new();
         chip_clients.insert(ChipKind::BLUETOOTH, Box::new(bt_client.clone()));
+        #[cfg(not(feature = "cuttlefish"))]
         chip_clients.insert(ChipKind::WIFI, Box::new(wifi_client.clone()));
         chip_clients.insert(ChipKind::UWB, Box::new(uwb_client.clone()));
         chip_clients.insert(ChipKind::CELLULAR, Box::new(cell_client.clone()));
@@ -545,8 +557,11 @@ impl NetsimDaemon {
         // Spawn server tasks
         let mut join_set = JoinSet::new();
         join_set.spawn(bt_runner.run(bt_actor_state));
+        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(wifi_runner.run(wifi_actor_state));
+        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(ap_runner.run(ap_actor_state));
+        #[cfg(not(feature = "cuttlefish"))]
         join_set.spawn(slirp_runner.run(slirp_actor_state));
         join_set.spawn(cell_runner.run(cell_actor_state));
         join_set.spawn(link_runner.run(link_actor_state));
@@ -558,16 +573,19 @@ impl NetsimDaemon {
         let device_task = tokio::spawn(device_runner.run(device_actor_state));
 
         // Create Default AP
-        let mut ap_config = ap_actor::ApConfig::default();
-        if let Some(ssid) = &args.wifi.wifi_ssid {
-            ap_config.ssid = ssid.clone();
-        }
-        set_if_some!(ap_config.wpa_passphrase, args.wifi.wifi_password.clone(), Some);
-        set_if_some!(ap_config.channel, args.wifi.wifi_channel);
-        set_if_some!(ap_config.beacon_interval, args.wifi.wifi_beacon_interval);
-        set_if_some!(ap_config.hw_mode, args.wifi.wifi_mode, Into::into);
+        #[cfg(not(feature = "cuttlefish"))]
+        {
+            let mut ap_config = ap_actor::ApConfig::default();
+            if let Some(ssid) = &args.wifi.wifi_ssid {
+                ap_config.ssid = ssid.clone();
+            }
+            set_if_some!(ap_config.wpa_passphrase, args.wifi.wifi_password.clone(), Some);
+            set_if_some!(ap_config.channel, args.wifi.wifi_channel);
+            set_if_some!(ap_config.beacon_interval, args.wifi.wifi_beacon_interval);
+            set_if_some!(ap_config.hw_mode, args.wifi.wifi_mode, Into::into);
 
-        ap_client.create_ap(Some(0), ap_config).await.expect("Failed to create default AP");
+            ap_client.create_ap(Some(0), ap_config).await.expect("Failed to create default AP");
+        }
 
         // Clone chip_clients for NetsimDaemon
         let daemon_chip_clients = chip_clients.iter().map(|(k, v)| (*k, v.clone_box())).collect();
@@ -584,6 +602,7 @@ impl NetsimDaemon {
                 _grpc_server: Some(grpc_server),
                 device_task,
                 link_client: Box::new(link_client),
+                #[cfg(not(feature = "cuttlefish"))]
                 slirp_client: Some(slirp_client.clone()),
                 chip_clients: daemon_chip_clients,
             },
@@ -611,6 +630,7 @@ impl NetsimDaemon {
         info!("Graceful shutdown requested for all actors");
 
         let link_fut = self.link_client.shutdown();
+        #[cfg(not(feature = "cuttlefish"))]
         let slirp_fut = async {
             if let Some(slirp) = &self.slirp_client {
                 if let Err(e) = slirp.shutdown().await {
@@ -618,6 +638,8 @@ impl NetsimDaemon {
                 }
             }
         };
+        #[cfg(feature = "cuttlefish")]
+        let slirp_fut = async {};
         let chips_fut = futures::future::join_all(self.chip_clients.values().map(|c| c.shutdown()));
 
         // Execute all shutdown dispatches concurrently

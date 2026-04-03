@@ -1,0 +1,31 @@
+package {
+    default_applicable_licenses: ["tools_netsim_license"],
+}
+
+rust_library_host {
+    name: "libnetsim_next_device_actor",
+    crate_name: "device_actor",
+    stem: "libdevice_actor",
+    crate_root: "src/lib.rs",
+    srcs: [
+        "src/lib.rs",
+    ],
+    features: ["cuttlefish"],
+    lints: "none",
+    rustlibs: [
+        "libbytes",
+        "libfutures",
+        "libnetsim_next_actor_framework",
+        "libnetsim_next_capture_api",
+        "libnetsim_next_common",
+        "libnetsim_next_device_api",
+        "libnetsim_next_link_api",
+        "libnetsim_next_model",
+        "libnetsim_proto",
+        "libprotobuf_json_mapping",
+        "libserde",
+        "libthiserror",
+        "libtokio",
+        "libtracing",
+    ],
+}
