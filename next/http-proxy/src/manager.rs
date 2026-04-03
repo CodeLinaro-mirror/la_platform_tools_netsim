@@ -8,7 +8,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use libslirp_rs::libslirp::{ProxyConnect, ProxyManager};
+use libslirp_rs::{ProxyConnect, ProxyManager};
 use tokio::runtime::Runtime;
 use tracing::{debug, warn};
 
@@ -38,7 +38,7 @@ use crate::{
 /// ```
 /// use std::net::SocketAddr;
 ///
-/// use libslirp_rs::libslirp::ProxyConnect;
+/// use libslirp_rs::ProxyConnect;
 ///
 /// struct MyProxyConnect;
 ///
